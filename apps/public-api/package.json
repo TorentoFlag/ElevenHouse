@@ -1,0 +1,26 @@
+{
+  "name": "@elevenhouse/public-api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx src/main.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@elevenhouse/contracts": "workspace:*",
+    "@elevenhouse/observability": "workspace:*",
+    "@elevenhouse/validation": "workspace:*",
+    "@nestjs/common": "11.1.26",
+    "@nestjs/config": "4.0.4",
+    "@nestjs/core": "11.1.26",
+    "@nestjs/platform-express": "11.1.26",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.2",
+    "tsx": "4.21.0",
+    "typescript": "6.0.3"
+  }
+}
