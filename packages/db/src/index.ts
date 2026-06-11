@@ -1,6 +1,8 @@
 const allowedPostgresProtocols = new Set(["postgres:", "postgresql:"]);
 const localDatabaseHosts = new Set(["localhost", "127.0.0.1", "::1"]);
 
+export * from "./schema";
+
 export type PostgresConnectionConfig = {
   readonly connectionString: string;
 };

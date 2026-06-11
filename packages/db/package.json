@@ -21,6 +21,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@elevenhouse/auth": "workspace:*",
     "@types/node": "25.9.2",
     "@types/pg": "8.20.0",
     "drizzle-kit": "0.31.10",
