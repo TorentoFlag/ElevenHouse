@@ -22,3 +22,4 @@ export function createDomainEvent<TName extends string, TPayload extends Record<
 }
 
 export * from "./identity";
+export * from "./account-registration-db";

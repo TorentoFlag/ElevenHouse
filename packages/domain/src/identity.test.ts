@@ -67,13 +67,35 @@ describe("linkAuthIdentity", () => {
       provider: "email",
       providerSubject: "ada@example.com",
       email: "ada@example.com",
-      phoneNumber: undefined,
       passwordHash: "argon2$hash"
     });
     expect(identity).toMatchObject({ provider: "email", email: "ada@example.com" });
   });
 
-  it("rejects an email identity without an email address", async () => {
+  it("trims email identity strings before linking", async () => {
+    const store = createStore();
+
+    await linkAuthIdentity({
+      store,
+      userId: "user_1",
+      identity: {
+        provider: "email",
+        providerSubject: " ada@example.com ",
+        email: " ada@example.com ",
+        passwordHash: "argon2$hash"
+      }
+    });
+
+    expect(store.createAuthIdentity).toHaveBeenCalledWith({
+      userId: "user_1",
+      provider: "email",
+      providerSubject: "ada@example.com",
+      email: "ada@example.com",
+      passwordHash: "argon2$hash"
+    });
+  });
+
+  it("rejects an email identity without a non-empty email address", async () => {
     const store = createStore();
 
     await expect(
@@ -82,10 +104,49 @@ describe("linkAuthIdentity", () => {
         userId: "user_1",
         identity: {
           provider: "email",
-          providerSubject: "ada@example.com"
+          providerSubject: "ada@example.com",
+          email: "   ",
+          passwordHash: "argon2$hash"
         }
       })
     ).rejects.toThrow("Email identities require an email address");
+
+    expect(store.createAuthIdentity).not.toHaveBeenCalled();
+  });
+
+  it("rejects an email identity without a non-empty password hash", async () => {
+    const store = createStore();
+
+    await expect(
+      linkAuthIdentity({
+        store,
+        userId: "user_1",
+        identity: {
+          provider: "email",
+          providerSubject: "ada@example.com",
+          email: "ada@example.com",
+          passwordHash: "   "
+        }
+      })
+    ).rejects.toThrow("Email identities require a password hash");
+
+    expect(store.createAuthIdentity).not.toHaveBeenCalled();
+  });
+
+  it("rejects a phone identity without a non-empty phone number", async () => {
+    const store = createStore();
+
+    await expect(
+      linkAuthIdentity({
+        store,
+        userId: "user_1",
+        identity: {
+          provider: "phone",
+          providerSubject: "+15550001111",
+          phoneNumber: "   "
+        }
+      })
+    ).rejects.toThrow("Phone identities require a phone number");
 
     expect(store.createAuthIdentity).not.toHaveBeenCalled();
   });
@@ -154,7 +215,6 @@ describe("registerCustomerAccount", () => {
       provider: "email",
       providerSubject: "ada@example.com",
       email: "ada@example.com",
-      phoneNumber: undefined,
       passwordHash: "argon2$hash"
     });
     expect(store.assignRole).toHaveBeenCalledTimes(2);

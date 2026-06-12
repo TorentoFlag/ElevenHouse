@@ -1,8 +1,8 @@
-import { registerCustomerAccount } from "@elevenhouse/domain";
+import { authIdentities, userRoleAssignments, users } from "@elevenhouse/db";
 import { describe, expect, it } from "vitest";
-import { authIdentities, userRoleAssignments, users } from "./schema";
 import {
   createDrizzleAccountRegistrationUnitOfWork,
+  registerCustomerAccount,
   type AccountRegistrationDrizzleExecutor
 } from "./index";
 
@@ -16,6 +16,20 @@ function createFakeDrizzleDatabase(rows: readonly Record<string, unknown>[]) {
   let transactionCalls = 0;
   let nextRowIndex = 0;
 
+  const insert = ((table: unknown) => ({
+    values: (value: Record<string, unknown>) => ({
+      returning: async () => {
+        inserts.push({ table, value });
+
+        const row = rows[nextRowIndex];
+        nextRowIndex += 1;
+
+        return row ? [row] : [];
+      }
+    })
+  })) as unknown as AccountRegistrationDrizzleExecutor["insert"];
+  const executor: AccountRegistrationDrizzleExecutor = { insert };
+
   return {
     inserts,
     get transactionCalls() {
@@ -23,21 +37,7 @@ function createFakeDrizzleDatabase(rows: readonly Record<string, unknown>[]) {
     },
     transaction: async <T>(operation: (executor: AccountRegistrationDrizzleExecutor) => Promise<T>) => {
       transactionCalls += 1;
-
-      return operation({
-        insert: (table: unknown) => ({
-          values: (value: Record<string, unknown>) => ({
-            returning: async () => {
-              inserts.push({ table, value });
-
-              const row = rows[nextRowIndex];
-              nextRowIndex += 1;
-
-              return row ? [row] : [];
-            }
-          })
-        })
-      });
+      return operation(executor);
     }
   };
 }
@@ -49,6 +49,9 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
       {
         id: "user_1",
         status: "active",
+        deletionRequestedAt: null,
+        deletionScheduledAt: null,
+        deletedAt: null,
         createdAt: now,
         updatedAt: now
       },
@@ -59,6 +62,9 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         providerSubject: "ada@example.com",
         email: "ada@example.com",
         phoneNumber: null,
+        emailVerifiedAt: null,
+        phoneVerifiedAt: null,
+        passwordHash: "argon2$hash",
         createdAt: now,
         updatedAt: now
       },
@@ -82,8 +88,8 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
       accountRegistration: createDrizzleAccountRegistrationUnitOfWork(database),
       identity: {
         provider: "email",
-        providerSubject: "ada@example.com",
-        email: "ada@example.com",
+        providerSubject: " ada@example.com ",
+        email: " ada@example.com ",
         passwordHash: "argon2$hash"
       },
       roles: ["client", "astrologer"]
@@ -102,7 +108,6 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
           provider: "email",
           providerSubject: "ada@example.com",
           email: "ada@example.com",
-          phoneNumber: undefined,
           passwordHash: "argon2$hash"
         }
       },
@@ -110,16 +115,14 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         table: userRoleAssignments,
         value: {
           userId: "user_1",
-          role: "client",
-          assignedByUserId: undefined
+          role: "client"
         }
       },
       {
         table: userRoleAssignments,
         value: {
           userId: "user_1",
-          role: "astrologer",
-          assignedByUserId: undefined
+          role: "astrologer"
         }
       }
     ]);
@@ -136,7 +139,6 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         provider: "email",
         providerSubject: "ada@example.com",
         email: "ada@example.com",
-        phoneNumber: undefined,
         createdAt: "2026-06-12T00:00:00.000Z",
         updatedAt: "2026-06-12T00:00:00.000Z"
       },
@@ -145,14 +147,12 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
           id: "role_client",
           userId: "user_1",
           role: "client",
-          assignedByUserId: undefined,
           assignedAt: "2026-06-12T00:00:00.000Z"
         },
         {
           id: "role_astrologer",
           userId: "user_1",
           role: "astrologer",
-          assignedByUserId: undefined,
           assignedAt: "2026-06-12T00:00:00.000Z"
         }
       ]
@@ -168,10 +168,59 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         identity: {
           provider: "email",
           providerSubject: "ada@example.com",
-          email: "ada@example.com"
+          email: "ada@example.com",
+          passwordHash: "argon2$hash"
         },
         roles: ["client"]
       })
     ).rejects.toThrow("Expected users insert to return a row");
+  });
+
+  it("rejects unexpected returned role values before exposing a domain result", async () => {
+    const now = new Date("2026-06-12T00:00:00.000Z");
+    const database = createFakeDrizzleDatabase([
+      {
+        id: "user_1",
+        status: "active",
+        deletionRequestedAt: null,
+        deletionScheduledAt: null,
+        deletedAt: null,
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        id: "identity_1",
+        userId: "user_1",
+        provider: "email",
+        providerSubject: "ada@example.com",
+        email: "ada@example.com",
+        phoneNumber: null,
+        emailVerifiedAt: null,
+        phoneVerifiedAt: null,
+        passwordHash: "argon2$hash",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        id: "role_owner",
+        userId: "user_1",
+        role: "owner",
+        assignedByUserId: null,
+        assignedAt: now
+      }
+    ]);
+
+    await expect(
+      registerCustomerAccount({
+        accountRegistration: createDrizzleAccountRegistrationUnitOfWork(database),
+        identity: {
+          provider: "email",
+          providerSubject: "ada@example.com",
+          email: "ada@example.com",
+          passwordHash: "argon2$hash"
+        },
+        roles: ["client"]
+      })
+    ).rejects.toThrow("Unexpected user_role_assignments.role value: owner");
   });
 });

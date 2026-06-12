@@ -289,9 +289,6 @@ importers:
 
   packages/db:
     dependencies:
-      '@elevenhouse/domain':
-        specifier: workspace:*
-        version: link:../domain
       dotenv:
         specifier: 17.4.2
         version: 17.4.2
@@ -332,6 +329,9 @@ importers:
       '@elevenhouse/auth':
         specifier: workspace:*
         version: link:../auth
+      '@elevenhouse/db':
+        specifier: workspace:*
+        version: link:../db
     devDependencies:
       typescript:
         specifier: 6.0.3
