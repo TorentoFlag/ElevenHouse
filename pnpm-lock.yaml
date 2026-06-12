@@ -325,6 +325,10 @@ importers:
         version: 6.0.3
 
   packages/domain:
+    dependencies:
+      '@elevenhouse/auth':
+        specifier: workspace:*
+        version: link:../auth
     devDependencies:
       typescript:
         specifier: 6.0.3

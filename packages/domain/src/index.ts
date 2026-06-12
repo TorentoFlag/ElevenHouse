@@ -20,3 +20,5 @@ export function createDomainEvent<TName extends string, TPayload extends Record<
     payload: input.payload
   };
 }
+
+export * from "./identity";
