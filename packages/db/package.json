@@ -30,10 +30,20 @@
       "import": "./dist/adapters/identity/account-registration/index.js",
       "require": "./dist/adapters/identity/account-registration/index.js"
     },
+    "./adapters/identity/auth-sessions": {
+      "types": "./dist/adapters/identity/auth-sessions/index.d.ts",
+      "import": "./dist/adapters/identity/auth-sessions/index.js",
+      "require": "./dist/adapters/identity/auth-sessions/index.js"
+    },
     "./account-registration": {
       "types": "./dist/adapters/identity/account-registration/index.d.ts",
       "import": "./dist/adapters/identity/account-registration/index.js",
       "require": "./dist/adapters/identity/account-registration/index.js"
+    },
+    "./auth-sessions": {
+      "types": "./dist/adapters/identity/auth-sessions/index.d.ts",
+      "import": "./dist/adapters/identity/auth-sessions/index.js",
+      "require": "./dist/adapters/identity/auth-sessions/index.js"
     }
   },
   "scripts": {
