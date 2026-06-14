@@ -1,8 +1,8 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
-import { HealthController } from "./health.controller";
-import { HealthService } from "./health.service";
-import { createPublicApiRuntimeConfig } from "./runtime-config";
+import { createPublicApiRuntimeConfig } from "./config/runtime-config";
+import { HealthModule } from "./modules/health/health.module";
+import { IdentityModule } from "./modules/identity/identity.module";
 
 @Module({
   imports: [
@@ -13,9 +13,9 @@ import { createPublicApiRuntimeConfig } from "./runtime-config";
           publicApi: createPublicApiRuntimeConfig()
         })
       ]
-    })
-  ],
-  controllers: [HealthController],
-  providers: [HealthService]
+    }),
+    HealthModule,
+    IdentityModule
+  ]
 })
 export class AppModule {}
