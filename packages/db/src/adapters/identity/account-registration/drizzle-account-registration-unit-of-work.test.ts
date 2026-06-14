@@ -1,17 +1,23 @@
-import { authIdentities, userRoleAssignments, users } from "@elevenhouse/db";
+import { registerCustomerAccount } from "@elevenhouse/domain";
 import { describe, expect, it } from "vitest";
-import {
-  createDrizzleAccountRegistrationUnitOfWork,
-  registerCustomerAccount,
-  type AccountRegistrationDrizzleExecutor
+import { createDrizzleAccountRegistrationUnitOfWork } from "./index";
+import type {
+  AccountRegistrationDrizzleDatabase,
+  AccountRegistrationDrizzleExecutor
 } from "./index";
+import { authIdentities, userRoleAssignments, users } from "../../../schema";
 
 type InsertCall = {
   readonly table: unknown;
   readonly value: Record<string, unknown>;
 };
 
-function createFakeDrizzleDatabase(rows: readonly Record<string, unknown>[]) {
+type FakeDrizzleDatabase = AccountRegistrationDrizzleDatabase & {
+  readonly inserts: InsertCall[];
+  readonly transactionCalls: number;
+};
+
+function createFakeDrizzleDatabase(rows: readonly Record<string, unknown>[]): FakeDrizzleDatabase {
   const inserts: InsertCall[] = [];
   let transactionCalls = 0;
   let nextRowIndex = 0;
@@ -35,11 +41,13 @@ function createFakeDrizzleDatabase(rows: readonly Record<string, unknown>[]) {
     get transactionCalls() {
       return transactionCalls;
     },
-    transaction: async <T>(operation: (executor: AccountRegistrationDrizzleExecutor) => Promise<T>) => {
+    transaction: async <T>(
+      operation: (executor: AccountRegistrationDrizzleExecutor) => Promise<T>
+    ) => {
       transactionCalls += 1;
       return operation(executor);
     }
-  };
+  } as unknown as FakeDrizzleDatabase;
 }
 
 describe("createDrizzleAccountRegistrationUnitOfWork", () => {

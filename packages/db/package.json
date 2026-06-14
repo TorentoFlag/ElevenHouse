@@ -9,6 +9,31 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js",
+      "require": "./dist/runtime/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "import": "./dist/schema/index.js",
+      "require": "./dist/schema/index.js"
+    },
+    "./connection": {
+      "types": "./dist/connection/index.d.ts",
+      "import": "./dist/connection/index.js",
+      "require": "./dist/connection/index.js"
+    },
+    "./adapters/identity/account-registration": {
+      "types": "./dist/adapters/identity/account-registration/index.d.ts",
+      "import": "./dist/adapters/identity/account-registration/index.js",
+      "require": "./dist/adapters/identity/account-registration/index.js"
+    },
+    "./account-registration": {
+      "types": "./dist/adapters/identity/account-registration/index.d.ts",
+      "import": "./dist/adapters/identity/account-registration/index.js",
+      "require": "./dist/adapters/identity/account-registration/index.js"
     }
   },
   "scripts": {
@@ -29,6 +54,7 @@
     "typescript": "6.0.3"
   },
   "dependencies": {
+    "@elevenhouse/domain": "workspace:*",
     "dotenv": "17.4.2",
     "drizzle-orm": "0.45.2",
     "pg": "8.21.0"

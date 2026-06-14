@@ -4,7 +4,7 @@ import {
   databasePlatformRoleValues,
   identityProviderValues,
   userStatusValues
-} from "./schema";
+} from "./schema/index";
 
 describe("database account schema constants", () => {
   it("keeps database role checks aligned with the application role model", () => {

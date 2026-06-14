@@ -10,7 +10,7 @@ config({ path: resolve(currentDirectory, "../../../.env"), quiet: true });
 config({ path: resolve(currentDirectory, "../../../.env.example"), quiet: true });
 
 const { connectionString } = createPostgresConnectionConfig();
-assertDevelopmentDatabaseUrl(connectionString);
+assertDevelopmentDatabaseUrl(connectionString, process.env.NODE_ENV, "reset");
 
 const pool = new Pool({ connectionString });
 

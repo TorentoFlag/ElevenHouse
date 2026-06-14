@@ -44,14 +44,31 @@ describe("assertDevelopmentDatabaseUrl", () => {
     expect(() =>
       assertDevelopmentDatabaseUrl(
         "postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse",
-        "production"
+        "production",
+        "reset"
       )
     ).toThrow("Refusing to reset a production database");
   });
 
   it("rejects non-local development databases", () => {
     expect(() =>
-      assertDevelopmentDatabaseUrl("postgresql://elevenhouse:elevenhouse@db.internal/elevenhouse")
+      assertDevelopmentDatabaseUrl(
+        "postgresql://elevenhouse:elevenhouse@db.internal/elevenhouse",
+        "development",
+        "reset"
+      )
     ).toThrow("Refusing to reset a non-local database host: db.internal");
+  });
+
+  it("rejects unapproved local database names", () => {
+    expect(() =>
+      assertDevelopmentDatabaseUrl("postgresql://elevenhouse:elevenhouse@localhost/postgres")
+    ).toThrow("Refusing to use unapproved database name: postgres");
+  });
+
+  it("rejects unapproved local database users", () => {
+    expect(() =>
+      assertDevelopmentDatabaseUrl("postgresql://postgres:elevenhouse@localhost/elevenhouse")
+    ).toThrow("Refusing to use database with unapproved user: postgres");
   });
 });

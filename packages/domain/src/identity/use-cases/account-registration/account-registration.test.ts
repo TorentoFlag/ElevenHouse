@@ -4,8 +4,8 @@ import {
   grantCustomerRole,
   linkAuthIdentity,
   registerCustomerAccount,
-  type AccountRegistrationUnitOfWork,
-  type AccountRegistrationStore
+  type AccountRegistrationStore,
+  type AccountRegistrationUnitOfWork
 } from "./index";
 
 function createStore(): AccountRegistrationStore {
@@ -21,8 +21,8 @@ function createStore(): AccountRegistrationStore {
       userId: input.userId,
       provider: input.provider,
       providerSubject: input.providerSubject,
-      email: input.email,
-      phoneNumber: input.phoneNumber,
+      ...(input.email === undefined ? {} : { email: input.email }),
+      ...(input.phoneNumber === undefined ? {} : { phoneNumber: input.phoneNumber }),
       createdAt: "2026-06-12T00:00:00.000Z",
       updatedAt: "2026-06-12T00:00:00.000Z"
     })),
@@ -30,7 +30,9 @@ function createStore(): AccountRegistrationStore {
       id: `role_${input.role}`,
       userId: input.userId,
       role: input.role,
-      assignedByUserId: input.assignedByUserId,
+      ...(input.assignedByUserId === undefined
+        ? {}
+        : { assignedByUserId: input.assignedByUserId }),
       assignedAt: "2026-06-12T00:00:00.000Z"
     }))
   };
@@ -129,6 +131,25 @@ describe("linkAuthIdentity", () => {
         }
       })
     ).rejects.toThrow("Email identities require a password hash");
+
+    expect(store.createAuthIdentity).not.toHaveBeenCalled();
+  });
+
+  it("rejects password hashes with surrounding whitespace", async () => {
+    const store = createStore();
+
+    await expect(
+      linkAuthIdentity({
+        store,
+        userId: "user_1",
+        identity: {
+          provider: "email",
+          providerSubject: "ada@example.com",
+          email: "ada@example.com",
+          passwordHash: " argon2$hash "
+        }
+      })
+    ).rejects.toThrow("Auth identity password hashes must not contain surrounding whitespace");
 
     expect(store.createAuthIdentity).not.toHaveBeenCalled();
   });
