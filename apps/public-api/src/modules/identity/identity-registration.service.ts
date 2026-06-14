@@ -1,10 +1,11 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import {
   registerCustomerAccountRequestSchema,
   registerCustomerAccountResponseSchema,
   type RegisterCustomerAccountRequest,
   type RegisterCustomerAccountResponse
 } from "@elevenhouse/contracts";
+import { CustomerAccountIdentityConflictError } from "@elevenhouse/domain";
 import { DomainCustomerAccountRegistrationHandler } from "./identity-registration.handler";
 
 @Injectable()
@@ -23,8 +24,24 @@ export class IdentityRegistrationService {
       });
     }
 
-    const response = await this.handler.registerCustomerAccount(request.data);
+    const response = await this.registerCustomerAccountThroughHandler(request.data);
 
     return registerCustomerAccountResponseSchema.parse(response);
+  }
+
+  private async registerCustomerAccountThroughHandler(
+    request: RegisterCustomerAccountRequest
+  ): Promise<RegisterCustomerAccountResponse> {
+    try {
+      return await this.handler.registerCustomerAccount(request);
+    } catch (error) {
+      if (error instanceof CustomerAccountIdentityConflictError) {
+        throw new ConflictException("Customer account identity already exists", {
+          cause: error
+        });
+      }
+
+      throw error;
+    }
   }
 }

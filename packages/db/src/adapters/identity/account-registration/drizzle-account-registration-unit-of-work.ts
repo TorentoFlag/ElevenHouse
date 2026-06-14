@@ -1,9 +1,10 @@
-import type {
-  AccountRegistrationStore,
-  AccountRegistrationUnitOfWork,
-  AuthIdentityInput,
-  IdentityProvider,
-  UserAccountStatus
+import {
+  CustomerAccountIdentityConflictError,
+  type AccountRegistrationStore,
+  type AccountRegistrationUnitOfWork,
+  type AuthIdentityInput,
+  type IdentityProvider,
+  type UserAccountStatus
 } from "@elevenhouse/domain";
 import {
   authIdentities,
@@ -29,6 +30,11 @@ export type AccountRegistrationDrizzleDatabase = Pick<ElevenHouseDatabase, "tran
 const userStatusSet = new Set<string>(userStatusValues);
 const identityProviderSet = new Set<string>(identityProviderValues);
 const customerRoleSet = new Set<string>(["client", "astrologer"]);
+const authIdentityUniqueConstraints = new Set<string>([
+  "auth_identities_provider_subject_unique",
+  "auth_identities_email_login_unique",
+  "auth_identities_phone_login_unique"
+]);
 
 export function createDrizzleAccountRegistrationUnitOfWork(
   database: AccountRegistrationDrizzleDatabase
@@ -62,10 +68,7 @@ export function createAccountRegistrationStore(
       };
     },
     createAuthIdentity: async (input) => {
-      const row = await insertReturningOne(
-        () => executor.insert(authIdentities).values(toAuthIdentityInsert(input)).returning(),
-        "auth_identities"
-      );
+      const row = await createAuthIdentityRow(executor, input);
 
       const provider = row.provider;
       if (!isIdentityProvider(provider)) {
@@ -105,6 +108,24 @@ export function createAccountRegistrationStore(
   };
 }
 
+async function createAuthIdentityRow(
+  executor: AccountRegistrationDrizzleExecutor,
+  input: AuthIdentityInput & { readonly userId: string }
+): Promise<typeof authIdentities.$inferSelect> {
+  try {
+    return await insertReturningOne(
+      () => executor.insert(authIdentities).values(toAuthIdentityInsert(input)).returning(),
+      "auth_identities"
+    );
+  } catch (error) {
+    if (isAuthIdentityUniqueViolation(error)) {
+      throw new CustomerAccountIdentityConflictError();
+    }
+
+    throw error;
+  }
+}
+
 function toAuthIdentityInsert(
   input: AuthIdentityInput & { readonly userId: string }
 ): AuthIdentitiesInsert {
@@ -140,4 +161,26 @@ function isIdentityProvider(value: string): value is IdentityProvider {
 
 function isCustomerPlatformRole(value: string): value is CustomerPlatformRole {
   return customerRoleSet.has(value);
+}
+
+function isAuthIdentityUniqueViolation(error: unknown): boolean {
+  if (!isPostgresError(error)) {
+    return false;
+  }
+
+  return error.code === "23505" && authIdentityUniqueConstraints.has(error.constraint);
+}
+
+function isPostgresError(error: unknown): error is {
+  readonly code: string;
+  readonly constraint: string;
+} {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    "constraint" in error &&
+    typeof error.code === "string" &&
+    typeof error.constraint === "string"
+  );
 }

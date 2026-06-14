@@ -33,6 +33,13 @@ export type RegisteredCustomerAccount = {
   readonly roleAssignments: readonly UserRoleAssignment[];
 };
 
+export class CustomerAccountIdentityConflictError extends Error {
+  constructor() {
+    super("Customer account identity already exists");
+    this.name = "CustomerAccountIdentityConflictError";
+  }
+}
+
 export async function createActiveUserAccount(input: {
   readonly store: AccountRegistrationStore;
 }): Promise<UserAccount> {

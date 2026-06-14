@@ -1,4 +1,7 @@
-import { registerCustomerAccount } from "@elevenhouse/domain";
+import {
+  CustomerAccountIdentityConflictError,
+  registerCustomerAccount
+} from "@elevenhouse/domain";
 import { describe, expect, it } from "vitest";
 import { createDrizzleAccountRegistrationUnitOfWork } from "./index";
 import type {
@@ -11,13 +14,14 @@ type InsertCall = {
   readonly table: unknown;
   readonly value: Record<string, unknown>;
 };
+type FakeInsertResult = Record<string, unknown> | Error;
 
 type FakeDrizzleDatabase = AccountRegistrationDrizzleDatabase & {
   readonly inserts: InsertCall[];
   readonly transactionCalls: number;
 };
 
-function createFakeDrizzleDatabase(rows: readonly Record<string, unknown>[]): FakeDrizzleDatabase {
+function createFakeDrizzleDatabase(rows: readonly FakeInsertResult[]): FakeDrizzleDatabase {
   const inserts: InsertCall[] = [];
   let transactionCalls = 0;
   let nextRowIndex = 0;
@@ -29,6 +33,10 @@ function createFakeDrizzleDatabase(rows: readonly Record<string, unknown>[]): Fa
 
         const row = rows[nextRowIndex];
         nextRowIndex += 1;
+
+        if (row instanceof Error) {
+          throw row;
+        }
 
         return row ? [row] : [];
       }
@@ -230,5 +238,38 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         roles: ["client"]
       })
     ).rejects.toThrow("Unexpected user_role_assignments.role value: owner");
+  });
+
+  it("maps duplicate auth identities to a domain conflict", async () => {
+    const now = new Date("2026-06-12T00:00:00.000Z");
+    const duplicateIdentityError = Object.assign(new Error("duplicate key value"), {
+      code: "23505",
+      constraint: "auth_identities_email_login_unique"
+    });
+    const database = createFakeDrizzleDatabase([
+      {
+        id: "user_1",
+        status: "active",
+        deletionRequestedAt: null,
+        deletionScheduledAt: null,
+        deletedAt: null,
+        createdAt: now,
+        updatedAt: now
+      },
+      duplicateIdentityError
+    ]);
+
+    await expect(
+      registerCustomerAccount({
+        accountRegistration: createDrizzleAccountRegistrationUnitOfWork(database),
+        identity: {
+          provider: "email",
+          providerSubject: "ada@example.com",
+          email: "ada@example.com",
+          passwordHash: "argon2$hash"
+        },
+        roles: ["client"]
+      })
+    ).rejects.toBeInstanceOf(CustomerAccountIdentityConflictError);
   });
 });
