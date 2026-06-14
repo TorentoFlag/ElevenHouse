@@ -1,6 +1,8 @@
 import { platformRoles } from "@elevenhouse/auth";
 import { describe, expect, it } from "vitest";
 import {
+  authSecurityEventTypeValues,
+  authSessionStatusValues,
   databasePlatformRoleValues,
   identityProviderValues,
   userStatusValues
@@ -17,5 +19,19 @@ describe("database account schema constants", () => {
 
   it("keeps account statuses explicit", () => {
     expect(userStatusValues).toEqual(["active", "suspended", "deleted"]);
+  });
+
+  it("keeps auth session statuses explicit", () => {
+    expect(authSessionStatusValues).toEqual(["active", "revoked"]);
+  });
+
+  it("keeps auth security event types explicit", () => {
+    expect(authSecurityEventTypeValues).toEqual([
+      "registration_succeeded",
+      "login_succeeded",
+      "login_failed",
+      "logout_succeeded",
+      "session_revoked"
+    ]);
   });
 });

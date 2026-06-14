@@ -12,3 +12,15 @@ export const databasePlatformRoleValues = [
   "super_admin"
 ] as const;
 export type DatabasePlatformRole = (typeof databasePlatformRoleValues)[number];
+
+export const authSessionStatusValues = ["active", "revoked"] as const;
+export type AuthSessionStatus = (typeof authSessionStatusValues)[number];
+
+export const authSecurityEventTypeValues = [
+  "registration_succeeded",
+  "login_succeeded",
+  "login_failed",
+  "logout_succeeded",
+  "session_revoked"
+] as const;
+export type AuthSecurityEventType = (typeof authSecurityEventTypeValues)[number];
