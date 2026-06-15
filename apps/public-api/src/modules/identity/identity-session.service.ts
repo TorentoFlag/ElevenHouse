@@ -2,8 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   createSessionToken,
-  hashSessionToken,
-  publicSessionCookieName
+  hashSessionToken
 } from "@elevenhouse/auth";
 
 export type IssuedSessionToken = {
@@ -59,8 +58,9 @@ export class PublicSessionCookieService {
       "publicApi.sessionTtlSeconds"
     );
     const secure = this.configService.getOrThrow<boolean>("publicApi.sessionCookieSecure");
+    const name = this.configService.getOrThrow<string>("publicApi.sessionCookieName");
 
-    response.cookie(publicSessionCookieName, session.token, {
+    response.cookie(name, session.token, {
       httpOnly: true,
       secure,
       sameSite: "lax",

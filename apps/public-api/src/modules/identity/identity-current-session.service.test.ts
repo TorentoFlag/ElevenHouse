@@ -1,4 +1,5 @@
-import { hashSessionToken, publicSessionCookieName } from "@elevenhouse/auth";
+import { ConfigService } from "@nestjs/config";
+import { hashSessionToken } from "@elevenhouse/auth";
 import type {
   AuthSessionAuthenticationStore,
   AuthenticatedSessionContext
@@ -8,13 +9,23 @@ import { IdentityCurrentSessionService } from "./identity-current-session.servic
 import type { SystemClock } from "./identity-session.service";
 
 function createService(
-  store: AuthSessionAuthenticationStore
+  store: AuthSessionAuthenticationStore,
+  sessionCookieName = "elevenhouse_public_session"
 ): IdentityCurrentSessionService {
   const clock: SystemClock = {
     now: vi.fn(() => new Date("2026-06-15T10:00:00.000Z"))
   };
+  const configService = {
+    getOrThrow: vi.fn((key: string) => {
+      if (key === "publicApi.sessionCookieName") {
+        return sessionCookieName;
+      }
 
-  return new IdentityCurrentSessionService(store, clock);
+      throw new Error(`Unexpected config key: ${key}`);
+    })
+  } as unknown as ConfigService;
+
+  return new IdentityCurrentSessionService(store, clock, configService);
 }
 
 describe("IdentityCurrentSessionService", () => {
@@ -50,7 +61,7 @@ describe("IdentityCurrentSessionService", () => {
     await expect(
       createService(store).resolveCurrentCustomerAccount({
         headers: {
-          cookie: `theme=dark; ${publicSessionCookieName}=raw-session-token; locale=ru`
+          cookie: "theme=dark; elevenhouse_public_session=raw-session-token; locale=ru"
         }
       })
     ).resolves.toEqual({
@@ -86,9 +97,24 @@ describe("IdentityCurrentSessionService", () => {
     await expect(
       createService(store).resolveCurrentCustomerAccount({
         headers: {
-          cookie: `${publicSessionCookieName}=raw-session-token`
+          cookie: "elevenhouse_public_session=raw-session-token"
         }
       })
     ).resolves.toBeNull();
+  });
+
+  it("uses the configured production public session cookie name", async () => {
+    const store: AuthSessionAuthenticationStore = {
+      findByTokenHash: vi.fn(async () => null)
+    };
+
+    await expect(
+      createService(store, "__Host-elevenhouse_public_session").resolveCurrentCustomerAccount({
+        headers: {
+          cookie: "__Host-elevenhouse_public_session=raw-session-token"
+        }
+      })
+    ).resolves.toBeNull();
+    expect(store.findByTokenHash).toHaveBeenCalledWith(hashSessionToken("raw-session-token"));
   });
 });

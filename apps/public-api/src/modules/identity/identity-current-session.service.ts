@@ -1,8 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
-import {
-  hashSessionToken,
-  publicSessionCookieName
-} from "@elevenhouse/auth";
+import { ConfigService } from "@nestjs/config";
+import { hashSessionToken } from "@elevenhouse/auth";
 import {
   resolveAuthenticatedSession,
   type AuthSessionAuthenticationStore
@@ -26,13 +24,17 @@ export class IdentityCurrentSessionService {
   constructor(
     @Inject(AUTH_SESSION_AUTHENTICATION_STORE)
     private readonly store: AuthSessionAuthenticationStore,
-    private readonly clock: SystemClock
+    private readonly clock: SystemClock,
+    private readonly configService: ConfigService
   ) {}
 
   async resolveCurrentCustomerAccount(
     request: PublicSessionRequest
   ): Promise<AuthenticatedCustomerAccountResponse | null> {
-    const token = readCookieValue(request.headers.cookie, publicSessionCookieName);
+    const token = readCookieValue(
+      request.headers.cookie,
+      this.configService.getOrThrow<string>("publicApi.sessionCookieName")
+    );
 
     if (!token) {
       return null;

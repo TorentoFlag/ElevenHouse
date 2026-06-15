@@ -98,6 +98,10 @@ describe("IdentityModule", () => {
             return false;
           }
 
+          if (key === "publicApi.sessionCookieName") {
+            return "elevenhouse_public_session";
+          }
+
           throw new Error(`Unexpected config key: ${key}`);
         })
       })
@@ -145,7 +149,7 @@ describe("IdentityModule", () => {
     await expect(
       currentSessionService.resolveCurrentCustomerAccount({
         headers: {
-          cookie: "__Host-elevenhouse_public_session=raw-session-token"
+          cookie: "elevenhouse_public_session=raw-session-token"
         }
       })
     ).resolves.toEqual({
