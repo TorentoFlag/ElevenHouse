@@ -3,7 +3,8 @@ import type { UserAccount, UserAccountStatus } from "../../../accounts/account";
 import {
   normalizeAuthIdentityInput,
   type AuthIdentity,
-  type AuthIdentityInput
+  type AuthIdentityInput,
+  type NormalizedAuthIdentityInput
 } from "../../../auth-identities/auth-identity";
 import {
   assertCustomerRole,
@@ -14,7 +15,7 @@ import {
 export type AccountRegistrationStore = {
   readonly createUser: (input: { readonly status: UserAccountStatus }) => Promise<UserAccount>;
   readonly createAuthIdentity: (
-    input: AuthIdentityInput & { readonly userId: string }
+    input: NormalizedAuthIdentityInput & { readonly userId: string }
   ) => Promise<AuthIdentity>;
   readonly assignRole: (input: {
     readonly userId: string;
@@ -58,8 +59,9 @@ export async function linkAuthIdentity(input: {
     providerSubject: identity.providerSubject,
     ...(identity.email ? { email: identity.email } : {}),
     ...(identity.phoneNumber ? { phoneNumber: identity.phoneNumber } : {}),
-    ...(identity.passwordHash ? { passwordHash: identity.passwordHash } : {})
-  } satisfies AuthIdentityInput & { readonly userId: string };
+    ...(identity.emailVerifiedAt ? { emailVerifiedAt: identity.emailVerifiedAt } : {}),
+    ...(identity.phoneVerifiedAt ? { phoneVerifiedAt: identity.phoneVerifiedAt } : {})
+  } satisfies NormalizedAuthIdentityInput & { readonly userId: string };
 
   return input.store.createAuthIdentity(authIdentityInput);
 }

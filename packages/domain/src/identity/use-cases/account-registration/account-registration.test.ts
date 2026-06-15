@@ -23,6 +23,10 @@ function createStore(): AccountRegistrationStore {
       providerSubject: input.providerSubject,
       ...(input.email === undefined ? {} : { email: input.email }),
       ...(input.phoneNumber === undefined ? {} : { phoneNumber: input.phoneNumber }),
+      ...(input.emailVerifiedAt === undefined ? {} : { emailVerifiedAt: input.emailVerifiedAt }),
+      ...(input.phoneVerifiedAt === undefined
+        ? {}
+        : { phoneVerifiedAt: input.phoneVerifiedAt }),
       createdAt: "2026-06-12T00:00:00.000Z",
       updatedAt: "2026-06-12T00:00:00.000Z"
     })),
@@ -60,7 +64,7 @@ describe("linkAuthIdentity", () => {
         provider: "email",
         providerSubject: "ada@example.com",
         email: "ada@example.com",
-        passwordHash: "argon2$hash"
+        emailVerifiedAt: new Date("2026-06-15T10:00:00.000Z")
       }
     });
 
@@ -69,7 +73,7 @@ describe("linkAuthIdentity", () => {
       provider: "email",
       providerSubject: "ada@example.com",
       email: "ada@example.com",
-      passwordHash: "argon2$hash"
+      emailVerifiedAt: "2026-06-15T10:00:00.000Z"
     });
     expect(identity).toMatchObject({ provider: "email", email: "ada@example.com" });
   });
@@ -84,7 +88,7 @@ describe("linkAuthIdentity", () => {
         provider: "email",
         providerSubject: " ada@example.com ",
         email: " ada@example.com ",
-        passwordHash: "argon2$hash"
+        emailVerifiedAt: new Date("2026-06-15T10:00:00.000Z")
       }
     });
 
@@ -93,7 +97,7 @@ describe("linkAuthIdentity", () => {
       provider: "email",
       providerSubject: "ada@example.com",
       email: "ada@example.com",
-      passwordHash: "argon2$hash"
+      emailVerifiedAt: "2026-06-15T10:00:00.000Z"
     });
   });
 
@@ -108,48 +112,10 @@ describe("linkAuthIdentity", () => {
           provider: "email",
           providerSubject: "ada@example.com",
           email: "   ",
-          passwordHash: "argon2$hash"
+          emailVerifiedAt: new Date("2026-06-15T10:00:00.000Z")
         }
       })
     ).rejects.toThrow("Email identities require an email address");
-
-    expect(store.createAuthIdentity).not.toHaveBeenCalled();
-  });
-
-  it("rejects an email identity without a non-empty password hash", async () => {
-    const store = createStore();
-
-    await expect(
-      linkAuthIdentity({
-        store,
-        userId: "user_1",
-        identity: {
-          provider: "email",
-          providerSubject: "ada@example.com",
-          email: "ada@example.com",
-          passwordHash: "   "
-        }
-      })
-    ).rejects.toThrow("Email identities require a password hash");
-
-    expect(store.createAuthIdentity).not.toHaveBeenCalled();
-  });
-
-  it("rejects password hashes with surrounding whitespace", async () => {
-    const store = createStore();
-
-    await expect(
-      linkAuthIdentity({
-        store,
-        userId: "user_1",
-        identity: {
-          provider: "email",
-          providerSubject: "ada@example.com",
-          email: "ada@example.com",
-          passwordHash: " argon2$hash "
-        }
-      })
-    ).rejects.toThrow("Auth identity password hashes must not contain surrounding whitespace");
 
     expect(store.createAuthIdentity).not.toHaveBeenCalled();
   });
@@ -224,7 +190,7 @@ describe("registerCustomerAccount", () => {
         provider: "email",
         providerSubject: "ada@example.com",
         email: "ada@example.com",
-        passwordHash: "argon2$hash"
+        emailVerifiedAt: new Date("2026-06-15T10:00:00.000Z")
       },
       roles: ["client", "client", "astrologer"]
     });
@@ -236,7 +202,7 @@ describe("registerCustomerAccount", () => {
       provider: "email",
       providerSubject: "ada@example.com",
       email: "ada@example.com",
-      passwordHash: "argon2$hash"
+      emailVerifiedAt: "2026-06-15T10:00:00.000Z"
     });
     expect(store.assignRole).toHaveBeenCalledTimes(2);
     expect(result.roleAssignments.map((assignment) => assignment.role)).toEqual([

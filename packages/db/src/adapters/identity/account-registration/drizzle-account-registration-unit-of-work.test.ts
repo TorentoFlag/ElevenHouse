@@ -78,9 +78,8 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         providerSubject: "ada@example.com",
         email: "ada@example.com",
         phoneNumber: null,
-        emailVerifiedAt: null,
+        emailVerifiedAt: now,
         phoneVerifiedAt: null,
-        passwordHash: "argon2$hash",
         createdAt: now,
         updatedAt: now
       },
@@ -106,7 +105,7 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         provider: "email",
         providerSubject: " ada@example.com ",
         email: " ada@example.com ",
-        passwordHash: "argon2$hash"
+        emailVerifiedAt: new Date("2026-06-12T00:00:00.000Z")
       },
       roles: ["client", "astrologer"]
     });
@@ -124,7 +123,7 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
           provider: "email",
           providerSubject: "ada@example.com",
           email: "ada@example.com",
-          passwordHash: "argon2$hash"
+          emailVerifiedAt: now
         }
       },
       {
@@ -155,6 +154,7 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         provider: "email",
         providerSubject: "ada@example.com",
         email: "ada@example.com",
+        emailVerifiedAt: "2026-06-12T00:00:00.000Z",
         createdAt: "2026-06-12T00:00:00.000Z",
         updatedAt: "2026-06-12T00:00:00.000Z"
       },
@@ -176,6 +176,7 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
   });
 
   it("fails when an insert returns no row", async () => {
+    const now = new Date("2026-06-12T00:00:00.000Z");
     const database = createFakeDrizzleDatabase([]);
 
     await expect(
@@ -185,7 +186,7 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
           provider: "email",
           providerSubject: "ada@example.com",
           email: "ada@example.com",
-          passwordHash: "argon2$hash"
+          emailVerifiedAt: now
         },
         roles: ["client"]
       })
@@ -211,9 +212,8 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         providerSubject: "ada@example.com",
         email: "ada@example.com",
         phoneNumber: null,
-        emailVerifiedAt: null,
+        emailVerifiedAt: now,
         phoneVerifiedAt: null,
-        passwordHash: "argon2$hash",
         createdAt: now,
         updatedAt: now
       },
@@ -233,7 +233,7 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
           provider: "email",
           providerSubject: "ada@example.com",
           email: "ada@example.com",
-          passwordHash: "argon2$hash"
+          emailVerifiedAt: now
         },
         roles: ["client"]
       })
@@ -266,7 +266,7 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
           provider: "email",
           providerSubject: "ada@example.com",
           email: "ada@example.com",
-          passwordHash: "argon2$hash"
+          emailVerifiedAt: now
         },
         roles: ["client"]
       })

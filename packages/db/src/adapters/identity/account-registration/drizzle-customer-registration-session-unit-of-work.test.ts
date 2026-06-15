@@ -83,9 +83,8 @@ describe("createDrizzleCustomerAccountRegistrationSessionUnitOfWork", () => {
         providerSubject: "ada@example.com",
         email: "ada@example.com",
         phoneNumber: null,
-        emailVerifiedAt: null,
+        emailVerifiedAt: sessionCreatedAt,
         phoneVerifiedAt: null,
-        passwordHash: "argon2$hash",
         createdAt: accountCreatedAt,
         updatedAt: accountCreatedAt
       },
@@ -126,7 +125,7 @@ describe("createDrizzleCustomerAccountRegistrationSessionUnitOfWork", () => {
         provider: "email",
         providerSubject: "ada@example.com",
         email: "ada@example.com",
-        passwordHash: "argon2$hash"
+        emailVerifiedAt: sessionCreatedAt
       },
       roles: ["client"],
       session: {
@@ -152,7 +151,7 @@ describe("createDrizzleCustomerAccountRegistrationSessionUnitOfWork", () => {
           provider: "email",
           providerSubject: "ada@example.com",
           email: "ada@example.com",
-          passwordHash: "argon2$hash"
+          emailVerifiedAt: sessionCreatedAt
         }
       },
       {

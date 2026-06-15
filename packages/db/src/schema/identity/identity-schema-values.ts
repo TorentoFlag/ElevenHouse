@@ -16,6 +16,12 @@ export type DatabasePlatformRole = (typeof databasePlatformRoleValues)[number];
 export const authSessionStatusValues = ["active", "revoked"] as const;
 export type AuthSessionStatus = (typeof authSessionStatusValues)[number];
 
+export const authChallengeStatusValues = ["pending", "consumed", "cancelled"] as const;
+export type AuthChallengeStatus = (typeof authChallengeStatusValues)[number];
+
+export const authChallengeDeliveryStatusValues = ["queued", "sent", "failed"] as const;
+export type AuthChallengeDeliveryStatus = (typeof authChallengeDeliveryStatusValues)[number];
+
 export const authSecurityEventTypeValues = [
   "registration_succeeded",
   "login_succeeded",

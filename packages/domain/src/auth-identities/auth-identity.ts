@@ -8,6 +8,8 @@ export type AuthIdentity = {
   readonly providerSubject: string;
   readonly email?: string;
   readonly phoneNumber?: string;
+  readonly emailVerifiedAt?: string;
+  readonly phoneVerifiedAt?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -17,7 +19,16 @@ export type AuthIdentityInput = {
   readonly providerSubject: string;
   readonly email?: string;
   readonly phoneNumber?: string;
-  readonly passwordHash?: string;
+  readonly emailVerifiedAt?: Date | string;
+  readonly phoneVerifiedAt?: Date | string;
+};
+
+export type NormalizedAuthIdentityInput = Omit<
+  AuthIdentityInput,
+  "emailVerifiedAt" | "phoneVerifiedAt"
+> & {
+  readonly emailVerifiedAt?: string;
+  readonly phoneVerifiedAt?: string;
 };
 
 const identityProviderSet = new Set<string>(identityProviderValues);
@@ -26,7 +37,9 @@ export function isIdentityProvider(value: string): value is IdentityProvider {
   return identityProviderSet.has(value);
 }
 
-export function normalizeAuthIdentityInput(identity: AuthIdentityInput): AuthIdentityInput {
+export function normalizeAuthIdentityInput(
+  identity: AuthIdentityInput
+): NormalizedAuthIdentityInput {
   if (!isIdentityProvider(identity.provider)) {
     throw new Error(`Unsupported identity provider: ${identity.provider}`);
   }
@@ -43,25 +56,21 @@ export function normalizeAuthIdentityInput(identity: AuthIdentityInput): AuthIde
     throw new Error("Email identities require an email address");
   }
 
-  if (identity.provider === "email" && !identity.passwordHash?.trim()) {
-    throw new Error("Email identities require a password hash");
-  }
-
-  if (identity.passwordHash && identity.passwordHash.trim() !== identity.passwordHash) {
-    throw new Error("Auth identity password hashes must not contain surrounding whitespace");
-  }
-
   if (identity.provider === "phone" && !phoneNumber) {
     throw new Error("Phone identities require a phone number");
   }
+
+  const emailVerifiedAt = normalizeOptionalTimestamp(identity.emailVerifiedAt);
+  const phoneVerifiedAt = normalizeOptionalTimestamp(identity.phoneVerifiedAt);
 
   const normalizedIdentity = {
     provider: identity.provider,
     providerSubject,
     ...(email ? { email } : {}),
     ...(phoneNumber ? { phoneNumber } : {}),
-    ...(identity.passwordHash ? { passwordHash: identity.passwordHash } : {})
-  } satisfies AuthIdentityInput;
+    ...(emailVerifiedAt ? { emailVerifiedAt } : {}),
+    ...(phoneVerifiedAt ? { phoneVerifiedAt } : {})
+  } satisfies NormalizedAuthIdentityInput;
 
   return normalizedIdentity;
 }
@@ -69,4 +78,12 @@ export function normalizeAuthIdentityInput(identity: AuthIdentityInput): AuthIde
 function normalizeOptionalString(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized ? normalized : undefined;
+}
+
+function normalizeOptionalTimestamp(value: Date | string | undefined): string | undefined {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return normalizeOptionalString(value);
 }

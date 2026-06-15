@@ -35,6 +35,11 @@
       "import": "./dist/adapters/identity/auth-sessions/index.js",
       "require": "./dist/adapters/identity/auth-sessions/index.js"
     },
+    "./adapters/identity/passwordless-auth": {
+      "types": "./dist/adapters/identity/passwordless-auth/index.d.ts",
+      "import": "./dist/adapters/identity/passwordless-auth/index.js",
+      "require": "./dist/adapters/identity/passwordless-auth/index.js"
+    },
     "./account-registration": {
       "types": "./dist/adapters/identity/account-registration/index.d.ts",
       "import": "./dist/adapters/identity/account-registration/index.js",
@@ -44,6 +49,11 @@
       "types": "./dist/adapters/identity/auth-sessions/index.d.ts",
       "import": "./dist/adapters/identity/auth-sessions/index.js",
       "require": "./dist/adapters/identity/auth-sessions/index.js"
+    },
+    "./passwordless-auth": {
+      "types": "./dist/adapters/identity/passwordless-auth/index.d.ts",
+      "import": "./dist/adapters/identity/passwordless-auth/index.js",
+      "require": "./dist/adapters/identity/passwordless-auth/index.js"
     }
   },
   "scripts": {

@@ -20,6 +20,10 @@ function createStore(): CustomerAccountRegistrationSessionStore {
       providerSubject: input.providerSubject,
       ...(input.email === undefined ? {} : { email: input.email }),
       ...(input.phoneNumber === undefined ? {} : { phoneNumber: input.phoneNumber }),
+      ...(input.emailVerifiedAt === undefined ? {} : { emailVerifiedAt: input.emailVerifiedAt }),
+      ...(input.phoneVerifiedAt === undefined
+        ? {}
+        : { phoneVerifiedAt: input.phoneVerifiedAt }),
       createdAt: "2026-06-15T00:00:00.000Z",
       updatedAt: "2026-06-15T00:00:00.000Z"
     })),
@@ -63,7 +67,7 @@ describe("registerCustomerAccountWithSession", () => {
         provider: "email",
         providerSubject: " ada@example.com ",
         email: " ada@example.com ",
-        passwordHash: "argon2$hash"
+        emailVerifiedAt: new Date("2026-06-15T10:00:00.000Z")
       },
       roles: ["client", "client", "astrologer"],
       session: {
@@ -83,7 +87,7 @@ describe("registerCustomerAccountWithSession", () => {
       provider: "email",
       providerSubject: "ada@example.com",
       email: "ada@example.com",
-      passwordHash: "argon2$hash"
+      emailVerifiedAt: "2026-06-15T10:00:00.000Z"
     });
     expect(store.assignRole).toHaveBeenCalledTimes(2);
     expect(store.createSession).toHaveBeenCalledWith({
@@ -115,6 +119,7 @@ describe("registerCustomerAccountWithSession", () => {
         provider: "email",
         providerSubject: "ada@example.com",
         email: "ada@example.com",
+        emailVerifiedAt: "2026-06-15T10:00:00.000Z",
         createdAt: "2026-06-15T00:00:00.000Z",
         updatedAt: "2026-06-15T00:00:00.000Z"
       },

@@ -1,65 +1,99 @@
 import { describe, expect, it } from "vitest";
 import {
   authenticatedCustomerAccountResponseSchema,
-  loginCustomerAccountRequestSchema,
-  registerCustomerAccountRequestSchema,
-  registerCustomerAccountResponseSchema
+  requestPasswordlessCodeRequestSchema,
+  requestPasswordlessCodeResponseSchema,
+  verifyPasswordlessCodeRequestSchema,
+  verifyPasswordlessCodeResponseSchema
 } from "./identity";
 
-describe("registerCustomerAccountRequestSchema", () => {
-  it("accepts email/password registration for customer-facing roles", () => {
+describe("requestPasswordlessCodeRequestSchema", () => {
+  it("normalizes email code requests and accepts customer-facing roles", () => {
     expect(
-      registerCustomerAccountRequestSchema.parse({
-        email: "  CLIENT@example.COM ",
-        password: "correct-horse-battery-staple",
+      requestPasswordlessCodeRequestSchema.parse({
+        channel: "email",
+        identifier: "  CLIENT@example.COM ",
         roles: ["client", "astrologer"]
       })
     ).toEqual({
-      email: "client@example.com",
-      password: "correct-horse-battery-staple",
+      channel: "email",
+      identifier: "client@example.com",
       roles: ["client", "astrologer"]
     });
   });
 
-  it("rejects internal platform roles", () => {
-    expect(() =>
-      registerCustomerAccountRequestSchema.parse({
-        email: "client@example.com",
-        password: "correct-horse-battery-staple",
-        roles: ["admin"]
-      })
-    ).toThrow();
-  });
-
-  it("accepts passwords with the product minimum length", () => {
+  it("normalizes phone code requests to a compact E.164-like value", () => {
     expect(
-      registerCustomerAccountRequestSchema.parse({
-        email: "client@example.com",
-        password: "12345678",
+      requestPasswordlessCodeRequestSchema.parse({
+        channel: "phone",
+        identifier: " +7 (999) 000-11-22 ",
         roles: ["client"]
       })
     ).toEqual({
-      email: "client@example.com",
-      password: "12345678",
+      channel: "phone",
+      identifier: "+79990001122",
       roles: ["client"]
     });
   });
 
-  it("rejects passwords shorter than the product minimum length", () => {
+  it("rejects internal roles", () => {
     expect(() =>
-      registerCustomerAccountRequestSchema.parse({
-        email: "client@example.com",
-        password: "1234567",
-        roles: ["client"]
+      requestPasswordlessCodeRequestSchema.parse({
+        channel: "email",
+        identifier: "client@example.com",
+        roles: ["admin"]
       })
     ).toThrow();
   });
 });
 
-describe("registerCustomerAccountResponseSchema", () => {
-  it("exposes the registered account id, status and customer-facing roles", () => {
+describe("requestPasswordlessCodeResponseSchema", () => {
+  it("exposes challenge metadata without the plaintext code", () => {
     expect(
-      registerCustomerAccountResponseSchema.parse({
+      requestPasswordlessCodeResponseSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        channel: "email",
+        maskedIdentifier: "c***@example.com",
+        expiresAt: "2026-06-15T10:10:00.000Z",
+        resendAvailableAt: "2026-06-15T10:01:00.000Z"
+      })
+    ).toEqual({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      channel: "email",
+      maskedIdentifier: "c***@example.com",
+      expiresAt: "2026-06-15T10:10:00.000Z",
+      resendAvailableAt: "2026-06-15T10:01:00.000Z"
+    });
+  });
+});
+
+describe("verifyPasswordlessCodeRequestSchema", () => {
+  it("accepts a six-digit code", () => {
+    expect(
+      verifyPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456"
+      })
+    ).toEqual({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      code: "123456"
+    });
+  });
+
+  it("rejects non-six-digit codes", () => {
+    expect(() =>
+      verifyPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "12345"
+      })
+    ).toThrow();
+  });
+});
+
+describe("verifyPasswordlessCodeResponseSchema", () => {
+  it("uses the authenticated account response shape", () => {
+    expect(
+      verifyPasswordlessCodeResponseSchema.parse({
         account: {
           id: "8e14390f-3db1-4d1c-9344-55679c778427",
           status: "active",
@@ -76,22 +110,8 @@ describe("registerCustomerAccountResponseSchema", () => {
   });
 });
 
-describe("loginCustomerAccountRequestSchema", () => {
-  it("normalizes an email/password login request", () => {
-    expect(
-      loginCustomerAccountRequestSchema.parse({
-        email: "  CLIENT@example.COM ",
-        password: "correct-horse-battery-staple"
-      })
-    ).toEqual({
-      email: "client@example.com",
-      password: "correct-horse-battery-staple"
-    });
-  });
-});
-
 describe("authenticatedCustomerAccountResponseSchema", () => {
-  it("exposes the authenticated account shape used by register, login and me", () => {
+  it("exposes the authenticated account shape used by verify and me", () => {
     expect(
       authenticatedCustomerAccountResponseSchema.parse({
         account: {

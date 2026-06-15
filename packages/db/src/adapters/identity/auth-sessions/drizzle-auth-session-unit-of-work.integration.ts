@@ -44,7 +44,7 @@ describe("auth session Drizzle/PostgreSQL integration", () => {
         provider: "email",
         providerSubject: uniqueEmail,
         email: uniqueEmail,
-        passwordHash: "argon2$integration"
+        emailVerifiedAt: new Date("2026-06-14T10:00:00.000Z")
       },
       roles: ["client"]
     });

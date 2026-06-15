@@ -6,7 +6,6 @@ import { assertDevelopmentDatabaseUrl } from "../../../connection";
 import { createPostgresRuntime } from "../../../runtime";
 
 const databaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
-const integrationPasswordHash = "argon2$integration";
 
 describe("customer registration with initial session Drizzle/PostgreSQL integration", () => {
   const runtime = createPostgresRuntime({
@@ -42,7 +41,7 @@ describe("customer registration with initial session Drizzle/PostgreSQL integrat
         provider: "email",
         providerSubject: firstEmail,
         email: firstEmail,
-        passwordHash: integrationPasswordHash
+        emailVerifiedAt: createdAt
       },
       roles: ["client"],
       session: {
@@ -61,7 +60,7 @@ describe("customer registration with initial session Drizzle/PostgreSQL integrat
           provider: "email",
           providerSubject: failedEmail,
           email: failedEmail,
-          passwordHash: integrationPasswordHash
+          emailVerifiedAt: createdAt
         },
         roles: ["client"],
         session: {

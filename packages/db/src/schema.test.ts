@@ -1,6 +1,10 @@
 import { platformRoles } from "@elevenhouse/auth";
 import { describe, expect, it } from "vitest";
 import {
+  authChallengeDeliveries,
+  authChallengeDeliveryStatusValues,
+  authChallenges,
+  authChallengeStatusValues,
   authSecurityEventTypeValues,
   authSessionStatusValues,
   databasePlatformRoleValues,
@@ -23,6 +27,19 @@ describe("database account schema constants", () => {
 
   it("keeps auth session statuses explicit", () => {
     expect(authSessionStatusValues).toEqual(["active", "revoked"]);
+  });
+
+  it("keeps auth challenge statuses explicit", () => {
+    expect(authChallengeStatusValues).toEqual(["pending", "consumed", "cancelled"]);
+  });
+
+  it("keeps auth challenge delivery statuses explicit", () => {
+    expect(authChallengeDeliveryStatusValues).toEqual(["queued", "sent", "failed"]);
+  });
+
+  it("exports passwordless auth challenge tables", () => {
+    expect(authChallenges).toBeDefined();
+    expect(authChallengeDeliveries).toBeDefined();
   });
 
   it("keeps auth security event types explicit", () => {

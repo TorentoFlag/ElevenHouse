@@ -82,6 +82,12 @@ export function createAccountRegistrationStore(
         providerSubject: row.providerSubject,
         ...(row.email === null ? {} : { email: row.email }),
         ...(row.phoneNumber === null ? {} : { phoneNumber: row.phoneNumber }),
+        ...(row.emailVerifiedAt === null
+          ? {}
+          : { emailVerifiedAt: row.emailVerifiedAt.toISOString() }),
+        ...(row.phoneVerifiedAt === null
+          ? {}
+          : { phoneVerifiedAt: row.phoneVerifiedAt.toISOString() }),
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString()
       };
@@ -135,7 +141,12 @@ function toAuthIdentityInsert(
     providerSubject: input.providerSubject,
     ...(input.email === undefined ? {} : { email: input.email }),
     ...(input.phoneNumber === undefined ? {} : { phoneNumber: input.phoneNumber }),
-    ...(input.passwordHash === undefined ? {} : { passwordHash: input.passwordHash })
+    ...(input.emailVerifiedAt === undefined
+      ? {}
+      : { emailVerifiedAt: new Date(input.emailVerifiedAt) }),
+    ...(input.phoneVerifiedAt === undefined
+      ? {}
+      : { phoneVerifiedAt: new Date(input.phoneVerifiedAt) })
   };
 }
 

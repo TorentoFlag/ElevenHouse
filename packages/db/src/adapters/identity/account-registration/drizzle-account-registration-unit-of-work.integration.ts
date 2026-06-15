@@ -6,7 +6,6 @@ import { assertDevelopmentDatabaseUrl } from "../../../connection";
 import { createPostgresRuntime } from "../../../runtime";
 
 const databaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
-const integrationPasswordHash = "argon2$integration";
 
 describe("account registration Drizzle/PostgreSQL integration", () => {
   const runtime = createPostgresRuntime({
@@ -37,7 +36,7 @@ describe("account registration Drizzle/PostgreSQL integration", () => {
         provider: "email",
         providerSubject: uniqueEmail,
         email: uniqueEmail,
-        passwordHash: integrationPasswordHash
+        emailVerifiedAt: new Date("2026-06-15T10:00:00.000Z")
       },
       roles: ["client", "astrologer"]
     });
@@ -53,9 +52,9 @@ describe("account registration Drizzle/PostgreSQL integration", () => {
       provider: string;
       provider_subject: string;
       email: string | null;
-      has_password_hash: boolean;
+      email_verified_at: Date | null;
     }>(
-      `select user_id, provider, provider_subject, email, password_hash is not null as has_password_hash
+      `select user_id, provider, provider_subject, email, email_verified_at
        from auth_identities
        where user_id = $1`,
       [result.user.id]
@@ -72,7 +71,7 @@ describe("account registration Drizzle/PostgreSQL integration", () => {
         provider: "email",
         provider_subject: uniqueEmail,
         email: uniqueEmail,
-        has_password_hash: true
+        email_verified_at: new Date("2026-06-15T10:00:00.000Z")
       }
     ]);
     expect(persistedRoles.rows.map(({ role }) => role).sort()).toEqual(["astrologer", "client"]);

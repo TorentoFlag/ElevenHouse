@@ -2,8 +2,14 @@ import { customerPlatformRoles } from "@elevenhouse/auth";
 import { z } from "@elevenhouse/validation";
 
 export const customerAccountRoleSchema = z.enum(customerPlatformRoles);
+export const passwordlessAuthChannelSchema = z.enum(["email", "phone"]);
 
-export const customerAccountPasswordSchema = z.string().min(8).max(1024);
+const emailIdentifierSchema = z.string().trim().toLowerCase().email().max(320);
+const phoneIdentifierSchema = z
+  .string()
+  .trim()
+  .transform((value) => value.replace(/[\s().-]/g, ""))
+  .pipe(z.string().regex(/^\+[1-9]\d{7,14}$/));
 
 export const authenticatedCustomerAccountResponseSchema = z.object({
   account: z.object({
@@ -17,25 +23,46 @@ export type AuthenticatedCustomerAccountResponse = z.infer<
   typeof authenticatedCustomerAccountResponseSchema
 >;
 
-export const registerCustomerAccountRequestSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(320),
-  password: customerAccountPasswordSchema,
-  roles: z.array(customerAccountRoleSchema).min(1)
-});
+export const requestPasswordlessCodeRequestSchema = z.discriminatedUnion("channel", [
+  z.object({
+    channel: z.literal("email"),
+    identifier: emailIdentifierSchema,
+    roles: z.array(customerAccountRoleSchema).min(1)
+  }),
+  z.object({
+    channel: z.literal("phone"),
+    identifier: phoneIdentifierSchema,
+    roles: z.array(customerAccountRoleSchema).min(1)
+  })
+]);
 
-export type RegisterCustomerAccountRequest = z.infer<
-  typeof registerCustomerAccountRequestSchema
+export type RequestPasswordlessCodeRequest = z.infer<
+  typeof requestPasswordlessCodeRequestSchema
 >;
 
-export const registerCustomerAccountResponseSchema = authenticatedCustomerAccountResponseSchema;
-
-export type RegisterCustomerAccountResponse = z.infer<
-  typeof registerCustomerAccountResponseSchema
->;
-
-export const loginCustomerAccountRequestSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(320),
-  password: z.string().min(1).max(1024)
+export const requestPasswordlessCodeResponseSchema = z.object({
+  challengeId: z.string().uuid(),
+  channel: passwordlessAuthChannelSchema,
+  maskedIdentifier: z.string().min(1),
+  expiresAt: z.string().datetime(),
+  resendAvailableAt: z.string().datetime()
 });
 
-export type LoginCustomerAccountRequest = z.infer<typeof loginCustomerAccountRequestSchema>;
+export type RequestPasswordlessCodeResponse = z.infer<
+  typeof requestPasswordlessCodeResponseSchema
+>;
+
+export const verifyPasswordlessCodeRequestSchema = z.object({
+  challengeId: z.string().uuid(),
+  code: z.string().regex(/^\d{6}$/)
+});
+
+export type VerifyPasswordlessCodeRequest = z.infer<
+  typeof verifyPasswordlessCodeRequestSchema
+>;
+
+export const verifyPasswordlessCodeResponseSchema = authenticatedCustomerAccountResponseSchema;
+
+export type VerifyPasswordlessCodeResponse = z.infer<
+  typeof verifyPasswordlessCodeResponseSchema
+>;
