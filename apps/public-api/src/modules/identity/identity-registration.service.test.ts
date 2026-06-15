@@ -1,8 +1,5 @@
 import { BadRequestException, ConflictException } from "@nestjs/common";
-import type {
-  RegisterCustomerAccountRequest,
-  RegisterCustomerAccountResponse
-} from "@elevenhouse/contracts";
+import type { RegisterCustomerAccountRequest } from "@elevenhouse/contracts";
 import { CustomerAccountIdentityConflictError } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import type { DomainCustomerAccountRegistrationHandler } from "./identity-registration.handler";
@@ -11,12 +8,18 @@ import { IdentityRegistrationService } from "./identity-registration.service";
 describe("IdentityRegistrationService", () => {
   it("normalizes a public registration request and returns a contract-valid response", async () => {
     const registrationResponse = {
-      account: {
-        id: "8e14390f-3db1-4d1c-9344-55679c778427",
-        status: "active",
-        roles: ["client", "astrologer"]
+      response: {
+        account: {
+          id: "8e14390f-3db1-4d1c-9344-55679c778427",
+          status: "active",
+          roles: ["client", "astrologer"]
+        }
+      },
+      session: {
+        token: "raw-session-token",
+        expiresAt: "2026-06-21T10:00:00.000Z"
       }
-    } satisfies RegisterCustomerAccountResponse;
+    };
     const handler = {
       registerCustomerAccount: vi.fn(async () => registrationResponse)
     };
@@ -36,10 +39,16 @@ describe("IdentityRegistrationService", () => {
       roles: ["client", "astrologer"]
     });
     expect(response).toEqual({
-      account: {
-        id: "8e14390f-3db1-4d1c-9344-55679c778427",
-        status: "active",
-        roles: ["client", "astrologer"]
+      response: {
+        account: {
+          id: "8e14390f-3db1-4d1c-9344-55679c778427",
+          status: "active",
+          roles: ["client", "astrologer"]
+        }
+      },
+      session: {
+        token: "raw-session-token",
+        expiresAt: "2026-06-21T10:00:00.000Z"
       }
     });
   });

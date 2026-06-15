@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isInternalPlatformRole, isPlatformRole, platformRoles } from "./index";
+import {
+  createSessionToken,
+  hashSessionToken,
+  isInternalPlatformRole,
+  platformRoles,
+  publicSessionCookieName,
+  isPlatformRole
+} from "./index";
 
 describe("isPlatformRole", () => {
   it("accepts known platform roles", () => {
@@ -26,5 +33,24 @@ describe("isInternalPlatformRole", () => {
   it("rejects customer-facing roles", () => {
     expect(isInternalPlatformRole("client")).toBe(false);
     expect(isInternalPlatformRole("astrologer")).toBe(false);
+  });
+});
+
+describe("session token primitives", () => {
+  it("creates high-entropy URL-safe session tokens", () => {
+    const token = createSessionToken();
+
+    expect(token).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(token.length).toBeGreaterThanOrEqual(43);
+  });
+
+  it("hashes session tokens without exposing raw token values", () => {
+    expect(hashSessionToken("session-token")).toBe(
+      "c101e911469c969171040b50d70543313cf968fdef5bacc780776f8fb399ab36"
+    );
+  });
+
+  it("uses a host-prefixed public session cookie name", () => {
+    expect(publicSessionCookieName).toBe("__Host-elevenhouse_public_session");
   });
 });

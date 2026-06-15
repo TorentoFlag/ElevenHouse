@@ -2,11 +2,13 @@ import { BadRequestException, ConflictException, Injectable } from "@nestjs/comm
 import {
   registerCustomerAccountRequestSchema,
   registerCustomerAccountResponseSchema,
-  type RegisterCustomerAccountRequest,
-  type RegisterCustomerAccountResponse
+  type RegisterCustomerAccountRequest
 } from "@elevenhouse/contracts";
 import { CustomerAccountIdentityConflictError } from "@elevenhouse/domain";
-import { DomainCustomerAccountRegistrationHandler } from "./identity-registration.handler";
+import {
+  DomainCustomerAccountRegistrationHandler,
+  type RegisterCustomerAccountWithSessionResult
+} from "./identity-registration.handler";
 
 @Injectable()
 export class IdentityRegistrationService {
@@ -14,7 +16,7 @@ export class IdentityRegistrationService {
 
   async registerCustomerAccount(
     body: RegisterCustomerAccountRequest
-  ): Promise<RegisterCustomerAccountResponse> {
+  ): Promise<RegisterCustomerAccountWithSessionResult> {
     const request = registerCustomerAccountRequestSchema.safeParse(body);
 
     if (!request.success) {
@@ -24,14 +26,17 @@ export class IdentityRegistrationService {
       });
     }
 
-    const response = await this.registerCustomerAccountThroughHandler(request.data);
+    const result = await this.registerCustomerAccountThroughHandler(request.data);
 
-    return registerCustomerAccountResponseSchema.parse(response);
+    return {
+      response: registerCustomerAccountResponseSchema.parse(result.response),
+      session: result.session
+    };
   }
 
   private async registerCustomerAccountThroughHandler(
     request: RegisterCustomerAccountRequest
-  ): Promise<RegisterCustomerAccountResponse> {
+  ): Promise<RegisterCustomerAccountWithSessionResult> {
     try {
       return await this.handler.registerCustomerAccount(request);
     } catch (error) {
