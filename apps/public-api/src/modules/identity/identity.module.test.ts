@@ -1,12 +1,18 @@
-import type { CustomerAccountRegistrationSessionUnitOfWork } from "@elevenhouse/domain";
+import type {
+  AuthSessionAuthenticationStore,
+  AuthenticatedSessionContext,
+  CustomerAccountRegistrationSessionUnitOfWork
+} from "@elevenhouse/domain";
 import { ConfigService } from "@nestjs/config";
 import { Test } from "@nestjs/testing";
 import { describe, expect, it, vi } from "vitest";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityRegistrationService } from "./identity-registration.service";
 import { IdentityModule } from "./identity.module";
+import { AUTH_SESSION_AUTHENTICATION_STORE } from "./identity-auth.tokens";
 import { CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK } from "./identity-registration.tokens";
 import { Argon2PasswordHasher, type PasswordHasher } from "./identity-registration.handler";
+import { IdentityCurrentSessionService } from "./identity-current-session.service";
 import { PublicSessionTokenIssuer, SystemClock } from "./identity-session.service";
 
 describe("IdentityModule", () => {
@@ -49,6 +55,33 @@ describe("IdentityModule", () => {
     const passwordHasher: PasswordHasher = {
       hashPassword: vi.fn(async () => "argon2id$hash")
     };
+    const authenticatedContext = {
+      session: {
+        id: "session_1",
+        userId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        tokenHash: "hashed-session-token",
+        status: "active",
+        createdAt: "2026-06-14T10:00:00.000Z",
+        expiresAt: "2026-06-21T10:00:00.000Z"
+      },
+      user: {
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "active",
+        createdAt: "2026-06-14T10:00:00.000Z",
+        updatedAt: "2026-06-14T10:00:00.000Z"
+      },
+      roleAssignments: [
+        {
+          id: "role_client",
+          userId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          role: "client",
+          assignedAt: "2026-06-14T10:00:00.000Z"
+        }
+      ]
+    } satisfies AuthenticatedSessionContext;
+    const authSessionAuthenticationStore: AuthSessionAuthenticationStore = {
+      findByTokenHash: vi.fn(async () => authenticatedContext)
+    };
     const moduleRef = await Test.createTestingModule({
       imports: [IdentityModule]
     })
@@ -70,6 +103,8 @@ describe("IdentityModule", () => {
       })
       .overrideProvider(CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK)
       .useValue(registration)
+      .overrideProvider(AUTH_SESSION_AUTHENTICATION_STORE)
+      .useValue(authSessionAuthenticationStore)
       .overrideProvider(Argon2PasswordHasher)
       .useValue(passwordHasher)
       .overrideProvider(PublicSessionTokenIssuer)
@@ -86,6 +121,7 @@ describe("IdentityModule", () => {
       .compile();
 
     const service = moduleRef.get(IdentityRegistrationService);
+    const currentSessionService = moduleRef.get(IdentityCurrentSessionService);
 
     await expect(
       service.registerCustomerAccount({
@@ -104,6 +140,19 @@ describe("IdentityModule", () => {
       session: {
         token: "raw-session-token",
         expiresAt: "2026-06-21T10:00:00.000Z"
+      }
+    });
+    await expect(
+      currentSessionService.resolveCurrentCustomerAccount({
+        headers: {
+          cookie: "__Host-elevenhouse_public_session=raw-session-token"
+        }
+      })
+    ).resolves.toEqual({
+      account: {
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "active",
+        roles: ["client"]
       }
     });
 
