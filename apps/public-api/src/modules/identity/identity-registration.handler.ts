@@ -1,19 +1,14 @@
 import { Inject, Injectable } from "@nestjs/common";
 import {
-  createAuthenticatedSession,
-  registerCustomerAccount as registerCustomerAccountUseCase,
-  type AccountRegistrationUnitOfWork,
-  type AuthSessionCreationUnitOfWork
+  registerCustomerAccountWithSession,
+  type CustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
 import {
   type RegisterCustomerAccountRequest,
   type RegisterCustomerAccountResponse
 } from "@elevenhouse/contracts";
 import { argon2id, hash } from "argon2";
-import {
-  ACCOUNT_REGISTRATION_UNIT_OF_WORK,
-  AUTH_SESSION_CREATION_UNIT_OF_WORK
-} from "./identity-registration.tokens";
+import { CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK } from "./identity-registration.tokens";
 import {
   PublicSessionTokenIssuer,
   SystemClock,
@@ -55,10 +50,8 @@ export class Argon2PasswordHasher implements PasswordHasher {
 @Injectable()
 export class DomainCustomerAccountRegistrationHandler {
   constructor(
-    @Inject(ACCOUNT_REGISTRATION_UNIT_OF_WORK)
-    private readonly accountRegistration: AccountRegistrationUnitOfWork,
-    @Inject(AUTH_SESSION_CREATION_UNIT_OF_WORK)
-    private readonly authSessionCreation: AuthSessionCreationUnitOfWork,
+    @Inject(CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK)
+    private readonly registration: CustomerAccountRegistrationSessionUnitOfWork,
     private readonly passwordHasher: Argon2PasswordHasher,
     private readonly sessionTokenIssuer: PublicSessionTokenIssuer,
     private readonly clock: SystemClock,
@@ -70,32 +63,29 @@ export class DomainCustomerAccountRegistrationHandler {
     input: RegisterCustomerAccountRequest
   ): Promise<RegisterCustomerAccountWithSessionResult> {
     const passwordHash = await this.passwordHasher.hashPassword(input.password);
-    const result = await registerCustomerAccountUseCase({
-      accountRegistration: this.accountRegistration,
+    const now = this.clock.now();
+    const expiresAt = new Date(now.getTime() + this.sessionOptions.sessionTtlSeconds * 1000);
+    const issuedToken = this.sessionTokenIssuer.issueSessionToken();
+    const result = await registerCustomerAccountWithSession({
+      registration: this.registration,
       identity: {
         provider: "email",
         providerSubject: input.email,
         email: input.email,
         passwordHash
       },
-      roles: input.roles
+      roles: input.roles,
+      session: {
+        tokenHash: issuedToken.tokenHash,
+        createdAt: now,
+        expiresAt
+      },
+      securityEventType: "registration_succeeded"
     });
 
     if (result.user.status !== "active") {
       throw new Error(`Registered customer account has unexpected status: ${result.user.status}`);
     }
-
-    const now = this.clock.now();
-    const expiresAt = new Date(now.getTime() + this.sessionOptions.sessionTtlSeconds * 1000);
-    const issuedToken = this.sessionTokenIssuer.issueSessionToken();
-    const sessionResult = await createAuthenticatedSession({
-      sessionCreation: this.authSessionCreation,
-      userId: result.user.id,
-      tokenHash: issuedToken.tokenHash,
-      createdAt: now,
-      expiresAt,
-      securityEventType: "registration_succeeded"
-    });
 
     return {
       response: {
@@ -107,7 +97,7 @@ export class DomainCustomerAccountRegistrationHandler {
       },
       session: {
         token: issuedToken.token,
-        expiresAt: sessionResult.session.expiresAt
+        expiresAt: result.session.expiresAt
       }
     };
   }

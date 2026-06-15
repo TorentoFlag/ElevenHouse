@@ -1,7 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { createDrizzleAccountRegistrationUnitOfWork } from "@elevenhouse/db/account-registration";
-import { createDrizzleAuthSessionCreationUnitOfWork } from "@elevenhouse/db/auth-sessions";
+import { createDrizzleCustomerAccountRegistrationSessionUnitOfWork } from "@elevenhouse/db/account-registration";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityRegistrationController } from "./identity-registration.controller";
@@ -9,10 +8,7 @@ import {
   Argon2PasswordHasher,
   DomainCustomerAccountRegistrationHandler
 } from "./identity-registration.handler";
-import {
-  ACCOUNT_REGISTRATION_UNIT_OF_WORK,
-  AUTH_SESSION_CREATION_UNIT_OF_WORK
-} from "./identity-registration.tokens";
+import { CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK } from "./identity-registration.tokens";
 import { IdentityRegistrationService } from "./identity-registration.service";
 import {
   PublicSessionCookieService,
@@ -31,15 +27,9 @@ import {
     SystemClock,
     DomainCustomerAccountRegistrationHandler,
     {
-      provide: ACCOUNT_REGISTRATION_UNIT_OF_WORK,
+      provide: CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
-        createDrizzleAccountRegistrationUnitOfWork(postgresRuntime.database),
-      inject: [PostgresRuntimeService]
-    },
-    {
-      provide: AUTH_SESSION_CREATION_UNIT_OF_WORK,
-      useFactory: (postgresRuntime: PostgresRuntimeService) =>
-        createDrizzleAuthSessionCreationUnitOfWork(postgresRuntime.database),
+        createDrizzleCustomerAccountRegistrationSessionUnitOfWork(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     },
     {

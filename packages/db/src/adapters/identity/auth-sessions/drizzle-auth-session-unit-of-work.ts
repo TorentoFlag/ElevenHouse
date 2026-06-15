@@ -74,7 +74,7 @@ export function createDrizzleAuthSessionAuthenticationStore(
   };
 }
 
-function createAuthSessionCreationStore(
+export function createAuthSessionCreationStore(
   executor: AuthSessionCreationDrizzleExecutor
 ): AuthSessionCreationStore {
   return {

@@ -1,8 +1,6 @@
 import type {
-  AccountRegistrationStore,
-  AccountRegistrationUnitOfWork,
-  AuthSessionCreationStore,
-  AuthSessionCreationUnitOfWork
+  CustomerAccountRegistrationSessionStore,
+  CustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -11,8 +9,8 @@ import {
   type SessionTokenIssuer
 } from "./identity-registration.handler";
 
-function createAccountRegistrationUnitOfWork() {
-  const store: AccountRegistrationStore = {
+function createCustomerAccountRegistrationSessionUnitOfWork() {
+  const store: CustomerAccountRegistrationSessionStore = {
     createUser: vi.fn(async (input) => ({
       id: "8e14390f-3db1-4d1c-9344-55679c778427",
       status: input.status,
@@ -33,17 +31,7 @@ function createAccountRegistrationUnitOfWork() {
       userId: input.userId,
       role: input.role,
       assignedAt: "2026-06-14T00:00:00.000Z"
-    }))
-  };
-  const accountRegistration: AccountRegistrationUnitOfWork = {
-    transact: async (operation) => operation(store)
-  };
-
-  return { accountRegistration, store };
-}
-
-function createAuthSessionCreationUnitOfWork() {
-  const store: AuthSessionCreationStore = {
+    })),
     createSession: vi.fn(async (input) => ({
       id: "session_1",
       status: "active",
@@ -54,17 +42,16 @@ function createAuthSessionCreationUnitOfWork() {
       ...input
     }))
   };
-  const authSessionCreation: AuthSessionCreationUnitOfWork = {
+  const registration: CustomerAccountRegistrationSessionUnitOfWork = {
     transact: async (operation) => operation(store)
   };
 
-  return { authSessionCreation, store };
+  return { registration, store };
 }
 
 describe("DomainCustomerAccountRegistrationHandler", () => {
   it("hashes the password, registers the account, creates an initial session and returns an API response with a raw session token", async () => {
-    const { accountRegistration, store } = createAccountRegistrationUnitOfWork();
-    const { authSessionCreation, store: sessionStore } = createAuthSessionCreationUnitOfWork();
+    const { registration, store } = createCustomerAccountRegistrationSessionUnitOfWork();
     const passwordHasher: PasswordHasher = {
       hashPassword: vi.fn(async () => "argon2id$hash")
     };
@@ -75,8 +62,7 @@ describe("DomainCustomerAccountRegistrationHandler", () => {
       }))
     };
     const handler = new DomainCustomerAccountRegistrationHandler(
-      accountRegistration,
-      authSessionCreation,
+      registration,
       passwordHasher,
       sessionTokenIssuer,
       {
@@ -101,13 +87,13 @@ describe("DomainCustomerAccountRegistrationHandler", () => {
       email: "client@example.com",
       passwordHash: "argon2id$hash"
     });
-    expect(sessionStore.createSession).toHaveBeenCalledWith({
+    expect(store.createSession).toHaveBeenCalledWith({
       userId: "8e14390f-3db1-4d1c-9344-55679c778427",
       tokenHash: "hashed-session-token",
       createdAt: "2026-06-14T10:00:00.000Z",
       expiresAt: "2026-06-21T10:00:00.000Z"
     });
-    expect(sessionStore.recordSecurityEvent).toHaveBeenCalledWith({
+    expect(store.recordSecurityEvent).toHaveBeenCalledWith({
       userId: "8e14390f-3db1-4d1c-9344-55679c778427",
       sessionId: "session_1",
       eventType: "registration_succeeded",
