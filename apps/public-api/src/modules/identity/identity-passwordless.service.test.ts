@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   ServiceUnavailableException,
   UnauthorizedException
 } from "@nestjs/common";
@@ -11,6 +13,7 @@ import type {
 import {
   CustomerAccountIdentityConflictError,
   PasswordlessCodeDeliveryUnavailableError,
+  PasswordlessCodeRequestCooldownError,
   PasswordlessCodeVerificationError
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
@@ -114,6 +117,37 @@ describe("IdentityPasswordlessService", () => {
         roles: ["client"]
       })
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it("maps resend cooldowns to too many requests responses", async () => {
+    const handler = {
+      requestCode: vi.fn(async () => {
+        throw new PasswordlessCodeRequestCooldownError("2026-06-16T10:01:00.000Z");
+      }),
+      verifyCode: vi.fn()
+    };
+    const service = new IdentityPasswordlessService(
+      handler as unknown as DomainPasswordlessAuthHandler
+    );
+
+    let error: unknown;
+
+    try {
+      await service.requestCode({
+        channel: "email",
+        identifier: "client@example.com",
+        roles: ["client"]
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(HttpException);
+    expect((error as HttpException).getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+    expect((error as HttpException).getResponse()).toEqual({
+      message: "Passwordless code request is on cooldown",
+      resendAvailableAt: "2026-06-16T10:01:00.000Z"
+    });
   });
 
   it("verifies a code and returns a contract-valid response with session metadata", async () => {

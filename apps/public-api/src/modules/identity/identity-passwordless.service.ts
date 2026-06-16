@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   ServiceUnavailableException,
   UnauthorizedException
@@ -17,6 +19,7 @@ import {
 import {
   CustomerAccountIdentityConflictError,
   PasswordlessCodeDeliveryUnavailableError,
+  PasswordlessCodeRequestCooldownError,
   PasswordlessCodeVerificationError
 } from "@elevenhouse/domain";
 import {
@@ -45,6 +48,17 @@ export class IdentityPasswordlessService {
         await this.handler.requestCode(request.data)
       );
     } catch (error) {
+      if (error instanceof PasswordlessCodeRequestCooldownError) {
+        throw new HttpException(
+          {
+            message: "Passwordless code request is on cooldown",
+            resendAvailableAt: error.resendAvailableAt
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+          { cause: error }
+        );
+      }
+
       if (error instanceof PasswordlessCodeDeliveryUnavailableError) {
         throw new ServiceUnavailableException("Passwordless code delivery is unavailable", {
           cause: error

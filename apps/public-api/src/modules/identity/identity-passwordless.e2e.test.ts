@@ -145,6 +145,28 @@ describe("passwordless public auth HTTP flow", () => {
     });
   });
 
+  it("rejects duplicate passwordless code requests during resend cooldown", async () => {
+    const firstResponse = await postJson("/identity/passwordless/request-code", {
+      channel: "email",
+      identifier: "client@example.com",
+      roles: ["client"]
+    });
+    const duplicateResponse = await postJson("/identity/passwordless/request-code", {
+      channel: "email",
+      identifier: "CLIENT@example.com",
+      roles: ["client"]
+    });
+
+    expect(firstResponse.status).toBe(201);
+    expect(duplicateResponse.status).toBe(429);
+    expect(duplicateResponse.body).toEqual({
+      message: "Passwordless code request is on cooldown",
+      resendAvailableAt: "2026-06-16T10:01:00.000Z"
+    });
+    expect(store.authChallenges).toHaveLength(1);
+    expect(store.authChallengeDeliveries).toHaveLength(1);
+  });
+
   it("rejects wrong codes without setting a session cookie and still accepts the correct code", async () => {
     const requestResponse = await postJson("/identity/passwordless/request-code", {
       channel: "email",
@@ -370,6 +392,21 @@ class InMemoryPasswordlessAuthStore implements PasswordlessAuthStore, AuthSessio
       cancelledAt: input.cancelledAt,
       updatedAt: input.cancelledAt
     });
+  }
+
+  async findPendingChallengeByIdentifier(
+    input: Parameters<NonNullable<PasswordlessAuthStore["findPendingChallengeByIdentifier"]>>[0]
+  ): Promise<AuthChallenge | null> {
+    return (
+      [...this.authChallenges]
+        .reverse()
+        .find(
+          (challenge) =>
+            challenge.channel === input.channel &&
+            challenge.identifierNormalized === input.identifierNormalized &&
+            challenge.status === "pending"
+        ) ?? null
+    );
   }
 
   async findChallengeById(challengeId: string): Promise<AuthChallenge | null> {
