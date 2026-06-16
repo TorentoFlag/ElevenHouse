@@ -3,6 +3,7 @@ import {
   normalizeOptionalString,
   normalizePasswordlessIdentifier,
   normalizeRequestedCustomerRoles,
+  PasswordlessCodeRequestCooldownError,
   PasswordlessCodeDeliveryUnavailableError,
   type AuthChallenge,
   type AuthChallengeDelivery,
@@ -29,6 +30,10 @@ export type AuthCodeDeliveryPort = {
 };
 
 export type PasswordlessCodeRequestStore = {
+  readonly findPendingChallengeByIdentifier?: (input: {
+    readonly channel: PasswordlessAuthChannel;
+    readonly identifierNormalized: string;
+  }) => Promise<AuthChallenge | null>;
   readonly createChallenge: (input: {
     readonly channel: PasswordlessAuthChannel;
     readonly identifier: string;
@@ -89,6 +94,19 @@ export async function requestPasswordlessCode(input: {
   const resendAvailableAt = new Date(
     input.now.getTime() + input.resendCooldownSeconds * 1000
   ).toISOString();
+  const existingPendingChallenge = await input.store.findPendingChallengeByIdentifier?.({
+    channel: input.channel,
+    identifierNormalized
+  });
+
+  if (existingPendingChallenge) {
+    await assertCanReplacePendingChallenge({
+      store: input.store,
+      challenge: existingPendingChallenge,
+      now: input.now
+    });
+  }
+
   const challenge = await input.store.createChallenge({
     channel: input.channel,
     identifier,
@@ -143,6 +161,25 @@ export async function requestPasswordlessCode(input: {
     expiresAt: challenge.expiresAt,
     resendAvailableAt: challenge.resendAvailableAt
   };
+}
+
+async function assertCanReplacePendingChallenge(input: {
+  readonly store: PasswordlessCodeRequestStore;
+  readonly challenge: AuthChallenge;
+  readonly now: Date;
+}): Promise<void> {
+  const nowTime = input.now.getTime();
+  const expiresAtTime = new Date(input.challenge.expiresAt).getTime();
+  const resendAvailableAtTime = new Date(input.challenge.resendAvailableAt).getTime();
+
+  if (expiresAtTime > nowTime && resendAvailableAtTime > nowTime) {
+    throw new PasswordlessCodeRequestCooldownError(input.challenge.resendAvailableAt);
+  }
+
+  await input.store.cancelChallenge({
+    challengeId: input.challenge.id,
+    cancelledAt: input.now.toISOString()
+  });
 }
 
 function optional<K extends string, V>(

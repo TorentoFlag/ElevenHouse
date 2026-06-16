@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { requestPasswordlessCode } from "./passwordless-request";
+import { PasswordlessCodeRequestCooldownError } from "./passwordless-challenge";
 
 describe("requestPasswordlessCode", () => {
   it("creates a challenge, delivers the code and records delivery metadata", async () => {
@@ -179,5 +180,112 @@ describe("requestPasswordlessCode", () => {
       expiresAt: "2026-06-15T10:10:00.000Z"
     });
     expect(result.maskedIdentifier).toBe("+15***90");
+  });
+
+  it("rejects a duplicate request while an existing pending challenge is in resend cooldown", async () => {
+    const store = {
+      findPendingChallengeByIdentifier: vi.fn(async () => ({
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        channel: "email" as const,
+        identifier: "client@example.com",
+        identifierNormalized: "client@example.com",
+        codeHash: "hash",
+        requestedRoles: ["client"] as const,
+        status: "pending" as const,
+        attempts: 0,
+        maxAttempts: 5,
+        expiresAt: "2026-06-15T10:10:00.000Z",
+        resendAvailableAt: "2026-06-15T10:01:00.000Z",
+        createdAt: "2026-06-15T10:00:00.000Z",
+        updatedAt: "2026-06-15T10:00:00.000Z"
+      })),
+      createChallenge: vi.fn(),
+      recordDelivery: vi.fn(),
+      cancelChallenge: vi.fn()
+    };
+    const delivery = {
+      deliverAuthCode: vi.fn()
+    };
+
+    await expect(
+      requestPasswordlessCode({
+        store,
+        delivery,
+        channel: "email",
+        identifier: "CLIENT@example.com",
+        roles: ["client"],
+        code: "123456",
+        codeSecret: "test-secret",
+        now: new Date("2026-06-15T10:00:30.000Z"),
+        ttlSeconds: 600,
+        resendCooldownSeconds: 60,
+        maxAttempts: 5
+      })
+    ).rejects.toBeInstanceOf(PasswordlessCodeRequestCooldownError);
+
+    expect(store.findPendingChallengeByIdentifier).toHaveBeenCalledWith({
+      channel: "email",
+      identifierNormalized: "client@example.com"
+    });
+    expect(store.createChallenge).not.toHaveBeenCalled();
+    expect(delivery.deliverAuthCode).not.toHaveBeenCalled();
+    expect(store.cancelChallenge).not.toHaveBeenCalled();
+  });
+
+  it("cancels an existing pending challenge when cooldown has elapsed before creating a new one", async () => {
+    const store = {
+      findPendingChallengeByIdentifier: vi.fn(async () => ({
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        channel: "email" as const,
+        identifier: "client@example.com",
+        identifierNormalized: "client@example.com",
+        codeHash: "hash",
+        requestedRoles: ["client"] as const,
+        status: "pending" as const,
+        attempts: 0,
+        maxAttempts: 5,
+        expiresAt: "2026-06-15T10:10:00.000Z",
+        resendAvailableAt: "2026-06-15T10:01:00.000Z",
+        createdAt: "2026-06-15T10:00:00.000Z",
+        updatedAt: "2026-06-15T10:00:00.000Z"
+      })),
+      createChallenge: vi.fn(async (input) => ({
+        id: "9e14390f-3db1-4d1c-9344-55679c778427",
+        ...input,
+        status: "pending" as const,
+        attempts: 0,
+        createdAt: "2026-06-15T10:01:30.000Z",
+        updatedAt: "2026-06-15T10:01:30.000Z"
+      })),
+      recordDelivery: vi.fn(async (input) => ({ id: "delivery_2", ...input })),
+      cancelChallenge: vi.fn(async () => undefined)
+    };
+    const delivery = {
+      deliverAuthCode: vi.fn(async () => ({
+        provider: "dev",
+        status: "sent" as const
+      }))
+    };
+
+    await requestPasswordlessCode({
+      store,
+      delivery,
+      channel: "email",
+      identifier: "client@example.com",
+      roles: ["client"],
+      code: "654321",
+      codeSecret: "test-secret",
+      now: new Date("2026-06-15T10:01:30.000Z"),
+      ttlSeconds: 600,
+      resendCooldownSeconds: 60,
+      maxAttempts: 5
+    });
+
+    expect(store.cancelChallenge).toHaveBeenCalledWith({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      cancelledAt: "2026-06-15T10:01:30.000Z"
+    });
+    expect(store.createChallenge).toHaveBeenCalled();
+    expect(delivery.deliverAuthCode).toHaveBeenCalled();
   });
 });

@@ -59,6 +59,13 @@ export class PasswordlessCodeDeliveryUnavailableError extends Error {
   }
 }
 
+export class PasswordlessCodeRequestCooldownError extends Error {
+  constructor(readonly resendAvailableAt: string) {
+    super("Passwordless code request is on cooldown");
+    this.name = "PasswordlessCodeRequestCooldownError";
+  }
+}
+
 export class PasswordlessCodeVerificationError extends Error {
   constructor() {
     super("Invalid or expired passwordless code");
