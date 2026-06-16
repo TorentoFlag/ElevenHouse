@@ -1,6 +1,7 @@
 import {
   hashPasswordlessCode,
   PasswordlessCodeRequestCooldownError,
+  PasswordlessCodeVerificationError,
   requestPasswordlessCode,
   verifyPasswordlessCode
 } from "@elevenhouse/domain";
@@ -33,6 +34,7 @@ type QueryCall = {
   readonly args: unknown;
 };
 type FakeInsertResult = Record<string, unknown> | Error;
+type FakeUpdateResult = Record<string, unknown> | null;
 
 type FakeDrizzleDatabase = PasswordlessAuthDrizzleDatabase & {
   readonly inserts: InsertCall[];
@@ -49,6 +51,7 @@ const codeSecret = "test-secret";
 
 function createFakeDrizzleDatabase(input: {
   readonly insertRows?: readonly FakeInsertResult[];
+  readonly updateRows?: readonly FakeUpdateResult[];
   readonly challengeRows?: readonly (Record<string, unknown> | null)[];
   readonly identityRows?: readonly (Record<string, unknown> | null)[];
 }): FakeDrizzleDatabase {
@@ -57,6 +60,7 @@ function createFakeDrizzleDatabase(input: {
   const queries: QueryCall[] = [];
   let transactionCalls = 0;
   let nextInsertRowIndex = 0;
+  let nextUpdateRowIndex = 0;
   let nextChallengeRowIndex = 0;
   let nextIdentityRowIndex = 0;
 
@@ -78,8 +82,21 @@ function createFakeDrizzleDatabase(input: {
   })) as unknown as PasswordlessAuthDrizzleExecutor["insert"];
   const update = ((table: unknown) => ({
     set: (value: Record<string, unknown>) => ({
-      where: async () => {
+      where: () => {
         updates.push({ table, value });
+
+        return {
+          returning: async () => {
+            const row = input.updateRows?.[nextUpdateRowIndex];
+            nextUpdateRowIndex += 1;
+
+            if (row === null) {
+              return [];
+            }
+
+            return [row ?? {}];
+          }
+        };
       }
     })
   })) as unknown as PasswordlessAuthDrizzleExecutor["update"];
@@ -560,6 +577,42 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
     expect(result.authIdentity.emailVerifiedAt).toBe("2026-06-15T10:03:00.000Z");
   });
 
+  it("rejects verification when a concurrent verifier already consumed the challenge", async () => {
+    const database = createFakeDrizzleDatabase({
+      challengeRows: [createChallengeRow()],
+      updateRows: [null]
+    });
+
+    await expect(
+      createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
+        verifyPasswordlessCode({
+          store,
+          challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          code: "123456",
+          codeSecret,
+          now: verifyNow,
+          session: {
+            tokenHash: "session_hash",
+            createdAt: verifyNow,
+            expiresAt: new Date("2026-06-22T10:03:00.000Z")
+          }
+        })
+      )
+    ).rejects.toBeInstanceOf(PasswordlessCodeVerificationError);
+
+    expect(database.updates).toEqual([
+      {
+        table: authChallenges,
+        value: {
+          status: "consumed",
+          consumedAt: verifyNow,
+          updatedAt: verifyNow
+        }
+      }
+    ]);
+    expect(database.inserts).toEqual([]);
+  });
+
   it("creates a verified phone identity for a phone challenge", async () => {
     const database = createFakeDrizzleDatabase({
       challengeRows: [
@@ -736,5 +789,37 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
         }
       }
     ]);
+  });
+
+  it("rejects wrong-code verification when a concurrent update made the challenge unusable", async () => {
+    const database = createFakeDrizzleDatabase({
+      challengeRows: [createChallengeRow()],
+      updateRows: [null]
+    });
+
+    await expect(
+      createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
+        verifyPasswordlessCode({
+          store,
+          challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          code: "000000",
+          codeSecret,
+          now: verifyNow,
+          session: {
+            tokenHash: "session_hash",
+            createdAt: verifyNow,
+            expiresAt: new Date("2026-06-22T10:03:00.000Z")
+          }
+        })
+      )
+    ).rejects.toBeInstanceOf(PasswordlessCodeVerificationError);
+
+    expect(database.updates[0]).toMatchObject({
+      table: authChallenges,
+      value: {
+        updatedAt: verifyNow
+      }
+    });
+    expect(database.inserts).toEqual([]);
   });
 });

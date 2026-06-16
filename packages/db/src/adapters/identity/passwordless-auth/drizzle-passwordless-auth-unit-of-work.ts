@@ -1,5 +1,8 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { PasswordlessCodeRequestCooldownError } from "@elevenhouse/domain";
+import {
+  PasswordlessCodeRequestCooldownError,
+  PasswordlessCodeVerificationError
+} from "@elevenhouse/domain";
 import type {
   AuthChallenge,
   AuthChallengeDelivery,
@@ -128,24 +131,40 @@ export function createPasswordlessAuthStore(
       return row ? toAuthChallenge(row) : null;
     },
     incrementChallengeAttempts: async (input) => {
-      await executor
+      const rows = await executor
         .update(authChallenges)
         .set({
           attempts: sql`${authChallenges.attempts} + 1`,
           updatedAt: new Date(input.attemptedAt)
         })
-        .where(eq(authChallenges.id, input.challengeId));
+        .where(
+          and(
+            eq(authChallenges.id, input.challengeId),
+            eq(authChallenges.status, "pending"),
+            sql`${authChallenges.attempts} < ${authChallenges.maxAttempts}`
+          )
+        )
+        .returning({ id: authChallenges.id });
+
+      if (!rows[0]) {
+        throw new PasswordlessCodeVerificationError();
+      }
     },
     consumeChallenge: async (input) => {
       const consumedAt = new Date(input.consumedAt);
-      await executor
+      const rows = await executor
         .update(authChallenges)
         .set({
           status: "consumed",
           consumedAt,
           updatedAt: consumedAt
         })
-        .where(eq(authChallenges.id, input.challengeId));
+        .where(and(eq(authChallenges.id, input.challengeId), eq(authChallenges.status, "pending")))
+        .returning({ id: authChallenges.id });
+
+      if (!rows[0]) {
+        throw new PasswordlessCodeVerificationError();
+      }
     },
     findAuthIdentityByProviderSubject: async (input) => {
       const row = await executor.query.authIdentities.findFirst({
