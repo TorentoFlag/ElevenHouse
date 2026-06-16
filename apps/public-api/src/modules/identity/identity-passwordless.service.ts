@@ -29,7 +29,6 @@ import {
 } from "./identity-passwordless.handler";
 import { PASSWORDLESS_RATE_LIMITER } from "./identity-passwordless.tokens";
 import {
-  allowAllPasswordlessRateLimiter,
   anonymousPasswordlessIpAddress,
   type PasswordlessRateLimitPort,
   type PasswordlessRequestContext
@@ -40,7 +39,7 @@ export class IdentityPasswordlessService {
   constructor(
     private readonly handler: DomainPasswordlessAuthHandler,
     @Inject(PASSWORDLESS_RATE_LIMITER)
-    private readonly rateLimiter: PasswordlessRateLimitPort = allowAllPasswordlessRateLimiter
+    private readonly rateLimiter: PasswordlessRateLimitPort
   ) {}
 
   async requestCode(

@@ -18,9 +18,17 @@ import {
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import type { DomainPasswordlessAuthHandler } from "./identity-passwordless.handler";
+import {
+  allowAllPasswordlessRateLimiter,
+  type PasswordlessRateLimitPort
+} from "./identity-passwordless.rate-limit";
 import { IdentityPasswordlessService } from "./identity-passwordless.service";
 
 describe("IdentityPasswordlessService", () => {
+  it("declares the passwordless rate limiter as a required constructor dependency", () => {
+    expect(IdentityPasswordlessService.length).toBe(2);
+  });
+
   it("normalizes a passwordless code request and returns a contract-valid response", async () => {
     const codeResponse = {
       challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
@@ -33,9 +41,7 @@ describe("IdentityPasswordlessService", () => {
       requestCode: vi.fn(async () => codeResponse),
       verifyCode: vi.fn()
     };
-    const service = new IdentityPasswordlessService(
-      handler as unknown as DomainPasswordlessAuthHandler
-    );
+    const service = createService(handler);
 
     const response = await service.requestCode({
       channel: "email",
@@ -63,10 +69,7 @@ describe("IdentityPasswordlessService", () => {
       })),
       consumeVerifyCode: vi.fn()
     };
-    const service = new IdentityPasswordlessService(
-      handler as unknown as DomainPasswordlessAuthHandler,
-      rateLimiter
-    );
+    const service = createService(handler, rateLimiter);
 
     let error: unknown;
 
@@ -108,9 +111,7 @@ describe("IdentityPasswordlessService", () => {
       })),
       verifyCode: vi.fn()
     };
-    const service = new IdentityPasswordlessService(
-      handler as unknown as DomainPasswordlessAuthHandler
-    );
+    const service = createService(handler);
 
     await service.requestCode({
       channel: "phone",
@@ -130,9 +131,7 @@ describe("IdentityPasswordlessService", () => {
       requestCode: vi.fn(),
       verifyCode: vi.fn()
     };
-    const service = new IdentityPasswordlessService(
-      handler as unknown as DomainPasswordlessAuthHandler
-    );
+    const service = createService(handler);
 
     await expect(
       service.requestCode({
@@ -152,9 +151,7 @@ describe("IdentityPasswordlessService", () => {
       }),
       verifyCode: vi.fn()
     };
-    const service = new IdentityPasswordlessService(
-      handler as unknown as DomainPasswordlessAuthHandler
-    );
+    const service = createService(handler);
 
     await expect(
       service.requestCode({
@@ -172,9 +169,7 @@ describe("IdentityPasswordlessService", () => {
       }),
       verifyCode: vi.fn()
     };
-    const service = new IdentityPasswordlessService(
-      handler as unknown as DomainPasswordlessAuthHandler
-    );
+    const service = createService(handler);
 
     let error: unknown;
 
@@ -213,9 +208,7 @@ describe("IdentityPasswordlessService", () => {
         }
       }))
     };
-    const service = new IdentityPasswordlessService(
-      handler as unknown as DomainPasswordlessAuthHandler
-    );
+    const service = createService(handler);
     const request: VerifyPasswordlessCodeRequest = {
       challengeId: "e28cbfe7-414b-4d80-a410-1e3f00a380a7",
       code: "123456"
@@ -249,10 +242,7 @@ describe("IdentityPasswordlessService", () => {
         retryAfterSeconds: 30
       }))
     };
-    const service = new IdentityPasswordlessService(
-      handler as unknown as DomainPasswordlessAuthHandler,
-      rateLimiter
-    );
+    const service = createService(handler, rateLimiter);
 
     let error: unknown;
 
@@ -286,9 +276,7 @@ describe("IdentityPasswordlessService", () => {
       requestCode: vi.fn(),
       verifyCode: vi.fn()
     };
-    const service = new IdentityPasswordlessService(
-      handler as unknown as DomainPasswordlessAuthHandler
-    );
+    const service = createService(handler);
 
     await expect(
       service.verifyCode({
@@ -307,9 +295,7 @@ describe("IdentityPasswordlessService", () => {
         throw new PasswordlessCodeVerificationError();
       })
     };
-    const service = new IdentityPasswordlessService(
-      handler as unknown as DomainPasswordlessAuthHandler
-    );
+    const service = createService(handler);
 
     await expect(
       service.verifyCode({
@@ -326,9 +312,7 @@ describe("IdentityPasswordlessService", () => {
         throw new CustomerAccountIdentityConflictError();
       })
     };
-    const service = new IdentityPasswordlessService(
-      handler as unknown as DomainPasswordlessAuthHandler
-    );
+    const service = createService(handler);
 
     await expect(
       service.verifyCode({
@@ -338,3 +322,13 @@ describe("IdentityPasswordlessService", () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 });
+
+function createService(
+  handler: unknown,
+  rateLimiter: PasswordlessRateLimitPort = allowAllPasswordlessRateLimiter
+): IdentityPasswordlessService {
+  return new IdentityPasswordlessService(
+    handler as unknown as DomainPasswordlessAuthHandler,
+    rateLimiter
+  );
+}
