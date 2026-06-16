@@ -117,5 +117,67 @@ describe("requestPasswordlessCode", () => {
       challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
       cancelledAt: "2026-06-15T10:00:00.000Z"
     });
+    expect(store.recordDelivery).toHaveBeenCalledWith({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      channel: "email",
+      provider: "dev",
+      status: "failed",
+      errorCode: "DEV_DISABLED",
+      errorMessage: "Dev delivery disabled"
+    });
+  });
+
+  it("normalizes and masks phone identifiers", async () => {
+    const store = {
+      createChallenge: vi.fn(async (input) => ({
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        ...input,
+        status: "pending" as const,
+        attempts: 0,
+        createdAt: "2026-06-15T10:00:00.000Z",
+        updatedAt: "2026-06-15T10:00:00.000Z"
+      })),
+      recordDelivery: vi.fn(async (input) => ({ id: "delivery_1", ...input })),
+      cancelChallenge: vi.fn()
+    };
+    const delivery = {
+      deliverAuthCode: vi.fn(async () => ({
+        provider: "dev",
+        status: "sent" as const
+      }))
+    };
+
+    const result = await requestPasswordlessCode({
+      store,
+      delivery,
+      channel: "phone",
+      identifier: "+1 (555) 123-4090",
+      roles: ["client"],
+      code: "123456",
+      codeSecret: "test-secret",
+      now: new Date("2026-06-15T10:00:00.000Z"),
+      ttlSeconds: 600,
+      resendCooldownSeconds: 60,
+      maxAttempts: 5
+    });
+
+    expect(store.createChallenge).toHaveBeenCalledWith({
+      channel: "phone",
+      identifier: "+1 (555) 123-4090",
+      identifierNormalized: "+15551234090",
+      codeHash: expect.any(String),
+      requestedRoles: ["client"],
+      maxAttempts: 5,
+      expiresAt: "2026-06-15T10:10:00.000Z",
+      resendAvailableAt: "2026-06-15T10:01:00.000Z"
+    });
+    expect(delivery.deliverAuthCode).toHaveBeenCalledWith({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      channel: "phone",
+      identifier: "+15551234090",
+      code: "123456",
+      expiresAt: "2026-06-15T10:10:00.000Z"
+    });
+    expect(result.maskedIdentifier).toBe("+15***90");
   });
 });

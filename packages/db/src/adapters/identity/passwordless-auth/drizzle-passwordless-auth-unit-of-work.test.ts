@@ -301,6 +301,84 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
     });
   });
 
+  it("records a failed delivery and cancels the challenge when delivery fails", async () => {
+    const database = createFakeDrizzleDatabase({
+      insertRows: [
+        createChallengeRow(),
+        createDeliveryRow({
+          status: "failed",
+          providerMessageId: null,
+          errorCode: "DEV_DISABLED",
+          errorMessage: "Dev delivery disabled",
+          sentAt: null
+        })
+      ]
+    });
+    const delivery = {
+      deliverAuthCode: vi.fn(async () => ({
+        provider: "dev",
+        status: "failed" as const,
+        errorCode: "DEV_DISABLED",
+        errorMessage: "Dev delivery disabled"
+      }))
+    };
+
+    await expect(
+      createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
+        requestPasswordlessCode({
+          store,
+          delivery,
+          channel: "email",
+          identifier: "ada@example.com",
+          roles: ["client"],
+          code: "123456",
+          codeSecret,
+          now: baseNow,
+          ttlSeconds: 600,
+          resendCooldownSeconds: 60,
+          maxAttempts: 5
+        })
+      )
+    ).rejects.toThrow("Passwordless code delivery is unavailable");
+
+    expect(database.inserts).toEqual([
+      {
+        table: authChallenges,
+        value: {
+          channel: "email",
+          identifier: "ada@example.com",
+          identifierNormalized: "ada@example.com",
+          codeHash: expect.any(String),
+          requestedRoles: ["client"],
+          maxAttempts: 5,
+          expiresAt,
+          resendAvailableAt
+        }
+      },
+      {
+        table: authChallengeDeliveries,
+        value: {
+          challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          channel: "email",
+          provider: "dev",
+          status: "failed",
+          errorCode: "DEV_DISABLED",
+          errorMessage: "Dev delivery disabled"
+        }
+      }
+    ]);
+    expect(database.updates).toEqual([
+      {
+        table: authChallenges,
+        value: {
+          status: "cancelled",
+          cancelledAt: baseNow,
+          updatedAt: baseNow
+        }
+      }
+    ]);
+  });
+
   it("creates an active account and verified identity when a challenge has no linked identity", async () => {
     const database = createFakeDrizzleDatabase({
       challengeRows: [createChallengeRow()],
@@ -382,6 +460,70 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
     ]);
     expect(result.authenticationKind).toBe("registration");
     expect(result.authIdentity.emailVerifiedAt).toBe("2026-06-15T10:03:00.000Z");
+  });
+
+  it("creates a verified phone identity for a phone challenge", async () => {
+    const database = createFakeDrizzleDatabase({
+      challengeRows: [
+        createChallengeRow({
+          channel: "phone",
+          identifier: "+15551234090",
+          identifierNormalized: "+15551234090",
+          codeHash: hashPasswordlessCode({
+            secret: codeSecret,
+            channel: "phone",
+            identifierNormalized: "+15551234090",
+            code: "123456"
+          })
+        })
+      ],
+      identityRows: [null],
+      insertRows: [
+        createUserRow(),
+        createAuthIdentityRow({
+          provider: "phone",
+          providerSubject: "+15551234090",
+          email: null,
+          phoneNumber: "+15551234090",
+          emailVerifiedAt: null,
+          phoneVerifiedAt: verifyNow
+        }),
+        createRoleAssignmentRow(),
+        createSessionRow(),
+        createSecurityEventRow()
+      ]
+    });
+
+    const result = await createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
+      verifyPasswordlessCode({
+        store,
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        codeSecret,
+        now: verifyNow,
+        session: {
+          tokenHash: "session_hash",
+          createdAt: verifyNow,
+          expiresAt: new Date("2026-06-22T10:03:00.000Z")
+        }
+      })
+    );
+
+    expect(database.inserts[1]).toEqual({
+      table: authIdentities,
+      value: {
+        userId: "user_1",
+        provider: "phone",
+        providerSubject: "+15551234090",
+        phoneNumber: "+15551234090",
+        phoneVerifiedAt: verifyNow
+      }
+    });
+    expect(result.authIdentity).toMatchObject({
+      provider: "phone",
+      phoneNumber: "+15551234090",
+      phoneVerifiedAt: "2026-06-15T10:03:00.000Z"
+    });
   });
 
   it("logs in an existing linked identity without assigning requested roles again", async () => {

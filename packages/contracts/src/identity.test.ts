@@ -45,6 +45,26 @@ describe("requestPasswordlessCodeRequestSchema", () => {
       })
     ).toThrow();
   });
+
+  it("rejects unsupported channels", () => {
+    expect(() =>
+      requestPasswordlessCodeRequestSchema.parse({
+        channel: "telegram",
+        identifier: "client@example.com",
+        roles: ["client"]
+      })
+    ).toThrow();
+  });
+
+  it("rejects invalid phone identifiers", () => {
+    expect(() =>
+      requestPasswordlessCodeRequestSchema.parse({
+        channel: "phone",
+        identifier: "555-0100",
+        roles: ["client"]
+      })
+    ).toThrow();
+  });
 });
 
 describe("requestPasswordlessCodeResponseSchema", () => {
@@ -85,6 +105,24 @@ describe("verifyPasswordlessCodeRequestSchema", () => {
       verifyPasswordlessCodeRequestSchema.parse({
         challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
         code: "12345"
+      })
+    ).toThrow();
+  });
+
+  it("rejects non-uuid challenge ids", () => {
+    expect(() =>
+      verifyPasswordlessCodeRequestSchema.parse({
+        challengeId: "challenge_1",
+        code: "123456"
+      })
+    ).toThrow();
+  });
+
+  it("rejects alphanumeric codes", () => {
+    expect(() =>
+      verifyPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "12A456"
       })
     ).toThrow();
   });

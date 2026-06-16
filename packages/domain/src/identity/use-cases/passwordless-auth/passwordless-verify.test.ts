@@ -193,8 +193,62 @@ describe("verifyPasswordlessCode", () => {
       challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
       attemptedAt: "2026-06-15T10:03:00.000Z"
     });
+    expect(store.recordSecurityEvent).toHaveBeenCalledWith({
+      eventType: "login_failed",
+      occurredAt: "2026-06-15T10:03:00.000Z",
+      metadata: {
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        channel: "email"
+      }
+    });
     expect(store.consumeChallenge).not.toHaveBeenCalled();
     expect(store.createSession).not.toHaveBeenCalled();
+  });
+
+  it("fails generically when the challenge does not exist", async () => {
+    const store = createStore({
+      findChallengeById: vi.fn(async () => null)
+    });
+
+    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(
+      PasswordlessCodeVerificationError
+    );
+
+    expect(store.incrementChallengeAttempts).not.toHaveBeenCalled();
+    expect(store.consumeChallenge).not.toHaveBeenCalled();
+  });
+
+  it("fails generically for an expired challenge", async () => {
+    const store = createStore({
+      findChallengeById: vi.fn(async () => ({
+        ...createPendingChallenge(),
+        expiresAt: "2026-06-15T10:02:59.999Z"
+      }))
+    });
+
+    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(
+      PasswordlessCodeVerificationError
+    );
+
+    expect(store.incrementChallengeAttempts).not.toHaveBeenCalled();
+    expect(store.consumeChallenge).not.toHaveBeenCalled();
+  });
+
+  it("fails generically when max attempts are exhausted", async () => {
+    const store = createStore({
+      findChallengeById: vi.fn(async () => ({
+        ...createPendingChallenge(),
+        attempts: 5,
+        maxAttempts: 5
+      }))
+    });
+
+    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(
+      PasswordlessCodeVerificationError
+    );
+
+    expect(store.incrementChallengeAttempts).not.toHaveBeenCalled();
+    expect(store.consumeChallenge).not.toHaveBeenCalled();
   });
 
   it("fails generically for a consumed challenge", async () => {
@@ -212,5 +266,48 @@ describe("verifyPasswordlessCode", () => {
 
     expect(store.incrementChallengeAttempts).not.toHaveBeenCalled();
     expect(store.consumeChallenge).not.toHaveBeenCalled();
+  });
+
+  it("creates a verified phone identity for a new phone challenge", async () => {
+    const phoneChallenge = {
+      ...createPendingChallenge(),
+      channel: "phone" as const,
+      identifier: "+15551234090",
+      identifierNormalized: "+15551234090",
+      codeHash: hashPasswordlessCode({
+        secret: codeSecret,
+        channel: "phone",
+        identifierNormalized: "+15551234090",
+        code: "123456"
+      })
+    };
+    const store = createStore({
+      findChallengeById: vi.fn(async () => phoneChallenge),
+      createAuthIdentity: vi.fn(async (input) => ({
+        id: "identity_1",
+        userId: input.userId,
+        provider: input.provider,
+        providerSubject: input.providerSubject,
+        ...(input.phoneNumber === undefined ? {} : { phoneNumber: input.phoneNumber }),
+        ...(input.phoneVerifiedAt === undefined ? {} : { phoneVerifiedAt: input.phoneVerifiedAt }),
+        createdAt: "2026-06-15T10:03:00.000Z",
+        updatedAt: "2026-06-15T10:03:00.000Z"
+      }))
+    });
+
+    const result = await verifyWithStore(store);
+
+    expect(store.createAuthIdentity).toHaveBeenCalledWith({
+      userId: "user_1",
+      provider: "phone",
+      providerSubject: "+15551234090",
+      phoneNumber: "+15551234090",
+      phoneVerifiedAt: "2026-06-15T10:03:00.000Z"
+    });
+    expect(result.authIdentity).toMatchObject({
+      provider: "phone",
+      phoneNumber: "+15551234090",
+      phoneVerifiedAt: "2026-06-15T10:03:00.000Z"
+    });
   });
 });
