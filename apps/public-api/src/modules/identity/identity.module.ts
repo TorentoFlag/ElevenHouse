@@ -50,6 +50,10 @@ import {
     IdentityCurrentSessionService,
     PublicSessionAuthGuard,
     DevAuthCodeDeliveryProvider,
+    PublicSessionTokenIssuer,
+    PublicSessionCookieService,
+    SystemClock,
+    DomainPasswordlessAuthHandler,
     {
       provide: AUTH_CODE_DELIVERY,
       useFactory: (
@@ -72,9 +76,7 @@ import {
               )
             ),
             new SmsAuthCodeDeliveryProvider(
-              configService.getOrThrow<AuthCodeHttpDeliveryOptions>(
-                "publicApi.authCodeSmsDelivery"
-              )
+              configService.getOrThrow<AuthCodeHttpDeliveryOptions>("publicApi.authCodeSmsDelivery")
             )
           );
         }
@@ -87,10 +89,6 @@ import {
       provide: PUBLIC_AUTH_CODE_GENERATOR,
       useClass: NumericPasswordlessCodeGenerator
     },
-    PublicSessionTokenIssuer,
-    PublicSessionCookieService,
-    SystemClock,
-    DomainPasswordlessAuthHandler,
     {
       provide: PASSWORDLESS_AUTH_UNIT_OF_WORK,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
@@ -107,9 +105,7 @@ import {
       provide: PASSWORDLESS_AUTH_OPTIONS,
       useFactory: (configService: ConfigService) => ({
         codeSecret: configService.getOrThrow<string>("publicApi.passwordlessCodeSecret"),
-        codeTtlSeconds: configService.getOrThrow<number>(
-          "publicApi.passwordlessCodeTtlSeconds"
-        ),
+        codeTtlSeconds: configService.getOrThrow<number>("publicApi.passwordlessCodeTtlSeconds"),
         resendCooldownSeconds: configService.getOrThrow<number>(
           "publicApi.passwordlessResendCooldownSeconds"
         ),
