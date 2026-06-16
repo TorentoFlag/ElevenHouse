@@ -1,0 +1,93 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  ServiceUnavailableException,
+  UnauthorizedException
+} from "@nestjs/common";
+import {
+  requestPasswordlessCodeRequestSchema,
+  requestPasswordlessCodeResponseSchema,
+  verifyPasswordlessCodeRequestSchema,
+  verifyPasswordlessCodeResponseSchema,
+  type RequestPasswordlessCodeRequest,
+  type RequestPasswordlessCodeResponse,
+  type VerifyPasswordlessCodeRequest
+} from "@elevenhouse/contracts";
+import {
+  CustomerAccountIdentityConflictError,
+  PasswordlessCodeDeliveryUnavailableError,
+  PasswordlessCodeVerificationError
+} from "@elevenhouse/domain";
+import {
+  DomainPasswordlessAuthHandler,
+  type VerifyPasswordlessCodeWithSessionResult
+} from "./identity-passwordless.handler";
+
+@Injectable()
+export class IdentityPasswordlessService {
+  constructor(private readonly handler: DomainPasswordlessAuthHandler) {}
+
+  async requestCode(
+    body: RequestPasswordlessCodeRequest
+  ): Promise<RequestPasswordlessCodeResponse> {
+    const request = requestPasswordlessCodeRequestSchema.safeParse(body);
+
+    if (!request.success) {
+      throw new BadRequestException({
+        message: "Invalid passwordless code request",
+        issues: request.error.issues
+      });
+    }
+
+    try {
+      return requestPasswordlessCodeResponseSchema.parse(
+        await this.handler.requestCode(request.data)
+      );
+    } catch (error) {
+      if (error instanceof PasswordlessCodeDeliveryUnavailableError) {
+        throw new ServiceUnavailableException("Passwordless code delivery is unavailable", {
+          cause: error
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  async verifyCode(
+    body: VerifyPasswordlessCodeRequest
+  ): Promise<VerifyPasswordlessCodeWithSessionResult> {
+    const request = verifyPasswordlessCodeRequestSchema.safeParse(body);
+
+    if (!request.success) {
+      throw new BadRequestException({
+        message: "Invalid passwordless code verification request",
+        issues: request.error.issues
+      });
+    }
+
+    try {
+      const result = await this.handler.verifyCode(request.data);
+
+      return {
+        response: verifyPasswordlessCodeResponseSchema.parse(result.response),
+        session: result.session
+      };
+    } catch (error) {
+      if (error instanceof PasswordlessCodeVerificationError) {
+        throw new UnauthorizedException("Invalid or expired passwordless code", {
+          cause: error
+        });
+      }
+
+      if (error instanceof CustomerAccountIdentityConflictError) {
+        throw new ConflictException("Customer account identity already exists", {
+          cause: error
+        });
+      }
+
+      throw error;
+    }
+  }
+}

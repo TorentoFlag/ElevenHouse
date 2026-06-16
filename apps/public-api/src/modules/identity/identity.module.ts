@@ -1,20 +1,26 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { createDrizzleCustomerAccountRegistrationSessionUnitOfWork } from "@elevenhouse/db/account-registration";
 import { createDrizzleAuthSessionAuthenticationStore } from "@elevenhouse/db/auth-sessions";
+import { createDrizzlePasswordlessAuthUnitOfWork } from "@elevenhouse/db/passwordless-auth";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityCurrentAccountController } from "./identity-current-account.controller";
 import { IdentityCurrentSessionService } from "./identity-current-session.service";
 import { PublicSessionAuthGuard } from "./identity-auth.guard";
 import { AUTH_SESSION_AUTHENTICATION_STORE } from "./identity-auth.tokens";
-import { IdentityRegistrationController } from "./identity-registration.controller";
+import { IdentityPasswordlessController } from "./identity-passwordless.controller";
 import {
-  Argon2PasswordHasher,
-  DomainCustomerAccountRegistrationHandler
-} from "./identity-registration.handler";
-import { CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK } from "./identity-registration.tokens";
-import { IdentityRegistrationService } from "./identity-registration.service";
+  DomainPasswordlessAuthHandler,
+  NumericPasswordlessCodeGenerator,
+  PUBLIC_AUTH_CODE_GENERATOR
+} from "./identity-passwordless.handler";
+import { DevAuthCodeDeliveryProvider } from "./identity-passwordless.delivery";
+import {
+  AUTH_CODE_DELIVERY,
+  PASSWORDLESS_AUTH_OPTIONS,
+  PASSWORDLESS_AUTH_UNIT_OF_WORK
+} from "./identity-passwordless.tokens";
+import { IdentityPasswordlessService } from "./identity-passwordless.service";
 import {
   PublicSessionCookieService,
   PublicSessionTokenIssuer,
@@ -23,20 +29,40 @@ import {
 
 @Module({
   imports: [ConfigModule, DatabaseModule],
-  controllers: [IdentityRegistrationController, IdentityCurrentAccountController],
+  controllers: [IdentityPasswordlessController, IdentityCurrentAccountController],
   providers: [
-    IdentityRegistrationService,
+    IdentityPasswordlessService,
     IdentityCurrentSessionService,
     PublicSessionAuthGuard,
-    Argon2PasswordHasher,
+    DevAuthCodeDeliveryProvider,
+    {
+      provide: AUTH_CODE_DELIVERY,
+      useFactory: (
+        configService: ConfigService,
+        devAuthCodeDeliveryProvider: DevAuthCodeDeliveryProvider
+      ) => {
+        const provider = configService.getOrThrow<"dev">("publicApi.authCodeDeliveryProvider");
+
+        if (provider !== "dev") {
+          throw new Error(`Unsupported auth code delivery provider: ${provider}`);
+        }
+
+        return devAuthCodeDeliveryProvider;
+      },
+      inject: [ConfigService, DevAuthCodeDeliveryProvider]
+    },
+    {
+      provide: PUBLIC_AUTH_CODE_GENERATOR,
+      useClass: NumericPasswordlessCodeGenerator
+    },
     PublicSessionTokenIssuer,
     PublicSessionCookieService,
     SystemClock,
-    DomainCustomerAccountRegistrationHandler,
+    DomainPasswordlessAuthHandler,
     {
-      provide: CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK,
+      provide: PASSWORDLESS_AUTH_UNIT_OF_WORK,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
-        createDrizzleCustomerAccountRegistrationSessionUnitOfWork(postgresRuntime.database),
+        createDrizzlePasswordlessAuthUnitOfWork(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     },
     {
@@ -46,8 +72,16 @@ import {
       inject: [PostgresRuntimeService]
     },
     {
-      provide: "REGISTRATION_SESSION_OPTIONS",
+      provide: PASSWORDLESS_AUTH_OPTIONS,
       useFactory: (configService: ConfigService) => ({
+        codeSecret: configService.getOrThrow<string>("publicApi.passwordlessCodeSecret"),
+        codeTtlSeconds: configService.getOrThrow<number>(
+          "publicApi.passwordlessCodeTtlSeconds"
+        ),
+        resendCooldownSeconds: configService.getOrThrow<number>(
+          "publicApi.passwordlessResendCooldownSeconds"
+        ),
+        maxAttempts: configService.getOrThrow<number>("publicApi.passwordlessMaxAttempts"),
         sessionTtlSeconds: configService.getOrThrow<number>("publicApi.sessionTtlSeconds")
       }),
       inject: [ConfigService]
