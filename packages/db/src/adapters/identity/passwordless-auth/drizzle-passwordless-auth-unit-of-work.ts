@@ -1,4 +1,5 @@
 import { and, desc, eq, sql } from "drizzle-orm";
+import { PasswordlessCodeRequestCooldownError } from "@elevenhouse/domain";
 import type {
   AuthChallenge,
   AuthChallengeDelivery,
@@ -69,10 +70,27 @@ export function createPasswordlessAuthStore(
     ...accountRegistrationStore,
     ...authSessionCreationStore,
     createChallenge: async (input) => {
-      const row = await insertReturningOne(
-        () => executor.insert(authChallenges).values(toAuthChallengeInsert(input)).returning(),
-        "auth_challenges"
-      );
+      let row: typeof authChallenges.$inferSelect;
+
+      try {
+        row = await insertReturningOne(
+          () => executor.insert(authChallenges).values(toAuthChallengeInsert(input)).returning(),
+          "auth_challenges"
+        );
+      } catch (error) {
+        if (isPendingChallengeUniqueViolation(error)) {
+          const pendingChallenge = await findPendingChallengeByIdentifier(executor, {
+            channel: input.channel,
+            identifierNormalized: input.identifierNormalized
+          });
+
+          if (pendingChallenge) {
+            throw new PasswordlessCodeRequestCooldownError(pendingChallenge.resendAvailableAt);
+          }
+        }
+
+        throw error;
+      }
 
       return toAuthChallenge(row);
     },
@@ -100,16 +118,7 @@ export function createPasswordlessAuthStore(
         .where(eq(authChallenges.id, input.challengeId));
     },
     findPendingChallengeByIdentifier: async (input) => {
-      const row = await executor.query.authChallenges.findFirst({
-        where: and(
-          eq(authChallenges.channel, input.channel),
-          eq(authChallenges.identifierNormalized, input.identifierNormalized),
-          eq(authChallenges.status, "pending")
-        ),
-        orderBy: [desc(authChallenges.createdAt)]
-      });
-
-      return row ? toAuthChallenge(row) : null;
+      return findPendingChallengeByIdentifier(executor, input);
     },
     findChallengeById: async (challengeId) => {
       const row = await executor.query.authChallenges.findFirst({
@@ -156,6 +165,25 @@ export function createPasswordlessAuthStore(
       return row ? toExistingPasswordlessIdentity(row) : null;
     }
   };
+}
+
+async function findPendingChallengeByIdentifier(
+  executor: PasswordlessAuthDrizzleExecutor,
+  input: {
+    readonly channel: PasswordlessAuthChannel;
+    readonly identifierNormalized: string;
+  }
+): Promise<AuthChallenge | null> {
+  const row = await executor.query.authChallenges.findFirst({
+    where: and(
+      eq(authChallenges.channel, input.channel),
+      eq(authChallenges.identifierNormalized, input.identifierNormalized),
+      eq(authChallenges.status, "pending")
+    ),
+    orderBy: [desc(authChallenges.createdAt)]
+  });
+
+  return row ? toAuthChallenge(row) : null;
 }
 
 function toAuthChallengeInsert(
@@ -249,6 +277,22 @@ function toAuthChallengeDelivery(
     createdAt: row.createdAt.toISOString(),
     ...(row.sentAt === null ? {} : { sentAt: row.sentAt.toISOString() })
   };
+}
+
+function isPendingChallengeUniqueViolation(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const databaseError = error as {
+    readonly code?: unknown;
+    readonly constraint?: unknown;
+  };
+
+  return (
+    databaseError.code === "23505" &&
+    databaseError.constraint === "auth_challenges_pending_identifier_unique"
+  );
 }
 
 function toExistingPasswordlessIdentity(

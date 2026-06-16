@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid
 } from "drizzle-orm/pg-core";
 
@@ -48,11 +49,9 @@ export const authChallenges = pgTable(
       "auth_challenges_cancelled_at_check",
       sql`${table.status} <> 'cancelled' or ${table.cancelledAt} is not null`
     ),
-    index("auth_challenges_identifier_status_index").on(
-      table.channel,
-      table.identifierNormalized,
-      table.status
-    ),
+    uniqueIndex("auth_challenges_pending_identifier_unique")
+      .on(table.channel, table.identifierNormalized)
+      .where(sql`${table.status} = 'pending'`),
     index("auth_challenges_expires_at_index").on(table.expiresAt),
     index("auth_challenges_created_at_index").on(table.createdAt)
   ]

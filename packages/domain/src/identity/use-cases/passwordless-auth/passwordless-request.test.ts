@@ -5,6 +5,7 @@ import { PasswordlessCodeRequestCooldownError } from "./passwordless-challenge";
 describe("requestPasswordlessCode", () => {
   it("creates a challenge, delivers the code and records delivery metadata", async () => {
     const store = {
+      findPendingChallengeByIdentifier: vi.fn(async () => null),
       createChallenge: vi.fn(async (input) => ({
         id: "8e14390f-3db1-4d1c-9344-55679c778427",
         ...input,
@@ -78,6 +79,7 @@ describe("requestPasswordlessCode", () => {
 
   it("cancels the challenge when delivery fails", async () => {
     const store = {
+      findPendingChallengeByIdentifier: vi.fn(async () => null),
       createChallenge: vi.fn(async (input) => ({
         id: "8e14390f-3db1-4d1c-9344-55679c778427",
         ...input,
@@ -130,6 +132,7 @@ describe("requestPasswordlessCode", () => {
 
   it("normalizes and masks phone identifiers", async () => {
     const store = {
+      findPendingChallengeByIdentifier: vi.fn(async () => null),
       createChallenge: vi.fn(async (input) => ({
         id: "8e14390f-3db1-4d1c-9344-55679c778427",
         ...input,

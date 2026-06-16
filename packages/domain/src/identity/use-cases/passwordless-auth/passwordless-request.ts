@@ -30,7 +30,7 @@ export type AuthCodeDeliveryPort = {
 };
 
 export type PasswordlessCodeRequestStore = {
-  readonly findPendingChallengeByIdentifier?: (input: {
+  readonly findPendingChallengeByIdentifier: (input: {
     readonly channel: PasswordlessAuthChannel;
     readonly identifierNormalized: string;
   }) => Promise<AuthChallenge | null>;
@@ -94,7 +94,7 @@ export async function requestPasswordlessCode(input: {
   const resendAvailableAt = new Date(
     input.now.getTime() + input.resendCooldownSeconds * 1000
   ).toISOString();
-  const existingPendingChallenge = await input.store.findPendingChallengeByIdentifier?.({
+  const existingPendingChallenge = await input.store.findPendingChallengeByIdentifier({
     channel: input.channel,
     identifierNormalized
   });

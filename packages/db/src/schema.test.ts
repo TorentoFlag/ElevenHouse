@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { platformRoles } from "@elevenhouse/auth";
 import { describe, expect, it } from "vitest";
 import {
@@ -40,6 +41,14 @@ describe("database account schema constants", () => {
   it("exports passwordless auth challenge tables", () => {
     expect(authChallenges).toBeDefined();
     expect(authChallengeDeliveries).toBeDefined();
+  });
+
+  it("keeps pending passwordless challenges unique per channel and identifier", () => {
+    const migration = readFileSync("packages/db/drizzle/0000_sour_living_tribunal.sql", "utf8");
+
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "auth_challenges_pending_identifier_unique" ON "auth_challenges" USING btree ("channel","identifier_normalized") WHERE "auth_challenges"."status" = \'pending\''
+    );
   });
 
   it("keeps auth security event types explicit", () => {

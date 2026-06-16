@@ -233,6 +233,13 @@ function createSecurityEventRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createUniqueViolationError(constraint: string): Error {
+  return Object.assign(new Error("duplicate key value violates unique constraint"), {
+    code: "23505",
+    constraint
+  });
+}
+
 describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
   it("persists a passwordless code request in one transaction", async () => {
     const database = createFakeDrizzleDatabase({
@@ -412,6 +419,60 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
 
     expect(database.queries.map((query) => query.table)).toEqual(["authChallenges"]);
     expect(database.inserts).toEqual([]);
+    expect(database.updates).toEqual([]);
+    expect(delivery.deliverAuthCode).not.toHaveBeenCalled();
+  });
+
+  it("maps pending challenge insert races to passwordless resend cooldowns", async () => {
+    const database = createFakeDrizzleDatabase({
+      challengeRows: [null, createChallengeRow()],
+      insertRows: [createUniqueViolationError("auth_challenges_pending_identifier_unique")]
+    });
+    const delivery = {
+      deliverAuthCode: vi.fn(async () => ({
+        provider: "dev",
+        status: "sent" as const,
+        providerMessageId: "dev-message-1"
+      }))
+    };
+
+    await expect(
+      createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
+        requestPasswordlessCode({
+          store,
+          delivery,
+          channel: "email",
+          identifier: "ada@example.com",
+          roles: ["client"],
+          code: "123456",
+          codeSecret,
+          now: baseNow,
+          ttlSeconds: 600,
+          resendCooldownSeconds: 60,
+          maxAttempts: 5
+        })
+      )
+    ).rejects.toBeInstanceOf(PasswordlessCodeRequestCooldownError);
+
+    expect(database.queries.map((query) => query.table)).toEqual([
+      "authChallenges",
+      "authChallenges"
+    ]);
+    expect(database.inserts).toEqual([
+      {
+        table: authChallenges,
+        value: {
+          channel: "email",
+          identifier: "ada@example.com",
+          identifierNormalized: "ada@example.com",
+          codeHash: expect.any(String),
+          requestedRoles: ["client"],
+          maxAttempts: 5,
+          expiresAt,
+          resendAvailableAt
+        }
+      }
+    ]);
     expect(database.updates).toEqual([]);
     expect(delivery.deliverAuthCode).not.toHaveBeenCalled();
   });
