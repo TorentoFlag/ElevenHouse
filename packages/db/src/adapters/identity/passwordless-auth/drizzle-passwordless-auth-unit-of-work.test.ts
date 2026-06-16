@@ -1,5 +1,6 @@
 import {
   hashPasswordlessCode,
+  PasswordlessCodeRequestCooldownError,
   requestPasswordlessCode,
   verifyPasswordlessCode
 } from "@elevenhouse/domain";
@@ -377,6 +378,42 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
         }
       }
     ]);
+  });
+
+  it("rejects a duplicate passwordless code request while an existing challenge is in cooldown", async () => {
+    const database = createFakeDrizzleDatabase({
+      challengeRows: [createChallengeRow()]
+    });
+    const delivery = {
+      deliverAuthCode: vi.fn(async () => ({
+        provider: "dev",
+        status: "sent" as const,
+        providerMessageId: "dev-message-1"
+      }))
+    };
+
+    await expect(
+      createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
+        requestPasswordlessCode({
+          store,
+          delivery,
+          channel: "email",
+          identifier: "ADA@example.COM",
+          roles: ["client"],
+          code: "123456",
+          codeSecret,
+          now: baseNow,
+          ttlSeconds: 600,
+          resendCooldownSeconds: 60,
+          maxAttempts: 5
+        })
+      )
+    ).rejects.toBeInstanceOf(PasswordlessCodeRequestCooldownError);
+
+    expect(database.queries.map((query) => query.table)).toEqual(["authChallenges"]);
+    expect(database.inserts).toEqual([]);
+    expect(database.updates).toEqual([]);
+    expect(delivery.deliverAuthCode).not.toHaveBeenCalled();
   });
 
   it("creates an active account and verified identity when a challenge has no linked identity", async () => {

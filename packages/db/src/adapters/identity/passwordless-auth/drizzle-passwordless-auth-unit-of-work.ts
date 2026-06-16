@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type {
   AuthChallenge,
   AuthChallengeDelivery,
@@ -98,6 +98,18 @@ export function createPasswordlessAuthStore(
           updatedAt: cancelledAt
         })
         .where(eq(authChallenges.id, input.challengeId));
+    },
+    findPendingChallengeByIdentifier: async (input) => {
+      const row = await executor.query.authChallenges.findFirst({
+        where: and(
+          eq(authChallenges.channel, input.channel),
+          eq(authChallenges.identifierNormalized, input.identifierNormalized),
+          eq(authChallenges.status, "pending")
+        ),
+        orderBy: [desc(authChallenges.createdAt)]
+      });
+
+      return row ? toAuthChallenge(row) : null;
     },
     findChallengeById: async (challengeId) => {
       const row = await executor.query.authChallenges.findFirst({
