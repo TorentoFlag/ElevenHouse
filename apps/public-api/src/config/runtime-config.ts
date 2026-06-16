@@ -68,8 +68,22 @@ const publicApiRuntimeConfigSchema = z.object({
     .trim()
     .min(1)
     .default("elevenhouse:public-api"),
-  PUBLIC_API_AUTH_CODE_DELIVERY_PROVIDER: z.enum(["dev"]).default("dev")
+  PUBLIC_API_AUTH_CODE_DELIVERY_PROVIDER: z.enum(["dev", "email_sms"]).default("dev"),
+  PUBLIC_API_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL: z.string().trim().url().optional(),
+  PUBLIC_API_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN: z.string().trim().min(1).optional(),
+  PUBLIC_API_AUTH_CODE_EMAIL_FROM: z.string().trim().min(1).optional(),
+  PUBLIC_API_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL: z.string().trim().url().optional(),
+  PUBLIC_API_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN: z.string().trim().min(1).optional(),
+  PUBLIC_API_AUTH_CODE_SMS_FROM: z.string().trim().min(1).optional()
 });
+
+export type PublicApiAuthCodeDeliveryProvider = "dev" | "email_sms";
+
+export type PublicApiHttpAuthCodeDeliveryConfig = {
+  readonly endpointUrl: string;
+  readonly bearerToken: string;
+  readonly from: string;
+};
 
 export type PublicApiRuntimeConfig = {
   readonly port: number;
@@ -81,7 +95,9 @@ export type PublicApiRuntimeConfig = {
   readonly passwordlessCodeTtlSeconds: number;
   readonly passwordlessResendCooldownSeconds: number;
   readonly passwordlessMaxAttempts: number;
-  readonly authCodeDeliveryProvider: "dev";
+  readonly authCodeDeliveryProvider: PublicApiAuthCodeDeliveryProvider;
+  readonly authCodeEmailDelivery?: PublicApiHttpAuthCodeDeliveryConfig;
+  readonly authCodeSmsDelivery?: PublicApiHttpAuthCodeDeliveryConfig;
   readonly passwordlessRateLimitRedisKeyPrefix: string;
   readonly passwordlessRateLimits: {
     readonly requestCodeIdentifier: {
@@ -132,6 +148,41 @@ export function createPublicApiRuntimeConfig(
     throw new Error("Dev auth code delivery is not allowed in production");
   }
 
+  const authCodeEmailDelivery =
+    config.PUBLIC_API_AUTH_CODE_DELIVERY_PROVIDER === "email_sms"
+      ? {
+          endpointUrl: requireRuntimeConfig(
+            config.PUBLIC_API_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL,
+            "PUBLIC_API_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL"
+          ),
+          bearerToken: requireRuntimeConfig(
+            config.PUBLIC_API_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN,
+            "PUBLIC_API_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN"
+          ),
+          from: requireRuntimeConfig(
+            config.PUBLIC_API_AUTH_CODE_EMAIL_FROM,
+            "PUBLIC_API_AUTH_CODE_EMAIL_FROM"
+          )
+        }
+      : undefined;
+  const authCodeSmsDelivery =
+    config.PUBLIC_API_AUTH_CODE_DELIVERY_PROVIDER === "email_sms"
+      ? {
+          endpointUrl: requireRuntimeConfig(
+            config.PUBLIC_API_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL,
+            "PUBLIC_API_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL"
+          ),
+          bearerToken: requireRuntimeConfig(
+            config.PUBLIC_API_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN,
+            "PUBLIC_API_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN"
+          ),
+          from: requireRuntimeConfig(
+            config.PUBLIC_API_AUTH_CODE_SMS_FROM,
+            "PUBLIC_API_AUTH_CODE_SMS_FROM"
+          )
+        }
+      : undefined;
+
   return {
     port: config.PUBLIC_API_PORT,
     redisUrl: config.REDIS_URL,
@@ -146,6 +197,8 @@ export function createPublicApiRuntimeConfig(
       config.PUBLIC_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS,
     passwordlessMaxAttempts: config.PUBLIC_API_PASSWORDLESS_MAX_ATTEMPTS,
     authCodeDeliveryProvider: config.PUBLIC_API_AUTH_CODE_DELIVERY_PROVIDER,
+    ...(authCodeEmailDelivery === undefined ? {} : { authCodeEmailDelivery }),
+    ...(authCodeSmsDelivery === undefined ? {} : { authCodeSmsDelivery }),
     passwordlessRateLimitRedisKeyPrefix:
       config.PUBLIC_API_PASSWORDLESS_RATE_LIMIT_REDIS_KEY_PREFIX,
     passwordlessRateLimits: {
@@ -171,4 +224,12 @@ export function createPublicApiRuntimeConfig(
       }
     }
   };
+}
+
+function requireRuntimeConfig(value: string | undefined, key: string): string {
+  if (value === undefined) {
+    throw new Error(`${key} is required`);
+  }
+
+  return value;
 }

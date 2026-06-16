@@ -136,6 +136,41 @@ describe("createPublicApiRuntimeConfig", () => {
     });
   });
 
+  it("parses email and SMS auth code delivery settings from env", () => {
+    expect(
+      createPublicApiRuntimeConfig({
+        PUBLIC_API_AUTH_CODE_DELIVERY_PROVIDER: "email_sms",
+        PUBLIC_API_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL:
+          "https://delivery.internal/auth/email",
+        PUBLIC_API_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN: "email-token",
+        PUBLIC_API_AUTH_CODE_EMAIL_FROM: "auth@elevenhouse.test",
+        PUBLIC_API_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL: "https://delivery.internal/auth/sms",
+        PUBLIC_API_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN: "sms-token",
+        PUBLIC_API_AUTH_CODE_SMS_FROM: "ElevenHouse"
+      })
+    ).toMatchObject({
+      authCodeDeliveryProvider: "email_sms",
+      authCodeEmailDelivery: {
+        endpointUrl: "https://delivery.internal/auth/email",
+        bearerToken: "email-token",
+        from: "auth@elevenhouse.test"
+      },
+      authCodeSmsDelivery: {
+        endpointUrl: "https://delivery.internal/auth/sms",
+        bearerToken: "sms-token",
+        from: "ElevenHouse"
+      }
+    });
+  });
+
+  it("requires email and SMS delivery settings when auth code delivery uses email_sms", () => {
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        PUBLIC_API_AUTH_CODE_DELIVERY_PROVIDER: "email_sms"
+      })
+    ).toThrow("PUBLIC_API_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL is required");
+  });
+
   it("requires an explicit passwordless code secret in production", () => {
     expect(() =>
       createPublicApiRuntimeConfig({
@@ -152,5 +187,24 @@ describe("createPublicApiRuntimeConfig", () => {
         PUBLIC_API_AUTH_CODE_DELIVERY_PROVIDER: "dev"
       })
     ).toThrow("Dev auth code delivery is not allowed in production");
+  });
+
+  it("allows email and SMS auth code delivery in production with required settings", () => {
+    expect(
+      createPublicApiRuntimeConfig({
+        NODE_ENV: "production",
+        PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+        PUBLIC_API_AUTH_CODE_DELIVERY_PROVIDER: "email_sms",
+        PUBLIC_API_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL:
+          "https://delivery.internal/auth/email",
+        PUBLIC_API_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN: "email-token",
+        PUBLIC_API_AUTH_CODE_EMAIL_FROM: "auth@elevenhouse.test",
+        PUBLIC_API_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL: "https://delivery.internal/auth/sms",
+        PUBLIC_API_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN: "sms-token",
+        PUBLIC_API_AUTH_CODE_SMS_FROM: "ElevenHouse"
+      })
+    ).toMatchObject({
+      authCodeDeliveryProvider: "email_sms"
+    });
   });
 });

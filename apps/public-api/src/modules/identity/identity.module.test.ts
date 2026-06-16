@@ -7,7 +7,7 @@ import type {
 import { hashPasswordlessCode } from "@elevenhouse/domain";
 import { ConfigService } from "@nestjs/config";
 import { Test } from "@nestjs/testing";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { IdentityPasswordlessService } from "./identity-passwordless.service";
@@ -24,6 +24,10 @@ import { IdentityCurrentSessionService } from "./identity-current-session.servic
 import { PublicSessionTokenIssuer, SystemClock } from "./identity-session.service";
 
 describe("IdentityModule", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("wires passwordless auth to domain-backed providers and keeps session resolution working", async () => {
     const now = new Date("2026-06-16T10:00:00.000Z");
     const store: PasswordlessAuthStore = {
@@ -297,9 +301,88 @@ describe("IdentityModule", () => {
     await moduleRef.close();
     expect(redisClient.quit).not.toHaveBeenCalled();
   });
+
+  it("wires auth code delivery to email and SMS adapters", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ messageId: "email-message-1" }), {
+          status: 202,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ messageId: "sms-message-1" }), {
+          status: 202,
+          headers: { "content-type": "application/json" }
+        })
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [IdentityModule]
+    })
+      .overrideProvider(PostgresRuntimeService)
+      .useValue({ database: {} })
+      .overrideProvider(ConfigService)
+      .useValue(createConfigServiceStub({ authCodeDeliveryProvider: "email_sms" }))
+      .overrideProvider(RedisRuntimeService)
+      .useValue({
+        eval: vi.fn(async () => 0),
+        quit: vi.fn(async () => undefined)
+      })
+      .compile();
+
+    const delivery = moduleRef.get(AUTH_CODE_DELIVERY);
+
+    await expect(
+      delivery.deliverAuthCode({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        channel: "email",
+        identifier: "client@example.com",
+        code: "123456",
+        expiresAt: "2026-06-16T10:10:00.000Z"
+      })
+    ).resolves.toEqual({
+      provider: "email",
+      status: "sent",
+      providerMessageId: "email-message-1"
+    });
+    await expect(
+      delivery.deliverAuthCode({
+        challengeId: "9e14390f-3db1-4d1c-9344-55679c778427",
+        channel: "phone",
+        identifier: "+15551234090",
+        code: "123456",
+        expiresAt: "2026-06-16T10:10:00.000Z"
+      })
+    ).resolves.toEqual({
+      provider: "sms",
+      status: "sent",
+      providerMessageId: "sms-message-1"
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://delivery.internal/auth/email",
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://delivery.internal/auth/sms",
+      expect.any(Object)
+    );
+
+    await moduleRef.close();
+  });
 });
 
-function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
+function createConfigServiceStub(
+  options: { readonly authCodeDeliveryProvider?: "dev" | "email_sms" } = {}
+): Pick<ConfigService, "getOrThrow"> {
+  const authCodeDeliveryProvider = options.authCodeDeliveryProvider ?? "dev";
+
   return {
     getOrThrow: vi.fn((key: string) => {
       if (key === "publicApi.sessionTtlSeconds") {
@@ -337,7 +420,23 @@ function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
       }
 
       if (key === "publicApi.authCodeDeliveryProvider") {
-        return "dev";
+        return authCodeDeliveryProvider;
+      }
+
+      if (key === "publicApi.authCodeEmailDelivery") {
+        return {
+          endpointUrl: "https://delivery.internal/auth/email",
+          bearerToken: "email-token",
+          from: "auth@elevenhouse.test"
+        };
+      }
+
+      if (key === "publicApi.authCodeSmsDelivery") {
+        return {
+          endpointUrl: "https://delivery.internal/auth/sms",
+          bearerToken: "sms-token",
+          from: "ElevenHouse"
+        };
       }
 
       if (key === "publicApi.sessionCookieSecure") {
