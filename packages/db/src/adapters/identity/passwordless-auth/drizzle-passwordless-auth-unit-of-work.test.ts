@@ -404,6 +404,82 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
     ]);
   });
 
+  it("records a failed delivery and cancels the challenge when delivery throws", async () => {
+    const database = createFakeDrizzleDatabase({
+      insertRows: [
+        createChallengeRow(),
+        createDeliveryRow({
+          provider: "unknown",
+          status: "failed",
+          providerMessageId: null,
+          errorCode: "DELIVERY_EXCEPTION",
+          errorMessage: "SMTP timeout",
+          sentAt: null
+        })
+      ]
+    });
+    const delivery = {
+      deliverAuthCode: vi.fn(async () => {
+        throw new Error("SMTP timeout");
+      })
+    };
+
+    await expect(
+      createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
+        requestPasswordlessCode({
+          store,
+          delivery,
+          channel: "email",
+          identifier: "ada@example.com",
+          roles: ["client"],
+          code: "123456",
+          codeSecret,
+          now: baseNow,
+          ttlSeconds: 600,
+          resendCooldownSeconds: 60,
+          maxAttempts: 5
+        })
+      )
+    ).rejects.toThrow("Passwordless code delivery is unavailable");
+
+    expect(database.inserts).toEqual([
+      {
+        table: authChallenges,
+        value: {
+          channel: "email",
+          identifier: "ada@example.com",
+          identifierNormalized: "ada@example.com",
+          codeHash: expect.any(String),
+          requestedRoles: ["client"],
+          maxAttempts: 5,
+          expiresAt,
+          resendAvailableAt
+        }
+      },
+      {
+        table: authChallengeDeliveries,
+        value: {
+          challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          channel: "email",
+          provider: "unknown",
+          status: "failed",
+          errorCode: "DELIVERY_EXCEPTION",
+          errorMessage: "SMTP timeout"
+        }
+      }
+    ]);
+    expect(database.updates).toEqual([
+      {
+        table: authChallenges,
+        value: {
+          status: "cancelled",
+          cancelledAt: baseNow,
+          updatedAt: baseNow
+        }
+      }
+    ]);
+  });
+
   it("rejects a duplicate passwordless code request while an existing challenge is in cooldown", async () => {
     const database = createFakeDrizzleDatabase({
       challengeRows: [createChallengeRow()]

@@ -130,6 +130,56 @@ describe("requestPasswordlessCode", () => {
     });
   });
 
+  it("records a failed delivery and cancels the challenge when delivery throws", async () => {
+    const store = {
+      findPendingChallengeByIdentifier: vi.fn(async () => null),
+      createChallenge: vi.fn(async (input) => ({
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        ...input,
+        status: "pending" as const,
+        attempts: 0,
+        createdAt: "2026-06-15T10:00:00.000Z",
+        updatedAt: "2026-06-15T10:00:00.000Z"
+      })),
+      recordDelivery: vi.fn(async (input) => ({ id: "delivery_1", ...input })),
+      cancelChallenge: vi.fn(async () => undefined)
+    };
+    const delivery = {
+      deliverAuthCode: vi.fn(async () => {
+        throw new Error("SMTP timeout");
+      })
+    };
+
+    await expect(
+      requestPasswordlessCode({
+        store,
+        delivery,
+        channel: "email",
+        identifier: "ada@example.com",
+        roles: ["client"],
+        code: "123456",
+        codeSecret: "test-secret",
+        now: new Date("2026-06-15T10:00:00.000Z"),
+        ttlSeconds: 600,
+        resendCooldownSeconds: 60,
+        maxAttempts: 5
+      })
+    ).rejects.toThrow("Passwordless code delivery is unavailable");
+
+    expect(store.recordDelivery).toHaveBeenCalledWith({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      channel: "email",
+      provider: "unknown",
+      status: "failed",
+      errorCode: "DELIVERY_EXCEPTION",
+      errorMessage: "SMTP timeout"
+    });
+    expect(store.cancelChallenge).toHaveBeenCalledWith({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      cancelledAt: "2026-06-15T10:00:00.000Z"
+    });
+  });
+
   it("normalizes and masks phone identifiers", async () => {
     const store = {
       findPendingChallengeByIdentifier: vi.fn(async () => null),

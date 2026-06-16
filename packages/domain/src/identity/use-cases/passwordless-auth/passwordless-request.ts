@@ -124,12 +124,10 @@ export async function requestPasswordlessCode(input: {
     ...optional("ipAddress", normalizeOptionalString(input.ipAddress)),
     ...optional("userAgent", normalizeOptionalString(input.userAgent))
   });
-  const deliveryResult = await input.delivery.deliverAuthCode({
-    challengeId: challenge.id,
-    channel: challenge.channel,
-    identifier: challenge.identifierNormalized,
-    code: input.code,
-    expiresAt: challenge.expiresAt
+  const deliveryResult = await deliverAuthCode({
+    delivery: input.delivery,
+    challenge,
+    code: input.code
   });
 
   await input.store.recordDelivery({
@@ -161,6 +159,41 @@ export async function requestPasswordlessCode(input: {
     expiresAt: challenge.expiresAt,
     resendAvailableAt: challenge.resendAvailableAt
   };
+}
+
+async function deliverAuthCode(input: {
+  readonly delivery: AuthCodeDeliveryPort;
+  readonly challenge: AuthChallenge;
+  readonly code: string;
+}): Promise<AuthCodeDeliveryResult> {
+  try {
+    return await input.delivery.deliverAuthCode({
+      challengeId: input.challenge.id,
+      channel: input.challenge.channel,
+      identifier: input.challenge.identifierNormalized,
+      code: input.code,
+      expiresAt: input.challenge.expiresAt
+    });
+  } catch (error) {
+    return {
+      provider: "unknown",
+      status: "failed",
+      errorCode: "DELIVERY_EXCEPTION",
+      errorMessage: normalizeDeliveryExceptionMessage(error)
+    };
+  }
+}
+
+function normalizeDeliveryExceptionMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim().slice(0, 500);
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error.trim().slice(0, 500);
+  }
+
+  return "Auth code delivery provider threw an unknown error";
 }
 
 async function assertCanReplacePendingChallenge(input: {
