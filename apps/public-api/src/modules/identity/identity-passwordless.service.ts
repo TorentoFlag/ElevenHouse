@@ -3,6 +3,7 @@ import {
   ConflictException,
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   ServiceUnavailableException,
   UnauthorizedException
@@ -26,13 +27,25 @@ import {
   DomainPasswordlessAuthHandler,
   type VerifyPasswordlessCodeWithSessionResult
 } from "./identity-passwordless.handler";
+import { PASSWORDLESS_RATE_LIMITER } from "./identity-passwordless.tokens";
+import {
+  allowAllPasswordlessRateLimiter,
+  anonymousPasswordlessIpAddress,
+  type PasswordlessRateLimitPort,
+  type PasswordlessRequestContext
+} from "./identity-passwordless.rate-limit";
 
 @Injectable()
 export class IdentityPasswordlessService {
-  constructor(private readonly handler: DomainPasswordlessAuthHandler) {}
+  constructor(
+    private readonly handler: DomainPasswordlessAuthHandler,
+    @Inject(PASSWORDLESS_RATE_LIMITER)
+    private readonly rateLimiter: PasswordlessRateLimitPort = allowAllPasswordlessRateLimiter
+  ) {}
 
   async requestCode(
-    body: RequestPasswordlessCodeRequest
+    body: RequestPasswordlessCodeRequest,
+    context: PasswordlessRequestContext = {}
   ): Promise<RequestPasswordlessCodeResponse> {
     const request = requestPasswordlessCodeRequestSchema.safeParse(body);
 
@@ -42,6 +55,14 @@ export class IdentityPasswordlessService {
         issues: request.error.issues
       });
     }
+
+    await assertPasswordlessRateLimitAllowed(
+      await this.rateLimiter.consumeRequestCode({
+        channel: request.data.channel,
+        identifier: request.data.identifier,
+        ipAddress: context.ipAddress ?? anonymousPasswordlessIpAddress
+      })
+    );
 
     try {
       return requestPasswordlessCodeResponseSchema.parse(
@@ -70,7 +91,8 @@ export class IdentityPasswordlessService {
   }
 
   async verifyCode(
-    body: VerifyPasswordlessCodeRequest
+    body: VerifyPasswordlessCodeRequest,
+    context: PasswordlessRequestContext = {}
   ): Promise<VerifyPasswordlessCodeWithSessionResult> {
     const request = verifyPasswordlessCodeRequestSchema.safeParse(body);
 
@@ -80,6 +102,13 @@ export class IdentityPasswordlessService {
         issues: request.error.issues
       });
     }
+
+    await assertPasswordlessRateLimitAllowed(
+      await this.rateLimiter.consumeVerifyCode({
+        challengeId: request.data.challengeId,
+        ipAddress: context.ipAddress ?? anonymousPasswordlessIpAddress
+      })
+    );
 
     try {
       const result = await this.handler.verifyCode(request.data);
@@ -104,4 +133,20 @@ export class IdentityPasswordlessService {
       throw error;
     }
   }
+}
+
+async function assertPasswordlessRateLimitAllowed(
+  decision: Awaited<ReturnType<PasswordlessRateLimitPort["consumeRequestCode"]>>
+): Promise<void> {
+  if (decision.allowed) {
+    return;
+  }
+
+  throw new HttpException(
+    {
+      message: "Passwordless auth rate limit exceeded",
+      retryAfterSeconds: decision.retryAfterSeconds
+    },
+    HttpStatus.TOO_MANY_REQUESTS
+  );
 }

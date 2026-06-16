@@ -30,10 +30,15 @@ describe("IdentityPasswordlessController", () => {
       identifier: "client@example.com",
       roles: ["client"]
     };
+    const httpRequest = {
+      ip: "203.0.113.10"
+    };
 
-    await expect(controller.requestCode(body)).resolves.toEqual(response);
+    await expect(controller.requestCode(body, httpRequest)).resolves.toEqual(response);
 
-    expect(service.requestCode).toHaveBeenCalledWith(body);
+    expect(service.requestCode).toHaveBeenCalledWith(body, {
+      ipAddress: "203.0.113.10"
+    });
     expect(cookieService.setSessionCookie).not.toHaveBeenCalled();
   });
 
@@ -62,14 +67,19 @@ describe("IdentityPasswordlessController", () => {
     const httpResponse = {
       cookie: vi.fn()
     };
+    const httpRequest = {
+      ip: "203.0.113.10"
+    };
     const body = {
       challengeId: "e28cbfe7-414b-4d80-a410-1e3f00a380a7",
       code: "123456"
     };
 
-    await expect(controller.verifyCode(body, httpResponse)).resolves.toEqual(response);
+    await expect(controller.verifyCode(body, httpRequest, httpResponse)).resolves.toEqual(response);
 
-    expect(service.verifyCode).toHaveBeenCalledWith(body);
+    expect(service.verifyCode).toHaveBeenCalledWith(body, {
+      ipAddress: "203.0.113.10"
+    });
     expect(cookieService.setSessionCookie).toHaveBeenCalledWith(httpResponse, {
       token: "raw-session-token",
       expiresAt: "2026-06-23T10:00:00.000Z"

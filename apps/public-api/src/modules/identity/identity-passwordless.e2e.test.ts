@@ -16,14 +16,27 @@ import type {
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
+import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AUTH_SESSION_AUTHENTICATION_STORE } from "./identity-auth.tokens";
 import { IdentityModule } from "./identity.module";
 import { PUBLIC_AUTH_CODE_GENERATOR } from "./identity-passwordless.handler";
-import { AUTH_CODE_DELIVERY, PASSWORDLESS_AUTH_UNIT_OF_WORK } from "./identity-passwordless.tokens";
+import {
+  AUTH_CODE_DELIVERY,
+  PASSWORDLESS_AUTH_UNIT_OF_WORK,
+  PASSWORDLESS_RATE_LIMITER
+} from "./identity-passwordless.tokens";
+import { InMemoryPasswordlessRateLimiter } from "./identity-passwordless.rate-limit";
 import { SystemClock } from "./identity-session.service";
 
 const now = new Date("2026-06-16T10:00:00.000Z");
 const sessionCookieName = "elevenhouse_public_session";
+const defaultPasswordlessRateLimits = {
+  requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
+  requestCodeIp: { limit: 30, windowSeconds: 3600 },
+  requestCodeIdentifierIp: { limit: 3, windowSeconds: 3600 },
+  verifyChallenge: { limit: 5, windowSeconds: 900 },
+  verifyIp: { limit: 60, windowSeconds: 900 }
+};
 
 describe("passwordless public auth HTTP flow", () => {
   let app: INestApplication;
@@ -61,6 +74,13 @@ describe("passwordless public auth HTTP flow", () => {
       .useValue(store)
       .overrideProvider(AUTH_CODE_DELIVERY)
       .useValue(delivery)
+      .overrideProvider(PASSWORDLESS_RATE_LIMITER)
+      .useValue(new InMemoryPasswordlessRateLimiter(defaultPasswordlessRateLimits))
+      .overrideProvider(RedisRuntimeService)
+      .useValue({
+        eval: vi.fn(async () => 0),
+        quit: vi.fn(async () => undefined)
+      })
       .overrideProvider(PUBLIC_AUTH_CODE_GENERATOR)
       .useValue({
         generateCode: vi.fn(() => "123456")
@@ -193,6 +213,33 @@ describe("passwordless public auth HTTP flow", () => {
       errorCode: "DELIVERY_EXCEPTION",
       errorMessage: "SMTP timeout"
     });
+  });
+
+  it("rate limits passwordless code requests by client IP before delivery", async () => {
+    for (let index = 0; index < 30; index += 1) {
+      const response = await postJson("/identity/passwordless/request-code", {
+        channel: "email",
+        identifier: `client-${index}@example.com`,
+        roles: ["client"]
+      });
+
+      expect(response.status).toBe(201);
+    }
+
+    const limitedResponse = await postJson("/identity/passwordless/request-code", {
+      channel: "email",
+      identifier: "client-30@example.com",
+      roles: ["client"]
+    });
+
+    expect(limitedResponse.status).toBe(429);
+    expect(limitedResponse.body).toEqual({
+      message: "Passwordless auth rate limit exceeded",
+      retryAfterSeconds: 3600
+    });
+    expect(store.authChallenges).toHaveLength(30);
+    expect(store.authChallengeDeliveries).toHaveLength(30);
+    expect(deliverAuthCodeMock).toHaveBeenCalledTimes(30);
   });
 
   it("rejects wrong codes without setting a session cookie and still accepts the correct code", async () => {
@@ -355,6 +402,10 @@ function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
 
       if (key === "publicApi.passwordlessMaxAttempts") {
         return 5;
+      }
+
+      if (key === "publicApi.passwordlessRateLimits") {
+        return defaultPasswordlessRateLimits;
       }
 
       throw new Error(`Unexpected config key: ${key}`);

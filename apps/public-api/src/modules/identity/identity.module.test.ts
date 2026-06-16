@@ -9,11 +9,17 @@ import { ConfigService } from "@nestjs/config";
 import { Test } from "@nestjs/testing";
 import { describe, expect, it, vi } from "vitest";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
+import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { IdentityPasswordlessService } from "./identity-passwordless.service";
 import { IdentityModule } from "./identity.module";
 import { AUTH_SESSION_AUTHENTICATION_STORE } from "./identity-auth.tokens";
-import { AUTH_CODE_DELIVERY, PASSWORDLESS_AUTH_UNIT_OF_WORK } from "./identity-passwordless.tokens";
+import {
+  AUTH_CODE_DELIVERY,
+  PASSWORDLESS_AUTH_UNIT_OF_WORK,
+  PASSWORDLESS_RATE_LIMITER
+} from "./identity-passwordless.tokens";
 import { PUBLIC_AUTH_CODE_GENERATOR } from "./identity-passwordless.handler";
+import { allowAllPasswordlessRateLimiter } from "./identity-passwordless.rate-limit";
 import { IdentityCurrentSessionService } from "./identity-current-session.service";
 import { PublicSessionTokenIssuer, SystemClock } from "./identity-session.service";
 
@@ -157,6 +163,16 @@ describe("IdentityModule", () => {
             return 5;
           }
 
+          if (key === "publicApi.passwordlessRateLimits") {
+            return {
+              requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
+              requestCodeIp: { limit: 30, windowSeconds: 3600 },
+              requestCodeIdentifierIp: { limit: 3, windowSeconds: 3600 },
+              verifyChallenge: { limit: 5, windowSeconds: 900 },
+              verifyIp: { limit: 60, windowSeconds: 900 }
+            };
+          }
+
           if (key === "publicApi.sessionCookieSecure") {
             return false;
           }
@@ -172,6 +188,13 @@ describe("IdentityModule", () => {
       .useValue(passwordlessAuth)
       .overrideProvider(AUTH_CODE_DELIVERY)
       .useValue(delivery)
+      .overrideProvider(PASSWORDLESS_RATE_LIMITER)
+      .useValue(allowAllPasswordlessRateLimiter)
+      .overrideProvider(RedisRuntimeService)
+      .useValue({
+        eval: vi.fn(async () => 0),
+        quit: vi.fn(async () => undefined)
+      })
       .overrideProvider(AUTH_SESSION_AUTHENTICATION_STORE)
       .useValue(authSessionAuthenticationStore)
       .overrideProvider(PUBLIC_AUTH_CODE_GENERATOR)
@@ -242,4 +265,90 @@ describe("IdentityModule", () => {
 
     await moduleRef.close();
   });
+
+  it("wires passwordless rate limiting to the shared Redis client", async () => {
+    const redisClient = {
+      eval: vi.fn(async () => 0),
+      quit: vi.fn(async () => undefined)
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [IdentityModule]
+    })
+      .overrideProvider(PostgresRuntimeService)
+      .useValue({ database: {} })
+      .overrideProvider(ConfigService)
+      .useValue(createConfigServiceStub())
+      .overrideProvider(RedisRuntimeService)
+      .useValue(redisClient)
+      .compile();
+
+    const rateLimiter = moduleRef.get(PASSWORDLESS_RATE_LIMITER);
+
+    await expect(
+      rateLimiter.consumeRequestCode({
+        channel: "email",
+        identifier: "client@example.com",
+        ipAddress: "203.0.113.10"
+      })
+    ).resolves.toEqual({ allowed: true });
+
+    expect(redisClient.eval).toHaveBeenCalledWith(expect.any(String), expect.any(Object));
+    await moduleRef.close();
+    expect(redisClient.quit).not.toHaveBeenCalled();
+  });
 });
+
+function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
+  return {
+    getOrThrow: vi.fn((key: string) => {
+      if (key === "publicApi.sessionTtlSeconds") {
+        return 604800;
+      }
+
+      if (key === "publicApi.passwordlessCodeSecret") {
+        return "test-secret";
+      }
+
+      if (key === "publicApi.passwordlessCodeTtlSeconds") {
+        return 600;
+      }
+
+      if (key === "publicApi.passwordlessResendCooldownSeconds") {
+        return 60;
+      }
+
+      if (key === "publicApi.passwordlessMaxAttempts") {
+        return 5;
+      }
+
+      if (key === "publicApi.passwordlessRateLimits") {
+        return {
+          requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
+          requestCodeIp: { limit: 30, windowSeconds: 3600 },
+          requestCodeIdentifierIp: { limit: 3, windowSeconds: 3600 },
+          verifyChallenge: { limit: 5, windowSeconds: 900 },
+          verifyIp: { limit: 60, windowSeconds: 900 }
+        };
+      }
+
+      if (key === "publicApi.passwordlessRateLimitRedisKeyPrefix") {
+        return "elevenhouse:test";
+      }
+
+      if (key === "publicApi.authCodeDeliveryProvider") {
+        return "dev";
+      }
+
+      if (key === "publicApi.sessionCookieSecure") {
+        return false;
+      }
+
+      if (key === "publicApi.sessionCookieName") {
+        return "elevenhouse_public_session";
+      }
+
+      throw new Error(`Unexpected config key: ${key}`);
+    })
+  };
+}

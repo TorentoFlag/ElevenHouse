@@ -51,6 +51,52 @@ describe("IdentityPasswordlessService", () => {
     expect(response).toEqual(codeResponse);
   });
 
+  it("rejects passwordless code requests when the rate limiter blocks the context", async () => {
+    const handler = {
+      requestCode: vi.fn(),
+      verifyCode: vi.fn()
+    };
+    const rateLimiter = {
+      consumeRequestCode: vi.fn(async () => ({
+        allowed: false as const,
+        retryAfterSeconds: 45
+      })),
+      consumeVerifyCode: vi.fn()
+    };
+    const service = new IdentityPasswordlessService(
+      handler as unknown as DomainPasswordlessAuthHandler,
+      rateLimiter
+    );
+
+    let error: unknown;
+
+    try {
+      await service.requestCode(
+        {
+          channel: "email",
+          identifier: "CLIENT@example.COM",
+          roles: ["client"]
+        },
+        { ipAddress: "203.0.113.10" }
+      );
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(rateLimiter.consumeRequestCode).toHaveBeenCalledWith({
+      channel: "email",
+      identifier: "client@example.com",
+      ipAddress: "203.0.113.10"
+    });
+    expect(handler.requestCode).not.toHaveBeenCalled();
+    expect(error).toBeInstanceOf(HttpException);
+    expect((error as HttpException).getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+    expect((error as HttpException).getResponse()).toEqual({
+      message: "Passwordless auth rate limit exceeded",
+      retryAfterSeconds: 45
+    });
+  });
+
   it("normalizes phone identifiers for passwordless code requests", async () => {
     const handler = {
       requestCode: vi.fn(async () => ({
@@ -189,6 +235,50 @@ describe("IdentityPasswordlessService", () => {
       }
     });
     expect(handler.verifyCode).toHaveBeenCalledWith(request);
+  });
+
+  it("rejects passwordless code verification when the rate limiter blocks the context", async () => {
+    const handler = {
+      requestCode: vi.fn(),
+      verifyCode: vi.fn()
+    };
+    const rateLimiter = {
+      consumeRequestCode: vi.fn(),
+      consumeVerifyCode: vi.fn(async () => ({
+        allowed: false as const,
+        retryAfterSeconds: 30
+      }))
+    };
+    const service = new IdentityPasswordlessService(
+      handler as unknown as DomainPasswordlessAuthHandler,
+      rateLimiter
+    );
+
+    let error: unknown;
+
+    try {
+      await service.verifyCode(
+        {
+          challengeId: "e28cbfe7-414b-4d80-a410-1e3f00a380a7",
+          code: "123456"
+        },
+        { ipAddress: "203.0.113.10" }
+      );
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(rateLimiter.consumeVerifyCode).toHaveBeenCalledWith({
+      challengeId: "e28cbfe7-414b-4d80-a410-1e3f00a380a7",
+      ipAddress: "203.0.113.10"
+    });
+    expect(handler.verifyCode).not.toHaveBeenCalled();
+    expect(error).toBeInstanceOf(HttpException);
+    expect((error as HttpException).getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+    expect((error as HttpException).getResponse()).toEqual({
+      message: "Passwordless auth rate limit exceeded",
+      retryAfterSeconds: 30
+    });
   });
 
   it("rejects invalid verify requests before calling the handler", async () => {

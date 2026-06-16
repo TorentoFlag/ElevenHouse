@@ -4,6 +4,8 @@ import { createDrizzleAuthSessionAuthenticationStore } from "@elevenhouse/db/aut
 import { createDrizzlePasswordlessAuthUnitOfWork } from "@elevenhouse/db/passwordless-auth";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
+import { RedisModule } from "../redis/redis.module";
+import { REDIS_CLIENT, type RedisClientPort } from "../redis/redis.tokens";
 import { IdentityCurrentAccountController } from "./identity-current-account.controller";
 import { IdentityCurrentSessionService } from "./identity-current-session.service";
 import { PublicSessionAuthGuard } from "./identity-auth.guard";
@@ -18,8 +20,14 @@ import { DevAuthCodeDeliveryProvider } from "./identity-passwordless.delivery";
 import {
   AUTH_CODE_DELIVERY,
   PASSWORDLESS_AUTH_OPTIONS,
+  PASSWORDLESS_RATE_LIMITER,
+  PASSWORDLESS_RATE_LIMIT_OPTIONS,
   PASSWORDLESS_AUTH_UNIT_OF_WORK
 } from "./identity-passwordless.tokens";
+import {
+  RedisPasswordlessRateLimiter,
+  type PasswordlessRateLimitOptions
+} from "./identity-passwordless.rate-limit";
 import { IdentityPasswordlessService } from "./identity-passwordless.service";
 import {
   PublicSessionCookieService,
@@ -28,7 +36,7 @@ import {
 } from "./identity-session.service";
 
 @Module({
-  imports: [ConfigModule, DatabaseModule],
+  imports: [ConfigModule, DatabaseModule, RedisModule],
   controllers: [IdentityPasswordlessController, IdentityCurrentAccountController],
   providers: [
     IdentityPasswordlessService,
@@ -85,6 +93,26 @@ import {
         sessionTtlSeconds: configService.getOrThrow<number>("publicApi.sessionTtlSeconds")
       }),
       inject: [ConfigService]
+    },
+    {
+      provide: PASSWORDLESS_RATE_LIMIT_OPTIONS,
+      useFactory: (configService: ConfigService) =>
+        configService.getOrThrow("publicApi.passwordlessRateLimits"),
+      inject: [ConfigService]
+    },
+    {
+      provide: PASSWORDLESS_RATE_LIMITER,
+      useFactory: (
+        options: PasswordlessRateLimitOptions,
+        redisClient: RedisClientPort,
+        configService: ConfigService
+      ) =>
+        new RedisPasswordlessRateLimiter(redisClient, options, {
+          keyPrefix: configService.getOrThrow<string>(
+            "publicApi.passwordlessRateLimitRedisKeyPrefix"
+          )
+        }),
+      inject: [PASSWORDLESS_RATE_LIMIT_OPTIONS, REDIS_CLIENT, ConfigService]
     }
   ]
 })
