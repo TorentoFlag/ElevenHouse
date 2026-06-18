@@ -16,16 +16,7 @@ import {
   NumericPasswordlessCodeGenerator,
   PUBLIC_AUTH_CODE_GENERATOR
 } from "./identity-passwordless.handler";
-import type { PublicApiAuthCodeDeliveryProvider } from "../../config/runtime-config";
 import {
-  ChannelAuthCodeDeliveryProvider,
-  DevAuthCodeDeliveryProvider,
-  EmailAuthCodeDeliveryProvider,
-  SmsAuthCodeDeliveryProvider,
-  type AuthCodeHttpDeliveryOptions
-} from "./identity-passwordless.delivery";
-import {
-  AUTH_CODE_DELIVERY,
   PASSWORDLESS_AUTH_OPTIONS,
   PASSWORDLESS_RATE_LIMITER,
   PASSWORDLESS_RATE_LIMIT_OPTIONS,
@@ -49,42 +40,10 @@ import {
     IdentityPasswordlessService,
     IdentityCurrentSessionService,
     PublicSessionAuthGuard,
-    DevAuthCodeDeliveryProvider,
     PublicSessionTokenIssuer,
     PublicSessionCookieService,
     SystemClock,
     DomainPasswordlessAuthHandler,
-    {
-      provide: AUTH_CODE_DELIVERY,
-      useFactory: (
-        configService: ConfigService,
-        devAuthCodeDeliveryProvider: DevAuthCodeDeliveryProvider
-      ) => {
-        const provider = configService.getOrThrow<PublicApiAuthCodeDeliveryProvider>(
-          "publicApi.authCodeDeliveryProvider"
-        );
-
-        if (provider === "dev") {
-          return devAuthCodeDeliveryProvider;
-        }
-
-        if (provider === "email_sms") {
-          return new ChannelAuthCodeDeliveryProvider(
-            new EmailAuthCodeDeliveryProvider(
-              configService.getOrThrow<AuthCodeHttpDeliveryOptions>(
-                "publicApi.authCodeEmailDelivery"
-              )
-            ),
-            new SmsAuthCodeDeliveryProvider(
-              configService.getOrThrow<AuthCodeHttpDeliveryOptions>("publicApi.authCodeSmsDelivery")
-            )
-          );
-        }
-
-        throw new Error(`Unsupported auth code delivery provider: ${provider}`);
-      },
-      inject: [ConfigService, DevAuthCodeDeliveryProvider]
-    },
     {
       provide: PUBLIC_AUTH_CODE_GENERATOR,
       useClass: NumericPasswordlessCodeGenerator

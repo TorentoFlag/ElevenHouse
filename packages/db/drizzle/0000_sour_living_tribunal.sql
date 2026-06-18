@@ -82,17 +82,18 @@ CREATE TABLE "auth_challenges" (
 CREATE TABLE "auth_challenge_deliveries" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"challenge_id" uuid NOT NULL,
-	"channel" text NOT NULL,
-	"provider" text NOT NULL,
+	"provider" text,
 	"status" text NOT NULL,
 	"provider_message_id" text,
 	"error_code" text,
 	"error_message" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"sent_at" timestamp with time zone,
-	CONSTRAINT "auth_challenge_deliveries_channel_check" CHECK ("auth_challenge_deliveries"."channel" in ('email', 'phone')),
 	CONSTRAINT "auth_challenge_deliveries_status_check" CHECK ("auth_challenge_deliveries"."status" in ('queued', 'sent', 'failed')),
-	CONSTRAINT "auth_challenge_deliveries_sent_at_check" CHECK ("auth_challenge_deliveries"."status" <> 'sent' or "auth_challenge_deliveries"."sent_at" is not null)
+	CONSTRAINT "auth_challenge_deliveries_sent_at_check" CHECK ("auth_challenge_deliveries"."status" <> 'sent' or "auth_challenge_deliveries"."sent_at" is not null),
+	CONSTRAINT "auth_challenge_deliveries_queued_fields_check" CHECK ("auth_challenge_deliveries"."status" <> 'queued' or ("auth_challenge_deliveries"."provider" is null and "auth_challenge_deliveries"."provider_message_id" is null and "auth_challenge_deliveries"."error_code" is null and "auth_challenge_deliveries"."error_message" is null and "auth_challenge_deliveries"."sent_at" is null)),
+	CONSTRAINT "auth_challenge_deliveries_sent_fields_check" CHECK ("auth_challenge_deliveries"."status" <> 'sent' or ("auth_challenge_deliveries"."provider" is not null and "auth_challenge_deliveries"."error_code" is null and "auth_challenge_deliveries"."error_message" is null)),
+	CONSTRAINT "auth_challenge_deliveries_failed_fields_check" CHECK ("auth_challenge_deliveries"."status" <> 'failed' or ("auth_challenge_deliveries"."provider" is not null and "auth_challenge_deliveries"."error_code" is not null and "auth_challenge_deliveries"."error_message" is not null and "auth_challenge_deliveries"."sent_at" is null))
 );
 --> statement-breakpoint
 CREATE TABLE "auth_security_events" (
@@ -111,6 +112,26 @@ CREATE TABLE "auth_security_events" (
         'logout_succeeded',
         'session_revoked'
       ))
+);
+--> statement-breakpoint
+CREATE TABLE "outbox_events" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"event_type" text NOT NULL,
+	"aggregate_id" uuid NOT NULL,
+	"payload" jsonb NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"attempts" integer DEFAULT 0 NOT NULL,
+	"available_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"locked_at" timestamp with time zone,
+	"published_at" timestamp with time zone,
+	"last_error" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "outbox_events_status_check" CHECK ("outbox_events"."status" in ('pending', 'publishing', 'published')),
+	CONSTRAINT "outbox_events_attempts_check" CHECK ("outbox_events"."attempts" >= 0),
+	CONSTRAINT "outbox_events_pending_not_published_check" CHECK ("outbox_events"."status" <> 'pending' or "outbox_events"."published_at" is null),
+	CONSTRAINT "outbox_events_publishing_locked_check" CHECK ("outbox_events"."status" <> 'publishing' or "outbox_events"."locked_at" is not null),
+	CONSTRAINT "outbox_events_published_at_check" CHECK ("outbox_events"."status" <> 'published' or "outbox_events"."published_at" is not null)
 );
 --> statement-breakpoint
 ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -136,9 +157,12 @@ CREATE UNIQUE INDEX "auth_challenges_pending_identifier_unique" ON "auth_challen
 CREATE INDEX "auth_challenges_expires_at_index" ON "auth_challenges" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "auth_challenges_created_at_index" ON "auth_challenges" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "auth_challenge_deliveries_challenge_id_index" ON "auth_challenge_deliveries" USING btree ("challenge_id");--> statement-breakpoint
-CREATE INDEX "auth_challenge_deliveries_provider_status_index" ON "auth_challenge_deliveries" USING btree ("provider","status");--> statement-breakpoint
+CREATE INDEX "auth_challenge_deliveries_status_created_at_index" ON "auth_challenge_deliveries" USING btree ("status","created_at");--> statement-breakpoint
 CREATE INDEX "auth_challenge_deliveries_created_at_index" ON "auth_challenge_deliveries" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "auth_security_events_user_id_index" ON "auth_security_events" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "auth_security_events_session_id_index" ON "auth_security_events" USING btree ("session_id");--> statement-breakpoint
 CREATE INDEX "auth_security_events_event_type_index" ON "auth_security_events" USING btree ("event_type");--> statement-breakpoint
-CREATE INDEX "auth_security_events_occurred_at_index" ON "auth_security_events" USING btree ("occurred_at");
+CREATE INDEX "auth_security_events_occurred_at_index" ON "auth_security_events" USING btree ("occurred_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "outbox_events_event_type_aggregate_id_unique" ON "outbox_events" USING btree ("event_type","aggregate_id");--> statement-breakpoint
+CREATE INDEX "outbox_events_pending_index" ON "outbox_events" USING btree ("status","available_at","created_at");--> statement-breakpoint
+CREATE INDEX "outbox_events_locked_at_index" ON "outbox_events" USING btree ("locked_at");

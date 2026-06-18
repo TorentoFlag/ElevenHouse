@@ -776,17 +776,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "channel": {
-          "name": "channel",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "provider": {
           "name": "provider",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -842,17 +836,17 @@
           "method": "btree",
           "with": {}
         },
-        "auth_challenge_deliveries_provider_status_index": {
-          "name": "auth_challenge_deliveries_provider_status_index",
+        "auth_challenge_deliveries_status_created_at_index": {
+          "name": "auth_challenge_deliveries_status_created_at_index",
           "columns": [
             {
-              "expression": "provider",
+              "expression": "status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "status",
+              "expression": "created_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -898,10 +892,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "auth_challenge_deliveries_channel_check": {
-          "name": "auth_challenge_deliveries_channel_check",
-          "value": "\"auth_challenge_deliveries\".\"channel\" in ('email', 'phone')"
-        },
         "auth_challenge_deliveries_status_check": {
           "name": "auth_challenge_deliveries_status_check",
           "value": "\"auth_challenge_deliveries\".\"status\" in ('queued', 'sent', 'failed')"
@@ -909,6 +899,18 @@
         "auth_challenge_deliveries_sent_at_check": {
           "name": "auth_challenge_deliveries_sent_at_check",
           "value": "\"auth_challenge_deliveries\".\"status\" <> 'sent' or \"auth_challenge_deliveries\".\"sent_at\" is not null"
+        },
+        "auth_challenge_deliveries_queued_fields_check": {
+          "name": "auth_challenge_deliveries_queued_fields_check",
+          "value": "\"auth_challenge_deliveries\".\"status\" <> 'queued' or (\"auth_challenge_deliveries\".\"provider\" is null and \"auth_challenge_deliveries\".\"provider_message_id\" is null and \"auth_challenge_deliveries\".\"error_code\" is null and \"auth_challenge_deliveries\".\"error_message\" is null and \"auth_challenge_deliveries\".\"sent_at\" is null)"
+        },
+        "auth_challenge_deliveries_sent_fields_check": {
+          "name": "auth_challenge_deliveries_sent_fields_check",
+          "value": "\"auth_challenge_deliveries\".\"status\" <> 'sent' or (\"auth_challenge_deliveries\".\"provider\" is not null and \"auth_challenge_deliveries\".\"error_code\" is null and \"auth_challenge_deliveries\".\"error_message\" is null)"
+        },
+        "auth_challenge_deliveries_failed_fields_check": {
+          "name": "auth_challenge_deliveries_failed_fields_check",
+          "value": "\"auth_challenge_deliveries\".\"status\" <> 'failed' or (\"auth_challenge_deliveries\".\"provider\" is not null and \"auth_challenge_deliveries\".\"error_code\" is not null and \"auth_challenge_deliveries\".\"error_message\" is not null and \"auth_challenge_deliveries\".\"sent_at\" is null)"
         }
       },
       "isRLSEnabled": false
@@ -1066,6 +1068,182 @@
         "auth_security_events_event_type_check": {
           "name": "auth_security_events_event_type_check",
           "value": "\"auth_security_events\".\"event_type\" in (\n        'registration_succeeded',\n        'login_succeeded',\n        'login_failed',\n        'logout_succeeded',\n        'session_revoked'\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.outbox_events": {
+      "name": "outbox_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aggregate_id": {
+          "name": "aggregate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "available_at": {
+          "name": "available_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "locked_at": {
+          "name": "locked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "outbox_events_event_type_aggregate_id_unique": {
+          "name": "outbox_events_event_type_aggregate_id_unique",
+          "columns": [
+            {
+              "expression": "event_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "aggregate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "outbox_events_pending_index": {
+          "name": "outbox_events_pending_index",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "available_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "outbox_events_locked_at_index": {
+          "name": "outbox_events_locked_at_index",
+          "columns": [
+            {
+              "expression": "locked_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "outbox_events_status_check": {
+          "name": "outbox_events_status_check",
+          "value": "\"outbox_events\".\"status\" in ('pending', 'publishing', 'published')"
+        },
+        "outbox_events_attempts_check": {
+          "name": "outbox_events_attempts_check",
+          "value": "\"outbox_events\".\"attempts\" >= 0"
+        },
+        "outbox_events_pending_not_published_check": {
+          "name": "outbox_events_pending_not_published_check",
+          "value": "\"outbox_events\".\"status\" <> 'pending' or \"outbox_events\".\"published_at\" is null"
+        },
+        "outbox_events_publishing_locked_check": {
+          "name": "outbox_events_publishing_locked_check",
+          "value": "\"outbox_events\".\"status\" <> 'publishing' or \"outbox_events\".\"locked_at\" is not null"
+        },
+        "outbox_events_published_at_check": {
+          "name": "outbox_events_published_at_check",
+          "value": "\"outbox_events\".\"status\" <> 'published' or \"outbox_events\".\"published_at\" is not null"
         }
       },
       "isRLSEnabled": false

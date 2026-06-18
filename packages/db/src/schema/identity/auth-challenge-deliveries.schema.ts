@@ -9,8 +9,7 @@ export const authChallengeDeliveries = pgTable(
     challengeId: uuid("challenge_id")
       .notNull()
       .references(() => authChallenges.id, { onDelete: "cascade" }),
-    channel: text("channel").notNull(),
-    provider: text("provider").notNull(),
+    provider: text("provider"),
     status: text("status").notNull(),
     providerMessageId: text("provider_message_id"),
     errorCode: text("error_code"),
@@ -20,10 +19,6 @@ export const authChallengeDeliveries = pgTable(
   },
   (table) => [
     check(
-      "auth_challenge_deliveries_channel_check",
-      sql`${table.channel} in ('email', 'phone')`
-    ),
-    check(
       "auth_challenge_deliveries_status_check",
       sql`${table.status} in ('queued', 'sent', 'failed')`
     ),
@@ -31,8 +26,20 @@ export const authChallengeDeliveries = pgTable(
       "auth_challenge_deliveries_sent_at_check",
       sql`${table.status} <> 'sent' or ${table.sentAt} is not null`
     ),
+    check(
+      "auth_challenge_deliveries_queued_fields_check",
+      sql`${table.status} <> 'queued' or (${table.provider} is null and ${table.providerMessageId} is null and ${table.errorCode} is null and ${table.errorMessage} is null and ${table.sentAt} is null)`
+    ),
+    check(
+      "auth_challenge_deliveries_sent_fields_check",
+      sql`${table.status} <> 'sent' or (${table.provider} is not null and ${table.errorCode} is null and ${table.errorMessage} is null)`
+    ),
+    check(
+      "auth_challenge_deliveries_failed_fields_check",
+      sql`${table.status} <> 'failed' or (${table.provider} is not null and ${table.errorCode} is not null and ${table.errorMessage} is not null and ${table.sentAt} is null)`
+    ),
     index("auth_challenge_deliveries_challenge_id_index").on(table.challengeId),
-    index("auth_challenge_deliveries_provider_status_index").on(table.provider, table.status),
+    index("auth_challenge_deliveries_status_created_at_index").on(table.status, table.createdAt),
     index("auth_challenge_deliveries_created_at_index").on(table.createdAt)
   ]
 );

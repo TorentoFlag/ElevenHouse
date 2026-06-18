@@ -3,7 +3,6 @@ import {
   ConflictException,
   HttpException,
   HttpStatus,
-  ServiceUnavailableException,
   UnauthorizedException
 } from "@nestjs/common";
 import type {
@@ -12,7 +11,6 @@ import type {
 } from "@elevenhouse/contracts";
 import {
   CustomerAccountIdentityConflictError,
-  PasswordlessCodeDeliveryUnavailableError,
   PasswordlessCodeRequestCooldownError,
   PasswordlessCodeVerificationError
 } from "@elevenhouse/domain";
@@ -142,24 +140,6 @@ describe("IdentityPasswordlessService", () => {
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(handler.requestCode).not.toHaveBeenCalled();
-  });
-
-  it("maps delivery failures to service unavailable responses", async () => {
-    const handler = {
-      requestCode: vi.fn(async () => {
-        throw new PasswordlessCodeDeliveryUnavailableError();
-      }),
-      verifyCode: vi.fn()
-    };
-    const service = createService(handler);
-
-    await expect(
-      service.requestCode({
-        channel: "email",
-        identifier: "client@example.com",
-        roles: ["client"]
-      })
-    ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
   it("maps resend cooldowns to too many requests responses", async () => {

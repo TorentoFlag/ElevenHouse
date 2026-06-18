@@ -5,7 +5,7 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import type {
   AuthChallenge,
   AuthChallengeDelivery,
-  AuthCodeDeliveryPort,
+  AuthCodeDeliveryRequestedPayload,
   AuthSecurityEvent,
   AuthSession,
   AuthSessionAuthenticationStore,
@@ -21,7 +21,6 @@ import { AUTH_SESSION_AUTHENTICATION_STORE } from "./identity-auth.tokens";
 import { IdentityModule } from "./identity.module";
 import { PUBLIC_AUTH_CODE_GENERATOR } from "./identity-passwordless.handler";
 import {
-  AUTH_CODE_DELIVERY,
   PASSWORDLESS_AUTH_UNIT_OF_WORK,
   PASSWORDLESS_RATE_LIMITER
 } from "./identity-passwordless.tokens";
@@ -43,22 +42,11 @@ describe("passwordless public auth HTTP flow", () => {
   let moduleRef: TestingModule;
   let baseUrl: string;
   let store: InMemoryPasswordlessAuthStore;
-  let deliverAuthCodeMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     store = new InMemoryPasswordlessAuthStore(now);
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async (operation) => operation(store)
-    };
-    deliverAuthCodeMock = vi.fn(
-      async (input: Parameters<AuthCodeDeliveryPort["deliverAuthCode"]>[0]) => ({
-        provider: "dev",
-        status: "sent" as const,
-        providerMessageId: `dev:${input.challengeId}`
-      })
-    );
-    const delivery: AuthCodeDeliveryPort = {
-      deliverAuthCode: deliverAuthCodeMock as AuthCodeDeliveryPort["deliverAuthCode"]
     };
 
     moduleRef = await Test.createTestingModule({
@@ -72,8 +60,6 @@ describe("passwordless public auth HTTP flow", () => {
       .useValue(passwordlessAuth)
       .overrideProvider(AUTH_SESSION_AUTHENTICATION_STORE)
       .useValue(store)
-      .overrideProvider(AUTH_CODE_DELIVERY)
-      .useValue(delivery)
       .overrideProvider(PASSWORDLESS_RATE_LIMITER)
       .useValue(new InMemoryPasswordlessRateLimiter(defaultPasswordlessRateLimits))
       .overrideProvider(RedisRuntimeService)
@@ -191,27 +177,27 @@ describe("passwordless public auth HTTP flow", () => {
     expect(store.authChallengeDeliveries).toHaveLength(1);
   });
 
-  it("returns service unavailable and cancels the challenge when delivery throws", async () => {
-    deliverAuthCodeMock.mockRejectedValueOnce(new Error("SMTP timeout"));
-
+  it("queues delivery without calling the delivery provider during request-code", async () => {
     const response = await postJson("/identity/passwordless/request-code", {
       channel: "email",
       identifier: "client@example.com",
       roles: ["client"]
     });
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(201);
     expect(store.authChallenges).toHaveLength(1);
-    expect(store.authChallenges[0]).toMatchObject({
-      status: "cancelled",
-      cancelledAt: "2026-06-16T10:00:00.000Z"
-    });
+    expect(store.authChallenges[0]?.status).toBe("pending");
     expect(store.authChallengeDeliveries).toHaveLength(1);
     expect(store.authChallengeDeliveries[0]).toMatchObject({
-      provider: "unknown",
-      status: "failed",
-      errorCode: "DELIVERY_EXCEPTION",
-      errorMessage: "SMTP timeout"
+      status: "queued"
+    });
+    expect(store.authChallengeDeliveries[0]?.provider).toBeUndefined();
+    expect(store.authCodeDeliveryRequestedEvents).toHaveLength(1);
+    expect(store.authCodeDeliveryRequestedEvents[0]?.payload).toMatchObject({
+      deliveryId: store.authChallengeDeliveries[0]?.id,
+      channel: "email",
+      identifier: "client@example.com",
+      code: "123456"
     });
   });
 
@@ -239,7 +225,7 @@ describe("passwordless public auth HTTP flow", () => {
     });
     expect(store.authChallenges).toHaveLength(30);
     expect(store.authChallengeDeliveries).toHaveLength(30);
-    expect(deliverAuthCodeMock).toHaveBeenCalledTimes(30);
+    expect(store.authCodeDeliveryRequestedEvents).toHaveLength(30);
   });
 
   it("rejects wrong codes without setting a session cookie and still accepts the correct code", async () => {
@@ -353,7 +339,13 @@ describe("passwordless public auth HTTP flow", () => {
 
 type HttpJsonResponse = {
   readonly status: number;
-  readonly body: any;
+  readonly body: Record<string, unknown> & {
+    readonly challengeId: string;
+    readonly account: {
+      readonly id: string;
+      readonly roles: readonly string[];
+    };
+  };
   readonly setCookie: string | null;
 };
 
@@ -432,6 +424,10 @@ class InMemoryPasswordlessAuthStore implements PasswordlessAuthStore, AuthSessio
   readonly roleAssignments: UserRoleAssignment[] = [];
   readonly userSessions: AuthSession[] = [];
   readonly authSecurityEvents: AuthSecurityEvent[] = [];
+  readonly authCodeDeliveryRequestedEvents: Array<{
+    readonly payload: AuthCodeDeliveryRequestedPayload;
+    readonly occurredAt: string;
+  }> = [];
 
   constructor(private readonly now: Date) {}
 
@@ -460,6 +456,12 @@ class InMemoryPasswordlessAuthStore implements PasswordlessAuthStore, AuthSessio
     };
     this.authChallengeDeliveries.push(delivery);
     return delivery;
+  }
+
+  async recordAuthCodeDeliveryRequested(
+    input: Parameters<PasswordlessAuthStore["recordAuthCodeDeliveryRequested"]>[0]
+  ): Promise<void> {
+    this.authCodeDeliveryRequestedEvents.push(input);
   }
 
   async cancelChallenge(

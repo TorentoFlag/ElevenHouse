@@ -5,12 +5,13 @@ import {
   requestPasswordlessCode,
   verifyPasswordlessCode
 } from "@elevenhouse/domain";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   authChallengeDeliveries,
   authChallenges,
   authIdentities,
   authSecurityEvents,
+  outboxEvents,
   userRoleAssignments,
   users,
   userSessions
@@ -118,7 +119,25 @@ function createFakeDrizzleDatabase(input: {
       }
     }
   } as unknown as PasswordlessAuthDrizzleExecutor["query"];
-  const executor: PasswordlessAuthDrizzleExecutor = { insert, update, query };
+  const select = (() => ({
+    from: (table: unknown) => ({
+      where: (args: unknown) => ({
+        orderBy: () => ({
+          limit: async () => {
+            if (table === authChallenges) {
+              queries.push({ table: "authChallenges", args });
+              const row = input.challengeRows?.[nextChallengeRowIndex] ?? null;
+              nextChallengeRowIndex += 1;
+              return row ? [row] : [];
+            }
+
+            return [];
+          }
+        })
+      })
+    })
+  })) as unknown as PasswordlessAuthDrizzleExecutor["select"];
+  const executor: PasswordlessAuthDrizzleExecutor = { insert, update, query, select };
 
   return {
     inserts,
@@ -168,14 +187,13 @@ function createDeliveryRow(overrides: Record<string, unknown> = {}) {
   return {
     id: "delivery_1",
     challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-    channel: "email",
-    provider: "dev",
-    status: "sent",
-    providerMessageId: "dev-message-1",
+    provider: null,
+    status: "queued",
+    providerMessageId: null,
     errorCode: null,
     errorMessage: null,
     createdAt: baseNow,
-    sentAt: baseNow,
+    sentAt: null,
     ...overrides
   };
 }
@@ -260,20 +278,12 @@ function createUniqueViolationError(constraint: string): Error {
 describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
   it("persists a passwordless code request in one transaction", async () => {
     const database = createFakeDrizzleDatabase({
-      insertRows: [createChallengeRow(), createDeliveryRow()]
+      insertRows: [createChallengeRow(), createDeliveryRow(), { id: "outbox_1" }]
     });
-    const delivery = {
-      deliverAuthCode: vi.fn(async () => ({
-        provider: "dev",
-        status: "sent" as const,
-        providerMessageId: "dev-message-1"
-      }))
-    };
 
     const result = await createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
       requestPasswordlessCode({
         store,
-        delivery,
         channel: "email",
         identifier: " ADA@example.COM ",
         roles: ["client"],
@@ -309,11 +319,23 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
         table: authChallengeDeliveries,
         value: {
           challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-          channel: "email",
-          provider: "dev",
-          status: "sent",
-          providerMessageId: "dev-message-1",
-          sentAt: baseNow
+          status: "queued"
+        }
+      },
+      {
+        table: outboxEvents,
+        value: {
+          eventType: "identity.auth_code_delivery_requested",
+          aggregateId: "delivery_1",
+          payload: {
+            challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+            deliveryId: "delivery_1",
+            channel: "email",
+            identifier: "ada@example.com",
+            code: "123456",
+            expiresAt: "2026-06-15T10:10:00.000Z"
+          },
+          availableAt: baseNow
         }
       }
     ]);
@@ -326,177 +348,15 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
     });
   });
 
-  it("records a failed delivery and cancels the challenge when delivery fails", async () => {
-    const database = createFakeDrizzleDatabase({
-      insertRows: [
-        createChallengeRow(),
-        createDeliveryRow({
-          status: "failed",
-          providerMessageId: null,
-          errorCode: "DEV_DISABLED",
-          errorMessage: "Dev delivery disabled",
-          sentAt: null
-        })
-      ]
-    });
-    const delivery = {
-      deliverAuthCode: vi.fn(async () => ({
-        provider: "dev",
-        status: "failed" as const,
-        errorCode: "DEV_DISABLED",
-        errorMessage: "Dev delivery disabled"
-      }))
-    };
-
-    await expect(
-      createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
-        requestPasswordlessCode({
-          store,
-          delivery,
-          channel: "email",
-          identifier: "ada@example.com",
-          roles: ["client"],
-          code: "123456",
-          codeSecret,
-          now: baseNow,
-          ttlSeconds: 600,
-          resendCooldownSeconds: 60,
-          maxAttempts: 5
-        })
-      )
-    ).rejects.toThrow("Passwordless code delivery is unavailable");
-
-    expect(database.inserts).toEqual([
-      {
-        table: authChallenges,
-        value: {
-          channel: "email",
-          identifier: "ada@example.com",
-          identifierNormalized: "ada@example.com",
-          codeHash: expect.any(String),
-          requestedRoles: ["client"],
-          maxAttempts: 5,
-          expiresAt,
-          resendAvailableAt
-        }
-      },
-      {
-        table: authChallengeDeliveries,
-        value: {
-          challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-          channel: "email",
-          provider: "dev",
-          status: "failed",
-          errorCode: "DEV_DISABLED",
-          errorMessage: "Dev delivery disabled"
-        }
-      }
-    ]);
-    expect(database.updates).toEqual([
-      {
-        table: authChallenges,
-        value: {
-          status: "cancelled",
-          cancelledAt: baseNow,
-          updatedAt: baseNow
-        }
-      }
-    ]);
-  });
-
-  it("records a failed delivery and cancels the challenge when delivery throws", async () => {
-    const database = createFakeDrizzleDatabase({
-      insertRows: [
-        createChallengeRow(),
-        createDeliveryRow({
-          provider: "unknown",
-          status: "failed",
-          providerMessageId: null,
-          errorCode: "DELIVERY_EXCEPTION",
-          errorMessage: "SMTP timeout",
-          sentAt: null
-        })
-      ]
-    });
-    const delivery = {
-      deliverAuthCode: vi.fn(async () => {
-        throw new Error("SMTP timeout");
-      })
-    };
-
-    await expect(
-      createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
-        requestPasswordlessCode({
-          store,
-          delivery,
-          channel: "email",
-          identifier: "ada@example.com",
-          roles: ["client"],
-          code: "123456",
-          codeSecret,
-          now: baseNow,
-          ttlSeconds: 600,
-          resendCooldownSeconds: 60,
-          maxAttempts: 5
-        })
-      )
-    ).rejects.toThrow("Passwordless code delivery is unavailable");
-
-    expect(database.inserts).toEqual([
-      {
-        table: authChallenges,
-        value: {
-          channel: "email",
-          identifier: "ada@example.com",
-          identifierNormalized: "ada@example.com",
-          codeHash: expect.any(String),
-          requestedRoles: ["client"],
-          maxAttempts: 5,
-          expiresAt,
-          resendAvailableAt
-        }
-      },
-      {
-        table: authChallengeDeliveries,
-        value: {
-          challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-          channel: "email",
-          provider: "unknown",
-          status: "failed",
-          errorCode: "DELIVERY_EXCEPTION",
-          errorMessage: "SMTP timeout"
-        }
-      }
-    ]);
-    expect(database.updates).toEqual([
-      {
-        table: authChallenges,
-        value: {
-          status: "cancelled",
-          cancelledAt: baseNow,
-          updatedAt: baseNow
-        }
-      }
-    ]);
-  });
-
   it("rejects a duplicate passwordless code request while an existing challenge is in cooldown", async () => {
     const database = createFakeDrizzleDatabase({
       challengeRows: [createChallengeRow()]
     });
-    const delivery = {
-      deliverAuthCode: vi.fn(async () => ({
-        provider: "dev",
-        status: "sent" as const,
-        providerMessageId: "dev-message-1"
-      }))
-    };
 
     await expect(
       createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
         requestPasswordlessCode({
           store,
-          delivery,
           channel: "email",
           identifier: "ADA@example.COM",
           roles: ["client"],
@@ -513,7 +373,6 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
     expect(database.queries.map((query) => query.table)).toEqual(["authChallenges"]);
     expect(database.inserts).toEqual([]);
     expect(database.updates).toEqual([]);
-    expect(delivery.deliverAuthCode).not.toHaveBeenCalled();
   });
 
   it("maps pending challenge insert races to passwordless resend cooldowns", async () => {
@@ -521,19 +380,11 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
       challengeRows: [null, createChallengeRow()],
       insertRows: [createUniqueViolationError("auth_challenges_pending_identifier_unique")]
     });
-    const delivery = {
-      deliverAuthCode: vi.fn(async () => ({
-        provider: "dev",
-        status: "sent" as const,
-        providerMessageId: "dev-message-1"
-      }))
-    };
 
     await expect(
       createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
         requestPasswordlessCode({
           store,
-          delivery,
           channel: "email",
           identifier: "ada@example.com",
           roles: ["client"],
@@ -567,7 +418,6 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
       }
     ]);
     expect(database.updates).toEqual([]);
-    expect(delivery.deliverAuthCode).not.toHaveBeenCalled();
   });
 
   it("creates an active account and verified identity when a challenge has no linked identity", async () => {

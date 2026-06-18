@@ -1,6 +1,5 @@
 import type {
   AuthChallenge,
-  AuthCodeDeliveryPort,
   PasswordlessAuthStore,
   PasswordlessAuthUnitOfWork
 } from "@elevenhouse/domain";
@@ -38,6 +37,7 @@ function createBaseStore(): PasswordlessAuthStore {
       createdAt: now.toISOString(),
       ...input
     })),
+    recordAuthCodeDeliveryRequested: vi.fn(async () => undefined),
     cancelChallenge: vi.fn(async () => undefined),
     findChallengeById: vi.fn(async () => null),
     incrementChallengeAttempts: vi.fn(async () => undefined),
@@ -104,7 +104,6 @@ function createPendingChallenge(code: string): AuthChallenge {
 
 function createHandler(input: {
   readonly store: PasswordlessAuthStore;
-  readonly delivery?: AuthCodeDeliveryPort;
   readonly codeGenerator?: PasswordlessCodeGenerator;
   readonly options?: Partial<PasswordlessAuthOptions>;
 }): DomainPasswordlessAuthHandler {
@@ -114,20 +113,12 @@ function createHandler(input: {
       tokenHash: "hashed-session-token"
     }))
   };
-  const delivery: AuthCodeDeliveryPort = input.delivery ?? {
-    deliverAuthCode: vi.fn(async () => ({
-      provider: "dev",
-      status: "sent" as const,
-      providerMessageId: "dev-message-1"
-    }))
-  };
   const codeGenerator: PasswordlessCodeGenerator = input.codeGenerator ?? {
     generateCode: vi.fn(() => "123456")
   };
 
   return new DomainPasswordlessAuthHandler(
     createPasswordlessAuthUnitOfWork(input.store),
-    delivery,
     codeGenerator,
     sessionTokenIssuer,
     {
@@ -145,16 +136,9 @@ function createHandler(input: {
 }
 
 describe("DomainPasswordlessAuthHandler", () => {
-  it("creates and delivers a passwordless code challenge through the domain use case", async () => {
+  it("creates a passwordless code challenge and queues delivery through the domain use case", async () => {
     const store = createBaseStore();
-    const delivery: AuthCodeDeliveryPort = {
-      deliverAuthCode: vi.fn(async () => ({
-        provider: "dev",
-        status: "sent" as const,
-        providerMessageId: "dev-message-1"
-      }))
-    };
-    const handler = createHandler({ store, delivery });
+    const handler = createHandler({ store });
 
     const response = await handler.requestCode({
       channel: "email",
@@ -172,12 +156,20 @@ describe("DomainPasswordlessAuthHandler", () => {
       expiresAt: "2026-06-16T10:10:00.000Z",
       resendAvailableAt: "2026-06-16T10:01:00.000Z"
     });
-    expect(delivery.deliverAuthCode).toHaveBeenCalledWith({
+    expect(store.recordDelivery).toHaveBeenCalledWith({
       challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-      channel: "email",
-      identifier: "client@example.com",
-      code: "123456",
-      expiresAt: "2026-06-16T10:10:00.000Z"
+      status: "queued"
+    });
+    expect(store.recordAuthCodeDeliveryRequested).toHaveBeenCalledWith({
+      payload: {
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        deliveryId: "delivery_1",
+        channel: "email",
+        identifier: "client@example.com",
+        code: "123456",
+        expiresAt: "2026-06-16T10:10:00.000Z"
+      },
+      occurredAt: "2026-06-16T10:00:00.000Z"
     });
     expect(response).toEqual({
       challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",

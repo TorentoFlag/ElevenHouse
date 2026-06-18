@@ -10,6 +10,8 @@ import {
   authSessionStatusValues,
   databasePlatformRoleValues,
   identityProviderValues,
+  outboxEvents,
+  outboxEventStatusValues,
   userStatusValues
 } from "./schema/index";
 
@@ -41,6 +43,11 @@ describe("database account schema constants", () => {
   it("exports passwordless auth challenge tables", () => {
     expect(authChallenges).toBeDefined();
     expect(authChallengeDeliveries).toBeDefined();
+  });
+
+  it("keeps outbox event statuses explicit", () => {
+    expect(outboxEventStatusValues).toEqual(["pending", "publishing", "published"]);
+    expect(outboxEvents).toBeDefined();
   });
 
   it("keeps pending passwordless challenges unique per channel and identifier", () => {

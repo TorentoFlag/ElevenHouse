@@ -1,10 +1,25 @@
-import { Injectable, Logger } from "@nestjs/common";
-import type { AuthCodeDeliveryPort, AuthCodeDeliveryResult } from "@elevenhouse/domain";
+import type { AuthCodeHttpDeliveryOptions } from "./runtime-config";
 
-export type AuthCodeHttpDeliveryOptions = {
-  readonly endpointUrl: string;
-  readonly bearerToken: string;
-  readonly from: string;
+export type AuthCodeDeliveryInput = {
+  readonly challengeId: string;
+  readonly deliveryId: string;
+  readonly outboxEventId: string;
+  readonly channel: "email" | "phone";
+  readonly identifier: string;
+  readonly code: string;
+  readonly expiresAt: string;
+};
+
+export type AuthCodeDeliveryResult = {
+  readonly provider: "email" | "sms";
+  readonly status: "sent" | "failed";
+  readonly providerMessageId?: string;
+  readonly errorCode?: string;
+  readonly errorMessage?: string;
+};
+
+export type AuthCodeDeliveryProvider = {
+  readonly deliverAuthCode: (input: AuthCodeDeliveryInput) => Promise<AuthCodeDeliveryResult>;
 };
 
 type AuthCodeFetch = (
@@ -16,32 +31,7 @@ type AuthCodeFetch = (
   }
 ) => Promise<Response>;
 
-type AuthCodeDeliveryInput = Parameters<AuthCodeDeliveryPort["deliverAuthCode"]>[0];
-
-@Injectable()
-export class DevAuthCodeDeliveryProvider implements AuthCodeDeliveryPort {
-  private readonly logger = new Logger(DevAuthCodeDeliveryProvider.name);
-
-  async deliverAuthCode(input: {
-    readonly challengeId: string;
-    readonly channel: "email" | "phone";
-    readonly identifier: string;
-    readonly code: string;
-    readonly expiresAt: string;
-  }): Promise<AuthCodeDeliveryResult> {
-    this.logger.log(
-      `Dev auth code challenge=${input.challengeId} channel=${input.channel} identifier=${input.identifier} code=${input.code} expiresAt=${input.expiresAt}`
-    );
-
-    return {
-      provider: "dev",
-      status: "sent",
-      providerMessageId: `dev:${input.challengeId}`
-    };
-  }
-}
-
-export class EmailAuthCodeDeliveryProvider implements AuthCodeDeliveryPort {
+export class EmailAuthCodeDeliveryProvider implements AuthCodeDeliveryProvider {
   constructor(
     private readonly options: AuthCodeHttpDeliveryOptions,
     private readonly fetchFn: AuthCodeFetch = fetch
@@ -66,7 +56,7 @@ export class EmailAuthCodeDeliveryProvider implements AuthCodeDeliveryPort {
   }
 }
 
-export class SmsAuthCodeDeliveryProvider implements AuthCodeDeliveryPort {
+export class SmsAuthCodeDeliveryProvider implements AuthCodeDeliveryProvider {
   constructor(
     private readonly options: AuthCodeHttpDeliveryOptions,
     private readonly fetchFn: AuthCodeFetch = fetch
@@ -91,10 +81,10 @@ export class SmsAuthCodeDeliveryProvider implements AuthCodeDeliveryPort {
   }
 }
 
-export class ChannelAuthCodeDeliveryProvider implements AuthCodeDeliveryPort {
+export class ChannelAuthCodeDeliveryProvider implements AuthCodeDeliveryProvider {
   constructor(
-    private readonly emailDelivery: AuthCodeDeliveryPort,
-    private readonly smsDelivery: AuthCodeDeliveryPort
+    private readonly emailDelivery: AuthCodeDeliveryProvider,
+    private readonly smsDelivery: AuthCodeDeliveryProvider
   ) {}
 
   deliverAuthCode(input: AuthCodeDeliveryInput): Promise<AuthCodeDeliveryResult> {
@@ -115,12 +105,15 @@ async function deliverHttpAuthCode(input: {
       method: "POST",
       headers: {
         authorization: `Bearer ${input.options.bearerToken}`,
-        "content-type": "application/json"
+        "content-type": "application/json",
+        "idempotency-key": input.input.deliveryId
       },
       body: JSON.stringify({
         kind: "passwordless_auth_code",
         channel: input.input.channel,
         challengeId: input.input.challengeId,
+        deliveryId: input.input.deliveryId,
+        outboxEventId: input.input.outboxEventId,
         to: input.input.identifier,
         from: input.options.from,
         code: input.input.code,
@@ -165,7 +158,7 @@ async function readProviderMessageId(response: Response): Promise<string | undef
     return undefined;
   }
 
-  const body = await response.json() as unknown;
+  const body = (await response.json()) as unknown;
 
   if (isRecord(body) && typeof body.messageId === "string" && body.messageId.trim()) {
     return body.messageId.trim();

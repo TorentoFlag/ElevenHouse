@@ -3,7 +3,7 @@ import { requestPasswordlessCode } from "./passwordless-request";
 import { PasswordlessCodeRequestCooldownError } from "./passwordless-challenge";
 
 describe("requestPasswordlessCode", () => {
-  it("creates a challenge, delivers the code and records delivery metadata", async () => {
+  it("creates a challenge and queues delivery without calling the delivery provider", async () => {
     const store = {
       findPendingChallengeByIdentifier: vi.fn(async () => null),
       createChallenge: vi.fn(async (input) => ({
@@ -15,19 +15,12 @@ describe("requestPasswordlessCode", () => {
         updatedAt: "2026-06-15T10:00:00.000Z"
       })),
       recordDelivery: vi.fn(async (input) => ({ id: "delivery_1", ...input })),
+      recordAuthCodeDeliveryRequested: vi.fn(async () => undefined),
       cancelChallenge: vi.fn()
-    };
-    const delivery = {
-      deliverAuthCode: vi.fn(async () => ({
-        provider: "dev",
-        status: "sent" as const,
-        providerMessageId: "dev-message-1"
-      }))
     };
 
     const result = await requestPasswordlessCode({
       store,
-      delivery,
       channel: "email",
       identifier: " ADA@example.COM ",
       roles: ["client"],
@@ -53,20 +46,20 @@ describe("requestPasswordlessCode", () => {
       ipAddress: "127.0.0.1",
       userAgent: "Mozilla/5.0"
     });
-    expect(delivery.deliverAuthCode).toHaveBeenCalledWith({
-      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-      channel: "email",
-      identifier: "ada@example.com",
-      code: "123456",
-      expiresAt: "2026-06-15T10:10:00.000Z"
-    });
     expect(store.recordDelivery).toHaveBeenCalledWith({
       challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-      channel: "email",
-      provider: "dev",
-      status: "sent",
-      providerMessageId: "dev-message-1",
-      sentAt: "2026-06-15T10:00:00.000Z"
+      status: "queued"
+    });
+    expect(store.recordAuthCodeDeliveryRequested).toHaveBeenCalledWith({
+      payload: {
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        deliveryId: "delivery_1",
+        channel: "email",
+        identifier: "ada@example.com",
+        code: "123456",
+        expiresAt: "2026-06-15T10:10:00.000Z"
+      },
+      occurredAt: "2026-06-15T10:00:00.000Z"
     });
     expect(result).toEqual({
       challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
@@ -74,109 +67,6 @@ describe("requestPasswordlessCode", () => {
       maskedIdentifier: "a***@example.com",
       expiresAt: "2026-06-15T10:10:00.000Z",
       resendAvailableAt: "2026-06-15T10:01:00.000Z"
-    });
-  });
-
-  it("cancels the challenge when delivery fails", async () => {
-    const store = {
-      findPendingChallengeByIdentifier: vi.fn(async () => null),
-      createChallenge: vi.fn(async (input) => ({
-        id: "8e14390f-3db1-4d1c-9344-55679c778427",
-        ...input,
-        status: "pending" as const,
-        attempts: 0,
-        createdAt: "2026-06-15T10:00:00.000Z",
-        updatedAt: "2026-06-15T10:00:00.000Z"
-      })),
-      recordDelivery: vi.fn(async (input) => ({ id: "delivery_1", ...input })),
-      cancelChallenge: vi.fn(async () => undefined)
-    };
-    const delivery = {
-      deliverAuthCode: vi.fn(async () => ({
-        provider: "dev",
-        status: "failed" as const,
-        errorCode: "DEV_DISABLED",
-        errorMessage: "Dev delivery disabled"
-      }))
-    };
-
-    await expect(
-      requestPasswordlessCode({
-        store,
-        delivery,
-        channel: "email",
-        identifier: "ada@example.com",
-        roles: ["client"],
-        code: "123456",
-        codeSecret: "test-secret",
-        now: new Date("2026-06-15T10:00:00.000Z"),
-        ttlSeconds: 600,
-        resendCooldownSeconds: 60,
-        maxAttempts: 5
-      })
-    ).rejects.toThrow("Passwordless code delivery is unavailable");
-
-    expect(store.cancelChallenge).toHaveBeenCalledWith({
-      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-      cancelledAt: "2026-06-15T10:00:00.000Z"
-    });
-    expect(store.recordDelivery).toHaveBeenCalledWith({
-      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-      channel: "email",
-      provider: "dev",
-      status: "failed",
-      errorCode: "DEV_DISABLED",
-      errorMessage: "Dev delivery disabled"
-    });
-  });
-
-  it("records a failed delivery and cancels the challenge when delivery throws", async () => {
-    const store = {
-      findPendingChallengeByIdentifier: vi.fn(async () => null),
-      createChallenge: vi.fn(async (input) => ({
-        id: "8e14390f-3db1-4d1c-9344-55679c778427",
-        ...input,
-        status: "pending" as const,
-        attempts: 0,
-        createdAt: "2026-06-15T10:00:00.000Z",
-        updatedAt: "2026-06-15T10:00:00.000Z"
-      })),
-      recordDelivery: vi.fn(async (input) => ({ id: "delivery_1", ...input })),
-      cancelChallenge: vi.fn(async () => undefined)
-    };
-    const delivery = {
-      deliverAuthCode: vi.fn(async () => {
-        throw new Error("SMTP timeout");
-      })
-    };
-
-    await expect(
-      requestPasswordlessCode({
-        store,
-        delivery,
-        channel: "email",
-        identifier: "ada@example.com",
-        roles: ["client"],
-        code: "123456",
-        codeSecret: "test-secret",
-        now: new Date("2026-06-15T10:00:00.000Z"),
-        ttlSeconds: 600,
-        resendCooldownSeconds: 60,
-        maxAttempts: 5
-      })
-    ).rejects.toThrow("Passwordless code delivery is unavailable");
-
-    expect(store.recordDelivery).toHaveBeenCalledWith({
-      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-      channel: "email",
-      provider: "unknown",
-      status: "failed",
-      errorCode: "DELIVERY_EXCEPTION",
-      errorMessage: "SMTP timeout"
-    });
-    expect(store.cancelChallenge).toHaveBeenCalledWith({
-      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-      cancelledAt: "2026-06-15T10:00:00.000Z"
     });
   });
 
@@ -192,18 +82,12 @@ describe("requestPasswordlessCode", () => {
         updatedAt: "2026-06-15T10:00:00.000Z"
       })),
       recordDelivery: vi.fn(async (input) => ({ id: "delivery_1", ...input })),
+      recordAuthCodeDeliveryRequested: vi.fn(async () => undefined),
       cancelChallenge: vi.fn()
-    };
-    const delivery = {
-      deliverAuthCode: vi.fn(async () => ({
-        provider: "dev",
-        status: "sent" as const
-      }))
     };
 
     const result = await requestPasswordlessCode({
       store,
-      delivery,
       channel: "phone",
       identifier: "+1 (555) 123-4090",
       roles: ["client"],
@@ -224,13 +108,6 @@ describe("requestPasswordlessCode", () => {
       maxAttempts: 5,
       expiresAt: "2026-06-15T10:10:00.000Z",
       resendAvailableAt: "2026-06-15T10:01:00.000Z"
-    });
-    expect(delivery.deliverAuthCode).toHaveBeenCalledWith({
-      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-      channel: "phone",
-      identifier: "+15551234090",
-      code: "123456",
-      expiresAt: "2026-06-15T10:10:00.000Z"
     });
     expect(result.maskedIdentifier).toBe("+15***90");
   });
@@ -254,16 +131,13 @@ describe("requestPasswordlessCode", () => {
       })),
       createChallenge: vi.fn(),
       recordDelivery: vi.fn(),
+      recordAuthCodeDeliveryRequested: vi.fn(),
       cancelChallenge: vi.fn()
-    };
-    const delivery = {
-      deliverAuthCode: vi.fn()
     };
 
     await expect(
       requestPasswordlessCode({
         store,
-        delivery,
         channel: "email",
         identifier: "CLIENT@example.com",
         roles: ["client"],
@@ -281,7 +155,7 @@ describe("requestPasswordlessCode", () => {
       identifierNormalized: "client@example.com"
     });
     expect(store.createChallenge).not.toHaveBeenCalled();
-    expect(delivery.deliverAuthCode).not.toHaveBeenCalled();
+    expect(store.recordAuthCodeDeliveryRequested).not.toHaveBeenCalled();
     expect(store.cancelChallenge).not.toHaveBeenCalled();
   });
 
@@ -311,18 +185,12 @@ describe("requestPasswordlessCode", () => {
         updatedAt: "2026-06-15T10:01:30.000Z"
       })),
       recordDelivery: vi.fn(async (input) => ({ id: "delivery_2", ...input })),
+      recordAuthCodeDeliveryRequested: vi.fn(async () => undefined),
       cancelChallenge: vi.fn(async () => undefined)
-    };
-    const delivery = {
-      deliverAuthCode: vi.fn(async () => ({
-        provider: "dev",
-        status: "sent" as const
-      }))
     };
 
     await requestPasswordlessCode({
       store,
-      delivery,
       channel: "email",
       identifier: "client@example.com",
       roles: ["client"],
@@ -339,6 +207,16 @@ describe("requestPasswordlessCode", () => {
       cancelledAt: "2026-06-15T10:01:30.000Z"
     });
     expect(store.createChallenge).toHaveBeenCalled();
-    expect(delivery.deliverAuthCode).toHaveBeenCalled();
+    expect(store.recordAuthCodeDeliveryRequested).toHaveBeenCalledWith({
+      payload: {
+        challengeId: "9e14390f-3db1-4d1c-9344-55679c778427",
+        deliveryId: "delivery_2",
+        channel: "email",
+        identifier: "client@example.com",
+        code: "654321",
+        expiresAt: "2026-06-15T10:11:30.000Z"
+      },
+      occurredAt: "2026-06-15T10:01:30.000Z"
+    });
   });
 });

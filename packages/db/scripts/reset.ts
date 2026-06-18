@@ -17,9 +17,10 @@ const pool = new Pool({ connectionString });
 async function main() {
   try {
     await pool.query("drop schema if exists public cascade");
+    await pool.query("drop schema if exists drizzle cascade");
     await pool.query("create schema public");
     await pool.query("grant all on schema public to public");
-    console.log("Local PostgreSQL public schema reset");
+    console.log("Local PostgreSQL public and Drizzle metadata schemas reset");
   } finally {
     await pool.end();
   }

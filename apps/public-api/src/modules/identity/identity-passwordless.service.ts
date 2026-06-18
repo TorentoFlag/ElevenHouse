@@ -5,7 +5,6 @@ import {
   HttpStatus,
   Inject,
   Injectable,
-  ServiceUnavailableException,
   UnauthorizedException
 } from "@nestjs/common";
 import {
@@ -19,7 +18,6 @@ import {
 } from "@elevenhouse/contracts";
 import {
   CustomerAccountIdentityConflictError,
-  PasswordlessCodeDeliveryUnavailableError,
   PasswordlessCodeRequestCooldownError,
   PasswordlessCodeVerificationError
 } from "@elevenhouse/domain";
@@ -77,12 +75,6 @@ export class IdentityPasswordlessService {
           HttpStatus.TOO_MANY_REQUESTS,
           { cause: error }
         );
-      }
-
-      if (error instanceof PasswordlessCodeDeliveryUnavailableError) {
-        throw new ServiceUnavailableException("Passwordless code delivery is unavailable", {
-          cause: error
-        });
       }
 
       throw error;

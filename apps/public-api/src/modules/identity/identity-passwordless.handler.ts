@@ -1,8 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type {
-  AuthCodeDeliveryPort,
-  PasswordlessAuthUnitOfWork
-} from "@elevenhouse/domain";
+import type { PasswordlessAuthUnitOfWork } from "@elevenhouse/domain";
 import {
   createNumericPasswordlessCode,
   requestPasswordlessCode,
@@ -20,7 +17,6 @@ import {
   type IssuedSessionToken
 } from "./identity-session.service";
 import {
-  AUTH_CODE_DELIVERY,
   PASSWORDLESS_AUTH_OPTIONS,
   PASSWORDLESS_AUTH_UNIT_OF_WORK
 } from "./identity-passwordless.tokens";
@@ -63,8 +59,6 @@ export class DomainPasswordlessAuthHandler {
   constructor(
     @Inject(PASSWORDLESS_AUTH_UNIT_OF_WORK)
     private readonly passwordlessAuth: PasswordlessAuthUnitOfWork,
-    @Inject(AUTH_CODE_DELIVERY)
-    private readonly delivery: AuthCodeDeliveryPort,
     @Inject(PUBLIC_AUTH_CODE_GENERATOR)
     private readonly codeGenerator: PasswordlessCodeGenerator,
     private readonly sessionTokenIssuer: PublicSessionTokenIssuer,
@@ -80,7 +74,6 @@ export class DomainPasswordlessAuthHandler {
     return this.passwordlessAuth.transact((store) =>
       requestPasswordlessCode({
         store,
-        delivery: this.delivery,
         channel: input.channel,
         identifier: input.identifier,
         roles: input.roles,

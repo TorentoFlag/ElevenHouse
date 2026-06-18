@@ -14,7 +14,6 @@ import { IdentityPasswordlessService } from "./identity-passwordless.service";
 import { IdentityModule } from "./identity.module";
 import { AUTH_SESSION_AUTHENTICATION_STORE } from "./identity-auth.tokens";
 import {
-  AUTH_CODE_DELIVERY,
   PASSWORDLESS_AUTH_UNIT_OF_WORK,
   PASSWORDLESS_RATE_LIMITER
 } from "./identity-passwordless.tokens";
@@ -45,6 +44,7 @@ describe("IdentityModule", () => {
         createdAt: now.toISOString(),
         ...input
       })),
+      recordAuthCodeDeliveryRequested: vi.fn(async () => undefined),
       cancelChallenge: vi.fn(async () => undefined),
       findChallengeById: vi.fn(async () => ({
         id: "8e14390f-3db1-4d1c-9344-55679c778427",
@@ -104,13 +104,6 @@ describe("IdentityModule", () => {
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async (operation) =>
         operation(store)
-    };
-    const delivery = {
-      deliverAuthCode: vi.fn(async () => ({
-        provider: "dev",
-        status: "sent" as const,
-        providerMessageId: "dev-message-1"
-      }))
     };
     const authenticatedContext = {
       session: {
@@ -190,8 +183,6 @@ describe("IdentityModule", () => {
       })
       .overrideProvider(PASSWORDLESS_AUTH_UNIT_OF_WORK)
       .useValue(passwordlessAuth)
-      .overrideProvider(AUTH_CODE_DELIVERY)
-      .useValue(delivery)
       .overrideProvider(PASSWORDLESS_RATE_LIMITER)
       .useValue(allowAllPasswordlessRateLimiter)
       .overrideProvider(RedisRuntimeService)
@@ -252,7 +243,21 @@ describe("IdentityModule", () => {
         expiresAt: "2026-06-23T10:00:00.000Z"
       }
     });
-    expect(delivery.deliverAuthCode).toHaveBeenCalled();
+    expect(store.recordDelivery).toHaveBeenCalledWith({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      status: "queued"
+    });
+    expect(store.recordAuthCodeDeliveryRequested).toHaveBeenCalledWith({
+      payload: {
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        deliveryId: "delivery_1",
+        channel: "email",
+        identifier: "client@example.com",
+        code: "123456",
+        expiresAt: "2026-06-16T10:10:00.000Z"
+      },
+      occurredAt: "2026-06-16T10:00:00.000Z"
+    });
     await expect(
       currentSessionService.resolveCurrentCustomerAccount({
         headers: {
@@ -301,88 +306,9 @@ describe("IdentityModule", () => {
     await moduleRef.close();
     expect(redisClient.quit).not.toHaveBeenCalled();
   });
-
-  it("wires auth code delivery to email and SMS adapters", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ messageId: "email-message-1" }), {
-          status: 202,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ messageId: "sms-message-1" }), {
-          status: 202,
-          headers: { "content-type": "application/json" }
-        })
-      );
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    const moduleRef = await Test.createTestingModule({
-      imports: [IdentityModule]
-    })
-      .overrideProvider(PostgresRuntimeService)
-      .useValue({ database: {} })
-      .overrideProvider(ConfigService)
-      .useValue(createConfigServiceStub({ authCodeDeliveryProvider: "email_sms" }))
-      .overrideProvider(RedisRuntimeService)
-      .useValue({
-        eval: vi.fn(async () => 0),
-        quit: vi.fn(async () => undefined)
-      })
-      .compile();
-
-    const delivery = moduleRef.get(AUTH_CODE_DELIVERY);
-
-    await expect(
-      delivery.deliverAuthCode({
-        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-        channel: "email",
-        identifier: "client@example.com",
-        code: "123456",
-        expiresAt: "2026-06-16T10:10:00.000Z"
-      })
-    ).resolves.toEqual({
-      provider: "email",
-      status: "sent",
-      providerMessageId: "email-message-1"
-    });
-    await expect(
-      delivery.deliverAuthCode({
-        challengeId: "9e14390f-3db1-4d1c-9344-55679c778427",
-        channel: "phone",
-        identifier: "+15551234090",
-        code: "123456",
-        expiresAt: "2026-06-16T10:10:00.000Z"
-      })
-    ).resolves.toEqual({
-      provider: "sms",
-      status: "sent",
-      providerMessageId: "sms-message-1"
-    });
-
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      "https://delivery.internal/auth/email",
-      expect.any(Object)
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "https://delivery.internal/auth/sms",
-      expect.any(Object)
-    );
-
-    await moduleRef.close();
-  });
 });
 
-function createConfigServiceStub(
-  options: { readonly authCodeDeliveryProvider?: "dev" | "email_sms" } = {}
-): Pick<ConfigService, "getOrThrow"> {
-  const authCodeDeliveryProvider = options.authCodeDeliveryProvider ?? "dev";
-
+function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
   return {
     getOrThrow: vi.fn((key: string) => {
       if (key === "publicApi.sessionTtlSeconds") {
@@ -417,26 +343,6 @@ function createConfigServiceStub(
 
       if (key === "publicApi.passwordlessRateLimitRedisKeyPrefix") {
         return "elevenhouse:test";
-      }
-
-      if (key === "publicApi.authCodeDeliveryProvider") {
-        return authCodeDeliveryProvider;
-      }
-
-      if (key === "publicApi.authCodeEmailDelivery") {
-        return {
-          endpointUrl: "https://delivery.internal/auth/email",
-          bearerToken: "email-token",
-          from: "auth@elevenhouse.test"
-        };
-      }
-
-      if (key === "publicApi.authCodeSmsDelivery") {
-        return {
-          endpointUrl: "https://delivery.internal/auth/sms",
-          bearerToken: "sms-token",
-          from: "ElevenHouse"
-        };
       }
 
       if (key === "publicApi.sessionCookieSecure") {

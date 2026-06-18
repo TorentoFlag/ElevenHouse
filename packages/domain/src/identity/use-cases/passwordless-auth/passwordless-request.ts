@@ -4,29 +4,28 @@ import {
   normalizePasswordlessIdentifier,
   normalizeRequestedCustomerRoles,
   PasswordlessCodeRequestCooldownError,
-  PasswordlessCodeDeliveryUnavailableError,
   type AuthChallenge,
   type AuthChallengeDelivery,
   type PasswordlessAuthChannel
 } from "./passwordless-challenge";
 import { hashPasswordlessCode } from "./passwordless-code";
 
-export type AuthCodeDeliveryResult = {
-  readonly provider: string;
-  readonly status: "sent" | "failed";
-  readonly providerMessageId?: string;
-  readonly errorCode?: string;
-  readonly errorMessage?: string;
+export const authCodeDeliveryRequestedEventType = "identity.auth_code_delivery_requested";
+
+export type AuthCodeDeliveryRequestedPayload = {
+  readonly challengeId: string;
+  readonly deliveryId: string;
+  readonly channel: PasswordlessAuthChannel;
+  readonly identifier: string;
+  readonly code: string;
+  readonly expiresAt: string;
 };
 
-export type AuthCodeDeliveryPort = {
-  readonly deliverAuthCode: (input: {
-    readonly challengeId: string;
-    readonly channel: PasswordlessAuthChannel;
-    readonly identifier: string;
-    readonly code: string;
-    readonly expiresAt: string;
-  }) => Promise<AuthCodeDeliveryResult>;
+export type RedactedAuthCodeDeliveryRequestedPayload = Omit<
+  AuthCodeDeliveryRequestedPayload,
+  "code"
+> & {
+  readonly codeRedactedAt: string;
 };
 
 export type PasswordlessCodeRequestStore = {
@@ -48,14 +47,17 @@ export type PasswordlessCodeRequestStore = {
   }) => Promise<AuthChallenge>;
   readonly recordDelivery: (input: {
     readonly challengeId: string;
-    readonly channel: PasswordlessAuthChannel;
-    readonly provider: string;
-    readonly status: "sent" | "failed";
+    readonly provider?: string;
+    readonly status: "queued" | "sent" | "failed";
     readonly providerMessageId?: string;
     readonly errorCode?: string;
     readonly errorMessage?: string;
     readonly sentAt?: string;
   }) => Promise<AuthChallengeDelivery>;
+  readonly recordAuthCodeDeliveryRequested: (input: {
+    readonly payload: AuthCodeDeliveryRequestedPayload;
+    readonly occurredAt: string;
+  }) => Promise<void>;
   readonly cancelChallenge: (input: {
     readonly challengeId: string;
     readonly cancelledAt: string;
@@ -72,7 +74,6 @@ export type RequestPasswordlessCodeResult = {
 
 export async function requestPasswordlessCode(input: {
   readonly store: PasswordlessCodeRequestStore;
-  readonly delivery: AuthCodeDeliveryPort;
   readonly channel: PasswordlessAuthChannel;
   readonly identifier: string;
   readonly roles: readonly string[];
@@ -124,30 +125,22 @@ export async function requestPasswordlessCode(input: {
     ...optional("ipAddress", normalizeOptionalString(input.ipAddress)),
     ...optional("userAgent", normalizeOptionalString(input.userAgent))
   });
-  const deliveryResult = await deliverAuthCode({
-    delivery: input.delivery,
-    challenge,
-    code: input.code
-  });
 
-  await input.store.recordDelivery({
+  const delivery = await input.store.recordDelivery({
     challengeId: challenge.id,
-    channel: challenge.channel,
-    provider: deliveryResult.provider,
-    status: deliveryResult.status,
-    ...optional("providerMessageId", deliveryResult.providerMessageId),
-    ...optional("errorCode", deliveryResult.errorCode),
-    ...optional("errorMessage", deliveryResult.errorMessage),
-    ...(deliveryResult.status === "sent" ? { sentAt: input.now.toISOString() } : {})
+    status: "queued"
   });
-
-  if (deliveryResult.status !== "sent") {
-    await input.store.cancelChallenge({
+  await input.store.recordAuthCodeDeliveryRequested({
+    payload: {
       challengeId: challenge.id,
-      cancelledAt: input.now.toISOString()
-    });
-    throw new PasswordlessCodeDeliveryUnavailableError();
-  }
+      deliveryId: delivery.id,
+      channel: challenge.channel,
+      identifier: challenge.identifierNormalized,
+      code: input.code,
+      expiresAt: challenge.expiresAt
+    },
+    occurredAt: input.now.toISOString()
+  });
 
   return {
     challengeId: challenge.id,
@@ -159,41 +152,6 @@ export async function requestPasswordlessCode(input: {
     expiresAt: challenge.expiresAt,
     resendAvailableAt: challenge.resendAvailableAt
   };
-}
-
-async function deliverAuthCode(input: {
-  readonly delivery: AuthCodeDeliveryPort;
-  readonly challenge: AuthChallenge;
-  readonly code: string;
-}): Promise<AuthCodeDeliveryResult> {
-  try {
-    return await input.delivery.deliverAuthCode({
-      challengeId: input.challenge.id,
-      channel: input.challenge.channel,
-      identifier: input.challenge.identifierNormalized,
-      code: input.code,
-      expiresAt: input.challenge.expiresAt
-    });
-  } catch (error) {
-    return {
-      provider: "unknown",
-      status: "failed",
-      errorCode: "DELIVERY_EXCEPTION",
-      errorMessage: normalizeDeliveryExceptionMessage(error)
-    };
-  }
-}
-
-function normalizeDeliveryExceptionMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message.trim().slice(0, 500);
-  }
-
-  if (typeof error === "string" && error.trim()) {
-    return error.trim().slice(0, 500);
-  }
-
-  return "Auth code delivery provider threw an unknown error";
 }
 
 async function assertCanReplacePendingChallenge(input: {

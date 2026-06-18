@@ -33,8 +33,7 @@ export type AuthChallenge = {
 export type AuthChallengeDelivery = {
   readonly id: string;
   readonly challengeId: string;
-  readonly channel: PasswordlessAuthChannel;
-  readonly provider: string;
+  readonly provider?: string;
   readonly status: AuthChallengeDeliveryStatus;
   readonly providerMessageId?: string;
   readonly errorCode?: string;
@@ -51,13 +50,6 @@ export type PasswordlessAuthenticatedAccount = {
   readonly securityEvent: AuthSecurityEvent;
   readonly authenticationKind: "registration" | "login";
 };
-
-export class PasswordlessCodeDeliveryUnavailableError extends Error {
-  constructor() {
-    super("Passwordless code delivery is unavailable");
-    this.name = "PasswordlessCodeDeliveryUnavailableError";
-  }
-}
 
 export class PasswordlessCodeRequestCooldownError extends Error {
   constructor(readonly resendAvailableAt: string) {

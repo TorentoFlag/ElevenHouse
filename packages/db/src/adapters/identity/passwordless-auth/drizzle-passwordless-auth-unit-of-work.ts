@@ -1,5 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import {
+  authCodeDeliveryRequestedEventType,
   PasswordlessCodeRequestCooldownError,
   PasswordlessCodeVerificationError
 } from "@elevenhouse/domain";
@@ -19,15 +20,22 @@ import type {
   UserRoleAssignment
 } from "@elevenhouse/domain";
 import {
-  authChallengeDeliveries,
+  authChallengeDeliveries
+} from "../../../schema/identity/auth-challenge-deliveries.schema";
+import {
+  authChallenges
+} from "../../../schema/identity/auth-challenges.schema";
+import {
+  authIdentities
+} from "../../../schema/identity/auth-identities.schema";
+import {
   authChallengeDeliveryStatusValues,
-  authChallenges,
   authChallengeStatusValues,
-  authIdentities,
   databasePlatformRoleValues,
   identityProviderValues,
   userStatusValues
-} from "../../../schema";
+} from "../../../schema/identity/identity-schema-values";
+import { outboxEvents } from "../../../schema/outbox/outbox-events.schema";
 import type { ElevenHouseDatabase } from "../../../runtime";
 import { insertReturningOne } from "../../../shared/insert-returning-one";
 import { createAccountRegistrationStore } from "../account-registration";
@@ -35,6 +43,7 @@ import { createAuthSessionCreationStore } from "../auth-sessions";
 
 type AuthChallengesInsert = typeof authChallenges.$inferInsert;
 type AuthChallengeDeliveriesInsert = typeof authChallengeDeliveries.$inferInsert;
+type OutboxEventsInsert = typeof outboxEvents.$inferInsert;
 type AuthIdentitiesSelect = typeof authIdentities.$inferSelect;
 type CustomerPlatformRole = Extract<
   (typeof databasePlatformRoleValues)[number],
@@ -43,7 +52,7 @@ type CustomerPlatformRole = Extract<
 
 export type PasswordlessAuthDrizzleExecutor = Pick<
   ElevenHouseDatabase,
-  "insert" | "query" | "update"
+  "insert" | "query" | "select" | "update"
 >;
 export type PasswordlessAuthDrizzleDatabase = Pick<ElevenHouseDatabase, "transaction">;
 
@@ -108,6 +117,12 @@ export function createPasswordlessAuthStore(
       );
 
       return toAuthChallengeDelivery(row);
+    },
+    recordAuthCodeDeliveryRequested: async (input) => {
+      await executor
+        .insert(outboxEvents)
+        .values(toAuthCodeDeliveryRequestedOutboxInsert(input))
+        .returning({ id: outboxEvents.id });
     },
     cancelChallenge: async (input) => {
       const cancelledAt = new Date(input.cancelledAt);
@@ -193,14 +208,19 @@ async function findPendingChallengeByIdentifier(
     readonly identifierNormalized: string;
   }
 ): Promise<AuthChallenge | null> {
-  const row = await executor.query.authChallenges.findFirst({
-    where: and(
-      eq(authChallenges.channel, input.channel),
-      eq(authChallenges.identifierNormalized, input.identifierNormalized),
-      eq(authChallenges.status, "pending")
-    ),
-    orderBy: [desc(authChallenges.createdAt)]
-  });
+  const rows = await executor
+    .select()
+    .from(authChallenges)
+    .where(
+      and(
+        eq(authChallenges.channel, input.channel),
+        eq(authChallenges.identifierNormalized, input.identifierNormalized),
+        eq(authChallenges.status, "pending")
+      )
+    )
+    .orderBy(desc(authChallenges.createdAt))
+    .limit(1);
+  const row = rows[0];
 
   return row ? toAuthChallenge(row) : null;
 }
@@ -222,14 +242,24 @@ function toAuthChallengeInsert(
   };
 }
 
+function toAuthCodeDeliveryRequestedOutboxInsert(
+  input: Parameters<PasswordlessAuthStore["recordAuthCodeDeliveryRequested"]>[0]
+): OutboxEventsInsert {
+  return {
+    eventType: authCodeDeliveryRequestedEventType,
+    aggregateId: input.payload.deliveryId,
+    payload: input.payload,
+    availableAt: new Date(input.occurredAt)
+  };
+}
+
 function toAuthChallengeDeliveryInsert(
   input: Parameters<PasswordlessAuthStore["recordDelivery"]>[0]
 ): AuthChallengeDeliveriesInsert {
   return {
     challengeId: input.challengeId,
-    channel: input.channel,
-    provider: input.provider,
     status: input.status,
+    ...(input.provider === undefined ? {} : { provider: input.provider }),
     ...(input.providerMessageId === undefined
       ? {}
       : { providerMessageId: input.providerMessageId }),
@@ -274,11 +304,6 @@ function toAuthChallenge(row: typeof authChallenges.$inferSelect): AuthChallenge
 function toAuthChallengeDelivery(
   row: typeof authChallengeDeliveries.$inferSelect
 ): AuthChallengeDelivery {
-  const channel = row.channel;
-  if (!isPasswordlessAuthChannel(channel)) {
-    throw new Error(`Unexpected auth_challenge_deliveries.channel value: ${channel}`);
-  }
-
   const status = row.status;
   if (!isAuthChallengeDeliveryStatus(status)) {
     throw new Error(`Unexpected auth_challenge_deliveries.status value: ${status}`);
@@ -287,9 +312,8 @@ function toAuthChallengeDelivery(
   return {
     id: row.id,
     challengeId: row.challengeId,
-    channel,
-    provider: row.provider,
     status,
+    ...(row.provider === null ? {} : { provider: row.provider }),
     ...(row.providerMessageId === null ? {} : { providerMessageId: row.providerMessageId }),
     ...(row.errorCode === null ? {} : { errorCode: row.errorCode }),
     ...(row.errorMessage === null ? {} : { errorMessage: row.errorMessage }),
