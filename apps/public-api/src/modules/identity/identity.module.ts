@@ -9,6 +9,7 @@ import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { RedisModule } from "../redis/redis.module";
 import { REDIS_CLIENT, type RedisClientPort } from "../redis/redis.tokens";
+import { SecurityModule } from "../security/security.module";
 import { IdentityCurrentAccountController } from "./identity-current-account.controller";
 import { IdentityCurrentSessionService } from "./identity-current-session.service";
 import { PublicSessionAuthGuard } from "./identity-auth.guard";
@@ -44,7 +45,7 @@ import {
 } from "./identity-session.service";
 
 @Module({
-  imports: [ConfigModule, DatabaseModule, RedisModule],
+  imports: [ConfigModule, DatabaseModule, RedisModule, SecurityModule],
   controllers: [
     IdentityPasswordlessController,
     IdentityCurrentAccountController,

@@ -33,6 +33,8 @@ import { SystemClock } from "./identity-session.service";
 
 const now = new Date("2026-06-16T10:00:00.000Z");
 const sessionCookieName = "elevenhouse_public_session";
+const csrfCookieName = "elevenhouse_public_csrf";
+const csrfHeaderName = "x-csrf-token";
 const defaultPasswordlessRateLimits = {
   requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
   requestCodeIp: { limit: 30, windowSeconds: 3600 },
@@ -140,10 +142,14 @@ describe("passwordless public auth HTTP flow", () => {
     });
     expect(verifyResponse.body.account.id).toEqual(expect.any(String));
     expect(verifyResponse.setCookie).toContain(`${sessionCookieName}=`);
+    expect(verifyResponse.setCookie).toContain(`${csrfCookieName}=`);
     expect(verifyResponse.setCookie).toContain("HttpOnly");
     expect(verifyResponse.setCookie).toContain("SameSite=Lax");
 
-    const meResponse = await getJson("/identity/me", cookieHeader(verifyResponse.setCookie));
+    const meResponse = await getJson(
+      "/identity/me",
+      cookieHeader(verifyResponse.setCookies, [sessionCookieName])
+    );
 
     expect(meResponse.status).toBe(200);
     expect(meResponse.body).toEqual(verifyResponse.body);
@@ -412,18 +418,30 @@ describe("passwordless public auth HTTP flow", () => {
       challengeId: requestResponse.body.challengeId,
       code: "123456"
     });
-    const sessionCookie = cookieHeader(verifyResponse.setCookie);
+    const sessionCookie = cookieHeader(verifyResponse.setCookies, [sessionCookieName]);
+    const authenticatedCookies = cookieHeader(verifyResponse.setCookies, [
+      sessionCookieName,
+      csrfCookieName
+    ]);
+    const csrfToken = cookieValue(verifyResponse.setCookies, csrfCookieName);
 
     await expect(getJson("/identity/me", sessionCookie)).resolves.toMatchObject({
       status: 200
     });
 
-    const logoutResponse = await postEmpty("/identity/logout", sessionCookie, {
-      "user-agent": "ElevenHouse-Test/1.0"
-    });
+    const logoutResponse = await postEmpty(
+      "/identity/logout",
+      authenticatedCookies,
+      {
+        "user-agent": "ElevenHouse-Test/1.0",
+        origin: "http://localhost:3000",
+        [csrfHeaderName]: csrfToken
+      }
+    );
 
     expect(logoutResponse.status).toBe(204);
     expect(logoutResponse.setCookie).toContain(`${sessionCookieName}=`);
+    expect(logoutResponse.setCookie).toContain(`${csrfCookieName}=`);
     expect(logoutResponse.setCookie).toContain("Max-Age=0");
     expect(store.userSessions[0]).toMatchObject({
       status: "revoked",
@@ -485,10 +503,12 @@ describe("passwordless public auth HTTP flow", () => {
         ...headers
       }
     });
+    const setCookies = readSetCookies(response);
 
     return {
       status: response.status,
-      setCookie: response.headers.get("set-cookie")
+      setCookie: setCookies.length > 0 ? setCookies.join(", ") : null,
+      setCookies
     };
   }
 
@@ -513,22 +533,57 @@ type HttpJsonResponse = {
     };
   };
   readonly setCookie: string | null;
+  readonly setCookies: readonly string[];
 };
 
 async function readJsonResponse(response: Response): Promise<HttpJsonResponse> {
+  const setCookies = readSetCookies(response);
+
   return {
     status: response.status,
     body: await response.json(),
-    setCookie: response.headers.get("set-cookie")
+    setCookie: setCookies.length > 0 ? setCookies.join(", ") : null,
+    setCookies
   };
 }
 
-function cookieHeader(setCookie: string | null): string {
-  if (!setCookie) {
-    throw new Error("Expected Set-Cookie header");
+function readSetCookies(response: Response): readonly string[] {
+  const headers = response.headers as Headers & {
+    readonly getSetCookie?: () => string[];
+  };
+  const setCookies = headers.getSetCookie?.();
+
+  if (setCookies && setCookies.length > 0) {
+    return setCookies;
   }
 
-  return setCookie.split(";")[0] ?? "";
+  const setCookie = response.headers.get("set-cookie");
+
+  return setCookie ? [setCookie] : [];
+}
+
+function cookieHeader(setCookies: readonly string[], names: readonly string[]): string {
+  const cookies = setCookies
+    .map((setCookie) => setCookie.split(";")[0] ?? "")
+    .filter((cookie) => names.some((name) => cookie.startsWith(`${name}=`)));
+
+  if (cookies.length !== names.length) {
+    throw new Error(`Expected Set-Cookie headers for: ${names.join(", ")}`);
+  }
+
+  return cookies.join("; ");
+}
+
+function cookieValue(setCookies: readonly string[], name: string): string {
+  const cookie = setCookies
+    .map((setCookie) => setCookie.split(";")[0] ?? "")
+    .find((candidate) => candidate.startsWith(`${name}=`));
+
+  if (!cookie) {
+    throw new Error(`Expected Set-Cookie header for: ${name}`);
+  }
+
+  return cookie.slice(name.length + 1);
 }
 
 function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
@@ -548,6 +603,26 @@ function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
 
       if (key === "publicApi.sessionCookieName") {
         return sessionCookieName;
+      }
+
+      if (key === "publicApi.csrfSecret") {
+        return "test-csrf-secret-with-enough-entropy";
+      }
+
+      if (key === "publicApi.csrfCookieName") {
+        return csrfCookieName;
+      }
+
+      if (key === "publicApi.csrfHeaderName") {
+        return csrfHeaderName;
+      }
+
+      if (key === "publicApi.csrfTokenTtlSeconds") {
+        return 604800;
+      }
+
+      if (key === "publicApi.allowedOrigins") {
+        return ["http://localhost:3000"];
       }
 
       if (key === "publicApi.passwordlessCodeSecret") {

@@ -1,9 +1,18 @@
 import { ConfigService } from "@nestjs/config";
 import { describe, expect, it, vi } from "vitest";
 import { PublicSessionCookieService } from "./identity-session.service";
+import type { PublicCsrfTokenService } from "../security/csrf/public-csrf-token.service";
+
+function createCsrfTokenService(): PublicCsrfTokenService {
+  return {
+    setCsrfCookie: vi.fn(),
+    clearCsrfCookie: vi.fn()
+  } as unknown as PublicCsrfTokenService;
+}
 
 describe("PublicSessionCookieService", () => {
   it("sets the public session cookie with security options from runtime config", () => {
+    const csrfTokenService = createCsrfTokenService();
     const configService = {
       getOrThrow: vi.fn((key: string) => {
         if (key === "publicApi.sessionTtlSeconds") {
@@ -24,7 +33,7 @@ describe("PublicSessionCookieService", () => {
     const response = {
       cookie: vi.fn()
     };
-    const service = new PublicSessionCookieService(configService);
+    const service = new PublicSessionCookieService(configService, csrfTokenService);
 
     service.setSessionCookie(response, {
       token: "raw-session-token",
@@ -43,9 +52,15 @@ describe("PublicSessionCookieService", () => {
         maxAge: 604800000
       }
     );
+    expect(csrfTokenService.setCsrfCookie).toHaveBeenCalledWith({
+      response,
+      sessionToken: "raw-session-token",
+      sessionExpiresAt: "2026-06-21T10:00:00.000Z"
+    });
   });
 
   it("sets the local development public session cookie without the __Host prefix", () => {
+    const csrfTokenService = createCsrfTokenService();
     const configService = {
       getOrThrow: vi.fn((key: string) => {
         if (key === "publicApi.sessionTtlSeconds") {
@@ -66,7 +81,7 @@ describe("PublicSessionCookieService", () => {
     const response = {
       cookie: vi.fn()
     };
-    const service = new PublicSessionCookieService(configService);
+    const service = new PublicSessionCookieService(configService, csrfTokenService);
 
     service.setSessionCookie(response, {
       token: "raw-session-token",
@@ -85,9 +100,15 @@ describe("PublicSessionCookieService", () => {
         maxAge: 604800000
       }
     );
+    expect(csrfTokenService.setCsrfCookie).toHaveBeenCalledWith({
+      response,
+      sessionToken: "raw-session-token",
+      sessionExpiresAt: "2026-06-21T10:00:00.000Z"
+    });
   });
 
   it("clears the public session cookie", () => {
+    const csrfTokenService = createCsrfTokenService();
     const service = new PublicSessionCookieService({
       getOrThrow: (key: string) => {
         if (key === "publicApi.sessionCookieSecure") {
@@ -100,7 +121,7 @@ describe("PublicSessionCookieService", () => {
 
         throw new Error(`Unexpected config key: ${key}`);
       }
-    } as unknown as ConfigService);
+    } as unknown as ConfigService, csrfTokenService);
     const response = {
       cookie: vi.fn()
     };
@@ -119,5 +140,6 @@ describe("PublicSessionCookieService", () => {
         maxAge: 0
       }
     );
+    expect(csrfTokenService.clearCsrfCookie).toHaveBeenCalledWith(response);
   });
 });

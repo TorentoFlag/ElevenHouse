@@ -13,6 +13,11 @@ const publicApiRuntimeConfigSchema = z.object({
     .default("false")
     .transform((value) => value === "true"),
   PUBLIC_API_SESSION_COOKIE_NAME: z.string().trim().min(1).optional(),
+  PUBLIC_API_CSRF_SECRET: z.string().trim().min(32).optional(),
+  PUBLIC_API_CSRF_COOKIE_NAME: z.string().trim().min(1).default("elevenhouse_public_csrf"),
+  PUBLIC_API_CSRF_HEADER_NAME: z.string().trim().min(1).default("x-csrf-token"),
+  PUBLIC_API_CSRF_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
+  PUBLIC_API_ALLOWED_ORIGINS: z.string().trim().optional(),
   AUTH_CODE_DELIVERY_ENCRYPTION_KEY: z.string().trim().min(1),
   PUBLIC_API_PASSWORDLESS_CODE_SECRET: z.string().trim().min(1).optional(),
   PUBLIC_API_PASSWORDLESS_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
@@ -77,6 +82,11 @@ export type PublicApiRuntimeConfig = {
   readonly sessionTtlSeconds: number;
   readonly sessionCookieSecure: boolean;
   readonly sessionCookieName: string;
+  readonly csrfSecret: string;
+  readonly csrfCookieName: string;
+  readonly csrfHeaderName: string;
+  readonly csrfTokenTtlSeconds: number;
+  readonly allowedOrigins: readonly string[];
   readonly authCodeDeliveryEncryptionKey: Buffer;
   readonly passwordlessCodeSecret: string;
   readonly passwordlessCodeTtlSeconds: number;
@@ -125,12 +135,32 @@ export function createPublicApiRuntimeConfig(
     throw new Error("PUBLIC_API_PASSWORDLESS_CODE_SECRET is required in production");
   }
 
+  if (config.NODE_ENV === "production" && !config.PUBLIC_API_CSRF_SECRET) {
+    throw new Error("PUBLIC_API_CSRF_SECRET is required in production");
+  }
+
+  const allowedOrigins = parseAllowedOrigins(config.PUBLIC_API_ALLOWED_ORIGINS);
+
+  if (config.NODE_ENV === "production" && allowedOrigins.length === 0) {
+    throw new Error("PUBLIC_API_ALLOWED_ORIGINS is required in production");
+  }
+
   return {
     port: config.PUBLIC_API_PORT,
     redisUrl: config.REDIS_URL,
     sessionTtlSeconds: config.PUBLIC_API_SESSION_TTL_SECONDS,
     sessionCookieSecure: config.PUBLIC_API_SESSION_COOKIE_SECURE,
     sessionCookieName,
+    csrfSecret:
+      config.PUBLIC_API_CSRF_SECRET ??
+      "elevenhouse-dev-public-api-csrf-secret-change-before-production",
+    csrfCookieName: config.PUBLIC_API_CSRF_COOKIE_NAME,
+    csrfHeaderName: config.PUBLIC_API_CSRF_HEADER_NAME.toLowerCase(),
+    csrfTokenTtlSeconds: config.PUBLIC_API_CSRF_TOKEN_TTL_SECONDS,
+    allowedOrigins:
+      allowedOrigins.length > 0
+        ? allowedOrigins
+        : ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
     authCodeDeliveryEncryptionKey: parseBase64Aes256GcmKey(
       config.AUTH_CODE_DELIVERY_ENCRYPTION_KEY
     ),
@@ -166,4 +196,11 @@ export function createPublicApiRuntimeConfig(
       }
     }
   };
+}
+
+function parseAllowedOrigins(value: string | undefined): readonly string[] {
+  return (value ?? "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
 }

@@ -9,6 +9,7 @@ import {
   PublicSessionCookieService,
   type PublicSessionCookieResponse
 } from "./identity-session.service";
+import { RequireCsrf } from "../security/route-policy/route-security-policy";
 
 @Controller("identity")
 export class IdentitySessionController {
@@ -19,6 +20,7 @@ export class IdentitySessionController {
 
   @Post("logout")
   @HttpCode(204)
+  @RequireCsrf()
   async logout(
     @Req() request: PublicSessionRequest & IdentityHttpRequest,
     @Res({ passthrough: true }) response: PublicSessionCookieResponse

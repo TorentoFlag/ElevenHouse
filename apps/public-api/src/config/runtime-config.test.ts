@@ -13,6 +13,13 @@ const testEncryptionKey = Buffer.alloc(32, 1).toString("base64");
 const requiredSecurityConfig = {
   AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey
 };
+const defaultCsrfConfig = {
+  csrfSecret: "elevenhouse-dev-public-api-csrf-secret-change-before-production",
+  csrfCookieName: "elevenhouse_public_csrf",
+  csrfHeaderName: "x-csrf-token",
+  csrfTokenTtlSeconds: 604800,
+  allowedOrigins: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"]
+};
 
 describe("createPublicApiRuntimeConfig", () => {
   it("uses the default public API port when env is not set", () => {
@@ -22,6 +29,7 @@ describe("createPublicApiRuntimeConfig", () => {
       sessionTtlSeconds: 604800,
       sessionCookieSecure: false,
       sessionCookieName: "elevenhouse_public_session",
+      ...defaultCsrfConfig,
       authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
       passwordlessCodeSecret: "elevenhouse-dev-passwordless-code-secret",
       passwordlessCodeTtlSeconds: 600,
@@ -39,6 +47,7 @@ describe("createPublicApiRuntimeConfig", () => {
       sessionTtlSeconds: 604800,
       sessionCookieSecure: false,
       sessionCookieName: "elevenhouse_public_session",
+      ...defaultCsrfConfig,
       authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
       passwordlessCodeSecret: "elevenhouse-dev-passwordless-code-secret",
       passwordlessCodeTtlSeconds: 600,
@@ -62,6 +71,7 @@ describe("createPublicApiRuntimeConfig", () => {
       sessionTtlSeconds: 3600,
       sessionCookieSecure: true,
       sessionCookieName: publicSessionCookieName,
+      ...defaultCsrfConfig,
       authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
       passwordlessCodeSecret: "elevenhouse-dev-passwordless-code-secret",
       passwordlessCodeTtlSeconds: 600,
@@ -84,6 +94,7 @@ describe("createPublicApiRuntimeConfig", () => {
       sessionTtlSeconds: 604800,
       sessionCookieSecure: false,
       sessionCookieName: "custom_public_session",
+      ...defaultCsrfConfig,
       authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
       passwordlessCodeSecret: "elevenhouse-dev-passwordless-code-secret",
       passwordlessCodeTtlSeconds: 600,
@@ -91,6 +102,25 @@ describe("createPublicApiRuntimeConfig", () => {
       passwordlessMaxAttempts: 5,
       passwordlessRateLimitRedisKeyPrefix: "elevenhouse:public-api",
       passwordlessRateLimits: defaultPasswordlessRateLimits
+    });
+  });
+
+  it("parses CSRF settings from env", () => {
+    expect(
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
+        PUBLIC_API_CSRF_COOKIE_NAME: "custom_public_csrf",
+        PUBLIC_API_CSRF_HEADER_NAME: "X-ElevenHouse-CSRF",
+        PUBLIC_API_CSRF_TOKEN_TTL_SECONDS: "1800",
+        PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com, https://app.elevenhouse.com/"
+      })
+    ).toMatchObject({
+      csrfSecret: "configured-csrf-secret-with-enough-entropy",
+      csrfCookieName: "custom_public_csrf",
+      csrfHeaderName: "x-elevenhouse-csrf",
+      csrfTokenTtlSeconds: 1800,
+      allowedOrigins: ["https://client.elevenhouse.com", "https://app.elevenhouse.com"]
     });
   });
 
@@ -150,6 +180,27 @@ describe("createPublicApiRuntimeConfig", () => {
         NODE_ENV: "production"
       })
     ).toThrow("PUBLIC_API_PASSWORDLESS_CODE_SECRET is required in production");
+  });
+
+  it("requires an explicit CSRF secret in production", () => {
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret"
+      })
+    ).toThrow("PUBLIC_API_CSRF_SECRET is required in production");
+  });
+
+  it("requires explicit allowed origins in production", () => {
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+        PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy"
+      })
+    ).toThrow("PUBLIC_API_ALLOWED_ORIGINS is required in production");
   });
 
   it("requires an explicit auth code delivery encryption key", () => {
