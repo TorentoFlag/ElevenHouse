@@ -1,8 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
-import { HealthController } from "./health.controller";
-import { HealthService } from "./health.service";
-import { createOpsApiRuntimeConfig } from "./runtime-config";
+import { createOpsApiRuntimeConfig } from "./config/runtime-config";
+import { HealthModule } from "./modules/health/health.module";
 
 @Module({
   imports: [
@@ -13,9 +12,8 @@ import { createOpsApiRuntimeConfig } from "./runtime-config";
           opsApi: createOpsApiRuntimeConfig()
         })
       ]
-    })
-  ],
-  controllers: [HealthController],
-  providers: [HealthService]
+    }),
+    HealthModule
+  ]
 })
 export class AppModule {}
