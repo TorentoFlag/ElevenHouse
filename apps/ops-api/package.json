@@ -9,16 +9,19 @@
   },
   "dependencies": {
     "@elevenhouse/contracts": "workspace:*",
+    "@elevenhouse/db": "workspace:*",
     "@elevenhouse/observability": "workspace:*",
     "@elevenhouse/validation": "workspace:*",
     "@nestjs/common": "11.1.26",
     "@nestjs/config": "4.0.4",
     "@nestjs/core": "11.1.26",
     "@nestjs/platform-express": "11.1.26",
+    "redis": "6.0.0",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"
   },
   "devDependencies": {
+    "@nestjs/testing": "11.1.26",
     "@types/node": "25.9.2",
     "tsx": "4.21.0",
     "typescript": "6.0.3"

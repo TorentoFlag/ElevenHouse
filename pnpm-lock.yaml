@@ -178,6 +178,9 @@ importers:
       '@elevenhouse/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@elevenhouse/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@elevenhouse/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -196,6 +199,9 @@ importers:
       '@nestjs/platform-express':
         specifier: 11.1.26
         version: 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)
+      redis:
+        specifier: 6.0.0
+        version: 6.0.0
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -203,6 +209,9 @@ importers:
         specifier: 7.8.2
         version: 7.8.2
     devDependencies:
+      '@nestjs/testing':
+        specifier: 11.1.26
+        version: 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)(@nestjs/platform-express@11.1.26)
       '@types/node':
         specifier: 25.9.2
         version: 25.9.2
