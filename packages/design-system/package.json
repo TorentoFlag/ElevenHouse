@@ -22,9 +22,21 @@
       "types": "./dist/icons/ArrowLeft/index.d.ts",
       "import": "./dist/icons/ArrowLeft/index.js"
     },
+    "./icons/Flow": {
+      "types": "./dist/icons/Flow/index.d.ts",
+      "import": "./dist/icons/Flow/index.js"
+    },
+    "./icons/Orbit": {
+      "types": "./dist/icons/Orbit/index.d.ts",
+      "import": "./dist/icons/Orbit/index.js"
+    },
     "./icons/Sparkle": {
       "types": "./dist/icons/Sparkle/index.d.ts",
       "import": "./dist/icons/Sparkle/index.js"
+    },
+    "./icons/Wallet": {
+      "types": "./dist/icons/Wallet/index.d.ts",
+      "import": "./dist/icons/Wallet/index.js"
     },
     "./tokens.css": "./tokens.css"
   },

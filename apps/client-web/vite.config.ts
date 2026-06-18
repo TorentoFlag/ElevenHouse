@@ -15,8 +15,17 @@ export default defineConfig({
       "@elevenhouse/design-system/navigation": fileURLToPath(
         new URL("../../packages/design-system/src/navigation/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/icons/Flow": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Flow/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/Orbit": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Orbit/index.ts", import.meta.url)
+      ),
       "@elevenhouse/design-system/icons/Sparkle": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Sparkle/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/Wallet": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Wallet/index.ts", import.meta.url)
       ),
       "@elevenhouse/validation": fileURLToPath(
         new URL("../../packages/validation/src/index.ts", import.meta.url)

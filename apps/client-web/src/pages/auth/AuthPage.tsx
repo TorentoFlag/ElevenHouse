@@ -1,19 +1,25 @@
+import { Flow } from "@elevenhouse/design-system/icons/Flow";
+import { Orbit } from "@elevenhouse/design-system/icons/Orbit";
 import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
+import { Wallet } from "@elevenhouse/design-system/icons/Wallet";
 import { BackLink } from "@elevenhouse/design-system/navigation";
+import type { ComponentType, SVGProps } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import styles from "./AuthPage.module.css";
 
-const authHighlights = [
+type HighlightIcon = ComponentType<SVGProps<SVGSVGElement>>;
+
+const authHighlights: Array<{ Icon: HighlightIcon; label: string }> = [
   {
-    icon: "orbit",
+    Icon: Orbit,
     label: "Движок карт и все системы"
   },
   {
-    icon: "flow",
+    Icon: Flow,
     label: "Воронки и AI-автоматизация"
   },
   {
-    icon: "wallet",
+    Icon: Wallet,
     label: "Оплаты, продукты, контент"
   }
 ];
@@ -53,12 +59,12 @@ export function AuthPage() {
               продаёт за вас
             </h1>
             <div className={styles.highlightList}>
-              {authHighlights.map((highlight) => (
-                <div className={styles.highlightItem} key={highlight.label}>
+              {authHighlights.map(({ Icon, label }) => (
+                <div className={styles.highlightItem} key={label}>
                   <span className={styles.highlightIcon} aria-hidden="true">
-                    {highlight.icon === "orbit" ? "⌁" : highlight.icon === "flow" ? "⌘" : "▭"}
+                    <Icon />
                   </span>
-                  <span>{highlight.label}</span>
+                  <span>{label}</span>
                 </div>
               ))}
             </div>
