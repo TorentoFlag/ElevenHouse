@@ -1,5 +1,6 @@
 import { authCodeDeliveryRequestedEventType } from "@elevenhouse/domain";
 import type { OutboxRelayStore } from "@elevenhouse/db/outbox";
+import type { Logger } from "@elevenhouse/observability";
 import {
   authCodeDeliveryJobName,
   toAuthCodeDeliveryJobOptions,
@@ -14,15 +15,26 @@ export async function relayPendingOutboxEvents(input: {
   readonly batchSize: number;
   readonly publishingLockTimeoutMs: number;
   readonly queueOptions: AuthCodeDeliveryQueueOptions;
+  readonly logger?: Logger;
 }): Promise<number> {
   const events = await input.store.claimPending({
     limit: input.batchSize,
     now: input.now,
     stalePublishingBefore: new Date(input.now.getTime() - input.publishingLockTimeoutMs)
   });
+  input.logger?.info("notification outbox events claimed", {
+    count: events.length,
+    batchSize: input.batchSize
+  });
 
   for (const event of events) {
     try {
+      input.logger?.info("notification outbox event publishing", {
+        outboxEventId: event.id,
+        eventType: event.eventType,
+        attempts: event.attempts
+      });
+
       if (event.eventType !== authCodeDeliveryRequestedEventType) {
         throw new Error(`Unsupported outbox event type: ${event.eventType}`);
       }
@@ -39,12 +51,23 @@ export async function relayPendingOutboxEvents(input: {
         eventId: event.id,
         publishedAt: input.now
       });
+      input.logger?.info("notification outbox event published", {
+        outboxEventId: event.id,
+        eventType: event.eventType
+      });
     } catch (error) {
+      const errorMessage = normalizeErrorMessage(error);
       await input.store.markPublishFailed({
         eventId: event.id,
         failedAt: input.now,
         nextAvailableAt: new Date(input.now.getTime() + nextBackoffMs(event.attempts)),
-        errorMessage: normalizeErrorMessage(error)
+        errorMessage
+      });
+      input.logger?.error("notification outbox event publish failed", {
+        outboxEventId: event.id,
+        eventType: event.eventType,
+        attempts: event.attempts,
+        errorMessage
       });
     }
   }

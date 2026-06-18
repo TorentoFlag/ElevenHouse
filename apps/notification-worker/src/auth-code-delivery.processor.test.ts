@@ -1,6 +1,7 @@
 import type { Job } from "bullmq";
 import { describe, expect, it, vi } from "vitest";
 import type { AuthCodeDeliveryProcessingStore } from "@elevenhouse/db/notifications";
+import { createLogger, type LogRecord } from "@elevenhouse/observability";
 import { processAuthCodeDeliveryJob } from "./auth-code-delivery.processor";
 import type { AuthCodeDeliveryJobData } from "./auth-code-delivery.queue";
 
@@ -40,13 +41,15 @@ describe("processAuthCodeDeliveryJob", () => {
     const now = new Date("2026-06-16T10:00:00.000Z");
 
     const authCodeCipher = createTestCipher();
+    const logRecords: LogRecord[] = [];
 
     await processAuthCodeDeliveryJob({
       job: createJob(),
       store,
       authCodeCipher,
       delivery,
-      now
+      now,
+      logger: createTestLogger(logRecords)
     });
 
     expect(delivery.deliverAuthCode).not.toHaveBeenCalled();
@@ -70,6 +73,11 @@ describe("processAuthCodeDeliveryJob", () => {
       outboxEventId: "outbox_1",
       redactedAt: now
     });
+    expect(logRecords.map((record) => record.message)).toEqual([
+      "auth code delivery job started",
+      "auth code delivery expired before provider call",
+      "auth code delivery payload redacted"
+    ]);
   });
 
   it("sends queued deliveries with a stable idempotency context and redacts after success", async () => {
@@ -100,13 +108,15 @@ describe("processAuthCodeDeliveryJob", () => {
     const now = new Date("2026-06-16T10:00:00.000Z");
 
     const authCodeCipher = createTestCipher();
+    const logRecords: LogRecord[] = [];
 
     await processAuthCodeDeliveryJob({
       job: createJob(),
       store,
       authCodeCipher,
       delivery,
-      now
+      now,
+      logger: createTestLogger(logRecords)
     });
 
     expect(authCodeCipher.decrypt).toHaveBeenCalledWith({
@@ -148,6 +158,23 @@ describe("processAuthCodeDeliveryJob", () => {
       outboxEventId: "outbox_1",
       redactedAt: now
     });
+    expect(logRecords).toContainEqual(
+      expect.objectContaining({
+        level: "info",
+        message: "auth code delivery sent",
+        meta: {
+          outboxEventId: "outbox_1",
+          challengeId: "challenge_1",
+          deliveryId: "delivery_1",
+          provider: "email",
+          attemptNumber: 1,
+          providerStatusCode: 202,
+          providerMessageId: "email-message-1"
+        }
+      })
+    );
+    expect(JSON.stringify(logRecords)).not.toContain("client@example.com");
+    expect(JSON.stringify(logRecords)).not.toContain("123456");
   });
 
   it("records retryable failed attempts without marking delivery failed before the final attempt", async () => {
@@ -177,6 +204,7 @@ describe("processAuthCodeDeliveryJob", () => {
       }))
     };
     const now = new Date("2026-06-16T10:00:00.000Z");
+    const logRecords: LogRecord[] = [];
 
     await expect(
       processAuthCodeDeliveryJob({
@@ -184,7 +212,8 @@ describe("processAuthCodeDeliveryJob", () => {
         store,
         authCodeCipher: createTestCipher(),
         delivery,
-        now
+        now,
+        logger: createTestLogger(logRecords)
       })
     ).rejects.toThrow("provider unavailable");
 
@@ -200,6 +229,21 @@ describe("processAuthCodeDeliveryJob", () => {
     });
     expect(store.markFailed).not.toHaveBeenCalled();
     expect(store.redactAuthCodePayload).not.toHaveBeenCalled();
+    expect(logRecords).toContainEqual(
+      expect.objectContaining({
+        level: "warn",
+        message: "auth code delivery attempt failed, retry scheduled",
+        meta: {
+          outboxEventId: "outbox_1",
+          challengeId: "challenge_1",
+          deliveryId: "delivery_1",
+          provider: "email",
+          attemptNumber: 1,
+          providerStatusCode: 503,
+          errorCode: "EMAIL_DELIVERY_HTTP_503"
+        }
+      })
+    );
   });
 
   it("marks delivery failed and redacts the code after the final failed attempt", async () => {
@@ -229,13 +273,15 @@ describe("processAuthCodeDeliveryJob", () => {
       }))
     };
     const now = new Date("2026-06-16T10:00:00.000Z");
+    const logRecords: LogRecord[] = [];
 
     await processAuthCodeDeliveryJob({
       job: createJob({ attemptsMade: 2, opts: { attempts: 3 } }),
       store,
       authCodeCipher: createTestCipher(),
       delivery,
-      now
+      now,
+      logger: createTestLogger(logRecords)
     });
 
     expect(store.recordAttempt).toHaveBeenCalledWith({
@@ -258,6 +304,21 @@ describe("processAuthCodeDeliveryJob", () => {
       outboxEventId: "outbox_1",
       redactedAt: now
     });
+    expect(logRecords).toContainEqual(
+      expect.objectContaining({
+        level: "error",
+        message: "auth code delivery failed final attempt",
+        meta: {
+          outboxEventId: "outbox_1",
+          challengeId: "challenge_1",
+          deliveryId: "delivery_1",
+          provider: "email",
+          attemptNumber: 3,
+          providerStatusCode: 503,
+          errorCode: "EMAIL_DELIVERY_HTTP_503"
+        }
+      })
+    );
   });
 });
 
@@ -275,4 +336,8 @@ function createTestCipher() {
     encrypt: vi.fn(() => createEncryptedCode()),
     decrypt: vi.fn(() => "123456")
   };
+}
+
+function createTestLogger(records: LogRecord[]) {
+  return createLogger("notification-worker-test", (record) => records.push(record));
 }

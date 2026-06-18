@@ -2,6 +2,7 @@ import type { Job } from "bullmq";
 import type { Aes256GcmSecretCipher } from "@elevenhouse/auth";
 import type { AuthCodeDeliveryProcessingStore } from "@elevenhouse/db/notifications";
 import { createAuthCodeDeliveryEncryptionAad } from "@elevenhouse/domain";
+import type { Logger } from "@elevenhouse/observability";
 import type { AuthCodeDeliveryJobData } from "./auth-code-delivery.queue";
 import type { AuthCodeDeliveryProvider, AuthCodeDeliveryResult } from "./auth-code-delivery.provider";
 
@@ -11,17 +12,34 @@ export async function processAuthCodeDeliveryJob(input: {
   readonly authCodeCipher: Aes256GcmSecretCipher;
   readonly delivery: AuthCodeDeliveryProvider;
   readonly now: Date;
+  readonly logger?: Logger;
 }): Promise<void> {
+  const attemptNumber = getAttemptNumber(input.job);
+  input.logger?.info("auth code delivery job started", {
+    outboxEventId: input.job.data.outboxEventId,
+    attemptNumber
+  });
+
   const workItem = await input.store.findByOutboxEventId(input.job.data.outboxEventId);
 
   if (!workItem || workItem.deliveryStatus !== "queued") {
+    input.logger?.info("auth code delivery job skipped", {
+      outboxEventId: input.job.data.outboxEventId,
+      deliveryStatus: workItem?.deliveryStatus ?? "missing"
+    });
     return;
   }
 
   if (new Date(workItem.expiresAt).getTime() <= input.now.getTime()) {
+    input.logger?.warn("auth code delivery expired before provider call", {
+      outboxEventId: workItem.outboxEventId,
+      challengeId: workItem.challengeId,
+      deliveryId: workItem.deliveryId,
+      attemptNumber
+    });
     await input.store.recordAttempt({
       deliveryId: workItem.deliveryId,
-      attemptNumber: getAttemptNumber(input.job),
+      attemptNumber,
       provider: "system",
       status: "failed",
       errorCode: "AUTH_CODE_EXPIRED",
@@ -37,6 +55,12 @@ export async function processAuthCodeDeliveryJob(input: {
     await input.store.redactAuthCodePayload({
       outboxEventId: workItem.outboxEventId,
       redactedAt: input.now
+    });
+    input.logger?.info("auth code delivery payload redacted", {
+      outboxEventId: workItem.outboxEventId,
+      challengeId: workItem.challengeId,
+      deliveryId: workItem.deliveryId,
+      reason: "expired"
     });
     return;
   }
@@ -65,12 +89,21 @@ export async function processAuthCodeDeliveryJob(input: {
   if (result.status === "sent") {
     await input.store.recordAttempt({
       deliveryId: workItem.deliveryId,
-      attemptNumber: getAttemptNumber(input.job),
+      attemptNumber,
       provider: result.provider,
       status: "sent",
       providerStatusCode: result.providerStatusCode,
       providerMessageId: result.providerMessageId,
       attemptedAt: input.now
+    });
+    input.logger?.info("auth code delivery sent", {
+      outboxEventId: workItem.outboxEventId,
+      challengeId: workItem.challengeId,
+      deliveryId: workItem.deliveryId,
+      provider: result.provider,
+      attemptNumber,
+      providerStatusCode: result.providerStatusCode,
+      providerMessageId: result.providerMessageId
     });
     await input.store.markSent({
       deliveryId: workItem.deliveryId,
@@ -82,12 +115,18 @@ export async function processAuthCodeDeliveryJob(input: {
       outboxEventId: workItem.outboxEventId,
       redactedAt: input.now
     });
+    input.logger?.info("auth code delivery payload redacted", {
+      outboxEventId: workItem.outboxEventId,
+      challengeId: workItem.challengeId,
+      deliveryId: workItem.deliveryId,
+      reason: "sent"
+    });
     return;
   }
 
   await input.store.recordAttempt({
     deliveryId: workItem.deliveryId,
-    attemptNumber: getAttemptNumber(input.job),
+    attemptNumber,
     provider: result.provider,
     status: "failed",
     providerStatusCode: result.providerStatusCode,
@@ -97,6 +136,15 @@ export async function processAuthCodeDeliveryJob(input: {
   });
 
   if (isFinalAttempt(input.job)) {
+    input.logger?.error("auth code delivery failed final attempt", {
+      outboxEventId: workItem.outboxEventId,
+      challengeId: workItem.challengeId,
+      deliveryId: workItem.deliveryId,
+      provider: result.provider,
+      attemptNumber,
+      providerStatusCode: result.providerStatusCode,
+      errorCode: result.errorCode ?? "AUTH_CODE_DELIVERY_FAILED"
+    });
     await input.store.markFailed({
       deliveryId: workItem.deliveryId,
       provider: result.provider,
@@ -107,9 +155,24 @@ export async function processAuthCodeDeliveryJob(input: {
       outboxEventId: workItem.outboxEventId,
       redactedAt: input.now
     });
+    input.logger?.info("auth code delivery payload redacted", {
+      outboxEventId: workItem.outboxEventId,
+      challengeId: workItem.challengeId,
+      deliveryId: workItem.deliveryId,
+      reason: "failed"
+    });
     return;
   }
 
+  input.logger?.warn("auth code delivery attempt failed, retry scheduled", {
+    outboxEventId: workItem.outboxEventId,
+    challengeId: workItem.challengeId,
+    deliveryId: workItem.deliveryId,
+    provider: result.provider,
+    attemptNumber,
+    providerStatusCode: result.providerStatusCode,
+    errorCode: result.errorCode ?? "AUTH_CODE_DELIVERY_FAILED"
+  });
   throw new AuthCodeDeliveryRetryableError(result);
 }
 

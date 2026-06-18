@@ -35,7 +35,8 @@ const authCodeDeliveryWorker = createAuthCodeDeliveryWorker(config.redisUrl, (jo
     store: authCodeDeliveryStore,
     authCodeCipher,
     delivery: deliveryProvider,
-    now: new Date()
+    now: new Date(),
+    logger
   })
 );
 const readinessChecks = {
@@ -67,6 +68,7 @@ function startRelay(): ReturnType<typeof setInterval> {
       now: new Date(),
       batchSize: config.outboxRelayBatchSize,
       publishingLockTimeoutMs: config.outboxPublishingLockTimeoutMs,
+      logger,
       queueOptions: {
         attempts: config.authCodeDeliveryAttempts,
         backoffMs: config.authCodeDeliveryBackoffMs

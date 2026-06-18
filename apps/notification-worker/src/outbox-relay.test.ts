@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { OutboxRelayStore } from "@elevenhouse/db/outbox";
+import { createLogger, type LogRecord } from "@elevenhouse/observability";
 import { relayPendingOutboxEvents } from "./outbox-relay";
 import { authCodeDeliveryJobName, type AuthCodeDeliveryQueue } from "./auth-code-delivery.queue";
 
@@ -34,6 +35,7 @@ describe("relayPendingOutboxEvents", () => {
     const queue = {
       add: vi.fn(async () => undefined)
     } as unknown as AuthCodeDeliveryQueue;
+    const logRecords: LogRecord[] = [];
 
     await expect(
       relayPendingOutboxEvents({
@@ -42,6 +44,7 @@ describe("relayPendingOutboxEvents", () => {
         now,
         batchSize: 10,
         publishingLockTimeoutMs: 60_000,
+        logger: createLogger("notification-worker-test", (record) => logRecords.push(record)),
         queueOptions: {
           attempts: 3,
           backoffMs: 100
@@ -65,5 +68,99 @@ describe("relayPendingOutboxEvents", () => {
       eventId: "8e14390f-3db1-4d1c-9344-55679c778427",
       publishedAt: now
     });
+    expect(logRecords).toEqual([
+      expect.objectContaining({
+        level: "info",
+        message: "notification outbox events claimed",
+        meta: { count: 1, batchSize: 10 }
+      }),
+      expect.objectContaining({
+        level: "info",
+        message: "notification outbox event publishing",
+        meta: {
+          outboxEventId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          eventType: "identity.auth_code_delivery_requested",
+          attempts: 0
+        }
+      }),
+      expect.objectContaining({
+        level: "info",
+        message: "notification outbox event published",
+        meta: {
+          outboxEventId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          eventType: "identity.auth_code_delivery_requested"
+        }
+      })
+    ]);
+  });
+
+  it("logs failed outbox publication without exposing event payload", async () => {
+    const now = new Date("2026-06-16T10:00:00.000Z");
+    const store: OutboxRelayStore = {
+      claimPending: vi.fn(async () => [
+        {
+          id: "8e14390f-3db1-4d1c-9344-55679c778427",
+          eventType: "identity.unknown",
+          aggregateId: "9e14390f-3db1-4d1c-9344-55679c778427",
+          payload: {
+            challengeId: "7e14390f-3db1-4d1c-9344-55679c778427",
+            deliveryId: "9e14390f-3db1-4d1c-9344-55679c778427",
+            channel: "email" as const,
+            identifier: "client@example.com",
+            encryptedCode: {
+              algorithm: "aes-256-gcm" as const,
+              iv: "test-iv",
+              ciphertext: "encrypted:123456",
+              authTag: "test-auth-tag"
+            },
+            expiresAt: "2026-06-16T10:10:00.000Z"
+          },
+          attempts: 2
+        }
+      ]),
+      markPublished: vi.fn(async () => undefined),
+      markPublishFailed: vi.fn(async () => undefined)
+    };
+    const queue = {
+      add: vi.fn(async () => undefined)
+    } as unknown as AuthCodeDeliveryQueue;
+    const logRecords: LogRecord[] = [];
+
+    await expect(
+      relayPendingOutboxEvents({
+        store,
+        queue,
+        now,
+        batchSize: 10,
+        publishingLockTimeoutMs: 60_000,
+        logger: createLogger("notification-worker-test", (record) => logRecords.push(record)),
+        queueOptions: {
+          attempts: 3,
+          backoffMs: 100
+        }
+      })
+    ).resolves.toBe(1);
+
+    expect(queue.add).not.toHaveBeenCalled();
+    expect(store.markPublishFailed).toHaveBeenCalledWith({
+      eventId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      failedAt: now,
+      nextAvailableAt: new Date("2026-06-16T10:00:04.000Z"),
+      errorMessage: "Unsupported outbox event type: identity.unknown"
+    });
+    expect(logRecords.at(-1)).toEqual(
+      expect.objectContaining({
+        level: "error",
+        message: "notification outbox event publish failed",
+        meta: {
+          outboxEventId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          eventType: "identity.unknown",
+          attempts: 2,
+          errorMessage: "Unsupported outbox event type: identity.unknown"
+        }
+      })
+    );
+    expect(JSON.stringify(logRecords)).not.toContain("client@example.com");
+    expect(JSON.stringify(logRecords)).not.toContain("encrypted:123456");
   });
 });
