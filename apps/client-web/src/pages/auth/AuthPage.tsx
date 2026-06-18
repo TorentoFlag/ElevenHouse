@@ -1,3 +1,4 @@
+import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
 import { BackLink } from "@elevenhouse/design-system/navigation";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import styles from "./AuthPage.module.css";
@@ -43,7 +44,7 @@ export function AuthPage() {
 
           <div className={styles.heroCopy}>
             <div className={styles.brandBadge}>
-              <span aria-hidden="true">✦</span>
+              <Sparkle aria-hidden="true" />
               ElevenHouse
             </div>
             <h1 className={styles.heroTitle}>

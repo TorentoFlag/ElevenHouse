@@ -1,4 +1,4 @@
-import { ArrowLeft } from "../icons/ArrowLeft.js";
+import { ArrowLeft } from "../icons/ArrowLeft/index.js";
 import { useNavigate } from "react-router";
 
 export type BackLinkProps = {

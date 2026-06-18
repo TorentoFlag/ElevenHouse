@@ -15,6 +15,9 @@ export default defineConfig({
       "@elevenhouse/design-system/navigation": fileURLToPath(
         new URL("../../packages/design-system/src/navigation/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/icons/Sparkle": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Sparkle/index.ts", import.meta.url)
+      ),
       "@elevenhouse/validation": fileURLToPath(
         new URL("../../packages/validation/src/index.ts", import.meta.url)
       )

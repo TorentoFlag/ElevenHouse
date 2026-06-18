@@ -19,8 +19,12 @@
       "import": "./dist/icons/index.js"
     },
     "./icons/ArrowLeft": {
-      "types": "./dist/icons/ArrowLeft.d.ts",
-      "import": "./dist/icons/ArrowLeft.js"
+      "types": "./dist/icons/ArrowLeft/index.d.ts",
+      "import": "./dist/icons/ArrowLeft/index.js"
+    },
+    "./icons/Sparkle": {
+      "types": "./dist/icons/Sparkle/index.d.ts",
+      "import": "./dist/icons/Sparkle/index.js"
     },
     "./tokens.css": "./tokens.css"
   },
