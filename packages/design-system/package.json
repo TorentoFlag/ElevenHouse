@@ -2,20 +2,43 @@
   "name": "@elevenhouse/design-system",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
-    }
+      "import": "./dist/index.js"
+    },
+    "./navigation": {
+      "types": "./dist/navigation/index.d.ts",
+      "import": "./dist/navigation/index.js"
+    },
+    "./icons": {
+      "types": "./dist/icons/index.d.ts",
+      "import": "./dist/icons/index.js"
+    },
+    "./icons/ArrowLeft": {
+      "types": "./dist/icons/ArrowLeft.d.ts",
+      "import": "./dist/icons/ArrowLeft.js"
+    },
+    "./tokens.css": "./tokens.css"
   },
+  "sideEffects": [
+    "./tokens.css"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "peerDependencies": {
+    "react": "19.2.7",
+    "react-router": "^8.0.0"
+  },
   "devDependencies": {
+    "@types/react": "19.2.17",
+    "react": "19.2.7",
+    "react-router": "^8.0.0",
     "typescript": "6.0.3"
   }
 }

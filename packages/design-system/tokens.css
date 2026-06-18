@@ -1,0 +1,64 @@
+:root {
+  --eh-auth-page-background: #090719;
+  --eh-auth-page-text: #ece8f7;
+
+  --eh-auth-visual-glow-amethyst: rgba(139, 92, 246, 0.28);
+  --eh-auth-visual-gradient-start: #3a2a6e;
+  --eh-auth-visual-gradient-middle: #1c1342;
+  --eh-auth-visual-gradient-end: #0c0822;
+  --eh-auth-visual-nebula-gold: rgba(244, 196, 48, 0.18);
+  --eh-auth-visual-nebula-azure: rgba(111, 168, 255, 0.18);
+  --eh-auth-visual-nebula-rose: rgba(229, 156, 196, 0.15);
+
+  --eh-auth-form-glow-amethyst: rgba(139, 92, 246, 0.12);
+  --eh-auth-form-glow-azure: rgba(111, 168, 255, 0.08);
+  --eh-auth-form-gradient-start: #0b091b;
+  --eh-auth-form-gradient-end: #080719;
+
+  --eh-auth-control-line: rgba(216, 212, 236, 0.18);
+  --eh-auth-control-line-hover: rgba(216, 212, 236, 0.32);
+  --eh-auth-control-surface: rgba(20, 18, 47, 0.6);
+  --eh-auth-control-surface-strong: rgba(20, 18, 47, 0.72);
+  --eh-auth-control-text: #a7a2c8;
+  --eh-auth-control-text-hover: rgba(236, 232, 247, 0.88);
+
+  --eh-auth-brand-line: rgba(244, 196, 48, 0.55);
+  --eh-auth-brand-surface: rgba(244, 196, 48, 0.1);
+  --eh-auth-gold: #f4c430;
+
+  --eh-auth-title-gold: #f4c430;
+  --eh-auth-title-coral: #f47a7a;
+  --eh-auth-title-rose: #e59cc4;
+  --eh-auth-title-azure: #6fa8ff;
+  --eh-auth-title-shadow: rgba(229, 156, 196, 0.35);
+
+  --eh-auth-highlight-text: rgba(236, 232, 247, 0.92);
+  --eh-auth-highlight-line: rgba(244, 196, 48, 0.7);
+  --eh-auth-joined-text: rgba(236, 232, 247, 0.68);
+  --eh-auth-white: #ffffff;
+  --eh-auth-avatar-line: rgba(183, 156, 251, 0.42);
+  --eh-auth-avatar-surface: rgba(88, 68, 148, 0.72);
+
+  --eh-auth-planet-gold-glow: rgba(244, 196, 48, 0.52);
+  --eh-auth-planet-gold-start: #ffc93d;
+  --eh-auth-planet-coral: #f47a7a;
+  --eh-auth-planet-azure-glow: rgba(111, 168, 255, 0.36);
+  --eh-auth-planet-azure: #6fa8ff;
+  --eh-auth-planet-emerald: #4ec8a0;
+  --eh-auth-planet-amber-glow: rgba(244, 196, 48, 0.36);
+  --eh-auth-planet-amber-start: #ffd95f;
+  --eh-auth-planet-amber-end: #d9895a;
+  --eh-auth-planet-rose-glow: rgba(229, 156, 196, 0.42);
+  --eh-auth-planet-rose: #e59cc4;
+  --eh-auth-planet-amethyst: #8b5cf6;
+  --eh-auth-planet-blue-glow: rgba(111, 168, 255, 0.38);
+  --eh-auth-planet-lilac: #b79cfb;
+
+  --eh-auth-star-white-strong: rgba(255, 255, 255, 0.95);
+  --eh-auth-star-white: rgba(255, 255, 255, 0.9);
+  --eh-auth-star-white-soft: rgba(255, 255, 255, 0.82);
+  --eh-auth-star-moon-strong: rgba(216, 212, 236, 0.7);
+  --eh-auth-star-moon: rgba(216, 212, 236, 0.54);
+  --eh-auth-star-moon-soft: rgba(216, 212, 236, 0.42);
+  --eh-auth-star-gold: rgba(244, 196, 48, 0.72);
+}

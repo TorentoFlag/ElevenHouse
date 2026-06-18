@@ -371,6 +371,15 @@ importers:
 
   packages/design-system:
     devDependencies:
+      '@types/react':
+        specifier: 19.2.17
+        version: 19.2.17
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-router:
+        specifier: ^8.0.0
+        version: 8.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       typescript:
         specifier: 6.0.3
         version: 6.0.3

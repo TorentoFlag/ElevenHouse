@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import * as designSystem from "./index";
-import { colorTokens } from "./index";
+import * as designSystem from "./index.js";
+import { colorTokens } from "./index.js";
 
 describe("colorTokens", () => {
   it("exports the core palette from the visual reference app", () => {
