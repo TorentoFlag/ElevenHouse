@@ -1,4 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
+import type { Aes256GcmEncryptedSecret } from "@elevenhouse/auth";
 import { authChallengeDeliveries } from "../../schema/identity/auth-challenge-deliveries.schema";
 import { authChallenges } from "../../schema/identity/auth-challenges.schema";
 import { outboxEvents, type OutboxEventPayload } from "../../schema/outbox/outbox-events.schema";
@@ -10,7 +11,7 @@ export type AuthCodeDeliveryWorkItem = {
   readonly deliveryId: string;
   readonly channel: "email" | "phone";
   readonly identifier: string;
-  readonly code: string;
+  readonly encryptedCode: Aes256GcmEncryptedSecret;
   readonly expiresAt: string;
   readonly deliveryStatus: "queued" | "sent" | "failed";
 };
@@ -114,7 +115,7 @@ export function createDrizzleAuthCodeDeliveryProcessingStore(
       await database
         .update(outboxEvents)
         .set({
-          payload: sql`(${outboxEvents.payload} - 'code') || jsonb_build_object('codeRedactedAt', ${input.redactedAt.toISOString()}::text)`,
+          payload: sql`(${outboxEvents.payload} - 'encryptedCode') || jsonb_build_object('codeRedactedAt', ${input.redactedAt.toISOString()}::text)`,
           updatedAt: input.redactedAt
         })
         .where(eq(outboxEvents.id, input.outboxEventId));
@@ -150,7 +151,7 @@ function toAuthCodeDeliveryWorkItem(input: {
     throw new Error(`Unexpected auth code delivery status: ${input.deliveryStatus}`);
   }
 
-  if (!("code" in payload) || typeof payload.code !== "string") {
+  if (!("encryptedCode" in payload) || !isAes256GcmEncryptedSecret(payload.encryptedCode)) {
     throw new Error(`Outbox event ${input.outboxEventId} auth code payload is redacted`);
   }
 
@@ -160,8 +161,22 @@ function toAuthCodeDeliveryWorkItem(input: {
     deliveryId: input.deliveryId,
     channel: input.channel,
     identifier: input.identifierNormalized,
-    code: payload.code,
+    encryptedCode: payload.encryptedCode,
     expiresAt: input.expiresAt.toISOString(),
     deliveryStatus: input.deliveryStatus
   };
+}
+
+function isAes256GcmEncryptedSecret(value: unknown): value is Aes256GcmEncryptedSecret {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const secret = value as Record<string, unknown>;
+  return (
+    secret.algorithm === "aes-256-gcm" &&
+    typeof secret.iv === "string" &&
+    typeof secret.ciphertext === "string" &&
+    typeof secret.authTag === "string"
+  );
 }

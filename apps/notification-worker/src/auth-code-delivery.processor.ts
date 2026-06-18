@@ -1,11 +1,14 @@
 import type { Job } from "bullmq";
+import type { Aes256GcmSecretCipher } from "@elevenhouse/auth";
 import type { AuthCodeDeliveryProcessingStore } from "@elevenhouse/db/notifications";
+import { createAuthCodeDeliveryEncryptionAad } from "@elevenhouse/domain";
 import type { AuthCodeDeliveryJobData } from "./auth-code-delivery.queue";
 import type { AuthCodeDeliveryProvider, AuthCodeDeliveryResult } from "./auth-code-delivery.provider";
 
 export async function processAuthCodeDeliveryJob(input: {
   readonly job: Job<AuthCodeDeliveryJobData>;
   readonly store: AuthCodeDeliveryProcessingStore;
+  readonly authCodeCipher: Aes256GcmSecretCipher;
   readonly delivery: AuthCodeDeliveryProvider;
   readonly now: Date;
 }): Promise<void> {
@@ -29,13 +32,24 @@ export async function processAuthCodeDeliveryJob(input: {
     return;
   }
 
+  const code = input.authCodeCipher.decrypt({
+    encrypted: workItem.encryptedCode,
+    aad: createAuthCodeDeliveryEncryptionAad({
+      challengeId: workItem.challengeId,
+      deliveryId: workItem.deliveryId,
+      channel: workItem.channel,
+      identifier: workItem.identifier,
+      expiresAt: workItem.expiresAt
+    })
+  });
+
   const result = await input.delivery.deliverAuthCode({
     challengeId: workItem.challengeId,
     deliveryId: workItem.deliveryId,
     outboxEventId: workItem.outboxEventId,
     channel: workItem.channel,
     identifier: workItem.identifier,
-    code: workItem.code,
+    code,
     expiresAt: workItem.expiresAt
   });
 

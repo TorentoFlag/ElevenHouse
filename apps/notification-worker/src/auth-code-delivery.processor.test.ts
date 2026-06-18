@@ -22,7 +22,7 @@ describe("processAuthCodeDeliveryJob", () => {
         deliveryId: "delivery_1",
         channel: "email" as const,
         identifier: "client@example.com",
-        code: "123456",
+        encryptedCode: createEncryptedCode(),
         expiresAt: "2026-06-16T09:59:00.000Z",
         deliveryStatus: "queued" as const
       })),
@@ -38,14 +38,18 @@ describe("processAuthCodeDeliveryJob", () => {
     };
     const now = new Date("2026-06-16T10:00:00.000Z");
 
+    const authCodeCipher = createTestCipher();
+
     await processAuthCodeDeliveryJob({
       job: createJob(),
       store,
+      authCodeCipher,
       delivery,
       now
     });
 
     expect(delivery.deliverAuthCode).not.toHaveBeenCalled();
+    expect(authCodeCipher.decrypt).not.toHaveBeenCalled();
     expect(store.markFailed).toHaveBeenCalledWith({
       deliveryId: "delivery_1",
       provider: "system",
@@ -66,7 +70,7 @@ describe("processAuthCodeDeliveryJob", () => {
         deliveryId: "delivery_1",
         channel: "email" as const,
         identifier: "client@example.com",
-        code: "123456",
+        encryptedCode: createEncryptedCode(),
         expiresAt: "2026-06-16T10:10:00.000Z",
         deliveryStatus: "queued" as const
       })),
@@ -83,13 +87,27 @@ describe("processAuthCodeDeliveryJob", () => {
     };
     const now = new Date("2026-06-16T10:00:00.000Z");
 
+    const authCodeCipher = createTestCipher();
+
     await processAuthCodeDeliveryJob({
       job: createJob(),
       store,
+      authCodeCipher,
       delivery,
       now
     });
 
+    expect(authCodeCipher.decrypt).toHaveBeenCalledWith({
+      encrypted: createEncryptedCode(),
+      aad: [
+        "identity.auth_code_delivery_requested",
+        "challenge_1",
+        "delivery_1",
+        "email",
+        "client@example.com",
+        "2026-06-16T10:10:00.000Z"
+      ].join("|")
+    });
     expect(delivery.deliverAuthCode).toHaveBeenCalledWith({
       challengeId: "challenge_1",
       deliveryId: "delivery_1",
@@ -111,3 +129,19 @@ describe("processAuthCodeDeliveryJob", () => {
     });
   });
 });
+
+function createEncryptedCode() {
+  return {
+    algorithm: "aes-256-gcm" as const,
+    iv: "test-iv",
+    ciphertext: "encrypted:123456",
+    authTag: "test-auth-tag"
+  };
+}
+
+function createTestCipher() {
+  return {
+    encrypt: vi.fn(() => createEncryptedCode()),
+    decrypt: vi.fn(() => "123456")
+  };
+}

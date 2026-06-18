@@ -12,11 +12,13 @@ import { PublicSessionAuthGuard } from "./identity-auth.guard";
 import { AUTH_SESSION_AUTHENTICATION_STORE } from "./identity-auth.tokens";
 import { IdentityPasswordlessController } from "./identity-passwordless.controller";
 import {
+  AesGcmAuthCodeEncryption,
   DomainPasswordlessAuthHandler,
   NumericPasswordlessCodeGenerator,
   PUBLIC_AUTH_CODE_GENERATOR
 } from "./identity-passwordless.handler";
 import {
+  PASSWORDLESS_AUTH_CODE_ENCRYPTION,
   PASSWORDLESS_AUTH_OPTIONS,
   PASSWORDLESS_RATE_LIMITER,
   PASSWORDLESS_RATE_LIMIT_OPTIONS,
@@ -45,6 +47,10 @@ import {
     SystemClock,
     DomainPasswordlessAuthHandler,
     {
+      provide: PASSWORDLESS_AUTH_CODE_ENCRYPTION,
+      useClass: AesGcmAuthCodeEncryption
+    },
+    {
       provide: PUBLIC_AUTH_CODE_GENERATOR,
       useClass: NumericPasswordlessCodeGenerator
     },
@@ -63,6 +69,9 @@ import {
     {
       provide: PASSWORDLESS_AUTH_OPTIONS,
       useFactory: (configService: ConfigService) => ({
+        authCodeDeliveryEncryptionKey: configService.getOrThrow<Buffer>(
+          "publicApi.authCodeDeliveryEncryptionKey"
+        ),
         codeSecret: configService.getOrThrow<string>("publicApi.passwordlessCodeSecret"),
         codeTtlSeconds: configService.getOrThrow<number>("publicApi.passwordlessCodeTtlSeconds"),
         resendCooldownSeconds: configService.getOrThrow<number>(

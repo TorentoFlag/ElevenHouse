@@ -9,15 +9,20 @@ const defaultPasswordlessRateLimits = {
   verifyChallenge: { limit: 5, windowSeconds: 900 },
   verifyIp: { limit: 60, windowSeconds: 900 }
 };
+const testEncryptionKey = Buffer.alloc(32, 1).toString("base64");
+const requiredSecurityConfig = {
+  AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey
+};
 
 describe("createPublicApiRuntimeConfig", () => {
   it("uses the default public API port when env is not set", () => {
-    expect(createPublicApiRuntimeConfig({})).toEqual({
+    expect(createPublicApiRuntimeConfig(requiredSecurityConfig)).toEqual({
       port: 3001,
       redisUrl: "redis://localhost:6379",
       sessionTtlSeconds: 604800,
       sessionCookieSecure: false,
       sessionCookieName: "elevenhouse_public_session",
+      authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
       passwordlessCodeSecret: "elevenhouse-dev-passwordless-code-secret",
       passwordlessCodeTtlSeconds: 600,
       passwordlessResendCooldownSeconds: 60,
@@ -28,12 +33,13 @@ describe("createPublicApiRuntimeConfig", () => {
   });
 
   it("parses PUBLIC_API_PORT from env", () => {
-    expect(createPublicApiRuntimeConfig({ PUBLIC_API_PORT: "4011" })).toEqual({
+    expect(createPublicApiRuntimeConfig({ ...requiredSecurityConfig, PUBLIC_API_PORT: "4011" })).toEqual({
       port: 4011,
       redisUrl: "redis://localhost:6379",
       sessionTtlSeconds: 604800,
       sessionCookieSecure: false,
       sessionCookieName: "elevenhouse_public_session",
+      authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
       passwordlessCodeSecret: "elevenhouse-dev-passwordless-code-secret",
       passwordlessCodeTtlSeconds: 600,
       passwordlessResendCooldownSeconds: 60,
@@ -46,6 +52,7 @@ describe("createPublicApiRuntimeConfig", () => {
   it("parses public session settings from env", () => {
     expect(
       createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
         PUBLIC_API_SESSION_TTL_SECONDS: "3600",
         PUBLIC_API_SESSION_COOKIE_SECURE: "true"
       })
@@ -55,6 +62,7 @@ describe("createPublicApiRuntimeConfig", () => {
       sessionTtlSeconds: 3600,
       sessionCookieSecure: true,
       sessionCookieName: publicSessionCookieName,
+      authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
       passwordlessCodeSecret: "elevenhouse-dev-passwordless-code-secret",
       passwordlessCodeTtlSeconds: 600,
       passwordlessResendCooldownSeconds: 60,
@@ -67,6 +75,7 @@ describe("createPublicApiRuntimeConfig", () => {
   it("parses an explicit public session cookie name from env", () => {
     expect(
       createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
         PUBLIC_API_SESSION_COOKIE_NAME: "custom_public_session"
       })
     ).toEqual({
@@ -75,6 +84,7 @@ describe("createPublicApiRuntimeConfig", () => {
       sessionTtlSeconds: 604800,
       sessionCookieSecure: false,
       sessionCookieName: "custom_public_session",
+      authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
       passwordlessCodeSecret: "elevenhouse-dev-passwordless-code-secret",
       passwordlessCodeTtlSeconds: 600,
       passwordlessResendCooldownSeconds: 60,
@@ -87,6 +97,7 @@ describe("createPublicApiRuntimeConfig", () => {
   it("rejects __Host-prefixed public session cookie names without Secure", () => {
     expect(() =>
       createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
         PUBLIC_API_SESSION_COOKIE_NAME: publicSessionCookieName,
         PUBLIC_API_SESSION_COOKIE_SECURE: "false"
       })
@@ -96,6 +107,7 @@ describe("createPublicApiRuntimeConfig", () => {
   it("parses passwordless auth settings from env", () => {
     expect(
       createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
         REDIS_URL: "redis://redis.internal:6379/2",
         PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         PUBLIC_API_PASSWORDLESS_CODE_TTL_SECONDS: "900",
@@ -115,6 +127,7 @@ describe("createPublicApiRuntimeConfig", () => {
       })
     ).toMatchObject({
       redisUrl: "redis://redis.internal:6379/2",
+      authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
       passwordlessCodeSecret: "configured-secret",
       passwordlessCodeTtlSeconds: 900,
       passwordlessResendCooldownSeconds: 120,
@@ -133,9 +146,24 @@ describe("createPublicApiRuntimeConfig", () => {
   it("requires an explicit passwordless code secret in production", () => {
     expect(() =>
       createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
         NODE_ENV: "production"
       })
     ).toThrow("PUBLIC_API_PASSWORDLESS_CODE_SECRET is required in production");
+  });
+
+  it("requires an explicit auth code delivery encryption key", () => {
+    expect(() => createPublicApiRuntimeConfig({})).toThrow(
+      "AUTH_CODE_DELIVERY_ENCRYPTION_KEY"
+    );
+  });
+
+  it("rejects auth code delivery encryption keys with the wrong length", () => {
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        AUTH_CODE_DELIVERY_ENCRYPTION_KEY: Buffer.alloc(16).toString("base64")
+      })
+    ).toThrow("AES-256-GCM key must be 32 bytes encoded as base64");
   });
 
 });

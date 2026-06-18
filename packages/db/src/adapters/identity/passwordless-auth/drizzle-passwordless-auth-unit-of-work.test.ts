@@ -275,6 +275,17 @@ function createUniqueViolationError(constraint: string): Error {
   });
 }
 
+function createTestEncryption() {
+  return {
+    encryptAuthCode: (input: { readonly code: string }) => ({
+      algorithm: "aes-256-gcm" as const,
+      iv: "test-iv",
+      ciphertext: `encrypted:${input.code}`,
+      authTag: "test-auth-tag"
+    })
+  };
+}
+
 describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
   it("persists a passwordless code request in one transaction", async () => {
     const database = createFakeDrizzleDatabase({
@@ -284,6 +295,7 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
     const result = await createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
       requestPasswordlessCode({
         store,
+        encryption: createTestEncryption(),
         channel: "email",
         identifier: " ADA@example.COM ",
         roles: ["client"],
@@ -332,7 +344,12 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
             deliveryId: "delivery_1",
             channel: "email",
             identifier: "ada@example.com",
-            code: "123456",
+            encryptedCode: {
+              algorithm: "aes-256-gcm",
+              iv: "test-iv",
+              ciphertext: "encrypted:123456",
+              authTag: "test-auth-tag"
+            },
             expiresAt: "2026-06-15T10:10:00.000Z"
           },
           availableAt: baseNow
@@ -357,6 +374,7 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
       createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
         requestPasswordlessCode({
           store,
+          encryption: createTestEncryption(),
           channel: "email",
           identifier: "ADA@example.COM",
           roles: ["client"],
@@ -385,6 +403,7 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
       createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
         requestPasswordlessCode({
           store,
+          encryption: createTestEncryption(),
           channel: "email",
           identifier: "ada@example.com",
           roles: ["client"],

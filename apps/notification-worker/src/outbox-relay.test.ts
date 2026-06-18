@@ -17,7 +17,12 @@ describe("relayPendingOutboxEvents", () => {
             deliveryId: "9e14390f-3db1-4d1c-9344-55679c778427",
             channel: "email" as const,
             identifier: "client@example.com",
-            code: "123456",
+            encryptedCode: {
+              algorithm: "aes-256-gcm" as const,
+              iv: "test-iv",
+              ciphertext: "encrypted:123456",
+              authTag: "test-auth-tag"
+            },
             expiresAt: "2026-06-16T10:10:00.000Z"
           },
           attempts: 0

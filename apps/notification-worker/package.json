@@ -8,6 +8,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@elevenhouse/auth": "workspace:*",
     "@elevenhouse/db": "workspace:*",
     "@elevenhouse/domain": "workspace:*",
     "@elevenhouse/observability": "workspace:*",

@@ -1,3 +1,4 @@
+import type { Aes256GcmEncryptedSecret } from "@elevenhouse/auth";
 import {
   maskPasswordlessIdentifier,
   normalizeOptionalString,
@@ -17,16 +18,44 @@ export type AuthCodeDeliveryRequestedPayload = {
   readonly deliveryId: string;
   readonly channel: PasswordlessAuthChannel;
   readonly identifier: string;
-  readonly code: string;
+  readonly encryptedCode: Aes256GcmEncryptedSecret;
   readonly expiresAt: string;
 };
 
 export type RedactedAuthCodeDeliveryRequestedPayload = Omit<
   AuthCodeDeliveryRequestedPayload,
-  "code"
+  "encryptedCode"
 > & {
   readonly codeRedactedAt: string;
 };
+
+export type AuthCodeEncryptionPort = {
+  readonly encryptAuthCode: (input: {
+    readonly challengeId: string;
+    readonly deliveryId: string;
+    readonly channel: PasswordlessAuthChannel;
+    readonly identifier: string;
+    readonly code: string;
+    readonly expiresAt: string;
+  }) => Aes256GcmEncryptedSecret;
+};
+
+export function createAuthCodeDeliveryEncryptionAad(input: {
+  readonly challengeId: string;
+  readonly deliveryId: string;
+  readonly channel: PasswordlessAuthChannel;
+  readonly identifier: string;
+  readonly expiresAt: string;
+}): string {
+  return [
+    authCodeDeliveryRequestedEventType,
+    input.challengeId,
+    input.deliveryId,
+    input.channel,
+    input.identifier,
+    input.expiresAt
+  ].join("|");
+}
 
 export type PasswordlessCodeRequestStore = {
   readonly findPendingChallengeByIdentifier: (input: {
@@ -74,6 +103,7 @@ export type RequestPasswordlessCodeResult = {
 
 export async function requestPasswordlessCode(input: {
   readonly store: PasswordlessCodeRequestStore;
+  readonly encryption: AuthCodeEncryptionPort;
   readonly channel: PasswordlessAuthChannel;
   readonly identifier: string;
   readonly roles: readonly string[];
@@ -130,14 +160,20 @@ export async function requestPasswordlessCode(input: {
     challengeId: challenge.id,
     status: "queued"
   });
+  const deliveryPayload = {
+    challengeId: challenge.id,
+    deliveryId: delivery.id,
+    channel: challenge.channel,
+    identifier: challenge.identifierNormalized,
+    expiresAt: challenge.expiresAt
+  };
   await input.store.recordAuthCodeDeliveryRequested({
     payload: {
-      challengeId: challenge.id,
-      deliveryId: delivery.id,
-      channel: challenge.channel,
-      identifier: challenge.identifierNormalized,
-      code: input.code,
-      expiresAt: challenge.expiresAt
+      ...deliveryPayload,
+      encryptedCode: input.encryption.encryptAuthCode({
+        ...deliveryPayload,
+        code: input.code
+      })
     },
     occurredAt: input.now.toISOString()
   });

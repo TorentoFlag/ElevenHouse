@@ -1,4 +1,5 @@
 import type {
+  AuthCodeEncryptionPort,
   AuthChallenge,
   PasswordlessAuthStore,
   PasswordlessAuthUnitOfWork
@@ -105,6 +106,7 @@ function createPendingChallenge(code: string): AuthChallenge {
 function createHandler(input: {
   readonly store: PasswordlessAuthStore;
   readonly codeGenerator?: PasswordlessCodeGenerator;
+  readonly authCodeEncryption?: AuthCodeEncryptionPort;
   readonly options?: Partial<PasswordlessAuthOptions>;
 }): DomainPasswordlessAuthHandler {
   const sessionTokenIssuer: SessionTokenIssuer = {
@@ -119,12 +121,14 @@ function createHandler(input: {
 
   return new DomainPasswordlessAuthHandler(
     createPasswordlessAuthUnitOfWork(input.store),
+    input.authCodeEncryption ?? createTestEncryption(),
     codeGenerator,
     sessionTokenIssuer,
     {
       now: () => now
     },
     {
+      authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
       codeSecret,
       codeTtlSeconds: 600,
       resendCooldownSeconds: 60,
@@ -166,7 +170,12 @@ describe("DomainPasswordlessAuthHandler", () => {
         deliveryId: "delivery_1",
         channel: "email",
         identifier: "client@example.com",
-        code: "123456",
+        encryptedCode: {
+          algorithm: "aes-256-gcm",
+          iv: "test-iv",
+          ciphertext: "encrypted:123456",
+          authTag: "test-auth-tag"
+        },
         expiresAt: "2026-06-16T10:10:00.000Z"
       },
       occurredAt: "2026-06-16T10:00:00.000Z"
@@ -217,3 +226,14 @@ describe("DomainPasswordlessAuthHandler", () => {
     });
   });
 });
+
+function createTestEncryption(): AuthCodeEncryptionPort {
+  return {
+    encryptAuthCode: (input) => ({
+      algorithm: "aes-256-gcm",
+      iv: "test-iv",
+      ciphertext: `encrypted:${input.code}`,
+      authTag: "test-auth-tag"
+    })
+  };
+}

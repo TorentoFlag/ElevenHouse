@@ -140,6 +140,10 @@ describe("IdentityModule", () => {
       .overrideProvider(ConfigService)
       .useValue({
         getOrThrow: vi.fn((key: string) => {
+          if (key === "publicApi.authCodeDeliveryEncryptionKey") {
+            return Buffer.alloc(32, 1);
+          }
+
           if (key === "publicApi.sessionTtlSeconds") {
             return 604800;
           }
@@ -253,7 +257,12 @@ describe("IdentityModule", () => {
         deliveryId: "delivery_1",
         channel: "email",
         identifier: "client@example.com",
-        code: "123456",
+        encryptedCode: {
+          algorithm: "aes-256-gcm",
+          iv: expect.any(String),
+          ciphertext: expect.any(String),
+          authTag: expect.any(String)
+        },
         expiresAt: "2026-06-16T10:10:00.000Z"
       },
       occurredAt: "2026-06-16T10:00:00.000Z"
@@ -311,6 +320,10 @@ describe("IdentityModule", () => {
 function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
   return {
     getOrThrow: vi.fn((key: string) => {
+      if (key === "publicApi.authCodeDeliveryEncryptionKey") {
+        return Buffer.alloc(32, 1);
+      }
+
       if (key === "publicApi.sessionTtlSeconds") {
         return 604800;
       }

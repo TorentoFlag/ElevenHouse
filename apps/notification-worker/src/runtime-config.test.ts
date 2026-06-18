@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createNotificationWorkerRuntimeConfig } from "./runtime-config";
 
+const testEncryptionKey = Buffer.alloc(32, 2).toString("base64");
 const requiredDeliveryConfig = {
+  AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey,
   NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL:
     "https://delivery.internal/auth/email",
   NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN: "email-token",
@@ -12,10 +14,18 @@ const requiredDeliveryConfig = {
 };
 
 describe("createNotificationWorkerRuntimeConfig", () => {
-  it("requires explicit email and SMS delivery settings", () => {
+  it("requires explicit encryption, email, and SMS delivery settings", () => {
     expect(() => createNotificationWorkerRuntimeConfig({})).toThrow(
-      "NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL"
+      "AUTH_CODE_DELIVERY_ENCRYPTION_KEY"
     );
+  });
+
+  it("requires explicit email and SMS delivery settings", () => {
+    expect(() =>
+      createNotificationWorkerRuntimeConfig({
+        AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey
+      })
+    ).toThrow("NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL");
   });
 
   it("parses queue and delivery settings", () => {
@@ -31,6 +41,7 @@ describe("createNotificationWorkerRuntimeConfig", () => {
       })
     ).toEqual({
       redisUrl: "redis://redis.internal:6379/3",
+      authCodeDeliveryEncryptionKey: Buffer.alloc(32, 2),
       outboxRelayIntervalMs: 250,
       outboxRelayBatchSize: 10,
       outboxPublishingLockTimeoutMs: 30000,
@@ -47,5 +58,14 @@ describe("createNotificationWorkerRuntimeConfig", () => {
         from: "ElevenHouse"
       }
     });
+  });
+
+  it("rejects auth code delivery encryption keys with the wrong length", () => {
+    expect(() =>
+      createNotificationWorkerRuntimeConfig({
+        ...requiredDeliveryConfig,
+        AUTH_CODE_DELIVERY_ENCRYPTION_KEY: Buffer.alloc(16).toString("base64")
+      })
+    ).toThrow("AES-256-GCM key must be 32 bytes encoded as base64");
   });
 });

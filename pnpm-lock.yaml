@@ -132,6 +132,9 @@ importers:
 
   apps/notification-worker:
     dependencies:
+      '@elevenhouse/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@elevenhouse/db':
         specifier: workspace:*
         version: link:../../packages/db

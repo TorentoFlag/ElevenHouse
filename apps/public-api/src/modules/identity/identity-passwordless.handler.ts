@@ -1,6 +1,15 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { PasswordlessAuthUnitOfWork } from "@elevenhouse/domain";
 import {
+  createAes256GcmSecretCipher,
+  type Aes256GcmSecretCipher
+} from "@elevenhouse/auth";
+import type {
+  AuthCodeEncryptionPort,
+  PasswordlessAuthChannel,
+  PasswordlessAuthUnitOfWork
+} from "@elevenhouse/domain";
+import {
+  createAuthCodeDeliveryEncryptionAad,
   createNumericPasswordlessCode,
   requestPasswordlessCode,
   verifyPasswordlessCode
@@ -17,6 +26,7 @@ import {
   type IssuedSessionToken
 } from "./identity-session.service";
 import {
+  PASSWORDLESS_AUTH_CODE_ENCRYPTION,
   PASSWORDLESS_AUTH_OPTIONS,
   PASSWORDLESS_AUTH_UNIT_OF_WORK
 } from "./identity-passwordless.tokens";
@@ -32,6 +42,7 @@ export type SessionTokenIssuer = {
 };
 
 export type PasswordlessAuthOptions = {
+  readonly authCodeDeliveryEncryptionKey: Buffer;
   readonly codeSecret: string;
   readonly codeTtlSeconds: number;
   readonly resendCooldownSeconds: number;
@@ -55,10 +66,35 @@ export class NumericPasswordlessCodeGenerator implements PasswordlessCodeGenerat
 }
 
 @Injectable()
+export class AesGcmAuthCodeEncryption implements AuthCodeEncryptionPort {
+  private readonly cipher: Aes256GcmSecretCipher;
+
+  constructor(@Inject(PASSWORDLESS_AUTH_OPTIONS) options: PasswordlessAuthOptions) {
+    this.cipher = createAes256GcmSecretCipher(options.authCodeDeliveryEncryptionKey);
+  }
+
+  encryptAuthCode(input: {
+    readonly challengeId: string;
+    readonly deliveryId: string;
+    readonly channel: PasswordlessAuthChannel;
+    readonly identifier: string;
+    readonly code: string;
+    readonly expiresAt: string;
+  }) {
+    return this.cipher.encrypt({
+      plaintext: input.code,
+      aad: createAuthCodeDeliveryEncryptionAad(input)
+    });
+  }
+}
+
+@Injectable()
 export class DomainPasswordlessAuthHandler {
   constructor(
     @Inject(PASSWORDLESS_AUTH_UNIT_OF_WORK)
     private readonly passwordlessAuth: PasswordlessAuthUnitOfWork,
+    @Inject(PASSWORDLESS_AUTH_CODE_ENCRYPTION)
+    private readonly authCodeEncryption: AuthCodeEncryptionPort,
     @Inject(PUBLIC_AUTH_CODE_GENERATOR)
     private readonly codeGenerator: PasswordlessCodeGenerator,
     private readonly sessionTokenIssuer: PublicSessionTokenIssuer,
@@ -74,6 +110,7 @@ export class DomainPasswordlessAuthHandler {
     return this.passwordlessAuth.transact((store) =>
       requestPasswordlessCode({
         store,
+        encryption: this.authCodeEncryption,
         channel: input.channel,
         identifier: input.identifier,
         roles: input.roles,

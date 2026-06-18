@@ -1,7 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
-import { requestPasswordlessCode } from "@elevenhouse/domain";
+import { createAes256GcmSecretCipher } from "@elevenhouse/auth";
+import {
+  createAuthCodeDeliveryEncryptionAad,
+  requestPasswordlessCode
+} from "@elevenhouse/domain";
 import { createDrizzlePasswordlessAuthUnitOfWork } from "@elevenhouse/db/passwordless-auth";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createDrizzleAuthCodeDeliveryProcessingStore } from "@elevenhouse/db/notifications";
@@ -25,6 +29,21 @@ import { relayPendingOutboxEvents } from "./outbox-relay";
 const databaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
 const redisUrl = getIntegrationRedisUrl(process.env.INTEGRATION_REDIS_URL);
 const integrationQueueName = `${authCodeDeliveryQueueName}.integration.${process.pid}`;
+const authCodeCipher = createAes256GcmSecretCipher(Buffer.alloc(32, 13));
+const authCodeEncryption = {
+  encryptAuthCode: (input: {
+    readonly challengeId: string;
+    readonly deliveryId: string;
+    readonly channel: "email" | "phone";
+    readonly identifier: string;
+    readonly code: string;
+    readonly expiresAt: string;
+  }) =>
+    authCodeCipher.encrypt({
+      plaintext: input.code,
+      aad: createAuthCodeDeliveryEncryptionAad(input)
+    })
+};
 
 describe("auth code delivery outbox and BullMQ integration", () => {
   const runtime = createPostgresRuntime({
@@ -60,6 +79,7 @@ describe("auth code delivery outbox and BullMQ integration", () => {
         processAuthCodeDeliveryJob({
           job,
           store: createDrizzleAuthCodeDeliveryProcessingStore(runtime.database),
+          authCodeCipher,
           delivery: new ChannelAuthCodeDeliveryProvider(
             new EmailAuthCodeDeliveryProvider({
               endpointUrl: httpEndpoint("/email"),
@@ -111,6 +131,7 @@ describe("auth code delivery outbox and BullMQ integration", () => {
       (store) =>
         requestPasswordlessCode({
           store,
+          encryption: authCodeEncryption,
           channel: "email",
           identifier: "queue-integration@example.com",
           roles: ["client"],
@@ -136,6 +157,22 @@ describe("auth code delivery outbox and BullMQ integration", () => {
         status: "queued"
       }
     ]);
+
+    const initialOutbox = await runtime.pool.query<{ payload: Record<string, unknown> }>(
+      "select payload from outbox_events where payload->>'challengeId' = $1",
+      [response.challengeId]
+    );
+    expect(JSON.stringify(initialOutbox.rows[0]?.payload)).not.toContain("123456");
+    expect(initialOutbox.rows[0]?.payload).toMatchObject({
+      challengeId: response.challengeId,
+      deliveryId: queuedDelivery.rows[0]?.id,
+      encryptedCode: {
+        algorithm: "aes-256-gcm",
+        iv: expect.any(String),
+        ciphertext: expect.any(String),
+        authTag: expect.any(String)
+      }
+    });
 
     await expect(
       relayPendingOutboxEvents({
@@ -204,6 +241,7 @@ describe("auth code delivery outbox and BullMQ integration", () => {
         codeRedactedAt: expect.any(String)
       });
       expect(redactedOutbox.rows[0]?.payload).not.toHaveProperty("code");
+      expect(redactedOutbox.rows[0]?.payload).not.toHaveProperty("encryptedCode");
     });
   });
 

@@ -1,7 +1,9 @@
 import { z } from "@elevenhouse/validation";
+import { parseBase64Aes256GcmKey } from "@elevenhouse/auth";
 
 const notificationWorkerRuntimeConfigSchema = z.object({
   REDIS_URL: z.string().trim().min(1).default("redis://localhost:6379"),
+  AUTH_CODE_DELIVERY_ENCRYPTION_KEY: z.string().trim().min(1),
   NOTIFICATION_WORKER_OUTBOX_RELAY_INTERVAL_MS: z.coerce.number().int().positive().default(1000),
   NOTIFICATION_WORKER_OUTBOX_RELAY_BATCH_SIZE: z.coerce.number().int().positive().default(50),
   NOTIFICATION_WORKER_OUTBOX_PUBLISHING_LOCK_TIMEOUT_MS: z.coerce
@@ -31,6 +33,7 @@ export type AuthCodeHttpDeliveryOptions = {
 
 export type NotificationWorkerRuntimeConfig = {
   readonly redisUrl: string;
+  readonly authCodeDeliveryEncryptionKey: Buffer;
   readonly outboxRelayIntervalMs: number;
   readonly outboxRelayBatchSize: number;
   readonly outboxPublishingLockTimeoutMs: number;
@@ -47,6 +50,9 @@ export function createNotificationWorkerRuntimeConfig(
 
   return {
     redisUrl: config.REDIS_URL,
+    authCodeDeliveryEncryptionKey: parseBase64Aes256GcmKey(
+      config.AUTH_CODE_DELIVERY_ENCRYPTION_KEY
+    ),
     outboxRelayIntervalMs: config.NOTIFICATION_WORKER_OUTBOX_RELAY_INTERVAL_MS,
     outboxRelayBatchSize: config.NOTIFICATION_WORKER_OUTBOX_RELAY_BATCH_SIZE,
     outboxPublishingLockTimeoutMs:

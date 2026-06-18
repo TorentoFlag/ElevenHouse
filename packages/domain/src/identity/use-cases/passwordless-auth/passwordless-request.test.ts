@@ -4,6 +4,7 @@ import { PasswordlessCodeRequestCooldownError } from "./passwordless-challenge";
 
 describe("requestPasswordlessCode", () => {
   it("creates a challenge and queues delivery without calling the delivery provider", async () => {
+    const encryption = createTestEncryption();
     const store = {
       findPendingChallengeByIdentifier: vi.fn(async () => null),
       createChallenge: vi.fn(async (input) => ({
@@ -21,6 +22,7 @@ describe("requestPasswordlessCode", () => {
 
     const result = await requestPasswordlessCode({
       store,
+      encryption,
       channel: "email",
       identifier: " ADA@example.COM ",
       roles: ["client"],
@@ -56,7 +58,12 @@ describe("requestPasswordlessCode", () => {
         deliveryId: "delivery_1",
         channel: "email",
         identifier: "ada@example.com",
-        code: "123456",
+        encryptedCode: {
+          algorithm: "aes-256-gcm",
+          iv: "test-iv",
+          ciphertext: "encrypted:123456",
+          authTag: "test-auth-tag"
+        },
         expiresAt: "2026-06-15T10:10:00.000Z"
       },
       occurredAt: "2026-06-15T10:00:00.000Z"
@@ -71,6 +78,7 @@ describe("requestPasswordlessCode", () => {
   });
 
   it("normalizes and masks phone identifiers", async () => {
+    const encryption = createTestEncryption();
     const store = {
       findPendingChallengeByIdentifier: vi.fn(async () => null),
       createChallenge: vi.fn(async (input) => ({
@@ -88,6 +96,7 @@ describe("requestPasswordlessCode", () => {
 
     const result = await requestPasswordlessCode({
       store,
+      encryption,
       channel: "phone",
       identifier: "+1 (555) 123-4090",
       roles: ["client"],
@@ -113,6 +122,7 @@ describe("requestPasswordlessCode", () => {
   });
 
   it("rejects a duplicate request while an existing pending challenge is in resend cooldown", async () => {
+    const encryption = createTestEncryption();
     const store = {
       findPendingChallengeByIdentifier: vi.fn(async () => ({
         id: "8e14390f-3db1-4d1c-9344-55679c778427",
@@ -138,6 +148,7 @@ describe("requestPasswordlessCode", () => {
     await expect(
       requestPasswordlessCode({
         store,
+        encryption,
         channel: "email",
         identifier: "CLIENT@example.com",
         roles: ["client"],
@@ -160,6 +171,7 @@ describe("requestPasswordlessCode", () => {
   });
 
   it("cancels an existing pending challenge when cooldown has elapsed before creating a new one", async () => {
+    const encryption = createTestEncryption();
     const store = {
       findPendingChallengeByIdentifier: vi.fn(async () => ({
         id: "8e14390f-3db1-4d1c-9344-55679c778427",
@@ -191,6 +203,7 @@ describe("requestPasswordlessCode", () => {
 
     await requestPasswordlessCode({
       store,
+      encryption,
       channel: "email",
       identifier: "client@example.com",
       roles: ["client"],
@@ -213,10 +226,26 @@ describe("requestPasswordlessCode", () => {
         deliveryId: "delivery_2",
         channel: "email",
         identifier: "client@example.com",
-        code: "654321",
+        encryptedCode: {
+          algorithm: "aes-256-gcm",
+          iv: "test-iv",
+          ciphertext: "encrypted:654321",
+          authTag: "test-auth-tag"
+        },
         expiresAt: "2026-06-15T10:11:30.000Z"
       },
       occurredAt: "2026-06-15T10:01:30.000Z"
     });
   });
 });
+
+function createTestEncryption() {
+  return {
+    encryptAuthCode: vi.fn((input: { readonly code: string }) => ({
+      algorithm: "aes-256-gcm" as const,
+      iv: "test-iv",
+      ciphertext: `encrypted:${input.code}`,
+      authTag: "test-auth-tag"
+    }))
+  };
+}

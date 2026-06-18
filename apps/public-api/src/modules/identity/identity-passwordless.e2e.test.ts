@@ -103,6 +103,19 @@ describe("passwordless public auth HTTP flow", () => {
       resendAvailableAt: "2026-06-16T10:01:00.000Z"
     });
     expect(requestResponse.body.challengeId).toEqual(expect.any(String));
+    expect(store.authCodeDeliveryRequestedEvents).toHaveLength(1);
+    expect(JSON.stringify(store.authCodeDeliveryRequestedEvents[0]?.payload)).not.toContain(
+      "123456"
+    );
+    expect(store.authCodeDeliveryRequestedEvents[0]?.payload).toMatchObject({
+      challengeId: requestResponse.body.challengeId,
+      encryptedCode: {
+        algorithm: "aes-256-gcm",
+        iv: expect.any(String),
+        ciphertext: expect.any(String),
+        authTag: expect.any(String)
+      }
+    });
 
     const verifyResponse = await postJson("/identity/passwordless/verify-code", {
       challengeId: requestResponse.body.challengeId,
@@ -197,8 +210,16 @@ describe("passwordless public auth HTTP flow", () => {
       deliveryId: store.authChallengeDeliveries[0]?.id,
       channel: "email",
       identifier: "client@example.com",
-      code: "123456"
+      encryptedCode: {
+        algorithm: "aes-256-gcm",
+        iv: expect.any(String),
+        ciphertext: expect.any(String),
+        authTag: expect.any(String)
+      }
     });
+    expect(JSON.stringify(store.authCodeDeliveryRequestedEvents[0]?.payload)).not.toContain(
+      "123456"
+    );
   });
 
   it("rate limits passwordless code requests by client IP before delivery", async () => {
@@ -368,6 +389,10 @@ function cookieHeader(setCookie: string | null): string {
 function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
   return {
     getOrThrow: (key: string) => {
+      if (key === "publicApi.authCodeDeliveryEncryptionKey") {
+        return Buffer.alloc(32, 1);
+      }
+
       if (key === "publicApi.sessionTtlSeconds") {
         return 604800;
       }

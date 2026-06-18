@@ -1,5 +1,5 @@
 import { z } from "@elevenhouse/validation";
-import { publicSessionCookieName } from "@elevenhouse/auth";
+import { parseBase64Aes256GcmKey, publicSessionCookieName } from "@elevenhouse/auth";
 
 const localPublicSessionCookieName = "elevenhouse_public_session";
 
@@ -13,6 +13,7 @@ const publicApiRuntimeConfigSchema = z.object({
     .default("false")
     .transform((value) => value === "true"),
   PUBLIC_API_SESSION_COOKIE_NAME: z.string().trim().min(1).optional(),
+  AUTH_CODE_DELIVERY_ENCRYPTION_KEY: z.string().trim().min(1),
   PUBLIC_API_PASSWORDLESS_CODE_SECRET: z.string().trim().min(1).optional(),
   PUBLIC_API_PASSWORDLESS_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
   PUBLIC_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS: z.coerce
@@ -76,6 +77,7 @@ export type PublicApiRuntimeConfig = {
   readonly sessionTtlSeconds: number;
   readonly sessionCookieSecure: boolean;
   readonly sessionCookieName: string;
+  readonly authCodeDeliveryEncryptionKey: Buffer;
   readonly passwordlessCodeSecret: string;
   readonly passwordlessCodeTtlSeconds: number;
   readonly passwordlessResendCooldownSeconds: number;
@@ -129,6 +131,9 @@ export function createPublicApiRuntimeConfig(
     sessionTtlSeconds: config.PUBLIC_API_SESSION_TTL_SECONDS,
     sessionCookieSecure: config.PUBLIC_API_SESSION_COOKIE_SECURE,
     sessionCookieName,
+    authCodeDeliveryEncryptionKey: parseBase64Aes256GcmKey(
+      config.AUTH_CODE_DELIVERY_ENCRYPTION_KEY
+    ),
     passwordlessCodeSecret:
       config.PUBLIC_API_PASSWORDLESS_CODE_SECRET ??
       "elevenhouse-dev-passwordless-code-secret",

@@ -1,4 +1,5 @@
 import { createLogger } from "@elevenhouse/observability";
+import { createAes256GcmSecretCipher } from "@elevenhouse/auth";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createDrizzleAuthCodeDeliveryProcessingStore } from "@elevenhouse/db/notifications";
@@ -19,6 +20,7 @@ import { createNotificationWorkerRuntimeConfig } from "./runtime-config";
 const logger = createLogger("notification-worker");
 const config = createNotificationWorkerRuntimeConfig();
 const postgresRuntime = createPostgresRuntime();
+const authCodeCipher = createAes256GcmSecretCipher(config.authCodeDeliveryEncryptionKey);
 const authCodeDeliveryQueue = createAuthCodeDeliveryQueue(config.redisUrl);
 const outboxStore = createDrizzleOutboxRelayStore(postgresRuntime.database);
 const authCodeDeliveryStore = createDrizzleAuthCodeDeliveryProcessingStore(postgresRuntime.database);
@@ -30,6 +32,7 @@ const authCodeDeliveryWorker = createAuthCodeDeliveryWorker(config.redisUrl, (jo
   processAuthCodeDeliveryJob({
     job,
     store: authCodeDeliveryStore,
+    authCodeCipher,
     delivery: deliveryProvider,
     now: new Date()
   })
