@@ -19,6 +19,15 @@ export async function processAuthCodeDeliveryJob(input: {
   }
 
   if (new Date(workItem.expiresAt).getTime() <= input.now.getTime()) {
+    await input.store.recordAttempt({
+      deliveryId: workItem.deliveryId,
+      attemptNumber: getAttemptNumber(input.job),
+      provider: "system",
+      status: "failed",
+      errorCode: "AUTH_CODE_EXPIRED",
+      errorMessage: "Auth code expired before delivery",
+      attemptedAt: input.now
+    });
     await input.store.markFailed({
       deliveryId: workItem.deliveryId,
       provider: "system",
@@ -54,6 +63,15 @@ export async function processAuthCodeDeliveryJob(input: {
   });
 
   if (result.status === "sent") {
+    await input.store.recordAttempt({
+      deliveryId: workItem.deliveryId,
+      attemptNumber: getAttemptNumber(input.job),
+      provider: result.provider,
+      status: "sent",
+      providerStatusCode: result.providerStatusCode,
+      providerMessageId: result.providerMessageId,
+      attemptedAt: input.now
+    });
     await input.store.markSent({
       deliveryId: workItem.deliveryId,
       provider: result.provider,
@@ -66,6 +84,17 @@ export async function processAuthCodeDeliveryJob(input: {
     });
     return;
   }
+
+  await input.store.recordAttempt({
+    deliveryId: workItem.deliveryId,
+    attemptNumber: getAttemptNumber(input.job),
+    provider: result.provider,
+    status: "failed",
+    providerStatusCode: result.providerStatusCode,
+    errorCode: result.errorCode ?? "AUTH_CODE_DELIVERY_FAILED",
+    errorMessage: result.errorMessage ?? "Auth code delivery failed",
+    attemptedAt: input.now
+  });
 
   if (isFinalAttempt(input.job)) {
     await input.store.markFailed({
@@ -89,6 +118,10 @@ class AuthCodeDeliveryRetryableError extends Error {
     super(result.errorMessage ?? "Auth code delivery failed");
     this.name = "AuthCodeDeliveryRetryableError";
   }
+}
+
+function getAttemptNumber(job: Job<AuthCodeDeliveryJobData>): number {
+  return job.attemptsMade + 1;
 }
 
 function isFinalAttempt(job: Job<AuthCodeDeliveryJobData>): boolean {

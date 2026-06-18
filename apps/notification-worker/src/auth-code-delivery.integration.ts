@@ -230,6 +230,41 @@ describe("auth code delivery outbox and BullMQ integration", () => {
         expiresAt: expectedExpiresAt
       })
     ]);
+    const attempts = await runtime.pool.query<{
+      delivery_id: string;
+      attempt_number: number;
+      provider: string;
+      status: string;
+      provider_status_code: number | null;
+      provider_message_id: string | null;
+      error_code: string | null;
+      error_message: string | null;
+    }>(
+      `select delivery_id,
+              attempt_number,
+              provider,
+              status,
+              provider_status_code,
+              provider_message_id,
+              error_code,
+              error_message
+       from auth_challenge_delivery_attempts
+       where delivery_id = $1
+       order by attempt_number, attempted_at`,
+      [queuedDelivery.rows[0]?.id]
+    );
+    expect(attempts.rows).toEqual([
+      {
+        delivery_id: queuedDelivery.rows[0]?.id,
+        attempt_number: 1,
+        provider: "email",
+        status: "sent",
+        provider_status_code: 202,
+        provider_message_id: "email-message-1",
+        error_code: null,
+        error_message: null
+      }
+    ]);
     await waitFor(async () => {
       const redactedOutbox = await runtime.pool.query<{ payload: Record<string, unknown> }>(
         "select payload from outbox_events where payload->>'challengeId' = $1",

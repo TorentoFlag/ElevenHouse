@@ -5,5 +5,6 @@ export * from "./role-assignments.schema";
 export * from "./auth-sessions.schema";
 export * from "./auth-challenges.schema";
 export * from "./auth-challenge-deliveries.schema";
+export * from "./auth-challenge-delivery-attempts.schema";
 export * from "./auth-security-events.schema";
 export * from "./relations.schema";

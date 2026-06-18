@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import { users } from "./accounts.schema";
+import { authChallengeDeliveryAttempts } from "./auth-challenge-delivery-attempts.schema";
 import { authChallengeDeliveries } from "./auth-challenge-deliveries.schema";
 import { authChallenges } from "./auth-challenges.schema";
 import { authIdentities } from "./auth-identities.schema";
@@ -39,10 +40,21 @@ export const authChallengesRelations = relations(authChallenges, ({ many }) => (
 
 export const authChallengeDeliveriesRelations = relations(
   authChallengeDeliveries,
-  ({ one }) => ({
+  ({ many, one }) => ({
+    attempts: many(authChallengeDeliveryAttempts),
     challenge: one(authChallenges, {
       fields: [authChallengeDeliveries.challengeId],
       references: [authChallenges.id]
+    })
+  })
+);
+
+export const authChallengeDeliveryAttemptsRelations = relations(
+  authChallengeDeliveryAttempts,
+  ({ one }) => ({
+    delivery: one(authChallengeDeliveries, {
+      fields: [authChallengeDeliveryAttempts.deliveryId],
+      references: [authChallengeDeliveries.id]
     })
   })
 );

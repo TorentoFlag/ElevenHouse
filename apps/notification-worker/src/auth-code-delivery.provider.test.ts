@@ -35,6 +35,7 @@ describe("EmailAuthCodeDeliveryProvider", () => {
     ).resolves.toEqual({
       provider: "email",
       status: "sent",
+      providerStatusCode: 202,
       providerMessageId: "email-message-1"
     });
     expect(fetchMock).toHaveBeenCalledWith("https://delivery.internal/auth/email", {
@@ -81,6 +82,7 @@ describe("EmailAuthCodeDeliveryProvider", () => {
     ).resolves.toEqual({
       provider: "email",
       status: "failed",
+      providerStatusCode: 503,
       errorCode: "EMAIL_DELIVERY_HTTP_503",
       errorMessage: "provider unavailable"
     });
@@ -117,6 +119,7 @@ describe("SmsAuthCodeDeliveryProvider", () => {
     ).resolves.toEqual({
       provider: "sms",
       status: "sent",
+      providerStatusCode: 202,
       providerMessageId: "sms-message-1"
     });
   });

@@ -915,6 +915,173 @@
       },
       "isRLSEnabled": false
     },
+    "public.auth_challenge_delivery_attempts": {
+      "name": "auth_challenge_delivery_attempts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "delivery_id": {
+          "name": "delivery_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempt_number": {
+          "name": "attempt_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_status_code": {
+          "name": "provider_status_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_message_id": {
+          "name": "provider_message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempted_at": {
+          "name": "attempted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "auth_challenge_delivery_attempts_delivery_id_index": {
+          "name": "auth_challenge_delivery_attempts_delivery_id_index",
+          "columns": [
+            {
+              "expression": "delivery_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "auth_challenge_delivery_attempts_delivery_attempt_index": {
+          "name": "auth_challenge_delivery_attempts_delivery_attempt_index",
+          "columns": [
+            {
+              "expression": "delivery_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "attempt_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "attempted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "auth_challenge_delivery_attempts_attempted_at_index": {
+          "name": "auth_challenge_delivery_attempts_attempted_at_index",
+          "columns": [
+            {
+              "expression": "attempted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "auth_challenge_delivery_attempts_delivery_id_auth_challenge_deliveries_id_fk": {
+          "name": "auth_challenge_delivery_attempts_delivery_id_auth_challenge_deliveries_id_fk",
+          "tableFrom": "auth_challenge_delivery_attempts",
+          "tableTo": "auth_challenge_deliveries",
+          "columnsFrom": [
+            "delivery_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "auth_challenge_delivery_attempts_attempt_number_check": {
+          "name": "auth_challenge_delivery_attempts_attempt_number_check",
+          "value": "\"auth_challenge_delivery_attempts\".\"attempt_number\" > 0"
+        },
+        "auth_challenge_delivery_attempts_status_check": {
+          "name": "auth_challenge_delivery_attempts_status_check",
+          "value": "\"auth_challenge_delivery_attempts\".\"status\" in ('sent', 'failed')"
+        },
+        "auth_challenge_delivery_attempts_provider_status_code_check": {
+          "name": "auth_challenge_delivery_attempts_provider_status_code_check",
+          "value": "\"auth_challenge_delivery_attempts\".\"provider_status_code\" is null or \"auth_challenge_delivery_attempts\".\"provider_status_code\" between 100 and 599"
+        },
+        "auth_challenge_delivery_attempts_sent_fields_check": {
+          "name": "auth_challenge_delivery_attempts_sent_fields_check",
+          "value": "\"auth_challenge_delivery_attempts\".\"status\" <> 'sent' or (\"auth_challenge_delivery_attempts\".\"error_code\" is null and \"auth_challenge_delivery_attempts\".\"error_message\" is null)"
+        },
+        "auth_challenge_delivery_attempts_failed_fields_check": {
+          "name": "auth_challenge_delivery_attempts_failed_fields_check",
+          "value": "\"auth_challenge_delivery_attempts\".\"status\" <> 'failed' or (\"auth_challenge_delivery_attempts\".\"error_code\" is not null and \"auth_challenge_delivery_attempts\".\"error_message\" is not null and \"auth_challenge_delivery_attempts\".\"provider_message_id\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.auth_security_events": {
       "name": "auth_security_events",
       "schema": "",

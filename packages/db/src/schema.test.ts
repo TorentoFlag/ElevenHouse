@@ -3,6 +3,8 @@ import { platformRoles } from "@elevenhouse/auth";
 import { describe, expect, it } from "vitest";
 import {
   authChallengeDeliveries,
+  authChallengeDeliveryAttempts,
+  authChallengeDeliveryAttemptStatusValues,
   authChallengeDeliveryStatusValues,
   authChallenges,
   authChallengeStatusValues,
@@ -40,9 +42,14 @@ describe("database account schema constants", () => {
     expect(authChallengeDeliveryStatusValues).toEqual(["queued", "sent", "failed"]);
   });
 
+  it("keeps auth challenge delivery attempt statuses explicit", () => {
+    expect(authChallengeDeliveryAttemptStatusValues).toEqual(["sent", "failed"]);
+  });
+
   it("exports passwordless auth challenge tables", () => {
     expect(authChallenges).toBeDefined();
     expect(authChallengeDeliveries).toBeDefined();
+    expect(authChallengeDeliveryAttempts).toBeDefined();
   });
 
   it("keeps outbox event statuses explicit", () => {

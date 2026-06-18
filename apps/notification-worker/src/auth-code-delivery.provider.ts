@@ -13,6 +13,7 @@ export type AuthCodeDeliveryInput = {
 export type AuthCodeDeliveryResult = {
   readonly provider: "email" | "sms";
   readonly status: "sent" | "failed";
+  readonly providerStatusCode?: number;
   readonly providerMessageId?: string;
   readonly errorCode?: string;
   readonly errorMessage?: string;
@@ -125,6 +126,7 @@ async function deliverHttpAuthCode(input: {
       return {
         provider: input.provider,
         status: "failed",
+        providerStatusCode: response.status,
         errorCode: `${input.provider.toUpperCase()}_DELIVERY_HTTP_${response.status}`,
         errorMessage: await normalizeDeliveryResponseErrorMessage(response)
       };
@@ -133,6 +135,7 @@ async function deliverHttpAuthCode(input: {
     return {
       provider: input.provider,
       status: "sent",
+      providerStatusCode: response.status,
       ...optionalProviderMessageId(await readProviderMessageId(response))
     };
   } catch (error) {

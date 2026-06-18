@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Aes256GcmEncryptedSecret } from "@elevenhouse/auth";
+import { authChallengeDeliveryAttempts } from "../../schema/identity/auth-challenge-delivery-attempts.schema";
 import { authChallengeDeliveries } from "../../schema/identity/auth-challenge-deliveries.schema";
 import { authChallenges } from "../../schema/identity/auth-challenges.schema";
 import { outboxEvents, type OutboxEventPayload } from "../../schema/outbox/outbox-events.schema";
@@ -18,6 +19,17 @@ export type AuthCodeDeliveryWorkItem = {
 
 export type AuthCodeDeliveryProcessingStore = {
   readonly findByOutboxEventId: (outboxEventId: string) => Promise<AuthCodeDeliveryWorkItem | null>;
+  readonly recordAttempt: (input: {
+    readonly deliveryId: string;
+    readonly attemptNumber: number;
+    readonly provider: string;
+    readonly status: "sent" | "failed";
+    readonly attemptedAt: Date;
+    readonly providerStatusCode?: number;
+    readonly providerMessageId?: string;
+    readonly errorCode?: string;
+    readonly errorMessage?: string;
+  }) => Promise<void>;
   readonly markSent: (input: {
     readonly deliveryId: string;
     readonly provider: string;
@@ -75,6 +87,23 @@ export function createDrizzleAuthCodeDeliveryProcessingStore(
         identifierNormalized: result.identifierNormalized,
         expiresAt: result.expiresAt,
         deliveryStatus: result.deliveryStatus
+      });
+    },
+    recordAttempt: async (input) => {
+      await database.insert(authChallengeDeliveryAttempts).values({
+        deliveryId: input.deliveryId,
+        attemptNumber: input.attemptNumber,
+        provider: input.provider,
+        status: input.status,
+        attemptedAt: input.attemptedAt,
+        ...(input.providerStatusCode === undefined
+          ? {}
+          : { providerStatusCode: input.providerStatusCode }),
+        ...(input.providerMessageId === undefined
+          ? {}
+          : { providerMessageId: input.providerMessageId }),
+        ...(input.errorCode === undefined ? {} : { errorCode: input.errorCode }),
+        ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage })
       });
     },
     markSent: async (input) => {

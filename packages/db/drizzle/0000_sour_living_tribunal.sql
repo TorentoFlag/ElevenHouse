@@ -96,6 +96,24 @@ CREATE TABLE "auth_challenge_deliveries" (
 	CONSTRAINT "auth_challenge_deliveries_failed_fields_check" CHECK ("auth_challenge_deliveries"."status" <> 'failed' or ("auth_challenge_deliveries"."provider" is not null and "auth_challenge_deliveries"."error_code" is not null and "auth_challenge_deliveries"."error_message" is not null and "auth_challenge_deliveries"."sent_at" is null))
 );
 --> statement-breakpoint
+CREATE TABLE "auth_challenge_delivery_attempts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"delivery_id" uuid NOT NULL,
+	"attempt_number" integer NOT NULL,
+	"provider" text NOT NULL,
+	"status" text NOT NULL,
+	"provider_status_code" integer,
+	"provider_message_id" text,
+	"error_code" text,
+	"error_message" text,
+	"attempted_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "auth_challenge_delivery_attempts_attempt_number_check" CHECK ("auth_challenge_delivery_attempts"."attempt_number" > 0),
+	CONSTRAINT "auth_challenge_delivery_attempts_status_check" CHECK ("auth_challenge_delivery_attempts"."status" in ('sent', 'failed')),
+	CONSTRAINT "auth_challenge_delivery_attempts_provider_status_code_check" CHECK ("auth_challenge_delivery_attempts"."provider_status_code" is null or "auth_challenge_delivery_attempts"."provider_status_code" between 100 and 599),
+	CONSTRAINT "auth_challenge_delivery_attempts_sent_fields_check" CHECK ("auth_challenge_delivery_attempts"."status" <> 'sent' or ("auth_challenge_delivery_attempts"."error_code" is null and "auth_challenge_delivery_attempts"."error_message" is null)),
+	CONSTRAINT "auth_challenge_delivery_attempts_failed_fields_check" CHECK ("auth_challenge_delivery_attempts"."status" <> 'failed' or ("auth_challenge_delivery_attempts"."error_code" is not null and "auth_challenge_delivery_attempts"."error_message" is not null and "auth_challenge_delivery_attempts"."provider_message_id" is null))
+);
+--> statement-breakpoint
 CREATE TABLE "auth_security_events" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid,
@@ -139,6 +157,7 @@ ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_user_i
 ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_assigned_by_user_id_users_id_fk" FOREIGN KEY ("assigned_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_sessions" ADD CONSTRAINT "user_sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_challenge_deliveries" ADD CONSTRAINT "auth_challenge_deliveries_challenge_id_auth_challenges_id_fk" FOREIGN KEY ("challenge_id") REFERENCES "public"."auth_challenges"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "auth_challenge_delivery_attempts" ADD CONSTRAINT "auth_challenge_delivery_attempts_delivery_id_auth_challenge_deliveries_id_fk" FOREIGN KEY ("delivery_id") REFERENCES "public"."auth_challenge_deliveries"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_security_events" ADD CONSTRAINT "auth_security_events_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_security_events" ADD CONSTRAINT "auth_security_events_session_id_user_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."user_sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
@@ -159,6 +178,9 @@ CREATE INDEX "auth_challenges_created_at_index" ON "auth_challenges" USING btree
 CREATE INDEX "auth_challenge_deliveries_challenge_id_index" ON "auth_challenge_deliveries" USING btree ("challenge_id");--> statement-breakpoint
 CREATE INDEX "auth_challenge_deliveries_status_created_at_index" ON "auth_challenge_deliveries" USING btree ("status","created_at");--> statement-breakpoint
 CREATE INDEX "auth_challenge_deliveries_created_at_index" ON "auth_challenge_deliveries" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "auth_challenge_delivery_attempts_delivery_id_index" ON "auth_challenge_delivery_attempts" USING btree ("delivery_id");--> statement-breakpoint
+CREATE INDEX "auth_challenge_delivery_attempts_delivery_attempt_index" ON "auth_challenge_delivery_attempts" USING btree ("delivery_id","attempt_number","attempted_at");--> statement-breakpoint
+CREATE INDEX "auth_challenge_delivery_attempts_attempted_at_index" ON "auth_challenge_delivery_attempts" USING btree ("attempted_at");--> statement-breakpoint
 CREATE INDEX "auth_security_events_user_id_index" ON "auth_security_events" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "auth_security_events_session_id_index" ON "auth_security_events" USING btree ("session_id");--> statement-breakpoint
 CREATE INDEX "auth_security_events_event_type_index" ON "auth_security_events" USING btree ("event_type");--> statement-breakpoint
