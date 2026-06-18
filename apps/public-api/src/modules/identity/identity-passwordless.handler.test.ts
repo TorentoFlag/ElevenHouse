@@ -190,6 +190,47 @@ describe("DomainPasswordlessAuthHandler", () => {
     });
   });
 
+  it("passes request context to passwordless request and session creation", async () => {
+    const store = {
+      ...createBaseStore(),
+      findChallengeById: vi.fn(async () => createPendingChallenge("123456"))
+    } satisfies PasswordlessAuthStore;
+    const handler = createHandler({ store });
+    const context = {
+      ipAddress: "203.0.113.10",
+      userAgent: "Mozilla/5.0"
+    };
+
+    await handler.requestCode(
+      {
+        channel: "email",
+        identifier: "client@example.com",
+        roles: ["client"]
+      },
+      context
+    );
+    await handler.verifyCode(
+      {
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456"
+      },
+      context
+    );
+
+    expect(store.createChallenge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ipAddress: "203.0.113.10",
+        userAgent: "Mozilla/5.0"
+      })
+    );
+    expect(store.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ipAddress: "203.0.113.10",
+        userAgent: "Mozilla/5.0"
+      })
+    );
+  });
+
   it("verifies a passwordless code, creates a session and returns the raw session token", async () => {
     const store = {
       ...createBaseStore(),

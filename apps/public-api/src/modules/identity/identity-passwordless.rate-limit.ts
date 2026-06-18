@@ -3,6 +3,7 @@ import type { PasswordlessAuthChannel } from "@elevenhouse/domain";
 
 export type PasswordlessRequestContext = {
   readonly ipAddress?: string;
+  readonly userAgent?: string;
 };
 
 export type PasswordlessRateLimitDecision =

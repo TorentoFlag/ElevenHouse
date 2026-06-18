@@ -30,6 +30,7 @@ import {
   PASSWORDLESS_AUTH_OPTIONS,
   PASSWORDLESS_AUTH_UNIT_OF_WORK
 } from "./identity-passwordless.tokens";
+import type { PasswordlessRequestContext } from "./identity-passwordless.rate-limit";
 
 export const PUBLIC_AUTH_CODE_GENERATOR = Symbol("PUBLIC_AUTH_CODE_GENERATOR");
 
@@ -103,7 +104,10 @@ export class DomainPasswordlessAuthHandler {
     private readonly options: PasswordlessAuthOptions
   ) {}
 
-  requestCode(input: RequestPasswordlessCodeRequest): Promise<RequestPasswordlessCodeResponse> {
+  requestCode(
+    input: RequestPasswordlessCodeRequest,
+    context: PasswordlessRequestContext = {}
+  ): Promise<RequestPasswordlessCodeResponse> {
     const now = this.clock.now();
     const code = this.codeGenerator.generateCode();
 
@@ -119,13 +123,16 @@ export class DomainPasswordlessAuthHandler {
         now,
         ttlSeconds: this.options.codeTtlSeconds,
         resendCooldownSeconds: this.options.resendCooldownSeconds,
-        maxAttempts: this.options.maxAttempts
+        maxAttempts: this.options.maxAttempts,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent
       })
     );
   }
 
   async verifyCode(
-    input: VerifyPasswordlessCodeRequest
+    input: VerifyPasswordlessCodeRequest,
+    context: PasswordlessRequestContext = {}
   ): Promise<VerifyPasswordlessCodeWithSessionResult> {
     const now = this.clock.now();
     const expiresAt = new Date(now.getTime() + this.options.sessionTtlSeconds * 1000);
@@ -140,7 +147,9 @@ export class DomainPasswordlessAuthHandler {
         session: {
           tokenHash: issuedToken.tokenHash,
           createdAt: now,
-          expiresAt
+          expiresAt,
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent
         }
       })
     );

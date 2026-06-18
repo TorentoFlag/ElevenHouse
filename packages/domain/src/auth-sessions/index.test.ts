@@ -6,7 +6,8 @@ import {
   isAuthSessionUsable,
   normalizeAuthSessionCreationInput,
   normalizeAuthSecurityEventInput,
-  resolveAuthenticatedSession
+  resolveAuthenticatedSession,
+  revokeAuthenticatedSession
 } from "./index";
 
 describe("auth-sessions module exports", () => {
@@ -24,5 +25,6 @@ describe("auth-sessions module exports", () => {
     expect(normalizeAuthSecurityEventInput).toBeTypeOf("function");
     expect(createAuthenticatedSession).toBeTypeOf("function");
     expect(resolveAuthenticatedSession).toBeTypeOf("function");
+    expect(revokeAuthenticatedSession).toBeTypeOf("function");
   });
 });

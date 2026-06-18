@@ -1,15 +1,26 @@
-import { createAuthenticatedSession, resolveAuthenticatedSession } from "@elevenhouse/domain";
+import {
+  createAuthenticatedSession,
+  resolveAuthenticatedSession,
+  revokeAuthenticatedSession
+} from "@elevenhouse/domain";
 import { describe, expect, it } from "vitest";
 import { authSecurityEvents, userSessions } from "../../../schema";
 import {
   createDrizzleAuthSessionAuthenticationStore,
   createDrizzleAuthSessionCreationUnitOfWork,
+  createDrizzleAuthSessionRevocationUnitOfWork,
   type AuthSessionAuthenticationDrizzleDatabase,
   type AuthSessionCreationDrizzleDatabase,
-  type AuthSessionCreationDrizzleExecutor
+  type AuthSessionCreationDrizzleExecutor,
+  type AuthSessionRevocationDrizzleDatabase,
+  type AuthSessionRevocationDrizzleExecutor
 } from "./index";
 
 type InsertCall = {
+  readonly table: unknown;
+  readonly value: Record<string, unknown>;
+};
+type UpdateCall = {
   readonly table: unknown;
   readonly value: Record<string, unknown>;
 };
@@ -17,6 +28,11 @@ type FakeInsertResult = Record<string, unknown> | Error;
 
 type FakeCreationDatabase = AuthSessionCreationDrizzleDatabase & {
   readonly inserts: InsertCall[];
+  readonly transactionCalls: number;
+};
+type FakeRevocationDatabase = AuthSessionRevocationDrizzleDatabase & {
+  readonly inserts: InsertCall[];
+  readonly updates: UpdateCall[];
   readonly transactionCalls: number;
 };
 
@@ -55,6 +71,64 @@ function createFakeCreationDatabase(rows: readonly FakeInsertResult[]): FakeCrea
       return operation(executor);
     }
   } as unknown as FakeCreationDatabase;
+}
+
+function createFakeRevocationDatabase(input: {
+  readonly sessionRow: Record<string, unknown> | null;
+  readonly insertRows: readonly FakeInsertResult[];
+}): FakeRevocationDatabase {
+  const inserts: InsertCall[] = [];
+  const updates: UpdateCall[] = [];
+  let transactionCalls = 0;
+  let nextInsertRowIndex = 0;
+
+  const insert = ((table: unknown) => ({
+    values: (value: Record<string, unknown>) => ({
+      returning: async () => {
+        inserts.push({ table, value });
+
+        const row = input.insertRows[nextInsertRowIndex];
+        nextInsertRowIndex += 1;
+
+        if (row instanceof Error) {
+          throw row;
+        }
+
+        return row ? [row] : [];
+      }
+    })
+  })) as unknown as AuthSessionRevocationDrizzleExecutor["insert"];
+  const update = ((table: unknown) => ({
+    set: (value: Record<string, unknown>) => ({
+      where: () => {
+        updates.push({ table, value });
+
+        return {
+          returning: async () => [{ id: "session_1" }]
+        };
+      }
+    })
+  })) as unknown as AuthSessionRevocationDrizzleExecutor["update"];
+  const query = {
+    userSessions: {
+      findFirst: async () => input.sessionRow
+    }
+  } as unknown as AuthSessionRevocationDrizzleExecutor["query"];
+  const executor: AuthSessionRevocationDrizzleExecutor = { insert, query, update };
+
+  return {
+    inserts,
+    updates,
+    get transactionCalls() {
+      return transactionCalls;
+    },
+    transaction: async <T>(
+      operation: (executor: AuthSessionRevocationDrizzleExecutor) => Promise<T>
+    ) => {
+      transactionCalls += 1;
+      return operation(executor);
+    }
+  } as unknown as FakeRevocationDatabase;
 }
 
 describe("createDrizzleAuthSessionCreationUnitOfWork", () => {
@@ -144,6 +218,79 @@ describe("createDrizzleAuthSessionCreationUnitOfWork", () => {
         metadata: {}
       }
     });
+  });
+});
+
+describe("createDrizzleAuthSessionRevocationUnitOfWork", () => {
+  it("revokes an active session and records a logout security event in one transaction", async () => {
+    const now = new Date("2026-06-16T10:00:00.000Z");
+    const database = createFakeRevocationDatabase({
+      sessionRow: {
+        id: "session_1",
+        userId: "user_1",
+        tokenHash: "token_hash",
+        status: "active",
+        createdAt: new Date("2026-06-14T10:00:00.000Z"),
+        lastSeenAt: null,
+        expiresAt: new Date("2026-06-21T10:00:00.000Z"),
+        revokedAt: null,
+        userAgent: null,
+        ipAddress: null,
+        user: {
+          id: "user_1",
+          status: "active",
+          createdAt: new Date("2026-06-14T10:00:00.000Z"),
+          updatedAt: new Date("2026-06-14T10:00:00.000Z"),
+          roleAssignments: []
+        }
+      },
+      insertRows: [
+        {
+          id: "event_1",
+          userId: "user_1",
+          sessionId: "session_1",
+          eventType: "logout_succeeded",
+          occurredAt: now,
+          ipAddress: "203.0.113.10",
+          userAgent: "Mozilla/5.0",
+          metadata: {}
+        }
+      ]
+    });
+
+    await expect(
+      revokeAuthenticatedSession({
+        revocation: createDrizzleAuthSessionRevocationUnitOfWork(database),
+        tokenHash: "token_hash",
+        now,
+        ipAddress: "203.0.113.10",
+        userAgent: "Mozilla/5.0"
+      })
+    ).resolves.toEqual({ revoked: true });
+
+    expect(database.transactionCalls).toBe(1);
+    expect(database.updates).toEqual([
+      {
+        table: userSessions,
+        value: {
+          status: "revoked",
+          revokedAt: now
+        }
+      }
+    ]);
+    expect(database.inserts).toEqual([
+      {
+        table: authSecurityEvents,
+        value: {
+          userId: "user_1",
+          sessionId: "session_1",
+          eventType: "logout_succeeded",
+          occurredAt: now,
+          ipAddress: "203.0.113.10",
+          userAgent: "Mozilla/5.0"
+        }
+      }
+    ]);
   });
 });
 

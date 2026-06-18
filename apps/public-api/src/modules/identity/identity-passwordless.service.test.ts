@@ -45,13 +45,22 @@ describe("IdentityPasswordlessService", () => {
       channel: "email",
       identifier: "  CLIENT@example.COM ",
       roles: ["client", "astrologer"]
+    }, {
+      ipAddress: "203.0.113.10",
+      userAgent: "Mozilla/5.0"
     });
 
-    expect(handler.requestCode).toHaveBeenCalledWith({
-      channel: "email",
-      identifier: "client@example.com",
-      roles: ["client", "astrologer"]
-    });
+    expect(handler.requestCode).toHaveBeenCalledWith(
+      {
+        channel: "email",
+        identifier: "client@example.com",
+        roles: ["client", "astrologer"]
+      },
+      {
+        ipAddress: "203.0.113.10",
+        userAgent: "Mozilla/5.0"
+      }
+    );
     expect(response).toEqual(codeResponse);
   });
 
@@ -117,11 +126,14 @@ describe("IdentityPasswordlessService", () => {
       roles: ["client"]
     });
 
-    expect(handler.requestCode).toHaveBeenCalledWith({
-      channel: "phone",
-      identifier: "+15551234090",
-      roles: ["client"]
-    });
+    expect(handler.requestCode).toHaveBeenCalledWith(
+      {
+        channel: "phone",
+        identifier: "+15551234090",
+        roles: ["client"]
+      },
+      {}
+    );
   });
 
   it("rejects invalid passwordless code requests before calling the handler", async () => {
@@ -194,7 +206,12 @@ describe("IdentityPasswordlessService", () => {
       code: "123456"
     };
 
-    await expect(service.verifyCode(request)).resolves.toEqual({
+    await expect(
+      service.verifyCode(request, {
+        ipAddress: "203.0.113.10",
+        userAgent: "Mozilla/5.0"
+      })
+    ).resolves.toEqual({
       response: {
         account: {
           id: "8e14390f-3db1-4d1c-9344-55679c778427",
@@ -207,7 +224,10 @@ describe("IdentityPasswordlessService", () => {
         expiresAt: "2026-06-23T10:00:00.000Z"
       }
     });
-    expect(handler.verifyCode).toHaveBeenCalledWith(request);
+    expect(handler.verifyCode).toHaveBeenCalledWith(request, {
+      ipAddress: "203.0.113.10",
+      userAgent: "Mozilla/5.0"
+    });
   });
 
   it("rejects passwordless code verification when the rate limiter blocks the context", async () => {

@@ -86,4 +86,38 @@ describe("PublicSessionCookieService", () => {
       }
     );
   });
+
+  it("clears the public session cookie", () => {
+    const service = new PublicSessionCookieService({
+      getOrThrow: (key: string) => {
+        if (key === "publicApi.sessionCookieSecure") {
+          return false;
+        }
+
+        if (key === "publicApi.sessionCookieName") {
+          return "elevenhouse_public_session";
+        }
+
+        throw new Error(`Unexpected config key: ${key}`);
+      }
+    } as unknown as ConfigService);
+    const response = {
+      cookie: vi.fn()
+    };
+
+    service.clearSessionCookie(response);
+
+    expect(response.cookie).toHaveBeenCalledWith(
+      "elevenhouse_public_session",
+      "",
+      {
+        httpOnly: true,
+        secure: false,
+        sameSite: "lax",
+        path: "/",
+        expires: new Date(0),
+        maxAge: 0
+      }
+    );
+  });
 });

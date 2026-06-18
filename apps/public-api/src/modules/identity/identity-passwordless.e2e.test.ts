@@ -9,6 +9,7 @@ import type {
   AuthSecurityEvent,
   AuthSession,
   AuthSessionAuthenticationStore,
+  AuthSessionRevocationUnitOfWork,
   PasswordlessAuthStore,
   PasswordlessAuthUnitOfWork,
   UserAccount,
@@ -17,7 +18,10 @@ import type {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
-import { AUTH_SESSION_AUTHENTICATION_STORE } from "./identity-auth.tokens";
+import {
+  AUTH_SESSION_AUTHENTICATION_STORE,
+  AUTH_SESSION_REVOCATION_UNIT_OF_WORK
+} from "./identity-auth.tokens";
 import { IdentityModule } from "./identity.module";
 import { PUBLIC_AUTH_CODE_GENERATOR } from "./identity-passwordless.handler";
 import {
@@ -48,6 +52,9 @@ describe("passwordless public auth HTTP flow", () => {
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async (operation) => operation(store)
     };
+    const authSessionRevocation: AuthSessionRevocationUnitOfWork = {
+      transact: async (operation) => operation(store)
+    };
 
     moduleRef = await Test.createTestingModule({
       imports: [IdentityModule]
@@ -60,6 +67,8 @@ describe("passwordless public auth HTTP flow", () => {
       .useValue(passwordlessAuth)
       .overrideProvider(AUTH_SESSION_AUTHENTICATION_STORE)
       .useValue(store)
+      .overrideProvider(AUTH_SESSION_REVOCATION_UNIT_OF_WORK)
+      .useValue(authSessionRevocation)
       .overrideProvider(PASSWORDLESS_RATE_LIMITER)
       .useValue(new InMemoryPasswordlessRateLimiter(defaultPasswordlessRateLimits))
       .overrideProvider(RedisRuntimeService)
@@ -138,6 +147,43 @@ describe("passwordless public auth HTTP flow", () => {
 
     expect(meResponse.status).toBe(200);
     expect(meResponse.body).toEqual(verifyResponse.body);
+  });
+
+  it("stores request metadata on challenges, sessions and security events", async () => {
+    const requestResponse = await postJson(
+      "/identity/passwordless/request-code",
+      {
+        channel: "email",
+        identifier: "client@example.com",
+        roles: ["client"]
+      },
+      {
+        "user-agent": "ElevenHouse-Test/1.0"
+      }
+    );
+    const verifyResponse = await postJson(
+      "/identity/passwordless/verify-code",
+      {
+        challengeId: requestResponse.body.challengeId,
+        code: "123456"
+      },
+      {
+        "user-agent": "ElevenHouse-Test/1.0"
+      }
+    );
+
+    expect(requestResponse.status).toBe(201);
+    expect(verifyResponse.status).toBe(201);
+    expect(store.authChallenges[0]).toMatchObject({
+      userAgent: "ElevenHouse-Test/1.0"
+    });
+    expect(store.userSessions[0]).toMatchObject({
+      userAgent: "ElevenHouse-Test/1.0"
+    });
+    expect(store.authSecurityEvents.at(-1)).toMatchObject({
+      eventType: "registration_succeeded",
+      userAgent: "ElevenHouse-Test/1.0"
+    });
   });
 
   it("registers a phone account with multiple customer roles", async () => {
@@ -356,6 +402,44 @@ describe("passwordless public auth HTTP flow", () => {
     expect(store.roleAssignments).toHaveLength(1);
   });
 
+  it("revokes the current session and clears the cookie on logout", async () => {
+    const requestResponse = await postJson("/identity/passwordless/request-code", {
+      channel: "email",
+      identifier: "client@example.com",
+      roles: ["client"]
+    });
+    const verifyResponse = await postJson("/identity/passwordless/verify-code", {
+      challengeId: requestResponse.body.challengeId,
+      code: "123456"
+    });
+    const sessionCookie = cookieHeader(verifyResponse.setCookie);
+
+    await expect(getJson("/identity/me", sessionCookie)).resolves.toMatchObject({
+      status: 200
+    });
+
+    const logoutResponse = await postEmpty("/identity/logout", sessionCookie, {
+      "user-agent": "ElevenHouse-Test/1.0"
+    });
+
+    expect(logoutResponse.status).toBe(204);
+    expect(logoutResponse.setCookie).toContain(`${sessionCookieName}=`);
+    expect(logoutResponse.setCookie).toContain("Max-Age=0");
+    expect(store.userSessions[0]).toMatchObject({
+      status: "revoked",
+      revokedAt: "2026-06-16T10:00:00.000Z"
+    });
+    expect(store.authSecurityEvents.at(-1)).toMatchObject({
+      eventType: "logout_succeeded",
+      sessionId: store.userSessions[0]?.id,
+      userAgent: "ElevenHouse-Test/1.0"
+    });
+
+    await expect(getJson("/identity/me", sessionCookie)).resolves.toMatchObject({
+      status: 401
+    });
+  });
+
   it("rejects invalid request and verify payloads at the HTTP boundary", async () => {
     const requestResponse = await postJson("/identity/passwordless/request-code", {
       channel: "email",
@@ -372,16 +456,40 @@ describe("passwordless public auth HTTP flow", () => {
     expect(store.authChallenges).toHaveLength(0);
   });
 
-  async function postJson(path: string, body: unknown): Promise<HttpJsonResponse> {
+  async function postJson(
+    path: string,
+    body: unknown,
+    headers: Record<string, string> = {}
+  ): Promise<HttpJsonResponse> {
     const response = await fetch(`${baseUrl}${path}`, {
       method: "POST",
       headers: {
-        "content-type": "application/json"
+        "content-type": "application/json",
+        ...headers
       },
       body: JSON.stringify(body)
     });
 
     return readJsonResponse(response);
+  }
+
+  async function postEmpty(
+    path: string,
+    cookie?: string,
+    headers: Record<string, string> = {}
+  ): Promise<Omit<HttpJsonResponse, "body">> {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: {
+        ...(cookie ? { cookie } : {}),
+        ...headers
+      }
+    });
+
+    return {
+      status: response.status,
+      setCookie: response.headers.get("set-cookie")
+    };
   }
 
   async function getJson(path: string, cookie: string): Promise<HttpJsonResponse> {
@@ -582,6 +690,22 @@ class InMemoryPasswordlessAuthStore implements PasswordlessAuthStore, AuthSessio
       status: "consumed",
       consumedAt: input.consumedAt,
       updatedAt: input.consumedAt
+    });
+  }
+
+  async revokeSession(input: {
+    readonly sessionId: string;
+    readonly revokedAt: string;
+  }): Promise<void> {
+    const session = this.userSessions.find((candidate) => candidate.id === input.sessionId);
+
+    if (!session) {
+      throw new Error(`Session not found: ${input.sessionId}`);
+    }
+
+    Object.assign(session, {
+      status: "revoked",
+      revokedAt: input.revokedAt
     });
   }
 

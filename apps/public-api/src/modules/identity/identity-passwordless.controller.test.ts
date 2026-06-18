@@ -22,7 +22,8 @@ describe("IdentityPasswordlessController", () => {
       verifyCode: vi.fn()
     } as unknown as IdentityPasswordlessService;
     const cookieService: PublicSessionCookieService = {
-      setSessionCookie: vi.fn()
+      setSessionCookie: vi.fn(),
+      clearSessionCookie: vi.fn()
     } as unknown as PublicSessionCookieService;
     const controller = new IdentityPasswordlessController(service, cookieService);
     const body: RequestPasswordlessCodeRequest = {
@@ -31,13 +32,17 @@ describe("IdentityPasswordlessController", () => {
       roles: ["client"]
     };
     const httpRequest = {
-      ip: "203.0.113.10"
+      ip: "203.0.113.10",
+      headers: {
+        "user-agent": "Mozilla/5.0"
+      }
     };
 
     await expect(controller.requestCode(body, httpRequest)).resolves.toEqual(response);
 
     expect(service.requestCode).toHaveBeenCalledWith(body, {
-      ipAddress: "203.0.113.10"
+      ipAddress: "203.0.113.10",
+      userAgent: "Mozilla/5.0"
     });
     expect(cookieService.setSessionCookie).not.toHaveBeenCalled();
   });
@@ -61,14 +66,18 @@ describe("IdentityPasswordlessController", () => {
       }))
     } as unknown as IdentityPasswordlessService;
     const cookieService: PublicSessionCookieService = {
-      setSessionCookie: vi.fn()
+      setSessionCookie: vi.fn(),
+      clearSessionCookie: vi.fn()
     } as unknown as PublicSessionCookieService;
     const controller = new IdentityPasswordlessController(service, cookieService);
     const httpResponse = {
       cookie: vi.fn()
     };
     const httpRequest = {
-      ip: "203.0.113.10"
+      ip: "203.0.113.10",
+      headers: {
+        "user-agent": "Mozilla/5.0"
+      }
     };
     const body = {
       challengeId: "e28cbfe7-414b-4d80-a410-1e3f00a380a7",
@@ -78,7 +87,8 @@ describe("IdentityPasswordlessController", () => {
     await expect(controller.verifyCode(body, httpRequest, httpResponse)).resolves.toEqual(response);
 
     expect(service.verifyCode).toHaveBeenCalledWith(body, {
-      ipAddress: "203.0.113.10"
+      ipAddress: "203.0.113.10",
+      userAgent: "Mozilla/5.0"
     });
     expect(cookieService.setSessionCookie).toHaveBeenCalledWith(httpResponse, {
       token: "raw-session-token",

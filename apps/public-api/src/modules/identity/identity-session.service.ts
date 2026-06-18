@@ -69,4 +69,18 @@ export class PublicSessionCookieService {
       maxAge: sessionTtlSeconds * 1000
     });
   }
+
+  clearSessionCookie(response: PublicSessionCookieResponse): void {
+    const secure = this.configService.getOrThrow<boolean>("publicApi.sessionCookieSecure");
+    const name = this.configService.getOrThrow<string>("publicApi.sessionCookieName");
+
+    response.cookie(name, "", {
+      httpOnly: true,
+      secure,
+      sameSite: "lax",
+      path: "/",
+      expires: new Date(0),
+      maxAge: 0
+    });
+  }
 }

@@ -1,6 +1,9 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { createDrizzleAuthSessionAuthenticationStore } from "@elevenhouse/db/auth-sessions";
+import {
+  createDrizzleAuthSessionAuthenticationStore,
+  createDrizzleAuthSessionRevocationUnitOfWork
+} from "@elevenhouse/db/auth-sessions";
 import { createDrizzlePasswordlessAuthUnitOfWork } from "@elevenhouse/db/passwordless-auth";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
@@ -9,8 +12,13 @@ import { REDIS_CLIENT, type RedisClientPort } from "../redis/redis.tokens";
 import { IdentityCurrentAccountController } from "./identity-current-account.controller";
 import { IdentityCurrentSessionService } from "./identity-current-session.service";
 import { PublicSessionAuthGuard } from "./identity-auth.guard";
-import { AUTH_SESSION_AUTHENTICATION_STORE } from "./identity-auth.tokens";
+import {
+  AUTH_SESSION_AUTHENTICATION_STORE,
+  AUTH_SESSION_REVOCATION_UNIT_OF_WORK
+} from "./identity-auth.tokens";
+import { IdentityLogoutService } from "./identity-logout.service";
 import { IdentityPasswordlessController } from "./identity-passwordless.controller";
+import { IdentitySessionController } from "./identity-session.controller";
 import {
   AesGcmAuthCodeEncryption,
   DomainPasswordlessAuthHandler,
@@ -37,10 +45,15 @@ import {
 
 @Module({
   imports: [ConfigModule, DatabaseModule, RedisModule],
-  controllers: [IdentityPasswordlessController, IdentityCurrentAccountController],
+  controllers: [
+    IdentityPasswordlessController,
+    IdentityCurrentAccountController,
+    IdentitySessionController
+  ],
   providers: [
     IdentityPasswordlessService,
     IdentityCurrentSessionService,
+    IdentityLogoutService,
     PublicSessionAuthGuard,
     PublicSessionTokenIssuer,
     PublicSessionCookieService,
@@ -64,6 +77,12 @@ import {
       provide: AUTH_SESSION_AUTHENTICATION_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleAuthSessionAuthenticationStore(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: AUTH_SESSION_REVOCATION_UNIT_OF_WORK,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleAuthSessionRevocationUnitOfWork(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     },
     {

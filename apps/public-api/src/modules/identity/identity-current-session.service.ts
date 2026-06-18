@@ -31,7 +31,7 @@ export class IdentityCurrentSessionService {
   async resolveCurrentCustomerAccount(
     request: PublicSessionRequest
   ): Promise<AuthenticatedCustomerAccountResponse | null> {
-    const token = readCookieValue(
+    const token = readPublicSessionCookieValue(
       request.headers.cookie,
       this.configService.getOrThrow<string>("publicApi.sessionCookieName")
     );
@@ -60,7 +60,7 @@ export class IdentityCurrentSessionService {
   }
 }
 
-function readCookieValue(
+export function readPublicSessionCookieValue(
   cookieHeader: string | readonly string[] | undefined,
   name: string
 ): string | null {

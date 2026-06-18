@@ -1,9 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   type AuthSecurityEventType,
   type AuthSessionAuthenticationStore,
   type AuthSessionCreationStore,
   type AuthSessionCreationUnitOfWork,
+  type AuthSessionRevocationStore,
+  type AuthSessionRevocationUnitOfWork,
   type AuthSessionStatus,
   type UserAccountStatus
 } from "@elevenhouse/domain";
@@ -30,6 +32,11 @@ type CustomerPlatformRole = Extract<
 export type AuthSessionCreationDrizzleExecutor = Pick<ElevenHouseDatabase, "insert">;
 export type AuthSessionCreationDrizzleDatabase = Pick<ElevenHouseDatabase, "transaction">;
 export type AuthSessionAuthenticationDrizzleDatabase = Pick<ElevenHouseDatabase, "query">;
+export type AuthSessionRevocationDrizzleExecutor = Pick<
+  ElevenHouseDatabase,
+  "insert" | "query" | "update"
+>;
+export type AuthSessionRevocationDrizzleDatabase = Pick<ElevenHouseDatabase, "transaction">;
 
 const authSessionStatusSet = new Set<string>(authSessionStatusValues);
 const authSecurityEventTypeSet = new Set<string>(authSecurityEventTypeValues);
@@ -49,28 +56,16 @@ export function createDrizzleAuthSessionAuthenticationStore(
   database: AuthSessionAuthenticationDrizzleDatabase
 ): AuthSessionAuthenticationStore {
   return {
-    findByTokenHash: async (tokenHash) => {
-      const row = await database.query.userSessions.findFirst({
-        where: eq(userSessions.tokenHash, tokenHash),
-        with: {
-          user: {
-            with: {
-              roleAssignments: true
-            }
-          }
-        }
-      });
+    findByTokenHash: (tokenHash) => findSessionByTokenHash(database, tokenHash)
+  };
+}
 
-      if (!row) {
-        return null;
-      }
-
-      return {
-        session: toAuthSession(row),
-        user: toUserAccount(row.user),
-        roleAssignments: row.user.roleAssignments.map(toUserRoleAssignment)
-      };
-    }
+export function createDrizzleAuthSessionRevocationUnitOfWork(
+  database: AuthSessionRevocationDrizzleDatabase
+): AuthSessionRevocationUnitOfWork {
+  return {
+    transact: (operation) =>
+      database.transaction((executor) => operation(createAuthSessionRevocationStore(executor)))
   };
 }
 
@@ -95,6 +90,61 @@ export function createAuthSessionCreationStore(
 
       return toAuthSecurityEvent(row);
     }
+  };
+}
+
+export function createAuthSessionRevocationStore(
+  executor: AuthSessionRevocationDrizzleExecutor
+): AuthSessionRevocationStore {
+  return {
+    findByTokenHash: (tokenHash) => findSessionByTokenHash(executor, tokenHash),
+    revokeSession: async (input) => {
+      const revokedAt = new Date(input.revokedAt);
+
+      await executor
+        .update(userSessions)
+        .set({
+          status: "revoked",
+          revokedAt
+        })
+        .where(and(eq(userSessions.id, input.sessionId), eq(userSessions.status, "active")))
+        .returning({ id: userSessions.id });
+    },
+    recordSecurityEvent: async (input) => {
+      const row = await insertReturningOne(
+        () =>
+          executor.insert(authSecurityEvents).values(toAuthSecurityEventInsert(input)).returning(),
+        "auth_security_events"
+      );
+
+      return toAuthSecurityEvent(row);
+    }
+  };
+}
+
+async function findSessionByTokenHash(
+  database: AuthSessionAuthenticationDrizzleDatabase,
+  tokenHash: string
+) {
+  const row = await database.query.userSessions.findFirst({
+    where: eq(userSessions.tokenHash, tokenHash),
+    with: {
+      user: {
+        with: {
+          roleAssignments: true
+        }
+      }
+    }
+  });
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    session: toAuthSession(row),
+    user: toUserAccount(row.user),
+    roleAssignments: row.user.roleAssignments.map(toUserRoleAssignment)
   };
 }
 

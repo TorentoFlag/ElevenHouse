@@ -63,7 +63,7 @@ export class IdentityPasswordlessService {
 
     try {
       return requestPasswordlessCodeResponseSchema.parse(
-        await this.handler.requestCode(request.data)
+        await this.handler.requestCode(request.data, context)
       );
     } catch (error) {
       if (error instanceof PasswordlessCodeRequestCooldownError) {
@@ -102,7 +102,7 @@ export class IdentityPasswordlessService {
     );
 
     try {
-      const result = await this.handler.verifyCode(request.data);
+      const result = await this.handler.verifyCode(request.data, context);
 
       return {
         response: verifyPasswordlessCodeResponseSchema.parse(result.response),
