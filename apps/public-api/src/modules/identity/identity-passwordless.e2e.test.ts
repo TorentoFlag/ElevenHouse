@@ -190,6 +190,43 @@ describe("passwordless public auth HTTP flow", () => {
     expect(store.authChallengeDeliveries).toHaveLength(1);
   });
 
+  it("replaces a pending challenge before cooldown when the latest delivery failed", async () => {
+    const firstResponse = await postJson("/identity/passwordless/request-code", {
+      channel: "email",
+      identifier: "client@example.com",
+      roles: ["client"]
+    });
+    Object.assign(store.authChallengeDeliveries[0] ?? {}, {
+      status: "failed",
+      errorCode: "provider_unavailable"
+    });
+
+    const secondResponse = await postJson("/identity/passwordless/request-code", {
+      channel: "email",
+      identifier: "CLIENT@example.com",
+      roles: ["client"]
+    });
+
+    expect(firstResponse.status).toBe(201);
+    expect(secondResponse.status).toBe(201);
+    expect(store.authChallenges).toHaveLength(2);
+    expect(store.authChallenges[0]).toMatchObject({
+      id: firstResponse.body.challengeId,
+      status: "cancelled",
+      cancelledAt: "2026-06-16T10:00:00.000Z"
+    });
+    expect(store.authChallenges[1]).toMatchObject({
+      id: secondResponse.body.challengeId,
+      status: "pending"
+    });
+    expect(store.authChallengeDeliveries).toHaveLength(2);
+    expect(store.authChallengeDeliveries[1]).toMatchObject({
+      challengeId: secondResponse.body.challengeId,
+      status: "queued"
+    });
+    expect(store.authCodeDeliveryRequestedEvents).toHaveLength(2);
+  });
+
   it("queues delivery without calling the delivery provider during request-code", async () => {
     const response = await postJson("/identity/passwordless/request-code", {
       channel: "email",
@@ -512,6 +549,14 @@ class InMemoryPasswordlessAuthStore implements PasswordlessAuthStore, AuthSessio
             challenge.identifierNormalized === input.identifierNormalized &&
             challenge.status === "pending"
         ) ?? null
+    );
+  }
+
+  async findLatestDeliveryByChallengeId(challengeId: string): Promise<AuthChallengeDelivery | null> {
+    return (
+      [...this.authChallengeDeliveries]
+        .reverse()
+        .find((delivery) => delivery.challengeId === challengeId) ?? null
     );
   }
 

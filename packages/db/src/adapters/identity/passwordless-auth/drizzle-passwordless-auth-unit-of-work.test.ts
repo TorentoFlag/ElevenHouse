@@ -31,7 +31,7 @@ type UpdateCall = {
   readonly value: Record<string, unknown>;
 };
 type QueryCall = {
-  readonly table: "authChallenges" | "authIdentities";
+  readonly table: "authChallenges" | "authChallengeDeliveries" | "authIdentities";
   readonly args: unknown;
 };
 type FakeInsertResult = Record<string, unknown> | Error;
@@ -54,6 +54,7 @@ function createFakeDrizzleDatabase(input: {
   readonly insertRows?: readonly FakeInsertResult[];
   readonly updateRows?: readonly FakeUpdateResult[];
   readonly challengeRows?: readonly (Record<string, unknown> | null)[];
+  readonly deliveryRows?: readonly (Record<string, unknown> | null)[];
   readonly identityRows?: readonly (Record<string, unknown> | null)[];
 }): FakeDrizzleDatabase {
   const inserts: InsertCall[] = [];
@@ -63,6 +64,7 @@ function createFakeDrizzleDatabase(input: {
   let nextInsertRowIndex = 0;
   let nextUpdateRowIndex = 0;
   let nextChallengeRowIndex = 0;
+  let nextDeliveryRowIndex = 0;
   let nextIdentityRowIndex = 0;
 
   const insert = ((table: unknown) => ({
@@ -128,6 +130,13 @@ function createFakeDrizzleDatabase(input: {
               queries.push({ table: "authChallenges", args });
               const row = input.challengeRows?.[nextChallengeRowIndex] ?? null;
               nextChallengeRowIndex += 1;
+              return row ? [row] : [];
+            }
+
+            if (table === authChallengeDeliveries) {
+              queries.push({ table: "authChallengeDeliveries", args });
+              const row = input.deliveryRows?.[nextDeliveryRowIndex] ?? null;
+              nextDeliveryRowIndex += 1;
               return row ? [row] : [];
             }
 
@@ -367,7 +376,8 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
 
   it("rejects a duplicate passwordless code request while an existing challenge is in cooldown", async () => {
     const database = createFakeDrizzleDatabase({
-      challengeRows: [createChallengeRow()]
+      challengeRows: [createChallengeRow()],
+      deliveryRows: [createDeliveryRow()]
     });
 
     await expect(
@@ -388,9 +398,83 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
       )
     ).rejects.toBeInstanceOf(PasswordlessCodeRequestCooldownError);
 
-    expect(database.queries.map((query) => query.table)).toEqual(["authChallenges"]);
+    expect(database.queries.map((query) => query.table)).toEqual([
+      "authChallenges",
+      "authChallengeDeliveries"
+    ]);
     expect(database.inserts).toEqual([]);
     expect(database.updates).toEqual([]);
+  });
+
+  it("replaces a pending challenge inside cooldown when its latest delivery failed", async () => {
+    const replacementChallenge = createChallengeRow({
+      id: "9e14390f-3db1-4d1c-9344-55679c778427",
+      codeHash: hashPasswordlessCode({
+        secret: codeSecret,
+        channel: "email",
+        identifierNormalized: "ada@example.com",
+        code: "654321"
+      })
+    });
+    const database = createFakeDrizzleDatabase({
+      challengeRows: [createChallengeRow()],
+      deliveryRows: [
+        createDeliveryRow({
+          status: "failed",
+          errorCode: "provider_unavailable"
+        })
+      ],
+      insertRows: [
+        replacementChallenge,
+        createDeliveryRow({
+          id: "delivery_2",
+          challengeId: "9e14390f-3db1-4d1c-9344-55679c778427"
+        }),
+        { id: "outbox_2" }
+      ]
+    });
+
+    await expect(
+      createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
+        requestPasswordlessCode({
+          store,
+          encryption: createTestEncryption(),
+          channel: "email",
+          identifier: "ADA@example.COM",
+          roles: ["client"],
+          code: "654321",
+          codeSecret,
+          now: new Date("2026-06-15T10:00:30.000Z"),
+          ttlSeconds: 600,
+          resendCooldownSeconds: 60,
+          maxAttempts: 5
+        })
+      )
+    ).resolves.toMatchObject({
+      challengeId: "9e14390f-3db1-4d1c-9344-55679c778427",
+      channel: "email",
+      maskedIdentifier: "a***@example.com"
+    });
+
+    expect(database.queries.map((query) => query.table)).toEqual([
+      "authChallenges",
+      "authChallengeDeliveries"
+    ]);
+    expect(database.updates).toEqual([
+      {
+        table: authChallenges,
+        value: {
+          status: "cancelled",
+          cancelledAt: new Date("2026-06-15T10:00:30.000Z"),
+          updatedAt: new Date("2026-06-15T10:00:30.000Z")
+        }
+      }
+    ]);
+    expect(database.inserts.map((insert) => insert.table)).toEqual([
+      authChallenges,
+      authChallengeDeliveries,
+      outboxEvents
+    ]);
   });
 
   it("maps pending challenge insert races to passwordless resend cooldowns", async () => {

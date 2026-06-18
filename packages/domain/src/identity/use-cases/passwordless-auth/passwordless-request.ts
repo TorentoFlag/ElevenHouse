@@ -62,6 +62,9 @@ export type PasswordlessCodeRequestStore = {
     readonly channel: PasswordlessAuthChannel;
     readonly identifierNormalized: string;
   }) => Promise<AuthChallenge | null>;
+  readonly findLatestDeliveryByChallengeId: (
+    challengeId: string
+  ) => Promise<AuthChallengeDelivery | null>;
   readonly createChallenge: (input: {
     readonly channel: PasswordlessAuthChannel;
     readonly identifier: string;
@@ -199,10 +202,26 @@ async function assertCanReplacePendingChallenge(input: {
   const expiresAtTime = new Date(input.challenge.expiresAt).getTime();
   const resendAvailableAtTime = new Date(input.challenge.resendAvailableAt).getTime();
 
-  if (expiresAtTime > nowTime && resendAvailableAtTime > nowTime) {
-    throw new PasswordlessCodeRequestCooldownError(input.challenge.resendAvailableAt);
+  if (expiresAtTime <= nowTime || resendAvailableAtTime <= nowTime) {
+    await cancelPendingChallenge(input);
+    return;
   }
 
+  const latestDelivery = await input.store.findLatestDeliveryByChallengeId(input.challenge.id);
+
+  if (latestDelivery?.status === "failed") {
+    await cancelPendingChallenge(input);
+    return;
+  }
+
+  throw new PasswordlessCodeRequestCooldownError(input.challenge.resendAvailableAt);
+}
+
+async function cancelPendingChallenge(input: {
+  readonly store: PasswordlessCodeRequestStore;
+  readonly challenge: AuthChallenge;
+  readonly now: Date;
+}): Promise<void> {
   await input.store.cancelChallenge({
     challengeId: input.challenge.id,
     cancelledAt: input.now.toISOString()

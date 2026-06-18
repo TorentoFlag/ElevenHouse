@@ -31,6 +31,7 @@ describe("IdentityModule", () => {
     const now = new Date("2026-06-16T10:00:00.000Z");
     const store: PasswordlessAuthStore = {
       findPendingChallengeByIdentifier: vi.fn(async () => null),
+      findLatestDeliveryByChallengeId: vi.fn(async () => null),
       createChallenge: vi.fn(async (input) => ({
         id: "8e14390f-3db1-4d1c-9344-55679c778427",
         ...input,

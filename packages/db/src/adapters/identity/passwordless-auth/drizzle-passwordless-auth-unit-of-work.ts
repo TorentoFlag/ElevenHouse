@@ -138,6 +138,9 @@ export function createPasswordlessAuthStore(
     findPendingChallengeByIdentifier: async (input) => {
       return findPendingChallengeByIdentifier(executor, input);
     },
+    findLatestDeliveryByChallengeId: async (challengeId) => {
+      return findLatestDeliveryByChallengeId(executor, challengeId);
+    },
     findChallengeById: async (challengeId) => {
       const row = await executor.query.authChallenges.findFirst({
         where: eq(authChallenges.id, challengeId)
@@ -223,6 +226,21 @@ async function findPendingChallengeByIdentifier(
   const row = rows[0];
 
   return row ? toAuthChallenge(row) : null;
+}
+
+async function findLatestDeliveryByChallengeId(
+  executor: PasswordlessAuthDrizzleExecutor,
+  challengeId: string
+): Promise<AuthChallengeDelivery | null> {
+  const rows = await executor
+    .select()
+    .from(authChallengeDeliveries)
+    .where(eq(authChallengeDeliveries.challengeId, challengeId))
+    .orderBy(desc(authChallengeDeliveries.createdAt))
+    .limit(1);
+  const row = rows[0];
+
+  return row ? toAuthChallengeDelivery(row) : null;
 }
 
 function toAuthChallengeInsert(

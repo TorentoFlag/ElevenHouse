@@ -7,6 +7,7 @@ describe("requestPasswordlessCode", () => {
     const encryption = createTestEncryption();
     const store = {
       findPendingChallengeByIdentifier: vi.fn(async () => null),
+      findLatestDeliveryByChallengeId: vi.fn(async () => null),
       createChallenge: vi.fn(async (input) => ({
         id: "8e14390f-3db1-4d1c-9344-55679c778427",
         ...input,
@@ -81,6 +82,7 @@ describe("requestPasswordlessCode", () => {
     const encryption = createTestEncryption();
     const store = {
       findPendingChallengeByIdentifier: vi.fn(async () => null),
+      findLatestDeliveryByChallengeId: vi.fn(async () => null),
       createChallenge: vi.fn(async (input) => ({
         id: "8e14390f-3db1-4d1c-9344-55679c778427",
         ...input,
@@ -139,6 +141,12 @@ describe("requestPasswordlessCode", () => {
         createdAt: "2026-06-15T10:00:00.000Z",
         updatedAt: "2026-06-15T10:00:00.000Z"
       })),
+      findLatestDeliveryByChallengeId: vi.fn(async () => ({
+        id: "delivery_1",
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "queued" as const,
+        createdAt: "2026-06-15T10:00:00.000Z"
+      })),
       createChallenge: vi.fn(),
       recordDelivery: vi.fn(),
       recordAuthCodeDeliveryRequested: vi.fn(),
@@ -165,6 +173,9 @@ describe("requestPasswordlessCode", () => {
       channel: "email",
       identifierNormalized: "client@example.com"
     });
+    expect(store.findLatestDeliveryByChallengeId).toHaveBeenCalledWith(
+      "8e14390f-3db1-4d1c-9344-55679c778427"
+    );
     expect(store.createChallenge).not.toHaveBeenCalled();
     expect(store.recordAuthCodeDeliveryRequested).not.toHaveBeenCalled();
     expect(store.cancelChallenge).not.toHaveBeenCalled();
@@ -187,6 +198,13 @@ describe("requestPasswordlessCode", () => {
         resendAvailableAt: "2026-06-15T10:01:00.000Z",
         createdAt: "2026-06-15T10:00:00.000Z",
         updatedAt: "2026-06-15T10:00:00.000Z"
+      })),
+      findLatestDeliveryByChallengeId: vi.fn(async () => ({
+        id: "delivery_1",
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "sent" as const,
+        createdAt: "2026-06-15T10:00:00.000Z",
+        sentAt: "2026-06-15T10:00:02.000Z"
       })),
       createChallenge: vi.fn(async (input) => ({
         id: "9e14390f-3db1-4d1c-9344-55679c778427",
@@ -219,6 +237,7 @@ describe("requestPasswordlessCode", () => {
       challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
       cancelledAt: "2026-06-15T10:01:30.000Z"
     });
+    expect(store.findLatestDeliveryByChallengeId).not.toHaveBeenCalled();
     expect(store.createChallenge).toHaveBeenCalled();
     expect(store.recordAuthCodeDeliveryRequested).toHaveBeenCalledWith({
       payload: {
@@ -235,6 +254,72 @@ describe("requestPasswordlessCode", () => {
         expiresAt: "2026-06-15T10:11:30.000Z"
       },
       occurredAt: "2026-06-15T10:01:30.000Z"
+    });
+  });
+
+  it("replaces an existing pending challenge immediately when the latest delivery failed", async () => {
+    const encryption = createTestEncryption();
+    const store = {
+      findPendingChallengeByIdentifier: vi.fn(async () => ({
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        channel: "email" as const,
+        identifier: "client@example.com",
+        identifierNormalized: "client@example.com",
+        codeHash: "hash",
+        requestedRoles: ["client"] as const,
+        status: "pending" as const,
+        attempts: 0,
+        maxAttempts: 5,
+        expiresAt: "2026-06-15T10:10:00.000Z",
+        resendAvailableAt: "2026-06-15T10:01:00.000Z",
+        createdAt: "2026-06-15T10:00:00.000Z",
+        updatedAt: "2026-06-15T10:00:00.000Z"
+      })),
+      findLatestDeliveryByChallengeId: vi.fn(async () => ({
+        id: "delivery_1",
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "failed" as const,
+        errorCode: "provider_unavailable",
+        createdAt: "2026-06-15T10:00:00.000Z"
+      })),
+      createChallenge: vi.fn(async (input) => ({
+        id: "9e14390f-3db1-4d1c-9344-55679c778427",
+        ...input,
+        status: "pending" as const,
+        attempts: 0,
+        createdAt: "2026-06-15T10:00:30.000Z",
+        updatedAt: "2026-06-15T10:00:30.000Z"
+      })),
+      recordDelivery: vi.fn(async (input) => ({ id: "delivery_2", ...input })),
+      recordAuthCodeDeliveryRequested: vi.fn(async () => undefined),
+      cancelChallenge: vi.fn(async () => undefined)
+    };
+
+    await requestPasswordlessCode({
+      store,
+      encryption,
+      channel: "email",
+      identifier: "client@example.com",
+      roles: ["client"],
+      code: "654321",
+      codeSecret: "test-secret",
+      now: new Date("2026-06-15T10:00:30.000Z"),
+      ttlSeconds: 600,
+      resendCooldownSeconds: 60,
+      maxAttempts: 5
+    });
+
+    expect(store.findLatestDeliveryByChallengeId).toHaveBeenCalledWith(
+      "8e14390f-3db1-4d1c-9344-55679c778427"
+    );
+    expect(store.cancelChallenge).toHaveBeenCalledWith({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      cancelledAt: "2026-06-15T10:00:30.000Z"
+    });
+    expect(store.createChallenge).toHaveBeenCalled();
+    expect(store.recordDelivery).toHaveBeenCalledWith({
+      challengeId: "9e14390f-3db1-4d1c-9344-55679c778427",
+      status: "queued"
     });
   });
 });
