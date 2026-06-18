@@ -33,6 +33,8 @@ describe("createNotificationWorkerRuntimeConfig", () => {
       createNotificationWorkerRuntimeConfig({
         ...requiredDeliveryConfig,
         REDIS_URL: "redis://redis.internal:6379/3",
+        NOTIFICATION_WORKER_HEALTH_HOST: "127.0.0.1",
+        NOTIFICATION_WORKER_HEALTH_PORT: "4013",
         NOTIFICATION_WORKER_OUTBOX_RELAY_INTERVAL_MS: "250",
         NOTIFICATION_WORKER_OUTBOX_RELAY_BATCH_SIZE: "10",
         NOTIFICATION_WORKER_OUTBOX_PUBLISHING_LOCK_TIMEOUT_MS: "30000",
@@ -42,6 +44,8 @@ describe("createNotificationWorkerRuntimeConfig", () => {
     ).toEqual({
       redisUrl: "redis://redis.internal:6379/3",
       authCodeDeliveryEncryptionKey: Buffer.alloc(32, 2),
+      healthHost: "127.0.0.1",
+      healthPort: 4013,
       outboxRelayIntervalMs: 250,
       outboxRelayBatchSize: 10,
       outboxPublishingLockTimeoutMs: 30000,
