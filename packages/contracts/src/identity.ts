@@ -1,4 +1,4 @@
-import { customerPlatformRoles } from "@elevenhouse/auth";
+import { customerPlatformRoles } from "@elevenhouse/auth/roles";
 import { z } from "@elevenhouse/validation";
 
 export const customerAccountRoleSchema = z.enum(customerPlatformRoles);
