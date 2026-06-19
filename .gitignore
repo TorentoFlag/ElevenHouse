@@ -21,10 +21,8 @@ out/
 *.log
 
 # Agent instructions and generated planning artifacts
-AGENTS.md
 CLAUDE.md
 GEMINI.md
-docs/
 .codex/
 .claude/
 .cursor/
