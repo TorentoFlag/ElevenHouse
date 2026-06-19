@@ -8,10 +8,10 @@ Accepted
 
 ## Context
 
-`public-api` uses server-side sessions carried by an `HttpOnly`, `SameSite=Lax`
-cookie. This is the right base for browser sessions, but `SameSite` is a
-defense-in-depth layer and must not be the only protection for cookie-auth
-state-changing routes.
+`public-api` and `ops-api` use server-side sessions carried by an `HttpOnly`,
+`SameSite=Lax` cookie. This is the right base for browser sessions, but
+`SameSite` is a defense-in-depth layer and must not be the only protection for
+cookie-auth state-changing routes.
 
 ElevenHouse is a product-grade production codebase. Booking, orders and
 payments must be built on a consistent security policy from the first route,
@@ -19,7 +19,8 @@ not retrofitted after business workflows exist.
 
 ## Decision
 
-`public-api` owns a dedicated `SecurityModule` for browser request security.
+`public-api` and `ops-api` each own a dedicated `SecurityModule` for browser
+request security under their own runtime config namespace and cookie names.
 Feature modules declare security requirements with route metadata; they do not
 implement CSRF or idempotency checks locally.
 
@@ -43,8 +44,9 @@ request hash and persisted business result.
 ## Consequences
 
 - `SameSite=Lax` and `HttpOnly` session cookies stay in place.
-- `PUBLIC_API_CSRF_SECRET` and `PUBLIC_API_ALLOWED_ORIGINS` are required in
-  production.
+- `PUBLIC_API_CSRF_SECRET` / `PUBLIC_API_ALLOWED_ORIGINS` and
+  `OPS_API_CSRF_SECRET` / `OPS_API_ALLOWED_ORIGINS` are required in production
+  for their corresponding API apps.
 - Existing passwordless unauthenticated entrypoints do not require CSRF.
 - `POST /identity/logout` is protected by CSRF and clears both session and CSRF
   cookies.

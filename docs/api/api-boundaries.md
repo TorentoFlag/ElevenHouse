@@ -85,9 +85,10 @@ Admin actions должны вызывать domain use cases и писать aud
 
 ## Правило browser security
 
-Cookie-auth state-changing routes в `public-api` должны явно декларировать CSRF
-policy через общий security layer. Не реализуй CSRF-проверки локально внутри
-booking/orders/payments/identity controllers.
+Cookie-auth state-changing routes в `public-api` и `ops-api` должны явно
+декларировать CSRF policy через security layer соответствующего backend app.
+Не реализуй CSRF-проверки локально внутри booking/orders/payments/identity,
+astrologer или admin controllers.
 
 Для browser session routes используется signed double-submit CSRF cookie,
 проверка `X-CSRF-Token` и allowlist `Origin`/`Referer`. `SameSite=Lax` остаётся

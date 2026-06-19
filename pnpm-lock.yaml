@@ -175,6 +175,9 @@ importers:
 
   apps/ops-api:
     dependencies:
+      '@elevenhouse/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@elevenhouse/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
