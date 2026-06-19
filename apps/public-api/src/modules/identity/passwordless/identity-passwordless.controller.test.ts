@@ -6,7 +6,7 @@ import type {
 import { describe, expect, it, vi } from "vitest";
 import { IdentityPasswordlessController } from "./identity-passwordless.controller";
 import type { IdentityPasswordlessService } from "./identity-passwordless.service";
-import type { PublicSessionCookieService } from "./identity-session.service";
+import type { PublicSessionCookieService } from "../session/identity-session.service";
 
 describe("IdentityPasswordlessController", () => {
   it("delegates passwordless code requests without setting a session cookie", async () => {

@@ -9,7 +9,7 @@ import {
   authenticatedCustomerAccountResponseSchema,
   type AuthenticatedCustomerAccountResponse
 } from "@elevenhouse/contracts";
-import { AUTH_SESSION_AUTHENTICATION_STORE } from "./identity-auth.tokens";
+import { AUTH_SESSION_AUTHENTICATION_STORE } from "../auth/identity-auth.tokens";
 import { SystemClock } from "./identity-session.service";
 
 export type PublicSessionRequest = {

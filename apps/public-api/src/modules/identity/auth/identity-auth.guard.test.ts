@@ -4,7 +4,7 @@ import { PublicSessionAuthGuard } from "./identity-auth.guard";
 import type {
   IdentityCurrentSessionService,
   PublicSessionRequest
-} from "./identity-current-session.service";
+} from "../session/identity-current-session.service";
 
 function createExecutionContext(request: PublicSessionRequest): ExecutionContext {
   return {

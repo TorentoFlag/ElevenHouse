@@ -10,17 +10,17 @@ import { Test } from "@nestjs/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
-import { IdentityPasswordlessService } from "./identity-passwordless.service";
+import { IdentityPasswordlessService } from "./passwordless/identity-passwordless.service";
 import { IdentityModule } from "./identity.module";
-import { AUTH_SESSION_AUTHENTICATION_STORE } from "./identity-auth.tokens";
+import { AUTH_SESSION_AUTHENTICATION_STORE } from "./auth/identity-auth.tokens";
 import {
   PASSWORDLESS_AUTH_UNIT_OF_WORK,
   PASSWORDLESS_RATE_LIMITER
-} from "./identity-passwordless.tokens";
-import { PUBLIC_AUTH_CODE_GENERATOR } from "./identity-passwordless.handler";
-import { allowAllPasswordlessRateLimiter } from "./identity-passwordless.rate-limit";
-import { IdentityCurrentSessionService } from "./identity-current-session.service";
-import { PublicSessionTokenIssuer, SystemClock } from "./identity-session.service";
+} from "./passwordless/identity-passwordless.tokens";
+import { PUBLIC_AUTH_CODE_GENERATOR } from "./passwordless/identity-passwordless.handler";
+import { allowAllPasswordlessRateLimiter } from "./passwordless/identity-passwordless.rate-limit";
+import { IdentityCurrentSessionService } from "./session/identity-current-session.service";
+import { PublicSessionTokenIssuer, SystemClock } from "./session/identity-session.service";
 
 describe("IdentityModule", () => {
   afterEach(() => {

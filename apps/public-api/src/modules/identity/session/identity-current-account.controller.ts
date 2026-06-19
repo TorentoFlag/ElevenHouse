@@ -6,7 +6,7 @@ import {
   UseGuards
 } from "@nestjs/common";
 import type { AuthenticatedCustomerAccountResponse } from "@elevenhouse/contracts";
-import { PublicSessionAuthGuard } from "./identity-auth.guard";
+import { PublicSessionAuthGuard } from "../auth/identity-auth.guard";
 import type { PublicSessionRequest } from "./identity-current-session.service";
 
 @Controller("identity")

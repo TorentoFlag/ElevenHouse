@@ -7,7 +7,7 @@ import {
 import {
   IdentityCurrentSessionService,
   type PublicSessionRequest
-} from "./identity-current-session.service";
+} from "../session/identity-current-session.service";
 
 @Injectable()
 export class PublicSessionAuthGuard implements CanActivate {

@@ -2,14 +2,14 @@ import { Controller, HttpCode, Post, Req, Res } from "@nestjs/common";
 import {
   getIdentityRequestContext,
   type IdentityHttpRequest
-} from "./identity-http-context";
+} from "../http/identity-http-context";
 import type { PublicSessionRequest } from "./identity-current-session.service";
 import { IdentityLogoutService } from "./identity-logout.service";
 import {
   PublicSessionCookieService,
   type PublicSessionCookieResponse
 } from "./identity-session.service";
-import { RequireCsrf } from "../security/route-policy/route-security-policy";
+import { RequireCsrf } from "../../security/route-policy/route-security-policy";
 
 @Controller("identity")
 export class IdentitySessionController {

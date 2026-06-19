@@ -10,39 +10,39 @@ import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { RedisModule } from "../redis/redis.module";
 import { REDIS_CLIENT, type RedisClientPort } from "../redis/redis.tokens";
 import { SecurityModule } from "../security/security.module";
-import { IdentityCurrentAccountController } from "./identity-current-account.controller";
-import { IdentityCurrentSessionService } from "./identity-current-session.service";
-import { PublicSessionAuthGuard } from "./identity-auth.guard";
+import { IdentityCurrentAccountController } from "./session/identity-current-account.controller";
+import { IdentityCurrentSessionService } from "./session/identity-current-session.service";
+import { PublicSessionAuthGuard } from "./auth/identity-auth.guard";
 import {
   AUTH_SESSION_AUTHENTICATION_STORE,
   AUTH_SESSION_REVOCATION_UNIT_OF_WORK
-} from "./identity-auth.tokens";
-import { IdentityLogoutService } from "./identity-logout.service";
-import { IdentityPasswordlessController } from "./identity-passwordless.controller";
-import { IdentitySessionController } from "./identity-session.controller";
+} from "./auth/identity-auth.tokens";
+import { IdentityLogoutService } from "./session/identity-logout.service";
+import { IdentityPasswordlessController } from "./passwordless/identity-passwordless.controller";
+import { IdentitySessionController } from "./session/identity-session.controller";
 import {
   AesGcmAuthCodeEncryption,
   DomainPasswordlessAuthHandler,
   NumericPasswordlessCodeGenerator,
   PUBLIC_AUTH_CODE_GENERATOR
-} from "./identity-passwordless.handler";
+} from "./passwordless/identity-passwordless.handler";
 import {
   PASSWORDLESS_AUTH_CODE_ENCRYPTION,
   PASSWORDLESS_AUTH_OPTIONS,
   PASSWORDLESS_RATE_LIMITER,
   PASSWORDLESS_RATE_LIMIT_OPTIONS,
   PASSWORDLESS_AUTH_UNIT_OF_WORK
-} from "./identity-passwordless.tokens";
+} from "./passwordless/identity-passwordless.tokens";
 import {
   RedisPasswordlessRateLimiter,
   type PasswordlessRateLimitOptions
-} from "./identity-passwordless.rate-limit";
-import { IdentityPasswordlessService } from "./identity-passwordless.service";
+} from "./passwordless/identity-passwordless.rate-limit";
+import { IdentityPasswordlessService } from "./passwordless/identity-passwordless.service";
 import {
   PublicSessionCookieService,
   PublicSessionTokenIssuer,
   SystemClock
-} from "./identity-session.service";
+} from "./session/identity-session.service";
 
 @Module({
   imports: [ConfigModule, DatabaseModule, RedisModule, SecurityModule],

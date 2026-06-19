@@ -4,7 +4,7 @@ import {
   createSessionToken,
   hashSessionToken
 } from "@elevenhouse/auth";
-import { PublicCsrfTokenService } from "../security/csrf/public-csrf-token.service";
+import { PublicCsrfTokenService } from "../../security/csrf/public-csrf-token.service";
 
 export type IssuedSessionToken = {
   readonly token: string;

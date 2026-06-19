@@ -1,39 +1,30 @@
-import { randomUUID } from "node:crypto";
 import type { INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import type {
-  AuthChallenge,
-  AuthChallengeDelivery,
-  AuthCodeDeliveryRequestedPayload,
-  AuthSecurityEvent,
-  AuthSession,
-  AuthSessionAuthenticationStore,
   AuthSessionRevocationUnitOfWork,
-  PasswordlessAuthStore,
-  PasswordlessAuthUnitOfWork,
-  UserAccount,
-  UserRoleAssignment
+  PasswordlessAuthUnitOfWork
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PostgresRuntimeService } from "../database/postgres-runtime.service";
-import { RedisRuntimeService } from "../redis/redis-runtime.service";
+import { PostgresRuntimeService } from "../../database/postgres-runtime.service";
+import { RedisRuntimeService } from "../../redis/redis-runtime.service";
 import {
   AUTH_SESSION_AUTHENTICATION_STORE,
   AUTH_SESSION_REVOCATION_UNIT_OF_WORK
-} from "./identity-auth.tokens";
-import { IdentityModule } from "./identity.module";
+} from "../auth/identity-auth.tokens";
+import { IdentityModule } from "../identity.module";
 import { PUBLIC_AUTH_CODE_GENERATOR } from "./identity-passwordless.handler";
 import {
   PASSWORDLESS_AUTH_UNIT_OF_WORK,
   PASSWORDLESS_RATE_LIMITER
 } from "./identity-passwordless.tokens";
-import type {
-  PasswordlessRateLimitDecision,
-  PasswordlessRateLimitOptions,
-  PasswordlessRateLimitPort
-} from "./identity-passwordless.rate-limit";
-import { SystemClock } from "./identity-session.service";
+import { SystemClock } from "../session/identity-session.service";
+import { createIdentityConfigServiceStub } from "../testing/identity-config-service.stub";
+import {
+  InMemoryPasswordlessAuthStore,
+  seedExistingPasswordlessAccount
+} from "../testing/in-memory-passwordless-auth-store";
+import { TestPasswordlessRateLimiter } from "../testing/test-passwordless-rate-limiter";
 
 const now = new Date("2026-06-16T10:00:00.000Z");
 const sessionCookieName = "elevenhouse_public_session";
@@ -68,7 +59,14 @@ describe("passwordless public auth HTTP flow", () => {
       .overrideProvider(PostgresRuntimeService)
       .useValue({ database: {} })
       .overrideProvider(ConfigService)
-      .useValue(createConfigServiceStub())
+      .useValue(
+        createIdentityConfigServiceStub({
+          sessionCookieName,
+          csrfCookieName,
+          csrfHeaderName,
+          passwordlessRateLimits: defaultPasswordlessRateLimits
+        })
+      )
       .overrideProvider(PASSWORDLESS_AUTH_UNIT_OF_WORK)
       .useValue(passwordlessAuth)
       .overrideProvider(AUTH_SESSION_AUTHENTICATION_STORE)
@@ -559,101 +557,6 @@ describe("passwordless public auth HTTP flow", () => {
   }
 });
 
-type TestRateLimitBucket = {
-  readonly key: string;
-  readonly limit: number;
-  readonly windowSeconds: number;
-};
-
-class TestPasswordlessRateLimiter implements PasswordlessRateLimitPort {
-  private readonly buckets = new Map<string, number[]>();
-
-  constructor(
-    private readonly options: PasswordlessRateLimitOptions,
-    private readonly now: () => Date
-  ) {}
-
-  consumeRequestCode(
-    input: Parameters<PasswordlessRateLimitPort["consumeRequestCode"]>[0]
-  ): Promise<PasswordlessRateLimitDecision> {
-    return Promise.resolve(
-      this.consume([
-        {
-          key: `request-code:identifier:${input.channel}:${input.identifier}`,
-          ...this.options.requestCodeIdentifier
-        },
-        {
-          key: `request-code:ip:${input.ipAddress}`,
-          ...this.options.requestCodeIp
-        },
-        {
-          key: `request-code:identifier-ip:${input.channel}:${input.identifier}:${input.ipAddress}`,
-          ...this.options.requestCodeIdentifierIp
-        }
-      ])
-    );
-  }
-
-  consumeVerifyCode(
-    input: Parameters<PasswordlessRateLimitPort["consumeVerifyCode"]>[0]
-  ): Promise<PasswordlessRateLimitDecision> {
-    return Promise.resolve(
-      this.consume([
-        {
-          key: `verify-code:challenge:${input.challengeId}`,
-          ...this.options.verifyChallenge
-        },
-        {
-          key: `verify-code:ip:${input.ipAddress}`,
-          ...this.options.verifyIp
-        }
-      ])
-    );
-  }
-
-  private consume(buckets: readonly TestRateLimitBucket[]): PasswordlessRateLimitDecision {
-    const nowMs = this.now().getTime();
-    const retryAfterSeconds = buckets
-      .map((bucket) => this.checkBucket(bucket, nowMs))
-      .filter((value): value is number => value !== null);
-
-    if (retryAfterSeconds.length > 0) {
-      return {
-        allowed: false,
-        retryAfterSeconds: Math.max(...retryAfterSeconds)
-      };
-    }
-
-    for (const bucket of buckets) {
-      const timestamps = this.getActiveTimestamps(bucket, nowMs);
-      timestamps.push(nowMs);
-      this.buckets.set(bucket.key, timestamps);
-    }
-
-    return { allowed: true };
-  }
-
-  private checkBucket(bucket: TestRateLimitBucket, nowMs: number): number | null {
-    const timestamps = this.getActiveTimestamps(bucket, nowMs);
-    this.buckets.set(bucket.key, timestamps);
-
-    if (timestamps.length < bucket.limit) {
-      return null;
-    }
-
-    const oldestTimestamp = timestamps[0] ?? nowMs;
-    const retryAfterMs = oldestTimestamp + bucket.windowSeconds * 1000 - nowMs;
-
-    return Math.max(1, Math.ceil(retryAfterMs / 1000));
-  }
-
-  private getActiveTimestamps(bucket: TestRateLimitBucket, nowMs: number): number[] {
-    const cutoff = nowMs - bucket.windowSeconds * 1000;
-
-    return (this.buckets.get(bucket.key) ?? []).filter((timestamp) => timestamp > cutoff);
-  }
-}
-
 type HttpJsonResponse = {
   readonly status: number;
   readonly body: Record<string, unknown> & {
@@ -717,321 +620,3 @@ function cookieValue(setCookies: readonly string[], name: string): string {
   return cookie.slice(name.length + 1);
 }
 
-function seedExistingPasswordlessAccount(
-  store: InMemoryPasswordlessAuthStore,
-  input: {
-    readonly channel: "email" | "phone";
-    readonly identifierNormalized: string;
-    readonly roles: readonly ("client" | "astrologer")[];
-  }
-): UserAccount {
-  const user: UserAccount = {
-    id: randomUUID(),
-    status: "active",
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString()
-  };
-  store.users.push(user);
-  store.authIdentities.push({
-    id: randomUUID(),
-    userId: user.id,
-    provider: input.channel,
-    providerSubject: input.identifierNormalized,
-    ...(input.channel === "email"
-      ? { email: input.identifierNormalized, emailVerifiedAt: now.toISOString() }
-      : { phoneNumber: input.identifierNormalized, phoneVerifiedAt: now.toISOString() }),
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString()
-  });
-
-  for (const role of input.roles) {
-    store.roleAssignments.push({
-      id: randomUUID(),
-      userId: user.id,
-      role,
-      assignedAt: now.toISOString()
-    });
-  }
-
-  return user;
-}
-
-function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
-  return {
-    getOrThrow: (key: string) => {
-      if (key === "publicApi.authCodeDeliveryEncryptionKey") {
-        return Buffer.alloc(32, 1);
-      }
-
-      if (key === "publicApi.sessionTtlSeconds") {
-        return 604800;
-      }
-
-      if (key === "publicApi.sessionCookieSecure") {
-        return false;
-      }
-
-      if (key === "publicApi.sessionCookieName") {
-        return sessionCookieName;
-      }
-
-      if (key === "publicApi.csrfSecret") {
-        return "test-csrf-secret-with-enough-entropy";
-      }
-
-      if (key === "publicApi.csrfCookieName") {
-        return csrfCookieName;
-      }
-
-      if (key === "publicApi.csrfHeaderName") {
-        return csrfHeaderName;
-      }
-
-      if (key === "publicApi.csrfTokenTtlSeconds") {
-        return 604800;
-      }
-
-      if (key === "publicApi.allowedOrigins") {
-        return ["http://localhost:3000"];
-      }
-
-      if (key === "publicApi.passwordlessCodeSecret") {
-        return "test-secret";
-      }
-
-      if (key === "publicApi.passwordlessCodeTtlSeconds") {
-        return 600;
-      }
-
-      if (key === "publicApi.passwordlessResendCooldownSeconds") {
-        return 60;
-      }
-
-      if (key === "publicApi.passwordlessMaxAttempts") {
-        return 5;
-      }
-
-      if (key === "publicApi.passwordlessRateLimits") {
-        return defaultPasswordlessRateLimits;
-      }
-
-      throw new Error(`Unexpected config key: ${key}`);
-    }
-  };
-}
-
-class InMemoryPasswordlessAuthStore implements PasswordlessAuthStore, AuthSessionAuthenticationStore {
-  readonly authChallenges: AuthChallenge[] = [];
-  readonly authChallengeDeliveries: AuthChallengeDelivery[] = [];
-  readonly users: UserAccount[] = [];
-  readonly authIdentities: Array<{
-    readonly id: string;
-    readonly userId: string;
-    readonly provider: "email" | "phone";
-    readonly providerSubject: string;
-    readonly email?: string;
-    readonly phoneNumber?: string;
-    readonly emailVerifiedAt?: string;
-    readonly phoneVerifiedAt?: string;
-    readonly createdAt: string;
-    readonly updatedAt: string;
-  }> = [];
-  readonly roleAssignments: UserRoleAssignment[] = [];
-  readonly userSessions: AuthSession[] = [];
-  readonly authSecurityEvents: AuthSecurityEvent[] = [];
-  readonly authCodeDeliveryRequestedEvents: Array<{
-    readonly payload: AuthCodeDeliveryRequestedPayload;
-    readonly occurredAt: string;
-  }> = [];
-
-  constructor(private readonly now: Date) {}
-
-  async createChallenge(
-    input: Parameters<PasswordlessAuthStore["createChallenge"]>[0]
-  ): Promise<AuthChallenge> {
-    const challenge: AuthChallenge = {
-      id: randomUUID(),
-      ...input,
-      status: "pending",
-      attempts: 0,
-      createdAt: this.now.toISOString(),
-      updatedAt: this.now.toISOString()
-    };
-    this.authChallenges.push(challenge);
-    return challenge;
-  }
-
-  async recordDelivery(
-    input: Parameters<PasswordlessAuthStore["recordDelivery"]>[0]
-  ): Promise<AuthChallengeDelivery> {
-    const delivery: AuthChallengeDelivery = {
-      id: randomUUID(),
-      createdAt: this.now.toISOString(),
-      ...input
-    };
-    this.authChallengeDeliveries.push(delivery);
-    return delivery;
-  }
-
-  async recordAuthCodeDeliveryRequested(
-    input: Parameters<PasswordlessAuthStore["recordAuthCodeDeliveryRequested"]>[0]
-  ): Promise<void> {
-    this.authCodeDeliveryRequestedEvents.push(input);
-  }
-
-  async cancelChallenge(
-    input: Parameters<PasswordlessAuthStore["cancelChallenge"]>[0]
-  ): Promise<void> {
-    const challenge = this.requireChallenge(input.challengeId);
-    Object.assign(challenge, {
-      status: "cancelled",
-      cancelledAt: input.cancelledAt,
-      updatedAt: input.cancelledAt
-    });
-  }
-
-  async findPendingChallengeByIdentifier(
-    input: Parameters<NonNullable<PasswordlessAuthStore["findPendingChallengeByIdentifier"]>>[0]
-  ): Promise<AuthChallenge | null> {
-    return (
-      [...this.authChallenges]
-        .reverse()
-        .find(
-          (challenge) =>
-            challenge.channel === input.channel &&
-            challenge.identifierNormalized === input.identifierNormalized &&
-            challenge.status === "pending"
-        ) ?? null
-    );
-  }
-
-  async findLatestDeliveryByChallengeId(challengeId: string): Promise<AuthChallengeDelivery | null> {
-    return (
-      [...this.authChallengeDeliveries]
-        .reverse()
-        .find((delivery) => delivery.challengeId === challengeId) ?? null
-    );
-  }
-
-  async findChallengeById(challengeId: string): Promise<AuthChallenge | null> {
-    return this.authChallenges.find((challenge) => challenge.id === challengeId) ?? null;
-  }
-
-  async incrementChallengeAttempts(
-    input: Parameters<PasswordlessAuthStore["incrementChallengeAttempts"]>[0]
-  ): Promise<void> {
-    const challenge = this.requireChallenge(input.challengeId);
-    Object.assign(challenge, {
-      attempts: challenge.attempts + 1,
-      updatedAt: input.attemptedAt
-    });
-  }
-
-  async consumeChallenge(
-    input: Parameters<PasswordlessAuthStore["consumeChallenge"]>[0]
-  ): Promise<void> {
-    const challenge = this.requireChallenge(input.challengeId);
-    Object.assign(challenge, {
-      status: "consumed",
-      consumedAt: input.consumedAt,
-      updatedAt: input.consumedAt
-    });
-  }
-
-  async revokeSession(input: {
-    readonly sessionId: string;
-    readonly revokedAt: string;
-  }): Promise<void> {
-    const session = this.userSessions.find((candidate) => candidate.id === input.sessionId);
-
-    if (!session) {
-      throw new Error(`Session not found: ${input.sessionId}`);
-    }
-
-    Object.assign(session, {
-      status: "revoked",
-      revokedAt: input.revokedAt
-    });
-  }
-
-  async findAuthIdentityByProviderSubject(
-    input: Parameters<PasswordlessAuthStore["findAuthIdentityByProviderSubject"]>[0]
-  ) {
-    const authIdentity = this.authIdentities.find(
-      (identity) =>
-        identity.provider === input.provider && identity.providerSubject === input.providerSubject
-    );
-
-    if (!authIdentity) {
-      return null;
-    }
-
-    const user = this.requireUser(authIdentity.userId);
-
-    return {
-      user,
-      authIdentity,
-      roleAssignments: this.roleAssignments.filter((assignment) => assignment.userId === user.id)
-    };
-  }
-
-  async createSession(
-    input: Parameters<PasswordlessAuthStore["createSession"]>[0]
-  ): Promise<AuthSession> {
-    const session: AuthSession = {
-      id: randomUUID(),
-      status: "active",
-      ...input
-    };
-    this.userSessions.push(session);
-    return session;
-  }
-
-  async recordSecurityEvent(
-    input: Parameters<PasswordlessAuthStore["recordSecurityEvent"]>[0]
-  ): Promise<AuthSecurityEvent> {
-    const securityEvent: AuthSecurityEvent = {
-      id: randomUUID(),
-      ...input,
-      metadata: input.metadata ?? {}
-    };
-    this.authSecurityEvents.push(securityEvent);
-    return securityEvent;
-  }
-
-  async findByTokenHash(tokenHash: string) {
-    const session = this.userSessions.find((candidate) => candidate.tokenHash === tokenHash);
-
-    if (!session) {
-      return null;
-    }
-
-    const user = this.requireUser(session.userId);
-
-    return {
-      session,
-      user,
-      roleAssignments: this.roleAssignments.filter((assignment) => assignment.userId === user.id)
-    };
-  }
-
-  private requireChallenge(challengeId: string): AuthChallenge {
-    const challenge = this.authChallenges.find((candidate) => candidate.id === challengeId);
-
-    if (!challenge) {
-      throw new Error(`Challenge not found: ${challengeId}`);
-    }
-
-    return challenge;
-  }
-
-  private requireUser(userId: string): UserAccount {
-    const user = this.users.find((candidate) => candidate.id === userId);
-
-    if (!user) {
-      throw new Error(`User not found: ${userId}`);
-    }
-
-    return user;
-  }
-}

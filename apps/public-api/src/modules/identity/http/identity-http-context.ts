@@ -1,4 +1,4 @@
-import type { PasswordlessRequestContext } from "./identity-passwordless.rate-limit";
+import type { PasswordlessRequestContext } from "../passwordless/identity-passwordless.rate-limit";
 
 export type IdentityHttpRequest = {
   readonly ip?: string;

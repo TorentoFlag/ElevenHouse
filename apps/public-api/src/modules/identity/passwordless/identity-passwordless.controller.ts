@@ -9,11 +9,11 @@ import { IdentityPasswordlessService } from "./identity-passwordless.service";
 import {
   PublicSessionCookieService,
   type PublicSessionCookieResponse
-} from "./identity-session.service";
+} from "../session/identity-session.service";
 import {
   getIdentityRequestContext,
   type IdentityHttpRequest
-} from "./identity-http-context";
+} from "../http/identity-http-context";
 
 @Controller("identity/passwordless")
 export class IdentityPasswordlessController {

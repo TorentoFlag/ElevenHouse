@@ -24,7 +24,7 @@ import {
   PublicSessionTokenIssuer,
   SystemClock,
   type IssuedSessionToken
-} from "./identity-session.service";
+} from "../session/identity-session.service";
 import {
   PASSWORDLESS_AUTH_CODE_ENCRYPTION,
   PASSWORDLESS_AUTH_OPTIONS,

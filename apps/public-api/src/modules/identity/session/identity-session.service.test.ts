@@ -1,7 +1,7 @@
 import { ConfigService } from "@nestjs/config";
 import { describe, expect, it, vi } from "vitest";
 import { PublicSessionCookieService } from "./identity-session.service";
-import type { PublicCsrfTokenService } from "../security/csrf/public-csrf-token.service";
+import type { PublicCsrfTokenService } from "../../security/csrf/public-csrf-token.service";
 
 function createCsrfTokenService(): PublicCsrfTokenService {
   return {

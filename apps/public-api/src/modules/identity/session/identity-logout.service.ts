@@ -9,8 +9,8 @@ import {
   readPublicSessionCookieValue,
   type PublicSessionRequest
 } from "./identity-current-session.service";
-import { AUTH_SESSION_REVOCATION_UNIT_OF_WORK } from "./identity-auth.tokens";
-import type { PasswordlessRequestContext } from "./identity-passwordless.rate-limit";
+import { AUTH_SESSION_REVOCATION_UNIT_OF_WORK } from "../auth/identity-auth.tokens";
+import type { PasswordlessRequestContext } from "../passwordless/identity-passwordless.rate-limit";
 import { SystemClock } from "./identity-session.service";
 
 @Injectable()
