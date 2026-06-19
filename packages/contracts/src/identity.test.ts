@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  authenticatedAstrologerAccountResponseSchema,
   authenticatedCustomerAccountResponseSchema,
+  requestAstrologerPasswordlessCodeRequestSchema,
   requestPasswordlessCodeRequestSchema,
   requestPasswordlessCodeResponseSchema,
+  verifyAstrologerPasswordlessCodeResponseSchema,
   verifyPasswordlessCodeRequestSchema,
   verifyPasswordlessCodeResponseSchema
 } from "./identity";
@@ -62,6 +65,30 @@ describe("requestPasswordlessCodeRequestSchema", () => {
         channel: "phone",
         identifier: "555-0100",
         roles: ["client"]
+      })
+    ).toThrow();
+  });
+});
+
+describe("requestAstrologerPasswordlessCodeRequestSchema", () => {
+  it("normalizes email requests without exposing role selection to the caller", () => {
+    expect(
+      requestAstrologerPasswordlessCodeRequestSchema.parse({
+        channel: "email",
+        identifier: "  ASTROLOGER@example.COM "
+      })
+    ).toEqual({
+      channel: "email",
+      identifier: "astrologer@example.com"
+    });
+  });
+
+  it("rejects caller-controlled roles", () => {
+    expect(() =>
+      requestAstrologerPasswordlessCodeRequestSchema.parse({
+        channel: "email",
+        identifier: "astrologer@example.com",
+        roles: ["admin"]
       })
     ).toThrow();
   });
@@ -165,5 +192,35 @@ describe("authenticatedCustomerAccountResponseSchema", () => {
         roles: ["client", "astrologer"]
       }
     });
+  });
+});
+
+describe("authenticatedAstrologerAccountResponseSchema", () => {
+  it("requires the astrologer role", () => {
+    expect(
+      authenticatedAstrologerAccountResponseSchema.parse({
+        account: {
+          id: "8e14390f-3db1-4d1c-9344-55679c778427",
+          status: "active",
+          roles: ["client", "astrologer"]
+        }
+      })
+    ).toEqual({
+      account: {
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "active",
+        roles: ["client", "astrologer"]
+      }
+    });
+
+    expect(() =>
+      verifyAstrologerPasswordlessCodeResponseSchema.parse({
+        account: {
+          id: "8e14390f-3db1-4d1c-9344-55679c778427",
+          status: "active",
+          roles: ["client"]
+        }
+      })
+    ).toThrow();
   });
 });

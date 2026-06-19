@@ -65,3 +65,49 @@ export const verifyPasswordlessCodeResponseSchema = authenticatedCustomerAccount
 export type VerifyPasswordlessCodeResponse = z.infer<
   typeof verifyPasswordlessCodeResponseSchema
 >;
+
+export const requestAstrologerPasswordlessCodeRequestSchema = z.discriminatedUnion("channel", [
+  z.object({
+    channel: z.literal("email"),
+    identifier: emailSchema
+  }).strict(),
+  z.object({
+    channel: z.literal("phone"),
+    identifier: phoneIdentifierSchema
+  }).strict()
+]);
+
+export type RequestAstrologerPasswordlessCodeRequest = z.infer<
+  typeof requestAstrologerPasswordlessCodeRequestSchema
+>;
+
+export const requestAstrologerPasswordlessCodeResponseSchema =
+  requestPasswordlessCodeResponseSchema;
+
+export type RequestAstrologerPasswordlessCodeResponse = z.infer<
+  typeof requestAstrologerPasswordlessCodeResponseSchema
+>;
+
+export const authenticatedAstrologerAccountResponseSchema =
+  authenticatedCustomerAccountResponseSchema.refine(
+    (value) => value.account.roles.includes("astrologer"),
+    "Authenticated account must have the astrologer role"
+  );
+
+export type AuthenticatedAstrologerAccountResponse = z.infer<
+  typeof authenticatedAstrologerAccountResponseSchema
+>;
+
+export const verifyAstrologerPasswordlessCodeRequestSchema =
+  verifyPasswordlessCodeRequestSchema;
+
+export type VerifyAstrologerPasswordlessCodeRequest = z.infer<
+  typeof verifyAstrologerPasswordlessCodeRequestSchema
+>;
+
+export const verifyAstrologerPasswordlessCodeResponseSchema =
+  authenticatedAstrologerAccountResponseSchema;
+
+export type VerifyAstrologerPasswordlessCodeResponse = z.infer<
+  typeof verifyAstrologerPasswordlessCodeResponseSchema
+>;

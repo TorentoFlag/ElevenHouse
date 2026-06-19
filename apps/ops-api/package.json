@@ -11,6 +11,7 @@
     "@elevenhouse/auth": "workspace:*",
     "@elevenhouse/contracts": "workspace:*",
     "@elevenhouse/db": "workspace:*",
+    "@elevenhouse/domain": "workspace:*",
     "@elevenhouse/observability": "workspace:*",
     "@elevenhouse/validation": "workspace:*",
     "@nestjs/common": "11.1.26",

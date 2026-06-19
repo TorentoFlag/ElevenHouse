@@ -1,3 +1,4 @@
+import { parseBase64Aes256GcmKey } from "@elevenhouse/auth";
 import { z } from "@elevenhouse/validation";
 
 const localOpsSessionCookieName = "elevenhouse_ops_session";
@@ -17,7 +18,55 @@ const opsApiRuntimeConfigSchema = z.object({
   OPS_API_CSRF_COOKIE_NAME: z.string().trim().min(1).default("elevenhouse_ops_csrf"),
   OPS_API_CSRF_HEADER_NAME: z.string().trim().min(1).default("x-csrf-token"),
   OPS_API_CSRF_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
-  OPS_API_ALLOWED_ORIGINS: z.string().trim().optional()
+  OPS_API_ALLOWED_ORIGINS: z.string().trim().optional(),
+  AUTH_CODE_DELIVERY_ENCRYPTION_KEY: z.string().trim().min(1),
+  OPS_API_PASSWORDLESS_CODE_SECRET: z.string().trim().min(1).optional(),
+  OPS_API_PASSWORDLESS_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  OPS_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
+  OPS_API_PASSWORDLESS_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  OPS_API_PASSWORDLESS_REQUEST_CODE_IDENTIFIER_LIMIT: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5),
+  OPS_API_PASSWORDLESS_REQUEST_CODE_IDENTIFIER_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(3600),
+  OPS_API_PASSWORDLESS_REQUEST_CODE_IP_LIMIT: z.coerce.number().int().positive().default(30),
+  OPS_API_PASSWORDLESS_REQUEST_CODE_IP_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(3600),
+  OPS_API_PASSWORDLESS_REQUEST_CODE_IDENTIFIER_IP_LIMIT: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(3),
+  OPS_API_PASSWORDLESS_REQUEST_CODE_IDENTIFIER_IP_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(3600),
+  OPS_API_PASSWORDLESS_VERIFY_CHALLENGE_LIMIT: z.coerce.number().int().positive().default(5),
+  OPS_API_PASSWORDLESS_VERIFY_CHALLENGE_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(900),
+  OPS_API_PASSWORDLESS_VERIFY_IP_LIMIT: z.coerce.number().int().positive().default(60),
+  OPS_API_PASSWORDLESS_VERIFY_IP_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(900),
+  OPS_API_PASSWORDLESS_RATE_LIMIT_REDIS_KEY_PREFIX: z
+    .string()
+    .trim()
+    .min(1)
+    .default("elevenhouse:ops-api")
 });
 
 export type OpsApiRuntimeConfig = {
@@ -31,6 +80,34 @@ export type OpsApiRuntimeConfig = {
   readonly csrfHeaderName: string;
   readonly csrfTokenTtlSeconds: number;
   readonly allowedOrigins: readonly string[];
+  readonly authCodeDeliveryEncryptionKey: Buffer;
+  readonly passwordlessCodeSecret: string;
+  readonly passwordlessCodeTtlSeconds: number;
+  readonly passwordlessResendCooldownSeconds: number;
+  readonly passwordlessMaxAttempts: number;
+  readonly passwordlessRateLimitRedisKeyPrefix: string;
+  readonly passwordlessRateLimits: {
+    readonly requestCodeIdentifier: {
+      readonly limit: number;
+      readonly windowSeconds: number;
+    };
+    readonly requestCodeIp: {
+      readonly limit: number;
+      readonly windowSeconds: number;
+    };
+    readonly requestCodeIdentifierIp: {
+      readonly limit: number;
+      readonly windowSeconds: number;
+    };
+    readonly verifyChallenge: {
+      readonly limit: number;
+      readonly windowSeconds: number;
+    };
+    readonly verifyIp: {
+      readonly limit: number;
+      readonly windowSeconds: number;
+    };
+  };
 };
 
 export function createOpsApiRuntimeConfig(
@@ -49,6 +126,10 @@ export function createOpsApiRuntimeConfig(
 
   if (config.NODE_ENV === "production" && !config.OPS_API_CSRF_SECRET) {
     throw new Error("OPS_API_CSRF_SECRET is required in production");
+  }
+
+  if (config.NODE_ENV === "production" && !config.OPS_API_PASSWORDLESS_CODE_SECRET) {
+    throw new Error("OPS_API_PASSWORDLESS_CODE_SECRET is required in production");
   }
 
   const allowedOrigins = parseAllowedOrigins(config.OPS_API_ALLOWED_ORIGINS);
@@ -72,7 +153,39 @@ export function createOpsApiRuntimeConfig(
     allowedOrigins:
       allowedOrigins.length > 0
         ? allowedOrigins
-        : ["http://localhost:5174", "http://localhost:5175"]
+        : ["http://localhost:5174", "http://localhost:5175"],
+    authCodeDeliveryEncryptionKey: parseBase64Aes256GcmKey(
+      config.AUTH_CODE_DELIVERY_ENCRYPTION_KEY
+    ),
+    passwordlessCodeSecret:
+      config.OPS_API_PASSWORDLESS_CODE_SECRET ?? "elevenhouse-dev-ops-passwordless-code-secret",
+    passwordlessCodeTtlSeconds: config.OPS_API_PASSWORDLESS_CODE_TTL_SECONDS,
+    passwordlessResendCooldownSeconds: config.OPS_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS,
+    passwordlessMaxAttempts: config.OPS_API_PASSWORDLESS_MAX_ATTEMPTS,
+    passwordlessRateLimitRedisKeyPrefix:
+      config.OPS_API_PASSWORDLESS_RATE_LIMIT_REDIS_KEY_PREFIX,
+    passwordlessRateLimits: {
+      requestCodeIdentifier: {
+        limit: config.OPS_API_PASSWORDLESS_REQUEST_CODE_IDENTIFIER_LIMIT,
+        windowSeconds: config.OPS_API_PASSWORDLESS_REQUEST_CODE_IDENTIFIER_WINDOW_SECONDS
+      },
+      requestCodeIp: {
+        limit: config.OPS_API_PASSWORDLESS_REQUEST_CODE_IP_LIMIT,
+        windowSeconds: config.OPS_API_PASSWORDLESS_REQUEST_CODE_IP_WINDOW_SECONDS
+      },
+      requestCodeIdentifierIp: {
+        limit: config.OPS_API_PASSWORDLESS_REQUEST_CODE_IDENTIFIER_IP_LIMIT,
+        windowSeconds: config.OPS_API_PASSWORDLESS_REQUEST_CODE_IDENTIFIER_IP_WINDOW_SECONDS
+      },
+      verifyChallenge: {
+        limit: config.OPS_API_PASSWORDLESS_VERIFY_CHALLENGE_LIMIT,
+        windowSeconds: config.OPS_API_PASSWORDLESS_VERIFY_CHALLENGE_WINDOW_SECONDS
+      },
+      verifyIp: {
+        limit: config.OPS_API_PASSWORDLESS_VERIFY_IP_LIMIT,
+        windowSeconds: config.OPS_API_PASSWORDLESS_VERIFY_IP_WINDOW_SECONDS
+      }
+    }
   };
 }
 

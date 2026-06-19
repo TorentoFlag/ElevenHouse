@@ -187,6 +187,9 @@ importers:
       '@elevenhouse/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@elevenhouse/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@elevenhouse/observability':
         specifier: workspace:*
         version: link:../../packages/observability

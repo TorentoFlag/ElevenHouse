@@ -54,6 +54,10 @@ GET  /me/bookings
 Примеры routes:
 
 ```text
+POST /identity/astrologer/passwordless/request-code
+POST /identity/astrologer/passwordless/verify-code
+GET  /identity/me
+POST /identity/logout
 /astrologer/profile
 /astrologer/products
 /astrologer/availability
