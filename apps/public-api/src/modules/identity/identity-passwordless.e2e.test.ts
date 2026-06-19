@@ -98,7 +98,13 @@ describe("passwordless public auth HTTP flow", () => {
     await moduleRef.close();
   });
 
-  it("registers an email account, sets a session cookie and resolves /identity/me", async () => {
+  it("logs in an email account, sets a session cookie and resolves /identity/me", async () => {
+    const account = seedExistingPasswordlessAccount(store, {
+      channel: "email",
+      identifierNormalized: "client@example.com",
+      roles: ["client"]
+    });
+
     const requestResponse = await postJson("/identity/passwordless/request-code", {
       channel: "email",
       identifier: " CLIENT@example.COM ",
@@ -140,7 +146,7 @@ describe("passwordless public auth HTTP flow", () => {
         roles: ["client"]
       }
     });
-    expect(verifyResponse.body.account.id).toEqual(expect.any(String));
+    expect(verifyResponse.body.account.id).toBe(account.id);
     expect(verifyResponse.setCookie).toContain(`${sessionCookieName}=`);
     expect(verifyResponse.setCookie).toContain(`${csrfCookieName}=`);
     expect(verifyResponse.setCookie).toContain("HttpOnly");
@@ -156,6 +162,12 @@ describe("passwordless public auth HTTP flow", () => {
   });
 
   it("stores request metadata on challenges, sessions and security events", async () => {
+    seedExistingPasswordlessAccount(store, {
+      channel: "email",
+      identifierNormalized: "client@example.com",
+      roles: ["client"]
+    });
+
     const requestResponse = await postJson(
       "/identity/passwordless/request-code",
       {
@@ -187,12 +199,18 @@ describe("passwordless public auth HTTP flow", () => {
       userAgent: "ElevenHouse-Test/1.0"
     });
     expect(store.authSecurityEvents.at(-1)).toMatchObject({
-      eventType: "registration_succeeded",
+      eventType: "login_succeeded",
       userAgent: "ElevenHouse-Test/1.0"
     });
   });
 
-  it("registers a phone account with multiple customer roles", async () => {
+  it("logs in a phone account with multiple customer roles", async () => {
+    seedExistingPasswordlessAccount(store, {
+      channel: "phone",
+      identifierNormalized: "+15551234090",
+      roles: ["client", "astrologer"]
+    });
+
     const requestResponse = await postJson("/identity/passwordless/request-code", {
       channel: "phone",
       identifier: "+1 (555) 123-4090",
@@ -339,6 +357,12 @@ describe("passwordless public auth HTTP flow", () => {
   });
 
   it("rejects wrong codes without setting a session cookie and still accepts the correct code", async () => {
+    seedExistingPasswordlessAccount(store, {
+      channel: "email",
+      identifierNormalized: "client@example.com",
+      roles: ["client"]
+    });
+
     const requestResponse = await postJson("/identity/passwordless/request-code", {
       channel: "email",
       identifier: "client@example.com",
@@ -364,6 +388,12 @@ describe("passwordless public auth HTTP flow", () => {
   });
 
   it("rejects reused consumed challenges", async () => {
+    seedExistingPasswordlessAccount(store, {
+      channel: "email",
+      identifierNormalized: "client@example.com",
+      roles: ["client"]
+    });
+
     const requestResponse = await postJson("/identity/passwordless/request-code", {
       channel: "email",
       identifier: "client@example.com",
@@ -382,33 +412,35 @@ describe("passwordless public auth HTTP flow", () => {
     expect(reusedResponse.status).toBe(401);
   });
 
-  it("logs in an existing identity without granting requested roles again", async () => {
-    const firstRequest = await postJson("/identity/passwordless/request-code", {
+  it("rejects login when a requested role is not already assigned", async () => {
+    seedExistingPasswordlessAccount(store, {
       channel: "email",
-      identifier: "client@example.com",
+      identifierNormalized: "client@example.com",
       roles: ["client"]
     });
-    const firstVerify = await postJson("/identity/passwordless/verify-code", {
-      challengeId: firstRequest.body.challengeId,
-      code: "123456"
-    });
-    const secondRequest = await postJson("/identity/passwordless/request-code", {
+
+    const requestResponse = await postJson("/identity/passwordless/request-code", {
       channel: "email",
       identifier: "CLIENT@example.com",
       roles: ["client", "astrologer"]
     });
-    const secondVerify = await postJson("/identity/passwordless/verify-code", {
-      challengeId: secondRequest.body.challengeId,
+    const verifyResponse = await postJson("/identity/passwordless/verify-code", {
+      challengeId: requestResponse.body.challengeId,
       code: "123456"
     });
 
-    expect(secondVerify.status).toBe(201);
-    expect(secondVerify.body.account.id).toBe(firstVerify.body.account.id);
-    expect(secondVerify.body.account.roles).toEqual(["client"]);
+    expect(verifyResponse.status).toBe(401);
+    expect(verifyResponse.setCookie).toBeNull();
     expect(store.roleAssignments).toHaveLength(1);
   });
 
   it("revokes the current session and clears the cookie on logout", async () => {
+    seedExistingPasswordlessAccount(store, {
+      channel: "email",
+      identifierNormalized: "client@example.com",
+      roles: ["client"]
+    });
+
     const requestResponse = await postJson("/identity/passwordless/request-code", {
       channel: "email",
       identifier: "client@example.com",
@@ -584,6 +616,45 @@ function cookieValue(setCookies: readonly string[], name: string): string {
   }
 
   return cookie.slice(name.length + 1);
+}
+
+function seedExistingPasswordlessAccount(
+  store: InMemoryPasswordlessAuthStore,
+  input: {
+    readonly channel: "email" | "phone";
+    readonly identifierNormalized: string;
+    readonly roles: readonly ("client" | "astrologer")[];
+  }
+): UserAccount {
+  const user: UserAccount = {
+    id: randomUUID(),
+    status: "active",
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString()
+  };
+  store.users.push(user);
+  store.authIdentities.push({
+    id: randomUUID(),
+    userId: user.id,
+    provider: input.channel,
+    providerSubject: input.identifierNormalized,
+    ...(input.channel === "email"
+      ? { email: input.identifierNormalized, emailVerifiedAt: now.toISOString() }
+      : { phoneNumber: input.identifierNormalized, phoneVerifiedAt: now.toISOString() }),
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString()
+  });
+
+  for (const role of input.roles) {
+    store.roleAssignments.push({
+      id: randomUUID(),
+      userId: user.id,
+      role,
+      assignedAt: now.toISOString()
+    });
+  }
+
+  return user;
 }
 
 function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
@@ -803,49 +874,6 @@ class InMemoryPasswordlessAuthStore implements PasswordlessAuthStore, AuthSessio
       authIdentity,
       roleAssignments: this.roleAssignments.filter((assignment) => assignment.userId === user.id)
     };
-  }
-
-  async createUser(input: Parameters<PasswordlessAuthStore["createUser"]>[0]): Promise<UserAccount> {
-    const user: UserAccount = {
-      id: randomUUID(),
-      status: input.status,
-      createdAt: this.now.toISOString(),
-      updatedAt: this.now.toISOString()
-    };
-    this.users.push(user);
-    return user;
-  }
-
-  async createAuthIdentity(
-    input: Parameters<PasswordlessAuthStore["createAuthIdentity"]>[0]
-  ) {
-    const authIdentity = {
-      id: randomUUID(),
-      userId: input.userId,
-      provider: input.provider as "email" | "phone",
-      providerSubject: input.providerSubject,
-      ...(input.email === undefined ? {} : { email: input.email }),
-      ...(input.phoneNumber === undefined ? {} : { phoneNumber: input.phoneNumber }),
-      ...(input.emailVerifiedAt === undefined ? {} : { emailVerifiedAt: input.emailVerifiedAt }),
-      ...(input.phoneVerifiedAt === undefined ? {} : { phoneVerifiedAt: input.phoneVerifiedAt }),
-      createdAt: this.now.toISOString(),
-      updatedAt: this.now.toISOString()
-    };
-    this.authIdentities.push(authIdentity);
-    return authIdentity;
-  }
-
-  async assignRole(
-    input: Parameters<PasswordlessAuthStore["assignRole"]>[0]
-  ): Promise<UserRoleAssignment> {
-    const roleAssignment: UserRoleAssignment = {
-      id: randomUUID(),
-      userId: input.userId,
-      role: input.role,
-      assignedAt: this.now.toISOString()
-    };
-    this.roleAssignments.push(roleAssignment);
-    return roleAssignment;
   }
 
   async createSession(

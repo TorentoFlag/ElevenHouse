@@ -44,30 +44,31 @@ function createBaseStore(): PasswordlessAuthStore {
     findChallengeById: vi.fn(async () => null),
     incrementChallengeAttempts: vi.fn(async () => undefined),
     consumeChallenge: vi.fn(async () => undefined),
-    findAuthIdentityByProviderSubject: vi.fn(async () => null),
-    createUser: vi.fn(async (input) => ({
-      id: "8e14390f-3db1-4d1c-9344-55679c778427",
-      status: input.status,
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString()
-    })),
-    createAuthIdentity: vi.fn(async (input) => ({
-      id: "identity_1",
-      userId: input.userId,
-      provider: input.provider,
-      providerSubject: input.providerSubject,
-      ...(input.email === undefined ? {} : { email: input.email }),
-      ...(input.phoneNumber === undefined ? {} : { phoneNumber: input.phoneNumber }),
-      ...(input.emailVerifiedAt === undefined ? {} : { emailVerifiedAt: input.emailVerifiedAt }),
-      ...(input.phoneVerifiedAt === undefined ? {} : { phoneVerifiedAt: input.phoneVerifiedAt }),
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString()
-    })),
-    assignRole: vi.fn(async (input) => ({
-      id: `role_${input.role}`,
-      userId: input.userId,
-      role: input.role,
-      assignedAt: now.toISOString()
+    findAuthIdentityByProviderSubject: vi.fn(async () => ({
+      user: {
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "active" as const,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
+      },
+      authIdentity: {
+        id: "identity_1",
+        userId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        provider: "email" as const,
+        providerSubject: "client@example.com",
+        email: "client@example.com",
+        emailVerifiedAt: now.toISOString(),
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
+      },
+      roleAssignments: [
+        {
+          id: "role_client",
+          userId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          role: "client" as const,
+          assignedAt: now.toISOString()
+        }
+      ]
     })),
     createSession: vi.fn(async (input) => ({
       id: "session_1",

@@ -38,7 +38,6 @@ import {
 import { outboxEvents } from "../../../schema/outbox/outbox-events.schema";
 import type { ElevenHouseDatabase } from "../../../runtime";
 import { insertReturningOne } from "../../../shared/insert-returning-one";
-import { createAccountRegistrationStore } from "../account-registration";
 import { createAuthSessionCreationStore } from "../auth-sessions";
 
 type AuthChallengesInsert = typeof authChallenges.$inferInsert;
@@ -75,11 +74,9 @@ export function createDrizzlePasswordlessAuthUnitOfWork(
 export function createPasswordlessAuthStore(
   executor: PasswordlessAuthDrizzleExecutor
 ): PasswordlessAuthStore {
-  const accountRegistrationStore = createAccountRegistrationStore(executor);
   const authSessionCreationStore = createAuthSessionCreationStore(executor);
 
   return {
-    ...accountRegistrationStore,
     ...authSessionCreationStore,
     createChallenge: async (input) => {
       let row: typeof authChallenges.$inferSelect;

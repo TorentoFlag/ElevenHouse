@@ -69,28 +69,31 @@ describe("IdentityModule", () => {
       })),
       incrementChallengeAttempts: vi.fn(async () => undefined),
       consumeChallenge: vi.fn(async () => undefined),
-      findAuthIdentityByProviderSubject: vi.fn(async () => null),
-      createUser: vi.fn(async (input) => ({
-        id: "8e14390f-3db1-4d1c-9344-55679c778427",
-        status: input.status,
-        createdAt: "2026-06-16T10:00:00.000Z",
-        updatedAt: "2026-06-16T10:00:00.000Z"
-      })),
-      createAuthIdentity: vi.fn(async (input) => ({
-        id: "identity_1",
-        userId: input.userId,
-        provider: input.provider,
-        providerSubject: input.providerSubject,
-        email: input.email,
-        emailVerifiedAt: input.emailVerifiedAt,
-        createdAt: "2026-06-16T10:00:00.000Z",
-        updatedAt: "2026-06-16T10:00:00.000Z"
-      })),
-      assignRole: vi.fn(async (input) => ({
-        id: `role_${input.role}`,
-        userId: input.userId,
-        role: input.role,
-        assignedAt: "2026-06-16T10:00:00.000Z"
+      findAuthIdentityByProviderSubject: vi.fn(async () => ({
+        user: {
+          id: "8e14390f-3db1-4d1c-9344-55679c778427",
+          status: "active" as const,
+          createdAt: "2026-06-14T10:00:00.000Z",
+          updatedAt: "2026-06-14T10:00:00.000Z"
+        },
+        authIdentity: {
+          id: "identity_1",
+          userId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          provider: "email" as const,
+          providerSubject: "client@example.com",
+          email: "client@example.com",
+          emailVerifiedAt: "2026-06-14T10:00:00.000Z",
+          createdAt: "2026-06-14T10:00:00.000Z",
+          updatedAt: "2026-06-14T10:00:00.000Z"
+        },
+        roleAssignments: [
+          {
+            id: "role_client",
+            userId: "8e14390f-3db1-4d1c-9344-55679c778427",
+            role: "client" as const,
+            assignedAt: "2026-06-14T10:00:00.000Z"
+          }
+        ]
       })),
       createSession: vi.fn(async (input) => ({
         id: "session_1",

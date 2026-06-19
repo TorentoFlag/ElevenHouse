@@ -1,6 +1,5 @@
-import type { CustomerPlatformRole } from "@elevenhouse/auth";
-import type { UserAccount, UserAccountStatus } from "../../../accounts";
-import type { AuthIdentity, NormalizedAuthIdentityInput } from "../../../auth-identities";
+import type { UserAccount } from "../../../accounts";
+import type { AuthIdentity } from "../../../auth-identities";
 import {
   normalizeAuthSecurityEventInput,
   type AuthSecurityEvent
@@ -38,14 +37,6 @@ export type PasswordlessVerificationStore = {
     readonly provider: "email" | "phone";
     readonly providerSubject: string;
   }) => Promise<ExistingPasswordlessIdentity | null>;
-  readonly createUser: (input: { readonly status: UserAccountStatus }) => Promise<UserAccount>;
-  readonly createAuthIdentity: (
-    input: NormalizedAuthIdentityInput & { readonly userId: string }
-  ) => Promise<AuthIdentity>;
-  readonly assignRole: (input: {
-    readonly userId: string;
-    readonly role: CustomerPlatformRole;
-  }) => Promise<UserRoleAssignment>;
   readonly createSession: (
     input: ReturnType<typeof normalizeAuthSessionCreationInput>
   ) => Promise<AuthSession>;
@@ -106,8 +97,12 @@ export async function verifyPasswordlessCode(input: {
     provider: challenge.channel,
     providerSubject: challenge.identifierNormalized
   });
-  const accountContext =
-    existingIdentity ?? (await createPasswordlessAccount({ store: input.store, challenge, now: input.now }));
+  if (!existingIdentity) {
+    throw new PasswordlessCodeVerificationError();
+  }
+
+  assertRequestedRolesAssigned({ accountContext: existingIdentity, challenge });
+  const accountContext = existingIdentity;
   const session = await input.store.createSession(
     normalizeAuthSessionCreationInput({
       userId: accountContext.user.id,
@@ -118,10 +113,9 @@ export async function verifyPasswordlessCode(input: {
       userAgent: input.session.userAgent
     })
   );
-  const authenticationKind = existingIdentity ? "login" : "registration";
   const securityEvent = await input.store.recordSecurityEvent(
     normalizeAuthSecurityEventInput({
-      eventType: authenticationKind === "login" ? "login_succeeded" : "registration_succeeded",
+      eventType: "login_succeeded",
       occurredAt: input.now,
       userId: accountContext.user.id,
       sessionId: session.id,
@@ -136,35 +130,22 @@ export async function verifyPasswordlessCode(input: {
     roleAssignments: accountContext.roleAssignments,
     session,
     securityEvent,
-    authenticationKind
+    authenticationKind: "login"
   };
 }
 
-async function createPasswordlessAccount(input: {
-  readonly store: PasswordlessVerificationStore;
+function assertRequestedRolesAssigned(input: {
+  readonly accountContext: ExistingPasswordlessIdentity;
   readonly challenge: AuthChallenge;
-  readonly now: Date;
-}): Promise<ExistingPasswordlessIdentity> {
-  const user = await input.store.createUser({ status: "active" });
-  const verifiedAt = input.now.toISOString();
-  const authIdentity = await input.store.createAuthIdentity({
-    userId: user.id,
-    provider: input.challenge.channel,
-    providerSubject: input.challenge.identifierNormalized,
-    ...(input.challenge.channel === "email"
-      ? { email: input.challenge.identifierNormalized, emailVerifiedAt: verifiedAt }
-      : { phoneNumber: input.challenge.identifierNormalized, phoneVerifiedAt: verifiedAt })
-  });
-  const roleAssignments: UserRoleAssignment[] = [];
+}): void {
+  const existingRoles = new Set(
+    input.accountContext.roleAssignments.map((assignment) => assignment.role)
+  );
 
   for (const role of input.challenge.requestedRoles) {
-    roleAssignments.push(await input.store.assignRole({ userId: user.id, role }));
-  }
-
-  return {
-    user,
-    authIdentity,
-    roleAssignments
+    if (!existingRoles.has(role)) {
+      throw new PasswordlessCodeVerificationError();
+    }
   };
 }
 

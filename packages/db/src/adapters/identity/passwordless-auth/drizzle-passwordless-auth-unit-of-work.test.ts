@@ -9,11 +9,8 @@ import { describe, expect, it } from "vitest";
 import {
   authChallengeDeliveries,
   authChallenges,
-  authIdentities,
   authSecurityEvents,
   outboxEvents,
-  userRoleAssignments,
-  users,
   userSessions
 } from "../../../schema";
 import {
@@ -123,27 +120,32 @@ function createFakeDrizzleDatabase(input: {
   } as unknown as PasswordlessAuthDrizzleExecutor["query"];
   const select = (() => ({
     from: (table: unknown) => ({
-      where: (args: unknown) => ({
-        orderBy: () => ({
-          limit: async () => {
-            if (table === authChallenges) {
-              queries.push({ table: "authChallenges", args });
-              const row = input.challengeRows?.[nextChallengeRowIndex] ?? null;
-              nextChallengeRowIndex += 1;
-              return row ? [row] : [];
-            }
-
-            if (table === authChallengeDeliveries) {
-              queries.push({ table: "authChallengeDeliveries", args });
-              const row = input.deliveryRows?.[nextDeliveryRowIndex] ?? null;
-              nextDeliveryRowIndex += 1;
-              return row ? [row] : [];
-            }
-
-            return [];
+      where: (args: unknown) => {
+        const limit = async () => {
+          if (table === authChallenges) {
+            queries.push({ table: "authChallenges", args });
+            const row = input.challengeRows?.[nextChallengeRowIndex] ?? null;
+            nextChallengeRowIndex += 1;
+            return row ? [row] : [];
           }
-        })
-      })
+
+          if (table === authChallengeDeliveries) {
+            queries.push({ table: "authChallengeDeliveries", args });
+            const row = input.deliveryRows?.[nextDeliveryRowIndex] ?? null;
+            nextDeliveryRowIndex += 1;
+            return row ? [row] : [];
+          }
+
+          return [];
+        };
+
+        return {
+          orderBy: () => ({
+            limit
+          }),
+          limit
+        };
+      }
     })
   })) as unknown as PasswordlessAuthDrizzleExecutor["select"];
   const executor: PasswordlessAuthDrizzleExecutor = { insert, update, query, select };
@@ -266,7 +268,7 @@ function createSessionRow(overrides: Record<string, unknown> = {}) {
 function createSecurityEventRow(overrides: Record<string, unknown> = {}) {
   return {
     id: "event_1",
-    eventType: "registration_succeeded",
+    eventType: "login_succeeded",
     occurredAt: verifyNow,
     userId: "user_1",
     sessionId: "session_1",
@@ -523,33 +525,28 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
     expect(database.updates).toEqual([]);
   });
 
-  it("creates an active account and verified identity when a challenge has no linked identity", async () => {
+  it("rejects verification when a challenge has no linked identity", async () => {
     const database = createFakeDrizzleDatabase({
       challengeRows: [createChallengeRow()],
-      identityRows: [null],
-      insertRows: [
-        createUserRow(),
-        createAuthIdentityRow(),
-        createRoleAssignmentRow(),
-        createSessionRow(),
-        createSecurityEventRow()
-      ]
+      identityRows: [null]
     });
 
-    const result = await createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
-      verifyPasswordlessCode({
-        store,
-        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-        code: "123456",
-        codeSecret,
-        now: verifyNow,
-        session: {
-          tokenHash: " session_hash ",
-          createdAt: verifyNow,
-          expiresAt: new Date("2026-06-22T10:03:00.000Z")
-        }
-      })
-    );
+    await expect(
+      createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
+        verifyPasswordlessCode({
+          store,
+          challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          code: "123456",
+          codeSecret,
+          now: verifyNow,
+          session: {
+            tokenHash: " session_hash ",
+            createdAt: verifyNow,
+            expiresAt: new Date("2026-06-22T10:03:00.000Z")
+          }
+        })
+      )
+    ).rejects.toBeInstanceOf(PasswordlessCodeVerificationError);
 
     expect(database.updates).toEqual([
       {
@@ -561,49 +558,11 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
         }
       }
     ]);
-    expect(database.inserts).toEqual([
-      {
-        table: users,
-        value: { status: "active" }
-      },
-      {
-        table: authIdentities,
-        value: {
-          userId: "user_1",
-          provider: "email",
-          providerSubject: "ada@example.com",
-          email: "ada@example.com",
-          emailVerifiedAt: verifyNow
-        }
-      },
-      {
-        table: userRoleAssignments,
-        value: {
-          userId: "user_1",
-          role: "client"
-        }
-      },
-      {
-        table: userSessions,
-        value: {
-          userId: "user_1",
-          tokenHash: "session_hash",
-          createdAt: verifyNow,
-          expiresAt: new Date("2026-06-22T10:03:00.000Z")
-        }
-      },
-      {
-        table: authSecurityEvents,
-        value: {
-          eventType: "registration_succeeded",
-          occurredAt: verifyNow,
-          userId: "user_1",
-          sessionId: "session_1"
-        }
-      }
+    expect(database.queries.map((query) => query.table)).toEqual([
+      "authChallenges",
+      "authIdentities"
     ]);
-    expect(result.authenticationKind).toBe("registration");
-    expect(result.authIdentity.emailVerifiedAt).toBe("2026-06-15T10:03:00.000Z");
+    expect(database.inserts).toEqual([]);
   });
 
   it("rejects verification when a concurrent verifier already consumed the challenge", async () => {
@@ -642,7 +601,7 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
     expect(database.inserts).toEqual([]);
   });
 
-  it("creates a verified phone identity for a phone challenge", async () => {
+  it("logs in an existing verified phone identity for a phone challenge", async () => {
     const database = createFakeDrizzleDatabase({
       challengeRows: [
         createChallengeRow({
@@ -657,20 +616,25 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
           })
         })
       ],
-      identityRows: [null],
+      identityRows: [
+        {
+          ...createAuthIdentityRow({
+            provider: "phone",
+            providerSubject: "+15551234090",
+            email: null,
+            phoneNumber: "+15551234090",
+            emailVerifiedAt: null,
+            phoneVerifiedAt: verifyNow
+          }),
+          user: {
+            ...createUserRow(),
+            roleAssignments: [createRoleAssignmentRow()]
+          }
+        }
+      ],
       insertRows: [
-        createUserRow(),
-        createAuthIdentityRow({
-          provider: "phone",
-          providerSubject: "+15551234090",
-          email: null,
-          phoneNumber: "+15551234090",
-          emailVerifiedAt: null,
-          phoneVerifiedAt: verifyNow
-        }),
-        createRoleAssignmentRow(),
         createSessionRow(),
-        createSecurityEventRow()
+        createSecurityEventRow({ eventType: "login_succeeded" })
       ]
     });
 
@@ -689,16 +653,10 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
       })
     );
 
-    expect(database.inserts[1]).toEqual({
-      table: authIdentities,
-      value: {
-        userId: "user_1",
-        provider: "phone",
-        providerSubject: "+15551234090",
-        phoneNumber: "+15551234090",
-        phoneVerifiedAt: verifyNow
-      }
-    });
+    expect(database.inserts.map((insert) => insert.table)).toEqual([
+      userSessions,
+      authSecurityEvents
+    ]);
     expect(result.authIdentity).toMatchObject({
       provider: "phone",
       phoneNumber: "+15551234090",
@@ -706,7 +664,7 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
     });
   });
 
-  it("logs in an existing linked identity without assigning requested roles again", async () => {
+  it("rejects login when an existing linked identity is missing a requested role", async () => {
     const database = createFakeDrizzleDatabase({
       challengeRows: [createChallengeRow({ requestedRoles: ["client", "astrologer"] })],
       identityRows: [
@@ -715,6 +673,99 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
           user: {
             ...createUserRow(),
             roleAssignments: [createRoleAssignmentRow()]
+          }
+        }
+      ]
+    });
+
+    await expect(
+      createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
+        verifyPasswordlessCode({
+          store,
+          challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          code: "123456",
+          codeSecret,
+          now: verifyNow,
+          session: {
+            tokenHash: "session_hash",
+            createdAt: verifyNow,
+            expiresAt: new Date("2026-06-22T10:03:00.000Z")
+          }
+        })
+      )
+    ).rejects.toBeInstanceOf(PasswordlessCodeVerificationError);
+
+    expect(database.queries.map((query) => query.table)).toEqual([
+      "authChallenges",
+      "authIdentities"
+    ]);
+    expect(database.inserts).toEqual([]);
+  });
+
+  it("does not grant requested roles that are already assigned to an existing identity", async () => {
+    const database = createFakeDrizzleDatabase({
+      challengeRows: [createChallengeRow({ requestedRoles: ["astrologer"] })],
+      identityRows: [
+        {
+          ...createAuthIdentityRow(),
+          user: {
+            ...createUserRow(),
+            roleAssignments: [
+              createRoleAssignmentRow(),
+              createRoleAssignmentRow({
+                id: "role_astrologer",
+                role: "astrologer"
+              })
+            ]
+          }
+        }
+      ],
+      insertRows: [
+        createSessionRow(),
+        createSecurityEventRow({ eventType: "login_succeeded" })
+      ]
+    });
+
+    const result = await createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
+      verifyPasswordlessCode({
+        store,
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        codeSecret,
+        now: verifyNow,
+        session: {
+          tokenHash: "session_hash",
+          createdAt: verifyNow,
+          expiresAt: new Date("2026-06-22T10:03:00.000Z")
+        }
+      })
+    );
+
+    expect(database.inserts.map((insert) => insert.table)).toEqual([
+      userSessions,
+      authSecurityEvents
+    ]);
+    expect(result.roleAssignments.map((assignment) => assignment.role)).toEqual([
+      "client",
+      "astrologer"
+    ]);
+  });
+
+  it("logs in an existing linked identity with all requested roles", async () => {
+    const database = createFakeDrizzleDatabase({
+      challengeRows: [createChallengeRow({ requestedRoles: ["client", "astrologer"] })],
+      identityRows: [
+        {
+          ...createAuthIdentityRow(),
+          user: {
+            ...createUserRow(),
+            roleAssignments: [
+              createRoleAssignmentRow(),
+              createRoleAssignmentRow({
+                id: "role_astrologer",
+                role: "astrologer"
+              })
+            ]
           }
         }
       ],
@@ -764,15 +815,12 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
       }
     ]);
     expect(result.authenticationKind).toBe("login");
-    expect(result.roleAssignments).toEqual([
-      {
-        id: "role_client",
-        userId: "user_1",
-        role: "client",
-        assignedAt: "2026-06-15T10:03:00.000Z"
-      }
+    expect(result.roleAssignments.map((assignment) => assignment.role)).toEqual([
+      "client",
+      "astrologer"
     ]);
   });
+
 
   it("increments attempts and records a failed event for an incorrect code", async () => {
     const database = createFakeDrizzleDatabase({

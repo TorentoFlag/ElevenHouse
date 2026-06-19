@@ -8,7 +8,12 @@ const sessionCreatedAt = new Date("2026-06-15T10:03:00.000Z");
 const sessionExpiresAt = new Date("2026-06-22T10:03:00.000Z");
 const codeSecret = "test-secret";
 
-function createPendingChallenge(code = "123456") {
+function createPendingChallenge(input: {
+  readonly code?: string;
+  readonly requestedRoles?: readonly ("client" | "astrologer")[];
+} = {}) {
+  const code = input.code ?? "123456";
+
   return {
     id: "8e14390f-3db1-4d1c-9344-55679c778427",
     channel: "email" as const,
@@ -20,7 +25,7 @@ function createPendingChallenge(code = "123456") {
       identifierNormalized: "ada@example.com",
       code
     }),
-    requestedRoles: ["client"] as const,
+    requestedRoles: input.requestedRoles ?? (["client"] as const),
     status: "pending" as const,
     attempts: 0,
     maxAttempts: 5,
@@ -44,28 +49,6 @@ function createBaseStore() {
     incrementChallengeAttempts: vi.fn(async () => undefined),
     consumeChallenge: vi.fn(async () => undefined),
     findAuthIdentityByProviderSubject: vi.fn(async () => null),
-    createUser: vi.fn(async (input) => ({
-      id: "user_1",
-      status: input.status,
-      createdAt: "2026-06-15T10:03:00.000Z",
-      updatedAt: "2026-06-15T10:03:00.000Z"
-    })),
-    createAuthIdentity: vi.fn(async (input) => ({
-      id: "identity_1",
-      userId: input.userId,
-      provider: input.provider,
-      providerSubject: input.providerSubject,
-      ...(input.email === undefined ? {} : { email: input.email }),
-      ...(input.emailVerifiedAt === undefined ? {} : { emailVerifiedAt: input.emailVerifiedAt }),
-      createdAt: "2026-06-15T10:03:00.000Z",
-      updatedAt: "2026-06-15T10:03:00.000Z"
-    })),
-    assignRole: vi.fn(async (input) => ({
-      id: `role_${input.role}`,
-      userId: input.userId,
-      role: input.role,
-      assignedAt: "2026-06-15T10:03:00.000Z"
-    })),
     createSession: vi.fn(async (input) => ({
       id: "session_1",
       status: "active" as const,
@@ -94,44 +77,19 @@ function verifyWithStore(store: ReturnType<typeof createBaseStore>, code = "1234
 }
 
 describe("verifyPasswordlessCode", () => {
-  it("creates a verified identity, account, roles and session for a new user", async () => {
+  it("rejects a valid code for an unknown identity without creating an account", async () => {
     const store = createStore();
 
-    const result = await verifyWithStore(store);
+    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(PasswordlessCodeVerificationError);
 
     expect(store.consumeChallenge).toHaveBeenCalledWith({
       challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
       consumedAt: "2026-06-15T10:03:00.000Z"
     });
-    expect(store.createUser).toHaveBeenCalledWith({ status: "active" });
-    expect(store.createAuthIdentity).toHaveBeenCalledWith({
-      userId: "user_1",
-      provider: "email",
-      providerSubject: "ada@example.com",
-      email: "ada@example.com",
-      emailVerifiedAt: "2026-06-15T10:03:00.000Z"
-    });
-    expect(store.assignRole).toHaveBeenCalledWith({
-      userId: "user_1",
-      role: "client"
-    });
-    expect(store.createSession).toHaveBeenCalledWith({
-      userId: "user_1",
-      tokenHash: "session_hash",
-      createdAt: "2026-06-15T10:03:00.000Z",
-      expiresAt: "2026-06-22T10:03:00.000Z"
-    });
-    expect(store.recordSecurityEvent).toHaveBeenCalledWith({
-      eventType: "registration_succeeded",
-      occurredAt: "2026-06-15T10:03:00.000Z",
-      userId: "user_1",
-      sessionId: "session_1"
-    });
-    expect(result.authenticationKind).toBe("registration");
-    expect(result.user.id).toBe("user_1");
+    expect(store.createSession).not.toHaveBeenCalled();
   });
 
-  it("logs in an existing identity without granting new roles", async () => {
+  it("logs in an existing identity without granting already assigned requested roles", async () => {
     const store = createStore({
       findAuthIdentityByProviderSubject: vi.fn(async () => ({
         user: {
@@ -163,9 +121,6 @@ describe("verifyPasswordlessCode", () => {
 
     const result = await verifyWithStore(store);
 
-    expect(store.createUser).not.toHaveBeenCalled();
-    expect(store.createAuthIdentity).not.toHaveBeenCalled();
-    expect(store.assignRole).not.toHaveBeenCalled();
     expect(store.createSession).toHaveBeenCalledWith({
       userId: "user_existing",
       tokenHash: "session_hash",
@@ -180,6 +135,91 @@ describe("verifyPasswordlessCode", () => {
     });
     expect(result.authenticationKind).toBe("login");
     expect(result.roleAssignments).toHaveLength(1);
+  });
+
+  it("rejects login when an existing identity is missing a requested role", async () => {
+    const store = createStore({
+      findChallengeById: vi.fn(async () =>
+        createPendingChallenge({ requestedRoles: ["astrologer"] })
+      ),
+      findAuthIdentityByProviderSubject: vi.fn(async () => ({
+        user: {
+          id: "user_existing",
+          status: "active" as const,
+          createdAt: "2026-06-14T10:03:00.000Z",
+          updatedAt: "2026-06-14T10:03:00.000Z"
+        },
+        authIdentity: {
+          id: "identity_existing",
+          userId: "user_existing",
+          provider: "email" as const,
+          providerSubject: "ada@example.com",
+          email: "ada@example.com",
+          emailVerifiedAt: "2026-06-14T10:03:00.000Z",
+          createdAt: "2026-06-14T10:03:00.000Z",
+          updatedAt: "2026-06-14T10:03:00.000Z"
+        },
+        roleAssignments: [
+          {
+            id: "role_client",
+            userId: "user_existing",
+            role: "client" as const,
+            assignedAt: "2026-06-14T10:03:00.000Z"
+          }
+        ]
+      }))
+    });
+
+    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(PasswordlessCodeVerificationError);
+
+    expect(store.createSession).not.toHaveBeenCalled();
+  });
+
+  it("does not duplicate roles already assigned to an existing identity", async () => {
+    const store = createStore({
+      findChallengeById: vi.fn(async () =>
+        createPendingChallenge({ requestedRoles: ["astrologer"] })
+      ),
+      findAuthIdentityByProviderSubject: vi.fn(async () => ({
+        user: {
+          id: "user_existing",
+          status: "active" as const,
+          createdAt: "2026-06-14T10:03:00.000Z",
+          updatedAt: "2026-06-14T10:03:00.000Z"
+        },
+        authIdentity: {
+          id: "identity_existing",
+          userId: "user_existing",
+          provider: "email" as const,
+          providerSubject: "ada@example.com",
+          email: "ada@example.com",
+          emailVerifiedAt: "2026-06-14T10:03:00.000Z",
+          createdAt: "2026-06-14T10:03:00.000Z",
+          updatedAt: "2026-06-14T10:03:00.000Z"
+        },
+        roleAssignments: [
+          {
+            id: "role_client",
+            userId: "user_existing",
+            role: "client" as const,
+            assignedAt: "2026-06-14T10:03:00.000Z"
+          },
+          {
+            id: "role_astrologer",
+            userId: "user_existing",
+            role: "astrologer" as const,
+            assignedAt: "2026-06-14T10:04:00.000Z"
+          }
+        ]
+      }))
+    });
+
+    const result = await verifyWithStore(store);
+
+    expect(result.roleAssignments.map((assignment) => assignment.role)).toEqual([
+      "client",
+      "astrologer"
+    ]);
   });
 
   it("increments attempts and fails generically for a wrong code", async () => {
@@ -268,7 +308,7 @@ describe("verifyPasswordlessCode", () => {
     expect(store.consumeChallenge).not.toHaveBeenCalled();
   });
 
-  it("creates a verified phone identity for a new phone challenge", async () => {
+  it("logs in an existing verified phone identity", async () => {
     const phoneChallenge = {
       ...createPendingChallenge(),
       channel: "phone" as const,
@@ -283,31 +323,40 @@ describe("verifyPasswordlessCode", () => {
     };
     const store = createStore({
       findChallengeById: vi.fn(async () => phoneChallenge),
-      createAuthIdentity: vi.fn(async (input) => ({
-        id: "identity_1",
-        userId: input.userId,
-        provider: input.provider,
-        providerSubject: input.providerSubject,
-        ...(input.phoneNumber === undefined ? {} : { phoneNumber: input.phoneNumber }),
-        ...(input.phoneVerifiedAt === undefined ? {} : { phoneVerifiedAt: input.phoneVerifiedAt }),
-        createdAt: "2026-06-15T10:03:00.000Z",
-        updatedAt: "2026-06-15T10:03:00.000Z"
+      findAuthIdentityByProviderSubject: vi.fn(async () => ({
+        user: {
+          id: "user_existing",
+          status: "active" as const,
+          createdAt: "2026-06-14T10:03:00.000Z",
+          updatedAt: "2026-06-14T10:03:00.000Z"
+        },
+        authIdentity: {
+          id: "identity_existing",
+          userId: "user_existing",
+          provider: "phone" as const,
+          providerSubject: "+15551234090",
+          phoneNumber: "+15551234090",
+          phoneVerifiedAt: "2026-06-14T10:03:00.000Z",
+          createdAt: "2026-06-14T10:03:00.000Z",
+          updatedAt: "2026-06-14T10:03:00.000Z"
+        },
+        roleAssignments: [
+          {
+            id: "role_client",
+            userId: "user_existing",
+            role: "client" as const,
+            assignedAt: "2026-06-14T10:03:00.000Z"
+          }
+        ]
       }))
     });
 
     const result = await verifyWithStore(store);
 
-    expect(store.createAuthIdentity).toHaveBeenCalledWith({
-      userId: "user_1",
-      provider: "phone",
-      providerSubject: "+15551234090",
-      phoneNumber: "+15551234090",
-      phoneVerifiedAt: "2026-06-15T10:03:00.000Z"
-    });
     expect(result.authIdentity).toMatchObject({
       provider: "phone",
       phoneNumber: "+15551234090",
-      phoneVerifiedAt: "2026-06-15T10:03:00.000Z"
+      phoneVerifiedAt: "2026-06-14T10:03:00.000Z"
     });
   });
 });
