@@ -15,6 +15,12 @@ export default defineConfig({
       "@elevenhouse/design-system/navigation": fileURLToPath(
         new URL("../../packages/design-system/src/navigation/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/icons/Chat": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Chat/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/Content": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Content/index.ts", import.meta.url)
+      ),
       "@elevenhouse/design-system/icons/Flow": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Flow/index.ts", import.meta.url)
       ),
@@ -23,6 +29,9 @@ export default defineConfig({
       ),
       "@elevenhouse/design-system/icons/Sparkle": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Sparkle/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/Video": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Video/index.ts", import.meta.url)
       ),
       "@elevenhouse/design-system/icons/Wallet": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Wallet/index.ts", import.meta.url)

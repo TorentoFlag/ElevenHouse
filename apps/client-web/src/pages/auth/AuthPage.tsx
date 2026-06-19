@@ -1,7 +1,8 @@
-import { Flow } from "@elevenhouse/design-system/icons/Flow";
+import { Chat } from "@elevenhouse/design-system/icons/Chat";
+import { Content } from "@elevenhouse/design-system/icons/Content";
 import { Orbit } from "@elevenhouse/design-system/icons/Orbit";
 import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
-import { Wallet } from "@elevenhouse/design-system/icons/Wallet";
+import { Video } from "@elevenhouse/design-system/icons/Video";
 import { BackLink } from "@elevenhouse/design-system/navigation";
 import type { ComponentType, SVGProps } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
@@ -9,18 +10,26 @@ import styles from "./AuthPage.module.css";
 
 type HighlightIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
-const authHighlights: Array<{ Icon: HighlightIcon; label: string }> = [
+const authHighlights: Array<{ Icon: HighlightIcon; label: string; description: string }> = [
+  {
+    Icon: Video,
+    label: "Записи и онлайн консультации",
+    description: "История сессий, записи и материалы — всегда под рукой"
+  },
   {
     Icon: Orbit,
-    label: "Движок карт и все системы"
+    label: "Ваши натальные карты",
+    description: "Карты, расчёты и разборы от вашего астролога"
   },
   {
-    Icon: Flow,
-    label: "Воронки и AI-автоматизация"
+    Icon: Chat,
+    label: "Личные сообщения",
+    description: "Переписка с астрологом в одном окне"
   },
   {
-    Icon: Wallet,
-    label: "Оплаты, продукты, контент"
+    Icon: Content,
+    label: "Астродневник и контент",
+    description: "Прогнозы, дневник и закрытый контент по подписке"
   }
 ];
 
@@ -42,11 +51,7 @@ export function AuthPage() {
         <div className={styles.stars} />
 
         <div className={styles.visualContent}>
-          <BackLink
-            className={styles.backLink}
-            path="/"
-            title="На главную"
-          />
+          <BackLink className={styles.backLink} path="/" title="На страницу астролога" />
 
           <div className={styles.heroCopy}>
             <div className={styles.brandBadge}>
@@ -54,17 +59,19 @@ export function AuthPage() {
               ElevenHouse
             </div>
             <h1 className={styles.heroTitle}>
-              Кабинет, который
-              <br />
-              продаёт за вас
+              Ваш кабинет
+              <br />у астролога
             </h1>
             <div className={styles.highlightList}>
-              {authHighlights.map(({ Icon, label }) => (
+              {authHighlights.map(({ Icon, description, label }) => (
                 <div className={styles.highlightItem} key={label}>
                   <span className={styles.highlightIcon} aria-hidden="true">
                     <Icon />
                   </span>
-                  <span>{label}</span>
+                  <span className={styles.highlightText}>
+                    <span className={styles.highlightLabel}>{label}</span>
+                    <span className={styles.highlightDescription}>{description}</span>
+                  </span>
                 </div>
               ))}
             </div>

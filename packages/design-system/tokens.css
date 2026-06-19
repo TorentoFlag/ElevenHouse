@@ -30,6 +30,8 @@
   --eh-space-7: 7px;
   --eh-space-8: 8px;
   --eh-space-9: 9px;
+  --eh-space-11: 11px;
+  --eh-space-12: 12px;
   --eh-space-13: 13px;
   --eh-space-14: 14px;
   --eh-space-16: 16px;
@@ -44,6 +46,7 @@
   --eh-length-32: 32px;
   --eh-length-34: 34px;
   --eh-length-38: 38px;
+  --eh-length-340: 340px;
   --eh-length-420: 420px;
   --eh-length-440: 440px;
 
@@ -54,6 +57,9 @@
   --eh-font-size-12: 12px;
   --eh-font-size-13: 13px;
   --eh-font-size-14: 14px;
+
+  --eh-font-weight-semibold: 600;
+  --eh-line-height-140: 1.4;
 
   --eh-auth-page-background: #090719;
   --eh-auth-page-text: #ece8f7;
@@ -145,10 +151,15 @@
   --eh-auth-title-font-size: var(--eh-length-38);
   --eh-auth-title-font-size-mobile: var(--eh-length-34);
 
-  --eh-auth-highlight-list-gap: var(--eh-space-13);
-  --eh-auth-highlight-item-gap: var(--eh-space-13);
+  --eh-auth-highlight-list-width: var(--eh-length-340);
+  --eh-auth-highlight-list-gap: var(--eh-space-12);
+  --eh-auth-highlight-item-gap: var(--eh-space-11);
   --eh-auth-highlight-font-size: var(--eh-font-size-14);
-  --eh-auth-highlight-icon-size: var(--eh-length-32);
+  --eh-auth-highlight-font-weight: var(--eh-font-weight-semibold);
+  --eh-auth-highlight-description-font-size: var(--eh-font-size-12);
+  --eh-auth-highlight-description-line-height: var(--eh-line-height-140);
+  --eh-auth-highlight-description-text: var(--eh-auth-control-text);
+  --eh-auth-highlight-icon-size: var(--eh-length-34);
   --eh-auth-highlight-icon-radius: var(--eh-radius-10);
 
   --eh-auth-joined-gap: var(--eh-space-14);

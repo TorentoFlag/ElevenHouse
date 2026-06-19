@@ -22,6 +22,14 @@
       "types": "./dist/icons/ArrowLeft/index.d.ts",
       "import": "./dist/icons/ArrowLeft/index.js"
     },
+    "./icons/Chat": {
+      "types": "./dist/icons/Chat/index.d.ts",
+      "import": "./dist/icons/Chat/index.js"
+    },
+    "./icons/Content": {
+      "types": "./dist/icons/Content/index.d.ts",
+      "import": "./dist/icons/Content/index.js"
+    },
     "./icons/Flow": {
       "types": "./dist/icons/Flow/index.d.ts",
       "import": "./dist/icons/Flow/index.js"
@@ -33,6 +41,10 @@
     "./icons/Sparkle": {
       "types": "./dist/icons/Sparkle/index.d.ts",
       "import": "./dist/icons/Sparkle/index.js"
+    },
+    "./icons/Video": {
+      "types": "./dist/icons/Video/index.d.ts",
+      "import": "./dist/icons/Video/index.js"
     },
     "./icons/Wallet": {
       "types": "./dist/icons/Wallet/index.d.ts",

@@ -134,15 +134,32 @@
 .highlightList {
   display: flex;
   flex-direction: column;
+  max-width: var(--eh-auth-highlight-list-width);
   gap: var(--eh-auth-highlight-list-gap);
 }
 
 .highlightItem {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--eh-auth-highlight-item-gap);
+}
+
+.highlightText {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.highlightLabel {
   color: var(--eh-auth-highlight-text);
   font-size: var(--eh-auth-highlight-font-size);
+  font-weight: var(--eh-auth-highlight-font-weight);
+}
+
+.highlightDescription {
+  color: var(--eh-auth-highlight-description-text);
+  font-size: var(--eh-auth-highlight-description-font-size);
+  line-height: var(--eh-auth-highlight-description-line-height);
 }
 
 .highlightIcon {
