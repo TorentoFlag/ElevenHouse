@@ -1,0 +1,172 @@
+.ehOtpAuthForm {
+  width: min(var(--eh-otp-auth-form-width), 100%);
+  color: var(--eh-otp-auth-text);
+  font-family: var(--eh-font-sans);
+}
+
+.ehOtpAuthForm__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--eh-otp-auth-brand-gap);
+  color: var(--eh-otp-auth-text);
+}
+
+.ehOtpAuthForm__brand svg {
+  flex: 0 0 auto;
+}
+
+.ehOtpAuthForm__brandContent {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.ehOtpAuthForm__brandName {
+  color: var(--eh-otp-auth-text);
+  font-size: var(--eh-otp-auth-brand-font-size);
+  font-weight: var(--eh-font-weight-bold);
+  line-height: var(--eh-line-height-100);
+}
+
+.ehOtpAuthForm__brandName span {
+  color: var(--eh-auth-gold);
+}
+
+.ehOtpAuthForm__brandSubtitle {
+  color: var(--eh-otp-auth-brand-subtitle-text);
+  font-size: var(--eh-otp-auth-brand-subtitle-font-size);
+  letter-spacing: var(--eh-otp-auth-brand-subtitle-letter-spacing);
+  line-height: var(--eh-line-height-100);
+}
+
+.ehOtpAuthForm__tabs {
+  display: flex;
+  gap: var(--eh-otp-auth-tabs-gap);
+  margin: var(--eh-otp-auth-tabs-margin-y) 0;
+  padding: var(--eh-otp-auth-tabs-padding);
+  border: 1px solid var(--eh-otp-auth-tabs-line);
+  border-radius: var(--eh-otp-auth-tabs-radius);
+  background: var(--eh-otp-auth-tabs-surface);
+}
+
+.ehOtpAuthForm__tab {
+  flex: 1;
+  padding: var(--eh-otp-auth-tab-padding-y) var(--eh-otp-auth-tab-padding-x);
+  border: 0;
+  border-radius: var(--eh-otp-auth-tab-radius);
+  background: transparent;
+  color: var(--eh-otp-auth-muted-text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--eh-otp-auth-tab-font-size);
+  font-weight: var(--eh-font-weight-semibold);
+}
+
+.ehOtpAuthForm__tab--active {
+  background: var(--eh-auth-gold);
+  color: var(--eh-otp-auth-on-accent-text);
+}
+
+.ehOtpAuthForm__title {
+  margin: 0 0 var(--eh-otp-auth-title-margin-bottom);
+  color: var(--eh-otp-auth-text);
+  font-size: var(--eh-otp-auth-title-font-size);
+  font-weight: var(--eh-font-weight-bold);
+  line-height: var(--eh-line-height-120);
+}
+
+.ehOtpAuthForm__description {
+  margin: 0 0 var(--eh-otp-auth-description-margin-bottom);
+  color: var(--eh-otp-auth-description-text);
+  font-size: var(--eh-otp-auth-description-font-size);
+  line-height: var(--eh-line-height-140);
+}
+
+.ehOtpAuthForm__field {
+  display: block;
+  margin-bottom: var(--eh-otp-auth-field-margin-bottom);
+}
+
+.ehOtpAuthForm__field--compact {
+  margin-bottom: var(--eh-otp-auth-field-compact-margin-bottom);
+}
+
+.ehOtpAuthForm__label {
+  display: block;
+  margin-bottom: var(--eh-otp-auth-label-margin-bottom);
+  color: var(--eh-otp-auth-label-text);
+  font-size: var(--eh-otp-auth-label-font-size);
+  font-weight: var(--eh-font-weight-semibold);
+}
+
+.ehOtpAuthForm__input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--eh-otp-auth-input-padding-y) var(--eh-otp-auth-input-padding-x);
+  border: 1px solid var(--eh-otp-auth-input-line);
+  border-radius: var(--eh-otp-auth-input-radius);
+  outline: none;
+  background: var(--eh-otp-auth-input-surface);
+  color: var(--eh-otp-auth-text);
+  font-family: inherit;
+  font-size: var(--eh-otp-auth-input-font-size);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.ehOtpAuthForm__input::placeholder {
+  color: var(--eh-otp-auth-placeholder-text);
+}
+
+.ehOtpAuthForm__input:focus {
+  border-color: var(--eh-otp-auth-focus-line);
+  box-shadow: 0 0 0 var(--eh-otp-auth-focus-ring-size) var(--eh-otp-auth-focus-ring);
+}
+
+.ehOtpAuthForm__input--invalid {
+  border-color: var(--eh-otp-auth-error-text);
+}
+
+.ehOtpAuthForm__fieldError {
+  display: block;
+  margin-top: var(--eh-otp-auth-field-error-margin-top);
+  color: var(--eh-otp-auth-error-text);
+  font-size: var(--eh-otp-auth-field-error-font-size);
+  line-height: var(--eh-line-height-140);
+}
+
+.ehOtpAuthForm__hint,
+.ehOtpAuthForm__error {
+  margin: 0 0 var(--eh-otp-auth-hint-margin-bottom);
+  font-size: var(--eh-otp-auth-hint-font-size);
+  line-height: var(--eh-line-height-150);
+}
+
+.ehOtpAuthForm__hint {
+  color: var(--eh-otp-auth-description-text);
+}
+
+.ehOtpAuthForm__error {
+  color: var(--eh-otp-auth-error-text);
+}
+
+.ehOtpAuthForm__submit {
+  width: 100%;
+  display: inline-flex;
+  justify-content: center;
+  padding: var(--eh-otp-auth-submit-padding-y) var(--eh-otp-auth-submit-padding-x);
+  border: 0;
+  border-radius: var(--eh-otp-auth-submit-radius);
+  background: var(--eh-auth-gold);
+  color: var(--eh-otp-auth-on-accent-text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--eh-otp-auth-submit-font-size);
+  font-weight: var(--eh-font-weight-semibold);
+}
+
+.ehOtpAuthForm__submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

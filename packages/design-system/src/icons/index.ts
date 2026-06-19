@@ -2,6 +2,7 @@ export * from "./ArrowLeft/index.js";
 export * from "./Chat/index.js";
 export * from "./Content/index.js";
 export * from "./Flow/index.js";
+export * from "./LogoMoon/index.js";
 export * from "./Orbit/index.js";
 export * from "./Sparkle/index.js";
 export * from "./Video/index.js";

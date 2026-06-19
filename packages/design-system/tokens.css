@@ -8,7 +8,9 @@
 
   --eh-rgb-white: 255 255 255;
   --eh-rgb-moon: 216 212 236;
+  --eh-rgb-muted: 111 106 147;
   --eh-rgb-auth-text: 236 232 247;
+  --eh-rgb-surface-sidebar: 17 15 38;
   --eh-rgb-gold: 244 196 48;
   --eh-rgb-coral: 244 122 122;
   --eh-rgb-rose: 229 156 196;
@@ -19,6 +21,8 @@
   --eh-rgb-control-surface: 20 18 47;
 
   --eh-color-white: rgb(var(--eh-rgb-white));
+  --eh-color-muted: rgb(var(--eh-rgb-muted));
+  --eh-color-surface-sidebar: rgb(var(--eh-rgb-surface-sidebar));
   --eh-color-gold: rgb(var(--eh-rgb-gold));
   --eh-color-coral: rgb(var(--eh-rgb-coral));
   --eh-color-rose: rgb(var(--eh-rgb-rose));
@@ -27,9 +31,13 @@
   --eh-color-amethyst: rgb(var(--eh-rgb-amethyst));
   --eh-color-lilac: rgb(var(--eh-rgb-lilac));
 
+  --eh-space-3: 3px;
+  --eh-space-4: 4px;
+  --eh-space-6: 6px;
   --eh-space-7: 7px;
   --eh-space-8: 8px;
   --eh-space-9: 9px;
+  --eh-space-10: 10px;
   --eh-space-11: 11px;
   --eh-space-12: 12px;
   --eh-space-13: 13px;
@@ -41,25 +49,36 @@
   --eh-space-24: 24px;
   --eh-space-28: 28px;
   --eh-space-36: 36px;
+  --eh-space-40: 40px;
   --eh-space-44: 44px;
 
   --eh-length-32: 32px;
   --eh-length-34: 34px;
   --eh-length-38: 38px;
   --eh-length-340: 340px;
+  --eh-length-380: 380px;
   --eh-length-420: 420px;
   --eh-length-440: 440px;
 
+  --eh-radius-8: 8px;
   --eh-radius-10: 10px;
   --eh-radius-12: 12px;
   --eh-radius-pill: 999px;
 
   --eh-font-size-12: 12px;
+  --eh-font-size-12-5: 12.5px;
   --eh-font-size-13: 13px;
+  --eh-font-size-13-5: 13.5px;
   --eh-font-size-14: 14px;
+  --eh-font-size-15: 15px;
+  --eh-font-size-23: 23px;
 
   --eh-font-weight-semibold: 600;
+  --eh-font-weight-bold: 700;
+  --eh-line-height-100: 1;
+  --eh-line-height-120: 1.2;
   --eh-line-height-140: 1.4;
+  --eh-line-height-150: 1.5;
 
   --eh-auth-page-background: #090719;
   --eh-auth-page-text: #ece8f7;
@@ -168,4 +187,63 @@
   --eh-auth-avatar-overlap: calc(var(--eh-space-7) * -1);
   --eh-auth-avatar-radius: var(--eh-radius-12);
   --eh-auth-avatar-font-size: var(--eh-font-size-12);
+
+  --eh-auth-form-pane-padding-y: var(--eh-space-40);
+  --eh-auth-form-pane-padding-x: var(--eh-space-24);
+
+  --eh-otp-auth-form-width: var(--eh-length-380);
+  --eh-otp-auth-text: var(--eh-auth-page-text);
+  --eh-otp-auth-muted-text: var(--eh-auth-control-text);
+  --eh-otp-auth-description-text: var(--eh-auth-control-text);
+  --eh-otp-auth-label-text: var(--eh-auth-control-text);
+  --eh-otp-auth-placeholder-text: var(--eh-color-muted);
+  --eh-otp-auth-on-accent-text: var(--eh-auth-page-background);
+  --eh-otp-auth-error-text: var(--eh-color-coral);
+
+  --eh-otp-auth-brand-gap: var(--eh-space-11);
+  --eh-otp-auth-brand-font-size: 19px;
+  --eh-otp-auth-brand-subtitle-font-size: 11px;
+  --eh-otp-auth-brand-subtitle-letter-spacing: 0.16em;
+  --eh-otp-auth-brand-subtitle-text: #777195;
+
+  --eh-otp-auth-tabs-gap: var(--eh-space-3);
+  --eh-otp-auth-tabs-margin-y: var(--eh-space-22);
+  --eh-otp-auth-tabs-padding: var(--eh-space-4);
+  --eh-otp-auth-tabs-radius: var(--eh-radius-12);
+  --eh-otp-auth-tabs-surface: var(--eh-color-surface-sidebar);
+  --eh-otp-auth-tabs-line: var(--eh-auth-control-line-hover);
+  --eh-otp-auth-tab-padding-y: var(--eh-space-9);
+  --eh-otp-auth-tab-padding-x: var(--eh-space-4);
+  --eh-otp-auth-tab-radius: var(--eh-radius-8);
+  --eh-otp-auth-tab-font-size: var(--eh-font-size-13-5);
+
+  --eh-otp-auth-title-margin-bottom: var(--eh-space-6);
+  --eh-otp-auth-title-font-size: var(--eh-font-size-23);
+  --eh-otp-auth-description-margin-bottom: var(--eh-space-22);
+  --eh-otp-auth-description-font-size: var(--eh-font-size-13-5);
+
+  --eh-otp-auth-field-margin-bottom: var(--eh-space-14);
+  --eh-otp-auth-field-compact-margin-bottom: var(--eh-space-8);
+  --eh-otp-auth-label-margin-bottom: var(--eh-space-8);
+  --eh-otp-auth-label-font-size: var(--eh-font-size-13);
+  --eh-otp-auth-input-padding-y: var(--eh-space-12);
+  --eh-otp-auth-input-padding-x: var(--eh-space-14);
+  --eh-otp-auth-input-radius: var(--eh-radius-12);
+  --eh-otp-auth-input-surface: var(--eh-auth-page-background);
+  --eh-otp-auth-input-line: var(--eh-auth-control-line-hover);
+  --eh-otp-auth-input-font-size: var(--eh-font-size-15);
+  --eh-otp-auth-focus-line: var(--eh-auth-highlight-line);
+  --eh-otp-auth-focus-ring: var(--eh-auth-brand-surface);
+  --eh-otp-auth-focus-ring-size: var(--eh-space-3);
+  --eh-otp-auth-field-error-margin-top: var(--eh-space-6);
+  --eh-otp-auth-field-error-font-size: var(--eh-font-size-12);
+
+  --eh-otp-auth-hint-margin-bottom: var(--eh-space-18);
+  --eh-otp-auth-hint-font-size: var(--eh-font-size-12-5);
+
+  --eh-otp-auth-submit-padding-y: var(--eh-space-11);
+  --eh-otp-auth-submit-padding-x: var(--eh-space-16);
+  --eh-otp-auth-submit-radius: var(--eh-radius-12);
+  --eh-otp-auth-submit-font-size: var(--eh-font-size-14);
+
 }

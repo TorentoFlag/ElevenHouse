@@ -42,6 +42,12 @@
 }
 
 .formPane {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: var(--eh-auth-form-pane-padding-y) var(--eh-auth-form-pane-padding-x);
+  overflow-x: hidden;
+  overflow-y: auto;
   background:
     radial-gradient(circle at 76% 27%, var(--eh-auth-form-glow-amethyst), transparent 26%),
     radial-gradient(circle at 87% 78%, var(--eh-auth-form-glow-azure), transparent 28%),

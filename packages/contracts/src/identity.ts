@@ -1,10 +1,9 @@
 import { customerPlatformRoles } from "@elevenhouse/auth/roles";
-import { z } from "@elevenhouse/validation";
+import { emailSchema, z } from "@elevenhouse/validation";
 
 export const customerAccountRoleSchema = z.enum(customerPlatformRoles);
 export const passwordlessAuthChannelSchema = z.enum(["email", "phone"]);
 
-const emailIdentifierSchema = z.string().trim().toLowerCase().email().max(320);
 const phoneIdentifierSchema = z
   .string()
   .trim()
@@ -26,7 +25,7 @@ export type AuthenticatedCustomerAccountResponse = z.infer<
 export const requestPasswordlessCodeRequestSchema = z.discriminatedUnion("channel", [
   z.object({
     channel: z.literal("email"),
-    identifier: emailIdentifierSchema,
+    identifier: emailSchema,
     roles: z.array(customerAccountRoleSchema).min(1)
   }),
   z.object({

@@ -1,10 +1,23 @@
+import {
+  OtpAuthForm,
+  type OtpAuthFormMode,
+  type OtpAuthFormValues
+} from "@elevenhouse/design-system/components/OtpAuthForm";
+import "@elevenhouse/design-system/components/OtpAuthForm.css";
 import { Chat } from "@elevenhouse/design-system/icons/Chat";
 import { Content } from "@elevenhouse/design-system/icons/Content";
 import { Orbit } from "@elevenhouse/design-system/icons/Orbit";
 import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
 import { Video } from "@elevenhouse/design-system/icons/Video";
 import { BackLink } from "@elevenhouse/design-system/navigation";
+import {
+  isEmailCompleteWithKnownTld,
+  isPopularFemaleFirstName,
+  isValidDisplayName,
+  isValidEmail
+} from "@elevenhouse/validation";
 import type { ComponentType, SVGProps } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import styles from "./AuthPage.module.css";
 
@@ -33,8 +46,93 @@ const authHighlights: Array<{ Icon: HighlightIcon; label: string; description: s
   }
 ];
 
+const fieldAutoFocusDelayMs = 450;
+
 export function AuthPage() {
-  useDocumentTitle("Auth");
+  useDocumentTitle("ElevenHouse | Авторизация");
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
+  const phoneFocusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submitFocusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [authMode, setAuthMode] = useState<OtpAuthFormMode>("register");
+  const [authValues, setAuthValues] = useState<OtpAuthFormValues>({
+    name: "",
+    email: "",
+    phone: ""
+  });
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [nameTouched, setNameTouched] = useState(false);
+
+  const emailError =
+    emailTouched && authValues.email.length > 0 && !isValidEmail(authValues.email)
+      ? "Введите корректный email"
+      : null;
+  const nameError =
+    authMode === "register" && nameTouched && !isValidDisplayName(authValues.name)
+      ? "Имя должно быть от 2 до 200 символов"
+      : null;
+
+  function clearSubmitFocusTimeout() {
+    if (submitFocusTimeoutRef.current !== null) {
+      clearTimeout(submitFocusTimeoutRef.current);
+      submitFocusTimeoutRef.current = null;
+    }
+  }
+
+  function clearPhoneFocusTimeout() {
+    if (phoneFocusTimeoutRef.current !== null) {
+      clearTimeout(phoneFocusTimeoutRef.current);
+      phoneFocusTimeoutRef.current = null;
+    }
+  }
+
+  function schedulePhoneFocus(name: string) {
+    clearPhoneFocusTimeout();
+
+    if (authMode !== "register" || !isPopularFemaleFirstName(name)) {
+      return;
+    }
+
+    phoneFocusTimeoutRef.current = setTimeout(() => {
+      const nameInput = nameInputRef.current;
+      const phoneInput = phoneInputRef.current;
+
+      if (document.activeElement !== nameInput || !phoneInput) {
+        return;
+      }
+
+      phoneInput.focus({ preventScroll: true });
+    }, fieldAutoFocusDelayMs);
+  }
+
+  function scheduleSubmitFocus(email: string) {
+    clearSubmitFocusTimeout();
+
+    if (!isEmailCompleteWithKnownTld(email)) {
+      return;
+    }
+
+    submitFocusTimeoutRef.current = setTimeout(() => {
+      const emailInput = emailInputRef.current;
+      const submitButton = submitButtonRef.current;
+
+      if (document.activeElement !== emailInput || !submitButton || submitButton.disabled) {
+        return;
+      }
+
+      submitButton.focus({ preventScroll: true });
+    }, fieldAutoFocusDelayMs);
+  }
+
+  useEffect(
+    () => () => {
+      clearPhoneFocusTimeout();
+      clearSubmitFocusTimeout();
+    },
+    []
+  );
 
   return (
     <main className={styles.page}>
@@ -90,7 +188,35 @@ export function AuthPage() {
           </div>
         </div>
       </section>
-      <section className={styles.formPane} aria-label="Authentication" />
+      <section className={styles.formPane} aria-label="Authentication">
+        <OtpAuthForm
+          mode={authMode}
+          values={authValues}
+          emailError={emailError}
+          emailInputRef={emailInputRef}
+          nameError={nameError}
+          nameInputRef={nameInputRef}
+          phoneInputRef={phoneInputRef}
+          submitButtonRef={submitButtonRef}
+          submitDisabled={emailError !== null || nameError !== null}
+          onModeChange={setAuthMode}
+          onValuesChange={(values) => {
+            if (values.email !== authValues.email) {
+              setEmailTouched(true);
+              scheduleSubmitFocus(values.email);
+            }
+            if (values.name !== authValues.name) {
+              setNameTouched(true);
+              schedulePhoneFocus(values.name);
+            }
+            setAuthValues(values);
+          }}
+          onSubmit={() => {
+            setEmailTouched(true);
+            setNameTouched(true);
+          }}
+        />
+      </section>
     </main>
   );
 }

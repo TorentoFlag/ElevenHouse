@@ -15,6 +15,12 @@ export default defineConfig({
       "@elevenhouse/design-system/navigation": fileURLToPath(
         new URL("../../packages/design-system/src/navigation/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/components/OtpAuthForm": fileURLToPath(
+        new URL("../../packages/design-system/src/components/OtpAuthForm/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/OtpAuthForm.css": fileURLToPath(
+        new URL("../../packages/design-system/src/components/OtpAuthForm/OtpAuthForm.css", import.meta.url)
+      ),
       "@elevenhouse/design-system/icons/Chat": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Chat/index.ts", import.meta.url)
       ),
@@ -23,6 +29,9 @@ export default defineConfig({
       ),
       "@elevenhouse/design-system/icons/Flow": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Flow/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/LogoMoon": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/LogoMoon/index.ts", import.meta.url)
       ),
       "@elevenhouse/design-system/icons/Orbit": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Orbit/index.ts", import.meta.url)

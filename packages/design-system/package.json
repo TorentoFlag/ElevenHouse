@@ -14,6 +14,15 @@
       "types": "./dist/navigation/index.d.ts",
       "import": "./dist/navigation/index.js"
     },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js"
+    },
+    "./components/OtpAuthForm": {
+      "types": "./dist/components/OtpAuthForm/index.d.ts",
+      "import": "./dist/components/OtpAuthForm/index.js"
+    },
+    "./components/OtpAuthForm.css": "./src/components/OtpAuthForm/OtpAuthForm.css",
     "./icons": {
       "types": "./dist/icons/index.d.ts",
       "import": "./dist/icons/index.js"
@@ -34,6 +43,10 @@
       "types": "./dist/icons/Flow/index.d.ts",
       "import": "./dist/icons/Flow/index.js"
     },
+    "./icons/LogoMoon": {
+      "types": "./dist/icons/LogoMoon/index.d.ts",
+      "import": "./dist/icons/LogoMoon/index.js"
+    },
     "./icons/Orbit": {
       "types": "./dist/icons/Orbit/index.d.ts",
       "import": "./dist/icons/Orbit/index.js"
@@ -53,7 +66,8 @@
     "./tokens.css": "./tokens.css"
   },
   "sideEffects": [
-    "./tokens.css"
+    "./tokens.css",
+    "./src/components/OtpAuthForm/OtpAuthForm.css"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
