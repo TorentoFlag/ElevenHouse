@@ -4,6 +4,7 @@ import type { SupportedLocale } from "@elevenhouse/i18n";
 export type AuthCopy = {
   documentTitle: string;
   sectionAriaLabel: string;
+  visual: AuthVisualCopy;
   form: OtpAuthFormCopy;
   validation: {
     email: string;
@@ -15,6 +16,23 @@ export type AuthCopy = {
   };
 };
 
+export type AuthVisualHighlightKey = "sessions" | "charts" | "messages" | "content";
+
+export type AuthVisualCopy = {
+  backLinkTitle: string;
+  heroTitleLine1: string;
+  heroTitleLine2: string;
+  highlights: Array<{
+    key: AuthVisualHighlightKey;
+    label: string;
+    description: string;
+  }>;
+  joinedInfoLabel: string;
+  joinedInfoPrefix: string;
+  joinedInfoCount: string;
+  avatarInitials: string[];
+};
+
 export type ClientCopy = {
   auth: AuthCopy;
 };
@@ -24,6 +42,37 @@ export const clientCopyByLocale = {
     auth: {
       documentTitle: "ElevenHouse | Авторизация",
       sectionAriaLabel: "Авторизация",
+      visual: {
+        backLinkTitle: "На страницу астролога",
+        heroTitleLine1: "Ваш кабинет",
+        heroTitleLine2: "у астролога",
+        highlights: [
+          {
+            key: "sessions",
+            label: "Записи и онлайн консультации",
+            description: "История сессий, записи и материалы — всегда под рукой"
+          },
+          {
+            key: "charts",
+            label: "Ваши натальные карты",
+            description: "Карты, расчёты и разборы от вашего астролога"
+          },
+          {
+            key: "messages",
+            label: "Личные сообщения",
+            description: "Переписка с астрологом в одном окне"
+          },
+          {
+            key: "content",
+            label: "Астродневник и контент",
+            description: "Прогнозы, дневник и закрытый контент по подписке"
+          }
+        ],
+        joinedInfoLabel: "Уже с астрологами 18 000+",
+        joinedInfoPrefix: "Уже с астрологами",
+        joinedInfoCount: "18 000+",
+        avatarInitials: ["МК", "ДЛ", "ЗМ", "НР"]
+      },
       form: {
         brandTitle: "Eleven",
         brandAccent: "House",
@@ -59,6 +108,37 @@ export const clientCopyByLocale = {
     auth: {
       documentTitle: "ElevenHouse | Sign in",
       sectionAriaLabel: "Authentication",
+      visual: {
+        backLinkTitle: "Astrologer's page",
+        heroTitleLine1: "Your space",
+        heroTitleLine2: "with your astrologer",
+        highlights: [
+          {
+            key: "sessions",
+            label: "Sessions and online consultations",
+            description: "Session history, recordings, and materials always at hand"
+          },
+          {
+            key: "charts",
+            label: "Your natal charts",
+            description: "Charts, calculations, and interpretations from your astrologer"
+          },
+          {
+            key: "messages",
+            label: "Private messages",
+            description: "A single place for conversations with your astrologer"
+          },
+          {
+            key: "content",
+            label: "Astro journal and content",
+            description: "Forecasts, journal notes, and private subscription content"
+          }
+        ],
+        joinedInfoLabel: "Already connected with astrologers 18,000+",
+        joinedInfoPrefix: "Already connected with astrologers",
+        joinedInfoCount: "18,000+",
+        avatarInitials: ["MK", "DL", "ZM", "NR"]
+      },
       form: {
         brandTitle: "Eleven",
         brandAccent: "House",

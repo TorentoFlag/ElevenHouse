@@ -234,7 +234,7 @@ export function AuthPage() {
 
   return (
     <main className={styles.page}>
-      <AuthVisualPane />
+      <AuthVisualPane copy={copy.visual} />
       <section className={styles.formPane} aria-label={copy.sectionAriaLabel}>
         <OtpAuthForm
           mode={authMode}

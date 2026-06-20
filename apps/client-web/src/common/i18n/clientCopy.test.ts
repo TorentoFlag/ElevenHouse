@@ -15,4 +15,21 @@ describe("clientCopyByLocale", () => {
     expect(clientCopyByLocale.ru.auth.languageSwitcher.ariaLabel).toBe("Язык интерфейса");
     expect(clientCopyByLocale.en.auth.languageSwitcher.ariaLabel).toBe("Interface language");
   });
+
+  it("contains translated visual pane copy for the auth screen", () => {
+    expect(clientCopyByLocale.ru.auth.visual.backLinkTitle).toBe("На страницу астролога");
+    expect(clientCopyByLocale.en.auth.visual.backLinkTitle).toBe("Astrologer's page");
+    expect(clientCopyByLocale.ru.auth.visual.heroTitleLine1).toBe("Ваш кабинет");
+    expect(clientCopyByLocale.en.auth.visual.heroTitleLine1).toBe("Your space");
+    expect(clientCopyByLocale.ru.auth.visual.highlights[0]?.label).toBe(
+      "Записи и онлайн консультации"
+    );
+    expect(clientCopyByLocale.en.auth.visual.highlights[0]?.label).toBe(
+      "Sessions and online consultations"
+    );
+    expect(clientCopyByLocale.ru.auth.visual.joinedInfoPrefix).toBe("Уже с астрологами");
+    expect(clientCopyByLocale.en.auth.visual.joinedInfoPrefix).toBe(
+      "Already connected with astrologers"
+    );
+  });
 });

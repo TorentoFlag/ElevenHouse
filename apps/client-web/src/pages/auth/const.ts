@@ -2,29 +2,14 @@ import { Chat } from "@elevenhouse/design-system/icons/Chat";
 import { Content } from "@elevenhouse/design-system/icons/Content";
 import { Orbit } from "@elevenhouse/design-system/icons/Orbit";
 import { Video } from "@elevenhouse/design-system/icons/Video";
+import type { AuthVisualHighlightKey } from "../../common/i18n/clientCopy";
 import type { ComponentType, SVGProps } from "react";
 
 type HighlightIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
-export const authHighlights: Array<{ Icon: HighlightIcon; label: string; description: string }> = [
-  {
-    Icon: Video,
-    label: "Записи и онлайн консультации",
-    description: "История сессий, записи и материалы — всегда под рукой"
-  },
-  {
-    Icon: Orbit,
-    label: "Ваши натальные карты",
-    description: "Карты, расчёты и разборы от вашего астролога"
-  },
-  {
-    Icon: Chat,
-    label: "Личные сообщения",
-    description: "Переписка с астрологом в одном окне"
-  },
-  {
-    Icon: Content,
-    label: "Астродневник и контент",
-    description: "Прогнозы, дневник и закрытый контент по подписке"
-  }
-];
+export const authHighlightIcons: Record<AuthVisualHighlightKey, HighlightIcon> = {
+  sessions: Video,
+  charts: Orbit,
+  messages: Chat,
+  content: Content
+};
