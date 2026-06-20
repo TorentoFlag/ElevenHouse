@@ -21,6 +21,9 @@ export default defineConfig({
       "@elevenhouse/design-system/components/OtpAuthForm.css": fileURLToPath(
         new URL("../../packages/design-system/src/components/OtpAuthForm/OtpAuthForm.css", import.meta.url)
       ),
+      "@elevenhouse/design-system/helpers": fileURLToPath(
+        new URL("../../packages/design-system/src/helpers/index.ts", import.meta.url)
+      ),
       "@elevenhouse/design-system/icons/Chat": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Chat/index.ts", import.meta.url)
       ),
@@ -44,6 +47,9 @@ export default defineConfig({
       ),
       "@elevenhouse/design-system/icons/Wallet": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Wallet/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/i18n": fileURLToPath(
+        new URL("../../packages/i18n/src/index.ts", import.meta.url)
       ),
       "@elevenhouse/validation/phone": fileURLToPath(
         new URL("../../packages/validation/src/phone/index.ts", import.meta.url)
