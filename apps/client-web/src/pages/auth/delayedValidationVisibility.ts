@@ -46,3 +46,11 @@ export function isNameErrorCandidate(input: {
 }): boolean {
   return input.isRegisterMode && input.isTouched && !input.isValidName;
 }
+
+export function shouldSchedulePhoneFocusForName(input: {
+  isRegisterMode: boolean;
+  isPopularFirstName: boolean;
+  name: string;
+}): boolean {
+  return input.isRegisterMode && input.name === input.name.trim() && input.isPopularFirstName;
+}

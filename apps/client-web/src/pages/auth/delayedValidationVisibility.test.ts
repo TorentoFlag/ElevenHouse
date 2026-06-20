@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createDelayedValidationVisibilityController } from "./delayedValidationVisibility";
+import {
+  createDelayedValidationVisibilityController,
+  shouldSchedulePhoneFocusForName
+} from "./delayedValidationVisibility";
 
 describe("createDelayedValidationVisibilityController", () => {
   afterEach(() => {
@@ -39,5 +42,34 @@ describe("createDelayedValidationVisibilityController", () => {
 
     expect(onVisibleChange).toHaveBeenCalledOnce();
     expect(onVisibleChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("shouldSchedulePhoneFocusForName", () => {
+  it("accepts a complete known name without surrounding spaces", () => {
+    expect(
+      shouldSchedulePhoneFocusForName({
+        isRegisterMode: true,
+        isPopularFirstName: true,
+        name: "Антон"
+      })
+    ).toBe(true);
+  });
+
+  it("rejects known names with surrounding spaces", () => {
+    expect(
+      shouldSchedulePhoneFocusForName({
+        isRegisterMode: true,
+        isPopularFirstName: true,
+        name: "Антон "
+      })
+    ).toBe(false);
+    expect(
+      shouldSchedulePhoneFocusForName({
+        isRegisterMode: true,
+        isPopularFirstName: true,
+        name: " Антон"
+      })
+    ).toBe(false);
   });
 });

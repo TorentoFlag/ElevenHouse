@@ -22,6 +22,7 @@ import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import {
   createDelayedValidationVisibilityController,
   isNameErrorCandidate,
+  shouldSchedulePhoneFocusForName,
   type DelayedValidationVisibilityController
 } from "./delayedValidationVisibility";
 import styles from "./AuthPage.module.css";
@@ -108,7 +109,13 @@ export function AuthPage() {
   function schedulePhoneFocus(name: string) {
     clearPhoneFocusTimeout();
 
-    if (authMode !== "register" || !isPopularFirstName(name)) {
+    if (
+      !shouldSchedulePhoneFocusForName({
+        isRegisterMode: authMode === "register",
+        isPopularFirstName: isPopularFirstName(name),
+        name
+      })
+    ) {
       return;
     }
 
