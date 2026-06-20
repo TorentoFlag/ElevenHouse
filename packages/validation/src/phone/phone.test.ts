@@ -26,6 +26,17 @@ describe("phone validation", () => {
     expect(inferPhoneCountry("+7", "KZ")).toBe("KZ");
   });
 
+  it("infers Russia and Kazakhstan from full shared +7 numbering ranges", () => {
+    expect(formatPhoneInput("+7 705 943 4343", "RU")).toMatchObject({
+      normalizedValue: "+77059434343",
+      country: "KZ"
+    });
+    expect(formatPhoneInput("+7 999 123 45 67", "KZ")).toMatchObject({
+      normalizedValue: "+79991234567",
+      country: "RU"
+    });
+  });
+
   it("formats typed supported calling codes as international numbers and switches country", () => {
     expect(formatPhoneInput("994", "RU")).toMatchObject({
       displayValue: "+994",

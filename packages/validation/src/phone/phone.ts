@@ -52,6 +52,12 @@ export function inferPhoneCountry(input: string, fallbackCountry: PhoneCountryIs
   }
 
   if (digits.startsWith("7")) {
+    const parsedSharedZoneCountry = inferSharedSevenCountry(sanitizedInput);
+
+    if (parsedSharedZoneCountry) {
+      return parsedSharedZoneCountry;
+    }
+
     return fallbackCountry === "KZ" ? "KZ" : "RU";
   }
 
@@ -61,6 +67,20 @@ export function inferPhoneCountry(input: string, fallbackCountry: PhoneCountryIs
     .find((country) => digits.startsWith(country.callingCode));
 
   return match?.iso2 ?? fallbackCountry;
+}
+
+function inferSharedSevenCountry(input: string): PhoneCountryIso2 | null {
+  const digits = input.replace(/\D/g, "");
+
+  if (digits.length < 11) {
+    return null;
+  }
+
+  const parsedPhoneNumber = parsePhoneNumberFromString(input, {
+    extract: false
+  });
+
+  return isSupportedPhoneCountry(parsedPhoneNumber?.country) ? parsedPhoneNumber.country : null;
 }
 
 export function formatPhoneInput(input: string, country: PhoneCountryIso2): PhoneFormatResult {

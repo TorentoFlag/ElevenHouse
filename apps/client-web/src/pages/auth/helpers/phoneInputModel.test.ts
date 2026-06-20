@@ -26,6 +26,13 @@ describe("phoneInputModel", () => {
     });
   });
 
+  it("infers Kazakhstan from a full shared +7 Kazakhstan number", () => {
+    expect(applyPhoneInputChange(createInitialPhoneInputState("RU"), "+7 705 943 4343")).toMatchObject({
+      normalizedValue: "+77059434343",
+      selectedCountry: "KZ"
+    });
+  });
+
   it("turns a typed supported calling code into an international number and selects its country", () => {
     expect(applyPhoneInputChange(createInitialPhoneInputState("RU"), "994")).toMatchObject({
       displayValue: "+994",
