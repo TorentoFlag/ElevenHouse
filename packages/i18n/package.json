@@ -15,7 +15,12 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "peerDependencies": {
+    "react": "19.2.7"
+  },
   "devDependencies": {
+    "@types/react": "19.2.17",
+    "react": "19.2.7",
     "typescript": "6.0.3"
   }
 }
