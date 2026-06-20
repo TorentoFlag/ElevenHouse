@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createActiveUserAccount,
+  createUserProfile,
   grantCustomerRole,
   linkAuthIdentity,
   registerCustomerAccount,
@@ -13,6 +14,12 @@ function createStore(): AccountRegistrationStore {
     createUser: vi.fn(async (input) => ({
       id: "user_1",
       status: input.status,
+      createdAt: "2026-06-12T00:00:00.000Z",
+      updatedAt: "2026-06-12T00:00:00.000Z"
+    })),
+    createUserProfile: vi.fn(async (input) => ({
+      userId: input.userId,
+      displayName: input.displayName,
       createdAt: "2026-06-12T00:00:00.000Z",
       updatedAt: "2026-06-12T00:00:00.000Z"
     })),
@@ -50,6 +57,24 @@ describe("createActiveUserAccount", () => {
 
     expect(store.createUser).toHaveBeenCalledWith({ status: "active" });
     expect(user).toMatchObject({ id: "user_1", status: "active" });
+  });
+});
+
+describe("createUserProfile", () => {
+  it("creates a user profile with a normalized display name", async () => {
+    const store = createStore();
+
+    const profile = await createUserProfile({
+      store,
+      userId: "user_1",
+      displayName: " Анна "
+    });
+
+    expect(store.createUserProfile).toHaveBeenCalledWith({
+      userId: "user_1",
+      displayName: "Анна"
+    });
+    expect(profile).toMatchObject({ userId: "user_1", displayName: "Анна" });
   });
 });
 
@@ -192,6 +217,7 @@ describe("registerCustomerAccount", () => {
         email: "ada@example.com",
         emailVerifiedAt: new Date("2026-06-15T10:00:00.000Z")
       },
+      displayName: " Анна ",
       roles: ["client", "client", "astrologer"]
     });
 
@@ -204,7 +230,17 @@ describe("registerCustomerAccount", () => {
       email: "ada@example.com",
       emailVerifiedAt: "2026-06-15T10:00:00.000Z"
     });
+    expect(store.createUserProfile).toHaveBeenCalledWith({
+      userId: "user_1",
+      displayName: "Анна"
+    });
     expect(store.assignRole).toHaveBeenCalledTimes(2);
+    expect(result.userProfile).toEqual({
+      userId: "user_1",
+      displayName: "Анна",
+      createdAt: "2026-06-12T00:00:00.000Z",
+      updatedAt: "2026-06-12T00:00:00.000Z"
+    });
     expect(result.roleAssignments.map((assignment) => assignment.role)).toEqual([
       "client",
       "astrologer"
@@ -229,6 +265,7 @@ describe("registerCustomerAccount", () => {
           providerSubject: "ada@example.com",
           email: "ada@example.com"
         },
+        displayName: "Анна",
         roles: []
       })
     ).rejects.toThrow("Customer registration requires at least one role");

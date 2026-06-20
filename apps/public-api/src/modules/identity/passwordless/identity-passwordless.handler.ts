@@ -124,8 +124,8 @@ export class DomainPasswordlessAuthHandler {
         ttlSeconds: this.options.codeTtlSeconds,
         resendCooldownSeconds: this.options.resendCooldownSeconds,
         maxAttempts: this.options.maxAttempts,
-        ipAddress: context.ipAddress,
-        userAgent: context.userAgent
+        ...(context.ipAddress === undefined ? {} : { ipAddress: context.ipAddress }),
+        ...(context.userAgent === undefined ? {} : { userAgent: context.userAgent })
       })
     );
   }
@@ -148,8 +148,8 @@ export class DomainPasswordlessAuthHandler {
           tokenHash: issuedToken.tokenHash,
           createdAt: now,
           expiresAt,
-          ipAddress: context.ipAddress,
-          userAgent: context.userAgent
+          ...(context.ipAddress === undefined ? {} : { ipAddress: context.ipAddress }),
+          ...(context.userAgent === undefined ? {} : { userAgent: context.userAgent })
         }
       })
     );

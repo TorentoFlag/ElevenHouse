@@ -25,6 +25,7 @@ describe("createPublicApiRuntimeConfig", () => {
   it("uses the default public API port when env is not set", () => {
     expect(createPublicApiRuntimeConfig(requiredSecurityConfig)).toEqual({
       port: 3001,
+      trustProxy: false,
       redisUrl: "redis://localhost:6379",
       sessionTtlSeconds: 604800,
       sessionCookieSecure: false,
@@ -43,6 +44,7 @@ describe("createPublicApiRuntimeConfig", () => {
   it("parses PUBLIC_API_PORT from env", () => {
     expect(createPublicApiRuntimeConfig({ ...requiredSecurityConfig, PUBLIC_API_PORT: "4011" })).toEqual({
       port: 4011,
+      trustProxy: false,
       redisUrl: "redis://localhost:6379",
       sessionTtlSeconds: 604800,
       sessionCookieSecure: false,
@@ -58,6 +60,17 @@ describe("createPublicApiRuntimeConfig", () => {
     });
   });
 
+  it("parses explicit trust proxy settings from env", () => {
+    expect(
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        PUBLIC_API_TRUST_PROXY: "true"
+      })
+    ).toMatchObject({
+      trustProxy: true
+    });
+  });
+
   it("parses public session settings from env", () => {
     expect(
       createPublicApiRuntimeConfig({
@@ -67,6 +80,7 @@ describe("createPublicApiRuntimeConfig", () => {
       })
     ).toEqual({
       port: 3001,
+      trustProxy: false,
       redisUrl: "redis://localhost:6379",
       sessionTtlSeconds: 3600,
       sessionCookieSecure: true,
@@ -90,6 +104,7 @@ describe("createPublicApiRuntimeConfig", () => {
       })
     ).toEqual({
       port: 3001,
+      trustProxy: false,
       redisUrl: "redis://localhost:6379",
       sessionTtlSeconds: 604800,
       sessionCookieSecure: false,
@@ -177,9 +192,22 @@ describe("createPublicApiRuntimeConfig", () => {
     expect(() =>
       createPublicApiRuntimeConfig({
         ...requiredSecurityConfig,
-        NODE_ENV: "production"
+        NODE_ENV: "production",
+        PUBLIC_API_SESSION_COOKIE_SECURE: "true"
       })
     ).toThrow("PUBLIC_API_PASSWORDLESS_CODE_SECRET is required in production");
+  });
+
+  it("requires secure public session cookies in production", () => {
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+        PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
+        PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com"
+      })
+    ).toThrow("PUBLIC_API_SESSION_COOKIE_SECURE=true is required in production");
   });
 
   it("requires an explicit CSRF secret in production", () => {
@@ -187,6 +215,7 @@ describe("createPublicApiRuntimeConfig", () => {
       createPublicApiRuntimeConfig({
         ...requiredSecurityConfig,
         NODE_ENV: "production",
+        PUBLIC_API_SESSION_COOKIE_SECURE: "true",
         PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret"
       })
     ).toThrow("PUBLIC_API_CSRF_SECRET is required in production");
@@ -197,10 +226,30 @@ describe("createPublicApiRuntimeConfig", () => {
       createPublicApiRuntimeConfig({
         ...requiredSecurityConfig,
         NODE_ENV: "production",
+        PUBLIC_API_SESSION_COOKIE_SECURE: "true",
         PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy"
       })
     ).toThrow("PUBLIC_API_ALLOWED_ORIGINS is required in production");
+  });
+
+  it("uses the host-prefixed public session cookie when production security settings are complete", () => {
+    expect(
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        PUBLIC_API_SESSION_COOKIE_SECURE: "true",
+        PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+        PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
+        PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com"
+      })
+    ).toMatchObject({
+      sessionCookieSecure: true,
+      sessionCookieName: publicSessionCookieName,
+      passwordlessCodeSecret: "configured-secret",
+      csrfSecret: "configured-csrf-secret-with-enough-entropy",
+      allowedOrigins: ["https://client.elevenhouse.com"]
+    });
   });
 
   it("requires an explicit auth code delivery encryption key", () => {

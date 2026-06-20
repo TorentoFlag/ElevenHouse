@@ -230,8 +230,33 @@ function toAuthSecurityEvent(row: AuthSecurityEventsSelect) {
     ...(row.sessionId === null ? {} : { sessionId: row.sessionId }),
     ...(row.ipAddress === null ? {} : { ipAddress: row.ipAddress }),
     ...(row.userAgent === null ? {} : { userAgent: row.userAgent }),
-    metadata: row.metadata as Record<string, string | number | boolean | null>
+    metadata: toAuthSecurityEventMetadata(row.metadata)
   };
+}
+
+function toAuthSecurityEventMetadata(
+  value: unknown
+): Record<string, string | number | boolean | null> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("Unexpected auth_security_events.metadata value");
+  }
+
+  const metadata: Record<string, string | number | boolean | null> = {};
+
+  for (const [key, entry] of Object.entries(value)) {
+    if (
+      typeof entry !== "string" &&
+      typeof entry !== "number" &&
+      typeof entry !== "boolean" &&
+      entry !== null
+    ) {
+      throw new Error(`Unexpected auth_security_events.metadata entry value for ${key}`);
+    }
+
+    metadata[key] = entry;
+  }
+
+  return metadata;
 }
 
 function toUserAccount(row: {

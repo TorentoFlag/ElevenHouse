@@ -1,13 +1,17 @@
 import { randomUUID } from "node:crypto";
+import { CustomerAccountIdentityConflictError } from "@elevenhouse/domain";
 import type {
   AuthChallenge,
   AuthChallengeDelivery,
   AuthCodeDeliveryRequestedPayload,
+  AuthIdentity,
   AuthSecurityEvent,
   AuthSession,
   AuthSessionAuthenticationStore,
+  CustomerAccountRegistrationSessionStore,
   PasswordlessAuthStore,
   UserAccount,
+  UserProfile,
   UserRoleAssignment
 } from "@elevenhouse/domain";
 
@@ -17,18 +21,8 @@ export class InMemoryPasswordlessAuthStore
   readonly authChallenges: AuthChallenge[] = [];
   readonly authChallengeDeliveries: AuthChallengeDelivery[] = [];
   readonly users: UserAccount[] = [];
-  readonly authIdentities: Array<{
-    readonly id: string;
-    readonly userId: string;
-    readonly provider: "email" | "phone";
-    readonly providerSubject: string;
-    readonly email?: string;
-    readonly phoneNumber?: string;
-    readonly emailVerifiedAt?: string;
-    readonly phoneVerifiedAt?: string;
-    readonly createdAt: string;
-    readonly updatedAt: string;
-  }> = [];
+  readonly userProfiles: UserProfile[] = [];
+  readonly authIdentities: AuthIdentity[] = [];
   readonly roleAssignments: UserRoleAssignment[] = [];
   readonly userSessions: AuthSession[] = [];
   readonly authSecurityEvents: AuthSecurityEvent[] = [];
@@ -166,6 +160,84 @@ export class InMemoryPasswordlessAuthStore
       authIdentity,
       roleAssignments: this.roleAssignments.filter((assignment) => assignment.userId === user.id)
     };
+  }
+
+  async createUser(input: { readonly status: "active" | "suspended" | "deleted" }): Promise<UserAccount> {
+    const now = this.now.toISOString();
+    const user: UserAccount = {
+      id: randomUUID(),
+      status: input.status,
+      createdAt: now,
+      updatedAt: now
+    };
+    this.users.push(user);
+    return user;
+  }
+
+  async createUserProfile(input: {
+    readonly userId: string;
+    readonly displayName: string;
+  }): Promise<UserProfile> {
+    const now = this.now.toISOString();
+    const profile: UserProfile = {
+      userId: input.userId,
+      displayName: input.displayName,
+      createdAt: now,
+      updatedAt: now
+    };
+    this.userProfiles.push(profile);
+    return profile;
+  }
+
+  async createAuthIdentity(
+    input: Parameters<CustomerAccountRegistrationSessionStore["createAuthIdentity"]>[0]
+  ): Promise<AuthIdentity> {
+    if (input.provider !== "email" && input.provider !== "phone") {
+      throw new Error(`Unsupported test identity provider: ${input.provider}`);
+    }
+
+    const existingIdentity = this.authIdentities.find(
+      (identity) =>
+        identity.provider === input.provider && identity.providerSubject === input.providerSubject
+    );
+
+    if (existingIdentity) {
+      throw new CustomerAccountIdentityConflictError();
+    }
+
+    const now = this.now.toISOString();
+    const authIdentity: AuthIdentity = {
+      id: randomUUID(),
+      userId: input.userId,
+      provider: input.provider,
+      providerSubject: input.providerSubject,
+      ...(input.email === undefined ? {} : { email: input.email }),
+      ...(input.phoneNumber === undefined ? {} : { phoneNumber: input.phoneNumber }),
+      ...(input.emailVerifiedAt === undefined ? {} : { emailVerifiedAt: input.emailVerifiedAt }),
+      ...(input.phoneVerifiedAt === undefined ? {} : { phoneVerifiedAt: input.phoneVerifiedAt }),
+      createdAt: now,
+      updatedAt: now
+    };
+    this.authIdentities.push(authIdentity);
+    return authIdentity;
+  }
+
+  async assignRole(input: {
+    readonly userId: string;
+    readonly role: "client" | "astrologer";
+    readonly assignedByUserId?: string;
+  }): Promise<UserRoleAssignment> {
+    const assignment: UserRoleAssignment = {
+      id: randomUUID(),
+      userId: input.userId,
+      role: input.role,
+      ...(input.assignedByUserId === undefined
+        ? {}
+        : { assignedByUserId: input.assignedByUserId }),
+      assignedAt: this.now.toISOString()
+    };
+    this.roleAssignments.push(assignment);
+    return assignment;
   }
 
   async createSession(

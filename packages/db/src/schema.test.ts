@@ -14,6 +14,7 @@ import {
   identityProviderValues,
   outboxEvents,
   outboxEventStatusValues,
+  userProfiles,
   userStatusValues
 } from "./schema/index";
 
@@ -52,6 +53,10 @@ describe("database account schema constants", () => {
     expect(authChallengeDeliveryAttempts).toBeDefined();
   });
 
+  it("exports user profile table for self-declared display names", () => {
+    expect(userProfiles).toBeDefined();
+  });
+
   it("keeps outbox event statuses explicit", () => {
     expect(outboxEventStatusValues).toEqual(["pending", "publishing", "published"]);
     expect(outboxEvents).toBeDefined();
@@ -62,6 +67,16 @@ describe("database account schema constants", () => {
 
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "auth_challenges_pending_identifier_unique" ON "auth_challenges" USING btree ("channel","identifier_normalized") WHERE "auth_challenges"."status" = \'pending\''
+    );
+  });
+
+  it("keeps user profiles in the current identity migration", () => {
+    const migration = readFileSync("packages/db/drizzle/0000_sour_living_tribunal.sql", "utf8");
+
+    expect(migration).toContain('CREATE TABLE "user_profiles"');
+    expect(migration).toContain('"display_name" text NOT NULL');
+    expect(migration).toContain(
+      'ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action'
     );
   });
 

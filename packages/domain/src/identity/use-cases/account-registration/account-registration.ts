@@ -1,4 +1,5 @@
 import type { CustomerPlatformRole } from "@elevenhouse/auth";
+import { displayNameSchema } from "@elevenhouse/validation";
 import type { UserAccount, UserAccountStatus } from "../../../accounts/account";
 import {
   normalizeAuthIdentityInput,
@@ -14,6 +15,10 @@ import {
 
 export type AccountRegistrationStore = {
   readonly createUser: (input: { readonly status: UserAccountStatus }) => Promise<UserAccount>;
+  readonly createUserProfile: (input: {
+    readonly userId: string;
+    readonly displayName: string;
+  }) => Promise<UserProfile>;
   readonly createAuthIdentity: (
     input: NormalizedAuthIdentityInput & { readonly userId: string }
   ) => Promise<AuthIdentity>;
@@ -24,12 +29,20 @@ export type AccountRegistrationStore = {
   }) => Promise<UserRoleAssignment>;
 };
 
+export type UserProfile = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
 export type AccountRegistrationUnitOfWork = {
   readonly transact: <T>(operation: (store: AccountRegistrationStore) => Promise<T>) => Promise<T>;
 };
 
 export type RegisteredCustomerAccount = {
   readonly user: UserAccount;
+  readonly userProfile: UserProfile;
   readonly authIdentity: AuthIdentity;
   readonly roleAssignments: readonly UserRoleAssignment[];
 };
@@ -45,6 +58,21 @@ export async function createActiveUserAccount(input: {
   readonly store: AccountRegistrationStore;
 }): Promise<UserAccount> {
   return input.store.createUser({ status: "active" });
+}
+
+export function normalizeDisplayName(value: string): string {
+  return displayNameSchema.parse(value);
+}
+
+export async function createUserProfile(input: {
+  readonly store: AccountRegistrationStore;
+  readonly userId: string;
+  readonly displayName: string;
+}): Promise<UserProfile> {
+  return input.store.createUserProfile({
+    userId: input.userId,
+    displayName: normalizeDisplayName(input.displayName)
+  });
 }
 
 export async function linkAuthIdentity(input: {
@@ -85,6 +113,7 @@ export async function grantCustomerRole(input: {
 export async function registerCustomerAccount(input: {
   readonly accountRegistration: AccountRegistrationUnitOfWork;
   readonly identity: AuthIdentityInput;
+  readonly displayName: string;
   readonly roles: readonly string[];
 }): Promise<RegisteredCustomerAccount> {
   const roles = normalizeCustomerRoles(input.roles);
@@ -92,6 +121,11 @@ export async function registerCustomerAccount(input: {
 
   return input.accountRegistration.transact(async (store) => {
     const user = await createActiveUserAccount({ store });
+    const userProfile = await createUserProfile({
+      store,
+      userId: user.id,
+      displayName: input.displayName
+    });
     const authIdentity = await linkAuthIdentity({
       store,
       userId: user.id,
@@ -105,6 +139,7 @@ export async function registerCustomerAccount(input: {
 
     return {
       user,
+      userProfile,
       authIdentity,
       roleAssignments
     };

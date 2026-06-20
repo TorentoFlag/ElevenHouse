@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import type {
   AuthSessionRevocationUnitOfWork,
+  PasswordlessCustomerAccountRegistrationSessionUnitOfWork,
   PasswordlessAuthUnitOfWork
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +13,7 @@ import {
   AUTH_SESSION_AUTHENTICATION_STORE,
   AUTH_SESSION_REVOCATION_UNIT_OF_WORK
 } from "../auth/identity-auth.tokens";
+import { PASSWORDLESS_CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK } from "../registration/identity-registration.tokens";
 import { IdentityModule } from "../identity.module";
 import { PUBLIC_AUTH_CODE_GENERATOR } from "./identity-passwordless.handler";
 import {
@@ -52,6 +54,9 @@ describe("passwordless public auth HTTP flow", () => {
     const authSessionRevocation: AuthSessionRevocationUnitOfWork = {
       transact: async (operation) => operation(store)
     };
+    const customerRegistration: PasswordlessCustomerAccountRegistrationSessionUnitOfWork = {
+      transact: async (operation) => operation(store)
+    };
 
     moduleRef = await Test.createTestingModule({
       imports: [IdentityModule]
@@ -73,6 +78,8 @@ describe("passwordless public auth HTTP flow", () => {
       .useValue(store)
       .overrideProvider(AUTH_SESSION_REVOCATION_UNIT_OF_WORK)
       .useValue(authSessionRevocation)
+      .overrideProvider(PASSWORDLESS_CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK)
+      .useValue(customerRegistration)
       .overrideProvider(PASSWORDLESS_RATE_LIMITER)
       .useValue(new TestPasswordlessRateLimiter(defaultPasswordlessRateLimits, () => now))
       .overrideProvider(RedisRuntimeService)
@@ -238,6 +245,103 @@ describe("passwordless public auth HTTP flow", () => {
       phoneNumber: "+15551234090",
       phoneVerifiedAt: "2026-06-16T10:00:00.000Z"
     });
+  });
+
+  it("registers an email account, creates a user profile and sets a session cookie", async () => {
+    const requestResponse = await postJson("/identity/passwordless/request-code", {
+      channel: "email",
+      identifier: " CLIENT@example.COM ",
+      roles: ["client"]
+    });
+
+    expect(requestResponse.status).toBe(201);
+
+    const registrationResponse = await postJson(
+      "/identity/registration/passwordless/verify-code",
+      {
+        challengeId: requestResponse.body.challengeId,
+        code: "123456",
+        displayName: " Анна ",
+        roles: ["client"]
+      }
+    );
+
+    expect(registrationResponse.status).toBe(201);
+    expect(registrationResponse.body).toMatchObject({
+      account: {
+        status: "active",
+        roles: ["client"],
+        displayName: "Анна"
+      }
+    });
+    expect(registrationResponse.setCookie).toContain(`${sessionCookieName}=`);
+    expect(registrationResponse.setCookie).toContain(`${csrfCookieName}=`);
+    expect(store.userProfiles).toEqual([
+      expect.objectContaining({
+        userId: registrationResponse.body.account.id,
+        displayName: "Анна"
+      })
+    ]);
+    expect(store.authSecurityEvents.at(-1)).toMatchObject({
+      eventType: "registration_succeeded",
+      userId: registrationResponse.body.account.id
+    });
+
+    const meResponse = await getJson(
+      "/identity/me",
+      cookieHeader(registrationResponse.setCookies, [sessionCookieName])
+    );
+
+    expect(meResponse.status).toBe(200);
+    expect(meResponse.body.account.id).toBe(registrationResponse.body.account.id);
+  });
+
+  it("rejects astrologer self-assignment through public registration", async () => {
+    const requestResponse = await postJson("/identity/passwordless/request-code", {
+      channel: "email",
+      identifier: "astrologer@example.com",
+      roles: ["astrologer"]
+    });
+    const registrationResponse = await postJson(
+      "/identity/registration/passwordless/verify-code",
+      {
+        challengeId: requestResponse.body.challengeId,
+        code: "123456",
+        displayName: "Анна",
+        roles: ["astrologer"]
+      }
+    );
+
+    expect(requestResponse.status).toBe(201);
+    expect(registrationResponse.status).toBe(400);
+    expect(registrationResponse.setCookie).toBeNull();
+    expect(store.userProfiles).toHaveLength(0);
+  });
+
+  it("returns conflict when registering an identity that already exists", async () => {
+    seedExistingPasswordlessAccount(store, {
+      channel: "email",
+      identifierNormalized: "client@example.com",
+      roles: ["client"]
+    });
+
+    const requestResponse = await postJson("/identity/passwordless/request-code", {
+      channel: "email",
+      identifier: "client@example.com",
+      roles: ["client"]
+    });
+    const registrationResponse = await postJson(
+      "/identity/registration/passwordless/verify-code",
+      {
+        challengeId: requestResponse.body.challengeId,
+        code: "123456",
+        displayName: "Анна",
+        roles: ["client"]
+      }
+    );
+
+    expect(registrationResponse.status).toBe(409);
+    expect(registrationResponse.setCookie).toBeNull();
   });
 
   it("rejects duplicate passwordless code requests during resend cooldown", async () => {
@@ -619,4 +723,3 @@ function cookieValue(setCookies: readonly string[], name: string): string {
 
   return cookie.slice(name.length + 1);
 }
-

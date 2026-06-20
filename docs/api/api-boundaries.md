@@ -17,6 +17,11 @@
 Примеры routes:
 
 ```text
+POST /identity/passwordless/request-code
+POST /identity/passwordless/verify-code
+POST /identity/registration/passwordless/verify-code
+GET  /identity/me
+POST /identity/logout
 GET  /a/:handle
 POST /booking/intent
 POST /booking/:intentId/select-slot
@@ -25,6 +30,18 @@ POST /payments/checkout
 GET  /me/orders
 GET  /me/bookings
 ```
+
+Passwordless login verification is login-only. If the verified identifier is not linked
+to an existing account, `public-api` returns the same generic invalid-code response.
+Registration is explicit and uses `POST /identity/registration/passwordless/verify-code`
+after a code has been requested. Public registration is client-only and accepts only
+`roles: ["client"]`; astrologer role assignment belongs to an explicit
+ops/onboarding workflow, not caller-controlled public registration.
+
+`public-api` reads request IPs from the framework-resolved `request.ip`. Deployments
+behind a trusted reverse proxy must enable the explicit `PUBLIC_API_TRUST_PROXY`
+runtime setting so Express resolves proxy headers; controllers must not parse
+`X-Forwarded-For` directly.
 
 ## Ops API
 

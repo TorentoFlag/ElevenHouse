@@ -6,6 +6,10 @@ const localPublicSessionCookieName = "elevenhouse_public_session";
 const publicApiRuntimeConfigSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PUBLIC_API_PORT: z.coerce.number().int().positive().default(3001),
+  PUBLIC_API_TRUST_PROXY: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   REDIS_URL: z.string().trim().min(1).default("redis://localhost:6379"),
   PUBLIC_API_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
   PUBLIC_API_SESSION_COOKIE_SECURE: z
@@ -78,6 +82,7 @@ const publicApiRuntimeConfigSchema = z.object({
 
 export type PublicApiRuntimeConfig = {
   readonly port: number;
+  readonly trustProxy: boolean;
   readonly redisUrl: string;
   readonly sessionTtlSeconds: number;
   readonly sessionCookieSecure: boolean;
@@ -127,6 +132,10 @@ export function createPublicApiRuntimeConfig(
       ? publicSessionCookieName
       : localPublicSessionCookieName);
 
+  if (config.NODE_ENV === "production" && !config.PUBLIC_API_SESSION_COOKIE_SECURE) {
+    throw new Error("PUBLIC_API_SESSION_COOKIE_SECURE=true is required in production");
+  }
+
   if (sessionCookieName.startsWith("__Host-") && !config.PUBLIC_API_SESSION_COOKIE_SECURE) {
     throw new Error("__Host-prefixed public session cookies require Secure=true");
   }
@@ -147,6 +156,7 @@ export function createPublicApiRuntimeConfig(
 
   return {
     port: config.PUBLIC_API_PORT,
+    trustProxy: config.PUBLIC_API_TRUST_PROXY,
     redisUrl: config.REDIS_URL,
     sessionTtlSeconds: config.PUBLIC_API_SESSION_TTL_SECONDS,
     sessionCookieSecure: config.PUBLIC_API_SESSION_COOKIE_SECURE,

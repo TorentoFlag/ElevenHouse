@@ -407,6 +407,9 @@ importers:
       '@elevenhouse/auth':
         specifier: workspace:*
         version: link:../auth
+      '@elevenhouse/validation':
+        specifier: workspace:*
+        version: link:../validation
     devDependencies:
       '@types/node':
         specifier: 25.9.2

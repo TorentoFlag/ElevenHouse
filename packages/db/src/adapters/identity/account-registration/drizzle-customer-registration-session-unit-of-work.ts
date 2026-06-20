@@ -1,9 +1,16 @@
-import type { CustomerAccountRegistrationSessionUnitOfWork } from "@elevenhouse/domain";
+import type {
+  CustomerAccountRegistrationSessionUnitOfWork,
+  PasswordlessCustomerAccountRegistrationSessionUnitOfWork
+} from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../../runtime";
 import {
   createAuthSessionCreationStore,
   type AuthSessionCreationDrizzleExecutor
 } from "../auth-sessions";
+import {
+  createPasswordlessAuthStore,
+  type PasswordlessAuthDrizzleExecutor
+} from "../passwordless-auth";
 import {
   createAccountRegistrationStore,
   type AccountRegistrationDrizzleExecutor
@@ -11,6 +18,8 @@ import {
 
 export type CustomerAccountRegistrationSessionDrizzleExecutor =
   AccountRegistrationDrizzleExecutor & AuthSessionCreationDrizzleExecutor;
+export type PasswordlessCustomerAccountRegistrationSessionDrizzleExecutor =
+  CustomerAccountRegistrationSessionDrizzleExecutor & PasswordlessAuthDrizzleExecutor;
 
 export type CustomerAccountRegistrationSessionDrizzleDatabase = Pick<
   ElevenHouseDatabase,
@@ -24,6 +33,21 @@ export function createDrizzleCustomerAccountRegistrationSessionUnitOfWork(
     transact: (operation) =>
       database.transaction((executor) =>
         operation({
+          ...createAccountRegistrationStore(executor),
+          ...createAuthSessionCreationStore(executor)
+        })
+      )
+  };
+}
+
+export function createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitOfWork(
+  database: CustomerAccountRegistrationSessionDrizzleDatabase
+): PasswordlessCustomerAccountRegistrationSessionUnitOfWork {
+  return {
+    transact: (operation) =>
+      database.transaction((executor) =>
+        operation({
+          ...createPasswordlessAuthStore(executor),
           ...createAccountRegistrationStore(executor),
           ...createAuthSessionCreationStore(executor)
         })

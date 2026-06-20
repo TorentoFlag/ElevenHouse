@@ -4,6 +4,9 @@ import {
   createDrizzleAuthSessionAuthenticationStore,
   createDrizzleAuthSessionRevocationUnitOfWork
 } from "@elevenhouse/db/auth-sessions";
+import {
+  createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitOfWork
+} from "@elevenhouse/db/account-registration";
 import { createDrizzlePasswordlessAuthUnitOfWork } from "@elevenhouse/db/passwordless-auth";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
@@ -38,6 +41,13 @@ import {
   type PasswordlessRateLimitOptions
 } from "./passwordless/identity-passwordless.rate-limit";
 import { IdentityPasswordlessService } from "./passwordless/identity-passwordless.service";
+import { IdentityRegistrationController } from "./registration/identity-registration.controller";
+import { DomainRegistrationHandler } from "./registration/identity-registration.handler";
+import { IdentityRegistrationService } from "./registration/identity-registration.service";
+import {
+  PASSWORDLESS_CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK,
+  REGISTRATION_AUTH_OPTIONS
+} from "./registration/identity-registration.tokens";
 import {
   PublicSessionCookieService,
   PublicSessionTokenIssuer,
@@ -48,11 +58,13 @@ import {
   imports: [ConfigModule, DatabaseModule, RedisModule, SecurityModule],
   controllers: [
     IdentityPasswordlessController,
+    IdentityRegistrationController,
     IdentityCurrentAccountController,
     IdentitySessionController
   ],
   providers: [
     IdentityPasswordlessService,
+    IdentityRegistrationService,
     IdentityCurrentSessionService,
     IdentityLogoutService,
     PublicSessionAuthGuard,
@@ -60,6 +72,7 @@ import {
     PublicSessionCookieService,
     SystemClock,
     DomainPasswordlessAuthHandler,
+    DomainRegistrationHandler,
     {
       provide: PASSWORDLESS_AUTH_CODE_ENCRYPTION,
       useClass: AesGcmAuthCodeEncryption
@@ -87,6 +100,14 @@ import {
       inject: [PostgresRuntimeService]
     },
     {
+      provide: PASSWORDLESS_CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitOfWork(
+          postgresRuntime.database
+        ),
+      inject: [PostgresRuntimeService]
+    },
+    {
       provide: PASSWORDLESS_AUTH_OPTIONS,
       useFactory: (configService: ConfigService) => ({
         authCodeDeliveryEncryptionKey: configService.getOrThrow<Buffer>(
@@ -106,6 +127,14 @@ import {
       provide: PASSWORDLESS_RATE_LIMIT_OPTIONS,
       useFactory: (configService: ConfigService) =>
         configService.getOrThrow("publicApi.passwordlessRateLimits"),
+      inject: [ConfigService]
+    },
+    {
+      provide: REGISTRATION_AUTH_OPTIONS,
+      useFactory: (configService: ConfigService) => ({
+        codeSecret: configService.getOrThrow<string>("publicApi.passwordlessCodeSecret"),
+        sessionTtlSeconds: configService.getOrThrow<number>("publicApi.sessionTtlSeconds")
+      }),
       inject: [ConfigService]
     },
     {

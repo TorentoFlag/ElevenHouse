@@ -6,11 +6,23 @@ import { authChallenges } from "./auth-challenges.schema";
 import { authIdentities } from "./auth-identities.schema";
 import { userSessions } from "./auth-sessions.schema";
 import { userRoleAssignments } from "./role-assignments.schema";
+import { userProfiles } from "./user-profiles.schema";
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   authIdentities: many(authIdentities),
   roleAssignments: many(userRoleAssignments),
-  sessions: many(userSessions)
+  sessions: many(userSessions),
+  profile: one(userProfiles, {
+    fields: [users.id],
+    references: [userProfiles.userId]
+  })
+}));
+
+export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
+  user: one(users, {
+    fields: [userProfiles.userId],
+    references: [users.id]
+  })
 }));
 
 export const authIdentitiesRelations = relations(authIdentities, ({ one }) => ({

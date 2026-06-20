@@ -1,5 +1,6 @@
 export * from "./identity-schema-values";
 export * from "./accounts.schema";
+export * from "./user-profiles.schema";
 export * from "./auth-identities.schema";
 export * from "./role-assignments.schema";
 export * from "./auth-sessions.schema";

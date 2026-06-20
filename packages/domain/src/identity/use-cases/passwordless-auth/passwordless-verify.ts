@@ -45,6 +45,48 @@ export type PasswordlessVerificationStore = {
   ) => Promise<AuthSecurityEvent>;
 };
 
+export type PasswordlessRegistrationChallenge = {
+  readonly channel: "email" | "phone";
+  readonly identifierNormalized: string;
+  readonly requestedRoles: readonly ("client" | "astrologer")[];
+};
+
+export async function verifyPasswordlessCodeForRegistration(input: {
+  readonly store: PasswordlessVerificationStore;
+  readonly challengeId: string;
+  readonly code: string;
+  readonly codeSecret: string;
+  readonly now: Date;
+  readonly roles?: readonly string[];
+}): Promise<PasswordlessRegistrationChallenge> {
+  const challenge = await verifyUsableChallengeCode({
+    store: input.store,
+    challengeId: input.challengeId,
+    code: input.code,
+    codeSecret: input.codeSecret,
+    now: input.now,
+    authFlow: "registration"
+  });
+
+  if (input.roles) {
+    assertRequestedRolesMatchChallenge({
+      requestedRoles: input.roles,
+      challengeRoles: challenge.requestedRoles
+    });
+  }
+
+  await input.store.consumeChallenge({
+    challengeId: challenge.id,
+    consumedAt: input.now.toISOString()
+  });
+
+  return {
+    channel: challenge.channel,
+    identifierNormalized: challenge.identifierNormalized,
+    requestedRoles: challenge.requestedRoles
+  };
+}
+
 export async function verifyPasswordlessCode(input: {
   readonly store: PasswordlessVerificationStore;
   readonly challengeId: string;
@@ -53,6 +95,70 @@ export async function verifyPasswordlessCode(input: {
   readonly session: Omit<AuthSessionCreationInput, "userId">;
   readonly now: Date;
 }): Promise<PasswordlessAuthenticatedAccount> {
+  const challengeId = input.challengeId.trim();
+  const challenge = await verifyUsableChallengeCode({
+    store: input.store,
+    challengeId,
+    code: input.code,
+    codeSecret: input.codeSecret,
+    now: input.now,
+    authFlow: "login"
+  });
+
+  await input.store.consumeChallenge({
+    challengeId: challenge.id,
+    consumedAt: input.now.toISOString()
+  });
+
+  const existingIdentity = await input.store.findAuthIdentityByProviderSubject({
+    provider: challenge.channel,
+    providerSubject: challenge.identifierNormalized
+  });
+  if (!existingIdentity) {
+    throw new PasswordlessCodeVerificationError();
+  }
+
+  assertRequestedRolesAssigned({ accountContext: existingIdentity, challenge });
+  const accountContext = existingIdentity;
+  const session = await input.store.createSession(
+    normalizeAuthSessionCreationInput({
+      userId: accountContext.user.id,
+      tokenHash: input.session.tokenHash,
+      createdAt: input.session.createdAt,
+      expiresAt: input.session.expiresAt,
+      ...(input.session.ipAddress === undefined ? {} : { ipAddress: input.session.ipAddress }),
+      ...(input.session.userAgent === undefined ? {} : { userAgent: input.session.userAgent })
+    })
+  );
+  const securityEvent = await input.store.recordSecurityEvent(
+    normalizeAuthSecurityEventInput({
+      eventType: "login_succeeded",
+      occurredAt: input.now,
+      userId: accountContext.user.id,
+      sessionId: session.id,
+      ...(input.session.ipAddress === undefined ? {} : { ipAddress: input.session.ipAddress }),
+      ...(input.session.userAgent === undefined ? {} : { userAgent: input.session.userAgent })
+    })
+  );
+
+  return {
+    user: accountContext.user,
+    authIdentity: accountContext.authIdentity,
+    roleAssignments: accountContext.roleAssignments,
+    session,
+    securityEvent,
+    authenticationKind: "login"
+  };
+}
+
+async function verifyUsableChallengeCode(input: {
+  readonly store: PasswordlessVerificationStore;
+  readonly challengeId: string;
+  readonly code: string;
+  readonly codeSecret: string;
+  readonly now: Date;
+  readonly authFlow: "login" | "registration";
+}): Promise<AuthChallenge> {
   const challengeId = input.challengeId.trim();
   if (!challengeId) {
     throw new PasswordlessCodeVerificationError();
@@ -77,61 +183,19 @@ export async function verifyPasswordlessCode(input: {
       normalizeAuthSecurityEventInput({
         eventType: "login_failed",
         occurredAt: input.now,
-        ipAddress: challenge.ipAddress,
-        userAgent: challenge.userAgent,
+        ...(challenge.ipAddress === undefined ? {} : { ipAddress: challenge.ipAddress }),
+        ...(challenge.userAgent === undefined ? {} : { userAgent: challenge.userAgent }),
         metadata: {
           challengeId: challenge.id,
-          channel: challenge.channel
+          channel: challenge.channel,
+          ...(input.authFlow === "registration" ? { authFlow: input.authFlow } : {})
         }
       })
     );
     throw new PasswordlessCodeVerificationError();
   }
 
-  await input.store.consumeChallenge({
-    challengeId: challenge.id,
-    consumedAt: input.now.toISOString()
-  });
-
-  const existingIdentity = await input.store.findAuthIdentityByProviderSubject({
-    provider: challenge.channel,
-    providerSubject: challenge.identifierNormalized
-  });
-  if (!existingIdentity) {
-    throw new PasswordlessCodeVerificationError();
-  }
-
-  assertRequestedRolesAssigned({ accountContext: existingIdentity, challenge });
-  const accountContext = existingIdentity;
-  const session = await input.store.createSession(
-    normalizeAuthSessionCreationInput({
-      userId: accountContext.user.id,
-      tokenHash: input.session.tokenHash,
-      createdAt: input.session.createdAt,
-      expiresAt: input.session.expiresAt,
-      ipAddress: input.session.ipAddress,
-      userAgent: input.session.userAgent
-    })
-  );
-  const securityEvent = await input.store.recordSecurityEvent(
-    normalizeAuthSecurityEventInput({
-      eventType: "login_succeeded",
-      occurredAt: input.now,
-      userId: accountContext.user.id,
-      sessionId: session.id,
-      ipAddress: input.session.ipAddress,
-      userAgent: input.session.userAgent
-    })
-  );
-
-  return {
-    user: accountContext.user,
-    authIdentity: accountContext.authIdentity,
-    roleAssignments: accountContext.roleAssignments,
-    session,
-    securityEvent,
-    authenticationKind: "login"
-  };
+  return challenge;
 }
 
 function assertRequestedRolesAssigned(input: {
@@ -146,7 +210,22 @@ function assertRequestedRolesAssigned(input: {
     if (!existingRoles.has(role)) {
       throw new PasswordlessCodeVerificationError();
     }
-  };
+  }
+}
+
+function assertRequestedRolesMatchChallenge(input: {
+  readonly requestedRoles: readonly string[];
+  readonly challengeRoles: readonly ("client" | "astrologer")[];
+}): void {
+  const requestedRoles = new Set(input.requestedRoles);
+  const challengeRoles = new Set(input.challengeRoles);
+
+  if (
+    requestedRoles.size !== challengeRoles.size ||
+    input.requestedRoles.some((role) => !challengeRoles.has(role as "client" | "astrologer"))
+  ) {
+    throw new PasswordlessCodeVerificationError();
+  }
 }
 
 function assertChallengeUsable(

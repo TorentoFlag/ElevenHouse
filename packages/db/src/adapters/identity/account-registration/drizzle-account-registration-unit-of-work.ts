@@ -10,6 +10,7 @@ import {
   authIdentities,
   databasePlatformRoleValues,
   identityProviderValues,
+  userProfiles,
   userRoleAssignments,
   users,
   userStatusValues
@@ -18,6 +19,7 @@ import type { ElevenHouseDatabase } from "../../../runtime";
 import { insertReturningOne } from "../../../shared/insert-returning-one";
 
 type AuthIdentitiesInsert = typeof authIdentities.$inferInsert;
+type UserProfilesInsert = typeof userProfiles.$inferInsert;
 type UserRoleAssignmentsInsert = typeof userRoleAssignments.$inferInsert;
 type CustomerPlatformRole = Extract<
   (typeof databasePlatformRoleValues)[number],
@@ -67,6 +69,19 @@ export function createAccountRegistrationStore(
         updatedAt: row.updatedAt.toISOString()
       };
     },
+    createUserProfile: async (input) => {
+      const row = await insertReturningOne(
+        () => executor.insert(userProfiles).values(toUserProfileInsert(input)).returning(),
+        "user_profiles"
+      );
+
+      return {
+        userId: row.userId,
+        displayName: row.displayName,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString()
+      };
+    },
     createAuthIdentity: async (input) => {
       const row = await createAuthIdentityRow(executor, input);
 
@@ -111,6 +126,16 @@ export function createAccountRegistrationStore(
         assignedAt: row.assignedAt.toISOString()
       };
     }
+  };
+}
+
+function toUserProfileInsert(input: {
+  readonly userId: string;
+  readonly displayName: string;
+}): UserProfilesInsert {
+  return {
+    userId: input.userId,
+    displayName: input.displayName
   };
 }
 

@@ -42,8 +42,8 @@ export async function createAuthenticatedSession(
         occurredAt: input.createdAt,
         userId: session.userId,
         sessionId: session.id,
-        ipAddress: input.ipAddress,
-        userAgent: input.userAgent
+        ...(input.ipAddress === undefined ? {} : { ipAddress: input.ipAddress }),
+        ...(input.userAgent === undefined ? {} : { userAgent: input.userAgent })
       })
     );
 

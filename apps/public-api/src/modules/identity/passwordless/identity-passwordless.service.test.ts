@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   HttpException,
   HttpStatus,
   UnauthorizedException
@@ -10,17 +9,14 @@ import type {
   VerifyPasswordlessCodeRequest
 } from "@elevenhouse/contracts";
 import {
-  CustomerAccountIdentityConflictError,
   PasswordlessCodeRequestCooldownError,
   PasswordlessCodeVerificationError
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import type { DomainPasswordlessAuthHandler } from "./identity-passwordless.handler";
-import {
-  allowAllPasswordlessRateLimiter,
-  type PasswordlessRateLimitPort
-} from "./identity-passwordless.rate-limit";
+import type { PasswordlessRateLimitPort } from "./identity-passwordless.rate-limit";
 import { IdentityPasswordlessService } from "./identity-passwordless.service";
+import { allowAllPasswordlessRateLimiter } from "../testing/allow-all-passwordless-rate-limiter";
 
 describe("IdentityPasswordlessService", () => {
   it("declares the passwordless rate limiter as a required constructor dependency", () => {
@@ -305,22 +301,6 @@ describe("IdentityPasswordlessService", () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it("maps identity races to conflict responses", async () => {
-    const handler = {
-      requestCode: vi.fn(),
-      verifyCode: vi.fn(async () => {
-        throw new CustomerAccountIdentityConflictError();
-      })
-    };
-    const service = createService(handler);
-
-    await expect(
-      service.verifyCode({
-        challengeId: "e28cbfe7-414b-4d80-a410-1e3f00a380a7",
-        code: "123456"
-      })
-    ).rejects.toBeInstanceOf(ConflictException);
-  });
 });
 
 function createService(

@@ -7,7 +7,9 @@ import {
   requestPasswordlessCodeResponseSchema,
   verifyAstrologerPasswordlessCodeResponseSchema,
   verifyPasswordlessCodeRequestSchema,
-  verifyPasswordlessCodeResponseSchema
+  verifyPasswordlessCodeResponseSchema,
+  verifyRegistrationPasswordlessCodeRequestSchema,
+  verifyRegistrationPasswordlessCodeResponseSchema
 } from "./identity";
 
 describe("requestPasswordlessCodeRequestSchema", () => {
@@ -170,6 +172,68 @@ describe("verifyPasswordlessCodeResponseSchema", () => {
         id: "8e14390f-3db1-4d1c-9344-55679c778427",
         status: "active",
         roles: ["client"]
+      }
+    });
+  });
+});
+
+describe("verifyRegistrationPasswordlessCodeRequestSchema", () => {
+  it("normalizes public passwordless registration requests", () => {
+    expect(
+      verifyRegistrationPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        displayName: " Анна ",
+        roles: ["client"]
+      })
+    ).toEqual({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      code: "123456",
+      displayName: "Анна",
+      roles: ["client"]
+    });
+  });
+
+  it("rejects internal roles in public registration requests", () => {
+    expect(() =>
+      verifyRegistrationPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        displayName: "Анна",
+        roles: ["admin"]
+      })
+    ).toThrow();
+  });
+
+  it("rejects astrologer self-assignment in public registration requests", () => {
+    expect(() =>
+      verifyRegistrationPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        displayName: "Анна",
+        roles: ["astrologer"]
+      })
+    ).toThrow();
+  });
+});
+
+describe("verifyRegistrationPasswordlessCodeResponseSchema", () => {
+  it("returns a registered account with a display name", () => {
+    expect(
+      verifyRegistrationPasswordlessCodeResponseSchema.parse({
+        account: {
+          id: "8e14390f-3db1-4d1c-9344-55679c778427",
+          status: "active",
+          roles: ["client"],
+          displayName: "Анна"
+        }
+      })
+    ).toEqual({
+      account: {
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "active",
+        roles: ["client"],
+        displayName: "Анна"
       }
     });
   });

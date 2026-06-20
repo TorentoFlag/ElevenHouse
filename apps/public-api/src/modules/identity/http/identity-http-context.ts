@@ -13,7 +13,6 @@ export function getIdentityRequestContext(
 ): PasswordlessRequestContext {
   const ipAddress =
     normalizeHeaderValue(request.ip) ??
-    normalizeHeaderValue(request.headers?.["x-forwarded-for"])?.split(",")[0]?.trim() ??
     normalizeHeaderValue(request.socket?.remoteAddress);
   const userAgent = normalizeHeaderValue(request.headers?.["user-agent"]);
 

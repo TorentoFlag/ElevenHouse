@@ -3,9 +3,7 @@
   "compilerOptions": {
     "module": "Node16",
     "moduleResolution": "Node16",
-    "types": [
-      "vitest"
-    ]
+    "types": []
   },
   "include": [
     "src"

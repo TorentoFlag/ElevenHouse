@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   authIdentities,
   authSecurityEvents,
+  userProfiles,
   userRoleAssignments,
   userSessions,
   users
@@ -77,6 +78,12 @@ describe("createDrizzleCustomerAccountRegistrationSessionUnitOfWork", () => {
         updatedAt: accountCreatedAt
       },
       {
+        userId: "user_1",
+        displayName: "Анна",
+        createdAt: accountCreatedAt,
+        updatedAt: accountCreatedAt
+      },
+      {
         id: "identity_1",
         userId: "user_1",
         provider: "email",
@@ -127,6 +134,7 @@ describe("createDrizzleCustomerAccountRegistrationSessionUnitOfWork", () => {
         email: "ada@example.com",
         emailVerifiedAt: sessionCreatedAt
       },
+      displayName: " Анна ",
       roles: ["client"],
       session: {
         tokenHash: "session_hash",
@@ -143,6 +151,13 @@ describe("createDrizzleCustomerAccountRegistrationSessionUnitOfWork", () => {
       {
         table: users,
         value: { status: "active" }
+      },
+      {
+        table: userProfiles,
+        value: {
+          userId: "user_1",
+          displayName: "Анна"
+        }
       },
       {
         table: authIdentities,

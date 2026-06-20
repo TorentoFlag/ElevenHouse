@@ -8,7 +8,7 @@ import type {
   AccountRegistrationDrizzleDatabase,
   AccountRegistrationDrizzleExecutor
 } from "./index";
-import { authIdentities, userRoleAssignments, users } from "../../../schema";
+import { authIdentities, userProfiles, userRoleAssignments, users } from "../../../schema";
 
 type InsertCall = {
   readonly table: unknown;
@@ -74,6 +74,13 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
       {
         id: "identity_1",
         userId: "user_1",
+        displayName: "Анна",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        id: "identity_1",
+        userId: "user_1",
         provider: "email",
         providerSubject: "ada@example.com",
         email: "ada@example.com",
@@ -107,6 +114,7 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         email: " ada@example.com ",
         emailVerifiedAt: new Date("2026-06-12T00:00:00.000Z")
       },
+      displayName: " Анна ",
       roles: ["client", "astrologer"]
     });
 
@@ -115,6 +123,13 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
       {
         table: users,
         value: { status: "active" }
+      },
+      {
+        table: userProfiles,
+        value: {
+          userId: "user_1",
+          displayName: "Анна"
+        }
       },
       {
         table: authIdentities,
@@ -145,6 +160,12 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
       user: {
         id: "user_1",
         status: "active",
+        createdAt: "2026-06-12T00:00:00.000Z",
+        updatedAt: "2026-06-12T00:00:00.000Z"
+      },
+      userProfile: {
+        userId: "user_1",
+        displayName: "Анна",
         createdAt: "2026-06-12T00:00:00.000Z",
         updatedAt: "2026-06-12T00:00:00.000Z"
       },
@@ -188,6 +209,7 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
           email: "ada@example.com",
           emailVerifiedAt: now
         },
+        displayName: "Анна",
         roles: ["client"]
       })
     ).rejects.toThrow("Expected users insert to return a row");
@@ -202,6 +224,12 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         deletionRequestedAt: null,
         deletionScheduledAt: null,
         deletedAt: null,
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        userId: "user_1",
+        displayName: "Анна",
         createdAt: now,
         updatedAt: now
       },
@@ -235,6 +263,7 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
           email: "ada@example.com",
           emailVerifiedAt: now
         },
+        displayName: "Анна",
         roles: ["client"]
       })
     ).rejects.toThrow("Unexpected user_role_assignments.role value: owner");
@@ -256,6 +285,12 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
         createdAt: now,
         updatedAt: now
       },
+      {
+        userId: "user_1",
+        displayName: "Анна",
+        createdAt: now,
+        updatedAt: now
+      },
       duplicateIdentityError
     ]);
 
@@ -268,6 +303,7 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
           email: "ada@example.com",
           emailVerifiedAt: now
         },
+        displayName: "Анна",
         roles: ["client"]
       })
     ).rejects.toBeInstanceOf(CustomerAccountIdentityConflictError);

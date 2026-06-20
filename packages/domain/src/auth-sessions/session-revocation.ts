@@ -53,8 +53,8 @@ export async function revokeAuthenticatedSession(input: {
         occurredAt: input.now,
         userId: context.user.id,
         sessionId: context.session.id,
-        ipAddress: input.ipAddress,
-        userAgent: input.userAgent
+        ...(input.ipAddress === undefined ? {} : { ipAddress: input.ipAddress }),
+        ...(input.userAgent === undefined ? {} : { userAgent: input.userAgent })
       })
     );
 

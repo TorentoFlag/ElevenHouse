@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { hashPasswordlessCode } from "./passwordless-code";
 import { PasswordlessCodeVerificationError } from "./passwordless-challenge";
-import { verifyPasswordlessCode } from "./passwordless-verify";
+import {
+  verifyPasswordlessCode,
+  verifyPasswordlessCodeForRegistration
+} from "./passwordless-verify";
 
 const now = new Date("2026-06-15T10:03:00.000Z");
 const sessionCreatedAt = new Date("2026-06-15T10:03:00.000Z");
@@ -77,6 +80,74 @@ function verifyWithStore(store: ReturnType<typeof createBaseStore>, code = "1234
 }
 
 describe("verifyPasswordlessCode", () => {
+  it("verifies and consumes a registration challenge without requiring an existing identity", async () => {
+    const store = createStore();
+
+    const result = await verifyPasswordlessCodeForRegistration({
+      store,
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      code: "123456",
+      codeSecret,
+      now
+    });
+
+    expect(result).toEqual({
+      channel: "email",
+      identifierNormalized: "ada@example.com",
+      requestedRoles: ["client"]
+    });
+    expect(store.findAuthIdentityByProviderSubject).not.toHaveBeenCalled();
+    expect(store.consumeChallenge).toHaveBeenCalledWith({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      consumedAt: "2026-06-15T10:03:00.000Z"
+    });
+    expect(store.createSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects registration role mismatches without consuming the challenge", async () => {
+    const store = createStore();
+
+    await expect(
+      verifyPasswordlessCodeForRegistration({
+        store,
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        codeSecret,
+        now,
+        roles: ["astrologer"]
+      })
+    ).rejects.toBeInstanceOf(PasswordlessCodeVerificationError);
+
+    expect(store.consumeChallenge).not.toHaveBeenCalled();
+    expect(store.createSession).not.toHaveBeenCalled();
+  });
+
+  it("accepts registration roles that match the challenge roles in a different order", async () => {
+    const store = createStore({
+      findChallengeById: vi.fn(async () =>
+        createPendingChallenge({ requestedRoles: ["client", "astrologer"] })
+      )
+    });
+
+    await expect(
+      verifyPasswordlessCodeForRegistration({
+        store,
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        codeSecret,
+        now,
+        roles: ["astrologer", "client"]
+      })
+    ).resolves.toMatchObject({
+      requestedRoles: ["client", "astrologer"]
+    });
+
+    expect(store.consumeChallenge).toHaveBeenCalledWith({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      consumedAt: "2026-06-15T10:03:00.000Z"
+    });
+  });
+
   it("rejects a valid code for an unknown identity without creating an account", async () => {
     const store = createStore();
 

@@ -27,11 +27,6 @@ export type PasswordlessRateLimitPort = {
 
 export const anonymousPasswordlessIpAddress = "unknown";
 
-export const allowAllPasswordlessRateLimiter: PasswordlessRateLimitPort = {
-  consumeRequestCode: async () => ({ allowed: true }),
-  consumeVerifyCode: async () => ({ allowed: true })
-};
-
 export type PasswordlessRateLimitBucketOptions = {
   readonly limit: number;
   readonly windowSeconds: number;

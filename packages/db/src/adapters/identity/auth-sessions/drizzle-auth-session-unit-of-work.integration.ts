@@ -46,6 +46,7 @@ describe("auth session Drizzle/PostgreSQL integration", () => {
         email: uniqueEmail,
         emailVerifiedAt: new Date("2026-06-14T10:00:00.000Z")
       },
+      displayName: "Integration Client",
       roles: ["client"]
     });
     createdUserIds.push(account.user.id);

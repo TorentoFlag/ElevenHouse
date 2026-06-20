@@ -7,9 +7,20 @@ ElevenHouse uses one user account model across all product surfaces. A user acco
 Authentication identities, sessions and role assignments are separate concepts:
 
 - User account: the durable platform account.
+- User profile: self-declared profile attributes for the account.
 - Auth identity: a login method linked to a user account, such as email/password or a future OAuth provider.
 - Session: an authenticated runtime session for one user account.
 - Role assignment: a role granted to a user account.
+
+## User profile
+
+`users` is the durable account shell and stores account lifecycle state. Self-declared
+profile attributes live in `user_profiles`.
+
+`user_profiles.display_name` stores the answer to "Как к вам обращаться". It is not a
+legal name and must not be used as KYC data. Future legal identity and KYC records
+must live in a separate identity verification contour with its own audit, retention
+and access rules.
 
 ## Canonical roles
 
@@ -35,10 +46,14 @@ Internal platform roles:
 - `super_admin`
 
 Internal roles are only for ElevenHouse platform staff. They must not be granted through public registration or astrologer onboarding.
+Public registration grants only `client`. The `astrologer` role may be added to the
+same account later, but only through a dedicated astrologer onboarding or ops flow
+with explicit server-side authorization.
 
 ## Authorization invariants
 
 - `client` and `astrologer` may coexist on one account.
+- Public registration must not self-assign `astrologer`, `moderator`, `admin` or `super_admin`.
 - `moderator`, `admin` and `super_admin` are internal roles.
 - Admin and super-admin actions must call domain use cases and write audit log entries.
 - `super_admin` should be reserved for actions that can change platform-wide security, financial, role or operational settings.

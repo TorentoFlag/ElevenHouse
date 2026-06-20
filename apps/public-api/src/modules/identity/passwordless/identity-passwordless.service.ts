@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   HttpException,
   HttpStatus,
   Inject,
@@ -17,7 +16,6 @@ import {
   type VerifyPasswordlessCodeRequest
 } from "@elevenhouse/contracts";
 import {
-  CustomerAccountIdentityConflictError,
   PasswordlessCodeRequestCooldownError,
   PasswordlessCodeVerificationError
 } from "@elevenhouse/domain";
@@ -31,6 +29,7 @@ import {
   type PasswordlessRateLimitPort,
   type PasswordlessRequestContext
 } from "./identity-passwordless.rate-limit";
+import { assertPasswordlessRateLimitAllowed } from "./identity-passwordless-http-errors";
 
 @Injectable()
 export class IdentityPasswordlessService {
@@ -115,29 +114,7 @@ export class IdentityPasswordlessService {
         });
       }
 
-      if (error instanceof CustomerAccountIdentityConflictError) {
-        throw new ConflictException("Customer account identity already exists", {
-          cause: error
-        });
-      }
-
       throw error;
     }
   }
-}
-
-async function assertPasswordlessRateLimitAllowed(
-  decision: Awaited<ReturnType<PasswordlessRateLimitPort["consumeRequestCode"]>>
-): Promise<void> {
-  if (decision.allowed) {
-    return;
-  }
-
-  throw new HttpException(
-    {
-      message: "Passwordless auth rate limit exceeded",
-      retryAfterSeconds: decision.retryAfterSeconds
-    },
-    HttpStatus.TOO_MANY_REQUESTS
-  );
 }

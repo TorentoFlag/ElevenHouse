@@ -18,7 +18,7 @@ import {
   PASSWORDLESS_RATE_LIMITER
 } from "./passwordless/identity-passwordless.tokens";
 import { PUBLIC_AUTH_CODE_GENERATOR } from "./passwordless/identity-passwordless.handler";
-import { allowAllPasswordlessRateLimiter } from "./passwordless/identity-passwordless.rate-limit";
+import { allowAllPasswordlessRateLimiter } from "./testing/allow-all-passwordless-rate-limiter";
 import { IdentityCurrentSessionService } from "./session/identity-current-session.service";
 import { PublicSessionTokenIssuer, SystemClock } from "./session/identity-session.service";
 

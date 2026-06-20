@@ -39,8 +39,8 @@ export class IdentityLogoutService {
       revocation: this.revocation,
       tokenHash: hashSessionToken(token),
       now: this.clock.now(),
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent
+      ...(context.ipAddress === undefined ? {} : { ipAddress: context.ipAddress }),
+      ...(context.userAgent === undefined ? {} : { userAgent: context.userAgent })
     });
   }
 }

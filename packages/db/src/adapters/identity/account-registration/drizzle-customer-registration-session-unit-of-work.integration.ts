@@ -43,6 +43,7 @@ describe("customer registration with initial session Drizzle/PostgreSQL integrat
         email: firstEmail,
         emailVerifiedAt: createdAt
       },
+      displayName: "Integration Client",
       roles: ["client"],
       session: {
         tokenHash,
@@ -62,6 +63,7 @@ describe("customer registration with initial session Drizzle/PostgreSQL integrat
           email: failedEmail,
           emailVerifiedAt: createdAt
         },
+        displayName: "Failed Client",
         roles: ["client"],
         session: {
           tokenHash,
@@ -76,8 +78,16 @@ describe("customer registration with initial session Drizzle/PostgreSQL integrat
       "select id from auth_identities where email = $1",
       [failedEmail]
     );
+    const persistedFailedProfile = await runtime.pool.query<{ user_id: string }>(
+      `select user_profiles.user_id
+       from user_profiles
+       join auth_identities on auth_identities.user_id = user_profiles.user_id
+       where auth_identities.email = $1`,
+      [failedEmail]
+    );
 
     expect(persistedFailedIdentity.rows).toEqual([]);
+    expect(persistedFailedProfile.rows).toEqual([]);
   });
 });
 

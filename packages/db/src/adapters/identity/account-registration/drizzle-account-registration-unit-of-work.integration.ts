@@ -38,6 +38,7 @@ describe("account registration Drizzle/PostgreSQL integration", () => {
         email: uniqueEmail,
         emailVerifiedAt: new Date("2026-06-15T10:00:00.000Z")
       },
+      displayName: "Integration Client",
       roles: ["client", "astrologer"]
     });
 
@@ -63,8 +64,15 @@ describe("account registration Drizzle/PostgreSQL integration", () => {
       "select role from user_role_assignments where user_id = $1",
       [result.user.id]
     );
+    const persistedProfiles = await runtime.pool.query<{
+      user_id: string;
+      display_name: string;
+    }>("select user_id, display_name from user_profiles where user_id = $1", [result.user.id]);
 
     expect(persistedUsers.rows).toEqual([{ id: result.user.id, status: "active" }]);
+    expect(persistedProfiles.rows).toEqual([
+      { user_id: result.user.id, display_name: "Integration Client" }
+    ]);
     expect(persistedIdentities.rows).toEqual([
       {
         user_id: result.user.id,
