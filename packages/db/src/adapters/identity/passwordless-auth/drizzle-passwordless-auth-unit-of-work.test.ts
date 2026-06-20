@@ -632,10 +632,7 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
           }
         }
       ],
-      insertRows: [
-        createSessionRow(),
-        createSecurityEventRow({ eventType: "login_succeeded" })
-      ]
+      insertRows: [createSessionRow(), createSecurityEventRow({ eventType: "login_succeeded" })]
     });
 
     const result = await createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
@@ -715,15 +712,16 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
               createRoleAssignmentRow({
                 id: "role_astrologer",
                 role: "astrologer"
+              }),
+              createRoleAssignmentRow({
+                id: "role_admin",
+                role: "admin"
               })
             ]
           }
         }
       ],
-      insertRows: [
-        createSessionRow(),
-        createSecurityEventRow({ eventType: "login_succeeded" })
-      ]
+      insertRows: [createSessionRow(), createSecurityEventRow({ eventType: "login_succeeded" })]
     });
 
     const result = await createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
@@ -769,10 +767,7 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
           }
         }
       ],
-      insertRows: [
-        createSessionRow(),
-        createSecurityEventRow({ eventType: "login_succeeded" })
-      ]
+      insertRows: [createSessionRow(), createSecurityEventRow({ eventType: "login_succeeded" })]
     });
 
     const result = await createDrizzlePasswordlessAuthUnitOfWork(database).transact((store) =>
@@ -821,11 +816,12 @@ describe("createDrizzlePasswordlessAuthUnitOfWork", () => {
     ]);
   });
 
-
   it("increments attempts and records a failed event for an incorrect code", async () => {
     const database = createFakeDrizzleDatabase({
       challengeRows: [createChallengeRow()],
-      insertRows: [createSecurityEventRow({ eventType: "login_failed", userId: null, sessionId: null })]
+      insertRows: [
+        createSecurityEventRow({ eventType: "login_failed", userId: null, sessionId: null })
+      ]
     });
 
     await expect(

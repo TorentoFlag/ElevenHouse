@@ -4,6 +4,7 @@ import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { createLogger } from "@elevenhouse/observability";
 import { AppModule } from "./app.module";
+import { configureAstrologerApiHttpSettings } from "./http-app-settings";
 
 async function bootstrap() {
   const logger = createLogger("astrologer-api");
@@ -11,7 +12,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.getOrThrow<number>("astrologerApi.port");
 
-  app.set("trust proxy", configService.getOrThrow<boolean>("astrologerApi.trustProxy"));
+  configureAstrologerApiHttpSettings(app, configService);
   app.enableShutdownHooks();
   await app.listen(port);
 

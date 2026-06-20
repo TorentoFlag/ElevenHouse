@@ -19,15 +19,9 @@ import type {
   UserAccountStatus,
   UserRoleAssignment
 } from "@elevenhouse/domain";
-import {
-  authChallengeDeliveries
-} from "../../../schema/identity/auth-challenge-deliveries.schema";
-import {
-  authChallenges
-} from "../../../schema/identity/auth-challenges.schema";
-import {
-  authIdentities
-} from "../../../schema/identity/auth-identities.schema";
+import { authChallengeDeliveries } from "../../../schema/identity/auth-challenge-deliveries.schema";
+import { authChallenges } from "../../../schema/identity/auth-challenges.schema";
+import { authIdentities } from "../../../schema/identity/auth-identities.schema";
 import {
   authChallengeDeliveryStatusValues,
   authChallengeStatusValues,
@@ -373,7 +367,9 @@ function toExistingPasswordlessIdentity(
   return {
     user: toUserAccount(row.user),
     authIdentity: toAuthIdentity(row),
-    roleAssignments: row.user.roleAssignments.map(toUserRoleAssignment)
+    roleAssignments: row.user.roleAssignments
+      .filter((assignment) => isCustomerPlatformRole(assignment.role))
+      .map(toUserRoleAssignment)
   };
 }
 

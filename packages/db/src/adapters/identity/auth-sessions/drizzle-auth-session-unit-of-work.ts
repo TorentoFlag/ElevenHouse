@@ -144,7 +144,9 @@ async function findSessionByTokenHash(
   return {
     session: toAuthSession(row),
     user: toUserAccount(row.user),
-    roleAssignments: row.user.roleAssignments.map(toUserRoleAssignment)
+    roleAssignments: row.user.roleAssignments
+      .filter((assignment) => isCustomerPlatformRole(assignment.role))
+      .map(toUserRoleAssignment)
   };
 }
 

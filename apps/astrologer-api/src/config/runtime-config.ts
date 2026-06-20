@@ -26,7 +26,11 @@ const astrologerApiRuntimeConfigSchema = z.object({
   AUTH_CODE_DELIVERY_ENCRYPTION_KEY: z.string().trim().min(1),
   ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: z.string().trim().min(1).optional(),
   ASTROLOGER_API_PASSWORDLESS_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
-  ASTROLOGER_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
+  ASTROLOGER_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60),
   ASTROLOGER_API_PASSWORDLESS_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   ASTROLOGER_API_PASSWORDLESS_REQUEST_CODE_IDENTIFIER_LIMIT: z.coerce
     .number()
@@ -160,15 +164,13 @@ export function createAstrologerApiRuntimeConfig(
     csrfCookieName: config.ASTROLOGER_API_CSRF_COOKIE_NAME,
     csrfHeaderName: config.ASTROLOGER_API_CSRF_HEADER_NAME.toLowerCase(),
     csrfTokenTtlSeconds: config.ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS,
-    allowedOrigins:
-      allowedOrigins.length > 0
-        ? allowedOrigins
-        : ["http://localhost:5174", "http://localhost:5175"],
+    allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5174"],
     authCodeDeliveryEncryptionKey: parseBase64Aes256GcmKey(
       config.AUTH_CODE_DELIVERY_ENCRYPTION_KEY
     ),
     passwordlessCodeSecret:
-      config.ASTROLOGER_API_PASSWORDLESS_CODE_SECRET ?? "elevenhouse-dev-astrologer-passwordless-code-secret",
+      config.ASTROLOGER_API_PASSWORDLESS_CODE_SECRET ??
+      "elevenhouse-dev-astrologer-passwordless-code-secret",
     passwordlessCodeTtlSeconds: config.ASTROLOGER_API_PASSWORDLESS_CODE_TTL_SECONDS,
     passwordlessResendCooldownSeconds: config.ASTROLOGER_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS,
     passwordlessMaxAttempts: config.ASTROLOGER_API_PASSWORDLESS_MAX_ATTEMPTS,

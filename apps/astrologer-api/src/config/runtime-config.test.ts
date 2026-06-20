@@ -14,7 +14,7 @@ const defaultSecurityConfig = {
   csrfCookieName: "elevenhouse_astrologer_csrf",
   csrfHeaderName: "x-csrf-token",
   csrfTokenTtlSeconds: 604800,
-  allowedOrigins: ["http://localhost:5174", "http://localhost:5175"],
+  allowedOrigins: ["http://localhost:5174"],
   authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
   passwordlessCodeSecret: "elevenhouse-dev-astrologer-passwordless-code-secret",
   passwordlessCodeTtlSeconds: 600,
@@ -239,8 +239,6 @@ describe("createAstrologerApiRuntimeConfig", () => {
   });
 
   it("requires an explicit auth code delivery encryption key", () => {
-    expect(() => createAstrologerApiRuntimeConfig({})).toThrow(
-      "AUTH_CODE_DELIVERY_ENCRYPTION_KEY"
-    );
+    expect(() => createAstrologerApiRuntimeConfig({})).toThrow("AUTH_CODE_DELIVERY_ENCRYPTION_KEY");
   });
 });

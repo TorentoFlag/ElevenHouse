@@ -325,6 +325,13 @@ describe("createDrizzleAuthSessionAuthenticationStore", () => {
                   role: "client",
                   assignedByUserId: null,
                   assignedAt: roleAssignedAt
+                },
+                {
+                  id: "role_admin",
+                  userId: "user_1",
+                  role: "admin",
+                  assignedByUserId: null,
+                  assignedAt: roleAssignedAt
                 }
               ]
             }
