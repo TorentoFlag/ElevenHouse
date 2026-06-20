@@ -128,6 +128,61 @@
   border-color: var(--eh-otp-auth-error-text);
 }
 
+.ehOtpAuthForm__phoneControl {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  align-items: center;
+  border: 1px solid var(--eh-otp-auth-input-line);
+  border-radius: var(--eh-otp-auth-input-radius);
+  background: var(--eh-otp-auth-input-surface);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.ehOtpAuthForm__phoneControl:focus-within {
+  border-color: var(--eh-otp-auth-focus-line);
+  box-shadow: 0 0 0 var(--eh-otp-auth-focus-ring-size) var(--eh-otp-auth-focus-ring);
+}
+
+.ehOtpAuthForm__phoneControl--invalid {
+  border-color: var(--eh-otp-auth-error-text);
+}
+
+.ehOtpAuthForm__phoneInput {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  border-radius: var(--eh-otp-auth-input-radius) 0 0 var(--eh-otp-auth-input-radius);
+  background: transparent;
+  box-shadow: none;
+}
+
+.ehOtpAuthForm__phoneInput:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.ehOtpAuthForm__phoneCountry {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding-right: var(--eh-otp-auth-input-padding-x);
+}
+
+.ehOtpAuthForm__phoneCountrySelect {
+  max-width: 116px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--eh-otp-auth-text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--eh-otp-auth-label-font-size);
+  font-weight: var(--eh-font-weight-semibold);
+}
+
 .ehOtpAuthForm__fieldError {
   display: block;
   margin-top: var(--eh-otp-auth-field-error-margin-top);

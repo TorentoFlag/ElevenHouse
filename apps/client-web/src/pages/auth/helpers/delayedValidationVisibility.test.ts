@@ -43,6 +43,26 @@ describe("createDelayedValidationVisibilityController", () => {
     expect(onVisibleChange).toHaveBeenCalledOnce();
     expect(onVisibleChange).toHaveBeenCalledWith(false);
   });
+
+  it("reschedules pending feedback when validation remains dirty", () => {
+    vi.useFakeTimers();
+    const onVisibleChange = vi.fn();
+    const controller = createDelayedValidationVisibilityController({
+      delayMs: 700,
+      onVisibleChange
+    });
+
+    controller.schedule(true);
+    vi.advanceTimersByTime(500);
+    controller.schedule(true);
+    vi.advanceTimersByTime(500);
+
+    expect(onVisibleChange).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(200);
+
+    expect(onVisibleChange).toHaveBeenCalledWith(true);
+  });
 });
 
 describe("shouldSchedulePhoneFocusForName", () => {

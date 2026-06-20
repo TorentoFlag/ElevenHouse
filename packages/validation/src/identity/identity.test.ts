@@ -9,21 +9,10 @@ import {
   isValidDisplayName,
   isValidEmail,
   normalizeFirstName,
-  popularFirstNames,
-  nonEmptyStringSchema,
+  popularEmailTopLevelDomains,
   popularFemaleFirstNames,
-  popularEmailTopLevelDomains
+  popularFirstNames
 } from "./index";
-
-describe("nonEmptyStringSchema", () => {
-  it("trims and accepts non-empty strings", () => {
-    expect(nonEmptyStringSchema.parse(" ElevenHouse ")).toBe("ElevenHouse");
-  });
-
-  it("rejects empty strings", () => {
-    expect(() => nonEmptyStringSchema.parse("   ")).toThrow();
-  });
-});
 
 describe("displayNameSchema", () => {
   it("trims and accepts names from 2 to 200 characters", () => {

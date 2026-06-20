@@ -1,74 +1,7 @@
-import type { ChangeEvent, Ref } from "react";
+import type { ChangeEvent } from "react";
 import { LogoMoon } from "../../icons/LogoMoon/index.js";
-
-export type OtpAuthFormMode = "register" | "login";
-
-export type OtpAuthFormValues = {
-  name: string;
-  email: string;
-  phone: string;
-};
-
-export type OtpAuthFormCopy = {
-  brandTitle: string;
-  brandAccent: string;
-  brandSubtitle: string;
-  registerTab: string;
-  loginTab: string;
-  registerTitle: string;
-  loginTitle: string;
-  registerDescription: string;
-  loginDescription: string;
-  nameLabel: string;
-  namePlaceholder: string;
-  emailLabel: string;
-  emailPlaceholder: string;
-  phoneLabel: string;
-  phonePlaceholder: string;
-  hint: string;
-  registerSubmitLabel: string;
-  loginSubmitLabel: string;
-};
-
-export type OtpAuthFormProps = {
-  mode: OtpAuthFormMode;
-  values: OtpAuthFormValues;
-  className?: string;
-  copy?: Partial<OtpAuthFormCopy>;
-  error?: string | null;
-  emailError?: string | null;
-  emailInputRef?: Ref<HTMLInputElement>;
-  isSubmitting?: boolean;
-  nameError?: string | null;
-  nameInputRef?: Ref<HTMLInputElement>;
-  phoneInputRef?: Ref<HTMLInputElement>;
-  submitButtonRef?: Ref<HTMLButtonElement>;
-  submitDisabled?: boolean;
-  onModeChange: (mode: OtpAuthFormMode) => void;
-  onValuesChange: (values: OtpAuthFormValues) => void;
-  onSubmit?: (values: OtpAuthFormValues, mode: OtpAuthFormMode) => void | Promise<void>;
-};
-
-const defaultCopy: OtpAuthFormCopy = {
-  brandTitle: "Eleven",
-  brandAccent: "House",
-  brandSubtitle: "КАБИНЕТ АСТРОЛОГА",
-  registerTab: "Регистрация",
-  loginTab: "Вход",
-  registerTitle: "Создать аккаунт",
-  loginTitle: "С возвращением",
-  registerDescription: "Доступ к консультациям, картам и переписке с астрологом.",
-  loginDescription: "Войдите, чтобы вернуться в свой кабинет.",
-  nameLabel: "Имя",
-  namePlaceholder: "Как к вам обращаться",
-  emailLabel: "или email",
-  emailPlaceholder: "you@example.com",
-  phoneLabel: "Телефон",
-  phonePlaceholder: "+7 ___ ___ __ __",
-  hint: "Пришлём код для входа — пароль не нужен.",
-  registerSubmitLabel: "Получить код",
-  loginSubmitLabel: "Войти по коду"
-};
+import { defaultCopy } from "./const.js";
+import type { OtpAuthFormProps, OtpAuthFormValues } from "./types.js";
 
 export function OtpAuthForm({
   mode,
@@ -81,10 +14,15 @@ export function OtpAuthForm({
   isSubmitting = false,
   nameError,
   nameInputRef,
+  phoneCountries,
+  phoneCountry,
+  phoneError,
   phoneInputRef,
+  phonePlaceholder,
   submitButtonRef,
   submitDisabled = false,
   onModeChange,
+  onPhoneCountryChange,
   onValuesChange,
   onSubmit
 }: OtpAuthFormProps) {
@@ -93,6 +31,15 @@ export function OtpAuthForm({
   const description = mode === "register" ? text.registerDescription : text.loginDescription;
   const submitLabel = mode === "register" ? text.registerSubmitLabel : text.loginSubmitLabel;
   const rootClassName = ["ehOtpAuthForm", className].filter(Boolean).join(" ");
+  const selectedPhoneCountry =
+    phoneCountries?.find((country) => country.iso2 === phoneCountry) ?? phoneCountries?.[0] ?? null;
+  const resolvedPhonePlaceholder = phonePlaceholder ?? text.phonePlaceholder;
+  const phoneInputClassName = phoneError
+    ? "ehOtpAuthForm__input ehOtpAuthForm__phoneInput ehOtpAuthForm__input--invalid"
+    : "ehOtpAuthForm__input ehOtpAuthForm__phoneInput";
+  const phoneControlClassName = phoneError
+    ? "ehOtpAuthForm__phoneControl ehOtpAuthForm__phoneControl--invalid"
+    : "ehOtpAuthForm__phoneControl";
 
   function handleValueChange(field: keyof OtpAuthFormValues) {
     return (event: ChangeEvent<HTMLInputElement>) => {
@@ -172,16 +119,44 @@ export function OtpAuthForm({
 
       <label className="ehOtpAuthForm__field ehOtpAuthForm__field--compact">
         <span className="ehOtpAuthForm__label">{text.phoneLabel}</span>
-        <input
-          className="ehOtpAuthForm__input"
-          name="phone"
-          type="tel"
-          placeholder={text.phonePlaceholder}
-          value={values.phone}
-          autoComplete="tel"
-          ref={phoneInputRef}
-          onChange={handleValueChange("phone")}
-        />
+        <span className={phoneControlClassName}>
+          <input
+            className={phoneInputClassName}
+            name="phone"
+            type="tel"
+            inputMode="tel"
+            placeholder={resolvedPhonePlaceholder}
+            value={values.phone}
+            autoComplete="tel"
+            ref={phoneInputRef}
+            aria-invalid={phoneError ? true : undefined}
+            aria-describedby={phoneError ? "eh-otp-auth-phone-error" : undefined}
+            onChange={handleValueChange("phone")}
+          />
+          {selectedPhoneCountry && phoneCountries && phoneCountries.length > 0 ? (
+            <span className="ehOtpAuthForm__phoneCountry">
+              <select
+                className="ehOtpAuthForm__phoneCountrySelect"
+                value={selectedPhoneCountry.iso2}
+                aria-label="Страна телефона"
+                onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+                  onPhoneCountryChange?.(event.currentTarget.value);
+                }}
+              >
+                {phoneCountries.map((country) => (
+                  <option key={country.iso2} value={country.iso2}>
+                    {country.flag} {country.iso2} +{country.callingCode}
+                  </option>
+                ))}
+              </select>
+            </span>
+          ) : null}
+        </span>
+        {phoneError ? (
+          <span className="ehOtpAuthForm__fieldError" id="eh-otp-auth-phone-error">
+            {phoneError}
+          </span>
+        ) : null}
       </label>
 
       <label className="ehOtpAuthForm__field">

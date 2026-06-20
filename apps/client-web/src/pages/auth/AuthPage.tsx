@@ -4,53 +4,33 @@ import {
   type OtpAuthFormValues
 } from "@elevenhouse/design-system/components/OtpAuthForm";
 import "@elevenhouse/design-system/components/OtpAuthForm.css";
-import { Chat } from "@elevenhouse/design-system/icons/Chat";
-import { Content } from "@elevenhouse/design-system/icons/Content";
-import { Orbit } from "@elevenhouse/design-system/icons/Orbit";
-import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
-import { Video } from "@elevenhouse/design-system/icons/Video";
-import { BackLink } from "@elevenhouse/design-system/navigation";
 import {
   isEmailCompleteWithKnownTld,
   isPopularFirstName,
   isValidDisplayName,
   isValidEmail
 } from "@elevenhouse/validation";
-import type { ComponentType, SVGProps } from "react";
+import {
+  getPhonePlaceholder,
+  isSupportedPhoneCountry,
+  supportedPhoneCountries,
+  validateSupportedPhoneNumber
+} from "@elevenhouse/validation/phone";
 import { useEffect, useRef, useState } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
+import { AuthVisualPane } from "./AuthVisualPane";
 import {
-  createDelayedValidationVisibilityController,
   isNameErrorCandidate,
-  shouldSchedulePhoneFocusForName,
-  type DelayedValidationVisibilityController
-} from "./delayedValidationVisibility";
+  shouldSchedulePhoneFocusForName
+} from "./helpers/delayedValidationVisibility";
+import {
+  applyPhoneCountryChange,
+  applyPhoneInputChange,
+  createInitialPhoneInputState,
+  type PhoneInputState
+} from "./helpers/phoneInputModel";
+import { useDelayedValidationVisibility } from "./hooks/useDelayedValidationVisibility";
 import styles from "./AuthPage.module.css";
-
-type HighlightIcon = ComponentType<SVGProps<SVGSVGElement>>;
-
-const authHighlights: Array<{ Icon: HighlightIcon; label: string; description: string }> = [
-  {
-    Icon: Video,
-    label: "Записи и онлайн консультации",
-    description: "История сессий, записи и материалы — всегда под рукой"
-  },
-  {
-    Icon: Orbit,
-    label: "Ваши натальные карты",
-    description: "Карты, расчёты и разборы от вашего астролога"
-  },
-  {
-    Icon: Chat,
-    label: "Личные сообщения",
-    description: "Переписка с астрологом в одном окне"
-  },
-  {
-    Icon: Content,
-    label: "Астродневник и контент",
-    description: "Прогнозы, дневник и закрытый контент по подписке"
-  }
-];
 
 const fieldAutoFocusDelayMs = 450;
 const validationFeedbackDelayMs = 700;
@@ -63,7 +43,6 @@ export function AuthPage() {
   const submitButtonRef = useRef<HTMLButtonElement>(null);
   const phoneFocusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submitFocusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const nameErrorVisibilityControllerRef = useRef<DelayedValidationVisibilityController | null>(null);
   const [authMode, setAuthMode] = useState<OtpAuthFormMode>("register");
   const [authValues, setAuthValues] = useState<OtpAuthFormValues>({
     name: "",
@@ -72,14 +51,10 @@ export function AuthPage() {
   });
   const [emailTouched, setEmailTouched] = useState(false);
   const [nameTouched, setNameTouched] = useState(false);
-  const [showNameError, setShowNameError] = useState(false);
-
-  if (nameErrorVisibilityControllerRef.current === null) {
-    nameErrorVisibilityControllerRef.current = createDelayedValidationVisibilityController({
-      delayMs: validationFeedbackDelayMs,
-      onVisibleChange: setShowNameError
-    });
-  }
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const [phoneInputState, setPhoneInputState] = useState<PhoneInputState>(() =>
+    createInitialPhoneInputState("RU")
+  );
 
   const emailError =
     emailTouched && authValues.email.length > 0 && !isValidEmail(authValues.email)
@@ -90,7 +65,18 @@ export function AuthPage() {
     isTouched: nameTouched,
     isValidName: isValidDisplayName(authValues.name)
   });
+  const showNameError = useDelayedValidationVisibility({
+    delayMs: validationFeedbackDelayMs,
+    resetKey: authValues.name,
+    shouldShow: hasNameValidationError
+  });
   const nameError = showNameError && hasNameValidationError ? "Имя должно быть от 2 до 200 символов" : null;
+  const phoneValidation = validateSupportedPhoneNumber(
+    phoneInputState.normalizedValue,
+    phoneInputState.selectedCountry
+  );
+  const hasPhoneValidationError = authValues.phone.length > 0 && !phoneValidation.valid;
+  const phoneError = phoneTouched && hasPhoneValidationError ? "Введите корректный номер телефона" : null;
 
   function clearSubmitFocusTimeout() {
     if (submitFocusTimeoutRef.current !== null) {
@@ -150,73 +136,34 @@ export function AuthPage() {
     }, fieldAutoFocusDelayMs);
   }
 
+  function handlePhoneCountryChange(nextCountry: string) {
+    if (!isSupportedPhoneCountry(nextCountry)) {
+      return;
+    }
+
+    const nextPhoneInputState = applyPhoneCountryChange(
+      phoneInputState,
+      nextCountry
+    );
+
+    setPhoneInputState(nextPhoneInputState);
+    setAuthValues((currentValues) => ({
+      ...currentValues,
+      phone: nextPhoneInputState.displayValue
+    }));
+  }
+
   useEffect(
     () => () => {
       clearPhoneFocusTimeout();
       clearSubmitFocusTimeout();
-      nameErrorVisibilityControllerRef.current?.clear();
     },
     []
   );
 
-  useEffect(() => {
-    nameErrorVisibilityControllerRef.current?.schedule(hasNameValidationError);
-  }, [authValues.name, hasNameValidationError]);
-
   return (
     <main className={styles.page}>
-      <section className={styles.visualPane}>
-        <div className={`${styles.planet} ${styles.planetGold}`}>
-          <span className={styles.orbit} />
-        </div>
-        <div className={`${styles.planet} ${styles.planetTeal}`} />
-        <div className={`${styles.planet} ${styles.planetAmber}`} />
-        <div className={`${styles.planet} ${styles.planetViolet}`}>
-          <span className={styles.orbit} />
-        </div>
-        <div className={`${styles.planet} ${styles.planetBlue}`} />
-        <div className={styles.stars} />
-
-        <div className={styles.visualContent}>
-          <BackLink className={styles.backLink} path="/" title="На страницу астролога" />
-
-          <div className={styles.heroCopy}>
-            <div className={styles.brandBadge}>
-              <Sparkle aria-hidden="true" />
-              ElevenHouse
-            </div>
-            <h1 className={styles.heroTitle}>
-              Ваш кабинет
-              <br />у астролога
-            </h1>
-            <div className={styles.highlightList}>
-              {authHighlights.map(({ Icon, description, label }) => (
-                <div className={styles.highlightItem} key={label}>
-                  <span className={styles.highlightIcon} aria-hidden="true">
-                    <Icon />
-                  </span>
-                  <span className={styles.highlightText}>
-                    <span className={styles.highlightLabel}>{label}</span>
-                    <span className={styles.highlightDescription}>{description}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className={styles.joinedInfo} aria-label="Уже с астрологами 18 000+">
-            <div className={styles.joinedAvatars} aria-hidden="true">
-              <span>МК</span>
-              <span>ДЛ</span>
-              <span>ЗМ</span>
-              <span>НР</span>
-            </div>
-            <p>
-              Уже с астрологами <strong>18 000+</strong>
-            </p>
-          </div>
-        </div>
-      </section>
+      <AuthVisualPane />
       <section className={styles.formPane} aria-label="Authentication">
         <OtpAuthForm
           mode={authMode}
@@ -225,11 +172,18 @@ export function AuthPage() {
           emailInputRef={emailInputRef}
           nameError={nameError}
           nameInputRef={nameInputRef}
+          phoneCountries={supportedPhoneCountries}
+          phoneCountry={phoneInputState.selectedCountry}
+          phoneError={phoneError}
           phoneInputRef={phoneInputRef}
+          phonePlaceholder={getPhonePlaceholder(phoneInputState.selectedCountry)}
           submitButtonRef={submitButtonRef}
-          submitDisabled={emailError !== null || hasNameValidationError}
+          submitDisabled={emailError !== null || hasNameValidationError || hasPhoneValidationError}
           onModeChange={setAuthMode}
+          onPhoneCountryChange={handlePhoneCountryChange}
           onValuesChange={(values) => {
+            let nextValues = values;
+
             if (values.email !== authValues.email) {
               setEmailTouched(true);
               scheduleSubmitFocus(values.email);
@@ -238,11 +192,22 @@ export function AuthPage() {
               setNameTouched(true);
               schedulePhoneFocus(values.name);
             }
-            setAuthValues(values);
+            if (values.phone !== authValues.phone) {
+              setPhoneTouched(true);
+              const nextPhoneInputState = applyPhoneInputChange(phoneInputState, values.phone);
+              setPhoneInputState(nextPhoneInputState);
+              nextValues = {
+                ...values,
+                phone: nextPhoneInputState.displayValue
+              };
+            }
+
+            setAuthValues(nextValues);
           }}
           onSubmit={() => {
             setEmailTouched(true);
             setNameTouched(true);
+            setPhoneTouched(true);
           }}
         />
       </section>
