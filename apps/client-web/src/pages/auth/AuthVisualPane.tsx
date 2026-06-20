@@ -1,3 +1,4 @@
+import { classNames } from "@elevenhouse/design-system/helpers";
 import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
 import { BackLink } from "@elevenhouse/design-system/navigation";
 import { authHighlights } from "./const";
@@ -6,15 +7,15 @@ import styles from "./AuthPage.module.css";
 export function AuthVisualPane() {
   return (
     <section className={styles.visualPane}>
-      <div className={`${styles.planet} ${styles.planetGold}`}>
+      <div className={classNames(styles.planet, styles.planetGold)}>
         <span className={styles.orbit} />
       </div>
-      <div className={`${styles.planet} ${styles.planetTeal}`} />
-      <div className={`${styles.planet} ${styles.planetAmber}`} />
-      <div className={`${styles.planet} ${styles.planetViolet}`}>
+      <div className={classNames(styles.planet, styles.planetTeal)} />
+      <div className={classNames(styles.planet, styles.planetAmber)} />
+      <div className={classNames(styles.planet, styles.planetViolet)}>
         <span className={styles.orbit} />
       </div>
-      <div className={`${styles.planet} ${styles.planetBlue}`} />
+      <div className={classNames(styles.planet, styles.planetBlue)} />
       <div className={styles.stars} />
 
       <div className={styles.visualContent}>

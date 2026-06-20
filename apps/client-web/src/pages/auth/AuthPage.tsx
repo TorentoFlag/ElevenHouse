@@ -11,13 +11,18 @@ import {
   isValidEmail
 } from "@elevenhouse/validation";
 import {
+  isSupportedLocale,
+  useI18n
+} from "@elevenhouse/i18n";
+import {
   getPhonePlaceholder,
   isSupportedPhoneCountry,
   supportedPhoneCountries,
   validateSupportedPhoneNumber
 } from "@elevenhouse/validation/phone";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
+import type { ClientCopy } from "../../common/i18n/clientCopy";
 import { AuthVisualPane } from "./AuthVisualPane";
 import {
   isNameErrorCandidate,
@@ -37,7 +42,10 @@ const fieldAutoFocusDelayMs = 450;
 const validationFeedbackDelayMs = 700;
 
 export function AuthPage() {
-  useDocumentTitle("ElevenHouse | Авторизация");
+  const { dictionary, locale, localeOptions, setLocale } = useI18n<ClientCopy>();
+  const copy = dictionary.auth;
+
+  useDocumentTitle(copy.documentTitle);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const phoneInputRef = useRef<HTMLInputElement>(null);
@@ -59,7 +67,7 @@ export function AuthPage() {
 
   const emailError =
     emailTouched && authValues.email.length > 0 && !isValidEmail(authValues.email)
-      ? "Введите корректный email"
+      ? copy.validation.email
       : null;
   const hasNameValidationError = isNameErrorCandidate({
     isRegisterMode: authMode === "register",
@@ -71,29 +79,29 @@ export function AuthPage() {
     resetKey: authValues.name,
     shouldShow: hasNameValidationError
   });
-  const nameError = showNameError && hasNameValidationError ? "Имя должно быть от 2 до 200 символов" : null;
+  const nameError = showNameError && hasNameValidationError ? copy.validation.name : null;
   const phoneValidation = validateSupportedPhoneNumber(
     phoneInputState.normalizedValue,
     phoneInputState.selectedCountry
   );
   const hasPhoneValidationError = authValues.phone.length > 0 && !phoneValidation.valid;
-  const phoneError = phoneTouched && hasPhoneValidationError ? "Введите корректный номер телефона" : null;
+  const phoneError = phoneTouched && hasPhoneValidationError ? copy.validation.phone : null;
 
-  function clearSubmitFocusTimeout() {
+  const clearSubmitFocusTimeout = useCallback(() => {
     if (submitFocusTimeoutRef.current !== null) {
       clearTimeout(submitFocusTimeoutRef.current);
       submitFocusTimeoutRef.current = null;
     }
-  }
+  }, []);
 
-  function clearPhoneFocusTimeout() {
+  const clearPhoneFocusTimeout = useCallback(() => {
     if (phoneFocusTimeoutRef.current !== null) {
       clearTimeout(phoneFocusTimeoutRef.current);
       phoneFocusTimeoutRef.current = null;
     }
-  }
+  }, []);
 
-  function schedulePhoneFocus(name: string) {
+  const schedulePhoneFocus = useCallback((name: string) => {
     clearPhoneFocusTimeout();
 
     if (
@@ -116,9 +124,9 @@ export function AuthPage() {
 
       phoneInput.focus({ preventScroll: true });
     }, fieldAutoFocusDelayMs);
-  }
+  }, [authMode, clearPhoneFocusTimeout]);
 
-  function scheduleSubmitFocus(email: string) {
+  const scheduleSubmitFocus = useCallback((email: string) => {
     clearSubmitFocusTimeout();
 
     if (!isEmailCompleteWithKnownTld(email)) {
@@ -135,9 +143,9 @@ export function AuthPage() {
 
       submitButton.focus({ preventScroll: true });
     }, fieldAutoFocusDelayMs);
-  }
+  }, [clearSubmitFocusTimeout]);
 
-  function scheduleSubmitFocusAfterValidPhone(nextPhoneInputState: PhoneInputState) {
+  const scheduleSubmitFocusAfterValidPhone = useCallback((nextPhoneInputState: PhoneInputState) => {
     clearSubmitFocusTimeout();
 
     const nextPhoneValidation = validateSupportedPhoneNumber(
@@ -164,9 +172,9 @@ export function AuthPage() {
 
       submitButton.focus({ preventScroll: true });
     }, fieldAutoFocusDelayMs);
-  }
+  }, [clearSubmitFocusTimeout]);
 
-  function handlePhoneCountryChange(nextCountry: string) {
+  const handlePhoneCountryChange = useCallback((nextCountry: string) => {
     if (!isSupportedPhoneCountry(nextCountry)) {
       return;
     }
@@ -181,25 +189,69 @@ export function AuthPage() {
       ...currentValues,
       phone: nextPhoneInputState.displayValue
     }));
-  }
+  }, [phoneInputState]);
+
+  const handleValuesChange = useCallback((values: OtpAuthFormValues) => {
+    let nextValues = values;
+
+    if (values.email !== authValues.email) {
+      setEmailTouched(true);
+      scheduleSubmitFocus(values.email);
+    }
+    if (values.name !== authValues.name) {
+      setNameTouched(true);
+      schedulePhoneFocus(values.name);
+    }
+    if (values.phone !== authValues.phone) {
+      setPhoneTouched(true);
+      const nextPhoneInputState = applyPhoneInputChange(phoneInputState, values.phone);
+      setPhoneInputState(nextPhoneInputState);
+      scheduleSubmitFocusAfterValidPhone(nextPhoneInputState);
+      nextValues = {
+        ...values,
+        phone: nextPhoneInputState.displayValue
+      };
+    }
+
+    setAuthValues(nextValues);
+  }, [
+    authValues.email,
+    authValues.name,
+    authValues.phone,
+    phoneInputState,
+    schedulePhoneFocus,
+    scheduleSubmitFocus,
+    scheduleSubmitFocusAfterValidPhone
+  ]);
 
   useEffect(
     () => () => {
       clearPhoneFocusTimeout();
       clearSubmitFocusTimeout();
     },
-    []
+    [clearPhoneFocusTimeout, clearSubmitFocusTimeout]
   );
 
   return (
     <main className={styles.page}>
       <AuthVisualPane />
-      <section className={styles.formPane} aria-label="Authentication">
+      <section className={styles.formPane} aria-label={copy.sectionAriaLabel}>
         <OtpAuthForm
           mode={authMode}
           values={authValues}
+          copy={copy.form}
           emailError={emailError}
           emailInputRef={emailInputRef}
+          localeSwitcher={{
+            locale,
+            options: localeOptions,
+            ariaLabel: copy.languageSwitcher.ariaLabel,
+            onLocaleChange: (nextLocale) => {
+              if (isSupportedLocale(nextLocale)) {
+                setLocale(nextLocale);
+              }
+            }
+          }}
           nameError={nameError}
           nameInputRef={nameInputRef}
           phoneCountries={supportedPhoneCountries}
@@ -211,30 +263,7 @@ export function AuthPage() {
           submitDisabled={emailError !== null || hasNameValidationError || hasPhoneValidationError}
           onModeChange={setAuthMode}
           onPhoneCountryChange={handlePhoneCountryChange}
-          onValuesChange={(values) => {
-            let nextValues = values;
-
-            if (values.email !== authValues.email) {
-              setEmailTouched(true);
-              scheduleSubmitFocus(values.email);
-            }
-            if (values.name !== authValues.name) {
-              setNameTouched(true);
-              schedulePhoneFocus(values.name);
-            }
-            if (values.phone !== authValues.phone) {
-              setPhoneTouched(true);
-              const nextPhoneInputState = applyPhoneInputChange(phoneInputState, values.phone);
-              setPhoneInputState(nextPhoneInputState);
-              scheduleSubmitFocusAfterValidPhone(nextPhoneInputState);
-              nextValues = {
-                ...values,
-                phone: nextPhoneInputState.displayValue
-              };
-            }
-
-            setAuthValues(nextValues);
-          }}
+          onValuesChange={handleValuesChange}
           onSubmit={() => {
             setEmailTouched(true);
             setNameTouched(true);
