@@ -1,0 +1,37 @@
+@import "../../motion/motion.css";
+
+.ehSegmentedTabs {
+  --eh-motion-segmented-background: var(--eh-color-gold);
+  --eh-motion-segmented-gap: var(--eh-space-3);
+  --eh-motion-segmented-padding: var(--eh-space-4);
+  --eh-motion-segmented-radius: var(--eh-radius-8);
+
+  position: relative;
+  display: flex;
+  gap: var(--eh-space-3);
+  padding: var(--eh-space-4);
+  border: 1px solid rgb(216 212 236 / 0.32);
+  border-radius: var(--eh-radius-12);
+  background: var(--eh-color-night-900);
+}
+
+.ehSegmentedTabs__tab {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  padding: var(--eh-space-9) var(--eh-space-4);
+  border: 0;
+  border-radius: var(--eh-radius-8);
+  background: transparent;
+  color: var(--eh-color-moon-500);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--eh-font-size-13-5);
+  font-weight: var(--eh-font-weight-semibold);
+  transition: color 0.18s ease;
+}
+
+.ehSegmentedTabs__tab--active {
+  background: transparent;
+  color: var(--eh-color-night-950);
+}

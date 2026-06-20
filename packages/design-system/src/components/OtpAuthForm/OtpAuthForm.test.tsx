@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { Button } from "../Button/index.js";
+import { SegmentedTabs } from "../SegmentedTabs/index.js";
 import { OtpAuthForm } from "./OtpAuthForm.js";
 
 describe("OtpAuthForm", () => {
@@ -87,11 +89,12 @@ describe("OtpAuthForm", () => {
       onValuesChange: vi.fn()
     });
 
-    const indicator = findElementByProp(form, "activeIndex", 1);
+    const tabs = findElementByProp(form, "ariaLabel", "Auth mode");
     const motionFrame = findElementByClassName(form, "ehOtpAuthForm__motionFrame");
     const motionContent = findElementByClassName(form, "ehOtpAuthForm__motionContent");
 
-    expect(indicator).not.toBeNull();
+    expect(tabs?.type).toBe(SegmentedTabs);
+    expect(tabs?.props?.value).toBe("login");
     expect(motionFrame?.props?.transitionKey).toBe("login");
     expect(motionContent?.props?.transitionKey).toBe("login");
   });
@@ -178,6 +181,11 @@ describe("OtpAuthForm", () => {
     const submitButton = findElementByClassName(form, "ehOtpAuthForm__submit");
     submitButton?.props?.onClick?.();
 
+    expect(submitButton?.type).toBe(Button);
+    expect(submitButton?.props?.title).toBe("Получить код");
+    expect(submitButton?.props?.variant).toBe("brand");
+    expect(submitButton?.props?.size).toBe("medium");
+    expect(submitButton?.props?.type).toBe("button");
     expect(onSubmit).toHaveBeenCalledWith(
       { email: "user@example.com", name: "Анна", phone: "+7" },
       "register"
@@ -186,6 +194,7 @@ describe("OtpAuthForm", () => {
 });
 
 type TestElement = {
+  type?: unknown;
   key?: string | null;
   props?: {
     children?: unknown;

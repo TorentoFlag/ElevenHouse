@@ -1,8 +1,10 @@
 import type { ChangeEvent } from "react";
 import { classNames } from "../../helpers/classNames.js";
 import { LogoMoon } from "../../icons/LogoMoon/index.js";
+import { Button } from "../Button/index.js";
 import { LanguageSwitcher } from "../LanguageSwitcher/index.js";
-import { MotionContent, MotionHeight, SegmentedIndicator } from "../../motion/index.js";
+import { SegmentedTabs } from "../SegmentedTabs/index.js";
+import { MotionContent, MotionHeight } from "../../motion/index.js";
 import { defaultCopy } from "./const.js";
 import type { OtpAuthFormProps, OtpAuthFormValues } from "./types.js";
 
@@ -46,8 +48,6 @@ export function OtpAuthForm({
   const phoneControlClassName = classNames("ehOtpAuthForm__phoneControl", {
     "ehOtpAuthForm__phoneControl--invalid": Boolean(phoneError)
   });
-  const activeTabIndex = mode === "register" ? 0 : 1;
-
   function handleValueChange(field: keyof OtpAuthFormValues) {
     return (event: ChangeEvent<HTMLInputElement>) => {
       onValuesChange({
@@ -81,31 +81,16 @@ export function OtpAuthForm({
         ) : null}
       </div>
 
-      <div className="ehOtpAuthForm__tabs" role="tablist" aria-label="Auth mode">
-        <SegmentedIndicator activeIndex={activeTabIndex} />
-        <button
-          className={classNames("ehOtpAuthForm__tab", {
-            "ehOtpAuthForm__tab--active": mode === "register"
-          })}
-          type="button"
-          role="tab"
-          aria-selected={mode === "register"}
-          onClick={() => onModeChange("register")}
-        >
-          {text.registerTab}
-        </button>
-        <button
-          className={classNames("ehOtpAuthForm__tab", {
-            "ehOtpAuthForm__tab--active": mode === "login"
-          })}
-          type="button"
-          role="tab"
-          aria-selected={mode === "login"}
-          onClick={() => onModeChange("login")}
-        >
-          {text.loginTab}
-        </button>
-      </div>
+      <SegmentedTabs
+        className="ehOtpAuthForm__tabs"
+        value={mode}
+        ariaLabel="Auth mode"
+        options={[
+          { value: "register", label: text.registerTab },
+          { value: "login", label: text.loginTab }
+        ]}
+        onValueChange={onModeChange}
+      />
 
       <MotionHeight className="ehOtpAuthForm__motionFrame" transitionKey={mode}>
         <MotionContent className="ehOtpAuthForm__motionContent" transitionKey={mode}>
@@ -209,15 +194,16 @@ export function OtpAuthForm({
             </p>
           ) : null}
 
-          <button
+          <Button
             className="ehOtpAuthForm__submit"
+            title={isSubmitting ? "..." : submitLabel}
+            variant="brand"
+            size="medium"
             type="button"
             ref={submitButtonRef}
             disabled={submitDisabled || isSubmitting}
             onClick={() => onSubmit?.(values, mode)}
-          >
-            {isSubmitting ? "..." : submitLabel}
-          </button>
+          />
         </MotionContent>
       </MotionHeight>
     </div>
