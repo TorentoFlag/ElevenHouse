@@ -1,3 +1,5 @@
+@import "@elevenhouse/design-system/tokens.css";
+
 html,
 body,
 #root {
@@ -21,6 +23,7 @@ body {
 }
 
 .app-kicker {
+  color: var(--eh-color-azure);
   margin: 0;
   font-size: 14px;
   font-weight: 700;
