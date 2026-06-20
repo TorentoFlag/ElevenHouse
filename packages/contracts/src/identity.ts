@@ -97,6 +97,24 @@ export type VerifyRegistrationPasswordlessCodeResponse = z.infer<
   typeof verifyRegistrationPasswordlessCodeResponseSchema
 >;
 
+export const registeredAstrologerAccountResponseSchema = z
+  .object({
+    account: z.object({
+      id: z.string().uuid(),
+      status: z.literal("active"),
+      roles: z.array(customerAccountRoleSchema).min(1),
+      displayName: displayNameSchema
+    })
+  })
+  .refine(
+    (value) => value.account.roles.includes("astrologer"),
+    "Registered account must have the astrologer role"
+  );
+
+export type RegisteredAstrologerAccountResponse = z.infer<
+  typeof registeredAstrologerAccountResponseSchema
+>;
+
 export const requestAstrologerPasswordlessCodeRequestSchema = z.discriminatedUnion("channel", [
   z.object({
     channel: z.literal("email"),
@@ -141,4 +159,20 @@ export const verifyAstrologerPasswordlessCodeResponseSchema =
 
 export type VerifyAstrologerPasswordlessCodeResponse = z.infer<
   typeof verifyAstrologerPasswordlessCodeResponseSchema
+>;
+
+export const verifyAstrologerRegistrationPasswordlessCodeRequestSchema =
+  verifyPasswordlessCodeRequestSchema.extend({
+    displayName: displayNameSchema
+  }).strict();
+
+export type VerifyAstrologerRegistrationPasswordlessCodeRequest = z.infer<
+  typeof verifyAstrologerRegistrationPasswordlessCodeRequestSchema
+>;
+
+export const verifyAstrologerRegistrationPasswordlessCodeResponseSchema =
+  registeredAstrologerAccountResponseSchema;
+
+export type VerifyAstrologerRegistrationPasswordlessCodeResponse = z.infer<
+  typeof verifyAstrologerRegistrationPasswordlessCodeResponseSchema
 >;

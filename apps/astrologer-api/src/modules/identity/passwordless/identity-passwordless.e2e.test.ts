@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import type {
   AuthSessionRevocationUnitOfWork,
+  PasswordlessCustomerAccountRegistrationSessionUnitOfWork,
   PasswordlessAuthUnitOfWork
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +14,7 @@ import {
   AUTH_SESSION_REVOCATION_UNIT_OF_WORK
 } from "../auth/identity-auth.tokens";
 import { IdentityModule } from "../identity.module";
+import { ASTROLOGER_REGISTRATION_SESSION_UNIT_OF_WORK } from "../registration/identity-registration.tokens";
 import { SystemClock } from "../session/identity-session.service";
 import { createIdentityConfigServiceStub } from "../testing/identity-config-service.stub";
 import {
@@ -52,6 +54,9 @@ describe("passwordless astrologer auth HTTP flow", () => {
     const authSessionRevocation: AuthSessionRevocationUnitOfWork = {
       transact: async (operation) => operation(store)
     };
+    const astrologerRegistration: PasswordlessCustomerAccountRegistrationSessionUnitOfWork = {
+      transact: async (operation) => operation(store)
+    };
 
     moduleRef = await Test.createTestingModule({
       imports: [IdentityModule]
@@ -73,6 +78,8 @@ describe("passwordless astrologer auth HTTP flow", () => {
       .useValue(store)
       .overrideProvider(AUTH_SESSION_REVOCATION_UNIT_OF_WORK)
       .useValue(authSessionRevocation)
+      .overrideProvider(ASTROLOGER_REGISTRATION_SESSION_UNIT_OF_WORK)
+      .useValue(astrologerRegistration)
       .overrideProvider(PASSWORDLESS_RATE_LIMITER)
       .useValue(new TestPasswordlessRateLimiter(defaultPasswordlessRateLimits, () => now))
       .overrideProvider(RedisRuntimeService)
@@ -173,6 +180,113 @@ describe("passwordless astrologer auth HTTP flow", () => {
     expect(verifyResponse.status).toBe(401);
     expect(verifyResponse.setCookie).toBeNull();
     expect(store.roleAssignments).toHaveLength(1);
+  });
+
+  it("registers an email astrologer account, sets cookies and resolves /identity/me", async () => {
+    const requestResponse = await postJson("/identity/astrologer/passwordless/request-code", {
+      channel: "email",
+      identifier: " ASTROLOGER@example.COM "
+    });
+
+    expect(requestResponse.status).toBe(201);
+
+    const registrationResponse = await postJson(
+      "/identity/astrologer/registration/passwordless/verify-code",
+      {
+        challengeId: requestResponse.body.challengeId,
+        code: "123456",
+        displayName: " Астролог Анна "
+      }
+    );
+
+    expect(registrationResponse.status).toBe(201);
+    expect(registrationResponse.body).toMatchObject({
+      account: {
+        status: "active",
+        roles: ["astrologer"],
+        displayName: "Астролог Анна"
+      }
+    });
+    expect(registrationResponse.setCookie).toContain(`${sessionCookieName}=`);
+    expect(registrationResponse.setCookie).toContain(`${csrfCookieName}=`);
+    expect(store.userProfiles).toEqual([
+      expect.objectContaining({
+        userId: registrationResponse.body.account.id,
+        displayName: "Астролог Анна"
+      })
+    ]);
+    expect(store.authSecurityEvents.at(-1)).toMatchObject({
+      eventType: "registration_succeeded",
+      userId: registrationResponse.body.account.id
+    });
+
+    const meResponse = await getJson(
+      "/identity/me",
+      cookieHeader(registrationResponse.setCookies, [sessionCookieName])
+    );
+
+    expect(meResponse.status).toBe(200);
+    expect(meResponse.body.account.id).toBe(registrationResponse.body.account.id);
+  });
+
+  it("returns conflict when registering an identity that already exists", async () => {
+    seedExistingPasswordlessAccount(store, {
+      channel: "email",
+      identifierNormalized: "astrologer@example.com",
+      roles: ["astrologer"]
+    });
+
+    const requestResponse = await postJson("/identity/astrologer/passwordless/request-code", {
+      channel: "email",
+      identifier: "astrologer@example.com"
+    });
+    const registrationResponse = await postJson(
+      "/identity/astrologer/registration/passwordless/verify-code",
+      {
+        challengeId: requestResponse.body.challengeId,
+        code: "123456",
+        displayName: "Астролог Анна"
+      }
+    );
+
+    expect(requestResponse.status).toBe(201);
+    expect(registrationResponse.status).toBe(409);
+    expect(registrationResponse.setCookie).toBeNull();
+  });
+
+  it("rejects wrong registration codes without setting cookies", async () => {
+    const requestResponse = await postJson("/identity/astrologer/passwordless/request-code", {
+      channel: "email",
+      identifier: "astrologer@example.com"
+    });
+    const registrationResponse = await postJson(
+      "/identity/astrologer/registration/passwordless/verify-code",
+      {
+        challengeId: requestResponse.body.challengeId,
+        code: "000000",
+        displayName: "Астролог Анна"
+      }
+    );
+
+    expect(requestResponse.status).toBe(201);
+    expect(registrationResponse.status).toBe(401);
+    expect(registrationResponse.setCookie).toBeNull();
+    expect(store.userProfiles).toHaveLength(0);
+  });
+
+  it("rejects invalid registration payloads before creating a profile", async () => {
+    const registrationResponse = await postJson(
+      "/identity/astrologer/registration/passwordless/verify-code",
+      {
+        challengeId: "not-a-uuid",
+        code: "123456",
+        displayName: "Астролог Анна"
+      }
+    );
+
+    expect(registrationResponse.status).toBe(400);
+    expect(registrationResponse.setCookie).toBeNull();
+    expect(store.userProfiles).toHaveLength(0);
   });
 
   it("revokes the current session and clears cookies on logout", async () => {

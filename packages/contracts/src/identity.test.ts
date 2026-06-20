@@ -5,6 +5,8 @@ import {
   requestAstrologerPasswordlessCodeRequestSchema,
   requestPasswordlessCodeRequestSchema,
   requestPasswordlessCodeResponseSchema,
+  verifyAstrologerRegistrationPasswordlessCodeRequestSchema,
+  verifyAstrologerRegistrationPasswordlessCodeResponseSchema,
   verifyAstrologerPasswordlessCodeResponseSchema,
   verifyPasswordlessCodeRequestSchema,
   verifyPasswordlessCodeResponseSchema,
@@ -236,6 +238,68 @@ describe("verifyRegistrationPasswordlessCodeResponseSchema", () => {
         displayName: "Анна"
       }
     });
+  });
+});
+
+describe("verifyAstrologerRegistrationPasswordlessCodeRequestSchema", () => {
+  it("normalizes astrologer passwordless registration requests", () => {
+    expect(
+      verifyAstrologerRegistrationPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        displayName: " Астролог Анна "
+      })
+    ).toEqual({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      code: "123456",
+      displayName: "Астролог Анна"
+    });
+  });
+
+  it("rejects caller-controlled roles", () => {
+    expect(() =>
+      verifyAstrologerRegistrationPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        displayName: "Астролог Анна",
+        roles: ["admin"]
+      })
+    ).toThrow();
+  });
+});
+
+describe("verifyAstrologerRegistrationPasswordlessCodeResponseSchema", () => {
+  it("returns a registered astrologer account with a display name", () => {
+    expect(
+      verifyAstrologerRegistrationPasswordlessCodeResponseSchema.parse({
+        account: {
+          id: "8e14390f-3db1-4d1c-9344-55679c778427",
+          status: "active",
+          roles: ["astrologer"],
+          displayName: "Астролог Анна"
+        }
+      })
+    ).toEqual({
+      account: {
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "active",
+        roles: ["astrologer"],
+        displayName: "Астролог Анна"
+      }
+    });
+  });
+
+  it("requires the registered account to have the astrologer role", () => {
+    expect(() =>
+      verifyAstrologerRegistrationPasswordlessCodeResponseSchema.parse({
+        account: {
+          id: "8e14390f-3db1-4d1c-9344-55679c778427",
+          status: "active",
+          roles: ["client"],
+          displayName: "Астролог Анна"
+        }
+      })
+    ).toThrow();
   });
 });
 
