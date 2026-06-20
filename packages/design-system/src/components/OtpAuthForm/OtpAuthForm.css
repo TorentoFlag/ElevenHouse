@@ -1,4 +1,11 @@
+@import "../../motion/motion.css";
+
 .ehOtpAuthForm {
+  --eh-motion-duration-normal: 320ms;
+  --eh-motion-ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+  --eh-motion-content-enter-scale: 0.992;
+  --eh-motion-content-enter-y: 6px;
+
   width: min(var(--eh-otp-auth-form-width), 100%);
   color: var(--eh-otp-auth-text);
   font-family: var(--eh-font-sans);
@@ -40,6 +47,13 @@
 }
 
 .ehOtpAuthForm__tabs {
+  --eh-motion-segmented-background: var(--eh-auth-gold);
+  --eh-motion-segmented-count: 2;
+  --eh-motion-segmented-gap: var(--eh-otp-auth-tabs-gap);
+  --eh-motion-segmented-padding: var(--eh-otp-auth-tabs-padding);
+  --eh-motion-segmented-radius: var(--eh-otp-auth-tab-radius);
+
+  position: relative;
   display: flex;
   gap: var(--eh-otp-auth-tabs-gap);
   margin: var(--eh-otp-auth-tabs-margin-y) 0;
@@ -50,6 +64,8 @@
 }
 
 .ehOtpAuthForm__tab {
+  position: relative;
+  z-index: 1;
   flex: 1;
   padding: var(--eh-otp-auth-tab-padding-y) var(--eh-otp-auth-tab-padding-x);
   border: 0;
@@ -60,11 +76,20 @@
   font-family: inherit;
   font-size: var(--eh-otp-auth-tab-font-size);
   font-weight: var(--eh-font-weight-semibold);
+  transition: color 0.18s ease;
 }
 
 .ehOtpAuthForm__tab--active {
-  background: var(--eh-auth-gold);
+  background: transparent;
   color: var(--eh-otp-auth-on-accent-text);
+}
+
+.ehOtpAuthForm__motionFrame {
+  width: 100%;
+}
+
+.ehOtpAuthForm__motionContent {
+  width: 100%;
 }
 
 .ehOtpAuthForm__title {

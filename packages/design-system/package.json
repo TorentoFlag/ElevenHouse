@@ -23,6 +23,11 @@
       "import": "./dist/components/OtpAuthForm/index.js"
     },
     "./components/OtpAuthForm.css": "./src/components/OtpAuthForm/OtpAuthForm.css",
+    "./motion": {
+      "types": "./dist/motion/index.d.ts",
+      "import": "./dist/motion/index.js"
+    },
+    "./motion.css": "./src/motion/motion.css",
     "./icons": {
       "types": "./dist/icons/index.d.ts",
       "import": "./dist/icons/index.js"
@@ -67,6 +72,7 @@
   },
   "sideEffects": [
     "./tokens.css",
+    "./src/motion/motion.css",
     "./src/components/OtpAuthForm/OtpAuthForm.css"
   ],
   "scripts": {

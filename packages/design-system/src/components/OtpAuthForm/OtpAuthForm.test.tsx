@@ -29,6 +29,23 @@ describe("OtpAuthForm", () => {
     expect(JSON.stringify(form.props.children)).toContain("Войти в кабинет");
   });
 
+  it("renders motion containers for mode changes", () => {
+    const form = OtpAuthForm({
+      mode: "login",
+      values: { email: "", name: "", phone: "" },
+      onModeChange: vi.fn(),
+      onValuesChange: vi.fn()
+    });
+
+    const indicator = findElementByProp(form, "activeIndex", 1);
+    const motionFrame = findElementByClassName(form, "ehOtpAuthForm__motionFrame");
+    const motionContent = findElementByClassName(form, "ehOtpAuthForm__motionContent");
+
+    expect(indicator).not.toBeNull();
+    expect(motionFrame?.props?.transitionKey).toBe("login");
+    expect(motionContent?.props?.transitionKey).toBe("login");
+  });
+
   it("renders name validation error", () => {
     const form = OtpAuthForm({
       mode: "register",
@@ -119,11 +136,13 @@ describe("OtpAuthForm", () => {
 });
 
 type TestElement = {
+  key?: string | null;
   props?: {
     children?: unknown;
     className?: string;
     onChange?: (event: { currentTarget: { value: string } }) => void;
     onClick?: () => void;
+    [key: string]: unknown;
   };
 };
 
@@ -133,7 +152,7 @@ function findElementByClassName(node: unknown, className: string): TestElement |
   }
 
   const element = node as TestElement;
-  if (element.props?.className === className) {
+  if (typeof element.props?.className === "string" && element.props.className.split(" ").includes(className)) {
     return element;
   }
 
@@ -142,6 +161,29 @@ function findElementByClassName(node: unknown, className: string): TestElement |
 
   for (const child of childList) {
     const match = findElementByClassName(child, className);
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+function findElementByProp(node: unknown, propName: string, value: unknown): TestElement | null {
+  if (!node || typeof node !== "object") {
+    return null;
+  }
+
+  const element = node as TestElement;
+  if (element.props?.[propName] === value) {
+    return element;
+  }
+
+  const children = element.props?.children;
+  const childList = Array.isArray(children) ? children : [children];
+
+  for (const child of childList) {
+    const match = findElementByProp(child, propName, value);
     if (match) {
       return match;
     }

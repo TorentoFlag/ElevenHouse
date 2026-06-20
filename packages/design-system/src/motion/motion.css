@@ -1,0 +1,53 @@
+.ehMotionHeight {
+  overflow: hidden;
+}
+
+.ehMotionHeight--switching {
+  transition: height var(--eh-motion-duration-normal, 320ms) var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+.ehMotionContent {
+  animation: ehMotionContentIn var(--eh-motion-duration-normal, 320ms) var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  transform-origin: 50% 0;
+}
+
+.ehSegmentedIndicator {
+  position: absolute;
+  z-index: 0;
+  top: var(--eh-motion-segmented-padding, 0);
+  bottom: var(--eh-motion-segmented-padding, 0);
+  left: var(--eh-motion-segmented-padding, 0);
+  width: calc(
+    (100% - (var(--eh-motion-segmented-padding, 0) * 2) - (var(--eh-motion-segmented-gap, 0) * (var(--eh-motion-segmented-count, 2) - 1))) /
+      var(--eh-motion-segmented-count, 2)
+  );
+  border-radius: var(--eh-motion-segmented-radius, inherit);
+  background: var(--eh-motion-segmented-background, currentColor);
+  transform: translateX(
+    calc(var(--eh-motion-segmented-active-index, 0) * (100% + var(--eh-motion-segmented-gap, 0)))
+  );
+  transition: transform var(--eh-motion-duration-normal, 320ms) var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+@keyframes ehMotionContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(var(--eh-motion-content-enter-y, 6px)) scale(var(--eh-motion-content-enter-scale, 0.992));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ehMotionHeight--switching,
+  .ehSegmentedIndicator {
+    transition: none;
+  }
+
+  .ehMotionContent {
+    animation: none;
+  }
+}
