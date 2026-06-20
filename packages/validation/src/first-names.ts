@@ -197,9 +197,116 @@ export const popularFemaleFirstNames = [
   "ясмина"
 ] as const;
 
+export const popularMaleFirstNames = [
+  "айдар",
+  "азат",
+  "алан",
+  "александр",
+  "алексей",
+  "али",
+  "альберт",
+  "амир",
+  "анатолий",
+  "андрей",
+  "антон",
+  "арсен",
+  "арсений",
+  "артем",
+  "артур",
+  "аслан",
+  "ахмед",
+  "богдан",
+  "борис",
+  "вадим",
+  "валентин",
+  "валерий",
+  "василий",
+  "вениамин",
+  "виктор",
+  "виталий",
+  "владимир",
+  "владислав",
+  "всеволод",
+  "вячеслав",
+  "геннадий",
+  "георгий",
+  "глеб",
+  "григорий",
+  "давид",
+  "дамир",
+  "даниил",
+  "данил",
+  "даниэль",
+  "денис",
+  "дмитрий",
+  "евгений",
+  "егор",
+  "захар",
+  "заур",
+  "иван",
+  "ибрагим",
+  "игорь",
+  "ильдар",
+  "илья",
+  "ислам",
+  "камиль",
+  "кирилл",
+  "константин",
+  "леонид",
+  "магомед",
+  "максим",
+  "марат",
+  "марк",
+  "матвей",
+  "мирон",
+  "михаил",
+  "мурад",
+  "мухаммад",
+  "назар",
+  "наиль",
+  "никита",
+  "николай",
+  "олег",
+  "павел",
+  "петр",
+  "прохор",
+  "радмир",
+  "рамазан",
+  "рамиль",
+  "рафаэль",
+  "ренат",
+  "ринат",
+  "роберт",
+  "родион",
+  "роман",
+  "руслан",
+  "рустам",
+  "савелий",
+  "саид",
+  "святослав",
+  "семен",
+  "сергей",
+  "станислав",
+  "степан",
+  "тамерлан",
+  "тимофей",
+  "тимур",
+  "федор",
+  "эдуард",
+  "эльдар",
+  "эмиль",
+  "юрий",
+  "ярослав"
+] as const;
+
+export const popularFirstNames = [...popularFemaleFirstNames, ...popularMaleFirstNames] as const;
+
 export type PopularFemaleFirstName = (typeof popularFemaleFirstNames)[number];
+export type PopularMaleFirstName = (typeof popularMaleFirstNames)[number];
+export type PopularFirstName = (typeof popularFirstNames)[number];
 
 const popularFemaleFirstNameSet = new Set<string>(popularFemaleFirstNames);
+const popularFirstNameSet = new Set<string>(popularFirstNames);
 
 export function normalizeFirstName(value: string): string {
   return value.trim().toLowerCase().replaceAll("ё", "е");
@@ -207,4 +314,8 @@ export function normalizeFirstName(value: string): string {
 
 export function isPopularFemaleFirstName(value: string): boolean {
   return popularFemaleFirstNameSet.has(normalizeFirstName(value));
+}
+
+export function isPopularFirstName(value: string): boolean {
+  return popularFirstNameSet.has(normalizeFirstName(value));
 }

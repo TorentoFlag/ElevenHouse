@@ -12,13 +12,18 @@ import { Video } from "@elevenhouse/design-system/icons/Video";
 import { BackLink } from "@elevenhouse/design-system/navigation";
 import {
   isEmailCompleteWithKnownTld,
-  isPopularFemaleFirstName,
+  isPopularFirstName,
   isValidDisplayName,
   isValidEmail
 } from "@elevenhouse/validation";
 import type { ComponentType, SVGProps } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
+import {
+  createDelayedValidationVisibilityController,
+  isNameErrorCandidate,
+  type DelayedValidationVisibilityController
+} from "./delayedValidationVisibility";
 import styles from "./AuthPage.module.css";
 
 type HighlightIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -47,6 +52,7 @@ const authHighlights: Array<{ Icon: HighlightIcon; label: string; description: s
 ];
 
 const fieldAutoFocusDelayMs = 450;
+const validationFeedbackDelayMs = 700;
 
 export function AuthPage() {
   useDocumentTitle("ElevenHouse | Авторизация");
@@ -56,6 +62,7 @@ export function AuthPage() {
   const submitButtonRef = useRef<HTMLButtonElement>(null);
   const phoneFocusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submitFocusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameErrorVisibilityControllerRef = useRef<DelayedValidationVisibilityController | null>(null);
   const [authMode, setAuthMode] = useState<OtpAuthFormMode>("register");
   const [authValues, setAuthValues] = useState<OtpAuthFormValues>({
     name: "",
@@ -64,15 +71,25 @@ export function AuthPage() {
   });
   const [emailTouched, setEmailTouched] = useState(false);
   const [nameTouched, setNameTouched] = useState(false);
+  const [showNameError, setShowNameError] = useState(false);
+
+  if (nameErrorVisibilityControllerRef.current === null) {
+    nameErrorVisibilityControllerRef.current = createDelayedValidationVisibilityController({
+      delayMs: validationFeedbackDelayMs,
+      onVisibleChange: setShowNameError
+    });
+  }
 
   const emailError =
     emailTouched && authValues.email.length > 0 && !isValidEmail(authValues.email)
       ? "Введите корректный email"
       : null;
-  const nameError =
-    authMode === "register" && nameTouched && !isValidDisplayName(authValues.name)
-      ? "Имя должно быть от 2 до 200 символов"
-      : null;
+  const hasNameValidationError = isNameErrorCandidate({
+    isRegisterMode: authMode === "register",
+    isTouched: nameTouched,
+    isValidName: isValidDisplayName(authValues.name)
+  });
+  const nameError = showNameError && hasNameValidationError ? "Имя должно быть от 2 до 200 символов" : null;
 
   function clearSubmitFocusTimeout() {
     if (submitFocusTimeoutRef.current !== null) {
@@ -91,7 +108,7 @@ export function AuthPage() {
   function schedulePhoneFocus(name: string) {
     clearPhoneFocusTimeout();
 
-    if (authMode !== "register" || !isPopularFemaleFirstName(name)) {
+    if (authMode !== "register" || !isPopularFirstName(name)) {
       return;
     }
 
@@ -130,9 +147,14 @@ export function AuthPage() {
     () => () => {
       clearPhoneFocusTimeout();
       clearSubmitFocusTimeout();
+      nameErrorVisibilityControllerRef.current?.clear();
     },
     []
   );
+
+  useEffect(() => {
+    nameErrorVisibilityControllerRef.current?.schedule(hasNameValidationError);
+  }, [authValues.name, hasNameValidationError]);
 
   return (
     <main className={styles.page}>
@@ -198,7 +220,7 @@ export function AuthPage() {
           nameInputRef={nameInputRef}
           phoneInputRef={phoneInputRef}
           submitButtonRef={submitButtonRef}
-          submitDisabled={emailError !== null || nameError !== null}
+          submitDisabled={emailError !== null || hasNameValidationError}
           onModeChange={setAuthMode}
           onValuesChange={(values) => {
             if (values.email !== authValues.email) {

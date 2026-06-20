@@ -4,10 +4,12 @@ import {
   emailSchema,
   getEmailTopLevelDomain,
   isEmailCompleteWithKnownTld,
+  isPopularFirstName,
   isPopularFemaleFirstName,
   isValidDisplayName,
   isValidEmail,
   normalizeFirstName,
+  popularFirstNames,
   nonEmptyStringSchema,
   popularFemaleFirstNames,
   popularEmailTopLevelDomains
@@ -109,6 +111,31 @@ describe("popularFemaleFirstNames", () => {
     expect(popularFemaleFirstNames).toContain("наталья");
     expect(popularFemaleFirstNames).toContain("наталия");
     expect(popularFemaleFirstNames).toContain("софья");
+  });
+});
+
+describe("popularFirstNames", () => {
+  it("contains common masculine first-name variants", () => {
+    expect(popularFirstNames).toContain("александр");
+    expect(popularFirstNames).toContain("алексей");
+    expect(popularFirstNames).toContain("даниил");
+    expect(popularFirstNames).toContain("данил");
+    expect(popularFirstNames).toContain("федор");
+    expect(popularFirstNames).toContain("мухаммад");
+  });
+});
+
+describe("isPopularFirstName", () => {
+  it("accepts known complete first names across common variants", () => {
+    expect(isPopularFirstName("Алексей")).toBe(true);
+    expect(isPopularFirstName("Фёдор")).toBe(true);
+    expect(isPopularFirstName("Данил")).toBe(true);
+    expect(isPopularFirstName("Анна")).toBe(true);
+  });
+
+  it("rejects partial or unknown names", () => {
+    expect(isPopularFirstName("Алекс")).toBe(false);
+    expect(isPopularFirstName("Неизвестный")).toBe(false);
   });
 });
 

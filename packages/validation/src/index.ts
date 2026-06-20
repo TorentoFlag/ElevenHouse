@@ -1,9 +1,14 @@
 import { z } from "zod";
 export {
+  isPopularFirstName,
   isPopularFemaleFirstName,
   normalizeFirstName,
+  popularFirstNames,
   popularFemaleFirstNames,
-  type PopularFemaleFirstName
+  popularMaleFirstNames,
+  type PopularFirstName,
+  type PopularFemaleFirstName,
+  type PopularMaleFirstName
 } from "./first-names.js";
 
 export { z };

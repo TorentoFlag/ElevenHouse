@@ -134,6 +134,7 @@
   color: var(--eh-otp-auth-error-text);
   font-size: var(--eh-otp-auth-field-error-font-size);
   line-height: var(--eh-line-height-140);
+  animation: ehOtpAuthFieldErrorIn 0.18s ease-out both;
 }
 
 .ehOtpAuthForm__hint,
@@ -170,4 +171,22 @@
 .ehOtpAuthForm__submit:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+@keyframes ehOtpAuthFieldErrorIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ehOtpAuthForm__fieldError {
+    animation: none;
+  }
 }
