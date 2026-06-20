@@ -1,0 +1,79 @@
+.ehButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--eh-space-8);
+  border: 0;
+  border-radius: var(--eh-radius-12);
+  outline: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--eh-font-size-15);
+  font-weight: var(--eh-font-weight-semibold);
+  line-height: var(--eh-line-height-100);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.ehButton--small {
+  height: var(--eh-length-36);
+  padding: 0 var(--eh-space-14);
+}
+
+.ehButton--medium {
+  height: var(--eh-length-48);
+  padding: 0 var(--eh-space-16);
+}
+
+.ehButton--brand {
+  background: var(--eh-color-gold);
+  color: var(--eh-color-night-950);
+}
+
+.ehButton--brand:hover:not(:disabled) {
+  box-shadow:
+    0 0 0 1px rgb(244 196 48 / 0.42),
+    0 14px 30px -8px rgb(244 196 48 / 0.4);
+}
+
+.ehButton--default {
+  background: transparent;
+  color: var(--eh-color-moon-500);
+}
+
+.ehButton--default:hover:not(:disabled) {
+  background: var(--eh-color-night-860);
+  color: var(--eh-color-moon-120);
+}
+
+.ehButton:focus-visible {
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.22);
+}
+
+.ehButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.ehButton__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.ehButton__icon svg {
+  width: 1em;
+  height: 1em;
+}
+
+.ehButton__title {
+  min-width: 0;
+}

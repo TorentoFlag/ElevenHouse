@@ -1,4 +1,5 @@
 import type { Ref } from "react";
+import type { LanguageSwitcherProps } from "../LanguageSwitcher/index.js";
 
 export type OtpAuthFormMode = "register" | "login";
 
@@ -24,6 +25,7 @@ export type OtpAuthFormCopy = {
   emailPlaceholder: string;
   phoneLabel: string;
   phonePlaceholder: string;
+  phoneCountryAriaLabel: string;
   hint: string;
   registerSubmitLabel: string;
   loginSubmitLabel: string;
@@ -36,6 +38,8 @@ export type OtpAuthPhoneCountryOption = {
   callingCode: string;
 };
 
+export type OtpAuthLocaleSwitcher = LanguageSwitcherProps;
+
 export type OtpAuthFormProps = {
   mode: OtpAuthFormMode;
   values: OtpAuthFormValues;
@@ -47,6 +51,7 @@ export type OtpAuthFormProps = {
   isSubmitting?: boolean;
   nameError?: string | null;
   nameInputRef?: Ref<HTMLInputElement>;
+  localeSwitcher?: OtpAuthLocaleSwitcher;
   phoneCountries?: readonly OtpAuthPhoneCountryOption[];
   phoneCountry?: string;
   phoneError?: string | null;

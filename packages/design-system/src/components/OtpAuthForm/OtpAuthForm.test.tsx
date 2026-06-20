@@ -29,6 +29,56 @@ describe("OtpAuthForm", () => {
     expect(JSON.stringify(form.props.children)).toContain("Войти в кабинет");
   });
 
+  it("renders an optional language switcher", () => {
+    const form = OtpAuthForm({
+      mode: "register",
+      values: { email: "", name: "", phone: "" },
+      localeSwitcher: {
+        locale: "ru",
+        ariaLabel: "Язык",
+        options: [
+          { locale: "ru", label: "Русский", shortLabel: "RU" },
+          { locale: "en", label: "English", shortLabel: "EN" }
+        ],
+        onLocaleChange: vi.fn()
+      },
+      onModeChange: vi.fn(),
+      onValuesChange: vi.fn()
+    });
+
+    const serializedForm = JSON.stringify(form.props.children);
+    const switcher = findElementByProp(form, "ariaLabel", "Язык");
+
+    expect(serializedForm).toContain("RU");
+    expect(serializedForm).toContain("EN");
+    expect(switcher?.props?.locale).toBe("ru");
+    expect(switcher?.props?.ariaLabel).toBe("Язык");
+  });
+
+  it("calls the language switcher callback", () => {
+    const onLocaleChange = vi.fn();
+    const form = OtpAuthForm({
+      mode: "register",
+      values: { email: "", name: "", phone: "" },
+      localeSwitcher: {
+        locale: "ru",
+        ariaLabel: "Language",
+        options: [
+          { locale: "ru", label: "Русский", shortLabel: "RU" },
+          { locale: "en", label: "English", shortLabel: "EN" }
+        ],
+        onLocaleChange
+      },
+      onModeChange: vi.fn(),
+      onValuesChange: vi.fn()
+    });
+
+    const switcher = findElementByProp(form, "ariaLabel", "Language");
+    switcher?.props?.onLocaleChange?.("en");
+
+    expect(onLocaleChange).toHaveBeenCalledWith("en");
+  });
+
   it("renders motion containers for mode changes", () => {
     const form = OtpAuthForm({
       mode: "login",
@@ -142,11 +192,21 @@ type TestElement = {
     className?: string;
     onChange?: (event: { currentTarget: { value: string } }) => void;
     onClick?: () => void;
+    onLocaleChange?: (locale: string) => void;
     [key: string]: unknown;
   };
 };
 
 function findElementByClassName(node: unknown, className: string): TestElement | null {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const match = findElementByClassName(child, className);
+      if (match) {
+        return match;
+      }
+    }
+  }
+
   if (!node || typeof node !== "object") {
     return null;
   }
@@ -170,6 +230,15 @@ function findElementByClassName(node: unknown, className: string): TestElement |
 }
 
 function findElementByProp(node: unknown, propName: string, value: unknown): TestElement | null {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const match = findElementByProp(child, propName, value);
+      if (match) {
+        return match;
+      }
+    }
+  }
+
   if (!node || typeof node !== "object") {
     return null;
   }

@@ -1,6 +1,8 @@
 import type { ChangeEvent } from "react";
-import { MotionContent, MotionHeight, SegmentedIndicator } from "../../motion/index.js";
+import { classNames } from "../../helpers/classNames.js";
 import { LogoMoon } from "../../icons/LogoMoon/index.js";
+import { LanguageSwitcher } from "../LanguageSwitcher/index.js";
+import { MotionContent, MotionHeight, SegmentedIndicator } from "../../motion/index.js";
 import { defaultCopy } from "./const.js";
 import type { OtpAuthFormProps, OtpAuthFormValues } from "./types.js";
 
@@ -13,6 +15,7 @@ export function OtpAuthForm({
   emailError,
   emailInputRef,
   isSubmitting = false,
+  localeSwitcher,
   nameError,
   nameInputRef,
   phoneCountries,
@@ -31,16 +34,18 @@ export function OtpAuthForm({
   const title = mode === "register" ? text.registerTitle : text.loginTitle;
   const description = mode === "register" ? text.registerDescription : text.loginDescription;
   const submitLabel = mode === "register" ? text.registerSubmitLabel : text.loginSubmitLabel;
-  const rootClassName = ["ehOtpAuthForm", className].filter(Boolean).join(" ");
+  const rootClassName = classNames("ehOtpAuthForm", className);
   const selectedPhoneCountry =
     phoneCountries?.find((country) => country.iso2 === phoneCountry) ?? phoneCountries?.[0] ?? null;
   const resolvedPhonePlaceholder = phonePlaceholder ?? text.phonePlaceholder;
-  const phoneInputClassName = phoneError
-    ? "ehOtpAuthForm__input ehOtpAuthForm__phoneInput ehOtpAuthForm__input--invalid"
-    : "ehOtpAuthForm__input ehOtpAuthForm__phoneInput";
-  const phoneControlClassName = phoneError
-    ? "ehOtpAuthForm__phoneControl ehOtpAuthForm__phoneControl--invalid"
-    : "ehOtpAuthForm__phoneControl";
+  const phoneInputClassName = classNames(
+    "ehOtpAuthForm__input",
+    "ehOtpAuthForm__phoneInput",
+    { "ehOtpAuthForm__input--invalid": Boolean(phoneError) }
+  );
+  const phoneControlClassName = classNames("ehOtpAuthForm__phoneControl", {
+    "ehOtpAuthForm__phoneControl--invalid": Boolean(phoneError)
+  });
   const activeTabIndex = mode === "register" ? 0 : 1;
 
   function handleValueChange(field: keyof OtpAuthFormValues) {
@@ -54,25 +59,34 @@ export function OtpAuthForm({
 
   return (
     <div className={rootClassName}>
-      <div className="ehOtpAuthForm__brand" aria-label={`${text.brandTitle}${text.brandAccent} ${text.brandSubtitle}`}>
-        <LogoMoon aria-hidden="true" />
-        <span className="ehOtpAuthForm__brandContent">
-          <span className="ehOtpAuthForm__brandName">
-            {text.brandTitle}
-            <span>{text.brandAccent}</span>
+      <div className="ehOtpAuthForm__brandHeader">
+        <div className="ehOtpAuthForm__brand" aria-label={`${text.brandTitle}${text.brandAccent} ${text.brandSubtitle}`}>
+          <LogoMoon aria-hidden="true" />
+          <span className="ehOtpAuthForm__brandContent">
+            <span className="ehOtpAuthForm__brandName">
+              {text.brandTitle}
+              <span>{text.brandAccent}</span>
+            </span>
+            <span className="ehOtpAuthForm__brandSubtitle">{text.brandSubtitle}</span>
           </span>
-          <span className="ehOtpAuthForm__brandSubtitle">{text.brandSubtitle}</span>
-        </span>
+        </div>
+
+        {localeSwitcher ? (
+          <LanguageSwitcher
+            locale={localeSwitcher.locale}
+            options={localeSwitcher.options}
+            ariaLabel={localeSwitcher.ariaLabel}
+            onLocaleChange={localeSwitcher.onLocaleChange}
+          />
+        ) : null}
       </div>
 
       <div className="ehOtpAuthForm__tabs" role="tablist" aria-label="Auth mode">
         <SegmentedIndicator activeIndex={activeTabIndex} />
         <button
-          className={
-            mode === "register"
-              ? "ehOtpAuthForm__tab ehOtpAuthForm__tab--active"
-              : "ehOtpAuthForm__tab"
-          }
+          className={classNames("ehOtpAuthForm__tab", {
+            "ehOtpAuthForm__tab--active": mode === "register"
+          })}
           type="button"
           role="tab"
           aria-selected={mode === "register"}
@@ -81,11 +95,9 @@ export function OtpAuthForm({
           {text.registerTab}
         </button>
         <button
-          className={
-            mode === "login"
-              ? "ehOtpAuthForm__tab ehOtpAuthForm__tab--active"
-              : "ehOtpAuthForm__tab"
-          }
+          className={classNames("ehOtpAuthForm__tab", {
+            "ehOtpAuthForm__tab--active": mode === "login"
+          })}
           type="button"
           role="tab"
           aria-selected={mode === "login"}
@@ -104,7 +116,9 @@ export function OtpAuthForm({
             <label className="ehOtpAuthForm__field">
               <span className="ehOtpAuthForm__label">{text.nameLabel}</span>
               <input
-                className={nameError ? "ehOtpAuthForm__input ehOtpAuthForm__input--invalid" : "ehOtpAuthForm__input"}
+                className={classNames("ehOtpAuthForm__input", {
+                  "ehOtpAuthForm__input--invalid": Boolean(nameError)
+                })}
                 name="name"
                 placeholder={text.namePlaceholder}
                 value={values.name}
@@ -143,7 +157,7 @@ export function OtpAuthForm({
                   <select
                     className="ehOtpAuthForm__phoneCountrySelect"
                     value={selectedPhoneCountry.iso2}
-                    aria-label="Страна телефона"
+                    aria-label={text.phoneCountryAriaLabel}
                     onChange={(event: ChangeEvent<HTMLSelectElement>) => {
                       onPhoneCountryChange?.(event.currentTarget.value);
                     }}
@@ -167,7 +181,9 @@ export function OtpAuthForm({
           <label className="ehOtpAuthForm__field">
             <span className="ehOtpAuthForm__label">{text.emailLabel}</span>
             <input
-              className={emailError ? "ehOtpAuthForm__input ehOtpAuthForm__input--invalid" : "ehOtpAuthForm__input"}
+              className={classNames("ehOtpAuthForm__input", {
+                "ehOtpAuthForm__input--invalid": Boolean(emailError)
+              })}
               name="email"
               type="email"
               placeholder={text.emailPlaceholder}

@@ -1,0 +1,38 @@
+@import "../../motion/motion.css";
+
+.ehLanguageSwitcher {
+  --eh-motion-segmented-background: var(--eh-color-gold);
+  --eh-motion-segmented-gap: var(--eh-space-3);
+  --eh-motion-segmented-padding: var(--eh-space-4);
+  --eh-motion-segmented-radius: var(--eh-radius-pill);
+
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--eh-space-3);
+  padding: var(--eh-space-4);
+  border: 1px solid rgb(216 212 236 / 0.32);
+  border-radius: var(--eh-radius-pill);
+  background: var(--eh-color-night-900);
+}
+
+.ehLanguageSwitcher__option {
+  position: relative;
+  z-index: 1;
+  min-width: 48px;
+  padding: var(--eh-space-8) var(--eh-space-12);
+  border: 0;
+  border-radius: var(--eh-radius-pill);
+  background: transparent;
+  color: var(--eh-color-moon-500);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--eh-font-size-13-5);
+  font-weight: var(--eh-font-weight-bold);
+  line-height: var(--eh-line-height-100);
+  transition: color 0.18s ease;
+}
+
+.ehLanguageSwitcher__option--active {
+  color: var(--eh-color-night-950);
+}

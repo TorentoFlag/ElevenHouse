@@ -16,6 +16,7 @@ export const defaultCopy: OtpAuthFormCopy = {
   emailPlaceholder: "you@example.com",
   phoneLabel: "Телефон",
   phonePlaceholder: "+7 ___ ___ __ __",
+  phoneCountryAriaLabel: "Страна телефона",
   hint: "Пришлём код для входа — пароль не нужен.",
   registerSubmitLabel: "Получить код",
   loginSubmitLabel: "Войти по коду"
