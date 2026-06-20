@@ -175,7 +175,7 @@ export function AuthPage() {
             </div>
           </div>
 
-          <div className={styles.joinedInfo} aria-label="Уже с нами 1 200+ астрологов">
+          <div className={styles.joinedInfo} aria-label="Уже с астрологами 18 000+">
             <div className={styles.joinedAvatars} aria-hidden="true">
               <span>МК</span>
               <span>ДЛ</span>
@@ -183,7 +183,7 @@ export function AuthPage() {
               <span>НР</span>
             </div>
             <p>
-              Уже с нами <strong>1 200+ астрологов</strong>
+              Уже с астрологами <strong>18 000+</strong>
             </p>
           </div>
         </div>

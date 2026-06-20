@@ -194,7 +194,7 @@
   --eh-otp-auth-form-width: var(--eh-length-380);
   --eh-otp-auth-text: var(--eh-auth-page-text);
   --eh-otp-auth-muted-text: var(--eh-auth-control-text);
-  --eh-otp-auth-description-text: var(--eh-auth-control-text);
+  --eh-otp-auth-description-text: var(--eh-color-muted);
   --eh-otp-auth-label-text: var(--eh-auth-control-text);
   --eh-otp-auth-placeholder-text: var(--eh-color-muted);
   --eh-otp-auth-on-accent-text: var(--eh-auth-page-background);
@@ -240,6 +240,7 @@
 
   --eh-otp-auth-hint-margin-bottom: var(--eh-space-18);
   --eh-otp-auth-hint-font-size: var(--eh-font-size-12-5);
+  --eh-otp-auth-hint-text: var(--eh-color-muted);
 
   --eh-otp-auth-submit-padding-y: var(--eh-space-11);
   --eh-otp-auth-submit-padding-x: var(--eh-space-16);

@@ -144,7 +144,7 @@
 }
 
 .ehOtpAuthForm__hint {
-  color: var(--eh-otp-auth-description-text);
+  color: var(--eh-otp-auth-hint-text);
 }
 
 .ehOtpAuthForm__error {
@@ -164,6 +164,7 @@
   font-family: inherit;
   font-size: var(--eh-otp-auth-submit-font-size);
   font-weight: var(--eh-font-weight-semibold);
+  line-height: var(--eh-line-height-100);
 }
 
 .ehOtpAuthForm__submit:disabled {
