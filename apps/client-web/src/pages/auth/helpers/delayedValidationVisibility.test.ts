@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createDelayedValidationVisibilityController,
-  shouldSchedulePhoneFocusForName
+  shouldSchedulePhoneFocusForName,
+  shouldScheduleSubmitFocusForPhone
 } from "./delayedValidationVisibility";
 
 describe("createDelayedValidationVisibilityController", () => {
@@ -89,6 +90,32 @@ describe("shouldSchedulePhoneFocusForName", () => {
         isRegisterMode: true,
         isPopularFirstName: true,
         name: " Антон"
+      })
+    ).toBe(false);
+  });
+});
+
+describe("shouldScheduleSubmitFocusForPhone", () => {
+  it("accepts a complete valid phone number", () => {
+    expect(
+      shouldScheduleSubmitFocusForPhone({
+        isValidPhone: true,
+        phone: "+7 705 943 4343"
+      })
+    ).toBe(true);
+  });
+
+  it("rejects empty and invalid phone values", () => {
+    expect(
+      shouldScheduleSubmitFocusForPhone({
+        isValidPhone: true,
+        phone: ""
+      })
+    ).toBe(false);
+    expect(
+      shouldScheduleSubmitFocusForPhone({
+        isValidPhone: false,
+        phone: "+7 705"
       })
     ).toBe(false);
   });

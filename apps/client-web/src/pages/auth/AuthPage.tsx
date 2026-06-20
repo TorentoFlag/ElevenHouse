@@ -21,7 +21,8 @@ import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { AuthVisualPane } from "./AuthVisualPane";
 import {
   isNameErrorCandidate,
-  shouldSchedulePhoneFocusForName
+  shouldSchedulePhoneFocusForName,
+  shouldScheduleSubmitFocusForPhone
 } from "./helpers/delayedValidationVisibility";
 import {
   applyPhoneCountryChange,
@@ -136,6 +137,35 @@ export function AuthPage() {
     }, fieldAutoFocusDelayMs);
   }
 
+  function scheduleSubmitFocusAfterValidPhone(nextPhoneInputState: PhoneInputState) {
+    clearSubmitFocusTimeout();
+
+    const nextPhoneValidation = validateSupportedPhoneNumber(
+      nextPhoneInputState.normalizedValue,
+      nextPhoneInputState.selectedCountry
+    );
+
+    if (
+      !shouldScheduleSubmitFocusForPhone({
+        isValidPhone: nextPhoneValidation.valid,
+        phone: nextPhoneInputState.displayValue
+      })
+    ) {
+      return;
+    }
+
+    submitFocusTimeoutRef.current = setTimeout(() => {
+      const phoneInput = phoneInputRef.current;
+      const submitButton = submitButtonRef.current;
+
+      if (document.activeElement !== phoneInput || !submitButton || submitButton.disabled) {
+        return;
+      }
+
+      submitButton.focus({ preventScroll: true });
+    }, fieldAutoFocusDelayMs);
+  }
+
   function handlePhoneCountryChange(nextCountry: string) {
     if (!isSupportedPhoneCountry(nextCountry)) {
       return;
@@ -196,6 +226,7 @@ export function AuthPage() {
               setPhoneTouched(true);
               const nextPhoneInputState = applyPhoneInputChange(phoneInputState, values.phone);
               setPhoneInputState(nextPhoneInputState);
+              scheduleSubmitFocusAfterValidPhone(nextPhoneInputState);
               nextValues = {
                 ...values,
                 phone: nextPhoneInputState.displayValue

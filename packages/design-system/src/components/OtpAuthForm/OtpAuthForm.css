@@ -5,6 +5,7 @@
   --eh-motion-ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
   --eh-motion-content-enter-scale: 0.992;
   --eh-motion-content-enter-y: 6px;
+  --eh-otp-auth-focus-gutter: calc(var(--eh-otp-auth-focus-ring-size) + 1px);
 
   width: min(var(--eh-otp-auth-form-width), 100%);
   color: var(--eh-otp-auth-text);
@@ -86,6 +87,8 @@
 
 .ehOtpAuthForm__motionFrame {
   width: 100%;
+  margin: calc(var(--eh-otp-auth-focus-gutter) * -1);
+  padding: var(--eh-otp-auth-focus-gutter);
 }
 
 .ehOtpAuthForm__motionContent {

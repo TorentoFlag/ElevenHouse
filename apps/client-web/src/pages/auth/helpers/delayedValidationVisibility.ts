@@ -54,3 +54,10 @@ export function shouldSchedulePhoneFocusForName(input: {
 }): boolean {
   return input.isRegisterMode && input.name === input.name.trim() && input.isPopularFirstName;
 }
+
+export function shouldScheduleSubmitFocusForPhone(input: {
+  isValidPhone: boolean;
+  phone: string;
+}): boolean {
+  return input.phone.length > 0 && input.isValidPhone;
+}
