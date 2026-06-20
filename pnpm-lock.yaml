@@ -70,6 +70,61 @@ importers:
         specifier: 8.0.16
         version: 8.0.16(@types/node@25.9.2)(esbuild@0.27.7)(tsx@4.21.0)
 
+  apps/astrologer-api:
+    dependencies:
+      '@elevenhouse/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@elevenhouse/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@elevenhouse/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@elevenhouse/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@elevenhouse/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@elevenhouse/validation':
+        specifier: workspace:*
+        version: link:../../packages/validation
+      '@nestjs/common':
+        specifier: 11.1.26
+        version: 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/config':
+        specifier: 4.0.4
+        version: 4.0.4(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: 11.1.26
+        version: 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.26)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/platform-express':
+        specifier: 11.1.26
+        version: 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)
+      redis:
+        specifier: 6.0.0
+        version: 6.0.0
+      reflect-metadata:
+        specifier: 0.2.2
+        version: 0.2.2
+      rxjs:
+        specifier: 7.8.2
+        version: 7.8.2
+    devDependencies:
+      '@nestjs/testing':
+        specifier: 11.1.26
+        version: 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)(@nestjs/platform-express@11.1.26)
+      '@types/node':
+        specifier: 25.9.2
+        version: 25.9.2
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
   apps/astrologer-web:
     dependencies:
       '@elevenhouse/design-system':
@@ -166,61 +221,6 @@ importers:
         specifier: 8.21.0
         version: 8.21.0
     devDependencies:
-      '@types/node':
-        specifier: 25.9.2
-        version: 25.9.2
-      tsx:
-        specifier: 4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-
-  apps/ops-api:
-    dependencies:
-      '@elevenhouse/auth':
-        specifier: workspace:*
-        version: link:../../packages/auth
-      '@elevenhouse/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@elevenhouse/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@elevenhouse/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
-      '@elevenhouse/observability':
-        specifier: workspace:*
-        version: link:../../packages/observability
-      '@elevenhouse/validation':
-        specifier: workspace:*
-        version: link:../../packages/validation
-      '@nestjs/common':
-        specifier: 11.1.26
-        version: 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/config':
-        specifier: 4.0.4
-        version: 4.0.4(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
-      '@nestjs/core':
-        specifier: 11.1.26
-        version: 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.26)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/platform-express':
-        specifier: 11.1.26
-        version: 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)
-      redis:
-        specifier: 6.0.0
-        version: 6.0.0
-      reflect-metadata:
-        specifier: 0.2.2
-        version: 0.2.2
-      rxjs:
-        specifier: 7.8.2
-        version: 7.8.2
-    devDependencies:
-      '@nestjs/testing':
-        specifier: 11.1.26
-        version: 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)(@nestjs/platform-express@11.1.26)
       '@types/node':
         specifier: 25.9.2
         version: 25.9.2

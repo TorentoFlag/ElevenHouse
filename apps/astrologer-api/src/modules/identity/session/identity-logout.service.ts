@@ -1,0 +1,46 @@
+import { Inject, Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { hashSessionToken } from "@elevenhouse/auth";
+import {
+  revokeAuthenticatedSession,
+  type AuthSessionRevocationUnitOfWork
+} from "@elevenhouse/domain";
+import {
+  readAstrologerSessionCookieValue,
+  type AstrologerSessionRequest
+} from "./identity-current-session.service";
+import { AUTH_SESSION_REVOCATION_UNIT_OF_WORK } from "../auth/identity-auth.tokens";
+import type { PasswordlessRequestContext } from "../passwordless/identity-passwordless.rate-limit";
+import { SystemClock } from "./identity-session.service";
+
+@Injectable()
+export class IdentityLogoutService {
+  constructor(
+    @Inject(AUTH_SESSION_REVOCATION_UNIT_OF_WORK)
+    private readonly revocation: AuthSessionRevocationUnitOfWork,
+    private readonly clock: SystemClock,
+    private readonly configService: ConfigService
+  ) {}
+
+  async logout(
+    request: AstrologerSessionRequest,
+    context: PasswordlessRequestContext = {}
+  ): Promise<void> {
+    const token = readAstrologerSessionCookieValue(
+      request.headers.cookie,
+      this.configService.getOrThrow<string>("astrologerApi.sessionCookieName")
+    );
+
+    if (!token) {
+      return;
+    }
+
+    await revokeAuthenticatedSession({
+      revocation: this.revocation,
+      tokenHash: hashSessionToken(token),
+      now: this.clock.now(),
+      ...(context.ipAddress ? { ipAddress: context.ipAddress } : {}),
+      ...(context.userAgent ? { userAgent: context.userAgent } : {})
+    });
+  }
+}
