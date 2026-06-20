@@ -18,16 +18,39 @@
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"
     },
+    "./components/Button": {
+      "types": "./dist/components/Button/index.d.ts",
+      "import": "./dist/components/Button/index.js"
+    },
+    "./components/Button.css": "./src/components/Button/Button.css",
     "./components/OtpAuthForm": {
       "types": "./dist/components/OtpAuthForm/index.d.ts",
       "import": "./dist/components/OtpAuthForm/index.js"
     },
+    "./components/LanguageSwitcher": {
+      "types": "./dist/components/LanguageSwitcher/index.d.ts",
+      "import": "./dist/components/LanguageSwitcher/index.js"
+    },
+    "./components/LanguageSwitcher.css": "./src/components/LanguageSwitcher/LanguageSwitcher.css",
+    "./components/SegmentedTabs": {
+      "types": "./dist/components/SegmentedTabs/index.d.ts",
+      "import": "./dist/components/SegmentedTabs/index.js"
+    },
+    "./components/SegmentedTabs.css": "./src/components/SegmentedTabs/SegmentedTabs.css",
     "./components/OtpAuthForm.css": "./src/components/OtpAuthForm/OtpAuthForm.css",
     "./motion": {
       "types": "./dist/motion/index.d.ts",
       "import": "./dist/motion/index.js"
     },
     "./motion.css": "./src/motion/motion.css",
+    "./helpers": {
+      "types": "./dist/helpers/index.d.ts",
+      "import": "./dist/helpers/index.js"
+    },
+    "./helpers/classNames": {
+      "types": "./dist/helpers/classNames.d.ts",
+      "import": "./dist/helpers/classNames.js"
+    },
     "./icons": {
       "types": "./dist/icons/index.d.ts",
       "import": "./dist/icons/index.js"
@@ -73,7 +96,10 @@
   "sideEffects": [
     "./tokens.css",
     "./src/motion/motion.css",
-    "./src/components/OtpAuthForm/OtpAuthForm.css"
+    "./src/components/Button/Button.css",
+    "./src/components/OtpAuthForm/OtpAuthForm.css",
+    "./src/components/LanguageSwitcher/LanguageSwitcher.css",
+    "./src/components/SegmentedTabs/SegmentedTabs.css"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

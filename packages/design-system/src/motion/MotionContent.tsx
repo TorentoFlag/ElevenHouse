@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { classNames } from "../helpers/classNames.js";
 
 export type MotionContentProps = {
   transitionKey: string | number;
@@ -7,7 +8,7 @@ export type MotionContentProps = {
 };
 
 export function MotionContent({ transitionKey, children, className }: MotionContentProps) {
-  const resolvedClassName = ["ehMotionContent", className].filter(Boolean).join(" ");
+  const resolvedClassName = classNames("ehMotionContent", className);
 
   return (
     <div className={resolvedClassName} key={transitionKey}>

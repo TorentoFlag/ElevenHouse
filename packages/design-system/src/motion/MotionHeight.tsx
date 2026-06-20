@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { classNames } from "../helpers/classNames.js";
 
 const defaultMotionHeightDurationMs = 320;
 
@@ -22,9 +23,11 @@ export function MotionHeight({
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [frameHeight, setFrameHeight] = useState<string | undefined>(undefined);
   const [isSwitching, setIsSwitching] = useState(false);
-  const rootClassName = ["ehMotionHeight", isSwitching ? "ehMotionHeight--switching" : null, className]
-    .filter(Boolean)
-    .join(" ");
+  const rootClassName = classNames(
+    "ehMotionHeight",
+    { "ehMotionHeight--switching": isSwitching },
+    className
+  );
 
   useLayoutEffect(() => {
     const content = contentRef.current;

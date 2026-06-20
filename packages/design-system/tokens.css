@@ -1,35 +1,37 @@
 @import url("https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
 :root {
-  --font: "Onest", system-ui, -apple-system, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, monospace;
-  --eh-font-sans: var(--font);
-  --eh-font-mono: var(--mono);
+  --eh-font-sans: "Onest", system-ui, -apple-system, sans-serif;
+  --eh-font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  --eh-rgb-white: 255 255 255;
-  --eh-rgb-moon: 216 212 236;
-  --eh-rgb-muted: 111 106 147;
-  --eh-rgb-auth-text: 236 232 247;
-  --eh-rgb-surface-sidebar: 17 15 38;
-  --eh-rgb-gold: 244 196 48;
-  --eh-rgb-coral: 244 122 122;
-  --eh-rgb-rose: 229 156 196;
-  --eh-rgb-azure: 111 168 255;
-  --eh-rgb-emerald: 78 200 160;
-  --eh-rgb-amethyst: 139 92 246;
-  --eh-rgb-lilac: 183 156 251;
-  --eh-rgb-control-surface: 20 18 47;
-
-  --eh-color-white: rgb(var(--eh-rgb-white));
-  --eh-color-muted: rgb(var(--eh-rgb-muted));
-  --eh-color-surface-sidebar: rgb(var(--eh-rgb-surface-sidebar));
-  --eh-color-gold: rgb(var(--eh-rgb-gold));
-  --eh-color-coral: rgb(var(--eh-rgb-coral));
-  --eh-color-rose: rgb(var(--eh-rgb-rose));
-  --eh-color-azure: rgb(var(--eh-rgb-azure));
-  --eh-color-emerald: rgb(var(--eh-rgb-emerald));
-  --eh-color-amethyst: rgb(var(--eh-rgb-amethyst));
-  --eh-color-lilac: rgb(var(--eh-rgb-lilac));
+  --eh-color-white: #ffffff;
+  --eh-color-black: #000000;
+  --eh-color-night-980: #07060f;
+  --eh-color-night-960: #080719;
+  --eh-color-night-950: #090719;
+  --eh-color-night-940: #0b091b;
+  --eh-color-night-930: #0b0b1f;
+  --eh-color-night-900: #110f26;
+  --eh-color-night-880: #14122b;
+  --eh-color-night-860: #16142f;
+  --eh-color-violet-950: #0c0822;
+  --eh-color-violet-900: #1c1342;
+  --eh-color-violet-800: #2a1b4e;
+  --eh-color-violet-700: #3a2a6e;
+  --eh-color-violet-600: #584494;
+  --eh-color-amethyst: #8b5cf6;
+  --eh-color-gold: #f4c430;
+  --eh-color-coral: #f47a7a;
+  --eh-color-rose: #e59cc4;
+  --eh-color-azure: #6fa8ff;
+  --eh-color-emerald: #4ec8a0;
+  --eh-color-lilac: #b79cfb;
+  --eh-color-moon-100: #ece8f7;
+  --eh-color-moon-120: #eceaf7;
+  --eh-color-moon-300: #d8d4ec;
+  --eh-color-moon-500: #a7a2c8;
+  --eh-color-moon-650: #777195;
+  --eh-color-muted: #6f6a93;
 
   --eh-space-3: 3px;
   --eh-space-4: 4px;
@@ -54,7 +56,9 @@
 
   --eh-length-32: 32px;
   --eh-length-34: 34px;
+  --eh-length-36: 36px;
   --eh-length-38: 38px;
+  --eh-length-48: 48px;
   --eh-length-340: 340px;
   --eh-length-380: 380px;
   --eh-length-420: 420px;
@@ -79,172 +83,4 @@
   --eh-line-height-120: 1.2;
   --eh-line-height-140: 1.4;
   --eh-line-height-150: 1.5;
-
-  --eh-auth-page-background: #090719;
-  --eh-auth-page-text: #ece8f7;
-
-  --eh-auth-visual-glow-amethyst: rgb(var(--eh-rgb-amethyst) / 0.28);
-  --eh-auth-visual-gradient-start: #3a2a6e;
-  --eh-auth-visual-gradient-middle: #1c1342;
-  --eh-auth-visual-gradient-end: #0c0822;
-  --eh-auth-visual-nebula-gold: rgb(var(--eh-rgb-gold) / 0.18);
-  --eh-auth-visual-nebula-azure: rgb(var(--eh-rgb-azure) / 0.18);
-  --eh-auth-visual-nebula-rose: rgb(var(--eh-rgb-rose) / 0.15);
-
-  --eh-auth-form-glow-amethyst: rgb(var(--eh-rgb-amethyst) / 0.12);
-  --eh-auth-form-glow-azure: rgb(var(--eh-rgb-azure) / 0.08);
-  --eh-auth-form-gradient-start: #0b091b;
-  --eh-auth-form-gradient-end: #080719;
-
-  --eh-auth-control-line: rgb(var(--eh-rgb-moon) / 0.18);
-  --eh-auth-control-line-hover: rgb(var(--eh-rgb-moon) / 0.32);
-  --eh-auth-control-surface: rgb(var(--eh-rgb-control-surface) / 0.6);
-  --eh-auth-control-surface-strong: rgb(var(--eh-rgb-control-surface) / 0.72);
-  --eh-auth-control-text: #a7a2c8;
-  --eh-auth-control-text-hover: rgb(var(--eh-rgb-auth-text) / 0.88);
-
-  --eh-auth-brand-line: rgb(var(--eh-rgb-gold) / 0.55);
-  --eh-auth-brand-surface: rgb(var(--eh-rgb-gold) / 0.1);
-  --eh-auth-gold: var(--eh-color-gold);
-
-  --eh-auth-title-gold: var(--eh-color-gold);
-  --eh-auth-title-coral: var(--eh-color-coral);
-  --eh-auth-title-rose: var(--eh-color-rose);
-  --eh-auth-title-azure: var(--eh-color-azure);
-  --eh-auth-title-shadow: rgb(var(--eh-rgb-rose) / 0.35);
-
-  --eh-auth-highlight-text: #eceaf7;
-  --eh-auth-highlight-line: rgb(var(--eh-rgb-gold) / 0.7);
-  --eh-auth-joined-text: rgb(var(--eh-rgb-auth-text) / 0.68);
-  --eh-auth-white: var(--eh-color-white);
-  --eh-auth-avatar-line: rgb(var(--eh-rgb-lilac) / 0.42);
-  --eh-auth-avatar-surface: rgba(88, 68, 148, 0.72);
-
-  --eh-auth-planet-gold-glow: rgb(var(--eh-rgb-gold) / 0.52);
-  --eh-auth-planet-gold-start: #ffc93d;
-  --eh-auth-planet-coral: var(--eh-color-coral);
-  --eh-auth-planet-azure-glow: rgb(var(--eh-rgb-azure) / 0.36);
-  --eh-auth-planet-azure: var(--eh-color-azure);
-  --eh-auth-planet-emerald: var(--eh-color-emerald);
-  --eh-auth-planet-amber-glow: rgb(var(--eh-rgb-gold) / 0.36);
-  --eh-auth-planet-amber-start: #ffd95f;
-  --eh-auth-planet-amber-end: #d9895a;
-  --eh-auth-planet-rose-glow: rgb(var(--eh-rgb-rose) / 0.42);
-  --eh-auth-planet-rose: var(--eh-color-rose);
-  --eh-auth-planet-amethyst: var(--eh-color-amethyst);
-  --eh-auth-planet-blue-glow: rgb(var(--eh-rgb-azure) / 0.38);
-  --eh-auth-planet-lilac: var(--eh-color-lilac);
-
-  --eh-auth-star-white-strong: rgb(var(--eh-rgb-white) / 0.95);
-  --eh-auth-star-white: rgb(var(--eh-rgb-white) / 0.9);
-  --eh-auth-star-white-soft: rgb(var(--eh-rgb-white) / 0.82);
-  --eh-auth-star-moon-strong: rgb(var(--eh-rgb-moon) / 0.7);
-  --eh-auth-star-moon: rgb(var(--eh-rgb-moon) / 0.54);
-  --eh-auth-star-moon-soft: rgb(var(--eh-rgb-moon) / 0.42);
-  --eh-auth-star-gold: rgb(var(--eh-rgb-gold) / 0.72);
-
-  --eh-auth-visual-content-padding-y: clamp(var(--eh-space-22), 3.8vh, var(--eh-space-36));
-  --eh-auth-visual-content-padding-bottom: clamp(var(--eh-space-18), 3.8vh, var(--eh-space-36));
-  --eh-auth-visual-content-padding-x: var(--eh-space-44);
-  --eh-auth-visual-content-padding-y-tablet: clamp(var(--eh-space-20), 3.2vh, var(--eh-space-28));
-  --eh-auth-visual-content-padding-x-tablet: var(--eh-space-24);
-  --eh-auth-visual-content-padding-y-mobile: var(--eh-space-22);
-  --eh-auth-visual-content-padding-x-mobile: var(--eh-space-18);
-  --eh-auth-form-pane-min-width: var(--eh-length-420);
-
-  --eh-auth-back-link-gap: var(--eh-space-8);
-  --eh-auth-back-link-padding-y: var(--eh-space-9);
-  --eh-auth-back-link-padding-x: var(--eh-space-16);
-  --eh-auth-back-link-radius: var(--eh-radius-pill);
-  --eh-auth-back-link-font-size: var(--eh-font-size-13);
-
-  --eh-auth-hero-copy-width: var(--eh-length-440);
-  --eh-auth-brand-gap: var(--eh-space-8);
-  --eh-auth-brand-margin-bottom: var(--eh-space-20);
-  --eh-auth-brand-padding-y: var(--eh-space-7);
-  --eh-auth-brand-padding-x: var(--eh-space-14);
-  --eh-auth-brand-radius: var(--eh-radius-pill);
-  --eh-auth-brand-font-size: var(--eh-font-size-12);
-
-  --eh-auth-title-margin-bottom: var(--eh-space-24);
-  --eh-auth-title-font-size: var(--eh-length-38);
-  --eh-auth-title-font-size-mobile: var(--eh-length-34);
-
-  --eh-auth-highlight-list-width: var(--eh-length-340);
-  --eh-auth-highlight-list-gap: var(--eh-space-12);
-  --eh-auth-highlight-item-gap: var(--eh-space-11);
-  --eh-auth-highlight-font-size: var(--eh-font-size-14);
-  --eh-auth-highlight-font-weight: var(--eh-font-weight-semibold);
-  --eh-auth-highlight-description-font-size: var(--eh-font-size-12);
-  --eh-auth-highlight-description-line-height: var(--eh-line-height-140);
-  --eh-auth-highlight-description-text: var(--eh-auth-control-text);
-  --eh-auth-highlight-icon-size: var(--eh-length-34);
-  --eh-auth-highlight-icon-radius: var(--eh-radius-10);
-
-  --eh-auth-joined-gap: var(--eh-space-14);
-  --eh-auth-joined-font-size: var(--eh-font-size-14);
-  --eh-auth-avatar-size: var(--eh-length-34);
-  --eh-auth-avatar-overlap: calc(var(--eh-space-7) * -1);
-  --eh-auth-avatar-radius: var(--eh-radius-12);
-  --eh-auth-avatar-font-size: var(--eh-font-size-12);
-
-  --eh-auth-form-pane-padding-y: var(--eh-space-40);
-  --eh-auth-form-pane-padding-x: var(--eh-space-24);
-
-  --eh-otp-auth-form-width: var(--eh-length-380);
-  --eh-otp-auth-text: var(--eh-auth-page-text);
-  --eh-otp-auth-muted-text: var(--eh-auth-control-text);
-  --eh-otp-auth-description-text: var(--eh-color-muted);
-  --eh-otp-auth-label-text: var(--eh-auth-control-text);
-  --eh-otp-auth-placeholder-text: var(--eh-color-muted);
-  --eh-otp-auth-on-accent-text: var(--eh-auth-page-background);
-  --eh-otp-auth-error-text: var(--eh-color-coral);
-
-  --eh-otp-auth-brand-gap: var(--eh-space-11);
-  --eh-otp-auth-brand-font-size: 19px;
-  --eh-otp-auth-brand-subtitle-font-size: 11px;
-  --eh-otp-auth-brand-subtitle-letter-spacing: 0.16em;
-  --eh-otp-auth-brand-subtitle-text: #777195;
-
-  --eh-otp-auth-tabs-gap: var(--eh-space-3);
-  --eh-otp-auth-tabs-margin-y: var(--eh-space-22);
-  --eh-otp-auth-tabs-padding: var(--eh-space-4);
-  --eh-otp-auth-tabs-radius: var(--eh-radius-12);
-  --eh-otp-auth-tabs-surface: var(--eh-color-surface-sidebar);
-  --eh-otp-auth-tabs-line: var(--eh-auth-control-line-hover);
-  --eh-otp-auth-tab-padding-y: var(--eh-space-9);
-  --eh-otp-auth-tab-padding-x: var(--eh-space-4);
-  --eh-otp-auth-tab-radius: var(--eh-radius-8);
-  --eh-otp-auth-tab-font-size: var(--eh-font-size-13-5);
-
-  --eh-otp-auth-title-margin-bottom: var(--eh-space-6);
-  --eh-otp-auth-title-font-size: var(--eh-font-size-23);
-  --eh-otp-auth-description-margin-bottom: var(--eh-space-22);
-  --eh-otp-auth-description-font-size: var(--eh-font-size-13-5);
-
-  --eh-otp-auth-field-margin-bottom: var(--eh-space-14);
-  --eh-otp-auth-field-compact-margin-bottom: var(--eh-space-8);
-  --eh-otp-auth-label-margin-bottom: var(--eh-space-8);
-  --eh-otp-auth-label-font-size: var(--eh-font-size-13);
-  --eh-otp-auth-input-padding-y: var(--eh-space-12);
-  --eh-otp-auth-input-padding-x: var(--eh-space-14);
-  --eh-otp-auth-input-radius: var(--eh-radius-12);
-  --eh-otp-auth-input-surface: var(--eh-auth-page-background);
-  --eh-otp-auth-input-line: var(--eh-auth-control-line-hover);
-  --eh-otp-auth-input-font-size: var(--eh-font-size-15);
-  --eh-otp-auth-focus-line: var(--eh-auth-highlight-line);
-  --eh-otp-auth-focus-ring: var(--eh-auth-brand-surface);
-  --eh-otp-auth-focus-ring-size: var(--eh-space-3);
-  --eh-otp-auth-field-error-margin-top: var(--eh-space-6);
-  --eh-otp-auth-field-error-font-size: var(--eh-font-size-12);
-
-  --eh-otp-auth-hint-margin-bottom: var(--eh-space-18);
-  --eh-otp-auth-hint-font-size: var(--eh-font-size-12-5);
-  --eh-otp-auth-hint-text: var(--eh-color-muted);
-
-  --eh-otp-auth-submit-padding-y: var(--eh-space-11);
-  --eh-otp-auth-submit-padding-x: var(--eh-space-16);
-  --eh-otp-auth-submit-radius: var(--eh-radius-12);
-  --eh-otp-auth-submit-font-size: var(--eh-font-size-14);
-
 }
