@@ -66,8 +66,10 @@ export function inferPhoneCountry(input: string, fallbackCountry: PhoneCountryIs
 export function formatPhoneInput(input: string, country: PhoneCountryIso2): PhoneFormatResult {
   const sanitizedInput = sanitizePhoneInput(input, country);
   const inferredCountry = inferPhoneCountry(sanitizedInput, country);
+  const internationalInput = normalizeInferredInternationalInput(sanitizedInput, inferredCountry, country);
+  const limitedInput = limitPhoneInputToCountryLength(internationalInput, inferredCountry);
 
-  if (sanitizedInput.length === 0) {
+  if (limitedInput.length === 0) {
     return {
       displayValue: "",
       normalizedValue: "",
@@ -76,13 +78,63 @@ export function formatPhoneInput(input: string, country: PhoneCountryIso2): Phon
   }
 
   const formatter = new AsYouType(inferredCountry as CountryCode);
-  const displayValue = formatter.input(sanitizedInput);
+  const displayValue = formatter.input(limitedInput);
 
   return {
     displayValue,
-    normalizedValue: sanitizedInput,
+    normalizedValue: limitedInput,
     country: inferredCountry
   };
+}
+
+function normalizeInferredInternationalInput(
+  input: string,
+  inferredCountry: PhoneCountryIso2,
+  fallbackCountry: PhoneCountryIso2
+): string {
+  if (input.length === 0 || input.startsWith("+") || inferredCountry === fallbackCountry) {
+    return input;
+  }
+
+  const supportedCountry = getSupportedPhoneCountry(inferredCountry);
+  const digits = input.replace(/\D/g, "");
+
+  if (!digits.startsWith(supportedCountry.callingCode)) {
+    return input;
+  }
+
+  return `+${digits}`;
+}
+
+function limitPhoneInputToCountryLength(input: string, country: PhoneCountryIso2): string {
+  const supportedCountry = getSupportedPhoneCountry(country);
+  const maxNationalDigits = getMaxNationalPhoneDigits(country);
+  const digits = input.replace(/\D/g, "");
+
+  if (digits.length === 0) {
+    return "";
+  }
+
+  if (input.startsWith("+")) {
+    if (!digits.startsWith(supportedCountry.callingCode)) {
+      return input;
+    }
+
+    return `+${digits.slice(0, supportedCountry.callingCode.length + maxNationalDigits)}`;
+  }
+
+  return digits.slice(0, maxNationalDigits);
+}
+
+function getMaxNationalPhoneDigits(country: PhoneCountryIso2): number {
+  const supportedCountry = getSupportedPhoneCountry(country);
+  const placeholderDigits = supportedCountry.placeholder.replace(/\D/g, "");
+
+  if (placeholderDigits.startsWith(supportedCountry.callingCode)) {
+    return placeholderDigits.length - supportedCountry.callingCode.length;
+  }
+
+  return placeholderDigits.length;
 }
 
 export function validateSupportedPhoneNumber(

@@ -26,6 +26,14 @@ describe("phoneInputModel", () => {
     });
   });
 
+  it("turns a typed supported calling code into an international number and selects its country", () => {
+    expect(applyPhoneInputChange(createInitialPhoneInputState("RU"), "994")).toMatchObject({
+      displayValue: "+994",
+      normalizedValue: "+994",
+      selectedCountry: "AZ"
+    });
+  });
+
   it("preserves Kazakhstan after manual selection for shared +7 numbers", () => {
     const kazakhstan = applyPhoneCountryChange(createInitialPhoneInputState("RU"), "KZ");
 
@@ -41,6 +49,15 @@ describe("phoneInputModel", () => {
     expect(applyPhoneInputChange(kazakhstan, "7011234567")).toMatchObject({
       normalizedValue: "7011234567",
       selectedCountry: "KZ"
+    });
+  });
+
+  it("does not keep more phone digits than the selected country allows", () => {
+    const georgia = applyPhoneCountryChange(createInitialPhoneInputState("RU"), "GE");
+
+    expect(applyPhoneInputChange(georgia, "+995555123456789")).toMatchObject({
+      normalizedValue: "+995555123456",
+      selectedCountry: "GE"
     });
   });
 

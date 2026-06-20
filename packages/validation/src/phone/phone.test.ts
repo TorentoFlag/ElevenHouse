@@ -26,6 +26,18 @@ describe("phone validation", () => {
     expect(inferPhoneCountry("+7", "KZ")).toBe("KZ");
   });
 
+  it("formats typed supported calling codes as international numbers and switches country", () => {
+    expect(formatPhoneInput("994", "RU")).toMatchObject({
+      displayValue: "+994",
+      normalizedValue: "+994",
+      country: "AZ"
+    });
+    expect(formatPhoneInput("995555123456", "RU")).toMatchObject({
+      normalizedValue: "+995555123456",
+      country: "GE"
+    });
+  });
+
   it("validates a Russian phone number and returns E.164", () => {
     expect(validateSupportedPhoneNumber("+7 999 123-45-67", "RU")).toEqual({
       valid: true,
@@ -59,6 +71,21 @@ describe("phone validation", () => {
       normalizedValue: "+995555123456",
       country: "GE",
       reason: null
+    });
+  });
+
+  it("limits formatted input to the selected country's maximum national digits", () => {
+    expect(formatPhoneInput("+995 555 12 34 56 789", "GE")).toMatchObject({
+      normalizedValue: "+995555123456",
+      country: "GE"
+    });
+    expect(formatPhoneInput("+7 999 123-45-67 89", "RU")).toMatchObject({
+      normalizedValue: "+79991234567",
+      country: "RU"
+    });
+    expect(formatPhoneInput("701123456789", "KZ")).toMatchObject({
+      normalizedValue: "7011234567",
+      country: "KZ"
     });
   });
 
