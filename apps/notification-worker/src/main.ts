@@ -5,8 +5,10 @@ import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createDrizzleAuthCodeDeliveryProcessingStore } from "@elevenhouse/db/notifications";
 import {
   ChannelAuthCodeDeliveryProvider,
+  DevConsoleAuthCodeDeliveryProvider,
   EmailAuthCodeDeliveryProvider,
-  SmsAuthCodeDeliveryProvider
+  SmsAuthCodeDeliveryProvider,
+  type AuthCodeDeliveryProvider
 } from "./auth-code-delivery.provider";
 import {
   createAuthCodeDeliveryQueue,
@@ -24,11 +26,10 @@ const postgresRuntime = createPostgresRuntime();
 const authCodeCipher = createAes256GcmSecretCipher(config.authCodeDeliveryEncryptionKey);
 const authCodeDeliveryQueue = createAuthCodeDeliveryQueue(config.redisUrl);
 const outboxStore = createDrizzleOutboxRelayStore(postgresRuntime.database);
-const authCodeDeliveryStore = createDrizzleAuthCodeDeliveryProcessingStore(postgresRuntime.database);
-const deliveryProvider = new ChannelAuthCodeDeliveryProvider(
-  new EmailAuthCodeDeliveryProvider(config.authCodeEmailDelivery),
-  new SmsAuthCodeDeliveryProvider(config.authCodeSmsDelivery)
+const authCodeDeliveryStore = createDrizzleAuthCodeDeliveryProcessingStore(
+  postgresRuntime.database
 );
+const deliveryProvider = createDeliveryProvider();
 const authCodeDeliveryWorker = createAuthCodeDeliveryWorker(config.redisUrl, (job) =>
   processAuthCodeDeliveryJob({
     job,
@@ -57,6 +58,21 @@ const healthServer = createWorkerReadinessServer({
       checks: readinessChecks
     })
 });
+
+function createDeliveryProvider(): AuthCodeDeliveryProvider {
+  if (config.authCodeDeliveryMode === "dev_console") {
+    return new DevConsoleAuthCodeDeliveryProvider(logger);
+  }
+
+  if (!config.authCodeEmailDelivery || !config.authCodeSmsDelivery) {
+    throw new Error("HTTP auth code delivery settings are required in http mode");
+  }
+
+  return new ChannelAuthCodeDeliveryProvider(
+    new EmailAuthCodeDeliveryProvider(config.authCodeEmailDelivery),
+    new SmsAuthCodeDeliveryProvider(config.authCodeSmsDelivery)
+  );
+}
 
 let relayTimer: ReturnType<typeof setInterval> | undefined;
 

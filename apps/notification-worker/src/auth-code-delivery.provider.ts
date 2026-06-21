@@ -11,7 +11,7 @@ export type AuthCodeDeliveryInput = {
 };
 
 export type AuthCodeDeliveryResult = {
-  readonly provider: "email" | "sms";
+  readonly provider: "email" | "sms" | "dev_console";
   readonly status: "sent" | "failed";
   readonly providerStatusCode?: number;
   readonly providerMessageId?: string;
@@ -92,6 +92,32 @@ export class ChannelAuthCodeDeliveryProvider implements AuthCodeDeliveryProvider
     return input.channel === "email"
       ? this.emailDelivery.deliverAuthCode(input)
       : this.smsDelivery.deliverAuthCode(input);
+  }
+}
+
+export class DevConsoleAuthCodeDeliveryProvider implements AuthCodeDeliveryProvider {
+  constructor(
+    private readonly logger: {
+      readonly info: (message: string, context: Record<string, unknown>) => void;
+    }
+  ) {}
+
+  deliverAuthCode(input: AuthCodeDeliveryInput): Promise<AuthCodeDeliveryResult> {
+    this.logger.info("dev console auth code delivery", {
+      challengeId: input.challengeId,
+      deliveryId: input.deliveryId,
+      outboxEventId: input.outboxEventId,
+      channel: input.channel,
+      identifier: input.identifier,
+      code: input.code,
+      expiresAt: input.expiresAt
+    });
+
+    return Promise.resolve({
+      provider: "dev_console",
+      status: "sent",
+      providerMessageId: `dev-console-${input.deliveryId}`
+    });
   }
 }
 

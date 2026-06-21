@@ -1,17 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   ChannelAuthCodeDeliveryProvider,
+  DevConsoleAuthCodeDeliveryProvider,
   EmailAuthCodeDeliveryProvider,
   SmsAuthCodeDeliveryProvider
 } from "./auth-code-delivery.provider";
 
 describe("EmailAuthCodeDeliveryProvider", () => {
   it("posts email auth codes to the configured delivery endpoint", async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ messageId: "email-message-1" }), {
-        status: 202,
-        headers: { "content-type": "application/json" }
-      })
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ messageId: "email-message-1" }), {
+          status: 202,
+          headers: { "content-type": "application/json" }
+        })
     );
     const delivery = new EmailAuthCodeDeliveryProvider(
       {
@@ -91,11 +93,12 @@ describe("EmailAuthCodeDeliveryProvider", () => {
 
 describe("SmsAuthCodeDeliveryProvider", () => {
   it("posts phone auth codes to the configured SMS delivery endpoint", async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ messageId: "sms-message-1" }), {
-        status: 202,
-        headers: { "content-type": "application/json" }
-      })
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ messageId: "sms-message-1" }), {
+          status: 202,
+          headers: { "content-type": "application/json" }
+        })
     );
     const delivery = new SmsAuthCodeDeliveryProvider(
       {
@@ -121,6 +124,40 @@ describe("SmsAuthCodeDeliveryProvider", () => {
       status: "sent",
       providerStatusCode: 202,
       providerMessageId: "sms-message-1"
+    });
+  });
+});
+
+describe("DevConsoleAuthCodeDeliveryProvider", () => {
+  it("logs auth codes for local development and marks delivery as sent", async () => {
+    const logger = {
+      info: vi.fn()
+    };
+    const delivery = new DevConsoleAuthCodeDeliveryProvider(logger);
+
+    await expect(
+      delivery.deliverAuthCode({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        deliveryId: "delivery_1",
+        outboxEventId: "outbox_1",
+        channel: "phone",
+        identifier: "+15551234090",
+        code: "123456",
+        expiresAt: "2026-06-16T10:10:00.000Z"
+      })
+    ).resolves.toEqual({
+      provider: "dev_console",
+      status: "sent",
+      providerMessageId: "dev-console-delivery_1"
+    });
+    expect(logger.info).toHaveBeenCalledWith("dev console auth code delivery", {
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      deliveryId: "delivery_1",
+      outboxEventId: "outbox_1",
+      channel: "phone",
+      identifier: "+15551234090",
+      code: "123456",
+      expiresAt: "2026-06-16T10:10:00.000Z"
     });
   });
 });
