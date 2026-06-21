@@ -27,6 +27,32 @@ export function applyPhoneInputChange(
   };
 }
 
+export function applyPhoneInputBackspace(
+  previous: PhoneInputState,
+  currentDisplayValue: string,
+  selectionStart: number,
+  selectionEnd: number = selectionStart
+): PhoneInputState {
+  const normalizedDigits = previous.normalizedValue.replace(/\D/g, "");
+  const digitsBeforeSelection = countDigitsBeforeIndex(currentDisplayValue, selectionStart);
+  const digitsAfterSelection = countDigitsBeforeIndex(currentDisplayValue, selectionEnd);
+  const deleteStart = selectionStart === selectionEnd ? digitsBeforeSelection - 1 : digitsBeforeSelection;
+  const deleteEnd = selectionStart === selectionEnd ? digitsBeforeSelection : digitsAfterSelection;
+
+  if (deleteStart < 0 || deleteEnd <= deleteStart) {
+    return previous;
+  }
+
+  const nextDigits = `${normalizedDigits.slice(0, deleteStart)}${normalizedDigits.slice(deleteEnd)}`;
+  const nextRawValue = previous.normalizedValue.startsWith("+") && nextDigits.length > 0 ? `+${nextDigits}` : nextDigits;
+
+  return applyPhoneInputChange(previous, nextRawValue);
+}
+
+function countDigitsBeforeIndex(value: string, index: number): number {
+  return value.slice(0, Math.max(0, index)).replace(/\D/g, "").length;
+}
+
 export function applyPhoneCountryChange(
   previous: PhoneInputState,
   nextCountry: PhoneCountryIso2

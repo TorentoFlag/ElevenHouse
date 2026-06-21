@@ -31,6 +31,7 @@ export function OtpAuthForm({
   submitDisabled = false,
   onModeChange,
   onPhoneCountryChange,
+  onPhoneInputKeyDown,
   onValuesChange,
   onSubmit
 }: OtpAuthFormProps) {
@@ -140,6 +141,7 @@ export function OtpAuthForm({
                 aria-invalid={phoneError ? true : undefined}
                 aria-describedby={phoneError ? "eh-otp-auth-phone-error" : undefined}
                 onChange={handleValueChange("phone")}
+                onKeyDown={onPhoneInputKeyDown}
               />
               {selectedPhoneCountry && phoneCountries && phoneCountries.length > 0 ? (
                 <span className="ehOtpAuthForm__phoneCountry">

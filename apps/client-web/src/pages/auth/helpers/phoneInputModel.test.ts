@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { applyPhoneCountryChange, applyPhoneInputChange, createInitialPhoneInputState } from "./phoneInputModel";
+import {
+  applyPhoneCountryChange,
+  applyPhoneInputBackspace,
+  applyPhoneInputChange,
+  createInitialPhoneInputState
+} from "./phoneInputModel";
 
 describe("phoneInputModel", () => {
   it("turns a leading seven into +7 and selects Russia", () => {
@@ -73,6 +78,15 @@ describe("phoneInputModel", () => {
       displayValue: "",
       normalizedValue: "",
       selectedCountry: "GE"
+    });
+  });
+
+  it("deletes the previous digit when backspace is pressed before formatting characters", () => {
+    const previous = applyPhoneInputChange(createInitialPhoneInputState("RU"), "+7 (905)");
+
+    expect(applyPhoneInputBackspace(previous, "+7 (905)", 8)).toMatchObject({
+      normalizedValue: "+790",
+      selectedCountry: "RU"
     });
   });
 });

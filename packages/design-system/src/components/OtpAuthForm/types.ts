@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import type { KeyboardEvent, Ref } from "react";
 import type { LanguageSwitcherProps } from "../LanguageSwitcher/index.js";
 
 export type OtpAuthFormMode = "register" | "login";
@@ -63,6 +63,7 @@ export type OtpAuthFormProps = {
   submitDisabled?: boolean;
   onModeChange: (mode: OtpAuthFormMode) => void;
   onPhoneCountryChange?: (country: string) => void;
+  onPhoneInputKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
   onValuesChange: (values: OtpAuthFormValues) => void;
   onSubmit?: (values: OtpAuthFormValues, mode: OtpAuthFormMode) => void | Promise<void>;
 };

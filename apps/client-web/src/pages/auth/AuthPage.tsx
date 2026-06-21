@@ -21,6 +21,7 @@ import {
   validateSupportedPhoneNumber
 } from "@elevenhouse/validation/phone";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { useNavigate } from "react-router";
 import { application } from "../../Application";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
@@ -38,6 +39,7 @@ import {
 } from "./helpers/delayedValidationVisibility";
 import {
   applyPhoneCountryChange,
+  applyPhoneInputBackspace,
   applyPhoneInputChange,
   createInitialPhoneInputState,
   type PhoneInputState
@@ -274,6 +276,42 @@ export function AuthPage() {
     ]
   );
 
+  const handlePhoneInputKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key !== "Backspace") {
+        return;
+      }
+
+      const selectionStart = event.currentTarget.selectionStart;
+      const selectionEnd = event.currentTarget.selectionEnd;
+
+      if (selectionStart === null || selectionEnd === null) {
+        return;
+      }
+
+      const nextPhoneInputState = applyPhoneInputBackspace(
+        phoneInputState,
+        event.currentTarget.value,
+        selectionStart,
+        selectionEnd
+      );
+
+      if (nextPhoneInputState.normalizedValue === phoneInputState.normalizedValue) {
+        return;
+      }
+
+      event.preventDefault();
+      setPhoneTouched(true);
+      setPhoneInputState(nextPhoneInputState);
+      setAuthValues((currentValues) => ({
+        ...currentValues,
+        phone: nextPhoneInputState.displayValue
+      }));
+      scheduleSubmitFocusAfterValidPhone(nextPhoneInputState);
+    },
+    [phoneInputState, scheduleSubmitFocusAfterValidPhone]
+  );
+
   const handleModeChange = useCallback((mode: OtpAuthFormMode) => {
     setAuthMode(mode);
     setAuthStep("credentials");
@@ -452,6 +490,7 @@ export function AuthPage() {
             }
             onModeChange={handleModeChange}
             onPhoneCountryChange={handlePhoneCountryChange}
+            onPhoneInputKeyDown={handlePhoneInputKeyDown}
             onValuesChange={handleValuesChange}
             onSubmit={() => {
               void handleCredentialSubmit();

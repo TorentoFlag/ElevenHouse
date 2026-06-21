@@ -32,6 +32,10 @@ export function sanitizePhoneInput(input: string, country?: PhoneCountryIso2): s
     return `+${digits}`;
   }
 
+  if (digits.startsWith("8")) {
+    return `+7${digits.slice(1)}`;
+  }
+
   if (country === "KZ" && digits.startsWith("7") && digits.length > 1) {
     return digits;
   }

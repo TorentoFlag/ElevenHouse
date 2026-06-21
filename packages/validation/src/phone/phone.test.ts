@@ -21,6 +21,14 @@ describe("phone validation", () => {
     });
   });
 
+  it("turns a leading Russian trunk eight into a Russian dial prefix", () => {
+    expect(sanitizePhoneInput("89050334945")).toBe("+79050334945");
+    expect(formatPhoneInput("8 905 033 49 45", "RU")).toMatchObject({
+      country: "RU",
+      normalizedValue: "+79050334945"
+    });
+  });
+
   it("defaults shared +7 input to Russia unless Kazakhstan is selected", () => {
     expect(inferPhoneCountry("+7", "RU")).toBe("RU");
     expect(inferPhoneCountry("+7", "KZ")).toBe("KZ");
