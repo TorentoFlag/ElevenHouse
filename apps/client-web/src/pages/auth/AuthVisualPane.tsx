@@ -24,7 +24,7 @@ export function AuthVisualPane({ copy }: AuthVisualPaneProps) {
       <div className={styles.stars} />
 
       <div className={styles.visualContent}>
-        <BackLink className={styles.backLink} path="/" title={copy.backLinkTitle} />
+        <BackLink className={styles.backLink ?? ""} path="/" title={copy.backLinkTitle} />
 
         <div className={styles.heroCopy}>
           <div className={styles.brandBadge}>

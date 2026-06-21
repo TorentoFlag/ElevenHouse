@@ -1,5 +1,6 @@
 import type {
   AuthenticatedCustomerAccountResponse,
+  RegisteredCustomerAccountResponse,
   RequestPasswordlessCodeResponse
 } from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +8,7 @@ import { application } from "../../../Application";
 import { getCurrentAccount } from "./getCurrentAccount";
 import { logout } from "./logout";
 import { requestPasswordlessCode } from "./requestPasswordlessCode";
+import { verifyRegistrationPasswordlessCode } from "./verifyRegistrationPasswordlessCode";
 import { verifyPasswordlessCode } from "./verifyPasswordlessCode";
 
 const accountResponse = {
@@ -24,6 +26,14 @@ const challengeResponse = {
   expiresAt: "2026-06-16T10:10:00.000Z",
   resendAvailableAt: "2026-06-16T10:01:00.000Z"
 } satisfies RequestPasswordlessCodeResponse;
+const registeredAccountResponse = {
+  account: {
+    id: "8e14390f-3db1-4d1c-9344-55679c778427",
+    status: "active",
+    roles: ["client"],
+    displayName: "Анна"
+  }
+} satisfies RegisteredCustomerAccountResponse;
 
 describe("auth API", () => {
   afterEach(() => {
@@ -64,6 +74,26 @@ describe("auth API", () => {
     });
   });
 
+  it("verifies a registration passwordless code with a client-only role", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(registeredAccountResponse);
+
+    await expect(
+      verifyRegistrationPasswordlessCode({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        displayName: " Анна ",
+        roles: ["client"]
+      })
+    ).resolves.toEqual(registeredAccountResponse);
+
+    expect(post).toHaveBeenCalledWith("/identity/registration/passwordless/verify-code", {
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      code: "123456",
+      displayName: "Анна",
+      roles: ["client"]
+    });
+  });
+
   it("loads the current authenticated account", async () => {
     const get = vi.spyOn(application.http, "get").mockResolvedValue(accountResponse);
 
@@ -77,6 +107,6 @@ describe("auth API", () => {
 
     await expect(logout()).resolves.toBeUndefined();
 
-    expect(post).toHaveBeenCalledWith("/identity/logout");
+    expect(post).toHaveBeenCalledWith("/identity/logout", undefined, { csrf: true });
   });
 });

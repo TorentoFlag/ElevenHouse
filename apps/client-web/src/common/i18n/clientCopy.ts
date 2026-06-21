@@ -1,4 +1,5 @@
 import type { OtpAuthFormCopy } from "@elevenhouse/design-system/components/OtpAuthForm";
+import type { OtpCodeFormCopy } from "@elevenhouse/design-system/components/OtpCodeForm";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 
 export type AuthCopy = {
@@ -6,10 +7,17 @@ export type AuthCopy = {
   sectionAriaLabel: string;
   visual: AuthVisualCopy;
   form: OtpAuthFormCopy;
+  codeForm: OtpCodeFormCopy;
   validation: {
     email: string;
     name: string;
     phone: string;
+  };
+  errors: {
+    invalidCode: string;
+    identityExists: string;
+    rateLimited: string;
+    generic: string;
   };
   languageSwitcher: {
     ariaLabel: string;
@@ -94,10 +102,25 @@ export const clientCopyByLocale = {
         registerSubmitLabel: "Получить код",
         loginSubmitLabel: "Войти по коду"
       },
+      codeForm: {
+        title: "Введите код",
+        description: "Мы отправили код на {identifier}",
+        codeLabel: "Код из сообщения",
+        codePlaceholder: "000000",
+        submitLabel: "Продолжить",
+        backLabel: "Изменить данные",
+        resendLabel: "Отправить повторно"
+      },
       validation: {
         email: "Введите корректный email",
         name: "Имя должно быть от 2 до 200 символов",
         phone: "Введите корректный номер телефона"
+      },
+      errors: {
+        invalidCode: "Неверный или устаревший код",
+        identityExists: "Аккаунт с этим телефоном или email уже существует",
+        rateLimited: "Слишком много попыток. Попробуйте позже",
+        generic: "Не удалось выполнить запрос. Попробуйте ещё раз"
       },
       languageSwitcher: {
         ariaLabel: "Язык интерфейса"
@@ -160,10 +183,25 @@ export const clientCopyByLocale = {
         registerSubmitLabel: "Get code",
         loginSubmitLabel: "Sign in by code"
       },
+      codeForm: {
+        title: "Enter code",
+        description: "We sent a code to {identifier}",
+        codeLabel: "Message code",
+        codePlaceholder: "000000",
+        submitLabel: "Continue",
+        backLabel: "Change details",
+        resendLabel: "Send again"
+      },
       validation: {
         email: "Enter a valid email",
         name: "Name must be 2 to 200 characters",
         phone: "Enter a valid phone number"
+      },
+      errors: {
+        invalidCode: "Invalid or expired code",
+        identityExists: "An account with this phone or email already exists",
+        rateLimited: "Too many attempts. Try again later",
+        generic: "Request failed. Try again"
       },
       languageSwitcher: {
         ariaLabel: "Interface language"

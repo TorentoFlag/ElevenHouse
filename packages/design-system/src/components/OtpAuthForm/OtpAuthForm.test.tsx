@@ -168,6 +168,27 @@ describe("OtpAuthForm", () => {
     expect(serializedForm).toContain("eh-otp-auth-phone-error");
   });
 
+  it("disables email and phone controls when requested by the app", () => {
+    const form = OtpAuthForm({
+      mode: "register",
+      values: { email: "", name: "", phone: "+7 999 000-11-22" },
+      emailDisabled: true,
+      phoneDisabled: true,
+      phoneCountry: "RU",
+      phoneCountries: [{ iso2: "RU", name: "Россия", flag: "🇷🇺", callingCode: "7" }],
+      onModeChange: vi.fn(),
+      onValuesChange: vi.fn()
+    });
+
+    const emailInput = findElementByProp(form, "name", "email");
+    const phoneInput = findElementByProp(form, "name", "phone");
+    const countrySelect = findElementByClassName(form, "ehOtpAuthForm__phoneCountrySelect");
+
+    expect(emailInput?.props?.disabled).toBe(true);
+    expect(phoneInput?.props?.disabled).toBe(true);
+    expect(countrySelect?.props?.disabled).toBe(true);
+  });
+
   it("submits controlled values", () => {
     const onSubmit = vi.fn();
     const form = OtpAuthForm({
@@ -221,7 +242,10 @@ function findElementByClassName(node: unknown, className: string): TestElement |
   }
 
   const element = node as TestElement;
-  if (typeof element.props?.className === "string" && element.props.className.split(" ").includes(className)) {
+  if (
+    typeof element.props?.className === "string" &&
+    element.props.className.split(" ").includes(className)
+  ) {
     return element;
   }
 

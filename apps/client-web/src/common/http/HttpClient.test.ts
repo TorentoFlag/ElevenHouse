@@ -66,6 +66,61 @@ describe("HttpClient", () => {
     });
     await expect(http.get("/identity/me")).rejects.toBeInstanceOf(HttpError);
   });
+
+  it("adds a CSRF header from the configured cookie when requested", async () => {
+    const fetcher = vi.fn(async () => new Response(null, { status: 204 }));
+    const http = new HttpClient({
+      basePath: "/api",
+      csrf: {
+        cookieName: "elevenhouse_public_csrf",
+        headerName: "x-csrf-token",
+        readCookie: () => "signed-token"
+      },
+      fetcher
+    });
+
+    await http.post("/identity/logout", undefined, { csrf: true });
+
+    expect(fetcher).toHaveBeenCalledWith("/api/identity/logout", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "x-csrf-token": "signed-token"
+      }
+    });
+  });
+
+  it("does not add a CSRF header to unprotected requests", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ ok: true }));
+    const http = new HttpClient({
+      basePath: "/api",
+      csrf: {
+        cookieName: "elevenhouse_public_csrf",
+        headerName: "x-csrf-token",
+        readCookie: () => "signed-token"
+      },
+      fetcher
+    });
+
+    await http.post("/identity/passwordless/request-code", {
+      channel: "email",
+      identifier: "client@example.com",
+      roles: ["client"]
+    });
+
+    expect(fetcher).toHaveBeenCalledWith("/api/identity/passwordless/request-code", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        channel: "email",
+        identifier: "client@example.com",
+        roles: ["client"]
+      })
+    });
+  });
 });
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {

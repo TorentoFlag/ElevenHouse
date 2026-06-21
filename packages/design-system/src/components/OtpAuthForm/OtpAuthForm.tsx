@@ -14,6 +14,7 @@ export function OtpAuthForm({
   className,
   copy,
   error,
+  emailDisabled = false,
   emailError,
   emailInputRef,
   isSubmitting = false,
@@ -22,6 +23,7 @@ export function OtpAuthForm({
   nameInputRef,
   phoneCountries,
   phoneCountry,
+  phoneDisabled = false,
   phoneError,
   phoneInputRef,
   phonePlaceholder,
@@ -40,11 +42,9 @@ export function OtpAuthForm({
   const selectedPhoneCountry =
     phoneCountries?.find((country) => country.iso2 === phoneCountry) ?? phoneCountries?.[0] ?? null;
   const resolvedPhonePlaceholder = phonePlaceholder ?? text.phonePlaceholder;
-  const phoneInputClassName = classNames(
-    "ehOtpAuthForm__input",
-    "ehOtpAuthForm__phoneInput",
-    { "ehOtpAuthForm__input--invalid": Boolean(phoneError) }
-  );
+  const phoneInputClassName = classNames("ehOtpAuthForm__input", "ehOtpAuthForm__phoneInput", {
+    "ehOtpAuthForm__input--invalid": Boolean(phoneError)
+  });
   const phoneControlClassName = classNames("ehOtpAuthForm__phoneControl", {
     "ehOtpAuthForm__phoneControl--invalid": Boolean(phoneError)
   });
@@ -60,7 +60,10 @@ export function OtpAuthForm({
   return (
     <div className={rootClassName}>
       <div className="ehOtpAuthForm__brandHeader">
-        <div className="ehOtpAuthForm__brand" aria-label={`${text.brandTitle}${text.brandAccent} ${text.brandSubtitle}`}>
+        <div
+          className="ehOtpAuthForm__brand"
+          aria-label={`${text.brandTitle}${text.brandAccent} ${text.brandSubtitle}`}
+        >
           <LogoMoon aria-hidden="true" />
           <span className="ehOtpAuthForm__brandContent">
             <span className="ehOtpAuthForm__brandName">
@@ -132,6 +135,7 @@ export function OtpAuthForm({
                 placeholder={resolvedPhonePlaceholder}
                 value={values.phone}
                 autoComplete="tel"
+                disabled={phoneDisabled}
                 ref={phoneInputRef}
                 aria-invalid={phoneError ? true : undefined}
                 aria-describedby={phoneError ? "eh-otp-auth-phone-error" : undefined}
@@ -143,6 +147,7 @@ export function OtpAuthForm({
                     className="ehOtpAuthForm__phoneCountrySelect"
                     value={selectedPhoneCountry.iso2}
                     aria-label={text.phoneCountryAriaLabel}
+                    disabled={phoneDisabled}
                     onChange={(event: ChangeEvent<HTMLSelectElement>) => {
                       onPhoneCountryChange?.(event.currentTarget.value);
                     }}
@@ -174,6 +179,7 @@ export function OtpAuthForm({
               placeholder={text.emailPlaceholder}
               value={values.email}
               autoComplete="email"
+              disabled={emailDisabled}
               ref={emailInputRef}
               aria-invalid={emailError ? true : undefined}
               aria-describedby={emailError ? "eh-otp-auth-email-error" : undefined}

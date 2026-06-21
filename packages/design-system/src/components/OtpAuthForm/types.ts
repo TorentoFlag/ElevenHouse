@@ -46,6 +46,7 @@ export type OtpAuthFormProps = {
   className?: string;
   copy?: Partial<OtpAuthFormCopy>;
   error?: string | null;
+  emailDisabled?: boolean;
   emailError?: string | null;
   emailInputRef?: Ref<HTMLInputElement>;
   isSubmitting?: boolean;
@@ -54,6 +55,7 @@ export type OtpAuthFormProps = {
   localeSwitcher?: OtpAuthLocaleSwitcher;
   phoneCountries?: readonly OtpAuthPhoneCountryOption[];
   phoneCountry?: string;
+  phoneDisabled?: boolean;
   phoneError?: string | null;
   phoneInputRef?: Ref<HTMLInputElement>;
   phonePlaceholder?: string;

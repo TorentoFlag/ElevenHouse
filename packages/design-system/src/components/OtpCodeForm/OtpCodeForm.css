@@ -1,0 +1,87 @@
+.ehOtpCodeForm {
+  width: min(100%, var(--eh-length-420));
+  display: flex;
+  flex-direction: column;
+  gap: var(--eh-space-18);
+  color: var(--eh-color-moon-100);
+}
+
+.ehOtpCodeForm__back,
+.ehOtpCodeForm__resend {
+  width: fit-content;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--eh-color-moon-500);
+  font: inherit;
+  font-size: var(--eh-font-size-14);
+  cursor: pointer;
+}
+
+.ehOtpCodeForm__back:disabled,
+.ehOtpCodeForm__resend:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ehOtpCodeForm__title {
+  margin: 0;
+  font-size: var(--eh-length-30);
+  font-weight: 800;
+  line-height: var(--eh-line-height-110);
+}
+
+.ehOtpCodeForm__description {
+  margin: calc(var(--eh-space-10) * -1) 0 0;
+  color: var(--eh-color-moon-500);
+  font-size: var(--eh-font-size-15);
+  line-height: var(--eh-line-height-140);
+}
+
+.ehOtpCodeForm__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--eh-space-8);
+}
+
+.ehOtpCodeForm__label {
+  color: var(--eh-color-moon-300);
+  font-size: var(--eh-font-size-13);
+  font-weight: 700;
+}
+
+.ehOtpCodeForm__input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--eh-length-52);
+  border: 1px solid rgb(216 212 236 / 0.16);
+  border-radius: var(--eh-radius-8);
+  background: rgb(20 18 47 / 0.76);
+  color: var(--eh-color-white);
+  font-size: var(--eh-font-size-22);
+  font-weight: 800;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.ehOtpCodeForm__input--invalid {
+  border-color: var(--eh-color-coral);
+}
+
+.ehOtpCodeForm__error {
+  margin: calc(var(--eh-space-8) * -1) 0 0;
+  color: var(--eh-color-coral);
+  font-size: var(--eh-font-size-13);
+  line-height: var(--eh-line-height-140);
+}
+
+.ehOtpCodeForm__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--eh-space-16);
+}
+
+.ehOtpCodeForm__submit {
+  min-width: var(--eh-length-160);
+}

@@ -9,20 +9,13 @@
       "@elevenhouse/design-system/components/OtpAuthForm": [
         "../../packages/design-system/src/components/OtpAuthForm/index.ts"
       ],
-      "@elevenhouse/design-system/helpers": [
-        "../../packages/design-system/src/helpers/index.ts"
+      "@elevenhouse/design-system/components/OtpCodeForm": [
+        "../../packages/design-system/src/components/OtpCodeForm/index.ts"
       ],
-      "@elevenhouse/i18n": [
-        "../../packages/i18n/src/index.ts"
-      ]
+      "@elevenhouse/design-system/helpers": ["../../packages/design-system/src/helpers/index.ts"],
+      "@elevenhouse/i18n": ["../../packages/i18n/src/index.ts"]
     },
-    "types": [
-      "vite/client",
-      "vitest"
-    ]
+    "types": ["vite/client", "vitest"]
   },
-  "include": [
-    "src",
-    "vite.config.ts"
-  ]
+  "include": ["src", "vite.config.ts"]
 }

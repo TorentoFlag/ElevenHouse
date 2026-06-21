@@ -38,6 +38,11 @@
     },
     "./components/SegmentedTabs.css": "./src/components/SegmentedTabs/SegmentedTabs.css",
     "./components/OtpAuthForm.css": "./src/components/OtpAuthForm/OtpAuthForm.css",
+    "./components/OtpCodeForm": {
+      "types": "./dist/components/OtpCodeForm/index.d.ts",
+      "import": "./dist/components/OtpCodeForm/index.js"
+    },
+    "./components/OtpCodeForm.css": "./src/components/OtpCodeForm/OtpCodeForm.css",
     "./motion": {
       "types": "./dist/motion/index.d.ts",
       "import": "./dist/motion/index.js"
@@ -98,6 +103,7 @@
     "./src/motion/motion.css",
     "./src/components/Button/Button.css",
     "./src/components/OtpAuthForm/OtpAuthForm.css",
+    "./src/components/OtpCodeForm/OtpCodeForm.css",
     "./src/components/LanguageSwitcher/LanguageSwitcher.css",
     "./src/components/SegmentedTabs/SegmentedTabs.css"
   ],

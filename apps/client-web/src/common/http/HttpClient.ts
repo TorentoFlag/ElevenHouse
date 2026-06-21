@@ -2,22 +2,32 @@ import { HttpError } from "./HttpError";
 
 export type HttpClientOptions = {
   readonly basePath: string;
+  readonly csrf?: HttpClientCsrfOptions;
   readonly credentials?: RequestCredentials;
   readonly fetcher?: typeof fetch;
+};
+
+export type HttpClientCsrfOptions = {
+  readonly cookieName: string;
+  readonly headerName: string;
+  readonly readCookie?: (name: string) => string | null;
 };
 
 export type HttpRequestOptions = {
   readonly method?: "GET" | "POST";
   readonly body?: unknown;
+  readonly csrf?: boolean;
 };
 
 export class HttpClient {
   private readonly basePath: string;
+  private readonly csrf: HttpClientCsrfOptions | null;
   private readonly credentials: RequestCredentials;
   private readonly fetcher: typeof fetch;
 
   constructor(options: HttpClientOptions) {
     this.basePath = normalizeBasePath(options.basePath);
+    this.csrf = options.csrf ?? null;
     this.credentials = options.credentials ?? "include";
     this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
   }
@@ -28,17 +38,19 @@ export class HttpClient {
     });
   }
 
-  post<TResponse>(path: string, body?: unknown): Promise<TResponse> {
+  post<TResponse>(
+    path: string,
+    body?: unknown,
+    options: Omit<HttpRequestOptions, "method" | "body"> = {}
+  ): Promise<TResponse> {
     return this.request<TResponse>(path, {
       method: "POST",
+      ...options,
       ...(body === undefined ? {} : { body })
     });
   }
 
-  async request<TResponse>(
-    path: string,
-    options: HttpRequestOptions = {}
-  ): Promise<TResponse> {
+  async request<TResponse>(path: string, options: HttpRequestOptions = {}): Promise<TResponse> {
     const response = await this.fetcher(this.createUrl(path), this.createRequestInit(options));
     const responseBody = await readResponseBody(response);
 
@@ -57,19 +69,36 @@ export class HttpClient {
 
   private createRequestInit(options: HttpRequestOptions): RequestInit {
     const method = options.method ?? "GET";
+    const headers = this.createHeaders(options);
 
     return {
       method,
       credentials: this.credentials,
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
       ...(options.body === undefined
         ? {}
         : {
-            headers: {
-              "content-type": "application/json"
-            },
             body: JSON.stringify(options.body)
           })
     };
+  }
+
+  private createHeaders(options: HttpRequestOptions): Record<string, string> {
+    const headers: Record<string, string> = {};
+
+    if (options.body !== undefined) {
+      headers["content-type"] = "application/json";
+    }
+
+    if (options.csrf && this.csrf) {
+      const token = (this.csrf.readCookie ?? readDocumentCookie)(this.csrf.cookieName);
+
+      if (token) {
+        headers[this.csrf.headerName] = token;
+      }
+    }
+
+    return headers;
   }
 }
 
@@ -93,4 +122,23 @@ function normalizeBasePath(basePath: string): string {
   const normalized = basePath.trim().replace(/\/+$/, "");
 
   return normalized ? normalized : "/";
+}
+
+function readDocumentCookie(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  for (const cookie of document.cookie.split(";")) {
+    const [rawName, ...rawValueParts] = cookie.split("=");
+
+    if (rawName?.trim() !== name) {
+      continue;
+    }
+
+    const value = rawValueParts.join("=").trim();
+    return value ? decodeURIComponent(value) : null;
+  }
+
+  return null;
 }

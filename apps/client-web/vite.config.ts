@@ -19,7 +19,19 @@ export default defineConfig({
         new URL("../../packages/design-system/src/components/OtpAuthForm/index.ts", import.meta.url)
       ),
       "@elevenhouse/design-system/components/OtpAuthForm.css": fileURLToPath(
-        new URL("../../packages/design-system/src/components/OtpAuthForm/OtpAuthForm.css", import.meta.url)
+        new URL(
+          "../../packages/design-system/src/components/OtpAuthForm/OtpAuthForm.css",
+          import.meta.url
+        )
+      ),
+      "@elevenhouse/design-system/components/OtpCodeForm": fileURLToPath(
+        new URL("../../packages/design-system/src/components/OtpCodeForm/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/OtpCodeForm.css": fileURLToPath(
+        new URL(
+          "../../packages/design-system/src/components/OtpCodeForm/OtpCodeForm.css",
+          import.meta.url
+        )
       ),
       "@elevenhouse/design-system/helpers": fileURLToPath(
         new URL("../../packages/design-system/src/helpers/index.ts", import.meta.url)

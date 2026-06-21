@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import type { AuthenticatedCustomerAccountResponse } from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { application } from "../../../Application";
+import { HttpError } from "../../../common/http/HttpError";
 import { authQueryKeys } from "./authQueryKeys";
 import { currentAccountQueryOptions } from "./useCurrentAccountQuery";
 import { logoutMutationOptions } from "./useLogoutMutation";
@@ -29,6 +30,16 @@ describe("auth queries", () => {
 
     expect(options.queryKey).toEqual(authQueryKeys.currentAccount());
     await expect(options.queryFn()).resolves.toEqual(accountResponse);
+  });
+
+  it("does not retry unauthorized current account requests", () => {
+    const options = currentAccountQueryOptions();
+
+    expect(
+      options.retry(0, new HttpError(401, { message: "Valid public session is required" }))
+    ).toBe(false);
+    expect(options.retry(0, new Error("network failed"))).toBe(true);
+    expect(options.retry(2, new Error("network failed"))).toBe(false);
   });
 
   it("clears the cached current account after logout succeeds", async () => {
