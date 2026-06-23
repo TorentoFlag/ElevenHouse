@@ -7,6 +7,11 @@ import { ArrowLeft } from "../../icons/ArrowLeft/index.js";
 import { Refresh } from "../../icons/Refresh/index.js";
 import { OtpCodeForm } from "./OtpCodeForm.js";
 
+vi.mock("react", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react")>()),
+  useCallback: (callback: unknown) => callback
+}));
+
 const otpCodeFormCss = readFileSync(new URL("./OtpCodeForm.css", import.meta.url), "utf8");
 
 describe("OtpCodeForm", () => {
@@ -21,7 +26,6 @@ describe("OtpCodeForm", () => {
       copy: {
         title: "Введите код",
         description: "Мы отправили код на c***@example.com",
-        helpText: "Код обычно приходит в течение 30 секунд",
         codeLabel: "Код",
         codePlaceholder: "000000",
         submitLabel: "Продолжить",
@@ -45,13 +49,15 @@ describe("OtpCodeForm", () => {
       form,
       "ehOtpCodeForm__changeIdentifier"
     );
+    const title = findElementByClassName(form, "ehOtpCodeForm__title");
     const resendButton = findElementByClassName(form, "ehOtpCodeForm__resend");
     const submitButton = findElementByClassName(form, "ehOtpCodeForm__submit");
 
     expect(serializedForm).toContain("Введите код");
     expect(serializedForm).toContain("c***@example.com");
-    expect(serializedForm).toContain("Код обычно приходит в течение 30 секунд");
     expect(serializedForm).toContain("Проверьте SMS или сообщения в приложении");
+    expect(serializedForm).not.toContain("Код обычно приходит в течение 30 секунд");
+    expect(title?.type).toBe("p");
     expect(codeInput?.props?.value).toBe("123456");
     expect(digitGroup).not.toBeNull();
     expect(digitCells).toHaveLength(6);
@@ -96,8 +102,8 @@ describe("OtpCodeForm", () => {
       type: Refresh,
       props: {
         className: "ehOtpCodeForm__resendIcon",
-        width: 26,
-        height: 26,
+        width: 20,
+        height: 20,
         "aria-hidden": true
       }
     });
@@ -106,10 +112,28 @@ describe("OtpCodeForm", () => {
     expect(onSubmit).toHaveBeenCalledWith("123456");
   });
 
+  it("submits automatically when code input reaches six digits", () => {
+    const onSubmit = vi.fn();
+    const form = OtpCodeForm({
+      code: "12345",
+      maskedIdentifier: "c***@example.com",
+      onBack: vi.fn(),
+      onCodeChange: vi.fn(),
+      onResend: vi.fn(),
+      onSubmit
+    });
+
+    const codeInput = findElementByProp(form, "name", "otp-code");
+
+    codeInput?.props?.onChange?.({ currentTarget: { value: "123456" } });
+
+    expect(onSubmit).toHaveBeenCalledWith("123456");
+  });
+
   it("renders error and disables actions while submitting", () => {
     const form = OtpCodeForm({
       code: "123",
-      maskedIdentifier: "+79***22",
+      maskedIdentifier: "+7******22",
       error: "Неверный код",
       isSubmitting: true,
       onBack: vi.fn(),
@@ -125,6 +149,38 @@ describe("OtpCodeForm", () => {
     expect(serializedForm).toContain("Неверный код");
     expect(submitButton?.props?.disabled).toBe(true);
     expect(resendButton?.props?.disabled).toBe(true);
+  });
+
+  it("renders resend cooldown text on the right side of the resend row", () => {
+    const form = OtpCodeForm({
+      code: "",
+      maskedIdentifier: "c***@example.com",
+      resendCooldownLabel: "Повторно через 0:42",
+      onBack: vi.fn(),
+      onCodeChange: vi.fn(),
+      onResend: vi.fn(),
+      onSubmit: vi.fn()
+    });
+
+    const cooldown = findElementByClassName(form, "ehOtpCodeForm__resendCooldown");
+
+    expect(cooldown?.props?.children).toBe("Повторно через 0:42");
+    expect(getCssRule(".ehOtpCodeForm__resendCooldown")).toContain(
+      "font-size: var(--eh-font-size-13);"
+    );
+  });
+
+  it("omits resend cooldown text when there is no cooldown", () => {
+    const form = OtpCodeForm({
+      code: "",
+      maskedIdentifier: "c***@example.com",
+      onBack: vi.fn(),
+      onCodeChange: vi.fn(),
+      onResend: vi.fn(),
+      onSubmit: vi.fn()
+    });
+
+    expect(findElementByClassName(form, "ehOtpCodeForm__resendCooldown")).toBeNull();
   });
 
   it("renders empty digit cells without placeholder zeroes", () => {
@@ -150,23 +206,97 @@ describe("OtpCodeForm", () => {
     ]);
   });
 
+  it("allows the back icon size to be increased while keeping the default size", () => {
+    const defaultForm = OtpCodeForm({
+      code: "",
+      maskedIdentifier: "c***@example.com",
+      onBack: vi.fn(),
+      onCodeChange: vi.fn(),
+      onResend: vi.fn(),
+      onSubmit: vi.fn()
+    });
+    const largerForm = OtpCodeForm({
+      code: "",
+      maskedIdentifier: "c***@example.com",
+      backIconSize: 24,
+      onBack: vi.fn(),
+      onCodeChange: vi.fn(),
+      onResend: vi.fn(),
+      onSubmit: vi.fn()
+    });
+
+    const defaultBackButton = findElementByClassName(defaultForm, "ehOtpCodeForm__back");
+    const largerBackButton = findElementByClassName(largerForm, "ehOtpCodeForm__back");
+
+    expect(defaultBackButton?.props?.startIcon).toMatchObject({
+      props: {
+        width: 18,
+        height: 18
+      }
+    });
+    expect(defaultBackButton?.props?.style).toBeUndefined();
+    expect(largerBackButton?.props?.startIcon).toMatchObject({
+      props: {
+        width: 24,
+        height: 24
+      }
+    });
+    expect(largerBackButton?.props?.style).toEqual({
+      "--eh-otp-code-form-back-icon-size": "24px"
+    });
+    expect(getCssRule(".ehOtpCodeForm__back")).toContain(
+      "--eh-otp-code-form-back-icon-size: 18px;"
+    );
+    expect(getCssRule(".ehOtpCodeForm__backIcon")).toContain(
+      "width: var(--eh-otp-code-form-back-icon-size);"
+    );
+    expect(getCssRule(".ehOtpCodeForm__back .ehButton__icon svg")).toContain(
+      "width: var(--eh-otp-code-form-back-icon-size);"
+    );
+  });
+
   it("uses muted reference typography for the resend action", () => {
     expect(getCssRule(".ehOtpCodeForm__resend")).toContain("color: var(--eh-color-moon-500);");
     expect(getCssRule(".ehOtpCodeForm__resend")).toContain(
-      "font-size: var(--eh-font-size-23);"
+      "font-size: var(--eh-font-size-15);"
     );
     expect(getCssRule(".ehOtpCodeForm__resend")).toContain("font-weight: 400;");
     expect(getCssRule(".ehOtpCodeForm__resend")).toContain(
       "line-height: var(--eh-line-height-120);"
     );
-    expect(getCssRule(".ehOtpCodeForm__resend.ehButton")).toContain("gap: var(--eh-space-16);");
+    expect(getCssRule(".ehOtpCodeForm__resend.ehButton")).toContain("gap: var(--eh-space-10);");
+    expect(getCssRule(".ehOtpCodeForm__resendIcon")).toContain("width: 20px;");
+    expect(getCssRule(".ehOtpCodeForm__resend .ehButton__icon svg")).toContain("width: 20px;");
     expect(getCssRule(".ehOtpCodeForm__resend.ehButton:hover:not(:disabled)")).toContain(
       "color: var(--eh-color-moon-300);"
     );
   });
 
-  it("uses medium title weight for the code form heading", () => {
-    expect(getCssRule(".ehOtpCodeForm__title")).toContain("font-weight: 500;");
+  it("uses the registration form title styling for the code form title", () => {
+    expect(getCssRule(".ehOtpCodeForm__title")).toContain("margin: 0 0 var(--eh-space-6);");
+    expect(getCssRule(".ehOtpCodeForm__title")).toContain("color: var(--eh-color-moon-100);");
+    expect(getCssRule(".ehOtpCodeForm__title")).toContain(
+      "font-size: var(--eh-font-size-23);"
+    );
+    expect(getCssRule(".ehOtpCodeForm__title")).toContain(
+      "font-weight: var(--eh-font-weight-bold);"
+    );
+    expect(getCssRule(".ehOtpCodeForm__title")).toContain(
+      "line-height: var(--eh-line-height-120);"
+    );
+    expect(otpCodeFormCss).not.toContain("font-size: 22px;");
+  });
+
+  it("uses the registration form description typography for code form helper copy", () => {
+    expect(getCssRule(".ehOtpCodeForm__description")).toContain(
+      "color: var(--eh-color-muted);"
+    );
+    expect(getCssRule(".ehOtpCodeForm__description")).toContain(
+      "font-size: var(--eh-font-size-13-5);"
+    );
+    expect(getCssRule(".ehOtpCodeForm__description")).toContain(
+      "line-height: var(--eh-line-height-140);"
+    );
   });
 });
 

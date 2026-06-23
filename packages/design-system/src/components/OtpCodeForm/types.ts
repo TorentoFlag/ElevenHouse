@@ -3,7 +3,6 @@ import type { Ref } from "react";
 export type OtpCodeFormCopy = {
   readonly title: string;
   readonly description: string;
-  readonly helpText: string;
   readonly codeLabel: string;
   readonly codePlaceholder: string;
   readonly submitLabel: string;
@@ -19,6 +18,8 @@ export type OtpCodeFormProps = {
   readonly className?: string;
   readonly copy?: Partial<OtpCodeFormCopy>;
   readonly error?: string | null;
+  readonly backIconSize?: number;
+  readonly resendCooldownLabel?: string | null;
   readonly isResendDisabled?: boolean;
   readonly isSubmitting?: boolean;
   readonly codeInputRef?: Ref<HTMLInputElement>;

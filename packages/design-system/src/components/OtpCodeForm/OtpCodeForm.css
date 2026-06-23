@@ -15,6 +15,8 @@
 }
 
 .ehOtpCodeForm__back {
+  --eh-otp-code-form-back-icon-size: 18px;
+
   width: 44px;
   height: 44px;
   display: grid;
@@ -40,8 +42,13 @@
 }
 
 .ehOtpCodeForm__back .ehButton__icon svg {
-  width: 18px;
-  height: 18px;
+  width: var(--eh-otp-code-form-back-icon-size);
+  height: var(--eh-otp-code-form-back-icon-size);
+}
+
+.ehOtpCodeForm__backIcon {
+  width: var(--eh-otp-code-form-back-icon-size);
+  height: var(--eh-otp-code-form-back-icon-size);
 }
 
 .ehOtpCodeForm__changeIdentifier {
@@ -73,7 +80,7 @@
   background: transparent;
   color: var(--eh-color-moon-500);
   font: inherit;
-  font-size: var(--eh-font-size-23);
+  font-size: var(--eh-font-size-15);
   font-weight: 400;
   line-height: var(--eh-line-height-120);
   cursor: pointer;
@@ -81,7 +88,7 @@
 
 .ehOtpCodeForm__resend.ehButton {
   height: auto;
-  gap: var(--eh-space-16);
+  gap: var(--eh-space-10);
   padding: 0;
   border-radius: 0;
 }
@@ -99,35 +106,28 @@
 }
 
 .ehOtpCodeForm__resendIcon {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
 }
 
 .ehOtpCodeForm__resend .ehButton__icon svg {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
 }
 
 .ehOtpCodeForm__title {
-  margin: 0;
-  color: var(--eh-color-white);
-  font-size: var(--eh-length-38);
-  font-weight: 500;
-  line-height: var(--eh-line-height-110);
+  margin: 0 0 var(--eh-space-6);
+  color: var(--eh-color-moon-100);
+  font-size: var(--eh-font-size-23);
+  font-weight: var(--eh-font-weight-bold);
+  line-height: var(--eh-line-height-120);
 }
 
 .ehOtpCodeForm__description {
   margin: calc(var(--eh-space-8) * -1) 0 0;
-  color: var(--eh-color-moon-300);
-  font-size: 18px;
-  line-height: var(--eh-line-height-140);
-}
-
-.ehOtpCodeForm__help {
-  margin: var(--eh-space-4) 0 26px;
-  color: var(--eh-color-moon-500);
-  font-size: var(--eh-font-size-15);
+  color: var(--eh-color-muted);
+  font-size: var(--eh-font-size-13-5);
   line-height: var(--eh-line-height-140);
 }
 
@@ -202,10 +202,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--eh-space-16);
   margin-top: 32px;
   padding: var(--eh-space-18) 0;
   border-top: 1px solid rgb(216 212 236 / 0.12);
   border-bottom: 1px solid rgb(216 212 236 / 0.12);
+}
+
+.ehOtpCodeForm__resendCooldown {
+  min-width: fit-content;
+  color: var(--eh-color-moon-500);
+  font-size: var(--eh-font-size-13);
+  font-weight: 500;
+  line-height: var(--eh-line-height-120);
+  text-align: right;
 }
 
 .ehOtpCodeForm__deliveryHint {
@@ -233,10 +243,6 @@
 @media (max-width: 560px) {
   .ehOtpCodeForm {
     min-height: min(100%, 560px);
-  }
-
-  .ehOtpCodeForm__title {
-    font-size: var(--eh-length-32);
   }
 
   .ehOtpCodeForm__digitGroup {

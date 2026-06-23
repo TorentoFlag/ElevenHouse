@@ -1,4 +1,4 @@
-import type { ChangeEvent } from "react";
+import { useCallback, type ChangeEvent, type CSSProperties } from "react";
 import { classNames } from "../../helpers/classNames.js";
 import { ArrowLeft } from "../../icons/ArrowLeft/index.js";
 import { Refresh } from "../../icons/Refresh/index.js";
@@ -12,6 +12,8 @@ export function OtpCodeForm({
   className,
   copy,
   error,
+  backIconSize,
+  resendCooldownLabel,
   isResendDisabled = false,
   isSubmitting = false,
   codeInputRef,
@@ -24,10 +26,26 @@ export function OtpCodeForm({
   const text = { ...defaultCopy, ...copy };
   const description = text.description.replace("{identifier}", maskedIdentifier);
   const digits = Array.from({ length: 6 }, (_, index) => code[index] ?? "");
+  const resolvedBackIconSize = backIconSize ?? 18;
+  const backButtonStyle =
+    backIconSize === undefined
+      ? undefined
+      : ({
+          "--eh-otp-code-form-back-icon-size": `${backIconSize}px`
+        } as CSSProperties);
 
-  function handleCodeChange(event: ChangeEvent<HTMLInputElement>) {
-    onCodeChange(event.currentTarget.value.replace(/\D/g, "").slice(0, 6));
-  }
+  const handleCodeChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const nextCode = event.currentTarget.value.replace(/\D/g, "").slice(0, 6);
+
+      onCodeChange(nextCode);
+
+      if (nextCode.length === 6 && nextCode !== code) {
+        onSubmit(nextCode);
+      }
+    },
+    [code, onCodeChange, onSubmit]
+  );
 
   return (
     <div className={classNames("ehOtpCodeForm", className)}>
@@ -39,12 +57,13 @@ export function OtpCodeForm({
           size="small"
           type="button"
           disabled={isSubmitting}
+          style={backButtonStyle}
           onClick={onBack}
           startIcon={
             <ArrowLeft
               className="ehOtpCodeForm__backIcon"
-              width={18}
-              height={18}
+              width={resolvedBackIconSize}
+              height={resolvedBackIconSize}
               aria-hidden={true}
             />
           }
@@ -60,9 +79,8 @@ export function OtpCodeForm({
         />
       </div>
 
-      <h1 className="ehOtpCodeForm__title">{text.title}</h1>
+      <p className="ehOtpCodeForm__title">{text.title}</p>
       <p className="ehOtpCodeForm__description">{description}</p>
-      <p className="ehOtpCodeForm__help">{text.helpText}</p>
 
       <label className="ehOtpCodeForm__field">
         <span className="ehOtpCodeForm__label">{text.codeLabel}</span>
@@ -116,12 +134,15 @@ export function OtpCodeForm({
           startIcon={
             <Refresh
               className="ehOtpCodeForm__resendIcon"
-              width={26}
-              height={26}
+              width={20}
+              height={20}
               aria-hidden={true}
             />
           }
         />
+        {resendCooldownLabel ? (
+          <span className="ehOtpCodeForm__resendCooldown">{resendCooldownLabel}</span>
+        ) : null}
       </div>
 
       <p className="ehOtpCodeForm__deliveryHint">{text.deliveryHint}</p>
