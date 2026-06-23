@@ -54,6 +54,9 @@ export default defineConfig({
       "@elevenhouse/design-system/icons/Wallet": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Wallet/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/motion": fileURLToPath(
+        new URL("../../packages/design-system/src/motion/index.ts", import.meta.url)
+      ),
       "@elevenhouse/i18n": fileURLToPath(
         new URL("../../packages/i18n/src/index.ts", import.meta.url)
       ),

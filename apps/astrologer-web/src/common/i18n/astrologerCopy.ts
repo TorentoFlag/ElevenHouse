@@ -19,6 +19,9 @@ export type AuthCopy = {
     rateLimited: string;
     generic: string;
   };
+  resendCooldown: {
+    availableIn: string;
+  };
   languageSwitcher: {
     ariaLabel: string;
   };
@@ -124,6 +127,9 @@ export const astrologerCopyByLocale = {
         rateLimited: "Слишком много попыток. Попробуйте позже",
         generic: "Не удалось выполнить запрос. Попробуйте ещё раз"
       },
+      resendCooldown: {
+        availableIn: "Повторно через {time}"
+      },
       languageSwitcher: {
         ariaLabel: "Язык интерфейса"
       }
@@ -206,6 +212,9 @@ export const astrologerCopyByLocale = {
         identityExists: "A workspace with this phone or email already exists",
         rateLimited: "Too many attempts. Try again later",
         generic: "Request failed. Try again"
+      },
+      resendCooldown: {
+        availableIn: "Again in {time}"
       },
       languageSwitcher: {
         ariaLabel: "Interface language"
