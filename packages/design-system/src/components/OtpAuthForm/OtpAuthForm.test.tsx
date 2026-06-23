@@ -132,6 +132,20 @@ describe("OtpAuthForm", () => {
     expect(serializedForm).toContain("+995");
   });
 
+  it("can render email before phone for app-specific auth layouts", () => {
+    const form = OtpAuthForm({
+      mode: "register",
+      values: { email: "", name: "", phone: "" },
+      identifierFieldOrder: "email-phone",
+      onModeChange: vi.fn(),
+      onValuesChange: vi.fn()
+    });
+
+    const serializedForm = JSON.stringify(form.props.children);
+
+    expect(serializedForm.indexOf("email")).toBeLessThan(serializedForm.indexOf("phone"));
+  });
+
   it("calls phone country change callback", () => {
     const onPhoneCountryChange = vi.fn();
     const form = OtpAuthForm({

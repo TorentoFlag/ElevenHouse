@@ -40,6 +40,8 @@ export type OtpAuthPhoneCountryOption = {
 
 export type OtpAuthLocaleSwitcher = LanguageSwitcherProps;
 
+export type OtpAuthIdentifierFieldOrder = "phone-email" | "email-phone";
+
 export type OtpAuthFormProps = {
   mode: OtpAuthFormMode;
   values: OtpAuthFormValues;
@@ -53,6 +55,7 @@ export type OtpAuthFormProps = {
   nameError?: string | null;
   nameInputRef?: Ref<HTMLInputElement>;
   localeSwitcher?: OtpAuthLocaleSwitcher;
+  identifierFieldOrder?: OtpAuthIdentifierFieldOrder;
   phoneCountries?: readonly OtpAuthPhoneCountryOption[];
   phoneCountry?: string;
   phoneDisabled?: boolean;

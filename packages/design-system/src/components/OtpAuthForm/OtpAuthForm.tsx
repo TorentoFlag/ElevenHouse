@@ -17,6 +17,7 @@ export function OtpAuthForm({
   emailDisabled = false,
   emailError,
   emailInputRef,
+  identifierFieldOrder = "phone-email",
   isSubmitting = false,
   localeSwitcher,
   nameError,
@@ -57,6 +58,92 @@ export function OtpAuthForm({
       });
     };
   }
+
+  const phoneField = (
+    <label className="ehOtpAuthForm__field ehOtpAuthForm__field--compact">
+      <span className="ehOtpAuthForm__label">{text.phoneLabel}</span>
+      <span className={phoneControlClassName}>
+        <input
+          className={phoneInputClassName}
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          placeholder={resolvedPhonePlaceholder}
+          value={values.phone}
+          autoComplete="tel"
+          disabled={phoneDisabled}
+          ref={phoneInputRef}
+          aria-invalid={phoneError ? true : undefined}
+          aria-describedby={phoneError ? "eh-otp-auth-phone-error" : undefined}
+          onChange={handleValueChange("phone")}
+          onKeyDown={onPhoneInputKeyDown}
+        />
+        {selectedPhoneCountry && phoneCountries && phoneCountries.length > 0 ? (
+          <span className="ehOtpAuthForm__phoneCountry">
+            <select
+              className="ehOtpAuthForm__phoneCountrySelect"
+              value={selectedPhoneCountry.iso2}
+              aria-label={text.phoneCountryAriaLabel}
+              disabled={phoneDisabled}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+                onPhoneCountryChange?.(event.currentTarget.value);
+              }}
+            >
+              {phoneCountries.map((country) => (
+                <option key={country.iso2} value={country.iso2}>
+                  {country.flag} {country.iso2} +{country.callingCode}
+                </option>
+              ))}
+            </select>
+          </span>
+        ) : null}
+      </span>
+      {phoneError ? (
+        <span className="ehOtpAuthForm__fieldError" id="eh-otp-auth-phone-error">
+          {phoneError}
+        </span>
+      ) : null}
+    </label>
+  );
+
+  const emailField = (
+    <label className="ehOtpAuthForm__field">
+      <span className="ehOtpAuthForm__label">{text.emailLabel}</span>
+      <input
+        className={classNames("ehOtpAuthForm__input", {
+          "ehOtpAuthForm__input--invalid": Boolean(emailError)
+        })}
+        name="email"
+        type="email"
+        placeholder={text.emailPlaceholder}
+        value={values.email}
+        autoComplete="email"
+        disabled={emailDisabled}
+        ref={emailInputRef}
+        aria-invalid={emailError ? true : undefined}
+        aria-describedby={emailError ? "eh-otp-auth-email-error" : undefined}
+        onChange={handleValueChange("email")}
+      />
+      {emailError ? (
+        <span className="ehOtpAuthForm__fieldError" id="eh-otp-auth-email-error">
+          {emailError}
+        </span>
+      ) : null}
+    </label>
+  );
+
+  const identifierFields =
+    identifierFieldOrder === "email-phone" ? (
+      <>
+        {emailField}
+        {phoneField}
+      </>
+    ) : (
+      <>
+        {phoneField}
+        {emailField}
+      </>
+    );
 
   return (
     <div className={rootClassName}>
@@ -125,74 +212,7 @@ export function OtpAuthForm({
             </label>
           ) : null}
 
-          <label className="ehOtpAuthForm__field ehOtpAuthForm__field--compact">
-            <span className="ehOtpAuthForm__label">{text.phoneLabel}</span>
-            <span className={phoneControlClassName}>
-              <input
-                className={phoneInputClassName}
-                name="phone"
-                type="tel"
-                inputMode="tel"
-                placeholder={resolvedPhonePlaceholder}
-                value={values.phone}
-                autoComplete="tel"
-                disabled={phoneDisabled}
-                ref={phoneInputRef}
-                aria-invalid={phoneError ? true : undefined}
-                aria-describedby={phoneError ? "eh-otp-auth-phone-error" : undefined}
-                onChange={handleValueChange("phone")}
-                onKeyDown={onPhoneInputKeyDown}
-              />
-              {selectedPhoneCountry && phoneCountries && phoneCountries.length > 0 ? (
-                <span className="ehOtpAuthForm__phoneCountry">
-                  <select
-                    className="ehOtpAuthForm__phoneCountrySelect"
-                    value={selectedPhoneCountry.iso2}
-                    aria-label={text.phoneCountryAriaLabel}
-                    disabled={phoneDisabled}
-                    onChange={(event: ChangeEvent<HTMLSelectElement>) => {
-                      onPhoneCountryChange?.(event.currentTarget.value);
-                    }}
-                  >
-                    {phoneCountries.map((country) => (
-                      <option key={country.iso2} value={country.iso2}>
-                        {country.flag} {country.iso2} +{country.callingCode}
-                      </option>
-                    ))}
-                  </select>
-                </span>
-              ) : null}
-            </span>
-            {phoneError ? (
-              <span className="ehOtpAuthForm__fieldError" id="eh-otp-auth-phone-error">
-                {phoneError}
-              </span>
-            ) : null}
-          </label>
-
-          <label className="ehOtpAuthForm__field">
-            <span className="ehOtpAuthForm__label">{text.emailLabel}</span>
-            <input
-              className={classNames("ehOtpAuthForm__input", {
-                "ehOtpAuthForm__input--invalid": Boolean(emailError)
-              })}
-              name="email"
-              type="email"
-              placeholder={text.emailPlaceholder}
-              value={values.email}
-              autoComplete="email"
-              disabled={emailDisabled}
-              ref={emailInputRef}
-              aria-invalid={emailError ? true : undefined}
-              aria-describedby={emailError ? "eh-otp-auth-email-error" : undefined}
-              onChange={handleValueChange("email")}
-            />
-            {emailError ? (
-              <span className="ehOtpAuthForm__fieldError" id="eh-otp-auth-email-error">
-                {emailError}
-              </span>
-            ) : null}
-          </label>
+          {identifierFields}
 
           <p className="ehOtpAuthForm__hint">{text.hint}</p>
 

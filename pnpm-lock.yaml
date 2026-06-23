@@ -130,15 +130,30 @@ importers:
 
   apps/astrologer-web:
     dependencies:
+      '@elevenhouse/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@elevenhouse/design-system':
         specifier: workspace:*
         version: link:../../packages/design-system
+      '@elevenhouse/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
+      '@elevenhouse/validation':
+        specifier: workspace:*
+        version: link:../../packages/validation
+      '@tanstack/react-query':
+        specifier: ^5.101.0
+        version: 5.101.0(react@19.2.7)
       react:
         specifier: 19.2.7
         version: 19.2.7
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
+      react-router:
+        specifier: ^8.0.0
+        version: 8.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
     devDependencies:
       '@vitejs/plugin-react':
         specifier: 6.0.2
