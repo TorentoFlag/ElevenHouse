@@ -15,8 +15,8 @@ export function Refresh(props: RefreshProps = {}) {
       strokeLinejoin="round"
       {...props}
     >
-      <path d="M20 7v5h-5" />
-      <path d="M19.2 13A7.8 7.8 0 1 1 17 5.5L20 8.5" />
+      <path d="M21 3v5h-5" />
+      <path d="M20.5 12A8.5 8.5 0 1 1 18 6L21 8" />
     </svg>
   );
 }

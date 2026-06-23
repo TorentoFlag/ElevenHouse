@@ -3,11 +3,14 @@ import type { Ref } from "react";
 export type OtpCodeFormCopy = {
   readonly title: string;
   readonly description: string;
+  readonly helpText: string;
   readonly codeLabel: string;
   readonly codePlaceholder: string;
   readonly submitLabel: string;
   readonly backLabel: string;
+  readonly changeIdentifierLabel: string;
   readonly resendLabel: string;
+  readonly deliveryHint: string;
 };
 
 export type OtpCodeFormProps = {

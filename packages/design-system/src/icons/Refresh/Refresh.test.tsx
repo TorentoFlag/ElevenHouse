@@ -15,9 +15,7 @@ describe("Refresh", () => {
     expect(icon.props.strokeLinecap).toBe("round");
     expect(icon.props.strokeLinejoin).toBe("round");
     expect(icon.props.children).toHaveLength(2);
-    expect(icon.props.children[0].props.d).toBe("M20 7v5h-5");
-    expect(icon.props.children[1].props.d).toBe(
-      "M19.2 13A7.8 7.8 0 1 1 17 5.5L20 8.5"
-    );
+    expect(icon.props.children[0].props.d).toBe("M21 3v5h-5");
+    expect(icon.props.children[1].props.d).toBe("M20.5 12A8.5 8.5 0 1 1 18 6L21 8");
   });
 });
