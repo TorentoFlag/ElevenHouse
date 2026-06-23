@@ -120,7 +120,42 @@ describe("requestPasswordlessCode", () => {
       expiresAt: "2026-06-15T10:10:00.000Z",
       resendAvailableAt: "2026-06-15T10:01:00.000Z"
     });
-    expect(result.maskedIdentifier).toBe("+15***90");
+    expect(result.maskedIdentifier).toBe("+1******90");
+  });
+
+  it("masks Russian phone identifiers without exposing the first local digit", async () => {
+    const encryption = createTestEncryption();
+    const store = {
+      findPendingChallengeByIdentifier: vi.fn(async () => null),
+      findLatestDeliveryByChallengeId: vi.fn(async () => null),
+      createChallenge: vi.fn(async (input) => ({
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        ...input,
+        status: "pending" as const,
+        attempts: 0,
+        createdAt: "2026-06-15T10:00:00.000Z",
+        updatedAt: "2026-06-15T10:00:00.000Z"
+      })),
+      recordDelivery: vi.fn(async (input) => ({ id: "delivery_1", ...input })),
+      recordAuthCodeDeliveryRequested: vi.fn(async () => undefined),
+      cancelChallenge: vi.fn()
+    };
+
+    const result = await requestPasswordlessCode({
+      store,
+      encryption,
+      channel: "phone",
+      identifier: "+7 999 888-77-66",
+      roles: ["client"],
+      code: "123456",
+      codeSecret: "test-secret",
+      now: new Date("2026-06-15T10:00:00.000Z"),
+      ttlSeconds: 600,
+      resendCooldownSeconds: 60,
+      maxAttempts: 5
+    });
+
+    expect(result.maskedIdentifier).toBe("+7******66");
   });
 
   it("rejects a duplicate request while an existing pending challenge is in resend cooldown", async () => {

@@ -98,7 +98,7 @@ export function maskPasswordlessIdentifier(input: {
     return `${local.slice(0, 1) || "*"}***@${domain}`;
   }
 
-  return `${input.identifierNormalized.slice(0, 3)}***${input.identifierNormalized.slice(-2)}`;
+  return `${input.identifierNormalized.slice(0, 2)}******${input.identifierNormalized.slice(-2)}`;
 }
 
 export function normalizeRequestedCustomerRoles(
