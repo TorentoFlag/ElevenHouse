@@ -19,6 +19,9 @@ export type AuthCopy = {
     rateLimited: string;
     generic: string;
   };
+  resendCooldown: {
+    availableIn: string;
+  };
   languageSwitcher: {
     ariaLabel: string;
   };
@@ -105,7 +108,6 @@ export const clientCopyByLocale = {
       codeForm: {
         title: "Введите код",
         description: "Мы отправили код на {identifier}",
-        helpText: "Код обычно приходит в течение 30 секунд",
         codeLabel: "Код из сообщения",
         codePlaceholder: "000000",
         submitLabel: "Продолжить",
@@ -124,6 +126,9 @@ export const clientCopyByLocale = {
         identityExists: "Аккаунт с этим телефоном или email уже существует",
         rateLimited: "Слишком много попыток. Попробуйте позже",
         generic: "Не удалось выполнить запрос. Попробуйте ещё раз"
+      },
+      resendCooldown: {
+        availableIn: "Повторно через {time}"
       },
       languageSwitcher: {
         ariaLabel: "Язык интерфейса"
@@ -189,7 +194,6 @@ export const clientCopyByLocale = {
       codeForm: {
         title: "Enter code",
         description: "We sent a code to {identifier}",
-        helpText: "The code usually arrives within 30 seconds",
         codeLabel: "Message code",
         codePlaceholder: "000000",
         submitLabel: "Continue",
@@ -208,6 +212,9 @@ export const clientCopyByLocale = {
         identityExists: "An account with this phone or email already exists",
         rateLimited: "Too many attempts. Try again later",
         generic: "Request failed. Try again"
+      },
+      resendCooldown: {
+        availableIn: "Again in {time}"
       },
       languageSwitcher: {
         ariaLabel: "Interface language"

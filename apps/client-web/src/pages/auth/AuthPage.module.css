@@ -54,6 +54,16 @@
     linear-gradient(180deg, var(--eh-color-night-940) 0%, var(--eh-color-night-960) 100%);
 }
 
+.authStepMotionFrame {
+  width: min(100%, var(--eh-length-420));
+}
+
+.authStepMotionContent {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+}
+
 .visualContent {
   position: relative;
   z-index: 1;
