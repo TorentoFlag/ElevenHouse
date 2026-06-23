@@ -20,9 +20,9 @@ import type {
   VerifyPasswordlessCodeRequest,
   VerifyPasswordlessCodeResponse
 } from "@elevenhouse/contracts";
+import { SystemClock } from "../../../common/system-clock.js";
 import {
   PublicSessionTokenIssuer,
-  SystemClock,
   type IssuedSessionToken
 } from "../session/identity-session.service";
 import {

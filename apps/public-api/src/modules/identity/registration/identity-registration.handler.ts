@@ -4,10 +4,10 @@ import {
   verifyPasswordlessCodeAndRegisterCustomerAccountWithSession
 } from "@elevenhouse/domain";
 import type { VerifyRegistrationPasswordlessCodeResponse } from "@elevenhouse/contracts";
+import { SystemClock } from "../../../common/system-clock.js";
 import type { PasswordlessAuthOptions } from "../passwordless/identity-passwordless.handler";
 import {
   PublicSessionTokenIssuer,
-  SystemClock,
   type IssuedSessionToken
 } from "../session/identity-session.service";
 import {

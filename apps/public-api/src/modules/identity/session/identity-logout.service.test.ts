@@ -3,7 +3,7 @@ import { hashSessionToken } from "@elevenhouse/auth";
 import type { AuthSessionRevocationUnitOfWork } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import { IdentityLogoutService } from "./identity-logout.service";
-import type { SystemClock } from "./identity-session.service";
+import type { SystemClock } from "../../../common/system-clock.js";
 
 function createService(revocation: AuthSessionRevocationUnitOfWork): IdentityLogoutService {
   const clock: SystemClock = {

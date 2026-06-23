@@ -2,6 +2,7 @@ import { ConfigService } from "@nestjs/config";
 import { describe, expect, it, vi } from "vitest";
 import { PublicSessionCookieService } from "./identity-session.service";
 import type { PublicCsrfTokenService } from "../../security/csrf/public-csrf-token.service";
+import type { SystemClock } from "../../../common/system-clock.js";
 
 function createCsrfTokenService(): PublicCsrfTokenService {
   return {
@@ -11,6 +12,14 @@ function createCsrfTokenService(): PublicCsrfTokenService {
 }
 
 describe("PublicSessionCookieService", () => {
+  const now = new Date("2026-06-16T10:00:00.000Z");
+
+  function createClock(): SystemClock {
+    return {
+      now: vi.fn(() => now)
+    };
+  }
+
   it("sets the public session cookie with security options from runtime config", () => {
     const csrfTokenService = createCsrfTokenService();
     const configService = {
@@ -33,7 +42,11 @@ describe("PublicSessionCookieService", () => {
     const response = {
       cookie: vi.fn()
     };
-    const service = new PublicSessionCookieService(configService, csrfTokenService);
+    const service = new PublicSessionCookieService(
+      configService,
+      csrfTokenService,
+      createClock()
+    );
 
     service.setSessionCookie(response, {
       token: "raw-session-token",
@@ -55,7 +68,8 @@ describe("PublicSessionCookieService", () => {
     expect(csrfTokenService.setCsrfCookie).toHaveBeenCalledWith({
       response,
       sessionToken: "raw-session-token",
-      sessionExpiresAt: "2026-06-21T10:00:00.000Z"
+      sessionExpiresAt: "2026-06-21T10:00:00.000Z",
+      now
     });
   });
 
@@ -81,7 +95,11 @@ describe("PublicSessionCookieService", () => {
     const response = {
       cookie: vi.fn()
     };
-    const service = new PublicSessionCookieService(configService, csrfTokenService);
+    const service = new PublicSessionCookieService(
+      configService,
+      csrfTokenService,
+      createClock()
+    );
 
     service.setSessionCookie(response, {
       token: "raw-session-token",
@@ -103,25 +121,30 @@ describe("PublicSessionCookieService", () => {
     expect(csrfTokenService.setCsrfCookie).toHaveBeenCalledWith({
       response,
       sessionToken: "raw-session-token",
-      sessionExpiresAt: "2026-06-21T10:00:00.000Z"
+      sessionExpiresAt: "2026-06-21T10:00:00.000Z",
+      now
     });
   });
 
   it("clears the public session cookie", () => {
     const csrfTokenService = createCsrfTokenService();
-    const service = new PublicSessionCookieService({
-      getOrThrow: (key: string) => {
-        if (key === "publicApi.sessionCookieSecure") {
-          return false;
-        }
+    const service = new PublicSessionCookieService(
+      {
+        getOrThrow: (key: string) => {
+          if (key === "publicApi.sessionCookieSecure") {
+            return false;
+          }
 
-        if (key === "publicApi.sessionCookieName") {
-          return "elevenhouse_public_session";
-        }
+          if (key === "publicApi.sessionCookieName") {
+            return "elevenhouse_public_session";
+          }
 
-        throw new Error(`Unexpected config key: ${key}`);
-      }
-    } as unknown as ConfigService, csrfTokenService);
+          throw new Error(`Unexpected config key: ${key}`);
+        }
+      } as unknown as ConfigService,
+      csrfTokenService,
+      createClock()
+    );
     const response = {
       cookie: vi.fn()
     };

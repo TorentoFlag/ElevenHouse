@@ -20,7 +20,8 @@ import {
 import { PUBLIC_AUTH_CODE_GENERATOR } from "./passwordless/identity-passwordless.handler";
 import { allowAllPasswordlessRateLimiter } from "./testing/allow-all-passwordless-rate-limiter";
 import { IdentityCurrentSessionService } from "./session/identity-current-session.service";
-import { PublicSessionTokenIssuer, SystemClock } from "./session/identity-session.service";
+import { SystemClock } from "../../common/system-clock.js";
+import { PublicSessionTokenIssuer } from "./session/identity-session.service";
 
 describe("IdentityModule", () => {
   afterEach(() => {

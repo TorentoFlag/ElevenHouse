@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Reflector } from "@nestjs/core";
+import { SystemClock } from "../../../common/system-clock.js";
 import { csrfRequiredMetadataKey } from "../route-policy/route-security-metadata";
 import { PublicCsrfTokenService, type CsrfRequest } from "./public-csrf-token.service";
 
@@ -13,7 +14,8 @@ export class CsrfGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly csrfTokenService: PublicCsrfTokenService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly clock: SystemClock
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -38,7 +40,8 @@ export class CsrfGuard implements CanActivate {
 
     this.csrfTokenService.assertValidRequest({
       request,
-      sessionToken
+      sessionToken,
+      now: this.clock.now()
     });
 
     return true;

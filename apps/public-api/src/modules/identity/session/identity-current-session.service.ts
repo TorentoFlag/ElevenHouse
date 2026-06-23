@@ -9,8 +9,8 @@ import {
   authenticatedCustomerAccountResponseSchema,
   type AuthenticatedCustomerAccountResponse
 } from "@elevenhouse/contracts";
+import { SystemClock } from "../../../common/system-clock.js";
 import { AUTH_SESSION_AUTHENTICATION_STORE } from "../auth/identity-auth.tokens";
-import { SystemClock } from "./identity-session.service";
 
 export type PublicSessionRequest = {
   readonly headers: {

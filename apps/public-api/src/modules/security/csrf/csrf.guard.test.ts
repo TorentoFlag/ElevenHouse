@@ -34,7 +34,10 @@ function createGuard(input: {
 
         throw new Error(`Unexpected config key: ${key}`);
       })
-    } as unknown as ConfigService
+    } as unknown as ConfigService,
+    {
+      now: vi.fn(() => new Date("2026-06-16T10:00:00.000Z"))
+    }
   );
 }
 
@@ -65,7 +68,8 @@ describe("CsrfGuard", () => {
           cookie: "elevenhouse_public_session=raw-session-token"
         }
       },
-      sessionToken: "raw-session-token"
+      sessionToken: "raw-session-token",
+      now: new Date("2026-06-16T10:00:00.000Z")
     });
   });
 });

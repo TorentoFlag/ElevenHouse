@@ -6,7 +6,7 @@ import type {
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import { IdentityCurrentSessionService } from "./identity-current-session.service";
-import type { SystemClock } from "./identity-session.service";
+import type { SystemClock } from "../../../common/system-clock.js";
 
 function createService(
   store: AuthSessionAuthenticationStore,

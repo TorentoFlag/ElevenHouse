@@ -20,7 +20,7 @@ import {
   PASSWORDLESS_AUTH_UNIT_OF_WORK,
   PASSWORDLESS_RATE_LIMITER
 } from "./identity-passwordless.tokens";
-import { SystemClock } from "../session/identity-session.service";
+import { SystemClock } from "../../../common/system-clock.js";
 import { createIdentityConfigServiceStub } from "../testing/identity-config-service.stub";
 import {
   InMemoryPasswordlessAuthStore,
@@ -229,7 +229,7 @@ describe("passwordless public auth HTTP flow", () => {
     expect(requestResponse.status).toBe(201);
     expect(requestResponse.body).toMatchObject({
       channel: "phone",
-      maskedIdentifier: "+15***90"
+      maskedIdentifier: "+1******90"
     });
 
     const verifyResponse = await postJson("/identity/passwordless/verify-code", {

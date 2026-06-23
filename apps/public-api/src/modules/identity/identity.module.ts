@@ -50,8 +50,7 @@ import {
 } from "./registration/identity-registration.tokens";
 import {
   PublicSessionCookieService,
-  PublicSessionTokenIssuer,
-  SystemClock
+  PublicSessionTokenIssuer
 } from "./session/identity-session.service";
 
 @Module({
@@ -70,7 +69,6 @@ import {
     PublicSessionAuthGuard,
     PublicSessionTokenIssuer,
     PublicSessionCookieService,
-    SystemClock,
     DomainPasswordlessAuthHandler,
     DomainRegistrationHandler,
     {
