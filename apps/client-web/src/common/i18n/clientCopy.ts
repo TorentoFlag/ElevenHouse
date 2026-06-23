@@ -105,14 +105,11 @@ export const clientCopyByLocale = {
       codeForm: {
         title: "Введите код",
         description: "Мы отправили код на {identifier}",
-        helpText: "Код обычно приходит в течение 30 секунд",
         codeLabel: "Код из сообщения",
         codePlaceholder: "000000",
         submitLabel: "Продолжить",
         backLabel: "Изменить данные",
-        changeIdentifierLabel: "Изменить контакт",
-        resendLabel: "Отправить повторно",
-        deliveryHint: "Проверьте SMS или сообщения в приложении"
+        resendLabel: "Отправить повторно"
       },
       validation: {
         email: "Введите корректный email",
@@ -189,14 +186,11 @@ export const clientCopyByLocale = {
       codeForm: {
         title: "Enter code",
         description: "We sent a code to {identifier}",
-        helpText: "The code usually arrives within 30 seconds",
         codeLabel: "Message code",
         codePlaceholder: "000000",
         submitLabel: "Continue",
         backLabel: "Change details",
-        changeIdentifierLabel: "Change contact",
-        resendLabel: "Send again",
-        deliveryHint: "Check SMS or app messages"
+        resendLabel: "Send again"
       },
       validation: {
         email: "Enter a valid email",
