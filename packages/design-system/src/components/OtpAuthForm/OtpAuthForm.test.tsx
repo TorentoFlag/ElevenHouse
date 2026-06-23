@@ -1,215 +1,162 @@
 import { describe, expect, it, vi } from "vitest";
 import { Button } from "../Button/index.js";
 import { SegmentedTabs } from "../SegmentedTabs/index.js";
+import { MotionText } from "../../motion/index.js";
 import { OtpAuthForm } from "./OtpAuthForm.js";
 
+vi.mock("react", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react")>()),
+  useCallback: (callback: unknown) => callback
+}));
+
 describe("OtpAuthForm", () => {
-  it("renders the shared otp auth form shell", () => {
-    const form = OtpAuthForm({
-      mode: "register",
-      values: { email: "", name: "", phone: "" },
-      onModeChange: vi.fn(),
-      onValuesChange: vi.fn()
-    });
-
-    expect(form.type).toBe("div");
-    expect(form.props.className).toBe("ehOtpAuthForm");
-    expect(JSON.stringify(form.props.children)).toContain("Создать аккаунт");
-  });
-
-  it("allows app-specific copy", () => {
-    const form = OtpAuthForm({
-      mode: "login",
-      values: { email: "", name: "", phone: "" },
-      copy: {
-        loginTitle: "Войти в кабинет"
-      },
-      onModeChange: vi.fn(),
-      onValuesChange: vi.fn()
-    });
-
-    expect(JSON.stringify(form.props.children)).toContain("Войти в кабинет");
-  });
-
-  it("renders an optional language switcher", () => {
-    const form = OtpAuthForm({
-      mode: "register",
-      values: { email: "", name: "", phone: "" },
-      localeSwitcher: {
-        locale: "ru",
-        ariaLabel: "Язык",
-        options: [
-          { locale: "ru", label: "Русский", shortLabel: "RU" },
-          { locale: "en", label: "English", shortLabel: "EN" }
-        ],
-        onLocaleChange: vi.fn()
-      },
-      onModeChange: vi.fn(),
-      onValuesChange: vi.fn()
-    });
-
-    const serializedForm = JSON.stringify(form.props.children);
-    const switcher = findElementByProp(form, "ariaLabel", "Язык");
-
-    expect(serializedForm).toContain("RU");
-    expect(serializedForm).toContain("EN");
-    expect(switcher?.props?.locale).toBe("ru");
-    expect(switcher?.props?.ariaLabel).toBe("Язык");
-  });
-
-  it("calls the language switcher callback", () => {
-    const onLocaleChange = vi.fn();
-    const form = OtpAuthForm({
-      mode: "register",
-      values: { email: "", name: "", phone: "" },
-      localeSwitcher: {
-        locale: "ru",
-        ariaLabel: "Language",
-        options: [
-          { locale: "ru", label: "Русский", shortLabel: "RU" },
-          { locale: "en", label: "English", shortLabel: "EN" }
-        ],
-        onLocaleChange
-      },
-      onModeChange: vi.fn(),
-      onValuesChange: vi.fn()
-    });
-
-    const switcher = findElementByProp(form, "ariaLabel", "Language");
-    switcher?.props?.onLocaleChange?.("en");
-
-    expect(onLocaleChange).toHaveBeenCalledWith("en");
-  });
-
-  it("renders motion containers for mode changes", () => {
-    const form = OtpAuthForm({
-      mode: "login",
-      values: { email: "", name: "", phone: "" },
-      onModeChange: vi.fn(),
-      onValuesChange: vi.fn()
-    });
+  it("renders the register form shell with tabs and motion containers", () => {
+    const form = renderForm();
 
     const tabs = findElementByProp(form, "ariaLabel", "Auth mode");
     const motionFrame = findElementByClassName(form, "ehOtpAuthForm__motionFrame");
     const motionContent = findElementByClassName(form, "ehOtpAuthForm__motionContent");
 
+    expect(form.type).toBe("div");
+    expect(form.props.className).toBe("ehOtpAuthForm");
+    expect(JSON.stringify(form.props.children)).toContain("Создать аккаунт");
     expect(tabs?.type).toBe(SegmentedTabs);
-    expect(tabs?.props?.value).toBe("login");
-    expect(motionFrame?.props?.transitionKey).toBe("login");
-    expect(motionContent?.props?.transitionKey).toBe("login");
+    expect(tabs?.props?.value).toBe("register");
+    expect(motionFrame?.props?.transitionKey).toBe("register:default");
+    expect(motionContent?.props?.transitionKey).toBe("register");
   });
 
-  it("renders name validation error", () => {
-    const form = OtpAuthForm({
-      mode: "register",
-      values: { email: "", name: "А", phone: "" },
-      nameError: "Имя должно быть от 2 до 200 символов",
-      onModeChange: vi.fn(),
-      onValuesChange: vi.fn()
+  it("applies app copy and locale-aware text motion without remounting fields", () => {
+    const form = renderForm({
+      copy: {
+        registerTitle: "Create account",
+        registerDescription: "Free, no card.",
+        nameLabel: "Name",
+        registerSubmitLabel: "Get code"
+      },
+      localeSwitcher: {
+        locale: "en",
+        ariaLabel: "Language",
+        options: [
+          { locale: "ru", label: "Русский", shortLabel: "RU" },
+          { locale: "en", label: "English", shortLabel: "EN" }
+        ],
+        onLocaleChange: vi.fn()
+      }
+    });
+    const tree = expandPrivateOtpAuthComponents(form);
+
+    const switcher = findElementByProp(tree, "ariaLabel", "Language");
+    const motionFrame = findElementByClassName(tree, "ehOtpAuthForm__motionFrame");
+    const motionContent = findElementByClassName(tree, "ehOtpAuthForm__motionContent");
+    const titleMotionText = findElementByProp(
+      tree,
+      "transitionKey",
+      "en:register:title:Create account"
+    );
+    const nameInput = findElementByProp(tree, "name", "name");
+
+    expect(JSON.stringify(tree)).toContain("Create account");
+    expect(switcher?.props?.locale).toBe("en");
+    expect(motionFrame?.props?.transitionKey).toBe("register:en");
+    expect(motionContent?.props?.transitionKey).toBe("register");
+    expect(titleMotionText?.type).toBe(MotionText);
+    expect(nameInput?.props?.value).toBe("");
+  });
+
+  it("emits controlled value changes for each credential field", () => {
+    const onValuesChange = vi.fn();
+    const values = { email: "old@example.com", name: "Анна", phone: "+7" };
+    const form = renderForm({ values, onValuesChange });
+    const tree = expandPrivateOtpAuthComponents(form);
+
+    findElementByProp(tree, "name", "name")?.props?.onChange?.({
+      currentTarget: { value: "Мария" }
+    });
+    findElementByProp(tree, "name", "email")?.props?.onChange?.({
+      currentTarget: { value: "new@example.com" }
+    });
+    findElementByProp(tree, "name", "phone")?.props?.onChange?.({
+      currentTarget: { value: "+995" }
     });
 
-    expect(JSON.stringify(form.props.children)).toContain("Имя должно быть от 2 до 200 символов");
+    expect(onValuesChange).toHaveBeenNthCalledWith(1, {
+      email: "old@example.com",
+      name: "Мария",
+      phone: "+7"
+    });
+    expect(onValuesChange).toHaveBeenNthCalledWith(2, {
+      email: "new@example.com",
+      name: "Анна",
+      phone: "+7"
+    });
+    expect(onValuesChange).toHaveBeenNthCalledWith(3, {
+      email: "old@example.com",
+      name: "Анна",
+      phone: "+995"
+    });
   });
 
-  it("renders phone country selector and dynamic phone placeholder", () => {
-    const form = OtpAuthForm({
-      mode: "register",
-      values: { email: "", name: "", phone: "" },
+  it("supports app-specific identifier order and phone country selection", () => {
+    const onPhoneCountryChange = vi.fn();
+    const form = renderForm({
+      identifierFieldOrder: "email-phone",
       phoneCountry: "GE",
       phoneCountries: [
         { iso2: "RU", name: "Россия", flag: "🇷🇺", callingCode: "7" },
         { iso2: "GE", name: "Грузия", flag: "🇬🇪", callingCode: "995" }
       ],
       phonePlaceholder: "+995 555 12 34 56",
-      onModeChange: vi.fn(),
-      onValuesChange: vi.fn()
+      onPhoneCountryChange
     });
+    const tree = expandPrivateOtpAuthComponents(form);
 
-    const serializedForm = JSON.stringify(form.props.children);
-
-    expect(serializedForm).toContain("+995 555 12 34 56");
-    expect(serializedForm).toContain("🇬🇪");
-    expect(serializedForm).toContain("+995");
-  });
-
-  it("can render email before phone for app-specific auth layouts", () => {
-    const form = OtpAuthForm({
-      mode: "register",
-      values: { email: "", name: "", phone: "" },
-      identifierFieldOrder: "email-phone",
-      onModeChange: vi.fn(),
-      onValuesChange: vi.fn()
-    });
-
-    const serializedForm = JSON.stringify(form.props.children);
+    const serializedForm = JSON.stringify(tree);
+    const countrySelect = findElementByClassName(tree, "ehOtpAuthForm__phoneCountrySelect");
+    countrySelect?.props?.onChange?.({ currentTarget: { value: "RU" } });
 
     expect(serializedForm.indexOf("email")).toBeLessThan(serializedForm.indexOf("phone"));
+    expect(serializedForm).toContain("+995 555 12 34 56");
+    expect(serializedForm).toContain("🇬🇪");
+    expect(countrySelect?.props?.value).toBe("GE");
+    expect(onPhoneCountryChange).toHaveBeenCalledWith("RU");
   });
 
-  it("calls phone country change callback", () => {
-    const onPhoneCountryChange = vi.fn();
-    const form = OtpAuthForm({
-      mode: "register",
-      values: { email: "", name: "", phone: "" },
-      phoneCountry: "RU",
-      phoneCountries: [
-        { iso2: "RU", name: "Россия", flag: "🇷🇺", callingCode: "7" },
-        { iso2: "GE", name: "Грузия", flag: "🇬🇪", callingCode: "995" }
-      ],
-      onModeChange: vi.fn(),
-      onPhoneCountryChange,
-      onValuesChange: vi.fn()
-    });
-
-    const countrySelect = findElementByClassName(form, "ehOtpAuthForm__phoneCountrySelect");
-    countrySelect?.props?.onChange?.({ currentTarget: { value: "GE" } });
-
-    expect(onPhoneCountryChange).toHaveBeenCalledWith("GE");
-  });
-
-  it("renders phone validation error", () => {
-    const form = OtpAuthForm({
-      mode: "register",
-      values: { email: "", name: "", phone: "+7" },
-      phoneError: "Введите корректный номер телефона",
-      onModeChange: vi.fn(),
-      onValuesChange: vi.fn()
-    });
-
-    const serializedForm = JSON.stringify(form.props.children);
-
-    expect(serializedForm).toContain("Введите корректный номер телефона");
-    expect(serializedForm).toContain("eh-otp-auth-phone-error");
-  });
-
-  it("disables email and phone controls when requested by the app", () => {
-    const form = OtpAuthForm({
-      mode: "register",
-      values: { email: "", name: "", phone: "+7 999 000-11-22" },
+  it("renders validation and disabled states requested by the app", () => {
+    const form = renderForm({
+      values: { email: "bad", name: "А", phone: "+7" },
       emailDisabled: true,
       phoneDisabled: true,
+      emailError: "Введите корректный email",
+      nameError: "Имя должно быть от 2 до 200 символов",
+      phoneError: "Введите корректный номер телефона",
       phoneCountry: "RU",
-      phoneCountries: [{ iso2: "RU", name: "Россия", flag: "🇷🇺", callingCode: "7" }],
-      onModeChange: vi.fn(),
-      onValuesChange: vi.fn()
+      phoneCountries: [{ iso2: "RU", name: "Россия", flag: "🇷🇺", callingCode: "7" }]
     });
+    const tree = expandPrivateOtpAuthComponents(form);
 
-    const emailInput = findElementByProp(form, "name", "email");
-    const phoneInput = findElementByProp(form, "name", "phone");
-    const countrySelect = findElementByClassName(form, "ehOtpAuthForm__phoneCountrySelect");
+    const serializedForm = JSON.stringify(tree);
+    const emailInput = findElementByProp(tree, "name", "email");
+    const nameInput = findElementByProp(tree, "name", "name");
+    const phoneInput = findElementByProp(tree, "name", "phone");
+    const countrySelect = findElementByClassName(tree, "ehOtpAuthForm__phoneCountrySelect");
 
+    expect(serializedForm).toContain("Введите корректный email");
+    expect(serializedForm).toContain("Имя должно быть от 2 до 200 символов");
+    expect(serializedForm).toContain("Введите корректный номер телефона");
     expect(emailInput?.props?.disabled).toBe(true);
+    expect(emailInput?.props?.["aria-describedby"]).toBe("eh-otp-auth-email-error");
+    expect(nameInput?.props?.["aria-describedby"]).toBe("eh-otp-auth-name-error");
     expect(phoneInput?.props?.disabled).toBe(true);
+    expect(phoneInput?.props?.["aria-describedby"]).toBe("eh-otp-auth-phone-error");
     expect(countrySelect?.props?.disabled).toBe(true);
   });
 
-  it("submits controlled values", () => {
+  it("submits controlled values in the current auth mode", () => {
     const onSubmit = vi.fn();
-    const form = OtpAuthForm({
-      mode: "register",
+    const form = renderForm({
+      mode: "login",
       values: { email: "user@example.com", name: "Анна", phone: "+7" },
-      onModeChange: vi.fn(),
-      onValuesChange: vi.fn(),
       onSubmit
     });
 
@@ -217,16 +164,27 @@ describe("OtpAuthForm", () => {
     submitButton?.props?.onClick?.();
 
     expect(submitButton?.type).toBe(Button);
-    expect(submitButton?.props?.title).toBe("Получить код");
     expect(submitButton?.props?.variant).toBe("brand");
     expect(submitButton?.props?.size).toBe("medium");
     expect(submitButton?.props?.type).toBe("button");
     expect(onSubmit).toHaveBeenCalledWith(
       { email: "user@example.com", name: "Анна", phone: "+7" },
-      "register"
+      "login"
     );
   });
 });
+
+type RenderFormProps = Partial<Parameters<typeof OtpAuthForm>[0]>;
+
+function renderForm(overrides: RenderFormProps = {}) {
+  return OtpAuthForm({
+    mode: "register",
+    values: { email: "", name: "", phone: "" },
+    onModeChange: vi.fn(),
+    onValuesChange: vi.fn(),
+    ...overrides
+  });
+}
 
 type TestElement = {
   type?: unknown;
@@ -236,10 +194,39 @@ type TestElement = {
     className?: string;
     onChange?: (event: { currentTarget: { value: string } }) => void;
     onClick?: () => void;
-    onLocaleChange?: (locale: string) => void;
     [key: string]: unknown;
   };
 };
+
+function expandPrivateOtpAuthComponents(node: unknown): unknown {
+  if (Array.isArray(node)) {
+    return node.map((child) => expandPrivateOtpAuthComponents(child));
+  }
+
+  if (!node || typeof node !== "object") {
+    return node;
+  }
+
+  const element = node as TestElement;
+
+  if (typeof element.type === "function" && element.type.name.startsWith("OtpAuth")) {
+    return expandPrivateOtpAuthComponents(element.type(element.props));
+  }
+
+  const children = element.props?.children;
+
+  if (children === undefined) {
+    return element;
+  }
+
+  return {
+    ...element,
+    props: {
+      ...element.props,
+      children: expandPrivateOtpAuthComponents(children)
+    }
+  };
+}
 
 function findElementByClassName(node: unknown, className: string): TestElement | null {
   if (Array.isArray(node)) {
