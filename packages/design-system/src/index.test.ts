@@ -9,6 +9,7 @@ describe("design-system root exports", () => {
     expect(designSystem.OtpAuthForm).toBeTypeOf("function");
     expect(designSystem.Sparkle).toBeTypeOf("function");
     expect(designSystem.MotionContent).toBeTypeOf("function");
+    expect(designSystem.MotionText).toBeTypeOf("function");
     expect(designSystem.classNames("root", { active: true })).toBe("root active");
   });
 

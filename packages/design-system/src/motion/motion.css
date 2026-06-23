@@ -11,6 +11,13 @@
   transform-origin: 50% 0;
 }
 
+.ehMotionText {
+  display: inline-block;
+  animation: ehMotionContentIn var(--eh-motion-duration-normal, 320ms) var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  transform-origin: 50% 50%;
+  will-change: opacity, transform;
+}
+
 .ehSegmentedIndicator {
   position: absolute;
   z-index: 0;
@@ -48,6 +55,10 @@
   }
 
   .ehMotionContent {
+    animation: none;
+  }
+
+  .ehMotionText {
     animation: none;
   }
 }
