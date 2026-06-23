@@ -1,6 +1,8 @@
+import type { ReactNode } from "react";
+
 export type SegmentedTabsOption<TValue extends string = string> = {
   value: TValue;
-  label: string;
+  label: ReactNode;
 };
 
 export type SegmentedTabsProps<TValue extends string = string> = {
