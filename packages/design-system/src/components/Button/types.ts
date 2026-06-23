@@ -4,7 +4,7 @@ export type ButtonSize = "small" | "medium";
 export type ButtonVariant = "brand" | "default";
 
 export type ButtonProps = Omit<ComponentPropsWithRef<"button">, "children" | "title"> & {
-  title: string;
+  title: ReactNode;
   size?: ButtonSize;
   variant?: ButtonVariant;
   startIcon?: ReactNode;
