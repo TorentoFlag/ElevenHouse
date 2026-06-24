@@ -156,7 +156,7 @@
 
 .highlightItem {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--eh-space-11);
 }
 
@@ -169,7 +169,7 @@
 .highlightLabel {
   color: var(--eh-color-moon-120);
   font-size: var(--eh-font-size-14);
-  font-weight: var(--eh-font-weight-semibold);
+  font-weight: 500;
 }
 
 .highlightDescription {
