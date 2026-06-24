@@ -1,0 +1,21 @@
+.placeholder {
+  display: grid;
+  min-height: calc(100dvh - var(--eh-space-64));
+  place-content: center;
+  gap: var(--eh-space-8);
+}
+
+.kicker {
+  margin: 0;
+  color: var(--eh-color-amethyst);
+  font-size: var(--eh-font-size-14);
+  font-weight: var(--eh-font-weight-bold);
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  color: var(--eh-color-moon-100);
+  font-size: var(--eh-font-size-32);
+  font-weight: var(--eh-font-weight-bold);
+}

@@ -1,0 +1,14 @@
+.shell {
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 95% 8%, rgb(244 196 48 / 0.08), transparent 18%),
+    radial-gradient(circle at 12% 92%, rgb(183 156 251 / 0.08), transparent 24%),
+    var(--eh-color-night-950);
+  color: var(--eh-color-moon-100);
+}
+
+.main {
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding: var(--eh-space-32);
+}
