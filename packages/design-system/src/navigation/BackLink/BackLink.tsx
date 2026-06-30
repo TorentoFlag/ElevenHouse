@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { ArrowLeft } from "../icons/ArrowLeft/index.js";
 import { useNavigate } from "react-router";
+import { Button } from "../../components/Button/index.js";
+import { ArrowLeft } from "../../icons/ArrowLeft/index.js";
 
 export type BackLinkProps = {
   readonly title: ReactNode;
@@ -14,14 +15,15 @@ export function BackLink({ title, path, className, ariaLabel }: BackLinkProps) {
   const resolvedAriaLabel = ariaLabel ?? (typeof title === "string" ? title : undefined);
 
   return (
-    <button
+    <Button
       aria-label={resolvedAriaLabel}
       className={className}
+      title={title}
       type="button"
+      variant="default"
+      size="small"
+      startIcon={<ArrowLeft aria-hidden="true" />}
       onClick={() => navigate(path)}
-    >
-      <ArrowLeft aria-hidden="true" />
-      {title}
-    </button>
+    />
   );
 }

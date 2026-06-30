@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { Button } from "../../components/Button/index.js";
 import { BackLink } from "./BackLink.js";
 
 const navigate = vi.fn();
@@ -15,11 +16,14 @@ describe("BackLink", () => {
       className: "auth-back"
     });
 
-    expect(element.type).toBe("button");
+    expect(element.type).toBe(Button);
     expect(element.props.type).toBe("button");
     expect(element.props.className).toBe("auth-back");
     expect(element.props["aria-label"]).toBe("На главную");
-    expect(element.props.children[0].type.name).toBe("ArrowLeft");
+    expect(element.props.title).toBe("На главную");
+    expect(element.props.variant).toBe("default");
+    expect(element.props.size).toBe("small");
+    expect(element.props.startIcon.type.name).toBe("ArrowLeft");
 
     element.props.onClick();
 
