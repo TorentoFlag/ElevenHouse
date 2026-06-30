@@ -1,0 +1,100 @@
+import { describe, expect, it } from "vitest";
+import {
+  createDictionaryCustomEntryRequestSchema,
+  dictionaryEntriesQuerySchema,
+  dictionaryEntrySourceSchema,
+  dictionaryLocaleSchema,
+  dictionarySourceCountsSchema,
+  listDictionaryCategoriesQuerySchema,
+  updateDictionaryPlatformEntryOverrideRequestSchema
+} from "./dictionary";
+
+describe("dictionary contracts", () => {
+  it("normalizes supported locales and source filters", () => {
+    expect(dictionaryLocaleSchema.parse(" ru ")).toBe("ru");
+    expect(dictionaryEntrySourceSchema.parse("modified")).toBe("modified");
+  });
+
+  it("parses category list queries", () => {
+    expect(listDictionaryCategoriesQuerySchema.parse({ locale: "ru" })).toEqual({
+      locale: "ru"
+    });
+  });
+
+  it("parses entry list queries with optional filters", () => {
+    expect(
+      dictionaryEntriesQuerySchema.parse({
+        locale: "ru",
+        categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        source: "custom",
+        search: "  солнце  ",
+        limit: "20",
+        offset: "40"
+      })
+    ).toEqual({
+      locale: "ru",
+      categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      source: "custom",
+      search: "солнце",
+      limit: 20,
+      offset: 40
+    });
+  });
+
+  it("defaults entry list pagination and all source filter", () => {
+    expect(dictionaryEntriesQuerySchema.parse({ locale: "en" })).toMatchObject({
+      locale: "en",
+      source: "all",
+      limit: 50,
+      offset: 0
+    });
+  });
+
+  it("rejects unsupported locales, sources and excessive pagination", () => {
+    expect(() => listDictionaryCategoriesQuerySchema.parse({ locale: "de" })).toThrow();
+    expect(() => dictionaryEntriesQuerySchema.parse({ locale: "ru", source: "external" })).toThrow();
+    expect(() => dictionaryEntriesQuerySchema.parse({ locale: "ru", limit: "501" })).toThrow();
+  });
+
+  it("parses custom entry and override requests", () => {
+    expect(
+      createDictionaryCustomEntryRequestSchema.parse({
+        categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        locale: "ru",
+        title: "  Авторская трактовка  ",
+        content: "  Текст трактовки  "
+      })
+    ).toEqual({
+      categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      locale: "ru",
+      title: "Авторская трактовка",
+      content: "Текст трактовки"
+    });
+
+    expect(
+      updateDictionaryPlatformEntryOverrideRequestSchema.parse({
+        title: "  Солнце в Овне  ",
+        content: "  Новая трактовка  "
+      })
+    ).toEqual({
+      title: "Солнце в Овне",
+      content: "Новая трактовка"
+    });
+  });
+
+  it("parses source counts", () => {
+    expect(
+      dictionarySourceCountsSchema.parse({
+        all: 14,
+        platform: 14,
+        modified: 0,
+        custom: 0
+      })
+    ).toEqual({
+      all: 14,
+      platform: 14,
+      modified: 0,
+      custom: 0
+    });
+  });
+});

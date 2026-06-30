@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   authenticatedCustomerAccountResponseSchema,
+  dictionaryCategoriesResponseSchema,
+  dictionaryEntriesResponseSchema,
   healthResponseSchema,
   requestPasswordlessCodeRequestSchema,
   requestPasswordlessCodeResponseSchema,
@@ -19,5 +21,10 @@ describe("contracts public barrel", () => {
     expect(requestPasswordlessCodeResponseSchema.parse).toBeTypeOf("function");
     expect(verifyPasswordlessCodeRequestSchema.parse).toBeTypeOf("function");
     expect(verifyPasswordlessCodeResponseSchema.parse).toBeTypeOf("function");
+  });
+
+  it("exports dictionary contracts", () => {
+    expect(dictionaryCategoriesResponseSchema.parse).toBeTypeOf("function");
+    expect(dictionaryEntriesResponseSchema.parse).toBeTypeOf("function");
   });
 });
