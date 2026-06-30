@@ -1,19 +1,46 @@
 import { nonEmptyStringSchema, z } from "@elevenhouse/validation";
 
 export const dictionaryLocaleSchema = z.string().trim().pipe(z.enum(["ru", "en"]));
+export type DictionaryLocale = z.infer<typeof dictionaryLocaleSchema>;
 export const dictionaryEntrySourceSchema = z.enum(["platform", "modified", "custom"]);
+export type DictionaryEntrySource = z.infer<typeof dictionaryEntrySourceSchema>;
 export const dictionaryEntrySourceFilterSchema = z.union([
   z.literal("all"),
   dictionaryEntrySourceSchema
 ]);
+export type DictionaryEntrySourceFilter = z.infer<typeof dictionaryEntrySourceFilterSchema>;
 
 const uuidSchema = z.string().uuid();
+export const dictionarySearchMaxLength = 200;
+export const dictionaryTitleMaxLength = 200;
+export const dictionaryContentMaxLength = 10_000;
 const optionalNonEmptyStringSchema = z
   .string()
   .trim()
+  .max(dictionarySearchMaxLength)
   .transform((value) => (value.length === 0 ? undefined : value))
   .optional();
+const dictionaryTitleRequestSchema = nonEmptyStringSchema.max(dictionaryTitleMaxLength);
+const dictionaryContentRequestSchema = nonEmptyStringSchema.max(dictionaryContentMaxLength);
 const paginationNumberSchema = z.coerce.number().int().min(0);
+
+export const dictionaryPlatformEntryIdParamSchema = z
+  .object({
+    platformEntryId: uuidSchema
+  })
+  .strict();
+export type DictionaryPlatformEntryIdParam = z.infer<
+  typeof dictionaryPlatformEntryIdParamSchema
+>;
+
+export const dictionaryAstrologerEntryIdParamSchema = z
+  .object({
+    entryId: uuidSchema
+  })
+  .strict();
+export type DictionaryAstrologerEntryIdParam = z.infer<
+  typeof dictionaryAstrologerEntryIdParamSchema
+>;
 
 export const listDictionaryCategoriesQuerySchema = z
   .object({
@@ -53,6 +80,7 @@ export const dictionaryCategoryResponseSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 });
+export type DictionaryCategoryResponse = z.infer<typeof dictionaryCategoryResponseSchema>;
 
 export const dictionaryCategoriesResponseSchema = z.object({
   categories: z.array(dictionaryCategoryResponseSchema),
@@ -76,6 +104,9 @@ export const dictionaryEffectiveEntryResponseSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 });
+export type DictionaryEffectiveEntryResponse = z.infer<
+  typeof dictionaryEffectiveEntryResponseSchema
+>;
 
 export const dictionaryEntriesResponseSchema = z.object({
   entries: z.array(dictionaryEffectiveEntryResponseSchema),
@@ -107,8 +138,8 @@ export const createDictionaryCustomEntryRequestSchema = z
   .object({
     categoryId: uuidSchema,
     locale: dictionaryLocaleSchema,
-    title: nonEmptyStringSchema,
-    content: nonEmptyStringSchema
+    title: dictionaryTitleRequestSchema,
+    content: dictionaryContentRequestSchema
   })
   .strict();
 export type CreateDictionaryCustomEntryRequest = z.infer<
@@ -117,8 +148,8 @@ export type CreateDictionaryCustomEntryRequest = z.infer<
 
 export const updateDictionaryPlatformEntryOverrideRequestSchema = z
   .object({
-    title: nonEmptyStringSchema,
-    content: nonEmptyStringSchema
+    title: dictionaryTitleRequestSchema,
+    content: dictionaryContentRequestSchema
   })
   .strict();
 export type UpdateDictionaryPlatformEntryOverrideRequest = z.infer<

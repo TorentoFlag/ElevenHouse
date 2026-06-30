@@ -1,7 +1,12 @@
-import { BadRequestException, UnauthorizedException } from "@nestjs/common";
-import type { DictionaryStore } from "@elevenhouse/domain";
+import { BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import {
+  DictionaryCategoryNotFoundError,
+  DictionaryPlatformEntryNotFoundError,
+  type DictionaryStore
+} from "@elevenhouse/domain";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import type { SystemClock } from "../clock/system-clock.service";
 import { DictionaryService } from "./dictionary.service";
 
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
@@ -17,7 +22,7 @@ describe("DictionaryService", () => {
 
   it("lists categories for the authenticated astrologer and locale", async () => {
     const store = createStore();
-    const service = new DictionaryService(store);
+    const service = createService(store);
 
     await expect(
       service.listCategories({ locale: " ru " }, createAuthenticatedRequest())
@@ -34,7 +39,7 @@ describe("DictionaryService", () => {
 
   it("lists entries for the authenticated astrologer with normalized filters", async () => {
     const store = createStore();
-    const service = new DictionaryService(store);
+    const service = createService(store);
 
     await expect(
       service.listEntries(
@@ -75,7 +80,7 @@ describe("DictionaryService", () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
     const store = createStore();
-    const service = new DictionaryService(store);
+    const service = createService(store);
 
     await service.createCustomEntry(
       {
@@ -104,7 +109,7 @@ describe("DictionaryService", () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
     const store = createStore();
-    const service = new DictionaryService(store);
+    const service = createService(store);
 
     await service.overridePlatformEntry(
       platformEntryId,
@@ -126,7 +131,7 @@ describe("DictionaryService", () => {
 
   it("deletes custom entries and resets overrides for the authenticated astrologer", async () => {
     const store = createStore();
-    const service = new DictionaryService(store);
+    const service = createService(store);
 
     await service.deleteEntry(astrologerEntryId, createAuthenticatedRequest());
     await service.resetPlatformEntryOverride(platformEntryId, createAuthenticatedRequest());
@@ -142,18 +147,70 @@ describe("DictionaryService", () => {
   });
 
   it("rejects invalid requests and missing authenticated account context", async () => {
-    const service = new DictionaryService(createStore());
+    const service = createService(createStore());
 
     expect(() => service.listEntries({ locale: "de" }, createAuthenticatedRequest())).toThrow(
       BadRequestException
     );
-    expect(() => service.listCategories({ locale: "ru" }, { headers: {} })).toThrow(
+    expect(() =>
+      service.overridePlatformEntry(
+        "not-a-uuid",
+        { title: "Title", content: "Content" },
+        createAuthenticatedRequest()
+      )
+    ).toThrow(BadRequestException);
+    expect(() => service.deleteEntry("not-a-uuid", createAuthenticatedRequest())).toThrow(
+      BadRequestException
+    );
+    expect(() =>
+      service.resetPlatformEntryOverride("not-a-uuid", createAuthenticatedRequest())
+    ).toThrow(BadRequestException);
+    await expect(service.listCategories({ locale: "ru" }, { headers: {} })).rejects.toThrow(
       UnauthorizedException
     );
   });
+
+  it("maps typed dictionary domain errors to HTTP errors", async () => {
+    const platformStore = createStore({
+      upsertPlatformEntryOverride: vi.fn(async () => {
+        throw new DictionaryPlatformEntryNotFoundError(platformEntryId);
+      })
+    });
+    const categoryStore = createStore({
+      createCustomEntry: vi.fn(async () => {
+        throw new DictionaryCategoryNotFoundError(categoryId);
+      })
+    });
+    const platformService = createService(platformStore);
+    const categoryService = createService(categoryStore);
+
+    await expect(
+      platformService.overridePlatformEntry(
+        platformEntryId,
+        { title: "Title", content: "Content" },
+        createAuthenticatedRequest()
+      )
+    ).rejects.toThrow(NotFoundException);
+    await expect(
+      categoryService.createCustomEntry(
+        { categoryId, locale: "ru", title: "Title", content: "Content" },
+        createAuthenticatedRequest()
+      )
+    ).rejects.toThrow(NotFoundException);
+  });
 });
 
-function createStore(): DictionaryStore {
+function createService(store: DictionaryStore): DictionaryService {
+  return new DictionaryService(store, createClock());
+}
+
+function createClock(): SystemClock {
+  return {
+    now: () => now
+  };
+}
+
+function createStore(overrides: Partial<DictionaryStore> = {}): DictionaryStore {
   return {
     listCategories: vi.fn(async () => ({
       categories: [
@@ -199,7 +256,8 @@ function createStore(): DictionaryStore {
       updatedAt: input.updatedAt
     })),
     deleteAstrologerEntry: vi.fn(async () => undefined),
-    resetPlatformEntryOverride: vi.fn(async () => undefined)
+    resetPlatformEntryOverride: vi.fn(async () => undefined),
+    ...overrides
   };
 }
 

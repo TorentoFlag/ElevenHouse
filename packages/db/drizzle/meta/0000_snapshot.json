@@ -1,5 +1,5 @@
 {
-  "id": "477754a9-8ff4-47db-a493-a91f6945d886",
+  "id": "c4942d10-a16d-4f64-9782-148197457251",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1605,15 +1605,9 @@
         }
       },
       "indexes": {
-        "dictionary_platform_entries_category_locale_status_index": {
-          "name": "dictionary_platform_entries_category_locale_status_index",
+        "dictionary_platform_entries_locale_status_category_index": {
+          "name": "dictionary_platform_entries_locale_status_category_index",
           "columns": [
-            {
-              "expression": "category_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
             {
               "expression": "locale",
               "isExpression": false,
@@ -1622,6 +1616,12 @@
             },
             {
               "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "category_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1758,17 +1758,11 @@
         }
       },
       "indexes": {
-        "dictionary_astrologer_entries_owner_category_locale_index": {
-          "name": "dictionary_astrologer_entries_owner_category_locale_index",
+        "dictionary_astrologer_entries_custom_owner_locale_category_index": {
+          "name": "dictionary_astrologer_entries_custom_owner_locale_category_index",
           "columns": [
             {
               "expression": "owner_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "category_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1778,9 +1772,16 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "category_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": false,
+          "where": "\"dictionary_astrologer_entries\".\"entry_type\" = 'custom'",
           "concurrently": false,
           "method": "btree",
           "with": {}

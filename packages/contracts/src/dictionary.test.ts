@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   createDictionaryCustomEntryRequestSchema,
+  dictionaryContentMaxLength,
+  dictionaryAstrologerEntryIdParamSchema,
   dictionaryEntriesQuerySchema,
   dictionaryEntrySourceSchema,
   dictionaryLocaleSchema,
+  dictionaryPlatformEntryIdParamSchema,
   dictionarySourceCountsSchema,
+  dictionaryTitleMaxLength,
   listDictionaryCategoriesQuerySchema,
   updateDictionaryPlatformEntryOverrideRequestSchema
 } from "./dictionary";
@@ -50,10 +54,48 @@ describe("dictionary contracts", () => {
     });
   });
 
+  it("parses dictionary route params", () => {
+    expect(
+      dictionaryPlatformEntryIdParamSchema.parse({
+        platformEntryId: "8e14390f-3db1-4d1c-9344-55679c778427"
+      })
+    ).toEqual({
+      platformEntryId: "8e14390f-3db1-4d1c-9344-55679c778427"
+    });
+    expect(
+      dictionaryAstrologerEntryIdParamSchema.parse({
+        entryId: "27f4dd55-1da2-4e58-90a1-ce10c2566b36"
+      })
+    ).toEqual({
+      entryId: "27f4dd55-1da2-4e58-90a1-ce10c2566b36"
+    });
+  });
+
   it("rejects unsupported locales, sources and excessive pagination", () => {
     expect(() => listDictionaryCategoriesQuerySchema.parse({ locale: "de" })).toThrow();
     expect(() => dictionaryEntriesQuerySchema.parse({ locale: "ru", source: "external" })).toThrow();
     expect(() => dictionaryEntriesQuerySchema.parse({ locale: "ru", limit: "501" })).toThrow();
+    expect(() =>
+      dictionaryPlatformEntryIdParamSchema.parse({ platformEntryId: "not-a-uuid" })
+    ).toThrow();
+    expect(() => dictionaryAstrologerEntryIdParamSchema.parse({ entryId: "not-a-uuid" })).toThrow();
+    expect(() =>
+      dictionaryEntriesQuerySchema.parse({ locale: "ru", search: "x".repeat(201) })
+    ).toThrow();
+    expect(() =>
+      createDictionaryCustomEntryRequestSchema.parse({
+        categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        locale: "ru",
+        title: "x".repeat(dictionaryTitleMaxLength + 1),
+        content: "Content"
+      })
+    ).toThrow();
+    expect(() =>
+      updateDictionaryPlatformEntryOverrideRequestSchema.parse({
+        title: "Title",
+        content: "x".repeat(dictionaryContentMaxLength + 1)
+      })
+    ).toThrow();
   });
 
   it("parses custom entry and override requests", () => {

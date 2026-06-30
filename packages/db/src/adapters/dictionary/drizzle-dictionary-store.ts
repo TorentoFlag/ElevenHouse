@@ -12,6 +12,10 @@ import type {
   DictionaryLocale,
   DictionaryStore
 } from "@elevenhouse/domain";
+import {
+  DictionaryCategoryNotFoundError,
+  DictionaryPlatformEntryNotFoundError
+} from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
   dictionaryAstrologerEntries,
@@ -38,12 +42,15 @@ type DictionaryEffectiveEntryRow = Omit<
   readonly astrologerEntryId: string | null;
   readonly createdAt: Date | string;
   readonly updatedAt: Date | string;
-  readonly total: number | string;
 };
 
 type DictionarySourceCountRow = {
   readonly source: string;
   readonly count: number | string;
+};
+
+type DictionaryTotalRow = {
+  readonly total: number | string;
 };
 
 const dictionaryLocaleSet = new Set<string>(["ru", "en"]);
@@ -55,6 +62,13 @@ export function createDrizzleDictionaryStore(database: ElevenHouseDatabase): Dic
     listCategories: (query) => listCategories(database, query),
     listEntries: (query) => listEntries(database, query),
     createCustomEntry: async (input) => {
+      const category = await database.query.dictionaryCategories.findFirst({
+        where: eq(dictionaryCategories.id, input.categoryId)
+      });
+      if (!category) {
+        throw new DictionaryCategoryNotFoundError(input.categoryId);
+      }
+
       const row = await insertReturningOne(
         () =>
           database
@@ -79,38 +93,14 @@ export function createDrizzleDictionaryStore(database: ElevenHouseDatabase): Dic
     upsertPlatformEntryOverride: (input) =>
       database.transaction(async (transaction) => {
         const platformEntry = await transaction.query.dictionaryPlatformEntries.findFirst({
-          where: eq(dictionaryPlatformEntries.id, input.platformEntryId)
-        });
-
-        if (!platformEntry) {
-          throw new Error(`Dictionary platform entry not found: ${input.platformEntryId}`);
-        }
-
-        const existingOverride = await transaction.query.dictionaryAstrologerEntries.findFirst({
           where: and(
-            eq(dictionaryAstrologerEntries.ownerUserId, input.ownerUserId),
-            eq(dictionaryAstrologerEntries.platformEntryId, input.platformEntryId),
-            eq(dictionaryAstrologerEntries.locale, platformEntry.locale),
-            eq(dictionaryAstrologerEntries.entryType, "override")
+            eq(dictionaryPlatformEntries.id, input.platformEntryId),
+            eq(dictionaryPlatformEntries.status, "published")
           )
         });
 
-        if (existingOverride) {
-          const row = await insertReturningOne(
-            () =>
-              transaction
-                .update(dictionaryAstrologerEntries)
-                .set({
-                  title: input.title,
-                  content: input.content,
-                  updatedAt: new Date(input.updatedAt)
-                })
-                .where(eq(dictionaryAstrologerEntries.id, existingOverride.id))
-                .returning(),
-            "dictionary_astrologer_entries"
-          );
-
-          return toDictionaryAstrologerEntry(row);
+        if (!platformEntry) {
+          throw new DictionaryPlatformEntryNotFoundError(input.platformEntryId);
         }
 
         const row = await insertReturningOne(
@@ -118,6 +108,19 @@ export function createDrizzleDictionaryStore(database: ElevenHouseDatabase): Dic
             transaction
               .insert(dictionaryAstrologerEntries)
               .values(toOverrideInsert(input, platformEntry))
+              .onConflictDoUpdate({
+                target: [
+                  dictionaryAstrologerEntries.ownerUserId,
+                  dictionaryAstrologerEntries.platformEntryId,
+                  dictionaryAstrologerEntries.locale
+                ],
+                targetWhere: sql`${dictionaryAstrologerEntries.entryType} = 'override'`,
+                set: {
+                  title: input.title,
+                  content: input.content,
+                  updatedAt: new Date(input.updatedAt)
+                }
+              })
               .returning(),
           "dictionary_astrologer_entries"
         );
@@ -288,8 +291,7 @@ async function listEntries(
       "platformEntryId",
       "astrologerEntryId",
       "createdAt",
-      "updatedAt",
-      count(*) over() as "total"
+      "updatedAt"
     from effective_entries
     where true
       ${sourceFilter}
@@ -299,6 +301,14 @@ async function listEntries(
     offset ${offset}
   `);
   const rows = result.rows as unknown as readonly DictionaryEffectiveEntryRow[];
+  const totalResult = await database.execute(sql<DictionaryTotalRow>`
+    with ${effectiveEntriesCte}
+    select count(*)::int as total
+    from effective_entries
+    where true
+      ${sourceFilter}
+      ${searchFilter}
+  `);
   const countsResult = await database.execute(sql<DictionarySourceCountRow>`
     with ${effectiveEntriesCte}
     select source, count(*)::int as count
@@ -311,7 +321,7 @@ async function listEntries(
 
   return {
     entries: rows.map(toDictionaryEffectiveEntry),
-    total: Number(rows[0]?.total ?? 0),
+    total: Number(totalResult.rows[0]?.total ?? 0),
     counts: {
       sources: toDictionarySourceCounts(sourceCountRows)
     }

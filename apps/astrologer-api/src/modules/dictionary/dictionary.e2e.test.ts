@@ -2,6 +2,11 @@ import type { INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
+import {
+  dictionaryAstrologerEntryResponseSchema,
+  dictionaryCategoriesResponseSchema,
+  dictionaryEntriesResponseSchema
+} from "@elevenhouse/contracts";
 import type {
   AuthSessionAuthenticationStore,
   AuthSessionRevocationUnitOfWork,
@@ -40,6 +45,7 @@ const categoryId = "27f4dd55-1da2-4e58-90a1-ce10c2566b36";
 const platformEntryId = "73cb0e88-e485-4ca2-94de-8c734047f268";
 const astrologerEntryId = "6fd8c491-0292-4921-8fb3-e4ca3b9cb073";
 let currentCsrfToken = "";
+let currentAuthRoles: readonly ("client" | "astrologer")[] = ["astrologer"];
 const defaultPasswordlessRateLimits = {
   requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
   requestCodeIp: { limit: 30, windowSeconds: 3600 },
@@ -55,6 +61,7 @@ describe("dictionary HTTP routes", () => {
   let dictionaryStore: DictionaryStore;
 
   beforeEach(async () => {
+    currentAuthRoles = ["astrologer"];
     dictionaryStore = createDictionaryStore();
     const authStore = createAuthStore();
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
@@ -129,11 +136,13 @@ describe("dictionary HTTP routes", () => {
     const entriesResponse = await getJson("/dictionary/entries?locale=ru&source=custom");
 
     expect(categoriesResponse.status).toBe(200);
+    dictionaryCategoriesResponseSchema.parse(categoriesResponse.body);
     expect(categoriesResponse.body).toMatchObject({
       total: 4,
       categories: [expect.objectContaining({ id: categoryId, count: 4 })]
     });
     expect(entriesResponse.status).toBe(200);
+    dictionaryEntriesResponseSchema.parse(entriesResponse.body);
     expect(entriesResponse.body).toMatchObject({
       total: 1,
       counts: {
@@ -207,6 +216,7 @@ describe("dictionary HTTP routes", () => {
     expect(unauthenticatedResponse.status).toBe(401);
     expect(missingCsrfResponse.status).toBe(403);
     expect(createResponse.status).toBe(201);
+    dictionaryAstrologerEntryResponseSchema.parse(createResponse.body);
     expect(createResponse.body).toMatchObject({
       ownerUserId,
       categoryId,
@@ -214,6 +224,7 @@ describe("dictionary HTTP routes", () => {
       entryType: "custom"
     });
     expect(overrideResponse.status).toBe(200);
+    dictionaryAstrologerEntryResponseSchema.parse(overrideResponse.body);
     expect(overrideResponse.body).toMatchObject({
       ownerUserId,
       platformEntryId,
@@ -221,6 +232,38 @@ describe("dictionary HTTP routes", () => {
     });
     expect(deleteResponse.status).toBe(204);
     expect(resetResponse.status).toBe(204);
+  });
+
+  it("rejects invalid route params before calling the dictionary store", async () => {
+    const overrideResponse = await putJson(
+      "/dictionary/platform-entries/not-a-uuid/override",
+      {
+        title: "Sun in Aries",
+        content: "Override content"
+      },
+      csrfHeaders()
+    );
+    const deleteResponse = await deleteEmpty("/dictionary/entries/not-a-uuid", csrfHeaders());
+    const resetResponse = await deleteEmpty(
+      "/dictionary/platform-entries/not-a-uuid/override",
+      csrfHeaders()
+    );
+
+    expect(overrideResponse.status).toBe(400);
+    expect(deleteResponse.status).toBe(400);
+    expect(resetResponse.status).toBe(400);
+    expect(dictionaryStore.upsertPlatformEntryOverride).not.toHaveBeenCalled();
+    expect(dictionaryStore.deleteAstrologerEntry).not.toHaveBeenCalled();
+    expect(dictionaryStore.resetPlatformEntryOverride).not.toHaveBeenCalled();
+  });
+
+  it("rejects authenticated sessions without the astrologer role", async () => {
+    currentAuthRoles = ["client"];
+
+    const response = await getJson("/dictionary/categories?locale=ru");
+
+    expect(response.status).toBe(401);
+    expect(dictionaryStore.listCategories).not.toHaveBeenCalled();
   });
 
   async function getJson(path: string): Promise<HttpJsonResponse> {
@@ -332,14 +375,12 @@ function createAuthStore(): AuthSessionAuthenticationStore {
           createdAt: "2026-06-30T09:00:00.000Z",
           updatedAt: "2026-06-30T09:00:00.000Z"
         },
-        roleAssignments: [
-          {
+        roleAssignments: currentAuthRoles.map((role) => ({
             id: "f7e4d8ea-7d14-4e54-a19a-9412307b3e8d",
             userId: ownerUserId,
-            role: "astrologer" as const,
+            role,
             assignedAt: "2026-06-30T09:00:00.000Z"
-          }
-        ]
+          }))
       };
     })
   };

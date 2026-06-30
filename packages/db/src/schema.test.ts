@@ -24,6 +24,8 @@ import {
   userStatusValues
 } from "./schema/index";
 
+const currentBaselineMigration = "packages/db/drizzle/0000_youthful_the_stranger.sql";
+
 describe("database account schema constants", () => {
   it("keeps database role checks aligned with the application role model", () => {
     expect(databasePlatformRoleValues).toEqual(platformRoles);
@@ -78,7 +80,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps dictionary tables in the current baseline migration", () => {
-    const migration = readFileSync("packages/db/drizzle/0000_sour_living_tribunal.sql", "utf8");
+    const migration = readFileSync(currentBaselineMigration, "utf8");
     const dictionaryAstrologerEntriesTable = getCreateTableStatement(
       migration,
       "dictionary_astrologer_entries"
@@ -109,6 +111,12 @@ describe("database account schema constants", () => {
       'ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_platform_entry_identity_fk" FOREIGN KEY ("platform_entry_id","category_id","code","locale") REFERENCES "public"."dictionary_platform_entries"("id","category_id","code","locale") ON DELETE restrict ON UPDATE no action'
     );
     expect(migration).toContain(
+      'CREATE INDEX "dictionary_platform_entries_locale_status_category_index" ON "dictionary_platform_entries" USING btree ("locale","status","category_id")'
+    );
+    expect(migration).toContain(
+      'CREATE INDEX "dictionary_astrologer_entries_custom_owner_locale_category_index" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","locale","category_id") WHERE "dictionary_astrologer_entries"."entry_type" = \'custom\''
+    );
+    expect(migration).toContain(
       'CREATE INDEX "dictionary_astrologer_entries_platform_entry_id_index" ON "dictionary_astrologer_entries" USING btree ("platform_entry_id")'
     );
     expect(migration).toContain(
@@ -120,7 +128,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps pending passwordless challenges unique per channel and identifier", () => {
-    const migration = readFileSync("packages/db/drizzle/0000_sour_living_tribunal.sql", "utf8");
+    const migration = readFileSync(currentBaselineMigration, "utf8");
 
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "auth_challenges_pending_identifier_unique" ON "auth_challenges" USING btree ("channel","identifier_normalized") WHERE "auth_challenges"."status" = \'pending\''
@@ -128,7 +136,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps user profiles in the current identity migration", () => {
-    const migration = readFileSync("packages/db/drizzle/0000_sour_living_tribunal.sql", "utf8");
+    const migration = readFileSync(currentBaselineMigration, "utf8");
 
     expect(migration).toContain('CREATE TABLE "user_profiles"');
     expect(migration).toContain('"display_name" text NOT NULL');

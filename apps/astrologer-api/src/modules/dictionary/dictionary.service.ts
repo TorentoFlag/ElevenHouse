@@ -14,109 +14,147 @@ import {
   listDictionaryEntries,
   overrideDictionaryPlatformEntry,
   resetDictionaryPlatformEntryOverride,
-  type DictionaryAstrologerEntry,
-  type DictionaryCategoryListResult,
-  type DictionaryEntryListResult,
+  DictionaryCategoryNotFoundError,
+  DictionaryPlatformEntryNotFoundError,
   type DictionaryStore
 } from "@elevenhouse/domain";
 import {
   createDictionaryCustomEntryRequestSchema,
+  dictionaryAstrologerEntryIdParamSchema,
+  dictionaryAstrologerEntryResponseSchema,
   dictionaryEntriesQuerySchema,
+  dictionaryEntriesResponseSchema,
+  dictionaryPlatformEntryIdParamSchema,
+  dictionaryCategoriesResponseSchema,
   listDictionaryCategoriesQuerySchema,
+  type DictionaryAstrologerEntryResponse,
+  type DictionaryCategoriesResponse,
+  type DictionaryEntriesResponse,
   updateDictionaryPlatformEntryOverrideRequestSchema
 } from "@elevenhouse/contracts";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { SystemClock } from "../clock/system-clock.service";
 import { DICTIONARY_STORE } from "./dictionary.tokens";
 
 @Injectable()
 export class DictionaryService {
-  constructor(@Inject(DICTIONARY_STORE) private readonly store: DictionaryStore) {}
+  constructor(
+    @Inject(DICTIONARY_STORE) private readonly store: DictionaryStore,
+    private readonly clock: SystemClock
+  ) {}
 
   listCategories(
     query: unknown,
     request: AstrologerSessionRequest
-  ): Promise<DictionaryCategoryListResult> {
+  ): Promise<DictionaryCategoriesResponse> {
     const parsedQuery = parseContract(listDictionaryCategoriesQuerySchema, query);
 
-    return listDictionaryCategories({
-      store: this.store,
-      ownerUserId: requireOwnerUserId(request),
-      locale: parsedQuery.locale
-    });
+    return mapDictionaryStoreErrors(async () =>
+      dictionaryCategoriesResponseSchema.parse(
+        await listDictionaryCategories({
+          store: this.store,
+          ownerUserId: requireOwnerUserId(request),
+          locale: parsedQuery.locale
+        })
+      )
+    );
   }
 
   listEntries(
     query: unknown,
     request: AstrologerSessionRequest
-  ): Promise<DictionaryEntryListResult> {
+  ): Promise<DictionaryEntriesResponse> {
     const parsedQuery = parseContract(dictionaryEntriesQuerySchema, query);
 
-    return listDictionaryEntries({
-      store: this.store,
-      ownerUserId: requireOwnerUserId(request),
-      locale: parsedQuery.locale,
-      categoryId: parsedQuery.categoryId,
-      source: parsedQuery.source,
-      search: parsedQuery.search,
-      limit: parsedQuery.limit,
-      offset: parsedQuery.offset
-    });
+    return mapDictionaryStoreErrors(async () =>
+      dictionaryEntriesResponseSchema.parse(
+        await listDictionaryEntries({
+          store: this.store,
+          ownerUserId: requireOwnerUserId(request),
+          locale: parsedQuery.locale,
+          categoryId: parsedQuery.categoryId,
+          source: parsedQuery.source,
+          search: parsedQuery.search,
+          limit: parsedQuery.limit,
+          offset: parsedQuery.offset
+        })
+      )
+    );
   }
 
   createCustomEntry(
     body: unknown,
     request: AstrologerSessionRequest
-  ): Promise<DictionaryAstrologerEntry> {
+  ): Promise<DictionaryAstrologerEntryResponse> {
     const parsedBody = parseContract(createDictionaryCustomEntryRequestSchema, body);
 
-    return createDictionaryCustomEntry({
-      store: this.store,
-      ownerUserId: requireOwnerUserId(request),
-      categoryId: parsedBody.categoryId,
-      code: `custom_${randomUUID()}`,
-      locale: parsedBody.locale,
-      title: parsedBody.title,
-      content: parsedBody.content,
-      now: new Date()
-    });
+    return mapDictionaryStoreErrors(async () =>
+      dictionaryAstrologerEntryResponseSchema.parse(
+        await createDictionaryCustomEntry({
+          store: this.store,
+          ownerUserId: requireOwnerUserId(request),
+          categoryId: parsedBody.categoryId,
+          code: `custom_${randomUUID()}`,
+          locale: parsedBody.locale,
+          title: parsedBody.title,
+          content: parsedBody.content,
+          now: this.clock.now()
+        })
+      )
+    );
   }
 
   overridePlatformEntry(
     platformEntryId: string,
     body: unknown,
     request: AstrologerSessionRequest
-  ): Promise<DictionaryAstrologerEntry> {
+  ): Promise<DictionaryAstrologerEntryResponse> {
+    const parsedParams = parseContract(dictionaryPlatformEntryIdParamSchema, {
+      platformEntryId
+    });
     const parsedBody = parseContract(updateDictionaryPlatformEntryOverrideRequestSchema, body);
 
-    return mapDictionaryStoreErrors(() =>
-      overrideDictionaryPlatformEntry({
-        store: this.store,
-        ownerUserId: requireOwnerUserId(request),
-        platformEntryId,
-        title: parsedBody.title,
-        content: parsedBody.content,
-        now: new Date()
-      })
+    return mapDictionaryStoreErrors(async () =>
+      dictionaryAstrologerEntryResponseSchema.parse(
+        await overrideDictionaryPlatformEntry({
+          store: this.store,
+          ownerUserId: requireOwnerUserId(request),
+          platformEntryId: parsedParams.platformEntryId,
+          title: parsedBody.title,
+          content: parsedBody.content,
+          now: this.clock.now()
+        })
+      )
     );
   }
 
   deleteEntry(entryId: string, request: AstrologerSessionRequest): Promise<void> {
-    return deleteDictionaryAstrologerEntry({
-      store: this.store,
-      ownerUserId: requireOwnerUserId(request),
-      entryId
-    });
+    const parsedParams = parseContract(dictionaryAstrologerEntryIdParamSchema, { entryId });
+
+    return mapDictionaryStoreErrors(() =>
+      deleteDictionaryAstrologerEntry({
+        store: this.store,
+        ownerUserId: requireOwnerUserId(request),
+        entryId: parsedParams.entryId
+      })
+    );
   }
 
   resetPlatformEntryOverride(
     platformEntryId: string,
     request: AstrologerSessionRequest
   ): Promise<void> {
-    return resetDictionaryPlatformEntryOverride({
-      store: this.store,
-      ownerUserId: requireOwnerUserId(request),
+    const parsedParams = parseContract(dictionaryPlatformEntryIdParamSchema, {
       platformEntryId
     });
+
+    return mapDictionaryStoreErrors(() =>
+      resetDictionaryPlatformEntryOverride({
+        store: this.store,
+        ownerUserId: requireOwnerUserId(request),
+        platformEntryId: parsedParams.platformEntryId
+      })
+    );
   }
 }
 
@@ -142,11 +180,12 @@ async function mapDictionaryStoreErrors<T>(operation: () => Promise<T>): Promise
   try {
     return await operation();
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.startsWith("Dictionary platform entry not found:")
-    ) {
+    if (error instanceof DictionaryPlatformEntryNotFoundError) {
       throw new NotFoundException("Dictionary platform entry not found");
+    }
+
+    if (error instanceof DictionaryCategoryNotFoundError) {
+      throw new NotFoundException("Dictionary category not found");
     }
 
     throw error;

@@ -50,13 +50,15 @@ export class IdentityCurrentSessionService {
       return null;
     }
 
-    return authenticatedAstrologerAccountResponseSchema.parse({
+    const account = authenticatedAstrologerAccountResponseSchema.safeParse({
       account: {
         id: context.user.id,
         status: context.user.status,
         roles: context.roleAssignments.map((assignment) => assignment.role)
       }
     });
+
+    return account.success ? account.data : null;
   }
 }
 

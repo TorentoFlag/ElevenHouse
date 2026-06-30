@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createDictionaryCustomEntry,
   deleteDictionaryAstrologerEntry,
+  DictionaryCategoryNotFoundError,
+  DictionaryPlatformEntryNotFoundError,
   listDictionaryCategories,
   listDictionaryEntries,
   overrideDictionaryPlatformEntry,
@@ -249,6 +251,53 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
       entries: [expect.objectContaining({ id: platformMoon.id })]
     });
 
+    await expect(
+      overrideDictionaryPlatformEntry({
+        store,
+        ownerUserId,
+        platformEntryId: archived.id,
+        title: "Archived override",
+        content: "Archived override content",
+        now: new Date("2026-06-30T10:10:00.000Z")
+      })
+    ).rejects.toBeInstanceOf(DictionaryPlatformEntryNotFoundError);
+
+    await expect(
+      createDictionaryCustomEntry({
+        store,
+        ownerUserId,
+        categoryId: randomUUID(),
+        code: `missing_category_${suffix}`,
+        locale: "ru",
+        title: "Missing category custom",
+        content: "Missing category content",
+        now: new Date("2026-06-30T10:15:00.000Z")
+      })
+    ).rejects.toBeInstanceOf(DictionaryCategoryNotFoundError);
+
+    await expect(
+      listDictionaryEntries({
+        store,
+        ownerUserId,
+        locale: "ru",
+        categoryId: category.id,
+        source: "all",
+        limit: 1,
+        offset: 10
+      })
+    ).resolves.toMatchObject({
+      total: 3,
+      entries: [],
+      counts: {
+        sources: {
+          all: 3,
+          platform: 1,
+          modified: 1,
+          custom: 1
+        }
+      }
+    });
+
     await resetDictionaryPlatformEntryOverride({
       store,
       ownerUserId,
@@ -294,6 +343,28 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
         })
       ])
     });
+
+    await expect(
+      Promise.all([
+        overrideDictionaryPlatformEntry({
+          store,
+          ownerUserId,
+          platformEntryId: platformMoon.id,
+          title: "Concurrent Moon",
+          content: "Concurrent Moon content",
+          now: new Date("2026-06-30T10:20:00.000Z")
+        }),
+        overrideDictionaryPlatformEntry({
+          store,
+          ownerUserId,
+          platformEntryId: platformMoon.id,
+          title: "Concurrent Moon",
+          content: "Concurrent Moon content",
+          now: new Date("2026-06-30T10:20:00.000Z")
+        })
+      ])
+    ).resolves.toHaveLength(2);
+    await expect(countOverrides(ownerUserId, platformMoon.id)).resolves.toBe(1);
   });
 
   async function createUser(): Promise<string> {
@@ -350,6 +421,19 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
     const result = await runtime.pool.query<{ count: string }>(
       "select count(*)::text as count from dictionary_astrologer_entries where owner_user_id = $1",
       [ownerUserId]
+    );
+
+    return Number(result.rows[0]?.count ?? 0);
+  }
+
+  async function countOverrides(ownerUserId: string, platformEntryId: string): Promise<number> {
+    const result = await runtime.pool.query<{ count: string }>(
+      `select count(*)::text as count
+       from dictionary_astrologer_entries
+       where owner_user_id = $1
+         and platform_entry_id = $2
+         and entry_type = 'override'`,
+      [ownerUserId, platformEntryId]
     );
 
     return Number(result.rows[0]?.count ?? 0);

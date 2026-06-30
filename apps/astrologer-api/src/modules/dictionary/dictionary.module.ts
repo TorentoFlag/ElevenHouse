@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { createDrizzleDictionaryStore } from "@elevenhouse/db/dictionary";
+import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
@@ -10,7 +11,7 @@ import { DictionaryService } from "./dictionary.service";
 import { DICTIONARY_STORE } from "./dictionary.tokens";
 
 @Module({
-  imports: [ConfigModule, DatabaseModule, IdentityModule, SecurityModule],
+  imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, SecurityModule],
   controllers: [DictionaryController],
   providers: [
     DictionaryService,

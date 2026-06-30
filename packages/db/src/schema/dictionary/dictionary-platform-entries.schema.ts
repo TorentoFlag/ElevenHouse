@@ -41,10 +41,10 @@ export const dictionaryPlatformEntries = pgTable(
       table.code,
       table.locale
     ),
-    index("dictionary_platform_entries_category_locale_status_index").on(
-      table.categoryId,
+    index("dictionary_platform_entries_locale_status_category_index").on(
       table.locale,
-      table.status
+      table.status,
+      table.categoryId
     )
   ]
 );

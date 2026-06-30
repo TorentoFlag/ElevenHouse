@@ -63,11 +63,9 @@ export const dictionaryAstrologerEntries = pgTable(
       ],
       name: "dictionary_astrologer_entries_platform_entry_identity_fk"
     }).onDelete("restrict"),
-    index("dictionary_astrologer_entries_owner_category_locale_index").on(
-      table.ownerUserId,
-      table.categoryId,
-      table.locale
-    ),
+    index("dictionary_astrologer_entries_custom_owner_locale_category_index")
+      .on(table.ownerUserId, table.locale, table.categoryId)
+      .where(sql`${table.entryType} = 'custom'`),
     index("dictionary_astrologer_entries_platform_entry_id_index").on(table.platformEntryId),
     uniqueIndex("dictionary_astrologer_entries_override_unique")
       .on(table.ownerUserId, table.platformEntryId, table.locale)
