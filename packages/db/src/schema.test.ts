@@ -89,6 +89,10 @@ describe("database account schema constants", () => {
     expect(migration).toContain('CREATE TABLE "dictionary_platform_entries"');
     expect(migration).toContain('CREATE TABLE "dictionary_astrologer_entries"');
     expect(migration).toContain('"entry_type" text NOT NULL');
+    expect(migration).toContain('"content" text NOT NULL');
+    expect(migration).not.toContain('"body" text NOT NULL');
+    expect(migration).not.toContain('CONSTRAINT "dictionary_platform_entries_version_check"');
+    expect(migration).not.toContain('CONSTRAINT "dictionary_astrologer_entries_version_check"');
     expect(migration).toContain(
       'CONSTRAINT "dictionary_platform_entries_category_code_locale_unique" UNIQUE("category_id","code","locale")'
     );

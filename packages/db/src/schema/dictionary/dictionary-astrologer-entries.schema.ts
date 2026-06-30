@@ -3,7 +3,6 @@ import {
   check,
   foreignKey,
   index,
-  integer,
   pgTable,
   text,
   timestamp,
@@ -34,9 +33,8 @@ export const dictionaryAstrologerEntries = pgTable(
     locale: text("locale").notNull(),
     entryType: text("entry_type").notNull(),
     title: text("title").notNull(),
-    body: text("body").notNull(),
+    content: text("content").notNull(),
     status: text("status").notNull().default("active"),
-    version: integer("version").notNull().default(1),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true })
@@ -54,7 +52,6 @@ export const dictionaryAstrologerEntries = pgTable(
       "dictionary_astrologer_entries_status_check",
       sql`${table.status} in ${sql.raw(formatSqlValues(dictionaryAstrologerEntryStatusValues))}`
     ),
-    check("dictionary_astrologer_entries_version_check", sql`${table.version} > 0`),
     check(
       "dictionary_astrologer_entries_override_platform_check",
       sql`${table.entryType} <> 'override' or ${table.platformEntryId} is not null`

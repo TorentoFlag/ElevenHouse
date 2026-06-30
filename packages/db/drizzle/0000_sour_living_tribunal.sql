@@ -175,16 +175,14 @@ CREATE TABLE "dictionary_platform_entries" (
 	"code" text NOT NULL,
 	"locale" text NOT NULL,
 	"title" text NOT NULL,
-	"body" text NOT NULL,
+	"content" text NOT NULL,
 	"status" text DEFAULT 'published' NOT NULL,
-	"version" integer DEFAULT 1 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "dictionary_platform_entries_category_code_locale_unique" UNIQUE("category_id","code","locale"),
 	CONSTRAINT "dictionary_platform_entries_identity_category_code_locale_unique" UNIQUE("id","category_id","code","locale"),
 	CONSTRAINT "dictionary_platform_entries_locale_check" CHECK ("dictionary_platform_entries"."locale" in ('ru', 'en')),
-	CONSTRAINT "dictionary_platform_entries_status_check" CHECK ("dictionary_platform_entries"."status" in ('published', 'archived')),
-	CONSTRAINT "dictionary_platform_entries_version_check" CHECK ("dictionary_platform_entries"."version" > 0)
+	CONSTRAINT "dictionary_platform_entries_status_check" CHECK ("dictionary_platform_entries"."status" in ('published', 'archived'))
 );
 --> statement-breakpoint
 CREATE TABLE "dictionary_astrologer_entries" (
@@ -196,16 +194,14 @@ CREATE TABLE "dictionary_astrologer_entries" (
 	"locale" text NOT NULL,
 	"entry_type" text NOT NULL,
 	"title" text NOT NULL,
-	"body" text NOT NULL,
+	"content" text NOT NULL,
 	"status" text DEFAULT 'active' NOT NULL,
-	"version" integer DEFAULT 1 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"deleted_at" timestamp with time zone,
 	CONSTRAINT "dictionary_astrologer_entries_locale_check" CHECK ("dictionary_astrologer_entries"."locale" in ('ru', 'en')),
 	CONSTRAINT "dictionary_astrologer_entries_entry_type_check" CHECK ("dictionary_astrologer_entries"."entry_type" in ('override', 'custom')),
 	CONSTRAINT "dictionary_astrologer_entries_status_check" CHECK ("dictionary_astrologer_entries"."status" in ('active', 'deleted')),
-	CONSTRAINT "dictionary_astrologer_entries_version_check" CHECK ("dictionary_astrologer_entries"."version" > 0),
 	CONSTRAINT "dictionary_astrologer_entries_override_platform_check" CHECK ("dictionary_astrologer_entries"."entry_type" <> 'override' or "dictionary_astrologer_entries"."platform_entry_id" is not null),
 	CONSTRAINT "dictionary_astrologer_entries_custom_platform_check" CHECK ("dictionary_astrologer_entries"."entry_type" <> 'custom' or "dictionary_astrologer_entries"."platform_entry_id" is null),
 	CONSTRAINT "dictionary_astrologer_entries_deleted_at_check" CHECK ("dictionary_astrologer_entries"."status" <> 'deleted' or "dictionary_astrologer_entries"."deleted_at" is not null)
