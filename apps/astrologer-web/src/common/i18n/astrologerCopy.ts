@@ -48,6 +48,7 @@ export type AstrologerCopy = {
   auth: AuthCopy;
   appShell: {
     header: AppShellHeaderCopy;
+    navigation: AppShellNavigationCopy;
   };
   dashboard: {
     documentTitle: string;
@@ -67,6 +68,46 @@ export type AppShellHeaderCopy = {
   profileTimezone: string;
   profileInitials: string;
   verifiedLabel: string;
+};
+
+export type AppShellNavigationItemId =
+  | "dashboard"
+  | "analytics"
+  | "calendar"
+  | "clients"
+  | "products"
+  | "funnels"
+  | "chartEngine"
+  | "numerology"
+  | "destinyMatrix"
+  | "humanDesign"
+  | "astroCalendar"
+  | "astroDiary"
+  | "reference"
+  | "settings";
+
+export type AppShellNavigationItemCopy = {
+  id: AppShellNavigationItemId;
+  title: string;
+  href: string;
+  badge?: string;
+  locked?: boolean;
+};
+
+export type AppShellNavigationCopy = {
+  ariaLabel: string;
+  brandTitle: string;
+  brandSubtitle: string;
+  collapseLabel: string;
+  expandLabel: string;
+  personalPage: {
+    title: string;
+    description: string;
+    href: string;
+    ariaLabel: string;
+  };
+  items: AppShellNavigationItemCopy[];
+  footerItems: AppShellNavigationItemCopy[];
 };
 
 export const astrologerCopyByLocale = {
@@ -162,6 +203,24 @@ export const astrologerCopyByLocale = {
         profileTimezone: "GMT+3, Москва",
         profileInitials: "АВ",
         verifiedLabel: "Верифицирован"
+      },
+      navigation: {
+        ariaLabel: "Навигация кабинета астролога",
+        brandTitle: "ElevenHouse",
+        brandSubtitle: "ASTROLOGER WORKSPACE",
+        collapseLabel: "Свернуть боковое меню",
+        expandLabel: "Развернуть боковое меню",
+        personalPage: {
+          title: "Личная страница",
+          description: "elevenhouse.app/alisa-vega",
+          href: "https://elevenhouse.app/alisa-vega",
+          ariaLabel: "Открыть личную страницу астролога"
+        },
+        items: [
+          { id: "dashboard", title: "Дашборд", href: "/dashboard" },
+          { id: "reference", title: "Справочники", href: "/reference" }
+        ],
+        footerItems: [{ id: "settings", title: "Настройки", href: "/settings" }]
       }
     },
     dashboard: {
@@ -262,6 +321,24 @@ export const astrologerCopyByLocale = {
         profileTimezone: "GMT+3, Moscow",
         profileInitials: "AV",
         verifiedLabel: "Verified"
+      },
+      navigation: {
+        ariaLabel: "Astrologer workspace navigation",
+        brandTitle: "ElevenHouse",
+        brandSubtitle: "ASTROLOGER WORKSPACE",
+        collapseLabel: "Collapse sidebar navigation",
+        expandLabel: "Expand sidebar navigation",
+        personalPage: {
+          title: "Personal page",
+          description: "elevenhouse.app/alisa-vega",
+          href: "https://elevenhouse.app/alisa-vega",
+          ariaLabel: "Open astrologer personal page"
+        },
+        items: [
+          { id: "dashboard", title: "Dashboard", href: "/dashboard" },
+          { id: "reference", title: "References", href: "/reference" }
+        ],
+        footerItems: [{ id: "settings", title: "Settings", href: "/settings" }]
       }
     },
     dashboard: {

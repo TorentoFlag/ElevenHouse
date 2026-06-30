@@ -1,0 +1,96 @@
+.astrologerNavigationDrawer__personalPage {
+  appearance: none;
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--eh-space-12);
+  min-height: 96px;
+  width: 100%;
+  padding: var(--eh-space-14) var(--eh-space-16);
+  border: 1px solid rgb(216 212 236 / 0.08);
+  border-radius: var(--eh-radius-12);
+  background: rgb(22 20 47 / 0.86);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  transition:
+    border-color var(--eh-motion-duration-state) var(--eh-motion-ease-fluid),
+    background var(--eh-motion-duration-state) var(--eh-motion-ease-fluid),
+    gap var(--eh-motion-duration-panel) var(--eh-motion-ease-fluid),
+    min-height var(--eh-motion-duration-panel) var(--eh-motion-ease-fluid),
+    padding var(--eh-motion-duration-panel) var(--eh-motion-ease-fluid);
+}
+
+.astrologerNavigationDrawer__personalPage:hover {
+  border-color: rgb(244 196 48 / 0.34);
+  background: rgb(244 196 48 / 0.1);
+}
+
+.astrologerNavigationDrawer__personalPage:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.2);
+}
+
+.astrologerNavigationDrawer__personalPageIcon {
+  display: inline-flex;
+  color: var(--eh-color-gold);
+  line-height: 0;
+}
+
+.astrologerNavigationDrawer__personalPageText {
+  display: grid;
+  min-width: 0;
+  gap: var(--eh-space-6);
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity var(--eh-motion-duration-state) var(--eh-motion-ease-fluid),
+    transform var(--eh-motion-duration-state) var(--eh-motion-ease-fluid);
+}
+
+.astrologerNavigationDrawer__personalPageTitle {
+  overflow: hidden;
+  color: var(--eh-color-moon-120);
+  font-size: var(--eh-font-size-14);
+  font-weight: var(--eh-font-weight-bold);
+  line-height: var(--eh-line-height-120);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.astrologerNavigationDrawer__personalPageDescription {
+  overflow: hidden;
+  color: var(--eh-color-muted);
+  font-family: var(--eh-font-mono);
+  font-size: var(--eh-font-size-12);
+  line-height: var(--eh-line-height-140);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ehNavigationDrawer--collapsed .astrologerNavigationDrawer__personalPage {
+  gap: 0;
+  grid-template-columns: 1fr;
+  min-height: 56px;
+  justify-items: center;
+  padding: var(--eh-space-14);
+}
+
+.ehNavigationDrawer--collapsed .astrologerNavigationDrawer__personalPageText {
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transform: translateX(-6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .astrologerNavigationDrawer__personalPage,
+  .astrologerNavigationDrawer__personalPageText {
+    transition: none;
+  }
+}

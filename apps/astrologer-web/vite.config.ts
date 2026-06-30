@@ -12,6 +12,12 @@ export default defineConfig({
       "@elevenhouse/contracts": fileURLToPath(
         new URL("../../packages/contracts/src/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/navigation/NavigationDrawer.css": fileURLToPath(
+        new URL(
+          "../../packages/design-system/src/navigation/NavigationDrawer/NavigationDrawer.css",
+          import.meta.url
+        )
+      ),
       "@elevenhouse/design-system/navigation": fileURLToPath(
         new URL("../../packages/design-system/src/navigation/index.ts", import.meta.url)
       ),
@@ -56,6 +62,9 @@ export default defineConfig({
       ),
       "@elevenhouse/design-system/icons/Refresh": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Refresh/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/Reference": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Reference/index.ts", import.meta.url)
       ),
       "@elevenhouse/design-system/icons/Search": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Search/index.ts", import.meta.url)
