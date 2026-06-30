@@ -12,7 +12,6 @@ import {
   authSessionStatusValues,
   databasePlatformRoleValues,
   dictionaryAstrologerEntries,
-  dictionaryAstrologerEntryStatusValues,
   dictionaryAstrologerEntryTypeValues,
   dictionaryCategories,
   dictionaryLocaleValues,
@@ -73,7 +72,6 @@ describe("database account schema constants", () => {
     expect(dictionaryLocaleValues).toEqual(["ru", "en"]);
     expect(dictionaryPlatformEntryStatusValues).toEqual(["published", "archived"]);
     expect(dictionaryAstrologerEntryTypeValues).toEqual(["override", "custom"]);
-    expect(dictionaryAstrologerEntryStatusValues).toEqual(["active", "deleted"]);
     expect(dictionaryCategories).toBeDefined();
     expect(dictionaryPlatformEntries).toBeDefined();
     expect(dictionaryAstrologerEntries).toBeDefined();
@@ -81,6 +79,10 @@ describe("database account schema constants", () => {
 
   it("keeps dictionary tables in the current baseline migration", () => {
     const migration = readFileSync("packages/db/drizzle/0000_sour_living_tribunal.sql", "utf8");
+    const dictionaryAstrologerEntriesTable = getCreateTableStatement(
+      migration,
+      "dictionary_astrologer_entries"
+    );
 
     expect(migration).toContain('CREATE TABLE "dictionary_categories"');
     expect(migration).toContain('"code" text NOT NULL');
@@ -90,7 +92,11 @@ describe("database account schema constants", () => {
     expect(migration).toContain('CREATE TABLE "dictionary_astrologer_entries"');
     expect(migration).toContain('"entry_type" text NOT NULL');
     expect(migration).toContain('"content" text NOT NULL');
+    expect(dictionaryAstrologerEntriesTable).not.toContain('"status" text');
+    expect(dictionaryAstrologerEntriesTable).not.toContain('"deleted_at"');
     expect(migration).not.toContain('"body" text NOT NULL');
+    expect(migration).not.toContain('CONSTRAINT "dictionary_astrologer_entries_status_check"');
+    expect(migration).not.toContain('CONSTRAINT "dictionary_astrologer_entries_deleted_at_check"');
     expect(migration).not.toContain('CONSTRAINT "dictionary_platform_entries_version_check"');
     expect(migration).not.toContain('CONSTRAINT "dictionary_astrologer_entries_version_check"');
     expect(migration).toContain(
@@ -106,10 +112,10 @@ describe("database account schema constants", () => {
       'CREATE INDEX "dictionary_astrologer_entries_platform_entry_id_index" ON "dictionary_astrologer_entries" USING btree ("platform_entry_id")'
     );
     expect(migration).toContain(
-      'CREATE UNIQUE INDEX "dictionary_astrologer_entries_active_override_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","platform_entry_id","locale") WHERE "dictionary_astrologer_entries"."entry_type" = \'override\' and "dictionary_astrologer_entries"."status" = \'active\''
+      'CREATE UNIQUE INDEX "dictionary_astrologer_entries_override_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","platform_entry_id","locale") WHERE "dictionary_astrologer_entries"."entry_type" = \'override\''
     );
     expect(migration).toContain(
-      'CREATE UNIQUE INDEX "dictionary_astrologer_entries_active_custom_code_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","code","locale") WHERE "dictionary_astrologer_entries"."entry_type" = \'custom\' and "dictionary_astrologer_entries"."status" = \'active\''
+      'CREATE UNIQUE INDEX "dictionary_astrologer_entries_custom_code_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","code","locale") WHERE "dictionary_astrologer_entries"."entry_type" = \'custom\''
     );
   });
 
@@ -141,3 +147,9 @@ describe("database account schema constants", () => {
     ]);
   });
 });
+
+function getCreateTableStatement(migration: string, tableName: string): string {
+  return (
+    migration.match(new RegExp(`CREATE TABLE "${tableName}" \\([\\s\\S]*?\\n\\);`))?.[0] ?? ""
+  );
+}

@@ -24,7 +24,6 @@ export type DictionaryCustomEntryInput = {
   readonly entryType: "custom";
   readonly title: string;
   readonly content: string;
-  readonly status: "active";
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -40,13 +39,11 @@ export type DictionaryPlatformEntryOverrideInput = {
 export type DictionaryAstrologerEntryDeleteInput = {
   readonly ownerUserId: string;
   readonly entryId: string;
-  readonly deletedAt: string;
 };
 
 export type DictionaryPlatformEntryOverrideResetInput = {
   readonly ownerUserId: string;
   readonly platformEntryId: string;
-  readonly resetAt: string;
 };
 
 export type DictionaryStore = {

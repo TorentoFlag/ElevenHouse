@@ -1,5 +1,5 @@
 {
-  "id": "f649b8aa-5da8-4210-bac0-76fcfb736c50",
+  "id": "477754a9-8ff4-47db-a493-a91f6945d886",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1742,13 +1742,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'active'"
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1762,17 +1755,11 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
-        "dictionary_astrologer_entries_owner_category_locale_status_index": {
-          "name": "dictionary_astrologer_entries_owner_category_locale_status_index",
+        "dictionary_astrologer_entries_owner_category_locale_index": {
+          "name": "dictionary_astrologer_entries_owner_category_locale_index",
           "columns": [
             {
               "expression": "owner_user_id",
@@ -1788,12 +1775,6 @@
             },
             {
               "expression": "locale",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1819,8 +1800,8 @@
           "method": "btree",
           "with": {}
         },
-        "dictionary_astrologer_entries_active_override_unique": {
-          "name": "dictionary_astrologer_entries_active_override_unique",
+        "dictionary_astrologer_entries_override_unique": {
+          "name": "dictionary_astrologer_entries_override_unique",
           "columns": [
             {
               "expression": "owner_user_id",
@@ -1842,13 +1823,13 @@
             }
           ],
           "isUnique": true,
-          "where": "\"dictionary_astrologer_entries\".\"entry_type\" = 'override' and \"dictionary_astrologer_entries\".\"status\" = 'active'",
+          "where": "\"dictionary_astrologer_entries\".\"entry_type\" = 'override'",
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "dictionary_astrologer_entries_active_custom_code_unique": {
-          "name": "dictionary_astrologer_entries_active_custom_code_unique",
+        "dictionary_astrologer_entries_custom_code_unique": {
+          "name": "dictionary_astrologer_entries_custom_code_unique",
           "columns": [
             {
               "expression": "owner_user_id",
@@ -1876,7 +1857,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"dictionary_astrologer_entries\".\"entry_type\" = 'custom' and \"dictionary_astrologer_entries\".\"status\" = 'active'",
+          "where": "\"dictionary_astrologer_entries\".\"entry_type\" = 'custom'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1941,10 +1922,6 @@
           "name": "dictionary_astrologer_entries_entry_type_check",
           "value": "\"dictionary_astrologer_entries\".\"entry_type\" in ('override', 'custom')"
         },
-        "dictionary_astrologer_entries_status_check": {
-          "name": "dictionary_astrologer_entries_status_check",
-          "value": "\"dictionary_astrologer_entries\".\"status\" in ('active', 'deleted')"
-        },
         "dictionary_astrologer_entries_override_platform_check": {
           "name": "dictionary_astrologer_entries_override_platform_check",
           "value": "\"dictionary_astrologer_entries\".\"entry_type\" <> 'override' or \"dictionary_astrologer_entries\".\"platform_entry_id\" is not null"
@@ -1952,10 +1929,6 @@
         "dictionary_astrologer_entries_custom_platform_check": {
           "name": "dictionary_astrologer_entries_custom_platform_check",
           "value": "\"dictionary_astrologer_entries\".\"entry_type\" <> 'custom' or \"dictionary_astrologer_entries\".\"platform_entry_id\" is null"
-        },
-        "dictionary_astrologer_entries_deleted_at_check": {
-          "name": "dictionary_astrologer_entries_deleted_at_check",
-          "value": "\"dictionary_astrologer_entries\".\"status\" <> 'deleted' or \"dictionary_astrologer_entries\".\"deleted_at\" is not null"
         }
       },
       "isRLSEnabled": false

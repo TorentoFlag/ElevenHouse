@@ -64,6 +64,16 @@
       "types": "./dist/adapters/notifications/index.d.ts",
       "import": "./dist/adapters/notifications/index.js",
       "require": "./dist/adapters/notifications/index.js"
+    },
+    "./dictionary": {
+      "types": "./dist/adapters/dictionary/index.d.ts",
+      "import": "./dist/adapters/dictionary/index.js",
+      "require": "./dist/adapters/dictionary/index.js"
+    },
+    "./adapters/dictionary": {
+      "types": "./dist/adapters/dictionary/index.d.ts",
+      "import": "./dist/adapters/dictionary/index.js",
+      "require": "./dist/adapters/dictionary/index.js"
     }
   },
   "scripts": {

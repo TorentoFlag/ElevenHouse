@@ -195,16 +195,12 @@ CREATE TABLE "dictionary_astrologer_entries" (
 	"entry_type" text NOT NULL,
 	"title" text NOT NULL,
 	"content" text NOT NULL,
-	"status" text DEFAULT 'active' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"deleted_at" timestamp with time zone,
 	CONSTRAINT "dictionary_astrologer_entries_locale_check" CHECK ("dictionary_astrologer_entries"."locale" in ('ru', 'en')),
 	CONSTRAINT "dictionary_astrologer_entries_entry_type_check" CHECK ("dictionary_astrologer_entries"."entry_type" in ('override', 'custom')),
-	CONSTRAINT "dictionary_astrologer_entries_status_check" CHECK ("dictionary_astrologer_entries"."status" in ('active', 'deleted')),
 	CONSTRAINT "dictionary_astrologer_entries_override_platform_check" CHECK ("dictionary_astrologer_entries"."entry_type" <> 'override' or "dictionary_astrologer_entries"."platform_entry_id" is not null),
-	CONSTRAINT "dictionary_astrologer_entries_custom_platform_check" CHECK ("dictionary_astrologer_entries"."entry_type" <> 'custom' or "dictionary_astrologer_entries"."platform_entry_id" is null),
-	CONSTRAINT "dictionary_astrologer_entries_deleted_at_check" CHECK ("dictionary_astrologer_entries"."status" <> 'deleted' or "dictionary_astrologer_entries"."deleted_at" is not null)
+	CONSTRAINT "dictionary_astrologer_entries_custom_platform_check" CHECK ("dictionary_astrologer_entries"."entry_type" <> 'custom' or "dictionary_astrologer_entries"."platform_entry_id" is null)
 );
 --> statement-breakpoint
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -250,7 +246,7 @@ CREATE INDEX "outbox_events_pending_index" ON "outbox_events" USING btree ("stat
 CREATE INDEX "outbox_events_locked_at_index" ON "outbox_events" USING btree ("locked_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "dictionary_categories_code_unique" ON "dictionary_categories" USING btree ("code");--> statement-breakpoint
 CREATE INDEX "dictionary_platform_entries_category_locale_status_index" ON "dictionary_platform_entries" USING btree ("category_id","locale","status");--> statement-breakpoint
-CREATE INDEX "dictionary_astrologer_entries_owner_category_locale_status_index" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","locale","status");--> statement-breakpoint
+CREATE INDEX "dictionary_astrologer_entries_owner_category_locale_index" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","locale");--> statement-breakpoint
 CREATE INDEX "dictionary_astrologer_entries_platform_entry_id_index" ON "dictionary_astrologer_entries" USING btree ("platform_entry_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "dictionary_astrologer_entries_active_override_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","platform_entry_id","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'override' and "dictionary_astrologer_entries"."status" = 'active';--> statement-breakpoint
-CREATE UNIQUE INDEX "dictionary_astrologer_entries_active_custom_code_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","code","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'custom' and "dictionary_astrologer_entries"."status" = 'active';
+CREATE UNIQUE INDEX "dictionary_astrologer_entries_override_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","platform_entry_id","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'override';--> statement-breakpoint
+CREATE UNIQUE INDEX "dictionary_astrologer_entries_custom_code_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","code","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'custom';

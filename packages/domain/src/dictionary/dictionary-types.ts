@@ -8,10 +8,6 @@ export type DictionaryEntrySourceFilter = "all" | DictionaryEntrySource;
 export const dictionaryAstrologerEntryTypeValues = ["override", "custom"] as const;
 export type DictionaryAstrologerEntryType = (typeof dictionaryAstrologerEntryTypeValues)[number];
 
-export const dictionaryAstrologerEntryStatusValues = ["active", "deleted"] as const;
-export type DictionaryAstrologerEntryStatus =
-  (typeof dictionaryAstrologerEntryStatusValues)[number];
-
 export type DictionaryCategory = {
   readonly id: string;
   readonly code: string;
@@ -51,8 +47,6 @@ export type DictionaryAstrologerEntry = {
   readonly entryType: DictionaryAstrologerEntryType;
   readonly title: string;
   readonly content: string;
-  readonly status: DictionaryAstrologerEntryStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
-  readonly deletedAt?: string;
 };

@@ -33,10 +33,8 @@ function createStore(overrides: Partial<DictionaryStore> = {}): DictionaryStore 
       id: "astrologer_entry_custom",
       platformEntryId: undefined,
       entryType: "custom",
-      status: "active",
       createdAt: input.createdAt,
       updatedAt: input.updatedAt,
-      deletedAt: undefined,
       ...input
     })),
     upsertPlatformEntryOverride: vi.fn(async (input) => ({
@@ -49,10 +47,8 @@ function createStore(overrides: Partial<DictionaryStore> = {}): DictionaryStore 
       entryType: "override" as const,
       title: input.title,
       content: input.content,
-      status: "active" as const,
       createdAt: input.updatedAt,
-      updatedAt: input.updatedAt,
-      deletedAt: undefined
+      updatedAt: input.updatedAt
     })),
     deleteAstrologerEntry: vi.fn(async () => undefined),
     resetPlatformEntryOverride: vi.fn(async () => undefined),
@@ -128,7 +124,6 @@ describe("dictionary domain module", () => {
       entryType: "custom",
       title: "Луна в Тельце",
       content: "Пользовательская трактовка",
-      status: "active",
       createdAt: "2026-06-30T10:00:00.000Z",
       updatedAt: "2026-06-30T10:00:00.000Z"
     });
@@ -155,20 +150,18 @@ describe("dictionary domain module", () => {
     });
   });
 
-  it("soft deletes a custom or override entry owned by the astrologer", async () => {
+  it("deletes a custom or override entry owned by the astrologer", async () => {
     const store = createStore();
 
     await deleteDictionaryAstrologerEntry({
       store,
       ownerUserId: " user_astrologer ",
-      entryId: " astrologer_entry ",
-      deletedAt: now
+      entryId: " astrologer_entry "
     });
 
     expect(store.deleteAstrologerEntry).toHaveBeenCalledWith({
       ownerUserId: "user_astrologer",
-      entryId: "astrologer_entry",
-      deletedAt: "2026-06-30T10:00:00.000Z"
+      entryId: "astrologer_entry"
     });
   });
 
@@ -178,14 +171,12 @@ describe("dictionary domain module", () => {
     await resetDictionaryPlatformEntryOverride({
       store,
       ownerUserId: " user_astrologer ",
-      platformEntryId: " platform_sun_aries ",
-      resetAt: now
+      platformEntryId: " platform_sun_aries "
     });
 
     expect(store.resetPlatformEntryOverride).toHaveBeenCalledWith({
       ownerUserId: "user_astrologer",
-      platformEntryId: "platform_sun_aries",
-      resetAt: "2026-06-30T10:00:00.000Z"
+      platformEntryId: "platform_sun_aries"
     });
   });
 });

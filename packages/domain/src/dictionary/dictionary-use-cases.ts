@@ -59,7 +59,6 @@ export function createDictionaryCustomEntry(input: {
     entryType: "custom",
     title: normalizeRequiredString(input.title, "Dictionary entry title is required"),
     content: normalizeRequiredString(input.content, "Dictionary entry content is required"),
-    status: "active",
     createdAt: now,
     updatedAt: now
   });
@@ -89,12 +88,10 @@ export function deleteDictionaryAstrologerEntry(input: {
   readonly store: DictionaryStore;
   readonly ownerUserId: string;
   readonly entryId: string;
-  readonly deletedAt: Date;
 }): Promise<void> {
   return input.store.deleteAstrologerEntry({
     ownerUserId: normalizeRequiredString(input.ownerUserId, "Dictionary owner user id is required"),
-    entryId: normalizeRequiredString(input.entryId, "Dictionary astrologer entry id is required"),
-    deletedAt: input.deletedAt.toISOString()
+    entryId: normalizeRequiredString(input.entryId, "Dictionary astrologer entry id is required")
   });
 }
 
@@ -102,14 +99,12 @@ export function resetDictionaryPlatformEntryOverride(input: {
   readonly store: DictionaryStore;
   readonly ownerUserId: string;
   readonly platformEntryId: string;
-  readonly resetAt: Date;
 }): Promise<void> {
   return input.store.resetPlatformEntryOverride({
     ownerUserId: normalizeRequiredString(input.ownerUserId, "Dictionary owner user id is required"),
     platformEntryId: normalizeRequiredString(
       input.platformEntryId,
       "Dictionary platform entry id is required"
-    ),
-    resetAt: input.resetAt.toISOString()
+    )
   });
 }

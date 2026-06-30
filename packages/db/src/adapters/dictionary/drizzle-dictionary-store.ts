@@ -1,0 +1,354 @@
+import { and, asc, eq, sql } from "drizzle-orm";
+import type {
+  DictionaryAstrologerEntry,
+  DictionaryCategory,
+  DictionaryEffectiveEntry,
+  DictionaryEntryListQuery,
+  DictionaryEntryListResult,
+  DictionaryEntrySource,
+  DictionaryLocale,
+  DictionaryStore
+} from "@elevenhouse/domain";
+import type { ElevenHouseDatabase } from "../../runtime";
+import {
+  dictionaryAstrologerEntries,
+  dictionaryCategories,
+  dictionaryPlatformEntries
+} from "../../schema";
+import { insertReturningOne } from "../../shared";
+
+type DictionaryAstrologerEntrySelect = typeof dictionaryAstrologerEntries.$inferSelect;
+type DictionaryAstrologerEntryInsert = typeof dictionaryAstrologerEntries.$inferInsert;
+type DictionaryPlatformEntrySelect = typeof dictionaryPlatformEntries.$inferSelect;
+
+type DictionaryEffectiveEntryRow = Omit<
+  DictionaryEffectiveEntry,
+  "createdAt" | "updatedAt" | "platformEntryId" | "astrologerEntryId"
+> & {
+  readonly platformEntryId: string | null;
+  readonly astrologerEntryId: string | null;
+  readonly createdAt: Date | string;
+  readonly updatedAt: Date | string;
+  readonly total: number | string;
+};
+
+const dictionaryLocaleSet = new Set<string>(["ru", "en"]);
+const dictionaryEntrySourceSet = new Set<string>(["platform", "modified", "custom"]);
+const dictionaryAstrologerEntryTypeSet = new Set<string>(["override", "custom"]);
+
+export function createDrizzleDictionaryStore(database: ElevenHouseDatabase): DictionaryStore {
+  return {
+    listCategories: async () => {
+      const rows = await database
+        .select()
+        .from(dictionaryCategories)
+        .orderBy(asc(dictionaryCategories.order));
+
+      return rows.map(toDictionaryCategory);
+    },
+    listEntries: (query) => listEntries(database, query),
+    createCustomEntry: async (input) => {
+      const row = await insertReturningOne(
+        () =>
+          database
+            .insert(dictionaryAstrologerEntries)
+            .values({
+              ownerUserId: input.ownerUserId,
+              categoryId: input.categoryId,
+              code: input.code,
+              locale: input.locale,
+              entryType: "custom",
+              title: input.title,
+              content: input.content,
+              createdAt: new Date(input.createdAt),
+              updatedAt: new Date(input.updatedAt)
+            } satisfies DictionaryAstrologerEntryInsert)
+            .returning(),
+        "dictionary_astrologer_entries"
+      );
+
+      return toDictionaryAstrologerEntry(row);
+    },
+    upsertPlatformEntryOverride: (input) =>
+      database.transaction(async (transaction) => {
+        const platformEntry = await transaction.query.dictionaryPlatformEntries.findFirst({
+          where: eq(dictionaryPlatformEntries.id, input.platformEntryId)
+        });
+
+        if (!platformEntry) {
+          throw new Error(`Dictionary platform entry not found: ${input.platformEntryId}`);
+        }
+
+        const existingOverride = await transaction.query.dictionaryAstrologerEntries.findFirst({
+          where: and(
+            eq(dictionaryAstrologerEntries.ownerUserId, input.ownerUserId),
+            eq(dictionaryAstrologerEntries.platformEntryId, input.platformEntryId),
+            eq(dictionaryAstrologerEntries.locale, platformEntry.locale),
+            eq(dictionaryAstrologerEntries.entryType, "override")
+          )
+        });
+
+        if (existingOverride) {
+          const row = await insertReturningOne(
+            () =>
+              transaction
+                .update(dictionaryAstrologerEntries)
+                .set({
+                  title: input.title,
+                  content: input.content,
+                  updatedAt: new Date(input.updatedAt)
+                })
+                .where(eq(dictionaryAstrologerEntries.id, existingOverride.id))
+                .returning(),
+            "dictionary_astrologer_entries"
+          );
+
+          return toDictionaryAstrologerEntry(row);
+        }
+
+        const row = await insertReturningOne(
+          () =>
+            transaction
+              .insert(dictionaryAstrologerEntries)
+              .values(toOverrideInsert(input, platformEntry))
+              .returning(),
+          "dictionary_astrologer_entries"
+        );
+
+        return toDictionaryAstrologerEntry(row);
+      }),
+    deleteAstrologerEntry: async (input) => {
+      await database
+        .delete(dictionaryAstrologerEntries)
+        .where(
+          and(
+            eq(dictionaryAstrologerEntries.id, input.entryId),
+            eq(dictionaryAstrologerEntries.ownerUserId, input.ownerUserId)
+          )
+        );
+    },
+    resetPlatformEntryOverride: async (input) => {
+      await database
+        .delete(dictionaryAstrologerEntries)
+        .where(
+          and(
+            eq(dictionaryAstrologerEntries.ownerUserId, input.ownerUserId),
+            eq(dictionaryAstrologerEntries.platformEntryId, input.platformEntryId),
+            eq(dictionaryAstrologerEntries.entryType, "override")
+          )
+        );
+    }
+  };
+}
+
+async function listEntries(
+  database: ElevenHouseDatabase,
+  query: DictionaryEntryListQuery
+): Promise<DictionaryEntryListResult> {
+  const sourceFilter =
+    query.source === "all" ? sql`` : sql`and source = ${query.source}`;
+  const platformCategoryFilter =
+    query.categoryId === undefined
+      ? sql``
+      : sql`and platform_entries.category_id = ${query.categoryId}`;
+  const customCategoryFilter =
+    query.categoryId === undefined
+      ? sql``
+      : sql`and custom_entries.category_id = ${query.categoryId}`;
+  const searchFilter =
+    query.search === undefined
+      ? sql``
+      : sql`and (lower(title) like ${formatSearch(query.search)} or lower(content) like ${formatSearch(
+          query.search
+        )})`;
+  const limit = query.limit ?? 50;
+  const offset = query.offset ?? 0;
+
+  const result = await database.execute(sql<DictionaryEffectiveEntryRow>`
+    with platform_entries as (
+      select
+        coalesce(overrides.id, platform_entries.id) as "id",
+        platform_entries.category_id as "categoryId",
+        categories.code as "categoryCode",
+        platform_entries.code as "code",
+        platform_entries.locale as "locale",
+        case
+          when overrides.id is null then 'platform'
+          else 'modified'
+        end as "source",
+        coalesce(overrides.title, platform_entries.title) as "title",
+        coalesce(overrides.content, platform_entries.content) as "content",
+        platform_entries.id as "platformEntryId",
+        overrides.id as "astrologerEntryId",
+        coalesce(overrides.created_at, platform_entries.created_at) as "createdAt",
+        coalesce(overrides.updated_at, platform_entries.updated_at) as "updatedAt",
+        categories."order" as "categoryOrder"
+      from ${dictionaryPlatformEntries} as platform_entries
+      inner join ${dictionaryCategories} as categories
+        on categories.id = platform_entries.category_id
+      left join ${dictionaryAstrologerEntries} as overrides
+        on overrides.owner_user_id = ${query.ownerUserId}
+        and overrides.platform_entry_id = platform_entries.id
+        and overrides.locale = platform_entries.locale
+        and overrides.entry_type = 'override'
+      where platform_entries.locale = ${query.locale}
+        and platform_entries.status = 'published'
+        ${platformCategoryFilter}
+    ),
+    custom_entries as (
+      select
+        custom_entries.id as "id",
+        custom_entries.category_id as "categoryId",
+        categories.code as "categoryCode",
+        custom_entries.code as "code",
+        custom_entries.locale as "locale",
+        'custom' as "source",
+        custom_entries.title as "title",
+        custom_entries.content as "content",
+        null::uuid as "platformEntryId",
+        custom_entries.id as "astrologerEntryId",
+        custom_entries.created_at as "createdAt",
+        custom_entries.updated_at as "updatedAt",
+        categories."order" as "categoryOrder"
+      from ${dictionaryAstrologerEntries} as custom_entries
+      inner join ${dictionaryCategories} as categories
+        on categories.id = custom_entries.category_id
+      where custom_entries.owner_user_id = ${query.ownerUserId}
+        and custom_entries.locale = ${query.locale}
+        and custom_entries.entry_type = 'custom'
+        ${customCategoryFilter}
+    ),
+    effective_entries as (
+      select * from platform_entries
+      union all
+      select * from custom_entries
+    )
+    select
+      id,
+      "categoryId",
+      "categoryCode",
+      code,
+      locale,
+      source,
+      title,
+      content,
+      "platformEntryId",
+      "astrologerEntryId",
+      "createdAt",
+      "updatedAt",
+      count(*) over() as "total"
+    from effective_entries
+    where true
+      ${sourceFilter}
+      ${searchFilter}
+    order by "categoryOrder", title, id
+    limit ${limit}
+    offset ${offset}
+  `);
+  const rows = result.rows as unknown as readonly DictionaryEffectiveEntryRow[];
+
+  return {
+    entries: rows.map(toDictionaryEffectiveEntry),
+    total: Number(rows[0]?.total ?? 0)
+  };
+}
+
+function toOverrideInsert(
+  input: Parameters<DictionaryStore["upsertPlatformEntryOverride"]>[0],
+  platformEntry: DictionaryPlatformEntrySelect
+): DictionaryAstrologerEntryInsert {
+  return {
+    ownerUserId: input.ownerUserId,
+    platformEntryId: platformEntry.id,
+    categoryId: platformEntry.categoryId,
+    code: platformEntry.code,
+    locale: platformEntry.locale,
+    entryType: "override",
+    title: input.title,
+    content: input.content,
+    createdAt: new Date(input.updatedAt),
+    updatedAt: new Date(input.updatedAt)
+  };
+}
+
+function toDictionaryCategory(row: typeof dictionaryCategories.$inferSelect): DictionaryCategory {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    order: row.order,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+function toDictionaryEffectiveEntry(row: DictionaryEffectiveEntryRow): DictionaryEffectiveEntry {
+  const locale = row.locale;
+  if (!isDictionaryLocale(locale)) {
+    throw new Error(`Unexpected dictionary locale: ${locale}`);
+  }
+
+  const source = row.source;
+  if (!isDictionaryEntrySource(source)) {
+    throw new Error(`Unexpected dictionary entry source: ${source}`);
+  }
+
+  return {
+    id: row.id,
+    categoryId: row.categoryId,
+    categoryCode: row.categoryCode,
+    code: row.code,
+    locale,
+    source,
+    title: row.title,
+    content: row.content,
+    ...(row.platformEntryId === null ? {} : { platformEntryId: row.platformEntryId }),
+    ...(row.astrologerEntryId === null ? {} : { astrologerEntryId: row.astrologerEntryId }),
+    createdAt: toIsoString(row.createdAt),
+    updatedAt: toIsoString(row.updatedAt)
+  };
+}
+
+function toDictionaryAstrologerEntry(
+  row: DictionaryAstrologerEntrySelect
+): DictionaryAstrologerEntry {
+  const locale = row.locale;
+  if (!isDictionaryLocale(locale)) {
+    throw new Error(`Unexpected dictionary_astrologer_entries.locale value: ${locale}`);
+  }
+
+  const entryType = row.entryType;
+  if (!dictionaryAstrologerEntryTypeSet.has(entryType)) {
+    throw new Error(`Unexpected dictionary_astrologer_entries.entry_type value: ${entryType}`);
+  }
+
+  return {
+    id: row.id,
+    ownerUserId: row.ownerUserId,
+    ...(row.platformEntryId === null ? {} : { platformEntryId: row.platformEntryId }),
+    categoryId: row.categoryId,
+    code: row.code,
+    locale,
+    entryType: entryType as DictionaryAstrologerEntry["entryType"],
+    title: row.title,
+    content: row.content,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+function formatSearch(search: string): string {
+  return `%${search.toLowerCase()}%`;
+}
+
+function toIsoString(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function isDictionaryLocale(value: string): value is DictionaryLocale {
+  return dictionaryLocaleSet.has(value);
+}
+
+function isDictionaryEntrySource(value: string): value is DictionaryEntrySource {
+  return dictionaryEntrySourceSet.has(value);
+}
