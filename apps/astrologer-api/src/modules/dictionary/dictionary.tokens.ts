@@ -1,0 +1,1 @@
+export const DICTIONARY_STORE = Symbol("DICTIONARY_STORE");
