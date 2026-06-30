@@ -1,0 +1,72 @@
+.ehIconButton {
+  box-sizing: border-box;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--eh-radius-12);
+  outline: none;
+  background: transparent;
+  color: var(--eh-color-moon-500);
+  cursor: pointer;
+  font-family: var(--eh-font-sans);
+  line-height: 0;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.ehIconButton--small {
+  width: 36px;
+  height: 36px;
+}
+
+.ehIconButton--medium {
+  width: 42px;
+  height: 42px;
+}
+
+.ehIconButton--default {
+  border-color: rgb(216 212 236 / 0.14);
+  background: rgb(22 20 47 / 0.82);
+}
+
+.ehIconButton--default:hover:not(:disabled) {
+  border-color: rgb(244 196 48 / 0.42);
+  background: rgb(244 196 48 / 0.12);
+  color: var(--eh-color-gold);
+}
+
+.ehIconButton--drawer {
+  border-color: rgb(216 212 236 / 0.1);
+  background: rgb(22 20 47 / 0.82);
+}
+
+.ehIconButton--drawer:hover:not(:disabled) {
+  border-color: rgb(244 196 48 / 0.42);
+  background: rgb(244 196 48 / 0.12);
+  color: var(--eh-color-gold);
+}
+
+.ehIconButton:focus-visible {
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.2);
+}
+
+.ehIconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+}
+
+.ehIconButton__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.ehIconButton__icon svg {
+  width: 20px;
+  height: 20px;
+}
