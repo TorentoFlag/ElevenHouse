@@ -11,6 +11,7 @@ export * from "./LogoMoon/index.js";
 export * from "./Orbit/index.js";
 export * from "./Plus/index.js";
 export * from "./Refresh/index.js";
+export * from "./Reference/index.js";
 export * from "./Search/index.js";
 export * from "./Sparkle/index.js";
 export * from "./Verified/index.js";
