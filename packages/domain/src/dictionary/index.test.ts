@@ -15,19 +15,31 @@ const now = new Date("2026-06-30T10:00:00.000Z");
 
 function createStore(overrides: Partial<DictionaryStore> = {}): DictionaryStore {
   return {
-    listCategories: vi.fn(async () => [
-      {
-        id: "category_planets_signs",
-        code: "planets_in_signs",
-        name: "Планеты в знаках",
-        order: 10,
-        createdAt: "2026-06-30T09:00:00.000Z",
-        updatedAt: "2026-06-30T09:00:00.000Z"
-      }
-    ]),
+    listCategories: vi.fn(async () => ({
+      categories: [
+        {
+          id: "category_planets_signs",
+          code: "planets_in_signs",
+          name: "Планеты в знаках",
+          order: 10,
+          count: 4,
+          createdAt: "2026-06-30T09:00:00.000Z",
+          updatedAt: "2026-06-30T09:00:00.000Z"
+        }
+      ],
+      total: 14
+    })),
     listEntries: vi.fn(async () => ({
       entries: [],
-      total: 0
+      total: 0,
+      counts: {
+        sources: {
+          all: 14,
+          platform: 14,
+          modified: 0,
+          custom: 0
+        }
+      }
     })),
     createCustomEntry: vi.fn(async (input) => ({
       id: "astrologer_entry_custom",
@@ -65,16 +77,31 @@ describe("dictionary domain module", () => {
   it("lists categories through the dictionary store", async () => {
     const store = createStore();
 
-    await expect(listDictionaryCategories({ store })).resolves.toEqual([
-      {
-        id: "category_planets_signs",
-        code: "planets_in_signs",
-        name: "Планеты в знаках",
-        order: 10,
-        createdAt: "2026-06-30T09:00:00.000Z",
-        updatedAt: "2026-06-30T09:00:00.000Z"
-      }
-    ]);
+    await expect(
+      listDictionaryCategories({
+        store,
+        ownerUserId: " user_astrologer ",
+        locale: " ru "
+      })
+    ).resolves.toEqual({
+      categories: [
+        {
+          id: "category_planets_signs",
+          code: "planets_in_signs",
+          name: "Планеты в знаках",
+          order: 10,
+          count: 4,
+          createdAt: "2026-06-30T09:00:00.000Z",
+          updatedAt: "2026-06-30T09:00:00.000Z"
+        }
+      ],
+      total: 14
+    });
+
+    expect(store.listCategories).toHaveBeenCalledWith({
+      ownerUserId: "user_astrologer",
+      locale: "ru"
+    });
   });
 
   it("normalizes effective entry list filters before calling the store", async () => {

@@ -17,6 +17,15 @@ export type DictionaryCategory = {
   readonly updatedAt: string;
 };
 
+export type DictionaryCategoryWithCount = DictionaryCategory & {
+  readonly count: number;
+};
+
+export type DictionaryCategoryListResult = {
+  readonly categories: readonly DictionaryCategoryWithCount[];
+  readonly total: number;
+};
+
 export type DictionaryEffectiveEntry = {
   readonly id: string;
   readonly categoryId: string;
@@ -32,9 +41,19 @@ export type DictionaryEffectiveEntry = {
   readonly updatedAt: string;
 };
 
+export type DictionarySourceCounts = {
+  readonly all: number;
+  readonly platform: number;
+  readonly modified: number;
+  readonly custom: number;
+};
+
 export type DictionaryEntryListResult = {
   readonly entries: readonly DictionaryEffectiveEntry[];
   readonly total: number;
+  readonly counts: {
+    readonly sources: DictionarySourceCounts;
+  };
 };
 
 export type DictionaryAstrologerEntry = {

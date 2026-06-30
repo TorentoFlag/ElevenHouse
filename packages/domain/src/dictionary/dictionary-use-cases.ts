@@ -1,6 +1,6 @@
 import type {
   DictionaryAstrologerEntry,
-  DictionaryCategory,
+  DictionaryCategoryListResult,
   DictionaryEntryListResult
 } from "./dictionary-types";
 import {
@@ -12,8 +12,13 @@ import type { DictionaryStore } from "./dictionary-store";
 
 export function listDictionaryCategories(input: {
   readonly store: DictionaryStore;
-}): Promise<readonly DictionaryCategory[]> {
-  return input.store.listCategories();
+  readonly ownerUserId: string;
+  readonly locale: string;
+}): Promise<DictionaryCategoryListResult> {
+  return input.store.listCategories({
+    ownerUserId: normalizeRequiredString(input.ownerUserId, "Dictionary owner user id is required"),
+    locale: normalizeDictionaryLocale(input.locale)
+  });
 }
 
 export function listDictionaryEntries(input: {

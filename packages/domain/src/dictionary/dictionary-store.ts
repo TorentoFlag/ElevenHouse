@@ -1,10 +1,15 @@
 import type {
   DictionaryAstrologerEntry,
-  DictionaryCategory,
+  DictionaryCategoryListResult,
   DictionaryEntryListResult,
   DictionaryEntrySourceFilter,
   DictionaryLocale
 } from "./dictionary-types";
+
+export type DictionaryCategoryListQuery = {
+  readonly ownerUserId: string;
+  readonly locale: DictionaryLocale;
+};
 
 export type DictionaryEntryListQuery = {
   readonly ownerUserId: string;
@@ -47,7 +52,9 @@ export type DictionaryPlatformEntryOverrideResetInput = {
 };
 
 export type DictionaryStore = {
-  readonly listCategories: () => Promise<readonly DictionaryCategory[]>;
+  readonly listCategories: (
+    query: DictionaryCategoryListQuery
+  ) => Promise<DictionaryCategoryListResult>;
   readonly listEntries: (query: DictionaryEntryListQuery) => Promise<DictionaryEntryListResult>;
   readonly createCustomEntry: (
     input: DictionaryCustomEntryInput
