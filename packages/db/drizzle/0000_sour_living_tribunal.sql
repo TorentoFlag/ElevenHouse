@@ -160,6 +160,57 @@ CREATE TABLE "outbox_events" (
 	CONSTRAINT "outbox_events_published_at_check" CHECK ("outbox_events"."status" <> 'published' or "outbox_events"."published_at" is not null)
 );
 --> statement-breakpoint
+CREATE TABLE "dictionary_categories" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"code" text NOT NULL,
+	"name" text NOT NULL,
+	"order" integer NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "dictionary_platform_entries" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"category_id" uuid NOT NULL,
+	"code" text NOT NULL,
+	"locale" text NOT NULL,
+	"title" text NOT NULL,
+	"body" text NOT NULL,
+	"status" text DEFAULT 'published' NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "dictionary_platform_entries_category_code_locale_unique" UNIQUE("category_id","code","locale"),
+	CONSTRAINT "dictionary_platform_entries_identity_category_code_locale_unique" UNIQUE("id","category_id","code","locale"),
+	CONSTRAINT "dictionary_platform_entries_locale_check" CHECK ("dictionary_platform_entries"."locale" in ('ru', 'en')),
+	CONSTRAINT "dictionary_platform_entries_status_check" CHECK ("dictionary_platform_entries"."status" in ('published', 'archived')),
+	CONSTRAINT "dictionary_platform_entries_version_check" CHECK ("dictionary_platform_entries"."version" > 0)
+);
+--> statement-breakpoint
+CREATE TABLE "dictionary_astrologer_entries" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"platform_entry_id" uuid,
+	"category_id" uuid NOT NULL,
+	"code" text NOT NULL,
+	"locale" text NOT NULL,
+	"entry_type" text NOT NULL,
+	"title" text NOT NULL,
+	"body" text NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"deleted_at" timestamp with time zone,
+	CONSTRAINT "dictionary_astrologer_entries_locale_check" CHECK ("dictionary_astrologer_entries"."locale" in ('ru', 'en')),
+	CONSTRAINT "dictionary_astrologer_entries_entry_type_check" CHECK ("dictionary_astrologer_entries"."entry_type" in ('override', 'custom')),
+	CONSTRAINT "dictionary_astrologer_entries_status_check" CHECK ("dictionary_astrologer_entries"."status" in ('active', 'deleted')),
+	CONSTRAINT "dictionary_astrologer_entries_version_check" CHECK ("dictionary_astrologer_entries"."version" > 0),
+	CONSTRAINT "dictionary_astrologer_entries_override_platform_check" CHECK ("dictionary_astrologer_entries"."entry_type" <> 'override' or "dictionary_astrologer_entries"."platform_entry_id" is not null),
+	CONSTRAINT "dictionary_astrologer_entries_custom_platform_check" CHECK ("dictionary_astrologer_entries"."entry_type" <> 'custom' or "dictionary_astrologer_entries"."platform_entry_id" is null),
+	CONSTRAINT "dictionary_astrologer_entries_deleted_at_check" CHECK ("dictionary_astrologer_entries"."status" <> 'deleted' or "dictionary_astrologer_entries"."deleted_at" is not null)
+);
+--> statement-breakpoint
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -169,6 +220,10 @@ ALTER TABLE "auth_challenge_deliveries" ADD CONSTRAINT "auth_challenge_deliverie
 ALTER TABLE "auth_challenge_delivery_attempts" ADD CONSTRAINT "auth_challenge_delivery_attempts_delivery_id_auth_challenge_deliveries_id_fk" FOREIGN KEY ("delivery_id") REFERENCES "public"."auth_challenge_deliveries"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_security_events" ADD CONSTRAINT "auth_security_events_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_security_events" ADD CONSTRAINT "auth_security_events_session_id_user_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."user_sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "dictionary_platform_entries" ADD CONSTRAINT "dictionary_platform_entries_category_id_dictionary_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."dictionary_categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_category_id_dictionary_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."dictionary_categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_platform_entry_identity_fk" FOREIGN KEY ("platform_entry_id","category_id","code","locale") REFERENCES "public"."dictionary_platform_entries"("id","category_id","code","locale") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_email_login_unique" ON "auth_identities" USING btree (lower("email")) WHERE "auth_identities"."provider" = 'email' and "auth_identities"."email" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_phone_login_unique" ON "auth_identities" USING btree ("phone_number") WHERE "auth_identities"."provider" = 'phone' and "auth_identities"."phone_number" is not null;--> statement-breakpoint
@@ -196,4 +251,10 @@ CREATE INDEX "auth_security_events_event_type_index" ON "auth_security_events" U
 CREATE INDEX "auth_security_events_occurred_at_index" ON "auth_security_events" USING btree ("occurred_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "outbox_events_event_type_aggregate_id_unique" ON "outbox_events" USING btree ("event_type","aggregate_id");--> statement-breakpoint
 CREATE INDEX "outbox_events_pending_index" ON "outbox_events" USING btree ("status","available_at","created_at");--> statement-breakpoint
-CREATE INDEX "outbox_events_locked_at_index" ON "outbox_events" USING btree ("locked_at");
+CREATE INDEX "outbox_events_locked_at_index" ON "outbox_events" USING btree ("locked_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "dictionary_categories_code_unique" ON "dictionary_categories" USING btree ("code");--> statement-breakpoint
+CREATE INDEX "dictionary_platform_entries_category_locale_status_index" ON "dictionary_platform_entries" USING btree ("category_id","locale","status");--> statement-breakpoint
+CREATE INDEX "dictionary_astrologer_entries_owner_category_locale_status_index" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","locale","status");--> statement-breakpoint
+CREATE INDEX "dictionary_astrologer_entries_platform_entry_id_index" ON "dictionary_astrologer_entries" USING btree ("platform_entry_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "dictionary_astrologer_entries_active_override_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","platform_entry_id","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'override' and "dictionary_astrologer_entries"."status" = 'active';--> statement-breakpoint
+CREATE UNIQUE INDEX "dictionary_astrologer_entries_active_custom_code_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","code","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'custom' and "dictionary_astrologer_entries"."status" = 'active';

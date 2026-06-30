@@ -1,5 +1,5 @@
 {
-  "id": "28a0bfa0-e2b3-4ed6-9647-3a1c202cfc1f",
+  "id": "90bbd019-1976-49c5-aa39-c264c8caf100",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1469,6 +1469,515 @@
         "outbox_events_published_at_check": {
           "name": "outbox_events_published_at_check",
           "value": "\"outbox_events\".\"status\" <> 'published' or \"outbox_events\".\"published_at\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.dictionary_categories": {
+      "name": "dictionary_categories",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order": {
+          "name": "order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "dictionary_categories_code_unique": {
+          "name": "dictionary_categories_code_unique",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.dictionary_platform_entries": {
+      "name": "dictionary_platform_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "category_id": {
+          "name": "category_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "locale": {
+          "name": "locale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'published'"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "dictionary_platform_entries_category_locale_status_index": {
+          "name": "dictionary_platform_entries_category_locale_status_index",
+          "columns": [
+            {
+              "expression": "category_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "dictionary_platform_entries_category_id_dictionary_categories_id_fk": {
+          "name": "dictionary_platform_entries_category_id_dictionary_categories_id_fk",
+          "tableFrom": "dictionary_platform_entries",
+          "tableTo": "dictionary_categories",
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "dictionary_platform_entries_category_code_locale_unique": {
+          "name": "dictionary_platform_entries_category_code_locale_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "category_id",
+            "code",
+            "locale"
+          ]
+        },
+        "dictionary_platform_entries_identity_category_code_locale_unique": {
+          "name": "dictionary_platform_entries_identity_category_code_locale_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "category_id",
+            "code",
+            "locale"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "dictionary_platform_entries_locale_check": {
+          "name": "dictionary_platform_entries_locale_check",
+          "value": "\"dictionary_platform_entries\".\"locale\" in ('ru', 'en')"
+        },
+        "dictionary_platform_entries_status_check": {
+          "name": "dictionary_platform_entries_status_check",
+          "value": "\"dictionary_platform_entries\".\"status\" in ('published', 'archived')"
+        },
+        "dictionary_platform_entries_version_check": {
+          "name": "dictionary_platform_entries_version_check",
+          "value": "\"dictionary_platform_entries\".\"version\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.dictionary_astrologer_entries": {
+      "name": "dictionary_astrologer_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "platform_entry_id": {
+          "name": "platform_entry_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "category_id": {
+          "name": "category_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "locale": {
+          "name": "locale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_type": {
+          "name": "entry_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "dictionary_astrologer_entries_owner_category_locale_status_index": {
+          "name": "dictionary_astrologer_entries_owner_category_locale_status_index",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "category_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "dictionary_astrologer_entries_platform_entry_id_index": {
+          "name": "dictionary_astrologer_entries_platform_entry_id_index",
+          "columns": [
+            {
+              "expression": "platform_entry_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "dictionary_astrologer_entries_active_override_unique": {
+          "name": "dictionary_astrologer_entries_active_override_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "platform_entry_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"dictionary_astrologer_entries\".\"entry_type\" = 'override' and \"dictionary_astrologer_entries\".\"status\" = 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "dictionary_astrologer_entries_active_custom_code_unique": {
+          "name": "dictionary_astrologer_entries_active_custom_code_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "category_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"dictionary_astrologer_entries\".\"entry_type\" = 'custom' and \"dictionary_astrologer_entries\".\"status\" = 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "dictionary_astrologer_entries_owner_user_id_users_id_fk": {
+          "name": "dictionary_astrologer_entries_owner_user_id_users_id_fk",
+          "tableFrom": "dictionary_astrologer_entries",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "dictionary_astrologer_entries_category_id_dictionary_categories_id_fk": {
+          "name": "dictionary_astrologer_entries_category_id_dictionary_categories_id_fk",
+          "tableFrom": "dictionary_astrologer_entries",
+          "tableTo": "dictionary_categories",
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "dictionary_astrologer_entries_platform_entry_identity_fk": {
+          "name": "dictionary_astrologer_entries_platform_entry_identity_fk",
+          "tableFrom": "dictionary_astrologer_entries",
+          "tableTo": "dictionary_platform_entries",
+          "columnsFrom": [
+            "platform_entry_id",
+            "category_id",
+            "code",
+            "locale"
+          ],
+          "columnsTo": [
+            "id",
+            "category_id",
+            "code",
+            "locale"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "dictionary_astrologer_entries_locale_check": {
+          "name": "dictionary_astrologer_entries_locale_check",
+          "value": "\"dictionary_astrologer_entries\".\"locale\" in ('ru', 'en')"
+        },
+        "dictionary_astrologer_entries_entry_type_check": {
+          "name": "dictionary_astrologer_entries_entry_type_check",
+          "value": "\"dictionary_astrologer_entries\".\"entry_type\" in ('override', 'custom')"
+        },
+        "dictionary_astrologer_entries_status_check": {
+          "name": "dictionary_astrologer_entries_status_check",
+          "value": "\"dictionary_astrologer_entries\".\"status\" in ('active', 'deleted')"
+        },
+        "dictionary_astrologer_entries_version_check": {
+          "name": "dictionary_astrologer_entries_version_check",
+          "value": "\"dictionary_astrologer_entries\".\"version\" > 0"
+        },
+        "dictionary_astrologer_entries_override_platform_check": {
+          "name": "dictionary_astrologer_entries_override_platform_check",
+          "value": "\"dictionary_astrologer_entries\".\"entry_type\" <> 'override' or \"dictionary_astrologer_entries\".\"platform_entry_id\" is not null"
+        },
+        "dictionary_astrologer_entries_custom_platform_check": {
+          "name": "dictionary_astrologer_entries_custom_platform_check",
+          "value": "\"dictionary_astrologer_entries\".\"entry_type\" <> 'custom' or \"dictionary_astrologer_entries\".\"platform_entry_id\" is null"
+        },
+        "dictionary_astrologer_entries_deleted_at_check": {
+          "name": "dictionary_astrologer_entries_deleted_at_check",
+          "value": "\"dictionary_astrologer_entries\".\"status\" <> 'deleted' or \"dictionary_astrologer_entries\".\"deleted_at\" is not null"
         }
       },
       "isRLSEnabled": false

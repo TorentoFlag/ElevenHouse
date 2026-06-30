@@ -11,6 +11,13 @@ import {
   authSecurityEventTypeValues,
   authSessionStatusValues,
   databasePlatformRoleValues,
+  dictionaryAstrologerEntries,
+  dictionaryAstrologerEntryStatusValues,
+  dictionaryAstrologerEntryTypeValues,
+  dictionaryCategories,
+  dictionaryLocaleValues,
+  dictionaryPlatformEntries,
+  dictionaryPlatformEntryStatusValues,
   identityProviderValues,
   outboxEvents,
   outboxEventStatusValues,
@@ -60,6 +67,46 @@ describe("database account schema constants", () => {
   it("keeps outbox event statuses explicit", () => {
     expect(outboxEventStatusValues).toEqual(["pending", "publishing", "published"]);
     expect(outboxEvents).toBeDefined();
+  });
+
+  it("exports dictionary tables and explicit values", () => {
+    expect(dictionaryLocaleValues).toEqual(["ru", "en"]);
+    expect(dictionaryPlatformEntryStatusValues).toEqual(["published", "archived"]);
+    expect(dictionaryAstrologerEntryTypeValues).toEqual(["override", "custom"]);
+    expect(dictionaryAstrologerEntryStatusValues).toEqual(["active", "deleted"]);
+    expect(dictionaryCategories).toBeDefined();
+    expect(dictionaryPlatformEntries).toBeDefined();
+    expect(dictionaryAstrologerEntries).toBeDefined();
+  });
+
+  it("keeps dictionary tables in the current baseline migration", () => {
+    const migration = readFileSync("packages/db/drizzle/0000_sour_living_tribunal.sql", "utf8");
+
+    expect(migration).toContain('CREATE TABLE "dictionary_categories"');
+    expect(migration).toContain('"code" text NOT NULL');
+    expect(migration).toContain('"name" text NOT NULL');
+    expect(migration).toContain('"order" integer NOT NULL');
+    expect(migration).toContain('CREATE TABLE "dictionary_platform_entries"');
+    expect(migration).toContain('CREATE TABLE "dictionary_astrologer_entries"');
+    expect(migration).toContain('"entry_type" text NOT NULL');
+    expect(migration).toContain(
+      'CONSTRAINT "dictionary_platform_entries_category_code_locale_unique" UNIQUE("category_id","code","locale")'
+    );
+    expect(migration).toContain(
+      'CONSTRAINT "dictionary_platform_entries_identity_category_code_locale_unique" UNIQUE("id","category_id","code","locale")'
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_platform_entry_identity_fk" FOREIGN KEY ("platform_entry_id","category_id","code","locale") REFERENCES "public"."dictionary_platform_entries"("id","category_id","code","locale") ON DELETE restrict ON UPDATE no action'
+    );
+    expect(migration).toContain(
+      'CREATE INDEX "dictionary_astrologer_entries_platform_entry_id_index" ON "dictionary_astrologer_entries" USING btree ("platform_entry_id")'
+    );
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "dictionary_astrologer_entries_active_override_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","platform_entry_id","locale") WHERE "dictionary_astrologer_entries"."entry_type" = \'override\' and "dictionary_astrologer_entries"."status" = \'active\''
+    );
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "dictionary_astrologer_entries_active_custom_code_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","code","locale") WHERE "dictionary_astrologer_entries"."entry_type" = \'custom\' and "dictionary_astrologer_entries"."status" = \'active\''
+    );
   });
 
   it("keeps pending passwordless challenges unique per channel and identifier", () => {
