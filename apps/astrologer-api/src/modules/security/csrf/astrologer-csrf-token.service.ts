@@ -2,6 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { ForbiddenException, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { hashSessionToken } from "@elevenhouse/auth";
+import { SystemClock } from "../../clock/system-clock.service";
 
 export type CsrfCookieResponse = {
   readonly cookie: (
@@ -26,7 +27,10 @@ const csrfTokenVersion = "v1";
 
 @Injectable()
 export class AstrologerCsrfTokenService {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly clock: SystemClock
+  ) {}
 
   setCsrfCookie(input: {
     readonly response: CsrfCookieResponse;
@@ -34,7 +38,7 @@ export class AstrologerCsrfTokenService {
     readonly sessionExpiresAt: string;
     readonly now?: Date;
   }): string {
-    const now = input.now ?? new Date();
+    const now = input.now ?? this.clock.now();
     const tokenTtlMs =
       this.configService.getOrThrow<number>("astrologerApi.csrfTokenTtlSeconds") * 1000;
     const sessionExpiresAtMs = new Date(input.sessionExpiresAt).getTime();
@@ -90,7 +94,7 @@ export class AstrologerCsrfTokenService {
       !this.verifyToken({
         token: csrfHeader,
         sessionTokenHash: hashSessionToken(input.sessionToken),
-        now: input.now ?? new Date()
+        now: input.now ?? this.clock.now()
       })
     ) {
       throw new ForbiddenException("Valid CSRF token is required");

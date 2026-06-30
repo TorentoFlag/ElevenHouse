@@ -20,9 +20,9 @@ import type {
   VerifyAstrologerPasswordlessCodeRequest,
   VerifyAstrologerPasswordlessCodeResponse
 } from "@elevenhouse/contracts";
+import { SystemClock } from "../../clock/system-clock.service";
 import {
   AstrologerSessionTokenIssuer,
-  SystemClock,
   type IssuedSessionToken
 } from "../session/identity-session.service";
 import {

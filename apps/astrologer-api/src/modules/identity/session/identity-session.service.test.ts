@@ -9,7 +9,11 @@ describe("AstrologerSessionCookieService", () => {
       setCsrfCookie: vi.fn(),
       clearCsrfCookie: vi.fn()
     } as unknown as AstrologerCsrfTokenService;
-    const service = new AstrologerSessionCookieService(createConfigService(), csrfTokenService);
+    const service = new AstrologerSessionCookieService(
+      createConfigService(),
+      csrfTokenService,
+      createClock()
+    );
     const response = {
       cookie: vi.fn()
     };
@@ -30,7 +34,8 @@ describe("AstrologerSessionCookieService", () => {
     expect(csrfTokenService.setCsrfCookie).toHaveBeenCalledWith({
       response,
       sessionToken: "raw-session-token",
-      sessionExpiresAt: "2026-06-23T10:00:00.000Z"
+      sessionExpiresAt: "2026-06-23T10:00:00.000Z",
+      now: new Date("2026-06-16T10:00:00.000Z")
     });
   });
 
@@ -39,7 +44,11 @@ describe("AstrologerSessionCookieService", () => {
       setCsrfCookie: vi.fn(),
       clearCsrfCookie: vi.fn()
     } as unknown as AstrologerCsrfTokenService;
-    const service = new AstrologerSessionCookieService(createConfigService(), csrfTokenService);
+    const service = new AstrologerSessionCookieService(
+      createConfigService(),
+      csrfTokenService,
+      createClock()
+    );
     const response = {
       cookie: vi.fn()
     };
@@ -76,4 +85,10 @@ function createConfigService(): ConfigService {
       throw new Error(`Unexpected config key: ${key}`);
     })
   } as unknown as ConfigService;
+}
+
+function createClock() {
+  return {
+    now: () => new Date("2026-06-16T10:00:00.000Z")
+  };
 }

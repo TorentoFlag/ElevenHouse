@@ -4,35 +4,40 @@ import { describe, expect, it, vi } from "vitest";
 import { AstrologerCsrfTokenService } from "./astrologer-csrf-token.service";
 
 function createService(): AstrologerCsrfTokenService {
-  return new AstrologerCsrfTokenService({
-    getOrThrow: vi.fn((key: string) => {
-      if (key === "astrologerApi.csrfSecret") {
-        return "test-astrologer-csrf-secret-with-enough-entropy";
-      }
+  return new AstrologerCsrfTokenService(
+    {
+      getOrThrow: vi.fn((key: string) => {
+        if (key === "astrologerApi.csrfSecret") {
+          return "test-astrologer-csrf-secret-with-enough-entropy";
+        }
 
-      if (key === "astrologerApi.csrfCookieName") {
-        return "elevenhouse_astrologer_csrf";
-      }
+        if (key === "astrologerApi.csrfCookieName") {
+          return "elevenhouse_astrologer_csrf";
+        }
 
-      if (key === "astrologerApi.csrfHeaderName") {
-        return "x-csrf-token";
-      }
+        if (key === "astrologerApi.csrfHeaderName") {
+          return "x-csrf-token";
+        }
 
-      if (key === "astrologerApi.csrfTokenTtlSeconds") {
-        return 600;
-      }
+        if (key === "astrologerApi.csrfTokenTtlSeconds") {
+          return 600;
+        }
 
-      if (key === "astrologerApi.sessionCookieSecure") {
-        return false;
-      }
+        if (key === "astrologerApi.sessionCookieSecure") {
+          return false;
+        }
 
-      if (key === "astrologerApi.allowedOrigins") {
-        return ["https://ops.elevenhouse.test"];
-      }
+        if (key === "astrologerApi.allowedOrigins") {
+          return ["https://ops.elevenhouse.test"];
+        }
 
-      throw new Error(`Unexpected config key: ${key}`);
-    })
-  } as unknown as ConfigService);
+        throw new Error(`Unexpected config key: ${key}`);
+      })
+    } as unknown as ConfigService,
+    {
+      now: () => new Date("2026-06-16T10:00:00.000Z")
+    }
+  );
 }
 
 describe("AstrologerCsrfTokenService", () => {

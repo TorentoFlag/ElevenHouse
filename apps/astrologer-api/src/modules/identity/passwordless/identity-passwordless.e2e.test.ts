@@ -15,7 +15,7 @@ import {
 } from "../auth/identity-auth.tokens";
 import { IdentityModule } from "../identity.module";
 import { ASTROLOGER_REGISTRATION_SESSION_UNIT_OF_WORK } from "../registration/identity-registration.tokens";
-import { SystemClock } from "../session/identity-session.service";
+import { SystemClock } from "../../clock/system-clock.service";
 import { createIdentityConfigServiceStub } from "../testing/identity-config-service.stub";
 import {
   InMemoryPasswordlessAuthStore,

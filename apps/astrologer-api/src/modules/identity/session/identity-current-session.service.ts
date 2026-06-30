@@ -10,7 +10,7 @@ import {
   type AuthenticatedAstrologerAccountResponse
 } from "@elevenhouse/contracts";
 import { AUTH_SESSION_AUTHENTICATION_STORE } from "../auth/identity-auth.tokens";
-import { SystemClock } from "./identity-session.service";
+import { SystemClock } from "../../clock/system-clock.service";
 
 export type AstrologerSessionRequest = {
   readonly headers: {

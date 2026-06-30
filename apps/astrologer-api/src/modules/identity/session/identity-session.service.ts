@@ -4,6 +4,7 @@ import {
   createSessionToken,
   hashSessionToken
 } from "@elevenhouse/auth";
+import { SystemClock } from "../../clock/system-clock.service";
 import { AstrologerCsrfTokenService } from "../../security/csrf/astrologer-csrf-token.service";
 
 export type IssuedSessionToken = {
@@ -44,17 +45,11 @@ export class AstrologerSessionTokenIssuer {
 }
 
 @Injectable()
-export class SystemClock {
-  now(): Date {
-    return new Date();
-  }
-}
-
-@Injectable()
 export class AstrologerSessionCookieService {
   constructor(
     private readonly configService: ConfigService,
-    private readonly csrfTokenService: AstrologerCsrfTokenService
+    private readonly csrfTokenService: AstrologerCsrfTokenService,
+    private readonly clock: SystemClock
   ) {}
 
   setSessionCookie(response: AstrologerSessionCookieResponse, session: AstrologerSessionCookie): void {
@@ -75,7 +70,8 @@ export class AstrologerSessionCookieService {
     this.csrfTokenService.setCsrfCookie({
       response,
       sessionToken: session.token,
-      sessionExpiresAt: session.expiresAt
+      sessionExpiresAt: session.expiresAt,
+      now: this.clock.now()
     });
   }
 

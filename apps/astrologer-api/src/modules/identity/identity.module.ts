@@ -8,6 +8,7 @@ import {
   createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/db/account-registration";
 import { createDrizzlePasswordlessAuthUnitOfWork } from "@elevenhouse/db/passwordless-auth";
+import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { RedisModule } from "../redis/redis.module";
@@ -50,12 +51,11 @@ import { IdentityLogoutService } from "./session/identity-logout.service";
 import { IdentitySessionController } from "./session/identity-session.controller";
 import {
   AstrologerSessionCookieService,
-  AstrologerSessionTokenIssuer,
-  SystemClock
+  AstrologerSessionTokenIssuer
 } from "./session/identity-session.service";
 
 @Module({
-  imports: [ConfigModule, DatabaseModule, RedisModule, SecurityModule],
+  imports: [ClockModule, ConfigModule, DatabaseModule, RedisModule, SecurityModule],
   controllers: [
     IdentityPasswordlessController,
     IdentityRegistrationController,
@@ -70,7 +70,6 @@ import {
     AstrologerSessionAuthGuard,
     AstrologerSessionTokenIssuer,
     AstrologerSessionCookieService,
-    SystemClock,
     DomainPasswordlessAuthHandler,
     DomainRegistrationHandler,
     {
@@ -151,6 +150,7 @@ import {
         }),
       inject: [PASSWORDLESS_RATE_LIMIT_OPTIONS, REDIS_CLIENT, ConfigService]
     }
-  ]
+  ],
+  exports: [AstrologerSessionAuthGuard, IdentityCurrentSessionService]
 })
 export class IdentityModule {}

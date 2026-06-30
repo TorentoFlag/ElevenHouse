@@ -6,7 +6,8 @@ import {
   DomainPasswordlessAuthHandler,
   type PasswordlessAuthOptions
 } from "./identity-passwordless.handler";
-import { AstrologerSessionTokenIssuer, SystemClock } from "../session/identity-session.service";
+import { SystemClock } from "../../clock/system-clock.service";
+import { AstrologerSessionTokenIssuer } from "../session/identity-session.service";
 
 const now = new Date("2026-06-16T10:00:00.000Z");
 const options: PasswordlessAuthOptions = {

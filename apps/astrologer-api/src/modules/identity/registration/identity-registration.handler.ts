@@ -2,10 +2,10 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PasswordlessCustomerAccountRegistrationSessionUnitOfWork } from "@elevenhouse/domain";
 import { verifyPasswordlessCodeAndRegisterCustomerAccountWithSession } from "@elevenhouse/domain";
 import type { VerifyAstrologerRegistrationPasswordlessCodeResponse } from "@elevenhouse/contracts";
+import { SystemClock } from "../../clock/system-clock.service";
 import type { PasswordlessAuthOptions } from "../passwordless/identity-passwordless.handler";
 import {
   AstrologerSessionTokenIssuer,
-  SystemClock,
   type IssuedSessionToken
 } from "../session/identity-session.service";
 import {
