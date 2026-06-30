@@ -4,6 +4,7 @@ import type { AuthIdentity } from "../../../auth-identities";
 import type { AuthSecurityEvent, AuthSession } from "../../../auth-sessions";
 import { normalizeCustomerRoles } from "../../../roles";
 import type { UserRoleAssignment } from "../../../roles";
+import { normalizeRequiredString } from "../../../shared";
 
 export const passwordlessAuthChannels = ["email", "phone"] as const;
 export type PasswordlessAuthChannel = (typeof passwordlessAuthChannels)[number];
@@ -69,10 +70,10 @@ export function normalizePasswordlessIdentifier(input: {
   readonly channel: PasswordlessAuthChannel;
   readonly identifier: string;
 }): { readonly identifier: string; readonly identifierNormalized: string } {
-  const identifier = input.identifier.trim();
-  if (!identifier) {
-    throw new Error("Passwordless identifier is required");
-  }
+  const identifier = normalizeRequiredString(
+    input.identifier,
+    "Passwordless identifier is required"
+  );
 
   if (input.channel === "email") {
     return {
@@ -105,9 +106,4 @@ export function normalizeRequestedCustomerRoles(
   roles: readonly string[]
 ): readonly CustomerPlatformRole[] {
   return normalizeCustomerRoles(roles);
-}
-
-export function normalizeOptionalString(value: string | undefined): string | undefined {
-  const normalized = value?.trim();
-  return normalized ? normalized : undefined;
 }

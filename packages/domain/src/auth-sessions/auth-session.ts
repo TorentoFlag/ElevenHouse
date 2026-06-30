@@ -1,3 +1,5 @@
+import { normalizeOptionalString, normalizeRequiredString } from "../shared";
+
 export const authSessionStatusValues = ["active", "revoked"] as const;
 export type AuthSessionStatus = (typeof authSessionStatusValues)[number];
 
@@ -35,10 +37,7 @@ export type NormalizedAuthSessionCreationInput = {
 export function normalizeAuthSessionCreationInput(
   input: AuthSessionCreationInput
 ): NormalizedAuthSessionCreationInput {
-  const tokenHash = input.tokenHash.trim();
-  if (!tokenHash) {
-    throw new Error("Auth session token hash is required");
-  }
+  const tokenHash = normalizeRequiredString(input.tokenHash, "Auth session token hash is required");
 
   if (input.expiresAt.getTime() <= input.createdAt.getTime()) {
     throw new Error("Auth session expiry must be after creation");
@@ -59,9 +58,4 @@ export function normalizeAuthSessionCreationInput(
 
 export function isAuthSessionUsable(session: AuthSession, now: Date): boolean {
   return session.status === "active" && new Date(session.expiresAt).getTime() > now.getTime();
-}
-
-function normalizeOptionalString(value: string | undefined): string | undefined {
-  const normalized = value?.trim();
-  return normalized ? normalized : undefined;
 }

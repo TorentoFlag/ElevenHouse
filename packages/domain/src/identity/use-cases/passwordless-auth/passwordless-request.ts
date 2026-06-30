@@ -1,7 +1,7 @@
 import type { Aes256GcmEncryptedSecret } from "@elevenhouse/auth";
+import { normalizeOptionalString } from "../../../shared";
 import {
   maskPasswordlessIdentifier,
-  normalizeOptionalString,
   normalizePasswordlessIdentifier,
   normalizeRequestedCustomerRoles,
   PasswordlessCodeRequestCooldownError,

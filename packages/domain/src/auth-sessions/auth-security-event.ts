@@ -1,3 +1,5 @@
+import { normalizeOptionalString } from "../shared";
+
 export const authSecurityEventTypeValues = [
   "registration_succeeded",
   "login_succeeded",
@@ -48,9 +50,4 @@ export function normalizeAuthSecurityEventInput(
     ...(userAgent ? { userAgent } : {}),
     ...(input.metadata ? { metadata: input.metadata } : {})
   };
-}
-
-function normalizeOptionalString(value: string | undefined): string | undefined {
-  const normalized = value?.trim();
-  return normalized ? normalized : undefined;
 }
