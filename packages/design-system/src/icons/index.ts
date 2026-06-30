@@ -2,6 +2,8 @@ export * from "./ArrowLeft/index.js";
 export * from "./Bell/index.js";
 export * from "./Chat/index.js";
 export * from "./ChevronDown/index.js";
+export * from "./ChevronLeft/index.js";
+export * from "./ChevronRight/index.js";
 export * from "./Content/index.js";
 export * from "./Flow/index.js";
 export * from "./LayoutGrid/index.js";
