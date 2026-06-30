@@ -14,6 +14,11 @@
       "types": "./dist/navigation/index.d.ts",
       "import": "./dist/navigation/index.js"
     },
+    "./navigation/NavigationDrawer": {
+      "types": "./dist/navigation/NavigationDrawer/index.d.ts",
+      "import": "./dist/navigation/NavigationDrawer/index.js"
+    },
+    "./navigation/NavigationDrawer.css": "./src/navigation/NavigationDrawer/NavigationDrawer.css",
     "./components": {
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"
@@ -23,6 +28,11 @@
       "import": "./dist/components/Button/index.js"
     },
     "./components/Button.css": "./src/components/Button/Button.css",
+    "./components/IconButton": {
+      "types": "./dist/components/IconButton/index.d.ts",
+      "import": "./dist/components/IconButton/index.js"
+    },
+    "./components/IconButton.css": "./src/components/IconButton/IconButton.css",
     "./components/OtpAuthForm": {
       "types": "./dist/components/OtpAuthForm/index.d.ts",
       "import": "./dist/components/OtpAuthForm/index.js"
@@ -64,9 +74,25 @@
       "types": "./dist/icons/ArrowLeft/index.d.ts",
       "import": "./dist/icons/ArrowLeft/index.js"
     },
+    "./icons/Bell": {
+      "types": "./dist/icons/Bell/index.d.ts",
+      "import": "./dist/icons/Bell/index.js"
+    },
     "./icons/Chat": {
       "types": "./dist/icons/Chat/index.d.ts",
       "import": "./dist/icons/Chat/index.js"
+    },
+    "./icons/ChevronDown": {
+      "types": "./dist/icons/ChevronDown/index.d.ts",
+      "import": "./dist/icons/ChevronDown/index.js"
+    },
+    "./icons/ChevronLeft": {
+      "types": "./dist/icons/ChevronLeft/index.d.ts",
+      "import": "./dist/icons/ChevronLeft/index.js"
+    },
+    "./icons/ChevronRight": {
+      "types": "./dist/icons/ChevronRight/index.d.ts",
+      "import": "./dist/icons/ChevronRight/index.js"
     },
     "./icons/Content": {
       "types": "./dist/icons/Content/index.d.ts",
@@ -76,6 +102,10 @@
       "types": "./dist/icons/Flow/index.d.ts",
       "import": "./dist/icons/Flow/index.js"
     },
+    "./icons/LayoutGrid": {
+      "types": "./dist/icons/LayoutGrid/index.d.ts",
+      "import": "./dist/icons/LayoutGrid/index.js"
+    },
     "./icons/LogoMoon": {
       "types": "./dist/icons/LogoMoon/index.d.ts",
       "import": "./dist/icons/LogoMoon/index.js"
@@ -84,13 +114,29 @@
       "types": "./dist/icons/Orbit/index.d.ts",
       "import": "./dist/icons/Orbit/index.js"
     },
+    "./icons/Plus": {
+      "types": "./dist/icons/Plus/index.d.ts",
+      "import": "./dist/icons/Plus/index.js"
+    },
     "./icons/Refresh": {
       "types": "./dist/icons/Refresh/index.d.ts",
       "import": "./dist/icons/Refresh/index.js"
     },
+    "./icons/Reference": {
+      "types": "./dist/icons/Reference/index.d.ts",
+      "import": "./dist/icons/Reference/index.js"
+    },
+    "./icons/Search": {
+      "types": "./dist/icons/Search/index.d.ts",
+      "import": "./dist/icons/Search/index.js"
+    },
     "./icons/Sparkle": {
       "types": "./dist/icons/Sparkle/index.d.ts",
       "import": "./dist/icons/Sparkle/index.js"
+    },
+    "./icons/Verified": {
+      "types": "./dist/icons/Verified/index.d.ts",
+      "import": "./dist/icons/Verified/index.js"
     },
     "./icons/Video": {
       "types": "./dist/icons/Video/index.d.ts",
@@ -106,6 +152,8 @@
     "./tokens.css",
     "./src/motion/motion.css",
     "./src/components/Button/Button.css",
+    "./src/components/IconButton/IconButton.css",
+    "./src/navigation/NavigationDrawer/NavigationDrawer.css",
     "./src/components/OtpAuthForm/OtpAuthForm.css",
     "./src/components/OtpCodeForm/OtpCodeForm.css",
     "./src/components/LanguageSwitcher/LanguageSwitcher.css",
