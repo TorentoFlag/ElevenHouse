@@ -1,11 +1,14 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type {
   DictionaryAstrologerEntry,
-  DictionaryCategory,
+  DictionaryCategoryListQuery,
+  DictionaryCategoryListResult,
+  DictionaryCategoryWithCount,
   DictionaryEffectiveEntry,
   DictionaryEntryListQuery,
   DictionaryEntryListResult,
   DictionaryEntrySource,
+  DictionarySourceCounts,
   DictionaryLocale,
   DictionaryStore
 } from "@elevenhouse/domain";
@@ -21,6 +24,12 @@ type DictionaryAstrologerEntrySelect = typeof dictionaryAstrologerEntries.$infer
 type DictionaryAstrologerEntryInsert = typeof dictionaryAstrologerEntries.$inferInsert;
 type DictionaryPlatformEntrySelect = typeof dictionaryPlatformEntries.$inferSelect;
 
+type DictionaryCategoryRow = Omit<DictionaryCategoryWithCount, "createdAt" | "updatedAt"> & {
+  readonly createdAt: Date | string;
+  readonly updatedAt: Date | string;
+  readonly total: number | string;
+};
+
 type DictionaryEffectiveEntryRow = Omit<
   DictionaryEffectiveEntry,
   "createdAt" | "updatedAt" | "platformEntryId" | "astrologerEntryId"
@@ -32,20 +41,18 @@ type DictionaryEffectiveEntryRow = Omit<
   readonly total: number | string;
 };
 
+type DictionarySourceCountRow = {
+  readonly source: string;
+  readonly count: number | string;
+};
+
 const dictionaryLocaleSet = new Set<string>(["ru", "en"]);
 const dictionaryEntrySourceSet = new Set<string>(["platform", "modified", "custom"]);
 const dictionaryAstrologerEntryTypeSet = new Set<string>(["override", "custom"]);
 
 export function createDrizzleDictionaryStore(database: ElevenHouseDatabase): DictionaryStore {
   return {
-    listCategories: async () => {
-      const rows = await database
-        .select()
-        .from(dictionaryCategories)
-        .orderBy(asc(dictionaryCategories.order));
-
-      return rows.map(toDictionaryCategory);
-    },
+    listCategories: (query) => listCategories(database, query),
     listEntries: (query) => listEntries(database, query),
     createCustomEntry: async (input) => {
       const row = await insertReturningOne(
@@ -141,6 +148,49 @@ export function createDrizzleDictionaryStore(database: ElevenHouseDatabase): Dic
   };
 }
 
+async function listCategories(
+  database: ElevenHouseDatabase,
+  query: DictionaryCategoryListQuery
+): Promise<DictionaryCategoryListResult> {
+  const result = await database.execute(sql<DictionaryCategoryRow>`
+    with effective_entries as (
+      select platform_entries.category_id as "categoryId"
+      from ${dictionaryPlatformEntries} as platform_entries
+      where platform_entries.locale = ${query.locale}
+        and platform_entries.status = 'published'
+      union all
+      select custom_entries.category_id as "categoryId"
+      from ${dictionaryAstrologerEntries} as custom_entries
+      where custom_entries.owner_user_id = ${query.ownerUserId}
+        and custom_entries.locale = ${query.locale}
+        and custom_entries.entry_type = 'custom'
+    ),
+    counts as (
+      select "categoryId", count(*)::int as count
+      from effective_entries
+      group by "categoryId"
+    )
+    select
+      categories.id,
+      categories.code,
+      categories.name,
+      categories."order",
+      categories.created_at as "createdAt",
+      categories.updated_at as "updatedAt",
+      coalesce(counts.count, 0)::int as count,
+      coalesce((select sum(count) from counts), 0)::int as total
+    from ${dictionaryCategories} as categories
+    left join counts on counts."categoryId" = categories.id
+    order by categories."order", categories.name, categories.id
+  `);
+  const rows = result.rows as unknown as readonly DictionaryCategoryRow[];
+
+  return {
+    categories: rows.map(toDictionaryCategoryWithCount),
+    total: Number(rows[0]?.total ?? 0)
+  };
+}
+
 async function listEntries(
   database: ElevenHouseDatabase,
   query: DictionaryEntryListQuery
@@ -163,9 +213,8 @@ async function listEntries(
         )})`;
   const limit = query.limit ?? 50;
   const offset = query.offset ?? 0;
-
-  const result = await database.execute(sql<DictionaryEffectiveEntryRow>`
-    with platform_entries as (
+  const effectiveEntriesCte = sql`
+    platform_entries as (
       select
         coalesce(overrides.id, platform_entries.id) as "id",
         platform_entries.category_id as "categoryId",
@@ -223,6 +272,10 @@ async function listEntries(
       union all
       select * from custom_entries
     )
+  `;
+
+  const result = await database.execute(sql<DictionaryEffectiveEntryRow>`
+    with ${effectiveEntriesCte}
     select
       id,
       "categoryId",
@@ -246,10 +299,22 @@ async function listEntries(
     offset ${offset}
   `);
   const rows = result.rows as unknown as readonly DictionaryEffectiveEntryRow[];
+  const countsResult = await database.execute(sql<DictionarySourceCountRow>`
+    with ${effectiveEntriesCte}
+    select source, count(*)::int as count
+    from effective_entries
+    where true
+      ${searchFilter}
+    group by source
+  `);
+  const sourceCountRows = countsResult.rows as unknown as readonly DictionarySourceCountRow[];
 
   return {
     entries: rows.map(toDictionaryEffectiveEntry),
-    total: Number(rows[0]?.total ?? 0)
+    total: Number(rows[0]?.total ?? 0),
+    counts: {
+      sources: toDictionarySourceCounts(sourceCountRows)
+    }
   };
 }
 
@@ -271,14 +336,15 @@ function toOverrideInsert(
   };
 }
 
-function toDictionaryCategory(row: typeof dictionaryCategories.$inferSelect): DictionaryCategory {
+function toDictionaryCategoryWithCount(row: DictionaryCategoryRow): DictionaryCategoryWithCount {
   return {
     id: row.id,
     code: row.code,
     name: row.name,
     order: row.order,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString()
+    count: Number(row.count),
+    createdAt: toIsoString(row.createdAt),
+    updatedAt: toIsoString(row.updatedAt)
   };
 }
 
@@ -334,6 +400,35 @@ function toDictionaryAstrologerEntry(
     content: row.content,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+function toDictionarySourceCounts(rows: readonly DictionarySourceCountRow[]): DictionarySourceCounts {
+  let platform = 0;
+  let modified = 0;
+  let custom = 0;
+
+  for (const row of rows) {
+    const source = row.source;
+    if (!isDictionaryEntrySource(source)) {
+      throw new Error(`Unexpected dictionary entry source: ${source}`);
+    }
+
+    const count = Number(row.count);
+    if (source === "platform") {
+      platform = count;
+    } else if (source === "modified") {
+      modified = count;
+    } else {
+      custom = count;
+    }
+  }
+
+  return {
+    all: platform + modified + custom,
+    platform,
+    modified,
+    custom
   };
 }
 

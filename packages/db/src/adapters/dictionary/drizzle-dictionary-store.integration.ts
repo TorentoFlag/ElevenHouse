@@ -59,9 +59,9 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
     });
     categoryIds.push(category.id, earlierCategory.id);
 
-    const categories = await listDictionaryCategories({ store });
-    expect(categories.findIndex(({ id }) => id === earlierCategory.id)).toBeLessThan(
-      categories.findIndex(({ id }) => id === category.id)
+    const categories = await listDictionaryCategories({ store, ownerUserId, locale: "ru" });
+    expect(categories.categories.findIndex(({ id }) => id === earlierCategory.id)).toBeLessThan(
+      categories.categories.findIndex(({ id }) => id === category.id)
     );
 
     const platformSun = await createPlatformEntry({
@@ -88,6 +88,22 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
     platformEntryIds.push(platformSun.id, platformMoon.id, archived.id);
 
     await expect(
+      listDictionaryCategories({ store, ownerUserId, locale: "ru" })
+    ).resolves.toMatchObject({
+      total: 2,
+      categories: expect.arrayContaining([
+        expect.objectContaining({
+          id: category.id,
+          count: 2
+        }),
+        expect.objectContaining({
+          id: earlierCategory.id,
+          count: 0
+        })
+      ])
+    });
+
+    await expect(
       listDictionaryEntries({
         store,
         ownerUserId,
@@ -97,6 +113,14 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
       })
     ).resolves.toMatchObject({
       total: 2,
+      counts: {
+        sources: {
+          all: 2,
+          platform: 2,
+          modified: 0,
+          custom: 0
+        }
+      },
       entries: expect.arrayContaining([
         expect.objectContaining({
           id: platformSun.id,
@@ -148,6 +172,14 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
       })
     ).resolves.toMatchObject({
       total: 3,
+      counts: {
+        sources: {
+          all: 3,
+          platform: 1,
+          modified: 1,
+          custom: 1
+        }
+      },
       entries: expect.arrayContaining([
         expect.objectContaining({
           id: override.id,
@@ -184,6 +216,14 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
       })
     ).resolves.toMatchObject({
       total: 1,
+      counts: {
+        sources: {
+          all: 3,
+          platform: 1,
+          modified: 1,
+          custom: 1
+        }
+      },
       entries: [expect.objectContaining({ id: override.id, source: "modified" })]
     });
 
@@ -198,6 +238,14 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
       })
     ).resolves.toMatchObject({
       total: 1,
+      counts: {
+        sources: {
+          all: 1,
+          platform: 1,
+          modified: 0,
+          custom: 0
+        }
+      },
       entries: [expect.objectContaining({ id: platformMoon.id })]
     });
 
@@ -224,6 +272,14 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
       })
     ).resolves.toMatchObject({
       total: 2,
+      counts: {
+        sources: {
+          all: 2,
+          platform: 2,
+          modified: 0,
+          custom: 0
+        }
+      },
       entries: expect.arrayContaining([
         expect.objectContaining({
           id: platformSun.id,
