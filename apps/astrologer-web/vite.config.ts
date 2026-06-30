@@ -36,6 +36,12 @@ export default defineConfig({
       "@elevenhouse/design-system/helpers": fileURLToPath(
         new URL("../../packages/design-system/src/helpers/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/icons/Bell": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Bell/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/ChevronDown": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/ChevronDown/index.ts", import.meta.url)
+      ),
       "@elevenhouse/design-system/icons/Flow": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Flow/index.ts", import.meta.url)
       ),
@@ -45,11 +51,20 @@ export default defineConfig({
       "@elevenhouse/design-system/icons/Orbit": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Orbit/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/icons/Plus": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Plus/index.ts", import.meta.url)
+      ),
       "@elevenhouse/design-system/icons/Refresh": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Refresh/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/icons/Search": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Search/index.ts", import.meta.url)
+      ),
       "@elevenhouse/design-system/icons/Sparkle": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Sparkle/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/Verified": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Verified/index.ts", import.meta.url)
       ),
       "@elevenhouse/design-system/icons/Wallet": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Wallet/index.ts", import.meta.url)

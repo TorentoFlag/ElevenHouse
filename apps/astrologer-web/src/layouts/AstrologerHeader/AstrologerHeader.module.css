@@ -1,0 +1,234 @@
+.header {
+  --astrologer-header-line: rgb(216 212 236 / 0.08);
+  --astrologer-header-line-strong: rgb(216 212 236 / 0.14);
+  --astrologer-header-surface: #16142f;
+  --astrologer-header-raised: #272252;
+
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 16px;
+  height: var(--astrologer-app-header-height, 68px);
+  padding: 0 28px;
+  border-bottom: 1px solid var(--astrologer-header-line);
+  background: linear-gradient(180deg, rgb(18 16 40 / 0.98), rgb(13 12 32 / 0.98));
+}
+
+.searchWrap {
+  position: relative;
+  flex: 1 1 280px;
+  max-width: 460px;
+}
+
+.searchIcon {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  display: flex;
+  color: var(--eh-color-muted);
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px 0 38px;
+  border: 1px solid var(--astrologer-header-line-strong);
+  border-radius: 14px;
+  outline: none;
+  background: var(--eh-color-night-930);
+  color: var(--eh-color-moon-120);
+  font: 400 14px/1 var(--eh-font-sans);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.searchInput::placeholder {
+  color: var(--eh-color-muted);
+}
+
+.searchInput:focus {
+  border-color: rgb(244 196 48 / 0.42);
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.14);
+}
+
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.createButton,
+.notificationButton,
+.profileButton {
+  font-family: var(--eh-font-sans);
+  cursor: pointer;
+}
+
+.createButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--eh-color-gold);
+  color: #2a1b0b;
+  box-shadow:
+    0 0 0 1px rgb(244 196 48 / 0.42),
+    0 10px 26px -10px rgb(244 196 48 / 0.4);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    transform 120ms ease,
+    box-shadow 150ms ease;
+}
+
+.createButton:hover {
+  box-shadow:
+    0 0 0 1px rgb(244 196 48 / 0.42),
+    0 14px 30px -8px rgb(244 196 48 / 0.4);
+}
+
+.createButton:active {
+  transform: translateY(1px);
+}
+
+.createButton svg,
+.notificationButton svg {
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.createChevron {
+  margin-left: -2px;
+  opacity: 0.7;
+}
+
+.notificationButton {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid var(--astrologer-header-line-strong);
+  border-radius: 14px;
+  background: var(--astrologer-header-surface);
+  color: var(--eh-color-moon-500);
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.notificationButton:hover {
+  border-color: rgb(244 196 48 / 0.42);
+  background: rgb(244 196 48 / 0.14);
+  color: #f6d266;
+}
+
+.notificationDot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid var(--astrologer-header-surface);
+  border-radius: 999px;
+  background: var(--eh-color-gold);
+}
+
+.profileButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 0 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.avatar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--astrologer-header-line-strong);
+  border-radius: 13px;
+  background: linear-gradient(140deg, var(--astrologer-header-raised), var(--eh-color-violet-800));
+  color: var(--eh-color-moon-300);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.profileText {
+  display: grid;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+.profileName {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--eh-color-moon-120);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.verifiedIcon {
+  color: #f6d266;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.profileTimezone {
+  color: var(--eh-color-muted);
+  font-family: var(--eh-font-mono);
+  font-size: 11px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .header {
+    gap: 10px;
+    padding: 0 14px;
+  }
+
+  .actions {
+    gap: 10px;
+  }
+
+  .searchWrap {
+    max-width: none;
+  }
+
+  .profileText {
+    display: none;
+  }
+}

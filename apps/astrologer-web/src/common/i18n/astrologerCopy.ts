@@ -46,11 +46,27 @@ export type AuthVisualCopy = {
 
 export type AstrologerCopy = {
   auth: AuthCopy;
+  appShell: {
+    header: AppShellHeaderCopy;
+  };
   dashboard: {
     documentTitle: string;
     title: string;
     kicker: string;
   };
+};
+
+export type AppShellHeaderCopy = {
+  searchPlaceholder: string;
+  createLabel: string;
+  createMenuAriaLabel: string;
+  notificationsAriaLabel: string;
+  unreadNotificationsLabel: string;
+  profileSettingsLabel: string;
+  profileName: string;
+  profileTimezone: string;
+  profileInitials: string;
+  verifiedLabel: string;
 };
 
 export const astrologerCopyByLocale = {
@@ -132,6 +148,20 @@ export const astrologerCopyByLocale = {
       },
       languageSwitcher: {
         ariaLabel: "Язык интерфейса"
+      }
+    },
+    appShell: {
+      header: {
+        searchPlaceholder: "Поиск клиентов, заказов, карт…",
+        createLabel: "Создать",
+        createMenuAriaLabel: "Открыть меню создания",
+        notificationsAriaLabel: "Открыть уведомления",
+        unreadNotificationsLabel: "Есть непрочитанные уведомления",
+        profileSettingsLabel: "Настройки профиля",
+        profileName: "Алиса Вега",
+        profileTimezone: "GMT+3, Москва",
+        profileInitials: "АВ",
+        verifiedLabel: "Верифицирован"
       }
     },
     dashboard: {
@@ -218,6 +248,20 @@ export const astrologerCopyByLocale = {
       },
       languageSwitcher: {
         ariaLabel: "Interface language"
+      }
+    },
+    appShell: {
+      header: {
+        searchPlaceholder: "Search clients, orders, charts…",
+        createLabel: "Create",
+        createMenuAriaLabel: "Open create menu",
+        notificationsAriaLabel: "Open notifications",
+        unreadNotificationsLabel: "Unread notifications",
+        profileSettingsLabel: "Profile settings",
+        profileName: "Alisa Vega",
+        profileTimezone: "GMT+3, Moscow",
+        profileInitials: "AV",
+        verifiedLabel: "Verified"
       }
     },
     dashboard: {

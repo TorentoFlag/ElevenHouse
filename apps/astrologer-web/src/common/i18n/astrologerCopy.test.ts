@@ -13,4 +13,14 @@ describe("astrologerCopy", () => {
     expect(astrologerCopyByLocale.ru.auth.form.emailLabel).toBe("Email");
     expect(astrologerCopyByLocale.ru.auth.form.phoneLabel).toBe("Или телефон");
   });
+
+  it("contains app shell header copy from the selected cabinet design", () => {
+    expect(astrologerCopyByLocale.ru).toHaveProperty(
+      "appShell.header.searchPlaceholder",
+      "Поиск клиентов, заказов, карт…"
+    );
+    expect(astrologerCopyByLocale.ru).toHaveProperty("appShell.header.createLabel", "Создать");
+    expect(astrologerCopyByLocale.ru).toHaveProperty("appShell.header.profileName", "Алиса Вега");
+    expect(astrologerCopyByLocale.ru).toHaveProperty("appShell.header.profileTimezone", "GMT+3, Москва");
+  });
 });
