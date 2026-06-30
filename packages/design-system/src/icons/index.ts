@@ -4,6 +4,7 @@ export * from "./Chat/index.js";
 export * from "./ChevronDown/index.js";
 export * from "./Content/index.js";
 export * from "./Flow/index.js";
+export * from "./LayoutGrid/index.js";
 export * from "./LogoMoon/index.js";
 export * from "./Orbit/index.js";
 export * from "./Plus/index.js";
