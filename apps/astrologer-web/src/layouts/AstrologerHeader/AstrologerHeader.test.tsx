@@ -27,7 +27,7 @@ describe("AstrologerHeaderView", () => {
     expect(createButton.props.className).toBe(styles.createButton);
     expect(createButton.props.title).toBe("Создать");
     expect(createButton.props.variant).toBe("brand");
-    expect(createButton.props.size).toBe("medium");
+    expect(createButton.props.size).toBe("big");
     expect(createButton.props["aria-label"]).toBe("Открыть меню создания");
     expect(createButton.props.startIcon.type).toBe(Plus);
     expect(createButton.props.endIcon.type).toBe(ChevronDown);

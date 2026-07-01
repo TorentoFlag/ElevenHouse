@@ -37,7 +37,7 @@ export function AstrologerHeaderView({ copy }: AstrologerHeaderViewProps) {
           className={styles.createButton}
           type="button"
           variant="brand"
-          size="medium"
+          size="big"
           title={copy.createLabel}
           aria-label={copy.createMenuAriaLabel}
           startIcon={<Plus width={17} height={17} aria-hidden="true" />}
