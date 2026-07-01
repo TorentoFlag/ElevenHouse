@@ -3,8 +3,9 @@
 html,
 body,
 #root {
-  min-height: 100vh;
+  height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 body {
@@ -13,7 +14,8 @@ body {
 
 .app-shell {
   display: grid;
-  min-height: 100vh;
+  height: 100vh;
+  box-sizing: border-box;
   place-content: center;
   gap: 8px;
   padding: 32px;

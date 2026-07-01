@@ -315,6 +315,10 @@ describe("NavigationDrawer", () => {
     expect(navigationDrawerCss).toContain(
       "background: linear-gradient(180deg, rgb(17 15 38 / 0.92), rgb(11 11 31 / 0.92));"
     );
+    expect(navigationDrawerCss).toContain("height: 100dvh;");
+    expect(navigationDrawerCss).toContain("max-height: 100dvh;");
+    expect(navigationDrawerCss).toContain("overflow: hidden;");
+    expect(navigationDrawerCss).not.toContain("min-height: 100dvh;");
     expect(navigationDrawerCss).toContain("padding: 0 0 var(--eh-space-14);");
     expect(navigationDrawerCss).toContain("padding: var(--eh-space-20);");
     expect(navigationDrawerCss).toContain("padding: 0 12px;");
