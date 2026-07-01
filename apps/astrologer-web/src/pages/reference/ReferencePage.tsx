@@ -36,7 +36,6 @@ export function ReferencePage() {
       categories={summary.categories}
       entries={summary.entries}
       catalogTotal={summary.catalogTotal}
-      resultTotal={summary.resultTotal}
       sourceCounts={summary.sourceCounts}
       selectedCategoryId={selectedCategoryId}
       selectedSource={selectedSource}

@@ -106,7 +106,6 @@ describe("ReferencePageView", () => {
     const view = ReferencePageView({
       copy,
       catalogTotal: 396,
-      resultTotal: 14,
       categories,
       entries,
       selectedCategoryId: getArrayItem(categories, 0).id,
@@ -139,7 +138,7 @@ describe("ReferencePageView", () => {
 
     expect(toolbarProps.className).toBe(styles.toolbar);
     expect(JSON.stringify(toolbarProps.children)).toContain("Справочник трактовок");
-    expect(JSON.stringify(toolbarProps.children)).toContain("14");
+    expect(JSON.stringify(toolbarProps.children)).toContain("396");
     expect(findFirstElementByType(toolbar, Reference)).toBeTruthy();
     expect(findFirstElementByType(toolbar, Search)).toBeTruthy();
 
@@ -239,7 +238,6 @@ describe("ReferencePageView", () => {
     const baseProps: ReferencePageViewProps = {
       copy,
       catalogTotal: 0,
-      resultTotal: 0,
       categories: [],
       entries: [],
       selectedCategoryId: null,
