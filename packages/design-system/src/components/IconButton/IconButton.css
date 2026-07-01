@@ -19,11 +19,16 @@
 }
 
 .ehIconButton--small {
-  width: 36px;
-  height: 36px;
+  width: 31px;
+  height: 31px;
 }
 
 .ehIconButton--medium {
+  width: var(--eh-length-36);
+  height: var(--eh-length-36);
+}
+
+.ehIconButton--big {
   width: 42px;
   height: 42px;
 }
@@ -50,6 +55,16 @@
   color: var(--eh-color-gold);
 }
 
+.ehIconButton--quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--eh-color-moon-500);
+}
+
+.ehIconButton--quiet:hover:not(:disabled) {
+  color: var(--eh-color-moon-120);
+}
+
 .ehIconButton:focus-visible {
   box-shadow: 0 0 0 3px rgb(244 196 48 / 0.2);
 }
@@ -69,4 +84,9 @@
 .ehIconButton__icon svg {
   width: 20px;
   height: 20px;
+}
+
+.ehIconButton--small .ehIconButton__icon svg {
+  width: 13px;
+  height: 13px;
 }

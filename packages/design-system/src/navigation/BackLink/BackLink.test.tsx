@@ -22,7 +22,7 @@ describe("BackLink", () => {
     expect(element.props["aria-label"]).toBe("На главную");
     expect(element.props.title).toBe("На главную");
     expect(element.props.variant).toBe("default");
-    expect(element.props.size).toBe("small");
+    expect(element.props.size).toBe("medium");
     expect(element.props.startIcon.type.name).toBe("ArrowLeft");
 
     element.props.onClick();

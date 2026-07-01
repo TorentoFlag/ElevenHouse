@@ -48,7 +48,7 @@ export function NavigationDrawer({
             label={collapseButtonLabel}
             icon={<ChevronLeft aria-hidden="true" />}
             variant="drawer"
-            size="small"
+            size="medium"
             pressed={collapsed}
             onClick={() => onCollapsedChange?.(!collapsed)}
           />
@@ -61,7 +61,7 @@ export function NavigationDrawer({
           label={collapseButtonLabel}
           icon={<ChevronRight aria-hidden="true" />}
           variant="drawer"
-          size="small"
+          size="medium"
           pressed={collapsed}
           onClick={() => onCollapsedChange?.(!collapsed)}
         />

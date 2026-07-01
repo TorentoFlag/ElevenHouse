@@ -165,7 +165,7 @@ describe("OtpAuthForm", () => {
 
     expect(submitButton?.type).toBe(Button);
     expect(submitButton?.props?.variant).toBe("brand");
-    expect(submitButton?.props?.size).toBe("medium");
+    expect(submitButton?.props?.size).toBe("big");
     expect(submitButton?.props?.type).toBe("button");
     expect(onSubmit).toHaveBeenCalledWith(
       { email: "user@example.com", name: "Анна", phone: "+7" },

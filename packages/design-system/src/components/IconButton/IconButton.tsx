@@ -4,7 +4,7 @@ import type { IconButtonProps } from "./types.js";
 export function IconButton({
   label,
   icon,
-  size = "medium",
+  size = "big",
   variant = "default",
   pressed,
   className,

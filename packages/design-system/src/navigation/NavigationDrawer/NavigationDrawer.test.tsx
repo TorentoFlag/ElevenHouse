@@ -302,8 +302,10 @@ describe("NavigationDrawer", () => {
     const collapsedExpandButton = findElementByIconButtonLabel(collapsed, "Развернуть меню");
 
     expect(expandedHeaderButton?.props?.className).toBe("ehNavigationDrawer__collapseButton");
+    expect(expandedHeaderButton?.props?.size).toBe("medium");
     expect(collapsedHeaderButton?.props?.children).not.toContain(collapsedExpandButton);
     expect(collapsedExpandButton?.props?.className).toBe("ehNavigationDrawer__expandButton");
+    expect(collapsedExpandButton?.props?.size).toBe("medium");
     expect(collapsedExpandButton?.props?.pressed).toBe(true);
   });
 

@@ -79,7 +79,7 @@ describe("OtpCodeForm", () => {
     expect(backButton?.type).toBe(Button);
     expect(backButton?.props?.title).toBe("Изменить данные");
     expect(backButton?.props?.variant).toBe("default");
-    expect(backButton?.props?.size).toBe("small");
+    expect(backButton?.props?.size).toBe("medium");
     expect(backButton?.props?.startIcon).toMatchObject({
       type: ArrowLeft,
       props: {
@@ -92,12 +92,12 @@ describe("OtpCodeForm", () => {
     expect(changeIdentifierButton?.type).toBe(Button);
     expect(changeIdentifierButton?.props?.title).toBe("Изменить email");
     expect(changeIdentifierButton?.props?.variant).toBe("default");
-    expect(changeIdentifierButton?.props?.size).toBe("small");
+    expect(changeIdentifierButton?.props?.size).toBe("medium");
     expect(onBack).toHaveBeenCalledTimes(2);
     expect(resendButton?.type).toBe(Button);
     expect(resendButton?.props?.title).toBe("Отправить повторно");
     expect(resendButton?.props?.variant).toBe("default");
-    expect(resendButton?.props?.size).toBe("small");
+    expect(resendButton?.props?.size).toBe("medium");
     expect(resendButton?.props?.startIcon).toMatchObject({
       type: Refresh,
       props: {

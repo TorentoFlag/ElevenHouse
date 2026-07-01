@@ -22,11 +22,18 @@
 }
 
 .ehButton--small {
+  height: 31px;
+  padding: 0 var(--eh-space-12);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ehButton--medium {
   height: var(--eh-length-36);
   padding: 0 var(--eh-space-14);
 }
 
-.ehButton--medium {
+.ehButton--big {
   height: 42px;
   padding: 0 var(--eh-space-16);
 }
@@ -50,6 +57,12 @@
 .ehButton--default:hover:not(:disabled) {
   background: var(--eh-color-night-860);
   color: var(--eh-color-moon-120);
+}
+
+.ehButton--glass {
+  border: 1px solid rgba(216, 212, 236, 0.14);
+  background-color: rgb(30, 27, 62);
+  color: rgb(236, 234, 247);
 }
 
 .ehButton:focus-visible {

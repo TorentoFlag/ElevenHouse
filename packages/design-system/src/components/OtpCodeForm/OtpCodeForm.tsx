@@ -54,7 +54,7 @@ export function OtpCodeForm({
           className="ehOtpCodeForm__back"
           title={text.backLabel}
           variant="default"
-          size="small"
+          size="medium"
           type="button"
           disabled={isSubmitting}
           style={backButtonStyle}
@@ -72,7 +72,7 @@ export function OtpCodeForm({
           className="ehOtpCodeForm__changeIdentifier"
           title={text.changeIdentifierLabel}
           variant="default"
-          size="small"
+          size="medium"
           type="button"
           disabled={isSubmitting}
           onClick={onBack}
@@ -127,7 +127,7 @@ export function OtpCodeForm({
           className="ehOtpCodeForm__resend"
           title={text.resendLabel}
           variant="default"
-          size="small"
+          size="medium"
           type="button"
           disabled={isSubmitting || isResendDisabled}
           onClick={onResend}
@@ -152,7 +152,7 @@ export function OtpCodeForm({
           className="ehOtpCodeForm__submit"
           title={isSubmitting ? "..." : text.submitLabel}
           variant="brand"
-          size="medium"
+          size="big"
           type="button"
           disabled={submitDisabled || isSubmitting}
           onClick={() => onSubmit(code)}

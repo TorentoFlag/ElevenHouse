@@ -163,7 +163,7 @@ export function OtpAuthForm({
             className="ehOtpAuthForm__submit"
             title={renderMotionText("submit", isSubmitting ? "..." : submitLabel)}
             variant="brand"
-            size="medium"
+            size="big"
             type="button"
             ref={submitButtonRef}
             disabled={submitDisabled || isSubmitting}

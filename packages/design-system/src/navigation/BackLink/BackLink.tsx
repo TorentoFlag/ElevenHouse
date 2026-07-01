@@ -21,7 +21,7 @@ export function BackLink({ title, path, className, ariaLabel }: BackLinkProps) {
       title={title}
       type="button"
       variant="default"
-      size="small"
+      size="medium"
       startIcon={<ArrowLeft aria-hidden="true" />}
       onClick={() => navigate(path)}
     />

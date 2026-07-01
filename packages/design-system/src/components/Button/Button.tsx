@@ -3,7 +3,7 @@ import type { ButtonProps } from "./types.js";
 
 export function Button({
   title,
-  size = "medium",
+  size = "big",
   variant = "brand",
   startIcon,
   endIcon,
