@@ -234,7 +234,11 @@ async function listEntries(
         overrides.id as "astrologerEntryId",
         coalesce(overrides.created_at, platform_entries.created_at) as "createdAt",
         coalesce(overrides.updated_at, platform_entries.updated_at) as "updatedAt",
-        categories."order" as "categoryOrder"
+        categories."order" as "categoryOrder",
+        case
+          when platform_entries.code ~ '.*_[0-9]+$' then substring(platform_entries.code from '_([0-9]+)$')::int
+          else null
+        end as "codeOrderNumber"
       from ${dictionaryPlatformEntries} as platform_entries
       inner join ${dictionaryCategories} as categories
         on categories.id = platform_entries.category_id
@@ -261,7 +265,11 @@ async function listEntries(
         custom_entries.id as "astrologerEntryId",
         custom_entries.created_at as "createdAt",
         custom_entries.updated_at as "updatedAt",
-        categories."order" as "categoryOrder"
+        categories."order" as "categoryOrder",
+        case
+          when custom_entries.code ~ '.*_[0-9]+$' then substring(custom_entries.code from '_([0-9]+)$')::int
+          else null
+        end as "codeOrderNumber"
       from ${dictionaryAstrologerEntries} as custom_entries
       inner join ${dictionaryCategories} as categories
         on categories.id = custom_entries.category_id
@@ -296,7 +304,7 @@ async function listEntries(
     where true
       ${sourceFilter}
       ${searchFilter}
-    order by "categoryOrder", title, id
+    order by "categoryOrder", "codeOrderNumber" nulls last, title, id
     limit ${limit}
     offset ${offset}
   `);

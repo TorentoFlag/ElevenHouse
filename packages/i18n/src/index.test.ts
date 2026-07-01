@@ -33,6 +33,19 @@ describe("localeOptions", () => {
 });
 
 describe("resolveInitialLocale", () => {
+  it("uses an explicit initial locale before storage and browser preferences", () => {
+    const storage = createStorage("en");
+
+    expect(
+      resolveInitialLocale({
+        initialLocale: "ru",
+        storage,
+        browserLanguages: ["en-US"]
+      })
+    ).toBe("ru");
+    expect(storage.getItem).not.toHaveBeenCalled();
+  });
+
   it("prefers a supported stored locale", () => {
     const storage = createStorage("en");
 

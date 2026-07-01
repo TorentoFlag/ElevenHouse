@@ -21,6 +21,7 @@ export type LocaleOption = {
 export type LocaleStorage = Pick<Storage, "getItem" | "setItem">;
 
 export type ResolveInitialLocaleOptions = {
+  initialLocale?: SupportedLocale;
   storage?: LocaleStorage | null;
   browserLanguages?: readonly string[];
 };
@@ -37,6 +38,7 @@ export type I18nContextValue<TDictionary extends LocaleDictionary = LocaleDictio
 export type I18nProviderProps<TDictionary extends LocaleDictionary> = {
   children: ReactNode;
   dictionaries: Record<SupportedLocale, TDictionary>;
+  initialLocale?: SupportedLocale;
   storage?: LocaleStorage | null;
   browserLanguages?: readonly string[];
   documentElement?: Pick<HTMLElement, "lang"> | null;
@@ -56,9 +58,14 @@ export function isSupportedLocale(value: string): value is SupportedLocale {
 }
 
 export function resolveInitialLocale({
+  initialLocale,
   storage = getDefaultStorage(),
   browserLanguages = getDefaultBrowserLanguages()
 }: ResolveInitialLocaleOptions = {}): SupportedLocale {
+  if (initialLocale) {
+    return initialLocale;
+  }
+
   const storedLocale = readStoredLocale(storage);
 
   if (storedLocale) {
@@ -81,12 +88,13 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 export function I18nProvider<TDictionary extends LocaleDictionary>({
   children,
   dictionaries,
+  initialLocale,
   storage = getDefaultStorage(),
   browserLanguages = getDefaultBrowserLanguages(),
   documentElement = getDefaultDocumentElement()
 }: I18nProviderProps<TDictionary>) {
   const [locale, setLocaleState] = useState<SupportedLocale>(() =>
-    resolveInitialLocale({ storage, browserLanguages })
+    resolveInitialLocale({ initialLocale, storage, browserLanguages })
   );
 
   useEffect(() => {

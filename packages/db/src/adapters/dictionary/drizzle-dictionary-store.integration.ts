@@ -367,6 +367,57 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
     await expect(countOverrides(ownerUserId, platformMoon.id)).resolves.toBe(1);
   });
 
+  it("orders platform entries with numeric code suffixes naturally", async () => {
+    const store = createDrizzleDictionaryStore(runtime.database);
+    const ownerUserId = await createUser();
+    ownerUserIds.push(ownerUserId);
+    const category = await createCategory({
+      code: `house_meanings_${suffix}`,
+      name: "House meanings",
+      order: -1002
+    });
+    categoryIds.push(category.id);
+
+    const firstHouse = await createPlatformEntry({
+      categoryId: category.id,
+      code: `house_${suffix}_1`,
+      title: "1 Дом — личность",
+      content: "First house content",
+      status: "published"
+    });
+    const secondHouse = await createPlatformEntry({
+      categoryId: category.id,
+      code: `house_${suffix}_2`,
+      title: "2 Дом — ресурсы и ценности",
+      content: "Second house content",
+      status: "published"
+    });
+    const tenthHouse = await createPlatformEntry({
+      categoryId: category.id,
+      code: `house_${suffix}_10`,
+      title: "10 Дом — карьера и социальная реализация",
+      content: "Tenth house content",
+      status: "published"
+    });
+    platformEntryIds.push(firstHouse.id, secondHouse.id, tenthHouse.id);
+
+    await expect(
+      listDictionaryEntries({
+        store,
+        ownerUserId,
+        locale: "ru",
+        categoryId: category.id,
+        source: "platform"
+      })
+    ).resolves.toMatchObject({
+      entries: [
+        expect.objectContaining({ code: firstHouse.code }),
+        expect.objectContaining({ code: secondHouse.code }),
+        expect.objectContaining({ code: tenthHouse.code })
+      ]
+    });
+  });
+
   async function createUser(): Promise<string> {
     const result = await runtime.pool.query<{ id: string }>(
       "insert into users (status) values ('active') returning id"
