@@ -55,6 +55,34 @@ export type AstrologerCopy = {
     title: string;
     kicker: string;
   };
+  reference: {
+    documentTitle: string;
+    title: string;
+    searchPlaceholder: string;
+    resetLabel: string;
+    addLabel: string;
+    allCategoriesLabel: string;
+    sourceFilterAriaLabel: string;
+    sourceFilters: {
+      all: string;
+      platform: string;
+      modified: string;
+      custom: string;
+    };
+    sourceBadges: {
+      platform: string;
+      modified: string;
+      custom: string;
+    };
+    entryActions: {
+      editLabel: string;
+      deleteLabel: string;
+    };
+    emptyLabel: string;
+    emptyAddLabel: string;
+    loadingLabel: string;
+    errorLabel: string;
+  };
 };
 
 export type AppShellHeaderCopy = {
@@ -227,6 +255,34 @@ export const astrologerCopyByLocale = {
       documentTitle: "ElevenHouse | Кабинет астролога",
       kicker: "Astrologer surface",
       title: "ElevenHouse Astrologer Web"
+    },
+    reference: {
+      documentTitle: "ElevenHouse | Справочники",
+      title: "Справочник трактовок",
+      searchPlaceholder: "Поиск по трактовкам...",
+      resetLabel: "Сбросить",
+      addLabel: "Добавить",
+      allCategoriesLabel: "Все трактовки",
+      sourceFilterAriaLabel: "Фильтр источников трактовок",
+      sourceFilters: {
+        all: "Все источники",
+        platform: "ElevenHouse",
+        modified: "Изменённые",
+        custom: "Свои"
+      },
+      sourceBadges: {
+        platform: "ElevenHouse",
+        modified: "изменено",
+        custom: "своя"
+      },
+      entryActions: {
+        editLabel: "Изменить",
+        deleteLabel: "Удалить"
+      },
+      emptyLabel: "Ничего не найдено",
+      emptyAddLabel: "Добавить трактовку",
+      loadingLabel: "Загружаем справочники",
+      errorLabel: "Не удалось загрузить справочники"
     }
   },
   en: {
@@ -345,6 +401,34 @@ export const astrologerCopyByLocale = {
       documentTitle: "ElevenHouse | Astrologer dashboard",
       kicker: "Astrologer surface",
       title: "ElevenHouse Astrologer Web"
+    },
+    reference: {
+      documentTitle: "ElevenHouse | References",
+      title: "Interpretation references",
+      searchPlaceholder: "Search interpretations...",
+      resetLabel: "Reset",
+      addLabel: "Add",
+      allCategoriesLabel: "All interpretations",
+      sourceFilterAriaLabel: "Interpretation source filter",
+      sourceFilters: {
+        all: "All sources",
+        platform: "ElevenHouse",
+        modified: "Modified",
+        custom: "Mine"
+      },
+      sourceBadges: {
+        platform: "ElevenHouse",
+        modified: "modified",
+        custom: "mine"
+      },
+      entryActions: {
+        editLabel: "Edit",
+        deleteLabel: "Delete"
+      },
+      emptyLabel: "No interpretations found",
+      emptyAddLabel: "Add interpretation",
+      loadingLabel: "Loading references",
+      errorLabel: "Could not load references"
     }
   }
 } satisfies Record<SupportedLocale, AstrologerCopy>;
