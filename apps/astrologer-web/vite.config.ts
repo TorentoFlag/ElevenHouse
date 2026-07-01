@@ -30,6 +30,27 @@ export default defineConfig({
           import.meta.url
         )
       ),
+      "@elevenhouse/design-system/components/Chip": fileURLToPath(
+        new URL("../../packages/design-system/src/components/Chip/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/Chip.css": fileURLToPath(
+        new URL("../../packages/design-system/src/components/Chip/Chip.css", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/IconButton": fileURLToPath(
+        new URL("../../packages/design-system/src/components/IconButton/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/IconButton.css": fileURLToPath(
+        new URL(
+          "../../packages/design-system/src/components/IconButton/IconButton.css",
+          import.meta.url
+        )
+      ),
+      "@elevenhouse/design-system/components/Card": fileURLToPath(
+        new URL("../../packages/design-system/src/components/Card/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/Card.css": fileURLToPath(
+        new URL("../../packages/design-system/src/components/Card/Card.css", import.meta.url)
+      ),
       "@elevenhouse/design-system/components/OtpCodeForm": fileURLToPath(
         new URL("../../packages/design-system/src/components/OtpCodeForm/index.ts", import.meta.url)
       ),
@@ -48,8 +69,17 @@ export default defineConfig({
       "@elevenhouse/design-system/icons/ChevronDown": fileURLToPath(
         new URL("../../packages/design-system/src/icons/ChevronDown/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/icons/Content": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Content/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/Edit": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Edit/index.ts", import.meta.url)
+      ),
       "@elevenhouse/design-system/icons/Flow": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Flow/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/LayoutGrid": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/LayoutGrid/index.ts", import.meta.url)
       ),
       "@elevenhouse/design-system/icons/LogoMoon": fileURLToPath(
         new URL("../../packages/design-system/src/icons/LogoMoon/index.ts", import.meta.url)
@@ -71,6 +101,9 @@ export default defineConfig({
       ),
       "@elevenhouse/design-system/icons/Sparkle": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Sparkle/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/Trash": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Trash/index.ts", import.meta.url)
       ),
       "@elevenhouse/design-system/icons/Verified": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Verified/index.ts", import.meta.url)

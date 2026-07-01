@@ -5,6 +5,7 @@ import { RequireCurrentAccount } from "./features/auth/routes/RequireCurrentAcco
 import { AstrologerAppLayout } from "./layouts/AstrologerAppLayout";
 import { AuthPage } from "./pages/auth/AuthPage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
+import { ReferencePage } from "./pages/reference/ReferencePage";
 import { astrologerRoutes } from "./router";
 
 vi.mock("react-router", async (importOriginal) => {
@@ -17,7 +18,7 @@ vi.mock("react-router", async (importOriginal) => {
 });
 
 describe("astrologerRoutes", () => {
-  it("keeps auth outside the app shell and renders dashboard inside the protected shell", () => {
+  it("keeps auth outside the app shell and renders workspace pages inside the protected shell", () => {
     const authRoute = astrologerRoutes.find((route) => route.path === "/auth");
     const rootRedirect = astrologerRoutes.find((route) => route.path === "/");
     const protectedRoute = astrologerRoutes.find(
@@ -27,6 +28,7 @@ describe("astrologerRoutes", () => {
       (route) => isValidElement(route.element) && route.element.type === AstrologerAppLayout
     );
     const dashboardRoute = shellRoute?.children?.find((route) => route.path === "/dashboard");
+    const referenceRoute = shellRoute?.children?.find((route) => route.path === "/reference");
 
     expect(isValidElement(rootRedirect?.element) && rootRedirect.element.type).toBe(Navigate);
     expect(isValidElement(authRoute?.element) && authRoute.element.type).toBe(AuthPage);
@@ -38,6 +40,9 @@ describe("astrologerRoutes", () => {
     );
     expect(isValidElement(dashboardRoute?.element) && dashboardRoute.element.type).toBe(
       DashboardPage
+    );
+    expect(isValidElement(referenceRoute?.element) && referenceRoute.element.type).toBe(
+      ReferencePage
     );
   });
 });
