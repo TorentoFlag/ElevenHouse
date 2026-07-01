@@ -69,6 +69,7 @@ describe("AstrologerNavigationDrawerView", () => {
 
     expect(renderedLink.type).toBe(NavLink);
     expect(renderedLink.props.to).toBe("/dashboard");
+    expect(renderedLink.props.viewTransition).toBe(true);
     expect(renderedLink.props["data-navigation-drawer-item-id"]).toBe("dashboard");
     expect(renderedLink.props.className({ isActive: true })).toContain(
       "ehNavigationDrawer__item--active"

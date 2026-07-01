@@ -15,6 +15,7 @@ export function renderNavigationLink(
     <NavLink
       {...linkProps}
       to={href ?? "#"}
+      viewTransition
       className={({ isActive }) =>
         classNames(className, {
           "ehNavigationDrawer__item--active": isActive

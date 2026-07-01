@@ -1,3 +1,5 @@
+@import "@elevenhouse/design-system/motion.css";
+
 .shell {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -24,4 +26,10 @@
   box-sizing: border-box;
   overflow: auto;
   padding: 32px;
+}
+
+.routeOutlet,
+.routeContent {
+  min-width: 0;
+  min-height: 100%;
 }

@@ -3,19 +3,32 @@
 }
 
 .ehMotionHeight--switching {
-  transition: height var(--eh-motion-duration-normal, 320ms) var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1));
+  transition: height var(--eh-motion-duration-normal, 320ms)
+    var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1));
 }
 
 .ehMotionContent {
-  animation: ehMotionContentIn var(--eh-motion-duration-normal, 320ms) var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  animation: ehMotionContentIn var(--eh-motion-duration-normal, 320ms)
+    var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1)) both;
   transform-origin: 50% 0;
 }
 
 .ehMotionText {
   display: inline-block;
-  animation: ehMotionContentIn var(--eh-motion-duration-normal, 320ms) var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  animation: ehMotionContentIn var(--eh-motion-duration-normal, 320ms)
+    var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1)) both;
   transform-origin: 50% 50%;
   will-change: opacity, transform;
+}
+
+.ehMotionRouteContent {
+  min-width: 0;
+  transform-origin: 50% 0;
+}
+
+.ehMotionRouteContent--fallback {
+  animation: ehMotionRouteContentEnter var(--eh-motion-duration-page, 280ms)
+    var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1)) both;
 }
 
 .ehSegmentedIndicator {
@@ -25,7 +38,10 @@
   bottom: var(--eh-motion-segmented-padding, 0);
   left: var(--eh-motion-segmented-padding, 0);
   width: calc(
-    (100% - (var(--eh-motion-segmented-padding, 0) * 2) - (var(--eh-motion-segmented-gap, 0) * (var(--eh-motion-segmented-count, 2) - 1))) /
+    (
+        100% - (var(--eh-motion-segmented-padding, 0) * 2) -
+          (var(--eh-motion-segmented-gap, 0) * (var(--eh-motion-segmented-count, 2) - 1))
+      ) /
       var(--eh-motion-segmented-count, 2)
   );
   border-radius: var(--eh-motion-segmented-radius, inherit);
@@ -33,13 +49,15 @@
   transform: translateX(
     calc(var(--eh-motion-segmented-active-index, 0) * (100% + var(--eh-motion-segmented-gap, 0)))
   );
-  transition: transform var(--eh-motion-duration-normal, 320ms) var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1));
+  transition: transform var(--eh-motion-duration-normal, 320ms)
+    var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1));
 }
 
 @keyframes ehMotionContentIn {
   from {
     opacity: 0;
-    transform: translateY(var(--eh-motion-content-enter-y, 6px)) scale(var(--eh-motion-content-enter-scale, 0.992));
+    transform: translateY(var(--eh-motion-content-enter-y, 6px))
+      scale(var(--eh-motion-content-enter-scale, 0.992));
   }
 
   to {
@@ -48,17 +66,76 @@
   }
 }
 
+@keyframes ehMotionRouteContentEnter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--eh-motion-route-enter-y, 6px))
+      scale(var(--eh-motion-route-enter-scale, 0.996));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ehMotionRouteContentExit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(var(--eh-motion-route-exit-y, -2px))
+      scale(var(--eh-motion-route-exit-scale, 0.998));
+  }
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-group(eh-page) {
+  animation-duration: var(--eh-motion-duration-page, 280ms);
+  animation-timing-function: var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+::view-transition-old(eh-page),
+::view-transition-new(eh-page) {
+  animation-duration: var(--eh-motion-duration-page, 280ms);
+  animation-fill-mode: both;
+  animation-timing-function: var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1));
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(eh-page) {
+  animation-name: ehMotionRouteContentExit;
+}
+
+::view-transition-new(eh-page) {
+  animation-name: ehMotionRouteContentEnter;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ehMotionHeight--switching,
   .ehSegmentedIndicator {
     transition: none;
   }
 
-  .ehMotionContent {
+  .ehMotionContent,
+  .ehMotionRouteContent--fallback {
     animation: none;
   }
 
   .ehMotionText {
+    animation: none;
+  }
+
+  ::view-transition-old(eh-page),
+  ::view-transition-new(eh-page) {
     animation: none;
   }
 }

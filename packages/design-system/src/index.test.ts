@@ -18,6 +18,7 @@ describe("design-system root exports", () => {
     expect(designSystem.Sparkle).toBeTypeOf("function");
     expect(designSystem.Verified).toBeTypeOf("function");
     expect(designSystem.MotionContent).toBeTypeOf("function");
+    expect(designSystem.MotionRouteContent).toBeTypeOf("function");
     expect(designSystem.MotionText).toBeTypeOf("function");
     expect(designSystem.classNames("root", { active: true })).toBe("root active");
   });

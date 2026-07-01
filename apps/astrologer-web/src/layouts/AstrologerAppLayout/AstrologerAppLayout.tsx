@@ -1,7 +1,7 @@
-import { Outlet } from "react-router";
 import { AstrologerHeader } from "../AstrologerHeader";
 import { AstrologerNavigationDrawer } from "../AstrologerNavigationDrawer";
 import styles from "./AstrologerAppLayout.module.css";
+import { AstrologerRouteOutlet } from "./AstrologerRouteOutlet";
 
 export function AstrologerAppLayout() {
   return (
@@ -10,7 +10,7 @@ export function AstrologerAppLayout() {
       <div className={styles.workspace}>
         <AstrologerHeader />
         <main className={styles.main} aria-label="Astrologer workspace">
-          <Outlet />
+          <AstrologerRouteOutlet />
         </main>
       </div>
     </div>
