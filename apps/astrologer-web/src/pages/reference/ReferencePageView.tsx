@@ -30,7 +30,8 @@ type ReferencePageCopy = AstrologerCopy["reference"];
 
 export type ReferencePageViewProps = {
   copy: ReferencePageCopy;
-  total: number;
+  catalogTotal: number;
+  resultTotal: number;
   categories: DictionaryCategoryResponse[];
   entries: DictionaryEffectiveEntryResponse[];
   selectedCategoryId: string | null;
@@ -64,7 +65,8 @@ const categoryIconByCode: Record<string, ReferenceIcon> = {
 
 export function ReferencePageView({
   copy,
-  total,
+  catalogTotal,
+  resultTotal,
   categories,
   entries,
   selectedCategoryId,
@@ -94,7 +96,7 @@ export function ReferencePageView({
             <h1 id="reference-title" className={styles.title}>
               {copy.title}
             </h1>
-            <span className={styles.total}>{total}</span>
+            <span className={styles.total}>{resultTotal}</span>
           </span>
         </div>
 
@@ -141,7 +143,7 @@ export function ReferencePageView({
             <ReferenceCategoryButton
               id="all"
               label={copy.allCategoriesLabel}
-              count={total}
+              count={catalogTotal}
               icon={<Reference width={16} height={16} />}
               isActive={selectedCategoryId === null}
               onClick={() => onCategoryChange(null)}

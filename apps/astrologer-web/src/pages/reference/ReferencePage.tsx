@@ -35,7 +35,8 @@ export function ReferencePage() {
       copy={dictionary.reference}
       categories={summary.categories}
       entries={summary.entries}
-      total={summary.total}
+      catalogTotal={summary.catalogTotal}
+      resultTotal={summary.resultTotal}
       sourceCounts={summary.sourceCounts}
       selectedCategoryId={selectedCategoryId}
       selectedSource={selectedSource}

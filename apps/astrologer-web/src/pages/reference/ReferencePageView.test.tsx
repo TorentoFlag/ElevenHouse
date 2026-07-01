@@ -105,7 +105,8 @@ describe("ReferencePageView", () => {
     const onDeleteEntry = vi.fn();
     const view = ReferencePageView({
       copy,
-      total: 14,
+      catalogTotal: 396,
+      resultTotal: 14,
       categories,
       entries,
       selectedCategoryId: getArrayItem(categories, 0).id,
@@ -172,6 +173,8 @@ describe("ReferencePageView", () => {
       getArrayItem(categories, 0).id,
       getArrayItem(categories, 1).id
     ]);
+    expect(getArrayItem(categoryButtons, 0).props.count).toBe(396);
+    expect(getArrayItem(categoryButtons, 1).props.count).toBe(4);
     getArrayItem(categoryButtons, 2).props.onClick();
     expect(onCategoryChange).toHaveBeenCalledWith(getArrayItem(categories, 1).id);
 
@@ -235,7 +238,8 @@ describe("ReferencePageView", () => {
   it("renders loading and error states in the content region", () => {
     const baseProps: ReferencePageViewProps = {
       copy,
-      total: 0,
+      catalogTotal: 0,
+      resultTotal: 0,
       categories: [],
       entries: [],
       selectedCategoryId: null,
@@ -273,6 +277,7 @@ type TestElementProps = {
   as?: string;
   children?: unknown;
   className?: string;
+  count?: number;
   "data-reference-category-id"?: string;
   "data-reference-entry-action"?: string;
   "data-reference-source"?: string;

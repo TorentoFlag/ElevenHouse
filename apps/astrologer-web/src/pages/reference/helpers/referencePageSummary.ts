@@ -21,7 +21,8 @@ export function createReferencePageSummary({
   return {
     categories: categoriesResponse?.categories ?? [],
     entries: entriesResponse?.entries ?? [],
-    total: entriesResponse?.total ?? 0,
+    catalogTotal: categoriesResponse?.total ?? 0,
+    resultTotal: entriesResponse?.total ?? 0,
     sourceCounts: entriesResponse?.counts.sources ?? emptySourceCounts
   };
 }

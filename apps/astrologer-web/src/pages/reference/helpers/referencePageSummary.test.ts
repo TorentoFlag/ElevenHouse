@@ -59,7 +59,8 @@ describe("createReferencePageSummary", () => {
     ).toEqual({
       categories: [],
       entries: [],
-      total: 0,
+      catalogTotal: 0,
+      resultTotal: 0,
       sourceCounts: {
         all: 0,
         platform: 0,
@@ -78,7 +79,8 @@ describe("createReferencePageSummary", () => {
     ).toEqual({
       categories: categoriesResponse.categories,
       entries: entriesResponse.entries,
-      total: 4,
+      catalogTotal: 1,
+      resultTotal: 4,
       sourceCounts: entriesResponse.counts.sources
     });
   });
