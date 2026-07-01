@@ -20,17 +20,17 @@ export function Button({
 
   return (
     <button {...buttonProps} className={rootClassName} type={type}>
-      {startIcon ? (
+      {Boolean(startIcon) && (
         <span className="ehButton__icon ehButton__icon--start" aria-hidden="true">
           {startIcon}
         </span>
-      ) : null}
+      )}
       <span className="ehButton__title">{title}</span>
-      {endIcon ? (
+      {endIcon && (
         <span className="ehButton__icon ehButton__icon--end" aria-hidden="true">
           {endIcon}
         </span>
-      ) : null}
+      )}
     </button>
   );
 }

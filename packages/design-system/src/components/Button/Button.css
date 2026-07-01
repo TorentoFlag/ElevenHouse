@@ -9,7 +9,7 @@
   outline: none;
   cursor: pointer;
   font-family: inherit;
-  font-size: var(--eh-font-size-15);
+  font-size: var(--eh-font-size-14);
   font-weight: var(--eh-font-weight-semibold);
   line-height: var(--eh-line-height-100);
   text-decoration: none;
@@ -27,7 +27,7 @@
 }
 
 .ehButton--medium {
-  height: var(--eh-length-48);
+  height: 42px;
   padding: 0 var(--eh-space-16);
 }
 

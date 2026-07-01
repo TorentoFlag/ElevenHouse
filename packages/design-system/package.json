@@ -28,6 +28,16 @@
       "import": "./dist/components/Button/index.js"
     },
     "./components/Button.css": "./src/components/Button/Button.css",
+    "./components/Card": {
+      "types": "./dist/components/Card/index.d.ts",
+      "import": "./dist/components/Card/index.js"
+    },
+    "./components/Card.css": "./src/components/Card/Card.css",
+    "./components/Chip": {
+      "types": "./dist/components/Chip/index.d.ts",
+      "import": "./dist/components/Chip/index.js"
+    },
+    "./components/Chip.css": "./src/components/Chip/Chip.css",
     "./components/IconButton": {
       "types": "./dist/components/IconButton/index.d.ts",
       "import": "./dist/components/IconButton/index.js"
@@ -98,6 +108,10 @@
       "types": "./dist/icons/Content/index.d.ts",
       "import": "./dist/icons/Content/index.js"
     },
+    "./icons/Edit": {
+      "types": "./dist/icons/Edit/index.d.ts",
+      "import": "./dist/icons/Edit/index.js"
+    },
     "./icons/Flow": {
       "types": "./dist/icons/Flow/index.d.ts",
       "import": "./dist/icons/Flow/index.js"
@@ -134,6 +148,10 @@
       "types": "./dist/icons/Sparkle/index.d.ts",
       "import": "./dist/icons/Sparkle/index.js"
     },
+    "./icons/Trash": {
+      "types": "./dist/icons/Trash/index.d.ts",
+      "import": "./dist/icons/Trash/index.js"
+    },
     "./icons/Verified": {
       "types": "./dist/icons/Verified/index.d.ts",
       "import": "./dist/icons/Verified/index.js"
@@ -152,6 +170,8 @@
     "./tokens.css",
     "./src/motion/motion.css",
     "./src/components/Button/Button.css",
+    "./src/components/Card/Card.css",
+    "./src/components/Chip/Chip.css",
     "./src/components/IconButton/IconButton.css",
     "./src/navigation/NavigationDrawer/NavigationDrawer.css",
     "./src/components/OtpAuthForm/OtpAuthForm.css",

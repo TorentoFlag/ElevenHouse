@@ -1,0 +1,56 @@
+.ehChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--eh-space-6);
+  padding: 5px var(--eh-space-11);
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: var(--eh-radius-pill);
+  background: var(--eh-color-night-860);
+  color: var(--eh-color-moon-500);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--eh-font-size-12-5);
+  font-weight: 500;
+  line-height: var(--eh-line-height-100);
+  white-space: nowrap;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.ehChip--active {
+  border-color: rgb(244 196 48 / 0.42);
+  background: rgb(244 196 48 / 0.14);
+  color: #f6d266;
+}
+
+.ehChip:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.ehChip:focus-visible {
+  outline: 2px solid rgb(244 196 48 / 0.5);
+  outline-offset: 2px;
+}
+
+.ehChip__dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: var(--eh-radius-pill);
+  background: var(--eh-chip-dot-color, currentColor);
+}
+
+.ehChip__label {
+  min-width: 0;
+}
+
+.ehChip__count {
+  color: var(--eh-color-muted);
+  font-family: var(--eh-font-mono);
+  font-size: var(--eh-font-size-12-5);
+  font-weight: 500;
+}
