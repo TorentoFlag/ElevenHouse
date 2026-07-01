@@ -11,6 +11,7 @@ import { Card } from "@elevenhouse/design-system/components/Card";
 import "@elevenhouse/design-system/components/Card.css";
 import { IconButton } from "@elevenhouse/design-system/components/IconButton";
 import "@elevenhouse/design-system/components/IconButton.css";
+import { classNames } from "@elevenhouse/design-system/helpers";
 import { Content } from "@elevenhouse/design-system/icons/Content";
 import { Edit } from "@elevenhouse/design-system/icons/Edit";
 import { Flow } from "@elevenhouse/design-system/icons/Flow";
@@ -21,6 +22,7 @@ import { Reference } from "@elevenhouse/design-system/icons/Reference";
 import { Search } from "@elevenhouse/design-system/icons/Search";
 import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
 import { Trash } from "@elevenhouse/design-system/icons/Trash";
+import { MotionContent } from "@elevenhouse/design-system/motion";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { ReferenceCategoryButton } from "./components/ReferenceCategoryButton";
 import { ReferenceSourceFilterChip } from "./components/ReferenceSourceFilterChip";
@@ -39,6 +41,8 @@ export type ReferencePageViewProps = {
   search: string;
   isLoading: boolean;
   isError: boolean;
+  resultsMotionKey: string;
+  isResultsUpdating: boolean;
   onCategoryChange: (categoryId: string | null) => void;
   onSourceChange: (source: DictionaryEntrySourceFilter) => void;
   onSearchChange: (search: string) => void;
@@ -73,6 +77,8 @@ export function ReferencePageView({
   search,
   isLoading,
   isError,
+  resultsMotionKey,
+  isResultsUpdating,
   onCategoryChange,
   onSourceChange,
   onSearchChange,
@@ -183,68 +189,76 @@ export function ReferencePageView({
             ))}
           </div>
 
-          {isLoading && <p className={styles.contentState}>{copy.loadingLabel}</p>}
-          {isError && <p className={styles.contentState}>{copy.errorLabel}</p>}
-          {!isLoading && !isError && entries.length === 0 && (
-            <div className={styles.emptyState}>
-              <p>{copy.emptyLabel}</p>
-              <button
-                className={`${styles.button} ${styles.buttonGhost}`}
-                type="button"
-                onClick={onAdd}
-              >
-                {copy.emptyAddLabel}
-              </button>
-            </div>
-          )}
-
-          {!isLoading && !isError && entries.length > 0 && (
-            <div className={styles.entryGrid}>
-              {entries.map((entry) => (
-                <Card
-                  as="article"
-                  className={styles.entryCard}
-                  key={entry.id}
-                  padding="medium"
-                  variant="elevated"
+          <MotionContent
+            className={classNames(
+              styles.resultsMotion,
+              isResultsUpdating ? styles.resultsMotionUpdating : undefined
+            )}
+            transitionKey={resultsMotionKey}
+          >
+            {isLoading && <p className={styles.contentState}>{copy.loadingLabel}</p>}
+            {isError && <p className={styles.contentState}>{copy.errorLabel}</p>}
+            {!isLoading && !isError && entries.length === 0 && (
+              <div className={styles.emptyState}>
+                <p>{copy.emptyLabel}</p>
+                <button
+                  className={`${styles.button} ${styles.buttonGhost}`}
+                  type="button"
+                  onClick={onAdd}
                 >
-                  <div className={styles.entryTitleRow}>
-                    <h2 className={styles.entryTitle}>{entry.title}</h2>
-                    <span className={styles.entryBadge}>{copy.sourceBadges[entry.source]}</span>
-                  </div>
-                  <p className={styles.entryContent}>{entry.content}</p>
-                  <div className={styles.entryActions}>
-                    <Button
-                      className={styles.entryEditButton}
-                      type="button"
-                      variant="glass"
-                      size="small"
-                      title={copy.entryActions.editLabel}
-                      startIcon={
-                        <Edit
-                          className={styles.buttonIcon}
-                          width={13}
-                          height={13}
-                          aria-hidden="true"
-                        />
-                      }
-                      data-reference-entry-action="edit"
-                      onClick={() => onEditEntry(entry)}
-                    />
-                    <IconButton
-                      type="button"
-                      variant="quiet"
-                      size="small"
-                      label={`${copy.entryActions.deleteLabel}: ${entry.title}`}
-                      icon={<Trash aria-hidden="true" />}
-                      data-reference-entry-action="delete"
-                      onClick={() => onDeleteEntry(entry)}
-                    />
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
+                  {copy.emptyAddLabel}
+                </button>
+              </div>
+            )}
+
+            {!isLoading && !isError && entries.length > 0 && (
+              <div className={styles.entryGrid}>
+                {entries.map((entry) => (
+                  <Card
+                    as="article"
+                    className={styles.entryCard}
+                    key={entry.id}
+                    padding="medium"
+                    variant="elevated"
+                  >
+                    <div className={styles.entryTitleRow}>
+                      <h2 className={styles.entryTitle}>{entry.title}</h2>
+                      <span className={styles.entryBadge}>{copy.sourceBadges[entry.source]}</span>
+                    </div>
+                    <p className={styles.entryContent}>{entry.content}</p>
+                    <div className={styles.entryActions}>
+                      <Button
+                        className={styles.entryEditButton}
+                        type="button"
+                        variant="glass"
+                        size="small"
+                        title={copy.entryActions.editLabel}
+                        startIcon={
+                          <Edit
+                            className={styles.buttonIcon}
+                            width={13}
+                            height={13}
+                            aria-hidden="true"
+                          />
+                        }
+                        data-reference-entry-action="edit"
+                        onClick={() => onEditEntry(entry)}
+                      />
+                      <IconButton
+                        type="button"
+                        variant="quiet"
+                        size="small"
+                        label={`${copy.entryActions.deleteLabel}: ${entry.title}`}
+                        icon={<Trash aria-hidden="true" />}
+                        data-reference-entry-action="delete"
+                        onClick={() => onDeleteEntry(entry)}
+                      />
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </MotionContent>
         </div>
       </div>
     </section>

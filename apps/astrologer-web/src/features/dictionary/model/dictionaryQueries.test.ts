@@ -1,4 +1,5 @@
 import type { DictionaryEntriesQuery } from "@elevenhouse/contracts";
+import { keepPreviousData } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { listDictionaryCategories } from "../api/listDictionaryCategories";
 import { listDictionaryEntries } from "../api/listDictionaryEntries";
@@ -73,5 +74,11 @@ describe("dictionary query options", () => {
     expect(options.queryKey).toEqual(dictionaryQueryKeys.entries(entriesQuery));
     await expect(options.queryFn()).resolves.toMatchObject({ entries: [], total: 0 });
     expect(listDictionaryEntries).toHaveBeenCalledWith(entriesQuery);
+  });
+
+  it("keeps previous entries visible while a changed filter query is loading", () => {
+    const options = dictionaryEntriesQueryOptions(entriesQuery);
+
+    expect(options.placeholderData).toBe(keepPreviousData);
   });
 });

@@ -3,6 +3,7 @@ import type { DictionaryEffectiveEntryResponse } from "@elevenhouse/contracts";
 import { Button } from "@elevenhouse/design-system/components/Button";
 import { Card } from "@elevenhouse/design-system/components/Card";
 import { IconButton } from "@elevenhouse/design-system/components/IconButton";
+import { MotionContent } from "@elevenhouse/design-system/motion";
 import { Edit } from "@elevenhouse/design-system/icons/Edit";
 import { Plus } from "@elevenhouse/design-system/icons/Plus";
 import { Reference } from "@elevenhouse/design-system/icons/Reference";
@@ -119,6 +120,8 @@ describe("ReferencePageView", () => {
       search: "луна",
       isLoading: false,
       isError: false,
+      resultsMotionKey: "planets-in-signs:1000",
+      isResultsUpdating: true,
       onCategoryChange,
       onSourceChange,
       onSearchChange,
@@ -187,6 +190,11 @@ describe("ReferencePageView", () => {
     getArrayItem(sourceButtons, 2).props.onClick();
     expect(onSourceChange).toHaveBeenCalledWith("modified");
 
+    const resultsMotion = findRequiredElementByType(body, MotionContent);
+    expect(resultsMotion.props.transitionKey).toBe("planets-in-signs:1000");
+    expect(resultsMotion.props.className).toContain(styles.resultsMotion);
+    expect(resultsMotion.props.className).toContain(styles.resultsMotionUpdating);
+
     expect(JSON.stringify(bodyProps.children)).toContain("Солнце в Овне");
     expect(JSON.stringify(bodyProps.children)).toContain("Яркая воля, инициатива");
     expect(JSON.stringify(bodyProps.children)).toContain("изменено");
@@ -200,14 +208,8 @@ describe("ReferencePageView", () => {
     );
     expect(editActionButtons).toHaveLength(2);
     expect(editActionButtons.map((button) => button.props.size)).toEqual(["small", "small"]);
-    expect(editActionButtons.map((button) => button.props.variant)).toEqual([
-      "glass",
-      "glass"
-    ]);
-    expect(editActionButtons.map((button) => button.props.title)).toEqual([
-      "Изменить",
-      "Изменить"
-    ]);
+    expect(editActionButtons.map((button) => button.props.variant)).toEqual(["glass", "glass"]);
+    expect(editActionButtons.map((button) => button.props.title)).toEqual(["Изменить", "Изменить"]);
     expect(editActionButtons.map((button) => button.props.startIcon.type)).toEqual([Edit, Edit]);
     const deleteActionButtons = findElementsByType(body, IconButton).filter(
       (button) => button.props["data-reference-entry-action"] === "delete"
@@ -251,6 +253,8 @@ describe("ReferencePageView", () => {
       search: "",
       isLoading: true,
       isError: false,
+      resultsMotionKey: "initial",
+      isResultsUpdating: false,
       onCategoryChange: vi.fn(),
       onSourceChange: vi.fn(),
       onSearchChange: vi.fn(),
@@ -294,6 +298,7 @@ type TestElementProps = {
   value?: string;
   variant?: string;
   padding?: string;
+  transitionKey?: string;
 };
 
 function getElementProps(element: unknown) {

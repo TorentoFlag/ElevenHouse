@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useI18n } from "@elevenhouse/i18n";
 import type { DictionaryEntrySourceFilter } from "@elevenhouse/contracts";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
@@ -27,6 +27,13 @@ export function ReferencePage() {
     categoriesResponse: categoriesQuery.data,
     entriesResponse: entriesQuery.data
   });
+  const previousResultsMotionKeyRef = useRef("initial");
+  const currentResultsMotionKey =
+    entriesQuery.isPlaceholderData && previousResultsMotionKeyRef.current
+      ? previousResultsMotionKeyRef.current
+      : `${selectedCategoryId ?? "all"}:${selectedSource}:${search.trim()}:${entriesQuery.dataUpdatedAt}`;
+
+  previousResultsMotionKeyRef.current = currentResultsMotionKey;
 
   useDocumentTitle(dictionary.reference.documentTitle);
 
@@ -42,6 +49,8 @@ export function ReferencePage() {
       search={search}
       isLoading={categoriesQuery.isLoading || entriesQuery.isLoading}
       isError={categoriesQuery.isError || entriesQuery.isError}
+      resultsMotionKey={currentResultsMotionKey}
+      isResultsUpdating={entriesQuery.isPlaceholderData && entriesQuery.isFetching}
       onCategoryChange={setSelectedCategoryId}
       onSourceChange={setSelectedSource}
       onSearchChange={setSearch}
