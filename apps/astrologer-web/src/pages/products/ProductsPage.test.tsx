@@ -45,6 +45,21 @@ vi.mock("react", async () => {
               : nextValue;
         }
       ];
+    }),
+    useReducer: vi.fn((reducer: (state: unknown, action: unknown) => unknown, initialArg: unknown) => {
+      const stateIndex = mocks.hookState.cursor;
+      mocks.hookState.cursor += 1;
+
+      if (!(stateIndex in mocks.hookState.values)) {
+        mocks.hookState.values[stateIndex] = initialArg;
+      }
+
+      return [
+        mocks.hookState.values[stateIndex],
+        (action: unknown) => {
+          mocks.hookState.values[stateIndex] = reducer(mocks.hookState.values[stateIndex], action);
+        }
+      ];
     })
   };
 });

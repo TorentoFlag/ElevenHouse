@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createDefaultProductDraft } from "../../../features/products/model/productDraft";
 import { productCopyByLocale } from "../../../features/products/model/productCopy";
 import { ProductCard } from "./ProductCard";
+import { ProductsCreateFlow } from "./ProductsCreateFlow";
 import { ProductCreateTypeModal } from "./ProductCreateTypeModal";
 import { ProductEditorModal } from "./ProductEditorModal";
 import { ProductsResults } from "./ProductsResults";
@@ -304,6 +305,65 @@ describe("Products page components", () => {
     expect(submitResult).toBeUndefined();
     expect(onSave).toHaveBeenCalledOnce();
   });
+
+  it("renders create-flow modals from consolidated flow state", () => {
+    const draft = createDefaultProductDraft("single");
+    const flow = {
+      isTypeModalOpen: true,
+      editorDraft: draft,
+      editorError: null,
+      isSaving: false,
+      openTypeSelection: vi.fn(),
+      closeTypeSelection: vi.fn(),
+      selectType: vi.fn(),
+      updateDraft: vi.fn(),
+      saveDraft: vi.fn(),
+      closeEditor: vi.fn()
+    };
+
+    const flowView = ProductsCreateFlow({
+      copy: {
+        createTypeModal: {
+          title: "Выберите тип продукта",
+          closeLabel: "Закрыть выбор типа",
+          description: "Тип задаст базовые параметры, которые можно изменить в редакторе."
+        },
+        editor: {
+          createTitle: "Новый продукт",
+          closeLabel: "Закрыть редактор продукта",
+          typeLabel: "Тип",
+          titleLabel: "Название",
+          titlePlaceholder: "Например, Натальный разбор",
+          subtitleLabel: "Описание",
+          subtitlePlaceholder: "Коротко объясните, что получит клиент",
+          priceLabel: "Цена",
+          includedItemsLabel: "Что входит",
+          cancelLabel: "Отмена",
+          saveDraftLabel: "Сохранить черновик",
+          savingLabel: "Сохраняем",
+          genericError: "Не удалось сохранить продукт"
+        }
+      },
+      productCopy: productCopyByLocale.ru,
+      flow
+    });
+
+    const typeModal = findRequiredElementByType(flowView, ProductCreateTypeModal);
+    typeModal.props.onSelect("single");
+    typeModal.props.onClose();
+    expect(flow.selectType).toHaveBeenCalledWith("single");
+    expect(flow.closeTypeSelection).toHaveBeenCalledOnce();
+
+    const editorModal = findRequiredElementByType(flowView, ProductEditorModal);
+    expect(editorModal.props.draft).toBe(draft);
+    expect(editorModal.props.productType).toBe(productCopyByLocale.ru.types.single);
+    editorModal.props.onDraftChange(draft);
+    editorModal.props.onSave();
+    editorModal.props.onClose();
+    expect(flow.updateDraft).toHaveBeenCalledWith(draft);
+    expect(flow.saveDraft).toHaveBeenCalledOnce();
+    expect(flow.closeEditor).toHaveBeenCalledOnce();
+  });
 });
 
 type TestElementProps = {
@@ -318,6 +378,7 @@ type TestElementProps = {
   onClick: () => void;
   onSubmit: (event: { preventDefault: () => void }) => void | Promise<void>;
   product?: unknown;
+  productType?: unknown;
   startIcon: { type: unknown };
   title?: string;
   value?: string | number;
@@ -328,6 +389,11 @@ type TestElementProps = {
   "data-product-editor-subtitle"?: string;
   "data-product-editor-title"?: string;
   "data-product-editor-type-label"?: string;
+  draft?: unknown;
+  onClose: () => void;
+  onDraftChange: (draft: unknown) => void;
+  onSave: () => void | Promise<void>;
+  onSelect: (type: string) => void;
 };
 
 function findRequiredElementByType(root: unknown, type: unknown) {
