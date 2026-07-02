@@ -38,30 +38,15 @@ export type ReferenceEntryModalProps = {
   readonly onClose: () => void;
 } & (ReferenceEntryModalCreateMode | ReferenceEntryModalEditMode);
 
-type ReferenceEntryModalLegacyCreateProps = {
-  readonly copy: ReferenceEntryModalCopy;
-  readonly categories: DictionaryCategoryResponse[];
-  readonly locale: DictionaryLocale;
-  readonly selectedCategoryId: string | null;
-  readonly titleSeed: string;
-  readonly onClose: () => void;
-};
-
-type ReferenceEntryModalRuntimeProps =
-  | ReferenceEntryModalProps
-  | ReferenceEntryModalLegacyCreateProps;
-
-export function ReferenceEntryModal(props: ReferenceEntryModalRuntimeProps) {
-  const modalProps: ReferenceEntryModalProps =
-    "mode" in props ? props : { ...props, mode: "create" };
-  const { copy, categories, locale, onClose } = modalProps;
+export function ReferenceEntryModal(props: ReferenceEntryModalProps) {
+  const { copy, categories, locale, onClose } = props;
   const [draft, setDraft] = useState(() =>
-    modalProps.mode === "edit"
-      ? createReferenceEntryDraftFromEntry(modalProps.entry)
+    props.mode === "edit"
+      ? createReferenceEntryDraftFromEntry(props.entry)
       : createReferenceEntryDraft({
           categories,
-          selectedCategoryId: modalProps.selectedCategoryId,
-          titleSeed: modalProps.titleSeed
+          selectedCategoryId: props.selectedCategoryId,
+          titleSeed: props.titleSeed
         })
   );
   const [touchedFields, setTouchedFields] = useState<ReferenceEntryDraftTouchedFields>({
@@ -97,12 +82,12 @@ export function ReferenceEntryModal(props: ReferenceEntryModalRuntimeProps) {
     <ReferenceEntryModalView
       copy={{
         ...copy,
-        title: modalProps.mode === "edit" ? copy.editTitle : copy.createTitle,
-        closeLabel: modalProps.mode === "edit" ? copy.editCloseLabel : copy.createCloseLabel
+        title: props.mode === "edit" ? copy.editTitle : copy.createTitle,
+        closeLabel: props.mode === "edit" ? copy.editCloseLabel : copy.createCloseLabel
       }}
       categories={categories}
       draft={draft}
-      isCategoryEditable={modalProps.mode === "create" || modalProps.entry.source === "custom"}
+      isCategoryEditable={props.mode === "create" || props.entry.source === "custom"}
       canSubmit={canSubmit}
       isSaving={isSaving}
       fieldErrors={visibleFieldErrors}
@@ -139,7 +124,7 @@ export function ReferenceEntryModal(props: ReferenceEntryModalRuntimeProps) {
           return;
         }
 
-        if (modalProps.mode === "create") {
+        if (props.mode === "create") {
           createEntryMutation
             .mutateAsync({
               ...normalizeReferenceEntryDraft(draft),
@@ -150,8 +135,8 @@ export function ReferenceEntryModal(props: ReferenceEntryModalRuntimeProps) {
           return;
         }
 
-        if (modalProps.entry.source === "custom") {
-          const entryId = modalProps.entry.astrologerEntryId ?? modalProps.entry.id;
+        if (props.entry.source === "custom") {
+          const entryId = props.entry.astrologerEntryId ?? props.entry.id;
 
           updateCustomEntryMutation
             .mutateAsync({
@@ -163,10 +148,10 @@ export function ReferenceEntryModal(props: ReferenceEntryModalRuntimeProps) {
           return;
         }
 
-        if (modalProps.entry.platformEntryId) {
+        if (props.entry.platformEntryId) {
           updatePlatformEntryMutation
             .mutateAsync({
-              platformEntryId: modalProps.entry.platformEntryId,
+              platformEntryId: props.entry.platformEntryId,
               ...createReferencePlatformEntryOverridePayload(draft)
             })
             .then(onClose)

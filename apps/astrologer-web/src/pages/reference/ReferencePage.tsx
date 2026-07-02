@@ -104,6 +104,7 @@ export function ReferencePage() {
           copy={dictionary.reference.entryModal}
           categories={summary.categories}
           locale={locale}
+          mode="create"
           selectedCategoryId={selectedCategoryId}
           titleSeed={entryModal.titleSeed}
           onClose={() => setEntryModal(null)}
