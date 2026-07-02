@@ -1,26 +1,15 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
-import { createDrizzleDictionaryStore } from "@elevenhouse/db/dictionary";
 import { ClockModule } from "../clock/clock.module";
-import { DatabaseModule } from "../database/database.module";
-import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
 import { SecurityModule } from "../security/security.module";
+import { DictionaryStoreModule } from "./dictionary-store.module";
 import { DictionaryController } from "./dictionary.controller";
 import { DictionaryService } from "./dictionary.service";
-import { DICTIONARY_STORE } from "./dictionary.tokens";
 
 @Module({
-  imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, SecurityModule],
+  imports: [ConfigModule, ClockModule, DictionaryStoreModule, IdentityModule, SecurityModule],
   controllers: [DictionaryController],
-  providers: [
-    DictionaryService,
-    {
-      provide: DICTIONARY_STORE,
-      useFactory: (postgresRuntime: PostgresRuntimeService) =>
-        createDrizzleDictionaryStore(postgresRuntime.database),
-      inject: [PostgresRuntimeService]
-    }
-  ]
+  providers: [DictionaryService]
 })
 export class DictionaryModule {}
