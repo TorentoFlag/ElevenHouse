@@ -5,6 +5,7 @@ import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { REDIS_CLIENT } from "../redis/redis.tokens";
 import { AiGenerationService } from "./ai-generation.service";
 import { AiModule } from "./ai.module";
+import { OpenAiProvider } from "./openai-ai-provider";
 
 describe("AiModule", () => {
   it("wires AiGenerationService with overridable runtime dependencies", async () => {
@@ -21,6 +22,11 @@ describe("AiModule", () => {
           astrologerApi: {
             ai: {
               enabled: true,
+              openAiApiKey: "openai-secret",
+              openAiBaseUrl: "https://api.openai.com/v1",
+              fastDraftModel: "gpt-5.4-mini",
+              qualityDraftModel: "gpt-5.5",
+              timeoutMs: 15000,
               rateLimitRedisKeyPrefix: "elevenhouse:astrologer-api:ai",
               rateLimits: {
                 userPerMinute: { limit: 3, windowSeconds: 60 },
@@ -34,6 +40,7 @@ describe("AiModule", () => {
       .compile();
 
     expect(moduleRef.get(AiGenerationService)).toBeInstanceOf(AiGenerationService);
+    expect(moduleRef.get(OpenAiProvider)).toBeInstanceOf(OpenAiProvider);
 
     await moduleRef.close();
   });

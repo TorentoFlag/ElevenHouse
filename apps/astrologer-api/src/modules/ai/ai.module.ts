@@ -6,7 +6,7 @@ import { AiGenerationService } from "./ai-generation.service";
 import { RedisAiRateLimiter, type RedisAiRateLimitClient } from "./ai-rate-limiter";
 import { NoopAiUsageRecorder } from "./ai-usage-recorder";
 import { AI_GENERATION_PROVIDER, AI_RATE_LIMITER, AI_USAGE_RECORDER } from "./ai.tokens";
-import { DeepSeekAiProvider } from "./deepseek-ai-provider";
+import { OpenAiProvider } from "./openai-ai-provider";
 
 type AiRateLimitRuntimeConfig = {
   readonly rateLimitRedisKeyPrefix: string;
@@ -21,9 +21,10 @@ type AiRateLimitRuntimeConfig = {
   imports: [ConfigModule, RedisModule],
   providers: [
     AiGenerationService,
+    OpenAiProvider,
     {
       provide: AI_GENERATION_PROVIDER,
-      useClass: DeepSeekAiProvider
+      useClass: OpenAiProvider
     },
     {
       provide: AI_RATE_LIMITER,

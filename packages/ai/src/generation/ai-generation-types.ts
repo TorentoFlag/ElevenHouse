@@ -32,6 +32,7 @@ export type AiGenerationFinishReason =
 
 export type AiGenerationMetadata = {
   readonly feature: string;
+  readonly provider?: AiProviderName;
   readonly promptId: string;
   readonly promptVersion: number;
   readonly ownerUserId: string;

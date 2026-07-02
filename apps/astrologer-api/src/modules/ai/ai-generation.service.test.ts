@@ -6,7 +6,17 @@ import { z } from "@elevenhouse/validation";
 import { describe, expect, it, vi } from "vitest";
 import { AiGenerationService } from "./ai-generation.service";
 import type { AiRateLimitDecision } from "./ai-rate-limiter";
-import { AiProviderUnavailableError } from "./deepseek-ai-provider";
+import { createAiSafetyIdentifier } from "./ai-safety-identifier";
+import { AiProviderUnavailableError } from "./openai-ai-provider";
+
+const structuredOutputJsonSchema = {
+  type: "object",
+  properties: {
+    content: { type: "string", minLength: 1 }
+  },
+  required: ["content"],
+  additionalProperties: false
+} as const;
 
 const prompt = definePrompt({
   id: "dictionary.entryDraft",
@@ -14,8 +24,10 @@ const prompt = definePrompt({
   locales: ["ru"],
   modelProfile: "fastDraft",
   responseFormat: "json",
-  thinking: "disabled",
+  reasoningEffort: "low",
   maxOutputTokens: 900,
+  structuredOutputName: "dictionary_entry_draft_v1",
+  structuredOutputJsonSchema,
   inputSchema: z.object({ title: z.string().min(1) }),
   outputSchema: z.object({ content: z.string().min(1) }),
   render(input) {
@@ -23,7 +35,7 @@ const prompt = definePrompt({
   }
 });
 
-const hashedOwnerUserId = "eh_4c1029697ee358715d3a14a2add817c4b01651440de808371f78165ac90dc581";
+const safetyIdentifier = createAiSafetyIdentifier("owner");
 
 function createConfigService(enabled: boolean): ConfigService {
   return new ConfigService({
@@ -103,9 +115,9 @@ describe("AiGenerationService", () => {
     const generateStructured = vi.fn(
       async () => ({
         output: { content: "Generated" },
-        provider: "deepseek" as const,
-        model: "deepseek-v4-flash" as const,
-        finishReason: "stop" as const,
+        provider: "openai" as const,
+        model: "gpt-5.4-mini" as const,
+        finishReason: "completed" as const,
         usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 }
       })
     );
@@ -128,19 +140,23 @@ describe("AiGenerationService", () => {
       })
     ).resolves.toMatchObject({
       output: { content: "Generated" },
-      provider: "deepseek"
+      provider: "openai"
     });
 
     expect(generateStructured).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: { messages: [{ role: "user", content: "Sun in Aries" }] },
-        userKey: expect.stringMatching(/^eh_[a-f0-9]{64}$/),
-        metadata: {
+        reasoningEffort: "low",
+        safetyIdentifier,
+        structuredOutputName: "dictionary_entry_draft_v1",
+        structuredOutputJsonSchema,
+        metadata: expect.objectContaining({
           feature: "dictionary.aiDraft",
           promptId: "dictionary.entryDraft",
           promptVersion: 1,
-          ownerUserId: hashedOwnerUserId
-        }
+          ownerUserId: safetyIdentifier,
+          provider: "openai"
+        })
       })
     );
     expect(record).toHaveBeenCalledWith(
@@ -149,9 +165,9 @@ describe("AiGenerationService", () => {
         promptId: "dictionary.entryDraft",
         promptVersion: 1,
         ownerUserId: "owner",
-        provider: "deepseek",
-        model: "deepseek-v4-flash",
-        finishReason: "stop",
+        provider: "openai",
+        model: "gpt-5.4-mini",
+        finishReason: "completed",
         usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 }
       })
     );

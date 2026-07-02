@@ -3,7 +3,8 @@ import { ConfigService } from "@nestjs/config";
 import type { AiGenerationPort, AiGenerationResult, AiPromptDefinition } from "@elevenhouse/ai";
 import { AI_GENERATION_PROVIDER, AI_RATE_LIMITER, AI_USAGE_RECORDER } from "./ai.tokens";
 import type { AiRateLimiterPort } from "./ai-rate-limiter";
-import { AiProviderUnavailableError, createDeepSeekUserKey } from "./deepseek-ai-provider";
+import { createAiSafetyIdentifier } from "./ai-safety-identifier";
+import { AiProviderUnavailableError } from "./openai-ai-provider";
 import type { AiUsageRecord, AiUsageRecorderPort } from "./ai-usage-recorder";
 
 type AiGenerationRuntimeConfig = {
@@ -45,19 +46,22 @@ export class AiGenerationService {
 
     const startedAt = Date.now();
     const promptInput = input.prompt.inputSchema.parse(input.input);
-    const userKey = createDeepSeekUserKey(input.ownerUserId);
+    const safetyIdentifier = createAiSafetyIdentifier(input.ownerUserId);
     const result = await this.provider.generateStructured({
       prompt: input.prompt.render(promptInput),
       modelProfile: input.prompt.modelProfile,
       responseSchema: input.prompt.outputSchema,
       maxOutputTokens: input.prompt.maxOutputTokens,
-      thinking: input.prompt.thinking,
-      userKey,
+      reasoningEffort: input.prompt.reasoningEffort,
+      safetyIdentifier,
+      structuredOutputName: input.prompt.structuredOutputName,
+      structuredOutputJsonSchema: input.prompt.structuredOutputJsonSchema,
       metadata: {
         feature: input.feature,
+        provider: "openai",
         promptId: input.prompt.id,
         promptVersion: input.prompt.version,
-        ownerUserId: userKey
+        ownerUserId: safetyIdentifier
       }
     });
 
