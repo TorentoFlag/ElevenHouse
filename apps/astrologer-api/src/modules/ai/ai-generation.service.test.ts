@@ -7,7 +7,18 @@ import { describe, expect, it, vi } from "vitest";
 import { AiGenerationService } from "./ai-generation.service";
 import type { AiRateLimitDecision } from "./ai-rate-limiter";
 import { createAiSafetyIdentifier } from "./ai-safety-identifier";
-import { AiProviderUnavailableError } from "./openai-ai-provider";
+import {
+  AiProviderAuthenticationError,
+  AiProviderBadRequestError,
+  AiProviderBillingError,
+  AiProviderIncompleteResponseError,
+  AiProviderRateLimitError,
+  AiProviderRefusalError,
+  AiProviderResponseFormatError,
+  AiProviderServerError,
+  AiProviderTimeoutError,
+  AiProviderUnavailableError
+} from "./openai-ai-provider";
 
 const structuredOutputJsonSchema = {
   type: "object",
@@ -37,11 +48,12 @@ const prompt = definePrompt({
 
 const safetyIdentifier = createAiSafetyIdentifier("owner");
 
-function createConfigService(enabled: boolean): ConfigService {
+function createConfigService(enabled: boolean, maxOutputTokens = 900): ConfigService {
   return new ConfigService({
     astrologerApi: {
       ai: {
-        enabled
+        enabled,
+        maxOutputTokens
       }
     }
   });
@@ -60,14 +72,21 @@ describe("AiGenerationService", () => {
       createConfigService(false)
     );
 
-    await expect(
-      service.generate({
+    let error: unknown;
+
+    try {
+      await service.generate({
         prompt,
         input: { title: "Sun in Aries" },
         ownerUserId: "owner",
         feature: "dictionary.aiDraft"
-      })
-    ).rejects.toBeInstanceOf(AiProviderUnavailableError);
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(HttpException);
+    expect((error as HttpException).getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE);
     expect(rateLimiter.consume).not.toHaveBeenCalled();
     expect(provider.generateStructured).not.toHaveBeenCalled();
   });
@@ -171,5 +190,82 @@ describe("AiGenerationService", () => {
         usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 }
       })
     );
+  });
+
+  it("caps prompt output tokens by the runtime AI maximum", async () => {
+    const generateStructured = vi.fn(
+      async () => ({
+        output: { content: "Generated" },
+        provider: "openai" as const,
+        model: "gpt-5.4-mini" as const,
+        finishReason: "completed" as const
+      })
+    );
+    const provider: AiGenerationPort = {
+      generateStructured: generateStructured as unknown as AiGenerationPort["generateStructured"]
+    };
+    const service = new AiGenerationService(
+      provider,
+      { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
+      { record: vi.fn() },
+      createConfigService(true, 300)
+    );
+
+    await service.generate({
+      prompt,
+      input: { title: "Sun in Aries" },
+      ownerUserId: "owner",
+      feature: "dictionary.aiDraft"
+    });
+
+    expect(generateStructured).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxOutputTokens: 300
+      })
+    );
+  });
+
+  it.each([
+    [new AiProviderUnavailableError("disabled"), HttpStatus.SERVICE_UNAVAILABLE],
+    [new AiProviderAuthenticationError("auth failed"), HttpStatus.SERVICE_UNAVAILABLE],
+    [new AiProviderBillingError("billing failed"), HttpStatus.SERVICE_UNAVAILABLE],
+    [new AiProviderRateLimitError("rate limited"), HttpStatus.SERVICE_UNAVAILABLE],
+    [new AiProviderServerError("server failed"), HttpStatus.SERVICE_UNAVAILABLE],
+    [new AiProviderTimeoutError("timeout"), HttpStatus.SERVICE_UNAVAILABLE],
+    [new AiProviderBadRequestError("bad upstream request"), HttpStatus.BAD_GATEWAY],
+    [new AiProviderResponseFormatError("bad upstream response"), HttpStatus.BAD_GATEWAY],
+    [new AiProviderIncompleteResponseError("incomplete"), HttpStatus.BAD_GATEWAY],
+    [new AiProviderRefusalError("refused"), HttpStatus.UNPROCESSABLE_ENTITY]
+  ])("maps %s to a user-safe HTTP error", async (providerError, expectedStatus) => {
+    const provider = {
+      generateStructured: vi.fn(async () => {
+        throw providerError;
+      })
+    };
+    const service = new AiGenerationService(
+      provider,
+      { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
+      { record: vi.fn() },
+      createConfigService(true)
+    );
+
+    let error: unknown;
+
+    try {
+      await service.generate({
+        prompt,
+        input: { title: "Sun in Aries" },
+        ownerUserId: "owner",
+        feature: "dictionary.aiDraft"
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(HttpException);
+    expect((error as HttpException).getStatus()).toBe(expectedStatus);
+    expect((error as HttpException).getResponse()).toEqual({
+      message: expect.any(String)
+    });
   });
 });

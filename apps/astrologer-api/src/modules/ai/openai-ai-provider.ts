@@ -31,6 +31,11 @@ type OpenAiRuntimeConfig = {
 
 type OpenAiResponseBody = {
   readonly output_text?: unknown;
+  readonly output?: readonly {
+    readonly content?: readonly {
+      readonly type?: unknown;
+    }[];
+  }[];
   readonly status?: unknown;
   readonly incomplete_details?: {
     readonly reason?: unknown;
@@ -57,6 +62,8 @@ export class AiProviderBadRequestError extends AiProviderError {}
 export class AiProviderServerError extends AiProviderError {}
 export class AiProviderTimeoutError extends AiProviderError {}
 export class AiProviderResponseFormatError extends AiProviderError {}
+export class AiProviderIncompleteResponseError extends AiProviderError {}
+export class AiProviderRefusalError extends AiProviderError {}
 
 @Injectable()
 export class OpenAiProvider implements AiGenerationPort {
@@ -153,6 +160,13 @@ function parseOpenAiResponse<TOutput>({
   readonly model: AiModel;
 }): AiGenerationResult<TOutput> {
   const openAiBody = readOpenAiBody(body);
+
+  if (hasRefusal(openAiBody)) {
+    throw new AiProviderRefusalError("OpenAI response was refused");
+  }
+
+  assertCompletedResponse(openAiBody);
+
   const outputText = openAiBody.output_text;
 
   if (typeof outputText !== "string" || outputText.length === 0) {
@@ -177,7 +191,7 @@ function parseOpenAiResponse<TOutput>({
     output: parsedOutput.data,
     provider: "openai",
     model,
-    finishReason: parseFinishReason(openAiBody.status, openAiBody.incomplete_details?.reason),
+    finishReason: "completed",
     ...(usage ? { usage } : {})
   };
 }
@@ -202,26 +216,31 @@ function readOpenAiBody(body: unknown): OpenAiResponseBody {
 
   return {
     output_text: body.output_text,
+    output: body.output as OpenAiResponseBody["output"],
     status: body.status,
     incomplete_details: incompleteDetails as OpenAiResponseBody["incomplete_details"],
     usage: body.usage as OpenAiResponseBody["usage"]
   };
 }
 
-function parseFinishReason(
-  status: unknown,
-  incompleteReason: unknown
-): AiGenerationResult<unknown>["finishReason"] {
-  if (status === "completed") {
-    return "completed";
+function hasRefusal(body: OpenAiResponseBody): boolean {
+  return (
+    body.output?.some((item) => item.content?.some((content) => content.type === "refusal")) ??
+    false
+  );
+}
+
+function assertCompletedResponse(body: OpenAiResponseBody): void {
+  if (body.status === "completed") {
+    return;
   }
 
-  if (status === "failed") {
-    return "failed";
+  if (body.status === "failed") {
+    throw new AiProviderServerError("OpenAI response failed");
   }
 
-  if (status === "incomplete") {
-    return incompleteReason === "content_filter" ? "content_filter" : "incomplete";
+  if (body.status === "incomplete") {
+    throw new AiProviderIncompleteResponseError("OpenAI response was incomplete");
   }
 
   throw new AiProviderResponseFormatError("OpenAI response status was unsupported");
@@ -256,7 +275,7 @@ function readHttpStatus(error: unknown): number | undefined {
 }
 
 function mapOpenAiStatus(status: number): Error {
-  if (status === 401) {
+  if (status === 401 || status === 403) {
     return new AiProviderAuthenticationError("OpenAI authentication failed");
   }
 

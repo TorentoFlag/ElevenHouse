@@ -58,6 +58,24 @@ describe("prompt registry", () => {
       "Duplicate AI prompt dictionary.entryDraft@1"
     );
   });
+
+  it("rejects structured output schemas that do not require every property", () => {
+    expect(() =>
+      definePrompt({
+        ...testPrompt,
+        id: "invalid.prompt",
+        structuredOutputJsonSchema: {
+          type: "object",
+          properties: {
+            content: { type: "string" },
+            warning: { type: "string" }
+          },
+          required: ["content"],
+          additionalProperties: false
+        }
+      })
+    ).toThrow("AI prompt invalid.prompt@1 must require every structured output property");
+  });
 });
 
 function getThrownErrorMessage(action: () => unknown): string {

@@ -8,7 +8,9 @@ import {
   AiProviderAuthenticationError,
   AiProviderBadRequestError,
   AiProviderBillingError,
+  AiProviderIncompleteResponseError,
   AiProviderRateLimitError,
+  AiProviderRefusalError,
   AiProviderResponseFormatError,
   AiProviderServerError,
   AiProviderTimeoutError,
@@ -202,6 +204,7 @@ describe("OpenAiProvider", () => {
 
   it.each([
     [401, AiProviderAuthenticationError],
+    [403, AiProviderAuthenticationError],
     [402, AiProviderBillingError],
     [400, AiProviderBadRequestError],
     [422, AiProviderBadRequestError],
@@ -257,15 +260,33 @@ describe("OpenAiProvider", () => {
     );
   });
 
-  it("maps content-filtered incomplete responses to content_filter finish reason", async () => {
+  it("rejects incomplete responses before returning partial output", async () => {
     const client = createClient(
       createOpenAiResponse({ status: "incomplete", incompleteReason: "content_filter" })
     );
     const provider = new OpenAiProvider(createConfigService(), client);
 
-    await expect(provider.generateStructured(createProviderInput())).resolves.toMatchObject({
-      finishReason: "content_filter"
+    await expect(provider.generateStructured(createProviderInput())).rejects.toBeInstanceOf(
+      AiProviderIncompleteResponseError
+    );
+  });
+
+  it("rejects refusal responses before parsing output text", async () => {
+    const client = createClient({
+      status: "completed",
+      output_text: "",
+      output: [
+        {
+          type: "message",
+          content: [{ type: "refusal", refusal: "I cannot help with that." }]
+        }
+      ]
     });
+    const provider = new OpenAiProvider(createConfigService(), client);
+
+    await expect(provider.generateStructured(createProviderInput())).rejects.toBeInstanceOf(
+      AiProviderRefusalError
+    );
   });
 
   it.each([
