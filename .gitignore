@@ -19,12 +19,10 @@ build/
 out/
 .vite/
 *.log
+ElevenHouseDesign
 
 # Agent instructions and generated planning artifacts
-AGENTS.md
 CLAUDE.md
 GEMINI.md
-docs/
-.codex/
 .claude/
 .cursor/
