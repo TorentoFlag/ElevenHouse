@@ -22,7 +22,5 @@ out/
 ElevenHouseDesign
 
 # Agent instructions and generated planning artifacts
-CLAUDE.md
-GEMINI.md
 .claude/
 .cursor/
