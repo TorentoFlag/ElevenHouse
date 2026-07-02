@@ -6,7 +6,6 @@ import {
   type ProductLifetimeAnalytics,
   type ProductStore,
   type ProductStoreCreateInput,
-  type ProductStoreUpdatePatch,
   ProductValidationError
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
@@ -15,7 +14,6 @@ import type { AstrologerSessionRequest } from "../identity/session/identity-curr
 import { ProductsService } from "./products.service";
 
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
-const otherOwnerUserId = "b9a31163-8126-4ffc-a92d-1bc0555370d5";
 const productId = "463f34bb-38ec-4cb4-b105-2ed6de91e3cb";
 const now = new Date("2026-07-02T00:00:00.000Z");
 

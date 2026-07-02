@@ -16,6 +16,9 @@ export default defineConfig({
       "@elevenhouse/design-system/icons/Check": fileURLToPath(
         new URL("./packages/design-system/src/icons/Check/index.ts", import.meta.url)
       ),
+      "@elevenhouse/validation/phone": fileURLToPath(
+        new URL("./packages/validation/src/phone/index.ts", import.meta.url)
+      ),
       "@elevenhouse/validation": fileURLToPath(
         new URL("./packages/validation/src/index.ts", import.meta.url)
       )

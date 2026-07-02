@@ -10,7 +10,7 @@ CDN
 
 client-web -> public-api -> PostgreSQL / Redis / Queue
 astrologer-web -> astrologer-api -> PostgreSQL / Redis / Queue
-admin-web -> admin-api -> PostgreSQL / Redis / Queue
+admin-web -> admin-api -> PostgreSQL / Redis / Queue   (planned; app not created yet)
 
 Queue -> payment-worker
 Queue -> notification-worker
@@ -28,7 +28,8 @@ Queue -> workers
 - checkout/booking endpoints
 
 Трафик астрологов и админов должен масштабироваться отдельно через `astrologer-api`
-и `admin-api`. `ops-api` остаётся только transitional surface для старых workflows.
+и будущий `admin-api`. До появления `admin-api` нельзя добавлять внутренние
+admin/moderator workflows в `astrologer-api`.
 
 ## Ответственности workers
 

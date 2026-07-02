@@ -43,6 +43,33 @@ export class AppModule {}
 
 Если используется NestJS CLI/resource generator, оставляй generated structure в этом же стиле. Если структура создаётся вручную, соблюдай тот же принцип: module + controllers + providers + tests внутри `src/modules/<module-name>/`.
 
+## Реализованные backend apps и модули
+
+`apps/public-api` сейчас содержит:
+
+- `health`
+- `identity`
+- `database`
+- `redis`
+- `security`
+
+`apps/astrologer-api` сейчас содержит:
+
+- `ai`
+- `clock`
+- `database`
+- `dictionary`
+- `dictionary-ai`
+- `health`
+- `identity`
+- `products`
+- `redis`
+- `security`
+
+`apps/admin-api` пока отсутствует в коде. Admin/moderator/super_admin workflows
+не должны добавляться в `public-api` или `astrologer-api`; для них нужно создать
+отдельное Nest app с такой же feature-module структурой.
+
 ## Основные модули
 
 - `Identity`: регистрация, login, auth methods, sessions.

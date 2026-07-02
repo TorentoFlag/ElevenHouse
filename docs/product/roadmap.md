@@ -11,7 +11,7 @@
 - Monorepo, `apps/`, `packages/`, shared configs.
 - Account registration, authorization, role model.
 - `client-web`, `astrologer-web`, `admin-web` как отдельные приложения.
-- `public-api`, `ops-api`, workers.
+- `public-api`, `astrologer-api`, workers.
 - Базовые доменные модули: Users/Roles, Identity, AstrologerProfile, ClientProfile.
 - PostgreSQL, Redis, queue infrastructure.
 - AuditLog для внутренних и чувствительных действий.
@@ -102,6 +102,7 @@
 - Verification workflow.
 - Dispute workflows.
 - Platform settings: комиссии, тарифы, справочники, templates.
+- `admin-api` как отдельная backend-поверхность для внутренних workflows, если он ещё не создан к этому этапу.
 - Dedicated analytics storage, если потребуется нагрузкой или отчётностью.
 
 ## Явно вне текущего scope

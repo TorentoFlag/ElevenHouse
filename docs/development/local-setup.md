@@ -69,8 +69,11 @@ pnpm --filter @elevenhouse/client-web dev
 pnpm --filter @elevenhouse/astrologer-web dev
 pnpm --filter @elevenhouse/admin-web dev
 pnpm --filter @elevenhouse/public-api dev
-pnpm --filter @elevenhouse/ops-api dev
+pnpm --filter @elevenhouse/astrologer-api dev
+pnpm --filter @elevenhouse/workers dev
+pnpm --filter @elevenhouse/payment-worker dev
 pnpm --filter @elevenhouse/notification-worker dev
+pnpm --filter @elevenhouse/chart-worker dev
 ```
 
 Порты по умолчанию:
@@ -79,8 +82,10 @@ pnpm --filter @elevenhouse/notification-worker dev
 - `astrologer-web`: `5174`
 - `admin-web`: `5175`
 - `public-api`: `3001`
-- `ops-api`: `3002`
+- `astrologer-api`: `3002`
 - `notification-worker` readiness: `3013`
+
+`admin-api` пока не создан в коде, поэтому локальной команды запуска для него нет.
 
 For local passwordless auth development, set
 `NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE=dev_console`. In this mode the
@@ -89,9 +94,10 @@ the delivery as sent, and does not require real email/SMS provider credentials.
 Use `http` mode only when real delivery endpoints and bearer tokens are
 configured.
 
-## Foundation Scope
+## Current Foundation Scope
 
-Этот слой не содержит бизнес-фич. Его задача:
+Фундаментальный слой уже содержит первые production-срезы identity, dictionary,
+products, notification outbox delivery и AI draft generation. Его базовые задачи:
 
 - держать monorepo границы;
 - запускать apps independently;

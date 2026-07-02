@@ -7,7 +7,7 @@ let cleanup: (() => void) | undefined;
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
   useCallback: (callback: unknown) => callback,
-  useEffect: (effect: () => void | (() => void), _deps: readonly unknown[]) => {
+  useEffect: (effect: () => void | (() => void)) => {
     cleanup = effect() ?? undefined;
   },
   useState: (initializer: () => number) => {

@@ -1,6 +1,6 @@
 # Структура репозитория
 
-Ожидаемая структура корня:
+Фактическая структура production-кода:
 
 ```text
 ElevenHouse/
@@ -10,47 +10,34 @@ ElevenHouse/
     admin-web/
     public-api/
     astrologer-api/
-    admin-api/
-    ops-api/
     workers/
     payment-worker/
     notification-worker/
     chart-worker/
 
   packages/
-    design-system/
-    domain/
-    db/
-    contracts/
-    validation/
+    ai/
     auth/
     config/
+    contracts/
+    db/
+    design-system/
+    domain/
     i18n/
     observability/
     testing/
+    validation/
 
   docs/
-    architecture/
-    product/
-    decisions/
     api/
-
-  infra/
-    docker/
-    nginx/
-    terraform/
-    k8s/
-
-  scripts/
-    dev/
-    ci/
-    db/
-
-  tools/
-    generators/
-    eslint-config/
-    tsconfig/
+    architecture/
+    decisions/
+    development/
+    product/
 ```
+
+`apps/admin-api` является целевой будущей backend-поверхностью для
+moderator/admin/super_admin workflows, но сейчас отсутствует в коде.
 
 ## Apps
 
@@ -64,16 +51,17 @@ ElevenHouse/
 
 `packages/` содержит общий код.
 
+- `ai`: provider-neutral AI generation ports, prompt definitions and prompt registry.
+- `auth`: roles, permissions, session helpers and auth crypto helpers.
+- `config`: typed environment configuration helpers.
+- `contracts`: API DTOs, event schemas, generated clients или shared contracts.
+- `db`: schema, migrations, repositories, transaction helpers.
 - `design-system`: собственная UI-система ElevenHouse, tokens, primitives, components.
 - `domain`: business use cases и domain services.
-- `db`: schema, migrations, repositories, transaction helpers.
-- `contracts`: API DTOs, event schemas, generated clients или shared contracts.
-- `validation`: shared validation schemas.
-- `auth`: roles, permissions, session helpers.
-- `config`: typed environment configuration.
 - `i18n`: translation infrastructure и shared message keys.
 - `observability`: logging, metrics, tracing helpers.
 - `testing`: factories, mocks, test utilities.
+- `validation`: shared validation schemas.
 
 ## Направление зависимостей
 
@@ -91,8 +79,8 @@ packages/design-system -> packages/i18n, если нужно
 ```text
 packages/* -> apps/*
 packages/domain -> packages/db
-public-api -> ops-api
-ops-api -> public-api
+public-api -> astrologer-api
+astrologer-api -> public-api
 frontend app -> backend internals
 ```
 

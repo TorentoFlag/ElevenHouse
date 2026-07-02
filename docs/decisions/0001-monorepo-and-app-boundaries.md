@@ -17,7 +17,8 @@ Frontend apps:
 Backend apps/processes:
 
 - `public-api`
-- `ops-api`
+- `astrologer-api`
+- `admin-api` as the target internal API surface; not scaffolded in the current code yet
 - `workers`
 - `payment-worker`
 - `notification-worker`
@@ -35,3 +36,4 @@ Backend apps/processes:
 - Shared domain logic через packages.
 - Более простое future extraction для high-load contours.
 - Нужна дисциплина, чтобы shared packages не превратились в dumping ground.
+- Internal admin/moderator workflows wait for `admin-api` instead of being placed into `astrologer-api`.

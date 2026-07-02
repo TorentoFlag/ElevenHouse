@@ -47,8 +47,8 @@ Internal platform roles:
 
 Internal roles are only for ElevenHouse platform staff. They must not be granted through public registration or astrologer onboarding.
 Public registration grants only `client`. The `astrologer` role may be added to the
-same account later, but only through a dedicated astrologer onboarding or ops flow
-with explicit server-side authorization.
+same account later, but only through a dedicated astrologer onboarding or authorized
+internal workflow with explicit server-side authorization.
 
 ## Authorization invariants
 

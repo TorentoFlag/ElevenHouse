@@ -27,14 +27,18 @@ Backend нужно разделить по профилю нагрузки и о
 
 - `public-api`: обслуживает `client-web`, прямые страницы астрологов, booking, клиентские заказы, публичные checkout flows.
 - `astrologer-api`: обслуживает `astrologer-web`, CRM и authenticated workflows астролога.
-- `admin-api`: обслуживает `admin-web`, moderation/admin/super_admin workflows и audit-sensitive internal operations.
-- `ops-api`: transitional implementation для старых authenticated workflows; новые workflows астролога, модераторов и администраторов должны идти в `astrologer-api` или `admin-api`.
+- `admin-api`: целевой отдельный backend для `admin-web`, moderation/admin/super_admin workflows и audit-sensitive internal operations. В текущем коде ещё не создан.
 - `workers`: общие фоновые задачи.
 - `payment-worker`: payment webhooks, reconciliation, refunds, payout jobs.
 - `notification-worker`: email, SMS, Telegram, push, reminders, retry logic.
 - `chart-worker`: тяжёлые расчёты астрологических карт.
 
-Эти процессы могут на старте использовать общие domain packages и одну базу данных. Там, где полезно, они должны быть независимо deployable.
+В текущем коде существуют `public-api`, `astrologer-api`, `workers`,
+`payment-worker`, `notification-worker` и `chart-worker`; `admin-api` остаётся
+запланированной отдельной поверхностью и не должен заменяться admin workflows
+внутри `astrologer-api`.
+
+Эти процессы могут использовать общие domain packages и одну базу данных. Там, где полезно, они должны быть независимо deployable.
 
 
 ## Общая инфраструктура

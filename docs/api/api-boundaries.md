@@ -2,7 +2,9 @@
 
 ## Public API
 
-`public-api` обслуживает высоконагруженные client-facing flows.
+`public-api` обслуживает высоконагруженные client-facing flows. В текущем коде
+реализованы health и identity/passwordless/session routes; booking, orders и
+payments остаются будущими модулями этой поверхности.
 
 Ответственности:
 
@@ -36,7 +38,8 @@ to an existing account, `public-api` returns the same generic invalid-code respo
 Registration is explicit and uses `POST /identity/registration/passwordless/verify-code`
 after a code has been requested. Public registration is client-only and accepts only
 `roles: ["client"]`; astrologer role assignment belongs to an explicit
-ops/onboarding workflow, not caller-controlled public registration.
+astrologer onboarding or authorized internal workflow, not caller-controlled
+public registration.
 
 `public-api` reads request IPs from the framework-resolved `request.ip`. Deployments
 behind a trusted reverse proxy must enable the explicit `PUBLIC_API_TRUST_PROXY`
@@ -45,7 +48,9 @@ runtime setting so Express resolves proxy headers; controllers must not parse
 
 ## Astrologer API
 
-`astrologer-api` обслуживает authenticated workflows астрологов.
+`astrologer-api` обслуживает authenticated workflows астрологов. В текущем коде
+реализованы health, identity/passwordless/session, dictionary, dictionary AI draft,
+products и provider-neutral AI generation через OpenAI.
 
 Ответственности:
 
@@ -74,15 +79,26 @@ POST /products/:productId/publish
 POST /products/:productId/move-to-draft
 POST /products/:productId/archive
 POST /products/:productId/duplicate
+GET  /dictionary/categories
+GET  /dictionary/entries
+POST /dictionary/custom-entries
+PUT  /dictionary/custom-entries/:entryId
+PUT  /dictionary/platform-entries/:platformEntryId/override
+DELETE /dictionary/entries/:entryId
+DELETE /dictionary/entries
+DELETE /dictionary/platform-entries/:platformEntryId/override
+POST /dictionary/ai-draft
 ```
 
-`ops-api` является transitional implementation для старых authenticated workflows
-астролога. Новые workflows астролога должны добавляться в `astrologer-api`.
+AI provider credentials, model selection and rate limits are backend-only
+`ASTROLOGER_*` runtime config. `astrologer-web` must call feature-specific routes
+and must not know provider keys, prompt ids or provider internals.
 
 ## Admin API
 
-`admin-api` обслуживает authenticated workflows администраторов,
-супер-администраторов и модераторов.
+`admin-api` является целевой отдельной поверхностью authenticated workflows
+администраторов, супер-администраторов и модераторов. В текущем коде app ещё не
+создан; `admin-web` существует как frontend shell.
 
 Ответственности администратора/супер-администратора/модератора:
 
@@ -107,8 +123,9 @@ POST /identity/logout
 /admin/settings
 ```
 
-Новые admin/moderator/super_admin workflows не должны добавляться в `ops-api`.
-Они должны жить в `admin-api` и вызывать domain use cases с audit logging.
+Новые admin/moderator/super_admin workflows не должны добавляться в `public-api`
+или `astrologer-api`. Они должны жить в будущем `admin-api` и вызывать domain
+use cases с audit logging.
 
 ## Правило контрактов
 
@@ -131,7 +148,7 @@ Admin actions должны вызывать domain use cases и писать aud
 
 ## Правило browser security
 
-Cookie-auth state-changing routes в `public-api`, `astrologer-api` и `admin-api`
+Cookie-auth state-changing routes в `public-api`, `astrologer-api` и будущем `admin-api`
 должны явно декларировать CSRF policy через security layer соответствующего backend app.
 Не реализуй CSRF-проверки локально внутри booking/orders/payments/identity,
 astrologer или admin controllers.
