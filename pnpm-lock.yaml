@@ -75,6 +75,9 @@ importers:
 
   apps/astrologer-api:
     dependencies:
+      '@elevenhouse/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@elevenhouse/auth':
         specifier: workspace:*
         version: link:../../packages/auth
