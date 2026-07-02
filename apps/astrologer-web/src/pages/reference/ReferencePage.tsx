@@ -21,6 +21,7 @@ export function ReferencePage() {
   const [selectedSource, setSelectedSource] = useState<DictionaryEntrySourceFilter>("all");
   const [search, setSearch] = useState("");
   const [entryModal, setEntryModal] = useState<ReferenceEntryModalState | null>(null);
+  const [isResetConfirmationOpen, setIsResetConfirmationOpen] = useState(false);
   const categoriesQuery = useDictionaryCategoriesQuery({ locale });
   const resetEntriesMutation = useResetDictionaryEntriesMutation();
   const entriesQuery = useDictionaryEntriesQuery(
@@ -65,12 +66,21 @@ export function ReferencePage() {
         isLoading={categoriesQuery.isLoading || entriesQuery.isLoading}
         isError={categoriesQuery.isError || entriesQuery.isError}
         isResetting={resetEntriesMutation.isPending}
+        isResetConfirmationOpen={isResetConfirmationOpen}
         resultsMotionKey={currentResultsMotionKey}
         isResultsUpdating={entriesQuery.isPlaceholderData && entriesQuery.isFetching}
         onCategoryChange={setSelectedCategoryId}
         onSourceChange={setSelectedSource}
         onSearchChange={setSearch}
-        onReset={() => {
+        onReset={() => setIsResetConfirmationOpen(true)}
+        onResetCancel={() => {
+          if (resetEntriesMutation.isPending) {
+            return;
+          }
+
+          setIsResetConfirmationOpen(false);
+        }}
+        onResetConfirm={() => {
           if (resetEntriesMutation.isPending) {
             return;
           }
@@ -81,6 +91,7 @@ export function ReferencePage() {
               setSelectedCategoryId(null);
               setSelectedSource("all");
               setSearch("");
+              setIsResetConfirmationOpen(false);
             })
             .catch(() => undefined);
         }}

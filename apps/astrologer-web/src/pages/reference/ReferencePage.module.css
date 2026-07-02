@@ -352,6 +352,34 @@
   margin: 0 0 12px;
 }
 
+.resetConfirmation {
+  display: grid;
+  gap: 18px;
+}
+
+.resetConfirmationDescription {
+  margin: 0;
+  color: var(--reference-text-2);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.resetConfirmationActions {
+  display: flex;
+  gap: 9px;
+}
+
+.resetConfirmationButton {
+  flex: 1;
+  min-width: 0;
+}
+
+.resetConfirmationActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 @media (max-width: 1180px) {
   .toolbar {
     flex-wrap: wrap;
@@ -418,6 +446,15 @@
 
   .entryGrid {
     grid-template-columns: 1fr;
+  }
+
+  .resetConfirmationActions {
+    flex-direction: column;
+  }
+
+  .resetConfirmationActions button {
+    width: 100%;
+    justify-content: center;
   }
 }
 

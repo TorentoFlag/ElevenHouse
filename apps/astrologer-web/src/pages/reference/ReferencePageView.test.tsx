@@ -3,6 +3,7 @@ import type { DictionaryEffectiveEntryResponse } from "@elevenhouse/contracts";
 import { Button } from "@elevenhouse/design-system/components/Button";
 import { Card } from "@elevenhouse/design-system/components/Card";
 import { IconButton } from "@elevenhouse/design-system/components/IconButton";
+import { Modal } from "@elevenhouse/design-system/components/Modal";
 import { MotionContent } from "@elevenhouse/design-system/motion";
 import { Edit } from "@elevenhouse/design-system/icons/Edit";
 import { Plus } from "@elevenhouse/design-system/icons/Plus";
@@ -37,6 +38,14 @@ const copy = {
   entryActions: {
     editLabel: "Изменить",
     deleteLabel: "Удалить"
+  },
+  resetConfirmation: {
+    title: "Сбросить справочники?",
+    closeLabel: "Закрыть модалку сброса справочников",
+    description:
+      "Все созданные трактовки будут удалены, а измененные вернутся к исходному состоянию. Вы уверены что хотите сбросить справочники?",
+    confirmLabel: "Сбросить",
+    cancelLabel: "Отмена"
   },
   entryModal: {
     title: "Новая трактовка",
@@ -150,6 +159,9 @@ describe("ReferencePageView", () => {
       onSourceChange,
       onSearchChange,
       onReset,
+      isResetConfirmationOpen: false,
+      onResetConfirm: vi.fn(),
+      onResetCancel: vi.fn(),
       onAdd,
       onEditEntry,
       onDeleteEntry
@@ -187,6 +199,7 @@ describe("ReferencePageView", () => {
     getArrayItem(toolbarButtons, 1).props.onClick();
     expect(onReset).toHaveBeenCalled();
     expect(onAdd).toHaveBeenCalled();
+    expect(findFirstElementByType(view, Modal)).toBeNull();
 
     expect(bodyProps.className).toBe(styles.body);
     expect(JSON.stringify(bodyProps.children)).toContain("Все трактовки");
@@ -285,6 +298,9 @@ describe("ReferencePageView", () => {
       onSourceChange: vi.fn(),
       onSearchChange: vi.fn(),
       onReset: vi.fn(),
+      isResetConfirmationOpen: false,
+      onResetConfirm: vi.fn(),
+      onResetCancel: vi.fn(),
       onAdd: vi.fn(),
       onEditEntry: vi.fn(),
       onDeleteEntry: vi.fn()
@@ -324,6 +340,9 @@ describe("ReferencePageView", () => {
       onSourceChange: vi.fn(),
       onSearchChange: vi.fn(),
       onReset: vi.fn(),
+      isResetConfirmationOpen: false,
+      onResetConfirm: vi.fn(),
+      onResetCancel: vi.fn(),
       onAdd: vi.fn(),
       onEditEntry: vi.fn(),
       onDeleteEntry: vi.fn()
@@ -337,15 +356,120 @@ describe("ReferencePageView", () => {
     expect(resetButton.props["data-reference-toolbar-action"]).toBe("reset");
     expect(resetButton.props.disabled).toBe(true);
   });
+
+  it("renders a reset confirmation modal with cancel and confirm actions", () => {
+    const onReset = vi.fn();
+    const onResetConfirm = vi.fn();
+    const onResetCancel = vi.fn();
+    const view = ReferencePageView({
+      copy,
+      catalogTotal: 396,
+      categories,
+      entries,
+      selectedCategoryId: null,
+      selectedSource: "all",
+      sourceCounts: {
+        all: 14,
+        platform: 14,
+        modified: 0,
+        custom: 0
+      },
+      search: "",
+      isLoading: false,
+      isError: false,
+      isResetting: false,
+      isResetConfirmationOpen: true,
+      resultsMotionKey: "all:all:1000",
+      isResultsUpdating: false,
+      onCategoryChange: vi.fn(),
+      onSourceChange: vi.fn(),
+      onSearchChange: vi.fn(),
+      onReset,
+      onResetConfirm,
+      onResetCancel,
+      onAdd: vi.fn(),
+      onEditEntry: vi.fn(),
+      onDeleteEntry: vi.fn()
+    });
+    const modal = findRequiredElementByType(view, Modal);
+    const modalChildren = modal.props.children;
+
+    expect(modal.props.title).toBe("Сбросить справочники?");
+    expect(modal.props.closeLabel).toBe("Закрыть модалку сброса справочников");
+    expect(JSON.stringify(modalChildren)).toContain(
+      "Все созданные трактовки будут удалены, а измененные вернутся к исходному состоянию. Вы уверены что хотите сбросить справочники?"
+    );
+
+    const modalButtons = findElementsByDataAttribute(
+      modalChildren,
+      "data-reference-reset-confirmation-action"
+    );
+    expect(modalButtons.map((button) => button.props["data-reference-reset-confirmation-action"])).toEqual([
+      "confirm",
+      "cancel"
+    ]);
+    expect(modalButtons.map((button) => button.props.title)).toEqual(["Сбросить", "Отмена"]);
+
+    getArrayItem(modalButtons, 1).props.onClick();
+    expect(onResetCancel).toHaveBeenCalledOnce();
+    expect(onResetConfirm).not.toHaveBeenCalled();
+
+    getArrayItem(modalButtons, 0).props.onClick();
+    expect(onResetConfirm).toHaveBeenCalledOnce();
+    expect(onReset).not.toHaveBeenCalled();
+  });
+
+  it("disables the reset confirmation action while reset is pending", () => {
+    const view = ReferencePageView({
+      copy,
+      catalogTotal: 396,
+      categories,
+      entries,
+      selectedCategoryId: null,
+      selectedSource: "all",
+      sourceCounts: {
+        all: 14,
+        platform: 14,
+        modified: 0,
+        custom: 0
+      },
+      search: "",
+      isLoading: false,
+      isError: false,
+      isResetting: true,
+      isResetConfirmationOpen: true,
+      resultsMotionKey: "all:all:1000",
+      isResultsUpdating: false,
+      onCategoryChange: vi.fn(),
+      onSourceChange: vi.fn(),
+      onSearchChange: vi.fn(),
+      onReset: vi.fn(),
+      onResetConfirm: vi.fn(),
+      onResetCancel: vi.fn(),
+      onAdd: vi.fn(),
+      onEditEntry: vi.fn(),
+      onDeleteEntry: vi.fn()
+    });
+    const modal = findRequiredElementByType(view, Modal);
+    const modalButtons = findElementsByDataAttribute(
+      modal.props.children,
+      "data-reference-reset-confirmation-action"
+    );
+
+    expect(getArrayItem(modalButtons, 0).props.disabled).toBe(true);
+    expect(getArrayItem(modalButtons, 1).props.disabled).toBe(true);
+  });
 });
 
 type TestElementProps = {
   as?: string;
   children?: unknown;
   className?: string;
+  closeLabel?: string;
   count?: number;
   "data-reference-category-id"?: string;
   "data-reference-entry-action"?: string;
+  "data-reference-reset-confirmation-action"?: string;
   "data-reference-source"?: string;
   "data-reference-toolbar-action"?: string;
   disabled?: boolean;
@@ -403,6 +527,7 @@ function findElementsByDataAttribute(
   attribute:
     | "data-reference-category-id"
     | "data-reference-entry-action"
+    | "data-reference-reset-confirmation-action"
     | "data-reference-source"
     | "data-reference-toolbar-action"
 ) {

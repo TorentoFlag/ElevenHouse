@@ -11,6 +11,8 @@ import { Card } from "@elevenhouse/design-system/components/Card";
 import "@elevenhouse/design-system/components/Card.css";
 import { IconButton } from "@elevenhouse/design-system/components/IconButton";
 import "@elevenhouse/design-system/components/IconButton.css";
+import { Modal } from "@elevenhouse/design-system/components/Modal";
+import "@elevenhouse/design-system/components/Modal.css";
 import { classNames } from "@elevenhouse/design-system/helpers";
 import { Content } from "@elevenhouse/design-system/icons/Content";
 import { Edit } from "@elevenhouse/design-system/icons/Edit";
@@ -46,12 +48,15 @@ export type ReferencePageViewProps = {
   isLoading: boolean;
   isError: boolean;
   isResetting: boolean;
+  isResetConfirmationOpen: boolean;
   resultsMotionKey: string;
   isResultsUpdating: boolean;
   onCategoryChange: (categoryId: string | null) => void;
   onSourceChange: (source: DictionaryEntrySourceFilter) => void;
   onSearchChange: (search: string) => void;
   onReset: () => void;
+  onResetConfirm: () => void;
+  onResetCancel: () => void;
   onAdd: (options?: ReferenceAddEntryOptions) => void;
   onEditEntry: (entry: DictionaryEffectiveEntryResponse) => void;
   onDeleteEntry: (entry: DictionaryEffectiveEntryResponse) => void;
@@ -83,12 +88,15 @@ export function ReferencePageView({
   isLoading,
   isError,
   isResetting,
+  isResetConfirmationOpen,
   resultsMotionKey,
   isResultsUpdating,
   onCategoryChange,
   onSourceChange,
   onSearchChange,
   onReset,
+  onResetConfirm,
+  onResetCancel,
   onAdd,
   onEditEntry,
   onDeleteEntry
@@ -268,6 +276,41 @@ export function ReferencePageView({
           </MotionContent>
         </div>
       </div>
+
+      {isResetConfirmationOpen && (
+        <Modal
+          title={copy.resetConfirmation.title}
+          closeLabel={copy.resetConfirmation.closeLabel}
+          onClose={onResetCancel}
+        >
+          <div className={styles.resetConfirmation}>
+            <p className={styles.resetConfirmationDescription}>
+              {copy.resetConfirmation.description}
+            </p>
+            <div className={styles.resetConfirmationActions}>
+              <Button
+                className={styles.resetConfirmationButton}
+                type="button"
+                variant="brand"
+                size="medium"
+                title={copy.resetConfirmation.confirmLabel}
+                disabled={isResetting}
+                data-reference-reset-confirmation-action="confirm"
+                onClick={onResetConfirm}
+              />
+              <Button
+                type="button"
+                variant="glass"
+                size="medium"
+                title={copy.resetConfirmation.cancelLabel}
+                disabled={isResetting}
+                data-reference-reset-confirmation-action="cancel"
+                onClick={onResetCancel}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }

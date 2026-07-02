@@ -78,6 +78,13 @@ export type AstrologerCopy = {
       editLabel: string;
       deleteLabel: string;
     };
+    resetConfirmation: {
+      title: string;
+      closeLabel: string;
+      description: string;
+      confirmLabel: string;
+      cancelLabel: string;
+    };
     entryModal: {
       title: string;
       closeLabel: string;
@@ -302,6 +309,14 @@ export const astrologerCopyByLocale = {
         editLabel: "Изменить",
         deleteLabel: "Удалить"
       },
+      resetConfirmation: {
+        title: "Сбросить справочники?",
+        closeLabel: "Закрыть модалку сброса справочников",
+        description:
+          "Все созданные трактовки будут удалены, а измененные вернутся к исходному состоянию. Вы уверены что хотите сбросить справочники?",
+        confirmLabel: "Сбросить",
+        cancelLabel: "Отмена"
+      },
       entryModal: {
         title: "Новая трактовка",
         closeLabel: "Закрыть модалку добавления трактовки",
@@ -471,6 +486,14 @@ export const astrologerCopyByLocale = {
       entryActions: {
         editLabel: "Edit",
         deleteLabel: "Delete"
+      },
+      resetConfirmation: {
+        title: "Reset references?",
+        closeLabel: "Close reset references modal",
+        description:
+          "All created interpretations will be deleted, and modified interpretations will return to their original state. Are you sure you want to reset references?",
+        confirmLabel: "Reset",
+        cancelLabel: "Cancel"
       },
       entryModal: {
         title: "New interpretation",
