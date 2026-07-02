@@ -35,19 +35,3 @@ export function normalizeReferenceEntryDraft(draft: ReferenceEntryDraft): Refere
     content: draft.content.trim()
   };
 }
-
-export function createReferenceEntryAiDraft({
-  title,
-  template
-}: {
-  readonly title: string;
-  readonly template: string;
-}): string {
-  const normalizedTitle = title.trim();
-
-  if (!normalizedTitle) {
-    return "";
-  }
-
-  return template.replace("{title}", normalizedTitle);
-}

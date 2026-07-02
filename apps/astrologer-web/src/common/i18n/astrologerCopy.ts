@@ -92,7 +92,6 @@ export type AstrologerCopy = {
       saveLabel: string;
       savingLabel: string;
       genericError: string;
-      aiDraftTemplate: string;
     };
     emptyLabel: string;
     emptyAddLabel: string;
@@ -308,9 +307,7 @@ export const astrologerCopyByLocale = {
         cancelLabel: "Отмена",
         saveLabel: "Сохранить",
         savingLabel: "Сохраняем",
-        genericError: "Не удалось сохранить трактовку. Попробуйте ещё раз.",
-        aiDraftTemplate:
-          "Черновик для «{title}»: опишите ключевое значение, сильные проявления, возможные сложности и то, как эта тема раскрывается в карте."
+        genericError: "Не удалось сохранить трактовку. Попробуйте ещё раз."
       },
       emptyLabel: "Ничего не найдено",
       emptyAddLabel: "Добавить трактовку",
@@ -471,9 +468,7 @@ export const astrologerCopyByLocale = {
         cancelLabel: "Cancel",
         saveLabel: "Save",
         savingLabel: "Saving",
-        genericError: "Could not save the interpretation. Try again.",
-        aiDraftTemplate:
-          "Draft for “{title}”: describe the core meaning, strong expressions, possible challenges, and how this theme unfolds in the chart."
+        genericError: "Could not save the interpretation. Try again."
       },
       emptyLabel: "No interpretations found",
       emptyAddLabel: "Add interpretation",

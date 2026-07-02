@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { DictionaryCategoryResponse, DictionaryLocale } from "@elevenhouse/contracts";
+import { useCreateDictionaryAiDraftMutation } from "../../../../features/dictionary/model/useCreateDictionaryAiDraftMutation";
 import { useCreateDictionaryCustomEntryMutation } from "../../../../features/dictionary/model/useCreateDictionaryCustomEntryMutation";
 import {
-  createReferenceEntryAiDraft,
   createReferenceEntryDraft,
   isReferenceEntryDraftSubmittable,
   normalizeReferenceEntryDraft
@@ -34,6 +34,7 @@ export function ReferenceEntryModal({
     })
   );
   const createEntryMutation = useCreateDictionaryCustomEntryMutation();
+  const createAiDraftMutation = useCreateDictionaryAiDraftMutation();
   const canSubmit = isReferenceEntryDraftSubmittable(draft);
 
   return (
@@ -43,18 +44,29 @@ export function ReferenceEntryModal({
       draft={draft}
       canSubmit={canSubmit}
       isSaving={createEntryMutation.isPending}
+      isCreatingAiDraft={createAiDraftMutation.isPending}
       errorMessage={createEntryMutation.isError ? copy.genericError : null}
+      aiErrorMessage={createAiDraftMutation.isError ? copy.genericError : null}
       onClose={onClose}
       onDraftChange={setDraft}
       onCreateAiDraft={() => {
-        const content = createReferenceEntryAiDraft({
-          title: draft.title,
-          template: copy.aiDraftTemplate
-        });
-
-        if (content) {
-          setDraft({ ...draft, content });
+        if (createAiDraftMutation.isPending || !draft.categoryId || !draft.title.trim()) {
+          return;
         }
+
+        createAiDraftMutation
+          .mutateAsync({
+            categoryId: draft.categoryId,
+            locale,
+            title: draft.title
+          })
+          .then((response) => {
+            setDraft((currentDraft) => ({
+              ...currentDraft,
+              content: response.content
+            }));
+          })
+          .catch(() => undefined);
       }}
       onSubmit={() => {
         if (!canSubmit || createEntryMutation.isPending) {

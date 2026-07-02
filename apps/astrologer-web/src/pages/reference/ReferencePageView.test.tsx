@@ -51,8 +51,7 @@ const copy = {
     cancelLabel: "Отмена",
     saveLabel: "Сохранить",
     savingLabel: "Сохраняем",
-    genericError: "Не удалось сохранить трактовку. Попробуйте ещё раз.",
-    aiDraftTemplate: "Черновик для «{title}»: опишите проявления положения."
+    genericError: "Не удалось сохранить трактовку. Попробуйте ещё раз."
   },
   emptyLabel: "Ничего не найдено",
   emptyAddLabel: "Добавить трактовку",

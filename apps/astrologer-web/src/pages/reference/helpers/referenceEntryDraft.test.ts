@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  createReferenceEntryAiDraft,
   createReferenceEntryDraft,
   isReferenceEntryDraftSubmittable,
   normalizeReferenceEntryDraft
@@ -78,20 +77,5 @@ describe("reference entry draft helpers", () => {
       title: "Солнце в Овне",
       content: "Яркая воля."
     });
-  });
-
-  it("creates an AI draft from the localized template only when the title is present", () => {
-    expect(
-      createReferenceEntryAiDraft({
-        title: " Венера в Близнецах ",
-        template: "Черновик для «{title}»: опишите проявления положения."
-      })
-    ).toBe("Черновик для «Венера в Близнецах»: опишите проявления положения.");
-    expect(
-      createReferenceEntryAiDraft({
-        title: " ",
-        template: "Черновик для «{title}»: опишите проявления положения."
-      })
-    ).toBe("");
   });
 });

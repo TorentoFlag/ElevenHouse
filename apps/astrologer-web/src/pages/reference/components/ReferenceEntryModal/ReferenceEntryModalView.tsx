@@ -27,7 +27,6 @@ export type ReferenceEntryModalCopy = {
   readonly saveLabel: string;
   readonly savingLabel: string;
   readonly genericError: string;
-  readonly aiDraftTemplate: string;
 };
 
 export type ReferenceEntryModalViewProps = {
@@ -36,7 +35,9 @@ export type ReferenceEntryModalViewProps = {
   readonly draft: ReferenceEntryModalDraft;
   readonly canSubmit: boolean;
   readonly isSaving: boolean;
+  readonly isCreatingAiDraft: boolean;
   readonly errorMessage: string | null;
+  readonly aiErrorMessage: string | null;
   readonly onClose: () => void;
   readonly onDraftChange: (draft: ReferenceEntryModalDraft) => void;
   readonly onSubmit: () => void;
@@ -49,7 +50,9 @@ export function ReferenceEntryModalView({
   draft,
   canSubmit,
   isSaving,
+  isCreatingAiDraft,
   errorMessage,
+  aiErrorMessage,
   onClose,
   onDraftChange,
   onSubmit,
@@ -105,6 +108,7 @@ export function ReferenceEntryModalView({
               type="button"
               title={copy.aiDraftTitle}
               data-reference-entry-modal-ai="true"
+              disabled={isCreatingAiDraft}
               onClick={onCreateAiDraft}
             >
               <Sparkle width={12} height={12} aria-hidden="true" />
@@ -121,6 +125,7 @@ export function ReferenceEntryModalView({
           />
         </label>
 
+        {aiErrorMessage && <p className={styles.error}>{aiErrorMessage}</p>}
         {errorMessage && <p className={styles.error}>{errorMessage}</p>}
 
         <div className={styles.footer}>

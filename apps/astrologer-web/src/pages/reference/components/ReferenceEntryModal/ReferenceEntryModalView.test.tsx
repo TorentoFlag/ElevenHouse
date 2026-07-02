@@ -23,8 +23,7 @@ const copy = {
   cancelLabel: "Отмена",
   saveLabel: "Сохранить",
   savingLabel: "Сохраняем",
-  genericError: "Не удалось сохранить трактовку",
-  aiDraftTemplate: "Черновик для «{title}»: опишите проявления положения."
+  genericError: "Не удалось сохранить трактовку"
 } satisfies ReferenceEntryModalCopy;
 
 const categories = [
@@ -66,7 +65,9 @@ describe("ReferenceEntryModalView", () => {
       draft,
       canSubmit: true,
       isSaving: false,
+      isCreatingAiDraft: false,
       errorMessage: null,
+      aiErrorMessage: null,
       onClose,
       onDraftChange,
       onSubmit,
@@ -127,8 +128,10 @@ describe("ReferenceEntryModalView", () => {
     expect(aiButton.props.title).toBe(
       "AI набросает черновик по заголовку — отредактируйте под свой стиль"
     );
+    expect(aiButton.props.disabled).toBe(false);
     expect(findRequiredElementByType(aiButton, Sparkle).props.width).toBe(12);
     expect(JSON.stringify(aiButton.props.children)).toContain("AI-черновик");
+    expect(onCreateAiDraft).not.toHaveBeenCalled();
     aiButton.props.onClick();
     expect(onCreateAiDraft).toHaveBeenCalled();
 
@@ -158,7 +161,9 @@ describe("ReferenceEntryModalView", () => {
       },
       canSubmit: false,
       isSaving: true,
+      isCreatingAiDraft: false,
       errorMessage: "Сервер недоступен",
+      aiErrorMessage: null,
       onClose: vi.fn(),
       onDraftChange: vi.fn(),
       onSubmit: vi.fn(),
@@ -173,6 +178,60 @@ describe("ReferenceEntryModalView", () => {
     );
     expect(submitButton.props.disabled).toBe(true);
     expect(submitButton.props.title).toBe("Сохраняем");
+  });
+
+  it("disables AI draft action while draft is generating", () => {
+    const view = ReferenceEntryModalView({
+      copy,
+      categories,
+      draft: {
+        categoryId: categories[0]?.id ?? "",
+        title: "Марс в Овне",
+        content: ""
+      },
+      canSubmit: false,
+      isSaving: false,
+      isCreatingAiDraft: true,
+      errorMessage: null,
+      aiErrorMessage: null,
+      onClose: vi.fn(),
+      onDraftChange: vi.fn(),
+      onSubmit: vi.fn(),
+      onCreateAiDraft: vi.fn()
+    });
+
+    const aiButton = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-ai");
+
+    expect(aiButton.props.disabled).toBe(true);
+  });
+
+  it("renders AI draft errors without replacing content field", () => {
+    const view = ReferenceEntryModalView({
+      copy,
+      categories,
+      draft: {
+        categoryId: categories[0]?.id ?? "",
+        title: "Марс в Овне",
+        content: "Existing astrologer text"
+      },
+      canSubmit: true,
+      isSaving: false,
+      isCreatingAiDraft: false,
+      errorMessage: null,
+      aiErrorMessage: "Не удалось создать AI-черновик",
+      onClose: vi.fn(),
+      onDraftChange: vi.fn(),
+      onSubmit: vi.fn(),
+      onCreateAiDraft: vi.fn()
+    });
+
+    expect(JSON.stringify(view.props.children)).toContain("Не удалось создать AI-черновик");
+
+    const contentInput = findRequiredElementByDataAttribute(
+      view,
+      "data-reference-entry-modal-content"
+    );
+    expect(contentInput.props.value).toBe("Existing astrologer text");
   });
 });
 
