@@ -88,6 +88,29 @@ describe("HttpClient", () => {
     });
   });
 
+  it("sends protected DELETE requests through the configured base path", async () => {
+    const fetcher = vi.fn(async () => new Response(null, { status: 204 }));
+    const http = new HttpClient({
+      basePath: "/api",
+      csrf: {
+        cookieName: "elevenhouse_astrologer_csrf",
+        headerName: "x-csrf-token",
+        readCookie: () => "signed-token"
+      },
+      fetcher
+    });
+
+    await http.delete("/dictionary/entries", { csrf: true });
+
+    expect(fetcher).toHaveBeenCalledWith("/api/dictionary/entries", {
+      method: "DELETE",
+      credentials: "include",
+      headers: {
+        "x-csrf-token": "signed-token"
+      }
+    });
+  });
+
   it("does not add a CSRF header to unprotected requests", async () => {
     const fetcher = vi.fn(async () => jsonResponse({ ok: true }));
     const http = new HttpClient({

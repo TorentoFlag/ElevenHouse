@@ -14,7 +14,7 @@ export type HttpClientCsrfOptions = {
 };
 
 export type HttpRequestOptions = {
-  readonly method?: "GET" | "POST";
+  readonly method?: "DELETE" | "GET" | "POST";
   readonly body?: unknown;
   readonly csrf?: boolean;
 };
@@ -47,6 +47,16 @@ export class HttpClient {
       method: "POST",
       ...options,
       ...(body === undefined ? {} : { body })
+    });
+  }
+
+  delete<TResponse>(
+    path: string,
+    options: Omit<HttpRequestOptions, "method" | "body"> = {}
+  ): Promise<TResponse> {
+    return this.request<TResponse>(path, {
+      method: "DELETE",
+      ...options
     });
   }
 

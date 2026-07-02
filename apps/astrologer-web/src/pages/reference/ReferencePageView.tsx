@@ -45,6 +45,7 @@ export type ReferencePageViewProps = {
   search: string;
   isLoading: boolean;
   isError: boolean;
+  isResetting: boolean;
   resultsMotionKey: string;
   isResultsUpdating: boolean;
   onCategoryChange: (categoryId: string | null) => void;
@@ -81,6 +82,7 @@ export function ReferencePageView({
   search,
   isLoading,
   isError,
+  isResetting,
   resultsMotionKey,
   isResultsUpdating,
   onCategoryChange,
@@ -130,6 +132,7 @@ export function ReferencePageView({
           variant="default"
           size="medium"
           title={copy.resetLabel}
+          disabled={isResetting}
           data-reference-toolbar-action="reset"
           onClick={onReset}
         />

@@ -8,6 +8,7 @@ import { application } from "../../../Application";
 import { createDictionaryCustomEntry } from "./createDictionaryCustomEntry";
 import { listDictionaryCategories } from "./listDictionaryCategories";
 import { listDictionaryEntries } from "./listDictionaryEntries";
+import { resetDictionaryEntries } from "./resetDictionaryEntries";
 
 const categoryId = "8e14390f-3db1-4d1c-9344-55679c778427";
 
@@ -136,5 +137,13 @@ describe("dictionary API", () => {
       },
       { csrf: true }
     );
+  });
+
+  it("resets every astrologer dictionary entry through the protected reset endpoint", async () => {
+    const deleteRequest = vi.spyOn(application.http, "delete").mockResolvedValue(undefined);
+
+    await expect(resetDictionaryEntries()).resolves.toBeUndefined();
+
+    expect(deleteRequest).toHaveBeenCalledWith("/dictionary/entries", { csrf: true });
   });
 });

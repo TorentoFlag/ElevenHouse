@@ -46,6 +46,10 @@ export type DictionaryAstrologerEntryDeleteInput = {
   readonly entryId: string;
 };
 
+export type DictionaryAstrologerEntriesResetInput = {
+  readonly ownerUserId: string;
+};
+
 export type DictionaryPlatformEntryOverrideResetInput = {
   readonly ownerUserId: string;
   readonly platformEntryId: string;
@@ -63,6 +67,7 @@ export type DictionaryStore = {
     input: DictionaryPlatformEntryOverrideInput
   ) => Promise<DictionaryAstrologerEntry>;
   readonly deleteAstrologerEntry: (input: DictionaryAstrologerEntryDeleteInput) => Promise<void>;
+  readonly resetAstrologerEntries: (input: DictionaryAstrologerEntriesResetInput) => Promise<void>;
   readonly resetPlatformEntryOverride: (
     input: DictionaryPlatformEntryOverrideResetInput
   ) => Promise<void>;

@@ -8,6 +8,7 @@ import {
   listDictionaryCategories,
   listDictionaryEntries,
   overrideDictionaryPlatformEntry,
+  resetDictionaryAstrologerEntries,
   resetDictionaryPlatformEntryOverride
 } from "@elevenhouse/domain";
 import { createDrizzleDictionaryStore } from "./index";
@@ -340,6 +341,59 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
         expect.objectContaining({
           id: platformMoon.id,
           source: "platform"
+        })
+      ])
+    });
+
+    const customAgain = await createDictionaryCustomEntry({
+      store,
+      ownerUserId,
+      categoryId: category.id,
+      code: `custom_again_${suffix}`,
+      locale: "ru",
+      title: "Another custom note",
+      content: "Another custom content",
+      now: new Date("2026-06-30T10:20:00.000Z")
+    });
+    await overrideDictionaryPlatformEntry({
+      store,
+      ownerUserId,
+      platformEntryId: platformSun.id,
+      title: "Sun in Aries after reset",
+      content: "Second override content",
+      now: new Date("2026-06-30T10:25:00.000Z")
+    });
+
+    await expect(countAstrologerEntries(ownerUserId)).resolves.toBe(2);
+
+    await resetDictionaryAstrologerEntries({
+      store,
+      ownerUserId
+    });
+
+    await expect(countAstrologerEntries(ownerUserId)).resolves.toBe(0);
+
+    await expect(
+      listDictionaryEntries({
+        store,
+        ownerUserId,
+        locale: "ru",
+        categoryId: category.id,
+        source: "all"
+      })
+    ).resolves.toMatchObject({
+      total: 2,
+      counts: {
+        sources: {
+          all: 2,
+          platform: 2,
+          modified: 0,
+          custom: 0
+        }
+      },
+      entries: expect.not.arrayContaining([
+        expect.objectContaining({
+          id: customAgain.id
         })
       ])
     });

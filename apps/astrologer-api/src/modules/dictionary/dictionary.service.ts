@@ -13,6 +13,7 @@ import {
   listDictionaryCategories,
   listDictionaryEntries,
   overrideDictionaryPlatformEntry,
+  resetDictionaryAstrologerEntries,
   resetDictionaryPlatformEntryOverride,
   DictionaryCategoryNotFoundError,
   DictionaryPlatformEntryNotFoundError,
@@ -136,6 +137,15 @@ export class DictionaryService {
         store: this.store,
         ownerUserId: requireOwnerUserId(request),
         entryId: parsedParams.entryId
+      })
+    );
+  }
+
+  resetEntries(request: AstrologerSessionRequest): Promise<void> {
+    return mapDictionaryStoreErrors(() =>
+      resetDictionaryAstrologerEntries({
+        store: this.store,
+        ownerUserId: requireOwnerUserId(request)
       })
     );
   }

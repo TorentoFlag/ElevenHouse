@@ -137,6 +137,11 @@ export function createDrizzleDictionaryStore(database: ElevenHouseDatabase): Dic
           )
         );
     },
+    resetAstrologerEntries: async (input) => {
+      await database
+        .delete(dictionaryAstrologerEntries)
+        .where(eq(dictionaryAstrologerEntries.ownerUserId, input.ownerUserId));
+    },
     resetPlatformEntryOverride: async (input) => {
       await database
         .delete(dictionaryAstrologerEntries)

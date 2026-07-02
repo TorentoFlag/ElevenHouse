@@ -66,6 +66,13 @@ export class DictionaryController {
     return this.dictionaryService.deleteEntry(entryId, request);
   }
 
+  @Delete("entries")
+  @HttpCode(204)
+  @RequireCsrf()
+  resetEntries(@Req() request: AstrologerSessionRequest): ReturnType<DictionaryService["resetEntries"]> {
+    return this.dictionaryService.resetEntries(request);
+  }
+
   @Delete("platform-entries/:platformEntryId/override")
   @HttpCode(204)
   @RequireCsrf()

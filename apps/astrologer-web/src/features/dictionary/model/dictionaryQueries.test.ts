@@ -4,10 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 import { createDictionaryCustomEntry } from "../api/createDictionaryCustomEntry";
 import { listDictionaryCategories } from "../api/listDictionaryCategories";
 import { listDictionaryEntries } from "../api/listDictionaryEntries";
+import { resetDictionaryEntries } from "../api/resetDictionaryEntries";
 import {
   createDictionaryCustomEntryMutationOptions,
   dictionaryCategoriesQueryOptions,
-  dictionaryEntriesQueryOptions
+  dictionaryEntriesQueryOptions,
+  resetDictionaryEntriesMutationOptions
 } from "./dictionaryQueryOptions";
 import { dictionaryQueryKeys } from "./dictionaryQueryKeys";
 
@@ -21,6 +23,10 @@ vi.mock("../api/createDictionaryCustomEntry", () => ({
 
 vi.mock("../api/listDictionaryEntries", () => ({
   listDictionaryEntries: vi.fn()
+}));
+
+vi.mock("../api/resetDictionaryEntries", () => ({
+  resetDictionaryEntries: vi.fn()
 }));
 
 const entriesQuery = {
@@ -119,6 +125,22 @@ describe("dictionary query options", () => {
     await options.onSuccess();
 
     expect(createDictionaryCustomEntry).toHaveBeenCalledWith(input);
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: dictionaryQueryKeys.all()
+    });
+  });
+
+  it("resets all astrologer dictionary entries and invalidates every dictionary query on success", async () => {
+    vi.mocked(resetDictionaryEntries).mockResolvedValue(undefined);
+    const queryClient = {
+      invalidateQueries: vi.fn()
+    };
+    const options = resetDictionaryEntriesMutationOptions(queryClient);
+
+    await expect(options.mutationFn()).resolves.toBeUndefined();
+    await options.onSuccess();
+
+    expect(resetDictionaryEntries).toHaveBeenCalledWith();
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: dictionaryQueryKeys.all()
     });

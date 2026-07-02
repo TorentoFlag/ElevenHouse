@@ -100,6 +100,15 @@ export function deleteDictionaryAstrologerEntry(input: {
   });
 }
 
+export function resetDictionaryAstrologerEntries(input: {
+  readonly store: DictionaryStore;
+  readonly ownerUserId: string;
+}): Promise<void> {
+  return input.store.resetAstrologerEntries({
+    ownerUserId: normalizeRequiredString(input.ownerUserId, "Dictionary owner user id is required")
+  });
+}
+
 export function resetDictionaryPlatformEntryOverride(input: {
   readonly store: DictionaryStore;
   readonly ownerUserId: string;

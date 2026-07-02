@@ -212,6 +212,7 @@ describe("dictionary HTTP routes", () => {
       `/dictionary/platform-entries/${platformEntryId}/override`,
       csrfHeaders()
     );
+    const resetAllResponse = await deleteEmpty("/dictionary/entries", csrfHeaders());
 
     expect(unauthenticatedResponse.status).toBe(401);
     expect(missingCsrfResponse.status).toBe(403);
@@ -232,6 +233,7 @@ describe("dictionary HTTP routes", () => {
     });
     expect(deleteResponse.status).toBe(204);
     expect(resetResponse.status).toBe(204);
+    expect(resetAllResponse.status).toBe(204);
   });
 
   it("rejects invalid route params before calling the dictionary store", async () => {
@@ -255,6 +257,7 @@ describe("dictionary HTTP routes", () => {
     expect(dictionaryStore.upsertPlatformEntryOverride).not.toHaveBeenCalled();
     expect(dictionaryStore.deleteAstrologerEntry).not.toHaveBeenCalled();
     expect(dictionaryStore.resetPlatformEntryOverride).not.toHaveBeenCalled();
+    expect(dictionaryStore.resetAstrologerEntries).not.toHaveBeenCalled();
   });
 
   it("rejects authenticated sessions without the astrologer role", async () => {
@@ -432,6 +435,7 @@ function createDictionaryStore(): DictionaryStore {
       updatedAt: input.updatedAt
     })),
     deleteAstrologerEntry: vi.fn(async () => undefined),
+    resetAstrologerEntries: vi.fn(async () => undefined),
     resetPlatformEntryOverride: vi.fn(async () => undefined)
   };
 }

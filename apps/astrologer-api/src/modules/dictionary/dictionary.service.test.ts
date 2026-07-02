@@ -135,6 +135,7 @@ describe("DictionaryService", () => {
 
     await service.deleteEntry(astrologerEntryId, createAuthenticatedRequest());
     await service.resetPlatformEntryOverride(platformEntryId, createAuthenticatedRequest());
+    await service.resetEntries(createAuthenticatedRequest());
 
     expect(store.deleteAstrologerEntry).toHaveBeenCalledWith({
       ownerUserId,
@@ -143,6 +144,9 @@ describe("DictionaryService", () => {
     expect(store.resetPlatformEntryOverride).toHaveBeenCalledWith({
       ownerUserId,
       platformEntryId
+    });
+    expect(store.resetAstrologerEntries).toHaveBeenCalledWith({
+      ownerUserId
     });
   });
 
@@ -256,6 +260,7 @@ function createStore(overrides: Partial<DictionaryStore> = {}): DictionaryStore 
       updatedAt: input.updatedAt
     })),
     deleteAstrologerEntry: vi.fn(async () => undefined),
+    resetAstrologerEntries: vi.fn(async () => undefined),
     resetPlatformEntryOverride: vi.fn(async () => undefined),
     ...overrides
   };

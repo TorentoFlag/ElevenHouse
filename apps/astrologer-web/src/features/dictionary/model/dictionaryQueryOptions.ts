@@ -7,6 +7,7 @@ import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import { createDictionaryCustomEntry } from "../api/createDictionaryCustomEntry";
 import { listDictionaryCategories } from "../api/listDictionaryCategories";
 import { listDictionaryEntries } from "../api/listDictionaryEntries";
+import { resetDictionaryEntries } from "../api/resetDictionaryEntries";
 import { dictionaryQueryKeys } from "./dictionaryQueryKeys";
 
 export function dictionaryCategoriesQueryOptions(query: ListDictionaryCategoriesQuery) {
@@ -29,6 +30,18 @@ export function createDictionaryCustomEntryMutationOptions(
 ) {
   return {
     mutationFn: (input: CreateDictionaryCustomEntryRequest) => createDictionaryCustomEntry(input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: dictionaryQueryKeys.all()
+      })
+  };
+}
+
+export function resetDictionaryEntriesMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: () => resetDictionaryEntries(),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: dictionaryQueryKeys.all()

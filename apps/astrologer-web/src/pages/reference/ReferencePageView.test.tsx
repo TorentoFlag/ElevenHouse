@@ -143,6 +143,7 @@ describe("ReferencePageView", () => {
       search: "луна",
       isLoading: false,
       isError: false,
+      isResetting: false,
       resultsMotionKey: "planets-in-signs:1000",
       isResultsUpdating: true,
       onCategoryChange,
@@ -180,6 +181,7 @@ describe("ReferencePageView", () => {
       "reset",
       "add"
     ]);
+    expect(getArrayItem(toolbarButtons, 0).props.disabled).toBe(false);
     expect(getArrayItem(toolbarButtons, 1).props.startIcon.type).toBe(Plus);
     getArrayItem(toolbarButtons, 0).props.onClick();
     getArrayItem(toolbarButtons, 1).props.onClick();
@@ -276,6 +278,7 @@ describe("ReferencePageView", () => {
       search: "",
       isLoading: true,
       isError: false,
+      isResetting: false,
       resultsMotionKey: "initial",
       isResultsUpdating: false,
       onCategoryChange: vi.fn(),
@@ -296,6 +299,44 @@ describe("ReferencePageView", () => {
     expect(JSON.stringify(loadingView.props.children)).toContain("Загружаем справочники");
     expect(JSON.stringify(errorView.props.children)).toContain("Не удалось загрузить справочники");
   });
+
+  it("disables the toolbar reset command while a reset is pending", () => {
+    const view = ReferencePageView({
+      copy,
+      catalogTotal: 396,
+      categories,
+      entries,
+      selectedCategoryId: null,
+      selectedSource: "all",
+      sourceCounts: {
+        all: 14,
+        platform: 14,
+        modified: 0,
+        custom: 0
+      },
+      search: "",
+      isLoading: false,
+      isError: false,
+      isResetting: true,
+      resultsMotionKey: "all:all:1000",
+      isResultsUpdating: false,
+      onCategoryChange: vi.fn(),
+      onSourceChange: vi.fn(),
+      onSearchChange: vi.fn(),
+      onReset: vi.fn(),
+      onAdd: vi.fn(),
+      onEditEntry: vi.fn(),
+      onDeleteEntry: vi.fn()
+    });
+    const [toolbar] = Children.toArray(view.props.children);
+    const resetButton = getArrayItem(
+      findElementsByDataAttribute(toolbar, "data-reference-toolbar-action"),
+      0
+    );
+
+    expect(resetButton.props["data-reference-toolbar-action"]).toBe("reset");
+    expect(resetButton.props.disabled).toBe(true);
+  });
 });
 
 type TestElementProps = {
@@ -307,6 +348,7 @@ type TestElementProps = {
   "data-reference-entry-action"?: string;
   "data-reference-source"?: string;
   "data-reference-toolbar-action"?: string;
+  disabled?: boolean;
   icon: { type: unknown };
   id?: string;
   label?: string;

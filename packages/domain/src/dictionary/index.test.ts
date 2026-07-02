@@ -7,6 +7,7 @@ import {
   listDictionaryCategories,
   listDictionaryEntries,
   overrideDictionaryPlatformEntry,
+  resetDictionaryAstrologerEntries,
   resetDictionaryPlatformEntryOverride,
   type DictionaryStore
 } from "./index";
@@ -63,6 +64,7 @@ function createStore(overrides: Partial<DictionaryStore> = {}): DictionaryStore 
       updatedAt: input.updatedAt
     })),
     deleteAstrologerEntry: vi.fn(async () => undefined),
+    resetAstrologerEntries: vi.fn(async () => undefined),
     resetPlatformEntryOverride: vi.fn(async () => undefined),
     ...overrides
   };
@@ -204,6 +206,19 @@ describe("dictionary domain module", () => {
     expect(store.resetPlatformEntryOverride).toHaveBeenCalledWith({
       ownerUserId: "user_astrologer",
       platformEntryId: "platform_sun_aries"
+    });
+  });
+
+  it("resets every astrologer dictionary entry for the owner", async () => {
+    const store = createStore();
+
+    await resetDictionaryAstrologerEntries({
+      store,
+      ownerUserId: " user_astrologer "
+    });
+
+    expect(store.resetAstrologerEntries).toHaveBeenCalledWith({
+      ownerUserId: "user_astrologer"
     });
   });
 });

@@ -5,6 +5,7 @@ import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { useDictionaryCategoriesQuery } from "../../features/dictionary/model/useDictionaryCategoriesQuery";
 import { useDictionaryEntriesQuery } from "../../features/dictionary/model/useDictionaryEntriesQuery";
+import { useResetDictionaryEntriesMutation } from "../../features/dictionary/model/useResetDictionaryEntriesMutation";
 import { ReferenceEntryModal } from "./components/ReferenceEntryModal";
 import { createReferenceEntriesQuery } from "./helpers/referenceEntriesQuery";
 import { createReferencePageSummary } from "./helpers/referencePageSummary";
@@ -21,6 +22,7 @@ export function ReferencePage() {
   const [search, setSearch] = useState("");
   const [entryModal, setEntryModal] = useState<ReferenceEntryModalState | null>(null);
   const categoriesQuery = useDictionaryCategoriesQuery({ locale });
+  const resetEntriesMutation = useResetDictionaryEntriesMutation();
   const entriesQuery = useDictionaryEntriesQuery(
     createReferenceEntriesQuery({
       locale,
@@ -62,15 +64,25 @@ export function ReferencePage() {
         search={search}
         isLoading={categoriesQuery.isLoading || entriesQuery.isLoading}
         isError={categoriesQuery.isError || entriesQuery.isError}
+        isResetting={resetEntriesMutation.isPending}
         resultsMotionKey={currentResultsMotionKey}
         isResultsUpdating={entriesQuery.isPlaceholderData && entriesQuery.isFetching}
         onCategoryChange={setSelectedCategoryId}
         onSourceChange={setSelectedSource}
         onSearchChange={setSearch}
         onReset={() => {
-          setSelectedCategoryId(null);
-          setSelectedSource("all");
-          setSearch("");
+          if (resetEntriesMutation.isPending) {
+            return;
+          }
+
+          resetEntriesMutation
+            .mutateAsync()
+            .then(() => {
+              setSelectedCategoryId(null);
+              setSelectedSource("all");
+              setSearch("");
+            })
+            .catch(() => undefined);
         }}
         onAdd={openEntryModal}
         onEditEntry={() => undefined}
