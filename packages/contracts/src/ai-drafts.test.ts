@@ -31,15 +31,15 @@ describe("AI draft contracts", () => {
     ).toThrow();
   });
 
-  it("parses DeepSeek-backed dictionary AI draft responses", () => {
+  it("parses OpenAI-backed dictionary AI draft responses", () => {
     expect(
       createDictionaryAiDraftResponseSchema.parse({
         content: "Черновик трактовки.",
-        provider: "deepseek",
-        model: "deepseek-v4-flash",
+        provider: "openai",
+        model: "gpt-5.4-mini",
         promptId: "dictionary.entryDraft",
         promptVersion: 1,
-        finishReason: "stop",
+        finishReason: "completed",
         usage: {
           promptTokens: 100,
           completionTokens: 60,
@@ -48,11 +48,11 @@ describe("AI draft contracts", () => {
       })
     ).toEqual({
       content: "Черновик трактовки.",
-      provider: "deepseek",
-      model: "deepseek-v4-flash",
+      provider: "openai",
+      model: "gpt-5.4-mini",
       promptId: "dictionary.entryDraft",
       promptVersion: 1,
-      finishReason: "stop",
+      finishReason: "completed",
       usage: {
         promptTokens: 100,
         completionTokens: 60,
@@ -61,15 +61,28 @@ describe("AI draft contracts", () => {
     });
   });
 
-  it("rejects oversized AI draft content", () => {
+  it("rejects obsolete DeepSeek response metadata", () => {
     expect(() =>
       createDictionaryAiDraftResponseSchema.parse({
-        content: "x".repeat(10_001),
+        content: "Черновик трактовки.",
         provider: "deepseek",
         model: "deepseek-v4-flash",
         promptId: "dictionary.entryDraft",
         promptVersion: 1,
         finishReason: "stop"
+      })
+    ).toThrow();
+  });
+
+  it("rejects oversized AI draft content", () => {
+    expect(() =>
+      createDictionaryAiDraftResponseSchema.parse({
+        content: "x".repeat(10_001),
+        provider: "openai",
+        model: "gpt-5.4-mini",
+        promptId: "dictionary.entryDraft",
+        promptVersion: 1,
+        finishReason: "completed"
       })
     ).toThrow();
   });

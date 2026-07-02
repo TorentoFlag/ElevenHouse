@@ -1,9 +1,10 @@
 import type { ZodType } from "@elevenhouse/validation";
 
-export type AiProviderName = "deepseek";
+export type AiProviderName = "openai";
+export type AiModel = "gpt-5.4-mini" | "gpt-5.5";
 export type AiModelProfile = "fastDraft" | "qualityDraft";
 export type AiPromptResponseFormat = "json";
-export type AiPromptThinkingMode = "enabled" | "disabled";
+export type AiReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
 export type AiPromptLocale = "ru" | "en";
 export type AiChatRole = "system" | "user" | "assistant";
 
@@ -23,10 +24,11 @@ export type AiGenerationUsage = {
 };
 
 export type AiGenerationFinishReason =
-  | "stop"
-  | "length"
+  | "completed"
+  | "incomplete"
   | "content_filter"
-  | "insufficient_system_resource";
+  | "refusal"
+  | "failed";
 
 export type AiGenerationMetadata = {
   readonly feature: string;
@@ -38,9 +40,16 @@ export type AiGenerationMetadata = {
 export type AiGenerationResult<TOutput> = {
   readonly output: TOutput;
   readonly provider: AiProviderName;
-  readonly model: "deepseek-v4-flash" | "deepseek-v4-pro";
+  readonly model: AiModel;
   readonly finishReason: AiGenerationFinishReason;
   readonly usage?: AiGenerationUsage;
+};
+
+export type AiStructuredOutputJsonSchema = {
+  readonly type: "object";
+  readonly properties: Record<string, unknown>;
+  readonly required: readonly string[];
+  readonly additionalProperties: false;
 };
 
 export type AiPromptDefinition<TInput, TOutput> = {
@@ -49,8 +58,10 @@ export type AiPromptDefinition<TInput, TOutput> = {
   readonly locales: readonly AiPromptLocale[];
   readonly modelProfile: AiModelProfile;
   readonly responseFormat: AiPromptResponseFormat;
-  readonly thinking: AiPromptThinkingMode;
+  readonly reasoningEffort: AiReasoningEffort;
   readonly maxOutputTokens: number;
+  readonly structuredOutputName: string;
+  readonly structuredOutputJsonSchema: AiStructuredOutputJsonSchema;
   readonly inputSchema: ZodType<TInput>;
   readonly outputSchema: ZodType<TOutput>;
   readonly render: (input: TInput) => RenderedPrompt;

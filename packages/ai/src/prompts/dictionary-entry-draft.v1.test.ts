@@ -15,8 +15,20 @@ describe("dictionary entry draft prompt v1", () => {
     expect(dictionaryEntryDraftPromptV1.locales).toEqual(["ru", "en"]);
     expect(dictionaryEntryDraftPromptV1.modelProfile).toBe("fastDraft");
     expect(dictionaryEntryDraftPromptV1.responseFormat).toBe("json");
-    expect(dictionaryEntryDraftPromptV1.thinking).toBe("disabled");
+    expect(dictionaryEntryDraftPromptV1.reasoningEffort).toBe("low");
     expect(dictionaryEntryDraftPromptV1.maxOutputTokens).toBe(900);
+    expect(dictionaryEntryDraftPromptV1.structuredOutputName).toBe("dictionary_entry_draft_v1");
+    expect(dictionaryEntryDraftPromptV1.structuredOutputJsonSchema).toMatchObject({
+      type: "object",
+      required: ["content"],
+      additionalProperties: false
+    });
+    expect(dictionaryEntryDraftPromptV1.structuredOutputJsonSchema.properties.content).toMatchObject(
+      {
+        type: "string",
+        minLength: 1
+      }
+    );
   });
 
   it("renders system and user messages for dictionary draft input", () => {

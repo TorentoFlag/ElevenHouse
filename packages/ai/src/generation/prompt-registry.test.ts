@@ -9,8 +9,17 @@ const testPrompt = definePrompt({
   locales: ["ru", "en"],
   modelProfile: "fastDraft",
   responseFormat: "json",
-  thinking: "disabled",
+  reasoningEffort: "low",
   maxOutputTokens: 900,
+  structuredOutputName: "dictionary_entry_draft_v1",
+  structuredOutputJsonSchema: {
+    type: "object",
+    properties: {
+      content: { type: "string", minLength: 1 }
+    },
+    required: ["content"],
+    additionalProperties: false
+  },
   inputSchema: z.object({ title: z.string().min(1) }),
   outputSchema: z.object({ content: z.string().min(1) }),
   render(input) {

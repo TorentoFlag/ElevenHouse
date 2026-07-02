@@ -3,7 +3,8 @@ import type {
   AiGenerationMetadata,
   AiGenerationResult,
   AiModelProfile,
-  AiPromptThinkingMode,
+  AiReasoningEffort,
+  AiStructuredOutputJsonSchema,
   RenderedPrompt
 } from "./ai-generation-types";
 
@@ -13,8 +14,10 @@ export type AiGenerationPort = {
     readonly modelProfile: AiModelProfile;
     readonly responseSchema: ZodType<TOutput>;
     readonly maxOutputTokens: number;
-    readonly thinking: AiPromptThinkingMode;
-    readonly userKey: string;
+    readonly reasoningEffort: AiReasoningEffort;
+    readonly safetyIdentifier: string;
+    readonly structuredOutputName: string;
+    readonly structuredOutputJsonSchema: AiStructuredOutputJsonSchema;
     readonly metadata: AiGenerationMetadata;
   }) => Promise<AiGenerationResult<TOutput>>;
 };

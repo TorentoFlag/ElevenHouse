@@ -8,17 +8,18 @@ import {
 const uuidSchema = z.string().uuid();
 const dictionaryAiDraftTitleRequestSchema = nonEmptyStringSchema.max(dictionaryTitleMaxLength);
 
-export const aiDraftProviderSchema = z.literal("deepseek");
+export const aiDraftProviderSchema = z.literal("openai");
 export type AiDraftProvider = z.infer<typeof aiDraftProviderSchema>;
 
-export const aiDraftModelSchema = z.enum(["deepseek-v4-flash", "deepseek-v4-pro"]);
+export const aiDraftModelSchema = z.enum(["gpt-5.4-mini", "gpt-5.5"]);
 export type AiDraftModel = z.infer<typeof aiDraftModelSchema>;
 
 export const aiDraftFinishReasonSchema = z.enum([
-  "stop",
-  "length",
+  "completed",
+  "incomplete",
   "content_filter",
-  "insufficient_system_resource"
+  "refusal",
+  "failed"
 ]);
 export type AiDraftFinishReason = z.infer<typeof aiDraftFinishReasonSchema>;
 

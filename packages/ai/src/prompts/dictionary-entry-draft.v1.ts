@@ -33,8 +33,21 @@ export const dictionaryEntryDraftPromptV1 = definePrompt({
   locales: ["ru", "en"],
   modelProfile: "fastDraft",
   responseFormat: "json",
-  thinking: "disabled",
+  reasoningEffort: "low",
   maxOutputTokens: 900,
+  structuredOutputName: "dictionary_entry_draft_v1",
+  structuredOutputJsonSchema: {
+    type: "object",
+    properties: {
+      content: {
+        type: "string",
+        minLength: 1,
+        maxLength: dictionaryContentMaxLength
+      }
+    },
+    required: ["content"],
+    additionalProperties: false
+  },
   inputSchema: dictionaryEntryDraftPromptInputSchema,
   outputSchema: dictionaryEntryDraftPromptOutputSchema,
   render(input) {
