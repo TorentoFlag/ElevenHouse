@@ -1,0 +1,134 @@
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.label {
+  color: var(--eh-color-moon-500);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.aiDraftButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 9px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: #f6d266;
+  cursor: pointer;
+  font-family: var(--eh-font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.12s ease;
+}
+
+.aiDraftButton:hover {
+  background: rgb(216 212 236 / 0.06);
+  color: var(--eh-color-moon-120);
+}
+
+.aiDraftButton:active {
+  transform: translateY(1px);
+}
+
+.aiDraftButton:focus-visible {
+  outline: 2px solid rgb(244 196 48 / 0.5);
+  outline-offset: 2px;
+}
+
+.categoryList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.input,
+.textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid rgb(216 212 236 / 0.13);
+  border-radius: 14px;
+  outline: none;
+  background: rgb(7 6 15 / 0.58);
+  color: var(--eh-color-moon-120);
+  font: 600 14px / 1.45 var(--eh-font-sans);
+}
+
+.input {
+  height: 44px;
+  padding: 0 14px;
+}
+
+.textarea {
+  min-height: 148px;
+  resize: vertical;
+  padding: 12px 14px;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--eh-color-muted);
+}
+
+.input:focus,
+.textarea:focus,
+.textarea:focus {
+  border-color: rgb(244 196 48 / 0.5);
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.12);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.submitButton {
+  min-width: 120px;
+}
+
+.submitButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.error {
+  margin: -2px 0 0;
+  color: #f09a9a;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  .footer {
+    flex-direction: column-reverse;
+  }
+
+  .footer button {
+    width: 100%;
+    justify-content: center;
+  }
+}

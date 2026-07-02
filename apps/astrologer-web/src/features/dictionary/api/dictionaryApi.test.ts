@@ -1,6 +1,11 @@
-import type { DictionaryCategoriesResponse, DictionaryEntriesResponse } from "@elevenhouse/contracts";
+import type {
+  DictionaryAstrologerEntryResponse,
+  DictionaryCategoriesResponse,
+  DictionaryEntriesResponse
+} from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { application } from "../../../Application";
+import { createDictionaryCustomEntry } from "./createDictionaryCustomEntry";
 import { listDictionaryCategories } from "./listDictionaryCategories";
 import { listDictionaryEntries } from "./listDictionaryEntries";
 
@@ -48,6 +53,19 @@ const entriesResponse = {
   }
 } satisfies DictionaryEntriesResponse;
 
+const astrologerEntryResponse = {
+  id: "a2fb1fef-dc5c-44ec-ae36-060f455c8f0f",
+  ownerUserId: "4f3873e2-a2e8-4a3e-9387-b2f2fc39ee22",
+  categoryId,
+  code: "custom_venus_gemini",
+  locale: "ru",
+  entryType: "custom",
+  title: "Венера в Близнецах",
+  content: "Любовь становится легкой, живой и связанной с общением.",
+  createdAt: "2026-07-01T10:00:00.000Z",
+  updatedAt: "2026-07-01T10:00:00.000Z"
+} satisfies DictionaryAstrologerEntryResponse;
+
 describe("dictionary API", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -94,5 +112,29 @@ describe("dictionary API", () => {
     vi.spyOn(application.http, "get").mockResolvedValue({ categories: [{ id: "not-a-uuid" }] });
 
     await expect(listDictionaryCategories({ locale: "ru" })).rejects.toThrow();
+  });
+
+  it("creates custom dictionary entries through the shared request and response contracts", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(astrologerEntryResponse);
+
+    await expect(
+      createDictionaryCustomEntry({
+        categoryId,
+        locale: "ru",
+        title: " Венера в Близнецах ",
+        content: " Любовь становится легкой, живой и связанной с общением. "
+      })
+    ).resolves.toEqual(astrologerEntryResponse);
+
+    expect(post).toHaveBeenCalledWith(
+      "/dictionary/custom-entries",
+      {
+        categoryId,
+        locale: "ru",
+        title: "Венера в Близнецах",
+        content: "Любовь становится легкой, живой и связанной с общением."
+      },
+      { csrf: true }
+    );
   });
 });

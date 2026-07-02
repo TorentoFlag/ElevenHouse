@@ -45,6 +45,12 @@ export default defineConfig({
           import.meta.url
         )
       ),
+      "@elevenhouse/design-system/components/Modal": fileURLToPath(
+        new URL("../../packages/design-system/src/components/Modal/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/Modal.css": fileURLToPath(
+        new URL("../../packages/design-system/src/components/Modal/Modal.css", import.meta.url)
+      ),
       "@elevenhouse/design-system/components/Card": fileURLToPath(
         new URL("../../packages/design-system/src/components/Card/index.ts", import.meta.url)
       ),

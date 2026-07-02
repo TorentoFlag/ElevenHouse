@@ -5,15 +5,21 @@ import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { useDictionaryCategoriesQuery } from "../../features/dictionary/model/useDictionaryCategoriesQuery";
 import { useDictionaryEntriesQuery } from "../../features/dictionary/model/useDictionaryEntriesQuery";
+import { ReferenceEntryModal } from "./components/ReferenceEntryModal";
 import { createReferenceEntriesQuery } from "./helpers/referenceEntriesQuery";
 import { createReferencePageSummary } from "./helpers/referencePageSummary";
-import { ReferencePageView } from "./ReferencePageView";
+import { ReferencePageView, type ReferenceAddEntryOptions } from "./ReferencePageView";
+
+type ReferenceEntryModalState = {
+  readonly titleSeed: string;
+};
 
 export function ReferencePage() {
   const { dictionary, locale } = useI18n<AstrologerCopy>();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedSource, setSelectedSource] = useState<DictionaryEntrySourceFilter>("all");
   const [search, setSearch] = useState("");
+  const [entryModal, setEntryModal] = useState<ReferenceEntryModalState | null>(null);
   const categoriesQuery = useDictionaryCategoriesQuery({ locale });
   const entriesQuery = useDictionaryEntriesQuery(
     createReferenceEntriesQuery({
@@ -37,31 +43,49 @@ export function ReferencePage() {
 
   useDocumentTitle(dictionary.reference.documentTitle);
 
+  const openEntryModal = (options: ReferenceAddEntryOptions = {}) => {
+    setEntryModal({
+      titleSeed: options.titleSeed ?? ""
+    });
+  };
+
   return (
-    <ReferencePageView
-      copy={dictionary.reference}
-      categories={summary.categories}
-      entries={summary.entries}
-      catalogTotal={summary.catalogTotal}
-      sourceCounts={summary.sourceCounts}
-      selectedCategoryId={selectedCategoryId}
-      selectedSource={selectedSource}
-      search={search}
-      isLoading={categoriesQuery.isLoading || entriesQuery.isLoading}
-      isError={categoriesQuery.isError || entriesQuery.isError}
-      resultsMotionKey={currentResultsMotionKey}
-      isResultsUpdating={entriesQuery.isPlaceholderData && entriesQuery.isFetching}
-      onCategoryChange={setSelectedCategoryId}
-      onSourceChange={setSelectedSource}
-      onSearchChange={setSearch}
-      onReset={() => {
-        setSelectedCategoryId(null);
-        setSelectedSource("all");
-        setSearch("");
-      }}
-      onAdd={() => undefined}
-      onEditEntry={() => undefined}
-      onDeleteEntry={() => undefined}
-    />
+    <>
+      <ReferencePageView
+        copy={dictionary.reference}
+        categories={summary.categories}
+        entries={summary.entries}
+        catalogTotal={summary.catalogTotal}
+        sourceCounts={summary.sourceCounts}
+        selectedCategoryId={selectedCategoryId}
+        selectedSource={selectedSource}
+        search={search}
+        isLoading={categoriesQuery.isLoading || entriesQuery.isLoading}
+        isError={categoriesQuery.isError || entriesQuery.isError}
+        resultsMotionKey={currentResultsMotionKey}
+        isResultsUpdating={entriesQuery.isPlaceholderData && entriesQuery.isFetching}
+        onCategoryChange={setSelectedCategoryId}
+        onSourceChange={setSelectedSource}
+        onSearchChange={setSearch}
+        onReset={() => {
+          setSelectedCategoryId(null);
+          setSelectedSource("all");
+          setSearch("");
+        }}
+        onAdd={openEntryModal}
+        onEditEntry={() => undefined}
+        onDeleteEntry={() => undefined}
+      />
+      {entryModal && (
+        <ReferenceEntryModal
+          copy={dictionary.reference.entryModal}
+          categories={summary.categories}
+          locale={locale}
+          selectedCategoryId={selectedCategoryId}
+          titleSeed={entryModal.titleSeed}
+          onClose={() => setEntryModal(null)}
+        />
+      )}
+    </>
   );
 }

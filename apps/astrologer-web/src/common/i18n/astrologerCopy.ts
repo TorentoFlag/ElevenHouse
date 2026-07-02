@@ -78,6 +78,22 @@ export type AstrologerCopy = {
       editLabel: string;
       deleteLabel: string;
     };
+    entryModal: {
+      title: string;
+      closeLabel: string;
+      categoryLabel: string;
+      titleLabel: string;
+      titlePlaceholder: string;
+      contentLabel: string;
+      contentPlaceholder: string;
+      aiDraftLabel: string;
+      aiDraftTitle: string;
+      cancelLabel: string;
+      saveLabel: string;
+      savingLabel: string;
+      genericError: string;
+      aiDraftTemplate: string;
+    };
     emptyLabel: string;
     emptyAddLabel: string;
     loadingLabel: string;
@@ -279,6 +295,23 @@ export const astrologerCopyByLocale = {
         editLabel: "Изменить",
         deleteLabel: "Удалить"
       },
+      entryModal: {
+        title: "Новая трактовка",
+        closeLabel: "Закрыть модалку добавления трактовки",
+        categoryLabel: "Категория",
+        titleLabel: "Название",
+        titlePlaceholder: "Напр. Солнце в Овне",
+        contentLabel: "Текст трактовки",
+        contentPlaceholder: "Ваша трактовка...",
+        aiDraftLabel: "AI-черновик",
+        aiDraftTitle: "AI набросает черновик по заголовку — отредактируйте под свой стиль",
+        cancelLabel: "Отмена",
+        saveLabel: "Сохранить",
+        savingLabel: "Сохраняем",
+        genericError: "Не удалось сохранить трактовку. Попробуйте ещё раз.",
+        aiDraftTemplate:
+          "Черновик для «{title}»: опишите ключевое значение, сильные проявления, возможные сложности и то, как эта тема раскрывается в карте."
+      },
       emptyLabel: "Ничего не найдено",
       emptyAddLabel: "Добавить трактовку",
       loadingLabel: "Загружаем справочники",
@@ -424,6 +457,23 @@ export const astrologerCopyByLocale = {
       entryActions: {
         editLabel: "Edit",
         deleteLabel: "Delete"
+      },
+      entryModal: {
+        title: "New interpretation",
+        closeLabel: "Close add interpretation modal",
+        categoryLabel: "Category",
+        titleLabel: "Title",
+        titlePlaceholder: "E.g. Sun in Aries",
+        contentLabel: "Interpretation text",
+        contentPlaceholder: "Your interpretation...",
+        aiDraftLabel: "AI draft",
+        aiDraftTitle: "AI drafts text from the title — edit it to match your style",
+        cancelLabel: "Cancel",
+        saveLabel: "Save",
+        savingLabel: "Saving",
+        genericError: "Could not save the interpretation. Try again.",
+        aiDraftTemplate:
+          "Draft for “{title}”: describe the core meaning, strong expressions, possible challenges, and how this theme unfolds in the chart."
       },
       emptyLabel: "No interpretations found",
       emptyAddLabel: "Add interpretation",

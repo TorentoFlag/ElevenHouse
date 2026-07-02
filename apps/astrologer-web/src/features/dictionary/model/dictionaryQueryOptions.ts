@@ -1,5 +1,10 @@
-import type { DictionaryEntriesQuery, ListDictionaryCategoriesQuery } from "@elevenhouse/contracts";
-import { keepPreviousData } from "@tanstack/react-query";
+import type {
+  CreateDictionaryCustomEntryRequest,
+  DictionaryEntriesQuery,
+  ListDictionaryCategoriesQuery
+} from "@elevenhouse/contracts";
+import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
+import { createDictionaryCustomEntry } from "../api/createDictionaryCustomEntry";
 import { listDictionaryCategories } from "../api/listDictionaryCategories";
 import { listDictionaryEntries } from "../api/listDictionaryEntries";
 import { dictionaryQueryKeys } from "./dictionaryQueryKeys";
@@ -16,5 +21,17 @@ export function dictionaryEntriesQueryOptions(query: DictionaryEntriesQuery) {
     queryKey: dictionaryQueryKeys.entries(query),
     queryFn: () => listDictionaryEntries(query),
     placeholderData: keepPreviousData
+  };
+}
+
+export function createDictionaryCustomEntryMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: CreateDictionaryCustomEntryRequest) => createDictionaryCustomEntry(input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: dictionaryQueryKeys.all()
+      })
   };
 }

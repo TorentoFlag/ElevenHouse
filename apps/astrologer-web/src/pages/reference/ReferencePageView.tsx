@@ -30,6 +30,10 @@ import styles from "./ReferencePage.module.css";
 
 type ReferencePageCopy = AstrologerCopy["reference"];
 
+export type ReferenceAddEntryOptions = {
+  readonly titleSeed?: string;
+};
+
 export type ReferencePageViewProps = {
   copy: ReferencePageCopy;
   catalogTotal: number;
@@ -47,7 +51,7 @@ export type ReferencePageViewProps = {
   onSourceChange: (source: DictionaryEntrySourceFilter) => void;
   onSearchChange: (search: string) => void;
   onReset: () => void;
-  onAdd: () => void;
+  onAdd: (options?: ReferenceAddEntryOptions) => void;
   onEditEntry: (entry: DictionaryEffectiveEntryResponse) => void;
   onDeleteEntry: (entry: DictionaryEffectiveEntryResponse) => void;
 };
@@ -137,7 +141,7 @@ export function ReferencePageView({
           title={copy.addLabel}
           startIcon={<Plus width={15} height={15} aria-hidden="true" />}
           data-reference-toolbar-action="add"
-          onClick={onAdd}
+          onClick={() => onAdd()}
         />
       </header>
 
@@ -204,7 +208,7 @@ export function ReferencePageView({
                 <button
                   className={`${styles.button} ${styles.buttonGhost}`}
                   type="button"
-                  onClick={onAdd}
+                  onClick={() => onAdd({ titleSeed: search })}
                 >
                   {copy.emptyAddLabel}
                 </button>

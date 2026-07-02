@@ -1,0 +1,250 @@
+import { Children, isValidElement, type ReactElement } from "react";
+import { Chip } from "@elevenhouse/design-system/components/Chip";
+import { Modal } from "@elevenhouse/design-system/components/Modal";
+import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
+import { describe, expect, it, vi } from "vitest";
+import {
+  ReferenceEntryModalView,
+  type ReferenceEntryModalCopy,
+  type ReferenceEntryModalDraft
+} from "./ReferenceEntryModalView";
+import styles from "./ReferenceEntryModal.module.css";
+
+const copy = {
+  title: "Новая трактовка",
+  closeLabel: "Закрыть",
+  categoryLabel: "Категория",
+  titleLabel: "Название",
+  titlePlaceholder: "Напр. Солнце в Овне",
+  contentLabel: "Текст трактовки",
+  contentPlaceholder: "Ваша трактовка...",
+  aiDraftLabel: "AI-черновик",
+  aiDraftTitle: "AI набросает черновик по заголовку — отредактируйте под свой стиль",
+  cancelLabel: "Отмена",
+  saveLabel: "Сохранить",
+  savingLabel: "Сохраняем",
+  genericError: "Не удалось сохранить трактовку",
+  aiDraftTemplate: "Черновик для «{title}»: опишите проявления положения."
+} satisfies ReferenceEntryModalCopy;
+
+const categories = [
+  {
+    id: "8e14390f-3db1-4d1c-9344-55679c778427",
+    code: "planets_in_signs",
+    name: "Планеты в знаках",
+    order: 10,
+    count: 4,
+    createdAt: "2026-07-01T10:00:00.000Z",
+    updatedAt: "2026-07-01T10:00:00.000Z"
+  },
+  {
+    id: "3f925316-1b0e-47c8-a41e-91796f321acb",
+    code: "planets_in_houses",
+    name: "Планеты в домах",
+    order: 20,
+    count: 3,
+    createdAt: "2026-07-01T10:00:00.000Z",
+    updatedAt: "2026-07-01T10:00:00.000Z"
+  }
+];
+
+describe("ReferenceEntryModalView", () => {
+  it("renders a controlled add-entry form inside the shared modal", () => {
+    const draft = {
+      categoryId: categories[0]?.id ?? "",
+      title: "Венера в Близнецах",
+      content: "Любовь становится легкой, живой и связанной с общением."
+    } satisfies ReferenceEntryModalDraft;
+    const onClose = vi.fn();
+    const onDraftChange = vi.fn();
+    const onSubmit = vi.fn();
+    const onCreateAiDraft = vi.fn();
+
+    const view = ReferenceEntryModalView({
+      copy,
+      categories,
+      draft,
+      canSubmit: true,
+      isSaving: false,
+      errorMessage: null,
+      onClose,
+      onDraftChange,
+      onSubmit,
+      onCreateAiDraft
+    });
+
+    expect(view.type).toBe(Modal);
+    expect(view.props.title).toBe("Новая трактовка");
+    expect(view.props.closeLabel).toBe("Закрыть");
+    expect(view.props.onClose).toBe(onClose);
+
+    const form = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-form");
+    expect(form.props.onSubmit).toBeDefined();
+    form.props.onSubmit({ preventDefault: vi.fn() });
+    expect(onSubmit).toHaveBeenCalled();
+
+    const categoryButtons = findElementsByDataAttribute(
+      view,
+      "data-reference-entry-modal-category-id"
+    );
+    expect(categoryButtons.map((button) => button.type)).toEqual([Chip, Chip]);
+    expect(categoryButtons.map((button) => button.props.label)).toEqual([
+      "Планеты в знаках",
+      "Планеты в домах"
+    ]);
+    expect(categoryButtons.map((button) => button.props.active)).toEqual([true, false]);
+    categoryButtons[1]?.props.onClick();
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      categoryId: categories[1]?.id
+    });
+
+    const titleInput = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-title");
+    expect(titleInput.props.value).toBe("Венера в Близнецах");
+    expect(titleInput.props.placeholder).toBe("Напр. Солнце в Овне");
+    titleInput.props.onChange({ currentTarget: { value: "Марс в Овне" } });
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      title: "Марс в Овне"
+    });
+
+    const contentInput = findRequiredElementByDataAttribute(
+      view,
+      "data-reference-entry-modal-content"
+    );
+    expect(contentInput.props.value).toBe(
+      "Любовь становится легкой, живой и связанной с общением."
+    );
+    contentInput.props.onChange({ currentTarget: { value: "Новый текст" } });
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      content: "Новый текст"
+    });
+
+    const aiButton = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-ai");
+    expect(aiButton.type).toBe("button");
+    expect(aiButton.props.className).toBe(styles.aiDraftButton);
+    expect(aiButton.props.title).toBe(
+      "AI набросает черновик по заголовку — отредактируйте под свой стиль"
+    );
+    expect(findRequiredElementByType(aiButton, Sparkle).props.width).toBe(12);
+    expect(JSON.stringify(aiButton.props.children)).toContain("AI-черновик");
+    aiButton.props.onClick();
+    expect(onCreateAiDraft).toHaveBeenCalled();
+
+    const cancelButton = findRequiredElementByDataAttribute(
+      view,
+      "data-reference-entry-modal-cancel"
+    );
+    cancelButton.props.onClick();
+    expect(onClose).toHaveBeenCalled();
+
+    const submitButton = findRequiredElementByDataAttribute(
+      view,
+      "data-reference-entry-modal-submit"
+    );
+    expect(submitButton.props.disabled).toBe(false);
+    expect(submitButton.props.title).toBe("Сохранить");
+  });
+
+  it("disables submit while the draft is invalid or saving", () => {
+    const view = ReferenceEntryModalView({
+      copy,
+      categories,
+      draft: {
+        categoryId: "",
+        title: "",
+        content: ""
+      },
+      canSubmit: false,
+      isSaving: true,
+      errorMessage: "Сервер недоступен",
+      onClose: vi.fn(),
+      onDraftChange: vi.fn(),
+      onSubmit: vi.fn(),
+      onCreateAiDraft: vi.fn()
+    });
+
+    expect(JSON.stringify(view.props.children)).toContain("Сервер недоступен");
+
+    const submitButton = findRequiredElementByDataAttribute(
+      view,
+      "data-reference-entry-modal-submit"
+    );
+    expect(submitButton.props.disabled).toBe(true);
+    expect(submitButton.props.title).toBe("Сохраняем");
+  });
+});
+
+type TestElementProps = {
+  "aria-pressed"?: boolean;
+  children?: unknown;
+  closeLabel?: string;
+  disabled?: boolean;
+  className?: string;
+  "data-reference-entry-modal-ai"?: string;
+  "data-reference-entry-modal-cancel"?: string;
+  "data-reference-entry-modal-category-id"?: string;
+  "data-reference-entry-modal-content"?: string;
+  "data-reference-entry-modal-form"?: string;
+  "data-reference-entry-modal-submit"?: string;
+  "data-reference-entry-modal-title"?: string;
+  active?: boolean;
+  label?: string;
+  onChange: (event: { currentTarget: { value: string } }) => void;
+  onClick: () => void;
+  onClose?: () => void;
+  onSubmit: (event: { preventDefault: () => void }) => void;
+  placeholder?: string;
+  startIcon: { type: unknown };
+  title?: string;
+  value?: string;
+  width?: number;
+};
+
+function findRequiredElementByType(root: unknown, type: unknown) {
+  const element = findAllElements(root).find((candidate) => candidate.type === type);
+  if (!element) {
+    throw new Error("Expected matching element type");
+  }
+
+  return element;
+}
+
+function findAllElements(root: unknown) {
+  const matches: Array<ReactElement<TestElementProps>> = [];
+
+  visitElements(root, (element) => matches.push(element));
+
+  return matches;
+}
+
+function findRequiredElementByDataAttribute(root: unknown, attribute: keyof TestElementProps) {
+  const element = findElementsByDataAttribute(root, attribute)[0];
+  if (!element) {
+    throw new Error(`Expected element with ${attribute}`);
+  }
+
+  return element;
+}
+
+function findElementsByDataAttribute(root: unknown, attribute: keyof TestElementProps) {
+  const matches: Array<ReactElement<TestElementProps>> = [];
+
+  visitElements(root, (element) => {
+    if (element.props[attribute]) {
+      matches.push(element);
+    }
+  });
+
+  return matches;
+}
+
+function visitElements(root: unknown, visitor: (element: ReactElement<TestElementProps>) => void) {
+  if (!isValidElement<TestElementProps>(root)) {
+    return;
+  }
+
+  visitor(root);
+  Children.forEach(root.props.children, (child) => visitElements(child, visitor));
+}

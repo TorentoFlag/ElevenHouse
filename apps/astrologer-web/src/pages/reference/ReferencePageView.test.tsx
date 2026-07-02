@@ -38,6 +38,22 @@ const copy = {
     editLabel: "Изменить",
     deleteLabel: "Удалить"
   },
+  entryModal: {
+    title: "Новая трактовка",
+    closeLabel: "Закрыть модалку добавления трактовки",
+    categoryLabel: "Категория",
+    titleLabel: "Название",
+    titlePlaceholder: "Напр. Солнце в Овне",
+    contentLabel: "Текст трактовки",
+    contentPlaceholder: "Ваша трактовка...",
+    aiDraftLabel: "AI-черновик",
+    aiDraftTitle: "AI набросает черновик по заголовку — отредактируйте под свой стиль",
+    cancelLabel: "Отмена",
+    saveLabel: "Сохранить",
+    savingLabel: "Сохраняем",
+    genericError: "Не удалось сохранить трактовку. Попробуйте ещё раз.",
+    aiDraftTemplate: "Черновик для «{title}»: опишите проявления положения."
+  },
   emptyLabel: "Ничего не найдено",
   emptyAddLabel: "Добавить трактовку",
   loadingLabel: "Загружаем справочники",
