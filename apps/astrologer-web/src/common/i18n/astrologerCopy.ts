@@ -85,29 +85,7 @@ export type AstrologerCopy = {
       confirmLabel: string;
       cancelLabel: string;
     };
-    entryModal: {
-      title: string;
-      closeLabel: string;
-      categoryLabel: string;
-      titleLabel: string;
-      titlePlaceholder: string;
-      contentLabel: string;
-      contentPlaceholder: string;
-      aiDraftLabel: string;
-      aiDraftTitle: string;
-      cancelLabel: string;
-      saveLabel: string;
-      savingLabel: string;
-      genericError: string;
-      aiDraftTemplate: string;
-      validation: {
-        categoryRequired: string;
-        titleRequired: string;
-        titleMaxLength: string;
-        contentRequired: string;
-        contentMaxLength: string;
-      };
-    };
+    entryModal: ReferenceEntryModalCopy;
     emptyLabel: string;
     emptyAddLabel: string;
     loadingLabel: string;
@@ -167,6 +145,50 @@ export type AppShellNavigationCopy = {
   items: AppShellNavigationItemCopy[];
   footerItems: AppShellNavigationItemCopy[];
 };
+
+type ReferenceEntryModalCommonCopy = {
+  categoryLabel: string;
+  titleLabel: string;
+  titlePlaceholder: string;
+  contentLabel: string;
+  contentPlaceholder: string;
+  aiDraftLabel: string;
+  aiDraftTitle: string;
+  cancelLabel: string;
+  saveLabel: string;
+  savingLabel: string;
+  genericError: string;
+  aiDraftTemplate: string;
+  validation: {
+    categoryRequired: string;
+    titleRequired: string;
+    titleMaxLength: string;
+    contentRequired: string;
+    contentMaxLength: string;
+  };
+};
+
+export type ReferenceEntryModalCopy = ReferenceEntryModalCommonCopy & {
+  title: string;
+  closeLabel: string;
+  createTitle?: string;
+  editTitle?: string;
+  createCloseLabel?: string;
+  editCloseLabel?: string;
+};
+
+function createReferenceEntryModalCompatibilityCopy({
+  createTitle,
+  createCloseLabel
+}: {
+  readonly createTitle: string;
+  readonly createCloseLabel: string;
+}): Pick<ReferenceEntryModalCopy, "title" | "closeLabel"> {
+  return {
+    title: createTitle,
+    closeLabel: createCloseLabel
+  };
+}
 
 export const astrologerCopyByLocale = {
   ru: {
@@ -318,8 +340,14 @@ export const astrologerCopyByLocale = {
         cancelLabel: "Отмена"
       },
       entryModal: {
-        title: "Новая трактовка",
-        closeLabel: "Закрыть модалку добавления трактовки",
+        createTitle: "Новая трактовка",
+        editTitle: "Редактировать трактовку",
+        createCloseLabel: "Закрыть модалку добавления трактовки",
+        editCloseLabel: "Закрыть модалку редактирования трактовки",
+        ...createReferenceEntryModalCompatibilityCopy({
+          createTitle: "Новая трактовка",
+          createCloseLabel: "Закрыть модалку добавления трактовки"
+        }),
         categoryLabel: "Категория",
         titleLabel: "Название",
         titlePlaceholder: "Напр. Солнце в Овне",
@@ -496,8 +524,14 @@ export const astrologerCopyByLocale = {
         cancelLabel: "Cancel"
       },
       entryModal: {
-        title: "New interpretation",
-        closeLabel: "Close add interpretation modal",
+        createTitle: "New interpretation",
+        editTitle: "Edit interpretation",
+        createCloseLabel: "Close add interpretation modal",
+        editCloseLabel: "Close edit interpretation modal",
+        ...createReferenceEntryModalCompatibilityCopy({
+          createTitle: "New interpretation",
+          createCloseLabel: "Close add interpretation modal"
+        }),
         categoryLabel: "Category",
         titleLabel: "Title",
         titlePlaceholder: "E.g. Sun in Aries",

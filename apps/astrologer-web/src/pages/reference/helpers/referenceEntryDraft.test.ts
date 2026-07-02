@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { dictionaryContentMaxLength, dictionaryTitleMaxLength } from "@elevenhouse/contracts";
+import {
+  dictionaryContentMaxLength,
+  dictionaryTitleMaxLength,
+  type DictionaryEffectiveEntryResponse
+} from "@elevenhouse/contracts";
 import {
   createReferenceEntryAiDraft,
   createReferenceEntryDraft,
+  createReferenceEntryDraftFromEntry,
+  createReferenceEntryUpdatePayload,
+  createReferencePlatformEntryOverridePayload,
   isReferenceEntryDraftSubmittable,
   normalizeReferenceEntryDraft,
   resolveReferenceEntryVisibleFieldErrors,
@@ -38,6 +45,21 @@ const validationCopy = {
   contentMaxLength: "Текст не должен быть длиннее {max} символов"
 };
 
+const entry = {
+  id: "f83eb694-fc40-446b-9d60-1e64f8e74dc4",
+  categoryId: categories[0]?.id ?? "",
+  categoryCode: "planets_in_signs",
+  code: "venus_gemini",
+  locale: "ru",
+  source: "modified",
+  title: "Венера в Близнецах",
+  content: "Любопытство, легкость контакта и интерес к диалогу.",
+  platformEntryId: "e9f77fcf-47f0-4da6-89cd-b601af98d673",
+  astrologerEntryId: "8a7a6d1f-1766-445a-b378-d49993ee3e49",
+  createdAt: "2026-07-01T10:00:00.000Z",
+  updatedAt: "2026-07-01T10:00:00.000Z"
+} satisfies DictionaryEffectiveEntryResponse;
+
 describe("reference entry draft helpers", () => {
   it("prefills a new draft from the selected category and optional title seed", () => {
     expect(
@@ -50,6 +72,32 @@ describe("reference entry draft helpers", () => {
       categoryId: categories[1]?.id,
       title: "Венера в Близнецах",
       content: ""
+    });
+  });
+
+  it("prefills an edit draft from an effective dictionary entry", () => {
+    expect(createReferenceEntryDraftFromEntry(entry)).toEqual({
+      categoryId: entry.categoryId,
+      title: entry.title,
+      content: entry.content
+    });
+  });
+
+  it("creates normalized update payloads for custom and platform entries", () => {
+    const draft = {
+      categoryId: categories[0]?.id ?? "",
+      title: " Венера в Близнецах ",
+      content: " Новая редакция "
+    };
+
+    expect(createReferenceEntryUpdatePayload(draft)).toEqual({
+      categoryId: draft.categoryId,
+      title: "Венера в Близнецах",
+      content: "Новая редакция"
+    });
+    expect(createReferencePlatformEntryOverridePayload(draft)).toEqual({
+      title: "Венера в Близнецах",
+      content: "Новая редакция"
     });
   });
 

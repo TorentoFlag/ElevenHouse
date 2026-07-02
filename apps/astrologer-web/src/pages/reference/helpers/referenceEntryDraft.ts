@@ -3,6 +3,7 @@ import {
   dictionaryContentMaxLength,
   dictionaryTitleMaxLength,
   type DictionaryCategoryResponse,
+  type DictionaryEffectiveEntryResponse,
   type DictionaryLocale
 } from "@elevenhouse/contracts";
 
@@ -141,6 +142,32 @@ export function normalizeReferenceEntryDraft(draft: ReferenceEntryDraft): Refere
     categoryId: draft.categoryId,
     title: draft.title.trim(),
     content: draft.content.trim()
+  };
+}
+
+export function createReferenceEntryDraftFromEntry(
+  entry: DictionaryEffectiveEntryResponse
+): ReferenceEntryDraft {
+  return {
+    categoryId: entry.categoryId,
+    title: entry.title,
+    content: entry.content
+  };
+}
+
+export function createReferenceEntryUpdatePayload(draft: ReferenceEntryDraft): ReferenceEntryDraft {
+  return normalizeReferenceEntryDraft(draft);
+}
+
+export function createReferencePlatformEntryOverridePayload(draft: ReferenceEntryDraft): Pick<
+  ReferenceEntryDraft,
+  "title" | "content"
+> {
+  const normalizedDraft = normalizeReferenceEntryDraft(draft);
+
+  return {
+    title: normalizedDraft.title,
+    content: normalizedDraft.content
   };
 }
 
