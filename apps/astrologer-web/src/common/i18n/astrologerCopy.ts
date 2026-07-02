@@ -85,7 +85,7 @@ export type AstrologerCopy = {
       confirmLabel: string;
       cancelLabel: string;
     };
-    entryModal: ReferenceEntryModalCopy;
+    entryModal: ReferenceEntryModalCopy | ReferenceEntryModalLegacyCompatibilityCopy;
     emptyLabel: string;
     emptyAddLabel: string;
     loadingLabel: string;
@@ -168,13 +168,16 @@ type ReferenceEntryModalCommonCopy = {
   };
 };
 
-export type ReferenceEntryModalCopy = ReferenceEntryModalCommonCopy & {
+type ReferenceEntryModalLegacyCompatibilityCopy = ReferenceEntryModalCommonCopy & {
   title: string;
   closeLabel: string;
-  createTitle?: string;
-  editTitle?: string;
-  createCloseLabel?: string;
-  editCloseLabel?: string;
+};
+
+export type ReferenceEntryModalCopy = ReferenceEntryModalLegacyCompatibilityCopy & {
+  createTitle: string;
+  editTitle: string;
+  createCloseLabel: string;
+  editCloseLabel: string;
 };
 
 function createReferenceEntryModalCompatibilityCopy({
