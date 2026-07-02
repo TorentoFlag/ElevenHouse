@@ -1,0 +1,2 @@
+export const PRODUCT_STORE = Symbol("PRODUCT_STORE");
+export const PRODUCT_ANALYTICS_READER = Symbol("PRODUCT_ANALYTICS_READER");
