@@ -92,8 +92,6 @@ vi.mock("./components/ReferenceEntryModal", () => ({
 }));
 
 const entryModalCopy = {
-  title: "Новая трактовка",
-  closeLabel: "Закрыть",
   createTitle: "Новая трактовка",
   editTitle: "Редактировать трактовку",
   createCloseLabel: "Закрыть модалку добавления трактовки",
@@ -109,7 +107,6 @@ const entryModalCopy = {
   saveLabel: "Сохранить",
   savingLabel: "Сохраняем",
   genericError: "Не удалось сохранить трактовку",
-  aiDraftTemplate: "Черновик для «{title}»: опишите проявления положения.",
   validation: {
     categoryRequired: "Выберите категорию",
     titleRequired: "Введите название",

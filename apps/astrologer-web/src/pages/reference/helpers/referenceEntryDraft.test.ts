@@ -12,6 +12,7 @@ import {
   isReferenceEntryDraftSubmittable,
   normalizeReferenceEntryDraft,
   resolveReferenceEntryVisibleFieldErrors,
+  shouldApplyReferenceAiDraftResponse,
   validateReferenceEntryDraft
 } from "./referenceEntryDraft";
 
@@ -98,6 +99,42 @@ describe("reference entry draft helpers", () => {
       title: "Венера в Близнецах",
       content: "Новая редакция"
     });
+  });
+
+  it("applies AI draft responses only to the same unchanged draft snapshot", () => {
+    const requestDraft = {
+      categoryId: categories[0]?.id ?? "",
+      title: " Солнце в Овне ",
+      content: "Manual text"
+    };
+
+    expect(
+      shouldApplyReferenceAiDraftResponse({
+        currentDraft: {
+          ...requestDraft,
+          title: "Солнце в Овне"
+        },
+        requestDraft
+      })
+    ).toBe(true);
+    expect(
+      shouldApplyReferenceAiDraftResponse({
+        currentDraft: {
+          ...requestDraft,
+          categoryId: categories[1]?.id ?? ""
+        },
+        requestDraft
+      })
+    ).toBe(false);
+    expect(
+      shouldApplyReferenceAiDraftResponse({
+        currentDraft: {
+          ...requestDraft,
+          content: "Manual text edited while AI was pending"
+        },
+        requestDraft
+      })
+    ).toBe(false);
   });
 
   it("falls back to the first available category when every-category mode is active", () => {

@@ -171,6 +171,20 @@ export function createReferencePlatformEntryOverridePayload(draft: ReferenceEntr
   };
 }
 
+export function shouldApplyReferenceAiDraftResponse({
+  currentDraft,
+  requestDraft
+}: {
+  readonly currentDraft: ReferenceEntryDraft;
+  readonly requestDraft: ReferenceEntryDraft;
+}): boolean {
+  return (
+    currentDraft.categoryId === requestDraft.categoryId &&
+    currentDraft.title.trim() === requestDraft.title.trim() &&
+    currentDraft.content === requestDraft.content
+  );
+}
+
 function formatValidationMessage(template: string, max: number): string {
   return template.replace("{max}", String(max));
 }

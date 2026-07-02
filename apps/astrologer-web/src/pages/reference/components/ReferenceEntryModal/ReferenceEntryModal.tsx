@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   DictionaryCategoryResponse,
   DictionaryEffectiveEntryResponse,
@@ -15,10 +15,14 @@ import {
   createReferencePlatformEntryOverridePayload,
   normalizeReferenceEntryDraft,
   resolveReferenceEntryVisibleFieldErrors,
+  shouldApplyReferenceAiDraftResponse,
   type ReferenceEntryDraftTouchedFields,
   validateReferenceEntryDraft
 } from "../../helpers/referenceEntryDraft";
-import { ReferenceEntryModalView, type ReferenceEntryModalCopy } from "./ReferenceEntryModalView";
+import {
+  ReferenceEntryModalView,
+  type ReferenceEntryModalBaseCopy
+} from "./ReferenceEntryModalView";
 
 type ReferenceEntryModalCreateMode = {
   readonly mode: "create";
@@ -32,7 +36,7 @@ type ReferenceEntryModalEditMode = {
 };
 
 export type ReferenceEntryModalProps = {
-  readonly copy: ReferenceEntryModalCopy;
+  readonly copy: ReferenceEntryModalBaseCopy;
   readonly categories: DictionaryCategoryResponse[];
   readonly locale: DictionaryLocale;
   readonly onClose: () => void;
@@ -55,6 +59,9 @@ export function ReferenceEntryModal(props: ReferenceEntryModalProps) {
     content: false
   });
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
+  const latestDraftRef = useRef(draft);
+  const aiDraftRequestIdRef = useRef(0);
   const createEntryMutation = useCreateDictionaryCustomEntryMutation();
   const createAiDraftMutation = useCreateDictionaryAiDraftMutation();
   const updateCustomEntryMutation = useUpdateDictionaryCustomEntryMutation();
@@ -74,6 +81,7 @@ export function ReferenceEntryModal(props: ReferenceEntryModalProps) {
     touchedFields,
     submitAttempted
   });
+  latestDraftRef.current = draft;
 
   const updateDraft = (nextDraft: typeof draft) => {
     setDraft(nextDraft);
@@ -94,15 +102,17 @@ export function ReferenceEntryModal(props: ReferenceEntryModalProps) {
       isCreatingAiDraft={createAiDraftMutation.isPending}
       fieldErrors={visibleFieldErrors}
       errorMessage={
-        createEntryMutation.isError ||
+        submitErrorMessage ??
+        (createEntryMutation.isError ||
         updateCustomEntryMutation.isError ||
         updatePlatformEntryMutation.isError
           ? copy.genericError
-          : null
+          : null)
       }
       aiErrorMessage={createAiDraftMutation.isError ? copy.genericError : null}
       onClose={onClose}
       onDraftChange={(nextDraft, fieldName) => {
+        setSubmitErrorMessage(null);
         updateDraft(nextDraft);
 
         if (fieldName) {
@@ -114,23 +124,44 @@ export function ReferenceEntryModal(props: ReferenceEntryModalProps) {
           return;
         }
 
+        const requestId = aiDraftRequestIdRef.current + 1;
+        aiDraftRequestIdRef.current = requestId;
+        const requestDraft = {
+          categoryId: draft.categoryId,
+          title: draft.title.trim(),
+          content: draft.content
+        };
+
         createAiDraftMutation
           .mutateAsync({
-            categoryId: draft.categoryId,
+            categoryId: requestDraft.categoryId,
             locale,
-            title: draft.title
+            title: requestDraft.title
           })
           .then((response) => {
-            setDraft((currentDraft) => ({
+            const currentDraft = latestDraftRef.current;
+
+            if (
+              aiDraftRequestIdRef.current !== requestId ||
+              !shouldApplyReferenceAiDraftResponse({
+                currentDraft,
+                requestDraft
+              })
+            ) {
+              return;
+            }
+
+            setDraft({
               ...currentDraft,
               content: response.content
-            }));
+            });
             setTouchedFields((current) => ({ ...current, content: true }));
           })
           .catch(() => undefined);
       }}
       onSubmit={() => {
         setSubmitAttempted(true);
+        setSubmitErrorMessage(null);
 
         if (!canSubmit || isSaving) {
           return;
@@ -148,7 +179,12 @@ export function ReferenceEntryModal(props: ReferenceEntryModalProps) {
         }
 
         if (props.entry.source === "custom") {
-          const entryId = props.entry.astrologerEntryId ?? props.entry.id;
+          const entryId = props.entry.astrologerEntryId;
+
+          if (!entryId) {
+            setSubmitErrorMessage(copy.genericError);
+            return;
+          }
 
           updateCustomEntryMutation
             .mutateAsync({
@@ -160,15 +196,18 @@ export function ReferenceEntryModal(props: ReferenceEntryModalProps) {
           return;
         }
 
-        if (props.entry.platformEntryId) {
-          updatePlatformEntryMutation
-            .mutateAsync({
-              platformEntryId: props.entry.platformEntryId,
-              ...createReferencePlatformEntryOverridePayload(draft)
-            })
-            .then(onClose)
-            .catch(() => undefined);
+        if (!props.entry.platformEntryId) {
+          setSubmitErrorMessage(copy.genericError);
+          return;
         }
+
+        updatePlatformEntryMutation
+          .mutateAsync({
+            platformEntryId: props.entry.platformEntryId,
+            ...createReferencePlatformEntryOverridePayload(draft)
+          })
+          .then(onClose)
+          .catch(() => undefined);
       }}
     />
   );

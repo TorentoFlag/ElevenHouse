@@ -24,9 +24,7 @@ const CONTENT_ERROR_ID = "reference-entry-modal-content-error";
 export type ReferenceEntryModalDraft = ReferenceEntryDraft;
 type ReferenceEntryModalDraftField = keyof ReferenceEntryDraftTouchedFields;
 
-export type ReferenceEntryModalCopy = {
-  readonly title: string;
-  readonly closeLabel: string;
+export type ReferenceEntryModalBaseCopy = {
   readonly createTitle: string;
   readonly editTitle: string;
   readonly createCloseLabel: string;
@@ -45,8 +43,16 @@ export type ReferenceEntryModalCopy = {
   readonly validation: ReferenceEntryDraftValidationCopy;
 };
 
+export type ReferenceEntryModalViewCopy = Omit<
+  ReferenceEntryModalBaseCopy,
+  "createTitle" | "editTitle" | "createCloseLabel" | "editCloseLabel"
+> & {
+  readonly title: string;
+  readonly closeLabel: string;
+};
+
 export type ReferenceEntryModalViewProps = {
-  readonly copy: ReferenceEntryModalCopy;
+  readonly copy: ReferenceEntryModalViewCopy;
   readonly categories: DictionaryCategoryResponse[];
   readonly draft: ReferenceEntryModalDraft;
   readonly isCategoryEditable: boolean;

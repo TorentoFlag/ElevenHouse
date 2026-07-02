@@ -168,26 +168,11 @@ type ReferenceEntryModalCommonCopy = {
 };
 
 export type ReferenceEntryModalCopy = ReferenceEntryModalCommonCopy & {
-  title: string;
-  closeLabel: string;
   createTitle: string;
   editTitle: string;
   createCloseLabel: string;
   editCloseLabel: string;
 };
-
-function createReferenceEntryModalCompatibilityCopy({
-  createTitle,
-  createCloseLabel
-}: {
-  readonly createTitle: string;
-  readonly createCloseLabel: string;
-}): Pick<ReferenceEntryModalCopy, "title" | "closeLabel"> {
-  return {
-    title: createTitle,
-    closeLabel: createCloseLabel
-  };
-}
 
 export const astrologerCopyByLocale = {
   ru: {
@@ -343,10 +328,6 @@ export const astrologerCopyByLocale = {
         editTitle: "Редактировать трактовку",
         createCloseLabel: "Закрыть модалку добавления трактовки",
         editCloseLabel: "Закрыть модалку редактирования трактовки",
-        ...createReferenceEntryModalCompatibilityCopy({
-          createTitle: "Новая трактовка",
-          createCloseLabel: "Закрыть модалку добавления трактовки"
-        }),
         categoryLabel: "Категория",
         titleLabel: "Название",
         titlePlaceholder: "Напр. Солнце в Овне",
@@ -525,10 +506,6 @@ export const astrologerCopyByLocale = {
         editTitle: "Edit interpretation",
         createCloseLabel: "Close add interpretation modal",
         editCloseLabel: "Close edit interpretation modal",
-        ...createReferenceEntryModalCompatibilityCopy({
-          createTitle: "New interpretation",
-          createCloseLabel: "Close add interpretation modal"
-        }),
         categoryLabel: "Category",
         titleLabel: "Title",
         titlePlaceholder: "E.g. Sun in Aries",

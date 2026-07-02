@@ -48,8 +48,6 @@ const copy = {
     cancelLabel: "Отмена"
   },
   entryModal: {
-    title: "Новая трактовка",
-    closeLabel: "Закрыть модалку добавления трактовки",
     createTitle: "Новая трактовка",
     editTitle: "Редактировать трактовку",
     createCloseLabel: "Закрыть модалку добавления трактовки",

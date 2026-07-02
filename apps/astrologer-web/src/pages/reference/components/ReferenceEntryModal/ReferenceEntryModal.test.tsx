@@ -5,7 +5,7 @@ import type {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReferenceEntryModal, type ReferenceEntryModalProps } from "./ReferenceEntryModal";
 import type {
-  ReferenceEntryModalCopy,
+  ReferenceEntryModalBaseCopy,
   ReferenceEntryModalViewProps
 } from "./ReferenceEntryModalView";
 
@@ -38,6 +38,7 @@ vi.mock("react", async () => {
 
   return {
     ...actual,
+    useRef: vi.fn((initialValue: unknown) => ({ current: initialValue })),
     useState: vi.fn((initialValue: unknown) => [
       typeof initialValue === "function" ? (initialValue as () => unknown)() : initialValue,
       vi.fn()
@@ -75,8 +76,6 @@ const astrologerEntryId = "f04a647d-649f-4d31-a4c8-1c7e5f79792c";
 const platformEntryId = "a138f7d0-6b2c-4f6d-89a9-6be4f756d133";
 
 const copy = {
-  title: "Новая трактовка",
-  closeLabel: "Закрыть",
   createTitle: "Новая трактовка",
   editTitle: "Редактировать трактовку",
   createCloseLabel: "Закрыть модалку добавления трактовки",
@@ -99,7 +98,7 @@ const copy = {
     contentRequired: "Введите текст трактовки",
     contentMaxLength: "Текст не должен быть длиннее {max} символов"
   }
-} satisfies ReferenceEntryModalCopy;
+} satisfies ReferenceEntryModalBaseCopy;
 
 const categories = [
   {
@@ -214,6 +213,50 @@ describe("ReferenceEntryModal", () => {
     expect(mocks.createEntryMutation.mutateAsync).not.toHaveBeenCalled();
     expect(mocks.updateCustomEntryMutation.mutateAsync).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fall back to the effective entry id when a custom entry has no astrologer entry id", async () => {
+    const onClose = vi.fn();
+    const view = ReferenceEntryModal({
+      copy,
+      categories,
+      locale: "ru",
+      mode: "edit",
+      entry: createEntry({
+        source: "custom"
+      }),
+      onClose
+    });
+
+    getViewProps(view).onSubmit();
+    await Promise.resolve();
+
+    expect(mocks.updateCustomEntryMutation.mutateAsync).not.toHaveBeenCalled();
+    expect(mocks.createEntryMutation.mutateAsync).not.toHaveBeenCalled();
+    expect(mocks.updatePlatformEntryMutation.mutateAsync).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("does not submit a platform edit without a platform entry id", async () => {
+    const onClose = vi.fn();
+    const view = ReferenceEntryModal({
+      copy,
+      categories,
+      locale: "ru",
+      mode: "edit",
+      entry: createEntry({
+        source: "platform"
+      }),
+      onClose
+    });
+
+    getViewProps(view).onSubmit();
+    await Promise.resolve();
+
+    expect(mocks.updatePlatformEntryMutation.mutateAsync).not.toHaveBeenCalled();
+    expect(mocks.createEntryMutation.mutateAsync).not.toHaveBeenCalled();
+    expect(mocks.updateCustomEntryMutation.mutateAsync).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("creates an AI draft through the mutation using current category, locale, and trimmed title", async () => {

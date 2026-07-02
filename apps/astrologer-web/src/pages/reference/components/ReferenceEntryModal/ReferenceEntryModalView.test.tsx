@@ -8,8 +8,8 @@ import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
 import { describe, expect, it, vi } from "vitest";
 import {
   ReferenceEntryModalView,
-  type ReferenceEntryModalCopy,
-  type ReferenceEntryModalDraft
+  type ReferenceEntryModalDraft,
+  type ReferenceEntryModalViewCopy
 } from "./ReferenceEntryModalView";
 import styles from "./ReferenceEntryModal.module.css";
 
@@ -21,10 +21,6 @@ const modalCss = readFileSync(
 const copy = {
   title: "Новая трактовка",
   closeLabel: "Закрыть",
-  createTitle: "Новая трактовка",
-  editTitle: "Редактировать трактовку",
-  createCloseLabel: "Закрыть модалку добавления трактовки",
-  editCloseLabel: "Закрыть модалку редактирования трактовки",
   categoryLabel: "Категория",
   titleLabel: "Название",
   titlePlaceholder: "Напр. Солнце в Овне",
@@ -43,7 +39,7 @@ const copy = {
     contentRequired: "Введите текст трактовки",
     contentMaxLength: "Текст не должен быть длиннее {max} символов"
   }
-} satisfies ReferenceEntryModalCopy;
+} satisfies ReferenceEntryModalViewCopy;
 
 const categories = [
   {

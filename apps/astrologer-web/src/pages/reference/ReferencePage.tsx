@@ -116,6 +116,7 @@ export function ReferencePage() {
       />
       {entryModal && entryModal.mode === "create" && (
         <ReferenceEntryModal
+          key={`create:${selectedCategoryId ?? "all"}:${entryModal.titleSeed}`}
           mode="create"
           copy={dictionary.reference.entryModal}
           categories={summary.categories}
@@ -127,6 +128,7 @@ export function ReferencePage() {
       )}
       {entryModal && entryModal.mode === "edit" && (
         <ReferenceEntryModal
+          key={`edit:${entryModal.entry.id}`}
           mode="edit"
           copy={dictionary.reference.entryModal}
           categories={summary.categories}
