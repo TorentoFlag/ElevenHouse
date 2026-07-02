@@ -4,6 +4,7 @@ import type {
   DictionaryEffectiveEntryResponse,
   DictionaryEntrySourceFilter
 } from "@elevenhouse/contracts";
+import { useDebounce } from "../../common/hooks/useDebounce";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { useDictionaryCategoriesQuery } from "../../features/dictionary/model/useDictionaryCategoriesQuery";
@@ -34,6 +35,7 @@ export function ReferencePage() {
   const [deleteConfirmationEntry, setDeleteConfirmationEntry] =
     useState<DictionaryEffectiveEntryResponse | null>(null);
   const [isResetConfirmationOpen, setIsResetConfirmationOpen] = useState(false);
+  const debouncedSearch = useDebounce(search, 700);
   const categoriesQuery = useDictionaryCategoriesQuery({ locale });
   const deleteEntryMutation = useDeleteDictionaryEntryMutation();
   const resetEntriesMutation = useResetDictionaryEntriesMutation();
@@ -42,7 +44,7 @@ export function ReferencePage() {
       locale,
       selectedCategoryId,
       selectedSource,
-      search
+      search: debouncedSearch
     })
   );
   const summary = createReferencePageSummary({
@@ -53,7 +55,7 @@ export function ReferencePage() {
   const currentResultsMotionKey =
     entriesQuery.isPlaceholderData && previousResultsMotionKeyRef.current
       ? previousResultsMotionKeyRef.current
-      : `${selectedCategoryId ?? "all"}:${selectedSource}:${search.trim()}:${entriesQuery.dataUpdatedAt}`;
+      : `${selectedCategoryId ?? "all"}:${selectedSource}:${debouncedSearch.trim()}:${entriesQuery.dataUpdatedAt}`;
 
   previousResultsMotionKeyRef.current = currentResultsMotionKey;
 

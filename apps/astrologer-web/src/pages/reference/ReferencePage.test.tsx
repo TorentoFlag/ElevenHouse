@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   referencePageView: vi.fn(),
   referenceEntryModal: vi.fn(),
   useI18n: vi.fn(),
+  useDebounce: vi.fn(),
   useDocumentTitle: vi.fn(),
   useDictionaryCategoriesQuery: vi.fn(),
   useDictionaryEntriesQuery: vi.fn(),
@@ -62,6 +63,10 @@ vi.mock("@elevenhouse/i18n", () => ({
 
 vi.mock("../../common/hooks/useDocumentTitle", () => ({
   useDocumentTitle: mocks.useDocumentTitle
+}));
+
+vi.mock("../../common/hooks/useDebounce", () => ({
+  useDebounce: mocks.useDebounce
 }));
 
 vi.mock("../../features/dictionary/model/useDictionaryCategoriesQuery", () => ({
@@ -217,6 +222,7 @@ describe("ReferencePage", () => {
       },
       locale: "ru"
     });
+    mocks.useDebounce.mockImplementation((value: string) => value);
     mocks.useDictionaryCategoriesQuery.mockReturnValue({
       data: { categories, total: 1 },
       isLoading: false,
@@ -311,6 +317,28 @@ describe("ReferencePage", () => {
     viewProps = getLatestMockProps<ReferencePageViewProps>(mocks.referencePageView);
     expect(viewProps.deleteConfirmationEntry).toBeNull();
     expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("keeps search input immediate while dictionary entries query uses debounced search", () => {
+    mocks.useDebounce.mockImplementation((value: string) => (value === "луна" ? "лу" : value));
+
+    renderPage();
+    let viewProps = getLatestMockProps<ReferencePageViewProps>(mocks.referencePageView);
+    viewProps.onSearchChange("луна");
+    mocks.createReferenceEntriesQuery.mockClear();
+
+    renderPage();
+
+    viewProps = getLatestMockProps<ReferencePageViewProps>(mocks.referencePageView);
+    expect(mocks.useDebounce).toHaveBeenLastCalledWith("луна", 700);
+    expect(mocks.createReferenceEntriesQuery).toHaveBeenLastCalledWith({
+      locale: "ru",
+      selectedCategoryId: null,
+      selectedSource: "all",
+      search: "лу"
+    });
+    expect(viewProps.search).toBe("луна");
+    expect(viewProps.resultsMotionKey).toBe("all:all:лу:1000");
   });
 });
 
