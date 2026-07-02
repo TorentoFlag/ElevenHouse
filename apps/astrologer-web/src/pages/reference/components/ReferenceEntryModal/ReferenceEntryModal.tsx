@@ -5,6 +5,8 @@ import {
   createReferenceEntryAiDraft,
   createReferenceEntryDraft,
   normalizeReferenceEntryDraft,
+  resolveReferenceEntryVisibleFieldErrors,
+  type ReferenceEntryDraftTouchedFields,
   validateReferenceEntryDraft
 } from "../../helpers/referenceEntryDraft";
 import { ReferenceEntryModalView, type ReferenceEntryModalCopy } from "./ReferenceEntryModalView";
@@ -33,6 +35,12 @@ export function ReferenceEntryModal({
       titleSeed
     })
   );
+  const [touchedFields, setTouchedFields] = useState<ReferenceEntryDraftTouchedFields>({
+    categoryId: false,
+    title: false,
+    content: false
+  });
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const createEntryMutation = useCreateDictionaryCustomEntryMutation();
   const validationState = validateReferenceEntryDraft({
     draft,
@@ -40,6 +48,15 @@ export function ReferenceEntryModal({
     copy: copy.validation
   });
   const canSubmit = validationState.canSubmit;
+  const visibleFieldErrors = resolveReferenceEntryVisibleFieldErrors({
+    fieldErrors: validationState.fieldErrors,
+    touchedFields,
+    submitAttempted
+  });
+
+  const updateDraft = (nextDraft: typeof draft) => {
+    setDraft(nextDraft);
+  };
 
   return (
     <ReferenceEntryModalView
@@ -48,10 +65,16 @@ export function ReferenceEntryModal({
       draft={draft}
       canSubmit={canSubmit}
       isSaving={createEntryMutation.isPending}
-      fieldErrors={validationState.fieldErrors}
+      fieldErrors={visibleFieldErrors}
       errorMessage={createEntryMutation.isError ? copy.genericError : null}
       onClose={onClose}
-      onDraftChange={setDraft}
+      onDraftChange={(nextDraft, fieldName) => {
+        updateDraft(nextDraft);
+
+        if (fieldName) {
+          setTouchedFields((current) => ({ ...current, [fieldName]: true }));
+        }
+      }}
       onCreateAiDraft={() => {
         const content = createReferenceEntryAiDraft({
           title: draft.title,
@@ -59,10 +82,13 @@ export function ReferenceEntryModal({
         });
 
         if (content) {
-          setDraft({ ...draft, content });
+          updateDraft({ ...draft, content });
+          setTouchedFields((current) => ({ ...current, content: true }));
         }
       }}
       onSubmit={() => {
+        setSubmitAttempted(true);
+
         if (!canSubmit || createEntryMutation.isPending) {
           return;
         }

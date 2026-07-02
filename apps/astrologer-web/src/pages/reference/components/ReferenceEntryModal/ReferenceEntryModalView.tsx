@@ -11,6 +11,7 @@ import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
 import type {
   ReferenceEntryDraft,
   ReferenceEntryDraftFieldErrors,
+  ReferenceEntryDraftTouchedFields,
   ReferenceEntryDraftValidationCopy
 } from "../../helpers/referenceEntryDraft";
 import styles from "./ReferenceEntryModal.module.css";
@@ -21,6 +22,7 @@ const CONTENT_TEXTAREA_ID = "reference-entry-modal-content";
 const CONTENT_ERROR_ID = "reference-entry-modal-content-error";
 
 export type ReferenceEntryModalDraft = ReferenceEntryDraft;
+type ReferenceEntryModalDraftField = keyof ReferenceEntryDraftTouchedFields;
 
 export type ReferenceEntryModalCopy = {
   readonly title: string;
@@ -49,7 +51,10 @@ export type ReferenceEntryModalViewProps = {
   readonly fieldErrors: ReferenceEntryDraftFieldErrors;
   readonly errorMessage: string | null;
   readonly onClose: () => void;
-  readonly onDraftChange: (draft: ReferenceEntryModalDraft) => void;
+  readonly onDraftChange: (
+    draft: ReferenceEntryModalDraft,
+    fieldName?: ReferenceEntryModalDraftField
+  ) => void;
   readonly onSubmit: () => void;
   readonly onCreateAiDraft: () => void;
 };
@@ -94,7 +99,7 @@ export function ReferenceEntryModalView({
                   type="button"
                   active={isActive}
                   data-reference-entry-modal-category-id={category.id}
-                  onClick={() => onDraftChange({ ...draft, categoryId: category.id })}
+                  onClick={() => onDraftChange({ ...draft, categoryId: category.id }, "categoryId")}
                 />
               );
             })}
@@ -116,7 +121,9 @@ export function ReferenceEntryModalView({
             placeholder={copy.titlePlaceholder}
             aria-invalid={fieldErrors.title ? true : undefined}
             aria-describedby={fieldErrors.title ? TITLE_ERROR_ID : undefined}
-            onChange={(event) => onDraftChange({ ...draft, title: event.currentTarget.value })}
+            onChange={(event) =>
+              onDraftChange({ ...draft, title: event.currentTarget.value }, "title")
+            }
           />
           {fieldErrors.title ? (
             <span className={styles.fieldError} id={TITLE_ERROR_ID}>
@@ -150,7 +157,9 @@ export function ReferenceEntryModalView({
             rows={5}
             aria-invalid={fieldErrors.content ? true : undefined}
             aria-describedby={fieldErrors.content ? CONTENT_ERROR_ID : undefined}
-            onChange={(event) => onDraftChange({ ...draft, content: event.currentTarget.value })}
+            onChange={(event) =>
+              onDraftChange({ ...draft, content: event.currentTarget.value }, "content")
+            }
           />
           {fieldErrors.content ? (
             <span className={styles.fieldError} id={CONTENT_ERROR_ID}>

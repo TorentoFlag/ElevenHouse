@@ -18,6 +18,12 @@ export type ReferenceEntryDraftFieldErrors = {
   readonly content?: string;
 };
 
+export type ReferenceEntryDraftTouchedFields = {
+  readonly categoryId: boolean;
+  readonly title: boolean;
+  readonly content: boolean;
+};
+
 export type ReferenceEntryDraftValidationCopy = {
   readonly categoryRequired: string;
   readonly titleRequired: string;
@@ -105,6 +111,28 @@ export function validateReferenceEntryDraft({
           }
         : {})
     }
+  };
+}
+
+export function resolveReferenceEntryVisibleFieldErrors({
+  fieldErrors,
+  touchedFields,
+  submitAttempted
+}: {
+  readonly fieldErrors: ReferenceEntryDraftFieldErrors;
+  readonly touchedFields: ReferenceEntryDraftTouchedFields;
+  readonly submitAttempted: boolean;
+}): ReferenceEntryDraftFieldErrors {
+  if (submitAttempted) {
+    return fieldErrors;
+  }
+
+  return {
+    ...(touchedFields.categoryId && fieldErrors.categoryId
+      ? { categoryId: fieldErrors.categoryId }
+      : {}),
+    ...(touchedFields.title && fieldErrors.title ? { title: fieldErrors.title } : {}),
+    ...(touchedFields.content && fieldErrors.content ? { content: fieldErrors.content } : {})
   };
 }
 

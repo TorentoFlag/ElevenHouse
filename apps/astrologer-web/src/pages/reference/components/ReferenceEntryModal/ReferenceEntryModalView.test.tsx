@@ -110,19 +110,25 @@ describe("ReferenceEntryModalView", () => {
     ]);
     expect(categoryButtons.map((button) => button.props.active)).toEqual([true, false]);
     categoryButtons[1]?.props.onClick();
-    expect(onDraftChange).toHaveBeenCalledWith({
-      ...draft,
-      categoryId: categories[1]?.id
-    });
+    expect(onDraftChange).toHaveBeenCalledWith(
+      {
+        ...draft,
+        categoryId: categories[1]?.id
+      },
+      "categoryId"
+    );
 
     const titleInput = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-title");
     expect(titleInput.props.value).toBe("Венера в Близнецах");
     expect(titleInput.props.placeholder).toBe("Напр. Солнце в Овне");
     titleInput.props.onChange({ currentTarget: { value: "Марс в Овне" } });
-    expect(onDraftChange).toHaveBeenCalledWith({
-      ...draft,
-      title: "Марс в Овне"
-    });
+    expect(onDraftChange).toHaveBeenCalledWith(
+      {
+        ...draft,
+        title: "Марс в Овне"
+      },
+      "title"
+    );
 
     const contentInput = findRequiredElementByDataAttribute(
       view,
@@ -132,10 +138,13 @@ describe("ReferenceEntryModalView", () => {
       "Любовь становится легкой, живой и связанной с общением."
     );
     contentInput.props.onChange({ currentTarget: { value: "Новый текст" } });
-    expect(onDraftChange).toHaveBeenCalledWith({
-      ...draft,
-      content: "Новый текст"
-    });
+    expect(onDraftChange).toHaveBeenCalledWith(
+      {
+        ...draft,
+        content: "Новый текст"
+      },
+      "content"
+    );
 
     const aiButton = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-ai");
     expect(aiButton.type).toBe("button");
@@ -278,6 +287,39 @@ describe("ReferenceEntryModalView", () => {
     expect(titleInput.props["aria-describedby"]).toBe("reference-entry-modal-title-error");
     expect(contentInput.props["aria-invalid"]).toBe(true);
     expect(contentInput.props["aria-describedby"]).toBe("reference-entry-modal-content-error");
+  });
+
+  it("keeps validation helper text hidden until the container decides errors are visible", () => {
+    const view = ReferenceEntryModalView({
+      copy,
+      categories,
+      draft: {
+        categoryId: "",
+        title: "",
+        content: ""
+      },
+      canSubmit: false,
+      isSaving: false,
+      fieldErrors: {},
+      errorMessage: null,
+      onClose: vi.fn(),
+      onDraftChange: vi.fn(),
+      onSubmit: vi.fn(),
+      onCreateAiDraft: vi.fn()
+    });
+
+    expect(JSON.stringify(view.props.children)).not.toContain("Введите название");
+
+    const titleInput = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-title");
+    const contentInput = findRequiredElementByDataAttribute(
+      view,
+      "data-reference-entry-modal-content"
+    );
+
+    expect(titleInput.props["aria-invalid"]).toBeUndefined();
+    expect(titleInput.props["aria-describedby"]).toBeUndefined();
+    expect(contentInput.props["aria-invalid"]).toBeUndefined();
+    expect(contentInput.props["aria-describedby"]).toBeUndefined();
   });
 });
 

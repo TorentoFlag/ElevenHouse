@@ -5,6 +5,7 @@ import {
   createReferenceEntryDraft,
   isReferenceEntryDraftSubmittable,
   normalizeReferenceEntryDraft,
+  resolveReferenceEntryVisibleFieldErrors,
   validateReferenceEntryDraft
 } from "./referenceEntryDraft";
 
@@ -160,6 +161,52 @@ describe("reference entry draft helpers", () => {
         copy: validationCopy
       }).fieldErrors.title
     ).toBe(`Название не должно быть длиннее ${dictionaryTitleMaxLength} символов`);
+  });
+
+  it("hides required helper text until the field is touched or submit is attempted", () => {
+    const validationState = validateReferenceEntryDraft({
+      draft: {
+        categoryId: categories[0]?.id ?? "",
+        title: "",
+        content: ""
+      },
+      locale: "ru",
+      copy: validationCopy
+    });
+
+    expect(
+      resolveReferenceEntryVisibleFieldErrors({
+        fieldErrors: validationState.fieldErrors,
+        touchedFields: {
+          categoryId: false,
+          title: false,
+          content: false
+        },
+        submitAttempted: false
+      })
+    ).toEqual({});
+    expect(
+      resolveReferenceEntryVisibleFieldErrors({
+        fieldErrors: validationState.fieldErrors,
+        touchedFields: {
+          categoryId: false,
+          title: true,
+          content: false
+        },
+        submitAttempted: false
+      })
+    ).toEqual({ title: "Введите название" });
+    expect(
+      resolveReferenceEntryVisibleFieldErrors({
+        fieldErrors: validationState.fieldErrors,
+        touchedFields: {
+          categoryId: false,
+          title: false,
+          content: false
+        },
+        submitAttempted: true
+      })
+    ).toEqual(validationState.fieldErrors);
   });
 
   it("creates an AI draft from the localized template only when the title is present", () => {
