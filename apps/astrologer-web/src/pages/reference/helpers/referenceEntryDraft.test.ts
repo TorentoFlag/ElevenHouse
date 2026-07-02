@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { dictionaryContentMaxLength, dictionaryTitleMaxLength } from "@elevenhouse/contracts";
 import {
   createReferenceEntryAiDraft,
   createReferenceEntryDraft,
   isReferenceEntryDraftSubmittable,
-  normalizeReferenceEntryDraft
+  normalizeReferenceEntryDraft,
+  validateReferenceEntryDraft
 } from "./referenceEntryDraft";
 
 const categories = [
@@ -26,6 +28,14 @@ const categories = [
     updatedAt: "2026-07-01T10:00:00.000Z"
   }
 ];
+
+const validationCopy = {
+  categoryRequired: "Выберите категорию",
+  titleRequired: "Введите название",
+  titleMaxLength: "Название не должно быть длиннее {max} символов",
+  contentRequired: "Введите текст трактовки",
+  contentMaxLength: "Текст не должен быть длиннее {max} символов"
+};
 
 describe("reference entry draft helpers", () => {
   it("prefills a new draft from the selected category and optional title seed", () => {
@@ -55,16 +65,22 @@ describe("reference entry draft helpers", () => {
   it("validates and normalizes submittable drafts", () => {
     expect(
       isReferenceEntryDraftSubmittable({
-        categoryId: categories[0]?.id ?? "",
-        title: " Солнце в Овне ",
-        content: " Яркая воля. "
+        draft: {
+          categoryId: categories[0]?.id ?? "",
+          title: " Солнце в Овне ",
+          content: " Яркая воля. "
+        },
+        locale: "ru"
       })
     ).toBe(true);
     expect(
       isReferenceEntryDraftSubmittable({
-        categoryId: categories[0]?.id ?? "",
-        title: " ",
-        content: " Яркая воля. "
+        draft: {
+          categoryId: categories[0]?.id ?? "",
+          title: " ",
+          content: " Яркая воля. "
+        },
+        locale: "ru"
       })
     ).toBe(false);
     expect(
@@ -78,6 +94,72 @@ describe("reference entry draft helpers", () => {
       title: "Солнце в Овне",
       content: "Яркая воля."
     });
+  });
+
+  it("uses the backend custom-entry request contract for frontend submit validation", () => {
+    expect(
+      isReferenceEntryDraftSubmittable({
+        draft: {
+          categoryId: "not-a-uuid",
+          title: "Солнце в Овне",
+          content: "Яркая воля."
+        },
+        locale: "ru"
+      })
+    ).toBe(false);
+    expect(
+      isReferenceEntryDraftSubmittable({
+        draft: {
+          categoryId: categories[0]?.id ?? "",
+          title: "x".repeat(dictionaryTitleMaxLength + 1),
+          content: "Яркая воля."
+        },
+        locale: "ru"
+      })
+    ).toBe(false);
+    expect(
+      isReferenceEntryDraftSubmittable({
+        draft: {
+          categoryId: categories[0]?.id ?? "",
+          title: "Солнце в Овне",
+          content: "x".repeat(dictionaryContentMaxLength + 1)
+        },
+        locale: "ru"
+      })
+    ).toBe(false);
+  });
+
+  it("maps backend contract validation failures to localized field helper text", () => {
+    expect(
+      validateReferenceEntryDraft({
+        draft: {
+          categoryId: "not-a-uuid",
+          title: " ",
+          content: "x".repeat(dictionaryContentMaxLength + 1)
+        },
+        locale: "ru",
+        copy: validationCopy
+      })
+    ).toEqual({
+      canSubmit: false,
+      fieldErrors: {
+        categoryId: "Выберите категорию",
+        title: "Введите название",
+        content: `Текст не должен быть длиннее ${dictionaryContentMaxLength} символов`
+      }
+    });
+
+    expect(
+      validateReferenceEntryDraft({
+        draft: {
+          categoryId: categories[0]?.id ?? "",
+          title: "x".repeat(dictionaryTitleMaxLength + 1),
+          content: "Текст"
+        },
+        locale: "ru",
+        copy: validationCopy
+      }).fieldErrors.title
+    ).toBe(`Название не должно быть длиннее ${dictionaryTitleMaxLength} символов`);
   });
 
   it("creates an AI draft from the localized template only when the title is present", () => {

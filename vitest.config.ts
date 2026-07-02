@@ -6,6 +6,9 @@ export default defineConfig({
     alias: {
       "@elevenhouse/design-system/components/Modal": fileURLToPath(
         new URL("./packages/design-system/src/components/Modal/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/icons/Check": fileURLToPath(
+        new URL("./packages/design-system/src/icons/Check/index.ts", import.meta.url)
       )
     }
   },

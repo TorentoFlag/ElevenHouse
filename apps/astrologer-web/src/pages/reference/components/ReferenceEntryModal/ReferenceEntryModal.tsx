@@ -4,8 +4,8 @@ import { useCreateDictionaryCustomEntryMutation } from "../../../../features/dic
 import {
   createReferenceEntryAiDraft,
   createReferenceEntryDraft,
-  isReferenceEntryDraftSubmittable,
-  normalizeReferenceEntryDraft
+  normalizeReferenceEntryDraft,
+  validateReferenceEntryDraft
 } from "../../helpers/referenceEntryDraft";
 import { ReferenceEntryModalView, type ReferenceEntryModalCopy } from "./ReferenceEntryModalView";
 
@@ -34,7 +34,12 @@ export function ReferenceEntryModal({
     })
   );
   const createEntryMutation = useCreateDictionaryCustomEntryMutation();
-  const canSubmit = isReferenceEntryDraftSubmittable(draft);
+  const validationState = validateReferenceEntryDraft({
+    draft,
+    locale,
+    copy: copy.validation
+  });
+  const canSubmit = validationState.canSubmit;
 
   return (
     <ReferenceEntryModalView
@@ -43,6 +48,7 @@ export function ReferenceEntryModal({
       draft={draft}
       canSubmit={canSubmit}
       isSaving={createEntryMutation.isPending}
+      fieldErrors={validationState.fieldErrors}
       errorMessage={createEntryMutation.isError ? copy.genericError : null}
       onClose={onClose}
       onDraftChange={setDraft}

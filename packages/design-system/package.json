@@ -97,6 +97,10 @@
       "types": "./dist/icons/Chat/index.d.ts",
       "import": "./dist/icons/Chat/index.js"
     },
+    "./icons/Check": {
+      "types": "./dist/icons/Check/index.d.ts",
+      "import": "./dist/icons/Check/index.js"
+    },
     "./icons/ChevronDown": {
       "types": "./dist/icons/ChevronDown/index.d.ts",
       "import": "./dist/icons/ChevronDown/index.js"

@@ -6,10 +6,19 @@ import { Chip } from "@elevenhouse/design-system/components/Chip";
 import "@elevenhouse/design-system/components/Chip.css";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
 import "@elevenhouse/design-system/components/Modal.css";
+import { Check } from "@elevenhouse/design-system/icons/Check";
 import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
-import { Verified } from "@elevenhouse/design-system/icons/Verified";
-import type { ReferenceEntryDraft } from "../../helpers/referenceEntryDraft";
+import type {
+  ReferenceEntryDraft,
+  ReferenceEntryDraftFieldErrors,
+  ReferenceEntryDraftValidationCopy
+} from "../../helpers/referenceEntryDraft";
 import styles from "./ReferenceEntryModal.module.css";
+
+const CATEGORY_ERROR_ID = "reference-entry-modal-category-error";
+const TITLE_ERROR_ID = "reference-entry-modal-title-error";
+const CONTENT_TEXTAREA_ID = "reference-entry-modal-content";
+const CONTENT_ERROR_ID = "reference-entry-modal-content-error";
 
 export type ReferenceEntryModalDraft = ReferenceEntryDraft;
 
@@ -28,6 +37,7 @@ export type ReferenceEntryModalCopy = {
   readonly savingLabel: string;
   readonly genericError: string;
   readonly aiDraftTemplate: string;
+  readonly validation: ReferenceEntryDraftValidationCopy;
 };
 
 export type ReferenceEntryModalViewProps = {
@@ -36,6 +46,7 @@ export type ReferenceEntryModalViewProps = {
   readonly draft: ReferenceEntryModalDraft;
   readonly canSubmit: boolean;
   readonly isSaving: boolean;
+  readonly fieldErrors: ReferenceEntryDraftFieldErrors;
   readonly errorMessage: string | null;
   readonly onClose: () => void;
   readonly onDraftChange: (draft: ReferenceEntryModalDraft) => void;
@@ -49,6 +60,7 @@ export function ReferenceEntryModalView({
   draft,
   canSubmit,
   isSaving,
+  fieldErrors,
   errorMessage,
   onClose,
   onDraftChange,
@@ -67,7 +79,11 @@ export function ReferenceEntryModalView({
       >
         <div className={styles.field}>
           <span className={styles.label}>{copy.categoryLabel}</span>
-          <div className={styles.categoryList}>
+          <div
+            className={styles.categoryList}
+            role="group"
+            aria-describedby={fieldErrors.categoryId ? CATEGORY_ERROR_ID : undefined}
+          >
             {categories.map((category) => {
               const isActive = draft.categoryId === category.id;
 
@@ -83,23 +99,37 @@ export function ReferenceEntryModalView({
               );
             })}
           </div>
+          {fieldErrors.categoryId ? (
+            <span className={styles.fieldError} id={CATEGORY_ERROR_ID}>
+              {fieldErrors.categoryId}
+            </span>
+          ) : null}
         </div>
 
         <label className={styles.field}>
           <span className={styles.label}>{copy.titleLabel}</span>
           <input
-            className={styles.input}
+            className={`${styles.input}${fieldErrors.title ? ` ${styles.inputInvalid}` : ""}`}
             data-reference-entry-modal-title="true"
             autoFocus
             value={draft.title}
             placeholder={copy.titlePlaceholder}
+            aria-invalid={fieldErrors.title ? true : undefined}
+            aria-describedby={fieldErrors.title ? TITLE_ERROR_ID : undefined}
             onChange={(event) => onDraftChange({ ...draft, title: event.currentTarget.value })}
           />
+          {fieldErrors.title ? (
+            <span className={styles.fieldError} id={TITLE_ERROR_ID}>
+              {fieldErrors.title}
+            </span>
+          ) : null}
         </label>
 
-        <label className={styles.field}>
+        <div className={styles.field}>
           <span className={styles.labelRow}>
-            <span className={styles.label}>{copy.contentLabel}</span>
+            <label className={styles.label} htmlFor={CONTENT_TEXTAREA_ID}>
+              {copy.contentLabel}
+            </label>
             <button
               className={styles.aiDraftButton}
               type="button"
@@ -112,14 +142,22 @@ export function ReferenceEntryModalView({
             </button>
           </span>
           <textarea
-            className={styles.textarea}
+            id={CONTENT_TEXTAREA_ID}
+            className={`${styles.textarea}${fieldErrors.content ? ` ${styles.inputInvalid}` : ""}`}
             data-reference-entry-modal-content="true"
             value={draft.content}
             placeholder={copy.contentPlaceholder}
             rows={5}
+            aria-invalid={fieldErrors.content ? true : undefined}
+            aria-describedby={fieldErrors.content ? CONTENT_ERROR_ID : undefined}
             onChange={(event) => onDraftChange({ ...draft, content: event.currentTarget.value })}
           />
-        </label>
+          {fieldErrors.content ? (
+            <span className={styles.fieldError} id={CONTENT_ERROR_ID}>
+              {fieldErrors.content}
+            </span>
+          ) : null}
+        </div>
 
         {errorMessage && <p className={styles.error}>{errorMessage}</p>}
 
@@ -138,7 +176,7 @@ export function ReferenceEntryModalView({
             variant="brand"
             size="medium"
             title={isSaving ? copy.savingLabel : copy.saveLabel}
-            startIcon={<Verified width={14} height={14} aria-hidden="true" />}
+            startIcon={<Check width={16} height={16} aria-hidden="true" />}
             disabled={!canSubmit || isSaving}
             data-reference-entry-modal-submit="true"
           />

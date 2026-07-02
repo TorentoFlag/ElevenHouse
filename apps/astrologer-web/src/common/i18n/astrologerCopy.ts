@@ -93,6 +93,13 @@ export type AstrologerCopy = {
       savingLabel: string;
       genericError: string;
       aiDraftTemplate: string;
+      validation: {
+        categoryRequired: string;
+        titleRequired: string;
+        titleMaxLength: string;
+        contentRequired: string;
+        contentMaxLength: string;
+      };
     };
     emptyLabel: string;
     emptyAddLabel: string;
@@ -310,7 +317,14 @@ export const astrologerCopyByLocale = {
         savingLabel: "Сохраняем",
         genericError: "Не удалось сохранить трактовку. Попробуйте ещё раз.",
         aiDraftTemplate:
-          "Черновик для «{title}»: опишите ключевое значение, сильные проявления, возможные сложности и то, как эта тема раскрывается в карте."
+          "Черновик для «{title}»: опишите ключевое значение, сильные проявления, возможные сложности и то, как эта тема раскрывается в карте.",
+        validation: {
+          categoryRequired: "Выберите категорию",
+          titleRequired: "Введите название трактовки",
+          titleMaxLength: "Название не должно быть длиннее {max} символов",
+          contentRequired: "Введите текст трактовки",
+          contentMaxLength: "Текст не должен быть длиннее {max} символов"
+        }
       },
       emptyLabel: "Ничего не найдено",
       emptyAddLabel: "Добавить трактовку",
@@ -473,7 +487,14 @@ export const astrologerCopyByLocale = {
         savingLabel: "Saving",
         genericError: "Could not save the interpretation. Try again.",
         aiDraftTemplate:
-          "Draft for “{title}”: describe the core meaning, strong expressions, possible challenges, and how this theme unfolds in the chart."
+          "Draft for “{title}”: describe the core meaning, strong expressions, possible challenges, and how this theme unfolds in the chart.",
+        validation: {
+          categoryRequired: "Choose a category",
+          titleRequired: "Enter an interpretation title",
+          titleMaxLength: "Title must be no longer than {max} characters",
+          contentRequired: "Enter the interpretation text",
+          contentMaxLength: "Text must be no longer than {max} characters"
+        }
       },
       emptyLabel: "No interpretations found",
       emptyAddLabel: "Add interpretation",

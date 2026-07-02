@@ -52,7 +52,14 @@ const copy = {
     saveLabel: "Сохранить",
     savingLabel: "Сохраняем",
     genericError: "Не удалось сохранить трактовку. Попробуйте ещё раз.",
-    aiDraftTemplate: "Черновик для «{title}»: опишите проявления положения."
+    aiDraftTemplate: "Черновик для «{title}»: опишите проявления положения.",
+    validation: {
+      categoryRequired: "Выберите категорию",
+      titleRequired: "Введите название трактовки",
+      titleMaxLength: "Название не должно быть длиннее {max} символов",
+      contentRequired: "Введите текст трактовки",
+      contentMaxLength: "Текст не должен быть длиннее {max} символов"
+    }
   },
   emptyLabel: "Ничего не найдено",
   emptyAddLabel: "Добавить трактовку",

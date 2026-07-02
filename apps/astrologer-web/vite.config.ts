@@ -72,6 +72,9 @@ export default defineConfig({
       "@elevenhouse/design-system/icons/Bell": fileURLToPath(
         new URL("../../packages/design-system/src/icons/Bell/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/icons/Check": fileURLToPath(
+        new URL("../../packages/design-system/src/icons/Check/index.ts", import.meta.url)
+      ),
       "@elevenhouse/design-system/icons/ChevronDown": fileURLToPath(
         new URL("../../packages/design-system/src/icons/ChevronDown/index.ts", import.meta.url)
       ),

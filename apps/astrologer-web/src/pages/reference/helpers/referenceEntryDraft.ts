@@ -1,9 +1,29 @@
-import type { DictionaryCategoryResponse } from "@elevenhouse/contracts";
+import {
+  createDictionaryCustomEntryRequestSchema,
+  dictionaryContentMaxLength,
+  dictionaryTitleMaxLength,
+  type DictionaryCategoryResponse,
+  type DictionaryLocale
+} from "@elevenhouse/contracts";
 
 export type ReferenceEntryDraft = {
   readonly categoryId: string;
   readonly title: string;
   readonly content: string;
+};
+
+export type ReferenceEntryDraftFieldErrors = {
+  readonly categoryId?: string;
+  readonly title?: string;
+  readonly content?: string;
+};
+
+export type ReferenceEntryDraftValidationCopy = {
+  readonly categoryRequired: string;
+  readonly titleRequired: string;
+  readonly titleMaxLength: string;
+  readonly contentRequired: string;
+  readonly contentMaxLength: string;
 };
 
 export function createReferenceEntryDraft({
@@ -24,8 +44,68 @@ export function createReferenceEntryDraft({
   };
 }
 
-export function isReferenceEntryDraftSubmittable(draft: ReferenceEntryDraft): boolean {
-  return Boolean(draft.categoryId && draft.title.trim() && draft.content.trim());
+export function isReferenceEntryDraftSubmittable({
+  draft,
+  locale
+}: {
+  readonly draft: ReferenceEntryDraft;
+  readonly locale: DictionaryLocale;
+}): boolean {
+  return createDictionaryCustomEntryRequestSchema.safeParse({
+    ...normalizeReferenceEntryDraft(draft),
+    locale
+  }).success;
+}
+
+export function validateReferenceEntryDraft({
+  draft,
+  locale,
+  copy
+}: {
+  readonly draft: ReferenceEntryDraft;
+  readonly locale: DictionaryLocale;
+  readonly copy: ReferenceEntryDraftValidationCopy;
+}): {
+  readonly canSubmit: boolean;
+  readonly fieldErrors: ReferenceEntryDraftFieldErrors;
+} {
+  const normalizedDraft = normalizeReferenceEntryDraft(draft);
+  const result = createDictionaryCustomEntryRequestSchema.safeParse({
+    ...normalizedDraft,
+    locale
+  });
+
+  if (result.success) {
+    return {
+      canSubmit: true,
+      fieldErrors: {}
+    };
+  }
+
+  const invalidFields = new Set(result.error.issues.map((issue) => issue.path[0]));
+
+  return {
+    canSubmit: false,
+    fieldErrors: {
+      ...(invalidFields.has("categoryId") ? { categoryId: copy.categoryRequired } : {}),
+      ...(invalidFields.has("title")
+        ? {
+            title:
+              normalizedDraft.title.length === 0
+                ? copy.titleRequired
+                : formatValidationMessage(copy.titleMaxLength, dictionaryTitleMaxLength)
+          }
+        : {}),
+      ...(invalidFields.has("content")
+        ? {
+            content:
+              normalizedDraft.content.length === 0
+                ? copy.contentRequired
+                : formatValidationMessage(copy.contentMaxLength, dictionaryContentMaxLength)
+          }
+        : {})
+    }
+  };
 }
 
 export function normalizeReferenceEntryDraft(draft: ReferenceEntryDraft): ReferenceEntryDraft {
@@ -50,4 +130,8 @@ export function createReferenceEntryAiDraft({
   }
 
   return template.replace("{title}", normalizedTitle);
+}
+
+function formatValidationMessage(template: string, max: number): string {
+  return template.replace("{max}", String(max));
 }

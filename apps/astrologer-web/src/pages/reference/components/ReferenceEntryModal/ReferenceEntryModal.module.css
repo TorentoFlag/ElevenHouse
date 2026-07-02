@@ -98,15 +98,24 @@
   box-shadow: 0 0 0 3px rgb(244 196 48 / 0.12);
 }
 
+.inputInvalid {
+  border-color: var(--eh-color-coral);
+}
+
+.inputInvalid:focus {
+  border-color: var(--eh-color-coral);
+  box-shadow: 0 0 0 3px rgb(240 154 154 / 0.13);
+}
+
 .footer {
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  gap: 9px;
   padding-top: 2px;
 }
 
 .submitButton {
-  min-width: 120px;
+  flex: 1;
+  min-width: 0;
 }
 
 .submitButton:disabled {
@@ -119,6 +128,14 @@
   color: #f09a9a;
   font-size: 12.5px;
   font-weight: 700;
+  line-height: 1.35;
+}
+
+.fieldError {
+  margin-top: -2px;
+  color: var(--eh-color-coral);
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1.35;
 }
 
