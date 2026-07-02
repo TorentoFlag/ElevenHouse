@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { astrologerCopyByLocale, type ReferenceEntryModalCopy } from "./astrologerCopy";
+import { astrologerCopyByLocale, type AstrologerCopy } from "./astrologerCopy";
 
 type RequiredReferenceEntryModalEditLabels = {
   readonly createTitle: string;
@@ -9,7 +9,7 @@ type RequiredReferenceEntryModalEditLabels = {
 };
 
 const assertRequiredReferenceEntryModalEditLabels = (
-  copy: ReferenceEntryModalCopy
+  copy: AstrologerCopy["reference"]["entryModal"]
 ): RequiredReferenceEntryModalEditLabels => copy;
 
 describe("astrologerCopy", () => {

@@ -21,6 +21,10 @@ const modalCss = readFileSync(
 const copy = {
   title: "Новая трактовка",
   closeLabel: "Закрыть",
+  createTitle: "Новая трактовка",
+  editTitle: "Редактировать трактовку",
+  createCloseLabel: "Закрыть модалку добавления трактовки",
+  editCloseLabel: "Закрыть модалку редактирования трактовки",
   categoryLabel: "Категория",
   titleLabel: "Название",
   titlePlaceholder: "Напр. Солнце в Овне",

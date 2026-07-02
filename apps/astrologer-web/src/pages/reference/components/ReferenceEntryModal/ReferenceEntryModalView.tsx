@@ -27,6 +27,10 @@ type ReferenceEntryModalDraftField = keyof ReferenceEntryDraftTouchedFields;
 export type ReferenceEntryModalCopy = {
   readonly title: string;
   readonly closeLabel: string;
+  readonly createTitle: string;
+  readonly editTitle: string;
+  readonly createCloseLabel: string;
+  readonly editCloseLabel: string;
   readonly categoryLabel: string;
   readonly titleLabel: string;
   readonly titlePlaceholder: string;
