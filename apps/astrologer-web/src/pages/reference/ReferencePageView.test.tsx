@@ -47,6 +47,13 @@ const copy = {
     confirmLabel: "Сбросить",
     cancelLabel: "Отмена"
   },
+  deleteConfirmation: {
+    title: "Удалить трактовку?",
+    closeLabel: "Закрыть модалку удаления трактовки",
+    description: "Точно хотите удалить трактовку?",
+    confirmLabel: "Удалить",
+    cancelLabel: "Отмена"
+  },
   entryModal: {
     createTitle: "Новая трактовка",
     editTitle: "Редактировать трактовку",
@@ -159,6 +166,7 @@ describe("ReferencePageView", () => {
       isLoading: false,
       isError: false,
       isResetting: false,
+      isDeletingEntry: false,
       resultsMotionKey: "planets-in-signs:1000",
       isResultsUpdating: true,
       onCategoryChange,
@@ -166,8 +174,11 @@ describe("ReferencePageView", () => {
       onSearchChange,
       onReset,
       isResetConfirmationOpen: false,
+      deleteConfirmationEntry: null,
       onResetConfirm: vi.fn(),
       onResetCancel: vi.fn(),
+      onDeleteConfirm: vi.fn(),
+      onDeleteCancel: vi.fn(),
       onAdd,
       onEditEntry,
       onDeleteEntry
@@ -258,26 +269,24 @@ describe("ReferencePageView", () => {
     const deleteActionButtons = findElementsByType(body, IconButton).filter(
       (button) => button.props["data-reference-entry-action"] === "delete"
     );
-    expect(deleteActionButtons).toHaveLength(2);
-    expect(deleteActionButtons.map((button) => button.props.size)).toEqual(["small", "small"]);
-    expect(deleteActionButtons.map((button) => button.props.variant)).toEqual(["quiet", "quiet"]);
+    expect(deleteActionButtons).toHaveLength(1);
+    expect(deleteActionButtons.map((button) => button.props.size)).toEqual(["small"]);
+    expect(deleteActionButtons.map((button) => button.props.variant)).toEqual(["quiet"]);
     expect(deleteActionButtons.map((button) => button.props.label)).toEqual([
-      "Удалить: Солнце в Овне",
       "Удалить: Луна в Тельце"
     ]);
-    expect(deleteActionButtons.map((button) => button.props.icon.type)).toEqual([Trash, Trash]);
+    expect(deleteActionButtons.map((button) => button.props.icon.type)).toEqual([Trash]);
 
     const cardActionButtons = findElementsByDataAttribute(body, "data-reference-entry-action");
     expect(cardActionButtons.map((button) => button.props["data-reference-entry-action"])).toEqual([
       "edit",
-      "delete",
       "edit",
       "delete"
     ]);
     getArrayItem(cardActionButtons, 0).props.onClick();
-    getArrayItem(cardActionButtons, 1).props.onClick();
+    getArrayItem(cardActionButtons, 2).props.onClick();
     expect(onEditEntry).toHaveBeenCalledWith(getArrayItem(entries, 0));
-    expect(onDeleteEntry).toHaveBeenCalledWith(getArrayItem(entries, 0));
+    expect(onDeleteEntry).toHaveBeenCalledWith(getArrayItem(entries, 1));
   });
 
   it("renders loading and error states in the content region", () => {
@@ -298,6 +307,7 @@ describe("ReferencePageView", () => {
       isLoading: true,
       isError: false,
       isResetting: false,
+      isDeletingEntry: false,
       resultsMotionKey: "initial",
       isResultsUpdating: false,
       onCategoryChange: vi.fn(),
@@ -305,8 +315,11 @@ describe("ReferencePageView", () => {
       onSearchChange: vi.fn(),
       onReset: vi.fn(),
       isResetConfirmationOpen: false,
+      deleteConfirmationEntry: null,
       onResetConfirm: vi.fn(),
       onResetCancel: vi.fn(),
+      onDeleteConfirm: vi.fn(),
+      onDeleteCancel: vi.fn(),
       onAdd: vi.fn(),
       onEditEntry: vi.fn(),
       onDeleteEntry: vi.fn()
@@ -340,6 +353,7 @@ describe("ReferencePageView", () => {
       isLoading: false,
       isError: false,
       isResetting: true,
+      isDeletingEntry: false,
       resultsMotionKey: "all:all:1000",
       isResultsUpdating: false,
       onCategoryChange: vi.fn(),
@@ -347,8 +361,11 @@ describe("ReferencePageView", () => {
       onSearchChange: vi.fn(),
       onReset: vi.fn(),
       isResetConfirmationOpen: false,
+      deleteConfirmationEntry: null,
       onResetConfirm: vi.fn(),
       onResetCancel: vi.fn(),
+      onDeleteConfirm: vi.fn(),
+      onDeleteCancel: vi.fn(),
       onAdd: vi.fn(),
       onEditEntry: vi.fn(),
       onDeleteEntry: vi.fn()
@@ -384,7 +401,9 @@ describe("ReferencePageView", () => {
       isLoading: false,
       isError: false,
       isResetting: false,
+      isDeletingEntry: false,
       isResetConfirmationOpen: true,
+      deleteConfirmationEntry: null,
       resultsMotionKey: "all:all:1000",
       isResultsUpdating: false,
       onCategoryChange: vi.fn(),
@@ -393,6 +412,8 @@ describe("ReferencePageView", () => {
       onReset,
       onResetConfirm,
       onResetCancel,
+      onDeleteConfirm: vi.fn(),
+      onDeleteCancel: vi.fn(),
       onAdd: vi.fn(),
       onEditEntry: vi.fn(),
       onDeleteEntry: vi.fn()
@@ -443,7 +464,9 @@ describe("ReferencePageView", () => {
       isLoading: false,
       isError: false,
       isResetting: true,
+      isDeletingEntry: false,
       isResetConfirmationOpen: true,
+      deleteConfirmationEntry: null,
       resultsMotionKey: "all:all:1000",
       isResultsUpdating: false,
       onCategoryChange: vi.fn(),
@@ -452,6 +475,8 @@ describe("ReferencePageView", () => {
       onReset: vi.fn(),
       onResetConfirm: vi.fn(),
       onResetCancel: vi.fn(),
+      onDeleteConfirm: vi.fn(),
+      onDeleteCancel: vi.fn(),
       onAdd: vi.fn(),
       onEditEntry: vi.fn(),
       onDeleteEntry: vi.fn()
@@ -465,6 +490,67 @@ describe("ReferencePageView", () => {
     expect(getArrayItem(modalButtons, 0).props.disabled).toBe(true);
     expect(getArrayItem(modalButtons, 1).props.disabled).toBe(true);
   });
+
+  it("renders a delete confirmation modal with cancel and confirm actions", () => {
+    const onDeleteConfirm = vi.fn();
+    const onDeleteCancel = vi.fn();
+    const view = ReferencePageView({
+      copy,
+      catalogTotal: 396,
+      categories,
+      entries,
+      selectedCategoryId: null,
+      selectedSource: "all",
+      sourceCounts: {
+        all: 14,
+        platform: 14,
+        modified: 0,
+        custom: 0
+      },
+      search: "",
+      isLoading: false,
+      isError: false,
+      isResetting: false,
+      isDeletingEntry: false,
+      isResetConfirmationOpen: false,
+      deleteConfirmationEntry: getArrayItem(entries, 1),
+      resultsMotionKey: "all:all:1000",
+      isResultsUpdating: false,
+      onCategoryChange: vi.fn(),
+      onSourceChange: vi.fn(),
+      onSearchChange: vi.fn(),
+      onReset: vi.fn(),
+      onResetConfirm: vi.fn(),
+      onResetCancel: vi.fn(),
+      onDeleteConfirm,
+      onDeleteCancel,
+      onAdd: vi.fn(),
+      onEditEntry: vi.fn(),
+      onDeleteEntry: vi.fn()
+    });
+    const modal = findRequiredElementByType(view, Modal);
+
+    expect(modal.props.title).toBe("Удалить трактовку?");
+    expect(modal.props.closeLabel).toBe("Закрыть модалку удаления трактовки");
+    expect(JSON.stringify(modal.props.children)).toContain("Точно хотите удалить трактовку?");
+
+    const modalButtons = findElementsByDataAttribute(
+      modal.props.children,
+      "data-reference-delete-confirmation-action"
+    );
+    expect(modalButtons.map((button) => button.props["data-reference-delete-confirmation-action"])).toEqual([
+      "confirm",
+      "cancel"
+    ]);
+    expect(modalButtons.map((button) => button.props.title)).toEqual(["Удалить", "Отмена"]);
+
+    getArrayItem(modalButtons, 0).props.onClick();
+    getArrayItem(modalButtons, 1).props.onClick();
+    modal.props.onClose();
+
+    expect(onDeleteConfirm).toHaveBeenCalledOnce();
+    expect(onDeleteCancel).toHaveBeenCalledTimes(2);
+  });
 });
 
 type TestElementProps = {
@@ -474,6 +560,7 @@ type TestElementProps = {
   closeLabel?: string;
   count?: number;
   "data-reference-category-id"?: string;
+  "data-reference-delete-confirmation-action"?: string;
   "data-reference-entry-action"?: string;
   "data-reference-reset-confirmation-action"?: string;
   "data-reference-source"?: string;
@@ -483,6 +570,7 @@ type TestElementProps = {
   id?: string;
   label?: string;
   onChange: (event: { currentTarget: { value: string } }) => void;
+  onClose: () => void;
   onClick: () => void;
   placeholder?: string;
   size?: string;
@@ -532,6 +620,7 @@ function findElementsByDataAttribute(
   root: unknown,
   attribute:
     | "data-reference-category-id"
+    | "data-reference-delete-confirmation-action"
     | "data-reference-entry-action"
     | "data-reference-reset-confirmation-action"
     | "data-reference-source"

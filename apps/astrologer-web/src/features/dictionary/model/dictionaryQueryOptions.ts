@@ -5,6 +5,7 @@ import type {
 } from "@elevenhouse/contracts";
 import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import { createDictionaryCustomEntry } from "../api/createDictionaryCustomEntry";
+import { deleteDictionaryEntry } from "../api/deleteDictionaryEntry";
 import { listDictionaryCategories } from "../api/listDictionaryCategories";
 import { listDictionaryEntries } from "../api/listDictionaryEntries";
 import { resetDictionaryEntries } from "../api/resetDictionaryEntries";
@@ -75,6 +76,18 @@ export function resetDictionaryEntriesMutationOptions(
 ) {
   return {
     mutationFn: () => resetDictionaryEntries(),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: dictionaryQueryKeys.all()
+      })
+  };
+}
+
+export function deleteDictionaryEntryMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (entryId: string) => deleteDictionaryEntry(entryId),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: dictionaryQueryKeys.all()

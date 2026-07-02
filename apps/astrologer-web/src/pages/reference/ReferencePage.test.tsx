@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   useDocumentTitle: vi.fn(),
   useDictionaryCategoriesQuery: vi.fn(),
   useDictionaryEntriesQuery: vi.fn(),
+  useDeleteDictionaryEntryMutation: vi.fn(),
   useResetDictionaryEntriesMutation: vi.fn(),
   createReferenceEntriesQuery: vi.fn(),
   createReferencePageSummary: vi.fn()
@@ -69,6 +70,10 @@ vi.mock("../../features/dictionary/model/useDictionaryCategoriesQuery", () => ({
 
 vi.mock("../../features/dictionary/model/useDictionaryEntriesQuery", () => ({
   useDictionaryEntriesQuery: mocks.useDictionaryEntriesQuery
+}));
+
+vi.mock("../../features/dictionary/model/useDeleteDictionaryEntryMutation", () => ({
+  useDeleteDictionaryEntryMutation: mocks.useDeleteDictionaryEntryMutation
 }));
 
 vi.mock("../../features/dictionary/model/useResetDictionaryEntriesMutation", () => ({
@@ -151,6 +156,13 @@ const referenceCopy = {
     confirmLabel: "Сбросить",
     cancelLabel: "Отмена"
   },
+  deleteConfirmation: {
+    title: "Удалить трактовку?",
+    closeLabel: "Закрыть модалку удаления трактовки",
+    description: "Точно хотите удалить трактовку?",
+    confirmLabel: "Удалить",
+    cancelLabel: "Отмена"
+  },
   entryModal: entryModalCopy,
   emptyLabel: "Ничего не найдено",
   emptyAddLabel: "Добавить трактовку",
@@ -222,6 +234,10 @@ describe("ReferencePage", () => {
       isPending: false,
       mutateAsync: vi.fn()
     });
+    mocks.useDeleteDictionaryEntryMutation.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn()
+    });
     mocks.createReferenceEntriesQuery.mockReturnValue({ locale: "ru" });
     mocks.createReferencePageSummary.mockReturnValue({
       categories,
@@ -249,6 +265,52 @@ describe("ReferencePage", () => {
       entry,
       onClose: expect.any(Function)
     } satisfies ReferenceEntryModalProps);
+  });
+
+  it("opens delete confirmation and deletes the selected astrologer entry after confirmation", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mocks.useDeleteDictionaryEntryMutation.mockReturnValue({
+      isPending: false,
+      mutateAsync
+    });
+
+    renderPage();
+    let viewProps = getLatestMockProps<ReferencePageViewProps>(mocks.referencePageView);
+    viewProps.onDeleteEntry(entry);
+    renderPage();
+
+    viewProps = getLatestMockProps<ReferencePageViewProps>(mocks.referencePageView);
+    expect(viewProps.deleteConfirmationEntry).toBe(entry);
+    expect(viewProps.isDeletingEntry).toBe(false);
+
+    await viewProps.onDeleteConfirm();
+
+    expect(mutateAsync).toHaveBeenCalledWith(entry.astrologerEntryId);
+
+    renderPage();
+    viewProps = getLatestMockProps<ReferencePageViewProps>(mocks.referencePageView);
+    expect(viewProps.deleteConfirmationEntry).toBeNull();
+  });
+
+  it("closes delete confirmation without deleting when cancelled", () => {
+    const mutateAsync = vi.fn();
+    mocks.useDeleteDictionaryEntryMutation.mockReturnValue({
+      isPending: false,
+      mutateAsync
+    });
+
+    renderPage();
+    let viewProps = getLatestMockProps<ReferencePageViewProps>(mocks.referencePageView);
+    viewProps.onDeleteEntry(entry);
+    renderPage();
+
+    viewProps = getLatestMockProps<ReferencePageViewProps>(mocks.referencePageView);
+    viewProps.onDeleteCancel();
+    renderPage();
+
+    viewProps = getLatestMockProps<ReferencePageViewProps>(mocks.referencePageView);
+    expect(viewProps.deleteConfirmationEntry).toBeNull();
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 });
 

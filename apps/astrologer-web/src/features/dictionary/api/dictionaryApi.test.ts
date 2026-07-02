@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { application } from "../../../Application";
 import { createDictionaryAiDraft } from "./createDictionaryAiDraft";
 import { createDictionaryCustomEntry } from "./createDictionaryCustomEntry";
+import { deleteDictionaryEntry } from "./deleteDictionaryEntry";
 import { listDictionaryCategories } from "./listDictionaryCategories";
 import { listDictionaryEntries } from "./listDictionaryEntries";
 import { resetDictionaryEntries } from "./resetDictionaryEntries";
@@ -230,5 +231,16 @@ describe("dictionary API", () => {
     await expect(resetDictionaryEntries()).resolves.toBeUndefined();
 
     expect(deleteRequest).toHaveBeenCalledWith("/dictionary/entries", { csrf: true });
+  });
+
+  it("deletes an astrologer dictionary entry through the protected entry endpoint", async () => {
+    const deleteRequest = vi.spyOn(application.http, "delete").mockResolvedValue(undefined);
+
+    await expect(deleteDictionaryEntry(astrologerEntryResponse.id)).resolves.toBeUndefined();
+
+    expect(deleteRequest).toHaveBeenCalledWith(
+      `/dictionary/entries/${astrologerEntryResponse.id}`,
+      { csrf: true }
+    );
   });
 });

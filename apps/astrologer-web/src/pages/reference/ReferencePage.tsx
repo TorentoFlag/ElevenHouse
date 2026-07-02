@@ -8,6 +8,7 @@ import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { useDictionaryCategoriesQuery } from "../../features/dictionary/model/useDictionaryCategoriesQuery";
 import { useDictionaryEntriesQuery } from "../../features/dictionary/model/useDictionaryEntriesQuery";
+import { useDeleteDictionaryEntryMutation } from "../../features/dictionary/model/useDeleteDictionaryEntryMutation";
 import { useResetDictionaryEntriesMutation } from "../../features/dictionary/model/useResetDictionaryEntriesMutation";
 import { ReferenceEntryModal } from "./components/ReferenceEntryModal";
 import { createReferenceEntriesQuery } from "./helpers/referenceEntriesQuery";
@@ -30,8 +31,11 @@ export function ReferencePage() {
   const [selectedSource, setSelectedSource] = useState<DictionaryEntrySourceFilter>("all");
   const [search, setSearch] = useState("");
   const [entryModal, setEntryModal] = useState<ReferenceEntryModalState | null>(null);
+  const [deleteConfirmationEntry, setDeleteConfirmationEntry] =
+    useState<DictionaryEffectiveEntryResponse | null>(null);
   const [isResetConfirmationOpen, setIsResetConfirmationOpen] = useState(false);
   const categoriesQuery = useDictionaryCategoriesQuery({ locale });
+  const deleteEntryMutation = useDeleteDictionaryEntryMutation();
   const resetEntriesMutation = useResetDictionaryEntriesMutation();
   const entriesQuery = useDictionaryEntriesQuery(
     createReferenceEntriesQuery({
@@ -76,7 +80,9 @@ export function ReferencePage() {
         isLoading={categoriesQuery.isLoading || entriesQuery.isLoading}
         isError={categoriesQuery.isError || entriesQuery.isError}
         isResetting={resetEntriesMutation.isPending}
+        isDeletingEntry={deleteEntryMutation.isPending}
         isResetConfirmationOpen={isResetConfirmationOpen}
+        deleteConfirmationEntry={deleteConfirmationEntry}
         resultsMotionKey={currentResultsMotionKey}
         isResultsUpdating={entriesQuery.isPlaceholderData && entriesQuery.isFetching}
         onCategoryChange={setSelectedCategoryId}
@@ -105,6 +111,25 @@ export function ReferencePage() {
             })
             .catch(() => undefined);
         }}
+        onDeleteCancel={() => {
+          if (deleteEntryMutation.isPending) {
+            return;
+          }
+
+          setDeleteConfirmationEntry(null);
+        }}
+        onDeleteConfirm={() => {
+          if (deleteEntryMutation.isPending || !deleteConfirmationEntry?.astrologerEntryId) {
+            return Promise.resolve();
+          }
+
+          return deleteEntryMutation
+            .mutateAsync(deleteConfirmationEntry.astrologerEntryId)
+            .then(() => {
+              setDeleteConfirmationEntry(null);
+            })
+            .catch(() => undefined);
+        }}
         onAdd={openEntryModal}
         onEditEntry={(entry) =>
           setEntryModal({
@@ -112,7 +137,13 @@ export function ReferencePage() {
             entry
           })
         }
-        onDeleteEntry={() => undefined}
+        onDeleteEntry={(entry) => {
+          if (!entry.astrologerEntryId) {
+            return;
+          }
+
+          setDeleteConfirmationEntry(entry);
+        }}
       />
       {entryModal && entryModal.mode === "create" && (
         <ReferenceEntryModal

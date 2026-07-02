@@ -48,7 +48,9 @@ export type ReferencePageViewProps = {
   isLoading: boolean;
   isError: boolean;
   isResetting: boolean;
+  isDeletingEntry: boolean;
   isResetConfirmationOpen: boolean;
+  deleteConfirmationEntry: DictionaryEffectiveEntryResponse | null;
   resultsMotionKey: string;
   isResultsUpdating: boolean;
   onCategoryChange: (categoryId: string | null) => void;
@@ -57,6 +59,8 @@ export type ReferencePageViewProps = {
   onReset: () => void;
   onResetConfirm: () => void;
   onResetCancel: () => void;
+  onDeleteConfirm: () => void | Promise<void>;
+  onDeleteCancel: () => void;
   onAdd: (options?: ReferenceAddEntryOptions) => void;
   onEditEntry: (entry: DictionaryEffectiveEntryResponse) => void;
   onDeleteEntry: (entry: DictionaryEffectiveEntryResponse) => void;
@@ -88,7 +92,9 @@ export function ReferencePageView({
   isLoading,
   isError,
   isResetting,
+  isDeletingEntry,
   isResetConfirmationOpen,
+  deleteConfirmationEntry,
   resultsMotionKey,
   isResultsUpdating,
   onCategoryChange,
@@ -97,6 +103,8 @@ export function ReferencePageView({
   onReset,
   onResetConfirm,
   onResetCancel,
+  onDeleteConfirm,
+  onDeleteCancel,
   onAdd,
   onEditEntry,
   onDeleteEntry
@@ -259,15 +267,17 @@ export function ReferencePageView({
                         data-reference-entry-action="edit"
                         onClick={() => onEditEntry(entry)}
                       />
-                      <IconButton
-                        type="button"
-                        variant="quiet"
-                        size="small"
-                        label={`${copy.entryActions.deleteLabel}: ${entry.title}`}
-                        icon={<Trash aria-hidden="true" />}
-                        data-reference-entry-action="delete"
-                        onClick={() => onDeleteEntry(entry)}
-                      />
+                      {entry.astrologerEntryId ? (
+                        <IconButton
+                          type="button"
+                          variant="quiet"
+                          size="small"
+                          label={`${copy.entryActions.deleteLabel}: ${entry.title}`}
+                          icon={<Trash aria-hidden="true" />}
+                          data-reference-entry-action="delete"
+                          onClick={() => onDeleteEntry(entry)}
+                        />
+                      ) : null}
                     </div>
                   </Card>
                 ))}
@@ -306,6 +316,41 @@ export function ReferencePageView({
                 disabled={isResetting}
                 data-reference-reset-confirmation-action="cancel"
                 onClick={onResetCancel}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {deleteConfirmationEntry && (
+        <Modal
+          title={copy.deleteConfirmation.title}
+          closeLabel={copy.deleteConfirmation.closeLabel}
+          onClose={onDeleteCancel}
+        >
+          <div className={styles.resetConfirmation}>
+            <p className={styles.resetConfirmationDescription}>
+              {copy.deleteConfirmation.description}
+            </p>
+            <div className={styles.resetConfirmationActions}>
+              <Button
+                className={styles.resetConfirmationButton}
+                type="button"
+                variant="brand"
+                size="medium"
+                title={copy.deleteConfirmation.confirmLabel}
+                disabled={isDeletingEntry}
+                data-reference-delete-confirmation-action="confirm"
+                onClick={onDeleteConfirm}
+              />
+              <Button
+                type="button"
+                variant="glass"
+                size="medium"
+                title={copy.deleteConfirmation.cancelLabel}
+                disabled={isDeletingEntry}
+                data-reference-delete-confirmation-action="cancel"
+                onClick={onDeleteCancel}
               />
             </div>
           </div>

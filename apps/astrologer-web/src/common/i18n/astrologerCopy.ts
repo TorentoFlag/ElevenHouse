@@ -85,6 +85,13 @@ export type AstrologerCopy = {
       confirmLabel: string;
       cancelLabel: string;
     };
+    deleteConfirmation: {
+      title: string;
+      closeLabel: string;
+      description: string;
+      confirmLabel: string;
+      cancelLabel: string;
+    };
     entryModal: ReferenceEntryModalCopy;
     emptyLabel: string;
     emptyAddLabel: string;
@@ -328,6 +335,13 @@ export const astrologerCopyByLocale = {
         confirmLabel: "Сбросить",
         cancelLabel: "Отмена"
       },
+      deleteConfirmation: {
+        title: "Удалить трактовку?",
+        closeLabel: "Закрыть модалку удаления трактовки",
+        description: "Точно хотите удалить трактовку?",
+        confirmLabel: "Удалить",
+        cancelLabel: "Отмена"
+      },
       entryModal: {
         createTitle: "Новая трактовка",
         editTitle: "Редактировать трактовку",
@@ -509,6 +523,13 @@ export const astrologerCopyByLocale = {
         description:
           "All created interpretations will be deleted, and modified interpretations will return to their original state. Are you sure you want to reset references?",
         confirmLabel: "Reset",
+        cancelLabel: "Cancel"
+      },
+      deleteConfirmation: {
+        title: "Delete interpretation?",
+        closeLabel: "Close delete interpretation modal",
+        description: "Are you sure you want to delete this interpretation?",
+        confirmLabel: "Delete",
         cancelLabel: "Cancel"
       },
       entryModal: {

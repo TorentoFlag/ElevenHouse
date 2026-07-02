@@ -2,6 +2,7 @@ import type { DictionaryEntriesQuery } from "@elevenhouse/contracts";
 import { keepPreviousData } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { createDictionaryCustomEntry } from "../api/createDictionaryCustomEntry";
+import { deleteDictionaryEntry } from "../api/deleteDictionaryEntry";
 import { listDictionaryCategories } from "../api/listDictionaryCategories";
 import { listDictionaryEntries } from "../api/listDictionaryEntries";
 import { resetDictionaryEntries } from "../api/resetDictionaryEntries";
@@ -9,6 +10,7 @@ import { updateDictionaryCustomEntry } from "../api/updateDictionaryCustomEntry"
 import { updateDictionaryPlatformEntryOverride } from "../api/updateDictionaryPlatformEntryOverride";
 import {
   createDictionaryCustomEntryMutationOptions,
+  deleteDictionaryEntryMutationOptions,
   dictionaryCategoriesQueryOptions,
   dictionaryEntriesQueryOptions,
   resetDictionaryEntriesMutationOptions,
@@ -23,6 +25,10 @@ vi.mock("../api/listDictionaryCategories", () => ({
 
 vi.mock("../api/createDictionaryCustomEntry", () => ({
   createDictionaryCustomEntry: vi.fn()
+}));
+
+vi.mock("../api/deleteDictionaryEntry", () => ({
+  deleteDictionaryEntry: vi.fn()
 }));
 
 vi.mock("../api/listDictionaryEntries", () => ({
@@ -222,6 +228,23 @@ describe("dictionary query options", () => {
     await options.onSuccess();
 
     expect(resetDictionaryEntries).toHaveBeenCalledWith();
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: dictionaryQueryKeys.all()
+    });
+  });
+
+  it("deletes an astrologer dictionary entry and invalidates every dictionary query on success", async () => {
+    vi.mocked(deleteDictionaryEntry).mockResolvedValue(undefined);
+    const queryClient = {
+      invalidateQueries: vi.fn()
+    };
+    const entryId = "a2fb1fef-dc5c-44ec-ae36-060f455c8f0f";
+    const options = deleteDictionaryEntryMutationOptions(queryClient);
+
+    await expect(options.mutationFn(entryId)).resolves.toBeUndefined();
+    await options.onSuccess();
+
+    expect(deleteDictionaryEntry).toHaveBeenCalledWith(entryId);
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: dictionaryQueryKeys.all()
     });
