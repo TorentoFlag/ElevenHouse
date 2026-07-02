@@ -50,6 +50,7 @@ export type ReferenceEntryModalViewProps = {
   readonly copy: ReferenceEntryModalCopy;
   readonly categories: DictionaryCategoryResponse[];
   readonly draft: ReferenceEntryModalDraft;
+  readonly isCategoryEditable: boolean;
   readonly canSubmit: boolean;
   readonly isSaving: boolean;
   readonly fieldErrors: ReferenceEntryDraftFieldErrors;
@@ -67,6 +68,7 @@ export function ReferenceEntryModalView({
   copy,
   categories,
   draft,
+  isCategoryEditable,
   canSubmit,
   isSaving,
   fieldErrors,
@@ -102,8 +104,15 @@ export function ReferenceEntryModalView({
                   label={category.name}
                   type="button"
                   active={isActive}
+                  disabled={!isCategoryEditable}
                   data-reference-entry-modal-category-id={category.id}
-                  onClick={() => onDraftChange({ ...draft, categoryId: category.id }, "categoryId")}
+                  onClick={() => {
+                    if (!isCategoryEditable) {
+                      return;
+                    }
+
+                    onDraftChange({ ...draft, categoryId: category.id }, "categoryId");
+                  }}
                 />
               );
             })}
