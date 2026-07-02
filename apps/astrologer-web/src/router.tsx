@@ -4,6 +4,7 @@ import { AstrologerAppLayout } from "./layouts/AstrologerAppLayout";
 import { AuthPage } from "./pages/auth/AuthPage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
 import { NotFoundPage } from "./pages/not-found/NotFoundPage";
+import { ProductsPage } from "./pages/products/ProductsPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
 
 export const astrologerRoutes = [
@@ -24,6 +25,10 @@ export const astrologerRoutes = [
           {
             path: "/dashboard",
             element: <DashboardPage />
+          },
+          {
+            path: "/products",
+            element: <ProductsPage />
           },
           {
             path: "/reference",

@@ -55,6 +55,22 @@ export type AstrologerCopy = {
     title: string;
     kicker: string;
   };
+  products: {
+    documentTitle: string;
+    title: string;
+    createLabel: string;
+    statusFilterAriaLabel: string;
+    summary: {
+      activeLabel: string;
+      salesLabel: string;
+      revenueLabel: string;
+      bestsellerLabel: string;
+      emptyBestseller: string;
+    };
+    emptyLabel: string;
+    loadingLabel: string;
+    errorLabel: string;
+  };
   reference: {
     documentTitle: string;
     title: string;
@@ -294,6 +310,7 @@ export const astrologerCopyByLocale = {
         },
         items: [
           { id: "dashboard", title: "Дашборд", href: "/dashboard" },
+          { id: "products", title: "Продукты", href: "/products" },
           { id: "reference", title: "Справочники", href: "/reference" }
         ],
         footerItems: [{ id: "settings", title: "Настройки", href: "/settings" }]
@@ -303,6 +320,22 @@ export const astrologerCopyByLocale = {
       documentTitle: "ElevenHouse | Кабинет астролога",
       kicker: "Astrologer surface",
       title: "ElevenHouse Astrologer Web"
+    },
+    products: {
+      documentTitle: "ElevenHouse | Продукты",
+      title: "Продукты",
+      createLabel: "Создать продукт",
+      statusFilterAriaLabel: "Фильтр статусов продуктов",
+      summary: {
+        activeLabel: "Активных",
+        salesLabel: "Продаж всего",
+        revenueLabel: "Выручка каталога",
+        bestsellerLabel: "Бестселлер",
+        emptyBestseller: "—"
+      },
+      emptyLabel: "Нет продуктов в этом статусе",
+      loadingLabel: "Загружаем продукты",
+      errorLabel: "Не удалось загрузить продукты"
     },
     reference: {
       documentTitle: "ElevenHouse | Справочники",
@@ -484,6 +517,7 @@ export const astrologerCopyByLocale = {
         },
         items: [
           { id: "dashboard", title: "Dashboard", href: "/dashboard" },
+          { id: "products", title: "Products", href: "/products" },
           { id: "reference", title: "References", href: "/reference" }
         ],
         footerItems: [{ id: "settings", title: "Settings", href: "/settings" }]
@@ -493,6 +527,22 @@ export const astrologerCopyByLocale = {
       documentTitle: "ElevenHouse | Astrologer dashboard",
       kicker: "Astrologer surface",
       title: "ElevenHouse Astrologer Web"
+    },
+    products: {
+      documentTitle: "ElevenHouse | Products",
+      title: "Products",
+      createLabel: "Create product",
+      statusFilterAriaLabel: "Product status filter",
+      summary: {
+        activeLabel: "Active",
+        salesLabel: "Total sales",
+        revenueLabel: "Catalog revenue",
+        bestsellerLabel: "Bestseller",
+        emptyBestseller: "—"
+      },
+      emptyLabel: "No products in this status",
+      loadingLabel: "Loading products",
+      errorLabel: "Could not load products"
     },
     reference: {
       documentTitle: "ElevenHouse | References",

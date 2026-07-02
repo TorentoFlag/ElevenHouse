@@ -1,5 +1,6 @@
 import { NavigationDrawer } from "@elevenhouse/design-system/navigation";
 import { Reference } from "@elevenhouse/design-system/icons/Reference";
+import { Wallet } from "@elevenhouse/design-system/icons/Wallet";
 import { NavLink } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { astrologerCopyByLocale } from "../../common/i18n/astrologerCopy";
@@ -25,18 +26,24 @@ describe("AstrologerNavigationDrawerView", () => {
     expect(element.props.footerItems).toBeUndefined();
     expect(JSON.stringify(renderElement(element.props.footer))).toContain("Личная страница");
     expect(JSON.stringify(renderElement(element.props.footer))).toContain("Настройки");
-    expect(element.props.items).toHaveLength(2);
+    expect(element.props.items).toHaveLength(3);
     expect(element.props.items[0]).toMatchObject({
       id: "dashboard",
       title: "Дашборд",
       href: "/dashboard"
     });
     expect(element.props.items[1]).toMatchObject({
+      id: "products",
+      title: "Продукты",
+      href: "/products"
+    });
+    expect(element.props.items[1].icon.type).toBe(Wallet);
+    expect(element.props.items[2]).toMatchObject({
       id: "reference",
       title: "Справочники",
       href: "/reference"
     });
-    expect(element.props.items[1].icon.type).toBe(Reference);
+    expect(element.props.items[2].icon.type).toBe(Reference);
   });
 
   it("passes collapsed state controls to the shared navigation drawer", () => {

@@ -6,6 +6,7 @@ import { AstrologerAppLayout } from "./layouts/AstrologerAppLayout";
 import { AuthPage } from "./pages/auth/AuthPage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
+import { ProductsPage } from "./pages/products/ProductsPage";
 import { astrologerRoutes } from "./router";
 
 vi.mock("react-router", async (importOriginal) => {
@@ -28,6 +29,7 @@ describe("astrologerRoutes", () => {
       (route) => isValidElement(route.element) && route.element.type === AstrologerAppLayout
     );
     const dashboardRoute = shellRoute?.children?.find((route) => route.path === "/dashboard");
+    const productsRoute = shellRoute?.children?.find((route) => route.path === "/products");
     const referenceRoute = shellRoute?.children?.find((route) => route.path === "/reference");
 
     expect(isValidElement(rootRedirect?.element) && rootRedirect.element.type).toBe(Navigate);
@@ -40,6 +42,9 @@ describe("astrologerRoutes", () => {
     );
     expect(isValidElement(dashboardRoute?.element) && dashboardRoute.element.type).toBe(
       DashboardPage
+    );
+    expect(isValidElement(productsRoute?.element) && productsRoute.element.type).toBe(
+      ProductsPage
     );
     expect(isValidElement(referenceRoute?.element) && referenceRoute.element.type).toBe(
       ReferencePage
