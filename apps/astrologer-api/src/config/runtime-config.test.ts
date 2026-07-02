@@ -7,11 +7,11 @@ const requiredSecurityConfig = {
 };
 const defaultAiConfig = {
   enabled: false,
-  provider: "deepseek",
-  deepSeekApiKey: undefined,
-  deepSeekBaseUrl: "https://api.deepseek.com",
-  fastDraftModel: "deepseek-v4-flash",
-  qualityDraftModel: "deepseek-v4-pro",
+  provider: "openai",
+  openAiApiKey: undefined,
+  openAiBaseUrl: "https://api.openai.com/v1",
+  fastDraftModel: "gpt-5.4-mini",
+  qualityDraftModel: "gpt-5.5",
   timeoutMs: 15000,
   maxOutputTokens: 900,
   rateLimitRedisKeyPrefix: "elevenhouse:astrologer-api:ai",
@@ -259,7 +259,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
     expect(() => createAstrologerApiRuntimeConfig({})).toThrow("AUTH_CODE_DELIVERY_ENCRYPTION_KEY");
   });
 
-  it("parses disabled AI runtime config without requiring a DeepSeek key", () => {
+  it("parses disabled AI runtime config without requiring an OpenAI key", () => {
     const config = createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
       ASTROLOGER_AI_ENABLED: "false"
@@ -268,36 +268,36 @@ describe("createAstrologerApiRuntimeConfig", () => {
     expect(config.ai).toEqual(defaultAiConfig);
   });
 
-  it("normalizes a blank DeepSeek API key to undefined when AI is disabled", () => {
+  it("normalizes a blank OpenAI API key to undefined when AI is disabled", () => {
     const config = createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
       ASTROLOGER_AI_ENABLED: "false",
-      ASTROLOGER_DEEPSEEK_API_KEY: "   "
+      ASTROLOGER_OPENAI_API_KEY: "   "
     });
 
-    expect(config.ai.deepSeekApiKey).toBeUndefined();
+    expect(config.ai.openAiApiKey).toBeUndefined();
   });
 
-  it("requires a DeepSeek API key when AI is enabled", () => {
+  it("requires an OpenAI API key when AI is enabled", () => {
     expect(() =>
       createAstrologerApiRuntimeConfig({
         ...requiredSecurityConfig,
         ASTROLOGER_AI_ENABLED: "true"
       })
-    ).toThrow("ASTROLOGER_DEEPSEEK_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
+    ).toThrow("ASTROLOGER_OPENAI_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
   });
 
-  it("requires a DeepSeek API key when AI is enabled and the key is blank", () => {
+  it("requires an OpenAI API key when AI is enabled and the key is blank", () => {
     expect(() =>
       createAstrologerApiRuntimeConfig({
         ...requiredSecurityConfig,
         ASTROLOGER_AI_ENABLED: "true",
-        ASTROLOGER_DEEPSEEK_API_KEY: "   "
+        ASTROLOGER_OPENAI_API_KEY: "   "
       })
-    ).toThrow("ASTROLOGER_DEEPSEEK_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
+    ).toThrow("ASTROLOGER_OPENAI_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
   });
 
-  it("rejects cleartext DeepSeek base URLs in production when AI is enabled", () => {
+  it("rejects cleartext OpenAI base URLs in production when AI is enabled", () => {
     expect(() =>
       createAstrologerApiRuntimeConfig({
         ...requiredSecurityConfig,
@@ -307,24 +307,22 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
         ASTROLOGER_AI_ENABLED: "true",
-        ASTROLOGER_DEEPSEEK_API_KEY: "deepseek-secret",
-        ASTROLOGER_DEEPSEEK_BASE_URL: "http://deepseek.internal"
+        ASTROLOGER_OPENAI_API_KEY: "openai-secret",
+        ASTROLOGER_OPENAI_BASE_URL: "http://openai.internal"
       })
-    ).toThrow(
-      "ASTROLOGER_DEEPSEEK_BASE_URL must use https in production when ASTROLOGER_AI_ENABLED=true"
-    );
+    ).toThrow("ASTROLOGER_OPENAI_BASE_URL must use https in production when ASTROLOGER_AI_ENABLED=true");
   });
 
   it("parses enabled AI runtime config", () => {
     const config = createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
       ASTROLOGER_AI_ENABLED: "true",
-      ASTROLOGER_DEEPSEEK_API_KEY: "deepseek-secret",
+      ASTROLOGER_OPENAI_API_KEY: "openai-secret",
       ASTROLOGER_AI_RATE_LIMIT_USER_PER_MINUTE: "5"
     });
 
     expect(config.ai.enabled).toBe(true);
-    expect(config.ai.deepSeekApiKey).toBe("deepseek-secret");
+    expect(config.ai.openAiApiKey).toBe("openai-secret");
     expect(config.ai.rateLimits.userPerMinute).toEqual({ limit: 5, windowSeconds: 60 });
   });
 });

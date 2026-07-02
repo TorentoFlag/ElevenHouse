@@ -83,15 +83,13 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
-  ASTROLOGER_AI_PROVIDER: z.literal("deepseek").default("deepseek"),
-  ASTROLOGER_DEEPSEEK_API_KEY: optionalTrimmedNonEmptyStringSchema,
-  ASTROLOGER_DEEPSEEK_BASE_URL: z.string().trim().url().default("https://api.deepseek.com"),
+  ASTROLOGER_AI_PROVIDER: z.literal("openai").default("openai"),
+  ASTROLOGER_OPENAI_API_KEY: optionalTrimmedNonEmptyStringSchema,
+  ASTROLOGER_OPENAI_BASE_URL: z.string().trim().url().default("https://api.openai.com/v1"),
   ASTROLOGER_AI_FAST_DRAFT_MODEL: z
-    .enum(["deepseek-v4-flash", "deepseek-v4-pro"])
-    .default("deepseek-v4-flash"),
-  ASTROLOGER_AI_QUALITY_DRAFT_MODEL: z
-    .enum(["deepseek-v4-flash", "deepseek-v4-pro"])
-    .default("deepseek-v4-pro"),
+    .enum(["gpt-5.4-mini", "gpt-5.5"])
+    .default("gpt-5.4-mini"),
+  ASTROLOGER_AI_QUALITY_DRAFT_MODEL: z.enum(["gpt-5.4-mini", "gpt-5.5"]).default("gpt-5.5"),
   ASTROLOGER_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
   ASTROLOGER_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(900),
   ASTROLOGER_AI_RATE_LIMIT_USER_PER_MINUTE: z.coerce.number().int().positive().default(3),
@@ -146,11 +144,11 @@ export type AstrologerApiRuntimeConfig = {
   };
   readonly ai: {
     readonly enabled: boolean;
-    readonly provider: "deepseek";
-    readonly deepSeekApiKey?: string;
-    readonly deepSeekBaseUrl: string;
-    readonly fastDraftModel: "deepseek-v4-flash" | "deepseek-v4-pro";
-    readonly qualityDraftModel: "deepseek-v4-flash" | "deepseek-v4-pro";
+    readonly provider: "openai";
+    readonly openAiApiKey?: string;
+    readonly openAiBaseUrl: string;
+    readonly fastDraftModel: "gpt-5.4-mini" | "gpt-5.5";
+    readonly qualityDraftModel: "gpt-5.4-mini" | "gpt-5.5";
     readonly timeoutMs: number;
     readonly maxOutputTokens: number;
     readonly rateLimitRedisKeyPrefix: string;
@@ -203,17 +201,17 @@ export function createAstrologerApiRuntimeConfig(
     throw new Error("ASTROLOGER_API_ALLOWED_ORIGINS is required in production");
   }
 
-  if (config.ASTROLOGER_AI_ENABLED && !config.ASTROLOGER_DEEPSEEK_API_KEY) {
-    throw new Error("ASTROLOGER_DEEPSEEK_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
+  if (config.ASTROLOGER_AI_ENABLED && !config.ASTROLOGER_OPENAI_API_KEY) {
+    throw new Error("ASTROLOGER_OPENAI_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
   }
 
   if (
     config.NODE_ENV === "production" &&
     config.ASTROLOGER_AI_ENABLED &&
-    new URL(config.ASTROLOGER_DEEPSEEK_BASE_URL).protocol !== "https:"
+    new URL(config.ASTROLOGER_OPENAI_BASE_URL).protocol !== "https:"
   ) {
     throw new Error(
-      "ASTROLOGER_DEEPSEEK_BASE_URL must use https in production when ASTROLOGER_AI_ENABLED=true"
+      "ASTROLOGER_OPENAI_BASE_URL must use https in production when ASTROLOGER_AI_ENABLED=true"
     );
   }
 
@@ -267,8 +265,8 @@ export function createAstrologerApiRuntimeConfig(
     ai: {
       enabled: config.ASTROLOGER_AI_ENABLED,
       provider: config.ASTROLOGER_AI_PROVIDER,
-      deepSeekApiKey: config.ASTROLOGER_DEEPSEEK_API_KEY,
-      deepSeekBaseUrl: config.ASTROLOGER_DEEPSEEK_BASE_URL,
+      openAiApiKey: config.ASTROLOGER_OPENAI_API_KEY,
+      openAiBaseUrl: config.ASTROLOGER_OPENAI_BASE_URL,
       fastDraftModel: config.ASTROLOGER_AI_FAST_DRAFT_MODEL,
       qualityDraftModel: config.ASTROLOGER_AI_QUALITY_DRAFT_MODEL,
       timeoutMs: config.ASTROLOGER_AI_TIMEOUT_MS,
