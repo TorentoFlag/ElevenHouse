@@ -32,7 +32,6 @@ const copy = {
   saveLabel: "Сохранить",
   savingLabel: "Сохраняем",
   genericError: "Не удалось сохранить трактовку",
-  aiDraftTemplate: "Черновик для «{title}»: опишите проявления положения.",
   validation: {
     categoryRequired: "Выберите категорию",
     titleRequired: "Введите название",
@@ -81,8 +80,10 @@ describe("ReferenceEntryModalView", () => {
       draft,
       canSubmit: true,
       isSaving: false,
+      isCreatingAiDraft: false,
       fieldErrors: {},
       errorMessage: null,
+      aiErrorMessage: null,
       onClose,
       onDraftChange,
       onSubmit,
@@ -152,6 +153,7 @@ describe("ReferenceEntryModalView", () => {
     expect(aiButton.props.title).toBe(
       "AI набросает черновик по заголовку — отредактируйте под свой стиль"
     );
+    expect(aiButton.props.disabled).toBe(false);
     expect(findRequiredElementByType(aiButton, Sparkle).props.width).toBe(12);
     expect(JSON.stringify(aiButton.props.children)).toContain("AI-черновик");
     aiButton.props.onClick();
@@ -196,8 +198,10 @@ describe("ReferenceEntryModalView", () => {
       },
       canSubmit: false,
       isSaving: false,
+      isCreatingAiDraft: false,
       fieldErrors: {},
       errorMessage: null,
+      aiErrorMessage: null,
       onClose: vi.fn(),
       onDraftChange: vi.fn(),
       onSubmit: vi.fn(),
@@ -232,8 +236,10 @@ describe("ReferenceEntryModalView", () => {
       },
       canSubmit: false,
       isSaving: true,
+      isCreatingAiDraft: false,
       fieldErrors: {},
       errorMessage: "Сервер недоступен",
+      aiErrorMessage: null,
       onClose: vi.fn(),
       onDraftChange: vi.fn(),
       onSubmit: vi.fn(),
@@ -261,12 +267,14 @@ describe("ReferenceEntryModalView", () => {
       },
       canSubmit: false,
       isSaving: false,
+      isCreatingAiDraft: true,
       fieldErrors: {
         categoryId: "Выберите категорию",
         title: "Введите название",
         content: "Введите текст трактовки"
       },
       errorMessage: null,
+      aiErrorMessage: "Не удалось создать AI-черновик",
       onClose: vi.fn(),
       onDraftChange: vi.fn(),
       onSubmit: vi.fn(),
@@ -276,6 +284,7 @@ describe("ReferenceEntryModalView", () => {
     expect(JSON.stringify(view.props.children)).toContain("Выберите категорию");
     expect(JSON.stringify(view.props.children)).toContain("Введите название");
     expect(JSON.stringify(view.props.children)).toContain("Введите текст трактовки");
+    expect(JSON.stringify(view.props.children)).toContain("Не удалось создать AI-черновик");
 
     const titleInput = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-title");
     const contentInput = findRequiredElementByDataAttribute(
@@ -287,6 +296,9 @@ describe("ReferenceEntryModalView", () => {
     expect(titleInput.props["aria-describedby"]).toBe("reference-entry-modal-title-error");
     expect(contentInput.props["aria-invalid"]).toBe(true);
     expect(contentInput.props["aria-describedby"]).toBe("reference-entry-modal-content-error");
+
+    const aiButton = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-ai");
+    expect(aiButton.props.disabled).toBe(true);
   });
 
   it("keeps validation helper text hidden until the container decides errors are visible", () => {
@@ -300,8 +312,10 @@ describe("ReferenceEntryModalView", () => {
       },
       canSubmit: false,
       isSaving: false,
+      isCreatingAiDraft: false,
       fieldErrors: {},
       errorMessage: null,
+      aiErrorMessage: null,
       onClose: vi.fn(),
       onDraftChange: vi.fn(),
       onSubmit: vi.fn(),

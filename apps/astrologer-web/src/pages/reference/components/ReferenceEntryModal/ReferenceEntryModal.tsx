@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { DictionaryCategoryResponse, DictionaryLocale } from "@elevenhouse/contracts";
+import { useCreateDictionaryAiDraftMutation } from "../../../../features/dictionary/model/useCreateDictionaryAiDraftMutation";
 import { useCreateDictionaryCustomEntryMutation } from "../../../../features/dictionary/model/useCreateDictionaryCustomEntryMutation";
 import {
-  createReferenceEntryAiDraft,
   createReferenceEntryDraft,
   normalizeReferenceEntryDraft,
   resolveReferenceEntryVisibleFieldErrors,
@@ -42,6 +42,7 @@ export function ReferenceEntryModal({
   });
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const createEntryMutation = useCreateDictionaryCustomEntryMutation();
+  const createAiDraftMutation = useCreateDictionaryAiDraftMutation();
   const validationState = validateReferenceEntryDraft({
     draft,
     locale,
@@ -65,8 +66,10 @@ export function ReferenceEntryModal({
       draft={draft}
       canSubmit={canSubmit}
       isSaving={createEntryMutation.isPending}
+      isCreatingAiDraft={createAiDraftMutation.isPending}
       fieldErrors={visibleFieldErrors}
       errorMessage={createEntryMutation.isError ? copy.genericError : null}
+      aiErrorMessage={createAiDraftMutation.isError ? copy.genericError : null}
       onClose={onClose}
       onDraftChange={(nextDraft, fieldName) => {
         updateDraft(nextDraft);
@@ -76,15 +79,24 @@ export function ReferenceEntryModal({
         }
       }}
       onCreateAiDraft={() => {
-        const content = createReferenceEntryAiDraft({
-          title: draft.title,
-          template: copy.aiDraftTemplate
-        });
-
-        if (content) {
-          updateDraft({ ...draft, content });
-          setTouchedFields((current) => ({ ...current, content: true }));
+        if (createAiDraftMutation.isPending || !draft.categoryId || !draft.title.trim()) {
+          return;
         }
+
+        createAiDraftMutation
+          .mutateAsync({
+            categoryId: draft.categoryId,
+            locale,
+            title: draft.title
+          })
+          .then((response) => {
+            setDraft((currentDraft) => ({
+              ...currentDraft,
+              content: response.content
+            }));
+            setTouchedFields((current) => ({ ...current, content: true }));
+          })
+          .catch(() => undefined);
       }}
       onSubmit={() => {
         setSubmitAttempted(true);

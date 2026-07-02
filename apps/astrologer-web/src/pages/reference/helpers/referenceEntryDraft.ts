@@ -144,22 +144,6 @@ export function normalizeReferenceEntryDraft(draft: ReferenceEntryDraft): Refere
   };
 }
 
-export function createReferenceEntryAiDraft({
-  title,
-  template
-}: {
-  readonly title: string;
-  readonly template: string;
-}): string {
-  const normalizedTitle = title.trim();
-
-  if (!normalizedTitle) {
-    return "";
-  }
-
-  return template.replace("{title}", normalizedTitle);
-}
-
 function formatValidationMessage(template: string, max: number): string {
   return template.replace("{max}", String(max));
 }

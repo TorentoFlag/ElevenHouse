@@ -61,7 +61,6 @@ const copy = {
     saveLabel: "Сохранить",
     savingLabel: "Сохраняем",
     genericError: "Не удалось сохранить трактовку. Попробуйте ещё раз.",
-    aiDraftTemplate: "Черновик для «{title}»: опишите проявления положения.",
     validation: {
       categoryRequired: "Выберите категорию",
       titleRequired: "Введите название трактовки",

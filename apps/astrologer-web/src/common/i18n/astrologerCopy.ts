@@ -99,7 +99,6 @@ export type AstrologerCopy = {
       saveLabel: string;
       savingLabel: string;
       genericError: string;
-      aiDraftTemplate: string;
       validation: {
         categoryRequired: string;
         titleRequired: string;
@@ -331,8 +330,6 @@ export const astrologerCopyByLocale = {
         saveLabel: "Сохранить",
         savingLabel: "Сохраняем",
         genericError: "Не удалось сохранить трактовку. Попробуйте ещё раз.",
-        aiDraftTemplate:
-          "Черновик для «{title}»: опишите ключевое значение, сильные проявления, возможные сложности и то, как эта тема раскрывается в карте.",
         validation: {
           categoryRequired: "Выберите категорию",
           titleRequired: "Введите название трактовки",
@@ -509,8 +506,6 @@ export const astrologerCopyByLocale = {
         saveLabel: "Save",
         savingLabel: "Saving",
         genericError: "Could not save the interpretation. Try again.",
-        aiDraftTemplate:
-          "Draft for “{title}”: describe the core meaning, strong expressions, possible challenges, and how this theme unfolds in the chart.",
         validation: {
           categoryRequired: "Choose a category",
           titleRequired: "Enter an interpretation title",
