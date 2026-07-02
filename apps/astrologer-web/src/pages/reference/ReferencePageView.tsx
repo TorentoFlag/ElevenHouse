@@ -4,37 +4,15 @@ import type {
   DictionaryEntrySourceFilter,
   DictionarySourceCounts
 } from "@elevenhouse/contracts";
-import type { ComponentType, SVGProps } from "react";
-import { Button } from "@elevenhouse/design-system/components/Button";
-import "@elevenhouse/design-system/components/Button.css";
-import { Card } from "@elevenhouse/design-system/components/Card";
-import "@elevenhouse/design-system/components/Card.css";
-import { IconButton } from "@elevenhouse/design-system/components/IconButton";
-import "@elevenhouse/design-system/components/IconButton.css";
-import { Modal } from "@elevenhouse/design-system/components/Modal";
-import "@elevenhouse/design-system/components/Modal.css";
-import { classNames } from "@elevenhouse/design-system/helpers";
-import { Content } from "@elevenhouse/design-system/icons/Content";
-import { Edit } from "@elevenhouse/design-system/icons/Edit";
-import { Flow } from "@elevenhouse/design-system/icons/Flow";
-import { LayoutGrid } from "@elevenhouse/design-system/icons/LayoutGrid";
-import { Orbit } from "@elevenhouse/design-system/icons/Orbit";
-import { Plus } from "@elevenhouse/design-system/icons/Plus";
-import { Reference } from "@elevenhouse/design-system/icons/Reference";
-import { Search } from "@elevenhouse/design-system/icons/Search";
-import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
-import { Trash } from "@elevenhouse/design-system/icons/Trash";
-import { MotionContent } from "@elevenhouse/design-system/motion";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
-import { ReferenceCategoryButton } from "./components/ReferenceCategoryButton";
-import { ReferenceSourceFilterChip } from "./components/ReferenceSourceFilterChip";
+import { ReferenceCategoryRail } from "./components/ReferenceCategoryRail";
+import { ReferenceConfirmationModal } from "./components/ReferenceConfirmationModal";
+import { ReferenceResults } from "./components/ReferenceResults";
+import { ReferenceToolbar } from "./components/ReferenceToolbar";
+import type { ReferenceAddEntryOptions } from "./types";
 import styles from "./ReferencePage.module.css";
 
 type ReferencePageCopy = AstrologerCopy["reference"];
-
-export type ReferenceAddEntryOptions = {
-  readonly titleSeed?: string;
-};
 
 export type ReferencePageViewProps = {
   copy: ReferencePageCopy;
@@ -66,20 +44,6 @@ export type ReferencePageViewProps = {
   onDeleteEntry: (entry: DictionaryEffectiveEntryResponse) => void;
 };
 
-type ReferenceIcon = ComponentType<SVGProps<SVGSVGElement>>;
-
-const categoryIconByCode: Record<string, ReferenceIcon> = {
-  planets_in_signs: Orbit,
-  signs: Orbit,
-  planets_in_houses: Content,
-  houses: Content,
-  aspects: Flow,
-  house_meanings: LayoutGrid,
-  "house-mean": LayoutGrid,
-  own: Sparkle,
-  custom: Sparkle
-};
-
 export function ReferencePageView({
   copy,
   catalogTotal,
@@ -109,252 +73,80 @@ export function ReferencePageView({
   onEditEntry,
   onDeleteEntry
 }: ReferencePageViewProps) {
-  const sourceFilters: DictionaryEntrySourceFilter[] = ["all", "platform", "modified", "custom"];
-
   return (
     <section className={styles.referencePage} aria-labelledby="reference-title">
-      <header className={styles.toolbar}>
-        <div className={styles.titleGroup}>
-          <span className={styles.titleIcon} aria-hidden="true">
-            <Reference width={18} height={18} />
-          </span>
-          <span className={styles.titleText}>
-            <h1 id="reference-title" className={styles.title}>
-              {copy.title}
-            </h1>
-            <span className={styles.total}>{catalogTotal}</span>
-          </span>
-        </div>
-
-        <label className={styles.searchWrap}>
-          <span className={styles.searchIcon} aria-hidden="true">
-            <Search width={15} height={15} />
-          </span>
-          <input
-            className={styles.searchInput}
-            type="search"
-            value={search}
-            placeholder={copy.searchPlaceholder}
-            aria-label={copy.searchPlaceholder}
-            onChange={(event) => onSearchChange(event.currentTarget.value)}
-          />
-        </label>
-
-        <span className={styles.toolbarSpacer} aria-hidden="true" />
-
-        <Button
-          className={styles.resetButton}
-          type="button"
-          variant="default"
-          size="medium"
-          title={copy.resetLabel}
-          disabled={isResetting}
-          data-reference-toolbar-action="reset"
-          onClick={onReset}
-        />
-        <Button
-          className={styles.addButton}
-          type="button"
-          variant="brand"
-          size="big"
-          title={copy.addLabel}
-          startIcon={<Plus width={15} height={15} aria-hidden="true" />}
-          data-reference-toolbar-action="add"
-          onClick={() => onAdd()}
-        />
-      </header>
+      <ReferenceToolbar
+        title={copy.title}
+        catalogTotal={catalogTotal}
+        search={search}
+        searchPlaceholder={copy.searchPlaceholder}
+        resetLabel={copy.resetLabel}
+        addLabel={copy.addLabel}
+        isResetting={isResetting}
+        onSearchChange={onSearchChange}
+        onReset={onReset}
+        onAdd={onAdd}
+      />
 
       <div className={styles.body}>
-        <aside className={styles.categoryRail} aria-label={copy.allCategoriesLabel}>
-          <nav className={styles.categoryList}>
-            <ReferenceCategoryButton
-              id="all"
-              label={copy.allCategoriesLabel}
-              count={catalogTotal}
-              icon={<Reference width={16} height={16} />}
-              isActive={selectedCategoryId === null}
-              onClick={() => onCategoryChange(null)}
-            />
+        <ReferenceCategoryRail
+          allCategoriesLabel={copy.allCategoriesLabel}
+          catalogTotal={catalogTotal}
+          categories={categories}
+          selectedCategoryId={selectedCategoryId}
+          onCategoryChange={onCategoryChange}
+        />
 
-            {categories.map((category) => {
-              const CategoryIcon = categoryIconByCode[category.code] ?? Reference;
-
-              return (
-                <ReferenceCategoryButton
-                  key={category.id}
-                  id={category.id}
-                  label={category.name}
-                  count={category.count}
-                  icon={<CategoryIcon width={16} height={16} />}
-                  isActive={selectedCategoryId === category.id}
-                  onClick={() => onCategoryChange(category.id)}
-                />
-              );
-            })}
-          </nav>
-        </aside>
-
-        <div className={styles.content}>
-          <div
-            className={styles.sourceFilters}
-            role="group"
-            aria-label={copy.sourceFilterAriaLabel}
-          >
-            {sourceFilters.map((source) => (
-              <ReferenceSourceFilterChip
-                key={source}
-                source={source}
-                label={copy.sourceFilters[source]}
-                count={sourceCounts[source]}
-                isActive={selectedSource === source}
-                onClick={() => onSourceChange(source)}
-              />
-            ))}
-          </div>
-
-          <MotionContent
-            className={classNames(
-              styles.resultsMotion,
-              isResultsUpdating ? styles.resultsMotionUpdating : undefined
-            )}
-            transitionKey={resultsMotionKey}
-          >
-            {isLoading && <p className={styles.contentState}>{copy.loadingLabel}</p>}
-            {isError && <p className={styles.contentState}>{copy.errorLabel}</p>}
-            {!isLoading && !isError && entries.length === 0 && (
-              <div className={styles.emptyState}>
-                <p>{copy.emptyLabel}</p>
-                <button
-                  className={`${styles.button} ${styles.buttonGhost}`}
-                  type="button"
-                  onClick={() => onAdd({ titleSeed: search })}
-                >
-                  {copy.emptyAddLabel}
-                </button>
-              </div>
-            )}
-
-            {!isLoading && !isError && entries.length > 0 && (
-              <div className={styles.entryGrid}>
-                {entries.map((entry) => (
-                  <Card
-                    as="article"
-                    className={styles.entryCard}
-                    key={entry.id}
-                    padding="medium"
-                    variant="elevated"
-                  >
-                    <div className={styles.entryTitleRow}>
-                      <h2 className={styles.entryTitle}>{entry.title}</h2>
-                      <span className={styles.entryBadge}>{copy.sourceBadges[entry.source]}</span>
-                    </div>
-                    <p className={styles.entryContent}>{entry.content}</p>
-                    <div className={styles.entryActions}>
-                      <Button
-                        className={styles.entryEditButton}
-                        type="button"
-                        variant="glass"
-                        size="small"
-                        title={copy.entryActions.editLabel}
-                        startIcon={
-                          <Edit
-                            className={styles.buttonIcon}
-                            width={13}
-                            height={13}
-                            aria-hidden="true"
-                          />
-                        }
-                        data-reference-entry-action="edit"
-                        onClick={() => onEditEntry(entry)}
-                      />
-                      {entry.astrologerEntryId ? (
-                        <IconButton
-                          type="button"
-                          variant="quiet"
-                          size="small"
-                          label={`${copy.entryActions.deleteLabel}: ${entry.title}`}
-                          icon={<Trash aria-hidden="true" />}
-                          data-reference-entry-action="delete"
-                          onClick={() => onDeleteEntry(entry)}
-                        />
-                      ) : null}
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </MotionContent>
-        </div>
+        <ReferenceResults
+          sourceFilterAriaLabel={copy.sourceFilterAriaLabel}
+          sourceFilters={copy.sourceFilters}
+          sourceCounts={sourceCounts}
+          selectedSource={selectedSource}
+          entries={entries}
+          search={search}
+          isLoading={isLoading}
+          isError={isError}
+          resultsMotionKey={resultsMotionKey}
+          isResultsUpdating={isResultsUpdating}
+          loadingLabel={copy.loadingLabel}
+          errorLabel={copy.errorLabel}
+          emptyLabel={copy.emptyLabel}
+          emptyAddLabel={copy.emptyAddLabel}
+          sourceBadges={copy.sourceBadges}
+          entryActions={copy.entryActions}
+          onSourceChange={onSourceChange}
+          onAdd={onAdd}
+          onEditEntry={onEditEntry}
+          onDeleteEntry={onDeleteEntry}
+        />
       </div>
 
       {isResetConfirmationOpen && (
-        <Modal
+        <ReferenceConfirmationModal
           title={copy.resetConfirmation.title}
           closeLabel={copy.resetConfirmation.closeLabel}
-          onClose={onResetCancel}
-        >
-          <div className={styles.resetConfirmation}>
-            <p className={styles.resetConfirmationDescription}>
-              {copy.resetConfirmation.description}
-            </p>
-            <div className={styles.resetConfirmationActions}>
-              <Button
-                className={styles.resetConfirmationButton}
-                type="button"
-                variant="brand"
-                size="medium"
-                title={copy.resetConfirmation.confirmLabel}
-                disabled={isResetting}
-                data-reference-reset-confirmation-action="confirm"
-                onClick={onResetConfirm}
-              />
-              <Button
-                type="button"
-                variant="glass"
-                size="medium"
-                title={copy.resetConfirmation.cancelLabel}
-                disabled={isResetting}
-                data-reference-reset-confirmation-action="cancel"
-                onClick={onResetCancel}
-              />
-            </div>
-          </div>
-        </Modal>
+          description={copy.resetConfirmation.description}
+          confirmLabel={copy.resetConfirmation.confirmLabel}
+          cancelLabel={copy.resetConfirmation.cancelLabel}
+          isPending={isResetting}
+          actionDataAttribute="data-reference-reset-confirmation-action"
+          onConfirm={onResetConfirm}
+          onCancel={onResetCancel}
+        />
       )}
 
       {deleteConfirmationEntry && (
-        <Modal
+        <ReferenceConfirmationModal
           title={copy.deleteConfirmation.title}
           closeLabel={copy.deleteConfirmation.closeLabel}
-          onClose={onDeleteCancel}
-        >
-          <div className={styles.resetConfirmation}>
-            <p className={styles.resetConfirmationDescription}>
-              {copy.deleteConfirmation.description}
-            </p>
-            <div className={styles.resetConfirmationActions}>
-              <Button
-                className={styles.resetConfirmationButton}
-                type="button"
-                variant="brand"
-                size="medium"
-                title={copy.deleteConfirmation.confirmLabel}
-                disabled={isDeletingEntry}
-                data-reference-delete-confirmation-action="confirm"
-                onClick={onDeleteConfirm}
-              />
-              <Button
-                type="button"
-                variant="glass"
-                size="medium"
-                title={copy.deleteConfirmation.cancelLabel}
-                disabled={isDeletingEntry}
-                data-reference-delete-confirmation-action="cancel"
-                onClick={onDeleteCancel}
-              />
-            </div>
-          </div>
-        </Modal>
+          description={copy.deleteConfirmation.description}
+          confirmLabel={copy.deleteConfirmation.confirmLabel}
+          cancelLabel={copy.deleteConfirmation.cancelLabel}
+          isPending={isDeletingEntry}
+          actionDataAttribute="data-reference-delete-confirmation-action"
+          onConfirm={onDeleteConfirm}
+          onCancel={onDeleteCancel}
+        />
       )}
     </section>
   );

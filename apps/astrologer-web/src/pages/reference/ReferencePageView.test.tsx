@@ -1,18 +1,9 @@
 import { Children, isValidElement, type ReactElement } from "react";
 import type { DictionaryEffectiveEntryResponse } from "@elevenhouse/contracts";
-import { Button } from "@elevenhouse/design-system/components/Button";
-import { Card } from "@elevenhouse/design-system/components/Card";
-import { IconButton } from "@elevenhouse/design-system/components/IconButton";
-import { Modal } from "@elevenhouse/design-system/components/Modal";
-import { MotionContent } from "@elevenhouse/design-system/motion";
-import { Edit } from "@elevenhouse/design-system/icons/Edit";
-import { Plus } from "@elevenhouse/design-system/icons/Plus";
-import { Reference } from "@elevenhouse/design-system/icons/Reference";
-import { Search } from "@elevenhouse/design-system/icons/Search";
-import { Trash } from "@elevenhouse/design-system/icons/Trash";
 import { describe, expect, it, vi } from "vitest";
-import { ReferenceCategoryButton } from "./components/ReferenceCategoryButton";
-import { ReferenceSourceFilterChip } from "./components/ReferenceSourceFilterChip";
+import { ReferenceCategoryRail } from "./components/ReferenceCategoryRail";
+import { ReferenceConfirmationModal } from "./components/ReferenceConfirmationModal";
+import { ReferenceResults } from "./components/ReferenceResults";
 import { ReferencePageView, type ReferencePageViewProps } from "./ReferencePageView";
 import styles from "./ReferencePage.module.css";
 
@@ -80,7 +71,7 @@ const copy = {
       titleRequired: "Введите название трактовки",
       titleMaxLength: "Название не должно быть длиннее {max} символов",
       contentRequired: "Введите текст трактовки",
-      contentMaxLength: "Текст не должен быть длиннее {max} символов"
+      contentMaxLength: "Текст не должно быть длиннее {max} символов"
     }
   },
   emptyLabel: "Ничего не найдено",
@@ -141,7 +132,7 @@ const entries = [
 ] satisfies DictionaryEffectiveEntryResponse[];
 
 describe("ReferencePageView", () => {
-  it("renders the dictionary toolbar, category rail and source filters", () => {
+  it("composes toolbar, category rail and results with page state", () => {
     const onCategoryChange = vi.fn();
     const onSourceChange = vi.fn();
     const onSearchChange = vi.fn();
@@ -150,35 +141,18 @@ describe("ReferencePageView", () => {
     const onEditEntry = vi.fn();
     const onDeleteEntry = vi.fn();
     const view = ReferencePageView({
-      copy,
-      catalogTotal: 396,
+      ...createBaseProps(),
       categories,
       entries,
+      catalogTotal: 396,
       selectedCategoryId: getArrayItem(categories, 0).id,
-      selectedSource: "all",
-      sourceCounts: {
-        all: 14,
-        platform: 14,
-        modified: 0,
-        custom: 0
-      },
       search: "луна",
-      isLoading: false,
-      isError: false,
-      isResetting: false,
-      isDeletingEntry: false,
-      resultsMotionKey: "planets-in-signs:1000",
       isResultsUpdating: true,
+      resultsMotionKey: "planets-in-signs:1000",
       onCategoryChange,
       onSourceChange,
       onSearchChange,
       onReset,
-      isResetConfirmationOpen: false,
-      deleteConfirmationEntry: null,
-      onResetConfirm: vi.fn(),
-      onResetCancel: vi.fn(),
-      onDeleteConfirm: vi.fn(),
-      onDeleteCancel: vi.fn(),
       onAdd,
       onEditEntry,
       onDeleteEntry
@@ -192,396 +166,221 @@ describe("ReferencePageView", () => {
     const toolbarProps = getElementProps(toolbar);
     const bodyProps = getElementProps(body);
 
-    expect(toolbarProps.className).toBe(styles.toolbar);
-    expect(JSON.stringify(toolbarProps.children)).toContain("Справочник трактовок");
-    expect(JSON.stringify(toolbarProps.children)).toContain("396");
-    expect(findFirstElementByType(toolbar, Reference)).toBeTruthy();
-    expect(findFirstElementByType(toolbar, Search)).toBeTruthy();
-
-    const searchInput = findRequiredElementByType(toolbar, "input");
-    expect(searchInput.props.type).toBe("search");
-    expect(searchInput.props.value).toBe("луна");
-    expect(searchInput.props.placeholder).toBe("Поиск по трактовкам...");
-    searchInput.props.onChange({ currentTarget: { value: "овен" } });
+    expect(toolbarProps.title).toBe("Справочник трактовок");
+    expect(toolbarProps.catalogTotal).toBe(396);
+    expect(toolbarProps.search).toBe("луна");
+    expect(toolbarProps.searchPlaceholder).toBe("Поиск по трактовкам...");
+    expect(toolbarProps.isResetting).toBe(false);
+    toolbarProps.onSearchChange("овен");
+    toolbarProps.onReset();
+    toolbarProps.onAdd();
     expect(onSearchChange).toHaveBeenCalledWith("овен");
-
-    const toolbarButtons = findElementsByDataAttribute(toolbar, "data-reference-toolbar-action");
-    expect(toolbarButtons.map((button) => button.props["data-reference-toolbar-action"])).toEqual([
-      "reset",
-      "add"
-    ]);
-    expect(getArrayItem(toolbarButtons, 0).props.disabled).toBe(false);
-    expect(getArrayItem(toolbarButtons, 1).props.startIcon.type).toBe(Plus);
-    getArrayItem(toolbarButtons, 0).props.onClick();
-    getArrayItem(toolbarButtons, 1).props.onClick();
-    expect(onReset).toHaveBeenCalled();
-    expect(onAdd).toHaveBeenCalled();
-    expect(findFirstElementByType(view, Modal)).toBeNull();
+    expect(onReset).toHaveBeenCalledOnce();
+    expect(onAdd).toHaveBeenCalledOnce();
+    expect(findFirstElementByType(view, ReferenceConfirmationModal)).toBeNull();
 
     expect(bodyProps.className).toBe(styles.body);
-    expect(JSON.stringify(bodyProps.children)).toContain("Все трактовки");
-    expect(JSON.stringify(bodyProps.children)).toContain("Планеты в знаках");
-    expect(JSON.stringify(bodyProps.children)).toContain("Все источники");
-    expect(JSON.stringify(bodyProps.children)).toContain("Изменённые");
 
-    const categoryButtons = findElementsByType(body, ReferenceCategoryButton);
-    expect(categoryButtons.map((button) => button.props.id)).toEqual([
-      "all",
-      getArrayItem(categories, 0).id,
-      getArrayItem(categories, 1).id
-    ]);
-    expect(getArrayItem(categoryButtons, 0).props.count).toBe(396);
-    expect(getArrayItem(categoryButtons, 1).props.count).toBe(4);
-    getArrayItem(categoryButtons, 2).props.onClick();
+    const categoryRail = findRequiredElementByType(body, ReferenceCategoryRail);
+    expect(categoryRail.props.allCategoriesLabel).toBe("Все трактовки");
+    expect(categoryRail.props.catalogTotal).toBe(396);
+    expect(categoryRail.props.categories).toBe(categories);
+    expect(categoryRail.props.selectedCategoryId).toBe(getArrayItem(categories, 0).id);
+    categoryRail.props.onCategoryChange(getArrayItem(categories, 1).id);
     expect(onCategoryChange).toHaveBeenCalledWith(getArrayItem(categories, 1).id);
 
-    const sourceButtons = findElementsByType(body, ReferenceSourceFilterChip);
-    expect(sourceButtons.map((button) => button.props.source)).toEqual([
-      "all",
-      "platform",
-      "modified",
-      "custom"
-    ]);
-    getArrayItem(sourceButtons, 2).props.onClick();
+    const results = findRequiredElementByType(body, ReferenceResults);
+    expect(results.props.sourceFilters).toBe(copy.sourceFilters);
+    expect(results.props.sourceCounts).toEqual({
+      all: 14,
+      platform: 14,
+      modified: 0,
+      custom: 0
+    });
+    expect(results.props.selectedSource).toBe("all");
+    expect(results.props.entries).toBe(entries);
+    expect(results.props.search).toBe("луна");
+    expect(results.props.resultsMotionKey).toBe("planets-in-signs:1000");
+    expect(results.props.isResultsUpdating).toBe(true);
+    results.props.onSourceChange("modified");
+    results.props.onEditEntry(getArrayItem(entries, 0));
+    results.props.onDeleteEntry(getArrayItem(entries, 1));
     expect(onSourceChange).toHaveBeenCalledWith("modified");
-
-    const resultsMotion = findRequiredElementByType(body, MotionContent);
-    expect(resultsMotion.props.transitionKey).toBe("planets-in-signs:1000");
-    expect(resultsMotion.props.className).toContain(styles.resultsMotion);
-    expect(resultsMotion.props.className).toContain(styles.resultsMotionUpdating);
-
-    expect(JSON.stringify(bodyProps.children)).toContain("Солнце в Овне");
-    expect(JSON.stringify(bodyProps.children)).toContain("Яркая воля, инициатива");
-    expect(JSON.stringify(bodyProps.children)).toContain("изменено");
-    const entryCards = findElementsByType(body, Card);
-    expect(entryCards).toHaveLength(2);
-    expect(entryCards.map((card) => card.props.as)).toEqual(["article", "article"]);
-    expect(entryCards.map((card) => card.props.variant)).toEqual(["elevated", "elevated"]);
-    expect(entryCards.map((card) => card.props.padding)).toEqual(["medium", "medium"]);
-    const editActionButtons = findElementsByType(body, Button).filter(
-      (button) => button.props["data-reference-entry-action"] === "edit"
-    );
-    expect(editActionButtons).toHaveLength(2);
-    expect(editActionButtons.map((button) => button.props.size)).toEqual(["small", "small"]);
-    expect(editActionButtons.map((button) => button.props.variant)).toEqual(["glass", "glass"]);
-    expect(editActionButtons.map((button) => button.props.title)).toEqual(["Изменить", "Изменить"]);
-    expect(editActionButtons.map((button) => button.props.startIcon.type)).toEqual([Edit, Edit]);
-    const deleteActionButtons = findElementsByType(body, IconButton).filter(
-      (button) => button.props["data-reference-entry-action"] === "delete"
-    );
-    expect(deleteActionButtons).toHaveLength(1);
-    expect(deleteActionButtons.map((button) => button.props.size)).toEqual(["small"]);
-    expect(deleteActionButtons.map((button) => button.props.variant)).toEqual(["quiet"]);
-    expect(deleteActionButtons.map((button) => button.props.label)).toEqual([
-      "Удалить: Луна в Тельце"
-    ]);
-    expect(deleteActionButtons.map((button) => button.props.icon.type)).toEqual([Trash]);
-
-    const cardActionButtons = findElementsByDataAttribute(body, "data-reference-entry-action");
-    expect(cardActionButtons.map((button) => button.props["data-reference-entry-action"])).toEqual([
-      "edit",
-      "edit",
-      "delete"
-    ]);
-    getArrayItem(cardActionButtons, 0).props.onClick();
-    getArrayItem(cardActionButtons, 2).props.onClick();
     expect(onEditEntry).toHaveBeenCalledWith(getArrayItem(entries, 0));
     expect(onDeleteEntry).toHaveBeenCalledWith(getArrayItem(entries, 1));
   });
 
-  it("renders loading and error states in the content region", () => {
-    const baseProps: ReferencePageViewProps = {
-      copy,
-      catalogTotal: 0,
-      categories: [],
-      entries: [],
-      selectedCategoryId: null,
-      selectedSource: "all",
-      sourceCounts: {
-        all: 0,
-        platform: 0,
-        modified: 0,
-        custom: 0
-      },
-      search: "",
-      isLoading: true,
-      isError: false,
-      isResetting: false,
-      isDeletingEntry: false,
-      resultsMotionKey: "initial",
-      isResultsUpdating: false,
-      onCategoryChange: vi.fn(),
-      onSourceChange: vi.fn(),
-      onSearchChange: vi.fn(),
-      onReset: vi.fn(),
-      isResetConfirmationOpen: false,
-      deleteConfirmationEntry: null,
-      onResetConfirm: vi.fn(),
-      onResetCancel: vi.fn(),
-      onDeleteConfirm: vi.fn(),
-      onDeleteCancel: vi.fn(),
-      onAdd: vi.fn(),
-      onEditEntry: vi.fn(),
-      onDeleteEntry: vi.fn()
-    };
-    const loadingView = ReferencePageView(baseProps);
+  it("passes loading and error state to results", () => {
+    const loadingView = ReferencePageView({
+      ...createBaseProps(),
+      isLoading: true
+    });
     const errorView = ReferencePageView({
-      ...baseProps,
-      isLoading: false,
+      ...createBaseProps(),
       isError: true
     });
 
-    expect(JSON.stringify(loadingView.props.children)).toContain("Загружаем справочники");
-    expect(JSON.stringify(errorView.props.children)).toContain("Не удалось загрузить справочники");
+    expect(findRequiredElementByType(loadingView, ReferenceResults).props.isLoading).toBe(true);
+    expect(findRequiredElementByType(loadingView, ReferenceResults).props.loadingLabel).toBe(
+      "Загружаем справочники"
+    );
+    expect(findRequiredElementByType(errorView, ReferenceResults).props.isError).toBe(true);
+    expect(findRequiredElementByType(errorView, ReferenceResults).props.errorLabel).toBe(
+      "Не удалось загрузить справочники"
+    );
   });
 
-  it("disables the toolbar reset command while a reset is pending", () => {
+  it("passes reset pending state to toolbar", () => {
     const view = ReferencePageView({
-      copy,
-      catalogTotal: 396,
-      categories,
-      entries,
-      selectedCategoryId: null,
-      selectedSource: "all",
-      sourceCounts: {
-        all: 14,
-        platform: 14,
-        modified: 0,
-        custom: 0
-      },
-      search: "",
-      isLoading: false,
-      isError: false,
-      isResetting: true,
-      isDeletingEntry: false,
-      resultsMotionKey: "all:all:1000",
-      isResultsUpdating: false,
-      onCategoryChange: vi.fn(),
-      onSourceChange: vi.fn(),
-      onSearchChange: vi.fn(),
-      onReset: vi.fn(),
-      isResetConfirmationOpen: false,
-      deleteConfirmationEntry: null,
-      onResetConfirm: vi.fn(),
-      onResetCancel: vi.fn(),
-      onDeleteConfirm: vi.fn(),
-      onDeleteCancel: vi.fn(),
-      onAdd: vi.fn(),
-      onEditEntry: vi.fn(),
-      onDeleteEntry: vi.fn()
+      ...createBaseProps(),
+      isResetting: true
     });
     const [toolbar] = Children.toArray(view.props.children);
-    const resetButton = getArrayItem(
-      findElementsByDataAttribute(toolbar, "data-reference-toolbar-action"),
-      0
-    );
 
-    expect(resetButton.props["data-reference-toolbar-action"]).toBe("reset");
-    expect(resetButton.props.disabled).toBe(true);
+    expect(getElementProps(toolbar).isResetting).toBe(true);
   });
 
-  it("renders a reset confirmation modal with cancel and confirm actions", () => {
+  it("composes reset confirmation modal with cancel and confirm actions", () => {
     const onReset = vi.fn();
     const onResetConfirm = vi.fn();
     const onResetCancel = vi.fn();
     const view = ReferencePageView({
-      copy,
-      catalogTotal: 396,
-      categories,
-      entries,
-      selectedCategoryId: null,
-      selectedSource: "all",
-      sourceCounts: {
-        all: 14,
-        platform: 14,
-        modified: 0,
-        custom: 0
-      },
-      search: "",
-      isLoading: false,
-      isError: false,
-      isResetting: false,
-      isDeletingEntry: false,
+      ...createBaseProps(),
       isResetConfirmationOpen: true,
-      deleteConfirmationEntry: null,
-      resultsMotionKey: "all:all:1000",
-      isResultsUpdating: false,
-      onCategoryChange: vi.fn(),
-      onSourceChange: vi.fn(),
-      onSearchChange: vi.fn(),
       onReset,
       onResetConfirm,
-      onResetCancel,
-      onDeleteConfirm: vi.fn(),
-      onDeleteCancel: vi.fn(),
-      onAdd: vi.fn(),
-      onEditEntry: vi.fn(),
-      onDeleteEntry: vi.fn()
+      onResetCancel
     });
-    const modal = findRequiredElementByType(view, Modal);
-    const modalChildren = modal.props.children;
+    const modal = findRequiredElementByType(view, ReferenceConfirmationModal);
 
     expect(modal.props.title).toBe("Сбросить справочники?");
     expect(modal.props.closeLabel).toBe("Закрыть модалку сброса справочников");
-    expect(JSON.stringify(modalChildren)).toContain(
+    expect(modal.props.description).toBe(
       "Все созданные трактовки будут удалены, а измененные вернутся к исходному состоянию. Вы уверены что хотите сбросить справочники?"
     );
+    expect(modal.props.confirmLabel).toBe("Сбросить");
+    expect(modal.props.cancelLabel).toBe("Отмена");
+    expect(modal.props.actionDataAttribute).toBe("data-reference-reset-confirmation-action");
 
-    const modalButtons = findElementsByDataAttribute(
-      modalChildren,
-      "data-reference-reset-confirmation-action"
-    );
-    expect(modalButtons.map((button) => button.props["data-reference-reset-confirmation-action"])).toEqual([
-      "confirm",
-      "cancel"
-    ]);
-    expect(modalButtons.map((button) => button.props.title)).toEqual(["Сбросить", "Отмена"]);
-
-    getArrayItem(modalButtons, 1).props.onClick();
+    modal.props.onCancel();
     expect(onResetCancel).toHaveBeenCalledOnce();
     expect(onResetConfirm).not.toHaveBeenCalled();
 
-    getArrayItem(modalButtons, 0).props.onClick();
+    modal.props.onConfirm();
     expect(onResetConfirm).toHaveBeenCalledOnce();
     expect(onReset).not.toHaveBeenCalled();
   });
 
-  it("disables the reset confirmation action while reset is pending", () => {
+  it("passes reset pending state to reset confirmation modal", () => {
     const view = ReferencePageView({
-      copy,
-      catalogTotal: 396,
-      categories,
-      entries,
-      selectedCategoryId: null,
-      selectedSource: "all",
-      sourceCounts: {
-        all: 14,
-        platform: 14,
-        modified: 0,
-        custom: 0
-      },
-      search: "",
-      isLoading: false,
-      isError: false,
+      ...createBaseProps(),
       isResetting: true,
-      isDeletingEntry: false,
-      isResetConfirmationOpen: true,
-      deleteConfirmationEntry: null,
-      resultsMotionKey: "all:all:1000",
-      isResultsUpdating: false,
-      onCategoryChange: vi.fn(),
-      onSourceChange: vi.fn(),
-      onSearchChange: vi.fn(),
-      onReset: vi.fn(),
-      onResetConfirm: vi.fn(),
-      onResetCancel: vi.fn(),
-      onDeleteConfirm: vi.fn(),
-      onDeleteCancel: vi.fn(),
-      onAdd: vi.fn(),
-      onEditEntry: vi.fn(),
-      onDeleteEntry: vi.fn()
+      isResetConfirmationOpen: true
     });
-    const modal = findRequiredElementByType(view, Modal);
-    const modalButtons = findElementsByDataAttribute(
-      modal.props.children,
-      "data-reference-reset-confirmation-action"
-    );
+    const modal = findRequiredElementByType(view, ReferenceConfirmationModal);
 
-    expect(getArrayItem(modalButtons, 0).props.disabled).toBe(true);
-    expect(getArrayItem(modalButtons, 1).props.disabled).toBe(true);
+    expect(modal.props.isPending).toBe(true);
   });
 
-  it("renders a delete confirmation modal with cancel and confirm actions", () => {
+  it("composes delete confirmation modal with cancel and confirm actions", () => {
     const onDeleteConfirm = vi.fn();
     const onDeleteCancel = vi.fn();
     const view = ReferencePageView({
-      copy,
-      catalogTotal: 396,
-      categories,
-      entries,
-      selectedCategoryId: null,
-      selectedSource: "all",
-      sourceCounts: {
-        all: 14,
-        platform: 14,
-        modified: 0,
-        custom: 0
-      },
-      search: "",
-      isLoading: false,
-      isError: false,
-      isResetting: false,
-      isDeletingEntry: false,
-      isResetConfirmationOpen: false,
+      ...createBaseProps(),
       deleteConfirmationEntry: getArrayItem(entries, 1),
-      resultsMotionKey: "all:all:1000",
-      isResultsUpdating: false,
-      onCategoryChange: vi.fn(),
-      onSourceChange: vi.fn(),
-      onSearchChange: vi.fn(),
-      onReset: vi.fn(),
-      onResetConfirm: vi.fn(),
-      onResetCancel: vi.fn(),
       onDeleteConfirm,
-      onDeleteCancel,
-      onAdd: vi.fn(),
-      onEditEntry: vi.fn(),
-      onDeleteEntry: vi.fn()
+      onDeleteCancel
     });
-    const modal = findRequiredElementByType(view, Modal);
+    const modal = findRequiredElementByType(view, ReferenceConfirmationModal);
 
     expect(modal.props.title).toBe("Удалить трактовку?");
     expect(modal.props.closeLabel).toBe("Закрыть модалку удаления трактовки");
-    expect(JSON.stringify(modal.props.children)).toContain("Точно хотите удалить трактовку?");
+    expect(modal.props.description).toBe("Точно хотите удалить трактовку?");
+    expect(modal.props.confirmLabel).toBe("Удалить");
+    expect(modal.props.cancelLabel).toBe("Отмена");
+    expect(modal.props.actionDataAttribute).toBe("data-reference-delete-confirmation-action");
 
-    const modalButtons = findElementsByDataAttribute(
-      modal.props.children,
-      "data-reference-delete-confirmation-action"
-    );
-    expect(modalButtons.map((button) => button.props["data-reference-delete-confirmation-action"])).toEqual([
-      "confirm",
-      "cancel"
-    ]);
-    expect(modalButtons.map((button) => button.props.title)).toEqual(["Удалить", "Отмена"]);
-
-    getArrayItem(modalButtons, 0).props.onClick();
-    getArrayItem(modalButtons, 1).props.onClick();
-    modal.props.onClose();
-
+    modal.props.onConfirm();
+    modal.props.onCancel();
     expect(onDeleteConfirm).toHaveBeenCalledOnce();
-    expect(onDeleteCancel).toHaveBeenCalledTimes(2);
+    expect(onDeleteCancel).toHaveBeenCalledOnce();
   });
 });
 
+function createBaseProps(): ReferencePageViewProps {
+  return {
+    copy,
+    catalogTotal: 1,
+    categories,
+    entries,
+    selectedCategoryId: null,
+    selectedSource: "all",
+    sourceCounts: {
+      all: 14,
+      platform: 14,
+      modified: 0,
+      custom: 0
+    },
+    search: "",
+    isLoading: false,
+    isError: false,
+    isResetting: false,
+    isDeletingEntry: false,
+    isResetConfirmationOpen: false,
+    deleteConfirmationEntry: null,
+    resultsMotionKey: "all:all:1000",
+    isResultsUpdating: false,
+    onCategoryChange: vi.fn(),
+    onSourceChange: vi.fn(),
+    onSearchChange: vi.fn(),
+    onReset: vi.fn(),
+    onResetConfirm: vi.fn(),
+    onResetCancel: vi.fn(),
+    onDeleteConfirm: vi.fn(),
+    onDeleteCancel: vi.fn(),
+    onAdd: vi.fn(),
+    onEditEntry: vi.fn(),
+    onDeleteEntry: vi.fn()
+  };
+}
+
 type TestElementProps = {
-  as?: string;
+  actionDataAttribute?: string;
+  allCategoriesLabel?: string;
+  cancelLabel?: string;
+  catalogTotal?: number;
+  categories?: unknown[];
   children?: unknown;
   className?: string;
   closeLabel?: string;
-  count?: number;
-  "data-reference-category-id"?: string;
-  "data-reference-delete-confirmation-action"?: string;
-  "data-reference-entry-action"?: string;
-  "data-reference-reset-confirmation-action"?: string;
-  "data-reference-source"?: string;
-  "data-reference-toolbar-action"?: string;
-  disabled?: boolean;
-  icon: { type: unknown };
-  id?: string;
-  label?: string;
-  onChange: (event: { currentTarget: { value: string } }) => void;
-  onClose: () => void;
-  onClick: () => void;
-  placeholder?: string;
-  size?: string;
-  source?: string;
-  startIcon: { type: unknown };
+  confirmLabel?: string;
+  description?: string;
+  entries?: unknown[];
+  errorLabel?: string;
+  isError?: boolean;
+  isLoading?: boolean;
+  isPending?: boolean;
+  isResetting?: boolean;
+  isResultsUpdating?: boolean;
+  loadingLabel?: string;
+  onAdd: () => void;
+  onCancel: () => void;
+  onCategoryChange: (categoryId: string | null) => void;
+  onConfirm: () => void;
+  onDeleteEntry: (entry: DictionaryEffectiveEntryResponse) => void;
+  onEditEntry: (entry: DictionaryEffectiveEntryResponse) => void;
+  onReset: () => void;
+  onSearchChange: (search: string) => void;
+  onSourceChange: (source: string) => void;
+  resultsMotionKey?: string;
+  search?: string;
+  searchPlaceholder?: string;
+  selectedCategoryId?: string | null;
+  selectedSource?: string;
+  sourceCounts?: unknown;
+  sourceFilters?: unknown;
   title?: string;
-  type?: string;
-  value?: string;
-  variant?: string;
-  padding?: string;
-  transitionKey?: string;
+  "aria-labelledby"?: string;
 };
 
 function getElementProps(element: unknown) {
@@ -609,26 +408,6 @@ function findElementsByType(root: unknown, type: unknown): Array<{ props: TestEl
   const matches: Array<{ props: TestElementProps }> = [];
   visitElements(root, (element) => {
     if (element.type === type) {
-      matches.push(element as { props: TestElementProps });
-    }
-  });
-
-  return matches;
-}
-
-function findElementsByDataAttribute(
-  root: unknown,
-  attribute:
-    | "data-reference-category-id"
-    | "data-reference-delete-confirmation-action"
-    | "data-reference-entry-action"
-    | "data-reference-reset-confirmation-action"
-    | "data-reference-source"
-    | "data-reference-toolbar-action"
-) {
-  const matches: Array<{ props: TestElementProps }> = [];
-  visitElements(root, (element) => {
-    if (element.props[attribute]) {
       matches.push(element as { props: TestElementProps });
     }
   });

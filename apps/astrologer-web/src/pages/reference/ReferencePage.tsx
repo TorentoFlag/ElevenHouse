@@ -14,7 +14,8 @@ import { useResetDictionaryEntriesMutation } from "../../features/dictionary/mod
 import { ReferenceEntryModal } from "./components/ReferenceEntryModal";
 import { createReferenceEntriesQuery } from "./helpers/referenceEntriesQuery";
 import { createReferencePageSummary } from "./helpers/referencePageSummary";
-import { ReferencePageView, type ReferenceAddEntryOptions } from "./ReferencePageView";
+import { ReferencePageView } from "./ReferencePageView";
+import type { ReferenceAddEntryOptions } from "./types";
 
 type ReferenceEntryModalState =
   | {
