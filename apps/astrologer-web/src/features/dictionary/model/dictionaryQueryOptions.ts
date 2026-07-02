@@ -8,6 +8,14 @@ import { createDictionaryCustomEntry } from "../api/createDictionaryCustomEntry"
 import { listDictionaryCategories } from "../api/listDictionaryCategories";
 import { listDictionaryEntries } from "../api/listDictionaryEntries";
 import { resetDictionaryEntries } from "../api/resetDictionaryEntries";
+import {
+  updateDictionaryCustomEntry,
+  type UpdateDictionaryCustomEntryInput
+} from "../api/updateDictionaryCustomEntry";
+import {
+  updateDictionaryPlatformEntryOverride,
+  type UpdateDictionaryPlatformEntryOverrideInput
+} from "../api/updateDictionaryPlatformEntryOverride";
 import { dictionaryQueryKeys } from "./dictionaryQueryKeys";
 
 export function dictionaryCategoriesQueryOptions(query: ListDictionaryCategoriesQuery) {
@@ -30,6 +38,31 @@ export function createDictionaryCustomEntryMutationOptions(
 ) {
   return {
     mutationFn: (input: CreateDictionaryCustomEntryRequest) => createDictionaryCustomEntry(input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: dictionaryQueryKeys.all()
+      })
+  };
+}
+
+export function updateDictionaryCustomEntryMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: UpdateDictionaryCustomEntryInput) => updateDictionaryCustomEntry(input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: dictionaryQueryKeys.all()
+      })
+  };
+}
+
+export function updateDictionaryPlatformEntryOverrideMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: UpdateDictionaryPlatformEntryOverrideInput) =>
+      updateDictionaryPlatformEntryOverride(input),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: dictionaryQueryKeys.all()

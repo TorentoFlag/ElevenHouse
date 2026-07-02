@@ -9,6 +9,8 @@ import { createDictionaryCustomEntry } from "./createDictionaryCustomEntry";
 import { listDictionaryCategories } from "./listDictionaryCategories";
 import { listDictionaryEntries } from "./listDictionaryEntries";
 import { resetDictionaryEntries } from "./resetDictionaryEntries";
+import { updateDictionaryCustomEntry } from "./updateDictionaryCustomEntry";
+import { updateDictionaryPlatformEntryOverride } from "./updateDictionaryPlatformEntryOverride";
 
 const categoryId = "8e14390f-3db1-4d1c-9344-55679c778427";
 
@@ -134,6 +136,51 @@ describe("dictionary API", () => {
         locale: "ru",
         title: "Венера в Близнецах",
         content: "Любовь становится легкой, живой и связанной с общением."
+      },
+      { csrf: true }
+    );
+  });
+
+  it("updates custom dictionary entries through the shared request and response contracts", async () => {
+    const put = vi.spyOn(application.http, "put").mockResolvedValue(astrologerEntryResponse);
+
+    await expect(
+      updateDictionaryCustomEntry({
+        entryId: astrologerEntryResponse.id,
+        categoryId,
+        title: " Венера в Близнецах ",
+        content: " Новая редакция "
+      })
+    ).resolves.toEqual(astrologerEntryResponse);
+
+    expect(put).toHaveBeenCalledWith(
+      `/dictionary/custom-entries/${astrologerEntryResponse.id}`,
+      {
+        categoryId,
+        title: "Венера в Близнецах",
+        content: "Новая редакция"
+      },
+      { csrf: true }
+    );
+  });
+
+  it("updates platform dictionary entries through the override endpoint", async () => {
+    const put = vi.spyOn(application.http, "put").mockResolvedValue(astrologerEntryResponse);
+    const platformEntryId = "a138f7d0-6b2c-4f6d-89a9-6be4f756d133";
+
+    await expect(
+      updateDictionaryPlatformEntryOverride({
+        platformEntryId,
+        title: " Солнце в Овне ",
+        content: " Авторская редакция "
+      })
+    ).resolves.toEqual(astrologerEntryResponse);
+
+    expect(put).toHaveBeenCalledWith(
+      `/dictionary/platform-entries/${platformEntryId}/override`,
+      {
+        title: "Солнце в Овне",
+        content: "Авторская редакция"
       },
       { csrf: true }
     );
