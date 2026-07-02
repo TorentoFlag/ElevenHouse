@@ -1,2 +1,2 @@
 export * from "./ReferenceEntryModal";
-export * from "./ReferenceEntryModalView";
+export * from "./components/ReferenceEntryModalView";

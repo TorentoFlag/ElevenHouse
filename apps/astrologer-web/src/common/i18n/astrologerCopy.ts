@@ -154,6 +154,11 @@ type ReferenceEntryModalCommonCopy = {
   contentPlaceholder: string;
   aiDraftLabel: string;
   aiDraftTitle: string;
+  aiDraftLoadingLabel: string;
+  aiDraftLoadingAnnouncement: string;
+  aiDraftErrorLabel: string;
+  aiDraftErrorTitle: string;
+  aiDraftErrorAnnouncement: string;
   cancelLabel: string;
   saveLabel: string;
   savingLabel: string;
@@ -335,6 +340,11 @@ export const astrologerCopyByLocale = {
         contentPlaceholder: "Ваша трактовка...",
         aiDraftLabel: "AI-черновик",
         aiDraftTitle: "AI набросает черновик по заголовку — отредактируйте под свой стиль",
+        aiDraftLoadingLabel: "Генерируем...",
+        aiDraftLoadingAnnouncement: "Генерируем AI-черновик",
+        aiDraftErrorLabel: "Повторить AI-черновик",
+        aiDraftErrorTitle: "Не удалось создать AI-черновик. Попробуйте ещё раз.",
+        aiDraftErrorAnnouncement: "Не удалось создать AI-черновик",
         cancelLabel: "Отмена",
         saveLabel: "Сохранить",
         savingLabel: "Сохраняем",
@@ -513,6 +523,11 @@ export const astrologerCopyByLocale = {
         contentPlaceholder: "Your interpretation...",
         aiDraftLabel: "AI draft",
         aiDraftTitle: "AI drafts text from the title — edit it to match your style",
+        aiDraftLoadingLabel: "Generating...",
+        aiDraftLoadingAnnouncement: "Generating AI draft",
+        aiDraftErrorLabel: "Retry AI draft",
+        aiDraftErrorTitle: "Could not create the AI draft. Try again.",
+        aiDraftErrorAnnouncement: "Could not create the AI draft",
         cancelLabel: "Cancel",
         saveLabel: "Save",
         savingLabel: "Saving",

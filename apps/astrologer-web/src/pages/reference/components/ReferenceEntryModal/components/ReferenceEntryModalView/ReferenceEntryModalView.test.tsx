@@ -4,17 +4,17 @@ import { Children, isValidElement, type ReactElement } from "react";
 import { Chip } from "@elevenhouse/design-system/components/Chip";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
 import { Check } from "@elevenhouse/design-system/icons/Check";
-import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
 import { describe, expect, it, vi } from "vitest";
+import { ReferenceAiDraftButton } from "../ReferenceAiDraftButton";
 import {
   ReferenceEntryModalView,
   type ReferenceEntryModalDraft,
   type ReferenceEntryModalViewCopy
 } from "./ReferenceEntryModalView";
-import styles from "./ReferenceEntryModal.module.css";
+import styles from "./ReferenceEntryModalView.module.css";
 
 const modalCss = readFileSync(
-  fileURLToPath(new URL("./ReferenceEntryModal.module.css", import.meta.url)),
+  fileURLToPath(new URL("./ReferenceEntryModalView.module.css", import.meta.url)),
   "utf8"
 );
 
@@ -28,6 +28,11 @@ const copy = {
   contentPlaceholder: "Ваша трактовка...",
   aiDraftLabel: "AI-черновик",
   aiDraftTitle: "AI набросает черновик по заголовку — отредактируйте под свой стиль",
+  aiDraftLoadingLabel: "Генерируем...",
+  aiDraftLoadingAnnouncement: "Генерируем AI-черновик",
+  aiDraftErrorLabel: "Повторить AI-черновик",
+  aiDraftErrorTitle: "Не удалось создать AI-черновик. Попробуйте ещё раз.",
+  aiDraftErrorAnnouncement: "Не удалось создать AI-черновик",
   cancelLabel: "Отмена",
   saveLabel: "Сохранить",
   savingLabel: "Сохраняем",
@@ -150,14 +155,17 @@ describe("ReferenceEntryModalView", () => {
     );
 
     const aiButton = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-ai");
-    expect(aiButton.type).toBe("button");
-    expect(aiButton.props.className).toBe(styles.aiDraftButton);
-    expect(aiButton.props.title).toBe(
-      "AI набросает черновик по заголовку — отредактируйте под свой стиль"
-    );
-    expect(aiButton.props.disabled).toBe(false);
-    expect(findRequiredElementByType(aiButton, Sparkle).props.width).toBe(12);
-    expect(JSON.stringify(aiButton.props.children)).toContain("AI-черновик");
+    expect(aiButton.type).toBe(ReferenceAiDraftButton);
+    expect(aiButton.props.state).toBe("active");
+    expect(aiButton.props.copy).toEqual({
+      label: "AI-черновик",
+      title: "AI набросает черновик по заголовку — отредактируйте под свой стиль",
+      loadingLabel: "Генерируем...",
+      loadingAnnouncement: "Генерируем AI-черновик",
+      errorLabel: "Повторить AI-черновик",
+      errorTitle: "Не удалось создать AI-черновик. Попробуйте ещё раз.",
+      errorAnnouncement: "Не удалось создать AI-черновик"
+    });
     aiButton.props.onClick();
     expect(onCreateAiDraft).toHaveBeenCalled();
 
@@ -338,7 +346,33 @@ describe("ReferenceEntryModalView", () => {
     expect(contentInput.props["aria-describedby"]).toBe("reference-entry-modal-content-error");
 
     const aiButton = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-ai");
-    expect(aiButton.props.disabled).toBe(true);
+    expect(aiButton.props.state).toBe("loading");
+  });
+
+  it("shows the AI draft button error state after generation fails", () => {
+    const view = ReferenceEntryModalView({
+      copy,
+      categories,
+      draft: {
+        categoryId: categories[0]?.id ?? "",
+        title: "Луна в Раке",
+        content: ""
+      },
+      isCategoryEditable: true,
+      canSubmit: false,
+      isSaving: false,
+      isCreatingAiDraft: false,
+      fieldErrors: {},
+      errorMessage: null,
+      aiErrorMessage: "Не удалось создать AI-черновик",
+      onClose: vi.fn(),
+      onDraftChange: vi.fn(),
+      onSubmit: vi.fn(),
+      onCreateAiDraft: vi.fn()
+    });
+
+    const aiButton = findRequiredElementByDataAttribute(view, "data-reference-entry-modal-ai");
+    expect(aiButton.props.state).toBe("error");
   });
 
   it("keeps validation helper text hidden until the container decides errors are visible", () => {
@@ -380,6 +414,7 @@ describe("ReferenceEntryModalView", () => {
 
 type TestElementProps = {
   "aria-pressed"?: boolean;
+  "aria-disabled"?: boolean;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean;
   children?: unknown;
@@ -397,25 +432,18 @@ type TestElementProps = {
   "data-reference-entry-modal-title"?: string;
   active?: boolean;
   label?: string;
+  copy?: unknown;
   onChange: (event: { currentTarget: { value: string } }) => void;
   onClick: () => void;
   onClose?: () => void;
   onSubmit: (event: { preventDefault: () => void }) => void;
   placeholder?: string;
+  state?: string;
   startIcon: { type: unknown };
   title?: string;
   value?: string;
   width?: number;
 };
-
-function findRequiredElementByType(root: unknown, type: unknown) {
-  const element = findAllElements(root).find((candidate) => candidate.type === type);
-  if (!element) {
-    throw new Error("Expected matching element type");
-  }
-
-  return element;
-}
 
 function findAllElements(root: unknown) {
   const matches: Array<ReactElement<TestElementProps>> = [];

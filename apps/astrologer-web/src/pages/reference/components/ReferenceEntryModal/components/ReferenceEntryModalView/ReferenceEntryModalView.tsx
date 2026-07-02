@@ -7,14 +7,14 @@ import "@elevenhouse/design-system/components/Chip.css";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
 import "@elevenhouse/design-system/components/Modal.css";
 import { Check } from "@elevenhouse/design-system/icons/Check";
-import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
 import type {
   ReferenceEntryDraft,
   ReferenceEntryDraftFieldErrors,
   ReferenceEntryDraftTouchedFields,
   ReferenceEntryDraftValidationCopy
-} from "../../helpers/referenceEntryDraft";
-import styles from "./ReferenceEntryModal.module.css";
+} from "../../../../helpers/referenceEntryDraft";
+import { ReferenceAiDraftButton } from "../ReferenceAiDraftButton";
+import styles from "./ReferenceEntryModalView.module.css";
 
 const CATEGORY_ERROR_ID = "reference-entry-modal-category-error";
 const TITLE_ERROR_ID = "reference-entry-modal-title-error";
@@ -36,6 +36,11 @@ export type ReferenceEntryModalBaseCopy = {
   readonly contentPlaceholder: string;
   readonly aiDraftLabel: string;
   readonly aiDraftTitle: string;
+  readonly aiDraftLoadingLabel: string;
+  readonly aiDraftLoadingAnnouncement: string;
+  readonly aiDraftErrorLabel: string;
+  readonly aiDraftErrorTitle: string;
+  readonly aiDraftErrorAnnouncement: string;
   readonly cancelLabel: string;
   readonly saveLabel: string;
   readonly savingLabel: string;
@@ -159,17 +164,20 @@ export function ReferenceEntryModalView({
             <label className={styles.label} htmlFor={CONTENT_TEXTAREA_ID}>
               {copy.contentLabel}
             </label>
-            <button
-              className={styles.aiDraftButton}
-              type="button"
-              title={copy.aiDraftTitle}
+            <ReferenceAiDraftButton
+              copy={{
+                label: copy.aiDraftLabel,
+                title: copy.aiDraftTitle,
+                loadingLabel: copy.aiDraftLoadingLabel,
+                loadingAnnouncement: copy.aiDraftLoadingAnnouncement,
+                errorLabel: copy.aiDraftErrorLabel,
+                errorTitle: copy.aiDraftErrorTitle,
+                errorAnnouncement: copy.aiDraftErrorAnnouncement
+              }}
+              state={isCreatingAiDraft ? "loading" : aiErrorMessage ? "error" : "active"}
               data-reference-entry-modal-ai="true"
-              disabled={isCreatingAiDraft}
               onClick={onCreateAiDraft}
-            >
-              <Sparkle width={12} height={12} aria-hidden="true" />
-              {copy.aiDraftLabel}
-            </button>
+            />
           </span>
           <textarea
             id={CONTENT_TEXTAREA_ID}

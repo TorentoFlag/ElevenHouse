@@ -22,7 +22,7 @@ import {
 import {
   ReferenceEntryModalView,
   type ReferenceEntryModalBaseCopy
-} from "./ReferenceEntryModalView";
+} from "./components/ReferenceEntryModalView";
 
 type ReferenceEntryModalCreateMode = {
   readonly mode: "create";

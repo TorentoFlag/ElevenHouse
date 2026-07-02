@@ -7,7 +7,7 @@ import { ReferenceEntryModal, type ReferenceEntryModalProps } from "./ReferenceE
 import type {
   ReferenceEntryModalBaseCopy,
   ReferenceEntryModalViewProps
-} from "./ReferenceEntryModalView";
+} from "./components/ReferenceEntryModalView";
 
 const mocks = vi.hoisted(() => ({
   referenceEntryModalView: vi.fn(),
@@ -46,7 +46,7 @@ vi.mock("react", async () => {
   };
 });
 
-vi.mock("./ReferenceEntryModalView", () => ({
+vi.mock("./components/ReferenceEntryModalView", () => ({
   ReferenceEntryModalView: mocks.referenceEntryModalView
 }));
 
@@ -87,6 +87,11 @@ const copy = {
   contentPlaceholder: "Ваша трактовка...",
   aiDraftLabel: "AI-черновик",
   aiDraftTitle: "AI набросает черновик по заголовку",
+  aiDraftLoadingLabel: "Генерируем...",
+  aiDraftLoadingAnnouncement: "Генерируем AI-черновик",
+  aiDraftErrorLabel: "Повторить AI-черновик",
+  aiDraftErrorTitle: "Не удалось создать AI-черновик. Попробуйте ещё раз.",
+  aiDraftErrorAnnouncement: "Не удалось создать AI-черновик",
   cancelLabel: "Отмена",
   saveLabel: "Сохранить",
   savingLabel: "Сохраняем",
