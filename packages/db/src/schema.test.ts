@@ -20,11 +20,30 @@ import {
   identityProviderValues,
   outboxEvents,
   outboxEventStatusValues,
+  productAccessGrants,
+  productAccessGrantValues,
+  productCurrencyValues,
+  productDeliveryFormats,
+  productDeliveryFormatValues,
+  productExecutionModeValues,
+  productIncludedItems,
+  productMethods,
+  productMethodValues,
+  productModifiers,
+  productModifierKindValues,
+  productParticipantModeValues,
+  productPaymentModelValues,
+  productRequiredClientData,
+  productRequiredClientDataValues,
+  products,
+  productStatusValues,
+  productSubscriptionPeriodValues,
+  productTypeValues,
   userProfiles,
   userStatusValues
 } from "./schema/index";
 
-const currentBaselineMigration = "packages/db/drizzle/0000_youthful_the_stranger.sql";
+const currentBaselineMigration = "packages/db/drizzle/0000_dusty_bloodstorm.sql";
 
 describe("database account schema constants", () => {
   it("keeps database role checks aligned with the application role model", () => {
@@ -124,6 +143,86 @@ describe("database account schema constants", () => {
     );
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "dictionary_astrologer_entries_custom_code_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","code","locale") WHERE "dictionary_astrologer_entries"."entry_type" = \'custom\''
+    );
+  });
+
+  it("exports product tables and explicit values", () => {
+    expect(productStatusValues).toEqual(["draft", "active", "archived"]);
+    expect(productTypeValues).toEqual([
+      "single",
+      "pack",
+      "async",
+      "sub",
+      "mini",
+      "course",
+      "custom"
+    ]);
+    expect(productDeliveryFormatValues).toEqual([
+      "video",
+      "audio",
+      "chat",
+      "text",
+      "file",
+      "channel"
+    ]);
+    expect(productExecutionModeValues).toEqual(["live", "async", "instant"]);
+    expect(productPaymentModelValues).toEqual(["once", "pack", "sub", "free"]);
+    expect(productCurrencyValues).toEqual(["RUB"]);
+    expect(productSubscriptionPeriodValues).toEqual(["week", "month", "year"]);
+    expect(productParticipantModeValues).toEqual(["solo", "group", "gift"]);
+    expect(productRequiredClientDataValues).toEqual([
+      "chart1",
+      "cities",
+      "chart2",
+      "question",
+      "event"
+    ]);
+    expect(productMethodValues).toEqual([
+      "natal",
+      "forecast",
+      "synastry",
+      "child",
+      "numerology",
+      "matrix",
+      "humandesign"
+    ]);
+    expect(productAccessGrantValues).toEqual([
+      "content",
+      "channel",
+      "records",
+      "course",
+      "community",
+      "journal"
+    ]);
+    expect(productModifierKindValues).toEqual(["fixed", "percent", "free"]);
+    expect(products).toBeDefined();
+    expect(productDeliveryFormats).toBeDefined();
+    expect(productRequiredClientData).toBeDefined();
+    expect(productMethods).toBeDefined();
+    expect(productAccessGrants).toBeDefined();
+    expect(productIncludedItems).toBeDefined();
+    expect(productModifiers).toBeDefined();
+  });
+
+  it("keeps product tables in the current baseline migration", () => {
+    const migration = readFileSync(currentBaselineMigration, "utf8");
+
+    expect(migration).toContain('CREATE TABLE "products"');
+    expect(migration).toContain('"owner_user_id" uuid NOT NULL');
+    expect(migration).toContain('"price_minor" integer NOT NULL');
+    expect(migration).toContain('CREATE TABLE "product_delivery_formats"');
+    expect(migration).toContain('CREATE TABLE "product_required_client_data"');
+    expect(migration).toContain('CREATE TABLE "product_methods"');
+    expect(migration).toContain('CREATE TABLE "product_access_grants"');
+    expect(migration).toContain('CREATE TABLE "product_included_items"');
+    expect(migration).toContain('CREATE TABLE "product_modifiers"');
+    expect(migration).toContain('CONSTRAINT "products_free_price_check"');
+    expect(migration).toContain('CONSTRAINT "products_package_settings_check"');
+    expect(migration).toContain('CONSTRAINT "products_subscription_settings_check"');
+    expect(migration).toContain('CONSTRAINT "products_group_settings_check"');
+    expect(migration).toContain('CONSTRAINT "product_modifiers_free_price_check"');
+    expect(migration).toContain(
+      'CREATE INDEX "products_owner_status_idx" ON "products" USING btree ("owner_user_id","status")'
     );
   });
 
