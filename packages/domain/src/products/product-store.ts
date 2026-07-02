@@ -1,0 +1,52 @@
+import type {
+  Product,
+  ProductCreateInput,
+  ProductStatus,
+  ProductStatusFilter,
+  ProductUpdatePatch
+} from "./product-types";
+
+export type ProductListResult = {
+  readonly products: readonly Product[];
+  readonly total: number;
+  readonly counts: {
+    readonly all: number;
+    readonly active: number;
+    readonly draft: number;
+    readonly archived: number;
+  };
+};
+
+export type ProductStoreCreateInput = ProductCreateInput & {
+  readonly status: ProductStatus;
+  readonly now: string;
+};
+
+export type ProductStoreUpdatePatch = ProductUpdatePatch & {
+  readonly status?: ProductStatus;
+};
+
+export type ProductStore = {
+  readonly listByOwner: (query: {
+    readonly ownerUserId: string;
+    readonly status: ProductStatusFilter;
+    readonly limit: number;
+    readonly offset: number;
+  }) => Promise<ProductListResult>;
+  readonly findByOwnerAndId: (input: {
+    readonly ownerUserId: string;
+    readonly productId: string;
+  }) => Promise<Product | null>;
+  readonly create: (input: ProductStoreCreateInput) => Promise<Product>;
+  readonly update: (input: {
+    readonly ownerUserId: string;
+    readonly productId: string;
+    readonly patch: ProductStoreUpdatePatch;
+    readonly now: string;
+  }) => Promise<Product | null>;
+  readonly duplicate: (
+    input: ProductStoreCreateInput & {
+      readonly sourceProductId: string;
+    }
+  ) => Promise<Product>;
+};
