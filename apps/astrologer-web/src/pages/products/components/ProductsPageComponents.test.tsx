@@ -3,11 +3,15 @@ import type { ListProductsResponse, ProductSummaryResponse } from "@elevenhouse/
 import { Button } from "@elevenhouse/design-system/components/Button";
 import { Card } from "@elevenhouse/design-system/components/Card";
 import { Chip } from "@elevenhouse/design-system/components/Chip";
+import { Modal } from "@elevenhouse/design-system/components/Modal";
 import { Plus } from "@elevenhouse/design-system/icons/Plus";
 import { Wallet } from "@elevenhouse/design-system/icons/Wallet";
 import { describe, expect, it, vi } from "vitest";
+import { createDefaultProductDraft } from "../../../features/products/model/productDraft";
 import { productCopyByLocale } from "../../../features/products/model/productCopy";
 import { ProductCard } from "./ProductCard";
+import { ProductCreateTypeModal } from "./ProductCreateTypeModal";
+import { ProductEditorModal } from "./ProductEditorModal";
 import { ProductsResults } from "./ProductsResults";
 import { ProductsSummaryStrip } from "./ProductsSummaryStrip";
 import { ProductsToolbar } from "./ProductsToolbar";
@@ -189,18 +193,141 @@ describe("Products page components", () => {
     expect(JSON.stringify(card.props.children)).toContain("Продаж");
     expect(JSON.stringify(card.props.children)).toContain("4.9");
   });
+
+  it("renders product type selection modal with all product templates", () => {
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    const modal = ProductCreateTypeModal({
+      copy: {
+        title: "Выберите тип продукта",
+        closeLabel: "Закрыть выбор типа",
+        description: "Тип задаст базовые параметры, которые можно изменить в редакторе."
+      },
+      types: productCopyByLocale.ru.types,
+      onSelect,
+      onClose
+    });
+
+    const modalRoot = findRequiredElementByType(modal, Modal);
+    expect(modalRoot.props.title).toBe("Выберите тип продукта");
+    expect(modalRoot.props.closeLabel).toBe("Закрыть выбор типа");
+
+    const typeOptions = findElementsByProp(modal, "data-product-create-type");
+    expect(typeOptions.map((option) => option.props["data-product-create-type"])).toEqual([
+      "single",
+      "pack",
+      "async",
+      "sub",
+      "mini",
+      "course",
+      "custom"
+    ]);
+    expect(JSON.stringify(modal.props.children)).toContain("Разовая консультация");
+
+    getArrayItem(typeOptions, 0).props.onClick();
+    expect(onSelect).toHaveBeenCalledWith("single");
+  });
+
+  it("renders product editor modal and updates draft fields", async () => {
+    const draft = createDefaultProductDraft("single");
+    const onDraftChange = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const onClose = vi.fn();
+    const modal = ProductEditorModal({
+      copy: {
+        createTitle: "Новый продукт",
+        closeLabel: "Закрыть редактор продукта",
+        typeLabel: "Тип",
+        titleLabel: "Название",
+        titlePlaceholder: "Например, Натальный разбор",
+        subtitleLabel: "Описание",
+        subtitlePlaceholder: "Коротко объясните, что получит клиент",
+        priceLabel: "Цена",
+        includedItemsLabel: "Что входит",
+        cancelLabel: "Отмена",
+        saveDraftLabel: "Сохранить черновик",
+        savingLabel: "Сохраняем",
+        genericError: "Не удалось сохранить продукт"
+      },
+      productType: productCopyByLocale.ru.types.single,
+      draft,
+      isSaving: false,
+      error: null,
+      onDraftChange,
+      onSave,
+      onClose
+    });
+
+    expect(findRequiredElementByType(modal, Modal).props.title).toBe("Новый продукт");
+    expect(findRequiredElementByProp(modal, "data-product-editor-type-label").props.children).toBe(
+      "Разовая консультация"
+    );
+
+    findRequiredElementByProp(modal, "data-product-editor-title").props.onChange({
+      currentTarget: { value: "Натальный разбор" }
+    });
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      title: "Натальный разбор"
+    });
+
+    findRequiredElementByProp(modal, "data-product-editor-subtitle").props.onChange({
+      currentTarget: { value: "60 минут онлайн" }
+    });
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      subtitle: "60 минут онлайн"
+    });
+
+    findRequiredElementByProp(modal, "data-product-editor-price").props.onChange({
+      currentTarget: { value: "6200" }
+    });
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      priceMinor: 620000
+    });
+
+    findRequiredElementByProp(modal, "data-product-editor-included-item").props.onChange({
+      currentTarget: { value: "Персональные рекомендации" }
+    });
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      includedItems: [
+        { ...draft.includedItems[0], text: "Персональные рекомендации" },
+        ...draft.includedItems.slice(1)
+      ]
+    });
+
+    const submitResult = findRequiredElementByProp(modal, "data-product-editor-form").props.onSubmit({
+      preventDefault: vi.fn()
+    });
+    expect(submitResult).toBeUndefined();
+    expect(onSave).toHaveBeenCalledOnce();
+  });
 });
 
 type TestElementProps = {
   active?: boolean;
   as?: string;
   children?: unknown;
+  closeLabel?: string;
   className?: string;
+  disabled?: boolean;
   label?: string;
+  onChange: (event: { currentTarget: { value: string } }) => void;
   onClick: () => void;
+  onSubmit: (event: { preventDefault: () => void }) => void | Promise<void>;
   product?: unknown;
   startIcon: { type: unknown };
   title?: string;
+  value?: string | number;
+  "data-product-create-type"?: string;
+  "data-product-editor-form"?: string;
+  "data-product-editor-included-item"?: string;
+  "data-product-editor-price"?: string;
+  "data-product-editor-subtitle"?: string;
+  "data-product-editor-title"?: string;
+  "data-product-editor-type-label"?: string;
 };
 
 function findRequiredElementByType(root: unknown, type: unknown) {
@@ -216,6 +343,29 @@ function findElementsByType(root: unknown, type: unknown): Array<{ props: TestEl
   const matches: Array<{ props: TestElementProps }> = [];
   visitElements(root, (element) => {
     if (element.type === type) {
+      matches.push(element as { props: TestElementProps });
+    }
+  });
+
+  return matches;
+}
+
+function findRequiredElementByProp(root: unknown, propName: keyof TestElementProps) {
+  const element = findElementsByProp(root, propName)[0];
+  if (!element) {
+    throw new Error(`Expected React element with ${String(propName)}`);
+  }
+
+  return element;
+}
+
+function findElementsByProp(
+  root: unknown,
+  propName: keyof TestElementProps
+): Array<{ props: TestElementProps }> {
+  const matches: Array<{ props: TestElementProps }> = [];
+  visitElements(root, (element) => {
+    if (propName in element.props) {
       matches.push(element as { props: TestElementProps });
     }
   });

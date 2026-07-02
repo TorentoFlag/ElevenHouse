@@ -1,6 +1,7 @@
 import { Children, isValidElement, type ReactElement } from "react";
-import type { ListProductsResponse, ProductSummaryResponse } from "@elevenhouse/contracts";
+import type { CreateProductRequest, ListProductsResponse, ProductSummaryResponse } from "@elevenhouse/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProductEditorModalProps } from "./components/ProductEditorModal";
 import { ProductsPage } from "./ProductsPage";
 import type { ProductsPageViewProps } from "./ProductsPageView";
 
@@ -10,10 +11,13 @@ const mocks = vi.hoisted(() => ({
     values: [] as unknown[]
   },
   productsPageView: vi.fn(),
+  productCreateTypeModal: vi.fn(),
+  productEditorModal: vi.fn(),
   useI18n: vi.fn(),
   useDocumentTitle: vi.fn(),
   useProductListQuery: vi.fn(),
-  useProductSummaryQuery: vi.fn()
+  useProductSummaryQuery: vi.fn(),
+  useCreateProductMutation: vi.fn()
 }));
 
 vi.mock("react", async () => {
@@ -61,8 +65,20 @@ vi.mock("../../features/products/model/useProductSummaryQuery", () => ({
   useProductSummaryQuery: mocks.useProductSummaryQuery
 }));
 
+vi.mock("../../features/products/model/useCreateProductMutation", () => ({
+  useCreateProductMutation: mocks.useCreateProductMutation
+}));
+
 vi.mock("./ProductsPageView", () => ({
   ProductsPageView: mocks.productsPageView
+}));
+
+vi.mock("./components/ProductCreateTypeModal", () => ({
+  ProductCreateTypeModal: mocks.productCreateTypeModal
+}));
+
+vi.mock("./components/ProductEditorModal", () => ({
+  ProductEditorModal: mocks.productEditorModal
 }));
 
 const productsCopy = {
@@ -70,6 +86,26 @@ const productsCopy = {
   title: "Продукты",
   createLabel: "Создать продукт",
   statusFilterAriaLabel: "Фильтр статусов продуктов",
+  createTypeModal: {
+    title: "Выберите тип продукта",
+    closeLabel: "Закрыть выбор типа",
+    description: "Тип задаст базовые параметры, которые можно изменить в редакторе."
+  },
+  editor: {
+    createTitle: "Новый продукт",
+    closeLabel: "Закрыть редактор продукта",
+    typeLabel: "Тип",
+    titleLabel: "Название",
+    titlePlaceholder: "Например, Натальный разбор",
+    subtitleLabel: "Описание",
+    subtitlePlaceholder: "Коротко объясните, что получит клиент",
+    priceLabel: "Цена",
+    includedItemsLabel: "Что входит",
+    cancelLabel: "Отмена",
+    saveDraftLabel: "Сохранить черновик",
+    savingLabel: "Сохраняем",
+    genericError: "Не удалось сохранить продукт"
+  },
   summary: {
     activeLabel: "Активных",
     salesLabel: "Продаж всего",
@@ -160,6 +196,12 @@ describe("ProductsPage", () => {
     mocks.hookState.cursor = 0;
     mocks.hookState.values = [];
     mocks.productsPageView.mockImplementation(() => null);
+    mocks.productCreateTypeModal.mockImplementation(() => null);
+    mocks.productEditorModal.mockImplementation(() => null);
+    mocks.useCreateProductMutation.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false
+    });
     mocks.useI18n.mockReturnValue({
       dictionary: {
         products: productsCopy
@@ -239,6 +281,65 @@ describe("ProductsPage", () => {
 
     renderPage();
     expect(getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).isError).toBe(true);
+  });
+
+  it("opens product type selection and then opens the editor with a default draft", () => {
+    renderPage();
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onCreate();
+
+    renderPage();
+    const typeModalProps = getLatestMockProps<{
+      copy: typeof productsCopy.createTypeModal;
+      onSelect: (type: "single") => void;
+    }>(mocks.productCreateTypeModal);
+    expect(typeModalProps.copy).toBe(productsCopy.createTypeModal);
+
+    typeModalProps.onSelect("single");
+    renderPage();
+
+    const editorProps = getLatestMockProps<ProductEditorModalProps>(mocks.productEditorModal);
+    expect(editorProps.copy).toBe(productsCopy.editor);
+    expect(editorProps.draft.type).toBe("single");
+    expect(editorProps.draft.priceMinor).toBe(490000);
+  });
+
+  it("saves a created draft through the products mutation and closes the editor", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue(product);
+    mocks.useCreateProductMutation.mockReturnValue({
+      mutateAsync,
+      isPending: false
+    });
+
+    renderPage();
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onCreate();
+    renderPage();
+    getLatestMockProps<{ onSelect: (type: "single") => void }>(mocks.productCreateTypeModal).onSelect(
+      "single"
+    );
+    renderPage();
+
+    let editorProps = getLatestMockProps<ProductEditorModalProps>(mocks.productEditorModal);
+    editorProps.onDraftChange({
+      ...editorProps.draft,
+      title: "Натальный разбор",
+      subtitle: "60 минут онлайн",
+      priceMinor: 490000
+    });
+    renderPage();
+    editorProps = getLatestMockProps<ProductEditorModalProps>(mocks.productEditorModal);
+    await editorProps.onSave();
+
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Натальный разбор",
+        subtitle: "60 минут онлайн",
+        priceMinor: 490000
+      }) satisfies Partial<CreateProductRequest>
+    );
+
+    const editorCallCountBeforeCloseRender = mocks.productEditorModal.mock.calls.length;
+    renderPage();
+    expect(mocks.productEditorModal).toHaveBeenCalledTimes(editorCallCountBeforeCloseRender);
   });
 });
 

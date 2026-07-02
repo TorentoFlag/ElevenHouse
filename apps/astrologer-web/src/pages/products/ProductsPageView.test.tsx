@@ -12,6 +12,26 @@ const copy = {
   title: "Продукты",
   createLabel: "Создать продукт",
   statusFilterAriaLabel: "Фильтр статусов продуктов",
+  createTypeModal: {
+    title: "Выберите тип продукта",
+    closeLabel: "Закрыть выбор типа",
+    description: "Тип задаст базовые параметры, которые можно изменить в редакторе."
+  },
+  editor: {
+    createTitle: "Новый продукт",
+    closeLabel: "Закрыть редактор продукта",
+    typeLabel: "Тип",
+    titleLabel: "Название",
+    titlePlaceholder: "Например, Натальный разбор",
+    subtitleLabel: "Описание",
+    subtitlePlaceholder: "Коротко объясните, что получит клиент",
+    priceLabel: "Цена",
+    includedItemsLabel: "Что входит",
+    cancelLabel: "Отмена",
+    saveDraftLabel: "Сохранить черновик",
+    savingLabel: "Сохраняем",
+    genericError: "Не удалось сохранить продукт"
+  },
   summary: {
     activeLabel: "Активных",
     salesLabel: "Продаж всего",
