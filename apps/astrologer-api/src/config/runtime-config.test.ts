@@ -5,6 +5,22 @@ const testEncryptionKey = Buffer.alloc(32, 1).toString("base64");
 const requiredSecurityConfig = {
   AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey
 };
+const defaultAiConfig = {
+  enabled: false,
+  provider: "deepseek",
+  deepSeekApiKey: undefined,
+  deepSeekBaseUrl: "https://api.deepseek.com",
+  fastDraftModel: "deepseek-v4-flash",
+  qualityDraftModel: "deepseek-v4-pro",
+  timeoutMs: 15000,
+  maxOutputTokens: 900,
+  rateLimitRedisKeyPrefix: "elevenhouse:astrologer-api:ai",
+  rateLimits: {
+    userPerMinute: { limit: 3, windowSeconds: 60 },
+    userPerHour: { limit: 30, windowSeconds: 3600 },
+    userPerDay: { limit: 150, windowSeconds: 86400 }
+  }
+};
 const defaultSecurityConfig = {
   trustProxy: false,
   sessionTtlSeconds: 604800,
@@ -27,7 +43,8 @@ const defaultSecurityConfig = {
     requestCodeIdentifierIp: { limit: 3, windowSeconds: 3600 },
     verifyChallenge: { limit: 5, windowSeconds: 900 },
     verifyIp: { limit: 60, windowSeconds: 900 }
-  }
+  },
+  ai: defaultAiConfig
 };
 
 describe("createAstrologerApiRuntimeConfig", () => {
@@ -240,5 +257,74 @@ describe("createAstrologerApiRuntimeConfig", () => {
 
   it("requires an explicit auth code delivery encryption key", () => {
     expect(() => createAstrologerApiRuntimeConfig({})).toThrow("AUTH_CODE_DELIVERY_ENCRYPTION_KEY");
+  });
+
+  it("parses disabled AI runtime config without requiring a DeepSeek key", () => {
+    const config = createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      ASTROLOGER_AI_ENABLED: "false"
+    });
+
+    expect(config.ai).toEqual(defaultAiConfig);
+  });
+
+  it("normalizes a blank DeepSeek API key to undefined when AI is disabled", () => {
+    const config = createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      ASTROLOGER_AI_ENABLED: "false",
+      ASTROLOGER_DEEPSEEK_API_KEY: "   "
+    });
+
+    expect(config.ai.deepSeekApiKey).toBeUndefined();
+  });
+
+  it("requires a DeepSeek API key when AI is enabled", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_AI_ENABLED: "true"
+      })
+    ).toThrow("ASTROLOGER_DEEPSEEK_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
+  });
+
+  it("requires a DeepSeek API key when AI is enabled and the key is blank", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_AI_ENABLED: "true",
+        ASTROLOGER_DEEPSEEK_API_KEY: "   "
+      })
+    ).toThrow("ASTROLOGER_DEEPSEEK_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
+  });
+
+  it("rejects cleartext DeepSeek base URLs in production when AI is enabled", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
+        ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+        ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
+        ASTROLOGER_AI_ENABLED: "true",
+        ASTROLOGER_DEEPSEEK_API_KEY: "deepseek-secret",
+        ASTROLOGER_DEEPSEEK_BASE_URL: "http://deepseek.internal"
+      })
+    ).toThrow(
+      "ASTROLOGER_DEEPSEEK_BASE_URL must use https in production when ASTROLOGER_AI_ENABLED=true"
+    );
+  });
+
+  it("parses enabled AI runtime config", () => {
+    const config = createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      ASTROLOGER_AI_ENABLED: "true",
+      ASTROLOGER_DEEPSEEK_API_KEY: "deepseek-secret",
+      ASTROLOGER_AI_RATE_LIMIT_USER_PER_MINUTE: "5"
+    });
+
+    expect(config.ai.enabled).toBe(true);
+    expect(config.ai.deepSeekApiKey).toBe("deepseek-secret");
+    expect(config.ai.rateLimits.userPerMinute).toEqual({ limit: 5, windowSeconds: 60 });
   });
 });

@@ -3,6 +3,10 @@ import { z } from "@elevenhouse/validation";
 
 const localAstrologerSessionCookieName = "elevenhouse_astrologer_session";
 const secureAstrologerSessionCookieName = "__Host-elevenhouse_astrologer_session";
+const optionalTrimmedNonEmptyStringSchema = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().trim().min(1).optional()
+);
 
 const astrologerApiRuntimeConfigSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -74,7 +78,30 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .string()
     .trim()
     .min(1)
-    .default("elevenhouse:astrologer-api")
+    .default("elevenhouse:astrologer-api"),
+  ASTROLOGER_AI_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  ASTROLOGER_AI_PROVIDER: z.literal("deepseek").default("deepseek"),
+  ASTROLOGER_DEEPSEEK_API_KEY: optionalTrimmedNonEmptyStringSchema,
+  ASTROLOGER_DEEPSEEK_BASE_URL: z.string().trim().url().default("https://api.deepseek.com"),
+  ASTROLOGER_AI_FAST_DRAFT_MODEL: z
+    .enum(["deepseek-v4-flash", "deepseek-v4-pro"])
+    .default("deepseek-v4-flash"),
+  ASTROLOGER_AI_QUALITY_DRAFT_MODEL: z
+    .enum(["deepseek-v4-flash", "deepseek-v4-pro"])
+    .default("deepseek-v4-pro"),
+  ASTROLOGER_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
+  ASTROLOGER_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(900),
+  ASTROLOGER_AI_RATE_LIMIT_USER_PER_MINUTE: z.coerce.number().int().positive().default(3),
+  ASTROLOGER_AI_RATE_LIMIT_USER_PER_HOUR: z.coerce.number().int().positive().default(30),
+  ASTROLOGER_AI_RATE_LIMIT_USER_PER_DAY: z.coerce.number().int().positive().default(150),
+  ASTROLOGER_AI_RATE_LIMIT_REDIS_KEY_PREFIX: z
+    .string()
+    .trim()
+    .min(1)
+    .default("elevenhouse:astrologer-api:ai")
 });
 
 export type AstrologerApiRuntimeConfig = {
@@ -117,6 +144,31 @@ export type AstrologerApiRuntimeConfig = {
       readonly windowSeconds: number;
     };
   };
+  readonly ai: {
+    readonly enabled: boolean;
+    readonly provider: "deepseek";
+    readonly deepSeekApiKey?: string;
+    readonly deepSeekBaseUrl: string;
+    readonly fastDraftModel: "deepseek-v4-flash" | "deepseek-v4-pro";
+    readonly qualityDraftModel: "deepseek-v4-flash" | "deepseek-v4-pro";
+    readonly timeoutMs: number;
+    readonly maxOutputTokens: number;
+    readonly rateLimitRedisKeyPrefix: string;
+    readonly rateLimits: {
+      readonly userPerMinute: {
+        readonly limit: number;
+        readonly windowSeconds: number;
+      };
+      readonly userPerHour: {
+        readonly limit: number;
+        readonly windowSeconds: number;
+      };
+      readonly userPerDay: {
+        readonly limit: number;
+        readonly windowSeconds: number;
+      };
+    };
+  };
 };
 
 export function createAstrologerApiRuntimeConfig(
@@ -149,6 +201,20 @@ export function createAstrologerApiRuntimeConfig(
 
   if (config.NODE_ENV === "production" && allowedOrigins.length === 0) {
     throw new Error("ASTROLOGER_API_ALLOWED_ORIGINS is required in production");
+  }
+
+  if (config.ASTROLOGER_AI_ENABLED && !config.ASTROLOGER_DEEPSEEK_API_KEY) {
+    throw new Error("ASTROLOGER_DEEPSEEK_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
+  }
+
+  if (
+    config.NODE_ENV === "production" &&
+    config.ASTROLOGER_AI_ENABLED &&
+    new URL(config.ASTROLOGER_DEEPSEEK_BASE_URL).protocol !== "https:"
+  ) {
+    throw new Error(
+      "ASTROLOGER_DEEPSEEK_BASE_URL must use https in production when ASTROLOGER_AI_ENABLED=true"
+    );
   }
 
   return {
@@ -196,6 +262,31 @@ export function createAstrologerApiRuntimeConfig(
       verifyIp: {
         limit: config.ASTROLOGER_API_PASSWORDLESS_VERIFY_IP_LIMIT,
         windowSeconds: config.ASTROLOGER_API_PASSWORDLESS_VERIFY_IP_WINDOW_SECONDS
+      }
+    },
+    ai: {
+      enabled: config.ASTROLOGER_AI_ENABLED,
+      provider: config.ASTROLOGER_AI_PROVIDER,
+      deepSeekApiKey: config.ASTROLOGER_DEEPSEEK_API_KEY,
+      deepSeekBaseUrl: config.ASTROLOGER_DEEPSEEK_BASE_URL,
+      fastDraftModel: config.ASTROLOGER_AI_FAST_DRAFT_MODEL,
+      qualityDraftModel: config.ASTROLOGER_AI_QUALITY_DRAFT_MODEL,
+      timeoutMs: config.ASTROLOGER_AI_TIMEOUT_MS,
+      maxOutputTokens: config.ASTROLOGER_AI_MAX_OUTPUT_TOKENS,
+      rateLimitRedisKeyPrefix: config.ASTROLOGER_AI_RATE_LIMIT_REDIS_KEY_PREFIX,
+      rateLimits: {
+        userPerMinute: {
+          limit: config.ASTROLOGER_AI_RATE_LIMIT_USER_PER_MINUTE,
+          windowSeconds: 60
+        },
+        userPerHour: {
+          limit: config.ASTROLOGER_AI_RATE_LIMIT_USER_PER_HOUR,
+          windowSeconds: 3600
+        },
+        userPerDay: {
+          limit: config.ASTROLOGER_AI_RATE_LIMIT_USER_PER_DAY,
+          windowSeconds: 86400
+        }
       }
     }
   };
