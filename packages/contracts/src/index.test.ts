@@ -4,6 +4,7 @@ import {
   dictionaryCategoriesResponseSchema,
   dictionaryEntriesResponseSchema,
   healthResponseSchema,
+  createProductRequestSchema,
   requestPasswordlessCodeRequestSchema,
   requestPasswordlessCodeResponseSchema,
   verifyPasswordlessCodeRequestSchema,
@@ -26,5 +27,9 @@ describe("contracts public barrel", () => {
   it("exports dictionary contracts", () => {
     expect(dictionaryCategoriesResponseSchema.parse).toBeTypeOf("function");
     expect(dictionaryEntriesResponseSchema.parse).toBeTypeOf("function");
+  });
+
+  it("exports product contracts", () => {
+    expect(createProductRequestSchema.parse).toBeTypeOf("function");
   });
 });
