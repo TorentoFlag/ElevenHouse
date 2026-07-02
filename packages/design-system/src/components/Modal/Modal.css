@@ -1,0 +1,126 @@
+.ehModal__backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 30px;
+  background: rgb(7 6 15 / 0.64);
+  backdrop-filter: blur(6px);
+}
+
+.ehModal__dialog {
+  width: min(560px, 100%);
+  max-height: min(760px, calc(100dvh - 48px));
+  overflow: hidden;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgb(24 22 52 / 0.98), rgb(17 15 39 / 0.98));
+  box-shadow: 0 28px 80px rgb(0 0 0 / 0.42);
+  color: var(--eh-color-moon-120);
+}
+
+.ehModal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 12px;
+}
+
+.ehModal__title {
+  margin: 0;
+  color: var(--eh-color-moon-120);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ehModal__closeButton {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border: 1px solid rgb(216 212 236 / 0.12);
+  border-radius: 11px;
+  background: rgb(216 212 236 / 0.06);
+  color: var(--eh-color-moon-500);
+  cursor: pointer;
+}
+
+.ehModal__closeButton::before,
+.ehModal__closeButton::after {
+  grid-area: 1 / 1;
+  width: 14px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+}
+
+.ehModal__closeButton::before {
+  transform: rotate(45deg);
+}
+
+.ehModal__closeButton::after {
+  transform: rotate(-45deg);
+}
+
+.ehModal__closeButton:focus-visible {
+  outline: 2px solid rgb(244 196 48 / 0.56);
+  outline-offset: 2px;
+}
+
+.ehModal__content {
+  max-height: calc(min(760px, 100dvh - 48px) - 68px);
+  padding: 0 24px 24px;
+  overflow-y: auto;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ehModal__backdrop {
+    animation: elevenhouse-modal-backdrop 180ms
+      var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1));
+  }
+
+  .ehModal__dialog {
+    animation: elevenhouse-modal-dialog 220ms
+      var(--eh-motion-ease-standard, cubic-bezier(0.16, 1, 0.3, 1));
+  }
+}
+
+@media (max-width: 640px) {
+  .ehModal__backdrop {
+    align-items: end;
+    padding: 16px;
+  }
+
+  .ehModal__dialog {
+    width: 100%;
+    max-height: calc(100dvh - 32px);
+    border-radius: 20px;
+  }
+}
+
+@keyframes elevenhouse-modal-backdrop {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes elevenhouse-modal-dialog {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

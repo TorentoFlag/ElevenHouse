@@ -3,6 +3,7 @@ export * from "./Card/index.js";
 export * from "./Chip/index.js";
 export * from "./IconButton/index.js";
 export * from "./LanguageSwitcher/index.js";
+export * from "./Modal/index.js";
 export * from "./OtpAuthForm/index.js";
 export * from "./OtpCodeForm/index.js";
 export * from "./SegmentedTabs/index.js";

@@ -52,6 +52,11 @@
       "import": "./dist/components/LanguageSwitcher/index.js"
     },
     "./components/LanguageSwitcher.css": "./src/components/LanguageSwitcher/LanguageSwitcher.css",
+    "./components/Modal": {
+      "types": "./dist/components/Modal/index.d.ts",
+      "import": "./dist/components/Modal/index.js"
+    },
+    "./components/Modal.css": "./src/components/Modal/Modal.css",
     "./components/SegmentedTabs": {
       "types": "./dist/components/SegmentedTabs/index.d.ts",
       "import": "./dist/components/SegmentedTabs/index.js"
@@ -173,6 +178,7 @@
     "./src/components/Card/Card.css",
     "./src/components/Chip/Chip.css",
     "./src/components/IconButton/IconButton.css",
+    "./src/components/Modal/Modal.css",
     "./src/navigation/NavigationDrawer/NavigationDrawer.css",
     "./src/components/OtpAuthForm/OtpAuthForm.css",
     "./src/components/OtpCodeForm/OtpCodeForm.css",
@@ -185,11 +191,14 @@
   },
   "peerDependencies": {
     "react": "19.2.7",
+    "react-dom": "19.2.7",
     "react-router": "^8.0.0"
   },
   "devDependencies": {
     "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
     "react": "19.2.7",
+    "react-dom": "19.2.7",
     "react-router": "^8.0.0",
     "typescript": "6.0.3"
   }
