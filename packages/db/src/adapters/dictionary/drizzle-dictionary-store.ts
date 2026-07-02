@@ -13,6 +13,7 @@ import type {
   DictionaryStore
 } from "@elevenhouse/domain";
 import {
+  DictionaryAstrologerEntryNotFoundError,
   DictionaryCategoryNotFoundError,
   DictionaryPlatformEntryNotFoundError
 } from "@elevenhouse/domain";
@@ -87,6 +88,38 @@ export function createDrizzleDictionaryStore(database: ElevenHouseDatabase): Dic
             .returning(),
         "dictionary_astrologer_entries"
       );
+
+      return toDictionaryAstrologerEntry(row);
+    },
+    updateCustomEntry: async (input) => {
+      const category = await database.query.dictionaryCategories.findFirst({
+        where: eq(dictionaryCategories.id, input.categoryId)
+      });
+      if (!category) {
+        throw new DictionaryCategoryNotFoundError(input.categoryId);
+      }
+
+      const rows = await database
+        .update(dictionaryAstrologerEntries)
+        .set({
+          categoryId: input.categoryId,
+          title: input.title,
+          content: input.content,
+          updatedAt: new Date(input.updatedAt)
+        })
+        .where(
+          and(
+            eq(dictionaryAstrologerEntries.id, input.entryId),
+            eq(dictionaryAstrologerEntries.ownerUserId, input.ownerUserId),
+            eq(dictionaryAstrologerEntries.entryType, "custom")
+          )
+        )
+        .returning();
+
+      const row = rows[0];
+      if (!row) {
+        throw new DictionaryAstrologerEntryNotFoundError(input.entryId);
+      }
 
       return toDictionaryAstrologerEntry(row);
     },
