@@ -2,10 +2,12 @@ import { BadRequestException, NotFoundException, UnauthorizedException } from "@
 import {
   type Product,
   type ProductAnalyticsReader,
+  type ProductCatalogLifetimeAnalyticsSummary,
   type ProductLifetimeAnalytics,
   type ProductStore,
   type ProductStoreCreateInput,
-  type ProductStoreUpdatePatch
+  type ProductStoreUpdatePatch,
+  ProductValidationError
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import type { SystemClock } from "../clock/system-clock.service";
@@ -83,6 +85,12 @@ describe("ProductsService", () => {
     await expect(
       service.getProduct("not-a-uuid", createAuthenticatedRequest())
     ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.createProduct(
+        { ...validCreateBody(), deliveryFormats: ["video", "video"] },
+        createAuthenticatedRequest()
+      )
+    ).rejects.toThrow(BadRequestException);
   });
 
   it("maps missing products to NotFoundException", async () => {
@@ -99,6 +107,21 @@ describe("ProductsService", () => {
     await expect(service.publishProduct(productId, createAuthenticatedRequest())).rejects.toThrow(
       NotFoundException
     );
+  });
+
+  it("maps domain validation errors to BadRequestException", async () => {
+    const service = createService(
+      createStore({
+        update: vi.fn(async () => {
+          throw new ProductValidationError("Invalid product state");
+        })
+      })
+    );
+    await service.createProduct(validCreateBody(), createAuthenticatedRequest());
+
+    await expect(
+      service.updateProduct(productId, { title: "Валидный заголовок" }, createAuthenticatedRequest())
+    ).rejects.toThrow(BadRequestException);
   });
 
   it("rejects requests without authenticated astrologer context", async () => {
@@ -135,7 +158,13 @@ function createNullAnalyticsReader(): ProductAnalyticsReader {
         ])
       );
       return analytics;
-    })
+    }),
+    getCatalogLifetimeSummary: vi.fn(async (): Promise<ProductCatalogLifetimeAnalyticsSummary> => ({
+      totalSalesCount: 0,
+      grossRevenueMinor: 0,
+      currency: "RUB",
+      bestseller: null
+    }))
   };
 }
 

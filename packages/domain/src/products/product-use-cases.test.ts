@@ -7,6 +7,7 @@ import {
   listProducts,
   moveProductToDraft,
   ProductNotFoundError,
+  ProductValidationError,
   publishProduct,
   updateProduct,
   type Product,
@@ -190,6 +191,54 @@ describe("product use cases", () => {
     expect(updated.title).toBe("Синастрия");
     expect(updated.priceMinor).toBe(540000);
     expect(updated.updatedAt).toBe("2026-07-02T00:30:00.000Z");
+  });
+
+  it("clears nullable fields during partial updates", async () => {
+    const store = new InMemoryProductStore();
+    const product = await createProduct({ store, input: baseInput, now });
+
+    const updated = await updateProduct({
+      store,
+      ownerUserId: "owner-1",
+      productId: product.id,
+      patch: {
+        subtitle: null,
+        introVideoUrl: null,
+        durationMinutes: null
+      },
+      now: new Date("2026-07-02T00:32:00.000Z")
+    });
+
+    expect(updated.subtitle).toBeNull();
+    expect(updated.introVideoUrl).toBeNull();
+    expect(updated.durationMinutes).toBeNull();
+  });
+
+  it("rejects duplicate enum arrays before persistence unique constraints", async () => {
+    const store = new InMemoryProductStore();
+
+    await expect(
+      createProduct({
+        store,
+        input: { ...baseInput, deliveryFormats: ["video", "video"] },
+        now
+      })
+    ).rejects.toBeInstanceOf(ProductValidationError);
+  });
+
+  it("validates the materialized product state during partial updates", async () => {
+    const store = new InMemoryProductStore();
+    const product = await createProduct({ store, input: baseInput, now });
+
+    await expect(
+      updateProduct({
+        store,
+        ownerUserId: "owner-1",
+        productId: product.id,
+        patch: { paymentModel: "pack" },
+        now: new Date("2026-07-02T00:34:00.000Z")
+      })
+    ).rejects.toBeInstanceOf(ProductValidationError);
   });
 
   it("duplicates products into draft status", async () => {

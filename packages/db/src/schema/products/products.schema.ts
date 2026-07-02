@@ -109,6 +109,12 @@ export const products = pgTable(
       "products_group_settings_check",
       sql`${table.participantMode} <> 'group' or ${table.groupSize} is not null`
     ),
-    index("products_owner_status_idx").on(table.ownerUserId, table.status)
+    index("products_owner_created_id_idx").on(table.ownerUserId, table.createdAt, table.id),
+    index("products_owner_status_created_id_idx").on(
+      table.ownerUserId,
+      table.status,
+      table.createdAt,
+      table.id
+    )
   ]
 );

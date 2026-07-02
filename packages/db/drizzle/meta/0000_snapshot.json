@@ -1,5 +1,5 @@
 {
-  "id": "e7e5d093-ed1d-4758-bed4-99200d8ad4de",
+  "id": "b57872c9-311e-448c-b507-17a4fce1cf03",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2082,8 +2082,35 @@
         }
       },
       "indexes": {
-        "products_owner_status_idx": {
-          "name": "products_owner_status_idx",
+        "products_owner_created_id_idx": {
+          "name": "products_owner_created_id_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "products_owner_status_created_id_idx": {
+          "name": "products_owner_status_created_id_idx",
           "columns": [
             {
               "expression": "owner_user_id",
@@ -2093,6 +2120,18 @@
             },
             {
               "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

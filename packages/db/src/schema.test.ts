@@ -43,7 +43,7 @@ import {
   userStatusValues
 } from "./schema/index";
 
-const currentBaselineMigration = "packages/db/drizzle/0000_dusty_bloodstorm.sql";
+const currentBaselineMigration = "packages/db/drizzle/0000_dazzling_metal_master.sql";
 
 describe("database account schema constants", () => {
   it("keeps database role checks aligned with the application role model", () => {
@@ -222,7 +222,10 @@ describe("database account schema constants", () => {
     expect(migration).toContain('CONSTRAINT "products_group_settings_check"');
     expect(migration).toContain('CONSTRAINT "product_modifiers_free_price_check"');
     expect(migration).toContain(
-      'CREATE INDEX "products_owner_status_idx" ON "products" USING btree ("owner_user_id","status")'
+      'CREATE INDEX "products_owner_created_id_idx" ON "products" USING btree ("owner_user_id","created_at","id")'
+    );
+    expect(migration).toContain(
+      'CREATE INDEX "products_owner_status_created_id_idx" ON "products" USING btree ("owner_user_id","status","created_at","id")'
     );
   });
 

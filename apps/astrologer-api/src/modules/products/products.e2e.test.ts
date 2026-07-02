@@ -153,6 +153,16 @@ describe("products HTTP routes", () => {
     });
     const createResponse = await postJson("/products", validCreateBody(), csrfHeaders());
     const createdProductId = String(createResponse.body.id);
+    const updateResponse = await putJson(
+      `/products/${createdProductId}`,
+      { subtitle: null, durationMinutes: null },
+      csrfHeaders()
+    );
+    const invalidUpdateResponse = await putJson(
+      `/products/${createdProductId}`,
+      { paymentModel: "pack" },
+      csrfHeaders()
+    );
     const publishResponse = await postJson(
       `/products/${createdProductId}/publish`,
       {},
@@ -184,6 +194,13 @@ describe("products HTTP routes", () => {
         reviewsCount: 0
       }
     });
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body).toMatchObject({
+      id: createdProductId,
+      subtitle: null,
+      durationMinutes: null
+    });
+    expect(invalidUpdateResponse.status).toBe(400);
     expect(publishResponse.status).toBe(201);
     expect(publishResponse.body).toMatchObject({ id: createdProductId, status: "active" });
     expect(archiveResponse.status).toBe(201);
@@ -223,6 +240,23 @@ describe("products HTTP routes", () => {
   ): Promise<HttpJsonResponse> {
     const response = await fetch(`${baseUrl}${path}`, {
       method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...headers
+      },
+      body: JSON.stringify(body)
+    });
+
+    return readJsonResponse(response);
+  }
+
+  async function putJson(
+    path: string,
+    body: unknown,
+    headers: Record<string, string>
+  ): Promise<HttpJsonResponse> {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: "PUT",
       headers: {
         "content-type": "application/json",
         ...headers

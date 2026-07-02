@@ -47,11 +47,19 @@ const validProductRequest = {
 
 describe("product contracts", () => {
   it("accepts a valid create request", () => {
-    expect(createProductRequestSchema.parse(validProductRequest)).toMatchObject({
+    const parsed = createProductRequestSchema.parse(validProductRequest);
+
+    expect(parsed).toMatchObject({
       title: "Натальный разбор",
-      priceMinor: 490000,
-      status: "draft"
+      priceMinor: 490000
     });
+    expect(parsed).not.toHaveProperty("status");
+  });
+
+  it("rejects caller-controlled lifecycle status on create", () => {
+    expect(() =>
+      createProductRequestSchema.parse({ ...validProductRequest, status: "active" })
+    ).toThrow();
   });
 
   it("rejects negative money", () => {
@@ -147,6 +155,20 @@ describe("product contracts", () => {
     ).toThrow();
   });
 
+  it("rejects duplicate enum-array values before persistence", () => {
+    expect(() =>
+      createProductRequestSchema.parse({
+        ...validProductRequest,
+        deliveryFormats: ["video", "video"]
+      })
+    ).toThrow();
+    expect(() =>
+      updateProductRequestSchema.parse({
+        methods: ["natal", "natal"]
+      })
+    ).toThrow();
+  });
+
   it("parses list filters with defaults", () => {
     expect(listProductsQuerySchema.parse({})).toEqual({
       status: "all",
@@ -206,18 +228,32 @@ describe("product contracts", () => {
     });
   });
 
-  it("accepts partial update requests", () => {
+  it("accepts partial update requests and nullable field clearing", () => {
     expect(updateProductRequestSchema.parse({ title: "Синастрия" })).toEqual({
       title: "Синастрия"
     });
-  });
-
-  it("does not require paired fields in partial updates", () => {
     expect(updateProductRequestSchema.parse({ paymentModel: "pack" })).toEqual({
       paymentModel: "pack"
     });
     expect(updateProductRequestSchema.parse({ participantMode: "group" })).toEqual({
       participantMode: "group"
+    });
+    expect(
+      updateProductRequestSchema.parse({
+        subtitle: null,
+        introVideoUrl: "",
+        durationMinutes: null,
+        packageSessionCount: null,
+        subscriptionPeriod: null,
+        groupSize: null
+      })
+    ).toEqual({
+      subtitle: null,
+      introVideoUrl: null,
+      durationMinutes: null,
+      packageSessionCount: null,
+      subscriptionPeriod: null,
+      groupSize: null
     });
   });
 

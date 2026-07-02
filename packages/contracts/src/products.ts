@@ -7,6 +7,16 @@ const optionalTrimmedStringSchema = z
   .max(500)
   .transform((value) => (value.length === 0 ? undefined : value))
   .optional();
+const optionalNullableTrimmedStringSchema = z
+  .union([
+    z
+      .string()
+      .trim()
+      .max(500)
+      .transform((value) => (value.length === 0 ? null : value)),
+    z.null()
+  ])
+  .optional();
 const optionalUrlStringSchema = z
   .string()
   .trim()
@@ -25,9 +35,33 @@ const optionalUrlStringSchema = z
     { message: "Invalid URL" }
   )
   .optional();
+const optionalNullableUrlStringSchema = z
+  .union([
+    z
+      .string()
+      .trim()
+      .max(500)
+      .transform((value) => (value.length === 0 ? null : value))
+      .refine(
+        (value) => {
+          if (value === null) return true;
+          try {
+            new URL(value);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { message: "Invalid URL" }
+      ),
+    z.null()
+  ])
+  .optional();
 const nullableStringSchema = z.string().trim().max(500).nullable();
 const optionalPositiveIntSchema = z.number().int().positive().optional();
 const optionalNonNegativeIntSchema = z.number().int().min(0).optional();
+const optionalNullablePositiveIntSchema = z.number().int().positive().nullable().optional();
+const optionalNullableNonNegativeIntSchema = z.number().int().min(0).nullable().optional();
 const orderSchema = z.number().int().min(0).max(100_000);
 
 export const productStatusSchema = z.enum(["draft", "active", "archived"]);
@@ -162,6 +196,21 @@ const productPayloadFields = {
   modifiers: z.array(productModifierRequestSchema).max(30)
 };
 
+const updateProductPayloadFields = {
+  ...productPayloadFields,
+  subtitle: optionalNullableTrimmedStringSchema,
+  coverMediaId: optionalNullableTrimmedStringSchema,
+  introVideoUrl: optionalNullableUrlStringSchema,
+  durationMinutes: optionalNullablePositiveIntSchema,
+  durationLabel: optionalNullableTrimmedStringSchema,
+  slaLabel: optionalNullableTrimmedStringSchema,
+  packageSessionCount: optionalNullablePositiveIntSchema,
+  packageDiscountPercent: z.number().int().min(0).max(100).nullable().optional(),
+  subscriptionPeriod: productSubscriptionPeriodSchema.nullable().optional(),
+  trialDays: optionalNullableNonNegativeIntSchema,
+  groupSize: optionalNullablePositiveIntSchema
+};
+
 const addProductPayloadIssues = (
   value: {
     readonly paymentModel?: ProductPaymentModel;
@@ -170,9 +219,15 @@ const addProductPayloadIssues = (
     readonly participantMode?: ProductParticipantMode;
     readonly groupSize?: number | null;
     readonly priceMinor?: number;
+    readonly deliveryFormats?: readonly ProductDeliveryFormat[];
+    readonly requiredClientData?: readonly ProductRequiredClientData[];
+    readonly methods?: readonly ProductMethod[];
+    readonly accessGrants?: readonly ProductAccessGrant[];
   },
   ctx: z.RefinementCtx
 ) => {
+  addProductUpdateIssues(value, ctx);
+
   if (value.paymentModel === "pack" && !value.packageSessionCount) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -206,20 +261,46 @@ const addProductPayloadIssues = (
   }
 };
 
-const productPayloadBaseSchema = z
+const addProductUpdateIssues = (
+  value: {
+    readonly deliveryFormats?: readonly ProductDeliveryFormat[];
+    readonly requiredClientData?: readonly ProductRequiredClientData[];
+    readonly methods?: readonly ProductMethod[];
+    readonly accessGrants?: readonly ProductAccessGrant[];
+  },
+  ctx: z.RefinementCtx
+) => {
+  addUniqueArrayIssue(value.deliveryFormats, "deliveryFormats", ctx);
+  addUniqueArrayIssue(value.requiredClientData, "requiredClientData", ctx);
+  addUniqueArrayIssue(value.methods, "methods", ctx);
+  addUniqueArrayIssue(value.accessGrants, "accessGrants", ctx);
+};
+
+const addUniqueArrayIssue = (
+  values: readonly string[] | undefined,
+  path: string,
+  ctx: z.RefinementCtx
+) => {
+  if (values !== undefined && new Set(values).size !== values.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [path],
+      message: `${path} values must be unique`
+    });
+  }
+};
+
+export const createProductRequestSchema = z
   .object(productPayloadFields)
   .strict()
   .superRefine(addProductPayloadIssues);
-
-export const createProductRequestSchema = productPayloadBaseSchema.extend({
-  status: productStatusSchema.default("draft")
-});
 export type CreateProductRequest = z.infer<typeof createProductRequestSchema>;
 
 export const updateProductRequestSchema = z
-  .object(productPayloadFields)
+  .object(updateProductPayloadFields)
   .partial()
-  .strict();
+  .strict()
+  .superRefine(addProductUpdateIssues);
 export type UpdateProductRequest = z.infer<typeof updateProductRequestSchema>;
 
 export const productIdParamSchema = z.object({ productId: uuidSchema }).strict();

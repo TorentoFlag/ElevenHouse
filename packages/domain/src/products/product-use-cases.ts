@@ -1,9 +1,10 @@
 import { normalizeRequiredString } from "../shared";
-import { ProductNotFoundError } from "./product-errors";
+import { ProductNotFoundError, ProductValidationError } from "./product-errors";
 import type { ProductListResult, ProductStore } from "./product-store";
 import type {
   Product,
   ProductCreateInput,
+  ProductEditableFields,
   ProductIncludedItemInput,
   ProductModifierInput,
   ProductStatusFilter,
@@ -40,11 +41,13 @@ export async function getProduct(input: {
   return product;
 }
 
-export function createProduct(input: {
+export async function createProduct(input: {
   readonly store: ProductStore;
   readonly input: ProductCreateInput;
   readonly now: Date;
 }): Promise<Product> {
+  validateEditableProduct(input.input);
+
   return input.store.create({
     ...input.input,
     ownerUserId: normalizeRequiredString(
@@ -64,10 +67,22 @@ export async function updateProduct(input: {
   readonly patch: ProductUpdatePatch;
   readonly now: Date;
 }): Promise<Product> {
+  const ownerUserId = normalizeRequiredString(input.ownerUserId, "Product owner user id is required");
+  const productId = normalizeRequiredString(input.productId, "Product id is required");
+  const current = await input.store.findByOwnerAndId({
+    ownerUserId,
+    productId
+  });
+  if (!current) {
+    throw new ProductNotFoundError();
+  }
+  const patch = normalizeProductPatch(input.patch);
+  validateEditableProduct({ ...current, ...patch });
+
   const product = await input.store.update({
-    ownerUserId: normalizeRequiredString(input.ownerUserId, "Product owner user id is required"),
-    productId: normalizeRequiredString(input.productId, "Product id is required"),
-    patch: normalizeProductPatch(input.patch),
+    ownerUserId,
+    productId,
+    patch,
     now: input.now.toISOString()
   });
   if (!product) {
@@ -110,12 +125,9 @@ export async function duplicateProduct(input: {
   readonly now: Date;
 }): Promise<Product> {
   const source = await getProduct(input);
-
-  return input.store.duplicate({
-    sourceProductId: source.id,
+  const duplicate = {
     ownerUserId: source.ownerUserId,
     type: source.type,
-    status: "draft",
     title: `${source.title} (копия)`,
     subtitle: source.subtitle,
     priceMinor: source.priceMinor,
@@ -138,7 +150,14 @@ export async function duplicateProduct(input: {
     methods: source.methods,
     accessGrants: source.accessGrants,
     includedItems: stripIncludedItemIds(source.includedItems),
-    modifiers: stripModifierIds(source.modifiers),
+    modifiers: stripModifierIds(source.modifiers)
+  };
+  validateEditableProduct(duplicate);
+
+  return input.store.duplicate({
+    sourceProductId: source.id,
+    ...duplicate,
+    status: "draft",
     now: input.now.toISOString()
   });
 }
@@ -163,13 +182,53 @@ async function updateProductStatus(input: {
 }
 
 function normalizeProductPatch(patch: ProductUpdatePatch): ProductUpdatePatch {
-  return {
+  return omitUndefined({
     ...patch,
     title:
       patch.title === undefined
         ? undefined
         : normalizeRequiredString(patch.title, "Product title is required")
-  };
+  });
+}
+
+function validateEditableProduct(product: ProductEditableFields): void {
+  if (product.deliveryFormats.length === 0) {
+    throw new ProductValidationError("Product requires at least one delivery format");
+  }
+  assertUnique(product.deliveryFormats, "Product delivery formats must be unique");
+  assertUnique(product.requiredClientData, "Product required client data must be unique");
+  assertUnique(product.methods, "Product methods must be unique");
+  assertUnique(product.accessGrants, "Product access grants must be unique");
+
+  if (product.paymentModel === "pack" && product.packageSessionCount === null) {
+    throw new ProductValidationError("Package products require packageSessionCount");
+  }
+  if (product.paymentModel === "sub" && product.subscriptionPeriod === null) {
+    throw new ProductValidationError("Subscription products require subscriptionPeriod");
+  }
+  if (product.participantMode === "group" && product.groupSize === null) {
+    throw new ProductValidationError("Group products require groupSize");
+  }
+  if (product.paymentModel === "free" && product.priceMinor !== 0) {
+    throw new ProductValidationError("Free products must have zero price");
+  }
+  for (const modifier of product.modifiers) {
+    if (modifier.kind === "free" && modifier.priceMinor !== 0) {
+      throw new ProductValidationError("Free modifiers must have zero price");
+    }
+  }
+}
+
+function assertUnique(values: readonly string[], message: string): void {
+  if (new Set(values).size !== values.length) {
+    throw new ProductValidationError(message);
+  }
+}
+
+function omitUndefined<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
+  ) as T;
 }
 
 function stripIncludedItemIds(

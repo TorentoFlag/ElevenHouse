@@ -1,4 +1,8 @@
-import type { ProductAnalyticsReader, ProductLifetimeAnalytics } from "@elevenhouse/domain";
+import type {
+  ProductAnalyticsReader,
+  ProductCatalogLifetimeAnalyticsSummary,
+  ProductLifetimeAnalytics
+} from "@elevenhouse/domain";
 
 export class NullProductAnalyticsReader implements ProductAnalyticsReader {
   async getLifetimeAnalytics(input: {
@@ -17,5 +21,14 @@ export class NullProductAnalyticsReader implements ProductAnalyticsReader {
         }
       ])
     );
+  }
+
+  async getCatalogLifetimeSummary(): Promise<ProductCatalogLifetimeAnalyticsSummary> {
+    return {
+      totalSalesCount: 0,
+      grossRevenueMinor: 0,
+      currency: "RUB",
+      bestseller: null
+    };
   }
 }

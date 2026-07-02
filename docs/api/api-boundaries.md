@@ -71,6 +71,7 @@ GET  /products/:productId
 POST /products
 PUT  /products/:productId
 POST /products/:productId/publish
+POST /products/:productId/move-to-draft
 POST /products/:productId/archive
 POST /products/:productId/duplicate
 ```

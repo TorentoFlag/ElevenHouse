@@ -46,7 +46,7 @@ export function createDrizzleProductStore(database: ElevenHouseDatabase): Produc
         .select()
         .from(products)
         .where(where)
-        .orderBy(desc(products.createdAt))
+        .orderBy(desc(products.createdAt), desc(products.id))
         .limit(query.limit)
         .offset(query.offset);
       const [totalRow] = await database.select({ value: count() }).from(products).where(where);

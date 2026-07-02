@@ -13,6 +13,7 @@ import {
   listProducts,
   moveProductToDraft,
   ProductNotFoundError,
+  ProductValidationError,
   publishProduct,
   updateProduct,
   type Product,
@@ -94,34 +95,20 @@ export class ProductsService {
       store: this.store,
       ownerUserId,
       status: "all",
-      limit: 200,
+      limit: 1,
       offset: 0
     });
-    const analytics = await this.analyticsReader.getLifetimeAnalytics({
-      ownerUserId,
-      productIds: result.products.map((product) => product.id)
-    });
-    const analyticsValues = [...analytics.values()];
-    const bestseller = result.products
-      .map((product) => ({ product, metrics: analytics.get(product.id) }))
-      .filter((entry) => (entry.metrics?.salesCount ?? 0) > 0)
-      .sort((left, right) => (right.metrics?.salesCount ?? 0) - (left.metrics?.salesCount ?? 0))[0];
+    const analytics = await this.analyticsReader.getCatalogLifetimeSummary({ ownerUserId });
 
     return productSummaryResponseSchema.parse({
       total: result.counts.all,
       active: result.counts.active,
       draft: result.counts.draft,
       archived: result.counts.archived,
-      totalSalesCount: analyticsValues.reduce((sum, item) => sum + item.salesCount, 0),
-      grossRevenueMinor: analyticsValues.reduce((sum, item) => sum + item.grossRevenueMinor, 0),
-      currency: "RUB",
-      bestseller: bestseller
-        ? {
-            productId: bestseller.product.id,
-            title: bestseller.product.title,
-            salesCount: bestseller.metrics?.salesCount ?? 0
-          }
-        : null
+      totalSalesCount: analytics.totalSalesCount,
+      grossRevenueMinor: analytics.grossRevenueMinor,
+      currency: analytics.currency,
+      bestseller: analytics.bestseller
     });
   }
 
@@ -334,6 +321,9 @@ async function mapProductErrors<T>(operation: () => Promise<T>): Promise<T> {
   } catch (error) {
     if (error instanceof ProductNotFoundError) {
       throw new NotFoundException("Product not found");
+    }
+    if (error instanceof ProductValidationError) {
+      throw new BadRequestException(error.message);
     }
 
     throw error;
