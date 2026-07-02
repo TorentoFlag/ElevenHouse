@@ -69,6 +69,25 @@ export function createDictionaryCustomEntry(input: {
   });
 }
 
+export function updateDictionaryCustomEntry(input: {
+  readonly store: DictionaryStore;
+  readonly ownerUserId: string;
+  readonly entryId: string;
+  readonly categoryId: string;
+  readonly title: string;
+  readonly content: string;
+  readonly now: Date;
+}): Promise<DictionaryAstrologerEntry> {
+  return input.store.updateCustomEntry({
+    ownerUserId: normalizeRequiredString(input.ownerUserId, "Dictionary owner user id is required"),
+    entryId: normalizeRequiredString(input.entryId, "Dictionary astrologer entry id is required"),
+    categoryId: normalizeRequiredString(input.categoryId, "Dictionary category id is required"),
+    title: normalizeRequiredString(input.title, "Dictionary entry title is required"),
+    content: normalizeRequiredString(input.content, "Dictionary entry content is required"),
+    updatedAt: input.now.toISOString()
+  });
+}
+
 export function overrideDictionaryPlatformEntry(input: {
   readonly store: DictionaryStore;
   readonly ownerUserId: string;

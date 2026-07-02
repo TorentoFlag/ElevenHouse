@@ -9,6 +9,7 @@ import {
   overrideDictionaryPlatformEntry,
   resetDictionaryAstrologerEntries,
   resetDictionaryPlatformEntryOverride,
+  updateDictionaryCustomEntry,
   type DictionaryStore
 } from "./index";
 
@@ -49,6 +50,18 @@ function createStore(overrides: Partial<DictionaryStore> = {}): DictionaryStore 
       createdAt: input.createdAt,
       updatedAt: input.updatedAt,
       ...input
+    })),
+    updateCustomEntry: vi.fn(async (input) => ({
+      id: input.entryId,
+      ownerUserId: input.ownerUserId,
+      categoryId: input.categoryId,
+      code: "custom_venus_gemini",
+      locale: "ru" as const,
+      entryType: "custom" as const,
+      title: input.title,
+      content: input.content,
+      createdAt: "2026-06-30T09:00:00.000Z",
+      updatedAt: input.updatedAt
     })),
     upsertPlatformEntryOverride: vi.fn(async (input) => ({
       id: "astrologer_entry_override",
@@ -154,6 +167,29 @@ describe("dictionary domain module", () => {
       title: "Луна в Тельце",
       content: "Пользовательская трактовка",
       createdAt: "2026-06-30T10:00:00.000Z",
+      updatedAt: "2026-06-30T10:00:00.000Z"
+    });
+  });
+
+  it("updates a normalized custom dictionary entry", async () => {
+    const store = createStore();
+
+    await updateDictionaryCustomEntry({
+      store,
+      ownerUserId: " user_astrologer ",
+      entryId: " astrologer_entry_custom ",
+      categoryId: " category_planets_signs ",
+      title: "  Венера в Близнецах  ",
+      content: "  Новая авторская редакция  ",
+      now
+    });
+
+    expect(store.updateCustomEntry).toHaveBeenCalledWith({
+      ownerUserId: "user_astrologer",
+      entryId: "astrologer_entry_custom",
+      categoryId: "category_planets_signs",
+      title: "Венера в Близнецах",
+      content: "Новая авторская редакция",
       updatedAt: "2026-06-30T10:00:00.000Z"
     });
   });
