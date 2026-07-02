@@ -1,6 +1,9 @@
 import { useRef, useState } from "react";
 import { useI18n } from "@elevenhouse/i18n";
-import type { DictionaryEntrySourceFilter } from "@elevenhouse/contracts";
+import type {
+  DictionaryEffectiveEntryResponse,
+  DictionaryEntrySourceFilter
+} from "@elevenhouse/contracts";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { useDictionaryCategoriesQuery } from "../../features/dictionary/model/useDictionaryCategoriesQuery";
@@ -11,9 +14,15 @@ import { createReferenceEntriesQuery } from "./helpers/referenceEntriesQuery";
 import { createReferencePageSummary } from "./helpers/referencePageSummary";
 import { ReferencePageView, type ReferenceAddEntryOptions } from "./ReferencePageView";
 
-type ReferenceEntryModalState = {
-  readonly titleSeed: string;
-};
+type ReferenceEntryModalState =
+  | {
+      readonly mode: "create";
+      readonly titleSeed: string;
+    }
+  | {
+      readonly mode: "edit";
+      readonly entry: DictionaryEffectiveEntryResponse;
+    };
 
 export function ReferencePage() {
   const { dictionary, locale } = useI18n<AstrologerCopy>();
@@ -48,6 +57,7 @@ export function ReferencePage() {
 
   const openEntryModal = (options: ReferenceAddEntryOptions = {}) => {
     setEntryModal({
+      mode: "create",
       titleSeed: options.titleSeed ?? ""
     });
   };
@@ -96,16 +106,32 @@ export function ReferencePage() {
             .catch(() => undefined);
         }}
         onAdd={openEntryModal}
-        onEditEntry={() => undefined}
+        onEditEntry={(entry) =>
+          setEntryModal({
+            mode: "edit",
+            entry
+          })
+        }
         onDeleteEntry={() => undefined}
       />
-      {entryModal && (
+      {entryModal && entryModal.mode === "create" && (
         <ReferenceEntryModal
+          mode="create"
           copy={dictionary.reference.entryModal}
           categories={summary.categories}
           locale={locale}
           selectedCategoryId={selectedCategoryId}
           titleSeed={entryModal.titleSeed}
+          onClose={() => setEntryModal(null)}
+        />
+      )}
+      {entryModal && entryModal.mode === "edit" && (
+        <ReferenceEntryModal
+          mode="edit"
+          copy={dictionary.reference.entryModal}
+          categories={summary.categories}
+          locale={locale}
+          entry={entryModal.entry}
           onClose={() => setEntryModal(null)}
         />
       )}

@@ -327,6 +327,7 @@ function createDictionaryStore(): DictionaryStore {
       }
     })),
     createCustomEntry: vi.fn(async () => raise("Unexpected create custom entry call")),
+    updateCustomEntry: vi.fn(async () => raise("Unexpected update custom entry call")),
     upsertPlatformEntryOverride: vi.fn(async () => raise("Unexpected override call")),
     deleteAstrologerEntry: vi.fn(async () => raise("Unexpected delete call")),
     resetAstrologerEntries: vi.fn(async () => raise("Unexpected reset astrologer entries call")),

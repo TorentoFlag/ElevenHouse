@@ -111,6 +111,44 @@ describe("HttpClient", () => {
     });
   });
 
+  it("sends protected PUT requests with a JSON body through the configured base path", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ ok: true }));
+    const http = new HttpClient({
+      basePath: "/api",
+      csrf: {
+        cookieName: "elevenhouse_astrologer_csrf",
+        headerName: "x-csrf-token",
+        readCookie: () => "signed-token"
+      },
+      fetcher
+    });
+
+    await http.put(
+      "/dictionary/custom-entries/a2fb1fef-dc5c-44ec-ae36-060f455c8f0f",
+      {
+        title: "Венера в Близнецах",
+        content: "Новая редакция"
+      },
+      { csrf: true }
+    );
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/dictionary/custom-entries/a2fb1fef-dc5c-44ec-ae36-060f455c8f0f",
+      {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "content-type": "application/json",
+          "x-csrf-token": "signed-token"
+        },
+        body: JSON.stringify({
+          title: "Венера в Близнецах",
+          content: "Новая редакция"
+        })
+      }
+    );
+  });
+
   it("does not add a CSRF header to unprotected requests", async () => {
     const fetcher = vi.fn(async () => jsonResponse({ ok: true }));
     const http = new HttpClient({

@@ -27,6 +27,10 @@ type ReferenceEntryModalDraftField = keyof ReferenceEntryDraftTouchedFields;
 export type ReferenceEntryModalCopy = {
   readonly title: string;
   readonly closeLabel: string;
+  readonly createTitle: string;
+  readonly editTitle: string;
+  readonly createCloseLabel: string;
+  readonly editCloseLabel: string;
   readonly categoryLabel: string;
   readonly titleLabel: string;
   readonly titlePlaceholder: string;
@@ -45,6 +49,7 @@ export type ReferenceEntryModalViewProps = {
   readonly copy: ReferenceEntryModalCopy;
   readonly categories: DictionaryCategoryResponse[];
   readonly draft: ReferenceEntryModalDraft;
+  readonly isCategoryEditable: boolean;
   readonly canSubmit: boolean;
   readonly isSaving: boolean;
   readonly isCreatingAiDraft: boolean;
@@ -64,6 +69,7 @@ export function ReferenceEntryModalView({
   copy,
   categories,
   draft,
+  isCategoryEditable,
   canSubmit,
   isSaving,
   isCreatingAiDraft,
@@ -101,8 +107,15 @@ export function ReferenceEntryModalView({
                   label={category.name}
                   type="button"
                   active={isActive}
+                  disabled={!isCategoryEditable}
                   data-reference-entry-modal-category-id={category.id}
-                  onClick={() => onDraftChange({ ...draft, categoryId: category.id }, "categoryId")}
+                  onClick={() => {
+                    if (!isCategoryEditable) {
+                      return;
+                    }
+
+                    onDraftChange({ ...draft, categoryId: category.id }, "categoryId");
+                  }}
                 />
               );
             })}

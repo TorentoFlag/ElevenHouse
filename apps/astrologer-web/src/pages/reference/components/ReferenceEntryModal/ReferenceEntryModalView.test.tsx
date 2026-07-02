@@ -21,6 +21,10 @@ const modalCss = readFileSync(
 const copy = {
   title: "Новая трактовка",
   closeLabel: "Закрыть",
+  createTitle: "Новая трактовка",
+  editTitle: "Редактировать трактовку",
+  createCloseLabel: "Закрыть модалку добавления трактовки",
+  editCloseLabel: "Закрыть модалку редактирования трактовки",
   categoryLabel: "Категория",
   titleLabel: "Название",
   titlePlaceholder: "Напр. Солнце в Овне",
@@ -78,6 +82,7 @@ describe("ReferenceEntryModalView", () => {
       copy,
       categories,
       draft,
+      isCategoryEditable: true,
       canSubmit: true,
       isSaving: false,
       isCreatingAiDraft: false,
@@ -110,6 +115,7 @@ describe("ReferenceEntryModalView", () => {
       "Планеты в домах"
     ]);
     expect(categoryButtons.map((button) => button.props.active)).toEqual([true, false]);
+    expect(categoryButtons.map((button) => button.props.disabled)).toEqual([false, false]);
     categoryButtons[1]?.props.onClick();
     expect(onDraftChange).toHaveBeenCalledWith(
       {
@@ -187,6 +193,41 @@ describe("ReferenceEntryModalView", () => {
     expect(submitButtonRule).toContain("min-width: 0;");
   });
 
+  it("disables category chips when the category is not editable", () => {
+    const draft = {
+      categoryId: categories[0]?.id ?? "",
+      title: "Венера в Близнецах",
+      content: "Любовь становится легкой, живой и связанной с общением."
+    } satisfies ReferenceEntryModalDraft;
+    const onDraftChange = vi.fn();
+
+    const view = ReferenceEntryModalView({
+      copy,
+      categories,
+      draft,
+      isCategoryEditable: false,
+      canSubmit: true,
+      isSaving: false,
+      isCreatingAiDraft: false,
+      fieldErrors: {},
+      errorMessage: null,
+      aiErrorMessage: null,
+      onClose: vi.fn(),
+      onDraftChange,
+      onSubmit: vi.fn(),
+      onCreateAiDraft: vi.fn()
+    });
+
+    const categoryButtons = findElementsByDataAttribute(
+      view,
+      "data-reference-entry-modal-category-id"
+    );
+
+    expect(categoryButtons.map((button) => button.props.disabled)).toEqual([true, true]);
+    categoryButtons[1]?.props.onClick();
+    expect(onDraftChange).not.toHaveBeenCalled();
+  });
+
   it("keeps the AI draft action outside the textarea label boundary", () => {
     const view = ReferenceEntryModalView({
       copy,
@@ -196,6 +237,7 @@ describe("ReferenceEntryModalView", () => {
         title: "Луна в Раке",
         content: ""
       },
+      isCategoryEditable: true,
       canSubmit: false,
       isSaving: false,
       isCreatingAiDraft: false,
@@ -234,6 +276,7 @@ describe("ReferenceEntryModalView", () => {
         title: "",
         content: ""
       },
+      isCategoryEditable: true,
       canSubmit: false,
       isSaving: true,
       isCreatingAiDraft: false,
@@ -265,6 +308,7 @@ describe("ReferenceEntryModalView", () => {
         title: "",
         content: ""
       },
+      isCategoryEditable: true,
       canSubmit: false,
       isSaving: false,
       isCreatingAiDraft: true,
@@ -310,6 +354,7 @@ describe("ReferenceEntryModalView", () => {
         title: "",
         content: ""
       },
+      isCategoryEditable: true,
       canSubmit: false,
       isSaving: false,
       isCreatingAiDraft: false,

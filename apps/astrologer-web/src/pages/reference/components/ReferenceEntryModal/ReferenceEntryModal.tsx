@@ -1,9 +1,18 @@
 import { useState } from "react";
-import type { DictionaryCategoryResponse, DictionaryLocale } from "@elevenhouse/contracts";
+import type {
+  DictionaryCategoryResponse,
+  DictionaryEffectiveEntryResponse,
+  DictionaryLocale
+} from "@elevenhouse/contracts";
 import { useCreateDictionaryAiDraftMutation } from "../../../../features/dictionary/model/useCreateDictionaryAiDraftMutation";
 import { useCreateDictionaryCustomEntryMutation } from "../../../../features/dictionary/model/useCreateDictionaryCustomEntryMutation";
+import { useUpdateDictionaryCustomEntryMutation } from "../../../../features/dictionary/model/useUpdateDictionaryCustomEntryMutation";
+import { useUpdateDictionaryPlatformEntryOverrideMutation } from "../../../../features/dictionary/model/useUpdateDictionaryPlatformEntryOverrideMutation";
 import {
   createReferenceEntryDraft,
+  createReferenceEntryDraftFromEntry,
+  createReferenceEntryUpdatePayload,
+  createReferencePlatformEntryOverridePayload,
   normalizeReferenceEntryDraft,
   resolveReferenceEntryVisibleFieldErrors,
   type ReferenceEntryDraftTouchedFields,
@@ -11,29 +20,34 @@ import {
 } from "../../helpers/referenceEntryDraft";
 import { ReferenceEntryModalView, type ReferenceEntryModalCopy } from "./ReferenceEntryModalView";
 
+type ReferenceEntryModalCreateMode = {
+  readonly mode: "create";
+  readonly selectedCategoryId: string | null;
+  readonly titleSeed: string;
+};
+
+type ReferenceEntryModalEditMode = {
+  readonly mode: "edit";
+  readonly entry: DictionaryEffectiveEntryResponse;
+};
+
 export type ReferenceEntryModalProps = {
   readonly copy: ReferenceEntryModalCopy;
   readonly categories: DictionaryCategoryResponse[];
   readonly locale: DictionaryLocale;
-  readonly selectedCategoryId: string | null;
-  readonly titleSeed: string;
   readonly onClose: () => void;
-};
+} & (ReferenceEntryModalCreateMode | ReferenceEntryModalEditMode);
 
-export function ReferenceEntryModal({
-  copy,
-  categories,
-  locale,
-  selectedCategoryId,
-  titleSeed,
-  onClose
-}: ReferenceEntryModalProps) {
+export function ReferenceEntryModal(props: ReferenceEntryModalProps) {
+  const { copy, categories, locale, onClose } = props;
   const [draft, setDraft] = useState(() =>
-    createReferenceEntryDraft({
-      categories,
-      selectedCategoryId,
-      titleSeed
-    })
+    props.mode === "edit"
+      ? createReferenceEntryDraftFromEntry(props.entry)
+      : createReferenceEntryDraft({
+          categories,
+          selectedCategoryId: props.selectedCategoryId,
+          titleSeed: props.titleSeed
+        })
   );
   const [touchedFields, setTouchedFields] = useState<ReferenceEntryDraftTouchedFields>({
     categoryId: false,
@@ -43,6 +57,12 @@ export function ReferenceEntryModal({
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const createEntryMutation = useCreateDictionaryCustomEntryMutation();
   const createAiDraftMutation = useCreateDictionaryAiDraftMutation();
+  const updateCustomEntryMutation = useUpdateDictionaryCustomEntryMutation();
+  const updatePlatformEntryMutation = useUpdateDictionaryPlatformEntryOverrideMutation();
+  const isSaving =
+    createEntryMutation.isPending ||
+    updateCustomEntryMutation.isPending ||
+    updatePlatformEntryMutation.isPending;
   const validationState = validateReferenceEntryDraft({
     draft,
     locale,
@@ -61,14 +81,25 @@ export function ReferenceEntryModal({
 
   return (
     <ReferenceEntryModalView
-      copy={copy}
+      copy={{
+        ...copy,
+        title: props.mode === "edit" ? copy.editTitle : copy.createTitle,
+        closeLabel: props.mode === "edit" ? copy.editCloseLabel : copy.createCloseLabel
+      }}
       categories={categories}
       draft={draft}
+      isCategoryEditable={props.mode === "create" || props.entry.source === "custom"}
       canSubmit={canSubmit}
-      isSaving={createEntryMutation.isPending}
+      isSaving={isSaving}
       isCreatingAiDraft={createAiDraftMutation.isPending}
       fieldErrors={visibleFieldErrors}
-      errorMessage={createEntryMutation.isError ? copy.genericError : null}
+      errorMessage={
+        createEntryMutation.isError ||
+        updateCustomEntryMutation.isError ||
+        updatePlatformEntryMutation.isError
+          ? copy.genericError
+          : null
+      }
       aiErrorMessage={createAiDraftMutation.isError ? copy.genericError : null}
       onClose={onClose}
       onDraftChange={(nextDraft, fieldName) => {
@@ -101,17 +132,43 @@ export function ReferenceEntryModal({
       onSubmit={() => {
         setSubmitAttempted(true);
 
-        if (!canSubmit || createEntryMutation.isPending) {
+        if (!canSubmit || isSaving) {
           return;
         }
 
-        createEntryMutation
-          .mutateAsync({
-            ...normalizeReferenceEntryDraft(draft),
-            locale
-          })
-          .then(onClose)
-          .catch(() => undefined);
+        if (props.mode === "create") {
+          createEntryMutation
+            .mutateAsync({
+              ...normalizeReferenceEntryDraft(draft),
+              locale
+            })
+            .then(onClose)
+            .catch(() => undefined);
+          return;
+        }
+
+        if (props.entry.source === "custom") {
+          const entryId = props.entry.astrologerEntryId ?? props.entry.id;
+
+          updateCustomEntryMutation
+            .mutateAsync({
+              entryId,
+              ...createReferenceEntryUpdatePayload(draft)
+            })
+            .then(onClose)
+            .catch(() => undefined);
+          return;
+        }
+
+        if (props.entry.platformEntryId) {
+          updatePlatformEntryMutation
+            .mutateAsync({
+              platformEntryId: props.entry.platformEntryId,
+              ...createReferencePlatformEntryOverridePayload(draft)
+            })
+            .then(onClose)
+            .catch(() => undefined);
+        }
       }}
     />
   );

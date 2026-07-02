@@ -33,6 +33,15 @@ export type DictionaryCustomEntryInput = {
   readonly updatedAt: string;
 };
 
+export type DictionaryCustomEntryUpdateInput = {
+  readonly ownerUserId: string;
+  readonly entryId: string;
+  readonly categoryId: string;
+  readonly title: string;
+  readonly content: string;
+  readonly updatedAt: string;
+};
+
 export type DictionaryPlatformEntryOverrideInput = {
   readonly ownerUserId: string;
   readonly platformEntryId: string;
@@ -62,6 +71,9 @@ export type DictionaryStore = {
   readonly listEntries: (query: DictionaryEntryListQuery) => Promise<DictionaryEntryListResult>;
   readonly createCustomEntry: (
     input: DictionaryCustomEntryInput
+  ) => Promise<DictionaryAstrologerEntry>;
+  readonly updateCustomEntry: (
+    input: DictionaryCustomEntryUpdateInput
   ) => Promise<DictionaryAstrologerEntry>;
   readonly upsertPlatformEntryOverride: (
     input: DictionaryPlatformEntryOverrideInput

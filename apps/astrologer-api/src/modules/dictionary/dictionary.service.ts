@@ -15,6 +15,8 @@ import {
   overrideDictionaryPlatformEntry,
   resetDictionaryAstrologerEntries,
   resetDictionaryPlatformEntryOverride,
+  updateDictionaryCustomEntry,
+  DictionaryAstrologerEntryNotFoundError,
   DictionaryCategoryNotFoundError,
   DictionaryPlatformEntryNotFoundError,
   type DictionaryStore
@@ -31,6 +33,7 @@ import {
   type DictionaryAstrologerEntryResponse,
   type DictionaryCategoriesResponse,
   type DictionaryEntriesResponse,
+  updateDictionaryCustomEntryRequestSchema,
   updateDictionaryPlatformEntryOverrideRequestSchema
 } from "@elevenhouse/contracts";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
@@ -97,6 +100,29 @@ export class DictionaryService {
           categoryId: parsedBody.categoryId,
           code: `custom_${randomUUID()}`,
           locale: parsedBody.locale,
+          title: parsedBody.title,
+          content: parsedBody.content,
+          now: this.clock.now()
+        })
+      )
+    );
+  }
+
+  updateCustomEntry(
+    entryId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<DictionaryAstrologerEntryResponse> {
+    const parsedParams = parseContract(dictionaryAstrologerEntryIdParamSchema, { entryId });
+    const parsedBody = parseContract(updateDictionaryCustomEntryRequestSchema, body);
+
+    return mapDictionaryStoreErrors(async () =>
+      dictionaryAstrologerEntryResponseSchema.parse(
+        await updateDictionaryCustomEntry({
+          store: this.store,
+          ownerUserId: requireOwnerUserId(request),
+          entryId: parsedParams.entryId,
+          categoryId: parsedBody.categoryId,
           title: parsedBody.title,
           content: parsedBody.content,
           now: this.clock.now()
@@ -192,6 +218,10 @@ async function mapDictionaryStoreErrors<T>(operation: () => Promise<T>): Promise
   } catch (error) {
     if (error instanceof DictionaryPlatformEntryNotFoundError) {
       throw new NotFoundException("Dictionary platform entry not found");
+    }
+
+    if (error instanceof DictionaryAstrologerEntryNotFoundError) {
+      throw new NotFoundException("Dictionary astrologer entry not found");
     }
 
     if (error instanceof DictionaryCategoryNotFoundError) {

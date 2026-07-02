@@ -5,6 +5,13 @@ export class DictionaryPlatformEntryNotFoundError extends Error {
   }
 }
 
+export class DictionaryAstrologerEntryNotFoundError extends Error {
+  constructor(readonly entryId: string) {
+    super("Dictionary astrologer entry not found");
+    this.name = "DictionaryAstrologerEntryNotFoundError";
+  }
+}
+
 export class DictionaryCategoryNotFoundError extends Error {
   constructor(readonly categoryId: string) {
     super("Dictionary category not found");

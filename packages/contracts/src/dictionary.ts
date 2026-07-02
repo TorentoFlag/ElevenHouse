@@ -146,6 +146,17 @@ export type CreateDictionaryCustomEntryRequest = z.infer<
   typeof createDictionaryCustomEntryRequestSchema
 >;
 
+export const updateDictionaryCustomEntryRequestSchema = z
+  .object({
+    categoryId: uuidSchema,
+    title: dictionaryTitleRequestSchema,
+    content: dictionaryContentRequestSchema
+  })
+  .strict();
+export type UpdateDictionaryCustomEntryRequest = z.infer<
+  typeof updateDictionaryCustomEntryRequestSchema
+>;
+
 export const updateDictionaryPlatformEntryOverrideRequestSchema = z
   .object({
     title: dictionaryTitleRequestSchema,

@@ -5,11 +5,15 @@ import { createDictionaryCustomEntry } from "../api/createDictionaryCustomEntry"
 import { listDictionaryCategories } from "../api/listDictionaryCategories";
 import { listDictionaryEntries } from "../api/listDictionaryEntries";
 import { resetDictionaryEntries } from "../api/resetDictionaryEntries";
+import { updateDictionaryCustomEntry } from "../api/updateDictionaryCustomEntry";
+import { updateDictionaryPlatformEntryOverride } from "../api/updateDictionaryPlatformEntryOverride";
 import {
   createDictionaryCustomEntryMutationOptions,
   dictionaryCategoriesQueryOptions,
   dictionaryEntriesQueryOptions,
-  resetDictionaryEntriesMutationOptions
+  resetDictionaryEntriesMutationOptions,
+  updateDictionaryCustomEntryMutationOptions,
+  updateDictionaryPlatformEntryOverrideMutationOptions
 } from "./dictionaryQueryOptions";
 import { dictionaryQueryKeys } from "./dictionaryQueryKeys";
 
@@ -27,6 +31,14 @@ vi.mock("../api/listDictionaryEntries", () => ({
 
 vi.mock("../api/resetDictionaryEntries", () => ({
   resetDictionaryEntries: vi.fn()
+}));
+
+vi.mock("../api/updateDictionaryCustomEntry", () => ({
+  updateDictionaryCustomEntry: vi.fn()
+}));
+
+vi.mock("../api/updateDictionaryPlatformEntryOverride", () => ({
+  updateDictionaryPlatformEntryOverride: vi.fn()
 }));
 
 const entriesQuery = {
@@ -125,6 +137,75 @@ describe("dictionary query options", () => {
     await options.onSuccess();
 
     expect(createDictionaryCustomEntry).toHaveBeenCalledWith(input);
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: dictionaryQueryKeys.all()
+    });
+  });
+
+  it("updates custom entries and invalidates every dictionary query on success", async () => {
+    vi.mocked(updateDictionaryCustomEntry).mockResolvedValue({
+      id: "a2fb1fef-dc5c-44ec-ae36-060f455c8f0f",
+      ownerUserId: "4f3873e2-a2e8-4a3e-9387-b2f2fc39ee22",
+      categoryId: entriesQuery.categoryId,
+      code: "custom_venus_gemini",
+      locale: "ru",
+      entryType: "custom",
+      title: "Венера в Близнецах",
+      content: "Новая редакция",
+      createdAt: "2026-07-01T10:00:00.000Z",
+      updatedAt: "2026-07-01T10:00:00.000Z"
+    });
+    const queryClient = {
+      invalidateQueries: vi.fn()
+    };
+    const input = {
+      entryId: "a2fb1fef-dc5c-44ec-ae36-060f455c8f0f",
+      categoryId: entriesQuery.categoryId,
+      title: "Венера в Близнецах",
+      content: "Новая редакция"
+    } as const;
+    const options = updateDictionaryCustomEntryMutationOptions(queryClient);
+
+    await expect(options.mutationFn(input)).resolves.toMatchObject({
+      title: "Венера в Близнецах"
+    });
+    await options.onSuccess();
+
+    expect(updateDictionaryCustomEntry).toHaveBeenCalledWith(input);
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: dictionaryQueryKeys.all()
+    });
+  });
+
+  it("updates platform entry overrides and invalidates every dictionary query on success", async () => {
+    vi.mocked(updateDictionaryPlatformEntryOverride).mockResolvedValue({
+      id: "a2fb1fef-dc5c-44ec-ae36-060f455c8f0f",
+      ownerUserId: "4f3873e2-a2e8-4a3e-9387-b2f2fc39ee22",
+      categoryId: entriesQuery.categoryId,
+      code: "sun_aries",
+      locale: "ru",
+      entryType: "override",
+      title: "Солнце в Овне",
+      content: "Авторская редакция",
+      createdAt: "2026-07-01T10:00:00.000Z",
+      updatedAt: "2026-07-01T10:00:00.000Z"
+    });
+    const queryClient = {
+      invalidateQueries: vi.fn()
+    };
+    const input = {
+      platformEntryId: "a138f7d0-6b2c-4f6d-89a9-6be4f756d133",
+      title: "Солнце в Овне",
+      content: "Авторская редакция"
+    } as const;
+    const options = updateDictionaryPlatformEntryOverrideMutationOptions(queryClient);
+
+    await expect(options.mutationFn(input)).resolves.toMatchObject({
+      title: "Солнце в Овне"
+    });
+    await options.onSuccess();
+
+    expect(updateDictionaryPlatformEntryOverride).toHaveBeenCalledWith(input);
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: dictionaryQueryKeys.all()
     });
