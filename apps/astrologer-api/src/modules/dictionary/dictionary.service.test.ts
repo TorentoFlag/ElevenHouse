@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import {
+  DictionaryAstrologerEntryNotFoundError,
   DictionaryCategoryNotFoundError,
   DictionaryPlatformEntryNotFoundError,
   type DictionaryStore
@@ -105,6 +106,30 @@ describe("DictionaryService", () => {
     });
   });
 
+  it("updates a custom entry for the authenticated astrologer", async () => {
+    const store = createStore();
+    const service = createService(store);
+
+    await service.updateCustomEntry(
+      astrologerEntryId,
+      {
+        categoryId,
+        title: "  Венера в Близнецах  ",
+        content: "  Новая редакция  "
+      },
+      createAuthenticatedRequest()
+    );
+
+    expect(store.updateCustomEntry).toHaveBeenCalledWith({
+      ownerUserId,
+      entryId: astrologerEntryId,
+      categoryId,
+      title: "Венера в Близнецах",
+      content: "Новая редакция",
+      updatedAt: "2026-06-30T10:00:00.000Z"
+    });
+  });
+
   it("upserts a platform override for the authenticated astrologer", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -185,13 +210,26 @@ describe("DictionaryService", () => {
         throw new DictionaryCategoryNotFoundError(categoryId);
       })
     });
+    const astrologerEntryStore = createStore({
+      updateCustomEntry: vi.fn(async () => {
+        throw new DictionaryAstrologerEntryNotFoundError(astrologerEntryId);
+      })
+    });
     const platformService = createService(platformStore);
     const categoryService = createService(categoryStore);
+    const astrologerEntryService = createService(astrologerEntryStore);
 
     await expect(
       platformService.overridePlatformEntry(
         platformEntryId,
         { title: "Title", content: "Content" },
+        createAuthenticatedRequest()
+      )
+    ).rejects.toThrow(NotFoundException);
+    await expect(
+      astrologerEntryService.updateCustomEntry(
+        astrologerEntryId,
+        { categoryId, title: "Title", content: "Content" },
         createAuthenticatedRequest()
       )
     ).rejects.toThrow(NotFoundException);
@@ -245,6 +283,18 @@ function createStore(overrides: Partial<DictionaryStore> = {}): DictionaryStore 
     createCustomEntry: vi.fn(async (input) => ({
       id: astrologerEntryId,
       ...input
+    })),
+    updateCustomEntry: vi.fn(async (input) => ({
+      id: astrologerEntryId,
+      ownerUserId: input.ownerUserId,
+      categoryId: input.categoryId,
+      code: "custom_venus_gemini",
+      locale: "ru" as const,
+      entryType: "custom" as const,
+      title: input.title,
+      content: input.content,
+      createdAt: "2026-06-30T09:00:00.000Z",
+      updatedAt: input.updatedAt
     })),
     upsertPlatformEntryOverride: vi.fn(async (input) => ({
       id: astrologerEntryId,

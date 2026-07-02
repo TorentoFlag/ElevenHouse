@@ -46,6 +46,16 @@ export class DictionaryController {
     return this.dictionaryService.createCustomEntry(body, request);
   }
 
+  @Put("custom-entries/:entryId")
+  @RequireCsrf()
+  updateCustomEntry(
+    @Param("entryId") entryId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ): ReturnType<DictionaryService["updateCustomEntry"]> {
+    return this.dictionaryService.updateCustomEntry(entryId, body, request);
+  }
+
   @Put("platform-entries/:platformEntryId/override")
   @RequireCsrf()
   overridePlatformEntry(

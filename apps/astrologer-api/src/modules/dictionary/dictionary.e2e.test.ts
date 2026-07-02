@@ -204,6 +204,15 @@ describe("dictionary HTTP routes", () => {
       },
       csrfHeaders()
     );
+    const updateCustomResponse = await putJson(
+      `/dictionary/custom-entries/${astrologerEntryId}`,
+      {
+        categoryId,
+        title: "Венера в Близнецах",
+        content: "Новая авторская редакция"
+      },
+      csrfHeaders()
+    );
     const deleteResponse = await deleteEmpty(
       `/dictionary/entries/${astrologerEntryId}`,
       csrfHeaders()
@@ -230,6 +239,16 @@ describe("dictionary HTTP routes", () => {
       ownerUserId,
       platformEntryId,
       entryType: "override"
+    });
+    expect(updateCustomResponse.status).toBe(200);
+    dictionaryAstrologerEntryResponseSchema.parse(updateCustomResponse.body);
+    expect(dictionaryStore.updateCustomEntry).toHaveBeenCalledWith({
+      ownerUserId,
+      entryId: astrologerEntryId,
+      categoryId,
+      title: "Венера в Близнецах",
+      content: "Новая авторская редакция",
+      updatedAt: expect.any(String)
     });
     expect(deleteResponse.status).toBe(204);
     expect(resetResponse.status).toBe(204);
@@ -299,7 +318,7 @@ describe("dictionary HTTP routes", () => {
   async function putJson(
     path: string,
     body: unknown,
-    headers: Record<string, string>
+    headers: Record<string, string> = {}
   ): Promise<HttpJsonResponse> {
     const response = await fetch(`${baseUrl}${path}`, {
       method: "PUT",
@@ -420,6 +439,18 @@ function createDictionaryStore(): DictionaryStore {
     createCustomEntry: vi.fn(async (input) => ({
       id: astrologerEntryId,
       ...input
+    })),
+    updateCustomEntry: vi.fn(async (input) => ({
+      id: astrologerEntryId,
+      ownerUserId: input.ownerUserId,
+      categoryId: input.categoryId,
+      code: "custom_venus_gemini",
+      locale: "ru" as const,
+      entryType: "custom" as const,
+      title: input.title,
+      content: input.content,
+      createdAt: "2026-06-30T09:00:00.000Z",
+      updatedAt: input.updatedAt
     })),
     upsertPlatformEntryOverride: vi.fn(async (input) => ({
       id: astrologerEntryId,
