@@ -1,10 +1,12 @@
 import type {
+  CreateDictionaryAiDraftResponse,
   DictionaryAstrologerEntryResponse,
   DictionaryCategoriesResponse,
   DictionaryEntriesResponse
 } from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { application } from "../../../Application";
+import { createDictionaryAiDraft } from "./createDictionaryAiDraft";
 import { createDictionaryCustomEntry } from "./createDictionaryCustomEntry";
 import { listDictionaryCategories } from "./listDictionaryCategories";
 import { listDictionaryEntries } from "./listDictionaryEntries";
@@ -65,6 +67,20 @@ const astrologerEntryResponse = {
   createdAt: "2026-07-01T10:00:00.000Z",
   updatedAt: "2026-07-01T10:00:00.000Z"
 } satisfies DictionaryAstrologerEntryResponse;
+
+const aiDraftResponse = {
+  content: "Черновик трактовки Солнца в Овне.",
+  provider: "deepseek",
+  model: "deepseek-v4-flash",
+  promptId: "dictionary.entryDraft",
+  promptVersion: 1,
+  finishReason: "stop",
+  usage: {
+    promptTokens: 120,
+    completionTokens: 80,
+    totalTokens: 200
+  }
+} satisfies CreateDictionaryAiDraftResponse;
 
 describe("dictionary API", () => {
   afterEach(() => {
@@ -133,6 +149,28 @@ describe("dictionary API", () => {
         locale: "ru",
         title: "Венера в Близнецах",
         content: "Любовь становится легкой, живой и связанной с общением."
+      },
+      { csrf: true }
+    );
+  });
+
+  it("creates dictionary AI drafts through the shared request and response contracts", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(aiDraftResponse);
+
+    await expect(
+      createDictionaryAiDraft({
+        categoryId,
+        locale: "ru",
+        title: " Солнце в Овне "
+      })
+    ).resolves.toEqual(aiDraftResponse);
+
+    expect(post).toHaveBeenCalledWith(
+      "/dictionary/ai-draft",
+      {
+        categoryId,
+        locale: "ru",
+        title: "Солнце в Овне"
       },
       { csrf: true }
     );
