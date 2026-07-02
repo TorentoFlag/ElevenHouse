@@ -71,11 +71,11 @@ const astrologerEntryResponse = {
 
 const aiDraftResponse = {
   content: "Черновик трактовки Солнца в Овне.",
-  provider: "deepseek",
-  model: "deepseek-v4-flash",
+  provider: "openai",
+  model: "gpt-5.4-mini",
   promptId: "dictionary.entryDraft",
   promptVersion: 1,
-  finishReason: "stop",
+  finishReason: "completed",
   usage: {
     promptTokens: 120,
     completionTokens: 80,

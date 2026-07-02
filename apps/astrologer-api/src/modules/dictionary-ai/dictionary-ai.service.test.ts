@@ -25,11 +25,11 @@ describe("DictionaryAiService", () => {
       )
     ).resolves.toMatchObject({
       content: "Generated content",
-      provider: "deepseek",
-      model: "deepseek-v4-flash",
+      provider: "openai",
+      model: "gpt-5.4-mini",
       promptId: "dictionary.entryDraft",
       promptVersion: 1,
-      finishReason: "stop",
+      finishReason: "completed",
       usage: {
         promptTokens: 1,
         completionTokens: 2,
@@ -138,9 +138,9 @@ function createAiGeneration() {
   return {
     generate: vi.fn(async () => ({
       output: { content: "Generated content" },
-      provider: "deepseek",
-      model: "deepseek-v4-flash",
-      finishReason: "stop",
+      provider: "openai",
+      model: "gpt-5.4-mini",
+      finishReason: "completed",
       usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 }
     }))
   };
