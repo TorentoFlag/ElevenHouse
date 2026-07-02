@@ -10,6 +10,7 @@ import {
   dictionarySourceCountsSchema,
   dictionaryTitleMaxLength,
   listDictionaryCategoriesQuerySchema,
+  updateDictionaryCustomEntryRequestSchema,
   updateDictionaryPlatformEntryOverrideRequestSchema
 } from "./dictionary";
 
@@ -121,6 +122,20 @@ describe("dictionary contracts", () => {
     ).toEqual({
       title: "Солнце в Овне",
       content: "Новая трактовка"
+    });
+  });
+
+  it("parses custom entry update requests", () => {
+    expect(
+      updateDictionaryCustomEntryRequestSchema.parse({
+        categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        title: "  Венера в Близнецах  ",
+        content: "  Авторская редакция  "
+      })
+    ).toEqual({
+      categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      title: "Венера в Близнецах",
+      content: "Авторская редакция"
     });
   });
 
