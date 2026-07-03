@@ -117,6 +117,10 @@
       "types": "./dist/icons/ChevronRight/index.d.ts",
       "import": "./dist/icons/ChevronRight/index.js"
     },
+    "./icons/Close": {
+      "types": "./dist/icons/Close/index.d.ts",
+      "import": "./dist/icons/Close/index.js"
+    },
     "./icons/Content": {
       "types": "./dist/icons/Content/index.d.ts",
       "import": "./dist/icons/Content/index.js"

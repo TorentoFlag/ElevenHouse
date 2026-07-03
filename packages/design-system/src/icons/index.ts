@@ -6,6 +6,7 @@ export * from "./Check/index.js";
 export * from "./ChevronDown/index.js";
 export * from "./ChevronLeft/index.js";
 export * from "./ChevronRight/index.js";
+export * from "./Close/index.js";
 export * from "./Content/index.js";
 export * from "./Edit/index.js";
 export * from "./Flow/index.js";

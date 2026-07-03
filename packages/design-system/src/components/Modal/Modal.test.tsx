@@ -22,9 +22,13 @@ describe("Modal", () => {
     expect(markup).toContain('aria-labelledby="');
     expect(markup).toContain('tabindex="-1"');
     expect(markup).toContain("Новая трактовка");
-    expect(markup).toContain('class="ehModal__closeButton"');
+    expect(markup).toContain(
+      'class="ehIconButton ehIconButton--medium ehIconButton--quiet ehModal__closeButton"'
+    );
     expect(markup).toContain('type="button"');
     expect(markup).toContain('aria-label="Закрыть"');
+    expect(markup).toContain("<svg");
+    expect(markup).toContain('class="ehIconButton__icon"');
     expect(markup).toContain('data-modal-form="true"');
   });
 
@@ -58,6 +62,8 @@ describe("Modal", () => {
     expect(modalCss).toContain("backdrop-filter: blur(6px);");
     expect(modalCss).toContain(".ehModal__dialog");
     expect(modalCss).toContain("font-weight: 700;");
+    expect(modalCss).not.toContain(".ehModal__closeButton::before");
+    expect(modalCss).not.toContain(".ehModal__closeButton::after");
     expect(modalCss).toContain("@media (prefers-reduced-motion: no-preference)");
   });
 });

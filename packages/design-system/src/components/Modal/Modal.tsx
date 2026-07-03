@@ -1,5 +1,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useId, useRef, type MouseEvent } from "react";
+import { IconButton } from "../IconButton/index.js";
+import { Close } from "../../icons/Close/index.js";
 import { classNames } from "../../helpers/classNames.js";
 import { getFocusableElements } from "./helpers/getFocusableElements.js";
 import { handleDialogKeyDown } from "./helpers/handleDialogKeyDown.js";
@@ -69,10 +71,13 @@ export function Modal({
           <h2 id={titleId} className="ehModal__title">
             {title}
           </h2>
-          <button
+          <IconButton
             className="ehModal__closeButton"
             type="button"
-            aria-label={closeLabel}
+            label={closeLabel}
+            icon={<Close aria-hidden="true" />}
+            size="medium"
+            variant="quiet"
             onClick={onClose}
           />
         </header>

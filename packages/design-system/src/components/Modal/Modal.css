@@ -1,3 +1,5 @@
+@import "../IconButton/IconButton.css";
+
 .ehModal__backdrop {
   position: fixed;
   z-index: 80;
@@ -37,39 +39,9 @@
 }
 
 .ehModal__closeButton {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  place-items: center;
   border: 1px solid rgb(216 212 236 / 0.12);
   border-radius: 11px;
   background: rgb(216 212 236 / 0.06);
-  color: var(--eh-color-moon-500);
-  cursor: pointer;
-}
-
-.ehModal__closeButton::before,
-.ehModal__closeButton::after {
-  grid-area: 1 / 1;
-  width: 14px;
-  height: 2px;
-  border-radius: 999px;
-  background: currentColor;
-  content: "";
-}
-
-.ehModal__closeButton::before {
-  transform: rotate(45deg);
-}
-
-.ehModal__closeButton::after {
-  transform: rotate(-45deg);
-}
-
-.ehModal__closeButton:focus-visible {
-  outline: 2px solid rgb(244 196 48 / 0.56);
-  outline-offset: 2px;
 }
 
 .ehModal__content {
