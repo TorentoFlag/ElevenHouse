@@ -37,6 +37,28 @@ describe("Icon", () => {
     expect(icon.props.className).toBe("notificationIcon");
   });
 
+  it("renders the active variant on the svg without replacing explicit dimensions", () => {
+    const icon = Icon({
+      iconName: "box",
+      variant: "active",
+      width: 20,
+      height: 20,
+      className: "catalogIcon"
+    });
+
+    expect(icon.type).toBe(iconRegistry.box);
+    expect(icon.props.width).toBe(20);
+    expect(icon.props.height).toBe(20);
+    expect(icon.props.className).toBe("ehIcon ehIcon--active catalogIcon");
+    expect(icon.props.style).toMatchObject({
+      background: "var(--eh-color-night-900)",
+      borderRadius: "var(--eh-radius-12)",
+      boxSizing: "content-box",
+      color: "var(--eh-color-gold)",
+      padding: "var(--eh-space-12)"
+    });
+  });
+
   it("lets explicit width and height override size", () => {
     const icon = Icon({ iconName: "box", size: 20, width: 18, height: 22 });
 
