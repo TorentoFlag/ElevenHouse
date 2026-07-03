@@ -67,6 +67,11 @@
       "import": "./dist/components/SegmentedTabs/index.js"
     },
     "./components/SegmentedTabs.css": "./src/components/SegmentedTabs/SegmentedTabs.css",
+    "./components/SelectableTile": {
+      "types": "./dist/components/SelectableTile/index.d.ts",
+      "import": "./dist/components/SelectableTile/index.js"
+    },
+    "./components/SelectableTile.css": "./src/components/SelectableTile/SelectableTile.css",
     "./components/OtpAuthForm.css": "./src/components/OtpAuthForm/OtpAuthForm.css",
     "./components/OtpCodeForm": {
       "types": "./dist/components/OtpCodeForm/index.d.ts",
@@ -205,7 +210,8 @@
     "./src/components/OtpAuthForm/OtpAuthForm.css",
     "./src/components/OtpCodeForm/OtpCodeForm.css",
     "./src/components/LanguageSwitcher/LanguageSwitcher.css",
-    "./src/components/SegmentedTabs/SegmentedTabs.css"
+    "./src/components/SegmentedTabs/SegmentedTabs.css",
+    "./src/components/SelectableTile/SelectableTile.css"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

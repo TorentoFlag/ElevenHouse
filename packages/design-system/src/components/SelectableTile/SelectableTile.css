@@ -1,4 +1,5 @@
 .ehSelectableTile {
+  box-sizing: border-box;
   display: flex;
   width: 100%;
   min-width: 0;
@@ -11,16 +12,22 @@
   color: var(--eh-color-moon-120);
   cursor: pointer;
   font-family: var(--eh-font-sans);
+  outline: none;
   text-align: left;
   transition:
     border-color 160ms ease,
     background 160ms ease,
-    color 160ms ease;
+    color 160ms ease,
+    box-shadow 160ms ease;
 }
 
-.ehSelectableTile:hover {
+.ehSelectableTile:hover:not(:disabled) {
   border-color: var(--eh-color-gold-alpha-44);
   background: rgb(30 27 62 / 0.92);
+}
+
+.ehSelectableTile:focus-visible {
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.22);
 }
 
 .ehSelectableTile--selected {

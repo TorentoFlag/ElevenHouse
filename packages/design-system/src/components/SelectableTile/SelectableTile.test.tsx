@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SelectableTile } from "./SelectableTile";
+import { SelectableTile } from "./SelectableTile.js";
 
 describe("SelectableTile", () => {
   it("renders an accessible selectable button", () => {
