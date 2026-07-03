@@ -32,7 +32,9 @@ export function ProductCard({ product, productCopy, locale }: ProductCardProps) 
 
       <div className={styles.productPriceLine}>
         <span className={styles.productPrice}>{summary.price.amount}</span>
-        {summary.price.suffix ? <span className={styles.productPriceSuffix}>{summary.price.suffix}</span> : null}
+        {summary.price.suffix ? (
+          <span className={styles.productPriceSuffix}>{summary.price.suffix}</span>
+        ) : null}
       </div>
       <div className={styles.productMeta}>{summary.metaLine}</div>
 

@@ -337,7 +337,7 @@ describe("NavigationDrawer", () => {
     );
     expect(navigationDrawerCss).toContain("overflow: hidden;");
     expect(navigationDrawerCss).toContain("background: rgb(22 20 47 / 0.82);");
-    expect(navigationDrawerCss).toContain("border: 1px solid rgb(216 212 236 / 0.14);");
+    expect(navigationDrawerCss).toContain("border: 1px solid var(--eh-color-moon-300-alpha-14);");
   });
 
   it("keeps navigation item height at 40px", () => {

@@ -36,5 +36,5 @@
 
 .ehCard--outlined {
   --eh-card-background: var(--eh-color-night-900);
-  --eh-card-border: rgb(216 212 236 / 0.14);
+  --eh-card-border: var(--eh-color-moon-300-alpha-14);
 }

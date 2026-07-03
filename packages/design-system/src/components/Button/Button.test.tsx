@@ -66,7 +66,7 @@ describe("Button", () => {
 
     expect(button.props.className).toBe("ehButton ehButton--big ehButton--glass");
     expect(glassRule).toContain("background-color: rgb(30, 27, 62);");
-    expect(glassRule).toContain("border: 1px solid rgba(216, 212, 236, 0.14);");
+    expect(glassRule).toContain("border: 1px solid var(--eh-color-moon-300-alpha-14);");
     expect(glassRule).toContain("color: rgb(236, 234, 247);");
   });
 

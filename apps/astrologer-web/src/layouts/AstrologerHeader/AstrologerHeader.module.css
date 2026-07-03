@@ -1,6 +1,5 @@
 .header {
   --astrologer-header-line: rgb(216 212 236 / 0.08);
-  --astrologer-header-line-strong: rgb(216 212 236 / 0.14);
   --astrologer-header-surface: #16142f;
   --astrologer-header-raised: #272252;
 
@@ -40,7 +39,7 @@
   width: 100%;
   height: 42px;
   padding: 0 14px 0 38px;
-  border: 1px solid var(--astrologer-header-line-strong);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
   border-radius: 14px;
   outline: none;
   background: var(--eh-color-night-930);
@@ -128,7 +127,7 @@
   width: 42px;
   height: 42px;
   place-items: center;
-  border: 1px solid var(--astrologer-header-line-strong);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
   border-radius: 14px;
   background: var(--astrologer-header-surface);
   color: var(--eh-color-moon-500);
@@ -173,7 +172,7 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  border: 1px solid var(--astrologer-header-line-strong);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
   border-radius: 13px;
   background: linear-gradient(140deg, var(--astrologer-header-raised), var(--eh-color-violet-800));
   color: var(--eh-color-moon-300);

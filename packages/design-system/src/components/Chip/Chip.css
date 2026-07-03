@@ -3,7 +3,7 @@
   align-items: center;
   gap: var(--eh-space-6);
   padding: 5px var(--eh-space-11);
-  border: 1px solid rgb(216 212 236 / 0.14);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
   border-radius: var(--eh-radius-pill);
   background: var(--eh-color-night-860);
   color: var(--eh-color-moon-500);

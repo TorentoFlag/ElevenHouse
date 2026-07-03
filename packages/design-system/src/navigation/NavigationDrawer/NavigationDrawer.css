@@ -131,7 +131,7 @@
   width: 30px;
   height: 30px;
   padding: 0;
-  border: 1px solid rgb(216 212 236 / 0.14);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
   border-radius: 9px;
   outline: none;
   background: rgb(22 20 47 / 0.82);

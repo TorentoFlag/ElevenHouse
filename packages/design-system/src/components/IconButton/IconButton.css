@@ -34,7 +34,7 @@
 }
 
 .ehIconButton--default {
-  border-color: rgb(216 212 236 / 0.14);
+  border-color: var(--eh-color-moon-300-alpha-14);
   background: rgb(22 20 47 / 0.82);
 }
 
