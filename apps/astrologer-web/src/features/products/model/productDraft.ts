@@ -214,6 +214,99 @@ export function createProductDraftFromResponse(product: ProductResponse): Produc
   };
 }
 
+export type ProductDraftArrayKey =
+  | "deliveryFormats"
+  | "requiredClientData"
+  | "methods"
+  | "accessGrants";
+
+export function toggleProductDraftArrayValue<TKey extends ProductDraftArrayKey>(
+  draft: ProductFormDraft,
+  key: TKey,
+  value: ProductFormDraft[TKey][number]
+): ProductFormDraft {
+  const current = draft[key] as readonly string[];
+  const next = current.includes(value)
+    ? current.filter((item) => item !== value)
+    : [...current, value];
+
+  return {
+    ...draft,
+    [key]: next
+  };
+}
+
+export function addProductIncludedItem(draft: ProductFormDraft): ProductFormDraft {
+  return {
+    ...draft,
+    includedItems: [
+      ...draft.includedItems,
+      {
+        text: "",
+        icon: "check",
+        order: (draft.includedItems.length + 1) * 10
+      }
+    ]
+  };
+}
+
+export function updateProductIncludedItem(
+  draft: ProductFormDraft,
+  index: number,
+  patch: Partial<ProductIncludedItemRequest>
+): ProductFormDraft {
+  return {
+    ...draft,
+    includedItems: draft.includedItems.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, ...patch } : item
+    )
+  };
+}
+
+export function removeProductIncludedItem(draft: ProductFormDraft, index: number): ProductFormDraft {
+  return {
+    ...draft,
+    includedItems: draft.includedItems.filter((_, itemIndex) => itemIndex !== index)
+  };
+}
+
+export function addProductModifier(draft: ProductFormDraft): ProductFormDraft {
+  return {
+    ...draft,
+    modifiers: [
+      ...draft.modifiers,
+      {
+        label: "",
+        priceMinor: 0,
+        kind: "fixed",
+        isEnabled: true,
+        createsArtifact: false,
+        order: (draft.modifiers.length + 1) * 10
+      }
+    ]
+  };
+}
+
+export function updateProductModifier(
+  draft: ProductFormDraft,
+  index: number,
+  patch: Partial<ProductModifierRequest>
+): ProductFormDraft {
+  return {
+    ...draft,
+    modifiers: draft.modifiers.map((modifier, modifierIndex) =>
+      modifierIndex === index ? { ...modifier, ...patch } : modifier
+    )
+  };
+}
+
+export function removeProductModifier(draft: ProductFormDraft, index: number): ProductFormDraft {
+  return {
+    ...draft,
+    modifiers: draft.modifiers.filter((_, modifierIndex) => modifierIndex !== index)
+  };
+}
+
 export function toCreateProductRequest(draft: ProductFormDraft): CreateProductRequest {
   return createProductRequestSchema.parse(toPayload(draft, "create"));
 }

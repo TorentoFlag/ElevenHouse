@@ -5,10 +5,17 @@ import {
 } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
 import {
+  addProductIncludedItem,
+  addProductModifier,
   createDefaultProductDraft,
   createProductDraftFromResponse,
+  removeProductIncludedItem,
+  removeProductModifier,
+  toggleProductDraftArrayValue,
   toCreateProductRequest,
-  toUpdateProductRequest
+  toUpdateProductRequest,
+  updateProductIncludedItem,
+  updateProductModifier
 } from "./productDraft";
 
 const productResponse = {
@@ -153,5 +160,65 @@ describe("product draft helpers", () => {
     });
     expect(JSON.stringify(updateRequest)).not.toContain("33333333-3333-4333-8333-333333333333");
     expect(JSON.stringify(updateRequest)).not.toContain("44444444-4444-4444-8444-444444444444");
+  });
+
+  it("toggles array values without duplicates", () => {
+    const draft = createDefaultProductDraft("single");
+
+    expect(toggleProductDraftArrayValue(draft, "deliveryFormats", "audio").deliveryFormats).toEqual([
+      "video",
+      "audio"
+    ]);
+    expect(toggleProductDraftArrayValue(draft, "deliveryFormats", "video").deliveryFormats).toEqual([]);
+  });
+
+  it("adds, updates and removes included items", () => {
+    const draft = createDefaultProductDraft("custom");
+    const withItem = addProductIncludedItem(draft);
+    const lastIndex = withItem.includedItems.length - 1;
+
+    expect(withItem.includedItems[lastIndex]).toEqual({
+      text: "",
+      icon: "check",
+      order: (lastIndex + 1) * 10
+    });
+
+    const updated = updateProductIncludedItem(withItem, lastIndex, {
+      text: "Персональная карта",
+      icon: "orbit"
+    });
+    expect(updated.includedItems[lastIndex]).toMatchObject({
+      text: "Персональная карта",
+      icon: "orbit"
+    });
+
+    expect(removeProductIncludedItem(updated, lastIndex).includedItems).toHaveLength(lastIndex);
+  });
+
+  it("adds, updates and removes product modifiers", () => {
+    const draft = createDefaultProductDraft("single");
+    const withModifier = addProductModifier(draft);
+
+    expect(withModifier.modifiers[0]).toEqual({
+      label: "",
+      priceMinor: 0,
+      kind: "fixed",
+      isEnabled: true,
+      createsArtifact: false,
+      order: 10
+    });
+
+    const updated = updateProductModifier(withModifier, 0, {
+      label: "PDF-резюме",
+      priceMinor: 99000,
+      createsArtifact: true
+    });
+    expect(updated.modifiers[0]).toMatchObject({
+      label: "PDF-резюме",
+      priceMinor: 99000,
+      createsArtifact: true
+    });
+
+    expect(removeProductModifier(updated, 0).modifiers).toEqual([]);
   });
 });
