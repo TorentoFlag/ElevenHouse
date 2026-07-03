@@ -21,7 +21,7 @@
     box-shadow 160ms ease;
 }
 
-.ehSelectableTile:hover:not(:disabled) {
+.ehSelectableTile:not(.ehSelectableTile--selected):hover:not(:disabled) {
   border-color: var(--eh-color-gold-alpha-44);
   background: rgb(30 27 62 / 0.92);
 }
