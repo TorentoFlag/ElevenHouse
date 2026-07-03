@@ -10,6 +10,7 @@ import {
   authChallengeStatusValues,
   authSecurityEventTypeValues,
   authSessionStatusValues,
+  astrologerProfiles,
   databasePlatformRoleValues,
   dictionaryAstrologerEntries,
   dictionaryAstrologerEntryTypeValues,
@@ -226,6 +227,27 @@ describe("database account schema constants", () => {
     );
     expect(migration).toContain(
       'CREATE INDEX "products_owner_status_created_id_idx" ON "products" USING btree ("owner_user_id","status","created_at","id")'
+    );
+  });
+
+  it("exports astrologer profile tables", () => {
+    expect(astrologerProfiles).toBeDefined();
+  });
+
+  it("keeps astrologer profile tables in the current baseline migration", () => {
+    const migration = readFileSync(currentBaselineMigration, "utf8");
+
+    expect(migration).toContain('CREATE TABLE "astrologer_profiles"');
+    expect(migration).toContain('"owner_user_id" uuid PRIMARY KEY NOT NULL');
+    expect(migration).toContain('"public_handle" text NOT NULL');
+    expect(migration).toContain('"consultation_languages" jsonb NOT NULL');
+    expect(migration).toContain('CONSTRAINT "astrologer_profiles_public_handle_unique" UNIQUE("public_handle")');
+    expect(migration).toContain('CONSTRAINT "astrologer_profiles_public_handle_format_check"');
+    expect(migration).toContain(
+      'ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action'
+    );
+    expect(migration).toContain(
+      'CREATE INDEX "astrologer_profiles_public_handle_idx" ON "astrologer_profiles" USING btree ("public_handle")'
     );
   });
 

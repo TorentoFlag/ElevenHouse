@@ -1,6 +1,6 @@
 {
-  "id": "b57872c9-311e-448c-b507-17a4fce1cf03",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "8856bff6-8b6a-42b8-8ee2-9f390c97062b",
+  "prevId": "b57872c9-311e-448c-b507-17a4fce1cf03",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2784,6 +2784,163 @@
         "product_modifiers_free_price_check": {
           "name": "product_modifiers_free_price_check",
           "value": "\"product_modifiers\".\"kind\" <> 'free' or \"product_modifiers\".\"price_minor\" = 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.astrologer_profiles": {
+      "name": "astrologer_profiles",
+      "schema": "",
+      "columns": {
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "public_handle": {
+          "name": "public_handle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "public_name": {
+          "name": "public_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "headline": {
+          "name": "headline",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bio": {
+          "name": "bio",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "locale": {
+          "name": "locale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "avatar_media_id": {
+          "name": "avatar_media_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_media_id": {
+          "name": "cover_media_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "consultation_languages": {
+          "name": "consultation_languages",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_public_page_enabled": {
+          "name": "is_public_page_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "astrologer_profiles_public_handle_idx": {
+          "name": "astrologer_profiles_public_handle_idx",
+          "columns": [
+            {
+              "expression": "public_handle",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "astrologer_profiles_owner_user_id_users_id_fk": {
+          "name": "astrologer_profiles_owner_user_id_users_id_fk",
+          "tableFrom": "astrologer_profiles",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "astrologer_profiles_public_handle_unique": {
+          "name": "astrologer_profiles_public_handle_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "public_handle"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "astrologer_profiles_public_handle_format_check": {
+          "name": "astrologer_profiles_public_handle_format_check",
+          "value": "\"astrologer_profiles\".\"public_handle\" ~ '^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])?$'"
+        },
+        "astrologer_profiles_public_name_length_check": {
+          "name": "astrologer_profiles_public_name_length_check",
+          "value": "length(trim(\"astrologer_profiles\".\"public_name\")) between 2 and 200"
+        },
+        "astrologer_profiles_headline_length_check": {
+          "name": "astrologer_profiles_headline_length_check",
+          "value": "\"astrologer_profiles\".\"headline\" is null or length(trim(\"astrologer_profiles\".\"headline\")) <= 240"
+        },
+        "astrologer_profiles_bio_length_check": {
+          "name": "astrologer_profiles_bio_length_check",
+          "value": "\"astrologer_profiles\".\"bio\" is null or length(trim(\"astrologer_profiles\".\"bio\")) <= 4000"
+        },
+        "astrologer_profiles_timezone_length_check": {
+          "name": "astrologer_profiles_timezone_length_check",
+          "value": "length(trim(\"astrologer_profiles\".\"timezone\")) > 0"
+        },
+        "astrologer_profiles_locale_length_check": {
+          "name": "astrologer_profiles_locale_length_check",
+          "value": "length(trim(\"astrologer_profiles\".\"locale\")) > 0"
         }
       },
       "isRLSEnabled": false

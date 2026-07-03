@@ -300,6 +300,29 @@ CREATE TABLE "product_modifiers" (
 	CONSTRAINT "product_modifiers_free_price_check" CHECK ("product_modifiers"."kind" <> 'free' or "product_modifiers"."price_minor" = 0)
 );
 --> statement-breakpoint
+CREATE TABLE "astrologer_profiles" (
+	"owner_user_id" uuid PRIMARY KEY NOT NULL,
+	"public_handle" text NOT NULL,
+	"public_name" text NOT NULL,
+	"headline" text,
+	"bio" text,
+	"timezone" text NOT NULL,
+	"locale" text NOT NULL,
+	"avatar_media_id" text,
+	"cover_media_id" text,
+	"consultation_languages" jsonb NOT NULL,
+	"is_public_page_enabled" boolean DEFAULT false NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "astrologer_profiles_public_handle_unique" UNIQUE("public_handle"),
+	CONSTRAINT "astrologer_profiles_public_handle_format_check" CHECK ("astrologer_profiles"."public_handle" ~ '^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])?$'),
+	CONSTRAINT "astrologer_profiles_public_name_length_check" CHECK (length(trim("astrologer_profiles"."public_name")) between 2 and 200),
+	CONSTRAINT "astrologer_profiles_headline_length_check" CHECK ("astrologer_profiles"."headline" is null or length(trim("astrologer_profiles"."headline")) <= 240),
+	CONSTRAINT "astrologer_profiles_bio_length_check" CHECK ("astrologer_profiles"."bio" is null or length(trim("astrologer_profiles"."bio")) <= 4000),
+	CONSTRAINT "astrologer_profiles_timezone_length_check" CHECK (length(trim("astrologer_profiles"."timezone")) > 0),
+	CONSTRAINT "astrologer_profiles_locale_length_check" CHECK (length(trim("astrologer_profiles"."locale")) > 0)
+);
+--> statement-breakpoint
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -320,6 +343,7 @@ ALTER TABLE "product_methods" ADD CONSTRAINT "product_methods_product_id_product
 ALTER TABLE "product_access_grants" ADD CONSTRAINT "product_access_grants_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "product_included_items" ADD CONSTRAINT "product_included_items_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "product_modifiers" ADD CONSTRAINT "product_modifiers_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_email_login_unique" ON "auth_identities" USING btree (lower("email")) WHERE "auth_identities"."provider" = 'email' and "auth_identities"."email" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_phone_login_unique" ON "auth_identities" USING btree ("phone_number") WHERE "auth_identities"."provider" = 'phone' and "auth_identities"."phone_number" is not null;--> statement-breakpoint
@@ -365,4 +389,5 @@ CREATE UNIQUE INDEX "product_methods_product_value_unique" ON "product_methods" 
 CREATE INDEX "product_access_grants_product_id_idx" ON "product_access_grants" USING btree ("product_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "product_access_grants_product_value_unique" ON "product_access_grants" USING btree ("product_id","value");--> statement-breakpoint
 CREATE INDEX "product_included_items_product_id_idx" ON "product_included_items" USING btree ("product_id");--> statement-breakpoint
-CREATE INDEX "product_modifiers_product_id_idx" ON "product_modifiers" USING btree ("product_id");
+CREATE INDEX "product_modifiers_product_id_idx" ON "product_modifiers" USING btree ("product_id");--> statement-breakpoint
+CREATE INDEX "astrologer_profiles_public_handle_idx" ON "astrologer_profiles" USING btree ("public_handle");

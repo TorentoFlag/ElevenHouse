@@ -84,6 +84,16 @@
       "types": "./dist/adapters/products/index.d.ts",
       "import": "./dist/adapters/products/index.js",
       "require": "./dist/adapters/products/index.js"
+    },
+    "./astrologer-profile": {
+      "types": "./dist/adapters/astrologer-profile/index.d.ts",
+      "import": "./dist/adapters/astrologer-profile/index.js",
+      "require": "./dist/adapters/astrologer-profile/index.js"
+    },
+    "./adapters/astrologer-profile": {
+      "types": "./dist/adapters/astrologer-profile/index.d.ts",
+      "import": "./dist/adapters/astrologer-profile/index.js",
+      "require": "./dist/adapters/astrologer-profile/index.js"
     }
   },
   "scripts": {
