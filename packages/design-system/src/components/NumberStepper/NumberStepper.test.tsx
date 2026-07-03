@@ -2,6 +2,30 @@ import { describe, expect, it, vi } from "vitest";
 import { NumberStepper } from "./NumberStepper.js";
 
 describe("NumberStepper", () => {
+  it("renders the accessibility and display contract", () => {
+    const onValueChange = vi.fn();
+    const stepper = NumberStepper({
+      value: 7,
+      suffix: " мин",
+      decrementLabel: "Уменьшить",
+      incrementLabel: "Увеличить",
+      className: "customStepper",
+      onValueChange
+    });
+
+    const buttons = stepper.props.children.filter((child: { type: string }) => child.type === "button");
+    const value = stepper.props.children.find((child: { props?: { className?: string } }) =>
+      child.props?.className === "ehNumberStepper__value"
+    );
+
+    expect(stepper.props.className).toBe("ehNumberStepper customStepper");
+    expect(buttons[0].props.type).toBe("button");
+    expect(buttons[0].props["aria-label"]).toBe("Уменьшить");
+    expect(buttons[1].props.type).toBe("button");
+    expect(buttons[1].props["aria-label"]).toBe("Увеличить");
+    expect(value.props.children).toEqual([7, " мин"]);
+  });
+
   it("increments and decrements within bounds", () => {
     const onValueChange = vi.fn();
     const stepper = NumberStepper({
@@ -49,5 +73,20 @@ describe("NumberStepper", () => {
 
     maxButtons[1].props.onClick();
     expect(onValueChange).toHaveBeenLastCalledWith(5);
+  });
+
+  it("clamps decrement to the default minimum", () => {
+    const onValueChange = vi.fn();
+    const stepper = NumberStepper({
+      value: 0,
+      decrementLabel: "Уменьшить",
+      incrementLabel: "Увеличить",
+      onValueChange
+    });
+    const buttons = stepper.props.children.filter((child: { type: string }) => child.type === "button");
+
+    buttons[0].props.onClick();
+
+    expect(onValueChange).toHaveBeenCalledWith(0);
   });
 });

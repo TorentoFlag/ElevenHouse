@@ -5,22 +5,33 @@
 }
 
 .ehNumberStepper__button {
+  box-sizing: border-box;
   display: grid;
   width: 30px;
   height: 30px;
   place-items: center;
   border: 1px solid var(--eh-color-moon-300-alpha-14);
   border-radius: 10px;
+  outline: none;
   background: rgb(22 20 47 / 0.9);
   color: var(--eh-color-moon-120);
   cursor: pointer;
   font: inherit;
   font-weight: 800;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .ehNumberStepper__button:hover {
   border-color: var(--eh-color-gold-alpha-44);
   color: var(--eh-color-gold);
+}
+
+.ehNumberStepper__button:focus-visible {
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.2);
 }
 
 .ehNumberStepper__value {
