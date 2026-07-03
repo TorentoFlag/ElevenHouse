@@ -32,6 +32,31 @@ describe("Modal", () => {
     expect(markup).toContain('data-modal-form="true"');
   });
 
+  it("renders JSX title content and optional right header content", () => {
+    const markup = renderToStaticMarkup(
+      <Modal
+        title={
+          <>
+            <span>Новая трактовка</span>
+            <span data-title-badge="true">Draft</span>
+          </>
+        }
+        right={<button type="button">Сохранить</button>}
+        closeLabel="Закрыть"
+        onClose={vi.fn()}
+      >
+        Content
+      </Modal>
+    );
+
+    expect(markup).toContain('class="ehModal__title"');
+    expect(markup).toContain('data-title-badge="true"');
+    expect(markup).toContain('class="ehModal__right"');
+    expect(markup).toContain("<button");
+    expect(markup).toContain("Сохранить");
+    expect(markup).toContain('aria-label="Закрыть"');
+  });
+
   it("does not render when closed and passes custom classes through", () => {
     expect(
       renderToStaticMarkup(

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 
 export type ModalProps = {
-  readonly title: string;
+  readonly title: ReactNode;
+  readonly right?: ReactNode;
   readonly closeLabel: string;
   readonly children: ReactNode;
   readonly open?: boolean;

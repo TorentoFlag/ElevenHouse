@@ -9,6 +9,7 @@ import type { ModalProps } from "./types.js";
 
 export function Modal({
   title,
+  right,
   closeLabel,
   children,
   open = true,
@@ -71,6 +72,7 @@ export function Modal({
           <h2 id={titleId} className="ehModal__title">
             {title}
           </h2>
+          {right ? <div className="ehModal__right">{right}</div> : null}
           <IconButton
             className="ehModal__closeButton"
             type="button"
