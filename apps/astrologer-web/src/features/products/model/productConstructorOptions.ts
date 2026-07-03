@@ -82,6 +82,7 @@ export const productIconNames = [
   "video",
   "chat",
   "content",
+  "flow",
   "box",
   "wallet",
   "orbit",

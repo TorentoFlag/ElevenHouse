@@ -37,15 +37,63 @@ describe("product constructor options", () => {
       "group",
       "gift"
     ]);
-    expect(productRequiredClientDataOptions.map((option) => option.value)).toContain("chart1");
-    expect(productMethodOptions.map((option) => option.value)).toContain("natal");
-    expect(productAccessGrantOptions.map((option) => option.value)).toContain("course");
+    expect(productRequiredClientDataOptions.map((option) => option.value)).toEqual([
+      "chart1",
+      "cities",
+      "chart2",
+      "question",
+      "event"
+    ]);
+    expect(productMethodOptions.map((option) => option.value)).toEqual([
+      "natal",
+      "forecast",
+      "synastry",
+      "child",
+      "numerology",
+      "matrix",
+      "humandesign"
+    ]);
+    expect(productAccessGrantOptions.map((option) => option.value)).toEqual([
+      "content",
+      "channel",
+      "records",
+      "course",
+      "community",
+      "journal"
+    ]);
     expect(productSubscriptionPeriodOptions.map((option) => option.value)).toEqual([
       "week",
       "month",
       "year"
     ]);
-    expect(productIconNames).toContain("check");
-    expect(productIconNames).toContain("video");
+    expect(productIconNames).toEqual([
+      "check",
+      "sparkle",
+      "video",
+      "chat",
+      "content",
+      "flow",
+      "box",
+      "wallet",
+      "orbit",
+      "reference",
+      "verified",
+      "refresh"
+    ]);
+  });
+
+  it("keeps all constructor option icons available to icon pickers", () => {
+    const optionIconNames = [
+      ...productDeliveryFormatOptions,
+      ...productExecutionModeOptions,
+      ...productPaymentModelOptions,
+      ...productParticipantModeOptions,
+      ...productRequiredClientDataOptions,
+      ...productMethodOptions,
+      ...productAccessGrantOptions,
+      ...productSubscriptionPeriodOptions
+    ].map((option) => option.iconName);
+
+    expect(optionIconNames.filter((iconName) => !productIconNames.includes(iconName))).toEqual([]);
   });
 });
