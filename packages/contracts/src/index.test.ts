@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   authenticatedCustomerAccountResponseSchema,
+  astrologerProfileResponseSchema,
   dictionaryCategoriesResponseSchema,
   dictionaryEntriesResponseSchema,
   healthResponseSchema,
@@ -31,5 +32,9 @@ describe("contracts public barrel", () => {
 
   it("exports product contracts", () => {
     expect(createProductRequestSchema.parse).toBeTypeOf("function");
+  });
+
+  it("exports astrologer profile contracts", () => {
+    expect(astrologerProfileResponseSchema.parse).toBeTypeOf("function");
   });
 });
