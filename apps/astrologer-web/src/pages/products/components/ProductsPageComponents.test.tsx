@@ -100,7 +100,11 @@ describe("Products page components", () => {
     });
 
     expect(toolbar.props.className).toBe(styles.toolbar);
-    expect(findRequiredElementByType(toolbar, Icon).props.iconName).toBe("box");
+    expect(toolbar.props.children[0].props.children[0].type).toBe(Icon);
+    const titleIcon = findRequiredElementByType(toolbar, Icon);
+    expect(titleIcon.props.iconName).toBe("box");
+    expect(titleIcon.props.variant).toBe("active");
+    expect(titleIcon.props["aria-hidden"]).toBe("true");
     expect(findElementsByType(toolbar, Chip).map((chip) => chip.props.label)).toEqual([
       "Все",
       "Активные",
@@ -381,6 +385,8 @@ type TestElementProps = {
   productType?: unknown;
   startIcon: { props: { iconName?: string }; type: unknown };
   iconName?: string;
+  variant?: string;
+  "aria-hidden"?: string;
   title?: string;
   value?: string | number;
   "data-product-create-type"?: string;

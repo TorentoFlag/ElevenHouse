@@ -34,9 +34,7 @@ export function ProductsToolbar({
   return (
     <header className={styles.toolbar}>
       <div className={styles.titleGroup}>
-        <span className={styles.titleIcon} aria-hidden="true">
-          <Icon iconName="box" width={20} height={20} />
-        </span>
+        <Icon iconName="box" variant="active" width={20} height={20} aria-hidden="true" />
         <span className={styles.titleText}>
           <h1 id="products-title" className={styles.title}>
             {title}
