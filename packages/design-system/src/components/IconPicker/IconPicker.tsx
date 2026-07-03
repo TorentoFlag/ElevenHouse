@@ -7,10 +7,11 @@ export function IconPicker<TIconName extends IconName = IconName>({
   iconNames,
   ariaLabel,
   className,
+  getIconAriaLabel,
   onValueChange
 }: IconPickerProps<TIconName>) {
   return (
-    <div className={classNames("ehIconPicker", className)} role="listbox" aria-label={ariaLabel}>
+    <div className={classNames("ehIconPicker", className)} role="group" aria-label={ariaLabel}>
       {iconNames.map((iconName) => {
         const selected = iconName === value;
 
@@ -21,8 +22,8 @@ export function IconPicker<TIconName extends IconName = IconName>({
               "ehIconPicker__option--selected": selected
             })}
             type="button"
-            role="option"
-            aria-selected={selected}
+            aria-label={getIconAriaLabel(iconName)}
+            aria-pressed={selected}
             onClick={() => onValueChange(iconName)}
           >
             <Icon iconName={iconName} width={16} height={16} aria-hidden="true" />
