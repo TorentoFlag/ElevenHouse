@@ -347,9 +347,9 @@ export const astrologerCopyByLocale = {
       createLabel: "Создать продукт",
       statusFilterAriaLabel: "Фильтр статусов продуктов",
       createTypeModal: {
-        title: "Выберите тип продукта",
+        title: "Новый продукт",
         closeLabel: "Закрыть выбор типа",
-        description: "Тип задаст базовые параметры, которые можно изменить в редакторе."
+        description: "Выберите тип — дальше откроется конструктор с нужными полями."
       },
       editor: {
         createTitle: "Новый продукт",
