@@ -32,9 +32,7 @@ export function ReferenceToolbar({
   return (
     <header className={styles.toolbar}>
       <div className={styles.titleGroup}>
-        <span className={styles.titleIcon} aria-hidden="true">
-          <Icon iconName="reference" width={18} height={18} />
-        </span>
+        <Icon iconName="reference" variant="active" width={20} height={20} aria-hidden="true" />
         <span className={styles.titleText}>
           <h1 id="reference-title" className={styles.title}>
             {title}

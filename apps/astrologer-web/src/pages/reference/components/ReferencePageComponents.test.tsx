@@ -111,10 +111,14 @@ describe("Reference page local components", () => {
 
     expect(toolbar.props.className).toBe(styles.toolbar);
     expect(JSON.stringify(toolbar.props.children)).toContain("Справочник трактовок");
+    expect(toolbar.props.children[0].props.children[0].type).toBe(Icon);
     expect(findElementsByType(toolbar, Icon).map((icon) => icon.props.iconName)).toEqual([
       "reference",
       "search"
     ]);
+    const titleIcon = findRequiredElementByType(toolbar, Icon);
+    expect(titleIcon.props.variant).toBe("active");
+    expect(titleIcon.props["aria-hidden"]).toBe("true");
 
     const searchInput = findRequiredElementByType(toolbar, "input");
     searchInput.props.onChange({ currentTarget: { value: "овен" } });
@@ -338,6 +342,8 @@ type TestElementProps = {
   disabled?: boolean;
   icon: { props: { iconName?: string }; type: unknown };
   iconName?: string;
+  variant?: string;
+  "aria-hidden"?: string;
   id?: string;
   isActive?: boolean;
   label?: string;

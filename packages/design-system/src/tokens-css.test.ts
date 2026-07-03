@@ -10,4 +10,8 @@ describe("design-system CSS tokens", () => {
       "--eh-color-moon-300-alpha-14: rgba(216, 212, 236, 0.14);"
     );
   });
+
+  it("defines a reusable gold alpha token", () => {
+    expect(tokensCss).toContain("--eh-color-gold-alpha-14: rgba(244, 196, 48, 0.14);");
+  });
 });

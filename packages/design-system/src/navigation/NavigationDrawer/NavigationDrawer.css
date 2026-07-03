@@ -7,7 +7,7 @@
   --eh-navigation-drawer-border-strong: rgb(244 196 48 / 0.42);
   --eh-navigation-drawer-item: rgb(236 232 247 / 0.72);
   --eh-navigation-drawer-item-muted: rgb(167 162 200 / 0.74);
-  --eh-navigation-drawer-active-bg: rgb(244 196 48 / 0.14);
+  --eh-navigation-drawer-active-bg: var(--eh-color-gold-alpha-14);
   --eh-navigation-drawer-active-icon: rgb(246 210 102);
   --eh-navigation-drawer-hover-bg: rgb(216 212 236 / 0.06);
   --eh-motion-duration-panel: var(--eh-motion-duration-normal, 320ms);

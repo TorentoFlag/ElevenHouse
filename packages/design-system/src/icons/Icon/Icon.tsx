@@ -10,11 +10,11 @@ export type IconProps = Omit<SVGProps<SVGSVGElement>, "children"> & {
 };
 
 const activeIconStyle = {
-  background: "var(--eh-color-night-900)",
+  background: "var(--eh-color-gold-alpha-14)",
   borderRadius: "var(--eh-radius-12)",
   boxSizing: "content-box",
   color: "var(--eh-color-gold)",
-  padding: "var(--eh-space-12)"
+  padding: "var(--eh-space-7)"
 } satisfies CSSProperties;
 
 export function Icon({

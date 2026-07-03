@@ -4,7 +4,6 @@
   --products-surface-2: rgb(22 20 47);
   --products-surface-3: rgb(30 27 62);
   --products-line: rgb(216 212 236 / 0.08);
-  --products-accent-soft: rgb(244 196 48 / 0.14);
   --products-accent-text: #f6d266;
 
   position: relative;
@@ -40,7 +39,7 @@
   height: 34px;
   place-items: center;
   border-radius: 10px;
-  background: var(--products-accent-soft);
+  background: var(--eh-color-gold-alpha-14);
   color: var(--products-accent-text);
 }
 
@@ -354,7 +353,7 @@
   height: 34px;
   place-items: center;
   border-radius: 10px;
-  background: var(--products-accent-soft);
+  background: var(--eh-color-gold-alpha-14);
   color: var(--products-accent-text);
 }
 

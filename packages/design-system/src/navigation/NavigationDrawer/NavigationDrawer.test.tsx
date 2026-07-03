@@ -425,7 +425,7 @@ describe("NavigationDrawer", () => {
 
   it("uses the active background color token for the selected item", () => {
     expect(navigationDrawerCss).toContain(
-      "--eh-navigation-drawer-active-bg: rgb(244 196 48 / 0.14);"
+      "--eh-navigation-drawer-active-bg: var(--eh-color-gold-alpha-14);"
     );
     expect(navigationDrawerCss).toContain(
       ".ehNavigationDrawer__item--active {\n  border-color: var(--eh-navigation-drawer-border-strong);\n  background-color: var(--eh-navigation-drawer-active-bg);"

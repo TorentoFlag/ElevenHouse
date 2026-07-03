@@ -51,11 +51,11 @@ describe("Icon", () => {
     expect(icon.props.height).toBe(20);
     expect(icon.props.className).toBe("ehIcon ehIcon--active catalogIcon");
     expect(icon.props.style).toMatchObject({
-      background: "var(--eh-color-night-900)",
+      background: "var(--eh-color-gold-alpha-14)",
       borderRadius: "var(--eh-radius-12)",
       boxSizing: "content-box",
       color: "var(--eh-color-gold)",
-      padding: "var(--eh-space-12)"
+      padding: "var(--eh-space-7)"
     });
   });
 

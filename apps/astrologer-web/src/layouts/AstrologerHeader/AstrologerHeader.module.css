@@ -56,7 +56,7 @@
 
 .searchInput:focus {
   border-color: rgb(244 196 48 / 0.42);
-  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.14);
+  box-shadow: 0 0 0 3px var(--eh-color-gold-alpha-14);
 }
 
 .actions {
@@ -139,7 +139,7 @@
 
 .notificationButton:hover {
   border-color: rgb(244 196 48 / 0.42);
-  background: rgb(244 196 48 / 0.14);
+  background: var(--eh-color-gold-alpha-14);
   color: #f6d266;
 }
 

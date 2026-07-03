@@ -22,7 +22,7 @@
 
 .ehChip--active {
   border-color: rgb(244 196 48 / 0.42);
-  background: rgb(244 196 48 / 0.14);
+  background: var(--eh-color-gold-alpha-14);
   color: #f6d266;
 }
 
