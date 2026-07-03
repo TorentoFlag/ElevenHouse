@@ -1,4 +1,4 @@
-import { Children, isValidElement, type ReactElement } from "react";
+import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import type { ListProductsResponse, ProductSummaryResponse } from "@elevenhouse/contracts";
 import { Button } from "@elevenhouse/design-system/components/Button";
 import { Card } from "@elevenhouse/design-system/components/Card";
@@ -227,6 +227,15 @@ describe("Products page components", () => {
       "course",
       "custom"
     ]);
+    typeOptions.forEach((option) => {
+      const icon = getArrayItem(Children.toArray(option.props.children), 0);
+
+      expect(isValidElement(icon) ? icon.type : null).toBe(Icon);
+      expect(isValidElement<TestElementProps>(icon) ? icon.props.variant : undefined).toBe("active");
+      expect(isValidElement<TestElementProps>(icon) ? icon.props["aria-hidden"] : undefined).toBe(
+        "true"
+      );
+    });
     expect(JSON.stringify(modal.props.children)).toContain("Разовая консультация");
 
     getArrayItem(typeOptions, 0).props.onClick();
@@ -373,7 +382,7 @@ describe("Products page components", () => {
 type TestElementProps = {
   active?: boolean;
   as?: string;
-  children?: unknown;
+  children?: ReactNode;
   closeLabel?: string;
   className?: string;
   disabled?: boolean;

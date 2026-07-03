@@ -326,8 +326,7 @@
 .typeOption {
   display: flex;
   min-width: 0;
-  min-height: 92px;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--eh-color-moon-300-alpha-14);
@@ -344,17 +343,6 @@
   border-color: rgb(244 196 48 / 0.42);
   background: rgb(244 196 48 / 0.08);
   outline: none;
-}
-
-.typeOptionIcon {
-  display: grid;
-  flex: 0 0 34px;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 10px;
-  background: var(--eh-color-gold-alpha-14);
-  color: var(--products-accent-text);
 }
 
 .typeOptionText {

@@ -57,9 +57,7 @@ export function ProductCreateTypeModal({
               data-product-create-type={type}
               onClick={() => onSelect(type)}
             >
-              <span className={styles.typeOptionIcon} aria-hidden="true">
-                <Icon iconName={iconName} width={18} height={18} />
-              </span>
+              <Icon iconName={iconName} variant="active" width={20} height={20} aria-hidden="true" />
               <span className={styles.typeOptionText}>
                 <span className={styles.typeOptionTitle}>{typeCopy.label}</span>
                 {typeCopy.description ? (
