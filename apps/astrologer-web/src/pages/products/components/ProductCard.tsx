@@ -11,6 +11,7 @@ export type ProductCardProps = {
   readonly productCopy: ProductCopy;
   readonly locale: ProductLocale;
   readonly actions: ProductCardActions;
+  readonly isActionPending: boolean;
 };
 
 export type ProductCardActions = {
@@ -24,7 +25,13 @@ export type ProductCardActions = {
   readonly onStatusChange: (productId: string, status: ProductResponse["status"]) => void;
 };
 
-export function ProductCard({ product, productCopy, locale, actions }: ProductCardProps) {
+export function ProductCard({
+  product,
+  productCopy,
+  locale,
+  actions,
+  isActionPending
+}: ProductCardProps) {
   const summary = createProductCardSummary(product, productCopy, locale);
 
   return (
@@ -80,6 +87,7 @@ export function ProductCard({ product, productCopy, locale, actions }: ProductCa
           className={styles.productActionButton}
           data-product-action-duplicate="true"
           aria-label={actions.duplicateLabel}
+          disabled={isActionPending}
           onClick={() => actions.onDuplicate(product.id)}
         >
           {actions.duplicateLabel}
@@ -90,6 +98,7 @@ export function ProductCard({ product, productCopy, locale, actions }: ProductCa
             className={styles.productActionButton}
             data-product-action-publish="true"
             aria-label={actions.publishLabel}
+            disabled={isActionPending}
             onClick={() => actions.onStatusChange(product.id, "active")}
           >
             {actions.publishLabel}
@@ -101,6 +110,7 @@ export function ProductCard({ product, productCopy, locale, actions }: ProductCa
             className={styles.productActionButton}
             data-product-action-draft="true"
             aria-label={actions.draftLabel}
+            disabled={isActionPending}
             onClick={() => actions.onStatusChange(product.id, "draft")}
           >
             {actions.draftLabel}
@@ -112,6 +122,7 @@ export function ProductCard({ product, productCopy, locale, actions }: ProductCa
             className={styles.productActionButton}
             data-product-action-archive="true"
             aria-label={actions.archiveLabel}
+            disabled={isActionPending}
             onClick={() => actions.onStatusChange(product.id, "archived")}
           >
             {actions.archiveLabel}

@@ -40,6 +40,11 @@ export function ProductsPage() {
   };
   const isLoading = productsQuery.isLoading || summaryQuery.isLoading;
   const isError = productsQuery.isError || summaryQuery.isError;
+  const isProductActionPending =
+    duplicateMutation.isPending ||
+    publishMutation.isPending ||
+    moveToDraftMutation.isPending ||
+    archiveMutation.isPending;
   const handleProductStatusChange = (productId: string, status: ProductResponse["status"]) => {
     const mutation =
       status === "active"
@@ -64,6 +69,7 @@ export function ProductsPage() {
         selectedStatus={selectedStatus}
         isLoading={isLoading}
         isError={isError}
+        isProductActionPending={isProductActionPending}
         onStatusChange={setSelectedStatus}
         onCreate={createFlow.openTypeSelection}
         onEditProduct={createFlow.editProduct}

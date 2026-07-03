@@ -32,6 +32,7 @@ export type ProductsPageViewProps = {
   readonly selectedStatus: ProductStatusFilter;
   readonly isLoading: boolean;
   readonly isError: boolean;
+  readonly isProductActionPending: boolean;
   readonly onStatusChange: (status: ProductStatusFilter) => void;
   readonly onCreate: () => void;
   readonly onEditProduct: (product: ProductResponse) => void;
@@ -48,6 +49,7 @@ export function ProductsPageView({
   selectedStatus,
   isLoading,
   isError,
+  isProductActionPending,
   onStatusChange,
   onCreate,
   onEditProduct,
@@ -81,6 +83,7 @@ export function ProductsPageView({
             onDuplicate: onDuplicateProduct,
             onStatusChange: onProductStatusChange
           }}
+          isActionPending={isProductActionPending}
           isLoading={isLoading}
           isError={isError}
           loadingLabel={copy.loadingLabel}

@@ -143,6 +143,39 @@ describe("ProductConstructorModal", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  it("does not deselect the only selected delivery format", () => {
+    const draft = {
+      ...createDefaultProductDraft("single"),
+      deliveryFormats: ["video" as const]
+    };
+    const onDraftChange = vi.fn();
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft,
+      isSaving: false,
+      error: null,
+      onDraftChange,
+      onSave: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    const selectedDeliveryFormat = findAllByType(modal, SelectableTile).find(
+      (tile) => tile.props.label === productCopyByLocale.ru.deliveryFormats.video.label
+    );
+    expect(selectedDeliveryFormat).toBeDefined();
+
+    selectedDeliveryFormat?.props.onClick();
+
+    expect(onDraftChange).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        deliveryFormats: []
+      })
+    );
+    expect(onDraftChange).not.toHaveBeenCalled();
+  });
+
   it("switches product type by applying next type defaults and preserving basic fields", () => {
     const draft = {
       ...createDefaultProductDraft("single"),

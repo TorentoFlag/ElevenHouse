@@ -238,8 +238,13 @@ export function ProductConstructorModal({
               options: productDeliveryFormatOptions,
               selectedValues: draft.deliveryFormats,
               copyByValue: productCopy.deliveryFormats,
-              onToggle: (value) =>
-                onDraftChange(toggleProductDraftArrayValue(draft, "deliveryFormats", value))
+              onToggle: (value) => {
+                if (draft.deliveryFormats.includes(value) && draft.deliveryFormats.length === 1) {
+                  return;
+                }
+
+                onDraftChange(toggleProductDraftArrayValue(draft, "deliveryFormats", value));
+              }
             })}
           </section>
 

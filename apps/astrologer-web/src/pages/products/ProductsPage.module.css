@@ -296,9 +296,14 @@
   line-height: 1.1;
 }
 
-.productActionButton:hover,
+.productActionButton:hover:not(:disabled),
 .productActionButton:focus-visible {
   color: var(--products-accent-text);
+}
+
+.productActionButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .productActionButton:focus-visible {

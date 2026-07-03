@@ -156,6 +156,7 @@ describe("ProductsPageView", () => {
     expect(results.props.locale).toBe("ru");
     expect(results.props.isLoading).toBe(false);
     expect(results.props.isError).toBe(false);
+    expect(results.props.isActionPending).toBe(false);
     expect(results.props.actions).toMatchObject(copy.actions);
   });
 
@@ -191,6 +192,7 @@ function createBaseProps(): ProductsPageViewProps {
     selectedStatus: "all",
     isLoading: false,
     isError: false,
+    isProductActionPending: false,
     onStatusChange: vi.fn(),
     onCreate: vi.fn(),
     onEditProduct: vi.fn(),
@@ -208,6 +210,7 @@ type TestElementProps = {
   emptyLabel?: string;
   errorLabel?: string;
   isError?: boolean;
+  isActionPending?: boolean;
   isLoading?: boolean;
   loadingLabel?: string;
   locale?: string;

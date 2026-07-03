@@ -362,6 +362,7 @@ describe("ProductsPage", () => {
     expect(viewProps.summary).toBe(summaryResponse);
     expect(viewProps.isLoading).toBe(false);
     expect(viewProps.isError).toBe(false);
+    expect(viewProps.isProductActionPending).toBe(false);
     expect(typeof viewProps.onEditProduct).toBe("function");
     expect(typeof viewProps.onDuplicateProduct).toBe("function");
     expect(typeof viewProps.onProductStatusChange).toBe("function");
@@ -407,6 +408,27 @@ describe("ProductsPage", () => {
     renderPage();
     expect(getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).isError).toBe(true);
   });
+
+  it.each([
+    ["duplicate", "useDuplicateProductMutation"],
+    ["publish", "usePublishProductMutation"],
+    ["move to draft", "useMoveProductToDraftMutation"],
+    ["archive", "useArchiveProductMutation"]
+  ] satisfies Array<[string, keyof typeof mocks]>)(
+    "marks product actions pending while the %s mutation is pending",
+    (_label, mutationHookName) => {
+      mocks[mutationHookName].mockReturnValue({
+        mutate: vi.fn(),
+        isPending: true
+      });
+
+      renderPage();
+
+      expect(getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).isProductActionPending).toBe(
+        true
+      );
+    }
+  );
 
   it("opens product type selection and then opens the editor with a default draft", () => {
     renderPage();

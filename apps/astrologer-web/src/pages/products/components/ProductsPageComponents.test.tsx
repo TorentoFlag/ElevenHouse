@@ -225,6 +225,7 @@ describe("Products page components", () => {
       productCopy: productCopyByLocale.ru,
       locale: "ru",
       actions: productActions,
+      isActionPending: false,
       isLoading: false,
       isError: false,
       loadingLabel: "Загружаем продукты",
@@ -240,6 +241,7 @@ describe("Products page components", () => {
       productCopy: productCopyByLocale.ru,
       locale: "ru",
       actions: productActions,
+      isActionPending: false,
       isLoading: true,
       isError: false,
       loadingLabel: "Загружаем продукты",
@@ -253,6 +255,7 @@ describe("Products page components", () => {
       productCopy: productCopyByLocale.ru,
       locale: "ru",
       actions: productActions,
+      isActionPending: false,
       isLoading: false,
       isError: false,
       loadingLabel: "Загружаем продукты",
@@ -267,7 +270,8 @@ describe("Products page components", () => {
       product,
       productCopy: productCopyByLocale.ru,
       locale: "ru",
-      actions: productActions
+      actions: productActions,
+      isActionPending: false
     });
 
     expect(findRequiredElementByType(card, Card).props.as).toBe("article");
@@ -288,6 +292,7 @@ describe("Products page components", () => {
       product,
       productCopy: productCopyByLocale.ru,
       locale: "ru",
+      isActionPending: false,
       actions: {
         editLabel: "Изменить",
         duplicateLabel: "Дублировать",
@@ -311,6 +316,33 @@ describe("Products page components", () => {
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "archived");
   });
 
+  it("disables duplicate and status actions while a product action is pending", () => {
+    const draftCard = ProductCard({
+      product: createProductWithStatus("draft"),
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      actions: productActions,
+      isActionPending: true
+    });
+
+    expect(findRequiredElementByProp(draftCard, "data-product-action-edit").props.disabled).toBeUndefined();
+    expect(findRequiredElementByProp(draftCard, "data-product-action-duplicate").props.disabled).toBe(
+      true
+    );
+    expect(findRequiredElementByProp(draftCard, "data-product-action-publish").props.disabled).toBe(true);
+    expect(findRequiredElementByProp(draftCard, "data-product-action-archive").props.disabled).toBe(true);
+
+    const activeCard = ProductCard({
+      product: createProductWithStatus("active"),
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      actions: productActions,
+      isActionPending: true
+    });
+
+    expect(findRequiredElementByProp(activeCard, "data-product-action-draft").props.disabled).toBe(true);
+  });
+
   it("renders status action buttons by product status", () => {
     const onStatusChange = vi.fn();
 
@@ -318,6 +350,7 @@ describe("Products page components", () => {
       product: createProductWithStatus("draft"),
       productCopy: productCopyByLocale.ru,
       locale: "ru",
+      isActionPending: false,
       actions: {
         ...productActions,
         onStatusChange
@@ -334,6 +367,7 @@ describe("Products page components", () => {
       product: createProductWithStatus("active"),
       productCopy: productCopyByLocale.ru,
       locale: "ru",
+      isActionPending: false,
       actions: {
         ...productActions,
         onStatusChange
@@ -350,6 +384,7 @@ describe("Products page components", () => {
       product: createProductWithStatus("archived"),
       productCopy: productCopyByLocale.ru,
       locale: "ru",
+      isActionPending: false,
       actions: {
         ...productActions,
         onStatusChange
@@ -373,6 +408,7 @@ describe("Products page components", () => {
       ],
       productCopy: productCopyByLocale.ru,
       locale: "ru",
+      isActionPending: false,
       actions: {
         editLabel: "Изменить",
         duplicateLabel: "Дублировать",
@@ -401,6 +437,28 @@ describe("Products page components", () => {
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "active");
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "draft");
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "archived");
+  });
+
+  it("propagates action pending state through results to rendered card buttons", () => {
+    const results = ProductsResults({
+      products: [createProductWithStatus("draft")],
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      isActionPending: true,
+      actions: productActions,
+      isLoading: false,
+      isError: false,
+      loadingLabel: "Загружаем продукты",
+      errorLabel: "Не удалось загрузить продукты",
+      emptyLabel: "Нет продуктов в этом статусе"
+    });
+
+    expect(findRequiredRenderedElementByProp(results, "data-product-action-duplicate").props.disabled).toBe(
+      true
+    );
+    expect(findRequiredRenderedElementByProp(results, "data-product-action-publish").props.disabled).toBe(
+      true
+    );
   });
 
   it("renders product type selection modal with all product templates", () => {
@@ -521,12 +579,6 @@ type TestElementProps = {
   title?: string;
   value?: string | number;
   "data-product-create-type"?: string;
-  "data-product-editor-form"?: string;
-  "data-product-editor-included-item"?: string;
-  "data-product-editor-price"?: string;
-  "data-product-editor-subtitle"?: string;
-  "data-product-editor-title"?: string;
-  "data-product-editor-type-label"?: string;
   "data-product-action-archive"?: string;
   "data-product-action-draft"?: string;
   "data-product-action-duplicate"?: string;
