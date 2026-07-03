@@ -8,6 +8,7 @@
 - `architecture/repository-structure.md` — ожидаемая структура monorepo.
 - `architecture/backend-modules.md` — доменные границы backend.
 - `architecture/account-role-model.md` — модель аккаунтов, ролей и базовые auth-инварианты.
+- `architecture/design-reference-inventory.md` — карта соответствия `ElevenHouseDesign/` production-поверхностям, доменным модулям, контрактам и design-system работам.
 - `product/roadmap.md` — техническая roadmap разработки полной версии.
 - `product/full-functional-scope.md` — полный функциональный scope продукта.
 - `api/api-boundaries.md` — разделение public, astrologer и будущего admin API.
