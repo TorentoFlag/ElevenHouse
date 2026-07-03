@@ -93,6 +93,10 @@
       "types": "./dist/icons/Bell/index.d.ts",
       "import": "./dist/icons/Bell/index.js"
     },
+    "./icons/Box": {
+      "types": "./dist/icons/Box/index.d.ts",
+      "import": "./dist/icons/Box/index.js"
+    },
     "./icons/Chat": {
       "types": "./dist/icons/Chat/index.d.ts",
       "import": "./dist/icons/Chat/index.js"

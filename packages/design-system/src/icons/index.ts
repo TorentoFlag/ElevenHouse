@@ -1,5 +1,6 @@
 export * from "./ArrowLeft/index.js";
 export * from "./Bell/index.js";
+export * from "./Box/index.js";
 export * from "./Chat/index.js";
 export * from "./Check/index.js";
 export * from "./ChevronDown/index.js";

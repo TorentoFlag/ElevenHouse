@@ -5,6 +5,7 @@ describe("design-system root exports", () => {
   it("exports public runtime APIs from the root entrypoint", () => {
     expect(designSystem.BackLink).toBeTypeOf("function");
     expect(designSystem.Bell).toBeTypeOf("function");
+    expect(designSystem.Box).toBeTypeOf("function");
     expect(designSystem.Button).toBeTypeOf("function");
     expect(designSystem.ChevronDown).toBeTypeOf("function");
     expect(designSystem.ChevronLeft).toBeTypeOf("function");

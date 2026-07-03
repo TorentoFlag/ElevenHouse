@@ -1,6 +1,6 @@
 import { NavigationDrawer } from "@elevenhouse/design-system/navigation";
+import { Box } from "@elevenhouse/design-system/icons/Box";
 import { Reference } from "@elevenhouse/design-system/icons/Reference";
-import { Wallet } from "@elevenhouse/design-system/icons/Wallet";
 import { NavLink } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { astrologerCopyByLocale } from "../../common/i18n/astrologerCopy";
@@ -37,7 +37,7 @@ describe("AstrologerNavigationDrawerView", () => {
       title: "Продукты",
       href: "/products"
     });
-    expect(element.props.items[1].icon.type).toBe(Wallet);
+    expect(element.props.items[1].icon.type).toBe(Box);
     expect(element.props.items[2]).toMatchObject({
       id: "reference",
       title: "Справочники",

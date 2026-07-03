@@ -20,6 +20,9 @@
       "@elevenhouse/design-system/navigation": [
         "../../packages/design-system/src/navigation/index.ts"
       ],
+      "@elevenhouse/design-system/icons/Box": [
+        "../../packages/design-system/src/icons/Box/index.ts"
+      ],
       "@elevenhouse/design-system/icons/Reference": [
         "../../packages/design-system/src/icons/Reference/index.ts"
       ],
