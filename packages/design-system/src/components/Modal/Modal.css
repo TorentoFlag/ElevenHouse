@@ -17,7 +17,7 @@
   overflow: hidden;
   border: 1px solid rgb(216 212 236 / 0.14);
   border-radius: 22px;
-  background: linear-gradient(180deg, rgb(24 22 52 / 0.98), rgb(17 15 39 / 0.98));
+  background: linear-gradient(rgb(22, 20, 47), color(srgb 0.0793726 0.0721569 0.1));
   box-shadow: 0 28px 80px rgb(0 0 0 / 0.42);
   color: var(--eh-color-moon-120);
 }

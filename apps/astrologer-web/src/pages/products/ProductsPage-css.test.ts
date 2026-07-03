@@ -20,4 +20,8 @@ describe("ProductsPage.module.css", () => {
     expect(productsPageCss).toContain("grid-template-columns: 1fr;");
     expect(productsPageCss).not.toContain(".productCard .ehCard");
   });
+
+  it("uses design-system tokens directly instead of one-to-one local aliases", () => {
+    expect(productsPageCss.match(/--products-[\w-]+:\s*var\(--eh-/)).toBeNull();
+  });
 });

@@ -1,17 +1,12 @@
 .productsPage {
-  --products-bg-0: var(--eh-color-night-950);
   --products-panel: rgb(13 12 32 / 0.6);
   --products-subhead: rgb(13 12 32 / 0.85);
   --products-surface-2: rgb(22 20 47);
   --products-surface-3: rgb(30 27 62);
   --products-line: rgb(216 212 236 / 0.08);
   --products-line-strong: rgb(216 212 236 / 0.14);
-  --products-text-1: var(--eh-color-moon-120);
-  --products-text-2: var(--eh-color-moon-500);
-  --products-text-3: var(--eh-color-muted);
   --products-accent-soft: rgb(244 196 48 / 0.14);
   --products-accent-text: #f6d266;
-  --products-positive: var(--eh-color-emerald);
 
   position: relative;
   z-index: 1;
@@ -19,7 +14,7 @@
   min-height: calc(100dvh - var(--astrologer-app-header-height, 68px) - 64px);
   margin: -32px;
   flex-direction: column;
-  color: var(--products-text-1);
+  color: var(--eh-color-moon-120);
 }
 
 .toolbar {
@@ -61,7 +56,7 @@
 .title {
   overflow: hidden;
   margin: 0;
-  color: var(--products-text-1);
+  color: var(--eh-color-moon-120);
   font-size: 17px;
   font-weight: 700;
   line-height: 1.2;
@@ -70,7 +65,7 @@
 }
 
 .total {
-  color: var(--products-text-3);
+  color: var(--eh-color-muted);
   font-family: var(--eh-font-mono);
   font-size: 13px;
   font-weight: 500;
@@ -121,7 +116,7 @@
 .summaryLabel {
   display: block;
   margin-bottom: 4px;
-  color: var(--products-text-3);
+  color: var(--eh-color-muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -132,7 +127,7 @@
 .summaryValue {
   display: block;
   overflow: hidden;
-  color: var(--products-text-1);
+  color: var(--eh-color-moon-120);
   font-size: 17px;
   font-weight: 700;
   line-height: 1.2;
@@ -172,7 +167,7 @@
 .productType {
   display: block;
   overflow: hidden;
-  color: var(--products-text-3);
+  color: var(--eh-color-muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -185,7 +180,7 @@
 .productTitle {
   overflow: hidden;
   margin: 3px 0 0;
-  color: var(--products-text-1);
+  color: var(--eh-color-moon-120);
   font-size: 16px;
   font-weight: 700;
   line-height: 1.25;
@@ -211,11 +206,11 @@
 .statusBadge-active {
   border-color: rgb(78 200 160 / 0.28);
   background: rgb(78 200 160 / 0.13);
-  color: var(--products-positive);
+  color: var(--eh-color-emerald);
 }
 
 .statusBadge-draft {
-  color: var(--products-text-2);
+  color: var(--eh-color-moon-500);
 }
 
 .statusBadge-archived {
@@ -232,7 +227,7 @@
 }
 
 .productPrice {
-  color: var(--products-text-1);
+  color: var(--eh-color-moon-120);
   font-size: 24px;
   font-weight: 800;
   line-height: 1.1;
@@ -240,7 +235,7 @@
 
 .productPriceSuffix,
 .productMeta {
-  color: var(--products-text-3);
+  color: var(--eh-color-muted);
   font-size: 12.5px;
   font-weight: 600;
 }
@@ -264,7 +259,7 @@
   min-width: 0;
   align-items: flex-start;
   gap: 8px;
-  color: var(--products-text-2);
+  color: var(--eh-color-moon-500);
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1.35;
@@ -273,7 +268,7 @@
 .includedItem svg {
   flex: 0 0 auto;
   margin-top: 1px;
-  color: var(--products-positive);
+  color: var(--eh-color-emerald);
 }
 
 .productFooter {
@@ -282,7 +277,7 @@
   gap: 14px;
   padding: 12px 18px;
   border-top: 1px solid var(--products-line);
-  color: var(--products-text-2);
+  color: var(--eh-color-moon-500);
   font-size: 12.5px;
   font-weight: 600;
 }
@@ -290,7 +285,7 @@
 .productFooter strong,
 .revenue,
 .rating {
-  color: var(--products-text-1);
+  color: var(--eh-color-moon-120);
   font-family: var(--eh-font-mono);
   font-weight: 700;
 }
@@ -303,7 +298,7 @@
 .contentState,
 .emptyState {
   margin: 24px 0 0;
-  color: var(--products-text-3);
+  color: var(--eh-color-muted);
   font-size: 13px;
   font-weight: 700;
 }
@@ -318,9 +313,9 @@
 }
 
 .modalDescription {
-  margin: 0 0 18px;
-  color: var(--products-text-2);
-  font-size: 13px;
+  margin: 0 0 20px;
+  color: var(--eh-color-moon-500);
+  font-size: 14px;
   font-weight: 500;
   line-height: 1.45;
 }
@@ -373,14 +368,14 @@
 
 .typeOptionTitle {
   overflow-wrap: anywhere;
-  color: var(--products-text-1);
+  color: var(--eh-color-moon-120);
   font-size: 13px;
   font-weight: 800;
   line-height: 1.2;
 }
 
 .typeOptionDescription {
-  color: var(--products-text-3);
+  color: var(--eh-color-muted);
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1.35;
@@ -401,7 +396,7 @@
 }
 
 .typePreviewLabel {
-  color: var(--products-text-1);
+  color: var(--eh-color-moon-120);
   font-size: 14px;
   font-weight: 800;
   line-height: 1.2;
@@ -420,7 +415,7 @@
 }
 
 .fieldLabel {
-  color: var(--products-text-3);
+  color: var(--eh-color-muted);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -436,7 +431,7 @@
   border: 1px solid var(--products-line-strong);
   border-radius: 10px;
   background: var(--products-surface-2);
-  color: var(--products-text-1);
+  color: var(--eh-color-moon-120);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -450,7 +445,7 @@
 }
 
 .textInput::placeholder {
-  color: var(--products-text-3);
+  color: var(--eh-color-muted);
 }
 
 .textArea {

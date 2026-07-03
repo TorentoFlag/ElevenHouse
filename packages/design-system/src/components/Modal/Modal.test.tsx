@@ -61,6 +61,9 @@ describe("Modal", () => {
     expect(modalCss).toContain(".ehModal__backdrop");
     expect(modalCss).toContain("backdrop-filter: blur(6px);");
     expect(modalCss).toContain(".ehModal__dialog");
+    expect(modalCss).toContain(
+      "background: linear-gradient(rgb(22, 20, 47), color(srgb 0.0793726 0.0721569 0.1));"
+    );
     expect(modalCss).toContain("font-weight: 700;");
     expect(modalCss).not.toContain(".ehModal__closeButton::before");
     expect(modalCss).not.toContain(".ehModal__closeButton::after");
