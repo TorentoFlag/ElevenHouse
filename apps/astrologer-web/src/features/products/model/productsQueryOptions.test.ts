@@ -1,5 +1,10 @@
-import type { QueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
+import { useArchiveProductMutation } from "./useArchiveProductMutation";
+import { useDuplicateProductMutation } from "./useDuplicateProductMutation";
+import { useMoveProductToDraftMutation } from "./useMoveProductToDraftMutation";
+import { usePublishProductMutation } from "./usePublishProductMutation";
+import { useUpdateProductMutation } from "./useUpdateProductMutation";
 import {
   archiveProductMutationOptions,
   createProductMutationOptions,
@@ -12,6 +17,15 @@ import {
   publishProductMutationOptions,
   updateProductMutationOptions
 } from "./productsQueryOptions";
+
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    useMutation: vi.fn((options: unknown) => options),
+    useQueryClient: vi.fn(() => ({ invalidateQueries: vi.fn() }))
+  };
+});
 
 describe("products query options", () => {
   it("creates stable product query keys for list, summary and detail data", () => {
@@ -43,5 +57,15 @@ describe("products query options", () => {
 
     expect(invalidateQueries).toHaveBeenCalledTimes(6);
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: productsQueryKeys.all() });
+  });
+
+  it("creates React Query mutation hooks for all product actions", () => {
+    expect(useUpdateProductMutation()).toHaveProperty("mutationFn");
+    expect(usePublishProductMutation()).toHaveProperty("mutationFn");
+    expect(useMoveProductToDraftMutation()).toHaveProperty("mutationFn");
+    expect(useArchiveProductMutation()).toHaveProperty("mutationFn");
+    expect(useDuplicateProductMutation()).toHaveProperty("mutationFn");
+    expect(useQueryClient).toHaveBeenCalled();
+    expect(useMutation).toHaveBeenCalled();
   });
 });
