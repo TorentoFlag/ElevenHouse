@@ -3,8 +3,8 @@ import { Button } from "@elevenhouse/design-system/components/Button";
 import "@elevenhouse/design-system/components/Button.css";
 import { Chip } from "@elevenhouse/design-system/components/Chip";
 import "@elevenhouse/design-system/components/Chip.css";
+import { Box } from "@elevenhouse/design-system/icons/Box";
 import { Plus } from "@elevenhouse/design-system/icons/Plus";
-import { Wallet } from "@elevenhouse/design-system/icons/Wallet";
 import styles from "../ProductsPage.module.css";
 
 export type ProductsToolbarProps = {
@@ -36,7 +36,7 @@ export function ProductsToolbar({
     <header className={styles.toolbar}>
       <div className={styles.titleGroup}>
         <span className={styles.titleIcon} aria-hidden="true">
-          <Wallet width={18} height={18} />
+          <Box width={18} height={18} />
         </span>
         <span className={styles.titleText}>
           <h1 id="products-title" className={styles.title}>

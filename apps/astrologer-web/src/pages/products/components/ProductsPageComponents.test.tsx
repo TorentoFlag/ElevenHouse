@@ -4,8 +4,8 @@ import { Button } from "@elevenhouse/design-system/components/Button";
 import { Card } from "@elevenhouse/design-system/components/Card";
 import { Chip } from "@elevenhouse/design-system/components/Chip";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
+import { Box } from "@elevenhouse/design-system/icons/Box";
 import { Plus } from "@elevenhouse/design-system/icons/Plus";
-import { Wallet } from "@elevenhouse/design-system/icons/Wallet";
 import { describe, expect, it, vi } from "vitest";
 import { createDefaultProductDraft } from "../../../features/products/model/productDraft";
 import { productCopyByLocale } from "../../../features/products/model/productCopy";
@@ -101,7 +101,7 @@ describe("Products page components", () => {
     });
 
     expect(toolbar.props.className).toBe(styles.toolbar);
-    expect(findRequiredElementByType(toolbar, Wallet)).toBeTruthy();
+    expect(findRequiredElementByType(toolbar, Box)).toBeTruthy();
     expect(findElementsByType(toolbar, Chip).map((chip) => chip.props.label)).toEqual([
       "Все",
       "Активные",
