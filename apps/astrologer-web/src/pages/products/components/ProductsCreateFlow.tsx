@@ -1,20 +1,21 @@
-import type { ProductCopy } from "../../../features/products/model/productCopy";
+import type { ProductCopy, ProductLocale } from "../../../features/products/model/productCopy";
 import type { ProductCreateFlow } from "../hooks/useProductCreateFlow";
+import { ProductConstructorModal, type ProductConstructorModalCopy } from "./ProductConstructorModal";
 import { ProductCreateTypeModal, type ProductCreateTypeModalCopy } from "./ProductCreateTypeModal";
-import { ProductEditorModal, type ProductEditorModalCopy } from "./ProductEditorModal";
 
 export type ProductsCreateFlowCopy = {
   readonly createTypeModal: ProductCreateTypeModalCopy;
-  readonly editor: ProductEditorModalCopy;
+  readonly editor: ProductConstructorModalCopy;
 };
 
 export type ProductsCreateFlowProps = {
   readonly copy: ProductsCreateFlowCopy;
   readonly productCopy: ProductCopy;
+  readonly locale: ProductLocale;
   readonly flow: ProductCreateFlow;
 };
 
-export function ProductsCreateFlow({ copy, productCopy, flow }: ProductsCreateFlowProps) {
+export function ProductsCreateFlow({ copy, productCopy, locale, flow }: ProductsCreateFlowProps) {
   return (
     <>
       {flow.isTypeModalOpen ? (
@@ -27,17 +28,16 @@ export function ProductsCreateFlow({ copy, productCopy, flow }: ProductsCreateFl
       ) : null}
 
       {flow.editorDraft ? (
-        <ProductEditorModal
+        <ProductConstructorModal
           copy={copy.editor}
-          productType={productCopy.types[flow.editorDraft.type]}
+          productCopy={productCopy}
+          locale={locale}
           draft={flow.editorDraft}
           isSaving={flow.isSaving}
           error={flow.editorError}
           onDraftChange={flow.updateDraft}
           onSave={flow.saveDraft}
           onClose={flow.closeEditor}
-          onBackToTypeSelection={flow.returnToTypeSelection}
-          onCloseCreateFlow={flow.closeCreateFlow}
         />
       ) : null}
     </>

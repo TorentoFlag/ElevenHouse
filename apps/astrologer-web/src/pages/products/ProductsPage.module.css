@@ -279,6 +279,33 @@
   font-weight: 600;
 }
 
+.productFooterSpacer {
+  flex: 1 1 auto;
+}
+
+.productActionButton {
+  padding: 6px 9px;
+  border: 1px solid var(--products-line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--eh-color-moon-500);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.productActionButton:hover,
+.productActionButton:focus-visible {
+  color: var(--products-accent-text);
+}
+
+.productActionButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.16);
+}
+
 .productFooter strong,
 .revenue,
 .rating {

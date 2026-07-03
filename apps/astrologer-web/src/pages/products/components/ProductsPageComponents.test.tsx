@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createDefaultProductDraft } from "../../../features/products/model/productDraft";
 import { productCopyByLocale } from "../../../features/products/model/productCopy";
 import { ProductCard } from "./ProductCard";
+import { ProductConstructorModal } from "./ProductConstructorModal";
 import { ProductsCreateFlow } from "./ProductsCreateFlow";
 import { ProductCreateTypeModal } from "./ProductCreateTypeModal";
 import { ProductEditorModal } from "./ProductEditorModal";
@@ -78,6 +79,82 @@ const summary = {
     salesCount: 47
   }
 } satisfies ProductSummaryResponse;
+
+const constructorCopy = {
+  title: "Конструктор продукта",
+  closeLabel: "Закрыть конструктор продукта",
+  typeLabel: "Тип",
+  titleLabel: "Название",
+  titlePlaceholder: "Например, Натальный разбор",
+  subtitleLabel: "Описание",
+  subtitlePlaceholder: "Коротко объясните, что получит клиент",
+  priceLabel: "Цена",
+  durationLabel: "Длительность",
+  durationSuffix: " мин",
+  decrementDurationLabel: "Уменьшить длительность",
+  incrementDurationLabel: "Увеличить длительность",
+  formatLabel: "Формат",
+  executionModeLabel: "Сценарий выполнения",
+  paymentModelLabel: "Оплата",
+  packageLabel: "Пакет",
+  packageSessionCountLabel: "Сессий в пакете",
+  packageDiscountLabel: "Скидка пакета",
+  subscriptionLabel: "Подписка",
+  subscriptionPeriodLabel: "Период подписки",
+  trialDaysLabel: "Пробный период",
+  participantModeLabel: "Участники",
+  groupSizeLabel: "Размер группы",
+  requiredClientDataLabel: "Данные клиента",
+  methodsLabel: "Методы",
+  accessGrantsLabel: "Доступы",
+  includedItemsLabel: "Что входит",
+  includedItemTextLabel: "Текст пункта",
+  includedItemPlaceholder: "Что получает клиент",
+  includedItemIconLabel: "Иконка пункта",
+  addIncludedItemLabel: "Добавить пункт",
+  removeIncludedItemLabel: "Удалить пункт",
+  modifiersLabel: "Модификаторы",
+  modifierKindLabel: "Тип модификатора",
+  modifierFixedLabel: "Фиксированная цена",
+  modifierPercentLabel: "Процент",
+  modifierFreeLabel: "Бесплатно",
+  modifierLabelLabel: "Название модификатора",
+  modifierLabelPlaceholder: "Название модификатора",
+  modifierPriceLabel: "Цена модификатора",
+  addModifierLabel: "Добавить модификатор",
+  removeModifierLabel: "Удалить модификатор",
+  previewLabel: "Превью",
+  previewPriceLabel: "Стоимость",
+  previewIncludedItemsLabel: "Включено",
+  cancelLabel: "Отмена",
+  saveDraftLabel: "Сохранить черновик",
+  savingLabel: "Сохраняем",
+  iconLabelByName: {
+    check: "Галочка",
+    sparkle: "Искра",
+    video: "Видео",
+    chat: "Чат",
+    content: "Контент",
+    flow: "Поток",
+    box: "Коробка",
+    wallet: "Кошелек",
+    orbit: "Орбита",
+    reference: "Справочник",
+    verified: "Проверено",
+    refresh: "Обновить"
+  }
+};
+
+const productActions = {
+  editLabel: "Изменить",
+  duplicateLabel: "Дублировать",
+  publishLabel: "Опубликовать",
+  draftLabel: "В черновик",
+  archiveLabel: "В архив",
+  onEdit: vi.fn(),
+  onDuplicate: vi.fn(),
+  onStatusChange: vi.fn()
+};
 
 describe("Products page components", () => {
   it("renders toolbar status filters and create command", () => {
@@ -149,6 +226,7 @@ describe("Products page components", () => {
       products: [product],
       productCopy: productCopyByLocale.ru,
       locale: "ru",
+      actions: productActions,
       isLoading: false,
       isError: false,
       loadingLabel: "Загружаем продукты",
@@ -157,11 +235,13 @@ describe("Products page components", () => {
     });
 
     expect(findElementsByType(results, ProductCard)).toHaveLength(1);
+    expect(findRequiredElementByType(results, ProductCard).props.actions).toBe(productActions);
 
     const loading = ProductsResults({
       products: [],
       productCopy: productCopyByLocale.ru,
       locale: "ru",
+      actions: productActions,
       isLoading: true,
       isError: false,
       loadingLabel: "Загружаем продукты",
@@ -174,6 +254,7 @@ describe("Products page components", () => {
       products: [],
       productCopy: productCopyByLocale.ru,
       locale: "ru",
+      actions: productActions,
       isLoading: false,
       isError: false,
       loadingLabel: "Загружаем продукты",
@@ -187,7 +268,8 @@ describe("Products page components", () => {
     const card = ProductCard({
       product,
       productCopy: productCopyByLocale.ru,
-      locale: "ru"
+      locale: "ru",
+      actions: productActions
     });
 
     expect(findRequiredElementByType(card, Card).props.as).toBe("article");
@@ -198,6 +280,35 @@ describe("Products page components", () => {
     expect(JSON.stringify(card.props.children)).toContain("Полный разбор карты");
     expect(JSON.stringify(card.props.children)).toContain("Продаж");
     expect(JSON.stringify(card.props.children)).toContain("4.9");
+  });
+
+  it("exposes product card actions", () => {
+    const onEdit = vi.fn();
+    const onDuplicate = vi.fn();
+    const onStatusChange = vi.fn();
+    const card = ProductCard({
+      product,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      actions: {
+        editLabel: "Изменить",
+        duplicateLabel: "Дублировать",
+        publishLabel: "Опубликовать",
+        draftLabel: "В черновик",
+        archiveLabel: "В архив",
+        onEdit,
+        onDuplicate,
+        onStatusChange
+      }
+    });
+
+    findRequiredElementByProp(card, "data-product-action-edit").props.onClick();
+    findRequiredElementByProp(card, "data-product-action-duplicate").props.onClick();
+    findRequiredElementByProp(card, "data-product-action-archive").props.onClick();
+
+    expect(onEdit).toHaveBeenCalledWith(product);
+    expect(onDuplicate).toHaveBeenCalledWith(product.id);
+    expect(onStatusChange).toHaveBeenCalledWith(product.id, "archived");
   });
 
   it("renders product type selection modal with all product templates", () => {
@@ -345,6 +456,7 @@ describe("Products page components", () => {
       openTypeSelection: vi.fn(),
       closeTypeSelection: vi.fn(),
       selectType: vi.fn(),
+      editProduct: vi.fn(),
       updateDraft: vi.fn(),
       saveDraft: vi.fn(),
       closeEditor: vi.fn(),
@@ -359,26 +471,10 @@ describe("Products page components", () => {
           closeLabel: "Закрыть выбор типа",
           description: "Тип задаст базовые параметры, которые можно изменить в редакторе."
         },
-        editor: {
-          createTitle: "Новый продукт",
-          closeLabel: "Закрыть редактор продукта",
-          typeLabel: "Тип",
-          titleLabel: "Название",
-          titlePlaceholder: "Например, Натальный разбор",
-          subtitleLabel: "Описание",
-          subtitlePlaceholder: "Коротко объясните, что получит клиент",
-          priceLabel: "Цена",
-          includedItemsLabel: "Что входит",
-          cancelLabel: "Отмена",
-          saveDraftLabel: "Сохранить черновик",
-          savingLabel: "Сохраняем",
-          genericError: "Не удалось сохранить продукт",
-          breadcrumbsAriaLabel: "Путь создания продукта",
-          productsBreadcrumb: "Продукты",
-          createBreadcrumb: "Создать"
-        }
+        editor: constructorCopy
       },
       productCopy: productCopyByLocale.ru,
+      locale: "ru",
       flow
     });
 
@@ -388,19 +484,17 @@ describe("Products page components", () => {
     expect(flow.selectType).toHaveBeenCalledWith("single");
     expect(flow.closeTypeSelection).toHaveBeenCalledOnce();
 
-    const editorModal = findRequiredElementByType(flowView, ProductEditorModal);
-    expect(editorModal.props.draft).toBe(draft);
-    expect(editorModal.props.productType).toBe(productCopyByLocale.ru.types.single);
-    editorModal.props.onDraftChange(draft);
-    editorModal.props.onSave();
-    editorModal.props.onClose();
-    editorModal.props.onBackToTypeSelection();
-    editorModal.props.onCloseCreateFlow();
+    const constructorModal = findRequiredElementByType(flowView, ProductConstructorModal);
+    expect(constructorModal.props.copy).toBe(constructorCopy);
+    expect(constructorModal.props.productCopy).toBe(productCopyByLocale.ru);
+    expect(constructorModal.props.locale).toBe("ru");
+    expect(constructorModal.props.draft).toBe(draft);
+    constructorModal.props.onDraftChange(draft);
+    constructorModal.props.onSave();
+    constructorModal.props.onClose();
     expect(flow.updateDraft).toHaveBeenCalledWith(draft);
     expect(flow.saveDraft).toHaveBeenCalledOnce();
     expect(flow.closeEditor).toHaveBeenCalledOnce();
-    expect(flow.returnToTypeSelection).toHaveBeenCalledOnce();
-    expect(flow.closeCreateFlow).toHaveBeenCalledOnce();
   });
 });
 
@@ -410,6 +504,7 @@ type TestElementProps = {
   children?: ReactNode;
   closeLabel?: string;
   className?: string;
+  copy?: unknown;
   disabled?: boolean;
   ariaLabel?: string;
   items?: Array<{ label: ReactNode; isCurrent?: boolean }>;
@@ -432,7 +527,13 @@ type TestElementProps = {
   "data-product-editor-subtitle"?: string;
   "data-product-editor-title"?: string;
   "data-product-editor-type-label"?: string;
+  "data-product-action-archive"?: string;
+  "data-product-action-duplicate"?: string;
+  "data-product-action-edit"?: string;
+  actions?: unknown;
   draft?: unknown;
+  locale?: string;
+  productCopy?: unknown;
   onClose: () => void;
   onBackToTypeSelection: () => void;
   onCloseCreateFlow: () => void;

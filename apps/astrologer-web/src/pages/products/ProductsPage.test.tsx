@@ -1,7 +1,12 @@
 import { Children, isValidElement, type ReactElement } from "react";
-import type { CreateProductRequest, ListProductsResponse, ProductSummaryResponse } from "@elevenhouse/contracts";
+import type {
+  CreateProductRequest,
+  ListProductsResponse,
+  ProductStatus,
+  ProductSummaryResponse
+} from "@elevenhouse/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ProductEditorModalProps } from "./components/ProductEditorModal";
+import type { ProductConstructorModalProps } from "./components/ProductConstructorModal";
 import { ProductsPage } from "./ProductsPage";
 import type { ProductsPageViewProps } from "./ProductsPageView";
 
@@ -12,12 +17,17 @@ const mocks = vi.hoisted(() => ({
   },
   productsPageView: vi.fn(),
   productCreateTypeModal: vi.fn(),
-  productEditorModal: vi.fn(),
+  productConstructorModal: vi.fn(),
   useI18n: vi.fn(),
   useDocumentTitle: vi.fn(),
   useProductListQuery: vi.fn(),
   useProductSummaryQuery: vi.fn(),
-  useCreateProductMutation: vi.fn()
+  useCreateProductMutation: vi.fn(),
+  useUpdateProductMutation: vi.fn(),
+  usePublishProductMutation: vi.fn(),
+  useMoveProductToDraftMutation: vi.fn(),
+  useArchiveProductMutation: vi.fn(),
+  useDuplicateProductMutation: vi.fn()
 }));
 
 vi.mock("react", async () => {
@@ -84,6 +94,26 @@ vi.mock("../../features/products/model/useCreateProductMutation", () => ({
   useCreateProductMutation: mocks.useCreateProductMutation
 }));
 
+vi.mock("../../features/products/model/useUpdateProductMutation", () => ({
+  useUpdateProductMutation: mocks.useUpdateProductMutation
+}));
+
+vi.mock("../../features/products/model/usePublishProductMutation", () => ({
+  usePublishProductMutation: mocks.usePublishProductMutation
+}));
+
+vi.mock("../../features/products/model/useMoveProductToDraftMutation", () => ({
+  useMoveProductToDraftMutation: mocks.useMoveProductToDraftMutation
+}));
+
+vi.mock("../../features/products/model/useArchiveProductMutation", () => ({
+  useArchiveProductMutation: mocks.useArchiveProductMutation
+}));
+
+vi.mock("../../features/products/model/useDuplicateProductMutation", () => ({
+  useDuplicateProductMutation: mocks.useDuplicateProductMutation
+}));
+
 vi.mock("./ProductsPageView", () => ({
   ProductsPageView: mocks.productsPageView
 }));
@@ -92,8 +122,8 @@ vi.mock("./components/ProductCreateTypeModal", () => ({
   ProductCreateTypeModal: mocks.productCreateTypeModal
 }));
 
-vi.mock("./components/ProductEditorModal", () => ({
-  ProductEditorModal: mocks.productEditorModal
+vi.mock("./components/ProductConstructorModal", () => ({
+  ProductConstructorModal: mocks.productConstructorModal
 }));
 
 const productsCopy = {
@@ -107,22 +137,75 @@ const productsCopy = {
     description: "Тип задаст базовые параметры, которые можно изменить в редакторе."
   },
   editor: {
-    createTitle: "Новый продукт",
-    closeLabel: "Закрыть редактор продукта",
+    title: "Конструктор продукта",
+    closeLabel: "Закрыть конструктор продукта",
     typeLabel: "Тип",
     titleLabel: "Название",
     titlePlaceholder: "Например, Натальный разбор",
     subtitleLabel: "Описание",
     subtitlePlaceholder: "Коротко объясните, что получит клиент",
     priceLabel: "Цена",
+    durationLabel: "Длительность",
+    durationSuffix: " мин",
+    decrementDurationLabel: "Уменьшить длительность",
+    incrementDurationLabel: "Увеличить длительность",
+    formatLabel: "Формат",
+    executionModeLabel: "Сценарий выполнения",
+    paymentModelLabel: "Оплата",
+    packageLabel: "Пакет",
+    packageSessionCountLabel: "Сессий в пакете",
+    packageDiscountLabel: "Скидка пакета",
+    subscriptionLabel: "Подписка",
+    subscriptionPeriodLabel: "Период подписки",
+    trialDaysLabel: "Пробный период",
+    participantModeLabel: "Участники",
+    groupSizeLabel: "Размер группы",
+    requiredClientDataLabel: "Данные клиента",
+    methodsLabel: "Методы",
+    accessGrantsLabel: "Доступы",
     includedItemsLabel: "Что входит",
+    includedItemTextLabel: "Текст пункта",
+    includedItemPlaceholder: "Что получает клиент",
+    includedItemIconLabel: "Иконка пункта",
+    addIncludedItemLabel: "Добавить пункт",
+    removeIncludedItemLabel: "Удалить пункт",
+    modifiersLabel: "Модификаторы",
+    modifierKindLabel: "Тип модификатора",
+    modifierFixedLabel: "Фиксированная цена",
+    modifierPercentLabel: "Процент",
+    modifierFreeLabel: "Бесплатно",
+    modifierLabelLabel: "Название модификатора",
+    modifierLabelPlaceholder: "Название модификатора",
+    modifierPriceLabel: "Цена модификатора",
+    addModifierLabel: "Добавить модификатор",
+    removeModifierLabel: "Удалить модификатор",
+    previewLabel: "Превью",
+    previewPriceLabel: "Стоимость",
+    previewIncludedItemsLabel: "Включено",
     cancelLabel: "Отмена",
     saveDraftLabel: "Сохранить черновик",
     savingLabel: "Сохраняем",
-    genericError: "Не удалось сохранить продукт",
-    breadcrumbsAriaLabel: "Путь создания продукта",
-    productsBreadcrumb: "Продукты",
-    createBreadcrumb: "Создать"
+    iconLabelByName: {
+      check: "Галочка",
+      sparkle: "Искра",
+      video: "Видео",
+      chat: "Чат",
+      content: "Контент",
+      flow: "Поток",
+      box: "Коробка",
+      wallet: "Кошелек",
+      orbit: "Орбита",
+      reference: "Справочник",
+      verified: "Проверено",
+      refresh: "Обновить"
+    }
+  },
+  actions: {
+    editLabel: "Изменить",
+    duplicateLabel: "Дублировать",
+    publishLabel: "Опубликовать",
+    draftLabel: "В черновик",
+    archiveLabel: "В архив"
   },
   summary: {
     activeLabel: "Активных",
@@ -131,6 +214,7 @@ const productsCopy = {
     bestsellerLabel: "Бестселлер",
     emptyBestseller: "—"
   },
+  saveErrorLabel: "Не удалось сохранить продукт",
   emptyLabel: "Нет продуктов в этом статусе",
   loadingLabel: "Загружаем продукты",
   errorLabel: "Не удалось загрузить продукты"
@@ -215,8 +299,28 @@ describe("ProductsPage", () => {
     mocks.hookState.values = [];
     mocks.productsPageView.mockImplementation(() => null);
     mocks.productCreateTypeModal.mockImplementation(() => null);
-    mocks.productEditorModal.mockImplementation(() => null);
+    mocks.productConstructorModal.mockImplementation(() => null);
     mocks.useCreateProductMutation.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false
+    });
+    mocks.useUpdateProductMutation.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false
+    });
+    mocks.usePublishProductMutation.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false
+    });
+    mocks.useMoveProductToDraftMutation.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false
+    });
+    mocks.useArchiveProductMutation.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false
+    });
+    mocks.useDuplicateProductMutation.mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false
     });
@@ -258,6 +362,9 @@ describe("ProductsPage", () => {
     expect(viewProps.summary).toBe(summaryResponse);
     expect(viewProps.isLoading).toBe(false);
     expect(viewProps.isError).toBe(false);
+    expect(typeof viewProps.onEditProduct).toBe("function");
+    expect(typeof viewProps.onDuplicateProduct).toBe("function");
+    expect(typeof viewProps.onProductStatusChange).toBe("function");
   });
 
   it("changes the status filter and reloads products with that query", () => {
@@ -315,13 +422,16 @@ describe("ProductsPage", () => {
     typeModalProps.onSelect("single");
     renderPage();
 
-    const editorProps = getLatestMockProps<ProductEditorModalProps>(mocks.productEditorModal);
-    expect(editorProps.copy).toBe(productsCopy.editor);
-    expect(editorProps.draft.type).toBe("single");
-    expect(editorProps.draft.priceMinor).toBe(490000);
+    const constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    expect(constructorProps.copy).toBe(productsCopy.editor);
+    expect(constructorProps.locale).toBe("ru");
+    expect(constructorProps.draft.type).toBe("single");
+    expect(constructorProps.draft.priceMinor).toBe(490000);
   });
 
-  it("returns from the editor to type selection and closes the full create flow", () => {
+  it("closes the constructor without changing the selected type flow", () => {
     renderPage();
     getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onCreate();
     renderPage();
@@ -330,26 +440,18 @@ describe("ProductsPage", () => {
     );
     renderPage();
 
-    let editorProps = getLatestMockProps<ProductEditorModalProps>(mocks.productEditorModal);
-    editorProps.onBackToTypeSelection();
-    renderPage();
-
-    const typeSelectionProps = getLatestMockProps<{ onSelect: (type: "single") => void }>(
-      mocks.productCreateTypeModal
+    const constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
     );
-    typeSelectionProps.onSelect("single");
-    renderPage();
+    expect(constructorProps.draft.type).toBe("custom");
 
-    editorProps = getLatestMockProps<ProductEditorModalProps>(mocks.productEditorModal);
-    expect(editorProps.draft.type).toBe("single");
-
-    editorProps.onCloseCreateFlow();
+    constructorProps.onClose();
     const typeModalCallCountBeforeCloseRender = mocks.productCreateTypeModal.mock.calls.length;
-    const editorCallCountBeforeCloseRender = mocks.productEditorModal.mock.calls.length;
+    const constructorCallCountBeforeCloseRender = mocks.productConstructorModal.mock.calls.length;
     renderPage();
 
     expect(mocks.productCreateTypeModal).toHaveBeenCalledTimes(typeModalCallCountBeforeCloseRender);
-    expect(mocks.productEditorModal).toHaveBeenCalledTimes(editorCallCountBeforeCloseRender);
+    expect(mocks.productConstructorModal).toHaveBeenCalledTimes(constructorCallCountBeforeCloseRender);
   });
 
   it("saves a created draft through the products mutation and closes the editor", async () => {
@@ -367,16 +469,18 @@ describe("ProductsPage", () => {
     );
     renderPage();
 
-    let editorProps = getLatestMockProps<ProductEditorModalProps>(mocks.productEditorModal);
-    editorProps.onDraftChange({
-      ...editorProps.draft,
+    let constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    constructorProps.onDraftChange({
+      ...constructorProps.draft,
       title: "Натальный разбор",
       subtitle: "60 минут онлайн",
       priceMinor: 490000
     });
     renderPage();
-    editorProps = getLatestMockProps<ProductEditorModalProps>(mocks.productEditorModal);
-    await editorProps.onSave();
+    constructorProps = getLatestMockProps<ProductConstructorModalProps>(mocks.productConstructorModal);
+    await constructorProps.onSave();
 
     expect(mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -386,9 +490,77 @@ describe("ProductsPage", () => {
       }) satisfies Partial<CreateProductRequest>
     );
 
-    const editorCallCountBeforeCloseRender = mocks.productEditorModal.mock.calls.length;
+    const constructorCallCountBeforeCloseRender = mocks.productConstructorModal.mock.calls.length;
     renderPage();
-    expect(mocks.productEditorModal).toHaveBeenCalledTimes(editorCallCountBeforeCloseRender);
+    expect(mocks.productConstructorModal).toHaveBeenCalledTimes(constructorCallCountBeforeCloseRender);
+  });
+
+  it("opens an existing product in the constructor and saves it through the update mutation", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue(product);
+    mocks.useUpdateProductMutation.mockReturnValue({
+      mutateAsync,
+      isPending: false
+    });
+
+    renderPage();
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onEditProduct!(product);
+    renderPage();
+
+    let constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    expect(constructorProps.draft.title).toBe("Натальный разбор");
+    constructorProps.onDraftChange({
+      ...constructorProps.draft,
+      title: "Обновленный натальный разбор"
+    });
+    renderPage();
+
+    constructorProps = getLatestMockProps<ProductConstructorModalProps>(mocks.productConstructorModal);
+    await constructorProps.onSave();
+
+    expect(mutateAsync).toHaveBeenCalledWith({
+      productId: product.id,
+      body: expect.objectContaining({
+        title: "Обновленный натальный разбор"
+      })
+    });
+  });
+
+  it.each([
+    ["active", "usePublishProductMutation"],
+    ["draft", "useMoveProductToDraftMutation"],
+    ["archived", "useArchiveProductMutation"]
+  ] satisfies Array<[ProductStatus, keyof typeof mocks]>)(
+    "routes %s status actions to the matching mutation",
+    (status, mutationHookName) => {
+      const mutateAsync = vi.fn().mockResolvedValue(product);
+      mocks[mutationHookName].mockReturnValue({
+        mutateAsync,
+        isPending: false
+      });
+
+      renderPage();
+      getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onProductStatusChange!(
+        product.id,
+        status
+      );
+
+      expect(mutateAsync).toHaveBeenCalledWith(product.id);
+    }
+  );
+
+  it("duplicates products through the duplicate mutation", () => {
+    const mutateAsync = vi.fn().mockResolvedValue(product);
+    mocks.useDuplicateProductMutation.mockReturnValue({
+      mutateAsync,
+      isPending: false
+    });
+
+    renderPage();
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onDuplicateProduct!(product.id);
+
+    expect(mutateAsync).toHaveBeenCalledWith(product.id);
   });
 });
 

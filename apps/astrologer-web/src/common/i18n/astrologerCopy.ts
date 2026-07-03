@@ -66,7 +66,7 @@ export type AstrologerCopy = {
       description: string;
     };
     editor: {
-      createTitle: string;
+      title: string;
       closeLabel: string;
       typeLabel: string;
       titleLabel: string;
@@ -74,14 +74,54 @@ export type AstrologerCopy = {
       subtitleLabel: string;
       subtitlePlaceholder: string;
       priceLabel: string;
+      durationLabel: string;
+      durationSuffix: string;
+      decrementDurationLabel: string;
+      incrementDurationLabel: string;
+      formatLabel: string;
+      executionModeLabel: string;
+      paymentModelLabel: string;
+      packageLabel: string;
+      packageSessionCountLabel: string;
+      packageDiscountLabel: string;
+      subscriptionLabel: string;
+      subscriptionPeriodLabel: string;
+      trialDaysLabel: string;
+      participantModeLabel: string;
+      groupSizeLabel: string;
+      requiredClientDataLabel: string;
+      methodsLabel: string;
+      accessGrantsLabel: string;
       includedItemsLabel: string;
+      includedItemTextLabel: string;
+      includedItemPlaceholder: string;
+      includedItemIconLabel: string;
+      addIncludedItemLabel: string;
+      removeIncludedItemLabel: string;
+      modifiersLabel: string;
+      modifierKindLabel: string;
+      modifierFixedLabel: string;
+      modifierPercentLabel: string;
+      modifierFreeLabel: string;
+      modifierLabelLabel: string;
+      modifierLabelPlaceholder: string;
+      modifierPriceLabel: string;
+      addModifierLabel: string;
+      removeModifierLabel: string;
+      previewLabel: string;
+      previewPriceLabel: string;
+      previewIncludedItemsLabel: string;
       cancelLabel: string;
       saveDraftLabel: string;
       savingLabel: string;
-      genericError: string;
-      breadcrumbsAriaLabel: string;
-      productsBreadcrumb: string;
-      createBreadcrumb: string;
+      iconLabelByName: Record<string, string>;
+    };
+    actions: {
+      editLabel: string;
+      duplicateLabel: string;
+      publishLabel: string;
+      draftLabel: string;
+      archiveLabel: string;
     };
     summary: {
       activeLabel: string;
@@ -90,6 +130,7 @@ export type AstrologerCopy = {
       bestsellerLabel: string;
       emptyBestseller: string;
     };
+    saveErrorLabel: string;
     emptyLabel: string;
     loadingLabel: string;
     errorLabel: string;
@@ -355,22 +396,75 @@ export const astrologerCopyByLocale = {
         description: "Выберите тип — дальше откроется конструктор с нужными полями."
       },
       editor: {
-        createTitle: "Новый продукт",
-        closeLabel: "Закрыть редактор продукта",
+        title: "Конструктор продукта",
+        closeLabel: "Закрыть конструктор продукта",
         typeLabel: "Тип",
         titleLabel: "Название",
         titlePlaceholder: "Например, Натальный разбор",
         subtitleLabel: "Описание",
         subtitlePlaceholder: "Коротко объясните, что получит клиент",
         priceLabel: "Цена",
+        durationLabel: "Длительность",
+        durationSuffix: " мин",
+        decrementDurationLabel: "Уменьшить длительность",
+        incrementDurationLabel: "Увеличить длительность",
+        formatLabel: "Формат",
+        executionModeLabel: "Сценарий выполнения",
+        paymentModelLabel: "Оплата",
+        packageLabel: "Пакет",
+        packageSessionCountLabel: "Сессий в пакете",
+        packageDiscountLabel: "Скидка пакета",
+        subscriptionLabel: "Подписка",
+        subscriptionPeriodLabel: "Период подписки",
+        trialDaysLabel: "Пробный период",
+        participantModeLabel: "Участники",
+        groupSizeLabel: "Размер группы",
+        requiredClientDataLabel: "Данные клиента",
+        methodsLabel: "Методы",
+        accessGrantsLabel: "Доступы",
         includedItemsLabel: "Что входит",
+        includedItemTextLabel: "Текст пункта",
+        includedItemPlaceholder: "Что получает клиент",
+        includedItemIconLabel: "Иконка пункта",
+        addIncludedItemLabel: "Добавить пункт",
+        removeIncludedItemLabel: "Удалить пункт",
+        modifiersLabel: "Модификаторы",
+        modifierKindLabel: "Тип модификатора",
+        modifierFixedLabel: "Фиксированная цена",
+        modifierPercentLabel: "Процент",
+        modifierFreeLabel: "Бесплатно",
+        modifierLabelLabel: "Название модификатора",
+        modifierLabelPlaceholder: "Название модификатора",
+        modifierPriceLabel: "Цена модификатора",
+        addModifierLabel: "Добавить модификатор",
+        removeModifierLabel: "Удалить модификатор",
+        previewLabel: "Превью",
+        previewPriceLabel: "Стоимость",
+        previewIncludedItemsLabel: "Включено",
         cancelLabel: "Отмена",
         saveDraftLabel: "Сохранить черновик",
         savingLabel: "Сохраняем",
-        genericError: "Не удалось сохранить продукт",
-        breadcrumbsAriaLabel: "Путь создания продукта",
-        productsBreadcrumb: "Продукты",
-        createBreadcrumb: "Создать"
+        iconLabelByName: {
+          check: "Галочка",
+          sparkle: "Искра",
+          video: "Видео",
+          chat: "Чат",
+          content: "Контент",
+          flow: "Поток",
+          box: "Коробка",
+          wallet: "Кошелек",
+          orbit: "Орбита",
+          reference: "Справочник",
+          verified: "Проверено",
+          refresh: "Обновить"
+        }
+      },
+      actions: {
+        editLabel: "Изменить",
+        duplicateLabel: "Дублировать",
+        publishLabel: "Опубликовать",
+        draftLabel: "В черновик",
+        archiveLabel: "В архив"
       },
       summary: {
         activeLabel: "Активных",
@@ -379,6 +473,7 @@ export const astrologerCopyByLocale = {
         bestsellerLabel: "Бестселлер",
         emptyBestseller: "—"
       },
+      saveErrorLabel: "Не удалось сохранить продукт",
       emptyLabel: "Нет продуктов в этом статусе",
       loadingLabel: "Загружаем продукты",
       errorLabel: "Не удалось загрузить продукты"
@@ -585,22 +680,75 @@ export const astrologerCopyByLocale = {
         description: "The type sets starter defaults that can be adjusted in the editor."
       },
       editor: {
-        createTitle: "New product",
-        closeLabel: "Close product editor",
+        title: "Product constructor",
+        closeLabel: "Close product constructor",
         typeLabel: "Type",
         titleLabel: "Title",
         titlePlaceholder: "E.g. Natal reading",
         subtitleLabel: "Description",
         subtitlePlaceholder: "Briefly explain what the client receives",
         priceLabel: "Price",
+        durationLabel: "Duration",
+        durationSuffix: " min",
+        decrementDurationLabel: "Decrease duration",
+        incrementDurationLabel: "Increase duration",
+        formatLabel: "Format",
+        executionModeLabel: "Delivery scenario",
+        paymentModelLabel: "Payment",
+        packageLabel: "Package",
+        packageSessionCountLabel: "Sessions in package",
+        packageDiscountLabel: "Package discount",
+        subscriptionLabel: "Subscription",
+        subscriptionPeriodLabel: "Subscription period",
+        trialDaysLabel: "Trial period",
+        participantModeLabel: "Participants",
+        groupSizeLabel: "Group size",
+        requiredClientDataLabel: "Client data",
+        methodsLabel: "Methods",
+        accessGrantsLabel: "Access",
         includedItemsLabel: "Included",
+        includedItemTextLabel: "Item text",
+        includedItemPlaceholder: "What the client receives",
+        includedItemIconLabel: "Item icon",
+        addIncludedItemLabel: "Add item",
+        removeIncludedItemLabel: "Remove item",
+        modifiersLabel: "Modifiers",
+        modifierKindLabel: "Modifier type",
+        modifierFixedLabel: "Fixed price",
+        modifierPercentLabel: "Percent",
+        modifierFreeLabel: "Free",
+        modifierLabelLabel: "Modifier name",
+        modifierLabelPlaceholder: "Modifier name",
+        modifierPriceLabel: "Modifier price",
+        addModifierLabel: "Add modifier",
+        removeModifierLabel: "Remove modifier",
+        previewLabel: "Preview",
+        previewPriceLabel: "Price",
+        previewIncludedItemsLabel: "Included",
         cancelLabel: "Cancel",
         saveDraftLabel: "Save draft",
         savingLabel: "Saving",
-        genericError: "Could not save the product",
-        breadcrumbsAriaLabel: "Product creation path",
-        productsBreadcrumb: "Products",
-        createBreadcrumb: "Create"
+        iconLabelByName: {
+          check: "Check",
+          sparkle: "Sparkle",
+          video: "Video",
+          chat: "Chat",
+          content: "Content",
+          flow: "Flow",
+          box: "Box",
+          wallet: "Wallet",
+          orbit: "Orbit",
+          reference: "Reference",
+          verified: "Verified",
+          refresh: "Refresh"
+        }
+      },
+      actions: {
+        editLabel: "Edit",
+        duplicateLabel: "Duplicate",
+        publishLabel: "Publish",
+        draftLabel: "Move to draft",
+        archiveLabel: "Archive"
       },
       summary: {
         activeLabel: "Active",
@@ -609,6 +757,7 @@ export const astrologerCopyByLocale = {
         bestsellerLabel: "Bestseller",
         emptyBestseller: "—"
       },
+      saveErrorLabel: "Could not save the product",
       emptyLabel: "No products in this status",
       loadingLabel: "Loading products",
       errorLabel: "Could not load products"

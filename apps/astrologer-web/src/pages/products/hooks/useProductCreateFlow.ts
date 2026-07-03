@@ -1,15 +1,19 @@
 import { useReducer } from "react";
-import type { ProductType } from "@elevenhouse/contracts";
+import type { ProductResponse, ProductType } from "@elevenhouse/contracts";
 import {
   createDefaultProductDraft,
+  createProductDraftFromResponse,
   toCreateProductRequest,
+  toUpdateProductRequest,
   type ProductFormDraft
 } from "../../../features/products/model/productDraft";
 import { useCreateProductMutation } from "../../../features/products/model/useCreateProductMutation";
+import { useUpdateProductMutation } from "../../../features/products/model/useUpdateProductMutation";
 
 type ProductCreateFlowState = {
   readonly isTypeModalOpen: boolean;
   readonly editorDraft: ProductFormDraft | null;
+  readonly editingProductId: string | null;
   readonly editorError: string | null;
 };
 
@@ -17,6 +21,7 @@ type ProductCreateFlowAction =
   | { readonly type: "openTypeSelection" }
   | { readonly type: "closeTypeSelection" }
   | { readonly type: "selectType"; readonly productType: ProductType }
+  | { readonly type: "editProduct"; readonly product: ProductResponse }
   | { readonly type: "updateDraft"; readonly draft: ProductFormDraft }
   | { readonly type: "saveStarted" }
   | { readonly type: "saveSucceeded" }
@@ -28,6 +33,7 @@ type ProductCreateFlowAction =
 const initialProductCreateFlowState: ProductCreateFlowState = {
   isTypeModalOpen: false,
   editorDraft: null,
+  editingProductId: null,
   editorError: null
 };
 
@@ -39,6 +45,7 @@ export type ProductCreateFlow = {
   readonly openTypeSelection: () => void;
   readonly closeTypeSelection: () => void;
   readonly selectType: (type: ProductType) => void;
+  readonly editProduct: (product: ProductResponse) => void;
   readonly updateDraft: (draft: ProductFormDraft) => void;
   readonly saveDraft: () => Promise<void>;
   readonly closeEditor: () => void;
@@ -52,40 +59,50 @@ export function useProductCreateFlow(genericError: string): ProductCreateFlow {
     initialProductCreateFlowState
   );
   const createProductMutation = useCreateProductMutation();
+  const updateProductMutation = useUpdateProductMutation();
+  const isSaving = createProductMutation.isPending || updateProductMutation.isPending;
 
   return {
     ...state,
-    isSaving: createProductMutation.isPending,
+    isSaving,
     openTypeSelection: () => dispatch({ type: "openTypeSelection" }),
     closeTypeSelection: () => dispatch({ type: "closeTypeSelection" }),
     selectType: (type) => dispatch({ type: "selectType", productType: type }),
+    editProduct: (product) => dispatch({ type: "editProduct", product }),
     updateDraft: (draft) => dispatch({ type: "updateDraft", draft }),
     saveDraft: async () => {
-      if (createProductMutation.isPending || !state.editorDraft?.title.trim()) {
+      if (isSaving || !state.editorDraft?.title.trim()) {
         return;
       }
 
       dispatch({ type: "saveStarted" });
 
       try {
-        await createProductMutation.mutateAsync(toCreateProductRequest(state.editorDraft));
+        if (state.editingProductId) {
+          await updateProductMutation.mutateAsync({
+            productId: state.editingProductId,
+            body: toUpdateProductRequest(state.editorDraft)
+          });
+        } else {
+          await createProductMutation.mutateAsync(toCreateProductRequest(state.editorDraft));
+        }
         dispatch({ type: "saveSucceeded" });
       } catch {
         dispatch({ type: "saveFailed", error: genericError });
       }
     },
     closeEditor: () => {
-      if (!createProductMutation.isPending) {
+      if (!isSaving) {
         dispatch({ type: "closeEditor" });
       }
     },
     returnToTypeSelection: () => {
-      if (!createProductMutation.isPending) {
+      if (!isSaving) {
         dispatch({ type: "returnToTypeSelection" });
       }
     },
     closeCreateFlow: () => {
-      if (!createProductMutation.isPending) {
+      if (!isSaving) {
         dispatch({ type: "closeCreateFlow" });
       }
     }
@@ -100,6 +117,7 @@ function productCreateFlowReducer(
     return {
       ...state,
       isTypeModalOpen: true,
+      editingProductId: null,
       editorError: null
     };
   }
@@ -115,6 +133,16 @@ function productCreateFlowReducer(
     return {
       isTypeModalOpen: false,
       editorDraft: createDefaultProductDraft(action.productType),
+      editingProductId: null,
+      editorError: null
+    };
+  }
+
+  if (action.type === "editProduct") {
+    return {
+      isTypeModalOpen: false,
+      editorDraft: createProductDraftFromResponse(action.product),
+      editingProductId: action.product.id,
       editorError: null
     };
   }
@@ -138,6 +166,7 @@ function productCreateFlowReducer(
     return {
       ...state,
       editorDraft: null,
+      editingProductId: null,
       editorError: null
     };
   }
@@ -153,6 +182,7 @@ function productCreateFlowReducer(
     return {
       isTypeModalOpen: true,
       editorDraft: null,
+      editingProductId: null,
       editorError: null
     };
   }
@@ -164,6 +194,7 @@ function productCreateFlowReducer(
   return {
     ...state,
     editorDraft: null,
+    editingProductId: null,
     editorError: null
   };
 }

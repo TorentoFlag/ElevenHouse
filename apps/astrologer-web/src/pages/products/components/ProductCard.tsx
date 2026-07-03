@@ -10,9 +10,21 @@ export type ProductCardProps = {
   readonly product: ProductResponse;
   readonly productCopy: ProductCopy;
   readonly locale: ProductLocale;
+  readonly actions: ProductCardActions;
 };
 
-export function ProductCard({ product, productCopy, locale }: ProductCardProps) {
+export type ProductCardActions = {
+  readonly editLabel: string;
+  readonly duplicateLabel: string;
+  readonly publishLabel: string;
+  readonly draftLabel: string;
+  readonly archiveLabel: string;
+  readonly onEdit: (product: ProductResponse) => void;
+  readonly onDuplicate: (productId: string) => void;
+  readonly onStatusChange: (productId: string, status: ProductResponse["status"]) => void;
+};
+
+export function ProductCard({ product, productCopy, locale, actions }: ProductCardProps) {
   const summary = createProductCardSummary(product, productCopy, locale);
 
   return (
@@ -53,6 +65,34 @@ export function ProductCard({ product, productCopy, locale }: ProductCardProps) 
         </span>
         <span className={styles.revenue}>{summary.revenueLabel}</span>
         {summary.ratingLabel ? <span className={styles.rating}>{summary.ratingLabel}</span> : null}
+        <span className={styles.productFooterSpacer} />
+        <button
+          type="button"
+          className={styles.productActionButton}
+          data-product-action-edit="true"
+          aria-label={actions.editLabel}
+          onClick={() => actions.onEdit(product)}
+        >
+          {actions.editLabel}
+        </button>
+        <button
+          type="button"
+          className={styles.productActionButton}
+          data-product-action-duplicate="true"
+          aria-label={actions.duplicateLabel}
+          onClick={() => actions.onDuplicate(product.id)}
+        >
+          {actions.duplicateLabel}
+        </button>
+        <button
+          type="button"
+          className={styles.productActionButton}
+          data-product-action-archive="true"
+          aria-label={actions.archiveLabel}
+          onClick={() => actions.onStatusChange(product.id, "archived")}
+        >
+          {actions.archiveLabel}
+        </button>
       </div>
     </Card>
   );

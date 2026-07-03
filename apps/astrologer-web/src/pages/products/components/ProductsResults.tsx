@@ -1,12 +1,13 @@
 import type { ListProductsResponse } from "@elevenhouse/contracts";
 import type { ProductCopy, ProductLocale } from "../../../features/products/model/productCopy";
-import { ProductCard } from "./ProductCard";
+import { ProductCard, type ProductCardActions } from "./ProductCard";
 import styles from "../ProductsPage.module.css";
 
 export type ProductsResultsProps = {
   readonly products: ListProductsResponse["products"];
   readonly productCopy: ProductCopy;
   readonly locale: ProductLocale;
+  readonly actions: ProductCardActions;
   readonly isLoading: boolean;
   readonly isError: boolean;
   readonly loadingLabel: string;
@@ -18,6 +19,7 @@ export function ProductsResults({
   products,
   productCopy,
   locale,
+  actions,
   isLoading,
   isError,
   loadingLabel,
@@ -39,6 +41,7 @@ export function ProductsResults({
               product={product}
               productCopy={productCopy}
               locale={locale}
+              actions={actions}
             />
           ))}
         </div>
