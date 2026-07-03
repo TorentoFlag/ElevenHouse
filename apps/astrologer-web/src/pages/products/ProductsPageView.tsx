@@ -17,18 +17,10 @@ type ProductsPageCopy = {
   readonly createLabel: string;
   readonly statusFilterAriaLabel: string;
   readonly summary: AstrologerCopy["products"]["summary"];
-  readonly actions?: AstrologerCopy["products"]["actions"];
+  readonly actions: AstrologerCopy["products"]["actions"];
   readonly emptyLabel: string;
   readonly loadingLabel: string;
   readonly errorLabel: string;
-};
-
-const defaultProductActionsCopy: AstrologerCopy["products"]["actions"] = {
-  editLabel: "Edit",
-  duplicateLabel: "Duplicate",
-  publishLabel: "Publish",
-  draftLabel: "Move to draft",
-  archiveLabel: "Archive"
 };
 
 export type ProductsPageViewProps = {
@@ -42,9 +34,9 @@ export type ProductsPageViewProps = {
   readonly isError: boolean;
   readonly onStatusChange: (status: ProductStatusFilter) => void;
   readonly onCreate: () => void;
-  readonly onEditProduct?: (product: ProductResponse) => void;
-  readonly onDuplicateProduct?: (productId: string) => void;
-  readonly onProductStatusChange?: (productId: string, status: ProductResponse["status"]) => void;
+  readonly onEditProduct: (product: ProductResponse) => void;
+  readonly onDuplicateProduct: (productId: string) => void;
+  readonly onProductStatusChange: (productId: string, status: ProductResponse["status"]) => void;
 };
 
 export function ProductsPageView({
@@ -58,12 +50,11 @@ export function ProductsPageView({
   isError,
   onStatusChange,
   onCreate,
-  onEditProduct = () => undefined,
-  onDuplicateProduct = () => undefined,
-  onProductStatusChange = () => undefined
+  onEditProduct,
+  onDuplicateProduct,
+  onProductStatusChange
 }: ProductsPageViewProps) {
   const productCopy = productCopyByLocale[locale];
-  const actionsCopy = copy.actions ?? defaultProductActionsCopy;
 
   return (
     <section className={styles.productsPage} aria-labelledby="products-title">
@@ -85,7 +76,7 @@ export function ProductsPageView({
           productCopy={productCopy}
           locale={locale}
           actions={{
-            ...actionsCopy,
+            ...copy.actions,
             onEdit: onEditProduct,
             onDuplicate: onDuplicateProduct,
             onStatusChange: onProductStatusChange

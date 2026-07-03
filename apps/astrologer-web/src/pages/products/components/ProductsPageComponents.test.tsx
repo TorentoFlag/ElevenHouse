@@ -4,7 +4,6 @@ import { Button } from "@elevenhouse/design-system/components/Button";
 import { Card } from "@elevenhouse/design-system/components/Card";
 import { Chip } from "@elevenhouse/design-system/components/Chip";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
-import { Breadcrumbs } from "@elevenhouse/design-system/navigation";
 import { describe, expect, it, vi } from "vitest";
 import { createDefaultProductDraft } from "../../../features/products/model/productDraft";
 import { productCopyByLocale } from "../../../features/products/model/productCopy";
@@ -12,7 +11,6 @@ import { ProductCard } from "./ProductCard";
 import { ProductConstructorModal } from "./ProductConstructorModal";
 import { ProductsCreateFlow } from "./ProductsCreateFlow";
 import { ProductCreateTypeModal } from "./ProductCreateTypeModal";
-import { ProductEditorModal } from "./ProductEditorModal";
 import { ProductsResults } from "./ProductsResults";
 import { ProductsSummaryStrip } from "./ProductsSummaryStrip";
 import { ProductsToolbar } from "./ProductsToolbar";
@@ -446,98 +444,6 @@ describe("Products page components", () => {
 
     getArrayItem(typeOptions, 0).props.onClick();
     expect(onSelect).toHaveBeenCalledWith("single");
-  });
-
-  it("renders product editor modal and updates draft fields", async () => {
-    const draft = createDefaultProductDraft("single");
-    const onDraftChange = vi.fn();
-    const onSave = vi.fn().mockResolvedValue(undefined);
-    const onClose = vi.fn();
-    const modal = ProductEditorModal({
-      copy: {
-        createTitle: "Новый продукт",
-        closeLabel: "Закрыть редактор продукта",
-        typeLabel: "Тип",
-        titleLabel: "Название",
-        titlePlaceholder: "Например, Натальный разбор",
-        subtitleLabel: "Описание",
-        subtitlePlaceholder: "Коротко объясните, что получит клиент",
-        priceLabel: "Цена",
-        includedItemsLabel: "Что входит",
-        cancelLabel: "Отмена",
-        saveDraftLabel: "Сохранить черновик",
-        savingLabel: "Сохраняем",
-        genericError: "Не удалось сохранить продукт",
-        breadcrumbsAriaLabel: "Путь создания продукта",
-        productsBreadcrumb: "Продукты",
-        createBreadcrumb: "Создать"
-      },
-      productType: productCopyByLocale.ru.types.single,
-      draft,
-      isSaving: false,
-      error: null,
-      onDraftChange,
-      onSave,
-      onClose,
-      onBackToTypeSelection: vi.fn(),
-      onCloseCreateFlow: vi.fn()
-    });
-
-    expect(findRequiredElementByType(modal, Modal).props.title).toBe("Новый продукт");
-    const breadcrumbs = findRequiredElementByType(modal, Breadcrumbs);
-    const breadcrumbItems = breadcrumbs.props.items ?? [];
-    expect(breadcrumbs.props.ariaLabel).toBe("Путь создания продукта");
-    expect(breadcrumbItems.map((item) => item.label)).toEqual([
-      "Продукты",
-      "Создать",
-      "Разовая консультация"
-    ]);
-    expect(getArrayItem(breadcrumbItems, 2).isCurrent).toBe(true);
-
-    expect(findRequiredElementByProp(modal, "data-product-editor-type-label").props.children).toBe(
-      "Разовая консультация"
-    );
-
-    findRequiredElementByProp(modal, "data-product-editor-title").props.onChange({
-      currentTarget: { value: "Натальный разбор" }
-    });
-    expect(onDraftChange).toHaveBeenCalledWith({
-      ...draft,
-      title: "Натальный разбор"
-    });
-
-    findRequiredElementByProp(modal, "data-product-editor-subtitle").props.onChange({
-      currentTarget: { value: "60 минут онлайн" }
-    });
-    expect(onDraftChange).toHaveBeenCalledWith({
-      ...draft,
-      subtitle: "60 минут онлайн"
-    });
-
-    findRequiredElementByProp(modal, "data-product-editor-price").props.onChange({
-      currentTarget: { value: "6200" }
-    });
-    expect(onDraftChange).toHaveBeenCalledWith({
-      ...draft,
-      priceMinor: 620000
-    });
-
-    findRequiredElementByProp(modal, "data-product-editor-included-item").props.onChange({
-      currentTarget: { value: "Персональные рекомендации" }
-    });
-    expect(onDraftChange).toHaveBeenCalledWith({
-      ...draft,
-      includedItems: [
-        { ...draft.includedItems[0], text: "Персональные рекомендации" },
-        ...draft.includedItems.slice(1)
-      ]
-    });
-
-    const submitResult = findRequiredElementByProp(modal, "data-product-editor-form").props.onSubmit({
-      preventDefault: vi.fn()
-    });
-    expect(submitResult).toBeUndefined();
-    expect(onSave).toHaveBeenCalledOnce();
   });
 
   it("renders create-flow modals from consolidated flow state", () => {

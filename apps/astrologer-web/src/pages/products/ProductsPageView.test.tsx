@@ -42,6 +42,13 @@ const copy = {
     bestsellerLabel: "Бестселлер",
     emptyBestseller: "—"
   },
+  actions: {
+    editLabel: "Изменить",
+    duplicateLabel: "Дублировать",
+    publishLabel: "Опубликовать",
+    draftLabel: "В черновик",
+    archiveLabel: "В архив"
+  },
   emptyLabel: "Нет продуктов в этом статусе",
   loadingLabel: "Загружаем продукты",
   errorLabel: "Не удалось загрузить продукты"
@@ -149,6 +156,7 @@ describe("ProductsPageView", () => {
     expect(results.props.locale).toBe("ru");
     expect(results.props.isLoading).toBe(false);
     expect(results.props.isError).toBe(false);
+    expect(results.props.actions).toMatchObject(copy.actions);
   });
 
   it("passes loading, error and empty copy to results", () => {
@@ -184,11 +192,15 @@ function createBaseProps(): ProductsPageViewProps {
     isLoading: false,
     isError: false,
     onStatusChange: vi.fn(),
-    onCreate: vi.fn()
+    onCreate: vi.fn(),
+    onEditProduct: vi.fn(),
+    onDuplicateProduct: vi.fn(),
+    onProductStatusChange: vi.fn()
   };
 }
 
 type TestElementProps = {
+  actions?: unknown;
   children?: unknown;
   className?: string;
   copy?: unknown;

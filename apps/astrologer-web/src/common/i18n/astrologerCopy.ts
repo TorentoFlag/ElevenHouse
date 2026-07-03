@@ -1,6 +1,7 @@
 import type { OtpAuthFormCopy } from "@elevenhouse/design-system/components/OtpAuthForm";
 import type { OtpCodeFormCopy } from "@elevenhouse/design-system/components/OtpCodeForm";
 import type { SupportedLocale } from "@elevenhouse/i18n";
+import type { ProductIconName } from "../../features/products/model/productConstructorOptions";
 
 export type AuthCopy = {
   documentTitle: string;
@@ -114,7 +115,7 @@ export type AstrologerCopy = {
       cancelLabel: string;
       saveDraftLabel: string;
       savingLabel: string;
-      iconLabelByName: Record<string, string>;
+      iconLabelByName: Record<ProductIconName, string>;
     };
     actions: {
       editLabel: string;

@@ -309,19 +309,19 @@ describe("ProductsPage", () => {
       isPending: false
     });
     mocks.usePublishProductMutation.mockReturnValue({
-      mutateAsync: vi.fn(),
+      mutate: vi.fn(),
       isPending: false
     });
     mocks.useMoveProductToDraftMutation.mockReturnValue({
-      mutateAsync: vi.fn(),
+      mutate: vi.fn(),
       isPending: false
     });
     mocks.useArchiveProductMutation.mockReturnValue({
-      mutateAsync: vi.fn(),
+      mutate: vi.fn(),
       isPending: false
     });
     mocks.useDuplicateProductMutation.mockReturnValue({
-      mutateAsync: vi.fn(),
+      mutate: vi.fn(),
       isPending: false
     });
     mocks.useI18n.mockReturnValue({
@@ -527,6 +527,22 @@ describe("ProductsPage", () => {
     });
   });
 
+  it("clears the edited draft when opening type selection from edit flow", () => {
+    renderPage();
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onEditProduct!(product);
+    renderPage();
+    expect(getLatestMockProps<ProductConstructorModalProps>(mocks.productConstructorModal).draft.title).toBe(
+      "Натальный разбор"
+    );
+
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onCreate();
+    const constructorCallCountBeforeCreateRender = mocks.productConstructorModal.mock.calls.length;
+    renderPage();
+
+    expect(mocks.productConstructorModal).toHaveBeenCalledTimes(constructorCallCountBeforeCreateRender);
+    expect(getLatestMockProps<{ onSelect: (type: "single") => void }>(mocks.productCreateTypeModal)).toBeTruthy();
+  });
+
   it.each([
     ["active", "usePublishProductMutation"],
     ["draft", "useMoveProductToDraftMutation"],
@@ -534,9 +550,9 @@ describe("ProductsPage", () => {
   ] satisfies Array<[ProductStatus, keyof typeof mocks]>)(
     "routes %s status actions to the matching mutation",
     (status, mutationHookName) => {
-      const mutateAsync = vi.fn().mockResolvedValue(product);
+      const mutate = vi.fn();
       mocks[mutationHookName].mockReturnValue({
-        mutateAsync,
+        mutate,
         isPending: false
       });
 
@@ -546,21 +562,21 @@ describe("ProductsPage", () => {
         status
       );
 
-      expect(mutateAsync).toHaveBeenCalledWith(product.id);
+      expect(mutate).toHaveBeenCalledWith(product.id);
     }
   );
 
   it("duplicates products through the duplicate mutation", () => {
-    const mutateAsync = vi.fn().mockResolvedValue(product);
+    const mutate = vi.fn();
     mocks.useDuplicateProductMutation.mockReturnValue({
-      mutateAsync,
+      mutate,
       isPending: false
     });
 
     renderPage();
     getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onDuplicateProduct!(product.id);
 
-    expect(mutateAsync).toHaveBeenCalledWith(product.id);
+    expect(mutate).toHaveBeenCalledWith(product.id);
   });
 });
 

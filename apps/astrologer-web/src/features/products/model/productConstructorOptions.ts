@@ -90,3 +90,5 @@ export const productIconNames = [
   "verified",
   "refresh"
 ] satisfies readonly IconName[];
+
+export type ProductIconName = (typeof productIconNames)[number];

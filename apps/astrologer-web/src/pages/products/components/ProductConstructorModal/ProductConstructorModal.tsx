@@ -46,7 +46,8 @@ import {
   productPaymentModelOptions,
   productRequiredClientDataOptions,
   productSubscriptionPeriodOptions,
-  type ProductConstructorOption
+  type ProductConstructorOption,
+  type ProductIconName
 } from "../../../../features/products/model/productConstructorOptions";
 import styles from "../../ProductsPage.module.css";
 
@@ -99,7 +100,7 @@ export type ProductConstructorModalCopy = {
   readonly cancelLabel: string;
   readonly saveDraftLabel: string;
   readonly savingLabel: string;
-  readonly iconLabelByName: Record<string, string>;
+  readonly iconLabelByName: Record<ProductIconName, string>;
 };
 
 export type ProductConstructorModalProps = {
@@ -134,8 +135,6 @@ const modifierKindLabels = {
   percent: "%",
   free: "0"
 } satisfies Record<ProductModifierKind, string>;
-
-type ProductIconName = (typeof productIconNames)[number];
 
 export function ProductConstructorModal({
   copy,

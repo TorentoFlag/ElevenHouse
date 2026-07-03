@@ -117,6 +117,7 @@ function productCreateFlowReducer(
     return {
       ...state,
       isTypeModalOpen: true,
+      editorDraft: null,
       editingProductId: null,
       editorError: null
     };

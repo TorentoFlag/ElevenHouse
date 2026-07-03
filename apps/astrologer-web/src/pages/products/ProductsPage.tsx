@@ -48,7 +48,7 @@ export function ProductsPage() {
           ? moveToDraftMutation
           : archiveMutation;
 
-    void mutation.mutateAsync(productId);
+    mutation.mutate(productId);
   };
 
   useDocumentTitle(dictionary.products.documentTitle);
@@ -68,7 +68,7 @@ export function ProductsPage() {
         onCreate={createFlow.openTypeSelection}
         onEditProduct={createFlow.editProduct}
         onDuplicateProduct={(productId) => {
-          void duplicateMutation.mutateAsync(productId);
+          duplicateMutation.mutate(productId);
         }}
         onProductStatusChange={handleProductStatusChange}
       />
