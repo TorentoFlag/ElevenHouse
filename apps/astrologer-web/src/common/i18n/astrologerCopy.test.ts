@@ -12,6 +12,26 @@ const assertRequiredReferenceEntryModalEditLabels = (
   copy: AstrologerCopy["reference"]["entryModal"]
 ): RequiredReferenceEntryModalEditLabels => copy;
 
+type RequiredProductConstructorCopy = Pick<
+  AstrologerCopy["products"]["editor"],
+  | "title"
+  | "formatLabel"
+  | "executionModeLabel"
+  | "paymentModelLabel"
+  | "includedItemIconLabel"
+  | "previewLabel"
+  | "saveDraftLabel"
+  | "iconLabelByName"
+>;
+
+const assertRequiredProductConstructorCopy = (
+  copy: AstrologerCopy["products"]["editor"]
+): RequiredProductConstructorCopy => copy;
+
+const assertRequiredProductActionCopy = (
+  copy: AstrologerCopy["products"]["actions"]
+): AstrologerCopy["products"]["actions"] => copy;
+
 describe("astrologerCopy", () => {
   it("requires reference entry modal create and edit labels", () => {
     expect(assertRequiredReferenceEntryModalEditLabels(astrologerCopyByLocale.ru.reference.entryModal)).toEqual(
@@ -52,5 +72,53 @@ describe("astrologerCopy", () => {
     expect(astrologerCopyByLocale.ru).toHaveProperty("appShell.header.createLabel", "Создать");
     expect(astrologerCopyByLocale.ru).toHaveProperty("appShell.header.profileName", "Алиса Вега");
     expect(astrologerCopyByLocale.ru).toHaveProperty("appShell.header.profileTimezone", "GMT+3, Москва");
+  });
+
+  it("contains product constructor and action copy for both locales", () => {
+    expect(assertRequiredProductConstructorCopy(astrologerCopyByLocale.ru.products.editor)).toEqual(
+      expect.objectContaining({
+        title: "Конструктор продукта",
+        formatLabel: "Формат",
+        executionModeLabel: "Сценарий выполнения",
+        paymentModelLabel: "Оплата",
+        includedItemIconLabel: "Иконка пункта",
+        previewLabel: "Превью",
+        saveDraftLabel: "Сохранить черновик",
+        iconLabelByName: expect.objectContaining({
+          check: "Галочка",
+          video: "Видео"
+        })
+      })
+    );
+    expect(assertRequiredProductActionCopy(astrologerCopyByLocale.ru.products.actions)).toEqual({
+      editLabel: "Изменить",
+      duplicateLabel: "Дублировать",
+      publishLabel: "Опубликовать",
+      draftLabel: "В черновик",
+      archiveLabel: "В архив"
+    });
+
+    expect(assertRequiredProductConstructorCopy(astrologerCopyByLocale.en.products.editor)).toEqual(
+      expect.objectContaining({
+        title: "Product constructor",
+        formatLabel: "Format",
+        executionModeLabel: "Delivery scenario",
+        paymentModelLabel: "Payment",
+        includedItemIconLabel: "Item icon",
+        previewLabel: "Preview",
+        saveDraftLabel: "Save draft",
+        iconLabelByName: expect.objectContaining({
+          check: "Check",
+          video: "Video"
+        })
+      })
+    );
+    expect(assertRequiredProductActionCopy(astrologerCopyByLocale.en.products.actions)).toEqual({
+      editLabel: "Edit",
+      duplicateLabel: "Duplicate",
+      publishLabel: "Publish",
+      draftLabel: "Move to draft",
+      archiveLabel: "Archive"
+    });
   });
 });

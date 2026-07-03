@@ -1,5 +1,5 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
-import type { ListProductsResponse, ProductSummaryResponse } from "@elevenhouse/contracts";
+import type { ListProductsResponse, ProductStatus, ProductSummaryResponse } from "@elevenhouse/contracts";
 import { Button } from "@elevenhouse/design-system/components/Button";
 import { Card } from "@elevenhouse/design-system/components/Card";
 import { Chip } from "@elevenhouse/design-system/components/Chip";
@@ -304,10 +304,104 @@ describe("Products page components", () => {
 
     findRequiredElementByProp(card, "data-product-action-edit").props.onClick();
     findRequiredElementByProp(card, "data-product-action-duplicate").props.onClick();
+    findRequiredElementByProp(card, "data-product-action-draft").props.onClick();
     findRequiredElementByProp(card, "data-product-action-archive").props.onClick();
 
     expect(onEdit).toHaveBeenCalledWith(product);
     expect(onDuplicate).toHaveBeenCalledWith(product.id);
+    expect(onStatusChange).toHaveBeenCalledWith(product.id, "draft");
+    expect(onStatusChange).toHaveBeenCalledWith(product.id, "archived");
+  });
+
+  it("renders status action buttons by product status", () => {
+    const onStatusChange = vi.fn();
+
+    const draftCard = ProductCard({
+      product: createProductWithStatus("draft"),
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      actions: {
+        ...productActions,
+        onStatusChange
+      }
+    });
+    findRequiredElementByProp(draftCard, "data-product-action-publish").props.onClick();
+    findRequiredElementByProp(draftCard, "data-product-action-archive").props.onClick();
+    expect(findElementsByProp(draftCard, "data-product-action-draft")).toHaveLength(0);
+    expect(onStatusChange).toHaveBeenCalledWith(product.id, "active");
+    expect(onStatusChange).toHaveBeenCalledWith(product.id, "archived");
+
+    onStatusChange.mockClear();
+    const activeCard = ProductCard({
+      product: createProductWithStatus("active"),
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      actions: {
+        ...productActions,
+        onStatusChange
+      }
+    });
+    findRequiredElementByProp(activeCard, "data-product-action-draft").props.onClick();
+    findRequiredElementByProp(activeCard, "data-product-action-archive").props.onClick();
+    expect(findElementsByProp(activeCard, "data-product-action-publish")).toHaveLength(0);
+    expect(onStatusChange).toHaveBeenCalledWith(product.id, "draft");
+    expect(onStatusChange).toHaveBeenCalledWith(product.id, "archived");
+
+    onStatusChange.mockClear();
+    const archivedCard = ProductCard({
+      product: createProductWithStatus("archived"),
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      actions: {
+        ...productActions,
+        onStatusChange
+      }
+    });
+    findRequiredElementByProp(archivedCard, "data-product-action-draft").props.onClick();
+    expect(findElementsByProp(archivedCard, "data-product-action-archive")).toHaveLength(0);
+    expect(findElementsByProp(archivedCard, "data-product-action-publish")).toHaveLength(0);
+    expect(onStatusChange).toHaveBeenCalledWith(product.id, "draft");
+  });
+
+  it("propagates product actions through results to rendered card buttons", () => {
+    const onEdit = vi.fn();
+    const onDuplicate = vi.fn();
+    const onStatusChange = vi.fn();
+    const results = ProductsResults({
+      products: [
+        createProductWithStatus("draft"),
+        createProductWithStatus("active"),
+        createProductWithStatus("archived")
+      ],
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      actions: {
+        editLabel: "Изменить",
+        duplicateLabel: "Дублировать",
+        publishLabel: "Опубликовать",
+        draftLabel: "В черновик",
+        archiveLabel: "В архив",
+        onEdit,
+        onDuplicate,
+        onStatusChange
+      },
+      isLoading: false,
+      isError: false,
+      loadingLabel: "Загружаем продукты",
+      errorLabel: "Не удалось загрузить продукты",
+      emptyLabel: "Нет продуктов в этом статусе"
+    });
+
+    findRequiredRenderedElementByProp(results, "data-product-action-edit").props.onClick();
+    findRequiredRenderedElementByProp(results, "data-product-action-duplicate").props.onClick();
+    findRequiredRenderedElementByProp(results, "data-product-action-publish").props.onClick();
+    findRequiredRenderedElementByProp(results, "data-product-action-draft").props.onClick();
+    findRequiredRenderedElementByProp(results, "data-product-action-archive").props.onClick();
+
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: product.id, status: "draft" }));
+    expect(onDuplicate).toHaveBeenCalledWith(product.id);
+    expect(onStatusChange).toHaveBeenCalledWith(product.id, "active");
+    expect(onStatusChange).toHaveBeenCalledWith(product.id, "draft");
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "archived");
   });
 
@@ -528,8 +622,10 @@ type TestElementProps = {
   "data-product-editor-title"?: string;
   "data-product-editor-type-label"?: string;
   "data-product-action-archive"?: string;
+  "data-product-action-draft"?: string;
   "data-product-action-duplicate"?: string;
   "data-product-action-edit"?: string;
+  "data-product-action-publish"?: string;
   actions?: unknown;
   draft?: unknown;
   locale?: string;
@@ -541,6 +637,13 @@ type TestElementProps = {
   onSave: () => void | Promise<void>;
   onSelect: (type: string) => void;
 };
+
+function createProductWithStatus(status: ProductStatus): ListProductsResponse["products"][number] {
+  return {
+    ...product,
+    status
+  };
+}
 
 function findRequiredElementByType(root: unknown, type: unknown) {
   const element = findElementsByType(root, type)[0];
@@ -585,6 +688,29 @@ function findElementsByProp(
   return matches;
 }
 
+function findRequiredRenderedElementByProp(root: unknown, propName: keyof TestElementProps) {
+  const element = findRenderedElementsByProp(root, propName)[0];
+  if (!element) {
+    throw new Error(`Expected rendered React element with ${String(propName)}`);
+  }
+
+  return element;
+}
+
+function findRenderedElementsByProp(
+  root: unknown,
+  propName: keyof TestElementProps
+): Array<{ props: TestElementProps }> {
+  const matches: Array<{ props: TestElementProps }> = [];
+  visitRenderedElements(root, (element) => {
+    if (propName in element.props) {
+      matches.push(element as { props: TestElementProps });
+    }
+  });
+
+  return matches;
+}
+
 function getArrayItem<T>(items: T[], index: number): T {
   const item = items[index];
   if (!item) {
@@ -603,5 +729,26 @@ function visitElements(root: unknown, visitor: (element: ReactElement<TestElemen
 
   Children.forEach(root.props.children, (child) => {
     visitElements(child, visitor);
+  });
+}
+
+function visitRenderedElements(
+  root: unknown,
+  visitor: (element: ReactElement<TestElementProps>) => void
+) {
+  if (!isValidElement<TestElementProps>(root)) {
+    return;
+  }
+
+  if (typeof root.type === "function") {
+    const Component = root.type as (props: TestElementProps) => unknown;
+    visitRenderedElements(Component(root.props), visitor);
+    return;
+  }
+
+  visitor(root);
+
+  Children.forEach(root.props.children, (child) => {
+    visitRenderedElements(child, visitor);
   });
 }

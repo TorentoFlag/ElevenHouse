@@ -84,15 +84,39 @@ export function ProductCard({ product, productCopy, locale, actions }: ProductCa
         >
           {actions.duplicateLabel}
         </button>
-        <button
-          type="button"
-          className={styles.productActionButton}
-          data-product-action-archive="true"
-          aria-label={actions.archiveLabel}
-          onClick={() => actions.onStatusChange(product.id, "archived")}
-        >
-          {actions.archiveLabel}
-        </button>
+        {product.status === "draft" ? (
+          <button
+            type="button"
+            className={styles.productActionButton}
+            data-product-action-publish="true"
+            aria-label={actions.publishLabel}
+            onClick={() => actions.onStatusChange(product.id, "active")}
+          >
+            {actions.publishLabel}
+          </button>
+        ) : null}
+        {product.status !== "draft" ? (
+          <button
+            type="button"
+            className={styles.productActionButton}
+            data-product-action-draft="true"
+            aria-label={actions.draftLabel}
+            onClick={() => actions.onStatusChange(product.id, "draft")}
+          >
+            {actions.draftLabel}
+          </button>
+        ) : null}
+        {product.status !== "archived" ? (
+          <button
+            type="button"
+            className={styles.productActionButton}
+            data-product-action-archive="true"
+            aria-label={actions.archiveLabel}
+            onClick={() => actions.onStatusChange(product.id, "archived")}
+          >
+            {actions.archiveLabel}
+          </button>
+        ) : null}
       </div>
     </Card>
   );
