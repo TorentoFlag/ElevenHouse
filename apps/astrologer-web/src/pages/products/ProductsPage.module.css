@@ -564,6 +564,10 @@
   grid-template-columns: minmax(124px, 160px) minmax(0, 1fr) 34px;
 }
 
+.constructorModifierRow {
+  grid-template-columns: minmax(124px, 160px) minmax(0, 1fr) minmax(120px, 140px) 34px;
+}
+
 .constructorIconPicker {
   min-width: 0;
 }
@@ -779,8 +783,16 @@
     grid-template-columns: 1fr 34px;
   }
 
+  .constructorModifierRow {
+    grid-template-columns: 1fr 34px;
+  }
+
   .constructorIconPicker,
   .constructorModifierKinds {
+    grid-column: 1 / -1;
+  }
+
+  .constructorModifierRow .constructorCompactField {
     grid-column: 1 / -1;
   }
 

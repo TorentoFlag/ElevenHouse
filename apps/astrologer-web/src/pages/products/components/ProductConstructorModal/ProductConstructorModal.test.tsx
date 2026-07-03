@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createDefaultProductDraft } from "../../../../features/products/model/productDraft";
 import { productCopyByLocale } from "../../../../features/products/model/productCopy";
 import { ProductConstructorModal } from "./ProductConstructorModal";
+import styles from "../../ProductsPage.module.css";
 
 const copy = {
   title: "Конструктор продукта",
@@ -36,11 +37,17 @@ const copy = {
   methodsLabel: "Методы",
   accessGrantsLabel: "Доступы",
   includedItemsLabel: "Что входит",
+  includedItemTextLabel: "Текст пункта",
   includedItemPlaceholder: "Что получает клиент",
   includedItemIconLabel: "Иконка пункта",
   addIncludedItemLabel: "Добавить пункт",
   removeIncludedItemLabel: "Удалить пункт",
   modifiersLabel: "Модификаторы",
+  modifierKindLabel: "Тип модификатора",
+  modifierFixedLabel: "Фиксированная цена",
+  modifierPercentLabel: "Процент",
+  modifierFreeLabel: "Бесплатно",
+  modifierLabelLabel: "Название модификатора",
   modifierLabelPlaceholder: "Название модификатора",
   modifierPriceLabel: "Цена модификатора",
   addModifierLabel: "Добавить модификатор",
@@ -69,7 +76,10 @@ const copy = {
 
 describe("ProductConstructorModal", () => {
   it("renders constructor controls and submits draft changes", () => {
-    const draft = createDefaultProductDraft("pack");
+    const draft = {
+      ...createDefaultProductDraft("pack"),
+      title: "Пакет консультаций"
+    };
     const onDraftChange = vi.fn();
     const onSave = vi.fn();
     const onClose = vi.fn();
@@ -111,15 +121,125 @@ describe("ProductConstructorModal", () => {
     const firstIconPicker = findAllByType(modal, IconPicker)[0];
     expect(firstIconPicker?.props.getIconAriaLabel("check")).toBe("Галочка");
   });
+
+  it("does not save an invalid draft on form submit", () => {
+    const onSave = vi.fn();
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft: createDefaultProductDraft("single"),
+      isSaving: false,
+      error: null,
+      onDraftChange: vi.fn(),
+      onSave,
+      onClose: vi.fn()
+    });
+
+    findByProp(modal, "data-product-constructor-form").props.onSubmit({
+      preventDefault: vi.fn()
+    });
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("switches product type by applying next type defaults and preserving basic fields", () => {
+    const draft = {
+      ...createDefaultProductDraft("single"),
+      title: "Личный прогноз",
+      subtitle: "Описание",
+      priceMinor: 620000,
+      coverMediaId: "cover-media-id",
+      introVideoUrl: "https://example.com/intro"
+    };
+    const onDraftChange = vi.fn();
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft,
+      isSaving: false,
+      error: null,
+      onDraftChange,
+      onSave: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    findAllByType(modal, SelectableTile).find(
+      (tile) => tile.props.label === productCopyByLocale.ru.types.sub.label
+    )?.props.onClick();
+
+    expect(onDraftChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "sub",
+        paymentModel: "sub",
+        subscriptionPeriod: "month",
+        deliveryFormats: ["channel"],
+        title: draft.title,
+        subtitle: draft.subtitle,
+        priceMinor: draft.priceMinor,
+        currency: draft.currency,
+        coverMediaId: draft.coverMediaId,
+        introVideoUrl: draft.introVideoUrl
+      })
+    );
+  });
+
+  it("uses dedicated modifier rows and accessible labels for dynamic controls", () => {
+    const draft = {
+      ...createDefaultProductDraft("single"),
+      title: "Натальный разбор",
+      modifiers: [
+        {
+          label: "Срочность",
+          priceMinor: 90000,
+          kind: "fixed" as const,
+          isEnabled: true,
+          createsArtifact: false,
+          order: 10
+        }
+      ]
+    };
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft,
+      isSaving: false,
+      error: null,
+      onDraftChange: vi.fn(),
+      onSave: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    const modifierRow = findByProp(modal, "data-product-constructor-modifier-row");
+    expect(modifierRow.props.className).toContain(styles.constructorModifierRow);
+
+    expect(findByAriaLabel(modal, copy.includedItemTextLabel).props.value).toBe(
+      draft.includedItems[0]?.text
+    );
+    expect(findByAriaLabel(modal, copy.modifierLabelLabel).props.value).toBe("Срочность");
+    expect(findByAriaLabel(modal, copy.modifierPriceLabel).props.value).toBe("900");
+
+    expect(findByAriaLabel(modal, `${copy.modifierKindLabel}: ${copy.modifierFixedLabel}`)).toBeDefined();
+    expect(findByAriaLabel(modal, `${copy.modifierKindLabel}: ${copy.modifierPercentLabel}`)).toBeDefined();
+    expect(findByAriaLabel(modal, `${copy.modifierKindLabel}: ${copy.modifierFreeLabel}`)).toBeDefined();
+  });
 });
 
 type TestElementProps = {
+  className?: string;
   children?: ReactNode;
   getIconAriaLabel: (iconName: string) => string;
+  label?: ReactNode;
   onChange: (event: { currentTarget: { value: string } }) => void;
+  onClick: () => void;
   onSubmit: (event: { preventDefault: () => void }) => void | Promise<void>;
   title?: ReactNode;
+  value?: string | number;
+  "aria-label"?: string;
   "data-product-constructor-form"?: string;
+  "data-product-constructor-modifier-row"?: string;
   "data-product-constructor-title"?: string;
 };
 
@@ -147,6 +267,17 @@ function findByProp(root: unknown, propName: keyof TestElementProps) {
   const element = findAllByProp(root, propName)[0];
   if (!element) {
     throw new Error(`Expected React element with ${String(propName)}`);
+  }
+
+  return element;
+}
+
+function findByAriaLabel(root: unknown, label: string) {
+  const element = findAllByProp(root, "aria-label").find(
+    (currentElement) => currentElement.props["aria-label"] === label
+  );
+  if (!element) {
+    throw new Error(`Expected React element with aria-label ${label}`);
   }
 
   return element;

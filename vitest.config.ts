@@ -13,6 +13,30 @@ export default defineConfig({
       "@elevenhouse/design-system/components/Modal": fileURLToPath(
         new URL("./packages/design-system/src/components/Modal/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/components/SelectableTile": fileURLToPath(
+        new URL("./packages/design-system/src/components/SelectableTile/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/SelectableTile.css": fileURLToPath(
+        new URL(
+          "./packages/design-system/src/components/SelectableTile/SelectableTile.css",
+          import.meta.url
+        )
+      ),
+      "@elevenhouse/design-system/components/NumberStepper": fileURLToPath(
+        new URL("./packages/design-system/src/components/NumberStepper/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/NumberStepper.css": fileURLToPath(
+        new URL(
+          "./packages/design-system/src/components/NumberStepper/NumberStepper.css",
+          import.meta.url
+        )
+      ),
+      "@elevenhouse/design-system/components/IconPicker": fileURLToPath(
+        new URL("./packages/design-system/src/components/IconPicker/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/IconPicker.css": fileURLToPath(
+        new URL("./packages/design-system/src/components/IconPicker/IconPicker.css", import.meta.url)
+      ),
       "@elevenhouse/design-system/icons/Icon": fileURLToPath(
         new URL("./packages/design-system/src/icons/Icon/index.ts", import.meta.url)
       ),

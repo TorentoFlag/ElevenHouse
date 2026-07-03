@@ -28,6 +28,7 @@ import { formatMoneyMinor } from "../../../../features/products/model/productFor
 import {
   addProductIncludedItem,
   addProductModifier,
+  createDefaultProductDraft,
   removeProductIncludedItem,
   removeProductModifier,
   toggleProductDraftArrayValue,
@@ -77,11 +78,17 @@ export type ProductConstructorModalCopy = {
   readonly methodsLabel: string;
   readonly accessGrantsLabel: string;
   readonly includedItemsLabel: string;
+  readonly includedItemTextLabel: string;
   readonly includedItemPlaceholder: string;
   readonly includedItemIconLabel: string;
   readonly addIncludedItemLabel: string;
   readonly removeIncludedItemLabel: string;
   readonly modifiersLabel: string;
+  readonly modifierKindLabel: string;
+  readonly modifierFixedLabel: string;
+  readonly modifierPercentLabel: string;
+  readonly modifierFreeLabel: string;
+  readonly modifierLabelLabel: string;
   readonly modifierLabelPlaceholder: string;
   readonly modifierPriceLabel: string;
   readonly addModifierLabel: string;
@@ -144,6 +151,7 @@ export function ProductConstructorModal({
   const updateDraft = (patch: Partial<ProductFormDraft>) => {
     onDraftChange({ ...draft, ...patch });
   };
+  const canSave = !isSaving && Boolean(draft.title.trim());
 
   return (
     <Modal
@@ -158,6 +166,10 @@ export function ProductConstructorModal({
         data-product-constructor-form="true"
         onSubmit={(event: FormEvent<HTMLFormElement>) => {
           event.preventDefault();
+          if (!canSave) {
+            return;
+          }
+
           void onSave();
         }}
       >
@@ -175,7 +187,7 @@ export function ProductConstructorModal({
                   description={productCopy.types[option.value].description}
                   selected={draft.type === option.value}
                   icon={<Icon iconName={option.iconName} width={18} height={18} aria-hidden="true" />}
-                  onClick={() => updateDraft({ type: option.value })}
+                  onClick={() => onDraftChange(createDraftForTypeSwitch(draft, option.value))}
                 />
               ))}
             </div>
@@ -409,6 +421,7 @@ export function ProductConstructorModal({
                     />
                     <input
                       className={styles.textInput}
+                      aria-label={copy.includedItemTextLabel}
                       value={item.text}
                       placeholder={copy.includedItemPlaceholder}
                       onChange={(event) =>
@@ -445,7 +458,11 @@ export function ProductConstructorModal({
             </div>
             <div className={styles.constructorRows}>
               {draft.modifiers.map((modifier, index) => (
-                <div className={styles.constructorRow} key={`${modifier.order}-${index}`}>
+                <div
+                  className={`${styles.constructorRow} ${styles.constructorModifierRow}`}
+                  data-product-constructor-modifier-row="true"
+                  key={`${modifier.order}-${index}`}
+                >
                   <div className={styles.constructorModifierKinds}>
                     {Object.entries(modifierKindLabels).map(([kind, label]) => (
                       <button
@@ -454,6 +471,7 @@ export function ProductConstructorModal({
                           modifier.kind === kind ? styles.constructorSegmentButtonActive : ""
                         }`}
                         type="button"
+                        aria-label={getModifierKindAriaLabel(copy, kind as ProductModifierKind)}
                         aria-pressed={modifier.kind === kind}
                         onClick={() =>
                           onDraftChange(
@@ -469,6 +487,7 @@ export function ProductConstructorModal({
                   </div>
                   <input
                     className={styles.textInput}
+                    aria-label={copy.modifierLabelLabel}
                     value={modifier.label}
                     placeholder={copy.modifierLabelPlaceholder}
                     onChange={(event) =>
@@ -481,6 +500,7 @@ export function ProductConstructorModal({
                     <span className={styles.fieldLabel}>{copy.modifierPriceLabel}</span>
                     <input
                       className={styles.textInput}
+                      aria-label={copy.modifierPriceLabel}
                       inputMode="numeric"
                       value={minorToMajorValue(modifier.priceMinor)}
                       onChange={(event) =>
@@ -540,13 +560,38 @@ export function ProductConstructorModal({
             <Button
               title={isSaving ? copy.savingLabel : copy.saveDraftLabel}
               type="submit"
-              disabled={isSaving || !draft.title.trim()}
+              disabled={!canSave}
             />
           </div>
         </aside>
       </form>
     </Modal>
   );
+}
+
+function createDraftForTypeSwitch(draft: ProductFormDraft, type: ProductType): ProductFormDraft {
+  return {
+    ...createDefaultProductDraft(type),
+    title: draft.title,
+    subtitle: draft.subtitle,
+    priceMinor: draft.priceMinor,
+    currency: draft.currency,
+    coverMediaId: draft.coverMediaId,
+    introVideoUrl: draft.introVideoUrl
+  };
+}
+
+function getModifierKindAriaLabel(
+  copy: ProductConstructorModalCopy,
+  kind: ProductModifierKind
+): string {
+  const labelByKind = {
+    fixed: copy.modifierFixedLabel,
+    percent: copy.modifierPercentLabel,
+    free: copy.modifierFreeLabel
+  } satisfies Record<ProductModifierKind, string>;
+
+  return `${copy.modifierKindLabel}: ${labelByKind[kind]}`;
 }
 
 type CopyByValue<TValue extends string> = Record<TValue, { readonly label: string; readonly description?: string }>;
