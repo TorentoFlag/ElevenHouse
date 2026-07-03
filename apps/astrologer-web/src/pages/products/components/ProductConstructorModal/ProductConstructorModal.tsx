@@ -1,4 +1,4 @@
-import type { ComponentType, FormEvent } from "react";
+import type { FormEvent } from "react";
 import type { IconName } from "@elevenhouse/design-system/icons/Icon";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { Button } from "@elevenhouse/design-system/components/Button";
@@ -129,17 +129,6 @@ const modifierKindLabels = {
 } satisfies Record<ProductModifierKind, string>;
 
 type ProductIconName = (typeof productIconNames)[number];
-
-type ProductIconPickerProps = {
-  readonly value: ProductIconName;
-  readonly iconNames: readonly ProductIconName[];
-  readonly ariaLabel: string;
-  readonly className?: string;
-  readonly getIconAriaLabel: (iconName: ProductIconName) => string;
-  readonly onValueChange: (value: ProductIconName) => void;
-};
-
-const ProductIconPicker = IconPicker as unknown as ComponentType<ProductIconPickerProps>;
 
 export function ProductConstructorModal({
   copy,
@@ -408,7 +397,7 @@ export function ProductConstructorModal({
 
                 return (
                   <div className={styles.constructorRow} key={`${item.order}-${index}`}>
-                    <ProductIconPicker
+                    <IconPicker
                       value={selectedIcon}
                       iconNames={productIconNames}
                       ariaLabel={copy.includedItemIconLabel}

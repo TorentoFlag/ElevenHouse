@@ -15,6 +15,15 @@
       "@elevenhouse/design-system/components/Modal": [
         "../../packages/design-system/src/components/Modal/index.ts"
       ],
+      "@elevenhouse/design-system/components/SelectableTile": [
+        "../../packages/design-system/src/components/SelectableTile/index.ts"
+      ],
+      "@elevenhouse/design-system/components/NumberStepper": [
+        "../../packages/design-system/src/components/NumberStepper/index.ts"
+      ],
+      "@elevenhouse/design-system/components/IconPicker": [
+        "../../packages/design-system/src/components/IconPicker/index.ts"
+      ],
       "@elevenhouse/design-system/helpers": ["../../packages/design-system/src/helpers/index.ts"],
       "@elevenhouse/design-system/motion": ["../../packages/design-system/src/motion/index.ts"],
       "@elevenhouse/design-system/navigation": [

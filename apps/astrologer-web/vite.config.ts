@@ -57,6 +57,39 @@ export default defineConfig({
       "@elevenhouse/design-system/components/Modal.css": fileURLToPath(
         new URL("../../packages/design-system/src/components/Modal/Modal.css", import.meta.url)
       ),
+      "@elevenhouse/design-system/components/SelectableTile": fileURLToPath(
+        new URL(
+          "../../packages/design-system/src/components/SelectableTile/index.ts",
+          import.meta.url
+        )
+      ),
+      "@elevenhouse/design-system/components/SelectableTile.css": fileURLToPath(
+        new URL(
+          "../../packages/design-system/src/components/SelectableTile/SelectableTile.css",
+          import.meta.url
+        )
+      ),
+      "@elevenhouse/design-system/components/NumberStepper": fileURLToPath(
+        new URL(
+          "../../packages/design-system/src/components/NumberStepper/index.ts",
+          import.meta.url
+        )
+      ),
+      "@elevenhouse/design-system/components/NumberStepper.css": fileURLToPath(
+        new URL(
+          "../../packages/design-system/src/components/NumberStepper/NumberStepper.css",
+          import.meta.url
+        )
+      ),
+      "@elevenhouse/design-system/components/IconPicker": fileURLToPath(
+        new URL("../../packages/design-system/src/components/IconPicker/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/IconPicker.css": fileURLToPath(
+        new URL(
+          "../../packages/design-system/src/components/IconPicker/IconPicker.css",
+          import.meta.url
+        )
+      ),
       "@elevenhouse/design-system/components/Card": fileURLToPath(
         new URL("../../packages/design-system/src/components/Card/index.ts", import.meta.url)
       ),
