@@ -106,7 +106,7 @@ export function createDefaultProductDraft(type: ProductType): ProductFormDraft {
       methods: [],
       accessGrants: ["channel"],
       includedItems: [
-        { text: "Закрытый канал", icon: "channel", order: 10 },
+        { text: "Закрытый канал", icon: "flow", order: 10 },
         { text: "Лунный прогноз", icon: "check", order: 20 },
         { text: "Ежемесячный Q&A-эфир", icon: "video", order: 30 }
       ]
@@ -142,7 +142,7 @@ export function createDefaultProductDraft(type: ProductType): ProductFormDraft {
       includedItems: [
         { text: "1 вопрос — 1 ответ", icon: "chat", order: 10 },
         { text: "До 10 сообщений", icon: "check", order: 20 },
-        { text: "Ответ в течение суток", icon: "clock", order: 30 }
+        { text: "Ответ в течение суток", icon: "refresh", order: 30 }
       ]
     };
   }
@@ -160,7 +160,7 @@ export function createDefaultProductDraft(type: ProductType): ProductFormDraft {
       includedItems: [
         { text: "24 урока + практика", icon: "video", order: 10 },
         { text: "Проверка домашних", icon: "check", order: 20 },
-        { text: "Доступ навсегда", icon: "file", order: 30 }
+        { text: "Доступ навсегда", icon: "box", order: 30 }
       ]
     };
   }
@@ -220,12 +220,15 @@ export type ProductDraftArrayKey =
   | "methods"
   | "accessGrants";
 
+export type ProductDraftArrayValue<TKey extends ProductDraftArrayKey> =
+  ProductFormDraft[TKey] extends readonly (infer TValue)[] ? TValue : never;
+
 export function toggleProductDraftArrayValue<TKey extends ProductDraftArrayKey>(
   draft: ProductFormDraft,
   key: TKey,
-  value: ProductFormDraft[TKey][number]
+  value: ProductDraftArrayValue<TKey>
 ): ProductFormDraft {
-  const current = draft[key] as readonly string[];
+  const current = draft[key] as readonly ProductDraftArrayValue<TKey>[];
   const next = current.includes(value)
     ? current.filter((item) => item !== value)
     : [...current, value];
@@ -244,7 +247,7 @@ export function addProductIncludedItem(draft: ProductFormDraft): ProductFormDraf
       {
         text: "",
         icon: "check",
-        order: (draft.includedItems.length + 1) * 10
+        order: getNextOrder(draft.includedItems)
       }
     ]
   };
@@ -281,7 +284,7 @@ export function addProductModifier(draft: ProductFormDraft): ProductFormDraft {
         kind: "fixed",
         isEnabled: true,
         createsArtifact: false,
-        order: (draft.modifiers.length + 1) * 10
+        order: getNextOrder(draft.modifiers)
       }
     ]
   };
@@ -305,6 +308,10 @@ export function removeProductModifier(draft: ProductFormDraft, index: number): P
     ...draft,
     modifiers: draft.modifiers.filter((_, modifierIndex) => modifierIndex !== index)
   };
+}
+
+function getNextOrder(items: readonly { readonly order: number }[]): number {
+  return Math.max(0, ...items.map((item) => item.order)) + 10;
 }
 
 export function toCreateProductRequest(draft: ProductFormDraft): CreateProductRequest {

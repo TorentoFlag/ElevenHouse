@@ -1,3 +1,13 @@
+import {
+  productAccessGrantSchema,
+  productDeliveryFormatSchema,
+  productExecutionModeSchema,
+  productMethodSchema,
+  productParticipantModeSchema,
+  productPaymentModelSchema,
+  productRequiredClientDataSchema,
+  productSubscriptionPeriodSchema
+} from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
 import {
   productAccessGrantOptions,
@@ -13,59 +23,18 @@ import {
 
 describe("product constructor options", () => {
   it("keeps option sets aligned with product contracts", () => {
-    expect(productDeliveryFormatOptions.map((option) => option.value)).toEqual([
-      "video",
-      "audio",
-      "chat",
-      "text",
-      "file",
-      "channel"
-    ]);
-    expect(productExecutionModeOptions.map((option) => option.value)).toEqual([
-      "live",
-      "async",
-      "instant"
-    ]);
-    expect(productPaymentModelOptions.map((option) => option.value)).toEqual([
-      "once",
-      "pack",
-      "sub",
-      "free"
-    ]);
-    expect(productParticipantModeOptions.map((option) => option.value)).toEqual([
-      "solo",
-      "group",
-      "gift"
-    ]);
-    expect(productRequiredClientDataOptions.map((option) => option.value)).toEqual([
-      "chart1",
-      "cities",
-      "chart2",
-      "question",
-      "event"
-    ]);
-    expect(productMethodOptions.map((option) => option.value)).toEqual([
-      "natal",
-      "forecast",
-      "synastry",
-      "child",
-      "numerology",
-      "matrix",
-      "humandesign"
-    ]);
-    expect(productAccessGrantOptions.map((option) => option.value)).toEqual([
-      "content",
-      "channel",
-      "records",
-      "course",
-      "community",
-      "journal"
-    ]);
-    expect(productSubscriptionPeriodOptions.map((option) => option.value)).toEqual([
-      "week",
-      "month",
-      "year"
-    ]);
+    expect(productDeliveryFormatOptions.map((option) => option.value)).toEqual(productDeliveryFormatSchema.options);
+    expect(productExecutionModeOptions.map((option) => option.value)).toEqual(productExecutionModeSchema.options);
+    expect(productPaymentModelOptions.map((option) => option.value)).toEqual(productPaymentModelSchema.options);
+    expect(productParticipantModeOptions.map((option) => option.value)).toEqual(productParticipantModeSchema.options);
+    expect(productRequiredClientDataOptions.map((option) => option.value)).toEqual(
+      productRequiredClientDataSchema.options
+    );
+    expect(productMethodOptions.map((option) => option.value)).toEqual(productMethodSchema.options);
+    expect(productAccessGrantOptions.map((option) => option.value)).toEqual(productAccessGrantSchema.options);
+    expect(productSubscriptionPeriodOptions.map((option) => option.value)).toEqual(
+      productSubscriptionPeriodSchema.options
+    );
     expect(productIconNames).toEqual([
       "check",
       "sparkle",

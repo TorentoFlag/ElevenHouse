@@ -1,9 +1,11 @@
 import {
   createProductRequestSchema,
+  productTypeSchema,
   updateProductRequestSchema,
   type ProductResponse
 } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
+import { productIconNames } from "./productConstructorOptions";
 import {
   addProductIncludedItem,
   addProductModifier,
@@ -15,7 +17,8 @@ import {
   toCreateProductRequest,
   toUpdateProductRequest,
   updateProductIncludedItem,
-  updateProductModifier
+  updateProductModifier,
+  type ProductFormDraft
 } from "./productDraft";
 
 const productResponse = {
@@ -170,6 +173,24 @@ describe("product draft helpers", () => {
       "audio"
     ]);
     expect(toggleProductDraftArrayValue(draft, "deliveryFormats", "video").deliveryFormats).toEqual([]);
+    expect(toggleProductDraftArrayValue(draft, "requiredClientData", "question").requiredClientData).toEqual([
+      "chart1",
+      "question"
+    ]);
+    expect(toggleProductDraftArrayValue(draft, "methods", "forecast").methods).toEqual([
+      "natal",
+      "forecast"
+    ]);
+    expect(toggleProductDraftArrayValue(draft, "accessGrants", "course").accessGrants).toEqual(["course"]);
+  });
+
+  it("uses valid constructor icon names for all default included items", () => {
+    const availableIconNames: readonly string[] = productIconNames;
+    const defaultIncludedItemIcons = productTypeSchema.options.flatMap((type) =>
+      createDefaultProductDraft(type).includedItems.map((item) => item.icon)
+    );
+
+    expect(defaultIncludedItemIcons.filter((icon) => !availableIconNames.includes(icon))).toEqual([]);
   });
 
   it("adds, updates and removes included items", () => {
@@ -193,6 +214,13 @@ describe("product draft helpers", () => {
     });
 
     expect(removeProductIncludedItem(updated, lastIndex).includedItems).toHaveLength(lastIndex);
+  });
+
+  it("adds included items after the highest existing order", () => {
+    const draft = createDefaultProductDraft("pack");
+    const withoutMiddleItem = removeProductIncludedItem(draft, 1);
+
+    expect(addProductIncludedItem(withoutMiddleItem).includedItems.at(-1)?.order).toBe(40);
   });
 
   it("adds, updates and removes product modifiers", () => {
@@ -220,5 +248,41 @@ describe("product draft helpers", () => {
     });
 
     expect(removeProductModifier(updated, 0).modifiers).toEqual([]);
+  });
+
+  it("adds product modifiers after the highest existing order", () => {
+    const modifiers = [
+      {
+        label: "First",
+        priceMinor: 1000,
+        kind: "fixed",
+        isEnabled: true,
+        createsArtifact: false,
+        order: 10
+      },
+      {
+        label: "Second",
+        priceMinor: 2000,
+        kind: "fixed",
+        isEnabled: true,
+        createsArtifact: false,
+        order: 20
+      },
+      {
+        label: "Third",
+        priceMinor: 3000,
+        kind: "fixed",
+        isEnabled: true,
+        createsArtifact: false,
+        order: 30
+      }
+    ] satisfies ProductFormDraft["modifiers"];
+    const draft = {
+      ...createDefaultProductDraft("single"),
+      modifiers
+    };
+    const withoutMiddleModifier = removeProductModifier(draft, 1);
+
+    expect(addProductModifier(withoutMiddleModifier).modifiers.at(-1)?.order).toBe(40);
   });
 });
