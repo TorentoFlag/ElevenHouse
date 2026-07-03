@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, MouseEvent } from "react";
-import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
 import styles from "./ReferenceAiDraftButton.module.css";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 export type ReferenceAiDraftButtonState = "active" | "loading" | "error";
 
@@ -67,7 +67,7 @@ export function ReferenceAiDraftButton({
             data-reference-ai-draft-spinner="true"
           />
         ) : (
-          <Sparkle width={12} height={12} aria-hidden="true" />
+          <Icon iconName="sparkle" width={12} height={12} aria-hidden="true" />
         )}
       </span>
       <span className={styles.label}>{label}</span>

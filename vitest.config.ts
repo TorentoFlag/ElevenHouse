@@ -13,8 +13,8 @@ export default defineConfig({
       "@elevenhouse/design-system/components/Modal": fileURLToPath(
         new URL("./packages/design-system/src/components/Modal/index.ts", import.meta.url)
       ),
-      "@elevenhouse/design-system/icons/Check": fileURLToPath(
-        new URL("./packages/design-system/src/icons/Check/index.ts", import.meta.url)
+      "@elevenhouse/design-system/icons/Icon": fileURLToPath(
+        new URL("./packages/design-system/src/icons/Icon/index.ts", import.meta.url)
       ),
       "@elevenhouse/validation/phone": fileURLToPath(
         new URL("./packages/validation/src/phone/index.ts", import.meta.url)

@@ -1,10 +1,8 @@
 import { Button } from "@elevenhouse/design-system/components/Button";
 import "@elevenhouse/design-system/components/Button.css";
-import { Plus } from "@elevenhouse/design-system/icons/Plus";
-import { Reference } from "@elevenhouse/design-system/icons/Reference";
-import { Search } from "@elevenhouse/design-system/icons/Search";
 import type { ReferenceAddEntryOptions } from "../types";
 import styles from "../ReferencePage.module.css";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 export type ReferenceToolbarProps = {
   readonly title: string;
@@ -35,7 +33,7 @@ export function ReferenceToolbar({
     <header className={styles.toolbar}>
       <div className={styles.titleGroup}>
         <span className={styles.titleIcon} aria-hidden="true">
-          <Reference width={18} height={18} />
+          <Icon iconName="reference" width={18} height={18} />
         </span>
         <span className={styles.titleText}>
           <h1 id="reference-title" className={styles.title}>
@@ -47,7 +45,7 @@ export function ReferenceToolbar({
 
       <label className={styles.searchWrap}>
         <span className={styles.searchIcon} aria-hidden="true">
-          <Search width={15} height={15} />
+          <Icon iconName="search" width={15} height={15} />
         </span>
         <input
           className={styles.searchInput}
@@ -77,7 +75,7 @@ export function ReferenceToolbar({
         variant="brand"
         size="big"
         title={addLabel}
-        startIcon={<Plus width={15} height={15} aria-hidden="true" />}
+        startIcon={<Icon iconName="plus" width={15} height={15} aria-hidden="true" />}
         data-reference-toolbar-action="add"
         onClick={() => onAdd()}
       />

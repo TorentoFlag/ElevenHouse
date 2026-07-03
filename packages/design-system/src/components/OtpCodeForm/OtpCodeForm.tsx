@@ -1,7 +1,6 @@
 import { useCallback, type ChangeEvent, type CSSProperties } from "react";
 import { classNames } from "../../helpers/classNames.js";
-import { ArrowLeft } from "../../icons/ArrowLeft/index.js";
-import { Refresh } from "../../icons/Refresh/index.js";
+import { Icon } from "../../icons/Icon/index.js";
 import { Button } from "../Button/index.js";
 import { defaultCopy } from "./const.js";
 import type { OtpCodeFormProps } from "./types.js";
@@ -60,7 +59,8 @@ export function OtpCodeForm({
           style={backButtonStyle}
           onClick={onBack}
           startIcon={
-            <ArrowLeft
+            <Icon
+              iconName="arrowLeft"
               className="ehOtpCodeForm__backIcon"
               width={resolvedBackIconSize}
               height={resolvedBackIconSize}
@@ -132,7 +132,8 @@ export function OtpCodeForm({
           disabled={isSubmitting || isResendDisabled}
           onClick={onResend}
           startIcon={
-            <Refresh
+            <Icon
+              iconName="refresh"
               className="ehOtpCodeForm__resendIcon"
               width={20}
               height={20}

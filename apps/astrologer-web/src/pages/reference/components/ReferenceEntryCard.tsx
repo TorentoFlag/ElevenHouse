@@ -5,10 +5,9 @@ import { Card } from "@elevenhouse/design-system/components/Card";
 import "@elevenhouse/design-system/components/Card.css";
 import { IconButton } from "@elevenhouse/design-system/components/IconButton";
 import "@elevenhouse/design-system/components/IconButton.css";
-import { Edit } from "@elevenhouse/design-system/icons/Edit";
-import { Trash } from "@elevenhouse/design-system/icons/Trash";
 import type { AstrologerCopy } from "../../../common/i18n/astrologerCopy";
 import styles from "../ReferencePage.module.css";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 type ReferenceCopy = AstrologerCopy["reference"];
 
@@ -42,7 +41,7 @@ export function ReferenceEntryCard({
           size="small"
           title={entryActions.editLabel}
           startIcon={
-            <Edit className={styles.buttonIcon} width={13} height={13} aria-hidden="true" />
+            <Icon iconName="edit" className={styles.buttonIcon} width={13} height={13} aria-hidden="true" />
           }
           data-reference-entry-action="edit"
           onClick={() => onEditEntry(entry)}
@@ -53,7 +52,7 @@ export function ReferenceEntryCard({
             variant="quiet"
             size="small"
             label={`${entryActions.deleteLabel}: ${entry.title}`}
-            icon={<Trash aria-hidden="true" />}
+            icon={<Icon iconName="trash" aria-hidden="true" />}
             data-reference-entry-action="delete"
             onClick={() => onDeleteEntry(entry)}
           />

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "../../components/Button/index.js";
-import { ArrowLeft } from "../../icons/ArrowLeft/index.js";
+import { Icon } from "../../icons/Icon/index.js";
 
 export type BackLinkProps = {
   readonly title: ReactNode;
@@ -22,7 +22,7 @@ export function BackLink({ title, path, className, ariaLabel }: BackLinkProps) {
       type="button"
       variant="default"
       size="medium"
-      startIcon={<ArrowLeft aria-hidden="true" />}
+      startIcon={<Icon iconName="arrowLeft" aria-hidden="true" />}
       onClick={() => navigate(path)}
     />
   );

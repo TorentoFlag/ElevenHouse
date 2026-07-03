@@ -334,7 +334,7 @@
   padding: 14px;
   border: 1px solid var(--eh-color-moon-300-alpha-14);
   border-radius: 12px;
-  background: var(--products-surface-2);
+  background: var(--eh-color-night-900);
   color: inherit;
   cursor: pointer;
   font: inherit;

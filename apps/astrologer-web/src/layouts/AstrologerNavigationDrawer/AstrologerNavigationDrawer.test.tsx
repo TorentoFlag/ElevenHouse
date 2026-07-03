@@ -1,11 +1,10 @@
 import { NavigationDrawer } from "@elevenhouse/design-system/navigation";
-import { Box } from "@elevenhouse/design-system/icons/Box";
-import { Reference } from "@elevenhouse/design-system/icons/Reference";
 import { NavLink } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { astrologerCopyByLocale } from "../../common/i18n/astrologerCopy";
 import { AstrologerNavigationDrawerView } from "./components/AstrologerNavigationDrawerView";
 import { renderNavigationLink } from "./components/renderNavigationLink";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 describe("AstrologerNavigationDrawerView", () => {
   it("maps astrologer navigation copy to the shared navigation drawer", () => {
@@ -37,13 +36,15 @@ describe("AstrologerNavigationDrawerView", () => {
       title: "Продукты",
       href: "/products"
     });
-    expect(element.props.items[1].icon.type).toBe(Box);
+    expect(element.props.items[1].icon.type).toBe(Icon);
+    expect(element.props.items[1].icon.props.iconName).toBe("box");
     expect(element.props.items[2]).toMatchObject({
       id: "reference",
       title: "Справочники",
       href: "/reference"
     });
-    expect(element.props.items[2].icon.type).toBe(Reference);
+    expect(element.props.items[2].icon.type).toBe(Icon);
+    expect(element.props.items[2].icon.props.iconName).toBe("reference");
   });
 
   it("passes collapsed state controls to the shared navigation drawer", () => {

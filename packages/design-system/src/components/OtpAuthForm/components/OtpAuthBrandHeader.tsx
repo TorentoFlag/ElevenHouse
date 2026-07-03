@@ -1,4 +1,4 @@
-import { LogoMoon } from "../../../icons/LogoMoon/index.js";
+import { Icon } from "../../../icons/Icon/index.js";
 import { LanguageSwitcher } from "../../LanguageSwitcher/index.js";
 import type { OtpAuthLocaleSwitcher } from "../types.js";
 import type { OtpAuthMotionTextRenderer } from "./types.js";
@@ -24,7 +24,7 @@ export function OtpAuthBrandHeader({
         className="ehOtpAuthForm__brand"
         aria-label={`${brandTitle}${brandAccent} ${brandSubtitle}`}
       >
-        <LogoMoon aria-hidden="true" />
+        <Icon iconName="logoMoon" aria-hidden="true" />
         <span className="ehOtpAuthForm__brandContent">
           <span className="ehOtpAuthForm__brandName">
             {brandTitle}

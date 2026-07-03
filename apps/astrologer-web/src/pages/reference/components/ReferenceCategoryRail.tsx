@@ -1,11 +1,5 @@
 import type { DictionaryCategoryResponse } from "@elevenhouse/contracts";
-import type { ComponentType, SVGProps } from "react";
-import { Content } from "@elevenhouse/design-system/icons/Content";
-import { Flow } from "@elevenhouse/design-system/icons/Flow";
-import { LayoutGrid } from "@elevenhouse/design-system/icons/LayoutGrid";
-import { Orbit } from "@elevenhouse/design-system/icons/Orbit";
-import { Reference } from "@elevenhouse/design-system/icons/Reference";
-import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
+import { Icon, type IconName } from "@elevenhouse/design-system/icons/Icon";
 import { ReferenceCategoryButton } from "./ReferenceCategoryButton";
 import styles from "../ReferencePage.module.css";
 
@@ -17,18 +11,16 @@ export type ReferenceCategoryRailProps = {
   readonly onCategoryChange: (categoryId: string | null) => void;
 };
 
-type ReferenceIcon = ComponentType<SVGProps<SVGSVGElement>>;
-
-const categoryIconByCode: Record<string, ReferenceIcon> = {
-  planets_in_signs: Orbit,
-  signs: Orbit,
-  planets_in_houses: Content,
-  houses: Content,
-  aspects: Flow,
-  house_meanings: LayoutGrid,
-  "house-mean": LayoutGrid,
-  own: Sparkle,
-  custom: Sparkle
+const categoryIconByCode: Record<string, IconName> = {
+  planets_in_signs: "orbit",
+  signs: "orbit",
+  planets_in_houses: "content",
+  houses: "content",
+  aspects: "flow",
+  house_meanings: "layoutGrid",
+  "house-mean": "layoutGrid",
+  own: "sparkle",
+  custom: "sparkle"
 };
 
 export function ReferenceCategoryRail({
@@ -45,13 +37,13 @@ export function ReferenceCategoryRail({
           id="all"
           label={allCategoriesLabel}
           count={catalogTotal}
-          icon={<Reference width={16} height={16} />}
+          icon={<Icon iconName="reference" width={16} height={16} />}
           isActive={selectedCategoryId === null}
           onClick={() => onCategoryChange(null)}
         />
 
         {categories.map((category) => {
-          const CategoryIcon = categoryIconByCode[category.code] ?? Reference;
+          const iconName = categoryIconByCode[category.code] ?? "reference";
 
           return (
             <ReferenceCategoryButton
@@ -59,7 +51,7 @@ export function ReferenceCategoryRail({
               id={category.id}
               label={category.name}
               count={category.count}
-              icon={<CategoryIcon width={16} height={16} />}
+              icon={<Icon iconName={iconName} width={16} height={16} />}
               isActive={selectedCategoryId === category.id}
               onClick={() => onCategoryChange(category.id)}
             />

@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 import { Children, isValidElement, type ReactElement } from "react";
 import { Chip } from "@elevenhouse/design-system/components/Chip";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
-import { Check } from "@elevenhouse/design-system/icons/Check";
 import { describe, expect, it, vi } from "vitest";
 import { ReferenceAiDraftButton } from "../ReferenceAiDraftButton";
 import {
@@ -12,6 +11,7 @@ import {
   type ReferenceEntryModalViewCopy
 } from "./ReferenceEntryModalView";
 import styles from "./ReferenceEntryModalView.module.css";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 const modalCss = readFileSync(
   fileURLToPath(new URL("./ReferenceEntryModalView.module.css", import.meta.url)),
@@ -183,7 +183,8 @@ describe("ReferenceEntryModalView", () => {
     expect(submitButton.props.disabled).toBe(false);
     expect(submitButton.props.title).toBe("Сохранить");
     expect(submitButton.props.className).toBe(styles.submitButton);
-    expect(submitButton.props.startIcon.type).toBe(Check);
+    expect(submitButton.props.startIcon.type).toBe(Icon);
+    expect(submitButton.props.startIcon.props.iconName).toBe("check");
   });
 
   it("matches the design footer layout with a flexible primary action", () => {
@@ -439,7 +440,7 @@ type TestElementProps = {
   onSubmit: (event: { preventDefault: () => void }) => void;
   placeholder?: string;
   state?: string;
-  startIcon: { type: unknown };
+  startIcon: { props: { iconName?: string }; type: unknown };
   title?: string;
   value?: string;
   width?: number;

@@ -1,6 +1,6 @@
 import { Children, isValidElement, type ReactElement } from "react";
-import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
 import { describe, expect, it, vi } from "vitest";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import {
   ReferenceAiDraftButton,
   type ReferenceAiDraftButtonCopy
@@ -31,7 +31,9 @@ describe("ReferenceAiDraftButton", () => {
     expect(button.props.title).toBe(copy.title);
     expect(button.props["aria-disabled"]).toBeUndefined();
     expect(button.props["data-state"]).toBe("active");
-    expect(findRequiredElementByType(button, Sparkle).props.width).toBe(12);
+    const icon = findRequiredElementByType(button, Icon);
+    expect(icon.props.iconName).toBe("sparkle");
+    expect(icon.props.width).toBe(12);
     expect(JSON.stringify(button.props.children)).toContain("AI-черновик");
 
     button.props.onClick();
@@ -89,6 +91,7 @@ type TestElementProps = {
   disabled?: boolean;
   "data-reference-ai-draft-spinner"?: string;
   "data-state"?: string;
+  iconName?: string;
   onClick: (event?: { preventDefault: () => void }) => void;
   title?: string;
   type?: string;

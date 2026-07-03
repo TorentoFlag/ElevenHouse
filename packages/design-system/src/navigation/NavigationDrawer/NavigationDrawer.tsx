@@ -1,7 +1,6 @@
 import { IconButton } from "../../components/IconButton/index.js";
 import { classNames } from "../../helpers/classNames.js";
-import { ChevronLeft } from "../../icons/ChevronLeft/index.js";
-import { ChevronRight } from "../../icons/ChevronRight/index.js";
+import { Icon } from "../../icons/Icon/index.js";
 import { NavigationDrawerItem } from "./components/NavigationDrawerItem.js";
 import { NavigationDrawerItemButton } from "./components/NavigationDrawerItemButton.js";
 import { normalizeNavigationDrawerItem } from "./helpers/normalizeNavigationDrawerItem.js";
@@ -46,7 +45,7 @@ export function NavigationDrawer({
           <IconButton
             className="ehNavigationDrawer__collapseButton"
             label={collapseButtonLabel}
-            icon={<ChevronLeft aria-hidden="true" />}
+            icon={<Icon iconName="chevronLeft" aria-hidden="true" />}
             variant="drawer"
             size="medium"
             pressed={collapsed}
@@ -59,7 +58,7 @@ export function NavigationDrawer({
         <IconButton
           className="ehNavigationDrawer__expandButton"
           label={collapseButtonLabel}
-          icon={<ChevronRight aria-hidden="true" />}
+          icon={<Icon iconName="chevronRight" aria-hidden="true" />}
           variant="drawer"
           size="medium"
           pressed={collapsed}

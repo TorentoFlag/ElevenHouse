@@ -133,6 +133,10 @@
       "types": "./dist/icons/Flow/index.d.ts",
       "import": "./dist/icons/Flow/index.js"
     },
+    "./icons/Icon": {
+      "types": "./dist/icons/Icon/index.d.ts",
+      "import": "./dist/icons/Icon/index.js"
+    },
     "./icons/LayoutGrid": {
       "types": "./dist/icons/LayoutGrid/index.d.ts",
       "import": "./dist/icons/LayoutGrid/index.js"

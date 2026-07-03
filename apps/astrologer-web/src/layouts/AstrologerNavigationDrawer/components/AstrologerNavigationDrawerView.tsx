@@ -1,12 +1,12 @@
 import { NavigationDrawer } from "@elevenhouse/design-system/navigation";
 import "@elevenhouse/design-system/navigation/NavigationDrawer.css";
-import { LogoMoon } from "@elevenhouse/design-system/icons/LogoMoon";
 import type { AppShellNavigationCopy } from "../../../common/i18n/astrologerCopy";
 import { toNavigationDrawerItem } from "../helpers/navigationDrawerItems";
 import { AstrologerNavigationDrawerBrandTitle } from "./AstrologerNavigationDrawerBrandTitle";
 import { AstrologerNavigationDrawerFooter } from "./AstrologerNavigationDrawerFooter";
 import "./AstrologerNavigationDrawerFooter/AstrologerNavigationDrawerFooter.css";
 import { renderNavigationLink } from "./renderNavigationLink";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 type AstrologerNavigationDrawerViewProps = {
   copy: AppShellNavigationCopy;
@@ -25,7 +25,7 @@ export function AstrologerNavigationDrawerView({
       brand={{
         title: <AstrologerNavigationDrawerBrandTitle title={copy.brandTitle} />,
         subtitle: copy.brandSubtitle,
-        logo: <LogoMoon aria-hidden="true" />
+        logo: <Icon iconName="logoMoon" aria-hidden="true" />
       }}
       collapseLabel={copy.collapseLabel}
       expandLabel={copy.expandLabel}

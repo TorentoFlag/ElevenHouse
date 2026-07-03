@@ -1,0 +1,75 @@
+import { describe, expect, it } from "vitest";
+import { Icon } from "./Icon.js";
+import { iconRegistry } from "./iconRegistry.js";
+
+describe("Icon", () => {
+  it("renders the icon matching iconName", () => {
+    const icon = Icon({ iconName: "video" });
+    const svg = iconRegistry.video(icon.props);
+
+    expect(icon.type).toBe(iconRegistry.video);
+    expect(svg.type).toBe("svg");
+    expect(svg.props.viewBox).toBe("0 0 24 24");
+    expect(svg.props.width).toBe(16);
+    expect(svg.props.height).toBe(16);
+    expect(svg.props.children[0].type).toBe("rect");
+    expect(svg.props.children[0].props).toMatchObject({
+      x: 2.5,
+      y: 6,
+      width: 13,
+      height: 12,
+      rx: 2.4
+    });
+    expect(svg.props.children[1].props.d).toBe("m15.5 10 6-3v10l-6-3");
+  });
+
+  it("forwards svg props and applies size when width and height are omitted", () => {
+    const icon = Icon({
+      iconName: "bell",
+      size: 20,
+      "aria-hidden": true,
+      className: "notificationIcon"
+    });
+
+    expect(icon.props.width).toBe(20);
+    expect(icon.props.height).toBe(20);
+    expect(icon.props["aria-hidden"]).toBe(true);
+    expect(icon.props.className).toBe("notificationIcon");
+  });
+
+  it("lets explicit width and height override size", () => {
+    const icon = Icon({ iconName: "box", size: 20, width: 18, height: 22 });
+
+    expect(icon.props.width).toBe(18);
+    expect(icon.props.height).toBe(22);
+  });
+
+  it("keeps the supported icon names in the registry", () => {
+    expect(Object.keys(iconRegistry).sort()).toEqual([
+      "arrowLeft",
+      "bell",
+      "box",
+      "chat",
+      "check",
+      "chevronDown",
+      "chevronLeft",
+      "chevronRight",
+      "close",
+      "content",
+      "edit",
+      "flow",
+      "layoutGrid",
+      "logoMoon",
+      "orbit",
+      "plus",
+      "reference",
+      "refresh",
+      "search",
+      "sparkle",
+      "trash",
+      "verified",
+      "video",
+      "wallet"
+    ]);
+  });
+});

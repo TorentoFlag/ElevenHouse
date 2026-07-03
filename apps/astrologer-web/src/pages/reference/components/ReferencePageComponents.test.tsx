@@ -3,11 +3,6 @@ import type { DictionaryEffectiveEntryResponse } from "@elevenhouse/contracts";
 import { Card } from "@elevenhouse/design-system/components/Card";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
 import { MotionContent } from "@elevenhouse/design-system/motion";
-import { Edit } from "@elevenhouse/design-system/icons/Edit";
-import { Plus } from "@elevenhouse/design-system/icons/Plus";
-import { Reference } from "@elevenhouse/design-system/icons/Reference";
-import { Search } from "@elevenhouse/design-system/icons/Search";
-import { Trash } from "@elevenhouse/design-system/icons/Trash";
 import { describe, expect, it, vi } from "vitest";
 import { ReferenceCategoryButton } from "./ReferenceCategoryButton";
 import { ReferenceCategoryRail } from "./ReferenceCategoryRail";
@@ -17,6 +12,7 @@ import { ReferenceResults } from "./ReferenceResults";
 import { ReferenceSourceFilterChip } from "./ReferenceSourceFilterChip";
 import { ReferenceToolbar } from "./ReferenceToolbar";
 import styles from "../ReferencePage.module.css";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 const copy = {
   title: "Справочник трактовок",
@@ -115,8 +111,10 @@ describe("Reference page local components", () => {
 
     expect(toolbar.props.className).toBe(styles.toolbar);
     expect(JSON.stringify(toolbar.props.children)).toContain("Справочник трактовок");
-    expect(findFirstElementByType(toolbar, Reference)).toBeTruthy();
-    expect(findFirstElementByType(toolbar, Search)).toBeTruthy();
+    expect(findElementsByType(toolbar, Icon).map((icon) => icon.props.iconName)).toEqual([
+      "reference",
+      "search"
+    ]);
 
     const searchInput = findRequiredElementByType(toolbar, "input");
     searchInput.props.onChange({ currentTarget: { value: "овен" } });
@@ -129,7 +127,8 @@ describe("Reference page local components", () => {
       "add"
     ]);
     expect(getArrayItem(buttons, 0).props.disabled).toBe(true);
-    expect(getArrayItem(buttons, 1).props.startIcon.type).toBe(Plus);
+    expect(getArrayItem(buttons, 1).props.startIcon.type).toBe(Icon);
+    expect(getArrayItem(buttons, 1).props.startIcon.props.iconName).toBe("plus");
     getArrayItem(buttons, 0).props.onClick();
     getArrayItem(buttons, 1).props.onClick();
     expect(onReset).toHaveBeenCalledOnce();
@@ -188,8 +187,10 @@ describe("Reference page local components", () => {
       "data-reference-entry-action",
       "delete"
     );
-    expect(editButton.props.startIcon.type).toBe(Edit);
-    expect(deleteButton.props.icon.type).toBe(Trash);
+    expect(editButton.props.startIcon.type).toBe(Icon);
+    expect(editButton.props.startIcon.props.iconName).toBe("edit");
+    expect(deleteButton.props.icon.type).toBe(Icon);
+    expect(deleteButton.props.icon.props.iconName).toBe("trash");
 
     editButton.props.onClick();
     deleteButton.props.onClick();
@@ -335,7 +336,8 @@ type TestElementProps = {
   "data-reference-entry-action"?: string;
   "data-reference-toolbar-action"?: string;
   disabled?: boolean;
-  icon: { type: unknown };
+  icon: { props: { iconName?: string }; type: unknown };
+  iconName?: string;
   id?: string;
   isActive?: boolean;
   label?: string;
@@ -344,7 +346,7 @@ type TestElementProps = {
   onClose: () => void;
   placeholder?: string;
   source?: string;
-  startIcon: { type: unknown };
+  startIcon: { props: { iconName?: string }; type: unknown };
   title?: string;
   transitionKey?: string;
   type?: string;

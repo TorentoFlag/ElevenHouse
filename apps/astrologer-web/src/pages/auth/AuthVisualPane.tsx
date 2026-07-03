@@ -1,5 +1,5 @@
 import { classNames } from "@elevenhouse/design-system/helpers";
-import { Sparkle } from "@elevenhouse/design-system/icons/Sparkle";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { MotionText } from "@elevenhouse/design-system/motion";
 import { BackLink } from "@elevenhouse/design-system/navigation";
 import type { AuthVisualCopy } from "../../common/i18n/astrologerCopy";
@@ -39,7 +39,7 @@ export function AuthVisualPane({ copy, motionKey }: AuthVisualPaneProps) {
 
         <div className={styles.heroCopy}>
           <div className={styles.brandBadge}>
-            <Sparkle aria-hidden="true" />
+            <Icon iconName="sparkle" aria-hidden="true" />
             ElevenHouse
           </div>
           <h1 className={styles.heroTitle}>
@@ -49,12 +49,12 @@ export function AuthVisualPane({ copy, motionKey }: AuthVisualPaneProps) {
           </h1>
           <div className={styles.highlightList}>
             {copy.highlights.map(({ key, description, label }) => {
-              const Icon = authHighlightIcons[key];
+              const iconName = authHighlightIcons[key];
 
               return (
                 <div className={styles.highlightItem} key={key}>
                   <span className={styles.highlightIcon} aria-hidden="true">
-                    <Icon />
+                    <Icon iconName={iconName} />
                   </span>
                   <span className={styles.highlightText}>
                     <span className={styles.highlightLabel}>

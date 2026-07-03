@@ -10,6 +10,7 @@ describe("design-system root exports", () => {
     expect(designSystem.ChevronDown).toBeTypeOf("function");
     expect(designSystem.ChevronLeft).toBeTypeOf("function");
     expect(designSystem.ChevronRight).toBeTypeOf("function");
+    expect(designSystem.Icon).toBeTypeOf("function");
     expect(designSystem.LanguageSwitcher).toBeTypeOf("function");
     expect(designSystem.LayoutGrid).toBeTypeOf("function");
     expect(designSystem.OtpAuthForm).toBeTypeOf("function");

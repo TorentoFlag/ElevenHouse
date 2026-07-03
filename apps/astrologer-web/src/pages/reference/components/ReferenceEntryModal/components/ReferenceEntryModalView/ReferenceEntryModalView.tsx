@@ -6,7 +6,6 @@ import { Chip } from "@elevenhouse/design-system/components/Chip";
 import "@elevenhouse/design-system/components/Chip.css";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
 import "@elevenhouse/design-system/components/Modal.css";
-import { Check } from "@elevenhouse/design-system/icons/Check";
 import type {
   ReferenceEntryDraft,
   ReferenceEntryDraftFieldErrors,
@@ -15,6 +14,7 @@ import type {
 } from "../../../../helpers/referenceEntryDraft";
 import { ReferenceAiDraftButton } from "../ReferenceAiDraftButton";
 import styles from "./ReferenceEntryModalView.module.css";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 const CATEGORY_ERROR_ID = "reference-entry-modal-category-error";
 const TITLE_ERROR_ID = "reference-entry-modal-title-error";
@@ -217,7 +217,7 @@ export function ReferenceEntryModalView({
             variant="brand"
             size="medium"
             title={isSaving ? copy.savingLabel : copy.saveLabel}
-            startIcon={<Check width={16} height={16} aria-hidden="true" />}
+            startIcon={<Icon iconName="check" width={16} height={16} aria-hidden="true" />}
             disabled={!canSubmit || isSaving}
             data-reference-entry-modal-submit="true"
           />

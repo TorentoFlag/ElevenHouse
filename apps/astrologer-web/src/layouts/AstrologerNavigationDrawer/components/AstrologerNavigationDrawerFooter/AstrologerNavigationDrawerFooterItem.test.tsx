@@ -6,9 +6,14 @@ import { AstrologerNavigationDrawerFooterItem } from "./AstrologerNavigationDraw
 
 describe("AstrologerNavigationDrawerFooterItem", () => {
   it("renders a footer navigation item through NavLink", () => {
-    const referenceItem = toNavigationDrawerItem(
-      astrologerCopyByLocale.ru.appShell.navigation.items[1]!
+    const referenceCopy = astrologerCopyByLocale.ru.appShell.navigation.items.find(
+      (item) => item.id === "reference"
     );
+    if (!referenceCopy) {
+      throw new Error("Expected reference navigation copy");
+    }
+
+    const referenceItem = toNavigationDrawerItem(referenceCopy);
     const element = AstrologerNavigationDrawerFooterItem({
       item: referenceItem
     });

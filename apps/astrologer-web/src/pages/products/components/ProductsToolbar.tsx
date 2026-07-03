@@ -3,9 +3,8 @@ import { Button } from "@elevenhouse/design-system/components/Button";
 import "@elevenhouse/design-system/components/Button.css";
 import { Chip } from "@elevenhouse/design-system/components/Chip";
 import "@elevenhouse/design-system/components/Chip.css";
-import { Box } from "@elevenhouse/design-system/icons/Box";
-import { Plus } from "@elevenhouse/design-system/icons/Plus";
 import styles from "../ProductsPage.module.css";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 export type ProductsToolbarProps = {
   readonly title: string;
@@ -36,7 +35,7 @@ export function ProductsToolbar({
     <header className={styles.toolbar}>
       <div className={styles.titleGroup}>
         <span className={styles.titleIcon} aria-hidden="true">
-          <Box width={18} height={18} />
+          <Icon iconName="box" width={18} height={18} />
         </span>
         <span className={styles.titleText}>
           <h1 id="products-title" className={styles.title}>
@@ -66,7 +65,7 @@ export function ProductsToolbar({
         variant="brand"
         size="big"
         title={createLabel}
-        startIcon={<Plus width={15} height={15} aria-hidden="true" />}
+        startIcon={<Icon iconName="plus" width={15} height={15} aria-hidden="true" />}
         onClick={onCreate}
       />
     </header>

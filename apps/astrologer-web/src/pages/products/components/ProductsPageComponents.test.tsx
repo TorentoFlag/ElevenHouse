@@ -4,8 +4,6 @@ import { Button } from "@elevenhouse/design-system/components/Button";
 import { Card } from "@elevenhouse/design-system/components/Card";
 import { Chip } from "@elevenhouse/design-system/components/Chip";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
-import { Box } from "@elevenhouse/design-system/icons/Box";
-import { Plus } from "@elevenhouse/design-system/icons/Plus";
 import { describe, expect, it, vi } from "vitest";
 import { createDefaultProductDraft } from "../../../features/products/model/productDraft";
 import { productCopyByLocale } from "../../../features/products/model/productCopy";
@@ -17,6 +15,7 @@ import { ProductsResults } from "./ProductsResults";
 import { ProductsSummaryStrip } from "./ProductsSummaryStrip";
 import { ProductsToolbar } from "./ProductsToolbar";
 import styles from "../ProductsPage.module.css";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 const product = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -101,7 +100,7 @@ describe("Products page components", () => {
     });
 
     expect(toolbar.props.className).toBe(styles.toolbar);
-    expect(findRequiredElementByType(toolbar, Box)).toBeTruthy();
+    expect(findRequiredElementByType(toolbar, Icon).props.iconName).toBe("box");
     expect(findElementsByType(toolbar, Chip).map((chip) => chip.props.label)).toEqual([
       "Все",
       "Активные",
@@ -114,7 +113,8 @@ describe("Products page components", () => {
 
     const createButton = findRequiredElementByType(toolbar, Button);
     expect(createButton.props.title).toBe("Создать продукт");
-    expect(createButton.props.startIcon.type).toBe(Plus);
+    expect(createButton.props.startIcon.type).toBe(Icon);
+    expect(createButton.props.startIcon.props.iconName).toBe("plus");
     createButton.props.onClick();
     expect(onCreate).toHaveBeenCalledOnce();
   });
@@ -379,7 +379,8 @@ type TestElementProps = {
   onSubmit: (event: { preventDefault: () => void }) => void | Promise<void>;
   product?: unknown;
   productType?: unknown;
-  startIcon: { type: unknown };
+  startIcon: { props: { iconName?: string }; type: unknown };
+  iconName?: string;
   title?: string;
   value?: string | number;
   "data-product-create-type"?: string;

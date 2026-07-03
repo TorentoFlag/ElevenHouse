@@ -1,10 +1,10 @@
 import type { ProductResponse } from "@elevenhouse/contracts";
 import { Card } from "@elevenhouse/design-system/components/Card";
 import "@elevenhouse/design-system/components/Card.css";
-import { Check } from "@elevenhouse/design-system/icons/Check";
 import type { ProductCopy, ProductLocale } from "../../../features/products/model/productCopy";
 import { createProductCardSummary } from "../../../features/products/model/productFormatting";
 import styles from "../ProductsPage.module.css";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 export type ProductCardProps = {
   readonly product: ProductResponse;
@@ -19,7 +19,7 @@ export function ProductCard({ product, productCopy, locale }: ProductCardProps) 
     <Card as="article" className={styles.productCard} padding="medium" variant="default">
       <div className={styles.productCardHeader}>
         <span className={styles.productTypeIcon} aria-hidden="true">
-          <Check width={17} height={17} />
+          <Icon iconName="check" width={17} height={17} />
         </span>
         <div className={styles.productHeading}>
           <span className={styles.productType}>{summary.typeLabel}</span>
@@ -41,7 +41,7 @@ export function ProductCard({ product, productCopy, locale }: ProductCardProps) 
       <ul className={styles.includedList}>
         {product.includedItems.slice(0, 4).map((item) => (
           <li key={item.id} className={styles.includedItem}>
-            <Check width={13} height={13} aria-hidden="true" />
+            <Icon iconName="check" width={13} height={13} aria-hidden="true" />
             <span>{item.text}</span>
           </li>
         ))}

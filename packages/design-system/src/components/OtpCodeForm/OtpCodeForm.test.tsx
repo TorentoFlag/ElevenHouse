@@ -2,9 +2,8 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
+import { Icon } from "../../icons/Icon/index.js";
 import { Button } from "../Button/index.js";
-import { ArrowLeft } from "../../icons/ArrowLeft/index.js";
-import { Refresh } from "../../icons/Refresh/index.js";
 import { OtpCodeForm } from "./OtpCodeForm.js";
 
 vi.mock("react", async (importOriginal) => ({
@@ -81,8 +80,9 @@ describe("OtpCodeForm", () => {
     expect(backButton?.props?.variant).toBe("default");
     expect(backButton?.props?.size).toBe("medium");
     expect(backButton?.props?.startIcon).toMatchObject({
-      type: ArrowLeft,
+      type: Icon,
       props: {
+        iconName: "arrowLeft",
         className: "ehOtpCodeForm__backIcon",
         width: 18,
         height: 18,
@@ -99,8 +99,9 @@ describe("OtpCodeForm", () => {
     expect(resendButton?.props?.variant).toBe("default");
     expect(resendButton?.props?.size).toBe("medium");
     expect(resendButton?.props?.startIcon).toMatchObject({
-      type: Refresh,
+      type: Icon,
       props: {
+        iconName: "refresh",
         className: "ehOtpCodeForm__resendIcon",
         width: 20,
         height: 20,
@@ -229,14 +230,18 @@ describe("OtpCodeForm", () => {
     const largerBackButton = findElementByClassName(largerForm, "ehOtpCodeForm__back");
 
     expect(defaultBackButton?.props?.startIcon).toMatchObject({
+      type: Icon,
       props: {
+        iconName: "arrowLeft",
         width: 18,
         height: 18
       }
     });
     expect(defaultBackButton?.props?.style).toBeUndefined();
     expect(largerBackButton?.props?.startIcon).toMatchObject({
+      type: Icon,
       props: {
+        iconName: "arrowLeft",
         width: 24,
         height: 24
       }
