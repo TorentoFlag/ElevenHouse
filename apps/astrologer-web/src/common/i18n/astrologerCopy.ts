@@ -79,6 +79,9 @@ export type AstrologerCopy = {
       saveDraftLabel: string;
       savingLabel: string;
       genericError: string;
+      breadcrumbsAriaLabel: string;
+      productsBreadcrumb: string;
+      createBreadcrumb: string;
     };
     summary: {
       activeLabel: string;
@@ -364,7 +367,10 @@ export const astrologerCopyByLocale = {
         cancelLabel: "Отмена",
         saveDraftLabel: "Сохранить черновик",
         savingLabel: "Сохраняем",
-        genericError: "Не удалось сохранить продукт"
+        genericError: "Не удалось сохранить продукт",
+        breadcrumbsAriaLabel: "Путь создания продукта",
+        productsBreadcrumb: "Продукты",
+        createBreadcrumb: "Создать"
       },
       summary: {
         activeLabel: "Активных",
@@ -591,7 +597,10 @@ export const astrologerCopyByLocale = {
         cancelLabel: "Cancel",
         saveDraftLabel: "Save draft",
         savingLabel: "Saving",
-        genericError: "Could not save the product"
+        genericError: "Could not save the product",
+        breadcrumbsAriaLabel: "Product creation path",
+        productsBreadcrumb: "Products",
+        createBreadcrumb: "Create"
       },
       summary: {
         activeLabel: "Active",

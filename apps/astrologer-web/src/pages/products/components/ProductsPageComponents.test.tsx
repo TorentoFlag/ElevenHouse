@@ -4,6 +4,7 @@ import { Button } from "@elevenhouse/design-system/components/Button";
 import { Card } from "@elevenhouse/design-system/components/Card";
 import { Chip } from "@elevenhouse/design-system/components/Chip";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
+import { Breadcrumbs } from "@elevenhouse/design-system/navigation";
 import { describe, expect, it, vi } from "vitest";
 import { createDefaultProductDraft } from "../../../features/products/model/productDraft";
 import { productCopyByLocale } from "../../../features/products/model/productCopy";
@@ -261,7 +262,10 @@ describe("Products page components", () => {
         cancelLabel: "Отмена",
         saveDraftLabel: "Сохранить черновик",
         savingLabel: "Сохраняем",
-        genericError: "Не удалось сохранить продукт"
+        genericError: "Не удалось сохранить продукт",
+        breadcrumbsAriaLabel: "Путь создания продукта",
+        productsBreadcrumb: "Продукты",
+        createBreadcrumb: "Создать"
       },
       productType: productCopyByLocale.ru.types.single,
       draft,
@@ -269,10 +273,22 @@ describe("Products page components", () => {
       error: null,
       onDraftChange,
       onSave,
-      onClose
+      onClose,
+      onBackToTypeSelection: vi.fn(),
+      onCloseCreateFlow: vi.fn()
     });
 
     expect(findRequiredElementByType(modal, Modal).props.title).toBe("Новый продукт");
+    const breadcrumbs = findRequiredElementByType(modal, Breadcrumbs);
+    const breadcrumbItems = breadcrumbs.props.items ?? [];
+    expect(breadcrumbs.props.ariaLabel).toBe("Путь создания продукта");
+    expect(breadcrumbItems.map((item) => item.label)).toEqual([
+      "Продукты",
+      "Создать",
+      "Разовая консультация"
+    ]);
+    expect(getArrayItem(breadcrumbItems, 2).isCurrent).toBe(true);
+
     expect(findRequiredElementByProp(modal, "data-product-editor-type-label").props.children).toBe(
       "Разовая консультация"
     );
@@ -331,7 +347,9 @@ describe("Products page components", () => {
       selectType: vi.fn(),
       updateDraft: vi.fn(),
       saveDraft: vi.fn(),
-      closeEditor: vi.fn()
+      closeEditor: vi.fn(),
+      returnToTypeSelection: vi.fn(),
+      closeCreateFlow: vi.fn()
     };
 
     const flowView = ProductsCreateFlow({
@@ -354,7 +372,10 @@ describe("Products page components", () => {
           cancelLabel: "Отмена",
           saveDraftLabel: "Сохранить черновик",
           savingLabel: "Сохраняем",
-          genericError: "Не удалось сохранить продукт"
+          genericError: "Не удалось сохранить продукт",
+          breadcrumbsAriaLabel: "Путь создания продукта",
+          productsBreadcrumb: "Продукты",
+          createBreadcrumb: "Создать"
         }
       },
       productCopy: productCopyByLocale.ru,
@@ -373,9 +394,13 @@ describe("Products page components", () => {
     editorModal.props.onDraftChange(draft);
     editorModal.props.onSave();
     editorModal.props.onClose();
+    editorModal.props.onBackToTypeSelection();
+    editorModal.props.onCloseCreateFlow();
     expect(flow.updateDraft).toHaveBeenCalledWith(draft);
     expect(flow.saveDraft).toHaveBeenCalledOnce();
     expect(flow.closeEditor).toHaveBeenCalledOnce();
+    expect(flow.returnToTypeSelection).toHaveBeenCalledOnce();
+    expect(flow.closeCreateFlow).toHaveBeenCalledOnce();
   });
 });
 
@@ -386,6 +411,8 @@ type TestElementProps = {
   closeLabel?: string;
   className?: string;
   disabled?: boolean;
+  ariaLabel?: string;
+  items?: Array<{ label: ReactNode; isCurrent?: boolean }>;
   label?: string;
   onChange: (event: { currentTarget: { value: string } }) => void;
   onClick: () => void;
@@ -407,6 +434,8 @@ type TestElementProps = {
   "data-product-editor-type-label"?: string;
   draft?: unknown;
   onClose: () => void;
+  onBackToTypeSelection: () => void;
+  onCloseCreateFlow: () => void;
   onDraftChange: (draft: unknown) => void;
   onSave: () => void | Promise<void>;
   onSelect: (type: string) => void;

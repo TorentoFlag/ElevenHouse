@@ -21,7 +21,9 @@ type ProductCreateFlowAction =
   | { readonly type: "saveStarted" }
   | { readonly type: "saveSucceeded" }
   | { readonly type: "saveFailed"; readonly error: string }
-  | { readonly type: "closeEditor" };
+  | { readonly type: "closeEditor" }
+  | { readonly type: "returnToTypeSelection" }
+  | { readonly type: "closeCreateFlow" };
 
 const initialProductCreateFlowState: ProductCreateFlowState = {
   isTypeModalOpen: false,
@@ -40,6 +42,8 @@ export type ProductCreateFlow = {
   readonly updateDraft: (draft: ProductFormDraft) => void;
   readonly saveDraft: () => Promise<void>;
   readonly closeEditor: () => void;
+  readonly returnToTypeSelection: () => void;
+  readonly closeCreateFlow: () => void;
 };
 
 export function useProductCreateFlow(genericError: string): ProductCreateFlow {
@@ -73,6 +77,16 @@ export function useProductCreateFlow(genericError: string): ProductCreateFlow {
     closeEditor: () => {
       if (!createProductMutation.isPending) {
         dispatch({ type: "closeEditor" });
+      }
+    },
+    returnToTypeSelection: () => {
+      if (!createProductMutation.isPending) {
+        dispatch({ type: "returnToTypeSelection" });
+      }
+    },
+    closeCreateFlow: () => {
+      if (!createProductMutation.isPending) {
+        dispatch({ type: "closeCreateFlow" });
       }
     }
   };
@@ -133,6 +147,18 @@ function productCreateFlowReducer(
       ...state,
       editorError: action.error
     };
+  }
+
+  if (action.type === "returnToTypeSelection") {
+    return {
+      isTypeModalOpen: true,
+      editorDraft: null,
+      editorError: null
+    };
+  }
+
+  if (action.type === "closeCreateFlow") {
+    return initialProductCreateFlowState;
   }
 
   return {

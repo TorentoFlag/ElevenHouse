@@ -3,9 +3,11 @@ import { Button } from "@elevenhouse/design-system/components/Button";
 import "@elevenhouse/design-system/components/Button.css";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
 import "@elevenhouse/design-system/components/Modal.css";
-import type { ProductOptionCopy } from "../../../features/products/model/productCopy";
-import type { ProductFormDraft } from "../../../features/products/model/productDraft";
-import styles from "../ProductsPage.module.css";
+import { Breadcrumbs } from "@elevenhouse/design-system/navigation";
+import "@elevenhouse/design-system/navigation/Breadcrumbs.css";
+import type { ProductOptionCopy } from "../../../../features/products/model/productCopy";
+import type { ProductFormDraft } from "../../../../features/products/model/productDraft";
+import styles from "../../ProductsPage.module.css";
 
 export type ProductEditorModalCopy = {
   readonly createTitle: string;
@@ -21,6 +23,9 @@ export type ProductEditorModalCopy = {
   readonly saveDraftLabel: string;
   readonly savingLabel: string;
   readonly genericError: string;
+  readonly breadcrumbsAriaLabel: string;
+  readonly productsBreadcrumb: string;
+  readonly createBreadcrumb: string;
 };
 
 export type ProductEditorModalProps = {
@@ -32,6 +37,8 @@ export type ProductEditorModalProps = {
   readonly onDraftChange: (draft: ProductFormDraft) => void;
   readonly onSave: () => Promise<void> | void;
   readonly onClose: () => void;
+  readonly onBackToTypeSelection: () => void;
+  readonly onCloseCreateFlow: () => void;
 };
 
 export function ProductEditorModal({
@@ -42,7 +49,9 @@ export function ProductEditorModal({
   error,
   onDraftChange,
   onSave,
-  onClose
+  onClose,
+  onBackToTypeSelection,
+  onCloseCreateFlow
 }: ProductEditorModalProps) {
   return (
     <Modal
@@ -51,6 +60,27 @@ export function ProductEditorModal({
       className={styles.productsModal}
       onClose={onClose}
     >
+      <Breadcrumbs
+        className={styles.editorBreadcrumbs}
+        ariaLabel={copy.breadcrumbsAriaLabel}
+        items={[
+          {
+            id: "products",
+            label: copy.productsBreadcrumb,
+            onClick: onCloseCreateFlow
+          },
+          {
+            id: "create",
+            label: copy.createBreadcrumb,
+            onClick: onBackToTypeSelection
+          },
+          {
+            id: draft.type,
+            label: productType.label,
+            isCurrent: true
+          }
+        ]}
+      />
       <form
         className={styles.editorForm}
         data-product-editor-form="true"

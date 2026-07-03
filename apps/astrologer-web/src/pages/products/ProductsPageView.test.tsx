@@ -30,7 +30,10 @@ const copy = {
     cancelLabel: "Отмена",
     saveDraftLabel: "Сохранить черновик",
     savingLabel: "Сохраняем",
-    genericError: "Не удалось сохранить продукт"
+    genericError: "Не удалось сохранить продукт",
+    breadcrumbsAriaLabel: "Путь создания продукта",
+    productsBreadcrumb: "Продукты",
+    createBreadcrumb: "Создать"
   },
   summary: {
     activeLabel: "Активных",

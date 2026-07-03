@@ -12,6 +12,12 @@ export default defineConfig({
       "@elevenhouse/contracts": fileURLToPath(
         new URL("../../packages/contracts/src/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/navigation/Breadcrumbs.css": fileURLToPath(
+        new URL(
+          "../../packages/design-system/src/navigation/Breadcrumbs/Breadcrumbs.css",
+          import.meta.url
+        )
+      ),
       "@elevenhouse/design-system/navigation": fileURLToPath(
         new URL("../../packages/design-system/src/navigation/index.ts", import.meta.url)
       ),

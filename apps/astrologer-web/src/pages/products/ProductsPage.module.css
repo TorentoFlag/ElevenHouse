@@ -309,6 +309,10 @@
   width: min(760px, calc(100vw - 32px));
 }
 
+.editorBreadcrumbs {
+  margin-bottom: 16px;
+}
+
 .modalDescription {
   margin: 0 0 20px;
   color: var(--eh-color-moon-500);

@@ -119,7 +119,10 @@ const productsCopy = {
     cancelLabel: "Отмена",
     saveDraftLabel: "Сохранить черновик",
     savingLabel: "Сохраняем",
-    genericError: "Не удалось сохранить продукт"
+    genericError: "Не удалось сохранить продукт",
+    breadcrumbsAriaLabel: "Путь создания продукта",
+    productsBreadcrumb: "Продукты",
+    createBreadcrumb: "Создать"
   },
   summary: {
     activeLabel: "Активных",
@@ -316,6 +319,37 @@ describe("ProductsPage", () => {
     expect(editorProps.copy).toBe(productsCopy.editor);
     expect(editorProps.draft.type).toBe("single");
     expect(editorProps.draft.priceMinor).toBe(490000);
+  });
+
+  it("returns from the editor to type selection and closes the full create flow", () => {
+    renderPage();
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onCreate();
+    renderPage();
+    getLatestMockProps<{ onSelect: (type: "custom") => void }>(mocks.productCreateTypeModal).onSelect(
+      "custom"
+    );
+    renderPage();
+
+    let editorProps = getLatestMockProps<ProductEditorModalProps>(mocks.productEditorModal);
+    editorProps.onBackToTypeSelection();
+    renderPage();
+
+    const typeSelectionProps = getLatestMockProps<{ onSelect: (type: "single") => void }>(
+      mocks.productCreateTypeModal
+    );
+    typeSelectionProps.onSelect("single");
+    renderPage();
+
+    editorProps = getLatestMockProps<ProductEditorModalProps>(mocks.productEditorModal);
+    expect(editorProps.draft.type).toBe("single");
+
+    editorProps.onCloseCreateFlow();
+    const typeModalCallCountBeforeCloseRender = mocks.productCreateTypeModal.mock.calls.length;
+    const editorCallCountBeforeCloseRender = mocks.productEditorModal.mock.calls.length;
+    renderPage();
+
+    expect(mocks.productCreateTypeModal).toHaveBeenCalledTimes(typeModalCallCountBeforeCloseRender);
+    expect(mocks.productEditorModal).toHaveBeenCalledTimes(editorCallCountBeforeCloseRender);
   });
 
   it("saves a created draft through the products mutation and closes the editor", async () => {

@@ -36,6 +36,8 @@ export function ProductsCreateFlow({ copy, productCopy, flow }: ProductsCreateFl
           onDraftChange={flow.updateDraft}
           onSave={flow.saveDraft}
           onClose={flow.closeEditor}
+          onBackToTypeSelection={flow.returnToTypeSelection}
+          onCloseCreateFlow={flow.closeCreateFlow}
         />
       ) : null}
     </>

@@ -19,6 +19,11 @@
       "import": "./dist/navigation/NavigationDrawer/index.js"
     },
     "./navigation/NavigationDrawer.css": "./src/navigation/NavigationDrawer/NavigationDrawer.css",
+    "./navigation/Breadcrumbs": {
+      "types": "./dist/navigation/Breadcrumbs/index.d.ts",
+      "import": "./dist/navigation/Breadcrumbs/index.js"
+    },
+    "./navigation/Breadcrumbs.css": "./src/navigation/Breadcrumbs/Breadcrumbs.css",
     "./components": {
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"
@@ -194,6 +199,7 @@
     "./src/components/Card/Card.css",
     "./src/components/Chip/Chip.css",
     "./src/components/IconButton/IconButton.css",
+    "./src/navigation/Breadcrumbs/Breadcrumbs.css",
     "./src/components/Modal/Modal.css",
     "./src/navigation/NavigationDrawer/NavigationDrawer.css",
     "./src/components/OtpAuthForm/OtpAuthForm.css",

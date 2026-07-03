@@ -6,6 +6,7 @@ describe("design-system root exports", () => {
     expect(designSystem.BackLink).toBeTypeOf("function");
     expect(designSystem.Bell).toBeTypeOf("function");
     expect(designSystem.Box).toBeTypeOf("function");
+    expect(designSystem.Breadcrumbs).toBeTypeOf("function");
     expect(designSystem.Button).toBeTypeOf("function");
     expect(designSystem.ChevronDown).toBeTypeOf("function");
     expect(designSystem.ChevronLeft).toBeTypeOf("function");

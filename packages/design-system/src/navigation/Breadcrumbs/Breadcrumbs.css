@@ -1,0 +1,68 @@
+.ehBreadcrumbs {
+  color: rgb(111 106 147);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.ehBreadcrumbs__list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ehBreadcrumbs__item {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.ehBreadcrumbs__item + .ehBreadcrumbs__item::before {
+  flex: 0 0 auto;
+  margin: 0 7px;
+  color: currentColor;
+  content: ">";
+  opacity: 0.72;
+}
+
+.ehBreadcrumbs__button,
+.ehBreadcrumbs__link,
+.ehBreadcrumbs__current {
+  min-width: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.ehBreadcrumbs__button,
+.ehBreadcrumbs__link {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  text-decoration: none;
+}
+
+.ehBreadcrumbs__button:hover,
+.ehBreadcrumbs__button:focus-visible,
+.ehBreadcrumbs__link:hover,
+.ehBreadcrumbs__link:focus-visible {
+  color: rgb(246 210 102);
+  outline: none;
+}
+
+.ehBreadcrumbs__button:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
+.ehBreadcrumbs__current {
+  color: rgb(246 210 102);
+}
