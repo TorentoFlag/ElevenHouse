@@ -1,0 +1,33 @@
+.ehNumberStepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.ehNumberStepper__button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: 10px;
+  background: rgb(22 20 47 / 0.9);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.ehNumberStepper__button:hover {
+  border-color: var(--eh-color-gold-alpha-44);
+  color: var(--eh-color-gold);
+}
+
+.ehNumberStepper__value {
+  min-width: 42px;
+  color: var(--eh-color-moon-120);
+  font-family: var(--eh-font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
