@@ -16,12 +16,10 @@ type RequiredProductConstructorCopy = Pick<
   AstrologerCopy["products"]["editor"],
   | "title"
   | "formatLabel"
-  | "executionModeLabel"
   | "paymentModelLabel"
   | "includedItemIconLabel"
-  | "previewLabel"
+  | "modifierPriceLabel"
   | "saveDraftLabel"
-  | "iconLabelByName"
 >;
 
 const assertRequiredProductConstructorCopy = (
@@ -78,16 +76,11 @@ describe("astrologerCopy", () => {
     expect(assertRequiredProductConstructorCopy(astrologerCopyByLocale.ru.products.editor)).toEqual(
       expect.objectContaining({
         title: "Конструктор продукта",
-        formatLabel: "Формат",
-        executionModeLabel: "Сценарий выполнения",
+        formatLabel: "Формат поставки",
         paymentModelLabel: "Оплата",
         includedItemIconLabel: "Иконка пункта",
-        previewLabel: "Превью",
-        saveDraftLabel: "Сохранить черновик",
-        iconLabelByName: expect.objectContaining({
-          check: "Галочка",
-          video: "Видео"
-        })
+        modifierPriceLabel: "Цена модификатора",
+        saveDraftLabel: "Сохранить черновик"
       })
     );
     expect(assertRequiredProductActionCopy(astrologerCopyByLocale.ru.products.actions)).toEqual({
@@ -103,15 +96,10 @@ describe("astrologerCopy", () => {
       expect.objectContaining({
         title: "Product constructor",
         formatLabel: "Format",
-        executionModeLabel: "Delivery scenario",
         paymentModelLabel: "Payment",
         includedItemIconLabel: "Item icon",
-        previewLabel: "Preview",
-        saveDraftLabel: "Save draft",
-        iconLabelByName: expect.objectContaining({
-          check: "Check",
-          video: "Video"
-        })
+        modifierPriceLabel: "Modifier price",
+        saveDraftLabel: "Save draft"
       })
     );
     expect(assertRequiredProductActionCopy(astrologerCopyByLocale.en.products.actions)).toEqual({

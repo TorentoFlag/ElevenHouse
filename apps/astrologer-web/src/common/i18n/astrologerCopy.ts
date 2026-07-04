@@ -1,7 +1,6 @@
 import type { OtpAuthFormCopy } from "@elevenhouse/design-system/components/OtpAuthForm";
 import type { OtpCodeFormCopy } from "@elevenhouse/design-system/components/OtpCodeForm";
 import type { SupportedLocale } from "@elevenhouse/i18n";
-import type { ProductIconName } from "../../features/products/model/productConstructorOptions";
 
 export type AuthCopy = {
   documentTitle: string;
@@ -75,17 +74,11 @@ export type AstrologerCopy = {
       subtitleLabel: string;
       subtitlePlaceholder: string;
       priceLabel: string;
-      durationLabel: string;
       durationSuffix: string;
-      decrementDurationLabel: string;
-      incrementDurationLabel: string;
       formatLabel: string;
-      executionModeLabel: string;
       paymentModelLabel: string;
-      packageLabel: string;
       packageSessionCountLabel: string;
       packageDiscountLabel: string;
-      subscriptionLabel: string;
       subscriptionPeriodLabel: string;
       trialDaysLabel: string;
       participantModeLabel: string;
@@ -109,13 +102,8 @@ export type AstrologerCopy = {
       modifierPriceLabel: string;
       addModifierLabel: string;
       removeModifierLabel: string;
-      previewLabel: string;
-      previewPriceLabel: string;
-      previewIncludedItemsLabel: string;
-      cancelLabel: string;
       saveDraftLabel: string;
       savingLabel: string;
-      iconLabelByName: Record<ProductIconName, string>;
     };
     actions: {
       menuLabel: string;
@@ -410,31 +398,25 @@ export const astrologerCopyByLocale = {
         subtitleLabel: "Описание",
         subtitlePlaceholder: "Коротко объясните, что получит клиент",
         priceLabel: "Цена",
-        durationLabel: "Длительность",
         durationSuffix: " мин",
-        decrementDurationLabel: "Уменьшить длительность",
-        incrementDurationLabel: "Увеличить длительность",
-        formatLabel: "Формат",
-        executionModeLabel: "Сценарий выполнения",
+        formatLabel: "Формат поставки",
         paymentModelLabel: "Оплата",
-        packageLabel: "Пакет",
         packageSessionCountLabel: "Сессий в пакете",
         packageDiscountLabel: "Скидка пакета",
-        subscriptionLabel: "Подписка",
         subscriptionPeriodLabel: "Период подписки",
         trialDaysLabel: "Пробный период",
         participantModeLabel: "Участники",
         groupSizeLabel: "Размер группы",
-        requiredClientDataLabel: "Данные клиента",
-        methodsLabel: "Методы",
-        accessGrantsLabel: "Доступы",
+        requiredClientDataLabel: "Данные от клиента",
+        methodsLabel: "Метод / система",
+        accessGrantsLabel: "Доступ",
         includedItemsLabel: "Что входит",
         includedItemTextLabel: "Текст пункта",
         includedItemPlaceholder: "Что получает клиент",
         includedItemIconLabel: "Иконка пункта",
         addIncludedItemLabel: "Добавить пункт",
         removeIncludedItemLabel: "Удалить пункт",
-        modifiersLabel: "Модификаторы",
+        modifiersLabel: "Допы · модификаторы",
         modifierKindLabel: "Тип модификатора",
         modifierFixedLabel: "Фиксированная цена",
         modifierPercentLabel: "Процент",
@@ -442,28 +424,10 @@ export const astrologerCopyByLocale = {
         modifierLabelLabel: "Название модификатора",
         modifierLabelPlaceholder: "Название модификатора",
         modifierPriceLabel: "Цена модификатора",
-        addModifierLabel: "Добавить модификатор",
+        addModifierLabel: "Свой модификатор",
         removeModifierLabel: "Удалить модификатор",
-        previewLabel: "Превью",
-        previewPriceLabel: "Стоимость",
-        previewIncludedItemsLabel: "Включено",
-        cancelLabel: "Отмена",
         saveDraftLabel: "Сохранить черновик",
-        savingLabel: "Сохраняем",
-        iconLabelByName: {
-          check: "Галочка",
-          sparkle: "Искра",
-          video: "Видео",
-          chat: "Чат",
-          content: "Контент",
-          flow: "Поток",
-          box: "Коробка",
-          wallet: "Кошелек",
-          orbit: "Орбита",
-          reference: "Справочник",
-          verified: "Проверено",
-          refresh: "Обновить"
-        }
+        savingLabel: "Сохраняем"
       },
       actions: {
         menuLabel: "Действия продукта",
@@ -540,8 +504,8 @@ export const astrologerCopyByLocale = {
         aiDraftErrorLabel: "Повторить AI-черновик",
         aiDraftErrorTitle: "Не удалось создать AI-черновик. Попробуйте ещё раз.",
         aiDraftErrorAnnouncement: "Не удалось создать AI-черновик",
-        cancelLabel: "Отмена",
         saveLabel: "Сохранить",
+        cancelLabel: "Отмена",
         savingLabel: "Сохраняем",
         genericError: "Не удалось сохранить трактовку. Попробуйте ещё раз.",
         validation: {
@@ -699,31 +663,25 @@ export const astrologerCopyByLocale = {
         subtitleLabel: "Description",
         subtitlePlaceholder: "Briefly explain what the client receives",
         priceLabel: "Price",
-        durationLabel: "Duration",
         durationSuffix: " min",
-        decrementDurationLabel: "Decrease duration",
-        incrementDurationLabel: "Increase duration",
         formatLabel: "Format",
-        executionModeLabel: "Delivery scenario",
         paymentModelLabel: "Payment",
-        packageLabel: "Package",
         packageSessionCountLabel: "Sessions in package",
         packageDiscountLabel: "Package discount",
-        subscriptionLabel: "Subscription",
         subscriptionPeriodLabel: "Subscription period",
         trialDaysLabel: "Trial period",
         participantModeLabel: "Participants",
         groupSizeLabel: "Group size",
-        requiredClientDataLabel: "Client data",
-        methodsLabel: "Methods",
+        requiredClientDataLabel: "Client-provided data",
+        methodsLabel: "Method / system",
         accessGrantsLabel: "Access",
-        includedItemsLabel: "Included",
+        includedItemsLabel: "What is included",
         includedItemTextLabel: "Item text",
         includedItemPlaceholder: "What the client receives",
         includedItemIconLabel: "Item icon",
         addIncludedItemLabel: "Add item",
         removeIncludedItemLabel: "Remove item",
-        modifiersLabel: "Modifiers",
+        modifiersLabel: "Add-ons · modifiers",
         modifierKindLabel: "Modifier type",
         modifierFixedLabel: "Fixed price",
         modifierPercentLabel: "Percent",
@@ -731,28 +689,10 @@ export const astrologerCopyByLocale = {
         modifierLabelLabel: "Modifier name",
         modifierLabelPlaceholder: "Modifier name",
         modifierPriceLabel: "Modifier price",
-        addModifierLabel: "Add modifier",
+        addModifierLabel: "Custom modifier",
         removeModifierLabel: "Remove modifier",
-        previewLabel: "Preview",
-        previewPriceLabel: "Price",
-        previewIncludedItemsLabel: "Included",
-        cancelLabel: "Cancel",
         saveDraftLabel: "Save draft",
-        savingLabel: "Saving",
-        iconLabelByName: {
-          check: "Check",
-          sparkle: "Sparkle",
-          video: "Video",
-          chat: "Chat",
-          content: "Content",
-          flow: "Flow",
-          box: "Box",
-          wallet: "Wallet",
-          orbit: "Orbit",
-          reference: "Reference",
-          verified: "Verified",
-          refresh: "Refresh"
-        }
+        savingLabel: "Saving"
       },
       actions: {
         menuLabel: "Product actions",
@@ -829,8 +769,8 @@ export const astrologerCopyByLocale = {
         aiDraftErrorLabel: "Retry AI draft",
         aiDraftErrorTitle: "Could not create the AI draft. Try again.",
         aiDraftErrorAnnouncement: "Could not create the AI draft",
-        cancelLabel: "Cancel",
         saveLabel: "Save",
+        cancelLabel: "Cancel",
         savingLabel: "Saving",
         genericError: "Could not save the interpretation. Try again.",
         validation: {

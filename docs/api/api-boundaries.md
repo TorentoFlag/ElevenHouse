@@ -15,6 +15,9 @@ payments остаются будущими модулями этой повер�
 - Order creation для клиентских покупок.
 - Checkout/payment initiation.
 - Client cabinet: orders, bookings, materials, subscriptions.
+- Client-linked astrologers for cabinet context, limited to existing explicit
+  relationships. This must not become astrologer discovery, recommendation,
+  search or catalog API.
 
 Примеры routes:
 
