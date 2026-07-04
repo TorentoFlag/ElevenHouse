@@ -19,13 +19,16 @@ pnpm install
 ## Local Infrastructure
 
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres redis minio minio-init
 ```
 
 Сервисы:
 
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
+- MinIO S3 API: `localhost:9000`
+- MinIO console: `http://localhost:9001`
+- Local media bucket: `elevenhouse-local-media`
 
 Переменные окружения для локального запуска описаны в `.env.example`.
 

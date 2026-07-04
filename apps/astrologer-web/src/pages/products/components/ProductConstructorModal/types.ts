@@ -61,12 +61,16 @@ export type ProductConstructorModalProps = {
   readonly locale: ProductLocale;
   readonly draft: ProductFormDraft;
   readonly isSaving: boolean;
+  readonly isCoverUploading: boolean;
+  readonly coverMediaUrl: string | null;
   readonly error: string | null;
+  readonly coverUploadError: string | null;
   readonly portalTarget?: Element | null;
   readonly backdropClassName?: string;
   readonly onDraftChange: (draft: ProductFormDraft) => void;
   readonly onSave: () => Promise<void> | void;
   readonly onPublish: () => Promise<void> | void;
+  readonly onCoverFileSelected: (file: File) => Promise<void> | void;
   readonly onClose: () => void;
 };
 
@@ -76,6 +80,10 @@ export type ProductConstructorSectionProps = {
   readonly locale: ProductLocale;
   readonly draft: ProductFormDraft;
   readonly controller: ProductConstructorController;
+  readonly isCoverUploading: boolean;
+  readonly coverMediaUrl: string | null;
+  readonly coverUploadError: string | null;
+  readonly onCoverFileSelected: (file: File) => Promise<void> | void;
 };
 
 export type ProductConstructorOptionValue =

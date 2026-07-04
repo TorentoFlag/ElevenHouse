@@ -16,12 +16,16 @@ export function ProductConstructorModal({
   locale,
   draft,
   isSaving,
+  isCoverUploading,
+  coverMediaUrl,
   error,
+  coverUploadError,
   portalTarget,
   backdropClassName,
   onDraftChange,
   onSave,
   onPublish,
+  onCoverFileSelected,
   onClose
 }: ProductConstructorModalProps) {
   const controller = useProductConstructorController({ draft, productCopy, locale, onDraftChange });
@@ -68,12 +72,17 @@ export function ProductConstructorModal({
               locale={locale}
               draft={draft}
               controller={controller}
+              isCoverUploading={isCoverUploading}
+              coverMediaUrl={coverMediaUrl}
+              coverUploadError={coverUploadError}
+              onCoverFileSelected={onCoverFileSelected}
             />
             <ProductConstructorPreviewColumn
               copy={copy}
               locale={locale}
               draft={draft}
               controller={controller}
+              coverMediaUrl={coverMediaUrl}
               error={error}
             />
           </div>

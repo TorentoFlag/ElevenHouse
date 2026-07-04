@@ -7,10 +7,13 @@ import {
 } from "@nestjs/common";
 import {
   archiveProduct,
+  assertUsableMediaForOwner,
   createProduct,
   duplicateProduct,
   getProduct,
   listProducts,
+  MediaNotFoundError,
+  MediaValidationError,
   moveProductToDraft,
   ProductNotFoundError,
   ProductValidationError,
@@ -19,6 +22,7 @@ import {
   type Product,
   type ProductAnalyticsReader,
   type ProductCreateInput,
+  type MediaAssetStore,
   type ProductStore,
   type ProductUpdatePatch
 } from "@elevenhouse/domain";
@@ -41,12 +45,14 @@ import type { ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { PRODUCT_ANALYTICS_READER, PRODUCT_STORE } from "./products.tokens";
+import { MEDIA_ASSET_STORE } from "../media/media.tokens";
 
 @Injectable()
 export class ProductsService {
   constructor(
     @Inject(PRODUCT_STORE) private readonly store: ProductStore,
     @Inject(PRODUCT_ANALYTICS_READER) private readonly analyticsReader: ProductAnalyticsReader,
+    @Inject(MEDIA_ASSET_STORE) private readonly mediaStore: MediaAssetStore,
     private readonly clock: SystemClock
   ) {}
 
@@ -114,6 +120,7 @@ export class ProductsService {
   async createProduct(body: unknown, request: AstrologerSessionRequest): Promise<ProductResponse> {
     const parsedBody = parseContract(createProductRequestSchema, body);
     const ownerUserId = requireOwnerUserId(request);
+    await this.assertProductCoverMedia(ownerUserId, parsedBody.coverMediaId);
     const product = await createProduct({
       store: this.store,
       input: toCreateInput(parsedBody, ownerUserId),
@@ -132,6 +139,7 @@ export class ProductsService {
     const params = parseContract(productIdParamSchema, { productId });
     const patch = parseContract(updateProductRequestSchema, body);
     const ownerUserId = requireOwnerUserId(request);
+    await this.assertProductCoverMedia(ownerUserId, patch.coverMediaId);
 
     return mapProductErrors(async () => {
       const product = await updateProduct({
@@ -205,6 +213,22 @@ export class ProductsService {
       });
       const [response] = await this.mapProducts(ownerUserId, [product]);
       return productResponseSchema.parse(response);
+    });
+  }
+
+  private async assertProductCoverMedia(
+    ownerUserId: string,
+    coverMediaId: string | null | undefined
+  ): Promise<void> {
+    if (!coverMediaId) return;
+
+    await mapProductErrors(async () => {
+      await assertUsableMediaForOwner({
+        store: this.mediaStore,
+        ownerUserId,
+        mediaId: coverMediaId,
+        purpose: "product_cover"
+      });
     });
   }
 
@@ -322,7 +346,11 @@ async function mapProductErrors<T>(operation: () => Promise<T>): Promise<T> {
     if (error instanceof ProductNotFoundError) {
       throw new NotFoundException("Product not found");
     }
-    if (error instanceof ProductValidationError) {
+    if (
+      error instanceof ProductValidationError ||
+      error instanceof MediaValidationError ||
+      error instanceof MediaNotFoundError
+    ) {
       throw new BadRequestException(error.message);
     }
 

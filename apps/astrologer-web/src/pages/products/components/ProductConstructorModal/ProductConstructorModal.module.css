@@ -248,6 +248,7 @@
 }
 
 .constructorCoverDropzone {
+  position: relative;
   display: grid;
   width: 150px;
   height: 96px;
@@ -262,6 +263,26 @@
   font: inherit;
   font-size: 13px;
   font-weight: 700;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.constructorCoverDropzone[data-uploading="true"] {
+  cursor: progress;
+  opacity: 0.72;
+}
+
+.constructorFileInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.constructorCoverImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .constructorMediaFields {
@@ -789,6 +810,7 @@
 }
 
 .constructorPreviewCover {
+  position: relative;
   display: grid;
   box-sizing: border-box;
   height: 150px;
@@ -802,6 +824,7 @@
   color: rgb(143 136 179);
   font-size: 14px;
   font-weight: 700;
+  overflow: hidden;
 }
 
 .constructorPreviewHeader {

@@ -35,7 +35,11 @@ export function BasicProductSections({
   productCopy,
   locale,
   draft,
-  controller
+  controller,
+  isCoverUploading,
+  coverMediaUrl,
+  coverUploadError,
+  onCoverFileSelected
 }: ProductConstructorSectionProps) {
   const { uiCopy, actions } = controller;
 
@@ -51,14 +55,34 @@ export function BasicProductSections({
           hint={uiCopy.mediaHint}
         />
         <div className={styles.constructorMediaRow}>
-          <div
+          <label
             className={styles.constructorCoverDropzone}
             data-product-constructor-cover-dropzone="true"
+            data-uploading={isCoverUploading ? "true" : undefined}
             aria-label={uiCopy.coverPlaceholder}
           >
-            <Icon iconName="image" width={34} height={34} aria-hidden="true" />
-            <span>{uiCopy.coverPlaceholder}</span>
-          </div>
+            {coverMediaUrl ? (
+              <img src={coverMediaUrl} alt="" className={styles.constructorCoverImage} />
+            ) : (
+              <>
+                <Icon iconName="image" width={34} height={34} aria-hidden="true" />
+                <span>{isCoverUploading ? copy.savingLabel : uiCopy.coverPlaceholder}</span>
+              </>
+            )}
+            <input
+              className={styles.constructorFileInput}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/avif"
+              disabled={isCoverUploading}
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = "";
+                if (file) {
+                  void onCoverFileSelected(file);
+                }
+              }}
+            />
+          </label>
           <div className={styles.constructorMediaFields}>
             <label className={styles.constructorInputShell}>
               <Icon iconName="video" width={17} height={17} aria-hidden="true" />
@@ -71,7 +95,9 @@ export function BasicProductSections({
                 }
               />
             </label>
-            <p className={styles.constructorHint}>{uiCopy.introVideoHint}</p>
+            <p className={styles.constructorHint}>
+              {coverUploadError ? coverUploadError : uiCopy.introVideoHint}
+            </p>
           </div>
         </div>
       </section>
@@ -159,6 +185,10 @@ export function BasicProductSections({
         locale={locale}
         draft={draft}
         controller={controller}
+        isCoverUploading={isCoverUploading}
+        coverMediaUrl={coverMediaUrl}
+        coverUploadError={coverUploadError}
+        onCoverFileSelected={onCoverFileSelected}
       />
       <DurationSection
         copy={copy}
@@ -166,6 +196,10 @@ export function BasicProductSections({
         locale={locale}
         draft={draft}
         controller={controller}
+        isCoverUploading={isCoverUploading}
+        coverMediaUrl={coverMediaUrl}
+        coverUploadError={coverUploadError}
+        onCoverFileSelected={onCoverFileSelected}
       />
       <ParticipantsSection
         copy={copy}
@@ -173,6 +207,10 @@ export function BasicProductSections({
         locale={locale}
         draft={draft}
         controller={controller}
+        isCoverUploading={isCoverUploading}
+        coverMediaUrl={coverMediaUrl}
+        coverUploadError={coverUploadError}
+        onCoverFileSelected={onCoverFileSelected}
       />
     </>
   );

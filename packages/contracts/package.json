@@ -14,6 +14,11 @@
       "types": "./dist/products.d.ts",
       "import": "./dist/products.js",
       "require": "./dist/products.js"
+    },
+    "./media": {
+      "types": "./dist/media.d.ts",
+      "import": "./dist/media.js",
+      "require": "./dist/media.js"
     }
   },
   "scripts": {

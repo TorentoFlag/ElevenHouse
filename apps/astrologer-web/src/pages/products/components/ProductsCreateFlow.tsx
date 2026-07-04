@@ -47,12 +47,16 @@ export function ProductsCreateFlow({
           locale={locale}
           draft={flow.editorDraft}
           isSaving={flow.isSaving}
+          isCoverUploading={flow.isCoverUploading}
+          coverMediaUrl={flow.coverMediaUrl}
           error={flow.editorError}
+          coverUploadError={flow.coverUploadError}
           portalTarget={modalTarget}
           backdropClassName={styles.productScopedModalBackdrop}
           onDraftChange={flow.updateDraft}
           onSave={flow.saveDraft}
           onPublish={flow.publishDraft}
+          onCoverFileSelected={flow.uploadProductCover}
           onClose={flow.closeEditor}
         />
       ) : null}

@@ -6,6 +6,7 @@ import {
   type ProductFormDraft
 } from "../../../features/products/model/productDraft";
 import { persistProductDraft } from "../../../features/products/model/productCreateFlowPersistence";
+import { uploadMediaFile } from "../../../features/media/api/uploadMediaFile";
 import { useCreateProductMutation } from "../../../features/products/model/useCreateProductMutation";
 import { usePublishProductMutation } from "../../../features/products/model/usePublishProductMutation";
 import { useUpdateProductMutation } from "../../../features/products/model/useUpdateProductMutation";
@@ -15,6 +16,9 @@ type ProductCreateFlowState = {
   readonly editorDraft: ProductFormDraft | null;
   readonly editingProductId: string | null;
   readonly editorError: string | null;
+  readonly coverMediaUrl: string | null;
+  readonly isCoverUploading: boolean;
+  readonly coverUploadError: string | null;
 };
 
 type ProductCreateFlowAction =
@@ -31,6 +35,9 @@ type ProductCreateFlowAction =
       readonly error: string;
     }
   | { readonly type: "saveFailed"; readonly error: string }
+  | { readonly type: "coverUploadStarted" }
+  | { readonly type: "coverUploadSucceeded"; readonly mediaId: string; readonly url: string }
+  | { readonly type: "coverUploadFailed"; readonly error: string }
   | { readonly type: "closeEditor" }
   | { readonly type: "returnToTypeSelection" }
   | { readonly type: "closeCreateFlow" };
@@ -39,19 +46,26 @@ const initialProductCreateFlowState: ProductCreateFlowState = {
   isTypeModalOpen: false,
   editorDraft: null,
   editingProductId: null,
-  editorError: null
+  editorError: null,
+  coverMediaUrl: null,
+  isCoverUploading: false,
+  coverUploadError: null
 };
 
 export type ProductCreateFlow = {
   readonly isTypeModalOpen: boolean;
   readonly editorDraft: ProductFormDraft | null;
   readonly editorError: string | null;
+  readonly coverMediaUrl: string | null;
+  readonly isCoverUploading: boolean;
+  readonly coverUploadError: string | null;
   readonly isSaving: boolean;
   readonly openTypeSelection: () => void;
   readonly closeTypeSelection: () => void;
   readonly selectType: (type: ProductType) => void;
   readonly editProduct: (product: ProductResponse) => void;
   readonly updateDraft: (draft: ProductFormDraft) => void;
+  readonly uploadProductCover: (file: File) => Promise<void>;
   readonly saveDraft: () => Promise<void>;
   readonly publishDraft: () => Promise<void>;
   readonly closeEditor: () => void;
@@ -100,6 +114,23 @@ export function useProductCreateFlow(genericError: string): ProductCreateFlow {
 
     dispatch({ type: "saveFailed", error: genericError });
   };
+  const uploadProductCover = async (file: File) => {
+    if (!state.editorDraft || state.isCoverUploading) {
+      return;
+    }
+
+    dispatch({ type: "coverUploadStarted" });
+
+    try {
+      const media = await uploadMediaFile({
+        purpose: "product_cover",
+        file
+      });
+      dispatch({ type: "coverUploadSucceeded", mediaId: media.id, url: media.url });
+    } catch {
+      dispatch({ type: "coverUploadFailed", error: genericError });
+    }
+  };
 
   return {
     ...state,
@@ -109,6 +140,7 @@ export function useProductCreateFlow(genericError: string): ProductCreateFlow {
     selectType: (type) => dispatch({ type: "selectType", productType: type }),
     editProduct: (product) => dispatch({ type: "editProduct", product }),
     updateDraft: (draft) => dispatch({ type: "updateDraft", draft }),
+    uploadProductCover,
     saveDraft: () => persistDraft(false),
     publishDraft: () => persistDraft(true),
     closeEditor: () => {
@@ -139,7 +171,10 @@ function productCreateFlowReducer(
       isTypeModalOpen: true,
       editorDraft: null,
       editingProductId: null,
-      editorError: null
+      editorError: null,
+      coverMediaUrl: null,
+      isCoverUploading: false,
+      coverUploadError: null
     };
   }
 
@@ -155,7 +190,10 @@ function productCreateFlowReducer(
       isTypeModalOpen: false,
       editorDraft: createDefaultProductDraft(action.productType),
       editingProductId: null,
-      editorError: null
+      editorError: null,
+      coverMediaUrl: null,
+      isCoverUploading: false,
+      coverUploadError: null
     };
   }
 
@@ -164,7 +202,10 @@ function productCreateFlowReducer(
       isTypeModalOpen: false,
       editorDraft: createProductDraftFromResponse(action.product),
       editingProductId: action.product.id,
-      editorError: null
+      editorError: null,
+      coverMediaUrl: null,
+      isCoverUploading: false,
+      coverUploadError: null
     };
   }
 
@@ -172,7 +213,8 @@ function productCreateFlowReducer(
     return {
       ...state,
       editorDraft: action.draft,
-      editorError: null
+      editorError: null,
+      coverUploadError: null
     };
   }
 
@@ -183,12 +225,53 @@ function productCreateFlowReducer(
     };
   }
 
+  if (action.type === "coverUploadStarted") {
+    return {
+      ...state,
+      isCoverUploading: true,
+      coverUploadError: null,
+      editorError: null
+    };
+  }
+
+  if (action.type === "coverUploadSucceeded") {
+    if (!state.editorDraft) {
+      return {
+        ...state,
+        isCoverUploading: false,
+        coverUploadError: null
+      };
+    }
+
+    return {
+      ...state,
+      editorDraft: {
+        ...state.editorDraft,
+        coverMediaId: action.mediaId
+      },
+      coverMediaUrl: action.url,
+      isCoverUploading: false,
+      coverUploadError: null
+    };
+  }
+
+  if (action.type === "coverUploadFailed") {
+    return {
+      ...state,
+      isCoverUploading: false,
+      coverUploadError: action.error
+    };
+  }
+
   if (action.type === "saveSucceeded") {
     return {
       ...state,
       editorDraft: null,
       editingProductId: null,
-      editorError: null
+      editorError: null,
+      coverMediaUrl: null,
+      isCoverUploading: false,
+      coverUploadError: null
     };
   }
 
@@ -204,7 +287,10 @@ function productCreateFlowReducer(
       ...state,
       editorDraft: createProductDraftFromResponse(action.product),
       editingProductId: action.product.id,
-      editorError: action.error
+      editorError: action.error,
+      coverMediaUrl: null,
+      isCoverUploading: false,
+      coverUploadError: null
     };
   }
 
@@ -213,7 +299,10 @@ function productCreateFlowReducer(
       isTypeModalOpen: true,
       editorDraft: null,
       editingProductId: null,
-      editorError: null
+      editorError: null,
+      coverMediaUrl: null,
+      isCoverUploading: false,
+      coverUploadError: null
     };
   }
 
@@ -225,6 +314,9 @@ function productCreateFlowReducer(
     ...state,
     editorDraft: null,
     editingProductId: null,
-    editorError: null
+    editorError: null,
+    coverMediaUrl: null,
+    isCoverUploading: false,
+    coverUploadError: null
   };
 }

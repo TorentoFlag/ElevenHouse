@@ -57,6 +57,9 @@ export default defineConfig({
       "@elevenhouse/validation/products": fileURLToPath(
         new URL("../../packages/validation/src/products/index.ts", import.meta.url)
       ),
+      "@elevenhouse/validation/media": fileURLToPath(
+        new URL("../../packages/validation/src/media/index.ts", import.meta.url)
+      ),
       "@elevenhouse/validation": fileURLToPath(
         new URL("../../packages/validation/src/index.ts", import.meta.url)
       )

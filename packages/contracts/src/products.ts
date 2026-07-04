@@ -42,6 +42,22 @@ const optionalNullableTrimmedStringSchema = z
     z.null()
   ])
   .optional();
+const optionalUuidSchema = z
+  .string()
+  .trim()
+  .transform((value) => (value.length === 0 ? undefined : value))
+  .pipe(uuidSchema.optional())
+  .optional();
+const optionalNullableUuidSchema = z
+  .union([
+    z
+      .string()
+      .trim()
+      .transform((value) => (value.length === 0 ? null : value))
+      .pipe(uuidSchema.nullable()),
+    z.null()
+  ])
+  .optional();
 const optionalUrlStringSchema = z
   .string()
   .trim()
@@ -161,7 +177,7 @@ const productPayloadFields = {
   subtitle: optionalTrimmedStringSchema,
   priceMinor: z.number().int().min(0),
   currency: productCurrencySchema,
-  coverMediaId: optionalTrimmedStringSchema,
+  coverMediaId: optionalUuidSchema,
   introVideoUrl: optionalUrlStringSchema,
   executionMode: productExecutionModeSchema,
   paymentModel: productPaymentModelSchema,
@@ -185,7 +201,7 @@ const productPayloadFields = {
 const updateProductPayloadFields = {
   ...productPayloadFields,
   subtitle: optionalNullableTrimmedStringSchema,
-  coverMediaId: optionalNullableTrimmedStringSchema,
+  coverMediaId: optionalNullableUuidSchema,
   introVideoUrl: optionalNullableUrlStringSchema,
   durationMinutes: optionalNullablePositiveIntSchema,
   durationLabel: optionalNullableTrimmedStringSchema,
@@ -301,7 +317,7 @@ export const productResponseSchema = z
     ownerUserId: uuidSchema,
     status: productStatusSchema,
     subtitle: nullableStringSchema,
-    coverMediaId: nullableStringSchema,
+  coverMediaId: uuidSchema.nullable(),
     introVideoUrl: nullableStringSchema,
     durationMinutes: z.number().int().positive().nullable(),
     durationLabel: nullableStringSchema,

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "../identity/accounts.schema";
+import { mediaAssets } from "../media/media-assets.schema";
 import {
   formatSqlValues,
   productCurrencyValues,
@@ -25,7 +26,9 @@ export const products = pgTable(
     subtitle: text("subtitle"),
     priceMinor: integer("price_minor").notNull(),
     currency: text("currency").notNull(),
-    coverMediaId: text("cover_media_id"),
+    coverMediaId: uuid("cover_media_id").references(() => mediaAssets.id, {
+      onDelete: "set null"
+    }),
     introVideoUrl: text("intro_video_url"),
     executionMode: text("execution_mode").notNull(),
     paymentModel: text("payment_model").notNull(),

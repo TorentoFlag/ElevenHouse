@@ -82,6 +82,12 @@ const copy = {
     refresh: "Обновить"
   }
 };
+const defaultCoverUploadProps = {
+  isCoverUploading: false,
+  coverMediaUrl: null,
+  coverUploadError: null,
+  onCoverFileSelected: vi.fn()
+};
 
 describe("ProductConstructorModal", () => {
   it("renders constructor controls and submits draft changes", () => {
@@ -99,6 +105,7 @@ describe("ProductConstructorModal", () => {
       locale: "ru",
       draft,
       isSaving: false,
+      ...defaultCoverUploadProps,
       error: null,
       onDraftChange,
       onSave,
@@ -157,6 +164,7 @@ describe("ProductConstructorModal", () => {
       locale: "ru",
       draft,
       isSaving: false,
+      ...defaultCoverUploadProps,
       error: null,
       onDraftChange: vi.fn(),
       onSave: vi.fn(),
@@ -225,6 +233,7 @@ describe("ProductConstructorModal", () => {
       locale: "ru",
       draft,
       isSaving: false,
+      ...defaultCoverUploadProps,
       error: null,
       onDraftChange: vi.fn(),
       onSave: vi.fn(),
@@ -255,6 +264,7 @@ describe("ProductConstructorModal", () => {
       locale: "ru",
       draft: createDefaultProductDraft("single"),
       isSaving: false,
+      ...defaultCoverUploadProps,
       error: null,
       onDraftChange: vi.fn(),
       onSave,
@@ -281,6 +291,7 @@ describe("ProductConstructorModal", () => {
       locale: "ru",
       draft,
       isSaving: false,
+      ...defaultCoverUploadProps,
       error: null,
       onDraftChange,
       onSave: vi.fn(),
@@ -319,6 +330,7 @@ describe("ProductConstructorModal", () => {
       locale: "ru",
       draft,
       isSaving: false,
+      ...defaultCoverUploadProps,
       error: null,
       onDraftChange,
       onSave: vi.fn(),
@@ -353,6 +365,7 @@ describe("ProductConstructorModal", () => {
       locale: "ru",
       draft,
       isSaving: false,
+      ...defaultCoverUploadProps,
       error: null,
       onDraftChange: vi.fn(),
       onSave: vi.fn(),
@@ -406,6 +419,7 @@ describe("ProductConstructorModal", () => {
       locale: "ru",
       draft,
       isSaving: false,
+      ...defaultCoverUploadProps,
       error: null,
       onDraftChange,
       onSave: vi.fn(),

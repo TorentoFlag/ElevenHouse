@@ -14,12 +14,14 @@ export function ProductConstructorPreviewColumn({
   locale,
   draft,
   controller,
+  coverMediaUrl,
   error
 }: {
   readonly copy: ProductConstructorModalCopy;
   readonly locale: ProductLocale;
   readonly draft: ProductFormDraft;
   readonly controller: ProductConstructorController;
+  readonly coverMediaUrl: string | null;
   readonly error: string | null;
 }) {
   const { uiCopy, viewModel } = controller;
@@ -39,8 +41,14 @@ export function ProductConstructorPreviewColumn({
           className={styles.constructorPreviewCover}
           data-product-constructor-preview-cover="true"
         >
-          <Icon iconName="image" width={42} height={42} aria-hidden="true" />
-          <span>{getPreviewCoverPlaceholder(uiCopy.coverPlaceholder)}</span>
+          {coverMediaUrl ? (
+            <img src={coverMediaUrl} alt="" className={styles.constructorCoverImage} />
+          ) : (
+            <>
+              <Icon iconName="image" width={42} height={42} aria-hidden="true" />
+              <span>{getPreviewCoverPlaceholder(uiCopy.coverPlaceholder)}</span>
+            </>
+          )}
         </div>
         <div className={styles.constructorPreviewHeader}>
           <span className={styles.constructorPreviewIcon} aria-hidden="true">

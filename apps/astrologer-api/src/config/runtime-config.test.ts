@@ -44,6 +44,16 @@ const defaultSecurityConfig = {
     verifyChallenge: { limit: 5, windowSeconds: 900 },
     verifyIp: { limit: 60, windowSeconds: 900 }
   },
+  mediaStorage: {
+    endpoint: "http://localhost:9000",
+    region: "us-east-1",
+    bucket: "elevenhouse-local-media",
+    accessKeyId: "elevenhouse",
+    secretAccessKey: "elevenhouse-secret",
+    forcePathStyle: true,
+    publicBaseUrl: "http://localhost:9000/elevenhouse-local-media",
+    uploadTtlSeconds: 900
+  },
   ai: defaultAiConfig
 };
 
@@ -90,6 +100,31 @@ describe("createAstrologerApiRuntimeConfig", () => {
       port: 3002,
       redisUrl: "redis://redis.internal:6379/4",
       ...defaultSecurityConfig
+    });
+  });
+
+  it("parses S3-compatible media storage settings from env", () => {
+    const config = createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      ASTROLOGER_MEDIA_STORAGE_ENDPOINT: "https://s3.storage.example/",
+      ASTROLOGER_MEDIA_STORAGE_REGION: "eu-central-1",
+      ASTROLOGER_MEDIA_STORAGE_BUCKET: "elevenhouse-prod-media",
+      ASTROLOGER_MEDIA_STORAGE_ACCESS_KEY_ID: "prod-key",
+      ASTROLOGER_MEDIA_STORAGE_SECRET_ACCESS_KEY: "prod-secret",
+      ASTROLOGER_MEDIA_STORAGE_FORCE_PATH_STYLE: "false",
+      ASTROLOGER_MEDIA_STORAGE_PUBLIC_BASE_URL: "https://cdn.elevenhouse.com/media/",
+      ASTROLOGER_MEDIA_UPLOAD_TTL_SECONDS: "600"
+    });
+
+    expect(config.mediaStorage).toEqual({
+      endpoint: "https://s3.storage.example",
+      region: "eu-central-1",
+      bucket: "elevenhouse-prod-media",
+      accessKeyId: "prod-key",
+      secretAccessKey: "prod-secret",
+      forcePathStyle: false,
+      publicBaseUrl: "https://cdn.elevenhouse.com/media",
+      uploadTtlSeconds: 600
     });
   });
 

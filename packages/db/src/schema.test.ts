@@ -19,6 +19,13 @@ import {
   dictionaryPlatformEntries,
   dictionaryPlatformEntryStatusValues,
   identityProviderValues,
+  mediaAssets,
+  mediaImageMimeTypeValues,
+  mediaPurposeValues,
+  mediaStatusValues,
+  mediaVariants,
+  mediaVariantValues,
+  mediaVisibilityValues,
   outboxEvents,
   outboxEventStatusValues,
   productAccessGrants,
@@ -228,6 +235,56 @@ describe("database account schema constants", () => {
     expect(migration).toContain(
       'CREATE INDEX "products_owner_status_created_id_idx" ON "products" USING btree ("owner_user_id","status","created_at","id")'
     );
+    expect(migration).toContain(
+      'ALTER TABLE "products" ADD CONSTRAINT "products_cover_media_id_media_assets_id_fk" FOREIGN KEY ("cover_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action'
+    );
+  });
+
+  it("exports media tables and explicit values", () => {
+    expect(mediaPurposeValues).toEqual(["product_cover", "profile_avatar", "profile_cover"]);
+    expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
+    expect(mediaVisibilityValues).toEqual(["public", "private"]);
+    expect(mediaImageMimeTypeValues).toEqual([
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/avif"
+    ]);
+    expect(mediaVariantValues).toEqual(["original", "preview", "card", "cover"]);
+    expect(mediaAssets).toBeDefined();
+    expect(mediaVariants).toBeDefined();
+  });
+
+  it("keeps media tables in the current baseline migration", () => {
+    const migration = readFileSync(currentBaselineMigration, "utf8");
+
+    expect(migration).toContain('CREATE TABLE "media_assets"');
+    expect(migration).toContain('"owner_user_id" uuid NOT NULL');
+    expect(migration).toContain('"storage_bucket" text NOT NULL');
+    expect(migration).toContain('"storage_key" text NOT NULL');
+    expect(migration).toContain('"checksum_sha256" text');
+    expect(migration).toContain('CREATE TABLE "media_variants"');
+    expect(migration).toContain('CONSTRAINT "media_assets_purpose_check"');
+    expect(migration).toContain('CONSTRAINT "media_assets_status_check"');
+    expect(migration).toContain('CONSTRAINT "media_assets_visibility_check"');
+    expect(migration).toContain('CONSTRAINT "media_assets_mime_type_check"');
+    expect(migration).toContain('CONSTRAINT "media_assets_size_bytes_check"');
+    expect(migration).toContain('CONSTRAINT "media_assets_checksum_sha256_check"');
+    expect(migration).toContain(
+      'ALTER TABLE "media_assets" ADD CONSTRAINT "media_assets_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action'
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "media_variants" ADD CONSTRAINT "media_variants_asset_id_media_assets_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."media_assets"("id") ON DELETE cascade ON UPDATE no action'
+    );
+    expect(migration).toContain(
+      'CONSTRAINT "media_assets_storage_bucket_storage_key_unique" UNIQUE("storage_bucket","storage_key")'
+    );
+    expect(migration).toContain(
+      'CONSTRAINT "media_variants_asset_variant_unique" UNIQUE("asset_id","variant")'
+    );
+    expect(migration).toContain(
+      'CREATE INDEX "media_assets_owner_purpose_status_created_idx" ON "media_assets" USING btree ("owner_user_id","purpose","status","created_at")'
+    );
   });
 
   it("exports astrologer profile tables", () => {
@@ -241,8 +298,20 @@ describe("database account schema constants", () => {
     expect(migration).toContain('"owner_user_id" uuid PRIMARY KEY NOT NULL');
     expect(migration).toContain('"public_handle" text NOT NULL');
     expect(migration).toContain('"consultation_languages" jsonb NOT NULL');
-    expect(migration).toContain('CONSTRAINT "astrologer_profiles_public_handle_unique" UNIQUE("public_handle")');
+    expect(migration).toContain("\"visibility_status\" text DEFAULT 'draft' NOT NULL");
+    expect(migration).toContain('"professional_experience_years" integer');
+    expect(migration).toContain("\"specializations\" jsonb DEFAULT '[]'::jsonb NOT NULL");
+    expect(migration).toContain('"telegram_handle" text');
+    expect(migration).toContain('"own_birth_date" text');
+    expect(migration).toContain('"show_own_birth_data_public" boolean DEFAULT false NOT NULL');
+    expect(migration).toContain(
+      'CONSTRAINT "astrologer_profiles_public_handle_unique" UNIQUE("public_handle")'
+    );
     expect(migration).toContain('CONSTRAINT "astrologer_profiles_public_handle_format_check"');
+    expect(migration).toContain('CONSTRAINT "astrologer_profiles_visibility_status_check"');
+    expect(migration).toContain('CONSTRAINT "astrologer_profiles_own_birth_date_check"');
+    expect(migration).toContain("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+    expect(migration).toContain("^[0-9]{2}:[0-9]{2}$");
     expect(migration).toContain(
       'ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action'
     );
@@ -281,7 +350,5 @@ describe("database account schema constants", () => {
 });
 
 function getCreateTableStatement(migration: string, tableName: string): string {
-  return (
-    migration.match(new RegExp(`CREATE TABLE "${tableName}" \\([\\s\\S]*?\\n\\);`))?.[0] ?? ""
-  );
+  return migration.match(new RegExp(`CREATE TABLE "${tableName}" \\([\\s\\S]*?\\n\\);`))?.[0] ?? "";
 }

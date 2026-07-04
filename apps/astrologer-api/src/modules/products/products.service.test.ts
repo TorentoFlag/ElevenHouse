@@ -1,5 +1,7 @@
 import { BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import {
+  type MediaAsset,
+  type MediaAssetStore,
   type Product,
   type ProductAnalyticsReader,
   type ProductCatalogLifetimeAnalyticsSummary,
@@ -15,6 +17,7 @@ import { ProductsService } from "./products.service";
 
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
 const productId = "463f34bb-38ec-4cb4-b105-2ed6de91e3cb";
+const mediaId = "33333333-3333-4333-8333-333333333333";
 const now = new Date("2026-07-02T00:00:00.000Z");
 
 describe("ProductsService", () => {
@@ -122,6 +125,22 @@ describe("ProductsService", () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it("rejects cover media that is not ready for product covers", async () => {
+    const service = createService(
+      createStore(),
+      createMediaStore({
+        findByOwnerAndId: vi.fn(async () => ({
+          ...readyProductCoverMedia(),
+          status: "uploading" as const
+        }))
+      })
+    );
+
+    await expect(service.createProduct(validCreateBody(), createAuthenticatedRequest())).rejects.toThrow(
+      BadRequestException
+    );
+  });
+
   it("rejects requests without authenticated astrologer context", async () => {
     const service = createService(createStore());
 
@@ -129,8 +148,11 @@ describe("ProductsService", () => {
   });
 });
 
-function createService(store: ProductStore): ProductsService {
-  return new ProductsService(store, createNullAnalyticsReader(), createClock());
+function createService(
+  store: ProductStore,
+  mediaStore: MediaAssetStore = createMediaStore()
+): ProductsService {
+  return new ProductsService(store, createNullAnalyticsReader(), mediaStore, createClock());
 }
 
 function createClock(): SystemClock {
@@ -222,6 +244,47 @@ function createStore(overrides: Partial<ProductStore> = {}): ProductStore {
   };
 }
 
+function createMediaStore(overrides: Partial<MediaAssetStore> = {}): MediaAssetStore {
+  return {
+    createUploadingAsset: vi.fn(async () => {
+      throw new Error("Product service should not create media assets");
+    }),
+    findByOwnerAndId: vi.fn(async (input) =>
+      input.mediaId === mediaId && input.ownerUserId === ownerUserId ? readyProductCoverMedia() : null
+    ),
+    markReady: vi.fn(async () => {
+      throw new Error("Product service should not complete media uploads");
+    }),
+    markFailed: vi.fn(async () => {
+      throw new Error("Product service should not fail media uploads");
+    }),
+    ...overrides
+  };
+}
+
+function readyProductCoverMedia(): MediaAsset {
+  return {
+    id: mediaId,
+    ownerUserId,
+    purpose: "product_cover",
+    status: "ready",
+    visibility: "public",
+    storageBucket: "elevenhouse-local-media",
+    storageKey: `${ownerUserId}/product_cover/${mediaId}/cover.webp`,
+    originalFileName: "cover.webp",
+    mimeType: "image/webp",
+    sizeBytes: 1_250_000,
+    checksumSha256: null,
+    width: 1600,
+    height: 900,
+    altText: null,
+    failureReason: null,
+    variants: [],
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString()
+  };
+}
+
 function toProduct(id: string, input: ProductStoreCreateInput): Product {
   return {
     id,
@@ -269,7 +332,7 @@ function validCreateBody(): Record<string, unknown> {
     subtitle: "Полный разбор",
     priceMinor: 490000,
     currency: "RUB",
-    coverMediaId: "cover-1",
+    coverMediaId: mediaId,
     executionMode: "live",
     paymentModel: "once",
     durationMinutes: 60,

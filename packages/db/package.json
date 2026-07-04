@@ -75,6 +75,16 @@
       "import": "./dist/adapters/dictionary/index.js",
       "require": "./dist/adapters/dictionary/index.js"
     },
+    "./media": {
+      "types": "./dist/adapters/media/index.d.ts",
+      "import": "./dist/adapters/media/index.js",
+      "require": "./dist/adapters/media/index.js"
+    },
+    "./adapters/media": {
+      "types": "./dist/adapters/media/index.d.ts",
+      "import": "./dist/adapters/media/index.js",
+      "require": "./dist/adapters/media/index.js"
+    },
     "./products": {
       "types": "./dist/adapters/products/index.d.ts",
       "import": "./dist/adapters/products/index.js",

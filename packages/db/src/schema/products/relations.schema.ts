@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import { users } from "../identity/accounts.schema";
+import { mediaAssets } from "../media/media-assets.schema";
 import { productAccessGrants } from "./product-access-grants.schema";
 import { productDeliveryFormats } from "./product-delivery-formats.schema";
 import { productIncludedItems } from "./product-included-items.schema";
@@ -12,6 +13,10 @@ export const productsRelations = relations(products, ({ many, one }) => ({
   owner: one(users, {
     fields: [products.ownerUserId],
     references: [users.id]
+  }),
+  coverMedia: one(mediaAssets, {
+    fields: [products.coverMediaId],
+    references: [mediaAssets.id]
   }),
   deliveryFormats: many(productDeliveryFormats),
   requiredClientData: many(productRequiredClientData),

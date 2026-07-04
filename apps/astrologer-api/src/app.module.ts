@@ -8,6 +8,7 @@ import { DictionaryAiModule } from "./modules/dictionary-ai/dictionary-ai.module
 import { DictionaryModule } from "./modules/dictionary/dictionary.module";
 import { HealthModule } from "./modules/health/health.module";
 import { IdentityModule } from "./modules/identity/identity.module";
+import { MediaModule } from "./modules/media/media.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { RedisModule } from "./modules/redis/redis.module";
 
@@ -27,6 +28,7 @@ import { RedisModule } from "./modules/redis/redis.module";
     AiModule,
     DictionaryModule,
     DictionaryAiModule,
+    MediaModule,
     ProductsModule,
     AstrologerProfileModule,
     HealthModule

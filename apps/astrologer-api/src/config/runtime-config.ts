@@ -27,6 +27,25 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_API_CSRF_HEADER_NAME: z.string().trim().min(1).default("x-csrf-token"),
   ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
   ASTROLOGER_API_ALLOWED_ORIGINS: z.string().trim().optional(),
+  ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z
+    .string()
+    .trim()
+    .url()
+    .default("http://localhost:9000"),
+  ASTROLOGER_MEDIA_STORAGE_REGION: z.string().trim().min(1).default("us-east-1"),
+  ASTROLOGER_MEDIA_STORAGE_BUCKET: z.string().trim().min(1).default("elevenhouse-local-media"),
+  ASTROLOGER_MEDIA_STORAGE_ACCESS_KEY_ID: z.string().trim().min(1).default("elevenhouse"),
+  ASTROLOGER_MEDIA_STORAGE_SECRET_ACCESS_KEY: z
+    .string()
+    .trim()
+    .min(1)
+    .default("elevenhouse-secret"),
+  ASTROLOGER_MEDIA_STORAGE_FORCE_PATH_STYLE: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  ASTROLOGER_MEDIA_STORAGE_PUBLIC_BASE_URL: z.string().trim().url().optional(),
+  ASTROLOGER_MEDIA_UPLOAD_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   AUTH_CODE_DELIVERY_ENCRYPTION_KEY: z.string().trim().min(1),
   ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: z.string().trim().min(1).optional(),
   ASTROLOGER_API_PASSWORDLESS_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
@@ -142,6 +161,16 @@ export type AstrologerApiRuntimeConfig = {
       readonly windowSeconds: number;
     };
   };
+  readonly mediaStorage: {
+    readonly endpoint: string;
+    readonly region: string;
+    readonly bucket: string;
+    readonly accessKeyId: string;
+    readonly secretAccessKey: string;
+    readonly forcePathStyle: boolean;
+    readonly publicBaseUrl: string;
+    readonly uploadTtlSeconds: number;
+  };
   readonly ai: {
     readonly enabled: boolean;
     readonly provider: "openai";
@@ -196,6 +225,11 @@ export function createAstrologerApiRuntimeConfig(
   }
 
   const allowedOrigins = parseAllowedOrigins(config.ASTROLOGER_API_ALLOWED_ORIGINS);
+  const mediaStorageEndpoint = stripTrailingSlashes(config.ASTROLOGER_MEDIA_STORAGE_ENDPOINT);
+  const mediaStoragePublicBaseUrl = stripTrailingSlashes(
+    config.ASTROLOGER_MEDIA_STORAGE_PUBLIC_BASE_URL ??
+      `${mediaStorageEndpoint}/${config.ASTROLOGER_MEDIA_STORAGE_BUCKET}`
+  );
 
   if (config.NODE_ENV === "production" && allowedOrigins.length === 0) {
     throw new Error("ASTROLOGER_API_ALLOWED_ORIGINS is required in production");
@@ -262,6 +296,16 @@ export function createAstrologerApiRuntimeConfig(
         windowSeconds: config.ASTROLOGER_API_PASSWORDLESS_VERIFY_IP_WINDOW_SECONDS
       }
     },
+    mediaStorage: {
+      endpoint: mediaStorageEndpoint,
+      region: config.ASTROLOGER_MEDIA_STORAGE_REGION,
+      bucket: config.ASTROLOGER_MEDIA_STORAGE_BUCKET,
+      accessKeyId: config.ASTROLOGER_MEDIA_STORAGE_ACCESS_KEY_ID,
+      secretAccessKey: config.ASTROLOGER_MEDIA_STORAGE_SECRET_ACCESS_KEY,
+      forcePathStyle: config.ASTROLOGER_MEDIA_STORAGE_FORCE_PATH_STYLE,
+      publicBaseUrl: mediaStoragePublicBaseUrl,
+      uploadTtlSeconds: config.ASTROLOGER_MEDIA_UPLOAD_TTL_SECONDS
+    },
     ai: {
       enabled: config.ASTROLOGER_AI_ENABLED,
       provider: config.ASTROLOGER_AI_PROVIDER,
@@ -295,4 +339,8 @@ function parseAllowedOrigins(value: string | undefined): readonly string[] {
     .split(",")
     .map((origin) => origin.trim().replace(/\/+$/, ""))
     .filter(Boolean);
+}
+
+function stripTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, "");
 }

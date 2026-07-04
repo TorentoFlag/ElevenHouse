@@ -31,7 +31,7 @@ const productResponse = {
   subtitle: "Полный разбор карты",
   priceMinor: 490000,
   currency: "RUB",
-  coverMediaId: "cover-1",
+  coverMediaId: "55555555-5555-4555-8555-555555555555",
   introVideoUrl: "https://video.example/intro",
   executionMode: "live",
   paymentModel: "once",
@@ -183,7 +183,7 @@ describe("product draft helpers", () => {
     expect(updateProductRequestSchema.parse(updateRequest)).toMatchObject({
       title: "Натальный разбор",
       subtitle: "Полный разбор карты",
-      coverMediaId: "cover-1",
+      coverMediaId: "55555555-5555-4555-8555-555555555555",
       introVideoUrl: "https://video.example/intro"
     });
     expect(JSON.stringify(updateRequest)).not.toContain("33333333-3333-4333-8333-333333333333");

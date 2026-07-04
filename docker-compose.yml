@@ -25,5 +25,31 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: elevenhouse
+      MINIO_ROOT_PASSWORD: elevenhouse-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    volumes:
+      - ./infra/minio/cors.json:/etc/minio/cors.json:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "until mc alias set local http://minio:9000 elevenhouse elevenhouse-secret; do sleep 2; done &&
+      mc mb --ignore-existing local/elevenhouse-local-media &&
+      mc anonymous set download local/elevenhouse-local-media &&
+      mc cors set local/elevenhouse-local-media /etc/minio/cors.json"
+
 volumes:
   postgres-data:
+  minio-data:

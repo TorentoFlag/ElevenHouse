@@ -12,6 +12,9 @@ export default defineConfig({
       "@elevenhouse/contracts/products": fileURLToPath(
         new URL("../../packages/contracts/src/products.ts", import.meta.url)
       ),
+      "@elevenhouse/contracts/media": fileURLToPath(
+        new URL("../../packages/contracts/src/media.ts", import.meta.url)
+      ),
       "@elevenhouse/contracts": fileURLToPath(
         new URL("../../packages/contracts/src/index.ts", import.meta.url)
       ),
@@ -137,6 +140,9 @@ export default defineConfig({
       ),
       "@elevenhouse/validation/products": fileURLToPath(
         new URL("../../packages/validation/src/products/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/validation/media": fileURLToPath(
+        new URL("../../packages/validation/src/media/index.ts", import.meta.url)
       ),
       "@elevenhouse/validation": fileURLToPath(
         new URL("../../packages/validation/src/index.ts", import.meta.url)

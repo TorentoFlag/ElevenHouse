@@ -174,7 +174,7 @@ function createProductInput(ownerUserId: string): ProductCreateInput {
     subtitle: "Полный разбор",
     priceMinor: 490000,
     currency: "RUB",
-    coverMediaId: "cover-1",
+    coverMediaId: null,
     introVideoUrl: null,
     executionMode: "live",
     paymentModel: "once",

@@ -6,5 +6,6 @@ export * from "./roles";
 export * from "./identity";
 export * from "./dictionary";
 export * from "./products";
+export * from "./media";
 export * from "./astrologer-profile";
 export * from "./shared";

@@ -19,6 +19,11 @@
       "types": "./dist/products/index.d.ts",
       "import": "./dist/products/index.js",
       "require": "./dist/products/index.js"
+    },
+    "./media": {
+      "types": "./dist/media/index.d.ts",
+      "import": "./dist/media/index.js",
+      "require": "./dist/media/index.js"
     }
   },
   "scripts": {
