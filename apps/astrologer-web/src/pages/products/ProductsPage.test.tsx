@@ -201,6 +201,7 @@ const productsCopy = {
     }
   },
   actions: {
+    menuLabel: "Действия продукта",
     editLabel: "Изменить",
     duplicateLabel: "Дублировать",
     publishLabel: "Опубликовать",

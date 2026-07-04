@@ -1,8 +1,20 @@
 import type { ProductResponse } from "@elevenhouse/contracts";
+import { ActionMenu, type ActionMenuItem } from "@elevenhouse/design-system/components/ActionMenu";
+import "@elevenhouse/design-system/components/ActionMenu.css";
 import { Card } from "@elevenhouse/design-system/components/Card";
 import "@elevenhouse/design-system/components/Card.css";
+import { classNames } from "@elevenhouse/design-system/helpers";
 import type { ProductCopy, ProductLocale } from "../../../features/products/model/productCopy";
+import {
+  getProductCardActionItems,
+  type ProductCardActionItem,
+  type ProductCardActionLabels
+} from "../../../features/products/model/productCardActions";
 import { createProductCardSummary } from "../../../features/products/model/productFormatting";
+import {
+  getProductTypeIconName,
+  resolveProductIconName
+} from "../../../features/products/model/productIcons";
 import styles from "../ProductsPage.module.css";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
@@ -14,12 +26,7 @@ export type ProductCardProps = {
   readonly isActionPending: boolean;
 };
 
-export type ProductCardActions = {
-  readonly editLabel: string;
-  readonly duplicateLabel: string;
-  readonly publishLabel: string;
-  readonly draftLabel: string;
-  readonly archiveLabel: string;
+export type ProductCardActions = ProductCardActionLabels & {
   readonly onEdit: (product: ProductResponse) => void;
   readonly onDuplicate: (productId: string) => void;
   readonly onStatusChange: (productId: string, status: ProductResponse["status"]) => void;
@@ -38,15 +45,13 @@ export function ProductCard({
     <Card as="article" className={styles.productCard} padding="medium" variant="default">
       <div className={styles.productCardHeader}>
         <span className={styles.productTypeIcon} aria-hidden="true">
-          <Icon iconName="check" width={17} height={17} />
+          <Icon iconName={getProductTypeIconName(product.type)} width={17} height={17} />
         </span>
         <div className={styles.productHeading}>
           <span className={styles.productType}>{summary.typeLabel}</span>
           <h2 className={styles.productTitle}>{product.title}</h2>
         </div>
-        <span className={`${styles.statusBadge} ${styles[`statusBadge-${summary.statusTone}`]}`}>
-          {summary.statusLabel}
-        </span>
+        <ProductStatusBadge label={summary.statusLabel} tone={summary.statusTone} />
       </div>
 
       <div className={styles.productPriceLine}>
@@ -57,14 +62,7 @@ export function ProductCard({
       </div>
       <div className={styles.productMeta}>{summary.metaLine}</div>
 
-      <ul className={styles.includedList}>
-        {product.includedItems.slice(0, 4).map((item) => (
-          <li key={item.id} className={styles.includedItem}>
-            <Icon iconName="check" width={13} height={13} aria-hidden="true" />
-            <span>{item.text}</span>
-          </li>
-        ))}
-      </ul>
+      <ProductIncludedItemsList items={product.includedItems} />
 
       <div className={styles.productFooter}>
         <span>
@@ -73,62 +71,90 @@ export function ProductCard({
         <span className={styles.revenue}>{summary.revenueLabel}</span>
         {summary.ratingLabel ? <span className={styles.rating}>{summary.ratingLabel}</span> : null}
         <span className={styles.productFooterSpacer} />
-        <button
-          type="button"
-          className={styles.productActionButton}
-          data-product-action-edit="true"
-          aria-label={actions.editLabel}
-          onClick={() => actions.onEdit(product)}
-        >
-          {actions.editLabel}
-        </button>
-        <button
-          type="button"
-          className={styles.productActionButton}
-          data-product-action-duplicate="true"
-          aria-label={actions.duplicateLabel}
-          disabled={isActionPending}
-          onClick={() => actions.onDuplicate(product.id)}
-        >
-          {actions.duplicateLabel}
-        </button>
-        {product.status === "draft" ? (
-          <button
-            type="button"
-            className={styles.productActionButton}
-            data-product-action-publish="true"
-            aria-label={actions.publishLabel}
-            disabled={isActionPending}
-            onClick={() => actions.onStatusChange(product.id, "active")}
-          >
-            {actions.publishLabel}
-          </button>
-        ) : null}
-        {product.status !== "draft" ? (
-          <button
-            type="button"
-            className={styles.productActionButton}
-            data-product-action-draft="true"
-            aria-label={actions.draftLabel}
-            disabled={isActionPending}
-            onClick={() => actions.onStatusChange(product.id, "draft")}
-          >
-            {actions.draftLabel}
-          </button>
-        ) : null}
-        {product.status !== "archived" ? (
-          <button
-            type="button"
-            className={styles.productActionButton}
-            data-product-action-archive="true"
-            aria-label={actions.archiveLabel}
-            disabled={isActionPending}
-            onClick={() => actions.onStatusChange(product.id, "archived")}
-          >
-            {actions.archiveLabel}
-          </button>
-        ) : null}
+        <ActionMenu
+          className={styles.productActionsMenu}
+          label={actions.menuLabel}
+          items={createProductActionMenuItems(product, actions, isActionPending)}
+          align="end"
+        />
       </div>
     </Card>
   );
+}
+
+type ProductStatusBadgeProps = {
+  readonly label: string;
+  readonly tone: ProductResponse["status"];
+};
+
+function ProductStatusBadge({ label, tone }: ProductStatusBadgeProps) {
+  return (
+    <span className={classNames(styles.statusBadge, styles[`statusBadge-${tone}`])}>
+      {label}
+    </span>
+  );
+}
+
+type ProductIncludedItemsListProps = {
+  readonly items: ProductResponse["includedItems"];
+};
+
+function ProductIncludedItemsList({ items }: ProductIncludedItemsListProps) {
+  return (
+    <ul className={styles.includedList}>
+      {items.slice(0, 4).map((item) => (
+        <li key={item.id} className={styles.includedItem}>
+          <Icon iconName={resolveProductIconName(item.icon)} width={13} height={13} aria-hidden="true" />
+          <span>{item.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function createProductActionMenuItems(
+  product: ProductResponse,
+  actions: ProductCardActions,
+  isActionPending: boolean
+): readonly ActionMenuItem[] {
+  return getProductCardActionItems(product.status, actions).map((action) => ({
+    id: action.kind,
+    label: action.label,
+    icon: getProductActionIcon(action.kind),
+    disabled: isActionPending && action.kind !== "edit",
+    tone: action.kind === "archive" ? "danger" : "default",
+    onSelect: () => runProductCardAction(action, product, actions)
+  }));
+}
+
+function getProductActionIcon(kind: ProductCardActionItem["kind"]) {
+  const iconNameByKind = {
+    edit: "edit",
+    duplicate: "plus",
+    publish: "verified",
+    draft: "refresh",
+    archive: "trash"
+  } as const satisfies Record<ProductCardActionItem["kind"], Parameters<typeof Icon>[0]["iconName"]>;
+
+  return <Icon iconName={iconNameByKind[kind]} width={14} height={14} aria-hidden="true" />;
+}
+
+function runProductCardAction(
+  action: ProductCardActionItem,
+  product: ProductResponse,
+  actions: ProductCardActions
+) {
+  if (action.kind === "edit") {
+    actions.onEdit(product);
+    return;
+  }
+
+  if (action.kind === "duplicate") {
+    actions.onDuplicate(product.id);
+    return;
+  }
+
+  if (action.targetStatus) {
+    actions.onStatusChange(product.id, action.targetStatus);
+  }
 }

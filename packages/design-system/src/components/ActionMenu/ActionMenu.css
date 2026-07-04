@@ -1,0 +1,114 @@
+.ehActionMenu {
+  position: relative;
+  display: inline-flex;
+}
+
+.ehActionMenu__trigger {
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 31px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--eh-space-6);
+  padding: 0 var(--eh-space-10);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-10);
+  outline: none;
+  background: transparent;
+  color: var(--eh-color-moon-500);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ehActionMenu__trigger:hover:not(:disabled),
+.ehActionMenu__trigger:focus-visible,
+.ehActionMenu__trigger[aria-expanded="true"] {
+  border-color: rgb(244 196 48 / 0.32);
+  color: var(--eh-color-gold);
+}
+
+.ehActionMenu__trigger:focus-visible {
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.16);
+}
+
+.ehActionMenu__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+}
+
+.ehActionMenu__triggerChevron {
+  line-height: 1;
+}
+
+.ehActionMenu__popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  display: grid;
+  min-width: 172px;
+  padding: 6px;
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-12);
+  background: rgb(22 20 47);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.32);
+}
+
+.ehActionMenu__popover--start {
+  left: 0;
+}
+
+.ehActionMenu__popover--end {
+  right: 0;
+}
+
+.ehActionMenu__item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--eh-space-8);
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--eh-radius-8);
+  outline: none;
+  background: transparent;
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.ehActionMenu__item:hover:not(:disabled),
+.ehActionMenu__item:focus-visible {
+  background: rgb(244 196 48 / 0.12);
+  color: var(--eh-color-gold);
+}
+
+.ehActionMenu__item:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.ehActionMenu__item--danger {
+  color: rgb(255 168 158);
+}
+
+.ehActionMenu__itemIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.ehActionMenu__itemLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

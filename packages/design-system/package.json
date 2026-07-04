@@ -28,6 +28,11 @@
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"
     },
+    "./components/ActionMenu": {
+      "types": "./dist/components/ActionMenu/index.d.ts",
+      "import": "./dist/components/ActionMenu/index.js"
+    },
+    "./components/ActionMenu.css": "./src/components/ActionMenu/ActionMenu.css",
     "./components/Button": {
       "types": "./dist/components/Button/index.d.ts",
       "import": "./dist/components/Button/index.js"
@@ -210,6 +215,7 @@
   "sideEffects": [
     "./tokens.css",
     "./src/motion/motion.css",
+    "./src/components/ActionMenu/ActionMenu.css",
     "./src/components/Button/Button.css",
     "./src/components/Card/Card.css",
     "./src/components/Chip/Chip.css",

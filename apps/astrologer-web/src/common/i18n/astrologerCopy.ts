@@ -118,6 +118,7 @@ export type AstrologerCopy = {
       iconLabelByName: Record<ProductIconName, string>;
     };
     actions: {
+      menuLabel: string;
       editLabel: string;
       duplicateLabel: string;
       publishLabel: string;
@@ -461,6 +462,7 @@ export const astrologerCopyByLocale = {
         }
       },
       actions: {
+        menuLabel: "Действия продукта",
         editLabel: "Изменить",
         duplicateLabel: "Дублировать",
         publishLabel: "Опубликовать",
@@ -745,6 +747,7 @@ export const astrologerCopyByLocale = {
         }
       },
       actions: {
+        menuLabel: "Product actions",
         editLabel: "Edit",
         duplicateLabel: "Duplicate",
         publishLabel: "Publish",

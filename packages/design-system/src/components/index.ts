@@ -1,3 +1,4 @@
+export * from "./ActionMenu/index.js";
 export * from "./Button/index.js";
 export * from "./Card/index.js";
 export * from "./Chip/index.js";

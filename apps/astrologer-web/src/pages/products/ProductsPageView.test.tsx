@@ -43,6 +43,7 @@ const copy = {
     emptyBestseller: "—"
   },
   actions: {
+    menuLabel: "Действия продукта",
     editLabel: "Изменить",
     duplicateLabel: "Дублировать",
     publishLabel: "Опубликовать",

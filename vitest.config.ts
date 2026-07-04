@@ -13,6 +13,12 @@ export default defineConfig({
       "@elevenhouse/design-system/components/Modal": fileURLToPath(
         new URL("./packages/design-system/src/components/Modal/index.ts", import.meta.url)
       ),
+      "@elevenhouse/design-system/components/ActionMenu": fileURLToPath(
+        new URL("./packages/design-system/src/components/ActionMenu/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/ActionMenu.css": fileURLToPath(
+        new URL("./packages/design-system/src/components/ActionMenu/ActionMenu.css", import.meta.url)
+      ),
       "@elevenhouse/design-system/components/SelectableTile": fileURLToPath(
         new URL("./packages/design-system/src/components/SelectableTile/index.ts", import.meta.url)
       ),

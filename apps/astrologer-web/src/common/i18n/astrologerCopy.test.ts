@@ -91,6 +91,7 @@ describe("astrologerCopy", () => {
       })
     );
     expect(assertRequiredProductActionCopy(astrologerCopyByLocale.ru.products.actions)).toEqual({
+      menuLabel: "Действия продукта",
       editLabel: "Изменить",
       duplicateLabel: "Дублировать",
       publishLabel: "Опубликовать",
@@ -114,6 +115,7 @@ describe("astrologerCopy", () => {
       })
     );
     expect(assertRequiredProductActionCopy(astrologerCopyByLocale.en.products.actions)).toEqual({
+      menuLabel: "Product actions",
       editLabel: "Edit",
       duplicateLabel: "Duplicate",
       publishLabel: "Publish",

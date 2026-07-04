@@ -6,6 +6,9 @@
     "moduleResolution": "Bundler",
     "noEmit": true,
     "paths": {
+      "@elevenhouse/design-system/components/ActionMenu": [
+        "../../packages/design-system/src/components/ActionMenu/index.ts"
+      ],
       "@elevenhouse/design-system/components/OtpAuthForm": [
         "../../packages/design-system/src/components/OtpAuthForm/index.ts"
       ],
