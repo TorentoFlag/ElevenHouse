@@ -16,8 +16,24 @@ const validProfile = {
   locale: "ru",
   avatarMediaId: "avatar-1",
   coverMediaId: "cover-1",
-  consultationLanguages: ["ru", "en"],
-  isPublicPageEnabled: false,
+  consultationLanguages: ["Русский", "English"],
+  visibilityStatus: "paused",
+  professionalExperienceYears: 9,
+  professionalSchool: "Психологическая астрология",
+  specializations: ["Натальная карта", "Синастрия"],
+  methods: ["Натальная астрология"],
+  socialLinks: {
+    telegram: "alisa_astro",
+    instagram: "alisa.vega.astro",
+    whatsapp: null,
+    website: "alisavega.ru"
+  },
+  ownBirthData: {
+    date: "1990-07-14",
+    time: "08:30",
+    place: "Санкт-Петербург",
+    showOnPublicPage: true
+  },
   createdAt: "2026-07-03T00:00:00.000Z",
   updatedAt: "2026-07-03T00:00:00.000Z"
 } as const;
@@ -44,8 +60,24 @@ describe("astrologer profile contracts", () => {
         locale: " ru ",
         avatarMediaId: "",
         coverMediaId: " cover-1 ",
-        consultationLanguages: [" RU ", "en"],
-        isPublicPageEnabled: true
+        consultationLanguages: [" Русский ", "English"],
+        visibilityStatus: "published",
+        professionalExperienceYears: 9,
+        professionalSchool: "  Психологическая астрология  ",
+        specializations: [" Натальная карта "],
+        methods: [" Синастрия "],
+        socialLinks: {
+          telegram: " alisa_astro ",
+          instagram: "",
+          whatsapp: null,
+          website: " alisavega.ru "
+        },
+        ownBirthData: {
+          date: "1990-07-14",
+          time: "08:30",
+          place: " Санкт-Петербург ",
+          showOnPublicPage: true
+        }
       })
     ).toEqual({
       publicHandle: "astro-anna",
@@ -56,8 +88,24 @@ describe("astrologer profile contracts", () => {
       locale: "ru",
       avatarMediaId: null,
       coverMediaId: "cover-1",
-      consultationLanguages: ["ru", "en"],
-      isPublicPageEnabled: true
+      consultationLanguages: ["Русский", "English"],
+      visibilityStatus: "published",
+      professionalExperienceYears: 9,
+      professionalSchool: "Психологическая астрология",
+      specializations: ["Натальная карта"],
+      methods: ["Синастрия"],
+      socialLinks: {
+        telegram: "alisa_astro",
+        instagram: null,
+        whatsapp: null,
+        website: "alisavega.ru"
+      },
+      ownBirthData: {
+        date: "1990-07-14",
+        time: "08:30",
+        place: "Санкт-Петербург",
+        showOnPublicPage: true
+      }
     });
   });
 
@@ -66,12 +114,16 @@ describe("astrologer profile contracts", () => {
       updateAstrologerProfileRequestSchema.parse({
         headline: null,
         bio: "",
-        consultationLanguages: ["en"]
+        consultationLanguages: ["English"],
+        visibilityStatus: "paused",
+        socialLinks: { telegram: "", instagram: null, whatsapp: null, website: "" }
       })
     ).toEqual({
       headline: null,
       bio: null,
-      consultationLanguages: ["en"]
+      consultationLanguages: ["English"],
+      visibilityStatus: "paused",
+      socialLinks: { telegram: null, instagram: null, whatsapp: null, website: null }
     });
   });
 
@@ -102,7 +154,7 @@ describe("astrologer profile contracts", () => {
     expect(() =>
       upsertAstrologerProfileRequestSchema.parse({
         ...validProfile,
-        consultationLanguages: ["ru", "RU"]
+        consultationLanguages: ["Русский", "русский"]
       })
     ).toThrow();
   });

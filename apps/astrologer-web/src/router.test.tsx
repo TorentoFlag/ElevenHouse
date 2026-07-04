@@ -7,6 +7,7 @@ import { AuthPage } from "./pages/auth/AuthPage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
 import { ProductsPage } from "./pages/products/ProductsPage";
+import { SettingsPage } from "./pages/settings/SettingsPage";
 import { astrologerRoutes } from "./router";
 
 vi.mock("react-router", async (importOriginal) => {
@@ -31,6 +32,7 @@ describe("astrologerRoutes", () => {
     const dashboardRoute = shellRoute?.children?.find((route) => route.path === "/dashboard");
     const productsRoute = shellRoute?.children?.find((route) => route.path === "/products");
     const referenceRoute = shellRoute?.children?.find((route) => route.path === "/reference");
+    const settingsRoute = shellRoute?.children?.find((route) => route.path === "/settings");
 
     expect(isValidElement(rootRedirect?.element) && rootRedirect.element.type).toBe(Navigate);
     expect(isValidElement(authRoute?.element) && authRoute.element.type).toBe(AuthPage);
@@ -43,11 +45,10 @@ describe("astrologerRoutes", () => {
     expect(isValidElement(dashboardRoute?.element) && dashboardRoute.element.type).toBe(
       DashboardPage
     );
-    expect(isValidElement(productsRoute?.element) && productsRoute.element.type).toBe(
-      ProductsPage
-    );
+    expect(isValidElement(productsRoute?.element) && productsRoute.element.type).toBe(ProductsPage);
     expect(isValidElement(referenceRoute?.element) && referenceRoute.element.type).toBe(
       ReferencePage
     );
+    expect(isValidElement(settingsRoute?.element) && settingsRoute.element.type).toBe(SettingsPage);
   });
 });

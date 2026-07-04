@@ -1,0 +1,639 @@
+.settingsPage {
+  --settings-panel: rgb(13 12 32 / 0.6);
+  --settings-subhead: rgb(13 12 32 / 0.86);
+  --settings-surface-1: rgb(17 15 39);
+  --settings-surface-2: rgb(23 20 50);
+  --settings-line: rgb(216 212 236 / 0.09);
+  --settings-line-strong: rgb(216 212 236 / 0.15);
+  --settings-accent: #f4c430;
+  --settings-accent-text: #f6d266;
+  --settings-danger: #f47a7a;
+
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: calc(100dvh - var(--astrologer-app-header-height, 68px) - 64px);
+  margin: -32px;
+  flex-direction: column;
+  color: var(--eh-color-moon-120);
+}
+
+.subhead {
+  display: flex;
+  flex: 0 0 60px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--settings-line);
+  background: var(--settings-subhead);
+}
+
+.titleGroup {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.titleIcon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 10px;
+  background: var(--settings-surface-2);
+  color: var(--settings-accent-text);
+}
+
+.title {
+  overflow: hidden;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewButton,
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-family: var(--eh-font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.previewButton {
+  margin-left: auto;
+  border: 1px solid var(--eh-color-gold-alpha-26);
+  background: var(--eh-color-gold-alpha-14);
+  color: var(--settings-accent-text);
+}
+
+.primaryButton {
+  border: 1px solid var(--settings-accent);
+  background: var(--settings-accent);
+  color: rgb(23 18 6);
+}
+
+.secondaryButton {
+  border: 1px solid var(--settings-line-strong);
+  background: var(--settings-surface-2);
+  color: var(--eh-color-moon-120);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.settingsNavigation {
+  width: 260px;
+  flex: 0 0 260px;
+  padding: 14px 12px;
+  border-right: 1px solid var(--settings-line);
+  background: var(--settings-panel);
+}
+
+.navigationButton {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 13px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--eh-color-moon-500);
+  cursor: pointer;
+  font-family: var(--eh-font-sans);
+  text-align: left;
+}
+
+.navigationButton svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--eh-color-moon-600);
+}
+
+.navigationButton span,
+.navigationButton strong,
+.navigationButton em {
+  display: block;
+  min-width: 0;
+}
+
+.navigationButton strong {
+  color: var(--eh-color-moon-120);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.navigationButton em {
+  margin-top: 2px;
+  color: var(--eh-color-muted);
+  font-size: 11.5px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.navigationButtonActive {
+  border-color: var(--eh-color-gold-alpha-26);
+  background: var(--eh-color-gold-alpha-14);
+}
+
+.navigationButtonActive svg {
+  color: var(--settings-accent-text);
+}
+
+.navigationButtonDisabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.navigationButtonDisabled strong {
+  color: var(--eh-color-moon-500);
+}
+
+.navigationButtonDisabled em::after {
+  content: " · скоро";
+}
+
+.content {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 26px 30px 50px;
+  overflow-y: auto;
+}
+
+.profileForm {
+  width: min(100%, 660px);
+}
+
+.settingsGroup {
+  margin-bottom: 28px;
+}
+
+.settingsGroup h2 {
+  margin: 0 0 4px;
+  color: var(--eh-color-moon-120);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.settingsGroup p {
+  margin: 0 0 14px;
+  color: var(--eh-color-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.fieldGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field {
+  display: block;
+  min-width: 0;
+  margin-bottom: 14px;
+}
+
+.field > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  color: var(--eh-color-moon-300);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.field > span em {
+  color: var(--eh-color-muted);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.field input,
+.field textarea,
+.handleInput {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 10px;
+  background: rgb(9 8 24 / 0.78);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 14px;
+}
+
+.field input,
+.field textarea {
+  padding: 10px 13px;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus,
+.handleInput:focus-within {
+  border-color: var(--eh-color-gold-alpha-42);
+  outline: none;
+}
+
+.handleInput {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.handleInput span {
+  padding-left: 13px;
+  color: var(--eh-color-muted);
+  font-family: var(--eh-font-mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.handleInput input {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  background: transparent;
+  font-family: var(--eh-font-mono);
+  outline: none;
+  padding-left: 2px;
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--settings-line);
+  border-radius: 12px;
+  background: var(--settings-surface-1);
+}
+
+.toggleRow span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.toggleRow strong,
+.toggleRow em {
+  display: block;
+}
+
+.toggleRow strong {
+  color: var(--eh-color-moon-120);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.toggleRow em {
+  margin-top: 2px;
+  color: var(--eh-color-muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.toggleRow input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  accent-color: var(--settings-accent);
+}
+
+.visibilityList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.visibilityOption {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 15px;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 12px;
+  background: var(--settings-surface-1);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.visibilityOptionActive {
+  border-color: color-mix(in srgb, var(--visibility-color) 58%, transparent);
+  background: var(--settings-surface-2);
+}
+
+.visibilityRadio {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  border: 2px solid var(--eh-color-muted);
+  border-radius: 999px;
+}
+
+.visibilityOptionActive .visibilityRadio {
+  border-color: var(--visibility-color);
+}
+
+.visibilityOptionActive .visibilityRadio::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--visibility-color);
+  content: "";
+}
+
+.visibilityOption strong,
+.visibilityOption em {
+  display: block;
+}
+
+.visibilityOption strong {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.visibilityOption em {
+  margin-top: 2px;
+  color: var(--eh-color-muted);
+  font-size: 12.5px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.coverMediaInput {
+  min-height: 130px !important;
+  border-radius: 14px !important;
+  text-align: center;
+}
+
+.avatarRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.avatarMediaInput {
+  display: grid;
+  width: 76px !important;
+  height: 76px !important;
+  min-height: 76px !important;
+  flex: 0 0 76px;
+  padding: 8px !important;
+  border-radius: 999px !important;
+  text-align: center;
+}
+
+.avatarRow strong,
+.avatarRow span {
+  display: block;
+}
+
+.avatarRow strong {
+  margin-bottom: 3px;
+  color: var(--eh-color-moon-120);
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+
+.avatarRow span {
+  color: var(--eh-color-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stepper button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 9px;
+  background: var(--settings-surface-2);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.stepper span {
+  min-width: 28px;
+  color: var(--eh-color-moon-120);
+  font-family: var(--eh-font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 999px;
+  background: var(--settings-surface-1);
+  color: var(--eh-color-moon-300);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.chipActive {
+  border-color: var(--eh-color-gold-alpha-42);
+  background: var(--eh-color-gold-alpha-14);
+  color: var(--settings-accent-text);
+}
+
+.socialField {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.socialIcon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 10px;
+  background: var(--settings-surface-2);
+  color: var(--eh-color-moon-300);
+}
+
+.socialControl {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.socialControl > span:first-child {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--eh-color-muted);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.prefixedInput {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 10px;
+  background: rgb(9 8 24 / 0.78);
+}
+
+.prefixedInput em {
+  padding-left: 12px;
+  color: var(--eh-color-muted);
+  font-family: var(--eh-font-mono);
+  font-size: 13px;
+  font-style: normal;
+}
+
+.prefixedInput input {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  background: transparent;
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  padding: 10px 13px;
+}
+
+.prefixedInput em + input {
+  padding-left: 2px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.formError {
+  margin: -8px 0 16px;
+  color: var(--settings-danger);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.statusBanner {
+  margin: 12px 20px 0;
+  padding: 10px 13px;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 12px;
+  background: var(--settings-surface-1);
+  color: var(--eh-color-moon-300);
+  font-size: 13px;
+}
+
+.statusBannerDanger {
+  border-color: rgb(244 122 122 / 0.32);
+  background: rgb(244 122 122 / 0.1);
+  color: var(--settings-danger);
+}
+
+.statusBannerSuccess {
+  border-color: rgb(78 200 160 / 0.32);
+  background: rgb(78 200 160 / 0.1);
+  color: #4ec8a0;
+}
+
+@media (max-width: 860px) {
+  .settingsPage {
+    min-height: calc(100dvh - var(--astrologer-app-header-height, 68px) - 32px);
+    margin: -16px;
+  }
+
+  .subhead {
+    padding: 0 14px;
+  }
+
+  .previewButton {
+    display: none;
+  }
+
+  .body {
+    display: block;
+    overflow-y: auto;
+  }
+
+  .settingsNavigation {
+    width: auto;
+    padding: 10px 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--settings-line);
+  }
+
+  .content {
+    padding: 20px 16px 36px;
+    overflow: visible;
+  }
+
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+}

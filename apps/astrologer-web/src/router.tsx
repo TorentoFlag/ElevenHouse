@@ -6,6 +6,7 @@ import { DashboardPage } from "./pages/dashboard/DashboardPage";
 import { NotFoundPage } from "./pages/not-found/NotFoundPage";
 import { ProductsPage } from "./pages/products/ProductsPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
+import { SettingsPage } from "./pages/settings/SettingsPage";
 
 export const astrologerRoutes = [
   {
@@ -33,6 +34,10 @@ export const astrologerRoutes = [
           {
             path: "/reference",
             element: <ReferencePage />
+          },
+          {
+            path: "/settings",
+            element: <SettingsPage />
           }
         ]
       }

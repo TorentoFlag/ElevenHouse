@@ -70,7 +70,19 @@ function toAstrologerProfileInsertRow(
     avatarMediaId: input.avatarMediaId,
     coverMediaId: input.coverMediaId,
     consultationLanguages: [...input.consultationLanguages],
-    isPublicPageEnabled: input.isPublicPageEnabled,
+    visibilityStatus: input.visibilityStatus,
+    professionalExperienceYears: input.professionalExperienceYears,
+    professionalSchool: input.professionalSchool,
+    specializations: [...input.specializations],
+    methods: [...input.methods],
+    telegramHandle: input.socialLinks.telegram,
+    instagramHandle: input.socialLinks.instagram,
+    whatsappContact: input.socialLinks.whatsapp,
+    websiteUrl: input.socialLinks.website,
+    ownBirthDate: input.ownBirthData.date,
+    ownBirthTime: input.ownBirthData.time,
+    ownBirthPlace: input.ownBirthData.place,
+    showOwnBirthDataPublic: input.ownBirthData.showOnPublicPage,
     createdAt: new Date(input.now),
     updatedAt: new Date(input.now)
   };
@@ -91,7 +103,19 @@ function toAstrologerProfileUpdateRow(
     coverMediaId: patch.coverMediaId,
     consultationLanguages:
       patch.consultationLanguages === undefined ? undefined : [...patch.consultationLanguages],
-    isPublicPageEnabled: patch.isPublicPageEnabled,
+    visibilityStatus: patch.visibilityStatus,
+    professionalExperienceYears: patch.professionalExperienceYears,
+    professionalSchool: patch.professionalSchool,
+    specializations: patch.specializations === undefined ? undefined : [...patch.specializations],
+    methods: patch.methods === undefined ? undefined : [...patch.methods],
+    telegramHandle: patch.socialLinks?.telegram,
+    instagramHandle: patch.socialLinks?.instagram,
+    whatsappContact: patch.socialLinks?.whatsapp,
+    websiteUrl: patch.socialLinks?.website,
+    ownBirthDate: patch.ownBirthData?.date,
+    ownBirthTime: patch.ownBirthData?.time,
+    ownBirthPlace: patch.ownBirthData?.place,
+    showOwnBirthDataPublic: patch.ownBirthData?.showOnPublicPage,
     updatedAt: new Date(now)
   });
 }
@@ -108,7 +132,23 @@ function toAstrologerProfile(row: AstrologerProfileRow): AstrologerProfile {
     avatarMediaId: row.avatarMediaId,
     coverMediaId: row.coverMediaId,
     consultationLanguages: row.consultationLanguages,
-    isPublicPageEnabled: row.isPublicPageEnabled,
+    visibilityStatus: row.visibilityStatus as AstrologerProfile["visibilityStatus"],
+    professionalExperienceYears: row.professionalExperienceYears,
+    professionalSchool: row.professionalSchool,
+    specializations: row.specializations,
+    methods: row.methods,
+    socialLinks: {
+      telegram: row.telegramHandle,
+      instagram: row.instagramHandle,
+      whatsapp: row.whatsappContact,
+      website: row.websiteUrl
+    },
+    ownBirthData: {
+      date: row.ownBirthDate,
+      time: row.ownBirthTime,
+      place: row.ownBirthPlace,
+      showOnPublicPage: row.showOwnBirthDataPublic
+    },
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt)
   };

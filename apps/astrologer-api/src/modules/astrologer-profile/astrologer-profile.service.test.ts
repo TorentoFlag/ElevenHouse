@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  UnauthorizedException
-} from "@nestjs/common";
+import { BadRequestException, ConflictException, UnauthorizedException } from "@nestjs/common";
 import "reflect-metadata";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -45,8 +41,24 @@ describe("AstrologerProfileService", () => {
           locale: " RU ",
           avatarMediaId: null,
           coverMediaId: "",
-          consultationLanguages: [" RU "],
-          isPublicPageEnabled: true
+          consultationLanguages: [" Русский "],
+          visibilityStatus: "published",
+          professionalExperienceYears: 9,
+          professionalSchool: "Психологическая астрология",
+          specializations: ["Натальная карта"],
+          methods: ["Натальная астрология"],
+          socialLinks: {
+            telegram: "alisa_astro",
+            instagram: "",
+            whatsapp: null,
+            website: "alisavega.ru"
+          },
+          ownBirthData: {
+            date: "1990-07-14",
+            time: "08:30",
+            place: "Санкт-Петербург",
+            showOnPublicPage: true
+          }
         },
         createAuthenticatedRequest()
       )
@@ -86,7 +98,10 @@ describe("AstrologerProfileService", () => {
 describe("AstrologerProfileController", () => {
   it("marks profile mutation as CSRF-protected", () => {
     expect(
-      Reflect.getMetadata(csrfRequiredMetadataKey, AstrologerProfileController.prototype.upsertCurrentProfile)
+      Reflect.getMetadata(
+        csrfRequiredMetadataKey,
+        AstrologerProfileController.prototype.upsertCurrentProfile
+      )
     ).toBe(true);
   });
 });
@@ -133,8 +148,24 @@ const profile: AstrologerProfile = {
   locale: "ru",
   avatarMediaId: null,
   coverMediaId: null,
-  consultationLanguages: ["ru"],
-  isPublicPageEnabled: false,
+  consultationLanguages: ["Русский"],
+  visibilityStatus: "draft",
+  professionalExperienceYears: 9,
+  professionalSchool: "Психологическая астрология",
+  specializations: ["Натальная карта"],
+  methods: ["Натальная астрология"],
+  socialLinks: {
+    telegram: "alisa_astro",
+    instagram: null,
+    whatsapp: null,
+    website: "alisavega.ru"
+  },
+  ownBirthData: {
+    date: "1990-07-14",
+    time: "08:30",
+    place: "Санкт-Петербург",
+    showOnPublicPage: true
+  },
   createdAt: "2026-07-03T00:00:00.000Z",
   updatedAt: "2026-07-03T00:00:00.000Z"
 };
@@ -149,8 +180,24 @@ function validBody(): Record<string, unknown> {
     locale: "ru",
     avatarMediaId: null,
     coverMediaId: null,
-    consultationLanguages: ["ru"],
-    isPublicPageEnabled: false
+    consultationLanguages: ["Русский"],
+    visibilityStatus: "draft",
+    professionalExperienceYears: null,
+    professionalSchool: null,
+    specializations: [],
+    methods: [],
+    socialLinks: {
+      telegram: null,
+      instagram: null,
+      whatsapp: null,
+      website: null
+    },
+    ownBirthData: {
+      date: null,
+      time: null,
+      place: null,
+      showOnPublicPage: false
+    }
   };
 }
 

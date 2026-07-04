@@ -21,8 +21,24 @@ const profile: AstrologerProfile = {
   locale: "ru",
   avatarMediaId: null,
   coverMediaId: "cover-1",
-  consultationLanguages: ["ru", "en"],
-  isPublicPageEnabled: false,
+  consultationLanguages: ["Русский", "English"],
+  visibilityStatus: "draft",
+  professionalExperienceYears: 9,
+  professionalSchool: "Психологическая астрология",
+  specializations: ["Натальная карта"],
+  methods: ["Натальная астрология"],
+  socialLinks: {
+    telegram: "alisa_astro",
+    instagram: null,
+    whatsapp: null,
+    website: "alisavega.ru"
+  },
+  ownBirthData: {
+    date: "1990-07-14",
+    time: "08:30",
+    place: "Санкт-Петербург",
+    showOnPublicPage: true
+  },
   createdAt: "2026-07-03T00:00:00.000Z",
   updatedAt: "2026-07-03T00:00:00.000Z"
 };
@@ -72,8 +88,24 @@ describe("astrologer profile domain", () => {
         locale: " RU ",
         avatarMediaId: "",
         coverMediaId: " cover-1 ",
-        consultationLanguages: [" RU ", "en"],
-        isPublicPageEnabled: true
+        consultationLanguages: [" Русский ", "English"],
+        visibilityStatus: "published",
+        professionalExperienceYears: 9,
+        professionalSchool: " Психологическая астрология ",
+        specializations: [" Натальная карта "],
+        methods: [" Натальная астрология "],
+        socialLinks: {
+          telegram: " alisa_astro ",
+          instagram: "",
+          whatsapp: null,
+          website: " alisavega.ru "
+        },
+        ownBirthData: {
+          date: "1990-07-14",
+          time: "08:30",
+          place: " Санкт-Петербург ",
+          showOnPublicPage: true
+        }
       },
       now
     });
@@ -88,8 +120,24 @@ describe("astrologer profile domain", () => {
       locale: "ru",
       avatarMediaId: null,
       coverMediaId: "cover-1",
-      consultationLanguages: ["ru", "en"],
-      isPublicPageEnabled: true,
+      consultationLanguages: ["Русский", "English"],
+      visibilityStatus: "published",
+      professionalExperienceYears: 9,
+      professionalSchool: "Психологическая астрология",
+      specializations: ["Натальная карта"],
+      methods: ["Натальная астрология"],
+      socialLinks: {
+        telegram: "alisa_astro",
+        instagram: null,
+        whatsapp: null,
+        website: "alisavega.ru"
+      },
+      ownBirthData: {
+        date: "1990-07-14",
+        time: "08:30",
+        place: "Санкт-Петербург",
+        showOnPublicPage: true
+      },
       now: "2026-07-03T00:00:00.000Z"
     });
   });
@@ -102,7 +150,8 @@ describe("astrologer profile domain", () => {
       ownerUserId: "owner-1",
       patch: {
         headline: " ",
-        consultationLanguages: [" EN "]
+        consultationLanguages: [" English "],
+        visibilityStatus: "paused"
       },
       now
     });
@@ -111,7 +160,8 @@ describe("astrologer profile domain", () => {
       ownerUserId: "owner-1",
       patch: {
         headline: null,
-        consultationLanguages: ["en"]
+        consultationLanguages: ["English"],
+        visibilityStatus: "paused"
       },
       now: "2026-07-03T00:00:00.000Z"
     });
@@ -124,7 +174,7 @@ describe("astrologer profile domain", () => {
       updateAstrologerProfile({
         store,
         ownerUserId: "owner-1",
-        patch: { consultationLanguages: ["ru", " RU "] },
+        patch: { consultationLanguages: ["Русский", " русский "] },
         now
       })
     ).rejects.toBeInstanceOf(AstrologerProfileValidationError);
@@ -150,8 +200,24 @@ describe("astrologer profile domain", () => {
           locale: "ru",
           avatarMediaId: null,
           coverMediaId: null,
-          consultationLanguages: ["ru"],
-          isPublicPageEnabled: false
+          consultationLanguages: ["Русский"],
+          visibilityStatus: "draft",
+          professionalExperienceYears: null,
+          professionalSchool: null,
+          specializations: [],
+          methods: [],
+          socialLinks: {
+            telegram: null,
+            instagram: null,
+            whatsapp: null,
+            website: null
+          },
+          ownBirthData: {
+            date: null,
+            time: null,
+            place: null,
+            showOnPublicPage: false
+          }
         },
         now
       })

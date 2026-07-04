@@ -4,7 +4,8 @@ import {
   AstrologerProfileHandleConflictError,
   getAstrologerProfile,
   updateAstrologerProfile,
-  upsertAstrologerProfile
+  upsertAstrologerProfile,
+  type AstrologerProfileUpsertInput
 } from "@elevenhouse/domain";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import { createPostgresRuntime } from "../../runtime";
@@ -49,8 +50,24 @@ describe("astrologer profile Drizzle/PostgreSQL integration", () => {
         locale: "ru",
         avatarMediaId: null,
         coverMediaId: "cover-1",
-        consultationLanguages: ["ru", "en"],
-        isPublicPageEnabled: false
+        consultationLanguages: ["Русский", "English"],
+        visibilityStatus: "paused",
+        professionalExperienceYears: 9,
+        professionalSchool: "Психологическая астрология",
+        specializations: ["Натальная карта"],
+        methods: ["Натальная астрология"],
+        socialLinks: {
+          telegram: "alisa_astro",
+          instagram: null,
+          whatsapp: null,
+          website: "alisavega.ru"
+        },
+        ownBirthData: {
+          date: "1990-07-14",
+          time: "08:30",
+          place: "Санкт-Петербург",
+          showOnPublicPage: true
+        }
       },
       now: new Date("2026-07-03T00:00:00.000Z")
     });
@@ -59,9 +76,18 @@ describe("astrologer profile Drizzle/PostgreSQL integration", () => {
     await expect(getAstrologerProfile({ store, ownerUserId })).resolves.toMatchObject({
       ownerUserId,
       publicName: "Анна Вега",
-      consultationLanguages: ["ru", "en"]
+      consultationLanguages: ["Русский", "English"],
+      visibilityStatus: "paused",
+      socialLinks: {
+        telegram: "alisa_astro",
+        instagram: null,
+        whatsapp: null,
+        website: "alisavega.ru"
+      }
     });
-    await expect(getAstrologerProfile({ store, ownerUserId: otherOwnerUserId })).resolves.toBeNull();
+    await expect(
+      getAstrologerProfile({ store, ownerUserId: otherOwnerUserId })
+    ).resolves.toBeNull();
 
     const updated = await updateAstrologerProfile({
       store,
@@ -69,7 +95,8 @@ describe("astrologer profile Drizzle/PostgreSQL integration", () => {
       patch: {
         headline: null,
         bio: "Новая редакция",
-        consultationLanguages: ["en"]
+        consultationLanguages: ["English"],
+        visibilityStatus: "published"
       },
       now: new Date("2026-07-03T00:10:00.000Z")
     });
@@ -78,7 +105,8 @@ describe("astrologer profile Drizzle/PostgreSQL integration", () => {
       ownerUserId,
       headline: null,
       bio: "Новая редакция",
-      consultationLanguages: ["en"],
+      consultationLanguages: ["English"],
+      visibilityStatus: "published",
       updatedAt: "2026-07-03T00:10:00.000Z"
     });
   });
@@ -116,7 +144,7 @@ describe("astrologer profile Drizzle/PostgreSQL integration", () => {
   }
 });
 
-function createInput(publicHandle: string) {
+function createInput(publicHandle: string): AstrologerProfileUpsertInput {
   return {
     publicHandle,
     publicName: "Анна Вега",
@@ -126,8 +154,24 @@ function createInput(publicHandle: string) {
     locale: "ru",
     avatarMediaId: null,
     coverMediaId: null,
-    consultationLanguages: ["ru"],
-    isPublicPageEnabled: false
+    consultationLanguages: ["Русский"],
+    visibilityStatus: "draft",
+    professionalExperienceYears: null,
+    professionalSchool: null,
+    specializations: [],
+    methods: [],
+    socialLinks: {
+      telegram: null,
+      instagram: null,
+      whatsapp: null,
+      website: null
+    },
+    ownBirthData: {
+      date: null,
+      time: null,
+      place: null,
+      showOnPublicPage: false
+    }
   };
 }
 
@@ -136,11 +180,7 @@ function getIntegrationDatabaseUrl(value: string | undefined): string {
     throw new Error("INTEGRATION_DATABASE_URL is required for integration tests");
   }
 
-  return assertDevelopmentDatabaseUrl(
-    value,
-    process.env.NODE_ENV,
-    "run integration tests against"
-  );
+  return assertDevelopmentDatabaseUrl(value, process.env.NODE_ENV, "run integration tests against");
 }
 
 function raise(message: string): never {

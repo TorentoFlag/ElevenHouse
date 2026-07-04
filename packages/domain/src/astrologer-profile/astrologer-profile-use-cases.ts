@@ -4,8 +4,11 @@ import type { AstrologerProfileStore } from "./astrologer-profile-store";
 import type {
   AstrologerProfile,
   AstrologerProfileEditableFields,
+  AstrologerProfileOwnBirthData,
+  AstrologerProfileSocialLinks,
   AstrologerProfileUpdatePatch,
-  AstrologerProfileUpsertInput
+  AstrologerProfileUpsertInput,
+  AstrologerProfileVisibilityStatus
 } from "./astrologer-profile-types";
 
 export function getAstrologerProfile(input: {
@@ -43,7 +46,9 @@ export async function updateAstrologerProfile(input: {
   });
 }
 
-function normalizeProfileFields(fields: AstrologerProfileEditableFields): AstrologerProfileEditableFields {
+function normalizeProfileFields(
+  fields: AstrologerProfileEditableFields
+): AstrologerProfileEditableFields {
   return {
     publicHandle: normalizePublicHandle(fields.publicHandle),
     publicName: normalizeRequiredString(fields.publicName, "Astrologer public name is required"),
@@ -54,7 +59,13 @@ function normalizeProfileFields(fields: AstrologerProfileEditableFields): Astrol
     avatarMediaId: normalizeNullableString(fields.avatarMediaId),
     coverMediaId: normalizeNullableString(fields.coverMediaId),
     consultationLanguages: normalizeConsultationLanguages(fields.consultationLanguages),
-    isPublicPageEnabled: fields.isPublicPageEnabled
+    visibilityStatus: normalizeVisibilityStatus(fields.visibilityStatus),
+    professionalExperienceYears: normalizeExperienceYears(fields.professionalExperienceYears),
+    professionalSchool: normalizeNullableString(fields.professionalSchool),
+    specializations: normalizeOptionalStringList(fields.specializations, "specializations"),
+    methods: normalizeOptionalStringList(fields.methods, "methods"),
+    socialLinks: normalizeSocialLinks(fields.socialLinks),
+    ownBirthData: normalizeOwnBirthData(fields.ownBirthData)
   };
 }
 
@@ -81,12 +92,38 @@ function normalizeProfilePatch(patch: AstrologerProfileUpdatePatch): AstrologerP
       patch.consultationLanguages === undefined
         ? undefined
         : normalizeConsultationLanguages(patch.consultationLanguages),
-    isPublicPageEnabled: patch.isPublicPageEnabled
+    visibilityStatus:
+      patch.visibilityStatus === undefined
+        ? undefined
+        : normalizeVisibilityStatus(patch.visibilityStatus),
+    professionalExperienceYears:
+      patch.professionalExperienceYears === undefined
+        ? undefined
+        : normalizeExperienceYears(patch.professionalExperienceYears),
+    professionalSchool:
+      patch.professionalSchool === undefined
+        ? undefined
+        : normalizeNullableString(patch.professionalSchool),
+    specializations:
+      patch.specializations === undefined
+        ? undefined
+        : normalizeOptionalStringList(patch.specializations, "specializations"),
+    methods:
+      patch.methods === undefined
+        ? undefined
+        : normalizeOptionalStringList(patch.methods, "methods"),
+    socialLinks:
+      patch.socialLinks === undefined ? undefined : normalizeSocialLinks(patch.socialLinks),
+    ownBirthData:
+      patch.ownBirthData === undefined ? undefined : normalizeOwnBirthData(patch.ownBirthData)
   });
 }
 
 function normalizePublicHandle(value: string): string {
-  const normalized = normalizeRequiredString(value, "Astrologer public handle is required").toLowerCase();
+  const normalized = normalizeRequiredString(
+    value,
+    "Astrologer public handle is required"
+  ).toLowerCase();
   if (!/^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])?$/.test(normalized)) {
     throw new AstrologerProfileValidationError("Astrologer public handle is invalid");
   }
@@ -94,7 +131,10 @@ function normalizePublicHandle(value: string): string {
 }
 
 function normalizeLocale(value: string): string {
-  const normalized = normalizeRequiredString(value, "Astrologer profile locale is required").toLowerCase();
+  const normalized = normalizeRequiredString(
+    value,
+    "Astrologer profile locale is required"
+  ).toLowerCase();
   if (!/^[a-z]{2}(?:-[a-z0-9]{2,8})*$/.test(normalized)) {
     throw new AstrologerProfileValidationError("Astrologer profile locale is invalid");
   }
@@ -105,11 +145,59 @@ function normalizeConsultationLanguages(values: readonly string[]): string[] {
   if (values.length === 0) {
     throw new AstrologerProfileValidationError("Astrologer consultation languages are required");
   }
-  const normalized = values.map(normalizeLocale);
-  if (new Set(normalized).size !== normalized.length) {
-    throw new AstrologerProfileValidationError("Astrologer consultation languages must be unique");
+  return normalizeUniqueStringList(values, "consultation languages");
+}
+
+function normalizeOptionalStringList(values: readonly string[], fieldName: string): string[] {
+  return normalizeUniqueStringList(values, fieldName);
+}
+
+function normalizeUniqueStringList(values: readonly string[], fieldName: string): string[] {
+  const normalized = values.map((value) =>
+    normalizeRequiredString(value, `Astrologer ${fieldName} entry is required`)
+  );
+  const uniqueKeys = normalized.map((value) => value.toLocaleLowerCase());
+  if (new Set(uniqueKeys).size !== uniqueKeys.length) {
+    throw new AstrologerProfileValidationError(`Astrologer ${fieldName} must be unique`);
   }
   return normalized;
+}
+
+function normalizeVisibilityStatus(
+  value: AstrologerProfileVisibilityStatus
+): AstrologerProfileVisibilityStatus {
+  if (value === "published" || value === "paused" || value === "draft") {
+    return value;
+  }
+  throw new AstrologerProfileValidationError("Astrologer profile visibility status is invalid");
+}
+
+function normalizeExperienceYears(value: number | null): number | null {
+  if (value === null) return null;
+  if (!Number.isInteger(value) || value < 0 || value > 100) {
+    throw new AstrologerProfileValidationError("Astrologer experience years are invalid");
+  }
+  return value;
+}
+
+function normalizeSocialLinks(value: AstrologerProfileSocialLinks): AstrologerProfileSocialLinks {
+  return {
+    telegram: normalizeNullableString(value.telegram),
+    instagram: normalizeNullableString(value.instagram),
+    whatsapp: normalizeNullableString(value.whatsapp),
+    website: normalizeNullableString(value.website)
+  };
+}
+
+function normalizeOwnBirthData(
+  value: AstrologerProfileOwnBirthData
+): AstrologerProfileOwnBirthData {
+  return {
+    date: normalizeNullableString(value.date),
+    time: normalizeNullableString(value.time),
+    place: normalizeNullableString(value.place),
+    showOnPublicPage: value.showOnPublicPage
+  };
 }
 
 function normalizeNullableString(value: string | null): string | null {

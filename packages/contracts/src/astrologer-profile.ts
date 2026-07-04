@@ -14,6 +14,37 @@ const nullableTrimmedStringSchema = z
   .optional();
 
 const requiredTrimmedStringSchema = nonEmptyStringSchema.max(500);
+const responseNullableStringSchema = z.string().trim().max(500).nullable();
+const emptySocialLinks = {
+  telegram: null,
+  instagram: null,
+  whatsapp: null,
+  website: null
+} as const;
+const emptyOwnBirthData = {
+  date: null,
+  time: null,
+  place: null,
+  showOnPublicPage: false
+} as const;
+
+const uniqueTrimmedStringArraySchema = z
+  .array(z.string().trim().min(1).max(120))
+  .max(30)
+  .superRefine((values, ctx) => {
+    const normalizedValues = values.map((value) => value.toLocaleLowerCase());
+    if (new Set(normalizedValues).size !== normalizedValues.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Values must be unique"
+      });
+    }
+  });
+
+export const astrologerProfileVisibilityStatusSchema = z.enum(["published", "paused", "draft"]);
+export type AstrologerProfileVisibilityStatus = z.infer<
+  typeof astrologerProfileVisibilityStatusSchema
+>;
 
 export const astrologerPublicHandleSchema = z
   .string()
@@ -33,7 +64,7 @@ export const astrologerProfileLocaleSchema = z
   .regex(/^[a-z]{2}(?:-[a-z0-9]{2,8})*$/);
 export type AstrologerProfileLocale = z.infer<typeof astrologerProfileLocaleSchema>;
 
-export const consultationLanguageSchema = astrologerProfileLocaleSchema;
+export const consultationLanguageSchema = z.string().trim().min(1).max(80);
 export type ConsultationLanguage = z.infer<typeof consultationLanguageSchema>;
 
 const consultationLanguagesSchema = z
@@ -49,6 +80,58 @@ const consultationLanguagesSchema = z
     }
   });
 
+export const astrologerProfileSocialLinksSchema = z
+  .object({
+    telegram: nullableTrimmedStringSchema,
+    instagram: nullableTrimmedStringSchema,
+    whatsapp: nullableTrimmedStringSchema,
+    website: nullableTrimmedStringSchema
+  })
+  .strict()
+  .transform((value) => ({
+    telegram: value.telegram ?? null,
+    instagram: value.instagram ?? null,
+    whatsapp: value.whatsapp ?? null,
+    website: value.website ?? null
+  }));
+export type AstrologerProfileSocialLinks = z.infer<typeof astrologerProfileSocialLinksSchema>;
+
+export const astrologerProfileOwnBirthDataSchema = z
+  .object({
+    date: z
+      .union([
+        z
+          .string()
+          .trim()
+          .regex(/^\d{4}-\d{2}-\d{2}$/),
+        z.literal(""),
+        z.null()
+      ])
+      .optional()
+      .transform((value) => (value ? value : null)),
+    time: z
+      .union([
+        z
+          .string()
+          .trim()
+          .regex(/^\d{2}:\d{2}$/),
+        z.literal(""),
+        z.null()
+      ])
+      .optional()
+      .transform((value) => (value ? value : null)),
+    place: nullableTrimmedStringSchema,
+    showOnPublicPage: z.boolean().default(false)
+  })
+  .strict()
+  .transform((value) => ({
+    date: value.date ?? null,
+    time: value.time ?? null,
+    place: value.place ?? null,
+    showOnPublicPage: value.showOnPublicPage
+  }));
+export type AstrologerProfileOwnBirthData = z.infer<typeof astrologerProfileOwnBirthDataSchema>;
+
 export const astrologerProfileResponseSchema = z
   .object({
     ownerUserId: uuidSchema,
@@ -61,7 +144,13 @@ export const astrologerProfileResponseSchema = z
     avatarMediaId: z.string().trim().max(500).nullable(),
     coverMediaId: z.string().trim().max(500).nullable(),
     consultationLanguages: consultationLanguagesSchema,
-    isPublicPageEnabled: z.boolean(),
+    visibilityStatus: astrologerProfileVisibilityStatusSchema,
+    professionalExperienceYears: z.number().int().min(0).max(100).nullable(),
+    professionalSchool: responseNullableStringSchema,
+    specializations: uniqueTrimmedStringArraySchema,
+    methods: uniqueTrimmedStringArraySchema,
+    socialLinks: astrologerProfileSocialLinksSchema,
+    ownBirthData: astrologerProfileOwnBirthDataSchema,
     createdAt: timestampSchema,
     updatedAt: timestampSchema
   })
@@ -75,7 +164,7 @@ export const getAstrologerProfileResponseSchema = z
   .strict();
 export type GetAstrologerProfileResponse = z.infer<typeof getAstrologerProfileResponseSchema>;
 
-export const upsertAstrologerProfileRequestSchema = z
+const astrologerProfileRequestFieldsSchema = z
   .object({
     publicHandle: astrologerPublicHandleSchema,
     publicName: nonEmptyStringSchema.max(200),
@@ -86,16 +175,37 @@ export const upsertAstrologerProfileRequestSchema = z
     avatarMediaId: nullableTrimmedStringSchema,
     coverMediaId: nullableTrimmedStringSchema,
     consultationLanguages: consultationLanguagesSchema,
-    isPublicPageEnabled: z.boolean()
+    visibilityStatus: astrologerProfileVisibilityStatusSchema,
+    professionalExperienceYears: z.number().int().min(0).max(100).nullable().optional(),
+    professionalSchool: nullableTrimmedStringSchema,
+    specializations: uniqueTrimmedStringArraySchema.optional(),
+    methods: uniqueTrimmedStringArraySchema.optional(),
+    socialLinks: astrologerProfileSocialLinksSchema.optional(),
+    ownBirthData: astrologerProfileOwnBirthDataSchema.optional()
   })
   .strict();
-export type UpsertAstrologerProfileRequest = z.infer<
-  typeof upsertAstrologerProfileRequestSchema
->;
 
-export const updateAstrologerProfileRequestSchema = upsertAstrologerProfileRequestSchema
+export const upsertAstrologerProfileRequestSchema = astrologerProfileRequestFieldsSchema.transform(
+  (value) => {
+    return {
+      ...value,
+      professionalExperienceYears: value.professionalExperienceYears ?? null,
+      professionalSchool: value.professionalSchool ?? null,
+      specializations: value.specializations ?? [],
+      methods: value.methods ?? [],
+      socialLinks: value.socialLinks ?? emptySocialLinks,
+      ownBirthData: value.ownBirthData ?? emptyOwnBirthData
+    };
+  }
+);
+export type UpsertAstrologerProfileRequest = z.infer<typeof upsertAstrologerProfileRequestSchema>;
+
+export const updateAstrologerProfileRequestSchema = astrologerProfileRequestFieldsSchema
   .partial()
-  .strict();
-export type UpdateAstrologerProfileRequest = z.infer<
-  typeof updateAstrologerProfileRequestSchema
->;
+  .strict()
+  .transform((value) => {
+    return {
+      ...value
+    };
+  });
+export type UpdateAstrologerProfileRequest = z.infer<typeof updateAstrologerProfileRequestSchema>;

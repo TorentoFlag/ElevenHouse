@@ -79,7 +79,13 @@ function toUpsertInput(body: UpsertAstrologerProfileRequest): AstrologerProfileU
     avatarMediaId: body.avatarMediaId ?? null,
     coverMediaId: body.coverMediaId ?? null,
     consultationLanguages: body.consultationLanguages,
-    isPublicPageEnabled: body.isPublicPageEnabled
+    visibilityStatus: body.visibilityStatus,
+    professionalExperienceYears: body.professionalExperienceYears,
+    professionalSchool: body.professionalSchool,
+    specializations: body.specializations,
+    methods: body.methods,
+    socialLinks: body.socialLinks,
+    ownBirthData: body.ownBirthData
   };
 }
 

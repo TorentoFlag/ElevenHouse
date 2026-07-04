@@ -180,6 +180,10 @@ export type AstrologerCopy = {
     loadingLabel: string;
     errorLabel: string;
   };
+  settings: {
+    documentTitle: string;
+    title: string;
+  };
 };
 
 export type AppShellHeaderCopy = {
@@ -552,6 +556,10 @@ export const astrologerCopyByLocale = {
       emptyAddLabel: "Добавить трактовку",
       loadingLabel: "Загружаем справочники",
       errorLabel: "Не удалось загрузить справочники"
+    },
+    settings: {
+      documentTitle: "ElevenHouse | Настройки",
+      title: "Настройки"
     }
   },
   en: {
@@ -837,6 +845,10 @@ export const astrologerCopyByLocale = {
       emptyAddLabel: "Add interpretation",
       loadingLabel: "Loading references",
       errorLabel: "Could not load references"
+    },
+    settings: {
+      documentTitle: "ElevenHouse | Settings",
+      title: "Settings"
     }
   }
 } satisfies Record<SupportedLocale, AstrologerCopy>;

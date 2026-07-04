@@ -2852,8 +2852,83 @@
           "primaryKey": false,
           "notNull": true
         },
-        "is_public_page_enabled": {
-          "name": "is_public_page_enabled",
+        "visibility_status": {
+          "name": "visibility_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "professional_experience_years": {
+          "name": "professional_experience_years",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "professional_school": {
+          "name": "professional_school",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "specializations": {
+          "name": "specializations",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "methods": {
+          "name": "methods",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "telegram_handle": {
+          "name": "telegram_handle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "instagram_handle": {
+          "name": "instagram_handle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "whatsapp_contact": {
+          "name": "whatsapp_contact",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "website_url": {
+          "name": "website_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "own_birth_date": {
+          "name": "own_birth_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "own_birth_time": {
+          "name": "own_birth_time",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "own_birth_place": {
+          "name": "own_birth_place",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "show_own_birth_data_public": {
+          "name": "show_own_birth_data_public",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -2941,6 +3016,26 @@
         "astrologer_profiles_locale_length_check": {
           "name": "astrologer_profiles_locale_length_check",
           "value": "length(trim(\"astrologer_profiles\".\"locale\")) > 0"
+        },
+        "astrologer_profiles_visibility_status_check": {
+          "name": "astrologer_profiles_visibility_status_check",
+          "value": "\"astrologer_profiles\".\"visibility_status\" in ('published', 'paused', 'draft')"
+        },
+        "astrologer_profiles_experience_years_check": {
+          "name": "astrologer_profiles_experience_years_check",
+          "value": "\"astrologer_profiles\".\"professional_experience_years\" is null or (\"astrologer_profiles\".\"professional_experience_years\" >= 0 and \"astrologer_profiles\".\"professional_experience_years\" <= 100)"
+        },
+        "astrologer_profiles_school_length_check": {
+          "name": "astrologer_profiles_school_length_check",
+          "value": "\"astrologer_profiles\".\"professional_school\" is null or length(trim(\"astrologer_profiles\".\"professional_school\")) <= 500"
+        },
+        "astrologer_profiles_own_birth_date_check": {
+          "name": "astrologer_profiles_own_birth_date_check",
+          "value": "\"astrologer_profiles\".\"own_birth_date\" is null or \"astrologer_profiles\".\"own_birth_date\" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'"
+        },
+        "astrologer_profiles_own_birth_time_check": {
+          "name": "astrologer_profiles_own_birth_time_check",
+          "value": "\"astrologer_profiles\".\"own_birth_time\" is null or \"astrologer_profiles\".\"own_birth_time\" ~ '^[0-9]{2}:[0-9]{2}$'"
         }
       },
       "isRLSEnabled": false
