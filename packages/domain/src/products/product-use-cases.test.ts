@@ -54,9 +54,7 @@ class InMemoryProductStore implements ProductStore {
   async listByOwner(query: Parameters<ProductStore["listByOwner"]>[0]) {
     const owned = this.products.filter((product) => product.ownerUserId === query.ownerUserId);
     const filtered =
-      query.status === "all"
-        ? owned
-        : owned.filter((product) => product.status === query.status);
+      query.status === "all" ? owned : owned.filter((product) => product.status === query.status);
 
     return {
       products: filtered.slice(query.offset, query.offset + query.limit),
@@ -259,20 +257,18 @@ describe("product use cases", () => {
       store,
       ownerUserId: "owner-1",
       productId: product.id,
+      title: "Natal reading (copy)",
       now: new Date("2026-07-02T00:40:00.000Z")
     });
 
     expect(copy.id).not.toBe(product.id);
     expect(copy.status).toBe("draft");
-    expect(copy.title).toBe("Натальный разбор (копия)");
+    expect(copy.title).toBe("Natal reading (copy)");
     expect(copy.includedItems[0]?.id).not.toBe(product.includedItems[0]?.id);
   });
 });
 
-function materializePatch(
-  patch: ProductUpdatePatch,
-  createId: () => string
-): Partial<Product> {
+function materializePatch(patch: ProductUpdatePatch, createId: () => string): Partial<Product> {
   const { includedItems, modifiers, ...rest } = patch;
   return {
     ...rest,

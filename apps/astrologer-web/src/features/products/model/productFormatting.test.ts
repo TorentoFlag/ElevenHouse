@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { productCopyByLocale } from "./productCopy";
 import {
   createProductCardSummary,
+  createDuplicateProductTitle,
   formatMoneyMinor,
   formatProductPrice
 } from "./productFormatting";
@@ -95,6 +96,38 @@ describe("product formatting helpers", () => {
       salesCount: "47",
       revenueLabel: "230 300 ₽",
       ratingLabel: "4.9"
+    });
+  });
+
+  it("creates localized duplicate product titles outside the backend domain", () => {
+    expect(createDuplicateProductTitle("Натальный разбор", productCopyByLocale.ru)).toBe(
+      "Натальный разбор (копия)"
+    );
+    expect(createDuplicateProductTitle("Natal reading", productCopyByLocale.en)).toBe(
+      "Natal reading (copy)"
+    );
+  });
+
+  it("does not render unavailable analytics as real zero metrics", () => {
+    expect(
+      createProductCardSummary(
+        {
+          ...product,
+          analytics: {
+            ...product.analytics,
+            status: "unavailable",
+            salesCount: 0,
+            grossRevenueMinor: 0,
+            averageRating: null
+          }
+        },
+        productCopyByLocale.ru,
+        "ru"
+      )
+    ).toMatchObject({
+      salesCount: "—",
+      revenueLabel: "—",
+      ratingLabel: null
     });
   });
 });

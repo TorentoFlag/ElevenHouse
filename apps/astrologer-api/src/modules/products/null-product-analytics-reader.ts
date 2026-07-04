@@ -12,6 +12,7 @@ export class NullProductAnalyticsReader implements ProductAnalyticsReader {
       input.productIds.map((productId) => [
         productId,
         {
+          status: "unavailable",
           productId,
           salesCount: 0,
           grossRevenueMinor: 0,
@@ -25,6 +26,7 @@ export class NullProductAnalyticsReader implements ProductAnalyticsReader {
 
   async getCatalogLifetimeSummary(): Promise<ProductCatalogLifetimeAnalyticsSummary> {
     return {
+      analyticsStatus: "unavailable",
       totalSalesCount: 0,
       grossRevenueMinor: 0,
       currency: "RUB",

@@ -56,21 +56,26 @@ vi.mock("react", async () => {
         }
       ];
     }),
-    useReducer: vi.fn((reducer: (state: unknown, action: unknown) => unknown, initialArg: unknown) => {
-      const stateIndex = mocks.hookState.cursor;
-      mocks.hookState.cursor += 1;
+    useReducer: vi.fn(
+      (reducer: (state: unknown, action: unknown) => unknown, initialArg: unknown) => {
+        const stateIndex = mocks.hookState.cursor;
+        mocks.hookState.cursor += 1;
 
-      if (!(stateIndex in mocks.hookState.values)) {
-        mocks.hookState.values[stateIndex] = initialArg;
-      }
-
-      return [
-        mocks.hookState.values[stateIndex],
-        (action: unknown) => {
-          mocks.hookState.values[stateIndex] = reducer(mocks.hookState.values[stateIndex], action);
+        if (!(stateIndex in mocks.hookState.values)) {
+          mocks.hookState.values[stateIndex] = initialArg;
         }
-      ];
-    })
+
+        return [
+          mocks.hookState.values[stateIndex],
+          (action: unknown) => {
+            mocks.hookState.values[stateIndex] = reducer(
+              mocks.hookState.values[stateIndex],
+              action
+            );
+          }
+        ];
+      }
+    )
   };
 });
 
@@ -149,7 +154,7 @@ const productsCopy = {
     durationSuffix: " мин",
     decrementDurationLabel: "Уменьшить длительность",
     incrementDurationLabel: "Увеличить длительность",
-    formatLabel: "Формат",
+    formatLabel: "Формат поставки",
     executionModeLabel: "Сценарий выполнения",
     paymentModelLabel: "Оплата",
     packageLabel: "Пакет",
@@ -160,16 +165,16 @@ const productsCopy = {
     trialDaysLabel: "Пробный период",
     participantModeLabel: "Участники",
     groupSizeLabel: "Размер группы",
-    requiredClientDataLabel: "Данные клиента",
-    methodsLabel: "Методы",
-    accessGrantsLabel: "Доступы",
+    requiredClientDataLabel: "Данные от клиента",
+    methodsLabel: "Метод / система",
+    accessGrantsLabel: "Доступ",
     includedItemsLabel: "Что входит",
     includedItemTextLabel: "Текст пункта",
     includedItemPlaceholder: "Что получает клиент",
     includedItemIconLabel: "Иконка пункта",
     addIncludedItemLabel: "Добавить пункт",
     removeIncludedItemLabel: "Удалить пункт",
-    modifiersLabel: "Модификаторы",
+    modifiersLabel: "Допы · модификаторы",
     modifierKindLabel: "Тип модификатора",
     modifierFixedLabel: "Фиксированная цена",
     modifierPercentLabel: "Процент",
@@ -177,7 +182,7 @@ const productsCopy = {
     modifierLabelLabel: "Название модификатора",
     modifierLabelPlaceholder: "Название модификатора",
     modifierPriceLabel: "Цена модификатора",
-    addModifierLabel: "Добавить модификатор",
+    addModifierLabel: "Свой модификатор",
     removeModifierLabel: "Удалить модификатор",
     previewLabel: "Превью",
     previewPriceLabel: "Стоимость",
@@ -189,12 +194,22 @@ const productsCopy = {
       check: "Галочка",
       sparkle: "Искра",
       video: "Видео",
+      mic: "Микрофон",
       chat: "Чат",
       content: "Контент",
+      fileDown: "Файл",
       flow: "Поток",
+      globe: "Канал",
       box: "Коробка",
       wallet: "Кошелек",
+      calendar: "Календарь",
+      clock: "Часы",
+      lightning: "Молния",
+      users: "Группа",
+      gift: "Подарок",
       orbit: "Орбита",
+      map: "Карта",
+      star: "Звезда",
       reference: "Справочник",
       verified: "Проверено",
       refresh: "Обновить"
@@ -425,9 +440,9 @@ describe("ProductsPage", () => {
 
       renderPage();
 
-      expect(getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).isProductActionPending).toBe(
-        true
-      );
+      expect(
+        getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).isProductActionPending
+      ).toBe(true);
     }
   );
 
@@ -458,9 +473,9 @@ describe("ProductsPage", () => {
     renderPage();
     getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onCreate();
     renderPage();
-    getLatestMockProps<{ onSelect: (type: "custom") => void }>(mocks.productCreateTypeModal).onSelect(
-      "custom"
-    );
+    getLatestMockProps<{ onSelect: (type: "custom") => void }>(
+      mocks.productCreateTypeModal
+    ).onSelect("custom");
     renderPage();
 
     const constructorProps = getLatestMockProps<ProductConstructorModalProps>(
@@ -474,7 +489,9 @@ describe("ProductsPage", () => {
     renderPage();
 
     expect(mocks.productCreateTypeModal).toHaveBeenCalledTimes(typeModalCallCountBeforeCloseRender);
-    expect(mocks.productConstructorModal).toHaveBeenCalledTimes(constructorCallCountBeforeCloseRender);
+    expect(mocks.productConstructorModal).toHaveBeenCalledTimes(
+      constructorCallCountBeforeCloseRender
+    );
   });
 
   it("saves a created draft through the products mutation and closes the editor", async () => {
@@ -487,9 +504,9 @@ describe("ProductsPage", () => {
     renderPage();
     getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onCreate();
     renderPage();
-    getLatestMockProps<{ onSelect: (type: "single") => void }>(mocks.productCreateTypeModal).onSelect(
-      "single"
-    );
+    getLatestMockProps<{ onSelect: (type: "single") => void }>(
+      mocks.productCreateTypeModal
+    ).onSelect("single");
     renderPage();
 
     let constructorProps = getLatestMockProps<ProductConstructorModalProps>(
@@ -502,7 +519,9 @@ describe("ProductsPage", () => {
       priceMinor: 490000
     });
     renderPage();
-    constructorProps = getLatestMockProps<ProductConstructorModalProps>(mocks.productConstructorModal);
+    constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
     await constructorProps.onSave();
 
     expect(mutateAsync).toHaveBeenCalledWith(
@@ -515,7 +534,55 @@ describe("ProductsPage", () => {
 
     const constructorCallCountBeforeCloseRender = mocks.productConstructorModal.mock.calls.length;
     renderPage();
-    expect(mocks.productConstructorModal).toHaveBeenCalledTimes(constructorCallCountBeforeCloseRender);
+    expect(mocks.productConstructorModal).toHaveBeenCalledTimes(
+      constructorCallCountBeforeCloseRender
+    );
+  });
+
+  it("creates a draft and publishes it from the constructor publish action", async () => {
+    const createMutateAsync = vi.fn().mockResolvedValue({ ...product, id: "created-product-id" });
+    const publishMutateAsync = vi.fn().mockResolvedValue({
+      ...product,
+      id: "created-product-id",
+      status: "active"
+    });
+    mocks.useCreateProductMutation.mockReturnValue({
+      mutateAsync: createMutateAsync,
+      isPending: false
+    });
+    mocks.usePublishProductMutation.mockReturnValue({
+      mutateAsync: publishMutateAsync,
+      mutate: vi.fn(),
+      isPending: false
+    });
+
+    renderPage();
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onCreate();
+    renderPage();
+    getLatestMockProps<{ onSelect: (type: "single") => void }>(
+      mocks.productCreateTypeModal
+    ).onSelect("single");
+    renderPage();
+
+    let constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    constructorProps.onDraftChange({
+      ...constructorProps.draft,
+      title: "Натальный разбор"
+    });
+    renderPage();
+    constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    await constructorProps.onPublish();
+
+    expect(createMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Натальный разбор"
+      }) satisfies Partial<CreateProductRequest>
+    );
+    expect(publishMutateAsync).toHaveBeenCalledWith("created-product-id");
   });
 
   it("opens an existing product in the constructor and saves it through the update mutation", async () => {
@@ -539,7 +606,9 @@ describe("ProductsPage", () => {
     });
     renderPage();
 
-    constructorProps = getLatestMockProps<ProductConstructorModalProps>(mocks.productConstructorModal);
+    constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
     await constructorProps.onSave();
 
     expect(mutateAsync).toHaveBeenCalledWith({
@@ -550,20 +619,63 @@ describe("ProductsPage", () => {
     });
   });
 
+  it("updates an existing product and publishes it from the constructor publish action", async () => {
+    const updateMutateAsync = vi.fn().mockResolvedValue(product);
+    const publishMutateAsync = vi.fn().mockResolvedValue({ ...product, status: "active" });
+    mocks.useUpdateProductMutation.mockReturnValue({
+      mutateAsync: updateMutateAsync,
+      isPending: false
+    });
+    mocks.usePublishProductMutation.mockReturnValue({
+      mutateAsync: publishMutateAsync,
+      mutate: vi.fn(),
+      isPending: false
+    });
+
+    renderPage();
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onEditProduct!(product);
+    renderPage();
+
+    let constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    constructorProps.onDraftChange({
+      ...constructorProps.draft,
+      title: "Опубликованный натальный разбор"
+    });
+    renderPage();
+    constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    await constructorProps.onPublish();
+
+    expect(updateMutateAsync).toHaveBeenCalledWith({
+      productId: product.id,
+      body: expect.objectContaining({
+        title: "Опубликованный натальный разбор"
+      })
+    });
+    expect(publishMutateAsync).toHaveBeenCalledWith(product.id);
+  });
+
   it("clears the edited draft when opening type selection from edit flow", () => {
     renderPage();
     getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onEditProduct!(product);
     renderPage();
-    expect(getLatestMockProps<ProductConstructorModalProps>(mocks.productConstructorModal).draft.title).toBe(
-      "Натальный разбор"
-    );
+    expect(
+      getLatestMockProps<ProductConstructorModalProps>(mocks.productConstructorModal).draft.title
+    ).toBe("Натальный разбор");
 
     getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onCreate();
     const constructorCallCountBeforeCreateRender = mocks.productConstructorModal.mock.calls.length;
     renderPage();
 
-    expect(mocks.productConstructorModal).toHaveBeenCalledTimes(constructorCallCountBeforeCreateRender);
-    expect(getLatestMockProps<{ onSelect: (type: "single") => void }>(mocks.productCreateTypeModal)).toBeTruthy();
+    expect(mocks.productConstructorModal).toHaveBeenCalledTimes(
+      constructorCallCountBeforeCreateRender
+    );
+    expect(
+      getLatestMockProps<{ onSelect: (type: "single") => void }>(mocks.productCreateTypeModal)
+    ).toBeTruthy();
   });
 
   it.each([
@@ -597,9 +709,14 @@ describe("ProductsPage", () => {
     });
 
     renderPage();
-    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onDuplicateProduct!(product.id);
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onDuplicateProduct!(product);
 
-    expect(mutate).toHaveBeenCalledWith(product.id);
+    expect(mutate).toHaveBeenCalledWith({
+      productId: product.id,
+      body: {
+        title: "Натальный разбор (копия)"
+      }
+    });
   });
 });
 

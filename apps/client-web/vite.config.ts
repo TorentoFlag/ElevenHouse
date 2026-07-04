@@ -54,6 +54,9 @@ export default defineConfig({
       "@elevenhouse/validation/phone": fileURLToPath(
         new URL("../../packages/validation/src/phone/index.ts", import.meta.url)
       ),
+      "@elevenhouse/validation/products": fileURLToPath(
+        new URL("../../packages/validation/src/products/index.ts", import.meta.url)
+      ),
       "@elevenhouse/validation": fileURLToPath(
         new URL("../../packages/validation/src/index.ts", import.meta.url)
       )

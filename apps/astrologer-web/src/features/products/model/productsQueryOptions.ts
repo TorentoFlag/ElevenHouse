@@ -7,6 +7,7 @@ import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import { archiveProduct } from "../api/archiveProduct";
 import { createProduct } from "../api/createProduct";
 import { duplicateProduct } from "../api/duplicateProduct";
+import type { DuplicateProductInput } from "../api/duplicateProduct";
 import { getProduct } from "../api/getProduct";
 import { getProductSummary } from "../api/getProductSummary";
 import { listProducts } from "../api/listProducts";
@@ -43,27 +44,21 @@ export function productDetailQueryOptions(productId: string) {
   };
 }
 
-export function createProductMutationOptions(
-  queryClient: Pick<QueryClient, "invalidateQueries">
-) {
+export function createProductMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return {
     mutationFn: (body: CreateProductRequest) => createProduct(body),
     onSuccess: () => invalidateProducts(queryClient)
   };
 }
 
-export function updateProductMutationOptions(
-  queryClient: Pick<QueryClient, "invalidateQueries">
-) {
+export function updateProductMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return {
     mutationFn: (input: UpdateProductInput) => updateProduct(input),
     onSuccess: () => invalidateProducts(queryClient)
   };
 }
 
-export function publishProductMutationOptions(
-  queryClient: Pick<QueryClient, "invalidateQueries">
-) {
+export function publishProductMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return {
     mutationFn: (productId: string) => publishProduct(productId),
     onSuccess: () => invalidateProducts(queryClient)
@@ -79,9 +74,7 @@ export function moveProductToDraftMutationOptions(
   };
 }
 
-export function archiveProductMutationOptions(
-  queryClient: Pick<QueryClient, "invalidateQueries">
-) {
+export function archiveProductMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return {
     mutationFn: (productId: string) => archiveProduct(productId),
     onSuccess: () => invalidateProducts(queryClient)
@@ -92,7 +85,7 @@ export function duplicateProductMutationOptions(
   queryClient: Pick<QueryClient, "invalidateQueries">
 ) {
   return {
-    mutationFn: (productId: string) => duplicateProduct(productId),
+    mutationFn: (input: DuplicateProductInput) => duplicateProduct(input),
     onSuccess: () => invalidateProducts(queryClient)
   };
 }

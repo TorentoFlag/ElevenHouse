@@ -116,6 +116,7 @@
   },
   "dependencies": {
     "@elevenhouse/domain": "workspace:*",
+    "@elevenhouse/validation": "workspace:*",
     "dotenv": "17.4.2",
     "drizzle-orm": "0.45.2",
     "pg": "8.21.0"

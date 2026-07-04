@@ -1,5 +1,9 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
-import type { ListProductsResponse, ProductStatus, ProductSummaryResponse } from "@elevenhouse/contracts";
+import type {
+  ListProductsResponse,
+  ProductStatus,
+  ProductSummaryResponse
+} from "@elevenhouse/contracts";
 import { Button } from "@elevenhouse/design-system/components/Button";
 import { ActionMenu } from "@elevenhouse/design-system/components/ActionMenu";
 import { Card } from "@elevenhouse/design-system/components/Card";
@@ -93,7 +97,7 @@ const constructorCopy = {
   durationSuffix: " мин",
   decrementDurationLabel: "Уменьшить длительность",
   incrementDurationLabel: "Увеличить длительность",
-  formatLabel: "Формат",
+  formatLabel: "Формат поставки",
   executionModeLabel: "Сценарий выполнения",
   paymentModelLabel: "Оплата",
   packageLabel: "Пакет",
@@ -104,16 +108,16 @@ const constructorCopy = {
   trialDaysLabel: "Пробный период",
   participantModeLabel: "Участники",
   groupSizeLabel: "Размер группы",
-  requiredClientDataLabel: "Данные клиента",
-  methodsLabel: "Методы",
-  accessGrantsLabel: "Доступы",
+  requiredClientDataLabel: "Данные от клиента",
+  methodsLabel: "Метод / система",
+  accessGrantsLabel: "Доступ",
   includedItemsLabel: "Что входит",
   includedItemTextLabel: "Текст пункта",
   includedItemPlaceholder: "Что получает клиент",
   includedItemIconLabel: "Иконка пункта",
   addIncludedItemLabel: "Добавить пункт",
   removeIncludedItemLabel: "Удалить пункт",
-  modifiersLabel: "Модификаторы",
+  modifiersLabel: "Допы · модификаторы",
   modifierKindLabel: "Тип модификатора",
   modifierFixedLabel: "Фиксированная цена",
   modifierPercentLabel: "Процент",
@@ -121,7 +125,7 @@ const constructorCopy = {
   modifierLabelLabel: "Название модификатора",
   modifierLabelPlaceholder: "Название модификатора",
   modifierPriceLabel: "Цена модификатора",
-  addModifierLabel: "Добавить модификатор",
+  addModifierLabel: "Свой модификатор",
   removeModifierLabel: "Удалить модификатор",
   previewLabel: "Превью",
   previewPriceLabel: "Стоимость",
@@ -133,12 +137,22 @@ const constructorCopy = {
     check: "Галочка",
     sparkle: "Искра",
     video: "Видео",
+    mic: "Микрофон",
     chat: "Чат",
     content: "Контент",
+    fileDown: "Файл",
     flow: "Поток",
+    globe: "Канал",
     box: "Коробка",
     wallet: "Кошелек",
+    calendar: "Календарь",
+    clock: "Часы",
+    lightning: "Молния",
+    users: "Группа",
+    gift: "Подарок",
     orbit: "Орбита",
+    map: "Карта",
+    star: "Звезда",
     reference: "Справочник",
     verified: "Проверено",
     refresh: "Обновить"
@@ -220,6 +234,29 @@ describe("Products page components", () => {
     expect(JSON.stringify(strip.props.children)).toContain("1 из 1");
     expect(JSON.stringify(strip.props.children)).toContain("230 300 ₽");
     expect(JSON.stringify(strip.props.children)).toContain("Натальный разбор");
+  });
+
+  it("renders unavailable summary analytics without fake zero metrics", () => {
+    const strip = ProductsSummaryStrip({
+      copy: {
+        activeLabel: "Активных",
+        salesLabel: "Продаж всего",
+        revenueLabel: "Выручка каталога",
+        bestsellerLabel: "Бестселлер",
+        emptyBestseller: "—"
+      },
+      locale: "ru",
+      summary: {
+        ...summary,
+        analyticsStatus: "unavailable",
+        totalSalesCount: 0,
+        grossRevenueMinor: 0,
+        bestseller: null
+      }
+    });
+
+    expect(JSON.stringify(strip.props.children)).toContain("—");
+    expect(JSON.stringify(strip.props.children)).not.toContain('Продаж всего","value":"0');
   });
 
   it("renders product cards and state messages", () => {
@@ -318,7 +355,9 @@ describe("Products page components", () => {
       isActionPending: false
     });
 
-    const includedItemIcon = findRenderedElementsByType(card, Icon).find((icon) => icon.props.width === 13);
+    const includedItemIcon = findRenderedElementsByType(card, Icon).find(
+      (icon) => icon.props.width === 13
+    );
 
     expect(includedItemIcon?.props.iconName).toBe("video");
   });
@@ -387,7 +426,7 @@ describe("Products page components", () => {
     getArrayItem(menuItems, 3).onSelect();
 
     expect(onEdit).toHaveBeenCalledWith(product);
-    expect(onDuplicate).toHaveBeenCalledWith(product.id);
+    expect(onDuplicate).toHaveBeenCalledWith(product);
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "draft");
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "archived");
   });
@@ -415,7 +454,9 @@ describe("Products page components", () => {
       isActionPending: true
     });
 
-    expect(getArrayItem(findRequiredElementByType(activeCard, ActionMenu).props.items ?? [], 2).disabled).toBe(true);
+    expect(
+      getArrayItem(findRequiredElementByType(activeCard, ActionMenu).props.items ?? [], 2).disabled
+    ).toBe(true);
   });
 
   it("renders status action buttons by product status", () => {
@@ -512,8 +553,12 @@ describe("Products page components", () => {
     getArrayItem(getArrayItem(menus, 1).props.items ?? [], 2).onSelect();
     getArrayItem(getArrayItem(menus, 1).props.items ?? [], 3).onSelect();
 
-    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: product.id, status: "draft" }));
-    expect(onDuplicate).toHaveBeenCalledWith(product.id);
+    expect(onEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: product.id, status: "draft" })
+    );
+    expect(onDuplicate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: product.id, status: "draft" })
+    );
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "active");
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "draft");
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "archived");
@@ -570,7 +615,9 @@ describe("Products page components", () => {
       const icon = getArrayItem(Children.toArray(option.props.children), 0);
 
       expect(isValidElement(icon) ? icon.type : null).toBe(Icon);
-      expect(isValidElement<TestElementProps>(icon) ? icon.props.variant : undefined).toBe("active");
+      expect(isValidElement<TestElementProps>(icon) ? icon.props.variant : undefined).toBe(
+        "active"
+      );
       expect(isValidElement<TestElementProps>(icon) ? icon.props["aria-hidden"] : undefined).toBe(
         "true"
       );
@@ -583,6 +630,7 @@ describe("Products page components", () => {
 
   it("renders create-flow modals from consolidated flow state", () => {
     const draft = createDefaultProductDraft("single");
+    const modalTarget = { nodeType: 1 } as HTMLElement;
     const flow = {
       isTypeModalOpen: true,
       editorDraft: draft,
@@ -594,6 +642,7 @@ describe("Products page components", () => {
       editProduct: vi.fn(),
       updateDraft: vi.fn(),
       saveDraft: vi.fn(),
+      publishDraft: vi.fn(),
       closeEditor: vi.fn(),
       returnToTypeSelection: vi.fn(),
       closeCreateFlow: vi.fn()
@@ -610,10 +659,13 @@ describe("Products page components", () => {
       },
       productCopy: productCopyByLocale.ru,
       locale: "ru",
-      flow
+      flow,
+      modalTarget
     });
 
     const typeModal = findRequiredElementByType(flowView, ProductCreateTypeModal);
+    expect(typeModal.props.portalTarget).toBe(modalTarget);
+    expect(typeModal.props.backdropClassName).toBe(styles.productScopedModalBackdrop);
     typeModal.props.onSelect("single");
     typeModal.props.onClose();
     expect(flow.selectType).toHaveBeenCalledWith("single");
@@ -624,11 +676,15 @@ describe("Products page components", () => {
     expect(constructorModal.props.productCopy).toBe(productCopyByLocale.ru);
     expect(constructorModal.props.locale).toBe("ru");
     expect(constructorModal.props.draft).toBe(draft);
+    expect(constructorModal.props.portalTarget).toBe(modalTarget);
+    expect(constructorModal.props.backdropClassName).toBe(styles.productScopedModalBackdrop);
     constructorModal.props.onDraftChange(draft);
     constructorModal.props.onSave();
+    constructorModal.props.onPublish();
     constructorModal.props.onClose();
     expect(flow.updateDraft).toHaveBeenCalledWith(draft);
     expect(flow.saveDraft).toHaveBeenCalledOnce();
+    expect(flow.publishDraft).toHaveBeenCalledOnce();
     expect(flow.closeEditor).toHaveBeenCalledOnce();
   });
 });
@@ -656,6 +712,8 @@ type TestElementProps = {
   onSubmit: (event: { preventDefault: () => void }) => void | Promise<void>;
   product?: unknown;
   productType?: unknown;
+  portalTarget?: Element | null;
+  backdropClassName?: string;
   startIcon: { props: { iconName?: string }; type: unknown };
   width?: number;
   iconName?: string;
@@ -672,6 +730,7 @@ type TestElementProps = {
   onBackToTypeSelection: () => void;
   onCloseCreateFlow: () => void;
   onDraftChange: (draft: unknown) => void;
+  onPublish: () => void | Promise<void>;
   onSave: () => void | Promise<void>;
   onSelect: (type: string) => void;
 };
@@ -717,7 +776,10 @@ function findElementsByProp(
   return matches;
 }
 
-function findRenderedElementsByType(root: unknown, type: unknown): Array<{ props: TestElementProps }> {
+function findRenderedElementsByType(
+  root: unknown,
+  type: unknown
+): Array<{ props: TestElementProps }> {
   const matches: Array<{ props: TestElementProps }> = [];
   visitRenderedElements(root, (element) => {
     if (element.type === type) {

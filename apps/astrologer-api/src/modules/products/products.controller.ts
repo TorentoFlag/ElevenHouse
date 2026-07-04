@@ -65,8 +65,9 @@ export class ProductsController {
   @RequireCsrf()
   duplicateProduct(
     @Param("productId") productId: string,
+    @Body() body: unknown,
     @Req() request: AstrologerSessionRequest
   ) {
-    return this.productsService.duplicateProduct(productId, request);
+    return this.productsService.duplicateProduct(productId, body, request);
   }
 }

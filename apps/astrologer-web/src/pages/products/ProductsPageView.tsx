@@ -4,6 +4,7 @@ import type {
   ProductStatusFilter,
   ProductSummaryResponse
 } from "@elevenhouse/contracts";
+import type { Ref } from "react";
 import type { ProductLocale } from "../../features/products/model/productCopy";
 import { productCopyByLocale } from "../../features/products/model/productCopy";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
@@ -24,6 +25,7 @@ type ProductsPageCopy = {
 };
 
 export type ProductsPageViewProps = {
+  readonly modalScopeRef?: Ref<HTMLElement>;
   readonly copy: ProductsPageCopy;
   readonly locale: ProductLocale;
   readonly products: ListProductsResponse["products"];
@@ -36,11 +38,12 @@ export type ProductsPageViewProps = {
   readonly onStatusChange: (status: ProductStatusFilter) => void;
   readonly onCreate: () => void;
   readonly onEditProduct: (product: ProductResponse) => void;
-  readonly onDuplicateProduct: (productId: string) => void;
+  readonly onDuplicateProduct: (product: ProductResponse) => void;
   readonly onProductStatusChange: (productId: string, status: ProductResponse["status"]) => void;
 };
 
 export function ProductsPageView({
+  modalScopeRef,
   copy,
   locale,
   products,
@@ -59,7 +62,7 @@ export function ProductsPageView({
   const productCopy = productCopyByLocale[locale];
 
   return (
-    <section className={styles.productsPage} aria-labelledby="products-title">
+    <section className={styles.productsPage} aria-labelledby="products-title" ref={modalScopeRef}>
       <ProductsToolbar
         title={copy.title}
         total={counts.all}

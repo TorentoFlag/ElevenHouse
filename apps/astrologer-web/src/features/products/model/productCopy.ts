@@ -31,6 +31,7 @@ export type ProductSubscriptionPeriodCopy = ProductOptionCopy & {
 export type ProductCopy = {
   readonly card: {
     readonly salesLabel: string;
+    readonly duplicateTitleSuffix: string;
   };
   readonly statusFilters: Record<ProductStatusFilter, string>;
   readonly statuses: Record<ProductStatus, ProductStatusCopy>;
@@ -48,7 +49,8 @@ export type ProductCopy = {
 export const productCopyByLocale = {
   ru: {
     card: {
-      salesLabel: "Продаж"
+      salesLabel: "Продаж",
+      duplicateTitleSuffix: "копия"
     },
     statusFilters: {
       all: "Все",
@@ -62,7 +64,10 @@ export const productCopyByLocale = {
       archived: { label: "Архив", tone: "archived" }
     },
     types: {
-      single: { label: "Разовая консультация", description: "Одна сессия фиксированной длительности" },
+      single: {
+        label: "Разовая консультация",
+        description: "Одна сессия фиксированной длительности"
+      },
       pack: { label: "Пакет консультаций", description: "Несколько сессий в одном продукте" },
       async: { label: "Разбор в записи", description: "Асинхронный продукт с результатом" },
       sub: { label: "Подписка", description: "Регулярный доступ к контенту или эфиру" },
@@ -108,8 +113,8 @@ export const productCopyByLocale = {
     },
     methods: {
       natal: { label: "Натальная карта" },
-      forecast: { label: "Прогноз" },
-      synastry: { label: "Синастрия" },
+      forecast: { label: "Прогноз (транзиты/соляр)" },
+      synastry: { label: "Синастрия / совместимость" },
       child: { label: "Детская карта" },
       numerology: { label: "Нумерология" },
       matrix: { label: "Матрица судьбы" },
@@ -126,7 +131,8 @@ export const productCopyByLocale = {
   },
   en: {
     card: {
-      salesLabel: "Sales"
+      salesLabel: "Sales",
+      duplicateTitleSuffix: "copy"
     },
     statusFilters: {
       all: "All",

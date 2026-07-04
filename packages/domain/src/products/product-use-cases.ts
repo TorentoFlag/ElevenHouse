@@ -1,3 +1,7 @@
+import {
+  collectProductCreateInvariantIssues,
+  collectProductModifierInvariantIssues
+} from "@elevenhouse/validation/products";
 import { normalizeRequiredString } from "../shared";
 import { ProductNotFoundError, ProductValidationError } from "./product-errors";
 import type { ProductListResult, ProductStore } from "./product-store";
@@ -67,7 +71,10 @@ export async function updateProduct(input: {
   readonly patch: ProductUpdatePatch;
   readonly now: Date;
 }): Promise<Product> {
-  const ownerUserId = normalizeRequiredString(input.ownerUserId, "Product owner user id is required");
+  const ownerUserId = normalizeRequiredString(
+    input.ownerUserId,
+    "Product owner user id is required"
+  );
   const productId = normalizeRequiredString(input.productId, "Product id is required");
   const current = await input.store.findByOwnerAndId({
     ownerUserId,
@@ -122,13 +129,14 @@ export async function duplicateProduct(input: {
   readonly store: ProductStore;
   readonly ownerUserId: string;
   readonly productId: string;
+  readonly title?: string;
   readonly now: Date;
 }): Promise<Product> {
   const source = await getProduct(input);
   const duplicate = {
     ownerUserId: source.ownerUserId,
     type: source.type,
-    title: `${source.title} (копия)`,
+    title: normalizeRequiredString(input.title ?? source.title, "Product title is required"),
     subtitle: source.subtitle,
     priceMinor: source.priceMinor,
     currency: source.currency,
@@ -195,33 +203,20 @@ function validateEditableProduct(product: ProductEditableFields): void {
   if (product.deliveryFormats.length === 0) {
     throw new ProductValidationError("Product requires at least one delivery format");
   }
-  assertUnique(product.deliveryFormats, "Product delivery formats must be unique");
-  assertUnique(product.requiredClientData, "Product required client data must be unique");
-  assertUnique(product.methods, "Product methods must be unique");
-  assertUnique(product.accessGrants, "Product access grants must be unique");
 
-  if (product.paymentModel === "pack" && product.packageSessionCount === null) {
-    throw new ProductValidationError("Package products require packageSessionCount");
-  }
-  if (product.paymentModel === "sub" && product.subscriptionPeriod === null) {
-    throw new ProductValidationError("Subscription products require subscriptionPeriod");
-  }
-  if (product.participantMode === "group" && product.groupSize === null) {
-    throw new ProductValidationError("Group products require groupSize");
-  }
-  if (product.paymentModel === "free" && product.priceMinor !== 0) {
-    throw new ProductValidationError("Free products must have zero price");
-  }
+  throwFirstProductInvariantIssue(collectProductCreateInvariantIssues(product));
+
   for (const modifier of product.modifiers) {
-    if (modifier.kind === "free" && modifier.priceMinor !== 0) {
-      throw new ProductValidationError("Free modifiers must have zero price");
-    }
+    throwFirstProductInvariantIssue(collectProductModifierInvariantIssues(modifier));
   }
 }
 
-function assertUnique(values: readonly string[], message: string): void {
-  if (new Set(values).size !== values.length) {
-    throw new ProductValidationError(message);
+function throwFirstProductInvariantIssue(
+  issues: ReturnType<typeof collectProductCreateInvariantIssues>
+): void {
+  const issue = issues[0];
+  if (issue) {
+    throw new ProductValidationError(issue.message);
   }
 }
 

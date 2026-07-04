@@ -3,11 +3,11 @@ import type { ProductResponse, ProductType } from "@elevenhouse/contracts";
 import {
   createDefaultProductDraft,
   createProductDraftFromResponse,
-  toCreateProductRequest,
-  toUpdateProductRequest,
   type ProductFormDraft
 } from "../../../features/products/model/productDraft";
+import { persistProductDraft } from "../../../features/products/model/productCreateFlowPersistence";
 import { useCreateProductMutation } from "../../../features/products/model/useCreateProductMutation";
+import { usePublishProductMutation } from "../../../features/products/model/usePublishProductMutation";
 import { useUpdateProductMutation } from "../../../features/products/model/useUpdateProductMutation";
 
 type ProductCreateFlowState = {
@@ -25,6 +25,11 @@ type ProductCreateFlowAction =
   | { readonly type: "updateDraft"; readonly draft: ProductFormDraft }
   | { readonly type: "saveStarted" }
   | { readonly type: "saveSucceeded" }
+  | {
+      readonly type: "saveFailedWithPersistedProduct";
+      readonly product: ProductResponse;
+      readonly error: string;
+    }
   | { readonly type: "saveFailed"; readonly error: string }
   | { readonly type: "closeEditor" }
   | { readonly type: "returnToTypeSelection" }
@@ -48,19 +53,53 @@ export type ProductCreateFlow = {
   readonly editProduct: (product: ProductResponse) => void;
   readonly updateDraft: (draft: ProductFormDraft) => void;
   readonly saveDraft: () => Promise<void>;
+  readonly publishDraft: () => Promise<void>;
   readonly closeEditor: () => void;
   readonly returnToTypeSelection: () => void;
   readonly closeCreateFlow: () => void;
 };
 
 export function useProductCreateFlow(genericError: string): ProductCreateFlow {
-  const [state, dispatch] = useReducer(
-    productCreateFlowReducer,
-    initialProductCreateFlowState
-  );
+  const [state, dispatch] = useReducer(productCreateFlowReducer, initialProductCreateFlowState);
   const createProductMutation = useCreateProductMutation();
   const updateProductMutation = useUpdateProductMutation();
-  const isSaving = createProductMutation.isPending || updateProductMutation.isPending;
+  const publishProductMutation = usePublishProductMutation();
+  const isSaving =
+    createProductMutation.isPending ||
+    updateProductMutation.isPending ||
+    publishProductMutation.isPending;
+  const persistDraft = async (publish: boolean) => {
+    if (isSaving || !state.editorDraft?.title.trim()) {
+      return;
+    }
+
+    dispatch({ type: "saveStarted" });
+
+    const result = await persistProductDraft({
+      draft: state.editorDraft,
+      editingProductId: state.editingProductId,
+      publish,
+      createProduct: createProductMutation.mutateAsync,
+      updateProduct: updateProductMutation.mutateAsync,
+      publishProduct: publishProductMutation.mutateAsync
+    });
+
+    if (result.status === "saved") {
+      dispatch({ type: "saveSucceeded" });
+      return;
+    }
+
+    if (result.persistedProduct) {
+      dispatch({
+        type: "saveFailedWithPersistedProduct",
+        product: result.persistedProduct,
+        error: genericError
+      });
+      return;
+    }
+
+    dispatch({ type: "saveFailed", error: genericError });
+  };
 
   return {
     ...state,
@@ -70,27 +109,8 @@ export function useProductCreateFlow(genericError: string): ProductCreateFlow {
     selectType: (type) => dispatch({ type: "selectType", productType: type }),
     editProduct: (product) => dispatch({ type: "editProduct", product }),
     updateDraft: (draft) => dispatch({ type: "updateDraft", draft }),
-    saveDraft: async () => {
-      if (isSaving || !state.editorDraft?.title.trim()) {
-        return;
-      }
-
-      dispatch({ type: "saveStarted" });
-
-      try {
-        if (state.editingProductId) {
-          await updateProductMutation.mutateAsync({
-            productId: state.editingProductId,
-            body: toUpdateProductRequest(state.editorDraft)
-          });
-        } else {
-          await createProductMutation.mutateAsync(toCreateProductRequest(state.editorDraft));
-        }
-        dispatch({ type: "saveSucceeded" });
-      } catch {
-        dispatch({ type: "saveFailed", error: genericError });
-      }
-    },
+    saveDraft: () => persistDraft(false),
+    publishDraft: () => persistDraft(true),
     closeEditor: () => {
       if (!isSaving) {
         dispatch({ type: "closeEditor" });
@@ -175,6 +195,15 @@ function productCreateFlowReducer(
   if (action.type === "saveFailed") {
     return {
       ...state,
+      editorError: action.error
+    };
+  }
+
+  if (action.type === "saveFailedWithPersistedProduct") {
+    return {
+      ...state,
+      editorDraft: createProductDraftFromResponse(action.product),
+      editingProductId: action.product.id,
       editorError: action.error
     };
   }

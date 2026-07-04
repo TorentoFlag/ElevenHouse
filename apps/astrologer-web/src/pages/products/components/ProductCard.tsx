@@ -28,7 +28,7 @@ export type ProductCardProps = {
 
 export type ProductCardActions = ProductCardActionLabels & {
   readonly onEdit: (product: ProductResponse) => void;
-  readonly onDuplicate: (productId: string) => void;
+  readonly onDuplicate: (product: ProductResponse) => void;
   readonly onStatusChange: (productId: string, status: ProductResponse["status"]) => void;
 };
 
@@ -89,9 +89,7 @@ type ProductStatusBadgeProps = {
 
 function ProductStatusBadge({ label, tone }: ProductStatusBadgeProps) {
   return (
-    <span className={classNames(styles.statusBadge, styles[`statusBadge-${tone}`])}>
-      {label}
-    </span>
+    <span className={classNames(styles.statusBadge, styles[`statusBadge-${tone}`])}>{label}</span>
   );
 }
 
@@ -104,7 +102,12 @@ function ProductIncludedItemsList({ items }: ProductIncludedItemsListProps) {
     <ul className={styles.includedList}>
       {items.slice(0, 4).map((item) => (
         <li key={item.id} className={styles.includedItem}>
-          <Icon iconName={resolveProductIconName(item.icon)} width={13} height={13} aria-hidden="true" />
+          <Icon
+            iconName={resolveProductIconName(item.icon)}
+            width={13}
+            height={13}
+            aria-hidden="true"
+          />
           <span>{item.text}</span>
         </li>
       ))}
@@ -134,7 +137,10 @@ function getProductActionIcon(kind: ProductCardActionItem["kind"]) {
     publish: "verified",
     draft: "refresh",
     archive: "trash"
-  } as const satisfies Record<ProductCardActionItem["kind"], Parameters<typeof Icon>[0]["iconName"]>;
+  } as const satisfies Record<
+    ProductCardActionItem["kind"],
+    Parameters<typeof Icon>[0]["iconName"]
+  >;
 
   return <Icon iconName={iconNameByKind[kind]} width={14} height={14} aria-hidden="true" />;
 }
@@ -150,7 +156,7 @@ function runProductCardAction(
   }
 
   if (action.kind === "duplicate") {
-    actions.onDuplicate(product.id);
+    actions.onDuplicate(product);
     return;
   }
 

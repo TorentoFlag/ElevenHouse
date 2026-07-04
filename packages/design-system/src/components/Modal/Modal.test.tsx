@@ -70,6 +70,7 @@ describe("Modal", () => {
       <Modal
         title="Новая трактовка"
         closeLabel="Закрыть"
+        backdropClassName="custom-backdrop"
         className="custom-dialog"
         contentClassName="custom-content"
         onClose={vi.fn()}
@@ -78,6 +79,7 @@ describe("Modal", () => {
       </Modal>
     );
 
+    expect(markup).toContain('class="ehModal__backdrop custom-backdrop"');
     expect(markup).toContain('class="ehModal__dialog custom-dialog"');
     expect(markup).toContain('class="ehModal__content custom-content"');
   });

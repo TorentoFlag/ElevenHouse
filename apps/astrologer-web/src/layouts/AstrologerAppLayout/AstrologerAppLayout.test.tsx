@@ -65,6 +65,12 @@ describe("AstrologerAppLayout", () => {
     expect(appLayoutCss).toContain('@import "@elevenhouse/design-system/motion.css";');
     expect(appLayoutCss).not.toContain("min-height: 100dvh;");
   });
+
+  it("keeps mobile workspaces usable beside the collapsed navigation rail", () => {
+    expect(appLayoutCss).toContain("@media (max-width: 700px)");
+    expect(appLayoutCss).toContain("grid-template-columns: 72px minmax(0, 1fr);");
+    expect(appLayoutCss).toContain("padding: 16px;");
+  });
 });
 
 function getElementTypeName(element: ReactElement) {

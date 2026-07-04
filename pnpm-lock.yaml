@@ -389,6 +389,9 @@ importers:
         specifier: workspace:*
         version: link:../validation
     devDependencies:
+      '@types/node':
+        specifier: 25.9.2
+        version: 25.9.2
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -398,6 +401,9 @@ importers:
       '@elevenhouse/domain':
         specifier: workspace:*
         version: link:../domain
+      '@elevenhouse/validation':
+        specifier: workspace:*
+        version: link:../validation
       dotenv:
         specifier: 17.4.2
         version: 17.4.2

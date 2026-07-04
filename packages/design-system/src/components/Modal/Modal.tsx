@@ -13,6 +13,8 @@ export function Modal({
   closeLabel,
   children,
   open = true,
+  portalTarget,
+  backdropClassName,
   className,
   contentClassName,
   onClose
@@ -51,7 +53,7 @@ export function Modal({
 
   const content = (
     <div
-      className="ehModal__backdrop"
+      className={classNames("ehModal__backdrop", backdropClassName)}
       role="presentation"
       onMouseDown={(event: MouseEvent<HTMLDivElement>) => {
         if (event.target === event.currentTarget) {
@@ -92,5 +94,5 @@ export function Modal({
     return content;
   }
 
-  return createPortal(content, document.body);
+  return createPortal(content, portalTarget ?? document.body);
 }

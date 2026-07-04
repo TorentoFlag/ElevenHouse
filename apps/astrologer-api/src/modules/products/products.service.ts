@@ -24,6 +24,7 @@ import {
 } from "@elevenhouse/domain";
 import {
   createProductRequestSchema,
+  duplicateProductRequestSchema,
   listProductsQuerySchema,
   listProductsResponseSchema,
   productIdParamSchema,
@@ -71,10 +72,7 @@ export class ProductsService {
     });
   }
 
-  async getProduct(
-    productId: string,
-    request: AstrologerSessionRequest
-  ): Promise<ProductResponse> {
+  async getProduct(productId: string, request: AstrologerSessionRequest): Promise<ProductResponse> {
     const params = parseContract(productIdParamSchema, { productId });
     const ownerUserId = requireOwnerUserId(request);
 
@@ -101,6 +99,7 @@ export class ProductsService {
     const analytics = await this.analyticsReader.getCatalogLifetimeSummary({ ownerUserId });
 
     return productSummaryResponseSchema.parse({
+      analyticsStatus: analytics.analyticsStatus,
       total: result.counts.all,
       active: result.counts.active,
       draft: result.counts.draft,
@@ -112,10 +111,7 @@ export class ProductsService {
     });
   }
 
-  async createProduct(
-    body: unknown,
-    request: AstrologerSessionRequest
-  ): Promise<ProductResponse> {
+  async createProduct(body: unknown, request: AstrologerSessionRequest): Promise<ProductResponse> {
     const parsedBody = parseContract(createProductRequestSchema, body);
     const ownerUserId = requireOwnerUserId(request);
     const product = await createProduct({
@@ -167,9 +163,11 @@ export class ProductsService {
 
   async duplicateProduct(
     productId: string,
+    body: unknown,
     request: AstrologerSessionRequest
   ): Promise<ProductResponse> {
     const params = parseContract(productIdParamSchema, { productId });
+    const parsedBody = parseContract(duplicateProductRequestSchema, body ?? {});
     const ownerUserId = requireOwnerUserId(request);
 
     return mapProductErrors(async () => {
@@ -177,6 +175,7 @@ export class ProductsService {
         store: this.store,
         ownerUserId,
         productId: params.productId,
+        title: parsedBody.title,
         now: this.clock.now()
       });
       const [response] = await this.mapProducts(ownerUserId, [product]);
@@ -227,6 +226,7 @@ export class ProductsService {
       includedItems: product.includedItems.map((item) => ({ ...item })),
       modifiers: product.modifiers.map((modifier) => ({ ...modifier })),
       analytics: analytics.get(product.id) ?? {
+        status: "unavailable",
         productId: product.id,
         salesCount: 0,
         grossRevenueMinor: 0,

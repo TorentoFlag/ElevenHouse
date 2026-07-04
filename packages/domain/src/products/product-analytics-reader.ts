@@ -1,6 +1,9 @@
 import type { ProductCurrency } from "./product-types";
 
+export type ProductAnalyticsStatus = "ready" | "unavailable";
+
 export type ProductLifetimeAnalytics = {
+  readonly status?: ProductAnalyticsStatus;
   readonly productId: string;
   readonly salesCount: number;
   readonly grossRevenueMinor: number;
@@ -10,6 +13,7 @@ export type ProductLifetimeAnalytics = {
 };
 
 export type ProductCatalogLifetimeAnalyticsSummary = {
+  readonly analyticsStatus?: ProductAnalyticsStatus;
   readonly totalSalesCount: number;
   readonly grossRevenueMinor: number;
   readonly currency: ProductCurrency;

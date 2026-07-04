@@ -6,6 +6,8 @@ export type ModalProps = {
   readonly closeLabel: string;
   readonly children: ReactNode;
   readonly open?: boolean;
+  readonly portalTarget?: Element | null;
+  readonly backdropClassName?: string;
   readonly className?: string;
   readonly contentClassName?: string;
   readonly onClose: () => void;

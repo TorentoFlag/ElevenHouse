@@ -16,7 +16,7 @@ import {
   type ProductSubscriptionPeriod,
   type ProductType,
   type UpdateProductRequest
-} from "@elevenhouse/contracts";
+} from "@elevenhouse/contracts/products";
 
 export type ProductFormDraft = {
   readonly type: ProductType;
@@ -168,12 +168,56 @@ export function createDefaultProductDraft(type: ProductType): ProductFormDraft {
   if (type === "custom") {
     return {
       ...base,
-      priceMinor: 500000,
-      includedItems: [{ text: "Индивидуальный формат", icon: "check", order: 10 }]
+      title: "Астрокартография · где жить",
+      subtitle: "Где вам будет лучше — по карте мест",
+      priceMinor: 790000,
+      requiredClientData: ["chart1", "cities"],
+      includedItems: [
+        { text: "Анализ карты по городам", icon: "map", order: 10 },
+        { text: "Лучшие места для карьеры и любви", icon: "star", order: 20 }
+      ],
+      modifiers: createDefaultProductModifiers()
     };
   }
 
   return base;
+}
+
+function createDefaultProductModifiers(): readonly ProductModifierRequest[] {
+  return [
+    {
+      label: "PDF-карта / резюме",
+      priceMinor: 99000,
+      kind: "fixed",
+      isEnabled: true,
+      createsArtifact: true,
+      order: 10
+    },
+    {
+      label: "Срочно — за 24 часа",
+      priceMinor: 150000,
+      kind: "fixed",
+      isEnabled: true,
+      createsArtifact: false,
+      order: 20
+    },
+    {
+      label: "Доп. вопрос к разбору",
+      priceMinor: 50000,
+      kind: "fixed",
+      isEnabled: false,
+      createsArtifact: false,
+      order: 30
+    },
+    {
+      label: "Подарочный сертификат",
+      priceMinor: 0,
+      kind: "free",
+      isEnabled: false,
+      createsArtifact: true,
+      order: 40
+    }
+  ];
 }
 
 export function createProductDraftFromResponse(product: ProductResponse): ProductFormDraft {
@@ -239,6 +283,45 @@ export function toggleProductDraftArrayValue<TKey extends ProductDraftArrayKey>(
   };
 }
 
+export function applyProductDraftPatch(
+  draft: ProductFormDraft,
+  patch: Partial<ProductFormDraft>
+): ProductFormDraft {
+  const next = { ...draft, ...patch };
+
+  if (patch.paymentModel === "pack") {
+    return {
+      ...next,
+      packageSessionCount: next.packageSessionCount ?? 1,
+      packageDiscountPercent: next.packageDiscountPercent ?? 0
+    };
+  }
+
+  if (patch.paymentModel === "sub") {
+    return {
+      ...next,
+      subscriptionPeriod: next.subscriptionPeriod ?? "month",
+      trialDays: next.trialDays ?? 0
+    };
+  }
+
+  if (patch.paymentModel === "free") {
+    return {
+      ...next,
+      priceMinor: 0
+    };
+  }
+
+  if (patch.participantMode === "group") {
+    return {
+      ...next,
+      groupSize: next.groupSize ?? 2
+    };
+  }
+
+  return next;
+}
+
 export function addProductIncludedItem(draft: ProductFormDraft): ProductFormDraft {
   return {
     ...draft,
@@ -266,7 +349,10 @@ export function updateProductIncludedItem(
   };
 }
 
-export function removeProductIncludedItem(draft: ProductFormDraft, index: number): ProductFormDraft {
+export function removeProductIncludedItem(
+  draft: ProductFormDraft,
+  index: number
+): ProductFormDraft {
   return {
     ...draft,
     includedItems: draft.includedItems.filter((_, itemIndex) => itemIndex !== index)
@@ -298,7 +384,9 @@ export function updateProductModifier(
   return {
     ...draft,
     modifiers: draft.modifiers.map((modifier, modifierIndex) =>
-      modifierIndex === index ? { ...modifier, ...patch } : modifier
+      modifierIndex === index
+        ? normalizeProductModifier({ ...modifier, ...patch }, modifier, patch)
+        : modifier
     )
   };
 }
@@ -312,6 +400,33 @@ export function removeProductModifier(draft: ProductFormDraft, index: number): P
 
 function getNextOrder(items: readonly { readonly order: number }[]): number {
   return Math.max(0, ...items.map((item) => item.order)) + 10;
+}
+
+function normalizeProductModifier(
+  modifier: ProductModifierRequest,
+  previousModifier: ProductModifierRequest,
+  patch: Partial<ProductModifierRequest>
+): ProductModifierRequest {
+  const kindChanged = patch.kind !== undefined && patch.kind !== previousModifier.kind;
+
+  if (modifier.kind === "free") {
+    return { ...modifier, priceMinor: 0 };
+  }
+
+  if (modifier.kind === "percent") {
+    const nextPercent = kindChanged && patch.priceMinor === undefined ? 0 : modifier.priceMinor;
+    return { ...modifier, priceMinor: clampPercentModifierValue(nextPercent) };
+  }
+
+  if (kindChanged && patch.priceMinor === undefined) {
+    return { ...modifier, priceMinor: 0 };
+  }
+
+  return modifier;
+}
+
+function clampPercentModifierValue(value: number): number {
+  return Math.min(100, Math.max(0, value));
 }
 
 export function toCreateProductRequest(draft: ProductFormDraft): CreateProductRequest {
@@ -348,9 +463,12 @@ function toPayload(draft: ProductFormDraft, mode: "create" | "update") {
       paymentModel === "pack"
         ? normalizeOptionalNumber(draft.packageDiscountPercent, nullable)
         : nullOrUndefined(nullable),
-    subscriptionPeriod: paymentModel === "sub" ? draft.subscriptionPeriod : nullOrUndefined(nullable),
+    subscriptionPeriod:
+      paymentModel === "sub" ? draft.subscriptionPeriod : nullOrUndefined(nullable),
     trialDays:
-      paymentModel === "sub" ? normalizeOptionalNumber(draft.trialDays, nullable) : nullOrUndefined(nullable),
+      paymentModel === "sub"
+        ? normalizeOptionalNumber(draft.trialDays, nullable)
+        : nullOrUndefined(nullable),
     participantMode,
     groupSize:
       participantMode === "group"

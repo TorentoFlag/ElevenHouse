@@ -53,6 +53,8 @@ export function createProductCardSummary(
   copy: ProductCopy,
   locale: ProductLocale
 ): ProductCardSummary {
+  const analyticsUnavailable = product.analytics.status === "unavailable";
+
   return {
     typeLabel: copy.types[product.type].label,
     statusLabel: copy.statuses[product.status].label,
@@ -60,15 +62,19 @@ export function createProductCardSummary(
     price: formatProductPrice(product, copy, locale),
     metaLine: createProductMetaLine(product, copy),
     salesLabel: copy.card.salesLabel,
-    salesCount: String(product.analytics.salesCount),
-    revenueLabel: formatMoneyMinor(
-      product.analytics.grossRevenueMinor,
-      product.analytics.currency,
-      locale
-    ),
+    salesCount: analyticsUnavailable ? "—" : String(product.analytics.salesCount),
+    revenueLabel: analyticsUnavailable
+      ? "—"
+      : formatMoneyMinor(product.analytics.grossRevenueMinor, product.analytics.currency, locale),
     ratingLabel:
-      product.analytics.averageRating === null ? null : String(product.analytics.averageRating)
+      analyticsUnavailable || product.analytics.averageRating === null
+        ? null
+        : String(product.analytics.averageRating)
   };
+}
+
+export function createDuplicateProductTitle(title: string, copy: ProductCopy): string {
+  return `${title.trim()} (${copy.card.duplicateTitleSuffix})`.trim();
 }
 
 function createProductMetaLine(product: ProductResponse, copy: ProductCopy): string {

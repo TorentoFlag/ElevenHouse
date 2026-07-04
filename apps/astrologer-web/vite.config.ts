@@ -9,6 +9,9 @@ export default defineConfig({
       "@elevenhouse/auth/roles": fileURLToPath(
         new URL("../../packages/auth/src/roles.ts", import.meta.url)
       ),
+      "@elevenhouse/contracts/products": fileURLToPath(
+        new URL("../../packages/contracts/src/products.ts", import.meta.url)
+      ),
       "@elevenhouse/contracts": fileURLToPath(
         new URL("../../packages/contracts/src/index.ts", import.meta.url)
       ),
@@ -131,6 +134,9 @@ export default defineConfig({
       ),
       "@elevenhouse/validation/phone": fileURLToPath(
         new URL("../../packages/validation/src/phone/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/validation/products": fileURLToPath(
+        new URL("../../packages/validation/src/products/index.ts", import.meta.url)
       ),
       "@elevenhouse/validation": fileURLToPath(
         new URL("../../packages/validation/src/index.ts", import.meta.url)

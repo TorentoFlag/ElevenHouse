@@ -175,7 +175,7 @@ describe("products HTTP routes", () => {
     );
     const duplicateResponse = await postJson(
       `/products/${createdProductId}/duplicate`,
-      {},
+      { title: "Natal reading (copy)" },
       csrfHeaders()
     );
     const summaryResponse = await getJson("/products/summary");
@@ -208,10 +208,11 @@ describe("products HTTP routes", () => {
     expect(duplicateResponse.status).toBe(201);
     expect(duplicateResponse.body).toMatchObject({
       status: "draft",
-      title: "Натальный разбор (копия)"
+      title: "Natal reading (copy)"
     });
     productSummaryResponseSchema.parse(summaryResponse.body);
     expect(summaryResponse.body).toEqual({
+      analyticsStatus: "unavailable",
       total: 2,
       active: 0,
       draft: 1,
@@ -340,9 +341,7 @@ function createProductStore(): ProductStore {
     listByOwner: vi.fn(async (query) => {
       const owned = products.filter((product) => product.ownerUserId === query.ownerUserId);
       const filtered =
-        query.status === "all"
-          ? owned
-          : owned.filter((product) => product.status === query.status);
+        query.status === "all" ? owned : owned.filter((product) => product.status === query.status);
 
       return {
         products: filtered.slice(query.offset, query.offset + query.limit),
@@ -355,10 +354,11 @@ function createProductStore(): ProductStore {
         }
       };
     }),
-    findByOwnerAndId: vi.fn(async (input) =>
-      products.find(
-        (product) => product.ownerUserId === input.ownerUserId && product.id === input.productId
-      ) ?? null
+    findByOwnerAndId: vi.fn(
+      async (input) =>
+        products.find(
+          (product) => product.ownerUserId === input.ownerUserId && product.id === input.productId
+        ) ?? null
     ),
     create: vi.fn(async (input) => {
       const product = toProduct(nextProductId(products.length), input);

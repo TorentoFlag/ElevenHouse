@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createProductRequestSchema,
+  duplicateProductRequestSchema,
   listProductsQuerySchema,
   productResponseSchema,
   updateProductRequestSchema
@@ -60,6 +61,19 @@ describe("product contracts", () => {
     expect(() =>
       createProductRequestSchema.parse({ ...validProductRequest, status: "active" })
     ).toThrow();
+  });
+
+  it("accepts a localized duplicate title without lifecycle fields", () => {
+    expect(
+      duplicateProductRequestSchema.parse({
+        title: "Natal reading (copy)"
+      })
+    ).toEqual({
+      title: "Natal reading (copy)"
+    });
+
+    expect(() => duplicateProductRequestSchema.parse({ title: "x".repeat(201) })).toThrow();
+    expect(() => duplicateProductRequestSchema.parse({ status: "active" })).toThrow();
   });
 
   it("rejects negative money", () => {
@@ -146,6 +160,40 @@ describe("product contracts", () => {
             label: "Бонус",
             priceMinor: 1,
             kind: "free",
+            isEnabled: true,
+            createsArtifact: false,
+            order: 10
+          }
+        ]
+      })
+    ).toThrow();
+  });
+
+  it("limits percent modifiers to whole percentages", () => {
+    expect(
+      createProductRequestSchema.parse({
+        ...validProductRequest,
+        modifiers: [
+          {
+            label: "Скидка",
+            priceMinor: 15,
+            kind: "percent",
+            isEnabled: true,
+            createsArtifact: false,
+            order: 10
+          }
+        ]
+      }).modifiers[0]?.priceMinor
+    ).toBe(15);
+
+    expect(() =>
+      createProductRequestSchema.parse({
+        ...validProductRequest,
+        modifiers: [
+          {
+            label: "Скидка",
+            priceMinor: 101,
+            kind: "percent",
             isEnabled: true,
             createsArtifact: false,
             order: 10

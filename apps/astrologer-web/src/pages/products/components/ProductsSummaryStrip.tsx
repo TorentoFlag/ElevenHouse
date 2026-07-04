@@ -13,6 +13,7 @@ export type ProductsSummaryStripProps = {
 };
 
 export function ProductsSummaryStrip({ copy, locale, summary }: ProductsSummaryStripProps) {
+  const analyticsUnavailable = summary?.analyticsStatus === "unavailable";
   const metrics = [
     {
       label: copy.activeLabel,
@@ -20,11 +21,13 @@ export function ProductsSummaryStrip({ copy, locale, summary }: ProductsSummaryS
     },
     {
       label: copy.salesLabel,
-      value: String(summary?.totalSalesCount ?? 0)
+      value: analyticsUnavailable ? "—" : String(summary?.totalSalesCount ?? 0)
     },
     {
       label: copy.revenueLabel,
-      value: formatMoneyMinor(summary?.grossRevenueMinor ?? 0, summary?.currency ?? "RUB", locale)
+      value: analyticsUnavailable
+        ? "—"
+        : formatMoneyMinor(summary?.grossRevenueMinor ?? 0, summary?.currency ?? "RUB", locale)
     },
     {
       label: copy.bestsellerLabel,

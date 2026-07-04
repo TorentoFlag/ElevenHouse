@@ -23,15 +23,25 @@ import {
 
 describe("product constructor options", () => {
   it("keeps option sets aligned with product contracts", () => {
-    expect(productDeliveryFormatOptions.map((option) => option.value)).toEqual(productDeliveryFormatSchema.options);
-    expect(productExecutionModeOptions.map((option) => option.value)).toEqual(productExecutionModeSchema.options);
-    expect(productPaymentModelOptions.map((option) => option.value)).toEqual(productPaymentModelSchema.options);
-    expect(productParticipantModeOptions.map((option) => option.value)).toEqual(productParticipantModeSchema.options);
+    expect(productDeliveryFormatOptions.map((option) => option.value)).toEqual(
+      productDeliveryFormatSchema.options
+    );
+    expect(productExecutionModeOptions.map((option) => option.value)).toEqual(
+      productExecutionModeSchema.options
+    );
+    expect(productPaymentModelOptions.map((option) => option.value)).toEqual(
+      productPaymentModelSchema.options
+    );
+    expect(productParticipantModeOptions.map((option) => option.value)).toEqual(
+      productParticipantModeSchema.options
+    );
     expect(productRequiredClientDataOptions.map((option) => option.value)).toEqual(
       productRequiredClientDataSchema.options
     );
     expect(productMethodOptions.map((option) => option.value)).toEqual(productMethodSchema.options);
-    expect(productAccessGrantOptions.map((option) => option.value)).toEqual(productAccessGrantSchema.options);
+    expect(productAccessGrantOptions.map((option) => option.value)).toEqual(
+      productAccessGrantSchema.options
+    );
     expect(productSubscriptionPeriodOptions.map((option) => option.value)).toEqual(
       productSubscriptionPeriodSchema.options
     );
@@ -39,12 +49,22 @@ describe("product constructor options", () => {
       "check",
       "sparkle",
       "video",
+      "mic",
       "chat",
       "content",
+      "fileDown",
       "flow",
+      "globe",
       "box",
       "wallet",
+      "calendar",
+      "clock",
+      "lightning",
+      "users",
+      "gift",
       "orbit",
+      "map",
+      "star",
       "reference",
       "verified",
       "refresh"

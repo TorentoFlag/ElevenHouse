@@ -1,0 +1,1143 @@
+.productConstructorModal {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: min(1080px, 100%);
+  height: min(935px, 92%);
+  max-height: 92%;
+  border-color: rgb(216 212 236 / 0.08);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgb(22 20 47), color-mix(in srgb, rgb(22 20 47) 92%, black));
+}
+
+.productConstructorModal :global(.ehModal__header) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.productConstructorModalContent {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+}
+
+.productConstructorModal *,
+.productConstructorModal *::before,
+.productConstructorModal *::after {
+  box-sizing: border-box;
+}
+
+.productConstructorModal .textInput {
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  padding: 12px 14px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 14px;
+  background: rgb(11 11 31);
+  color: var(--eh-color-moon-120);
+  font-family: var(--eh-font-family-base);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: normal;
+  outline: 0;
+}
+
+.productConstructorModal .textInput::placeholder {
+  color: rgb(143 136 179);
+}
+
+.productConstructorModal .textInput:focus {
+  border-color: rgb(216 212 236 / 0.48);
+}
+
+.productConstructorForm,
+.productConstructorShell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.productConstructorShell {
+  overflow: hidden;
+}
+
+.productConstructorHeader {
+  display: flex;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgb(216 212 236 / 0.08);
+}
+
+.productConstructorHeading {
+  min-width: 0;
+}
+
+.productConstructorBreadcrumbs {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  color: rgb(111 106 147);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.productConstructorBreadcrumbs strong {
+  overflow: hidden;
+  color: var(--products-accent-text);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.productConstructorTitle {
+  margin: 0;
+  color: var(--eh-color-moon-120);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+}
+
+.productConstructorActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.productConstructorDraftButton {
+  min-width: 164px;
+  height: 38px;
+  border-radius: 14px;
+  font-size: 13px;
+}
+
+.productConstructorPublishButton {
+  min-width: 128px;
+  height: 38px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.productConstructorCloseButton {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: rgb(154 148 190);
+  cursor: pointer;
+}
+
+.productConstructorGrid {
+  display: grid;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+}
+
+.productConstructorEditor,
+.constructorPreviewColumn {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.productConstructorEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 24px 28px;
+  border-right: 1px solid rgb(216 212 236 / 0.08);
+}
+
+.constructorPreviewColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 24px 28px;
+}
+
+.constructorPreviewColumn > .constructorPreviewKicker {
+  margin-bottom: 0;
+}
+
+.constructorPreviewColumn > .constructorPreviewKicker:not(:first-child) {
+  margin-top: 4px;
+}
+
+.constructorSectionPlain,
+.constructorSectionHeading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.constructorSectionPlain {
+  gap: 0;
+}
+
+.constructorSectionHeader {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.constructorSectionHeading {
+  gap: 0;
+}
+
+.constructorSectionTitle,
+.constructorSubsectionTitle,
+.constructorPreviewKicker {
+  margin: 0;
+  margin-bottom: 9px;
+  color: rgb(111 106 147);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 13px;
+  text-transform: uppercase;
+}
+
+.constructorSectionHeading p,
+.constructorHint {
+  margin: 0;
+  color: rgb(111 106 147);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: normal;
+}
+
+.constructorSectionHeading p {
+  margin: -4px 0 10px;
+}
+
+.constructorMediaRow {
+  display: flex;
+  min-width: 0;
+  gap: 12px;
+}
+
+.constructorCoverDropzone {
+  display: grid;
+  width: 150px;
+  height: 96px;
+  flex: 0 0 auto;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  border: 2px dashed rgb(154 148 190 / 0.6);
+  border-radius: 14px;
+  background: rgb(40 37 75 / 0.42);
+  color: rgb(177 171 205);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.constructorMediaFields {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: 8px;
+}
+
+.constructorInputShell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px 0 34px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 14px;
+  background: rgb(11 11 31);
+  color: var(--eh-color-moon-120);
+}
+
+.constructorInputBare {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  outline: 0;
+}
+
+.constructorFieldsGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1.75fr) minmax(150px, 1fr);
+}
+
+.field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.constructorFieldsGrid .field,
+.constructorFieldsGrid + .field {
+  gap: 0;
+}
+
+.constructorFieldsGrid + .field {
+  margin-top: 10px;
+}
+
+.constructorFieldsGrid .fieldLabel,
+.constructorFieldsGrid + .field .fieldLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.constructorPriceInputShell {
+  position: relative;
+  display: block;
+}
+
+.productConstructorModal .constructorPriceInput {
+  padding: 12px 34px 12px 14px;
+}
+
+.constructorPriceInputShell > span {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: rgb(154 148 190);
+  font-size: 14px;
+  transform: translateY(-50%);
+}
+
+.constructorStepperRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.constructorInlineControls {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+  margin-top: 3px;
+}
+
+.constructorNestedControl {
+  display: grid;
+  gap: 8px;
+}
+
+.constructorShortInput {
+  max-width: 280px;
+}
+
+.constructorNote {
+  margin: 0;
+  color: rgb(143 136 179);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.constructorRows {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.constructorRow,
+.constructorModifierRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 10px;
+  background: rgb(22 20 47);
+  transition: opacity 0.14s;
+}
+
+.constructorIncludedRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 10px;
+  background: rgb(22 20 47);
+}
+
+.constructorIncludedRow > svg {
+  flex: 0 0 auto;
+  color: var(--eh-color-emerald);
+}
+
+.constructorIncludedRow > span {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: rgb(167 162 200);
+  font-size: 13px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.constructorIncludedRow > em {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 20px;
+  background: rgb(17 15 38);
+  color: rgb(111 106 147);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.constructorIncludedRowMuted {
+  opacity: 0.7;
+}
+
+.constructorIncludedRowMuted > svg,
+.constructorIncludedRowMuted > span {
+  color: rgb(111 106 147);
+}
+
+.constructorIncludedRowMuted > span {
+  text-decoration: line-through;
+}
+
+.constructorIncludedCustomRow {
+  position: relative;
+}
+
+.constructorSmallIconButton {
+  display: flex;
+  flex: 0 0 auto;
+  padding: 3px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 7px;
+  background: rgb(17 15 38);
+  color: var(--products-accent-text);
+  cursor: pointer;
+}
+
+.constructorInlineTextInput {
+  min-width: 0;
+  height: 20px;
+  flex: 1 1 auto;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  outline: 0;
+}
+
+.constructorInlineTextInput:focus {
+  border-bottom-color: rgb(244 196 48 / 0.42);
+}
+
+.constructorIconPopover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 8px;
+  display: grid;
+  width: 210px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 12px;
+  background: rgb(22 20 47);
+  box-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.7);
+}
+
+.constructorIconPopover button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgb(17 15 38);
+  color: rgb(167 162 200);
+  cursor: pointer;
+}
+
+.constructorIconPopover button:hover,
+.constructorIconPopoverButtonActive {
+  border-color: rgb(244 196 48 / 0.42);
+  color: var(--eh-color-moon-120);
+}
+
+.constructorIconPopoverButtonActive {
+  background: var(--eh-color-gold) !important;
+  color: rgb(42 27 11) !important;
+}
+
+.constructorAddRow {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: normal;
+  gap: 9px;
+  padding: 8px 12px;
+  border: 1px dashed rgb(216 212 236 / 0.14);
+  border-radius: 10px;
+  background: rgb(17 15 38);
+  color: rgb(167 162 200);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: normal;
+}
+
+.constructorAddRow svg {
+  flex: 0 0 auto;
+  color: var(--products-accent-text);
+}
+
+.constructorAddRow:hover,
+.constructorAddRow:focus-visible {
+  border-color: rgb(244 196 48 / 0.36);
+  color: var(--eh-color-moon-120);
+  outline: none;
+}
+
+.constructorAddRow input {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  background: transparent;
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 13px;
+  outline: 0;
+}
+
+.constructorAddRow input::placeholder {
+  color: rgb(111 106 147);
+}
+
+.constructorAddRow button {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 10px;
+  background: rgb(30 27 62);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.constructorIncludedSection {
+  padding-top: 18px;
+  border-top: 1px solid rgb(216 212 236 / 0.12);
+}
+
+.constructorIconPicker {
+  min-width: 0;
+}
+
+.constructorCheckButton,
+.constructorIconButton {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  place-items: center;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 7px;
+  background: rgb(17 15 38);
+  color: rgb(111 106 147);
+  cursor: pointer;
+}
+
+.constructorCheckButtonActive,
+.constructorIconButtonActive {
+  border-color: var(--eh-color-gold);
+  background: var(--eh-color-gold);
+  color: rgb(42 27 11);
+}
+
+.constructorCheckButton {
+  flex: 0 0 auto;
+}
+
+.constructorModifierRow .constructorIconButton {
+  display: flex;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(111 106 147);
+}
+
+.constructorModifierRow .constructorIconButtonActive {
+  border: 0;
+  background: transparent;
+  color: var(--products-accent-text);
+}
+
+.constructorIconButton:hover {
+  border-color: rgb(255 159 159 / 0.4);
+  color: #ff9f9f;
+}
+
+.constructorIconButton:focus-visible,
+.constructorSegmentButton:focus-visible,
+.constructorCheckButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.16);
+}
+
+.constructorModifierKinds {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 7px;
+}
+
+.constructorSegmentButton {
+  min-width: 0;
+  height: 24px;
+  box-sizing: border-box;
+  border: 0;
+  border-left: 1px solid rgb(216 212 236 / 0.14);
+  background: rgb(17 15 38);
+  color: rgb(111 106 147);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  padding: 5px 7px;
+}
+
+.constructorSegmentButton:first-child {
+  border-left: 0;
+}
+
+.constructorSegmentButtonActive {
+  background: var(--eh-color-gold);
+  color: rgb(42 27 11);
+}
+
+.constructorModName,
+.constructorModPrice {
+  min-width: 0;
+  height: 28px;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  outline: 0;
+}
+
+.constructorModName {
+  flex: 1 1 auto;
+  padding: 4px 2px;
+  border-bottom: 1px solid transparent;
+}
+
+.constructorModPrice {
+  width: 64px;
+  flex: 0 0 64px;
+  border: 1px solid rgb(216 212 236 / 0.12);
+  border-radius: 7px;
+  background: rgb(17 15 38);
+  font-family: var(--eh-font-mono);
+  letter-spacing: -0.01em;
+}
+
+.constructorModifierRow .constructorModPrice {
+  min-height: 28px;
+  padding: 5px 7px;
+  font-size: 12.5px;
+  text-align: right;
+}
+
+.constructorChipRow {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.constructorChip {
+  width: auto;
+  min-height: auto;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 10px;
+  background: rgb(22 20 47);
+  color: rgb(167 162 200);
+  font-family: var(--eh-font-sans);
+}
+
+.constructorChip:global(.ehSelectableTile--selected) {
+  border-color: var(--eh-color-gold);
+  background: rgb(244 196 48 / 0.14);
+  color: var(--eh-color-gold);
+}
+
+.constructorChip :global(.ehSelectableTile__icon) {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.constructorChip :global(.ehSelectableTile__label) {
+  color: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.constructorInlineIconButton {
+  display: flex;
+  flex: 0 0 auto;
+  padding: 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(111 106 147);
+  cursor: pointer;
+}
+
+.constructorInlineIconButtonActive {
+  color: var(--products-accent-text);
+}
+
+.constructorChip :global(.ehSelectableTile__description) {
+  display: none;
+}
+
+.constructorClientCard,
+.constructorCabinetCard {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid rgb(216 212 236 / 0.08);
+  border-radius: 16px;
+  background: rgb(17 15 38);
+}
+
+.constructorPreviewCover {
+  display: grid;
+  box-sizing: border-box;
+  height: 150px;
+  margin: -18px -18px 16px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  border: 2px dashed rgb(154 148 190 / 0.56);
+  border-radius: 16px 16px 0 0;
+  background: rgb(42 39 78 / 0.7);
+  color: rgb(143 136 179);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.constructorPreviewHeader {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.constructorPreviewIcon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  background: rgb(65 54 45);
+  color: var(--products-accent-text);
+}
+
+.constructorPreviewHeading {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.constructorPreviewHeading > span {
+  display: block;
+  color: rgb(143 136 179);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.constructorPreviewHeading strong {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: var(--eh-color-moon-120);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.constructorPreviewHeading p {
+  margin: 4px 0 0;
+  color: rgb(143 136 179);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.constructorStatusBadge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid rgb(216 212 236 / 0.18);
+  border-radius: 999px;
+  color: rgb(177 171 205);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.constructorStatusBadge span {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgb(177 171 205);
+}
+
+.constructorPreviewPriceLine {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.constructorPreviewPriceLine strong {
+  color: var(--eh-color-moon-120);
+  font-family: var(--eh-font-mono);
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.constructorPreviewPriceLine span {
+  color: rgb(143 136 179);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.constructorPreviewList {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.constructorPreviewList li {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 9px;
+  color: rgb(177 171 205);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.constructorPreviewList svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--products-accent-text);
+}
+
+.constructorUpsells {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgb(216 212 236 / 0.14);
+}
+
+.constructorUpsells > span {
+  color: rgb(143 136 179);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.constructorUpsells > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.constructorUpsells > div > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border: 1px solid rgb(216 212 236 / 0.12);
+  border-radius: 999px;
+  color: rgb(177 171 205);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.constructorUpsells strong {
+  color: var(--products-accent-text);
+  font-weight: 900;
+}
+
+.constructorPreviewActions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgb(216 212 236 / 0.08);
+}
+
+.constructorPreviewActions button {
+  display: inline-flex;
+  height: 37px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid rgb(216 212 236 / 0.12);
+  border-radius: 12px;
+  background: rgb(32 28 62);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.constructorPreviewActions button:first-child {
+  flex: 1 1 auto;
+  border-color: rgb(244 196 48 / 0.5);
+  background: var(--eh-color-gold);
+  color: var(--eh-color-night-950);
+}
+
+.constructorCabinetCard {
+  display: grid;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 15px;
+}
+
+.constructorCabinetHeader {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: rgb(143 136 179);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.constructorCabinetList {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.constructorCabinetArtifact {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgb(24 21 49);
+}
+
+.constructorCabinetArtifact svg {
+  flex: 0 0 auto;
+  color: var(--products-accent-text);
+}
+
+.constructorCabinetArtifact span {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--eh-color-moon-120);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.constructorCabinetArtifact strong {
+  flex: 0 0 auto;
+  color: rgb(177 171 205);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.constructorPreviewNote {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0 2px;
+  color: rgb(143 136 179);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.constructorPreviewNote svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--products-accent-text);
+}
+
+@media (max-width: 1180px) {
+  .productConstructorGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .productConstructorEditor {
+    border-right: 0;
+    border-bottom: 1px solid rgb(216 212 236 / 0.08);
+  }
+}
+
+@media (max-width: 820px) {
+  .constructorFieldsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .constructorSectionHeader,
+  .constructorStepperRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .productConstructorModal {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+
+  .productConstructorHeader {
+    min-height: auto;
+    flex-direction: column;
+    padding: 24px 20px 18px;
+  }
+
+  .productConstructorActions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .productConstructorDraftButton,
+  .productConstructorPublishButton {
+    min-width: 0;
+    flex: 1 1 180px;
+  }
+
+  .productConstructorEditor,
+  .constructorPreviewColumn {
+    padding: 24px 20px 40px;
+  }
+
+  .constructorMediaRow {
+    flex-direction: column;
+  }
+
+  .constructorCoverDropzone {
+    width: 100%;
+  }
+
+  .constructorRow,
+  .constructorModifierRow,
+  .constructorIncludedRow {
+    grid-template-columns: 1fr;
+  }
+
+  .constructorCheckButton,
+  .constructorIconButton {
+    width: 100%;
+  }
+
+  .constructorPreviewHeader,
+  .constructorPreviewActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

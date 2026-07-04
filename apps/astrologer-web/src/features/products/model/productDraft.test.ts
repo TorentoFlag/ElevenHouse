@@ -9,6 +9,7 @@ import { productIconNames } from "./productConstructorOptions";
 import {
   addProductIncludedItem,
   addProductModifier,
+  applyProductDraftPatch,
   createDefaultProductDraft,
   createProductDraftFromResponse,
   removeProductIncludedItem,
@@ -140,11 +141,35 @@ describe("product draft helpers", () => {
     expect(createProductRequestSchema.parse(request)).toEqual(request);
   });
 
+  it("materializes UI-selected modes that have visible default controls", () => {
+    const baseDraft = createDefaultProductDraft("custom");
+    const packageDraft = applyProductDraftPatch(baseDraft, { paymentModel: "pack" });
+    const subscriptionDraft = applyProductDraftPatch(baseDraft, { paymentModel: "sub" });
+    const groupDraft = applyProductDraftPatch(baseDraft, { participantMode: "group" });
+
+    expect(toCreateProductRequest({ ...packageDraft, title: "Пакет" })).toMatchObject({
+      paymentModel: "pack",
+      packageSessionCount: 1,
+      packageDiscountPercent: 0
+    });
+    expect(toCreateProductRequest({ ...subscriptionDraft, title: "Подписка" })).toMatchObject({
+      paymentModel: "sub",
+      subscriptionPeriod: "month",
+      trialDays: 0
+    });
+    expect(toCreateProductRequest({ ...groupDraft, title: "Группа" })).toMatchObject({
+      participantMode: "group",
+      groupSize: 2
+    });
+  });
+
   it("creates edit drafts from product responses without leaking response-only ids into requests", () => {
     const draft = createProductDraftFromResponse(productResponse);
     const updateRequest = toUpdateProductRequest(draft);
 
-    expect(draft.includedItems).toEqual([{ text: "Полный разбор карты", icon: "check", order: 10 }]);
+    expect(draft.includedItems).toEqual([
+      { text: "Полный разбор карты", icon: "check", order: 10 }
+    ]);
     expect(draft.modifiers).toEqual([
       {
         label: "PDF-карта / резюме",
@@ -168,20 +193,22 @@ describe("product draft helpers", () => {
   it("toggles array values without duplicates", () => {
     const draft = createDefaultProductDraft("single");
 
-    expect(toggleProductDraftArrayValue(draft, "deliveryFormats", "audio").deliveryFormats).toEqual([
-      "video",
-      "audio"
-    ]);
-    expect(toggleProductDraftArrayValue(draft, "deliveryFormats", "video").deliveryFormats).toEqual([]);
-    expect(toggleProductDraftArrayValue(draft, "requiredClientData", "question").requiredClientData).toEqual([
-      "chart1",
-      "question"
-    ]);
+    expect(toggleProductDraftArrayValue(draft, "deliveryFormats", "audio").deliveryFormats).toEqual(
+      ["video", "audio"]
+    );
+    expect(toggleProductDraftArrayValue(draft, "deliveryFormats", "video").deliveryFormats).toEqual(
+      []
+    );
+    expect(
+      toggleProductDraftArrayValue(draft, "requiredClientData", "question").requiredClientData
+    ).toEqual(["chart1", "question"]);
     expect(toggleProductDraftArrayValue(draft, "methods", "forecast").methods).toEqual([
       "natal",
       "forecast"
     ]);
-    expect(toggleProductDraftArrayValue(draft, "accessGrants", "course").accessGrants).toEqual(["course"]);
+    expect(toggleProductDraftArrayValue(draft, "accessGrants", "course").accessGrants).toEqual([
+      "course"
+    ]);
   });
 
   it("uses valid constructor icon names for all default included items", () => {
@@ -190,7 +217,9 @@ describe("product draft helpers", () => {
       createDefaultProductDraft(type).includedItems.map((item) => item.icon)
     );
 
-    expect(defaultIncludedItemIcons.filter((icon) => !availableIconNames.includes(icon))).toEqual([]);
+    expect(defaultIncludedItemIcons.filter((icon) => !availableIconNames.includes(icon))).toEqual(
+      []
+    );
   });
 
   it("adds, updates and removes included items", () => {
@@ -248,6 +277,32 @@ describe("product draft helpers", () => {
     });
 
     expect(removeProductModifier(updated, 0).modifiers).toEqual([]);
+  });
+
+  it("normalizes modifier values when switching kind", () => {
+    const draft = {
+      ...createDefaultProductDraft("single"),
+      modifiers: [
+        {
+          label: "Срочность",
+          priceMinor: 90000,
+          kind: "fixed" as const,
+          isEnabled: true,
+          createsArtifact: false,
+          order: 10
+        }
+      ]
+    };
+
+    expect(updateProductModifier(draft, 0, { kind: "percent" }).modifiers[0]).toMatchObject({
+      kind: "percent",
+      priceMinor: 0
+    });
+
+    expect(updateProductModifier(draft, 0, { kind: "free" }).modifiers[0]).toMatchObject({
+      kind: "free",
+      priceMinor: 0
+    });
   });
 
   it("adds product modifiers after the highest existing order", () => {

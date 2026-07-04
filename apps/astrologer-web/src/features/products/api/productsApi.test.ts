@@ -189,7 +189,7 @@ describe("products API", () => {
     await publishProduct(productId);
     await moveProductToDraft(productId);
     await archiveProduct(productId);
-    await duplicateProduct(productId);
+    await duplicateProduct({ productId, body: { title: "Натальный разбор (копия)" } });
 
     expect(post).toHaveBeenNthCalledWith(1, `/products/${productId}/publish`, undefined, {
       csrf: true
@@ -200,8 +200,11 @@ describe("products API", () => {
     expect(post).toHaveBeenNthCalledWith(3, `/products/${productId}/archive`, undefined, {
       csrf: true
     });
-    expect(post).toHaveBeenNthCalledWith(4, `/products/${productId}/duplicate`, undefined, {
-      csrf: true
-    });
+    expect(post).toHaveBeenNthCalledWith(
+      4,
+      `/products/${productId}/duplicate`,
+      { title: "Натальный разбор (копия)" },
+      { csrf: true }
+    );
   });
 });

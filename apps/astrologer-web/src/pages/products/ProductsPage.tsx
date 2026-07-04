@@ -4,6 +4,7 @@ import type { ProductResponse, ProductStatusFilter } from "@elevenhouse/contract
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { productCopyByLocale } from "../../features/products/model/productCopy";
+import { createDuplicateProductTitle } from "../../features/products/model/productFormatting";
 import { useArchiveProductMutation } from "../../features/products/model/useArchiveProductMutation";
 import { useDuplicateProductMutation } from "../../features/products/model/useDuplicateProductMutation";
 import { useMoveProductToDraftMutation } from "../../features/products/model/useMoveProductToDraftMutation";
@@ -19,6 +20,7 @@ const productsPageSize = 50;
 export function ProductsPage() {
   const { dictionary, locale } = useI18n<AstrologerCopy>();
   const [selectedStatus, setSelectedStatus] = useState<ProductStatusFilter>("all");
+  const [modalTarget, setModalTarget] = useState<HTMLElement | null>(null);
   const productsQuery = useProductListQuery({
     status: selectedStatus,
     limit: productsPageSize,
@@ -61,6 +63,7 @@ export function ProductsPage() {
   return (
     <>
       <ProductsPageView
+        modalScopeRef={setModalTarget}
         copy={dictionary.products}
         locale={locale}
         products={products}
@@ -73,8 +76,13 @@ export function ProductsPage() {
         onStatusChange={setSelectedStatus}
         onCreate={createFlow.openTypeSelection}
         onEditProduct={createFlow.editProduct}
-        onDuplicateProduct={(productId) => {
-          duplicateMutation.mutate(productId);
+        onDuplicateProduct={(product) => {
+          duplicateMutation.mutate({
+            productId: product.id,
+            body: {
+              title: createDuplicateProductTitle(product.title, productCopy)
+            }
+          });
         }}
         onProductStatusChange={handleProductStatusChange}
       />
@@ -83,6 +91,7 @@ export function ProductsPage() {
         productCopy={productCopy}
         locale={locale}
         flow={createFlow}
+        modalTarget={modalTarget}
       />
     </>
   );

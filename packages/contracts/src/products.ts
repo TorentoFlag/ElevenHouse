@@ -1,4 +1,29 @@
 import { nonEmptyStringSchema, z } from "@elevenhouse/validation";
+import {
+  collectProductCreateInvariantIssues,
+  collectProductModifierInvariantIssues,
+  collectProductUpdateInvariantIssues,
+  productAccessGrantValues,
+  productAnalyticsStatusValues,
+  productCurrencyValues,
+  productDeliveryFormatValues,
+  productExecutionModeValues,
+  productMethodValues,
+  productModifierKindValues,
+  productParticipantModeValues,
+  productPaymentModelValues,
+  productRequiredClientDataValues,
+  productStatusValues,
+  productSubscriptionPeriodValues,
+  productTypeValues,
+  type ProductAccessGrantValue,
+  type ProductDeliveryFormatValue,
+  type ProductMethodValue,
+  type ProductParticipantModeValue,
+  type ProductPaymentModelValue,
+  type ProductRequiredClientDataValue,
+  type ProductSubscriptionPeriodValue
+} from "@elevenhouse/validation/products";
 
 const uuidSchema = z.string().uuid();
 const optionalTrimmedStringSchema = z
@@ -64,80 +89,47 @@ const optionalNullablePositiveIntSchema = z.number().int().positive().nullable()
 const optionalNullableNonNegativeIntSchema = z.number().int().min(0).nullable().optional();
 const orderSchema = z.number().int().min(0).max(100_000);
 
-export const productStatusSchema = z.enum(["draft", "active", "archived"]);
+export const productStatusSchema = z.enum(productStatusValues);
 export type ProductStatus = z.infer<typeof productStatusSchema>;
 
 export const productStatusFilterSchema = z.union([z.literal("all"), productStatusSchema]);
 export type ProductStatusFilter = z.infer<typeof productStatusFilterSchema>;
 
-export const productTypeSchema = z.enum([
-  "single",
-  "pack",
-  "async",
-  "sub",
-  "mini",
-  "course",
-  "custom"
-]);
+export const productTypeSchema = z.enum(productTypeValues);
 export type ProductType = z.infer<typeof productTypeSchema>;
 
-export const productDeliveryFormatSchema = z.enum([
-  "video",
-  "audio",
-  "chat",
-  "text",
-  "file",
-  "channel"
-]);
+export const productDeliveryFormatSchema = z.enum(productDeliveryFormatValues);
 export type ProductDeliveryFormat = z.infer<typeof productDeliveryFormatSchema>;
 
-export const productExecutionModeSchema = z.enum(["live", "async", "instant"]);
+export const productExecutionModeSchema = z.enum(productExecutionModeValues);
 export type ProductExecutionMode = z.infer<typeof productExecutionModeSchema>;
 
-export const productPaymentModelSchema = z.enum(["once", "pack", "sub", "free"]);
+export const productPaymentModelSchema = z.enum(productPaymentModelValues);
 export type ProductPaymentModel = z.infer<typeof productPaymentModelSchema>;
 
-export const productSubscriptionPeriodSchema = z.enum(["week", "month", "year"]);
+export const productSubscriptionPeriodSchema = z.enum(productSubscriptionPeriodValues);
 export type ProductSubscriptionPeriod = z.infer<typeof productSubscriptionPeriodSchema>;
 
-export const productParticipantModeSchema = z.enum(["solo", "group", "gift"]);
+export const productParticipantModeSchema = z.enum(productParticipantModeValues);
 export type ProductParticipantMode = z.infer<typeof productParticipantModeSchema>;
 
-export const productRequiredClientDataSchema = z.enum([
-  "chart1",
-  "cities",
-  "chart2",
-  "question",
-  "event"
-]);
+export const productRequiredClientDataSchema = z.enum(productRequiredClientDataValues);
 export type ProductRequiredClientData = z.infer<typeof productRequiredClientDataSchema>;
 
-export const productMethodSchema = z.enum([
-  "natal",
-  "forecast",
-  "synastry",
-  "child",
-  "numerology",
-  "matrix",
-  "humandesign"
-]);
+export const productMethodSchema = z.enum(productMethodValues);
 export type ProductMethod = z.infer<typeof productMethodSchema>;
 
-export const productAccessGrantSchema = z.enum([
-  "content",
-  "channel",
-  "records",
-  "course",
-  "community",
-  "journal"
-]);
+export const productAccessGrantSchema = z.enum(productAccessGrantValues);
 export type ProductAccessGrant = z.infer<typeof productAccessGrantSchema>;
 
-export const productModifierKindSchema = z.enum(["fixed", "percent", "free"]);
+export const productModifierKindSchema = z.enum(productModifierKindValues);
 export type ProductModifierKind = z.infer<typeof productModifierKindSchema>;
 
-export const productCurrencySchema = z.enum(["RUB"]);
+export const productCurrencySchema = z.enum(productCurrencyValues);
 export type ProductCurrency = z.infer<typeof productCurrencySchema>;
+
+export const productAnalyticsStatusSchema = z.enum(productAnalyticsStatusValues);
+export type ProductAnalyticsStatus = z.infer<typeof productAnalyticsStatusSchema>;
 
 export const productIncludedItemRequestSchema = z
   .object({
@@ -159,13 +151,7 @@ export const productModifierRequestSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
-    if (value.kind === "free" && value.priceMinor !== 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["priceMinor"],
-        message: "Free modifiers must have zero price"
-      });
-    }
+    addProductInvariantIssues(collectProductModifierInvariantIssues(value), ctx);
   });
 export type ProductModifierRequest = z.infer<typeof productModifierRequestSchema>;
 
@@ -213,79 +199,43 @@ const updateProductPayloadFields = {
 
 const addProductPayloadIssues = (
   value: {
-    readonly paymentModel?: ProductPaymentModel;
+    readonly paymentModel?: ProductPaymentModelValue;
     readonly packageSessionCount?: number | null;
-    readonly subscriptionPeriod?: ProductSubscriptionPeriod | null;
-    readonly participantMode?: ProductParticipantMode;
+    readonly subscriptionPeriod?: ProductSubscriptionPeriodValue | null;
+    readonly participantMode?: ProductParticipantModeValue;
     readonly groupSize?: number | null;
     readonly priceMinor?: number;
-    readonly deliveryFormats?: readonly ProductDeliveryFormat[];
-    readonly requiredClientData?: readonly ProductRequiredClientData[];
-    readonly methods?: readonly ProductMethod[];
-    readonly accessGrants?: readonly ProductAccessGrant[];
+    readonly deliveryFormats?: readonly ProductDeliveryFormatValue[];
+    readonly requiredClientData?: readonly ProductRequiredClientDataValue[];
+    readonly methods?: readonly ProductMethodValue[];
+    readonly accessGrants?: readonly ProductAccessGrantValue[];
   },
   ctx: z.RefinementCtx
 ) => {
-  addProductUpdateIssues(value, ctx);
-
-  if (value.paymentModel === "pack" && !value.packageSessionCount) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["packageSessionCount"],
-      message: "Package products require packageSessionCount"
-    });
-  }
-
-  if (value.paymentModel === "sub" && !value.subscriptionPeriod) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["subscriptionPeriod"],
-      message: "Subscription products require subscriptionPeriod"
-    });
-  }
-
-  if (value.participantMode === "group" && !value.groupSize) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["groupSize"],
-      message: "Group products require groupSize"
-    });
-  }
-
-  if (value.paymentModel === "free" && value.priceMinor !== 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["priceMinor"],
-      message: "Free products must have zero price"
-    });
-  }
+  addProductInvariantIssues(collectProductCreateInvariantIssues(value), ctx);
 };
 
 const addProductUpdateIssues = (
   value: {
-    readonly deliveryFormats?: readonly ProductDeliveryFormat[];
-    readonly requiredClientData?: readonly ProductRequiredClientData[];
-    readonly methods?: readonly ProductMethod[];
-    readonly accessGrants?: readonly ProductAccessGrant[];
+    readonly deliveryFormats?: readonly ProductDeliveryFormatValue[];
+    readonly requiredClientData?: readonly ProductRequiredClientDataValue[];
+    readonly methods?: readonly ProductMethodValue[];
+    readonly accessGrants?: readonly ProductAccessGrantValue[];
   },
   ctx: z.RefinementCtx
 ) => {
-  addUniqueArrayIssue(value.deliveryFormats, "deliveryFormats", ctx);
-  addUniqueArrayIssue(value.requiredClientData, "requiredClientData", ctx);
-  addUniqueArrayIssue(value.methods, "methods", ctx);
-  addUniqueArrayIssue(value.accessGrants, "accessGrants", ctx);
+  addProductInvariantIssues(collectProductUpdateInvariantIssues(value), ctx);
 };
 
-const addUniqueArrayIssue = (
-  values: readonly string[] | undefined,
-  path: string,
+const addProductInvariantIssues = (
+  issues: ReturnType<typeof collectProductCreateInvariantIssues>,
   ctx: z.RefinementCtx
 ) => {
-  if (values !== undefined && new Set(values).size !== values.length) {
+  for (const issue of issues) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      path: [path],
-      message: `${path} values must be unique`
+      path: [...issue.path],
+      message: issue.message
     });
   }
 };
@@ -303,6 +253,13 @@ export const updateProductRequestSchema = z
   .superRefine(addProductUpdateIssues);
 export type UpdateProductRequest = z.infer<typeof updateProductRequestSchema>;
 
+export const duplicateProductRequestSchema = z
+  .object({
+    title: nonEmptyStringSchema.max(200).optional()
+  })
+  .strict();
+export type DuplicateProductRequest = z.infer<typeof duplicateProductRequestSchema>;
+
 export const productIdParamSchema = z.object({ productId: uuidSchema }).strict();
 export type ProductIdParam = z.infer<typeof productIdParamSchema>;
 
@@ -316,6 +273,7 @@ export const listProductsQuerySchema = z
 export type ListProductsQuery = z.infer<typeof listProductsQuerySchema>;
 
 export const productLifetimeAnalyticsResponseSchema = z.object({
+  status: productAnalyticsStatusSchema.optional(),
   salesCount: z.number().int().min(0),
   grossRevenueMinor: z.number().int().min(0),
   currency: productCurrencySchema,
@@ -376,6 +334,7 @@ export const listProductsResponseSchema = z.object({
 export type ListProductsResponse = z.infer<typeof listProductsResponseSchema>;
 
 export const productSummaryResponseSchema = z.object({
+  analyticsStatus: productAnalyticsStatusSchema.optional(),
   total: z.number().int().min(0),
   active: z.number().int().min(0),
   draft: z.number().int().min(0),

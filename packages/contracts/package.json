@@ -9,6 +9,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./products": {
+      "types": "./dist/products.d.ts",
+      "import": "./dist/products.js",
+      "require": "./dist/products.js"
     }
   },
   "scripts": {
@@ -21,6 +26,7 @@
     "@elevenhouse/validation": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "25.9.2",
     "typescript": "6.0.3"
   }
 }

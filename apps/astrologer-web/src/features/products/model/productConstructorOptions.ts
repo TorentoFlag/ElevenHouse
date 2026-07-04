@@ -17,17 +17,17 @@ export type ProductConstructorOption<TValue extends string> = {
 
 export const productDeliveryFormatOptions = [
   { value: "video", iconName: "video" },
-  { value: "audio", iconName: "content" },
+  { value: "audio", iconName: "mic" },
   { value: "chat", iconName: "chat" },
   { value: "text", iconName: "content" },
-  { value: "file", iconName: "box" },
-  { value: "channel", iconName: "flow" }
+  { value: "file", iconName: "fileDown" },
+  { value: "channel", iconName: "globe" }
 ] satisfies readonly ProductConstructorOption<ProductDeliveryFormat>[];
 
 export const productExecutionModeOptions = [
-  { value: "live", iconName: "video" },
-  { value: "async", iconName: "refresh" },
-  { value: "instant", iconName: "sparkle" }
+  { value: "live", iconName: "calendar" },
+  { value: "async", iconName: "clock" },
+  { value: "instant", iconName: "lightning" }
 ] satisfies readonly ProductConstructorOption<ProductExecutionMode>[];
 
 export const productPaymentModelOptions = [
@@ -45,13 +45,13 @@ export const productSubscriptionPeriodOptions = [
 
 export const productParticipantModeOptions = [
   { value: "solo", iconName: "verified" },
-  { value: "group", iconName: "chat" },
-  { value: "gift", iconName: "sparkle" }
+  { value: "group", iconName: "users" },
+  { value: "gift", iconName: "gift" }
 ] satisfies readonly ProductConstructorOption<ProductParticipantMode>[];
 
 export const productRequiredClientDataOptions = [
   { value: "chart1", iconName: "orbit" },
-  { value: "cities", iconName: "reference" },
+  { value: "cities", iconName: "map" },
   { value: "chart2", iconName: "chat" },
   { value: "question", iconName: "chat" },
   { value: "event", iconName: "content" }
@@ -80,12 +80,22 @@ export const productIconNames = [
   "check",
   "sparkle",
   "video",
+  "mic",
   "chat",
   "content",
+  "fileDown",
   "flow",
+  "globe",
   "box",
   "wallet",
+  "calendar",
+  "clock",
+  "lightning",
+  "users",
+  "gift",
   "orbit",
+  "map",
+  "star",
   "reference",
   "verified",
   "refresh"

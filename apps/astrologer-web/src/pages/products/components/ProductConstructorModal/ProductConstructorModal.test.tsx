@@ -1,13 +1,12 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
-import { IconPicker } from "@elevenhouse/design-system/components/IconPicker";
 import { NumberStepper } from "@elevenhouse/design-system/components/NumberStepper";
 import { SelectableTile } from "@elevenhouse/design-system/components/SelectableTile";
 import { describe, expect, it, vi } from "vitest";
 import { createDefaultProductDraft } from "../../../../features/products/model/productDraft";
 import { productCopyByLocale } from "../../../../features/products/model/productCopy";
 import { ProductConstructorModal } from "./ProductConstructorModal";
-import styles from "../../ProductsPage.module.css";
+import styles from "./ProductConstructorModal.module.css";
 
 const copy = {
   title: "Конструктор продукта",
@@ -22,7 +21,7 @@ const copy = {
   durationSuffix: " мин",
   decrementDurationLabel: "Уменьшить длительность",
   incrementDurationLabel: "Увеличить длительность",
-  formatLabel: "Формат",
+  formatLabel: "Формат поставки",
   executionModeLabel: "Сценарий выполнения",
   paymentModelLabel: "Оплата",
   packageLabel: "Пакет",
@@ -33,16 +32,16 @@ const copy = {
   trialDaysLabel: "Пробный период",
   participantModeLabel: "Участники",
   groupSizeLabel: "Размер группы",
-  requiredClientDataLabel: "Данные клиента",
-  methodsLabel: "Методы",
-  accessGrantsLabel: "Доступы",
+  requiredClientDataLabel: "Данные от клиента",
+  methodsLabel: "Метод / система",
+  accessGrantsLabel: "Доступ",
   includedItemsLabel: "Что входит",
   includedItemTextLabel: "Текст пункта",
   includedItemPlaceholder: "Что получает клиент",
   includedItemIconLabel: "Иконка пункта",
   addIncludedItemLabel: "Добавить пункт",
   removeIncludedItemLabel: "Удалить пункт",
-  modifiersLabel: "Модификаторы",
+  modifiersLabel: "Допы · модификаторы",
   modifierKindLabel: "Тип модификатора",
   modifierFixedLabel: "Фиксированная цена",
   modifierPercentLabel: "Процент",
@@ -50,7 +49,7 @@ const copy = {
   modifierLabelLabel: "Название модификатора",
   modifierLabelPlaceholder: "Название модификатора",
   modifierPriceLabel: "Цена модификатора",
-  addModifierLabel: "Добавить модификатор",
+  addModifierLabel: "Свой модификатор",
   removeModifierLabel: "Удалить модификатор",
   previewLabel: "Превью",
   previewPriceLabel: "Стоимость",
@@ -62,12 +61,22 @@ const copy = {
     check: "Галочка",
     sparkle: "Искра",
     video: "Видео",
+    mic: "Микрофон",
     chat: "Чат",
     content: "Контент",
+    fileDown: "Файл",
     flow: "Поток",
+    globe: "Канал",
     box: "Коробка",
     wallet: "Кошелек",
+    calendar: "Календарь",
+    clock: "Часы",
+    lightning: "Молния",
+    users: "Группа",
+    gift: "Подарок",
     orbit: "Орбита",
+    map: "Карта",
+    star: "Звезда",
     reference: "Справочник",
     verified: "Проверено",
     refresh: "Обновить"
@@ -93,15 +102,15 @@ describe("ProductConstructorModal", () => {
       error: null,
       onDraftChange,
       onSave,
+      onPublish: vi.fn(),
       onClose
     });
 
     expect(findByType(modal, Modal).props.title).toBe(copy.title);
     expect(findAllByType(modal, SelectableTile).length).toBeGreaterThan(12);
     expect(findAllByType(modal, NumberStepper).length).toBeGreaterThan(0);
-    expect(findAllByType(modal, IconPicker).length).toBeGreaterThan(0);
 
-    const serialized = JSON.stringify(modal.props.children);
+    const serialized = serializeRendered(modal);
     expect(serialized).toContain("Формат");
     expect(serialized).toContain("Превью");
 
@@ -118,8 +127,124 @@ describe("ProductConstructorModal", () => {
     expect(preventDefault).toHaveBeenCalledOnce();
     expect(onSave).toHaveBeenCalledOnce();
 
-    const firstIconPicker = findAllByType(modal, IconPicker)[0];
-    expect(firstIconPicker?.props.getIconAriaLabel("check")).toBe("Галочка");
+    expect(serialized).toContain("Авто — из выбранных кубиков");
+  });
+
+  it("renders the design-reference fullscreen constructor shell", () => {
+    const draft = {
+      ...createDefaultProductDraft("custom"),
+      title: "Астрокартография · где жить",
+      subtitle: "Где вам будет лучше — по карте мест",
+      priceMinor: 790000,
+      includedItems: [
+        { text: "Разбор натальной карты", icon: "orbit", order: 10 },
+        { text: "Анализ карты по городам", icon: "reference", order: 20 }
+      ],
+      modifiers: [
+        {
+          label: "PDF-карта / резюме",
+          priceMinor: 99000,
+          kind: "fixed" as const,
+          isEnabled: true,
+          createsArtifact: true,
+          order: 10
+        }
+      ]
+    };
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft,
+      isSaving: false,
+      error: null,
+      onDraftChange: vi.fn(),
+      onSave: vi.fn(),
+      onPublish: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    expect(findByProp(modal, "data-product-constructor-shell").props.className).toContain(
+      styles.productConstructorShell
+    );
+    expect(findByProp(modal, "data-product-constructor-header")).toBeDefined();
+    expect(findByProp(modal, "data-product-constructor-editor")).toBeDefined();
+    expect(findByProp(modal, "data-product-constructor-preview-panel")).toBeDefined();
+
+    const serialized = serializeRendered(modal);
+    expect(serialized).toContain("Продукты");
+    expect(serialized).toContain("Создать");
+    expect(serialized).toContain("Свой формат");
+    expect(serialized).toContain("Обложка и медиа");
+    expect(serialized).toContain("Превью · так увидит клиент");
+    expect(serialized).toContain("Что получит клиент");
+    expect(serialized).toContain("Когда");
+    expect(serialized).toContain("Вживую · слот");
+    expect(serialized).toContain("Асинхронно · SLA");
+    expect(serialized).toContain("Пакет из N");
+    expect(serialized).toContain("Бесплатно · лид-магнит");
+    expect(serialized).toContain("Объём");
+    expect(serialized).toContain("Личная консультация");
+    expect(serialized).not.toContain("Сценарий выполнения");
+  });
+
+  it("renders media, client-facing preview, enabled modifiers and cabinet artifacts", () => {
+    const draft = {
+      ...createDefaultProductDraft("single"),
+      title: "Астрокартография · где жить",
+      subtitle: "Где вам будет лучше — по карте мест",
+      priceMinor: 790000,
+      deliveryFormats: ["video", "file"] as const,
+      methods: ["natal"] as const,
+      includedItems: [
+        { text: "Запись сессии", icon: "video", order: 10 },
+        { text: "Анализ карты по городам", icon: "reference", order: 20 }
+      ],
+      modifiers: [
+        {
+          label: "PDF-карта / резюме",
+          priceMinor: 99000,
+          kind: "fixed" as const,
+          isEnabled: true,
+          createsArtifact: true,
+          order: 10
+        },
+        {
+          label: "Срочно — за 24 часа",
+          priceMinor: 150000,
+          kind: "fixed" as const,
+          isEnabled: true,
+          createsArtifact: false,
+          order: 20
+        }
+      ]
+    };
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft,
+      isSaving: false,
+      error: null,
+      onDraftChange: vi.fn(),
+      onSave: vi.fn(),
+      onPublish: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    expect(findByProp(modal, "data-product-constructor-cover-dropzone")).toBeDefined();
+    expect(findByProp(modal, "data-product-constructor-preview-cover")).toBeDefined();
+    expect(
+      findAllByProp(modal, "data-product-constructor-cabinet-artifact").length
+    ).toBeGreaterThan(1);
+    expect(findAllByProp(modal, "data-product-constructor-upsell").length).toBe(2);
+
+    const serialized = serializeRendered(modal);
+    expect(serialized).toContain("7 900");
+    expect(serialized).toContain("Видео + Файл · 60 мин");
+    expect(serialized).toContain("PDF-карта / резюме");
+    expect(serialized).toContain("+990");
+    expect(serialized).toContain("Записаться");
   });
 
   it("does not save an invalid draft on form submit", () => {
@@ -133,6 +258,7 @@ describe("ProductConstructorModal", () => {
       error: null,
       onDraftChange: vi.fn(),
       onSave,
+      onPublish: vi.fn(),
       onClose: vi.fn()
     });
 
@@ -158,6 +284,7 @@ describe("ProductConstructorModal", () => {
       error: null,
       onDraftChange,
       onSave: vi.fn(),
+      onPublish: vi.fn(),
       onClose: vi.fn()
     });
 
@@ -176,7 +303,7 @@ describe("ProductConstructorModal", () => {
     expect(onDraftChange).not.toHaveBeenCalled();
   });
 
-  it("switches product type by applying next type defaults and preserving basic fields", () => {
+  it("keeps product type selection outside the full constructor surface", () => {
     const draft = {
       ...createDefaultProductDraft("single"),
       title: "Личный прогноз",
@@ -195,27 +322,14 @@ describe("ProductConstructorModal", () => {
       error: null,
       onDraftChange,
       onSave: vi.fn(),
+      onPublish: vi.fn(),
       onClose: vi.fn()
     });
 
-    findAllByType(modal, SelectableTile).find(
-      (tile) => tile.props.label === productCopyByLocale.ru.types.sub.label
-    )?.props.onClick();
-
-    expect(onDraftChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "sub",
-        paymentModel: "sub",
-        subscriptionPeriod: "month",
-        deliveryFormats: ["channel"],
-        title: draft.title,
-        subtitle: draft.subtitle,
-        priceMinor: draft.priceMinor,
-        currency: draft.currency,
-        coverMediaId: draft.coverMediaId,
-        introVideoUrl: draft.introVideoUrl
-      })
-    );
+    const serialized = serializeRendered(modal);
+    expect(serialized).toContain(productCopyByLocale.ru.types.single.label);
+    expect(serialized).not.toContain(productCopyByLocale.ru.types.sub.description);
+    expect(onDraftChange).not.toHaveBeenCalled();
   });
 
   it("uses dedicated modifier rows and accessible labels for dynamic controls", () => {
@@ -242,6 +356,7 @@ describe("ProductConstructorModal", () => {
       error: null,
       onDraftChange: vi.fn(),
       onSave: vi.fn(),
+      onPublish: vi.fn(),
       onClose: vi.fn()
     });
 
@@ -251,12 +366,68 @@ describe("ProductConstructorModal", () => {
     expect(findByAriaLabel(modal, copy.includedItemTextLabel).props.value).toBe(
       draft.includedItems[0]?.text
     );
-    expect(findByAriaLabel(modal, copy.modifierLabelLabel).props.value).toBe("Срочность");
-    expect(findByAriaLabel(modal, copy.modifierPriceLabel).props.value).toBe("900");
+    expect(findByAriaLabel(modal, `${copy.modifierLabelLabel}: Срочность`).props.value).toBe(
+      "Срочность"
+    );
+    expect(findByAriaLabel(modal, `${copy.modifierPriceLabel}: Срочность`).props.value).toBe("900");
 
-    expect(findByAriaLabel(modal, `${copy.modifierKindLabel}: ${copy.modifierFixedLabel}`)).toBeDefined();
-    expect(findByAriaLabel(modal, `${copy.modifierKindLabel}: ${copy.modifierPercentLabel}`)).toBeDefined();
-    expect(findByAriaLabel(modal, `${copy.modifierKindLabel}: ${copy.modifierFreeLabel}`)).toBeDefined();
+    expect(
+      findByAriaLabel(modal, `${copy.modifierKindLabel}: ${copy.modifierFixedLabel} · Срочность`)
+    ).toBeDefined();
+    expect(
+      findByAriaLabel(modal, `${copy.modifierKindLabel}: ${copy.modifierPercentLabel} · Срочность`)
+    ).toBeDefined();
+    expect(
+      findByAriaLabel(modal, `${copy.modifierKindLabel}: ${copy.modifierFreeLabel} · Срочность`)
+    ).toBeDefined();
+
+    expect(findByAriaLabel(modal, `${copy.removeModifierLabel}: Срочность`)).toBeDefined();
+  });
+
+  it("edits percent modifiers as whole percentages instead of money minor units", () => {
+    const draft = {
+      ...createDefaultProductDraft("single"),
+      title: "Натальный разбор",
+      modifiers: [
+        {
+          label: "Скидка",
+          priceMinor: 15,
+          kind: "percent" as const,
+          isEnabled: true,
+          createsArtifact: false,
+          order: 10
+        }
+      ]
+    };
+    const onDraftChange = vi.fn();
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft,
+      isSaving: false,
+      error: null,
+      onDraftChange,
+      onSave: vi.fn(),
+      onPublish: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    expect(findByAriaLabel(modal, `${copy.modifierPriceLabel}: Скидка`).props.value).toBe("15");
+
+    findByAriaLabel(modal, `${copy.modifierPriceLabel}: Скидка`).props.onChange({
+      currentTarget: { value: "25" }
+    });
+
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      modifiers: [
+        {
+          ...draft.modifiers[0],
+          priceMinor: 25
+        }
+      ]
+    });
   });
 });
 
@@ -271,9 +442,17 @@ type TestElementProps = {
   title?: ReactNode;
   value?: string | number;
   "aria-label"?: string;
+  "data-product-constructor-cabinet-artifact"?: string;
+  "data-product-constructor-cover-dropzone"?: string;
+  "data-product-constructor-editor"?: string;
   "data-product-constructor-form"?: string;
+  "data-product-constructor-header"?: string;
   "data-product-constructor-modifier-row"?: string;
+  "data-product-constructor-preview-cover"?: string;
+  "data-product-constructor-preview-panel"?: string;
+  "data-product-constructor-shell"?: string;
   "data-product-constructor-title"?: string;
+  "data-product-constructor-upsell"?: string;
 };
 
 function findByType(root: unknown, type: unknown) {
@@ -331,13 +510,58 @@ function findAllByProp(
 }
 
 function visitElements(root: unknown, visitor: (element: ReactElement<TestElementProps>) => void) {
-  if (!isValidElement<TestElementProps>(root)) {
+  const renderedRoot = renderProductConstructorComponents(root);
+
+  if (!isValidElement<TestElementProps>(renderedRoot)) {
     return;
   }
 
-  visitor(root);
+  visitor(renderedRoot);
 
-  Children.forEach(root.props.children, (child) => {
+  Children.forEach(renderedRoot.props.children, (child) => {
     visitElements(child, visitor);
   });
+}
+
+function serializeRendered(root: unknown): string {
+  return JSON.stringify(renderProductConstructorComponents(root));
+}
+
+function renderProductConstructorComponents(root: unknown): unknown {
+  if (!isValidElement<TestElementProps>(root)) {
+    return root;
+  }
+
+  if (typeof root.type === "function" && shouldRenderProductConstructorComponent(root.type.name)) {
+    const component = root.type as (props: TestElementProps) => ReactElement<TestElementProps>;
+
+    return renderProductConstructorComponents(component(root.props));
+  }
+
+  const children = Children.map(root.props.children, (child) =>
+    renderProductConstructorComponents(child)
+  );
+
+  if (!children) {
+    return root;
+  }
+
+  return {
+    ...root,
+    props: {
+      ...root.props,
+      children
+    }
+  };
+}
+
+function shouldRenderProductConstructorComponent(componentName: string): boolean {
+  return (
+    componentName.startsWith("ProductConstructor") ||
+    componentName.endsWith("Section") ||
+    componentName === "BasicProductSections" ||
+    componentName === "ConstructorOptionGroup" ||
+    componentName === "SectionHeading" ||
+    componentName === "LabeledStepper"
+  );
 }
