@@ -104,6 +104,16 @@
       "types": "./dist/adapters/astrologer-profile/index.d.ts",
       "import": "./dist/adapters/astrologer-profile/index.js",
       "require": "./dist/adapters/astrologer-profile/index.js"
+    },
+    "./platform-billing": {
+      "types": "./dist/adapters/platform-billing/index.d.ts",
+      "import": "./dist/adapters/platform-billing/index.js",
+      "require": "./dist/adapters/platform-billing/index.js"
+    },
+    "./adapters/platform-billing": {
+      "types": "./dist/adapters/platform-billing/index.d.ts",
+      "import": "./dist/adapters/platform-billing/index.js",
+      "require": "./dist/adapters/platform-billing/index.js"
     }
   },
   "scripts": {

@@ -12,6 +12,7 @@ import {
   uuid
 } from "drizzle-orm/pg-core";
 import { users } from "../identity/accounts.schema";
+import { mediaAssets } from "../media/media-assets.schema";
 
 export const astrologerProfiles = pgTable(
   "astrologer_profiles",
@@ -25,8 +26,12 @@ export const astrologerProfiles = pgTable(
     bio: text("bio"),
     timezone: text("timezone").notNull(),
     locale: text("locale").notNull(),
-    avatarMediaId: text("avatar_media_id"),
-    coverMediaId: text("cover_media_id"),
+    avatarMediaId: uuid("avatar_media_id").references(() => mediaAssets.id, {
+      onDelete: "set null"
+    }),
+    coverMediaId: uuid("cover_media_id").references(() => mediaAssets.id, {
+      onDelete: "set null"
+    }),
     consultationLanguages: jsonb("consultation_languages").$type<string[]>().notNull(),
     visibilityStatus: text("visibility_status").notNull().default("draft"),
     professionalExperienceYears: integer("professional_experience_years"),

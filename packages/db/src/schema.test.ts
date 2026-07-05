@@ -28,6 +28,15 @@ import {
   mediaVisibilityValues,
   outboxEvents,
   outboxEventStatusValues,
+  billingInvoices,
+  billingInvoiceStatusValues,
+  billingPaymentMethods,
+  platformBillingProviderValues,
+  platformPlanFeatures,
+  platformPlanFeatureValues,
+  platformPlans,
+  platformSubscriptions,
+  platformSubscriptionStatusValues,
   productAccessGrants,
   productAccessGrantValues,
   productCurrencyValues,
@@ -240,6 +249,43 @@ describe("database account schema constants", () => {
     );
   });
 
+  it("exports platform billing tables and explicit values", () => {
+    expect(platformPlanFeatureValues).toContain("products");
+    expect(platformPlanFeatureValues).toContain("analytics");
+    expect(platformBillingProviderValues).toEqual(["arc_pay"]);
+    expect(platformSubscriptionStatusValues).toEqual([
+      "active",
+      "past_due",
+      "canceled",
+      "incomplete"
+    ]);
+    expect(billingInvoiceStatusValues).toEqual(["paid", "open", "void", "uncollectible"]);
+    expect(platformPlans).toBeDefined();
+    expect(platformPlanFeatures).toBeDefined();
+    expect(platformSubscriptions).toBeDefined();
+    expect(billingPaymentMethods).toBeDefined();
+    expect(billingInvoices).toBeDefined();
+  });
+
+  it("keeps platform billing tables in the current baseline migration", () => {
+    const migration = readFileSync(currentBaselineMigration, "utf8");
+
+    expect(migration).toContain('CREATE TABLE "platform_plans"');
+    expect(migration).toContain('"monthly_price_minor" integer NOT NULL');
+    expect(migration).toContain('"platform_fee_bps" integer NOT NULL');
+    expect(migration).toContain('CREATE TABLE "platform_plan_features"');
+    expect(migration).toContain('CREATE TABLE "platform_subscriptions"');
+    expect(migration).toContain('CREATE TABLE "billing_payment_methods"');
+    expect(migration).toContain('CREATE TABLE "billing_invoices"');
+    expect(migration).toContain('CONSTRAINT "platform_plans_platform_fee_bps_check"');
+    expect(migration).toContain('CONSTRAINT "platform_subscriptions_status_check"');
+    expect(migration).toContain('CONSTRAINT "billing_payment_methods_last4_check"');
+    expect(migration).toContain('CONSTRAINT "billing_invoices_amount_minor_check"');
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "platform_subscriptions_current_owner_unique" ON "platform_subscriptions" USING btree ("owner_user_id") WHERE "platform_subscriptions"."is_current" = true'
+    );
+  });
+
   it("exports media tables and explicit values", () => {
     expect(mediaPurposeValues).toEqual(["product_cover", "profile_avatar", "profile_cover"]);
     expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
@@ -297,6 +343,8 @@ describe("database account schema constants", () => {
     expect(migration).toContain('CREATE TABLE "astrologer_profiles"');
     expect(migration).toContain('"owner_user_id" uuid PRIMARY KEY NOT NULL');
     expect(migration).toContain('"public_handle" text NOT NULL');
+    expect(migration).toContain('"avatar_media_id" uuid');
+    expect(migration).toContain('"cover_media_id" uuid');
     expect(migration).toContain('"consultation_languages" jsonb NOT NULL');
     expect(migration).toContain("\"visibility_status\" text DEFAULT 'draft' NOT NULL");
     expect(migration).toContain('"professional_experience_years" integer');
@@ -314,6 +362,12 @@ describe("database account schema constants", () => {
     expect(migration).toContain("^[0-9]{2}:[0-9]{2}$");
     expect(migration).toContain(
       'ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action'
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_avatar_media_id_media_assets_id_fk" FOREIGN KEY ("avatar_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action'
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_cover_media_id_media_assets_id_fk" FOREIGN KEY ("cover_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action'
     );
     expect(migration).toContain(
       'CREATE INDEX "astrologer_profiles_public_handle_idx" ON "astrologer_profiles" USING btree ("public_handle")'

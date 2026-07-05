@@ -41,14 +41,11 @@ services:
     image: minio/mc:latest
     depends_on:
       - minio
-    volumes:
-      - ./infra/minio/cors.json:/etc/minio/cors.json:ro
     entrypoint: ["/bin/sh", "-c"]
     command: >
       "until mc alias set local http://minio:9000 elevenhouse elevenhouse-secret; do sleep 2; done &&
       mc mb --ignore-existing local/elevenhouse-local-media &&
-      mc anonymous set download local/elevenhouse-local-media &&
-      mc cors set local/elevenhouse-local-media /etc/minio/cors.json"
+      mc anonymous set download local/elevenhouse-local-media"
 
 volumes:
   postgres-data:

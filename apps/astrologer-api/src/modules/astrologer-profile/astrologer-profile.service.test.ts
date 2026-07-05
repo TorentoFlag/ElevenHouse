@@ -3,6 +3,8 @@ import "reflect-metadata";
 import { describe, expect, it, vi } from "vitest";
 import {
   AstrologerProfileHandleConflictError,
+  type MediaAsset,
+  type MediaAssetStore,
   type AstrologerProfile,
   type AstrologerProfileStore
 } from "@elevenhouse/domain";
@@ -13,6 +15,8 @@ import { AstrologerProfileController } from "./astrologer-profile.controller";
 import { AstrologerProfileService } from "./astrologer-profile.service";
 
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
+const avatarMediaId = "33333333-3333-4333-8333-333333333333";
+const coverMediaId = "44444444-4444-4444-8444-444444444444";
 const now = new Date("2026-07-03T00:00:00.000Z");
 
 describe("AstrologerProfileService", () => {
@@ -21,7 +25,19 @@ describe("AstrologerProfileService", () => {
     const service = createService(store);
 
     await expect(service.getCurrentProfile(createAuthenticatedRequest())).resolves.toEqual({
-      profile
+      profile: {
+        ...profile,
+        avatarMedia: expect.objectContaining({
+          id: avatarMediaId,
+          purpose: "profile_avatar",
+          url: `https://cdn.example/${ownerUserId}/profile_avatar/${avatarMediaId}/avatar.png`
+        }),
+        coverMedia: expect.objectContaining({
+          id: coverMediaId,
+          purpose: "profile_cover",
+          url: `https://cdn.example/${ownerUserId}/profile_cover/${coverMediaId}/cover.png`
+        })
+      }
     });
     expect(store.findByOwnerUserId).toHaveBeenCalledWith({ ownerUserId });
   });
@@ -76,6 +92,28 @@ describe("AstrologerProfileService", () => {
     );
   });
 
+  it("rejects profile media that is not a ready asset for the current owner and purpose", async () => {
+    const mediaStore = createMediaStore({
+      findByOwnerAndId: vi.fn(async () => createMediaAsset("product_cover", coverMediaId))
+    });
+    const service = createService(createStore(), mediaStore);
+
+    await expect(
+      service.upsertCurrentProfile(
+        {
+          ...validBody(),
+          coverMediaId
+        },
+        createAuthenticatedRequest()
+      )
+    ).rejects.toThrow(BadRequestException);
+
+    expect(mediaStore.findByOwnerAndId).toHaveBeenCalledWith({
+      ownerUserId,
+      mediaId: coverMediaId
+    });
+  });
+
   it("maps invalid bodies, unauthenticated requests and handle conflicts", async () => {
     const service = createService(
       createStore({
@@ -106,8 +144,11 @@ describe("AstrologerProfileController", () => {
   });
 });
 
-function createService(store: AstrologerProfileStore): AstrologerProfileService {
-  return new AstrologerProfileService(store, createClock());
+function createService(
+  store: AstrologerProfileStore,
+  mediaStore: MediaAssetStore = createMediaStore()
+): AstrologerProfileService {
+  return new AstrologerProfileService(store, mediaStore, createPublicUrlResolver(), createClock());
 }
 
 function createClock(): SystemClock {
@@ -138,6 +179,61 @@ function createStore(overrides: Partial<AstrologerProfileStore> = {}): Astrologe
   };
 }
 
+function createMediaStore(overrides: Partial<MediaAssetStore> = {}): MediaAssetStore {
+  return {
+    createUploadingAsset: vi.fn(async () => raise("Unexpected media create call")),
+    findByOwnerAndId: vi.fn(async (input) => {
+      if (input.mediaId === avatarMediaId) {
+        return createMediaAsset("profile_avatar", avatarMediaId, "avatar.png", 640, 640);
+      }
+      if (input.mediaId === coverMediaId) {
+        return createMediaAsset("profile_cover", coverMediaId, "cover.png", 1600, 600);
+      }
+      return null;
+    }),
+    markReady: vi.fn(async () => raise("Unexpected media ready call")),
+    markFailed: vi.fn(async () => raise("Unexpected media failed call")),
+    ...overrides
+  };
+}
+
+function createMediaAsset(
+  purpose: MediaAsset["purpose"],
+  id: string,
+  fileName = "cover.png",
+  width = 1600,
+  height = 600,
+  status: MediaAsset["status"] = "ready"
+): MediaAsset {
+  return {
+    id,
+    ownerUserId,
+    purpose,
+    status,
+    visibility: "public",
+    storageBucket: "elevenhouse-local-media",
+    storageKey: `${ownerUserId}/${purpose}/${id}/${fileName}`,
+    originalFileName: fileName,
+    mimeType: "image/png",
+    sizeBytes: 128000,
+    checksumSha256: null,
+    width,
+    height,
+    altText: null,
+    failureReason: null,
+    variants: [],
+    createdAt: "2026-07-03T00:00:00.000Z",
+    updatedAt: "2026-07-03T00:00:00.000Z"
+  };
+}
+
+function createPublicUrlResolver() {
+  return {
+    getPublicUrl: (input: { readonly storageKey: string }) =>
+      `https://cdn.example/${input.storageKey}`
+  };
+}
+
 const profile: AstrologerProfile = {
   ownerUserId,
   publicHandle: "astro-anna",
@@ -146,8 +242,8 @@ const profile: AstrologerProfile = {
   bio: "Описание практики",
   timezone: "Europe/Moscow",
   locale: "ru",
-  avatarMediaId: null,
-  coverMediaId: null,
+  avatarMediaId,
+  coverMediaId,
   consultationLanguages: ["Русский"],
   visibilityStatus: "draft",
   professionalExperienceYears: 9,
@@ -212,4 +308,8 @@ function createAuthenticatedRequest(): AstrologerSessionRequest {
       }
     }
   };
+}
+
+function raise(message: string): never {
+  throw new Error(message);
 }

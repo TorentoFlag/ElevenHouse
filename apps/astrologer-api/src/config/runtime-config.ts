@@ -27,11 +27,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_API_CSRF_HEADER_NAME: z.string().trim().min(1).default("x-csrf-token"),
   ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
   ASTROLOGER_API_ALLOWED_ORIGINS: z.string().trim().optional(),
-  ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z
-    .string()
-    .trim()
-    .url()
-    .default("http://localhost:9000"),
+  ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
   ASTROLOGER_MEDIA_STORAGE_REGION: z.string().trim().min(1).default("us-east-1"),
   ASTROLOGER_MEDIA_STORAGE_BUCKET: z.string().trim().min(1).default("elevenhouse-local-media"),
   ASTROLOGER_MEDIA_STORAGE_ACCESS_KEY_ID: z.string().trim().min(1).default("elevenhouse"),
@@ -46,6 +42,10 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .transform((value) => value === "true"),
   ASTROLOGER_MEDIA_STORAGE_PUBLIC_BASE_URL: z.string().trim().url().optional(),
   ASTROLOGER_MEDIA_UPLOAD_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  ASTROLOGER_BILLING_ARC_PAY_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   AUTH_CODE_DELIVERY_ENCRYPTION_KEY: z.string().trim().min(1),
   ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: z.string().trim().min(1).optional(),
   ASTROLOGER_API_PASSWORDLESS_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
@@ -105,9 +105,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_AI_PROVIDER: z.literal("openai").default("openai"),
   ASTROLOGER_OPENAI_API_KEY: optionalTrimmedNonEmptyStringSchema,
   ASTROLOGER_OPENAI_BASE_URL: z.string().trim().url().default("https://api.openai.com/v1"),
-  ASTROLOGER_AI_FAST_DRAFT_MODEL: z
-    .enum(["gpt-5.4-mini", "gpt-5.5"])
-    .default("gpt-5.4-mini"),
+  ASTROLOGER_AI_FAST_DRAFT_MODEL: z.enum(["gpt-5.4-mini", "gpt-5.5"]).default("gpt-5.4-mini"),
   ASTROLOGER_AI_QUALITY_DRAFT_MODEL: z.enum(["gpt-5.4-mini", "gpt-5.5"]).default("gpt-5.5"),
   ASTROLOGER_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
   ASTROLOGER_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(900),
@@ -170,6 +168,9 @@ export type AstrologerApiRuntimeConfig = {
     readonly forcePathStyle: boolean;
     readonly publicBaseUrl: string;
     readonly uploadTtlSeconds: number;
+  };
+  readonly billing: {
+    readonly arcPayConfigured: boolean;
   };
   readonly ai: {
     readonly enabled: boolean;
@@ -305,6 +306,9 @@ export function createAstrologerApiRuntimeConfig(
       forcePathStyle: config.ASTROLOGER_MEDIA_STORAGE_FORCE_PATH_STYLE,
       publicBaseUrl: mediaStoragePublicBaseUrl,
       uploadTtlSeconds: config.ASTROLOGER_MEDIA_UPLOAD_TTL_SECONDS
+    },
+    billing: {
+      arcPayConfigured: config.ASTROLOGER_BILLING_ARC_PAY_ENABLED
     },
     ai: {
       enabled: config.ASTROLOGER_AI_ENABLED,

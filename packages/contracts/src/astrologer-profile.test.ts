@@ -14,8 +14,42 @@ const validProfile = {
   bio: "Помогаю читать карту без мистификации.",
   timezone: "Europe/Moscow",
   locale: "ru",
-  avatarMediaId: "avatar-1",
-  coverMediaId: "cover-1",
+  avatarMediaId: "33333333-3333-4333-8333-333333333333",
+  avatarMedia: {
+    id: "33333333-3333-4333-8333-333333333333",
+    ownerUserId: "11111111-1111-4111-8111-111111111111",
+    purpose: "profile_avatar",
+    status: "ready",
+    visibility: "public",
+    originalFileName: "avatar.png",
+    mimeType: "image/png",
+    sizeBytes: 128000,
+    width: 640,
+    height: 640,
+    altText: null,
+    url: "https://cdn.example/profile/avatar.png",
+    variants: [],
+    createdAt: "2026-07-03T00:00:00.000Z",
+    updatedAt: "2026-07-03T00:00:00.000Z"
+  },
+  coverMediaId: "44444444-4444-4444-8444-444444444444",
+  coverMedia: {
+    id: "44444444-4444-4444-8444-444444444444",
+    ownerUserId: "11111111-1111-4111-8111-111111111111",
+    purpose: "profile_cover",
+    status: "ready",
+    visibility: "public",
+    originalFileName: "cover.png",
+    mimeType: "image/png",
+    sizeBytes: 512000,
+    width: 1600,
+    height: 600,
+    altText: null,
+    url: "https://cdn.example/profile/cover.png",
+    variants: [],
+    createdAt: "2026-07-03T00:00:00.000Z",
+    updatedAt: "2026-07-03T00:00:00.000Z"
+  },
   consultationLanguages: ["Русский", "English"],
   visibilityStatus: "paused",
   professionalExperienceYears: 9,
@@ -59,7 +93,7 @@ describe("astrologer profile contracts", () => {
         timezone: "  Europe/Moscow  ",
         locale: " ru ",
         avatarMediaId: "",
-        coverMediaId: " cover-1 ",
+        coverMediaId: " 44444444-4444-4444-8444-444444444444 ",
         consultationLanguages: [" Русский ", "English"],
         visibilityStatus: "published",
         professionalExperienceYears: 9,
@@ -87,7 +121,7 @@ describe("astrologer profile contracts", () => {
       timezone: "Europe/Moscow",
       locale: "ru",
       avatarMediaId: null,
-      coverMediaId: "cover-1",
+      coverMediaId: "44444444-4444-4444-8444-444444444444",
       consultationLanguages: ["Русский", "English"],
       visibilityStatus: "published",
       professionalExperienceYears: 9,
@@ -155,6 +189,22 @@ describe("astrologer profile contracts", () => {
       upsertAstrologerProfileRequestSchema.parse({
         ...validProfile,
         consultationLanguages: ["Русский", "русский"]
+      })
+    ).toThrow();
+  });
+
+  it("rejects non-uuid profile media identifiers before they reach the profile API", () => {
+    expect(() =>
+      upsertAstrologerProfileRequestSchema.parse({
+        ...validProfile,
+        avatarMediaId: "avatar-1"
+      })
+    ).toThrow();
+
+    expect(() =>
+      upsertAstrologerProfileRequestSchema.parse({
+        ...validProfile,
+        coverMediaId: "cover-1"
       })
     ).toThrow();
   });

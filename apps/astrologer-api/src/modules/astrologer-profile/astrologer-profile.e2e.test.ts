@@ -121,7 +121,13 @@ describe("astrologer profile HTTP routes", () => {
     expect(unauthenticatedResponse.status).toBe(401);
     expect(authenticatedResponse.status).toBe(200);
     getAstrologerProfileResponseSchema.parse(authenticatedResponse.body);
-    expect(authenticatedResponse.body).toEqual({ profile });
+    expect(authenticatedResponse.body).toEqual({
+      profile: {
+        ...profile,
+        avatarMedia: null,
+        coverMedia: null
+      }
+    });
     expect(profileStore.findByOwnerUserId).toHaveBeenCalledWith({ ownerUserId });
   });
 
@@ -202,7 +208,7 @@ const profile: AstrologerProfile = {
   timezone: "Europe/Moscow",
   locale: "ru",
   avatarMediaId: null,
-  coverMediaId: "cover-1",
+  coverMediaId: null,
   consultationLanguages: ["Русский", "English"],
   visibilityStatus: "published",
   professionalExperienceYears: 9,

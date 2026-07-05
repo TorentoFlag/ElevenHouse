@@ -191,6 +191,356 @@
   width: min(100%, 660px);
 }
 
+.billingPanel {
+  width: min(100%, 920px);
+}
+
+.billingProviderNotice,
+.currentPlanSummary,
+.billingRow,
+.billingEmptyRow,
+.billingEmptyState {
+  border: 1px solid var(--settings-line);
+  border-radius: 12px;
+  background: var(--settings-surface-1);
+}
+
+.billingProviderNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  color: var(--settings-accent-text);
+}
+
+.billingProviderNotice svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.billingProviderNotice strong,
+.billingProviderNotice em,
+.currentPlanText strong,
+.currentPlanText em,
+.billingRow strong,
+.billingRow em {
+  display: block;
+}
+
+.billingProviderNotice strong {
+  color: var(--eh-color-moon-120);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.billingProviderNotice em {
+  margin-top: 3px;
+  color: var(--eh-color-muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.currentPlanSummary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 16px 18px;
+  background: var(--eh-color-gold-alpha-14);
+  border-color: var(--eh-color-gold-alpha-26);
+}
+
+.currentPlanIcon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--settings-accent);
+  color: rgb(23 18 6);
+}
+
+.currentPlanText {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.currentPlanText strong {
+  color: var(--eh-color-moon-120);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.currentPlanText em {
+  margin-top: 3px;
+  color: var(--eh-color-muted);
+  font-size: 12.5px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.currentPlanStatus {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: rgb(57 196 121 / 0.13);
+  color: #7edb9f;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.billingCycleSegment {
+  display: inline-flex;
+  gap: 3px;
+  margin-bottom: 14px;
+  padding: 3px;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 10px;
+  background: var(--settings-surface-1);
+}
+
+.billingCycleSegment button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--eh-color-moon-500);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.billingCycleSegment button:focus-visible {
+  outline: 2px solid var(--settings-accent);
+  outline-offset: 2px;
+}
+
+.billingCycleActive {
+  background: var(--settings-accent);
+  color: rgb(23 18 6) !important;
+}
+
+.planGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.planCard {
+  display: flex;
+  min-height: 316px;
+  flex-direction: column;
+  padding: 16px;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 12px;
+  background: var(--settings-surface-1);
+}
+
+.planCardCurrent {
+  border-color: var(--settings-accent);
+  background: var(--settings-surface-2);
+}
+
+.planCardHeader {
+  display: flex;
+  min-height: 43px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.planCardHeader strong,
+.planCardHeader em {
+  display: block;
+}
+
+.planCardHeader strong {
+  color: var(--eh-color-moon-120);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.planCardHeader em {
+  margin-top: 3px;
+  color: var(--eh-color-muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.planCardHeader b {
+  color: var(--settings-accent-text);
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.planPrice {
+  display: flex;
+  min-height: 36px;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.planPrice strong {
+  color: var(--eh-color-moon-120);
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.planPrice span,
+.planFee {
+  color: var(--eh-color-muted);
+  font-size: 12px;
+}
+
+.planFee {
+  margin: 0 0 12px !important;
+  color: var(--settings-accent-text) !important;
+}
+
+.planFeatureList {
+  display: flex;
+  min-height: 112px;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.planFeatureList span {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--eh-color-moon-300);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.planFeatureList svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #7edb9f;
+}
+
+.planButton,
+.planGhostButton {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.planButton {
+  border: 1px solid var(--settings-accent);
+  background: var(--settings-accent);
+  color: rgb(23 18 6);
+}
+
+.planGhostButton {
+  border: 1px solid var(--settings-line-strong);
+  background: var(--settings-surface-2);
+  color: var(--eh-color-moon-300);
+}
+
+.planButton:disabled,
+.planGhostButton:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.billingRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.billingRow > svg {
+  flex: 0 0 auto;
+  color: var(--eh-color-moon-300);
+}
+
+.billingRow > span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.billingRow strong {
+  color: var(--eh-color-moon-120);
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+
+.billingRow em {
+  margin-top: 2px;
+  color: var(--eh-color-muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.billingRow b {
+  color: var(--eh-color-moon-120);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.billingRow i {
+  color: #7edb9f;
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.invoiceList {
+  display: grid;
+  gap: 8px;
+}
+
+.billingEmptyRow,
+.billingEmptyState {
+  padding: 16px;
+  color: var(--eh-color-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.billingEmptyState {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  text-align: center;
+}
+
+.billingEmptyState strong,
+.billingEmptyState span {
+  display: block;
+}
+
+.billingEmptyState strong {
+  margin-top: 8px;
+  color: var(--eh-color-moon-120);
+  font-size: 15px;
+}
+
 .settingsGroup {
   margin-bottom: 28px;
 }
@@ -401,45 +751,138 @@
   line-height: 1.35;
 }
 
-.coverMediaInput {
-  min-height: 130px !important;
-  border-radius: 14px !important;
-  text-align: center;
-}
-
-.avatarRow {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.avatarMediaInput {
+.profileMediaGrid {
   display: grid;
-  width: 76px !important;
-  height: 76px !important;
-  min-height: 76px !important;
-  flex: 0 0 76px;
-  padding: 8px !important;
-  border-radius: 999px !important;
-  text-align: center;
+  gap: 14px;
 }
 
-.avatarRow strong,
-.avatarRow span {
+.profileMediaUpload {
+  min-width: 0;
+}
+
+.profileMediaHeader {
+  display: block;
+  margin-bottom: 7px;
+}
+
+.profileMediaHeader strong,
+.profileMediaHeader em {
   display: block;
 }
 
-.avatarRow strong {
-  margin-bottom: 3px;
-  color: var(--eh-color-moon-120);
-  font-size: 13.5px;
-  line-height: 1.3;
+.profileMediaHeader strong {
+  color: var(--eh-color-moon-300);
+  font-size: 12.5px;
+  line-height: 1.2;
 }
 
-.avatarRow span {
+.profileMediaHeader em {
+  margin-top: 3px;
+  color: var(--eh-color-muted);
+  font-size: 11.5px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.profileMediaDropzone {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  border: 1px dashed var(--settings-line-strong);
+  background: rgb(9 8 24 / 0.78);
+  color: var(--eh-color-moon-300);
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.profileMediaDropzone:hover,
+.profileMediaDropzone:focus-within {
+  border-color: var(--eh-color-gold-alpha-42);
+  background: var(--settings-surface-1);
+}
+
+.profileMediaCover {
+  min-height: 146px;
+  border-radius: 14px;
+  aspect-ratio: 16 / 6;
+}
+
+.profileMediaAvatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 999px;
+}
+
+.profileMediaImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profileMediaPlaceholder {
+  display: grid;
+  place-items: center;
+  gap: 7px;
+  padding: 12px;
   color: var(--eh-color-muted);
   font-size: 12px;
-  line-height: 1.45;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.profileMediaBusy {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(9 8 24 / 0.72);
+  color: var(--settings-accent-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profileMediaInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.profileMediaInput:disabled {
+  cursor: not-allowed;
+}
+
+.profileMediaRemove {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 9px;
+  background: var(--settings-surface-2);
+  color: var(--eh-color-moon-300);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profileMediaRemove:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.profileMediaError {
+  margin: 10px 0 0;
+  color: var(--settings-danger);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .stepper {

@@ -8,11 +8,15 @@ import {
 import {
   AstrologerProfileHandleConflictError,
   AstrologerProfileValidationError,
+  assertUsableMediaForOwner,
   getAstrologerProfile,
+  MediaNotFoundError,
+  MediaValidationError,
   upsertAstrologerProfile,
   type AstrologerProfile,
   type AstrologerProfileStore,
-  type AstrologerProfileUpsertInput
+  type AstrologerProfileUpsertInput,
+  type MediaAssetStore
 } from "@elevenhouse/domain";
 import {
   astrologerProfileResponseSchema,
@@ -20,17 +24,22 @@ import {
   upsertAstrologerProfileRequestSchema,
   type AstrologerProfileResponse,
   type GetAstrologerProfileResponse,
+  type MediaAssetResponse,
   type UpsertAstrologerProfileRequest
 } from "@elevenhouse/contracts";
 import type { ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { toMediaAssetResponse, type MediaPublicUrlResolver } from "../media/media-response.mapper";
+import { MEDIA_ASSET_STORE, MEDIA_PUBLIC_URL_RESOLVER } from "../media/media.tokens";
 import { ASTROLOGER_PROFILE_STORE } from "./astrologer-profile.tokens";
 
 @Injectable()
 export class AstrologerProfileService {
   constructor(
     @Inject(ASTROLOGER_PROFILE_STORE) private readonly store: AstrologerProfileStore,
+    @Inject(MEDIA_ASSET_STORE) private readonly mediaStore: MediaAssetStore,
+    @Inject(MEDIA_PUBLIC_URL_RESOLVER) private readonly publicUrlResolver: MediaPublicUrlResolver,
     private readonly clock: SystemClock
   ) {}
 
@@ -44,7 +53,7 @@ export class AstrologerProfileService {
     });
 
     return getAstrologerProfileResponseSchema.parse({
-      profile: profile ? toProfileResponse(profile) : null
+      profile: profile ? await this.toProfileResponse(ownerUserId, profile) : null
     });
   }
 
@@ -56,6 +65,9 @@ export class AstrologerProfileService {
     const ownerUserId = requireOwnerUserId(request);
 
     return mapAstrologerProfileErrors(async () => {
+      await this.assertProfileMedia(ownerUserId, parsedBody.avatarMediaId, "profile_avatar");
+      await this.assertProfileMedia(ownerUserId, parsedBody.coverMediaId, "profile_cover");
+
       const profile = await upsertAstrologerProfile({
         store: this.store,
         ownerUserId,
@@ -63,8 +75,55 @@ export class AstrologerProfileService {
         now: this.clock.now()
       });
 
-      return toProfileResponse(profile);
+      return this.toProfileResponse(ownerUserId, profile);
     });
+  }
+
+  private async assertProfileMedia(
+    ownerUserId: string,
+    mediaId: string | null | undefined,
+    purpose: "profile_avatar" | "profile_cover"
+  ): Promise<void> {
+    if (!mediaId) return;
+
+    await assertUsableMediaForOwner({
+      store: this.mediaStore,
+      ownerUserId,
+      mediaId,
+      purpose
+    });
+  }
+
+  private async toProfileResponse(
+    ownerUserId: string,
+    profile: AstrologerProfile
+  ): Promise<AstrologerProfileResponse> {
+    const [avatarMedia, coverMedia] = await Promise.all([
+      this.getProfileMedia(ownerUserId, profile.avatarMediaId, "profile_avatar"),
+      this.getProfileMedia(ownerUserId, profile.coverMediaId, "profile_cover")
+    ]);
+
+    return astrologerProfileResponseSchema.parse({
+      ...profile,
+      avatarMedia,
+      coverMedia,
+      consultationLanguages: [...profile.consultationLanguages]
+    });
+  }
+
+  private async getProfileMedia(
+    ownerUserId: string,
+    mediaId: string | null,
+    purpose: "profile_avatar" | "profile_cover"
+  ): Promise<MediaAssetResponse | null> {
+    if (!mediaId) return null;
+
+    const asset = await this.mediaStore.findByOwnerAndId({ ownerUserId, mediaId });
+    if (!asset || asset.purpose !== purpose || asset.status !== "ready") {
+      return null;
+    }
+
+    return toMediaAssetResponse(asset, this.publicUrlResolver);
   }
 }
 
@@ -87,13 +146,6 @@ function toUpsertInput(body: UpsertAstrologerProfileRequest): AstrologerProfileU
     socialLinks: body.socialLinks,
     ownBirthData: body.ownBirthData
   };
-}
-
-function toProfileResponse(profile: AstrologerProfile): AstrologerProfileResponse {
-  return astrologerProfileResponseSchema.parse({
-    ...profile,
-    consultationLanguages: [...profile.consultationLanguages]
-  });
 }
 
 function requireOwnerUserId(request: AstrologerSessionRequest): string {
@@ -123,6 +175,9 @@ async function mapAstrologerProfileErrors<T>(operation: () => Promise<T>): Promi
     }
     if (error instanceof AstrologerProfileValidationError) {
       throw new BadRequestException("Invalid astrologer profile state");
+    }
+    if (error instanceof MediaNotFoundError || error instanceof MediaValidationError) {
+      throw new BadRequestException("Invalid astrologer profile media");
     }
     throw error;
   }

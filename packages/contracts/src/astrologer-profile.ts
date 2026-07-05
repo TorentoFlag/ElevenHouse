@@ -1,4 +1,5 @@
 import { nonEmptyStringSchema, z } from "@elevenhouse/validation";
+import { mediaAssetResponseSchema } from "./media";
 
 const uuidSchema = z.string().uuid();
 const timestampSchema = z.string().datetime({ offset: true });
@@ -12,6 +13,10 @@ const nullableTrimmedStringSchema = z
     z.null()
   ])
   .optional();
+const nullableUuidSchema = z
+  .union([z.string().trim().uuid(), z.literal(""), z.null()])
+  .optional()
+  .transform((value) => (value ? value : null));
 
 const requiredTrimmedStringSchema = nonEmptyStringSchema.max(500);
 const responseNullableStringSchema = z.string().trim().max(500).nullable();
@@ -141,8 +146,10 @@ export const astrologerProfileResponseSchema = z
     bio: z.string().trim().max(4000).nullable(),
     timezone: requiredTrimmedStringSchema,
     locale: astrologerProfileLocaleSchema,
-    avatarMediaId: z.string().trim().max(500).nullable(),
-    coverMediaId: z.string().trim().max(500).nullable(),
+    avatarMediaId: uuidSchema.nullable(),
+    avatarMedia: mediaAssetResponseSchema.nullable(),
+    coverMediaId: uuidSchema.nullable(),
+    coverMedia: mediaAssetResponseSchema.nullable(),
     consultationLanguages: consultationLanguagesSchema,
     visibilityStatus: astrologerProfileVisibilityStatusSchema,
     professionalExperienceYears: z.number().int().min(0).max(100).nullable(),
@@ -172,8 +179,8 @@ const astrologerProfileRequestFieldsSchema = z
     bio: nullableTrimmedStringSchema,
     timezone: requiredTrimmedStringSchema,
     locale: astrologerProfileLocaleSchema,
-    avatarMediaId: nullableTrimmedStringSchema,
-    coverMediaId: nullableTrimmedStringSchema,
+    avatarMediaId: nullableUuidSchema,
+    coverMediaId: nullableUuidSchema,
     consultationLanguages: consultationLanguagesSchema,
     visibilityStatus: astrologerProfileVisibilityStatusSchema,
     professionalExperienceYears: z.number().int().min(0).max(100).nullable().optional(),

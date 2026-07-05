@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type FormEvent,
+  type ReactNode
+} from "react";
 import type {
   AstrologerProfileResponse,
   UpsertAstrologerProfileRequest
@@ -17,6 +25,7 @@ import {
   toggleProfileStringValue,
   type AstrologerProfileSettingsDraft
 } from "../model/profileSettingsForm";
+import { uploadMediaFile } from "../../media/api/uploadMediaFile";
 import styles from "../../../pages/settings/SettingsPage.module.css";
 
 export type ProfileSettingsFormProps = {
@@ -24,6 +33,14 @@ export type ProfileSettingsFormProps = {
   readonly profile: AstrologerProfileResponse | null;
   readonly isSaving: boolean;
   readonly onSave: (body: UpsertAstrologerProfileRequest) => void;
+};
+type ProfileMediaTarget = "avatar" | "cover";
+
+type ProfileMediaPreviewState = {
+  readonly avatarUrl: string | null;
+  readonly coverUrl: string | null;
+  readonly uploadingTarget: ProfileMediaTarget | null;
+  readonly error: string | null;
 };
 
 export function ProfileSettingsForm({
@@ -33,13 +50,21 @@ export function ProfileSettingsForm({
   onSave
 }: ProfileSettingsFormProps) {
   const [draft, setDraft] = useState(() => createProfileSettingsDraft(profile, locale));
-  const initialDraft = useMemo(() => createProfileSettingsDraft(profile, locale), [profile, locale]);
+  const [mediaPreview, setMediaPreview] = useState<ProfileMediaPreviewState>(() =>
+    createProfileMediaPreviewState(profile)
+  );
+  const initialDraft = useMemo(
+    () => createProfileSettingsDraft(profile, locale),
+    [profile, locale]
+  );
   const validationMessage = getProfileSettingsDraftValidationMessage(draft);
   const isDirty = isProfileSettingsDraftDirty(initialDraft, draft);
+  const isUploadingMedia = Boolean(mediaPreview.uploadingTarget);
 
   useEffect(() => {
     setDraft(initialDraft);
-  }, [initialDraft]);
+    setMediaPreview(createProfileMediaPreviewState(profile));
+  }, [initialDraft, profile]);
 
   const updateDraft = <TKey extends keyof AstrologerProfileSettingsDraft>(
     key: TKey,
@@ -82,10 +107,65 @@ export function ProfileSettingsForm({
   };
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (validationMessage) {
+    if (validationMessage || isUploadingMedia) {
       return;
     }
     onSave(createUpsertAstrologerProfileRequest(draft));
+  };
+  const handleMediaUpload = async (target: ProfileMediaTarget, file: File) => {
+    if (isSaving || isUploadingMedia) {
+      return;
+    }
+
+    const previousUrl = target === "avatar" ? mediaPreview.avatarUrl : mediaPreview.coverUrl;
+    const urlKey = target === "avatar" ? "avatarUrl" : "coverUrl";
+    const draftKey = target === "avatar" ? "avatarMediaId" : "coverMediaId";
+    const purpose = target === "avatar" ? "profile_avatar" : "profile_cover";
+    const previewUrl = createObjectUrl(file);
+
+    setMediaPreview((current) => ({
+      ...current,
+      [urlKey]: previewUrl ?? current[urlKey],
+      uploadingTarget: target,
+      error: null
+    }));
+
+    try {
+      const media = await uploadMediaFile({ purpose, file });
+      setDraft((current) => ({ ...current, [draftKey]: media.id }));
+      setMediaPreview((current) => ({
+        ...current,
+        [urlKey]: media.url,
+        uploadingTarget: null,
+        error: null
+      }));
+    } catch {
+      setMediaPreview((current) => ({
+        ...current,
+        [urlKey]: previousUrl,
+        uploadingTarget: null,
+        error: "Не удалось загрузить изображение. Попробуйте другой файл."
+      }));
+    } finally {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    }
+  };
+  const removeProfileMedia = (target: ProfileMediaTarget) => {
+    const urlKey = target === "avatar" ? "avatarUrl" : "coverUrl";
+    const draftKey = target === "avatar" ? "avatarMediaId" : "coverMediaId";
+
+    setDraft((current) => ({ ...current, [draftKey]: "" }));
+    setMediaPreview((current) => ({
+      ...current,
+      [urlKey]: null,
+      error: null
+    }));
+  };
+  const resetDraft = () => {
+    setDraft(initialDraft);
+    setMediaPreview(createProfileMediaPreviewState(profile));
   };
 
   return (
@@ -122,27 +202,33 @@ export function ProfileSettingsForm({
       <section className={styles.settingsGroup}>
         <h2>Аватар и обложка</h2>
         <p>Обложка - фон шапки личной страницы, аватар - круглое фото.</p>
-        <Field label="Обложка страницы">
-          <input
-            className={styles.coverMediaInput}
-            value={draft.coverMediaId}
-            onChange={(event) => updateDraft("coverMediaId", event.target.value)}
-            placeholder="Обложка · 1600x600"
+        <div className={styles.profileMediaGrid}>
+          <ProfileMediaUpload
+            label="Обложка страницы"
+            hint="JPG, PNG или WebP. Лучше 1600x600."
+            shape="cover"
+            currentUrl={mediaPreview.coverUrl}
+            isUploading={mediaPreview.uploadingTarget === "cover"}
+            disabled={isSaving || isUploadingMedia}
+            onUpload={(file) => handleMediaUpload("cover", file)}
+            onRemove={() => removeProfileMedia("cover")}
           />
-        </Field>
-        <div className={styles.avatarRow}>
-          <input
-            className={styles.avatarMediaInput}
-            aria-label="Аватар профиля media id"
-            value={draft.avatarMediaId}
-            onChange={(event) => updateDraft("avatarMediaId", event.target.value)}
-            placeholder="Фото"
+          <ProfileMediaUpload
+            label="Аватар профиля"
+            hint="Квадрат от 320x320. Виден в карточках и на странице."
+            shape="avatar"
+            currentUrl={mediaPreview.avatarUrl}
+            isUploading={mediaPreview.uploadingTarget === "avatar"}
+            disabled={isSaving || isUploadingMedia}
+            onUpload={(file) => handleMediaUpload("avatar", file)}
+            onRemove={() => removeProfileMedia("avatar")}
           />
-          <div>
-            <strong>Аватар профиля</strong>
-            <span>Квадрат от 320x320. Виден в карточках и на странице.</span>
-          </div>
         </div>
+        {mediaPreview.error ? (
+          <p className={styles.profileMediaError} role="alert">
+            {mediaPreview.error}
+          </p>
+        ) : null}
       </section>
 
       <section className={styles.settingsGroup}>
@@ -352,21 +438,124 @@ export function ProfileSettingsForm({
         <button
           className={styles.primaryButton}
           type="submit"
-          disabled={isSaving || !isDirty || Boolean(validationMessage)}
+          disabled={isSaving || isUploadingMedia || !isDirty || Boolean(validationMessage)}
         >
-          {isSaving ? "Сохраняем" : "Сохранить"}
+          {isSaving ? "Сохраняем" : isUploadingMedia ? "Загружаем" : "Сохранить"}
         </button>
         <button
           className={styles.secondaryButton}
           type="button"
-          disabled={isSaving || !isDirty}
-          onClick={() => setDraft(initialDraft)}
+          disabled={isSaving || isUploadingMedia || !isDirty}
+          onClick={resetDraft}
         >
           Отменить
         </button>
       </div>
     </form>
   );
+}
+
+function ProfileMediaUpload({
+  label,
+  hint,
+  shape,
+  currentUrl,
+  isUploading,
+  disabled,
+  onUpload,
+  onRemove
+}: {
+  readonly label: string;
+  readonly hint: string;
+  readonly shape: "avatar" | "cover";
+  readonly currentUrl: string | null;
+  readonly isUploading: boolean;
+  readonly disabled: boolean;
+  readonly onUpload: (file: File) => void;
+  readonly onRemove: () => void;
+}) {
+  const handleFile = (file: File | undefined) => {
+    if (!file || disabled) {
+      return;
+    }
+    onUpload(file);
+  };
+  const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    handleFile(event.dataTransfer.files[0]);
+  };
+  const uploadLabel = currentUrl
+    ? `Заменить ${label.toLowerCase()}`
+    : `Загрузить ${label.toLowerCase()}`;
+
+  return (
+    <div className={styles.profileMediaUpload}>
+      <div className={styles.profileMediaHeader}>
+        <strong>{label}</strong>
+        <em>{hint}</em>
+      </div>
+      <label
+        className={`${styles.profileMediaDropzone} ${
+          shape === "avatar" ? styles.profileMediaAvatar : styles.profileMediaCover
+        }`}
+        aria-label={uploadLabel}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={handleDrop}
+      >
+        {currentUrl ? (
+          <img className={styles.profileMediaImage} src={currentUrl} alt="" />
+        ) : (
+          <span className={styles.profileMediaPlaceholder}>
+            <Icon
+              iconName="image"
+              width={shape === "avatar" ? 26 : 34}
+              height={shape === "avatar" ? 26 : 34}
+              aria-hidden="true"
+            />
+            <span>{isUploading ? "Загружаем" : "Загрузить фото"}</span>
+          </span>
+        )}
+        {isUploading ? <span className={styles.profileMediaBusy}>Загружаем</span> : null}
+        <input
+          className={styles.profileMediaInput}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={disabled}
+          onChange={(event) => {
+            handleFile(event.target.files?.[0]);
+            event.target.value = "";
+          }}
+        />
+      </label>
+      {currentUrl ? (
+        <button
+          className={styles.profileMediaRemove}
+          type="button"
+          disabled={disabled}
+          onClick={onRemove}
+          aria-label={`Удалить ${label.toLowerCase()}`}
+        >
+          <Icon iconName="trash" width={15} height={15} aria-hidden="true" />
+          Удалить
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function createProfileMediaPreviewState(
+  profile: AstrologerProfileResponse | null
+): ProfileMediaPreviewState {
+  return {
+    avatarUrl: profile?.avatarMedia?.url ?? null,
+    coverUrl: profile?.coverMedia?.url ?? null,
+    uploadingTarget: null,
+    error: null
+  };
+}
+
+function createObjectUrl(file: File): string | null {
+  return typeof URL.createObjectURL === "function" ? URL.createObjectURL(file) : null;
 }
 
 function Field({

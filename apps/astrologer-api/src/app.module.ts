@@ -9,6 +9,7 @@ import { DictionaryModule } from "./modules/dictionary/dictionary.module";
 import { HealthModule } from "./modules/health/health.module";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { MediaModule } from "./modules/media/media.module";
+import { PlatformBillingModule } from "./modules/platform-billing/platform-billing.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { RedisModule } from "./modules/redis/redis.module";
 
@@ -29,6 +30,7 @@ import { RedisModule } from "./modules/redis/redis.module";
     DictionaryModule,
     DictionaryAiModule,
     MediaModule,
+    PlatformBillingModule,
     ProductsModule,
     AstrologerProfileModule,
     HealthModule

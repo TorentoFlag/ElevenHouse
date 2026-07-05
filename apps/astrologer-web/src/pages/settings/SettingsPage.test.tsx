@@ -1,15 +1,26 @@
 import { Children, isValidElement, type ReactElement } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { AstrologerProfileResponse } from "@elevenhouse/contracts";
+import type { AstrologerProfileResponse, BillingOverviewResponse } from "@elevenhouse/contracts";
 import { SettingsPage } from "./SettingsPage";
 
 const mocks = vi.hoisted(() => ({
   useI18n: vi.fn(),
   useDocumentTitle: vi.fn(),
+  useState: vi.fn(),
   useCurrentAstrologerProfileQuery: vi.fn(),
+  useCurrentBillingOverviewQuery: vi.fn(),
   useUpsertAstrologerProfileMutation: vi.fn(),
   settingsPageView: vi.fn()
 }));
+
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+
+  return {
+    ...actual,
+    useState: mocks.useState
+  };
+});
 
 vi.mock("@elevenhouse/i18n", () => ({
   useI18n: mocks.useI18n
@@ -27,6 +38,10 @@ vi.mock("../../features/astrologer-profile/model/useUpsertAstrologerProfileMutat
   useUpsertAstrologerProfileMutation: mocks.useUpsertAstrologerProfileMutation
 }));
 
+vi.mock("../../features/platform-billing/model/useCurrentBillingOverviewQuery", () => ({
+  useCurrentBillingOverviewQuery: mocks.useCurrentBillingOverviewQuery
+}));
+
 vi.mock("./SettingsPageView", () => ({
   SettingsPageView: mocks.settingsPageView
 }));
@@ -34,6 +49,7 @@ vi.mock("./SettingsPageView", () => ({
 describe("SettingsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.useState.mockImplementation((initial: unknown) => [initial, vi.fn()]);
     mocks.settingsPageView.mockImplementation(() => null);
     mocks.useI18n.mockReturnValue({
       dictionary: {
@@ -46,6 +62,11 @@ describe("SettingsPage", () => {
     });
     mocks.useCurrentAstrologerProfileQuery.mockReturnValue({
       data: { profile },
+      isLoading: false,
+      isError: false
+    });
+    mocks.useCurrentBillingOverviewQuery.mockReturnValue({
+      data: billingOverview,
       isLoading: false,
       isError: false
     });
@@ -65,8 +86,13 @@ describe("SettingsPage", () => {
       expect.objectContaining({
         locale: "ru",
         profile,
+        billingOverview,
+        selectedBillingCycle: null,
+        activeSectionId: "profile",
         isLoading: false,
         isError: false,
+        isBillingLoading: false,
+        isBillingError: false,
         isSavingProfile: false
       })
     );
@@ -130,7 +156,9 @@ const profile = {
   timezone: "Europe/Moscow",
   locale: "ru",
   avatarMediaId: null,
+  avatarMedia: null,
   coverMediaId: null,
+  coverMedia: null,
   consultationLanguages: ["Русский"],
   visibilityStatus: "published",
   professionalExperienceYears: 9,
@@ -152,3 +180,35 @@ const profile = {
   createdAt: "2026-07-03T00:00:00.000Z",
   updatedAt: "2026-07-03T00:00:00.000Z"
 } satisfies AstrologerProfileResponse;
+
+const billingOverview = {
+  provider: {
+    code: "arc_pay",
+    status: "not_configured",
+    managePaymentMethodUrl: null,
+    checkoutUrl: null
+  },
+  billingCycle: "month",
+  currentSubscription: null,
+  plans: [
+    {
+      id: "start",
+      code: "start",
+      name: "Старт",
+      tagline: "Чтобы начать практику",
+      monthlyPriceMinor: 0,
+      yearlyPriceMinor: 0,
+      currency: "RUB",
+      platformFeeBps: 800,
+      seatsLimit: 1,
+      bookingsLimit: 30,
+      aiRequestsLimit: 20,
+      automationLimit: 1,
+      isPopular: false,
+      isActive: true,
+      features: ["engine", "pdf", "natal", "page"]
+    }
+  ],
+  paymentMethod: null,
+  invoices: []
+} satisfies BillingOverviewResponse;
