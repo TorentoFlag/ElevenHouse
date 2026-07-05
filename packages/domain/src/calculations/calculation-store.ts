@@ -75,6 +75,12 @@ export type CalculationStore = {
     readonly calculationId: string;
   }) => Promise<CalculationRecord | null>;
   readonly create: (input: CalculationStoreCreateInput) => Promise<CalculationRecord>;
+  /**
+   * Appends a new immutable version. Implementations must also demote any
+   * visible client links transactionally so stale published results are no
+   * longer visible after recalculation, then set status to "linked" when
+   * links remain or "calculated" when they do not.
+   */
   readonly appendVersion: (
     input: CalculationStoreAppendVersionInput
   ) => Promise<CalculationRecord | null>;

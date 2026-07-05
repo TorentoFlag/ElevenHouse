@@ -8,6 +8,7 @@ import {
   recalculateCalculation,
   saveCalculationInterpretation
 } from "./calculation-use-cases";
+import { CalculationValidationError } from "./calculation-errors";
 import type { CalculationRecord, CalculationStore } from "./calculation-store";
 
 const ownerUserId = "00000000-0000-4000-8000-000000000001";
@@ -90,9 +91,15 @@ function createMemoryStore(): MemoryStore {
       calls.appendVersion.push(input);
       const current = findRecord(input);
       if (!current) return null;
+      const links = current.links.map((link) =>
+        link.visibility === "visible_to_client"
+          ? { ...link, visibility: "private_to_astrologer" as const, publishedAt: null }
+          : link
+      );
       const next: CalculationRecord = {
         ...current,
         currentMethodVersion: input.methodVersion,
+        status: links.length > 0 ? "linked" : "calculated",
         versions: [
           ...current.versions,
           {
@@ -107,6 +114,7 @@ function createMemoryStore(): MemoryStore {
             createdAt: input.now
           }
         ],
+        links,
         updatedAt: input.now
       };
       records.set(next.id, next);
@@ -408,6 +416,78 @@ describe("calculations lifecycle", () => {
     ).rejects.toThrow("Calculation requires approved interpretation before publishing");
   });
 
+  it("demotes published client links when recalculating a published calculation", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+    await linkCalculationToClient({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      clientId,
+      now: new Date("2026-07-06T11:00:00.000Z")
+    });
+    await saveAndApproveInterpretation({ store, calculation: created });
+    const published = await publishCalculationToClient({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      clientId,
+      now: new Date("2026-07-06T12:00:00.000Z")
+    });
+
+    const recalculated = await recalculateCalculation({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      methodVersion: "1.0.1",
+      settingsSnapshot: {},
+      inputSnapshot: { name: "Мария Иванова" },
+      resultSnapshot: { lifePath: 9, expression: 7 },
+      resultSummary: { primaryLabel: "Путь 9" },
+      resultChecksum: "sha256:v2",
+      versionIdGenerator: () => "00000000-0000-4000-8000-000000000022",
+      now: new Date("2026-07-06T12:30:00.000Z")
+    });
+
+    expect(published.links[0]).toMatchObject({
+      visibility: "visible_to_client",
+      publishedAt: "2026-07-06T12:00:00.000Z"
+    });
+    expect(recalculated.versions).toHaveLength(2);
+    expect(recalculated.status).toBe("linked");
+    expect(recalculated.links[0]).toMatchObject({
+      visibility: "private_to_astrologer",
+      publishedAt: null
+    });
+    await expect(
+      publishCalculationToClient({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        clientId,
+        now: new Date("2026-07-06T13:00:00.000Z")
+      })
+    ).rejects.toThrow("Calculation requires approved interpretation before publishing");
+
+    await saveAndApproveInterpretation({
+      store,
+      calculation: created,
+      versionId: recalculated.versions.at(-1)!.id
+    });
+    const republished = await publishCalculationToClient({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      clientId,
+      now: new Date("2026-07-06T13:30:00.000Z")
+    });
+
+    expect(republished.links[0]).toMatchObject({
+      visibility: "visible_to_client",
+      publishedAt: "2026-07-06T13:30:00.000Z"
+    });
+  });
+
   it("links only calculations with a matching CRM participant", async () => {
     const store = createMemoryStore();
     const created = await createTestCalculation(store, {
@@ -434,6 +514,30 @@ describe("calculations lifecycle", () => {
         now: new Date("2026-07-06T11:00:00.000Z")
       })
     ).rejects.toThrow("Calculation can be linked only to a CRM participant");
+  });
+
+  it("treats linking the same CRM client as idempotent", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+
+    const linked = await linkCalculationToClient({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      clientId,
+      now: new Date("2026-07-06T11:00:00.000Z")
+    });
+    const linkedAgain = await linkCalculationToClient({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      clientId,
+      now: new Date("2026-07-06T11:05:00.000Z")
+    });
+
+    expect(linked.links).toHaveLength(1);
+    expect(linkedAgain.links).toHaveLength(1);
+    expect(store.calls.linkClient).toHaveLength(1);
   });
 
   it("rejects interpretation drafts for unknown calculation versions", async () => {
@@ -649,6 +753,14 @@ describe("calculations lifecycle", () => {
     expect(created.versions[0]?.resultChecksum).toBe("sha256:v1");
     expect(recalculated.currentMethodVersion).toBe("1.0.1");
     expect(recalculated.versions[1]?.resultChecksum).toBe("sha256:v2");
+  });
+
+  it("throws calculation validation errors for blank required strings", async () => {
+    await expect(
+      createTestCalculation(createMemoryStore(), {
+        title: "   "
+      })
+    ).rejects.toBeInstanceOf(CalculationValidationError);
   });
 
   it("archives a calculation without deleting versions", async () => {
