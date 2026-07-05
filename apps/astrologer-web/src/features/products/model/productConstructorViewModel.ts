@@ -108,7 +108,11 @@ export function createProductConstructorViewModel({
   readonly uiCopy: ProductConstructorViewModelCopy;
 }): ProductConstructorViewModel {
   const autoIncludedItems = createAutoIncludedItems(draft, productCopy, uiCopy);
-  const visibleIncludedItems = createVisibleIncludedItems(draft, autoIncludedItems, []);
+  const visibleIncludedItems = createVisibleIncludedItems(
+    draft,
+    autoIncludedItems,
+    draft.hiddenAutoIncludedKeys
+  );
 
   return {
     autoIncludedItems,

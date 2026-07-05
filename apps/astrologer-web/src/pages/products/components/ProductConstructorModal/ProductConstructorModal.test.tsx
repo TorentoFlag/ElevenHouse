@@ -1,4 +1,5 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import { Button } from "@elevenhouse/design-system/components/Button";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
 import { NumberStepper } from "@elevenhouse/design-system/components/NumberStepper";
 import { SelectableTile } from "@elevenhouse/design-system/components/SelectableTile";
@@ -86,7 +87,8 @@ const defaultCoverUploadProps = {
   isCoverUploading: false,
   coverMediaUrl: null,
   coverUploadError: null,
-  onCoverFileSelected: vi.fn()
+  onCoverFileSelected: vi.fn(),
+  onCoverRemove: vi.fn()
 };
 
 describe("ProductConstructorModal", () => {
@@ -279,6 +281,113 @@ describe("ProductConstructorModal", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  it("disables save and publish while a cover upload is in flight", () => {
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft: {
+        ...createDefaultProductDraft("single"),
+        title: "Натальный разбор"
+      },
+      isSaving: false,
+      ...defaultCoverUploadProps,
+      isCoverUploading: true,
+      error: null,
+      onDraftChange: vi.fn(),
+      onSave: vi.fn(),
+      onPublish: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    const buttons = findAllByType(modal, Button);
+    expect(
+      buttons.find((button) => button.props.title === copy.saveDraftLabel)?.props.disabled
+    ).toBe(true);
+    expect(buttons.find((button) => button.props.title === "Опубликовать")?.props.disabled).toBe(
+      true
+    );
+  });
+
+  it("submits the visible included-item preview composition", () => {
+    const onSave = vi.fn();
+    const draft = {
+      ...createDefaultProductDraft("single"),
+      title: "Натальный разбор",
+      deliveryFormats: ["video", "file"] as const,
+      includedItems: [{ text: "Ручной бонус", icon: "star", order: 30 }]
+    };
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft,
+      isSaving: false,
+      ...defaultCoverUploadProps,
+      error: null,
+      onDraftChange: vi.fn(),
+      onSave,
+      onPublish: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    findByProp(modal, "data-product-constructor-form").props.onSubmit({
+      preventDefault: vi.fn()
+    });
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ text: "Видео + Файл · 60 мин" }),
+        expect.objectContaining({ text: "Запись сессии" }),
+        expect.objectContaining({ text: "Ручной бонус" })
+      ])
+    );
+  });
+
+  it("can hide automatic included items and add custom items from the add button", () => {
+    const onDraftChange = vi.fn();
+    const draft = {
+      ...createDefaultProductDraft("single"),
+      title: "Натальный разбор"
+    };
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft,
+      isSaving: false,
+      ...defaultCoverUploadProps,
+      error: null,
+      onDraftChange,
+      onSave: vi.fn(),
+      onPublish: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    findByAriaLabel(modal, "Показывается клиенту: Видео · 60 мин").props.onClick();
+
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      hiddenAutoIncludedKeys: ["fmt"]
+    });
+
+    findByProp(modal, "data-product-constructor-add-included-button").props.onClick({
+      currentTarget: {
+        previousElementSibling: {
+          value: "Персональный чек-лист"
+        }
+      }
+    });
+
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      includedItems: [
+        ...draft.includedItems,
+        { text: "Персональный чек-лист", icon: "check", order: 30 }
+      ]
+    });
+  });
+
   it("does not deselect the only selected delivery format", () => {
     const draft = {
       ...createDefaultProductDraft("single"),
@@ -451,11 +560,20 @@ type TestElementProps = {
   getIconAriaLabel: (iconName: string) => string;
   label?: ReactNode;
   onChange: (event: { currentTarget: { value: string } }) => void;
-  onClick: () => void;
+  onClick: (event?: {
+    currentTarget?: {
+      previousElementSibling?: {
+        value: string;
+      };
+    };
+  }) => void;
   onSubmit: (event: { preventDefault: () => void }) => void | Promise<void>;
   title?: ReactNode;
   value?: string | number;
+  disabled?: boolean;
   "aria-label"?: string;
+  "data-product-constructor-add-included-button"?: string;
+  "data-product-constructor-add-included-input"?: string;
   "data-product-constructor-cabinet-artifact"?: string;
   "data-product-constructor-cover-dropzone"?: string;
   "data-product-constructor-editor"?: string;

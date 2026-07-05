@@ -1,5 +1,9 @@
 import { useReducer } from "react";
-import type { ProductResponse, ProductType } from "@elevenhouse/contracts";
+import type {
+  ProductIncludedItemRequest,
+  ProductResponse,
+  ProductType
+} from "@elevenhouse/contracts";
 import {
   createDefaultProductDraft,
   createProductDraftFromResponse,
@@ -35,9 +39,14 @@ type ProductCreateFlowAction =
       readonly error: string;
     }
   | { readonly type: "saveFailed"; readonly error: string }
-  | { readonly type: "coverUploadStarted" }
+  | { readonly type: "coverUploadStarted"; readonly previewUrl: string | null }
   | { readonly type: "coverUploadSucceeded"; readonly mediaId: string; readonly url: string }
-  | { readonly type: "coverUploadFailed"; readonly error: string }
+  | {
+      readonly type: "coverUploadFailed";
+      readonly error: string;
+      readonly previousUrl: string | null;
+    }
+  | { readonly type: "removeCover" }
   | { readonly type: "closeEditor" }
   | { readonly type: "returnToTypeSelection" }
   | { readonly type: "closeCreateFlow" };
@@ -66,8 +75,13 @@ export type ProductCreateFlow = {
   readonly editProduct: (product: ProductResponse) => void;
   readonly updateDraft: (draft: ProductFormDraft) => void;
   readonly uploadProductCover: (file: File) => Promise<void>;
-  readonly saveDraft: () => Promise<void>;
-  readonly publishDraft: () => Promise<void>;
+  readonly removeProductCover: () => void;
+  readonly saveDraft: (
+    visibleIncludedItems?: readonly ProductIncludedItemRequest[]
+  ) => Promise<void>;
+  readonly publishDraft: (
+    visibleIncludedItems?: readonly ProductIncludedItemRequest[]
+  ) => Promise<void>;
   readonly closeEditor: () => void;
   readonly returnToTypeSelection: () => void;
   readonly closeCreateFlow: () => void;
@@ -82,8 +96,11 @@ export function useProductCreateFlow(genericError: string): ProductCreateFlow {
     createProductMutation.isPending ||
     updateProductMutation.isPending ||
     publishProductMutation.isPending;
-  const persistDraft = async (publish: boolean) => {
-    if (isSaving || !state.editorDraft?.title.trim()) {
+  const persistDraft = async (
+    publish: boolean,
+    visibleIncludedItems?: readonly ProductIncludedItemRequest[]
+  ) => {
+    if (isSaving || state.isCoverUploading || !state.editorDraft?.title.trim()) {
       return;
     }
 
@@ -91,6 +108,7 @@ export function useProductCreateFlow(genericError: string): ProductCreateFlow {
 
     const result = await persistProductDraft({
       draft: state.editorDraft,
+      visibleIncludedItems,
       editingProductId: state.editingProductId,
       publish,
       createProduct: createProductMutation.mutateAsync,
@@ -119,7 +137,10 @@ export function useProductCreateFlow(genericError: string): ProductCreateFlow {
       return;
     }
 
-    dispatch({ type: "coverUploadStarted" });
+    const previousUrl = state.coverMediaUrl;
+    const previewUrl = createLocalObjectUrl(file);
+
+    dispatch({ type: "coverUploadStarted", previewUrl });
 
     try {
       const media = await uploadMediaFile({
@@ -128,7 +149,11 @@ export function useProductCreateFlow(genericError: string): ProductCreateFlow {
       });
       dispatch({ type: "coverUploadSucceeded", mediaId: media.id, url: media.url });
     } catch {
-      dispatch({ type: "coverUploadFailed", error: genericError });
+      dispatch({ type: "coverUploadFailed", error: genericError, previousUrl });
+    } finally {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
     }
   };
 
@@ -141,20 +166,21 @@ export function useProductCreateFlow(genericError: string): ProductCreateFlow {
     editProduct: (product) => dispatch({ type: "editProduct", product }),
     updateDraft: (draft) => dispatch({ type: "updateDraft", draft }),
     uploadProductCover,
-    saveDraft: () => persistDraft(false),
-    publishDraft: () => persistDraft(true),
+    removeProductCover: () => dispatch({ type: "removeCover" }),
+    saveDraft: (visibleIncludedItems) => persistDraft(false, visibleIncludedItems),
+    publishDraft: (visibleIncludedItems) => persistDraft(true, visibleIncludedItems),
     closeEditor: () => {
-      if (!isSaving) {
+      if (!isSaving && !state.isCoverUploading) {
         dispatch({ type: "closeEditor" });
       }
     },
     returnToTypeSelection: () => {
-      if (!isSaving) {
+      if (!isSaving && !state.isCoverUploading) {
         dispatch({ type: "returnToTypeSelection" });
       }
     },
     closeCreateFlow: () => {
-      if (!isSaving) {
+      if (!isSaving && !state.isCoverUploading) {
         dispatch({ type: "closeCreateFlow" });
       }
     }
@@ -203,7 +229,7 @@ function productCreateFlowReducer(
       editorDraft: createProductDraftFromResponse(action.product),
       editingProductId: action.product.id,
       editorError: null,
-      coverMediaUrl: null,
+      coverMediaUrl: action.product.coverMedia?.url ?? null,
       isCoverUploading: false,
       coverUploadError: null
     };
@@ -228,6 +254,7 @@ function productCreateFlowReducer(
   if (action.type === "coverUploadStarted") {
     return {
       ...state,
+      coverMediaUrl: action.previewUrl ?? state.coverMediaUrl,
       isCoverUploading: true,
       coverUploadError: null,
       editorError: null
@@ -258,8 +285,25 @@ function productCreateFlowReducer(
   if (action.type === "coverUploadFailed") {
     return {
       ...state,
+      coverMediaUrl: action.previousUrl,
       isCoverUploading: false,
       coverUploadError: action.error
+    };
+  }
+
+  if (action.type === "removeCover") {
+    if (!state.editorDraft || state.isCoverUploading) {
+      return state;
+    }
+
+    return {
+      ...state,
+      editorDraft: {
+        ...state.editorDraft,
+        coverMediaId: ""
+      },
+      coverMediaUrl: null,
+      coverUploadError: null
     };
   }
 
@@ -319,4 +363,12 @@ function productCreateFlowReducer(
     isCoverUploading: false,
     coverUploadError: null
   };
+}
+
+function createLocalObjectUrl(file: File): string | null {
+  if (typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
+    return null;
+  }
+
+  return URL.createObjectURL(file);
 }

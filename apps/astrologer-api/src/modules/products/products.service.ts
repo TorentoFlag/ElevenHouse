@@ -37,6 +37,7 @@ import {
   updateProductRequestSchema,
   type CreateProductRequest,
   type ListProductsResponse,
+  type MediaAssetResponse,
   type ProductResponse,
   type ProductSummaryResponse,
   type UpdateProductRequest
@@ -45,7 +46,8 @@ import type { ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { PRODUCT_ANALYTICS_READER, PRODUCT_STORE } from "./products.tokens";
-import { MEDIA_ASSET_STORE } from "../media/media.tokens";
+import { MEDIA_ASSET_STORE, MEDIA_PUBLIC_URL_RESOLVER } from "../media/media.tokens";
+import { toMediaAssetResponse, type MediaPublicUrlResolver } from "../media/media-response.mapper";
 
 @Injectable()
 export class ProductsService {
@@ -53,6 +55,7 @@ export class ProductsService {
     @Inject(PRODUCT_STORE) private readonly store: ProductStore,
     @Inject(PRODUCT_ANALYTICS_READER) private readonly analyticsReader: ProductAnalyticsReader,
     @Inject(MEDIA_ASSET_STORE) private readonly mediaStore: MediaAssetStore,
+    @Inject(MEDIA_PUBLIC_URL_RESOLVER) private readonly publicUrlResolver: MediaPublicUrlResolver,
     private readonly clock: SystemClock
   ) {}
 
@@ -240,9 +243,11 @@ export class ProductsService {
       ownerUserId,
       productIds: products.map((product) => product.id)
     });
+    const coverMediaById = await this.getCoverMediaById(ownerUserId, products);
 
     return products.map((product) => ({
       ...product,
+      coverMedia: product.coverMediaId ? (coverMediaById.get(product.coverMediaId) ?? null) : null,
       deliveryFormats: [...product.deliveryFormats],
       requiredClientData: [...product.requiredClientData],
       methods: [...product.methods],
@@ -259,6 +264,32 @@ export class ProductsService {
         reviewsCount: 0
       }
     }));
+  }
+
+  private async getCoverMediaById(
+    ownerUserId: string,
+    products: readonly Product[]
+  ): Promise<Map<string, MediaAssetResponse>> {
+    const mediaIds = [
+      ...new Set(
+        products.map((product) => product.coverMediaId).filter((id): id is string => Boolean(id))
+      )
+    ];
+    const coverMediaById = new Map<string, MediaAssetResponse>();
+
+    await Promise.all(
+      mediaIds.map(async (mediaId) => {
+        const asset = await this.mediaStore.findByOwnerAndId({ ownerUserId, mediaId });
+
+        if (!asset || asset.purpose !== "product_cover" || asset.status !== "ready") {
+          return;
+        }
+
+        coverMediaById.set(mediaId, toMediaAssetResponse(asset, this.publicUrlResolver));
+      })
+    );
+
+    return coverMediaById;
   }
 }
 

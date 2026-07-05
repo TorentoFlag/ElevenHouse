@@ -41,6 +41,7 @@ export type ProductFormDraft = {
   readonly requiredClientData: readonly ProductRequiredClientData[];
   readonly methods: readonly ProductMethod[];
   readonly accessGrants: readonly ProductAccessGrant[];
+  readonly hiddenAutoIncludedKeys: readonly string[];
   readonly includedItems: readonly ProductIncludedItemRequest[];
   readonly modifiers: readonly ProductModifierRequest[];
 };
@@ -69,6 +70,7 @@ export function createDefaultProductDraft(type: ProductType): ProductFormDraft {
     requiredClientData: ["chart1"],
     methods: ["natal"],
     accessGrants: [],
+    hiddenAutoIncludedKeys: [],
     includedItems: [
       { text: "Полный разбор карты", icon: "check", order: 10 },
       { text: "Запись сессии", icon: "video", order: 20 }
@@ -244,6 +246,7 @@ export function createProductDraftFromResponse(product: ProductResponse): Produc
     requiredClientData: [...product.requiredClientData],
     methods: [...product.methods],
     accessGrants: [...product.accessGrants],
+    hiddenAutoIncludedKeys: [],
     includedItems: product.includedItems.map(({ text, icon, order }) => ({ text, icon, order })),
     modifiers: product.modifiers.map(
       ({ label, priceMinor, kind, isEnabled, createsArtifact, order }) => ({
@@ -356,6 +359,36 @@ export function removeProductIncludedItem(
   return {
     ...draft,
     includedItems: draft.includedItems.filter((_, itemIndex) => itemIndex !== index)
+  };
+}
+
+export function moveProductIncludedItem(
+  draft: ProductFormDraft,
+  index: number,
+  direction: -1 | 1
+): ProductFormDraft {
+  const nextIndex = index + direction;
+  if (nextIndex < 0 || nextIndex >= draft.includedItems.length) {
+    return draft;
+  }
+
+  const items = [...draft.includedItems];
+  const current = items[index];
+  const next = items[nextIndex];
+
+  if (!current || !next) {
+    return draft;
+  }
+
+  items[index] = next;
+  items[nextIndex] = current;
+
+  return {
+    ...draft,
+    includedItems: items.map((item, itemIndex) => ({
+      ...item,
+      order: (itemIndex + 1) * 10
+    }))
   };
 }
 

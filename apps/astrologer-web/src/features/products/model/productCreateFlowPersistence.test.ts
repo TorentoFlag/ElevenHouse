@@ -13,6 +13,7 @@ const product = {
   priceMinor: 490000,
   currency: "RUB",
   coverMediaId: null,
+  coverMedia: null,
   introVideoUrl: null,
   executionMode: "live",
   paymentModel: "once",
@@ -109,5 +110,33 @@ describe("persistProductDraft", () => {
       productId: product.id,
       body: expect.objectContaining({ title: product.title })
     });
+  });
+
+  it("persists the visible preview composition instead of draft-only included items", async () => {
+    const createProduct = vi.fn(async () => product);
+    const visibleIncludedItems = [
+      { text: "Видео · 60 мин", icon: "video", order: 1 },
+      { text: "Полный разбор карты", icon: "check", order: 10 }
+    ];
+
+    await persistProductDraft({
+      draft: {
+        ...createDefaultProductDraft("single"),
+        title: product.title,
+        includedItems: [{ text: "Полный разбор карты", icon: "check", order: 10 }]
+      },
+      visibleIncludedItems,
+      editingProductId: null,
+      publish: false,
+      createProduct,
+      updateProduct: vi.fn(),
+      publishProduct: vi.fn()
+    });
+
+    expect(createProduct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        includedItems: visibleIncludedItems
+      })
+    );
   });
 });

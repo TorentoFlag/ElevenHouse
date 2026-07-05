@@ -1,3 +1,4 @@
+import type { ProductIncludedItemRequest } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { Button } from "@elevenhouse/design-system/components/Button";
 import "@elevenhouse/design-system/components/Button.css";
@@ -12,6 +13,7 @@ export function ProductConstructorHeader({
   productCopy,
   uiCopy,
   draft,
+  visibleIncludedItems,
   isSaving,
   canSave,
   onPublish,
@@ -21,10 +23,15 @@ export function ProductConstructorHeader({
   readonly productCopy: ProductCopy;
   readonly uiCopy: ConstructorUiCopy;
   readonly draft: ProductFormDraft;
+  readonly visibleIncludedItems: readonly ProductIncludedItemRequest[];
   readonly isSaving: boolean;
   readonly canSave: boolean;
-  readonly onSave: () => Promise<void> | void;
-  readonly onPublish: () => Promise<void> | void;
+  readonly onSave: (
+    visibleIncludedItems?: readonly ProductIncludedItemRequest[]
+  ) => Promise<void> | void;
+  readonly onPublish: (
+    visibleIncludedItems?: readonly ProductIncludedItemRequest[]
+  ) => Promise<void> | void;
   readonly onClose: () => void;
 }) {
   return (
@@ -53,7 +60,7 @@ export function ProductConstructorHeader({
           disabled={!canSave}
           className={styles.productConstructorPublishButton}
           onClick={() => {
-            void onPublish();
+            void onPublish(visibleIncludedItems);
           }}
         />
         <button

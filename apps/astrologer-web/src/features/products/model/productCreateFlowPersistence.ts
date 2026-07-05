@@ -1,4 +1,4 @@
-import type { ProductResponse } from "@elevenhouse/contracts";
+import type { ProductIncludedItemRequest, ProductResponse } from "@elevenhouse/contracts";
 import type { UpdateProductInput } from "../api/updateProduct";
 import {
   toCreateProductRequest,
@@ -12,6 +12,7 @@ export type PersistProductDraftResult =
 
 export type PersistProductDraftInput = {
   readonly draft: ProductFormDraft;
+  readonly visibleIncludedItems?: readonly ProductIncludedItemRequest[];
   readonly editingProductId: string | null;
   readonly publish: boolean;
   readonly createProduct: (
@@ -23,6 +24,7 @@ export type PersistProductDraftInput = {
 
 export async function persistProductDraft({
   draft,
+  visibleIncludedItems,
   editingProductId,
   publish,
   createProduct,
@@ -30,14 +32,17 @@ export async function persistProductDraft({
   publishProduct
 }: PersistProductDraftInput): Promise<PersistProductDraftResult> {
   let persistedProduct: ProductResponse | undefined;
+  const requestDraft = visibleIncludedItems
+    ? { ...draft, includedItems: visibleIncludedItems }
+    : draft;
 
   try {
     persistedProduct = editingProductId
       ? await updateProduct({
           productId: editingProductId,
-          body: toUpdateProductRequest(draft)
+          body: toUpdateProductRequest(requestDraft)
         })
-      : await createProduct(toCreateProductRequest(draft));
+      : await createProduct(toCreateProductRequest(requestDraft));
 
     if (publish) {
       await publishProduct(persistedProduct.id);

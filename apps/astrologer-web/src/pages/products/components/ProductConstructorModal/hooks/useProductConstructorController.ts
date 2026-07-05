@@ -2,6 +2,7 @@ import type { ProductDeliveryFormat } from "@elevenhouse/contracts";
 import {
   addProductModifier,
   applyProductDraftPatch,
+  moveProductIncludedItem,
   removeProductIncludedItem,
   removeProductModifier,
   toggleProductDraftArrayValue,
@@ -81,6 +82,19 @@ export function useProductConstructorController({
       },
       updateIncludedItem(index: number, patch: Parameters<typeof updateProductIncludedItem>[2]) {
         onDraftChange(updateProductIncludedItem(draft, index, patch));
+      },
+      toggleAutoIncludedItem(key: string) {
+        const nextKeys = draft.hiddenAutoIncludedKeys.includes(key)
+          ? draft.hiddenAutoIncludedKeys.filter((currentKey) => currentKey !== key)
+          : [...draft.hiddenAutoIncludedKeys, key];
+
+        onDraftChange({
+          ...draft,
+          hiddenAutoIncludedKeys: nextKeys
+        });
+      },
+      moveIncludedItem(index: number, direction: -1 | 1) {
+        onDraftChange(moveProductIncludedItem(draft, index, direction));
       },
       cycleIncludedItemIcon(index: number, icon: string) {
         const selectedIcon = resolveProductIconName(icon);

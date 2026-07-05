@@ -12,6 +12,7 @@ import {
   applyProductDraftPatch,
   createDefaultProductDraft,
   createProductDraftFromResponse,
+  moveProductIncludedItem,
   removeProductIncludedItem,
   removeProductModifier,
   toggleProductDraftArrayValue,
@@ -32,6 +33,23 @@ const productResponse = {
   priceMinor: 490000,
   currency: "RUB",
   coverMediaId: "55555555-5555-4555-8555-555555555555",
+  coverMedia: {
+    id: "55555555-5555-4555-8555-555555555555",
+    ownerUserId: "22222222-2222-4222-8222-222222222222",
+    purpose: "product_cover",
+    status: "ready",
+    visibility: "public",
+    originalFileName: "cover.webp",
+    mimeType: "image/webp",
+    sizeBytes: 128000,
+    width: 1600,
+    height: 900,
+    altText: null,
+    url: "https://cdn.example/product-cover.webp",
+    variants: [],
+    createdAt: "2026-07-02T00:00:00.000Z",
+    updatedAt: "2026-07-02T00:00:00.000Z"
+  },
   introVideoUrl: "https://video.example/intro",
   executionMode: "live",
   paymentModel: "once",
@@ -250,6 +268,28 @@ describe("product draft helpers", () => {
     const withoutMiddleItem = removeProductIncludedItem(draft, 1);
 
     expect(addProductIncludedItem(withoutMiddleItem).includedItems.at(-1)?.order).toBe(40);
+  });
+
+  it("reorders included items and normalizes their persisted order", () => {
+    const draft = {
+      ...createDefaultProductDraft("single"),
+      includedItems: [
+        { text: "Первый", icon: "check", order: 10 },
+        { text: "Второй", icon: "star", order: 20 },
+        { text: "Третий", icon: "video", order: 30 }
+      ]
+    };
+
+    const movedUp = moveProductIncludedItem(draft, 2, -1);
+    const movedPastStart = moveProductIncludedItem(movedUp, 0, -1);
+
+    expect(movedUp.includedItems.map((item) => item.text)).toEqual(["Первый", "Третий", "Второй"]);
+    expect(movedUp.includedItems.map((item) => item.order)).toEqual([10, 20, 30]);
+    expect(movedPastStart.includedItems.map((item) => item.text)).toEqual([
+      "Первый",
+      "Третий",
+      "Второй"
+    ]);
   });
 
   it("adds, updates and removes product modifiers", () => {

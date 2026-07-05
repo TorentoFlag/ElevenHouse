@@ -26,10 +26,11 @@ export function ProductConstructorModal({
   onSave,
   onPublish,
   onCoverFileSelected,
+  onCoverRemove,
   onClose
 }: ProductConstructorModalProps) {
   const controller = useProductConstructorController({ draft, productCopy, locale, onDraftChange });
-  const canSave = !isSaving && Boolean(draft.title.trim());
+  const canSave = !isSaving && !isCoverUploading && Boolean(draft.title.trim());
 
   return (
     <Modal
@@ -50,7 +51,7 @@ export function ProductConstructorModal({
             return;
           }
 
-          void onSave();
+          void onSave(controller.viewModel.visibleIncludedItems);
         }}
       >
         <div className={styles.productConstructorShell} data-product-constructor-shell="true">
@@ -59,6 +60,7 @@ export function ProductConstructorModal({
             productCopy={productCopy}
             uiCopy={controller.uiCopy}
             draft={draft}
+            visibleIncludedItems={controller.viewModel.visibleIncludedItems}
             isSaving={isSaving}
             canSave={canSave}
             onSave={onSave}
@@ -76,6 +78,7 @@ export function ProductConstructorModal({
               coverMediaUrl={coverMediaUrl}
               coverUploadError={coverUploadError}
               onCoverFileSelected={onCoverFileSelected}
+              onCoverRemove={onCoverRemove}
             />
             <ProductConstructorPreviewColumn
               copy={copy}

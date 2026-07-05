@@ -11,7 +11,6 @@ import {
   MediaNotFoundError,
   MediaStorageObjectMissingError,
   MediaValidationError,
-  type MediaAsset,
   type MediaAssetStore,
   type ObjectStoragePort
 } from "@elevenhouse/domain";
@@ -32,15 +31,9 @@ import {
   MEDIA_OBJECT_STORAGE,
   MEDIA_PUBLIC_URL_RESOLVER
 } from "./media.tokens";
+import { toMediaAssetResponse, type MediaPublicUrlResolver } from "./media-response.mapper";
 
 const mediaIdParamSchema = z.string().uuid();
-
-export type MediaPublicUrlResolver = {
-  readonly getPublicUrl: (input: {
-    readonly storageBucket: string;
-    readonly storageKey: string;
-  }) => string;
-};
 
 @Injectable()
 export class MediaService {
@@ -98,42 +91,6 @@ export class MediaService {
       )
     );
   }
-}
-
-function toMediaAssetResponse(
-  asset: MediaAsset,
-  publicUrlResolver: MediaPublicUrlResolver
-): MediaAssetResponse {
-  return {
-    id: asset.id,
-    ownerUserId: asset.ownerUserId,
-    purpose: asset.purpose,
-    status: asset.status,
-    visibility: asset.visibility,
-    originalFileName: asset.originalFileName,
-    mimeType: asset.mimeType,
-    sizeBytes: asset.sizeBytes,
-    width: asset.width,
-    height: asset.height,
-    altText: asset.altText,
-    url: publicUrlResolver.getPublicUrl({
-      storageBucket: asset.storageBucket,
-      storageKey: asset.storageKey
-    }),
-    variants: asset.variants.map((variant) => ({
-      variant: variant.variant,
-      url: publicUrlResolver.getPublicUrl({
-        storageBucket: variant.storageBucket,
-        storageKey: variant.storageKey
-      }),
-      mimeType: variant.mimeType,
-      width: variant.width,
-      height: variant.height,
-      sizeBytes: variant.sizeBytes
-    })),
-    createdAt: asset.createdAt,
-    updatedAt: asset.updatedAt
-  };
 }
 
 function requireOwnerUserId(request: AstrologerSessionRequest): string {

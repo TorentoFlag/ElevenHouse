@@ -46,6 +46,24 @@ const validProductRequest = {
   ]
 } as const;
 
+const validProductCoverMedia = {
+  id: "33333333-3333-4333-8333-333333333333",
+  ownerUserId: "22222222-2222-4222-8222-222222222222",
+  purpose: "product_cover",
+  status: "ready",
+  visibility: "public",
+  originalFileName: "cover.webp",
+  mimeType: "image/webp",
+  sizeBytes: 128000,
+  width: 1600,
+  height: 900,
+  altText: null,
+  url: "https://cdn.example/products/cover.webp",
+  variants: [],
+  createdAt: "2026-07-02T00:00:00.000Z",
+  updatedAt: "2026-07-02T00:00:00.000Z"
+} as const;
+
 describe("product contracts", () => {
   it("accepts a valid create request", () => {
     const parsed = createProductRequestSchema.parse(validProductRequest);
@@ -233,6 +251,7 @@ describe("product contracts", () => {
         status: "draft",
         ...validProductRequest,
         subtitle: "Полный разбор карты",
+        coverMedia: validProductCoverMedia,
         slaLabel: null,
         packageSessionCount: null,
         packageDiscountPercent: null,
@@ -269,6 +288,9 @@ describe("product contracts", () => {
         updatedAt: "2026-07-02T00:00:00.000Z"
       })
     ).toMatchObject({
+      coverMedia: {
+        url: "https://cdn.example/products/cover.webp"
+      },
       analytics: {
         salesCount: 0,
         averageRating: null
@@ -305,6 +327,64 @@ describe("product contracts", () => {
     });
   });
 
+  it("requires an explicit nullable cover media object in product responses", () => {
+    expect(
+      productResponseSchema.parse({
+        id: "11111111-1111-4111-8111-111111111111",
+        ownerUserId: "22222222-2222-4222-8222-222222222222",
+        status: "draft",
+        ...validProductRequest,
+        coverMediaId: null,
+        coverMedia: null,
+        subtitle: "Полный разбор карты",
+        slaLabel: null,
+        packageSessionCount: null,
+        packageDiscountPercent: null,
+        subscriptionPeriod: null,
+        trialDays: null,
+        groupSize: null,
+        includedItems: [],
+        modifiers: [],
+        analytics: {
+          salesCount: 0,
+          grossRevenueMinor: 0,
+          currency: "RUB",
+          averageRating: null,
+          reviewsCount: 0
+        },
+        createdAt: "2026-07-02T00:00:00.000Z",
+        updatedAt: "2026-07-02T00:00:00.000Z"
+      }).coverMedia
+    ).toBeNull();
+
+    expect(() =>
+      productResponseSchema.parse({
+        id: "11111111-1111-4111-8111-111111111111",
+        ownerUserId: "22222222-2222-4222-8222-222222222222",
+        status: "draft",
+        ...validProductRequest,
+        subtitle: "Полный разбор карты",
+        slaLabel: null,
+        packageSessionCount: null,
+        packageDiscountPercent: null,
+        subscriptionPeriod: null,
+        trialDays: null,
+        groupSize: null,
+        includedItems: [],
+        modifiers: [],
+        analytics: {
+          salesCount: 0,
+          grossRevenueMinor: 0,
+          currency: "RUB",
+          averageRating: null,
+          reviewsCount: 0
+        },
+        createdAt: "2026-07-02T00:00:00.000Z",
+        updatedAt: "2026-07-02T00:00:00.000Z"
+      })
+    ).toThrow();
+  });
+
   it("requires normalized nullable duration in product responses", () => {
     expect(() =>
       productResponseSchema.parse({
@@ -314,6 +394,7 @@ describe("product contracts", () => {
         ...validProductRequest,
         durationMinutes: undefined,
         subtitle: "Полный разбор карты",
+        coverMedia: validProductCoverMedia,
         slaLabel: null,
         packageSessionCount: null,
         packageDiscountPercent: null,

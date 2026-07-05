@@ -13,6 +13,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import type { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import type { MediaPublicUrlResolver } from "../media/media-response.mapper";
 import { ProductsService } from "./products.service";
 
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
@@ -29,6 +30,10 @@ describe("ProductsService", () => {
 
     expect(response.ownerUserId).toBe(ownerUserId);
     expect(response.status).toBe("draft");
+    expect(response.coverMedia).toMatchObject({
+      id: mediaId,
+      url: `https://cdn.example/${ownerUserId}/product_cover/${mediaId}/cover.webp`
+    });
     expect(response.analytics).toEqual({
       salesCount: 0,
       grossRevenueMinor: 0,
@@ -46,6 +51,20 @@ describe("ProductsService", () => {
     );
   });
 
+  it("returns null cover media for products without a cover", async () => {
+    const service = createService(createStore());
+
+    await expect(
+      service.createProduct(
+        { ...validCreateBody(), coverMediaId: undefined },
+        createAuthenticatedRequest()
+      )
+    ).resolves.toMatchObject({
+      coverMediaId: null,
+      coverMedia: null
+    });
+  });
+
   it("lists products and summary for the current astrologer", async () => {
     const store = createStore();
     const service = createService(store);
@@ -54,7 +73,10 @@ describe("ProductsService", () => {
     await service.publishProduct(productId, createAuthenticatedRequest());
 
     await expect(
-      service.listProducts({ status: "active", limit: "20", offset: "0" }, createAuthenticatedRequest())
+      service.listProducts(
+        { status: "active", limit: "20", offset: "0" },
+        createAuthenticatedRequest()
+      )
     ).resolves.toMatchObject({
       total: 1,
       counts: {
@@ -80,12 +102,12 @@ describe("ProductsService", () => {
   it("maps invalid body and params to BadRequestException", async () => {
     const service = createService(createStore());
 
-    await expect(service.createProduct({ title: "" }, createAuthenticatedRequest())).rejects.toThrow(
+    await expect(
+      service.createProduct({ title: "" }, createAuthenticatedRequest())
+    ).rejects.toThrow(BadRequestException);
+    await expect(service.getProduct("not-a-uuid", createAuthenticatedRequest())).rejects.toThrow(
       BadRequestException
     );
-    await expect(
-      service.getProduct("not-a-uuid", createAuthenticatedRequest())
-    ).rejects.toThrow(BadRequestException);
     await expect(
       service.createProduct(
         { ...validCreateBody(), deliveryFormats: ["video", "video"] },
@@ -121,7 +143,11 @@ describe("ProductsService", () => {
     await service.createProduct(validCreateBody(), createAuthenticatedRequest());
 
     await expect(
-      service.updateProduct(productId, { title: "Валидный заголовок" }, createAuthenticatedRequest())
+      service.updateProduct(
+        productId,
+        { title: "Валидный заголовок" },
+        createAuthenticatedRequest()
+      )
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -136,9 +162,9 @@ describe("ProductsService", () => {
       })
     );
 
-    await expect(service.createProduct(validCreateBody(), createAuthenticatedRequest())).rejects.toThrow(
-      BadRequestException
-    );
+    await expect(
+      service.createProduct(validCreateBody(), createAuthenticatedRequest())
+    ).rejects.toThrow(BadRequestException);
   });
 
   it("rejects requests without authenticated astrologer context", async () => {
@@ -150,9 +176,16 @@ describe("ProductsService", () => {
 
 function createService(
   store: ProductStore,
-  mediaStore: MediaAssetStore = createMediaStore()
+  mediaStore: MediaAssetStore = createMediaStore(),
+  publicUrlResolver: MediaPublicUrlResolver = createPublicUrlResolver()
 ): ProductsService {
-  return new ProductsService(store, createNullAnalyticsReader(), mediaStore, createClock());
+  return new ProductsService(
+    store,
+    createNullAnalyticsReader(),
+    mediaStore,
+    publicUrlResolver,
+    createClock()
+  );
 }
 
 function createClock(): SystemClock {
@@ -179,12 +212,14 @@ function createNullAnalyticsReader(): ProductAnalyticsReader {
       );
       return analytics;
     }),
-    getCatalogLifetimeSummary: vi.fn(async (): Promise<ProductCatalogLifetimeAnalyticsSummary> => ({
-      totalSalesCount: 0,
-      grossRevenueMinor: 0,
-      currency: "RUB",
-      bestseller: null
-    }))
+    getCatalogLifetimeSummary: vi.fn(
+      async (): Promise<ProductCatalogLifetimeAnalyticsSummary> => ({
+        totalSalesCount: 0,
+        grossRevenueMinor: 0,
+        currency: "RUB",
+        bestseller: null
+      })
+    )
   };
 }
 
@@ -195,9 +230,7 @@ function createStore(overrides: Partial<ProductStore> = {}): ProductStore {
     listByOwner: vi.fn(async (query) => {
       const owned = products.filter((product) => product.ownerUserId === query.ownerUserId);
       const filtered =
-        query.status === "all"
-          ? owned
-          : owned.filter((product) => product.status === query.status);
+        query.status === "all" ? owned : owned.filter((product) => product.status === query.status);
 
       return {
         products: filtered.slice(query.offset, query.offset + query.limit),
@@ -210,10 +243,11 @@ function createStore(overrides: Partial<ProductStore> = {}): ProductStore {
         }
       };
     }),
-    findByOwnerAndId: vi.fn(async (input) =>
-      products.find(
-        (product) => product.ownerUserId === input.ownerUserId && product.id === input.productId
-      ) ?? null
+    findByOwnerAndId: vi.fn(
+      async (input) =>
+        products.find(
+          (product) => product.ownerUserId === input.ownerUserId && product.id === input.productId
+        ) ?? null
     ),
     create: vi.fn(async (input) => {
       const product = toProduct(productId, input);
@@ -250,7 +284,9 @@ function createMediaStore(overrides: Partial<MediaAssetStore> = {}): MediaAssetS
       throw new Error("Product service should not create media assets");
     }),
     findByOwnerAndId: vi.fn(async (input) =>
-      input.mediaId === mediaId && input.ownerUserId === ownerUserId ? readyProductCoverMedia() : null
+      input.mediaId === mediaId && input.ownerUserId === ownerUserId
+        ? readyProductCoverMedia()
+        : null
     ),
     markReady: vi.fn(async () => {
       throw new Error("Product service should not complete media uploads");
@@ -259,6 +295,12 @@ function createMediaStore(overrides: Partial<MediaAssetStore> = {}): MediaAssetS
       throw new Error("Product service should not fail media uploads");
     }),
     ...overrides
+  };
+}
+
+function createPublicUrlResolver(): MediaPublicUrlResolver {
+  return {
+    getPublicUrl: (input) => `https://cdn.example/${input.storageKey}`
   };
 }
 

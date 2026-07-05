@@ -57,6 +57,7 @@ export function ProductsCreateFlow({
           onSave={flow.saveDraft}
           onPublish={flow.publishDraft}
           onCoverFileSelected={flow.uploadProductCover}
+          onCoverRemove={flow.removeProductCover}
           onClose={flow.closeEditor}
         />
       ) : null}

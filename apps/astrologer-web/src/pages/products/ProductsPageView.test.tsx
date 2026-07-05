@@ -65,6 +65,7 @@ const product = {
   priceMinor: 490000,
   currency: "RUB",
   coverMediaId: null,
+  coverMedia: null,
   introVideoUrl: null,
   executionMode: "live",
   paymentModel: "once",

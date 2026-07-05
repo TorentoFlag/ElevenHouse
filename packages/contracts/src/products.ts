@@ -24,6 +24,7 @@ import {
   type ProductRequiredClientDataValue,
   type ProductSubscriptionPeriodValue
 } from "@elevenhouse/validation/products";
+import { mediaAssetResponseSchema } from "./media";
 
 const uuidSchema = z.string().uuid();
 const optionalTrimmedStringSchema = z
@@ -317,7 +318,8 @@ export const productResponseSchema = z
     ownerUserId: uuidSchema,
     status: productStatusSchema,
     subtitle: nullableStringSchema,
-  coverMediaId: uuidSchema.nullable(),
+    coverMediaId: uuidSchema.nullable(),
+    coverMedia: mediaAssetResponseSchema.nullable(),
     introVideoUrl: nullableStringSchema,
     durationMinutes: z.number().int().positive().nullable(),
     durationLabel: nullableStringSchema,

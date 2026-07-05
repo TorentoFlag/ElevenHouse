@@ -49,6 +49,6 @@ import {
       useValue: randomUUID
     }
   ],
-  exports: [MediaService, MEDIA_ASSET_STORE]
+  exports: [MediaService, MEDIA_ASSET_STORE, MEDIA_PUBLIC_URL_RESOLVER]
 })
 export class MediaModule {}

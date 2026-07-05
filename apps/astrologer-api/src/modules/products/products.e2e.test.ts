@@ -10,6 +10,8 @@ import {
 import type {
   AuthSessionAuthenticationStore,
   AuthSessionRevocationUnitOfWork,
+  MediaAsset,
+  MediaAssetStore,
   PasswordlessAuthUnitOfWork,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork,
   Product,
@@ -31,6 +33,7 @@ import {
 } from "../identity/passwordless/identity-passwordless.tokens";
 import { ASTROLOGER_REGISTRATION_SESSION_UNIT_OF_WORK } from "../identity/registration/identity-registration.tokens";
 import { createIdentityConfigServiceStub } from "../identity/testing/identity-config-service.stub";
+import { MEDIA_ASSET_STORE } from "../media/media.tokens";
 import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordless-rate-limiter";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
@@ -43,6 +46,7 @@ const csrfCookieName = "elevenhouse_astrologer_csrf";
 const csrfHeaderName = "x-csrf-token";
 const sessionToken = "raw-session-token";
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
+const coverMediaId = "33333333-3333-4333-8333-333333333333";
 let currentCsrfToken = "";
 const defaultPasswordlessRateLimits = {
   requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
@@ -110,6 +114,8 @@ describe("products HTTP routes", () => {
       })
       .overrideProvider(PRODUCT_STORE)
       .useValue(productStore)
+      .overrideProvider(MEDIA_ASSET_STORE)
+      .useValue(createMediaAssetStore())
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -388,6 +394,42 @@ function createProductStore(): ProductStore {
   };
 }
 
+function createMediaAssetStore(): MediaAssetStore {
+  return {
+    createUploadingAsset: vi.fn(async () => raise("Product routes should not create media assets")),
+    findByOwnerAndId: vi.fn(async (input) =>
+      input.ownerUserId === ownerUserId && input.mediaId === coverMediaId
+        ? readyProductCoverMedia()
+        : null
+    ),
+    markReady: vi.fn(async () => raise("Product routes should not complete media uploads")),
+    markFailed: vi.fn(async () => raise("Product routes should not fail media uploads"))
+  };
+}
+
+function readyProductCoverMedia(): MediaAsset {
+  return {
+    id: coverMediaId,
+    ownerUserId,
+    purpose: "product_cover",
+    status: "ready",
+    visibility: "public",
+    storageBucket: "elevenhouse-local-media",
+    storageKey: `${ownerUserId}/product_cover/${coverMediaId}/cover.webp`,
+    originalFileName: "cover.webp",
+    mimeType: "image/webp",
+    sizeBytes: 1_250_000,
+    checksumSha256: null,
+    width: 1600,
+    height: 900,
+    altText: null,
+    failureReason: null,
+    variants: [],
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString()
+  };
+}
+
 function toProduct(id: string, input: ProductStoreCreateInput): Product {
   return {
     id,
@@ -441,7 +483,7 @@ function validCreateBody(): Record<string, unknown> {
     subtitle: "Полный разбор",
     priceMinor: 490000,
     currency: "RUB",
-    coverMediaId: "cover-1",
+    coverMediaId,
     executionMode: "live",
     paymentModel: "once",
     durationMinutes: 60,

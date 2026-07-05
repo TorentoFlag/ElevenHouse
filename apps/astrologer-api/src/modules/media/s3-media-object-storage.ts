@@ -2,7 +2,7 @@ import { HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { ObjectStoragePort, UploadedObjectMetadata } from "@elevenhouse/domain";
 import type { MediaImageMimeTypeValue } from "@elevenhouse/validation/media";
-import type { MediaPublicUrlResolver } from "./media.service";
+import type { MediaPublicUrlResolver } from "./media-response.mapper";
 
 export type S3MediaObjectStorageConfig = {
   readonly endpoint: string;
@@ -18,7 +18,10 @@ export type S3MediaObjectStorageConfig = {
 export class S3MediaObjectStorage implements ObjectStoragePort, MediaPublicUrlResolver {
   private readonly client: S3Client;
 
-  constructor(private readonly config: S3MediaObjectStorageConfig, client?: S3Client) {
+  constructor(
+    private readonly config: S3MediaObjectStorageConfig,
+    client?: S3Client
+  ) {
     this.client =
       client ??
       new S3Client({

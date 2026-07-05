@@ -43,6 +43,14 @@ export function ProductCard({
 
   return (
     <Card as="article" className={styles.productCard} padding="medium" variant="default">
+      {product.coverMedia ? (
+        <img
+          className={styles.productCardCover}
+          src={product.coverMedia.url}
+          alt=""
+          loading="lazy"
+        />
+      ) : null}
       <div className={styles.productCardHeader}>
         <span className={styles.productTypeIcon} aria-hidden="true">
           <Icon iconName={getProductTypeIconName(product.type)} width={17} height={17} />

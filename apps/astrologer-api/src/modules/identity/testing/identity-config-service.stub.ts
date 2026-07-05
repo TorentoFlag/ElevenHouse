@@ -65,6 +65,19 @@ export function createIdentityConfigServiceStub(input: {
         return input.passwordlessRateLimits;
       }
 
+      if (key === "astrologerApi.mediaStorage") {
+        return {
+          endpoint: "http://localhost:9000",
+          region: "us-east-1",
+          bucket: "elevenhouse-local-media",
+          accessKeyId: "elevenhouse",
+          secretAccessKey: "elevenhouse-secret",
+          forcePathStyle: true,
+          publicBaseUrl: "http://localhost:9000/elevenhouse-local-media",
+          uploadTtlSeconds: 900
+        };
+      }
+
       throw new Error(`Unexpected config key: ${key}`);
     }
   };

@@ -2,6 +2,7 @@ import type {
   ProductAccessGrant,
   ProductDeliveryFormat,
   ProductExecutionMode,
+  ProductIncludedItemRequest,
   ProductMethod,
   ProductModifierKind,
   ProductParticipantMode,
@@ -68,9 +69,14 @@ export type ProductConstructorModalProps = {
   readonly portalTarget?: Element | null;
   readonly backdropClassName?: string;
   readonly onDraftChange: (draft: ProductFormDraft) => void;
-  readonly onSave: () => Promise<void> | void;
-  readonly onPublish: () => Promise<void> | void;
+  readonly onSave: (
+    visibleIncludedItems?: readonly ProductIncludedItemRequest[]
+  ) => Promise<void> | void;
+  readonly onPublish: (
+    visibleIncludedItems?: readonly ProductIncludedItemRequest[]
+  ) => Promise<void> | void;
   readonly onCoverFileSelected: (file: File) => Promise<void> | void;
+  readonly onCoverRemove: () => void;
   readonly onClose: () => void;
 };
 
@@ -84,6 +90,7 @@ export type ProductConstructorSectionProps = {
   readonly coverMediaUrl: string | null;
   readonly coverUploadError: string | null;
   readonly onCoverFileSelected: (file: File) => Promise<void> | void;
+  readonly onCoverRemove: () => void;
 };
 
 export type ProductConstructorOptionValue =

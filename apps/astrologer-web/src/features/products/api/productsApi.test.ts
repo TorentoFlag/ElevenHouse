@@ -49,6 +49,7 @@ const productResponse = {
   priceMinor: 490000,
   currency: "RUB",
   coverMediaId: "33333333-3333-4333-8333-333333333333",
+  coverMedia: null,
   introVideoUrl: "https://video.example/intro",
   executionMode: "live",
   paymentModel: "once",

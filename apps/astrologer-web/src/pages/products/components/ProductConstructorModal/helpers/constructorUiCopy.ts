@@ -12,6 +12,7 @@ export type ConstructorUiCopy = {
   readonly mediaLabel: string;
   readonly mediaHint: string;
   readonly coverPlaceholder: string;
+  readonly removeCoverLabel: string;
   readonly introVideoPlaceholder: string;
   readonly introVideoHint: string;
   readonly nameAndPriceLabel: string;
@@ -75,6 +76,7 @@ export const constructorUiCopyByLocale = {
     mediaLabel: "Обложка и медиа",
     mediaHint: "Перетащите фото на обложку. Можно добавить промо-видео — карточка станет живее.",
     coverPlaceholder: "Фото / обложка",
+    removeCoverLabel: "Удалить обложку",
     introVideoPlaceholder: "Ссылка на промо-видео (YouTube / Vimeo / Rutube)",
     introVideoHint:
       "Обложка и видео показываются клиенту на странице записи и в карточке продукта.",
@@ -156,6 +158,7 @@ export const constructorUiCopyByLocale = {
     mediaLabel: "Cover and media",
     mediaHint: "Drop a cover photo. Add a promo video to make the card feel alive.",
     coverPlaceholder: "Photo / cover",
+    removeCoverLabel: "Remove cover",
     introVideoPlaceholder: "Promo video link (YouTube / Vimeo / Rutube)",
     introVideoHint: "Cover and video are shown on the booking page and product card.",
     nameAndPriceLabel: "Title and price",

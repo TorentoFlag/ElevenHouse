@@ -9,7 +9,8 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import type { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
-import { MediaService, type MediaPublicUrlResolver } from "./media.service";
+import { MediaService } from "./media.service";
+import type { MediaPublicUrlResolver } from "./media-response.mapper";
 
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
 const mediaId = "463f34bb-38ec-4cb4-b105-2ed6de91e3cb";
@@ -89,9 +90,9 @@ describe("MediaService", () => {
     await expect(
       service.createUploadIntent({ purpose: "product_cover" }, createAuthenticatedRequest())
     ).rejects.toThrow(BadRequestException);
-    await expect(service.completeUpload("not-a-uuid", {}, createAuthenticatedRequest())).rejects.toThrow(
-      BadRequestException
-    );
+    await expect(
+      service.completeUpload("not-a-uuid", {}, createAuthenticatedRequest())
+    ).rejects.toThrow(BadRequestException);
     await expect(service.createUploadIntent({}, { headers: {} })).rejects.toThrow(
       UnauthorizedException
     );
@@ -122,9 +123,9 @@ describe("MediaService", () => {
       createAuthenticatedRequest()
     );
 
-    await expect(
-      service.completeUpload(mediaId, {}, createAuthenticatedRequest())
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.completeUpload(mediaId, {}, createAuthenticatedRequest())).rejects.toThrow(
+      NotFoundException
+    );
     await expect(
       missingObjectService.completeUpload(mediaId, {}, createAuthenticatedRequest())
     ).rejects.toThrow(BadRequestException);

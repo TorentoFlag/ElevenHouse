@@ -39,7 +39,8 @@ export function BasicProductSections({
   isCoverUploading,
   coverMediaUrl,
   coverUploadError,
-  onCoverFileSelected
+  onCoverFileSelected,
+  onCoverRemove
 }: ProductConstructorSectionProps) {
   const { uiCopy, actions } = controller;
 
@@ -60,9 +61,33 @@ export function BasicProductSections({
             data-product-constructor-cover-dropzone="true"
             data-uploading={isCoverUploading ? "true" : undefined}
             aria-label={uiCopy.coverPlaceholder}
+            onDragOver={(event) => {
+              event.preventDefault();
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              const file = event.dataTransfer.files[0];
+              if (file) {
+                void onCoverFileSelected(file);
+              }
+            }}
           >
             {coverMediaUrl ? (
-              <img src={coverMediaUrl} alt="" className={styles.constructorCoverImage} />
+              <>
+                <img src={coverMediaUrl} alt="" className={styles.constructorCoverImage} />
+                <button
+                  className={styles.constructorCoverRemoveButton}
+                  type="button"
+                  aria-label={uiCopy.removeCoverLabel}
+                  disabled={isCoverUploading}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    onCoverRemove();
+                  }}
+                >
+                  <Icon iconName="close" width={14} height={14} aria-hidden="true" />
+                </button>
+              </>
             ) : (
               <>
                 <Icon iconName="image" width={34} height={34} aria-hidden="true" />
@@ -189,6 +214,7 @@ export function BasicProductSections({
         coverMediaUrl={coverMediaUrl}
         coverUploadError={coverUploadError}
         onCoverFileSelected={onCoverFileSelected}
+        onCoverRemove={onCoverRemove}
       />
       <DurationSection
         copy={copy}
@@ -200,6 +226,7 @@ export function BasicProductSections({
         coverMediaUrl={coverMediaUrl}
         coverUploadError={coverUploadError}
         onCoverFileSelected={onCoverFileSelected}
+        onCoverRemove={onCoverRemove}
       />
       <ParticipantsSection
         copy={copy}
@@ -211,6 +238,7 @@ export function BasicProductSections({
         coverMediaUrl={coverMediaUrl}
         coverUploadError={coverUploadError}
         onCoverFileSelected={onCoverFileSelected}
+        onCoverRemove={onCoverRemove}
       />
     </>
   );
