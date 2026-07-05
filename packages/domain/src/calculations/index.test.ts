@@ -3,7 +3,9 @@ import {
   approveCalculationInterpretation,
   archiveCalculation,
   createCalculation,
+  getCalculation,
   linkCalculationToClient,
+  listCalculations,
   publishCalculationToClient,
   recalculateCalculation,
   saveCalculationInterpretation
@@ -47,11 +49,12 @@ function createMemoryStore(): MemoryStore {
 
   return {
     calls,
-    listByOwner: async ({ ownerUserId }) => {
-      const calculations = [...records.values()].filter(
-        (record) => record.ownerUserId === ownerUserId
+    listByOwner: async ({ ownerUserId, status, limit, offset }) => {
+      const filtered = [...records.values()].filter(
+        (record) =>
+          record.ownerUserId === ownerUserId && (status === "all" || record.status === status)
       );
-      return { calculations, total: calculations.length };
+      return { calculations: filtered.slice(offset, offset + limit), total: filtered.length };
     },
     findByOwnerAndId: async (input) => findRecord(input),
     create: async (input) => {
@@ -272,6 +275,94 @@ async function saveAndApproveInterpretation(input: {
 }
 
 describe("calculations lifecycle", () => {
+  it("lists calculations by owner and status with total before pagination", async () => {
+    const store = createMemoryStore();
+    await createTestCalculation(store, {
+      idGenerator: () => "00000000-0000-4000-8000-000000000101",
+      title: "Owner active first"
+    });
+    await createTestCalculation(store, {
+      idGenerator: () => "00000000-0000-4000-8000-000000000102",
+      title: "Owner active second"
+    });
+    const archivedSource = await createTestCalculation(store, {
+      idGenerator: () => "00000000-0000-4000-8000-000000000103",
+      title: "Owner archived"
+    });
+    await archiveCalculation({
+      store,
+      ownerUserId,
+      calculationId: archivedSource.id,
+      now: new Date("2026-07-06T12:00:00.000Z")
+    });
+    await createTestCalculation(store, {
+      ownerUserId: otherOwnerUserId,
+      idGenerator: () => "00000000-0000-4000-8000-000000000104",
+      title: "Other owner active"
+    });
+
+    const result = await listCalculations({
+      store,
+      ownerUserId,
+      status: "calculated",
+      limit: 1,
+      offset: 1
+    });
+
+    expect(result.total).toBe(2);
+    expect(result.calculations).toHaveLength(1);
+    expect(result.calculations[0]?.title).toBe("Owner active second");
+  });
+
+  it("gets calculations owned by the requester", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+
+    const found = await getCalculation({
+      store,
+      ownerUserId,
+      calculationId: created.id
+    });
+
+    expect(found.id).toBe(created.id);
+  });
+
+  it("rejects getting calculations owned by another user", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+
+    await expect(
+      getCalculation({
+        store,
+        ownerUserId: otherOwnerUserId,
+        calculationId: created.id
+      })
+    ).rejects.toThrow("Calculation was not found");
+  });
+
+  it("rejects invalid list pagination", async () => {
+    const store = createMemoryStore();
+
+    await expect(
+      listCalculations({
+        store,
+        ownerUserId,
+        status: "all",
+        limit: 0,
+        offset: 0
+      })
+    ).rejects.toBeInstanceOf(CalculationValidationError);
+    await expect(
+      listCalculations({
+        store,
+        ownerUserId,
+        status: "all",
+        limit: 10,
+        offset: -1
+      })
+    ).rejects.toBeInstanceOf(CalculationValidationError);
+  });
+
   it("creates a calculated record with immutable version 1", async () => {
     const record = await createTestCalculation(createMemoryStore(), {
       title: "Мария, Пифагор",
@@ -763,6 +854,108 @@ describe("calculations lifecycle", () => {
     ).rejects.toBeInstanceOf(CalculationValidationError);
   });
 
+  it("rejects calculations without participants", async () => {
+    await expect(
+      createTestCalculation(createMemoryStore(), {
+        participants: []
+      })
+    ).rejects.toThrow("Calculation requires at least one participant");
+  });
+
+  it("rejects calculation participants with blank display names", async () => {
+    await expect(
+      createTestCalculation(createMemoryStore(), {
+        participants: [
+          {
+            role: "subject",
+            source: "manual",
+            clientId: null,
+            displayName: "   ",
+            birthDate: null,
+            inputSnapshot: {},
+            manuallyOverridden: false
+          }
+        ]
+      })
+    ).rejects.toThrow("Calculation participant display name is required");
+  });
+
+  it("rejects CRM participants without client id", async () => {
+    await expect(
+      createTestCalculation(createMemoryStore(), {
+        participants: [
+          {
+            role: "subject",
+            source: "crm_client",
+            clientId: null,
+            displayName: "CRM Client",
+            birthDate: null,
+            inputSnapshot: {},
+            manuallyOverridden: false
+          }
+        ]
+      })
+    ).rejects.toThrow("CRM calculation participant requires client id");
+  });
+
+  it("rejects manual participants with client id", async () => {
+    await expect(
+      createTestCalculation(createMemoryStore(), {
+        participants: [
+          {
+            role: "subject",
+            source: "manual",
+            clientId,
+            displayName: "Manual Client",
+            birthDate: null,
+            inputSnapshot: {},
+            manuallyOverridden: false
+          }
+        ]
+      })
+    ).rejects.toThrow("Manual calculation participant cannot have client id");
+  });
+
+  it("rejects blank participant birth dates", async () => {
+    await expect(
+      createTestCalculation(createMemoryStore(), {
+        participants: [
+          {
+            role: "subject",
+            source: "manual",
+            clientId: null,
+            displayName: "Manual Client",
+            birthDate: "   ",
+            inputSnapshot: {},
+            manuallyOverridden: false
+          }
+        ]
+      })
+    ).rejects.toThrow("Calculation participant birth date cannot be blank");
+  });
+
+  it("normalizes calculation participants before persistence", async () => {
+    const record = await createTestCalculation(createMemoryStore(), {
+      participants: [
+        {
+          role: "subject",
+          source: "crm_client",
+          clientId: `  ${clientId}  `,
+          displayName: "  CRM Client  ",
+          birthDate: "  1990-03-14  ",
+          inputSnapshot: {},
+          manuallyOverridden: false
+        }
+      ]
+    });
+
+    expect(record.participants[0]).toMatchObject({
+      clientId,
+      displayName: "CRM Client",
+      birthDate: "1990-03-14"
+    });
+  });
+
   it("archives a calculation without deleting versions", async () => {
     const store = createMemoryStore();
     const created = await createTestCalculation(store, {
@@ -780,5 +973,27 @@ describe("calculations lifecycle", () => {
 
     expect(archived.status).toBe("archived");
     expect(archived.versions).toHaveLength(1);
+  });
+
+  it("archives idempotently without mutating already archived records", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+    const archived = await archiveCalculation({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      now: new Date("2026-07-06T12:00:00.000Z")
+    });
+
+    const archivedAgain = await archiveCalculation({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      now: new Date("2026-07-06T13:00:00.000Z")
+    });
+
+    expect(store.calls.archive).toHaveLength(1);
+    expect(archivedAgain.updatedAt).toBe(archived.updatedAt);
+    expect(archivedAgain.versions).toEqual(archived.versions);
   });
 });

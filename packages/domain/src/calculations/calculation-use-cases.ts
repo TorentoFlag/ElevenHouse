@@ -1,12 +1,46 @@
 import { normalizeRequiredString } from "../shared";
 import { CalculationNotFoundError, CalculationValidationError } from "./calculation-errors";
 import type {
+  CalculationListResult,
   CalculationRecord,
   CalculationStore,
   CalculationStoreAppendVersionInput,
   CalculationStoreCreateInput
 } from "./calculation-store";
-import type { CalculationInterpretationSource } from "./calculation-types";
+import type {
+  CalculationInterpretationSource,
+  CalculationParticipant,
+  CalculationStatusFilter
+} from "./calculation-types";
+
+export async function listCalculations(input: {
+  readonly store: CalculationStore;
+  readonly ownerUserId: string;
+  readonly status: CalculationStatusFilter;
+  readonly limit: number;
+  readonly offset: number;
+}): Promise<CalculationListResult> {
+  const limit = normalizeListLimit(input.limit);
+  const offset = normalizeListOffset(input.offset);
+
+  return input.store.listByOwner({
+    ownerUserId: normalizeRequiredCalculationString(
+      input.ownerUserId,
+      "Calculation owner user id is required"
+    ),
+    status: input.status,
+    limit,
+    offset
+  });
+}
+
+export function getCalculation(input: {
+  readonly store: CalculationStore;
+  readonly ownerUserId: string;
+  readonly calculationId: string;
+}): Promise<CalculationRecord> {
+  return requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
+}
 
 export async function createCalculation(
   input: Omit<CalculationStoreCreateInput, "now"> & {
@@ -30,7 +64,7 @@ export async function createCalculation(
       "Calculation method version is required"
     ),
     title: normalizeRequiredCalculationString(input.title, "Calculation title is required"),
-    participants: input.participants,
+    participants: normalizeCalculationParticipants(input.participants),
     settingsSnapshot: input.settingsSnapshot,
     inputSnapshot: input.inputSnapshot,
     resultSnapshot: input.resultSnapshot,
@@ -235,6 +269,10 @@ export async function archiveCalculation(input: {
   readonly now: Date;
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
+  if (record.status === "archived") {
+    return record;
+  }
+
   const archived = await input.store.archive({
     ownerUserId: record.ownerUserId,
     calculationId: record.id,
@@ -277,6 +315,72 @@ function getLatestVersion(record: CalculationRecord) {
     }
     return latest;
   }, null);
+}
+
+function normalizeCalculationParticipants(
+  participants: readonly CalculationParticipant[]
+): readonly CalculationParticipant[] {
+  if (participants.length === 0) {
+    throw new CalculationValidationError("Calculation requires at least one participant");
+  }
+
+  return participants.map((participant) => {
+    const displayName = normalizeRequiredCalculationString(
+      participant.displayName,
+      "Calculation participant display name is required"
+    );
+    const birthDate =
+      participant.birthDate === null
+        ? null
+        : normalizeOptionalCalculationBirthDate(participant.birthDate);
+
+    if (participant.source === "crm_client") {
+      return {
+        ...participant,
+        clientId: normalizeRequiredCalculationString(
+          participant.clientId ?? "",
+          "CRM calculation participant requires client id"
+        ),
+        displayName,
+        birthDate
+      };
+    }
+
+    if (participant.clientId !== null) {
+      throw new CalculationValidationError("Manual calculation participant cannot have client id");
+    }
+
+    return {
+      ...participant,
+      clientId: null,
+      displayName,
+      birthDate
+    };
+  });
+}
+
+function normalizeOptionalCalculationBirthDate(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new CalculationValidationError("Calculation participant birth date cannot be blank");
+  }
+  return normalized;
+}
+
+function normalizeListLimit(limit: number): number {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    throw new CalculationValidationError("Calculation list limit must be an integer from 1 to 100");
+  }
+  return limit;
+}
+
+function normalizeListOffset(offset: number): number {
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new CalculationValidationError(
+      "Calculation list offset must be an integer greater than or equal to 0"
+    );
+  }
+  return offset;
 }
 
 function normalizeRequiredCalculationString(value: string, message: string): string {

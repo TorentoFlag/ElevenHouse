@@ -7,6 +7,7 @@ import type {
   CalculationModule,
   CalculationParticipant,
   CalculationStatus,
+  CalculationStatusFilter,
   CalculationVersion
 } from "./calculation-types";
 
@@ -67,8 +68,9 @@ export type CalculationStoreAppendVersionInput = {
 export type CalculationStore = {
   readonly listByOwner: (query: {
     readonly ownerUserId: string;
-    readonly limit?: number;
-    readonly offset?: number;
+    readonly status: CalculationStatusFilter;
+    readonly limit: number;
+    readonly offset: number;
   }) => Promise<CalculationListResult>;
   readonly findByOwnerAndId: (input: {
     readonly ownerUserId: string;
@@ -84,6 +86,11 @@ export type CalculationStore = {
   readonly appendVersion: (
     input: CalculationStoreAppendVersionInput
   ) => Promise<CalculationRecord | null>;
+  /**
+   * Links a CRM client idempotently. Adapters must enforce uniqueness for
+   * (calculationId, clientId), because the use-case precheck cannot prevent
+   * concurrent duplicate inserts by itself.
+   */
   readonly linkClient: (input: {
     readonly ownerUserId: string;
     readonly calculationId: string;

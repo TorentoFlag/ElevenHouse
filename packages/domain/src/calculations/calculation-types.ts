@@ -1,6 +1,7 @@
 export type CalculationModule = "numerology" | "chart" | "matrix" | "human_design";
 export type CalculationMode = "individual" | "compatibility";
 export type CalculationStatus = "calculated" | "linked" | "published" | "archived";
+export type CalculationStatusFilter = CalculationStatus | "all";
 export type CalculationParticipantRole = "subject" | "partner";
 export type CalculationParticipantSource = "crm_client" | "manual";
 export type CalculationClientVisibility = "private_to_astrologer" | "visible_to_client";
