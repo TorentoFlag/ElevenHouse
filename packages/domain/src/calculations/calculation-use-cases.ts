@@ -21,15 +21,21 @@ export async function createCalculation(
     ),
     module: input.module,
     mode: input.mode,
-    methodCode: input.methodCode,
-    methodVersion: input.methodVersion,
+    methodCode: normalizeRequiredString(input.methodCode, "Calculation method code is required"),
+    methodVersion: normalizeRequiredString(
+      input.methodVersion,
+      "Calculation method version is required"
+    ),
     title: normalizeRequiredString(input.title, "Calculation title is required"),
     participants: input.participants,
     settingsSnapshot: input.settingsSnapshot,
     inputSnapshot: input.inputSnapshot,
     resultSnapshot: input.resultSnapshot,
     resultSummary: input.resultSummary,
-    resultChecksum: input.resultChecksum,
+    resultChecksum: normalizeRequiredString(
+      input.resultChecksum,
+      "Calculation result checksum is required"
+    ),
     idGenerator: input.idGenerator,
     versionIdGenerator: input.versionIdGenerator,
     now: input.now.toISOString()
@@ -44,14 +50,22 @@ export async function recalculateCalculation(
   }
 ): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
+  assertCalculationCanBeChanged(record);
   const updated = await input.store.appendVersion({
+    ownerUserId: record.ownerUserId,
     calculationId: record.id,
-    methodVersion: input.methodVersion,
+    methodVersion: normalizeRequiredString(
+      input.methodVersion,
+      "Calculation method version is required"
+    ),
     settingsSnapshot: input.settingsSnapshot,
     inputSnapshot: input.inputSnapshot,
     resultSnapshot: input.resultSnapshot,
     resultSummary: input.resultSummary,
-    resultChecksum: input.resultChecksum,
+    resultChecksum: normalizeRequiredString(
+      input.resultChecksum,
+      "Calculation result checksum is required"
+    ),
     versionIdGenerator: input.versionIdGenerator,
     now: input.now.toISOString()
   });
@@ -69,6 +83,7 @@ export async function linkCalculationToClient(input: {
   readonly now: Date;
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
+  assertCalculationCanBeChanged(record);
   const clientId = normalizeRequiredString(input.clientId, "Calculation client id is required");
 
   if (
@@ -80,6 +95,7 @@ export async function linkCalculationToClient(input: {
   }
 
   const linked = await input.store.linkClient({
+    ownerUserId: record.ownerUserId,
     calculationId: record.id,
     clientId,
     now: input.now.toISOString()
@@ -98,18 +114,27 @@ export async function publishCalculationToClient(input: {
   readonly now: Date;
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
+  assertCalculationCanBeChanged(record);
   const clientId = normalizeRequiredString(input.clientId, "Calculation client id is required");
+  const latestVersion = getLatestVersion(record);
 
   if (!record.links.some((link) => link.clientId === clientId)) {
     throw new CalculationValidationError("Calculation must be linked before publishing");
   }
-  if (!record.interpretations.some((interpretation) => interpretation.status === "approved")) {
+  if (
+    !latestVersion ||
+    !record.interpretations.some(
+      (interpretation) =>
+        interpretation.versionId === latestVersion.id && interpretation.status === "approved"
+    )
+  ) {
     throw new CalculationValidationError(
       "Calculation requires approved interpretation before publishing"
     );
   }
 
   const published = await input.store.publishClientLink({
+    ownerUserId: record.ownerUserId,
     calculationId: record.id,
     clientId,
     now: input.now.toISOString()
@@ -133,9 +158,16 @@ export async function saveCalculationInterpretation(input: {
   readonly now: Date;
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
+  assertCalculationCanBeChanged(record);
+  const versionId = normalizeRequiredString(input.versionId, "Calculation version id is required");
+  if (!record.versions.some((version) => version.id === versionId)) {
+    throw new CalculationValidationError("Calculation version was not found");
+  }
+
   const saved = await input.store.saveInterpretation({
+    ownerUserId: record.ownerUserId,
     calculationId: record.id,
-    versionId: normalizeRequiredString(input.versionId, "Calculation version id is required"),
+    versionId,
     source: input.source,
     text: normalizeRequiredString(
       input.text,
@@ -160,12 +192,19 @@ export async function approveCalculationInterpretation(input: {
   readonly now: Date;
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
+  assertCalculationCanBeChanged(record);
+  const interpretationId = normalizeRequiredString(
+    input.interpretationId,
+    "Calculation interpretation id is required"
+  );
+  if (!record.interpretations.some((interpretation) => interpretation.id === interpretationId)) {
+    throw new CalculationValidationError("Calculation interpretation was not found");
+  }
+
   const approved = await input.store.approveInterpretation({
+    ownerUserId: record.ownerUserId,
     calculationId: record.id,
-    interpretationId: normalizeRequiredString(
-      input.interpretationId,
-      "Calculation interpretation id is required"
-    ),
+    interpretationId,
     now: input.now.toISOString()
   });
   if (!approved) {
@@ -182,6 +221,7 @@ export async function archiveCalculation(input: {
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
   const archived = await input.store.archive({
+    ownerUserId: record.ownerUserId,
     calculationId: record.id,
     now: input.now.toISOString()
   });
@@ -204,4 +244,19 @@ async function requireOwnedCalculation(
     throw new CalculationNotFoundError();
   }
   return record;
+}
+
+function assertCalculationCanBeChanged(record: CalculationRecord): void {
+  if (record.status === "archived") {
+    throw new CalculationValidationError("Archived calculation cannot be changed");
+  }
+}
+
+function getLatestVersion(record: CalculationRecord) {
+  return record.versions.reduce<(typeof record.versions)[number] | null>((latest, version) => {
+    if (!latest || version.versionNumber > latest.versionNumber) {
+      return version;
+    }
+    return latest;
+  }, null);
 }

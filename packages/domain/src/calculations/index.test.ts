@@ -11,13 +11,48 @@ import {
 import type { CalculationRecord, CalculationStore } from "./calculation-store";
 
 const ownerUserId = "00000000-0000-4000-8000-000000000001";
+const otherOwnerUserId = "00000000-0000-4000-8000-000000000099";
 const clientId = "00000000-0000-4000-8000-000000000002";
+const now = new Date("2026-07-06T10:00:00.000Z");
 
-function createMemoryStore(): CalculationStore {
+type CreateCalculationInput = Omit<Parameters<typeof createCalculation>[0], "store">;
+type MemoryStore = CalculationStore & {
+  readonly calls: {
+    readonly appendVersion: Parameters<CalculationStore["appendVersion"]>[0][];
+    readonly linkClient: Parameters<CalculationStore["linkClient"]>[0][];
+    readonly publishClientLink: Parameters<CalculationStore["publishClientLink"]>[0][];
+    readonly saveInterpretation: Parameters<CalculationStore["saveInterpretation"]>[0][];
+    readonly approveInterpretation: Parameters<CalculationStore["approveInterpretation"]>[0][];
+    readonly archive: Parameters<CalculationStore["archive"]>[0][];
+  };
+};
+
+function createMemoryStore(): MemoryStore {
   const records = new Map<string, CalculationRecord>();
+  const calls: MemoryStore["calls"] = {
+    appendVersion: [],
+    linkClient: [],
+    publishClientLink: [],
+    saveInterpretation: [],
+    approveInterpretation: [],
+    archive: []
+  };
+
+  function findRecord(input: { readonly ownerUserId: string; readonly calculationId: string }) {
+    const current = records.get(input.calculationId);
+    if (!current || current.ownerUserId !== input.ownerUserId) return null;
+    return current;
+  }
+
   return {
-    listByOwner: async () => ({ calculations: [...records.values()], total: records.size }),
-    findByOwnerAndId: async ({ calculationId }) => records.get(calculationId) ?? null,
+    calls,
+    listByOwner: async ({ ownerUserId }) => {
+      const calculations = [...records.values()].filter(
+        (record) => record.ownerUserId === ownerUserId
+      );
+      return { calculations, total: calculations.length };
+    },
+    findByOwnerAndId: async (input) => findRecord(input),
     create: async (input) => {
       const record: CalculationRecord = {
         id: input.idGenerator(),
@@ -52,7 +87,8 @@ function createMemoryStore(): CalculationStore {
       return record;
     },
     appendVersion: async (input) => {
-      const current = records.get(input.calculationId);
+      calls.appendVersion.push(input);
+      const current = findRecord(input);
       if (!current) return null;
       const next: CalculationRecord = {
         ...current,
@@ -77,7 +113,8 @@ function createMemoryStore(): CalculationStore {
       return next;
     },
     linkClient: async (input) => {
-      const current = records.get(input.calculationId);
+      calls.linkClient.push(input);
+      const current = findRecord(input);
       if (!current) return null;
       const next: CalculationRecord = {
         ...current,
@@ -97,7 +134,8 @@ function createMemoryStore(): CalculationStore {
       return next;
     },
     publishClientLink: async (input) => {
-      const current = records.get(input.calculationId);
+      calls.publishClientLink.push(input);
+      const current = findRecord(input);
       if (!current) return null;
       const next: CalculationRecord = {
         ...current,
@@ -113,7 +151,8 @@ function createMemoryStore(): CalculationStore {
       return next;
     },
     saveInterpretation: async (input) => {
-      const current = records.get(input.calculationId);
+      calls.saveInterpretation.push(input);
+      const current = findRecord(input);
       if (!current) return null;
       const next: CalculationRecord = {
         ...current,
@@ -136,7 +175,8 @@ function createMemoryStore(): CalculationStore {
       return next;
     },
     approveInterpretation: async (input) => {
-      const current = records.get(input.calculationId);
+      calls.approveInterpretation.push(input);
+      const current = findRecord(input);
       if (!current) return null;
       const next: CalculationRecord = {
         ...current,
@@ -151,7 +191,8 @@ function createMemoryStore(): CalculationStore {
       return next;
     },
     archive: async (input) => {
-      const current = records.get(input.calculationId);
+      calls.archive.push(input);
+      const current = findRecord(input);
       if (!current) return null;
       const next = { ...current, status: "archived" as const, updatedAt: input.now };
       records.set(next.id, next);
@@ -160,15 +201,71 @@ function createMemoryStore(): CalculationStore {
   };
 }
 
+function createTestCalculation(
+  store: CalculationStore,
+  overrides: Partial<CreateCalculationInput> = {}
+) {
+  return createCalculation({
+    store,
+    ownerUserId,
+    module: "numerology",
+    mode: "individual",
+    methodCode: "pythagorean",
+    methodVersion: "1.0.0",
+    title: "Мария",
+    participants: [
+      {
+        role: "subject",
+        source: "crm_client",
+        clientId,
+        displayName: "CRM Client",
+        birthDate: "1990-03-14",
+        inputSnapshot: {},
+        manuallyOverridden: false
+      }
+    ],
+    settingsSnapshot: {},
+    inputSnapshot: { name: "Мария" },
+    resultSnapshot: { lifePath: 9 },
+    resultSummary: { primaryLabel: "Путь 9" },
+    resultChecksum: "sha256:v1",
+    idGenerator: () => "00000000-0000-4000-8000-000000000010",
+    versionIdGenerator: () => "00000000-0000-4000-8000-000000000011",
+    now,
+    ...overrides
+  });
+}
+
+async function saveAndApproveInterpretation(input: {
+  readonly store: CalculationStore;
+  readonly calculation: CalculationRecord;
+  readonly versionId?: string;
+}) {
+  const draft = await saveCalculationInterpretation({
+    store: input.store,
+    ownerUserId,
+    calculationId: input.calculation.id,
+    versionId: input.versionId ?? input.calculation.versions[0]!.id,
+    source: "manual",
+    text: "Проверенная трактовка для клиента.",
+    modelId: null,
+    promptVersion: null,
+    interpretationIdGenerator: () => "00000000-0000-4000-8000-000000000032",
+    now: new Date("2026-07-06T11:10:00.000Z")
+  });
+
+  return approveCalculationInterpretation({
+    store: input.store,
+    ownerUserId,
+    calculationId: input.calculation.id,
+    interpretationId: draft.interpretations.at(-1)!.id,
+    now: new Date("2026-07-06T11:40:00.000Z")
+  });
+}
+
 describe("calculations lifecycle", () => {
   it("creates a calculated record with immutable version 1", async () => {
-    const record = await createCalculation({
-      store: createMemoryStore(),
-      ownerUserId,
-      module: "numerology",
-      mode: "individual",
-      methodCode: "pythagorean",
-      methodVersion: "1.0.0",
+    const record = await createTestCalculation(createMemoryStore(), {
       title: "Мария, Пифагор",
       participants: [
         {
@@ -181,14 +278,7 @@ describe("calculations lifecycle", () => {
           manuallyOverridden: false
         }
       ],
-      settingsSnapshot: { preserveMasterNumbers: ["11", "22", "33"] },
-      inputSnapshot: { participants: 1 },
-      resultSnapshot: { lifePath: 9 },
-      resultSummary: { primaryLabel: "Путь 9" },
-      resultChecksum: "sha256:fixture",
-      idGenerator: () => "00000000-0000-4000-8000-000000000010",
-      versionIdGenerator: () => "00000000-0000-4000-8000-000000000011",
-      now: new Date("2026-07-06T10:00:00.000Z")
+      settingsSnapshot: { preserveMasterNumbers: ["11", "22", "33"] }
     });
 
     expect(record.status).toBe("calculated");
@@ -198,24 +288,7 @@ describe("calculations lifecycle", () => {
 
   it("recalculates by appending a new version instead of overwriting version 1", async () => {
     const store = createMemoryStore();
-    const created = await createCalculation({
-      store,
-      ownerUserId,
-      module: "numerology",
-      mode: "individual",
-      methodCode: "pythagorean",
-      methodVersion: "1.0.0",
-      title: "Мария",
-      participants: [],
-      settingsSnapshot: {},
-      inputSnapshot: { name: "Мария" },
-      resultSnapshot: { lifePath: 9 },
-      resultSummary: { primaryLabel: "Путь 9" },
-      resultChecksum: "sha256:v1",
-      idGenerator: () => "00000000-0000-4000-8000-000000000020",
-      versionIdGenerator: () => "00000000-0000-4000-8000-000000000021",
-      now: new Date("2026-07-06T10:00:00.000Z")
-    });
+    const created = await createTestCalculation(store);
 
     const updated = await recalculateCalculation({
       store,
@@ -236,36 +309,9 @@ describe("calculations lifecycle", () => {
     expect(updated.versions[1]?.resultSnapshot).toEqual({ lifePath: 9, expression: 7 });
   });
 
-  it("does not publish until an interpretation is approved", async () => {
+  it("does not publish until the latest version interpretation is approved", async () => {
     const store = createMemoryStore();
-    const created = await createCalculation({
-      store,
-      ownerUserId,
-      module: "numerology",
-      mode: "individual",
-      methodCode: "pythagorean",
-      methodVersion: "1.0.0",
-      title: "CRM client",
-      participants: [
-        {
-          role: "subject",
-          source: "crm_client",
-          clientId,
-          displayName: "CRM Client",
-          birthDate: "1990-03-14",
-          inputSnapshot: {},
-          manuallyOverridden: false
-        }
-      ],
-      settingsSnapshot: {},
-      inputSnapshot: {},
-      resultSnapshot: {},
-      resultSummary: {},
-      resultChecksum: "sha256:v1",
-      idGenerator: () => "00000000-0000-4000-8000-000000000030",
-      versionIdGenerator: () => "00000000-0000-4000-8000-000000000031",
-      now: new Date("2026-07-06T10:00:00.000Z")
-    });
+    const created = await createTestCalculation(store);
 
     const linked = await linkCalculationToClient({
       store,
@@ -274,34 +320,7 @@ describe("calculations lifecycle", () => {
       clientId,
       now: new Date("2026-07-06T11:00:00.000Z")
     });
-    const draft = await saveCalculationInterpretation({
-      store,
-      ownerUserId,
-      calculationId: created.id,
-      versionId: created.versions[0]!.id,
-      source: "manual",
-      text: "Проверенная трактовка для клиента.",
-      modelId: null,
-      promptVersion: null,
-      interpretationIdGenerator: () => "00000000-0000-4000-8000-000000000032",
-      now: new Date("2026-07-06T11:10:00.000Z")
-    });
-    await expect(
-      publishCalculationToClient({
-        store,
-        ownerUserId,
-        calculationId: created.id,
-        clientId,
-        now: new Date("2026-07-06T11:30:00.000Z")
-      })
-    ).rejects.toThrow("Calculation requires approved interpretation before publishing");
-    await approveCalculationInterpretation({
-      store,
-      ownerUserId,
-      calculationId: created.id,
-      interpretationId: draft.interpretations[0]!.id,
-      now: new Date("2026-07-06T11:40:00.000Z")
-    });
+    const approved = await saveAndApproveInterpretation({ store, calculation: created });
     const published = await publishCalculationToClient({
       store,
       ownerUserId,
@@ -311,18 +330,49 @@ describe("calculations lifecycle", () => {
     });
 
     expect(linked.links[0]?.visibility).toBe("private_to_astrologer");
+    expect(approved.interpretations[0]?.status).toBe("approved");
     expect(published.links[0]?.visibility).toBe("visible_to_client");
+  });
+
+  it("rejects publishing when only an older version has an approved interpretation", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+    await linkCalculationToClient({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      clientId,
+      now: new Date("2026-07-06T11:00:00.000Z")
+    });
+    await saveAndApproveInterpretation({ store, calculation: created });
+    await recalculateCalculation({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      methodVersion: "1.0.1",
+      settingsSnapshot: {},
+      inputSnapshot: { name: "Мария Иванова" },
+      resultSnapshot: { lifePath: 9, expression: 7 },
+      resultSummary: { primaryLabel: "Путь 9" },
+      resultChecksum: "sha256:v2",
+      versionIdGenerator: () => "00000000-0000-4000-8000-000000000022",
+      now: new Date("2026-07-06T11:30:00.000Z")
+    });
+
+    await expect(
+      publishCalculationToClient({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        clientId,
+        now: new Date("2026-07-06T12:00:00.000Z")
+      })
+    ).rejects.toThrow("Calculation requires approved interpretation before publishing");
   });
 
   it("links only calculations with a matching CRM participant", async () => {
     const store = createMemoryStore();
-    const created = await createCalculation({
-      store,
-      ownerUserId,
-      module: "numerology",
-      mode: "individual",
-      methodCode: "pythagorean",
-      methodVersion: "1.0.0",
+    const created = await createTestCalculation(store, {
       title: "Manual participant",
       participants: [
         {
@@ -334,15 +384,7 @@ describe("calculations lifecycle", () => {
           inputSnapshot: {},
           manuallyOverridden: false
         }
-      ],
-      settingsSnapshot: {},
-      inputSnapshot: {},
-      resultSnapshot: {},
-      resultSummary: {},
-      resultChecksum: "sha256:v1",
-      idGenerator: () => "00000000-0000-4000-8000-000000000050",
-      versionIdGenerator: () => "00000000-0000-4000-8000-000000000051",
-      now: new Date("2026-07-06T10:00:00.000Z")
+      ]
     });
 
     await expect(
@@ -356,25 +398,227 @@ describe("calculations lifecycle", () => {
     ).rejects.toThrow("Calculation can be linked only to a CRM participant");
   });
 
-  it("archives a calculation without deleting versions", async () => {
+  it("rejects interpretation drafts for unknown calculation versions", async () => {
     const store = createMemoryStore();
-    const created = await createCalculation({
+    const created = await createTestCalculation(store);
+
+    await expect(
+      saveCalculationInterpretation({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        versionId: "missing-version",
+        source: "manual",
+        text: "Проверенная трактовка для клиента.",
+        modelId: null,
+        promptVersion: null,
+        interpretationIdGenerator: () => "00000000-0000-4000-8000-000000000032",
+        now: new Date("2026-07-06T11:10:00.000Z")
+      })
+    ).rejects.toThrow("Calculation version was not found");
+  });
+
+  it("rejects approval for missing interpretations", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+
+    await expect(
+      approveCalculationInterpretation({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        interpretationId: "missing-interpretation",
+        now: new Date("2026-07-06T11:40:00.000Z")
+      })
+    ).rejects.toThrow("Calculation interpretation was not found");
+  });
+
+  it("does not expose or mutate calculations for another owner", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+
+    expect(
+      await store.findByOwnerAndId({
+        ownerUserId: otherOwnerUserId,
+        calculationId: created.id
+      })
+    ).toBeNull();
+    await expect(
+      recalculateCalculation({
+        store,
+        ownerUserId: otherOwnerUserId,
+        calculationId: created.id,
+        methodVersion: "1.0.1",
+        settingsSnapshot: {},
+        inputSnapshot: {},
+        resultSnapshot: {},
+        resultSummary: {},
+        resultChecksum: "sha256:v2",
+        versionIdGenerator: () => "00000000-0000-4000-8000-000000000022",
+        now: new Date("2026-07-06T11:00:00.000Z")
+      })
+    ).rejects.toThrow("Calculation was not found");
+
+    expect(store.calls.appendVersion).toHaveLength(0);
+  });
+
+  it("passes owner id to every mutating store method", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+    const recalculated = await recalculateCalculation({
       store,
       ownerUserId,
-      module: "numerology",
-      mode: "individual",
-      methodCode: "pythagorean",
-      methodVersion: "1.0.0",
-      title: "Archive me",
-      participants: [],
+      calculationId: created.id,
+      methodVersion: "1.0.1",
+      settingsSnapshot: {},
+      inputSnapshot: { name: "Мария Иванова" },
+      resultSnapshot: { lifePath: 9, expression: 7 },
+      resultSummary: { primaryLabel: "Путь 9" },
+      resultChecksum: "sha256:v2",
+      versionIdGenerator: () => "00000000-0000-4000-8000-000000000022",
+      now: new Date("2026-07-06T11:00:00.000Z")
+    });
+    await linkCalculationToClient({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      clientId,
+      now: new Date("2026-07-06T11:05:00.000Z")
+    });
+    const latestVersionId = recalculated.versions.at(-1)!.id;
+    await saveAndApproveInterpretation({ store, calculation: created, versionId: latestVersionId });
+    await publishCalculationToClient({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      clientId,
+      now: new Date("2026-07-06T12:00:00.000Z")
+    });
+    await archiveCalculation({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      now: new Date("2026-07-06T12:30:00.000Z")
+    });
+
+    expect(store.calls.appendVersion[0]?.ownerUserId).toBe(ownerUserId);
+    expect(store.calls.linkClient[0]?.ownerUserId).toBe(ownerUserId);
+    expect(store.calls.saveInterpretation[0]?.ownerUserId).toBe(ownerUserId);
+    expect(store.calls.approveInterpretation[0]?.ownerUserId).toBe(ownerUserId);
+    expect(store.calls.publishClientLink[0]?.ownerUserId).toBe(ownerUserId);
+    expect(store.calls.archive[0]?.ownerUserId).toBe(ownerUserId);
+  });
+
+  it("rejects lifecycle changes after archive", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+    await linkCalculationToClient({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      clientId,
+      now: new Date("2026-07-06T11:00:00.000Z")
+    });
+    const approved = await saveAndApproveInterpretation({ store, calculation: created });
+    await archiveCalculation({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      now: new Date("2026-07-06T12:00:00.000Z")
+    });
+
+    await expect(
+      recalculateCalculation({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        methodVersion: "1.0.1",
+        settingsSnapshot: {},
+        inputSnapshot: {},
+        resultSnapshot: {},
+        resultSummary: {},
+        resultChecksum: "sha256:v2",
+        versionIdGenerator: () => "00000000-0000-4000-8000-000000000022",
+        now: new Date("2026-07-06T12:10:00.000Z")
+      })
+    ).rejects.toThrow("Archived calculation cannot be changed");
+    await expect(
+      linkCalculationToClient({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        clientId,
+        now: new Date("2026-07-06T12:10:00.000Z")
+      })
+    ).rejects.toThrow("Archived calculation cannot be changed");
+    await expect(
+      saveCalculationInterpretation({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        versionId: created.versions[0]!.id,
+        source: "manual",
+        text: "Текст после архива.",
+        modelId: null,
+        promptVersion: null,
+        interpretationIdGenerator: () => "00000000-0000-4000-8000-000000000033",
+        now: new Date("2026-07-06T12:10:00.000Z")
+      })
+    ).rejects.toThrow("Archived calculation cannot be changed");
+    await expect(
+      approveCalculationInterpretation({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        interpretationId: approved.interpretations[0]!.id,
+        now: new Date("2026-07-06T12:10:00.000Z")
+      })
+    ).rejects.toThrow("Archived calculation cannot be changed");
+    await expect(
+      publishCalculationToClient({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        clientId,
+        now: new Date("2026-07-06T12:10:00.000Z")
+      })
+    ).rejects.toThrow("Archived calculation cannot be changed");
+  });
+
+  it("normalizes required calculation strings before persistence", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store, {
+      methodCode: "  pythagorean  ",
+      methodVersion: "  1.0.0  ",
+      resultChecksum: "  sha256:v1  "
+    });
+    const recalculated = await recalculateCalculation({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      methodVersion: "  1.0.1  ",
       settingsSnapshot: {},
       inputSnapshot: {},
       resultSnapshot: {},
       resultSummary: {},
-      resultChecksum: "sha256:v1",
+      resultChecksum: "  sha256:v2  ",
+      versionIdGenerator: () => "00000000-0000-4000-8000-000000000022",
+      now: new Date("2026-07-06T11:00:00.000Z")
+    });
+
+    expect(created.methodCode).toBe("pythagorean");
+    expect(created.currentMethodVersion).toBe("1.0.0");
+    expect(created.versions[0]?.resultChecksum).toBe("sha256:v1");
+    expect(recalculated.currentMethodVersion).toBe("1.0.1");
+    expect(recalculated.versions[1]?.resultChecksum).toBe("sha256:v2");
+  });
+
+  it("archives a calculation without deleting versions", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store, {
+      title: "Archive me",
       idGenerator: () => "00000000-0000-4000-8000-000000000040",
-      versionIdGenerator: () => "00000000-0000-4000-8000-000000000041",
-      now: new Date("2026-07-06T10:00:00.000Z")
+      versionIdGenerator: () => "00000000-0000-4000-8000-000000000041"
     });
 
     const archived = await archiveCalculation({

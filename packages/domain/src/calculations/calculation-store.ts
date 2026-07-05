@@ -52,6 +52,7 @@ export type CalculationStoreCreateInput = {
 };
 
 export type CalculationStoreAppendVersionInput = {
+  readonly ownerUserId: string;
   readonly calculationId: string;
   readonly methodVersion: string;
   readonly settingsSnapshot: unknown;
@@ -78,16 +79,19 @@ export type CalculationStore = {
     input: CalculationStoreAppendVersionInput
   ) => Promise<CalculationRecord | null>;
   readonly linkClient: (input: {
+    readonly ownerUserId: string;
     readonly calculationId: string;
     readonly clientId: string;
     readonly now: string;
   }) => Promise<CalculationRecord | null>;
   readonly publishClientLink: (input: {
+    readonly ownerUserId: string;
     readonly calculationId: string;
     readonly clientId: string;
     readonly now: string;
   }) => Promise<CalculationRecord | null>;
   readonly saveInterpretation: (input: {
+    readonly ownerUserId: string;
     readonly calculationId: string;
     readonly versionId: string;
     readonly source: CalculationInterpretationSource;
@@ -98,11 +102,13 @@ export type CalculationStore = {
     readonly now: string;
   }) => Promise<CalculationRecord | null>;
   readonly approveInterpretation: (input: {
+    readonly ownerUserId: string;
     readonly calculationId: string;
     readonly interpretationId: string;
     readonly now: string;
   }) => Promise<CalculationRecord | null>;
   readonly archive: (input: {
+    readonly ownerUserId: string;
     readonly calculationId: string;
     readonly now: string;
   }) => Promise<CalculationRecord | null>;
