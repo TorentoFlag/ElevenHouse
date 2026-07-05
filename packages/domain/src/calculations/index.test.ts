@@ -334,6 +334,22 @@ describe("calculations lifecycle", () => {
     expect(published.links[0]?.visibility).toBe("visible_to_client");
   });
 
+  it("rejects publishing before the calculation is linked to the client", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+    await saveAndApproveInterpretation({ store, calculation: created });
+
+    await expect(
+      publishCalculationToClient({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        clientId,
+        now: new Date("2026-07-06T12:00:00.000Z")
+      })
+    ).rejects.toThrow("Calculation must be linked before publishing");
+  });
+
   it("rejects publishing when only an older version has an approved interpretation", async () => {
     const store = createMemoryStore();
     const created = await createTestCalculation(store);
