@@ -47,6 +47,15 @@ function createMemoryStore(): MemoryStore {
     return current;
   }
 
+  function findLatestVersion(record: CalculationRecord) {
+    return record.versions.reduce<(typeof record.versions)[number] | null>((latest, version) => {
+      if (!latest || version.versionNumber > latest.versionNumber) {
+        return version;
+      }
+      return latest;
+    }, null);
+  }
+
   return {
     calls,
     listByOwner: async ({ ownerUserId, status, limit, offset }) => {
@@ -54,7 +63,11 @@ function createMemoryStore(): MemoryStore {
         (record) =>
           record.ownerUserId === ownerUserId && (status === "all" || record.status === status)
       );
-      return { calculations: filtered.slice(offset, offset + limit), total: filtered.length };
+      const ordered = filtered.sort(
+        (left, right) =>
+          right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id)
+      );
+      return { calculations: ordered.slice(offset, offset + limit), total: ordered.length };
     },
     findByOwnerAndId: async (input) => findRecord(input),
     create: async (input) => {
@@ -148,6 +161,7 @@ function createMemoryStore(): MemoryStore {
       calls.publishClientLink.push(input);
       const current = findRecord(input);
       if (!current) return null;
+      if (findLatestVersion(current)?.id !== input.expectedVersionId) return null;
       const next: CalculationRecord = {
         ...current,
         status: "published",
@@ -311,7 +325,40 @@ describe("calculations lifecycle", () => {
 
     expect(result.total).toBe(2);
     expect(result.calculations).toHaveLength(1);
-    expect(result.calculations[0]?.title).toBe("Owner active second");
+    expect(result.calculations[0]?.title).toBe("Owner active first");
+  });
+
+  it("orders calculation lists by updated date and id before pagination", async () => {
+    const store = createMemoryStore();
+    await createTestCalculation(store, {
+      idGenerator: () => "00000000-0000-4000-8000-000000000301",
+      title: "Older update",
+      now: new Date("2026-07-06T09:00:00.000Z")
+    });
+    await createTestCalculation(store, {
+      idGenerator: () => "00000000-0000-4000-8000-000000000302",
+      title: "Same timestamp lower id",
+      now: new Date("2026-07-06T10:00:00.000Z")
+    });
+    await createTestCalculation(store, {
+      idGenerator: () => "00000000-0000-4000-8000-000000000303",
+      title: "Same timestamp higher id",
+      now: new Date("2026-07-06T10:00:00.000Z")
+    });
+
+    const result = await listCalculations({
+      store,
+      ownerUserId,
+      status: "all",
+      limit: 2,
+      offset: 1
+    });
+
+    expect(result.total).toBe(3);
+    expect(result.calculations.map((calculation) => calculation.title)).toEqual([
+      "Same timestamp lower id",
+      "Older update"
+    ]);
   });
 
   it("gets calculations owned by the requester", async () => {
@@ -431,6 +478,30 @@ describe("calculations lifecycle", () => {
     expect(linked.links[0]?.visibility).toBe("private_to_astrologer");
     expect(approved.interpretations[0]?.status).toBe("approved");
     expect(published.links[0]?.visibility).toBe("visible_to_client");
+    expect(store.calls.publishClientLink[0]?.expectedVersionId).toBe(created.versions[0]!.id);
+  });
+
+  it("does not publish when the store sees a stale expected latest version", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+    await linkCalculationToClient({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      clientId,
+      now: new Date("2026-07-06T11:00:00.000Z")
+    });
+    await saveAndApproveInterpretation({ store, calculation: created });
+
+    const result = await store.publishClientLink({
+      ownerUserId,
+      calculationId: created.id,
+      clientId,
+      expectedVersionId: "00000000-0000-4000-8000-000000000099",
+      now: new Date("2026-07-06T12:00:00.000Z").toISOString()
+    });
+
+    expect(result).toBeNull();
   });
 
   it("rejects publishing before the calculation is linked to the client", async () => {

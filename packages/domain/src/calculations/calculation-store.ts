@@ -66,6 +66,10 @@ export type CalculationStoreAppendVersionInput = {
 };
 
 export type CalculationStore = {
+  /**
+   * Returns calculations ordered by updatedAt desc, then id desc. The total is
+   * counted before limit/offset pagination.
+   */
   readonly listByOwner: (query: {
     readonly ownerUserId: string;
     readonly status: CalculationStatusFilter;
@@ -97,10 +101,16 @@ export type CalculationStore = {
     readonly clientId: string;
     readonly now: string;
   }) => Promise<CalculationRecord | null>;
+  /**
+   * Publishes the client link only when the expected version is still the
+   * calculation's latest version. Adapters must perform the check and update
+   * atomically, returning null if the latest version changed before publish.
+   */
   readonly publishClientLink: (input: {
     readonly ownerUserId: string;
     readonly calculationId: string;
     readonly clientId: string;
+    readonly expectedVersionId: string;
     readonly now: string;
   }) => Promise<CalculationRecord | null>;
   readonly saveInterpretation: (input: {

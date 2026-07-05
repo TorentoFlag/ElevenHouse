@@ -20,6 +20,7 @@ export async function listCalculations(input: {
   readonly limit: number;
   readonly offset: number;
 }): Promise<CalculationListResult> {
+  // Store contract returns updatedAt desc, id desc with total counted before pagination.
   const limit = normalizeListLimit(input.limit);
   const offset = normalizeListOffset(input.offset);
 
@@ -183,6 +184,7 @@ export async function publishCalculationToClient(input: {
     ownerUserId: record.ownerUserId,
     calculationId: record.id,
     clientId,
+    expectedVersionId: latestVersion.id,
     now: input.now.toISOString()
   });
   if (!published) {
