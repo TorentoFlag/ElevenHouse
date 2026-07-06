@@ -111,6 +111,7 @@ describe("calculation contracts", () => {
     });
 
     expect(() => listCalculationsQuerySchema.parse({ limit: "101" })).toThrow();
+    expect(() => listCalculationsQuerySchema.parse({ limit: "0" })).toThrow();
     expect(() => listCalculationsQuerySchema.parse({ offset: "-1" })).toThrow();
   });
 

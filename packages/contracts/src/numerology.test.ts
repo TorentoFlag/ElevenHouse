@@ -150,6 +150,18 @@ describe("numerology contracts", () => {
         ]
       })
     ).toThrow();
+
+    expect(() =>
+      createNumerologyCalculationRequestSchema.parse({
+        ...individualRequest,
+        participants: [
+          {
+            ...subjectManualParticipant,
+            birthDate: "1990-02-31"
+          }
+        ]
+      })
+    ).toThrow();
   });
 
   it("parses a valid compatibility request with exactly subject and partner", () => {
