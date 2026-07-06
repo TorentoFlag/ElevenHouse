@@ -223,6 +223,21 @@ export type CreateNumerologyCalculationRequest = z.infer<
   typeof createNumerologyCalculationRequestSchema
 >;
 
+export const recalculateNumerologyCalculationRequestSchema =
+  createNumerologyCalculationRequestSchema;
+export type RecalculateNumerologyCalculationRequest = z.infer<
+  typeof recalculateNumerologyCalculationRequestSchema
+>;
+
+export const createNumerologyAiDraftRequestSchema = z
+  .object({
+    versionId: uuidSchema
+  })
+  .strict();
+export type CreateNumerologyAiDraftRequest = z.infer<
+  typeof createNumerologyAiDraftRequestSchema
+>;
+
 const numerologyCalculationRecordResponseSchema = calculationRecordResponseSchema.extend({
   module: z.literal("numerology"),
   methodCode: numerologyMethodCodeSchema

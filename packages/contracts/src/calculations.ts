@@ -122,6 +122,16 @@ export const calculationIdParamSchema = z
   .strict();
 export type CalculationIdParam = z.infer<typeof calculationIdParamSchema>;
 
+export const calculationInterpretationIdParamSchema = z
+  .object({
+    calculationId: uuidSchema,
+    interpretationId: uuidSchema
+  })
+  .strict();
+export type CalculationInterpretationIdParam = z.infer<
+  typeof calculationInterpretationIdParamSchema
+>;
+
 export const listCalculationsQuerySchema = z
   .object({
     module: calculationModuleFilterSchema.default("all"),
@@ -243,6 +253,31 @@ export const listCalculationsResponseSchema = z
   })
   .strict();
 export type ListCalculationsResponse = z.infer<typeof listCalculationsResponseSchema>;
+
+export const linkCalculationClientRequestSchema = z
+  .object({
+    clientId: uuidSchema
+  })
+  .strict();
+export type LinkCalculationClientRequest = z.infer<typeof linkCalculationClientRequestSchema>;
+
+export const publishCalculationRequestSchema = linkCalculationClientRequestSchema;
+export type PublishCalculationRequest = z.infer<typeof publishCalculationRequestSchema>;
+
+export const saveCalculationInterpretationRequestSchema = z
+  .object({
+    versionId: uuidSchema,
+    text: z.string().trim().min(1).max(20_000)
+  })
+  .strict();
+export type SaveCalculationInterpretationRequest = z.infer<
+  typeof saveCalculationInterpretationRequestSchema
+>;
+
+export const approveCalculationInterpretationRequestSchema = z.object({}).strict();
+export type ApproveCalculationInterpretationRequest = z.infer<
+  typeof approveCalculationInterpretationRequestSchema
+>;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;

@@ -1,0 +1,1 @@
+export const CALCULATION_STORE = Symbol("CALCULATION_STORE");
