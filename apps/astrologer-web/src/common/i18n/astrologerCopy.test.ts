@@ -32,7 +32,9 @@ const assertRequiredProductActionCopy = (
 
 describe("astrologerCopy", () => {
   it("requires reference entry modal create and edit labels", () => {
-    expect(assertRequiredReferenceEntryModalEditLabels(astrologerCopyByLocale.ru.reference.entryModal)).toEqual(
+    expect(
+      assertRequiredReferenceEntryModalEditLabels(astrologerCopyByLocale.ru.reference.entryModal)
+    ).toEqual(
       expect.objectContaining({
         createTitle: "Новая трактовка",
         editTitle: "Редактировать трактовку",
@@ -40,7 +42,9 @@ describe("astrologerCopy", () => {
         editCloseLabel: "Закрыть модалку редактирования трактовки"
       })
     );
-    expect(assertRequiredReferenceEntryModalEditLabels(astrologerCopyByLocale.en.reference.entryModal)).toEqual(
+    expect(
+      assertRequiredReferenceEntryModalEditLabels(astrologerCopyByLocale.en.reference.entryModal)
+    ).toEqual(
       expect.objectContaining({
         createTitle: "New interpretation",
         editTitle: "Edit interpretation",
@@ -68,8 +72,12 @@ describe("astrologerCopy", () => {
       "Поиск клиентов, заказов, карт…"
     );
     expect(astrologerCopyByLocale.ru).toHaveProperty("appShell.header.createLabel", "Создать");
-    expect(astrologerCopyByLocale.ru).toHaveProperty("appShell.header.profileName", "Алиса Вега");
-    expect(astrologerCopyByLocale.ru).toHaveProperty("appShell.header.profileTimezone", "GMT+3, Москва");
+    expect(astrologerCopyByLocale.ru).toHaveProperty(
+      "appShell.header.profileLoadingName",
+      "Загрузка профиля"
+    );
+    expect(astrologerCopyByLocale.ru).not.toHaveProperty("appShell.header.profileName");
+    expect(astrologerCopyByLocale.ru).not.toHaveProperty("appShell.header.profileTimezone");
   });
 
   it("contains product constructor and action copy for both locales", () => {

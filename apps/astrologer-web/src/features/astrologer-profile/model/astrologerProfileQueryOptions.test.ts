@@ -24,6 +24,9 @@ describe("astrologer profile query options", () => {
       "astrologerProfile",
       "current"
     ]);
+    expect(currentAstrologerProfileQueryOptions()).toMatchObject({
+      staleTime: 60_000
+    });
   });
 
   it("invalidates current profile data after upsert succeeds", async () => {

@@ -181,9 +181,11 @@ export type AppShellHeaderCopy = {
   notificationsAriaLabel: string;
   unreadNotificationsLabel: string;
   profileSettingsLabel: string;
-  profileName: string;
-  profileTimezone: string;
-  profileInitials: string;
+  profileFallbackInitials: string;
+  profileLoadingName: string;
+  profileLoadingTimezone: string;
+  profileMissingName: string;
+  profileMissingTimezone: string;
   verifiedLabel: string;
 };
 
@@ -349,9 +351,11 @@ export const astrologerCopyByLocale = {
         notificationsAriaLabel: "Открыть уведомления",
         unreadNotificationsLabel: "Есть непрочитанные уведомления",
         profileSettingsLabel: "Настройки профиля",
-        profileName: "Алиса Вега",
-        profileTimezone: "GMT+3, Москва",
-        profileInitials: "АВ",
+        profileFallbackInitials: "EH",
+        profileLoadingName: "Загрузка профиля",
+        profileLoadingTimezone: "Данные профиля загружаются",
+        profileMissingName: "Профиль не заполнен",
+        profileMissingTimezone: "Укажите часовой пояс в настройках",
         verifiedLabel: "Верифицирован"
       },
       navigation: {
@@ -615,9 +619,11 @@ export const astrologerCopyByLocale = {
         notificationsAriaLabel: "Open notifications",
         unreadNotificationsLabel: "Unread notifications",
         profileSettingsLabel: "Profile settings",
-        profileName: "Alisa Vega",
-        profileTimezone: "GMT+3, Moscow",
-        profileInitials: "AV",
+        profileFallbackInitials: "EH",
+        profileLoadingName: "Loading profile",
+        profileLoadingTimezone: "Profile data is loading",
+        profileMissingName: "Profile is incomplete",
+        profileMissingTimezone: "Set timezone in settings",
         verifiedLabel: "Verified"
       },
       navigation: {

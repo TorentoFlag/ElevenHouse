@@ -14,7 +14,8 @@ export const astrologerProfileQueryKeys = {
 export function currentAstrologerProfileQueryOptions() {
   return {
     queryKey: astrologerProfileQueryKeys.current(),
-    queryFn: () => getCurrentAstrologerProfile()
+    queryFn: () => getCurrentAstrologerProfile(),
+    staleTime: 60_000
   };
 }
 
