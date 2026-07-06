@@ -28,7 +28,7 @@ const pythagoreanSettings = {
   includeNameNumbers: true,
   includePsychomatrix: true,
   includeStrengthLines: true,
-  forecastDate: "2026-07-06"
+  forecastDate: "2026-01-01"
 } as const;
 
 const individualRequest = {
@@ -230,6 +230,18 @@ describe("numerology contracts", () => {
         ]
       })
     ).toThrow();
+
+    expect(() =>
+      createNumerologyCalculationRequestSchema.parse({
+        ...individualRequest,
+        participants: [
+          {
+            ...subjectManualParticipant,
+            clientId: "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      })
+    ).toThrow();
   });
 
   it("requires CRM participant clientId, displayName, fullName, and birthDate", () => {
@@ -291,6 +303,26 @@ describe("numerology contracts", () => {
       numerologyCalculationResponseSchema.parse({
         ...calculationResponse,
         unexpected: true
+      })
+    ).toThrow();
+
+    expect(() =>
+      numerologyCalculationResponseSchema.parse({
+        ...calculationResponse,
+        currentVersion: {
+          ...calculationResponse.currentVersion,
+          id: "88888888-8888-4888-8888-888888888888"
+        }
+      })
+    ).toThrow();
+
+    expect(() =>
+      numerologyCalculationResponseSchema.parse({
+        ...calculationResponse,
+        resultSnapshot: {
+          methodCode: "pythagorean",
+          keyNumbers: { lifePath: 1 }
+        }
       })
     ).toThrow();
   });

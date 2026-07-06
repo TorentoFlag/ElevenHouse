@@ -118,6 +118,13 @@ export const numerologyParticipantRequestSchema = z
   .strict()
   .superRefine((value, ctx) => {
     if (value.source === "manual") {
+      if (value.clientId !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["clientId"],
+          message: "Manual participant clientId must be null"
+        });
+      }
       if (!value.fullName) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -229,7 +236,57 @@ export const numerologyCalculationResponseSchema = z
     settingsSnapshot: snapshotObjectSchema,
     inputSnapshot: snapshotObjectSchema
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    const currentVersion = value.calculation.versions.find(
+      (version) => version.id === value.currentVersion.id
+    );
+
+    if (!currentVersion) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["currentVersion", "id"],
+        message: "Current version must belong to calculation versions"
+      });
+      return;
+    }
+
+    if (!sameSnapshot(value.currentVersion, currentVersion)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["currentVersion"],
+        message: "Current version must match calculation version"
+      });
+    }
+
+    if (!sameSnapshot(value.resultSnapshot, currentVersion.resultSnapshot)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["resultSnapshot"],
+        message: "Result snapshot must match current version"
+      });
+    }
+
+    if (!sameSnapshot(value.settingsSnapshot, currentVersion.settingsSnapshot)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["settingsSnapshot"],
+        message: "Settings snapshot must match current version"
+      });
+    }
+
+    if (!sameSnapshot(value.inputSnapshot, currentVersion.inputSnapshot)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["inputSnapshot"],
+        message: "Input snapshot must match current version"
+      });
+    }
+  });
 export type NumerologyCalculationResponse = z.infer<
   typeof numerologyCalculationResponseSchema
 >;
+
+function sameSnapshot(first: unknown, second: unknown): boolean {
+  return JSON.stringify(first) === JSON.stringify(second);
+}
