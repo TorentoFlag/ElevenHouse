@@ -141,6 +141,20 @@ describe("calculation contracts", () => {
         ]
       })
     ).toThrow();
+
+    expect(() =>
+      calculationRecordResponseSchema.parse({
+        ...calculationRecordResponse,
+        versions: [
+          {
+            ...calculationRecordResponse.versions[0],
+            resultSnapshot: {
+              generatedAt: new Date("2026-07-06T00:00:00.000Z")
+            }
+          }
+        ]
+      })
+    ).toThrow();
   });
 
   it("rejects invalid or future participant birth dates in responses", () => {
@@ -163,6 +177,19 @@ describe("calculation contracts", () => {
           {
             ...calculationRecordResponse.participants[0],
             birthDate: "2999-01-01"
+          }
+        ]
+      })
+    ).toThrow();
+
+    expect(() =>
+      calculationRecordResponseSchema.parse({
+        ...calculationRecordResponse,
+        participants: [
+          {
+            ...calculationRecordResponse.participants[0],
+            source: "crm_client",
+            clientId: null
           }
         ]
       })

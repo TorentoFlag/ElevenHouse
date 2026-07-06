@@ -2,7 +2,33 @@ import { z } from "@elevenhouse/validation";
 
 const uuidSchema = z.string().uuid();
 const dateTimeSchema = z.string().datetime();
-const snapshotObjectSchema = z.record(z.string(), z.unknown());
+
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { readonly [key: string]: JsonValue };
+
+const plainObjectSchema = z.custom<Record<string, unknown>>(
+  (value) => isPlainObject(value),
+  "Expected a plain JSON object"
+);
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number().finite(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    plainObjectSchema.pipe(z.record(z.string(), jsonValueSchema))
+  ])
+);
+
+export const calculationSnapshotObjectSchema = plainObjectSchema.pipe(
+  z.record(z.string(), jsonValueSchema)
+);
 
 const parseIsoDate = (value: string): Date | null => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -113,7 +139,7 @@ export const calculationParticipantResponseSchema = z
     clientId: uuidSchema.nullable(),
     displayName: z.string().trim().min(1).max(200),
     birthDate: dateSchema.nullable(),
-    inputSnapshot: snapshotObjectSchema,
+    inputSnapshot: calculationSnapshotObjectSchema,
     manuallyOverridden: z.boolean()
   })
   .strict()
@@ -123,6 +149,13 @@ export const calculationParticipantResponseSchema = z
         code: z.ZodIssueCode.custom,
         path: ["clientId"],
         message: "Manual participant clientId must be null"
+      });
+    }
+    if (value.source === "crm_client" && value.clientId === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["clientId"],
+        message: "CRM participant clientId is required"
       });
     }
   });
@@ -135,10 +168,10 @@ export const calculationVersionResponseSchema = z
     id: uuidSchema,
     versionNumber: z.number().int().positive(),
     methodVersion: z.string().trim().min(1).max(120),
-    settingsSnapshot: snapshotObjectSchema,
-    inputSnapshot: snapshotObjectSchema,
-    resultSnapshot: snapshotObjectSchema,
-    resultSummary: snapshotObjectSchema,
+    settingsSnapshot: calculationSnapshotObjectSchema,
+    inputSnapshot: calculationSnapshotObjectSchema,
+    resultSnapshot: calculationSnapshotObjectSchema,
+    resultSummary: calculationSnapshotObjectSchema,
     resultChecksum: z.string().trim().min(1).max(256),
     createdAt: dateTimeSchema
   })
@@ -210,3 +243,9 @@ export const listCalculationsResponseSchema = z
   })
   .strict();
 export type ListCalculationsResponse = z.infer<typeof listCalculationsResponseSchema>;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}

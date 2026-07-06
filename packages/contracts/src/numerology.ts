@@ -1,5 +1,6 @@
 import { z } from "@elevenhouse/validation";
 import {
+  calculationSnapshotObjectSchema,
   calculationModeSchema,
   calculationParticipantRoleSchema,
   calculationParticipantSourceSchema,
@@ -8,7 +9,6 @@ import {
 } from "./calculations";
 
 const uuidSchema = z.string().uuid();
-const snapshotObjectSchema = z.record(z.string(), z.unknown());
 
 const isValidIsoDate = (value: string): boolean => parseIsoDate(value) !== null;
 
@@ -232,9 +232,9 @@ export const numerologyCalculationResponseSchema = z
   .object({
     calculation: numerologyCalculationRecordResponseSchema,
     currentVersion: calculationVersionResponseSchema,
-    resultSnapshot: snapshotObjectSchema,
-    settingsSnapshot: snapshotObjectSchema,
-    inputSnapshot: snapshotObjectSchema
+    resultSnapshot: calculationSnapshotObjectSchema,
+    settingsSnapshot: calculationSnapshotObjectSchema,
+    inputSnapshot: calculationSnapshotObjectSchema
   })
   .strict()
   .superRefine((value, ctx) => {
