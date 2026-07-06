@@ -202,9 +202,12 @@ describe("ReferencePageView", () => {
     expect(results.props.search).toBe("луна");
     expect(results.props.resultsMotionKey).toBe("planets-in-signs:1000");
     expect(results.props.isResultsUpdating).toBe(true);
+    expect(results.props.hasMoreEntries).toBe(false);
+    expect(results.props.isLoadingMoreEntries).toBe(false);
     results.props.onSourceChange("modified");
     results.props.onEditEntry(getArrayItem(entries, 0));
     results.props.onDeleteEntry(getArrayItem(entries, 1));
+    results.props.onLoadMoreEntries();
     expect(onSourceChange).toHaveBeenCalledWith("modified");
     expect(onEditEntry).toHaveBeenCalledWith(getArrayItem(entries, 0));
     expect(onDeleteEntry).toHaveBeenCalledWith(getArrayItem(entries, 1));
@@ -330,6 +333,8 @@ function createBaseProps(): ReferencePageViewProps {
     deleteConfirmationEntry: null,
     resultsMotionKey: "all:all:1000",
     isResultsUpdating: false,
+    hasMoreEntries: false,
+    isLoadingMoreEntries: false,
     onCategoryChange: vi.fn(),
     onSourceChange: vi.fn(),
     onSearchChange: vi.fn(),
@@ -340,7 +345,8 @@ function createBaseProps(): ReferencePageViewProps {
     onDeleteCancel: vi.fn(),
     onAdd: vi.fn(),
     onEditEntry: vi.fn(),
-    onDeleteEntry: vi.fn()
+    onDeleteEntry: vi.fn(),
+    onLoadMoreEntries: vi.fn()
   };
 }
 
@@ -362,6 +368,8 @@ type TestElementProps = {
   isPending?: boolean;
   isResetting?: boolean;
   isResultsUpdating?: boolean;
+  hasMoreEntries?: boolean;
+  isLoadingMoreEntries?: boolean;
   loadingLabel?: string;
   onAdd: () => void;
   onCancel: () => void;
@@ -369,6 +377,7 @@ type TestElementProps = {
   onConfirm: () => void;
   onDeleteEntry: (entry: DictionaryEffectiveEntryResponse) => void;
   onEditEntry: (entry: DictionaryEffectiveEntryResponse) => void;
+  onLoadMoreEntries: () => void;
   onReset: () => void;
   onSearchChange: (search: string) => void;
   onSourceChange: (source: string) => void;

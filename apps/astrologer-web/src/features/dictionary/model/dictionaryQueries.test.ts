@@ -12,6 +12,7 @@ import {
   createDictionaryCustomEntryMutationOptions,
   deleteDictionaryEntryMutationOptions,
   dictionaryCategoriesQueryOptions,
+  dictionaryEntriesInfiniteQueryOptions,
   dictionaryEntriesQueryOptions,
   resetDictionaryEntriesMutationOptions,
   updateDictionaryCustomEntryMutationOptions,
@@ -111,6 +112,66 @@ describe("dictionary query options", () => {
     const options = dictionaryEntriesQueryOptions(entriesQuery);
 
     expect(options.placeholderData).toBe(keepPreviousData);
+  });
+
+  it("describes dictionary entry pages for infinite scrolling", async () => {
+    vi.mocked(listDictionaryEntries).mockResolvedValue({
+      entries: [],
+      total: 24,
+      counts: {
+        sources: {
+          all: 24,
+          platform: 12,
+          modified: 8,
+          custom: 4
+        }
+      }
+    });
+
+    const options = dictionaryEntriesInfiniteQueryOptions({
+      locale: "ru",
+      categoryId: entriesQuery.categoryId,
+      source: "all",
+      search: "луна",
+      limit: 10
+    });
+    const firstPage = {
+      entries: [],
+      total: 24,
+      counts: {
+        sources: {
+          all: 24,
+          platform: 12,
+          modified: 8,
+          custom: 4
+        }
+      }
+    };
+
+    expect(options.initialPageParam).toBe(0);
+    expect(options.placeholderData).toBe(keepPreviousData);
+    expect(options.queryKey).toEqual(
+      dictionaryQueryKeys.infiniteEntries({
+        locale: "ru",
+        categoryId: entriesQuery.categoryId,
+        source: "all",
+        search: "луна",
+        limit: 10
+      })
+    );
+    await expect(options.queryFn({ pageParam: 0 })).resolves.toMatchObject({ total: 24 });
+    expect(listDictionaryEntries).toHaveBeenCalledWith({
+      locale: "ru",
+      categoryId: entriesQuery.categoryId,
+      source: "all",
+      search: "луна",
+      limit: 10,
+      offset: 0
+    });
+    expect(options.getNextPageParam(firstPage, [firstPage], 0)).toBe(10);
+    expect(
+      options.getNextPageParam(firstPage, [firstPage, firstPage, firstPage], 20)
+    ).toBeUndefined();
   });
 
   it("creates custom entries and invalidates every dictionary query on success", async () => {

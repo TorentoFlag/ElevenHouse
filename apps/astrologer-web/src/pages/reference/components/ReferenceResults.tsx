@@ -4,6 +4,8 @@ import type {
   DictionarySourceCounts
 } from "@elevenhouse/contracts";
 import { classNames } from "@elevenhouse/design-system/helpers";
+import { InfiniteScrollTrigger } from "@elevenhouse/design-system/components/InfiniteScrollTrigger";
+import "@elevenhouse/design-system/components/InfiniteScrollTrigger.css";
 import { MotionContent } from "@elevenhouse/design-system/motion";
 import type { AstrologerCopy } from "../../../common/i18n/astrologerCopy";
 import type { ReferenceAddEntryOptions } from "../types";
@@ -24,6 +26,8 @@ export type ReferenceResultsProps = {
   readonly isError: boolean;
   readonly resultsMotionKey: string;
   readonly isResultsUpdating: boolean;
+  readonly hasMoreEntries: boolean;
+  readonly isLoadingMoreEntries: boolean;
   readonly loadingLabel: string;
   readonly errorLabel: string;
   readonly emptyLabel: string;
@@ -34,6 +38,7 @@ export type ReferenceResultsProps = {
   readonly onAdd: (options?: ReferenceAddEntryOptions) => void;
   readonly onEditEntry: (entry: DictionaryEffectiveEntryResponse) => void;
   readonly onDeleteEntry: (entry: DictionaryEffectiveEntryResponse) => void;
+  readonly onLoadMoreEntries: () => void;
 };
 
 const sourceFilterOrder: DictionaryEntrySourceFilter[] = ["all", "platform", "modified", "custom"];
@@ -49,6 +54,8 @@ export function ReferenceResults({
   isError,
   resultsMotionKey,
   isResultsUpdating,
+  hasMoreEntries,
+  isLoadingMoreEntries,
   loadingLabel,
   errorLabel,
   emptyLabel,
@@ -58,7 +65,8 @@ export function ReferenceResults({
   onSourceChange,
   onAdd,
   onEditEntry,
-  onDeleteEntry
+  onDeleteEntry,
+  onLoadMoreEntries
 }: ReferenceResultsProps) {
   return (
     <div className={styles.content}>
@@ -98,18 +106,28 @@ export function ReferenceResults({
         )}
 
         {!isLoading && !isError && entries.length > 0 && (
-          <div className={styles.entryGrid}>
-            {entries.map((entry) => (
-              <ReferenceEntryCard
-                key={entry.id}
-                entry={entry}
-                sourceBadges={sourceBadges}
-                entryActions={entryActions}
-                onEditEntry={onEditEntry}
-                onDeleteEntry={onDeleteEntry}
-              />
-            ))}
-          </div>
+          <>
+            <div className={styles.entryGrid}>
+              {entries.map((entry) => (
+                <ReferenceEntryCard
+                  key={entry.id}
+                  entry={entry}
+                  sourceBadges={sourceBadges}
+                  entryActions={entryActions}
+                  onEditEntry={onEditEntry}
+                  onDeleteEntry={onDeleteEntry}
+                />
+              ))}
+            </div>
+            <InfiniteScrollTrigger
+              className={styles.infiniteScrollTrigger}
+              enabled={!isResultsUpdating}
+              hasMore={hasMoreEntries}
+              isLoading={isLoadingMoreEntries}
+              loadingLabel={loadingLabel}
+              onLoadMore={onLoadMoreEntries}
+            />
+          </>
         )}
       </MotionContent>
     </div>

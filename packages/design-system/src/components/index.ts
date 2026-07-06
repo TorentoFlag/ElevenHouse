@@ -4,6 +4,7 @@ export * from "./Card/index.js";
 export * from "./Chip/index.js";
 export * from "./IconButton/index.js";
 export * from "./IconPicker/index.js";
+export * from "./InfiniteScrollTrigger/index.js";
 export * from "./LanguageSwitcher/index.js";
 export * from "./Modal/index.js";
 export * from "./NumberStepper/index.js";

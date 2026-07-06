@@ -8,7 +8,7 @@ import { useDebounce } from "../../common/hooks/useDebounce";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { useDictionaryCategoriesQuery } from "../../features/dictionary/model/useDictionaryCategoriesQuery";
-import { useDictionaryEntriesQuery } from "../../features/dictionary/model/useDictionaryEntriesQuery";
+import { useDictionaryEntriesInfiniteQuery } from "../../features/dictionary/model/useDictionaryEntriesInfiniteQuery";
 import { useDeleteDictionaryEntryMutation } from "../../features/dictionary/model/useDeleteDictionaryEntryMutation";
 import { useResetDictionaryEntriesMutation } from "../../features/dictionary/model/useResetDictionaryEntriesMutation";
 import { ReferenceEntryModal } from "./components/ReferenceEntryModal";
@@ -40,7 +40,7 @@ export function ReferencePage() {
   const categoriesQuery = useDictionaryCategoriesQuery({ locale });
   const deleteEntryMutation = useDeleteDictionaryEntryMutation();
   const resetEntriesMutation = useResetDictionaryEntriesMutation();
-  const entriesQuery = useDictionaryEntriesQuery(
+  const entriesQuery = useDictionaryEntriesInfiniteQuery(
     createReferenceEntriesQuery({
       locale,
       selectedCategoryId,
@@ -48,13 +48,23 @@ export function ReferencePage() {
       search: debouncedSearch
     })
   );
+  const entryPages = entriesQuery.data?.pages ?? [];
+  const firstEntryPage = entryPages[0];
+  const entriesResponse = firstEntryPage
+    ? {
+        ...firstEntryPage,
+        entries: entryPages.flatMap((page) => page.entries)
+      }
+    : undefined;
   const summary = createReferencePageSummary({
     categoriesResponse: categoriesQuery.data,
-    entriesResponse: entriesQuery.data
+    entriesResponse
   });
+  const isResultsUpdating =
+    entriesQuery.isPlaceholderData && entriesQuery.isFetching && !entriesQuery.isFetchingNextPage;
   const previousResultsMotionKeyRef = useRef("initial");
   const currentResultsMotionKey =
-    entriesQuery.isPlaceholderData && previousResultsMotionKeyRef.current
+    isResultsUpdating && previousResultsMotionKeyRef.current
       ? previousResultsMotionKeyRef.current
       : `${selectedCategoryId ?? "all"}:${selectedSource}:${debouncedSearch.trim()}:${entriesQuery.dataUpdatedAt}`;
 
@@ -87,7 +97,9 @@ export function ReferencePage() {
         isResetConfirmationOpen={isResetConfirmationOpen}
         deleteConfirmationEntry={deleteConfirmationEntry}
         resultsMotionKey={currentResultsMotionKey}
-        isResultsUpdating={entriesQuery.isPlaceholderData && entriesQuery.isFetching}
+        isResultsUpdating={isResultsUpdating}
+        hasMoreEntries={Boolean(entriesQuery.hasNextPage)}
+        isLoadingMoreEntries={entriesQuery.isFetchingNextPage}
         onCategoryChange={setSelectedCategoryId}
         onSourceChange={setSelectedSource}
         onSearchChange={setSearch}
@@ -146,6 +158,11 @@ export function ReferencePage() {
           }
 
           setDeleteConfirmationEntry(entry);
+        }}
+        onLoadMoreEntries={() => {
+          if (entriesQuery.hasNextPage && !entriesQuery.isFetchingNextPage) {
+            void entriesQuery.fetchNextPage();
+          }
         }}
       />
       {entryModal && entryModal.mode === "create" && (

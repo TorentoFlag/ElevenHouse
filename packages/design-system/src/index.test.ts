@@ -13,6 +13,7 @@ describe("design-system root exports", () => {
     expect(designSystem.ChevronRight).toBeTypeOf("function");
     expect(designSystem.Icon).toBeTypeOf("function");
     expect(designSystem.IconPicker).toBeTypeOf("function");
+    expect(designSystem.InfiniteScrollTrigger).toBeTypeOf("function");
     expect(designSystem.LanguageSwitcher).toBeTypeOf("function");
     expect(designSystem.LayoutGrid).toBeTypeOf("function");
     expect(designSystem.NumberStepper).toBeTypeOf("function");

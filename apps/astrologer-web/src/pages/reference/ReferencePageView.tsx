@@ -31,6 +31,8 @@ export type ReferencePageViewProps = {
   deleteConfirmationEntry: DictionaryEffectiveEntryResponse | null;
   resultsMotionKey: string;
   isResultsUpdating: boolean;
+  hasMoreEntries: boolean;
+  isLoadingMoreEntries: boolean;
   onCategoryChange: (categoryId: string | null) => void;
   onSourceChange: (source: DictionaryEntrySourceFilter) => void;
   onSearchChange: (search: string) => void;
@@ -42,6 +44,7 @@ export type ReferencePageViewProps = {
   onAdd: (options?: ReferenceAddEntryOptions) => void;
   onEditEntry: (entry: DictionaryEffectiveEntryResponse) => void;
   onDeleteEntry: (entry: DictionaryEffectiveEntryResponse) => void;
+  onLoadMoreEntries: () => void;
 };
 
 export function ReferencePageView({
@@ -61,6 +64,8 @@ export function ReferencePageView({
   deleteConfirmationEntry,
   resultsMotionKey,
   isResultsUpdating,
+  hasMoreEntries,
+  isLoadingMoreEntries,
   onCategoryChange,
   onSourceChange,
   onSearchChange,
@@ -71,7 +76,8 @@ export function ReferencePageView({
   onDeleteCancel,
   onAdd,
   onEditEntry,
-  onDeleteEntry
+  onDeleteEntry,
+  onLoadMoreEntries
 }: ReferencePageViewProps) {
   return (
     <section className={styles.referencePage} aria-labelledby="reference-title">
@@ -108,6 +114,8 @@ export function ReferencePageView({
           isError={isError}
           resultsMotionKey={resultsMotionKey}
           isResultsUpdating={isResultsUpdating}
+          hasMoreEntries={hasMoreEntries}
+          isLoadingMoreEntries={isLoadingMoreEntries}
           loadingLabel={copy.loadingLabel}
           errorLabel={copy.errorLabel}
           emptyLabel={copy.emptyLabel}
@@ -118,6 +126,7 @@ export function ReferencePageView({
           onAdd={onAdd}
           onEditEntry={onEditEntry}
           onDeleteEntry={onDeleteEntry}
+          onLoadMoreEntries={onLoadMoreEntries}
         />
       </div>
 

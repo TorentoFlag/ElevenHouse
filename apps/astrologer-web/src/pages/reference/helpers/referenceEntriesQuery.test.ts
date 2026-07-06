@@ -1,7 +1,4 @@
-import type {
-  DictionaryEntrySourceFilter,
-  DictionaryLocale
-} from "@elevenhouse/contracts";
+import type { DictionaryEntrySourceFilter, DictionaryLocale } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
 import { createReferenceEntriesQuery } from "./referenceEntriesQuery";
 
@@ -21,8 +18,7 @@ describe("createReferenceEntriesQuery", () => {
       categoryId,
       source: "modified",
       search: "луна",
-      limit: 50,
-      offset: 0
+      limit: 10
     });
   });
 
@@ -37,8 +33,7 @@ describe("createReferenceEntriesQuery", () => {
     ).toEqual({
       locale: "en",
       source: "all",
-      limit: 50,
-      offset: 0
+      limit: 10
     });
   });
 });

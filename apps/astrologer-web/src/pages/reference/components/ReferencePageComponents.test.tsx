@@ -1,6 +1,7 @@
 import { Children, isValidElement, type ReactElement } from "react";
 import type { DictionaryEffectiveEntryResponse } from "@elevenhouse/contracts";
 import { Card } from "@elevenhouse/design-system/components/Card";
+import { InfiniteScrollTrigger } from "@elevenhouse/design-system/components/InfiniteScrollTrigger";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
 import { MotionContent } from "@elevenhouse/design-system/motion";
 import { describe, expect, it, vi } from "vitest";
@@ -234,6 +235,8 @@ describe("Reference page local components", () => {
       isError: false,
       resultsMotionKey: "all:all:луна:1000",
       isResultsUpdating: true,
+      hasMoreEntries: true,
+      isLoadingMoreEntries: false,
       loadingLabel: "Загружаем справочники",
       errorLabel: "Не удалось загрузить справочники",
       emptyLabel: copy.emptyLabel,
@@ -243,7 +246,8 @@ describe("Reference page local components", () => {
       onSourceChange,
       onAdd,
       onEditEntry: vi.fn(),
-      onDeleteEntry: vi.fn()
+      onDeleteEntry: vi.fn(),
+      onLoadMoreEntries: vi.fn()
     });
 
     const filters = findElementsByType(results, ReferenceSourceFilterChip);
@@ -260,6 +264,7 @@ describe("Reference page local components", () => {
     expect(motion.props.transitionKey).toBe("all:all:луна:1000");
     expect(motion.props.className).toContain(styles.resultsMotionUpdating);
     expect(findElementsByType(results, ReferenceEntryCard)).toHaveLength(2);
+    expect(findRequiredElementByType(results, InfiniteScrollTrigger).props.hasMore).toBe(true);
 
     const emptyResults = ReferenceResults({
       sourceFilterAriaLabel: copy.sourceFilterAriaLabel,
@@ -277,6 +282,8 @@ describe("Reference page local components", () => {
       isError: false,
       resultsMotionKey: "empty",
       isResultsUpdating: false,
+      hasMoreEntries: false,
+      isLoadingMoreEntries: false,
       loadingLabel: "Загружаем справочники",
       errorLabel: "Не удалось загрузить справочники",
       emptyLabel: copy.emptyLabel,
@@ -286,7 +293,8 @@ describe("Reference page local components", () => {
       onSourceChange,
       onAdd,
       onEditEntry: vi.fn(),
-      onDeleteEntry: vi.fn()
+      onDeleteEntry: vi.fn(),
+      onLoadMoreEntries: vi.fn()
     });
     findRequiredElementByType(emptyResults, "button").props.onClick();
     expect(onAdd).toHaveBeenCalledWith({ titleSeed: "новая" });
@@ -315,10 +323,9 @@ describe("Reference page local components", () => {
     expect(modal.props.title).toBe("Удалить трактовку?");
     expect(modal.props.closeLabel).toBe("Закрыть модалку удаления трактовки");
     expect(JSON.stringify(modal.props.children)).toContain("Точно хотите удалить трактовку?");
-    expect(buttons.map((button) => button.props["data-reference-delete-confirmation-action"])).toEqual([
-      "confirm",
-      "cancel"
-    ]);
+    expect(
+      buttons.map((button) => button.props["data-reference-delete-confirmation-action"])
+    ).toEqual(["confirm", "cancel"]);
     expect(buttons.map((button) => button.props.disabled)).toEqual([true, true]);
 
     getArrayItem(buttons, 0).props.onClick();
@@ -342,6 +349,7 @@ type TestElementProps = {
   disabled?: boolean;
   icon: { props: { iconName?: string }; type: unknown };
   iconName?: string;
+  hasMore?: boolean;
   variant?: string;
   "aria-hidden"?: string;
   id?: string;

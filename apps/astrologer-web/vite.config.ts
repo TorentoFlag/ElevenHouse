@@ -105,6 +105,18 @@ export default defineConfig({
           import.meta.url
         )
       ),
+      "@elevenhouse/design-system/components/InfiniteScrollTrigger": fileURLToPath(
+        new URL(
+          "../../packages/design-system/src/components/InfiniteScrollTrigger/index.ts",
+          import.meta.url
+        )
+      ),
+      "@elevenhouse/design-system/components/InfiniteScrollTrigger.css": fileURLToPath(
+        new URL(
+          "../../packages/design-system/src/components/InfiniteScrollTrigger/InfiniteScrollTrigger.css",
+          import.meta.url
+        )
+      ),
       "@elevenhouse/design-system/components/Card": fileURLToPath(
         new URL("../../packages/design-system/src/components/Card/index.ts", import.meta.url)
       ),

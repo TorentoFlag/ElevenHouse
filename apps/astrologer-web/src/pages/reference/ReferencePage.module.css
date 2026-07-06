@@ -263,6 +263,11 @@
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 }
 
+.infiniteScrollTrigger {
+  margin-top: 18px;
+  padding: 10px 0;
+}
+
 .entryCard {
   min-height: 132px;
   flex-direction: column;

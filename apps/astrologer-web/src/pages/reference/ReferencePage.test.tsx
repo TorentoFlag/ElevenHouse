@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   useDocumentTitle: vi.fn(),
   useDictionaryCategoriesQuery: vi.fn(),
   useDictionaryEntriesQuery: vi.fn(),
+  useDictionaryEntriesInfiniteQuery: vi.fn(),
   useDeleteDictionaryEntryMutation: vi.fn(),
   useResetDictionaryEntriesMutation: vi.fn(),
   createReferenceEntriesQuery: vi.fn(),
@@ -75,6 +76,10 @@ vi.mock("../../features/dictionary/model/useDictionaryCategoriesQuery", () => ({
 
 vi.mock("../../features/dictionary/model/useDictionaryEntriesQuery", () => ({
   useDictionaryEntriesQuery: mocks.useDictionaryEntriesQuery
+}));
+
+vi.mock("../../features/dictionary/model/useDictionaryEntriesInfiniteQuery", () => ({
+  useDictionaryEntriesInfiniteQuery: mocks.useDictionaryEntriesInfiniteQuery
 }));
 
 vi.mock("../../features/dictionary/model/useDeleteDictionaryEntryMutation", () => ({
@@ -236,6 +241,19 @@ describe("ReferencePage", () => {
       isFetching: false,
       isPlaceholderData: false
     });
+    mocks.useDictionaryEntriesInfiniteQuery.mockReturnValue({
+      data: {
+        pages: [{ entries: [entry], total: 1, counts: { sources: sourceCounts } }]
+      },
+      dataUpdatedAt: 1000,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      isPlaceholderData: false,
+      isFetchingNextPage: false,
+      hasNextPage: false,
+      fetchNextPage: vi.fn()
+    });
     mocks.useResetDictionaryEntriesMutation.mockReturnValue({
       isPending: false,
       mutateAsync: vi.fn()
@@ -244,14 +262,26 @@ describe("ReferencePage", () => {
       isPending: false,
       mutateAsync: vi.fn()
     });
-    mocks.createReferenceEntriesQuery.mockReturnValue({ locale: "ru" });
-    mocks.createReferencePageSummary.mockReturnValue({
-      categories,
-      entries: [entry],
-      catalogTotal: 1,
-      resultTotal: 1,
-      sourceCounts
-    });
+    mocks.createReferenceEntriesQuery.mockReturnValue({ locale: "ru", source: "all", limit: 10 });
+    mocks.createReferencePageSummary.mockImplementation(
+      ({
+        categoriesResponse,
+        entriesResponse
+      }: {
+        categoriesResponse?: { categories: typeof categories; total: number };
+        entriesResponse?: {
+          entries: DictionaryEffectiveEntryResponse[];
+          total: number;
+          counts: { sources: DictionarySourceCounts };
+        };
+      }) => ({
+        categories: categoriesResponse?.categories ?? [],
+        entries: entriesResponse?.entries ?? [],
+        catalogTotal: categoriesResponse?.total ?? 0,
+        resultTotal: entriesResponse?.total ?? 0,
+        sourceCounts: entriesResponse?.counts.sources ?? sourceCounts
+      })
+    );
   });
 
   it("opens the entry modal in edit mode with the selected entry", () => {
@@ -339,6 +369,63 @@ describe("ReferencePage", () => {
     });
     expect(viewProps.search).toBe("луна");
     expect(viewProps.resultsMotionKey).toBe("all:all:лу:1000");
+  });
+
+  it("uses ten-entry infinite pages and exposes fetch-more state to the view", () => {
+    const fetchNextPage = vi.fn();
+    mocks.useDictionaryEntriesInfiniteQuery.mockReturnValue({
+      data: {
+        pages: [
+          { entries: [entry], total: 2, counts: { sources: sourceCounts } },
+          {
+            entries: [{ ...entry, id: "9e2d4c2d-4708-404f-8c90-73d0b96ac870" }],
+            total: 2,
+            counts: { sources: sourceCounts }
+          }
+        ]
+      },
+      dataUpdatedAt: 1200,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      isPlaceholderData: false,
+      isFetchingNextPage: false,
+      hasNextPage: true,
+      fetchNextPage
+    });
+    mocks.createReferenceEntriesQuery.mockReturnValue({
+      locale: "ru",
+      categoryId: entry.categoryId,
+      source: "all",
+      search: "луна",
+      limit: 10
+    });
+
+    renderPage();
+
+    const viewProps = getLatestMockProps<
+      ReferencePageViewProps & {
+        entries: DictionaryEffectiveEntryResponse[];
+        hasMoreEntries: boolean;
+        isLoadingMoreEntries: boolean;
+        onLoadMoreEntries: () => void;
+      }
+    >(mocks.referencePageView);
+
+    expect(mocks.useDictionaryEntriesInfiniteQuery).toHaveBeenCalledWith({
+      locale: "ru",
+      categoryId: entry.categoryId,
+      source: "all",
+      search: "луна",
+      limit: 10
+    });
+    expect(viewProps.entries).toHaveLength(2);
+    expect(viewProps.hasMoreEntries).toBe(true);
+    expect(viewProps.isLoadingMoreEntries).toBe(false);
+
+    viewProps.onLoadMoreEntries();
+
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -1,0 +1,14 @@
+.ehInfiniteScrollTrigger {
+  display: flex;
+  min-height: 1px;
+  align-items: center;
+  justify-content: center;
+}
+
+.ehInfiniteScrollTrigger__label {
+  color: var(--eh-color-muted);
+  font-family: var(--eh-font-sans);
+  font-size: var(--eh-font-size-13);
+  font-weight: 600;
+  line-height: 1.4;
+}

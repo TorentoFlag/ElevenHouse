@@ -18,6 +18,7 @@ import {
   type UpdateDictionaryPlatformEntryOverrideInput
 } from "../api/updateDictionaryPlatformEntryOverride";
 import { dictionaryQueryKeys } from "./dictionaryQueryKeys";
+import type { DictionaryEntriesInfiniteQuery } from "./dictionaryQueryKeys";
 
 export function dictionaryCategoriesQueryOptions(query: ListDictionaryCategoriesQuery) {
   return {
@@ -31,6 +32,28 @@ export function dictionaryEntriesQueryOptions(query: DictionaryEntriesQuery) {
     queryKey: dictionaryQueryKeys.entries(query),
     queryFn: () => listDictionaryEntries(query),
     placeholderData: keepPreviousData
+  };
+}
+
+export function dictionaryEntriesInfiniteQueryOptions(query: DictionaryEntriesInfiniteQuery) {
+  return {
+    queryKey: dictionaryQueryKeys.infiniteEntries(query),
+    initialPageParam: 0,
+    queryFn: ({ pageParam }: { readonly pageParam: number }) =>
+      listDictionaryEntries({
+        ...query,
+        offset: pageParam
+      }),
+    placeholderData: keepPreviousData,
+    getNextPageParam: (
+      lastPage: Awaited<ReturnType<typeof listDictionaryEntries>>,
+      _pages: readonly Awaited<ReturnType<typeof listDictionaryEntries>>[],
+      lastPageParam: number
+    ) => {
+      const nextOffset = lastPageParam + query.limit;
+
+      return nextOffset < lastPage.total ? nextOffset : undefined;
+    }
   };
 }
 

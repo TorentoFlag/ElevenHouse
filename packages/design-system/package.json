@@ -58,6 +58,11 @@
       "import": "./dist/components/IconPicker/index.js"
     },
     "./components/IconPicker.css": "./src/components/IconPicker/IconPicker.css",
+    "./components/InfiniteScrollTrigger": {
+      "types": "./dist/components/InfiniteScrollTrigger/index.d.ts",
+      "import": "./dist/components/InfiniteScrollTrigger/index.js"
+    },
+    "./components/InfiniteScrollTrigger.css": "./src/components/InfiniteScrollTrigger/InfiniteScrollTrigger.css",
     "./components/OtpAuthForm": {
       "types": "./dist/components/OtpAuthForm/index.d.ts",
       "import": "./dist/components/OtpAuthForm/index.js"
@@ -221,6 +226,7 @@
     "./src/components/Chip/Chip.css",
     "./src/components/IconButton/IconButton.css",
     "./src/components/IconPicker/IconPicker.css",
+    "./src/components/InfiniteScrollTrigger/InfiniteScrollTrigger.css",
     "./src/navigation/Breadcrumbs/Breadcrumbs.css",
     "./src/components/Modal/Modal.css",
     "./src/components/NumberStepper/NumberStepper.css",
