@@ -97,7 +97,12 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
             publishedAt: null,
             updatedAt: new Date(input.now)
           })
-          .where(eq(calculationClientLinks.calculationId, input.calculationId));
+          .where(
+            and(
+              eq(calculationClientLinks.calculationId, input.calculationId),
+              eq(calculationClientLinks.visibility, "visible_to_client")
+            )
+          );
         const linkCount = await countLinks(transaction, input.calculationId);
         const updatedRow = await updateOwnedCalculation(transaction, {
           ownerUserId: input.ownerUserId,
@@ -138,7 +143,30 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           })
           .returning({ id: calculationClientLinks.id });
         if (!insertedLink) {
-          const [record] = await hydrateCalculations(transaction, [row]);
+          await transaction
+            .update(calculationClientLinks)
+            .set({
+              visibility: "private_to_astrologer",
+              publishedAt: null,
+              updatedAt: new Date(input.now)
+            })
+            .where(
+              and(
+                eq(calculationClientLinks.calculationId, input.calculationId),
+                eq(calculationClientLinks.clientId, input.clientId)
+              )
+            );
+          const updatedRow = await updateOwnedCalculation(transaction, {
+            ownerUserId: input.ownerUserId,
+            calculationId: input.calculationId,
+            patch: {
+              status: "linked",
+              updatedAt: new Date(input.now)
+            }
+          });
+          if (!updatedRow) return null;
+
+          const [record] = await hydrateCalculations(transaction, [updatedRow]);
           return record ?? null;
         }
 

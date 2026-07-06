@@ -173,8 +173,8 @@ describe("calculations Drizzle/PostgreSQL integration", () => {
         now: "2026-07-06T10:09:30.000Z"
       })
     ).resolves.toMatchObject({
-      status: "published",
-      links: [{ clientId, visibility: "visible_to_client" }]
+      status: "linked",
+      links: [{ clientId, visibility: "private_to_astrologer", publishedAt: null }]
     });
     expect(linkByClient(publishedFirstClient, clientId)).toMatchObject({
       visibility: "visible_to_client",
