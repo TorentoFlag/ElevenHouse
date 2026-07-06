@@ -25,6 +25,8 @@ export function calculatePythagoreanIndividual(
   participant: PythagoreanIndividualResult["participant"],
   settings: PythagoreanSettings
 ): PythagoreanIndividualResult {
+  validatePythagoreanSettings(settings);
+
   const birthDate = parseIsoDate(participant.birthDate, "birthDate");
   const normalizedName = normalizeNumerologyName(participant.fullName, settings.nameNormalization);
   const nameValues = getNameValues(normalizedName);
@@ -77,6 +79,24 @@ export function calculatePythagoreanCompatibility(
       secondComparisonStrengthLines
     )
   };
+}
+
+function validatePythagoreanSettings(settings: PythagoreanSettings): void {
+  if (typeof settings !== "object" || settings === null) {
+    throw new NumerologyValidationError("Invalid Pythagorean settings");
+  }
+
+  if (
+    typeof settings.includeNameNumbers !== "boolean" ||
+    typeof settings.includePsychomatrix !== "boolean" ||
+    typeof settings.includeStrengthLines !== "boolean"
+  ) {
+    throw new NumerologyValidationError("Invalid Pythagorean display settings");
+  }
+
+  if (settings.forecastDate !== undefined && typeof settings.forecastDate !== "string") {
+    throw new NumerologyValidationError("Invalid forecastDate setting");
+  }
 }
 
 function calculateForecastNumbers(

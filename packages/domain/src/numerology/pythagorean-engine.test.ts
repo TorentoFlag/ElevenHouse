@@ -105,6 +105,40 @@ describe("calculatePythagoreanIndividual", () => {
       )
     ).toThrow(NumerologyValidationError);
   });
+
+  it("rejects malformed top-level settings", () => {
+    expect(() =>
+      calculatePythagoreanIndividual(
+        { fullName: "Мария", birthDate: "1990-03-14" },
+        null as never
+      )
+    ).toThrow(NumerologyValidationError);
+
+    expect(() =>
+      calculatePythagoreanIndividual(
+        { fullName: "Мария", birthDate: "1990-03-14" },
+        {
+          masterNumbers: { mode: "reduce_all" },
+          nameNormalization: { yoPolicy: "separate", shortIPolicy: "separate" },
+          includeNameNumbers: false,
+          includePsychomatrix: "yes",
+          includeStrengthLines: false
+        } as never
+      )
+    ).toThrow(NumerologyValidationError);
+
+    expect(() =>
+      calculatePythagoreanIndividual(
+        { fullName: "Мария", birthDate: "1990-03-14" },
+        {
+          masterNumbers: { mode: "reduce_all" },
+          nameNormalization: { yoPolicy: "separate", shortIPolicy: "separate" },
+          includeNameNumbers: false,
+          includePsychomatrix: false
+        } as never
+      )
+    ).toThrow(NumerologyValidationError);
+  });
 });
 
 describe("calculatePythagoreanCompatibility", () => {
