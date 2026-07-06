@@ -19,6 +19,16 @@
       "types": "./dist/media.d.ts",
       "import": "./dist/media.js",
       "require": "./dist/media.js"
+    },
+    "./calculations": {
+      "types": "./dist/calculations.d.ts",
+      "import": "./dist/calculations.js",
+      "require": "./dist/calculations.js"
+    },
+    "./numerology": {
+      "types": "./dist/numerology.d.ts",
+      "import": "./dist/numerology.js",
+      "require": "./dist/numerology.js"
     }
   },
   "scripts": {
