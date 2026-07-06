@@ -134,6 +134,16 @@
       "types": "./dist/adapters/calculations/index.d.ts",
       "import": "./dist/adapters/calculations/index.js",
       "require": "./dist/adapters/calculations/index.js"
+    },
+    "./clients": {
+      "types": "./dist/adapters/clients/index.d.ts",
+      "import": "./dist/adapters/clients/index.js",
+      "require": "./dist/adapters/clients/index.js"
+    },
+    "./adapters/clients": {
+      "types": "./dist/adapters/clients/index.d.ts",
+      "import": "./dist/adapters/clients/index.js",
+      "require": "./dist/adapters/clients/index.js"
     }
   },
   "scripts": {

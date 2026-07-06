@@ -15,6 +15,13 @@
       "when": 1783327724152,
       "tag": "0001_large_blue_shield",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783335783810,
+      "tag": "0002_free_nomad",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,10 @@ import {
   authSecurityEventTypeValues,
   authSessionStatusValues,
   astrologerProfiles,
+  clientAstrologerRelationships,
+  clientBirthData,
+  clientJoinIntents,
+  clientProfiles,
   databasePlatformRoleValues,
   dictionaryAstrologerEntries,
   dictionaryAstrologerEntryTypeValues,
@@ -66,6 +70,7 @@ import {
 } from "./schema/index";
 
 const currentBaselineMigration = "packages/db/drizzle/0000_dazzling_metal_master.sql";
+const clientRelationshipsMigration = "packages/db/drizzle/0002_free_nomad.sql";
 
 describe("database account schema constants", () => {
   it("keeps database role checks aligned with the application role model", () => {
@@ -104,6 +109,30 @@ describe("database account schema constants", () => {
 
   it("exports user profile table for self-declared display names", () => {
     expect(userProfiles).toBeDefined();
+  });
+
+  it("exports client relationship schema tables", () => {
+    expect(clientProfiles).toBeDefined();
+    expect(clientBirthData).toBeDefined();
+    expect(clientAstrologerRelationships).toBeDefined();
+    expect(clientJoinIntents).toBeDefined();
+  });
+
+  it("keeps client relationship tables in their migration delta", () => {
+    const migration = readFileSync(clientRelationshipsMigration, "utf8");
+
+    expect(migration).toContain('CREATE TABLE "client_profiles"');
+    expect(migration).toContain('CREATE TABLE "client_birth_data"');
+    expect(migration).toContain('CREATE TABLE "client_astrologer_relationships"');
+    expect(migration).toContain('CREATE TABLE "client_join_intents"');
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "client_astrologer_relationships_unique" ON "client_astrologer_relationships" USING btree ("client_user_id","astrologer_user_id")'
+    );
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "client_join_intents_token_hash_unique" ON "client_join_intents" USING btree ("token_hash")'
+    );
+    expect(migration).not.toContain('CREATE TABLE "billing_invoices"');
+    expect(migration).not.toContain('CREATE TABLE "verification_applications"');
   });
 
   it("keeps outbox event statuses explicit", () => {

@@ -33,6 +33,7 @@ import { outboxEvents } from "../../../schema/outbox/outbox-events.schema";
 import type { ElevenHouseDatabase } from "../../../runtime";
 import { insertReturningOne } from "../../../shared/insert-returning-one";
 import { createAuthSessionCreationStore } from "../auth-sessions";
+import { createDrizzleClientStore } from "../../clients";
 
 type AuthChallengesInsert = typeof authChallenges.$inferInsert;
 type AuthChallengeDeliveriesInsert = typeof authChallengeDeliveries.$inferInsert;
@@ -61,7 +62,12 @@ export function createDrizzlePasswordlessAuthUnitOfWork(
 ): PasswordlessAuthUnitOfWork {
   return {
     transact: (operation) =>
-      database.transaction((executor) => operation(createPasswordlessAuthStore(executor)))
+      database.transaction((executor) =>
+        operation({
+          ...createPasswordlessAuthStore(executor),
+          ...createDrizzleClientStore(executor as never)
+        })
+      )
   };
 }
 

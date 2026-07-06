@@ -3,6 +3,7 @@ import type {
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../../runtime";
+import { createDrizzleClientStore } from "../../clients";
 import {
   createAuthSessionCreationStore,
   type AuthSessionCreationDrizzleExecutor
@@ -34,7 +35,8 @@ export function createDrizzleCustomerAccountRegistrationSessionUnitOfWork(
       database.transaction((executor) =>
         operation({
           ...createAccountRegistrationStore(executor),
-          ...createAuthSessionCreationStore(executor)
+          ...createAuthSessionCreationStore(executor),
+          ...createDrizzleClientStore(executor as never)
         })
       )
   };
@@ -49,7 +51,8 @@ export function createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitO
         operation({
           ...createPasswordlessAuthStore(executor),
           ...createAccountRegistrationStore(executor),
-          ...createAuthSessionCreationStore(executor)
+          ...createAuthSessionCreationStore(executor),
+          ...createDrizzleClientStore(executor as never)
         })
       )
   };
