@@ -8,6 +8,13 @@
       "when": 1782996784018,
       "tag": "0000_dazzling_metal_master",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783327724152,
+      "tag": "0001_large_blue_shield",
+      "breakpoints": true
     }
   ]
 }
