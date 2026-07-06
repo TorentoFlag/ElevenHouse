@@ -1,5 +1,6 @@
 import type { ReactElement, SVGProps } from "react";
 import { ArrowLeft } from "../ArrowLeft/index.js";
+import { ArrowUpRight } from "../ArrowUpRight/index.js";
 import { Bell } from "../Bell/index.js";
 import { Box } from "../Box/index.js";
 import { Calendar } from "../Calendar/index.js";
@@ -11,6 +12,7 @@ import { ChevronRight } from "../ChevronRight/index.js";
 import { Clock } from "../Clock/index.js";
 import { Close } from "../Close/index.js";
 import { Content } from "../Content/index.js";
+import { Doc } from "../Doc/index.js";
 import { Edit } from "../Edit/index.js";
 import { FileDown } from "../FileDown/index.js";
 import { Flow } from "../Flow/index.js";
@@ -24,6 +26,7 @@ import { Map } from "../Map/index.js";
 import { Mic } from "../Mic/index.js";
 import { Orbit } from "../Orbit/index.js";
 import { Plus } from "../Plus/index.js";
+import { Pin } from "../Pin/index.js";
 import { Reference } from "../Reference/index.js";
 import { Refresh } from "../Refresh/index.js";
 import { Search } from "../Search/index.js";
@@ -39,6 +42,7 @@ export type IconComponent = (props: SVGProps<SVGSVGElement>) => ReactElement;
 
 export const iconRegistry = {
   arrowLeft: ArrowLeft,
+  arrowUpRight: ArrowUpRight,
   bell: Bell,
   box: Box,
   calendar: Calendar,
@@ -50,6 +54,7 @@ export const iconRegistry = {
   clock: Clock,
   close: Close,
   content: Content,
+  doc: Doc,
   edit: Edit,
   fileDown: FileDown,
   flow: Flow,
@@ -63,6 +68,7 @@ export const iconRegistry = {
   mic: Mic,
   orbit: Orbit,
   plus: Plus,
+  pin: Pin,
   reference: Reference,
   refresh: Refresh,
   search: Search,

@@ -22,7 +22,6 @@ import {
   useLinkCalculationClientMutation,
   useNumerologyCalculationListQuery,
   usePublishCalculationMutation,
-  useRecalculateNumerologyMutation,
   useSaveCalculationInterpretationMutation
 } from "../../features/numerology/model/numerologyHooks";
 import {
@@ -37,7 +36,6 @@ import type { NumerologyPageViewProps } from "./NumerologyPageView";
 export function useNumerologyPageController(): NumerologyPageViewProps {
   const listQuery = useNumerologyCalculationListQuery();
   const createMutation = useCreateNumerologyMutation();
-  const recalculateMutation = useRecalculateNumerologyMutation();
   const linkMutation = useLinkCalculationClientMutation();
   const saveInterpretationMutation = useSaveCalculationInterpretationMutation();
   const approveInterpretationMutation = useApproveCalculationInterpretationMutation();
@@ -58,7 +56,6 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const isBusy =
     createMutation.isPending ||
-    recalculateMutation.isPending ||
     linkMutation.isPending ||
     saveInterpretationMutation.isPending ||
     approveInterpretationMutation.isPending ||
@@ -103,16 +100,6 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
         const response = await createMutation.mutateAsync(toCreateNumerologyRequest(formState));
         setSelectedResponse(response);
         setIsSetupOpen(false);
-      }, setErrorMessage);
-    },
-    onRecalculate: () => {
-      if (!selectedCalculation) return;
-      run(async () => {
-        const response = await recalculateMutation.mutateAsync({
-          calculationId: selectedCalculation.id,
-          body: toCreateNumerologyRequest(formState)
-        });
-        setSelectedResponse(response);
       }, setErrorMessage);
     },
     onSelectSaved: (calculation) => {

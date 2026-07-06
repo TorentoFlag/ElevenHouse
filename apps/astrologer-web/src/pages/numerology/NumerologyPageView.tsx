@@ -2,6 +2,7 @@ import type {
   CalculationRecordResponse,
   NumerologyCalculationResponse
 } from "@elevenhouse/contracts";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import { NumerologyResultPanel } from "../../features/numerology/components/NumerologyResultPanel";
 import { NumerologySetupModal } from "../../features/numerology/components/NumerologySetupModal";
@@ -28,7 +29,6 @@ export type NumerologyPageViewProps = {
   readonly onSelectSubjectClient: (client: ClientSelectOption) => void;
   readonly onSelectPartnerClient: (client: ClientSelectOption) => void;
   readonly onCreate: () => void;
-  readonly onRecalculate: () => void;
   readonly onSelectSaved: (calculation: CalculationRecordResponse) => void;
   readonly onSelectDetail: (selector: string) => void;
   readonly onToggleYearMode: () => void;
@@ -57,7 +57,6 @@ export function NumerologyPageView({
   onSelectSubjectClient,
   onSelectPartnerClient,
   onCreate,
-  onRecalculate,
   onSelectDetail,
   onToggleYearMode,
   onToggleCompatibilityMode,
@@ -112,6 +111,7 @@ export function NumerologyPageView({
           onClick={onToggleYearMode}
           title="Личные год и месяцы"
         >
+          <Icon iconName="clock" width={15} height={15} aria-hidden="true" />
           Год
         </button>
         <button
@@ -121,6 +121,7 @@ export function NumerologyPageView({
           onClick={onToggleCompatibilityMode}
           title="Нумерологическая совместимость пары"
         >
+          <Icon iconName="users" width={15} height={15} aria-hidden="true" />
           Совместимость
         </button>
         <button
@@ -130,6 +131,7 @@ export function NumerologyPageView({
           onClick={onOpenPresentation}
           title="Полноэкранный показ для сессии"
         >
+          <Icon iconName="arrowUpRight" width={15} height={15} aria-hidden="true" />
           Презентация
         </button>
         <button
@@ -139,15 +141,13 @@ export function NumerologyPageView({
           onClick={onLink}
           title={pageModel.linkableClientId ? undefined : "Нужен CRM-участник"}
         >
+          <Icon
+            iconName={pageModel.isCalculationLinked ? "check" : "pin"}
+            width={15}
+            height={15}
+            aria-hidden="true"
+          />
           {pageModel.isCalculationLinked ? "Привязана" : "Привязать"}
-        </button>
-        <button
-          type="button"
-          className={styles.toolButton}
-          disabled={pageModel.isRecalculateDisabled}
-          onClick={onRecalculate}
-        >
-          Пересчитать
         </button>
         <button
           type="button"
@@ -155,25 +155,13 @@ export function NumerologyPageView({
           disabled
           title="PDF-экспорт подключим после backend export endpoint"
         >
+          <Icon iconName="doc" width={15} height={15} aria-hidden="true" />
           PDF
         </button>
       </header>
       <div className={styles.body}>
         <main className={styles.workspace}>
           {errorMessage ? <p className={styles.error}>{errorMessage}</p> : null}
-          <div className={styles.statusBar}>
-            <span className={styles.statusBadge}>
-              {pageModel.calculation ? pageModel.calculation.status : "нет расчета"}
-            </span>
-            {pageModel.latestVersion ? (
-              <span className={styles.statusBadge}>
-                версия {pageModel.latestVersion.versionNumber}
-              </span>
-            ) : null}
-            {pageModel.calculation?.mode === "compatibility" ? (
-              <span className={styles.statusBadge}>совместимость</span>
-            ) : null}
-          </div>
           <div className={styles.workspaceGrid}>
             <NumerologyResultPanel
               model={pageModel.model}

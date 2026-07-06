@@ -1,6 +1,6 @@
 .page {
   --numerology-panel: rgb(13 12 32 / 0.82);
-  --numerology-subhead: rgb(13 12 32 / 0.9);
+  --numerology-subhead: rgb(13 12 32 / 0.85);
   --numerology-surface: rgb(25 22 54 / 0.76);
   --numerology-line: rgb(216 212 236 / 0.08);
   --numerology-line-strong: rgb(216 212 236 / 0.14);
@@ -18,19 +18,22 @@
 }
 
 .toolbar {
+  box-sizing: border-box;
   display: flex;
   flex: 0 0 60px;
+  height: 60px;
   align-items: center;
   gap: 12px;
   min-width: 0;
-  padding: 0 18px;
+  padding: 0 20px;
   border-bottom: 1px solid var(--numerology-line);
   background: var(--numerology-subhead);
 }
 
 .titleGroup {
-  display: flex;
-  min-width: 0;
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-width: max-content;
   align-items: center;
   gap: 10px;
 }
@@ -49,12 +52,10 @@
 }
 
 .title {
-  overflow: hidden;
   margin: 0;
   color: var(--eh-color-moon-120);
   font-size: 17px;
   font-weight: 700;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -79,18 +80,21 @@
 .toolButtonActive,
 .toolButtonLinked {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  justify-content: center;
-  min-height: 32px;
-  padding: 0 12px;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 37px;
+  padding: 10px 16px;
   border: 1px solid var(--numerology-line-strong);
-  border-radius: 9px;
-  background: rgb(22 20 47 / 0.66);
+  border-radius: 14px;
+  background: rgb(30 27 62);
   color: var(--eh-color-moon-120);
   cursor: pointer;
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
 }
 
@@ -101,16 +105,26 @@
 }
 
 .toolButtonLinked {
-  border-color: rgb(110 231 183 / 0.32);
-  background: rgb(110 231 183 / 0.12);
-  color: var(--numerology-green);
+  border-color: rgb(78 200 160 / 0.35);
+  background: rgb(78 200 160 / 0.14);
+  color: rgb(78 200 160);
+}
+
+.toolButton svg,
+.toolButtonActive svg,
+.toolButtonLinked svg {
+  flex: 0 0 auto;
 }
 
 .toolButton:disabled,
-.toolButtonActive:disabled,
-.toolButtonLinked:disabled {
+.toolButtonActive:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.toolButtonLinked:disabled {
+  cursor: default;
+  opacity: 1;
 }
 
 .body {
@@ -130,29 +144,6 @@
   height: 100%;
   min-height: 0;
   grid-template-columns: 234px minmax(360px, 1fr) minmax(300px, 360px);
-}
-
-.statusBar {
-  position: absolute;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 12px 0 0 250px;
-  pointer-events: none;
-}
-
-.statusBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 9px;
-  border: 1px solid rgb(216 212 236 / 0.12);
-  border-radius: 999px;
-  background: rgb(22 20 47 / 0.72);
-  color: var(--eh-color-muted);
-  font-size: 11px;
-  font-weight: 700;
 }
 
 .error {
@@ -274,8 +265,4 @@
     overflow-x: auto;
   }
 
-  .statusBar {
-    position: static;
-    margin: 12px 14px 0;
-  }
 }

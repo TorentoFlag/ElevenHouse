@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import type { NumerologyCalculationResponse } from "@elevenhouse/contracts";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { describe, expect, it, vi } from "vitest";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import {
@@ -47,13 +49,13 @@ describe("NumerologyPageView", () => {
     expect(findButtonByText(view, "Совместимость")).toBeDefined();
     expect(findButtonByText(view, "Презентация")).toBeDefined();
     expect(findButtonByText(view, "PDF").props.disabled).toBe(true);
+    expect(findOptionalButtonByText(view, "Пересчитать")).toBeNull();
     expect(findOptionalButtonByText(view, "Данные расчета")).toBeNull();
     expect(findElements(view).some((element) => includesText(element.props, "Сохраненные"))).toBe(false);
   });
 
   it("does not render the saved calculations picker on the reference workspace", () => {
     const onSelectSaved = vi.fn();
-    const onRecalculate = vi.fn();
     const saved = response({
       source: "manual",
       clientId: null
@@ -61,15 +63,13 @@ describe("NumerologyPageView", () => {
     const view = NumerologyPageView({
       ...baseProps(),
       calculations: [saved],
-      onSelectSaved,
-      onRecalculate
+      onSelectSaved
     });
 
     expect(findElements(view).some((element) => includesText(element.props, "СОХРАНЕННЫЕ"))).toBe(
       false
     );
     expect(onSelectSaved).not.toHaveBeenCalled();
-    expect(onRecalculate).not.toHaveBeenCalled();
   });
 
   it("renders client selector instead of manual CRM UUID field", () => {
@@ -197,7 +197,7 @@ describe("NumerologyPageView", () => {
 
     expect(clientPickers).toHaveLength(1);
     expect(clientPickers[0]?.props.disabled).toBe(true);
-    expect(findButtonByText(view, "Пересчитать").props.disabled).toBe(true);
+    expect(findOptionalButtonByText(view, "Пересчитать")).toBeNull();
   });
 
   it("does not expose the non-reference publish action in the workspace", () => {
@@ -210,6 +210,69 @@ describe("NumerologyPageView", () => {
     });
 
     expect(findOptionalButtonByText(view, "Опубликовать")).toBeNull();
+  });
+
+  it("does not render calculation status or version badges above the reference workspace", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      selectedResponse: response({
+        source: "crm_client",
+        clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+      })
+    });
+
+    expect(findElements(view).some((element) => elementIncludesText(element, "calculated"))).toBe(
+      false
+    );
+    expect(findElements(view).some((element) => elementIncludesText(element, "версия 1"))).toBe(
+      false
+    );
+  });
+
+  it("keeps the desktop toolbar title from shrinking before the client selector", () => {
+    const css = readFileSync(new URL("./NumerologyPage.module.css", import.meta.url), "utf8");
+    const toolbarRule = getCssRule(css, ".toolbar");
+    const titleGroupRule = getCssRule(css, ".titleGroup");
+    const titleRule = getCssRule(css, ".title");
+
+    expect(toolbarRule).toContain("height: 60px;");
+    expect(toolbarRule).toContain("padding: 0 20px;");
+    expect(titleGroupRule).toContain("flex: 0 0 auto;");
+    expect(titleRule).not.toContain("text-overflow: ellipsis;");
+  });
+
+  it("keeps reference action buttons at fixed content width", () => {
+    const css = readFileSync(new URL("./NumerologyPage.module.css", import.meta.url), "utf8");
+    const toolButtonRule = getCssRule(css, ".toolButton,\n.toolButtonActive,\n.toolButtonLinked");
+    const linkedRule = getCssRule(css, ".toolButtonLinked");
+    const linkedDisabledRule = getCssRule(css, ".toolButtonLinked:disabled");
+
+    expect(toolButtonRule).toContain("flex: 0 0 auto;");
+    expect(toolButtonRule).toContain("gap: 8px;");
+    expect(toolButtonRule).toContain("min-height: 37px;");
+    expect(toolButtonRule).toContain("padding: 10px 16px;");
+    expect(toolButtonRule).toContain("border-radius: 14px;");
+    expect(toolButtonRule).toContain("font-size: 13px;");
+    expect(toolButtonRule).toContain("font-weight: 600;");
+    expect(linkedRule).toContain("color: rgb(78 200 160);");
+    expect(linkedDisabledRule).toContain("opacity: 1;");
+  });
+
+  it("matches the reference action row icons and button set", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      selectedResponse: response({
+        source: "crm_client",
+        clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+      })
+    });
+
+    expect(getButtonIconName(view, "Год")).toBe("clock");
+    expect(getButtonIconName(view, "Совместимость")).toBe("users");
+    expect(getButtonIconName(view, "Презентация")).toBe("arrowUpRight");
+    expect(getButtonIconName(view, "Привязать")).toBe("pin");
+    expect(getButtonIconName(view, "PDF")).toBe("doc");
+    expect(findOptionalButtonByText(view, "Пересчитать")).toBeNull();
   });
 });
 
@@ -254,7 +317,6 @@ function baseProps(): NumerologyPageViewProps {
     onSelectSubjectClient: vi.fn(),
     onSelectPartnerClient: vi.fn(),
     onCreate: vi.fn(),
-    onRecalculate: vi.fn(),
     onSelectSaved: vi.fn(),
     onSelectDetail: vi.fn(),
     onToggleYearMode: vi.fn(),
@@ -362,6 +424,13 @@ function findButtonByTextInElements(
   return result as ReactElement<{ disabled?: boolean; title?: string }>;
 }
 
+function getButtonIconName(root: ReactElement, text: string): string | null {
+  const button = findButtonByText(root, text);
+  const icon = findElements(button).find((element) => element.type === Icon);
+
+  return (icon?.props as { iconName?: string } | undefined)?.iconName ?? null;
+}
+
 function findRequiredElementByType<TProps>(
   root: ReactElement,
   type: unknown
@@ -417,4 +486,22 @@ function includesText(value: unknown, text: string): boolean {
   }
 
   return false;
+}
+
+function elementIncludesText(element: ReactElement, text: string): boolean {
+  return includesText((element.props as { children?: unknown }).children, text);
+}
+
+function getCssRule(css: string, selector: string): string {
+  const matches = Array.from(
+    css.matchAll(new RegExp(`(?:^|\\n)${escapeRegExp(selector)}\\s*\\{(?<body>[^}]*)\\}`, "g"))
+  );
+  const match = matches.at(-1);
+  if (!match?.groups?.body) throw new Error(`CSS rule not found: ${selector}`);
+
+  return match.groups.body;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

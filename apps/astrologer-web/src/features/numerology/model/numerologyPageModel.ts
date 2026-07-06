@@ -39,7 +39,6 @@ export type NumerologyPageViewModel = {
   readonly linkDisabled: boolean;
   readonly publishDisabled: boolean;
   readonly publishDisabledReason: string | undefined;
-  readonly isRecalculateDisabled: boolean;
   readonly isClientSelectionDisabled: boolean;
   readonly isApproveInterpretationDisabled: boolean;
   readonly model: NumerologyWorkspaceModel | null;
@@ -76,7 +75,6 @@ export function buildNumerologyPageViewModel(
     linkDisabled: !canLinkCalculation(calculation) || isCalculationLinked(calculation) || isBusy,
     publishDisabled: !canPublishCalculation(calculation) || isBusy,
     publishDisabledReason: getPublishDisabledReason(calculation, isBusy),
-    isRecalculateDisabled: !model || isBusy,
     isClientSelectionDisabled: isBusy,
     isApproveInterpretationDisabled:
       !currentVersionInterpretation || currentVersionInterpretation.status === "approved" || isBusy,

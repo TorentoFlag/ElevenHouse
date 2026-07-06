@@ -69,6 +69,7 @@ describe("Icon", () => {
   it("keeps the supported icon names in the registry", () => {
     expect(Object.keys(iconRegistry).sort()).toEqual([
       "arrowLeft",
+      "arrowUpRight",
       "bell",
       "box",
       "calendar",
@@ -80,6 +81,7 @@ describe("Icon", () => {
       "clock",
       "close",
       "content",
+      "doc",
       "edit",
       "fileDown",
       "flow",
@@ -92,6 +94,7 @@ describe("Icon", () => {
       "map",
       "mic",
       "orbit",
+      "pin",
       "plus",
       "reference",
       "refresh",
