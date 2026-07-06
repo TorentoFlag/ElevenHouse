@@ -37,9 +37,49 @@ describe("AstrologerProfileService", () => {
           purpose: "profile_cover",
           url: `https://cdn.example/${ownerUserId}/profile_cover/${coverMediaId}/cover.png`
         })
-      }
+      },
+      integrityIssues: []
     });
     expect(store.findByOwnerUserId).toHaveBeenCalledWith({ ownerUserId });
+  });
+
+  it("surfaces profile media integrity issues without hiding the profile", async () => {
+    const mediaStore = createMediaStore({
+      findByOwnerAndId: vi.fn(async (input) => {
+        if (input.mediaId === avatarMediaId) {
+          return createMediaAsset("product_cover", avatarMediaId);
+        }
+        if (input.mediaId === coverMediaId) {
+          return createMediaAsset("profile_cover", coverMediaId, "cover.png", 1600, 600, "uploading");
+        }
+        return null;
+      })
+    });
+    const service = createService(createStore(), mediaStore);
+
+    await expect(service.getCurrentProfile(createAuthenticatedRequest())).resolves.toEqual({
+      profile: expect.objectContaining({
+        publicHandle: "astro-anna",
+        avatarMedia: null,
+        coverMedia: null
+      }),
+      integrityIssues: [
+        {
+          code: "avatar_media_unavailable",
+          severity: "warning",
+          field: "avatarMediaId",
+          mediaId: avatarMediaId,
+          message: "Profile avatar media is missing, has wrong purpose or is not ready"
+        },
+        {
+          code: "cover_media_unavailable",
+          severity: "warning",
+          field: "coverMediaId",
+          mediaId: coverMediaId,
+          message: "Profile cover media is missing, has wrong purpose or is not ready"
+        }
+      ]
+    });
   });
 
   it("upserts profile data for the authenticated astrologer", async () => {
@@ -169,12 +209,6 @@ function createStore(overrides: Partial<AstrologerProfileStore> = {}): Astrologe
         updatedAt: timestamp
       };
     }),
-    update: vi.fn(async (input) => ({
-      ...profile,
-      ...input.patch,
-      ownerUserId: input.ownerUserId,
-      updatedAt: input.now
-    })),
     ...overrides
   };
 }

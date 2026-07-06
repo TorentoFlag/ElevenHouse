@@ -126,7 +126,8 @@ describe("astrologer profile HTTP routes", () => {
         ...profile,
         avatarMedia: null,
         coverMedia: null
-      }
+      },
+      integrityIssues: []
     });
     expect(profileStore.findByOwnerUserId).toHaveBeenCalledWith({ ownerUserId });
   });
@@ -194,8 +195,7 @@ function createAuthStore(): AuthSessionAuthenticationStore {
 function createProfileStore(): AstrologerProfileStore {
   return {
     findByOwnerUserId: vi.fn(async () => profile),
-    upsert: vi.fn(async () => raise("Unexpected profile upsert call")),
-    update: vi.fn(async () => raise("Unexpected profile update call"))
+    upsert: vi.fn(async () => raise("Unexpected profile upsert call"))
   };
 }
 

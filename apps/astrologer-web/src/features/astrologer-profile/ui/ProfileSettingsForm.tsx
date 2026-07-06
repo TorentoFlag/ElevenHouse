@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type DragEvent,
@@ -22,6 +23,7 @@ import {
   createUpsertAstrologerProfileRequest,
   getProfileSettingsDraftValidationMessage,
   isProfileSettingsDraftDirty,
+  reconcileProfileSettingsDraftAfterProfileChange,
   toggleProfileStringValue,
   type AstrologerProfileSettingsDraft
 } from "../model/profileSettingsForm";
@@ -32,6 +34,7 @@ export type ProfileSettingsFormProps = {
   readonly locale: SupportedLocale;
   readonly profile: AstrologerProfileResponse | null;
   readonly isSaving: boolean;
+  readonly onDirtyChange?: (isDirty: boolean) => void;
   readonly onSave: (body: UpsertAstrologerProfileRequest) => void;
 };
 type ProfileMediaTarget = "avatar" | "cover";
@@ -47,6 +50,7 @@ export function ProfileSettingsForm({
   locale,
   profile,
   isSaving,
+  onDirtyChange,
   onSave
 }: ProfileSettingsFormProps) {
   const [draft, setDraft] = useState(() => createProfileSettingsDraft(profile, locale));
@@ -57,14 +61,34 @@ export function ProfileSettingsForm({
     () => createProfileSettingsDraft(profile, locale),
     [profile, locale]
   );
+  const previousInitialDraftRef = useRef(initialDraft);
+  const draftRef = useRef(draft);
   const validationMessage = getProfileSettingsDraftValidationMessage(draft);
   const isDirty = isProfileSettingsDraftDirty(initialDraft, draft);
   const isUploadingMedia = Boolean(mediaPreview.uploadingTarget);
 
   useEffect(() => {
-    setDraft(initialDraft);
-    setMediaPreview(createProfileMediaPreviewState(profile));
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    const result = reconcileProfileSettingsDraftAfterProfileChange({
+      previousInitialDraft: previousInitialDraftRef.current,
+      currentDraft: draftRef.current,
+      nextInitialDraft: initialDraft
+    });
+
+    if (result.shouldReplaceDraft) {
+      setDraft(result.draft);
+      draftRef.current = result.draft;
+      setMediaPreview(createProfileMediaPreviewState(profile));
+    }
+    previousInitialDraftRef.current = initialDraft;
   }, [initialDraft, profile]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const updateDraft = <TKey extends keyof AstrologerProfileSettingsDraft>(
     key: TKey,
@@ -173,7 +197,7 @@ export function ProfileSettingsForm({
       <section className={styles.settingsGroup}>
         <h2>Видимость страницы</h2>
         <p>Управляет тем, открыта ли личная страница и принимает ли оплату.</p>
-        <div className={styles.visibilityList}>
+        <div className={styles.visibilityList} role="radiogroup" aria-label="Видимость страницы">
           {PROFILE_VISIBILITY_OPTIONS.map((option) => {
             const selected = draft.visibilityStatus === option.id;
 
@@ -186,7 +210,8 @@ export function ProfileSettingsForm({
                 type="button"
                 onClick={() => updateDraft("visibilityStatus", option.id)}
                 style={{ "--visibility-color": option.color } as CSSProperties}
-                aria-pressed={selected}
+                role="radio"
+                aria-checked={selected}
               >
                 <span className={styles.visibilityRadio} aria-hidden="true" />
                 <span>
@@ -278,7 +303,7 @@ export function ProfileSettingsForm({
 
       <section className={styles.settingsGroup}>
         <h2>Профессиональный профиль</h2>
-        <p>Опыт, школа и методы - формируют доверие и фильтры в каталоге.</p>
+        <p>Опыт, школа и методы помогают клиенту понять ваш подход до записи.</p>
         <div className={styles.fieldGrid}>
           <Field label="Стаж практики, лет">
             <div className={styles.stepper}>

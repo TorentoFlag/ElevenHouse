@@ -40,6 +40,13 @@ export type BillingInvoiceStatus = "paid" | "open" | "void" | "uncollectible";
 export type BillingProvider = "arc_pay";
 export type BillingProviderStatus = "not_configured" | "ready";
 export type BillingCurrency = "RUB";
+export type BillingCurrentPlanSource = "subscription" | "default" | "unresolved";
+export type BillingIntegrityIssue = {
+  readonly code: "subscription_plan_not_found" | "default_plan_not_found";
+  readonly severity: "warning" | "error";
+  readonly planId: string | null;
+  readonly message: string;
+};
 
 export type PlatformPlan = {
   readonly id: string;
@@ -106,6 +113,9 @@ export type BillingOverview = {
     readonly checkoutUrl: string | null;
   };
   readonly billingCycle: BillingCycle;
+  readonly currentPlan: PlatformPlan | null;
+  readonly currentPlanSource: BillingCurrentPlanSource;
+  readonly integrityIssues: readonly BillingIntegrityIssue[];
   readonly currentSubscription: {
     readonly id: string;
     readonly planId: string;

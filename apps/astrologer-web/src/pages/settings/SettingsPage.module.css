@@ -57,7 +57,6 @@
   white-space: nowrap;
 }
 
-.previewButton,
 .primaryButton,
 .secondaryButton {
   display: inline-flex;
@@ -74,13 +73,6 @@
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-}
-
-.previewButton {
-  margin-left: auto;
-  border: 1px solid var(--eh-color-gold-alpha-26);
-  background: var(--eh-color-gold-alpha-14);
-  color: var(--settings-accent-text);
 }
 
 .primaryButton {
@@ -1045,6 +1037,12 @@
   color: #4ec8a0;
 }
 
+.statusBannerWarning {
+  border-color: var(--eh-color-gold-alpha-26);
+  background: var(--eh-color-gold-alpha-14);
+  color: var(--eh-color-moon-120);
+}
+
 @media (max-width: 860px) {
   .settingsPage {
     min-height: calc(100dvh - var(--astrologer-app-header-height, 68px) - 32px);
@@ -1053,10 +1051,6 @@
 
   .subhead {
     padding: 0 14px;
-  }
-
-  .previewButton {
-    display: none;
   }
 
   .body {

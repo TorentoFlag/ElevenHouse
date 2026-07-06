@@ -22,6 +22,7 @@ import {
   astrologerProfileResponseSchema,
   getAstrologerProfileResponseSchema,
   upsertAstrologerProfileRequestSchema,
+  type AstrologerProfileIntegrityIssueResponse,
   type AstrologerProfileResponse,
   type GetAstrologerProfileResponse,
   type MediaAssetResponse,
@@ -52,9 +53,16 @@ export class AstrologerProfileService {
       ownerUserId
     });
 
-    return getAstrologerProfileResponseSchema.parse({
-      profile: profile ? await this.toProfileResponse(ownerUserId, profile) : null
-    });
+    if (!profile) {
+      return getAstrologerProfileResponseSchema.parse({
+        profile: null,
+        integrityIssues: []
+      });
+    }
+
+    return getAstrologerProfileResponseSchema.parse(
+      await this.toProfileReadResponse(ownerUserId, profile)
+    );
   }
 
   async upsertCurrentProfile(
@@ -111,6 +119,30 @@ export class AstrologerProfileService {
     });
   }
 
+  private async toProfileReadResponse(
+    ownerUserId: string,
+    profile: AstrologerProfile
+  ): Promise<GetAstrologerProfileResponse> {
+    const [avatarMediaState, coverMediaState] = await Promise.all([
+      this.getProfileMediaState(ownerUserId, profile.avatarMediaId, "profile_avatar"),
+      this.getProfileMediaState(ownerUserId, profile.coverMediaId, "profile_cover")
+    ]);
+
+    return {
+      profile: {
+        ...profile,
+        avatarMedia: avatarMediaState.media,
+        coverMedia: coverMediaState.media,
+        consultationLanguages: [...profile.consultationLanguages],
+        specializations: [...profile.specializations],
+        methods: [...profile.methods]
+      },
+      integrityIssues: [avatarMediaState.issue, coverMediaState.issue].filter(
+        (issue): issue is AstrologerProfileIntegrityIssueResponse => Boolean(issue)
+      )
+    };
+  }
+
   private async getProfileMedia(
     ownerUserId: string,
     mediaId: string | null,
@@ -124,6 +156,47 @@ export class AstrologerProfileService {
     }
 
     return toMediaAssetResponse(asset, this.publicUrlResolver);
+  }
+
+  private async getProfileMediaState(
+    ownerUserId: string,
+    mediaId: string | null,
+    purpose: "profile_avatar" | "profile_cover"
+  ): Promise<{
+    readonly media: MediaAssetResponse | null;
+    readonly issue: AstrologerProfileIntegrityIssueResponse | null;
+  }> {
+    if (!mediaId) {
+      return { media: null, issue: null };
+    }
+
+    const asset = await this.mediaStore.findByOwnerAndId({ ownerUserId, mediaId });
+    if (asset && asset.purpose === purpose && asset.status === "ready") {
+      return {
+        media: toMediaAssetResponse(asset, this.publicUrlResolver),
+        issue: null
+      };
+    }
+
+    return {
+      media: null,
+      issue:
+        purpose === "profile_avatar"
+          ? {
+              code: "avatar_media_unavailable",
+              severity: "warning",
+              field: "avatarMediaId",
+              mediaId,
+              message: "Profile avatar media is missing, has wrong purpose or is not ready"
+            }
+          : {
+              code: "cover_media_unavailable",
+              severity: "warning",
+              field: "coverMediaId",
+              mediaId,
+              message: "Profile cover media is missing, has wrong purpose or is not ready"
+            }
+    };
   }
 }
 

@@ -13,6 +13,25 @@ const overview = {
     checkoutUrl: null
   },
   billingCycle: "month",
+  currentPlan: {
+    id: "pro",
+    code: "pro",
+    name: "Pro",
+    tagline: "Для активной практики",
+    monthlyPriceMinor: 199000,
+    yearlyPriceMinor: 1910000,
+    currency: "RUB",
+    platformFeeBps: 400,
+    seatsLimit: 1,
+    bookingsLimit: null,
+    aiRequestsLimit: null,
+    automationLimit: null,
+    isPopular: true,
+    isActive: true,
+    features: ["engine", "pdf", "natal", "products", "analytics"]
+  },
+  currentPlanSource: "subscription",
+  integrityIssues: [],
   currentSubscription: {
     id: "11111111-1111-4111-8111-111111111111",
     planId: "pro",
@@ -98,5 +117,32 @@ describe("platform billing contracts", () => {
         }
       })
     ).toThrow();
+  });
+
+  it("parses explicit billing integrity issues without inventing a current plan", () => {
+    const parsed = billingOverviewResponseSchema.parse({
+      ...overview,
+      currentPlan: null,
+      currentPlanSource: "unresolved",
+      integrityIssues: [
+        {
+          code: "subscription_plan_not_found",
+          severity: "error",
+          planId: "legacy-plan",
+          message: "Current subscription references an inactive or missing plan"
+        }
+      ],
+      currentSubscription: {
+        ...overview.currentSubscription,
+        planId: "legacy-plan"
+      }
+    });
+
+    expect(parsed.currentPlan).toBeNull();
+    expect(parsed.currentPlanSource).toBe("unresolved");
+    expect(parsed.integrityIssues[0]).toMatchObject({
+      code: "subscription_plan_not_found",
+      planId: "legacy-plan"
+    });
   });
 });

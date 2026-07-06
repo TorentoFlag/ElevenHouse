@@ -4,21 +4,27 @@ import { mediaAssetResponseSchema } from "./media";
 const uuidSchema = z.string().uuid();
 const timestampSchema = z.string().datetime({ offset: true });
 
-const nullableTrimmedStringSchema = z
-  .union([
-    z
-      .string()
-      .trim()
-      .transform((value) => (value.length === 0 ? null : value)),
-    z.null()
-  ])
-  .optional();
+function createNullableTrimmedStringSchema(maxLength: number) {
+  return z
+    .union([
+      z
+        .string()
+        .trim()
+        .max(maxLength)
+        .transform((value) => (value.length === 0 ? null : value)),
+      z.null()
+    ])
+    .optional();
+}
+
+const nullableTrimmedStringSchema = createNullableTrimmedStringSchema(500);
 const nullableUuidSchema = z
   .union([z.string().trim().uuid(), z.literal(""), z.null()])
   .optional()
   .transform((value) => (value ? value : null));
 
 const requiredTrimmedStringSchema = nonEmptyStringSchema.max(500);
+const publicNameSchema = nonEmptyStringSchema.min(2).max(200);
 const responseNullableStringSchema = z.string().trim().max(500).nullable();
 const emptySocialLinks = {
   telegram: null,
@@ -77,7 +83,8 @@ const consultationLanguagesSchema = z
   .min(1)
   .max(20)
   .superRefine((values, ctx) => {
-    if (new Set(values).size !== values.length) {
+    const normalizedValues = values.map((value) => value.toLocaleLowerCase());
+    if (new Set(normalizedValues).size !== normalizedValues.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Consultation languages must be unique"
@@ -141,7 +148,7 @@ export const astrologerProfileResponseSchema = z
   .object({
     ownerUserId: uuidSchema,
     publicHandle: astrologerPublicHandleSchema,
-    publicName: nonEmptyStringSchema.max(200),
+    publicName: publicNameSchema,
     headline: z.string().trim().max(240).nullable(),
     bio: z.string().trim().max(4000).nullable(),
     timezone: requiredTrimmedStringSchema,
@@ -164,9 +171,23 @@ export const astrologerProfileResponseSchema = z
   .strict();
 export type AstrologerProfileResponse = z.infer<typeof astrologerProfileResponseSchema>;
 
+export const astrologerProfileIntegrityIssueResponseSchema = z
+  .object({
+    code: z.enum(["avatar_media_unavailable", "cover_media_unavailable"]),
+    severity: z.literal("warning"),
+    field: z.enum(["avatarMediaId", "coverMediaId"]),
+    mediaId: uuidSchema,
+    message: z.string().min(1).max(240)
+  })
+  .strict();
+export type AstrologerProfileIntegrityIssueResponse = z.infer<
+  typeof astrologerProfileIntegrityIssueResponseSchema
+>;
+
 export const getAstrologerProfileResponseSchema = z
   .object({
-    profile: astrologerProfileResponseSchema.nullable()
+    profile: astrologerProfileResponseSchema.nullable(),
+    integrityIssues: z.array(astrologerProfileIntegrityIssueResponseSchema).max(10)
   })
   .strict();
 export type GetAstrologerProfileResponse = z.infer<typeof getAstrologerProfileResponseSchema>;
@@ -174,9 +195,9 @@ export type GetAstrologerProfileResponse = z.infer<typeof getAstrologerProfileRe
 const astrologerProfileRequestFieldsSchema = z
   .object({
     publicHandle: astrologerPublicHandleSchema,
-    publicName: nonEmptyStringSchema.max(200),
-    headline: nullableTrimmedStringSchema,
-    bio: nullableTrimmedStringSchema,
+    publicName: publicNameSchema,
+    headline: createNullableTrimmedStringSchema(240),
+    bio: createNullableTrimmedStringSchema(4000),
     timezone: requiredTrimmedStringSchema,
     locale: astrologerProfileLocaleSchema,
     avatarMediaId: nullableUuidSchema,
@@ -184,7 +205,7 @@ const astrologerProfileRequestFieldsSchema = z
     consultationLanguages: consultationLanguagesSchema,
     visibilityStatus: astrologerProfileVisibilityStatusSchema,
     professionalExperienceYears: z.number().int().min(0).max(100).nullable().optional(),
-    professionalSchool: nullableTrimmedStringSchema,
+    professionalSchool: createNullableTrimmedStringSchema(500),
     specializations: uniqueTrimmedStringArraySchema.optional(),
     methods: uniqueTrimmedStringArraySchema.optional(),
     socialLinks: astrologerProfileSocialLinksSchema.optional(),
@@ -206,13 +227,3 @@ export const upsertAstrologerProfileRequestSchema = astrologerProfileRequestFiel
   }
 );
 export type UpsertAstrologerProfileRequest = z.infer<typeof upsertAstrologerProfileRequestSchema>;
-
-export const updateAstrologerProfileRequestSchema = astrologerProfileRequestFieldsSchema
-  .partial()
-  .strict()
-  .transform((value) => {
-    return {
-      ...value
-    };
-  });
-export type UpdateAstrologerProfileRequest = z.infer<typeof updateAstrologerProfileRequestSchema>;

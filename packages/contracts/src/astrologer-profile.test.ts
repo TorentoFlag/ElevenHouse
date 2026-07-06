@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   astrologerProfileResponseSchema,
   getAstrologerProfileResponseSchema,
-  updateAstrologerProfileRequestSchema,
   upsertAstrologerProfileRequestSchema
 } from "./astrologer-profile";
 
@@ -72,15 +71,61 @@ const validProfile = {
   updatedAt: "2026-07-03T00:00:00.000Z"
 } as const;
 
+const validUpsertRequest = {
+  publicHandle: validProfile.publicHandle,
+  publicName: validProfile.publicName,
+  headline: validProfile.headline,
+  bio: validProfile.bio,
+  timezone: validProfile.timezone,
+  locale: validProfile.locale,
+  avatarMediaId: validProfile.avatarMediaId,
+  coverMediaId: validProfile.coverMediaId,
+  consultationLanguages: validProfile.consultationLanguages,
+  visibilityStatus: validProfile.visibilityStatus,
+  professionalExperienceYears: validProfile.professionalExperienceYears,
+  professionalSchool: validProfile.professionalSchool,
+  specializations: validProfile.specializations,
+  methods: validProfile.methods,
+  socialLinks: validProfile.socialLinks,
+  ownBirthData: validProfile.ownBirthData
+} as const;
+
 describe("astrologer profile contracts", () => {
   it("parses a persisted profile response", () => {
     expect(astrologerProfileResponseSchema.parse(validProfile)).toEqual(validProfile);
   });
 
   it("allows an absent current profile response", () => {
-    expect(getAstrologerProfileResponseSchema.parse({ profile: null })).toEqual({
-      profile: null
+    expect(getAstrologerProfileResponseSchema.parse({ profile: null, integrityIssues: [] })).toEqual({
+      profile: null,
+      integrityIssues: []
     });
+  });
+
+  it("parses explicit profile media integrity issues on read responses", () => {
+    const parsed = getAstrologerProfileResponseSchema.parse({
+      profile: {
+        ...validProfile,
+        avatarMedia: null
+      },
+      integrityIssues: [
+        {
+          code: "avatar_media_unavailable",
+          severity: "warning",
+          field: "avatarMediaId",
+          mediaId: validProfile.avatarMediaId,
+          message: "Profile avatar media is missing, has wrong purpose or is not ready"
+        }
+      ]
+    });
+
+    expect(parsed.integrityIssues).toEqual([
+      expect.objectContaining({
+        code: "avatar_media_unavailable",
+        field: "avatarMediaId",
+        mediaId: validProfile.avatarMediaId
+      })
+    ]);
   });
 
   it("normalizes handles, optional strings and consultation languages on upsert", () => {
@@ -143,35 +188,17 @@ describe("astrologer profile contracts", () => {
     });
   });
 
-  it("accepts partial update requests and nullable clearing", () => {
-    expect(
-      updateAstrologerProfileRequestSchema.parse({
-        headline: null,
-        bio: "",
-        consultationLanguages: ["English"],
-        visibilityStatus: "paused",
-        socialLinks: { telegram: "", instagram: null, whatsapp: null, website: "" }
-      })
-    ).toEqual({
-      headline: null,
-      bio: null,
-      consultationLanguages: ["English"],
-      visibilityStatus: "paused",
-      socialLinks: { telegram: null, instagram: null, whatsapp: null, website: null }
-    });
-  });
-
   it("rejects caller-controlled owner and protected workflow fields", () => {
     expect(() =>
-      updateAstrologerProfileRequestSchema.parse({
-        publicName: "Анна",
+      upsertAstrologerProfileRequestSchema.parse({
+        ...validUpsertRequest,
         ownerUserId: "11111111-1111-4111-8111-111111111111"
       })
     ).toThrow();
 
     expect(() =>
-      updateAstrologerProfileRequestSchema.parse({
-        publicName: "Анна",
+      upsertAstrologerProfileRequestSchema.parse({
+        ...validUpsertRequest,
         verificationStatus: "approved"
       })
     ).toThrow();
@@ -180,15 +207,45 @@ describe("astrologer profile contracts", () => {
   it("rejects malformed handles and duplicate consultation languages", () => {
     expect(() =>
       upsertAstrologerProfileRequestSchema.parse({
-        ...validProfile,
+        ...validUpsertRequest,
         publicHandle: "-bad-handle"
       })
     ).toThrow();
 
     expect(() =>
       upsertAstrologerProfileRequestSchema.parse({
-        ...validProfile,
+        ...validUpsertRequest,
         consultationLanguages: ["Русский", "русский"]
+      })
+    ).toThrow();
+  });
+
+  it("rejects profile fields that would violate persisted profile constraints", () => {
+    expect(() =>
+      upsertAstrologerProfileRequestSchema.parse({
+        ...validUpsertRequest,
+        publicName: "A"
+      })
+    ).toThrow();
+
+    expect(() =>
+      upsertAstrologerProfileRequestSchema.parse({
+        ...validUpsertRequest,
+        headline: "x".repeat(241)
+      })
+    ).toThrow();
+
+    expect(() =>
+      upsertAstrologerProfileRequestSchema.parse({
+        ...validUpsertRequest,
+        bio: "x".repeat(4001)
+      })
+    ).toThrow();
+
+    expect(() =>
+      upsertAstrologerProfileRequestSchema.parse({
+        ...validUpsertRequest,
+        professionalSchool: "x".repeat(501)
       })
     ).toThrow();
   });
@@ -196,14 +253,14 @@ describe("astrologer profile contracts", () => {
   it("rejects non-uuid profile media identifiers before they reach the profile API", () => {
     expect(() =>
       upsertAstrologerProfileRequestSchema.parse({
-        ...validProfile,
+        ...validUpsertRequest,
         avatarMediaId: "avatar-1"
       })
     ).toThrow();
 
     expect(() =>
       upsertAstrologerProfileRequestSchema.parse({
-        ...validProfile,
+        ...validUpsertRequest,
         coverMediaId: "cover-1"
       })
     ).toThrow();

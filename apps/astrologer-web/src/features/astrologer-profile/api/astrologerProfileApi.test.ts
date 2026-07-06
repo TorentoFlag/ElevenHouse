@@ -48,7 +48,7 @@ describe("astrologer profile API", () => {
   });
 
   it("loads the current profile through the shared response contract", async () => {
-    const response = { profile } satisfies GetAstrologerProfileResponse;
+    const response = { profile, integrityIssues: [] } satisfies GetAstrologerProfileResponse;
     const get = vi.spyOn(application.http, "get").mockResolvedValue(response);
 
     await expect(getCurrentAstrologerProfile()).resolves.toEqual(response);

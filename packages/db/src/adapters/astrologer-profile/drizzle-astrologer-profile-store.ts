@@ -3,8 +3,7 @@ import {
   AstrologerProfileHandleConflictError,
   type AstrologerProfile,
   type AstrologerProfileStore,
-  type AstrologerProfileStoreUpsertInput,
-  type AstrologerProfileUpdatePatch
+  type AstrologerProfileStoreUpsertInput
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import { astrologerProfiles } from "../../schema";
@@ -42,16 +41,6 @@ export function createDrizzleAstrologerProfileStore(
         }
 
         return toAstrologerProfile(row);
-      }),
-    update: async (input) =>
-      mapAstrologerProfileConflict(input.patch.publicHandle, async () => {
-        const [row] = await database
-          .update(astrologerProfiles)
-          .set(toAstrologerProfileUpdateRow(input.patch, input.now))
-          .where(eq(astrologerProfiles.ownerUserId, input.ownerUserId))
-          .returning();
-
-        return row ? toAstrologerProfile(row) : null;
       })
   };
 }
@@ -89,10 +78,10 @@ function toAstrologerProfileInsertRow(
 }
 
 function toAstrologerProfileUpdateRow(
-  patch: AstrologerProfileUpdatePatch,
+  patch: AstrologerProfileStoreUpsertInput,
   now: string
 ): AstrologerProfileUpdateRow {
-  return omitUndefined({
+  return {
     publicHandle: patch.publicHandle,
     publicName: patch.publicName,
     headline: patch.headline,
@@ -101,23 +90,22 @@ function toAstrologerProfileUpdateRow(
     locale: patch.locale,
     avatarMediaId: patch.avatarMediaId,
     coverMediaId: patch.coverMediaId,
-    consultationLanguages:
-      patch.consultationLanguages === undefined ? undefined : [...patch.consultationLanguages],
+    consultationLanguages: [...patch.consultationLanguages],
     visibilityStatus: patch.visibilityStatus,
     professionalExperienceYears: patch.professionalExperienceYears,
     professionalSchool: patch.professionalSchool,
-    specializations: patch.specializations === undefined ? undefined : [...patch.specializations],
-    methods: patch.methods === undefined ? undefined : [...patch.methods],
-    telegramHandle: patch.socialLinks?.telegram,
-    instagramHandle: patch.socialLinks?.instagram,
-    whatsappContact: patch.socialLinks?.whatsapp,
-    websiteUrl: patch.socialLinks?.website,
-    ownBirthDate: patch.ownBirthData?.date,
-    ownBirthTime: patch.ownBirthData?.time,
-    ownBirthPlace: patch.ownBirthData?.place,
-    showOwnBirthDataPublic: patch.ownBirthData?.showOnPublicPage,
+    specializations: [...patch.specializations],
+    methods: [...patch.methods],
+    telegramHandle: patch.socialLinks.telegram,
+    instagramHandle: patch.socialLinks.instagram,
+    whatsappContact: patch.socialLinks.whatsapp,
+    websiteUrl: patch.socialLinks.website,
+    ownBirthDate: patch.ownBirthData.date,
+    ownBirthTime: patch.ownBirthData.time,
+    ownBirthPlace: patch.ownBirthData.place,
+    showOwnBirthDataPublic: patch.ownBirthData.showOnPublicPage,
     updatedAt: new Date(now)
-  });
+  };
 }
 
 function toAstrologerProfile(row: AstrologerProfileRow): AstrologerProfile {
@@ -179,10 +167,4 @@ function isUniqueViolation(error: unknown): boolean {
 
 function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-}
-
-function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
-  ) as T;
 }

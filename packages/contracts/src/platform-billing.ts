@@ -59,6 +59,13 @@ export const platformSubscriptionStatusSchema = z.enum([
   "incomplete"
 ]);
 export type PlatformSubscriptionStatus = z.infer<typeof platformSubscriptionStatusSchema>;
+export const billingCurrentPlanSourceSchema = z.enum(["subscription", "default", "unresolved"]);
+export type BillingCurrentPlanSource = z.infer<typeof billingCurrentPlanSourceSchema>;
+export const billingIntegrityIssueCodeSchema = z.enum([
+  "subscription_plan_not_found",
+  "default_plan_not_found"
+]);
+export type BillingIntegrityIssueCode = z.infer<typeof billingIntegrityIssueCodeSchema>;
 
 export const billingInvoiceStatusSchema = z.enum(["paid", "open", "void", "uncollectible"]);
 export type BillingInvoiceStatus = z.infer<typeof billingInvoiceStatusSchema>;
@@ -138,10 +145,25 @@ export const billingProviderStateResponseSchema = z
   .strict();
 export type BillingProviderStateResponse = z.infer<typeof billingProviderStateResponseSchema>;
 
+export const billingIntegrityIssueResponseSchema = z
+  .object({
+    code: billingIntegrityIssueCodeSchema,
+    severity: z.enum(["warning", "error"]),
+    planId: z.string().min(1).max(80).nullable(),
+    message: z.string().min(1).max(240)
+  })
+  .strict();
+export type BillingIntegrityIssueResponse = z.infer<
+  typeof billingIntegrityIssueResponseSchema
+>;
+
 export const billingOverviewResponseSchema = z
   .object({
     provider: billingProviderStateResponseSchema,
     billingCycle: billingCycleSchema,
+    currentPlan: platformPlanResponseSchema.nullable(),
+    currentPlanSource: billingCurrentPlanSourceSchema,
+    integrityIssues: z.array(billingIntegrityIssueResponseSchema).max(12),
     currentSubscription: currentPlatformSubscriptionResponseSchema.nullable(),
     plans: z.array(platformPlanResponseSchema).min(1).max(12),
     paymentMethod: billingPaymentMethodResponseSchema.nullable(),

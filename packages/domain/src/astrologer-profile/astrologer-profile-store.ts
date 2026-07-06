@@ -1,6 +1,5 @@
 import type {
   AstrologerProfile,
-  AstrologerProfileUpdatePatch,
   AstrologerProfileUpsertInput
 } from "./astrologer-profile-types";
 
@@ -14,9 +13,4 @@ export type AstrologerProfileStore = {
     readonly ownerUserId: string;
   }) => Promise<AstrologerProfile | null>;
   readonly upsert: (input: AstrologerProfileStoreUpsertInput) => Promise<AstrologerProfile>;
-  readonly update: (input: {
-    readonly ownerUserId: string;
-    readonly patch: AstrologerProfileUpdatePatch;
-    readonly now: string;
-  }) => Promise<AstrologerProfile | null>;
 };

@@ -3,7 +3,6 @@ import {
   AstrologerProfileHandleConflictError,
   AstrologerProfileValidationError,
   getAstrologerProfile,
-  updateAstrologerProfile,
   upsertAstrologerProfile,
   type AstrologerProfile,
   type AstrologerProfileStore
@@ -50,12 +49,6 @@ function createStore(overrides: Partial<AstrologerProfileStore> = {}): Astrologe
       ...profile,
       ...input,
       createdAt: input.now,
-      updatedAt: input.now
-    })),
-    update: vi.fn(async (input) => ({
-      ...profile,
-      ...input.patch,
-      ownerUserId: input.ownerUserId,
       updatedAt: input.now
     })),
     ...overrides
@@ -142,39 +135,41 @@ describe("astrologer profile domain", () => {
     });
   });
 
-  it("normalizes partial update patches and preserves omitted fields", async () => {
-    const store = createStore();
-
-    await updateAstrologerProfile({
-      store,
-      ownerUserId: "owner-1",
-      patch: {
-        headline: " ",
-        consultationLanguages: [" English "],
-        visibilityStatus: "paused"
-      },
-      now
-    });
-
-    expect(store.update).toHaveBeenCalledWith({
-      ownerUserId: "owner-1",
-      patch: {
-        headline: null,
-        consultationLanguages: ["English"],
-        visibilityStatus: "paused"
-      },
-      now: "2026-07-03T00:00:00.000Z"
-    });
-  });
-
   it("rejects duplicate consultation languages before persistence", async () => {
     const store = createStore();
 
     await expect(
-      updateAstrologerProfile({
+      upsertAstrologerProfile({
         store,
         ownerUserId: "owner-1",
-        patch: { consultationLanguages: ["Русский", " русский "] },
+        input: {
+          publicHandle: "astro-anna",
+          publicName: "Анна Вега",
+          headline: null,
+          bio: null,
+          timezone: "Europe/Moscow",
+          locale: "ru",
+          avatarMediaId: null,
+          coverMediaId: null,
+          consultationLanguages: ["Русский", " русский "],
+          visibilityStatus: "draft",
+          professionalExperienceYears: null,
+          professionalSchool: null,
+          specializations: [],
+          methods: [],
+          socialLinks: {
+            telegram: null,
+            instagram: null,
+            whatsapp: null,
+            website: null
+          },
+          ownBirthData: {
+            date: null,
+            time: null,
+            place: null,
+            showOnPublicPage: false
+          }
+        },
         now
       })
     ).rejects.toBeInstanceOf(AstrologerProfileValidationError);

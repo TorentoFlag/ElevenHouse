@@ -68,6 +68,12 @@ and client cabinet APIs are missing.
 - `dictionary`: categories, entries, custom entries, platform entry overrides,
   resets and deletes.
 - `dictionary-ai`: AI draft generation for dictionary entries.
+- `astrologer-profile`: current astrologer profile read/upsert, public handle,
+  profile media references, visibility status and explicit read-model integrity
+  issues for unavailable profile media.
+- `media`: upload intents, completion and profile/product media asset metadata.
+- `platform-billing`: current platform plan/billing overview for settings,
+  including backend-derived current plan state and billing integrity issues.
 - `ai`: provider-neutral generation service, safety identifier, usage recorder
   and rate limiting.
 - `security`: route metadata and session cookie CSRF policy.
@@ -78,14 +84,14 @@ workflows must wait for that separate Nest app and must not be added to
 `public-api` or `astrologer-api`.
 
 Shared contracts exist for `identity`, `products`, `dictionary`, `ai-drafts`,
-`astrologer-profile` and `health`.
+`astrologer-profile`, `media`, `platform-billing` and `health`.
 
 Domain and DB layers currently cover identity/accounts/roles/auth sessions,
-products, dictionary, outbox, auth-code delivery and the
-`AstrologerProfile` domain foundation. The current working tree also contains
-in-progress DB schema/adapter work for `AstrologerProfile`, but
-`apps/astrologer-api` does not yet have an `astrologer-profile` feature module,
-so the API surface is still missing.
+products, dictionary, media assets, outbox, auth-code delivery and
+`AstrologerProfile`. The `AstrologerProfile` API surface covers current profile
+read/upsert and explicit media integrity issues on reads; public-page read/edit,
+verification, notification preferences, integrations and payouts remain separate
+missing contours.
 
 ### Frontend
 
@@ -97,6 +103,9 @@ so the API surface is still missing.
 - `/products` with real API queries and product create/edit/status actions in
   progress.
 - `/reference` with real API queries, mutations and AI draft flow.
+- `/settings` with real astrologer-profile read/upsert, profile media upload
+  flow, visible profile media integrity issues and platform-billing
+  overview/actions where provider URLs exist.
 
 `apps/client-web` currently has:
 
@@ -143,8 +152,8 @@ production apps. Page-specific business composition stays in the owning app.
 | Automation/funnels | `flow-builder.jsx`, `flow-canvas.jsx`, `flow-data.jsx`, `flow-engine.jsx`, `flow-gallery.jsx`, `flow-inspector.jsx`, `flow-nodes.jsx`, `flow-ai.jsx` | future `/funnels` in `astrologer-web` | `Automation`, `Broadcasts`, `Messaging`, `Notifications`, `Analytics`, `Ai`, `Charts`, `Orders`, `Booking` | missing except generic AI service | missing | Flow canvas, node palette, inspector, AI suggestions | Needs explicit event model and job dispatch. Automation must call domain use cases and cannot override booking/payment/consent rules. |
 | Content | `content.jsx`, `content-data.jsx` | future `/content` in `astrologer-web` | `Content`, `Media`, `Subscriptions`, `Moderation`, `Notifications`, `SocialPublishing` | missing | missing | Content calendar, post editor, social badges, publish controls | Content moderation and external publishing require backend workflow and auditability. |
 | Reviews | `reviews.jsx` | future `/reviews` in `astrologer-web` | `Reviews`, `Moderation`, `Orders`, `Sessions` | missing | missing | Review cards, moderation/status controls | Review visibility must respect moderation workflow. |
-| Settings and profile | `settings.jsx`, `page-data.jsx`, `plans-data.jsx`, `access.jsx` | future `/settings` in `astrologer-web` | `AstrologerProfile`, `PublicPage`, `Media`, `Integrations`, `NotificationPreferences`, `PlatformPlans`, `Payouts`, `Verification`, `Loyalty`, `Referral`, `Consent`, `Security` | profile foundation partial; public page/media/integrations/plans/payouts/verification missing | nav footer only | Settings sections, toggles, profile/public page editor controls | Split by domain. Public page settings affect `client-web` direct-link rendering through `public-api`, not only astrologer API. |
-| Platform plans and access gates | `plans-data.jsx`, `access.jsx`, `admin-plans.jsx`, `settings.jsx`, `landing.jsx` | astrologer settings/landing plus admin plan management | `PlatformPlans`, `Billing`, `Entitlements`, `AuditLog` | missing | missing | Plan cards, feature matrix, entitlement badges, upsell modal | Plan data cannot live in localStorage. Admin edits require `admin-api` and audit logs; astrologer plan changes need billing workflow. |
+| Settings and profile | `settings.jsx`, `page-data.jsx`, `plans-data.jsx`, `access.jsx` | `/settings` in `astrologer-web` | `AstrologerProfile`, `Media`, `PlatformPlans/Billing`; future `PublicPage`, `Integrations`, `NotificationPreferences`, `Payouts`, `Verification`, `Loyalty`, `Referral`, `Consent`, `Security` | profile/media/platform-billing overview partial; public page/integrations/notifications/payouts/verification missing | partial real integration | Settings sections, toggles, profile/public page editor controls | Keep split by domain. Profile fields and media are backed by `astrologer-api`; unavailable saved media references surface as explicit integrity issues rather than silent UI fallbacks. Public-page rendering still affects `client-web` direct-link reads through `public-api`, not only astrologer API. |
+| Platform plans and access gates | `plans-data.jsx`, `access.jsx`, `admin-plans.jsx`, `settings.jsx`, `landing.jsx` | astrologer settings/landing plus admin plan management | `PlatformPlans`, `Billing`, `Entitlements`, `AuditLog` | partial: astrologer billing overview contract/API exists; plan changes depend on provider URLs; admin plan management missing | partial in `/settings` | Plan cards, feature matrix, entitlement badges, upsell modal | Plan data cannot live in localStorage. Current plan state is derived in billing domain/read models, not guessed in React. Admin edits require `admin-api` and audit logs; astrologer plan changes need billing workflow/provider handoff. |
 | Personal public page editor/preview | `page.jsx`, `page-data.jsx`, `landing-sales.jsx` | editor in `astrologer-web`; public rendering in `client-web` | `AstrologerProfile`, `PublicPage`, `Products`, `Availability`, `Reviews`, `LeadMagnets`, `Content`, `Promotions` | profile/products partial; public page, availability, reviews and lead magnets missing | missing | Public page blocks, block ordering controls, preview frame, story/editor primitives | Public page reads belong to `public-api`; astrologer editing belongs to `astrologer-api`. |
 | Chart engine | `engine.jsx`, `engine-data.jsx`, `engine-wheel.jsx`, `engine-modes.jsx`, `engine-tables.jsx`, `wheel.jsx`, `astro-store.jsx` | future `/chart-engine` in `astrologer-web` | `BirthData`, `Charts`, `ChartWorker`, `Ai` | missing except generic AI | missing | Chart wheel/canvas, subject picker, tables, interpretation panels | Heavy calculations must go through chart domain/worker. Design helpers are not production-grade chart services. |
 | Numerology | `numerology.jsx`, `numerology-data.jsx`, `numerology-extra.jsx` | future `/numerology` in `astrologer-web` | `Calculations`, `Numerology`, `BirthData`, `Ai`, `Media` | missing; see `docs/superpowers/specs/2026-07-05-numerology-calculations-design.md` | missing | Number grids, interpretation panels, comparison controls, saved calculation picker | Ship Pythagorean first with versioned method profiles so Vedic, Kabbalistic and Author methods can be added after formulas and fixtures exist. |
@@ -245,8 +254,9 @@ use cases before shared UI should imply behavior.
      reusable.
 
 3. **Astrologer Profile, Public Page and Onboarding Foundation**
-   - Finish `AstrologerProfile` DB/API wiring before profile-backed shell,
-     settings and onboarding.
+   - Continue hardening profile-backed settings and shell integration on top of
+     the existing `AstrologerProfile` DB/API wiring and read-model integrity
+     issue contracts.
    - Add `PublicPage` editing contracts separately from public read contracts.
    - Keep payout, verification, plan and schedule steps behind their own domain
      modules rather than a single generic onboarding blob.

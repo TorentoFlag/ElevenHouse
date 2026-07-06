@@ -4,7 +4,8 @@ import {
   createProfileSettingsDraft,
   createUpsertAstrologerProfileRequest,
   getProfileSettingsDraftValidationMessage,
-  isProfileSettingsDraftDirty
+  isProfileSettingsDraftDirty,
+  reconcileProfileSettingsDraftAfterProfileChange
 } from "./profileSettingsForm";
 
 describe("profileSettingsForm", () => {
@@ -158,6 +159,43 @@ describe("profileSettingsForm", () => {
 
     expect(isProfileSettingsDraftDirty(draft, draft)).toBe(false);
     expect(isProfileSettingsDraftDirty(draft, { ...draft, publicName: "Анна Стар" })).toBe(true);
+  });
+
+  it("preserves dirty edits when a background profile refetch returns different data", () => {
+    const previousInitialDraft = createProfileSettingsDraft(profile, "ru");
+    const currentDraft = { ...previousInitialDraft, publicName: "Анна Стар" };
+    const nextInitialDraft = {
+      ...previousInitialDraft,
+      headline: "Обновлено на сервере"
+    };
+
+    expect(
+      reconcileProfileSettingsDraftAfterProfileChange({
+        previousInitialDraft,
+        currentDraft,
+        nextInitialDraft
+      })
+    ).toEqual({
+      draft: currentDraft,
+      shouldReplaceDraft: false
+    });
+  });
+
+  it("accepts a backend profile update when it matches the current submitted draft", () => {
+    const previousInitialDraft = createProfileSettingsDraft(profile, "ru");
+    const currentDraft = { ...previousInitialDraft, publicName: "Анна Стар" };
+    const nextInitialDraft = currentDraft;
+
+    expect(
+      reconcileProfileSettingsDraftAfterProfileChange({
+        previousInitialDraft,
+        currentDraft,
+        nextInitialDraft
+      })
+    ).toEqual({
+      draft: nextInitialDraft,
+      shouldReplaceDraft: true
+    });
   });
 });
 

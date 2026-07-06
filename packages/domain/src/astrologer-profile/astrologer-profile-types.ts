@@ -56,5 +56,3 @@ export type AstrologerProfileEditableFields = {
 };
 
 export type AstrologerProfileUpsertInput = AstrologerProfileEditableFields;
-
-export type AstrologerProfileUpdatePatch = Partial<AstrologerProfileEditableFields>;

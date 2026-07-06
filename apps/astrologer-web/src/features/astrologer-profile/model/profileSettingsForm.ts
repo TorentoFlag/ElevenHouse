@@ -225,6 +225,34 @@ export function isProfileSettingsDraftDirty(
   return JSON.stringify(initialDraft) !== JSON.stringify(currentDraft);
 }
 
+export function reconcileProfileSettingsDraftAfterProfileChange(input: {
+  readonly previousInitialDraft: AstrologerProfileSettingsDraft;
+  readonly currentDraft: AstrologerProfileSettingsDraft;
+  readonly nextInitialDraft: AstrologerProfileSettingsDraft;
+}): {
+  readonly draft: AstrologerProfileSettingsDraft;
+  readonly shouldReplaceDraft: boolean;
+} {
+  if (!isProfileSettingsDraftDirty(input.previousInitialDraft, input.currentDraft)) {
+    return {
+      draft: input.nextInitialDraft,
+      shouldReplaceDraft: true
+    };
+  }
+
+  if (!isProfileSettingsDraftDirty(input.nextInitialDraft, input.currentDraft)) {
+    return {
+      draft: input.nextInitialDraft,
+      shouldReplaceDraft: true
+    };
+  }
+
+  return {
+    draft: input.currentDraft,
+    shouldReplaceDraft: false
+  };
+}
+
 export function toggleProfileStringValue(values: readonly string[], value: string): string[] {
   return values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
 }

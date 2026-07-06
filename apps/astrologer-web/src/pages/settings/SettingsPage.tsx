@@ -13,6 +13,7 @@ export function SettingsPage() {
   const { dictionary, locale } = useI18n<AstrologerCopy>();
   const [activeSectionId, setActiveSectionId] = useState<SettingsSectionId>("profile");
   const [selectedBillingCycle, setSelectedBillingCycle] = useState<"month" | "year" | null>(null);
+  const [isProfileFormDirty, setProfileFormDirty] = useState(false);
   const profileQuery = useCurrentAstrologerProfileQuery();
   const billingQuery = useCurrentBillingOverviewQuery();
   const upsertProfileMutation = useUpsertAstrologerProfileMutation();
@@ -28,6 +29,7 @@ export function SettingsPage() {
       locale={locale}
       title={dictionary.settings.title}
       profile={profileQuery.data?.profile ?? null}
+      profileIntegrityIssues={profileQuery.data?.integrityIssues ?? []}
       billingOverview={billingQuery.data ?? null}
       selectedBillingCycle={selectedBillingCycle}
       activeSectionId={activeSectionId}
@@ -36,9 +38,10 @@ export function SettingsPage() {
       isBillingLoading={billingQuery.isLoading}
       isBillingError={billingQuery.isError}
       isSavingProfile={upsertProfileMutation.isPending}
-      saveStatus={upsertProfileMutation.isSuccess ? "saved" : null}
+      saveStatus={upsertProfileMutation.isSuccess && !isProfileFormDirty ? "saved" : null}
       onSectionChange={setActiveSectionId}
       onBillingCycleChange={setSelectedBillingCycle}
+      onProfileDirtyChange={setProfileFormDirty}
       onSaveProfile={handleSaveProfile}
     />
   );

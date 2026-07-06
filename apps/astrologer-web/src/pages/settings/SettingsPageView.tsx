@@ -1,6 +1,8 @@
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type {
+  AstrologerProfileIntegrityIssueResponse,
   AstrologerProfileResponse,
+  BillingIntegrityIssueResponse,
   BillingOverviewResponse,
   PlatformPlanFeatureCode,
   PlatformPlanResponse,
@@ -15,6 +17,7 @@ export type SettingsPageViewProps = {
   readonly locale: SupportedLocale;
   readonly title: string;
   readonly profile: AstrologerProfileResponse | null;
+  readonly profileIntegrityIssues: readonly AstrologerProfileIntegrityIssueResponse[];
   readonly billingOverview: BillingOverviewResponse | null;
   readonly selectedBillingCycle: "month" | "year" | null;
   readonly activeSectionId: SettingsSection["id"];
@@ -26,6 +29,7 @@ export type SettingsPageViewProps = {
   readonly saveStatus: "saved" | null;
   readonly onSectionChange: (sectionId: SettingsSection["id"]) => void;
   readonly onBillingCycleChange: (billingCycle: "month" | "year") => void;
+  readonly onProfileDirtyChange: (isDirty: boolean) => void;
   readonly onSaveProfile: (body: UpsertAstrologerProfileRequest) => void;
 };
 
@@ -99,6 +103,7 @@ export function SettingsPageView({
   locale,
   title,
   profile,
+  profileIntegrityIssues,
   billingOverview,
   selectedBillingCycle,
   activeSectionId,
@@ -110,9 +115,10 @@ export function SettingsPageView({
   saveStatus,
   onSectionChange,
   onBillingCycleChange,
+  onProfileDirtyChange,
   onSaveProfile
 }: SettingsPageViewProps) {
-  const publicHandle = profile?.publicHandle;
+  const canEditProfile = !isLoading && !isError;
 
   return (
     <section className={styles.settingsPage} aria-labelledby="settings-page-title">
@@ -125,17 +131,6 @@ export function SettingsPageView({
             {title}
           </h1>
         </div>
-        {publicHandle ? (
-          <a
-            className={styles.previewButton}
-            href={`https://elevenhouse.app/${publicHandle}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Icon iconName="chevronRight" width={15} height={15} aria-hidden="true" />
-            Превью глазами клиента
-          </a>
-        ) : null}
       </header>
 
       {isLoading ? <StatusBanner tone="neutral">Загружаем профиль</StatusBanner> : null}
@@ -145,6 +140,12 @@ export function SettingsPageView({
       {isError ? (
         <StatusBanner tone="danger">
           Не удалось синхронизировать профиль. Проверьте соединение и повторите сохранение.
+        </StatusBanner>
+      ) : null}
+      {profileIntegrityIssues.length > 0 && !isError ? (
+        <StatusBanner tone="warning">
+          Медиа профиля требует проверки. Загрузите аватар или обложку заново, если изображение не
+          отображается.
         </StatusBanner>
       ) : null}
       {isBillingError ? (
@@ -160,11 +161,12 @@ export function SettingsPageView({
           onSectionChange={onSectionChange}
         />
         <main className={styles.content}>
-          {activeSectionId === "profile" ? (
+          {activeSectionId === "profile" && canEditProfile ? (
             <ProfileSettingsForm
               locale={locale}
               profile={profile}
               isSaving={isSavingProfile}
+              onDirtyChange={onProfileDirtyChange}
               onSave={onSaveProfile}
             />
           ) : null}
@@ -186,14 +188,14 @@ function StatusBanner({
   tone,
   children
 }: {
-  readonly tone: "neutral" | "danger" | "success";
+  readonly tone: "neutral" | "danger" | "success" | "warning";
   readonly children: React.ReactNode;
 }) {
   return (
     <div
       className={`${styles.statusBanner} ${tone === "danger" ? styles.statusBannerDanger : ""} ${
         tone === "success" ? styles.statusBannerSuccess : ""
-      }`}
+      } ${tone === "warning" ? styles.statusBannerWarning : ""}`}
       aria-live="polite"
     >
       {children}
@@ -228,9 +230,7 @@ function renderBillingSettingsPanel({
     );
   }
 
-  const currentPlanId = billingOverview.currentSubscription?.planId ?? "start";
-  const currentPlan =
-    billingOverview.plans.find((plan) => plan.id === currentPlanId) ?? billingOverview.plans[0];
+  const currentPlan = billingOverview.currentPlan;
   const billingCycle =
     selectedBillingCycle ??
     billingOverview.currentSubscription?.billingCycle ??
@@ -249,33 +249,55 @@ function renderBillingSettingsPanel({
           </span>
         </div>
       ) : null}
+      {billingOverview.integrityIssues.length > 0 ? (
+        <div className={styles.billingProviderNotice}>
+          <Icon iconName="wallet" width={18} height={18} aria-hidden="true" />
+          <span>
+            <strong>Тариф требует проверки</strong>
+            <em>{formatBillingIssueMessage(billingOverview.integrityIssues[0])}</em>
+          </span>
+        </div>
+      ) : null}
 
       {renderBillingGroup({
         title: "Текущий тариф",
         hint: "Оплата за подписку плюс комиссия сервиса с продаж через платформу.",
         children: (
           <>
-            <div className={styles.currentPlanSummary}>
-              <span className={styles.currentPlanIcon}>
-                <Icon iconName="wallet" width={22} height={22} aria-hidden="true" />
-              </span>
-              <span className={styles.currentPlanText}>
-                <strong>
-                  {currentPlan?.name ?? "Старт"} · {billingCycle === "year" ? "год" : "месяц"}
-                </strong>
-                <em>
-                  {`Комиссия ${formatFee(currentPlan?.platformFeeBps ?? 0)}`}
-                  {billingOverview.currentSubscription?.currentPeriodEndsAt
-                    ? ` · следующее списание ${formatDate(
-                        billingOverview.currentSubscription.currentPeriodEndsAt
-                      )}`
-                    : " · без следующего списания"}
-                </em>
-              </span>
-              <span className={styles.currentPlanStatus}>
-                {billingOverview.currentSubscription?.status === "active" ? "Активен" : "Старт"}
-              </span>
-            </div>
+            {currentPlan ? (
+              <div className={styles.currentPlanSummary}>
+                <span className={styles.currentPlanIcon}>
+                  <Icon iconName="wallet" width={22} height={22} aria-hidden="true" />
+                </span>
+                <span className={styles.currentPlanText}>
+                  <strong>
+                    {currentPlan.name} · {billingCycle === "year" ? "год" : "месяц"}
+                  </strong>
+                  <em>
+                    {`Комиссия ${formatFee(currentPlan.platformFeeBps)}`}
+                    {billingOverview.currentSubscription?.currentPeriodEndsAt
+                      ? ` · следующее списание ${formatDate(
+                          billingOverview.currentSubscription.currentPeriodEndsAt
+                        )}`
+                      : " · без следующего списания"}
+                  </em>
+                </span>
+                <span className={styles.currentPlanStatus}>
+                  {formatCurrentPlanStatus(billingOverview)}
+                </span>
+              </div>
+            ) : (
+              <div className={styles.currentPlanSummary}>
+                <span className={styles.currentPlanIcon}>
+                  <Icon iconName="wallet" width={22} height={22} aria-hidden="true" />
+                </span>
+                <span className={styles.currentPlanText}>
+                  <strong>Текущий тариф не определён</strong>
+                  <em>Проверьте подписку и каталог тарифов перед изменением оплаты.</em>
+                </span>
+                <span className={styles.currentPlanStatus}>Проверка</span>
+              </div>
+            )}
 
             <div className={styles.billingCycleSegment} aria-label="Период оплаты">
               <button
@@ -324,15 +346,21 @@ function renderBillingSettingsPanel({
                       </span>
                     ))}
                   </div>
-                  <button
-                    className={
-                      plan.id === currentPlan?.id ? styles.planGhostButton : styles.planButton
-                    }
-                    type="button"
-                    disabled
-                  >
-                    {plan.id === currentPlan?.id ? "Текущий" : "Выбрать"}
-                  </button>
+                  {plan.id === currentPlan?.id ? (
+                    <button className={styles.planGhostButton} type="button" disabled>
+                      Текущий
+                    </button>
+                  ) : billingOverview.provider.checkoutUrl ? (
+                    renderExternalBillingLink({
+                      className: styles.planButton,
+                      href: billingOverview.provider.checkoutUrl,
+                      children: "Выбрать"
+                    })
+                  ) : (
+                    <button className={styles.planButton} type="button" disabled>
+                      Выбрать
+                    </button>
+                  )}
                 </article>
               ))}
             </div>
@@ -351,9 +379,17 @@ function renderBillingSettingsPanel({
               </strong>
               <em>до {billingOverview.paymentMethod.expiresAt}</em>
             </span>
-            <button className={styles.planGhostButton} type="button" disabled>
-              Изменить
-            </button>
+            {billingOverview.provider.managePaymentMethodUrl ? (
+              renderExternalBillingLink({
+                className: styles.planGhostButton,
+                href: billingOverview.provider.managePaymentMethodUrl,
+                children: "Изменить"
+              })
+            ) : (
+              <button className={styles.planGhostButton} type="button" disabled>
+                Изменить
+              </button>
+            )}
           </div>
         ) : (
           <div className={styles.billingRow}>
@@ -362,9 +398,17 @@ function renderBillingSettingsPanel({
               <strong>Способ оплаты не добавлен</strong>
               <em>Добавление карты появится после подключения ArcPay.</em>
             </span>
-            <button className={styles.planGhostButton} type="button" disabled>
-              Добавить
-            </button>
+            {billingOverview.provider.managePaymentMethodUrl ? (
+              renderExternalBillingLink({
+                className: styles.planGhostButton,
+                href: billingOverview.provider.managePaymentMethodUrl,
+                children: "Добавить"
+              })
+            ) : (
+              <button className={styles.planGhostButton} type="button" disabled>
+                Добавить
+              </button>
+            )}
           </div>
         )
       })}
@@ -382,6 +426,13 @@ function renderBillingSettingsPanel({
                   </span>
                   <b>{formatMoney(invoice.amountMinor, invoice.currency)}</b>
                   <i>{invoice.status === "paid" ? "Оплачено" : "Ожидает"}</i>
+                  {invoice.receiptUrl ? (
+                    renderExternalBillingLink({
+                      className: styles.planGhostButton,
+                      href: invoice.receiptUrl,
+                      children: "Скачать чек"
+                    })
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -390,6 +441,22 @@ function renderBillingSettingsPanel({
           )
       })}
     </section>
+  );
+}
+
+function renderExternalBillingLink({
+  className,
+  href,
+  children
+}: {
+  readonly className: string | undefined;
+  readonly href: string;
+  readonly children: React.ReactNode;
+}): React.ReactNode {
+  return (
+    <a className={className ?? ""} href={href} target="_blank" rel="noreferrer">
+      {children}
+    </a>
   );
 }
 
@@ -440,6 +507,30 @@ function formatDate(value: string): string {
     month: "long",
     year: "numeric"
   }).format(new Date(value));
+}
+
+function formatCurrentPlanStatus(billingOverview: BillingOverviewResponse): string {
+  if (billingOverview.currentSubscription?.status === "active") {
+    return "Активен";
+  }
+
+  if (billingOverview.currentPlanSource === "default") {
+    return "Базовый";
+  }
+
+  return "Проверка";
+}
+
+function formatBillingIssueMessage(issue: BillingIntegrityIssueResponse | undefined): string {
+  if (!issue) {
+    return "Проверьте подписку и каталог тарифов.";
+  }
+
+  if (issue.code === "subscription_plan_not_found") {
+    return "Подписка ссылается на тариф, которого нет в активном каталоге.";
+  }
+
+  return "Базовый тариф отсутствует в активном каталоге.";
 }
 
 function planName(plans: readonly PlatformPlanResponse[], planId: string): string {

@@ -6,7 +6,6 @@ import type {
   AstrologerProfileEditableFields,
   AstrologerProfileOwnBirthData,
   AstrologerProfileSocialLinks,
-  AstrologerProfileUpdatePatch,
   AstrologerProfileUpsertInput,
   AstrologerProfileVisibilityStatus
 } from "./astrologer-profile-types";
@@ -33,19 +32,6 @@ export async function upsertAstrologerProfile(input: {
   });
 }
 
-export async function updateAstrologerProfile(input: {
-  readonly store: AstrologerProfileStore;
-  readonly ownerUserId: string;
-  readonly patch: AstrologerProfileUpdatePatch;
-  readonly now: Date;
-}): Promise<AstrologerProfile | null> {
-  return input.store.update({
-    ownerUserId: normalizeRequiredString(input.ownerUserId, "Astrologer owner user id is required"),
-    patch: normalizeProfilePatch(input.patch),
-    now: input.now.toISOString()
-  });
-}
-
 function normalizeProfileFields(
   fields: AstrologerProfileEditableFields
 ): AstrologerProfileEditableFields {
@@ -67,56 +53,6 @@ function normalizeProfileFields(
     socialLinks: normalizeSocialLinks(fields.socialLinks),
     ownBirthData: normalizeOwnBirthData(fields.ownBirthData)
   };
-}
-
-function normalizeProfilePatch(patch: AstrologerProfileUpdatePatch): AstrologerProfileUpdatePatch {
-  return omitUndefined({
-    publicHandle:
-      patch.publicHandle === undefined ? undefined : normalizePublicHandle(patch.publicHandle),
-    publicName:
-      patch.publicName === undefined
-        ? undefined
-        : normalizeRequiredString(patch.publicName, "Astrologer public name is required"),
-    headline: patch.headline === undefined ? undefined : normalizeNullableString(patch.headline),
-    bio: patch.bio === undefined ? undefined : normalizeNullableString(patch.bio),
-    timezone:
-      patch.timezone === undefined
-        ? undefined
-        : normalizeRequiredString(patch.timezone, "Astrologer timezone is required"),
-    locale: patch.locale === undefined ? undefined : normalizeLocale(patch.locale),
-    avatarMediaId:
-      patch.avatarMediaId === undefined ? undefined : normalizeNullableString(patch.avatarMediaId),
-    coverMediaId:
-      patch.coverMediaId === undefined ? undefined : normalizeNullableString(patch.coverMediaId),
-    consultationLanguages:
-      patch.consultationLanguages === undefined
-        ? undefined
-        : normalizeConsultationLanguages(patch.consultationLanguages),
-    visibilityStatus:
-      patch.visibilityStatus === undefined
-        ? undefined
-        : normalizeVisibilityStatus(patch.visibilityStatus),
-    professionalExperienceYears:
-      patch.professionalExperienceYears === undefined
-        ? undefined
-        : normalizeExperienceYears(patch.professionalExperienceYears),
-    professionalSchool:
-      patch.professionalSchool === undefined
-        ? undefined
-        : normalizeNullableString(patch.professionalSchool),
-    specializations:
-      patch.specializations === undefined
-        ? undefined
-        : normalizeOptionalStringList(patch.specializations, "specializations"),
-    methods:
-      patch.methods === undefined
-        ? undefined
-        : normalizeOptionalStringList(patch.methods, "methods"),
-    socialLinks:
-      patch.socialLinks === undefined ? undefined : normalizeSocialLinks(patch.socialLinks),
-    ownBirthData:
-      patch.ownBirthData === undefined ? undefined : normalizeOwnBirthData(patch.ownBirthData)
-  });
 }
 
 function normalizePublicHandle(value: string): string {
@@ -204,10 +140,4 @@ function normalizeNullableString(value: string | null): string | null {
   if (value === null) return null;
   const normalized = value.trim();
   return normalized ? normalized : null;
-}
-
-function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
-  ) as T;
 }

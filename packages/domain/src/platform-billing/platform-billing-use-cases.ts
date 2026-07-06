@@ -1,4 +1,9 @@
 import type { BillingOverview } from "./platform-billing-types";
+import type {
+  BillingCurrentPlanSource,
+  BillingIntegrityIssue,
+  PlatformPlan
+} from "./platform-billing-types";
 import type { PlatformBillingStore } from "./platform-billing-store";
 
 export async function getPlatformBillingOverview(input: {
@@ -12,6 +17,10 @@ export async function getPlatformBillingOverview(input: {
     input.store.findDefaultPaymentMethod({ ownerUserId: input.ownerUserId }),
     input.store.listRecentInvoices({ ownerUserId: input.ownerUserId, limit: 20 })
   ]);
+  const currentPlanState = resolveCurrentPlan({
+    plans,
+    subscriptionPlanId: subscription?.planId ?? null
+  });
 
   return {
     provider: {
@@ -21,6 +30,9 @@ export async function getPlatformBillingOverview(input: {
       checkoutUrl: null
     },
     billingCycle: subscription?.billingCycle ?? "month",
+    currentPlan: currentPlanState.currentPlan,
+    currentPlanSource: currentPlanState.currentPlanSource,
+    integrityIssues: currentPlanState.integrityIssues,
     currentSubscription: subscription
       ? {
           id: subscription.id,
@@ -56,5 +68,60 @@ export async function getPlatformBillingOverview(input: {
       paidAt: invoice.paidAt,
       receiptUrl: invoice.receiptUrl
     }))
+  };
+}
+
+function resolveCurrentPlan(input: {
+  readonly plans: readonly PlatformPlan[];
+  readonly subscriptionPlanId: string | null;
+}): {
+  readonly currentPlan: PlatformPlan | null;
+  readonly currentPlanSource: BillingCurrentPlanSource;
+  readonly integrityIssues: readonly BillingIntegrityIssue[];
+} {
+  if (input.subscriptionPlanId) {
+    const subscriptionPlan = input.plans.find((plan) => plan.id === input.subscriptionPlanId);
+    if (subscriptionPlan) {
+      return {
+        currentPlan: subscriptionPlan,
+        currentPlanSource: "subscription",
+        integrityIssues: []
+      };
+    }
+
+    return {
+      currentPlan: null,
+      currentPlanSource: "unresolved",
+      integrityIssues: [
+        {
+          code: "subscription_plan_not_found",
+          severity: "error",
+          planId: input.subscriptionPlanId,
+          message: "Current subscription references an inactive or missing plan"
+        }
+      ]
+    };
+  }
+
+  const defaultPlan = input.plans.find((plan) => plan.code === "start") ?? null;
+  if (defaultPlan) {
+    return {
+      currentPlan: defaultPlan,
+      currentPlanSource: "default",
+      integrityIssues: []
+    };
+  }
+
+  return {
+    currentPlan: null,
+    currentPlanSource: "unresolved",
+    integrityIssues: [
+      {
+        code: "default_plan_not_found",
+        severity: "error",
+        planId: null,
+        message: "Default Start plan is missing from the active billing catalog"
+      }
+    ]
   };
 }

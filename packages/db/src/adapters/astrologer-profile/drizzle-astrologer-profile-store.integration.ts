@@ -3,7 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   AstrologerProfileHandleConflictError,
   getAstrologerProfile,
-  updateAstrologerProfile,
   upsertAstrologerProfile,
   type AstrologerProfileUpsertInput
 } from "@elevenhouse/domain";
@@ -32,7 +31,7 @@ describe("astrologer profile Drizzle/PostgreSQL integration", () => {
     }
   });
 
-  it("upserts, reads and partially updates owner-scoped astrologer profiles", async () => {
+  it("upserts and reads owner-scoped astrologer profiles", async () => {
     const store = createDrizzleAstrologerProfileStore(runtime.database);
     const ownerUserId = await createUser();
     const otherOwnerUserId = await createUser();
@@ -49,7 +48,7 @@ describe("astrologer profile Drizzle/PostgreSQL integration", () => {
         timezone: "Europe/Moscow",
         locale: "ru",
         avatarMediaId: null,
-        coverMediaId: "cover-1",
+        coverMediaId: null,
         consultationLanguages: ["Русский", "English"],
         visibilityStatus: "paused",
         professionalExperienceYears: 9,
@@ -88,27 +87,6 @@ describe("astrologer profile Drizzle/PostgreSQL integration", () => {
     await expect(
       getAstrologerProfile({ store, ownerUserId: otherOwnerUserId })
     ).resolves.toBeNull();
-
-    const updated = await updateAstrologerProfile({
-      store,
-      ownerUserId,
-      patch: {
-        headline: null,
-        bio: "Новая редакция",
-        consultationLanguages: ["English"],
-        visibilityStatus: "published"
-      },
-      now: new Date("2026-07-03T00:10:00.000Z")
-    });
-
-    expect(updated).toMatchObject({
-      ownerUserId,
-      headline: null,
-      bio: "Новая редакция",
-      consultationLanguages: ["English"],
-      visibilityStatus: "published",
-      updatedAt: "2026-07-03T00:10:00.000Z"
-    });
   });
 
   it("maps unique public handle collisions to a domain error", async () => {

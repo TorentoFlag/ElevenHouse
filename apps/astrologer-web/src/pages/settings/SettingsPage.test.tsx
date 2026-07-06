@@ -61,7 +61,7 @@ describe("SettingsPage", () => {
       locale: "ru"
     });
     mocks.useCurrentAstrologerProfileQuery.mockReturnValue({
-      data: { profile },
+      data: { profile, integrityIssues: [] },
       isLoading: false,
       isError: false
     });
@@ -86,6 +86,7 @@ describe("SettingsPage", () => {
       expect.objectContaining({
         locale: "ru",
         profile,
+        profileIntegrityIssues: [],
         billingOverview,
         selectedBillingCycle: null,
         activeSectionId: "profile",
@@ -111,6 +112,27 @@ describe("SettingsPage", () => {
     expect(getLatestMockProps(mocks.settingsPageView)).toEqual(
       expect.objectContaining({
         saveStatus: "saved"
+      })
+    );
+  });
+
+  it("clears the saved status once the profile form becomes dirty again", () => {
+    mocks.useState
+      .mockImplementationOnce((initial: unknown) => [initial, vi.fn()])
+      .mockImplementationOnce((initial: unknown) => [initial, vi.fn()])
+      .mockImplementationOnce(() => [true, vi.fn()]);
+    mocks.useUpsertAstrologerProfileMutation.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      isError: false,
+      isSuccess: true
+    });
+
+    renderElement(<SettingsPage />);
+
+    expect(getLatestMockProps(mocks.settingsPageView)).toEqual(
+      expect.objectContaining({
+        saveStatus: null
       })
     );
   });
@@ -189,6 +211,25 @@ const billingOverview = {
     checkoutUrl: null
   },
   billingCycle: "month",
+  currentPlan: {
+    id: "start",
+    code: "start",
+    name: "Старт",
+    tagline: "Чтобы начать практику",
+    monthlyPriceMinor: 0,
+    yearlyPriceMinor: 0,
+    currency: "RUB",
+    platformFeeBps: 800,
+    seatsLimit: 1,
+    bookingsLimit: 30,
+    aiRequestsLimit: 20,
+    automationLimit: 1,
+    isPopular: false,
+    isActive: true,
+    features: ["engine", "pdf", "natal", "page"]
+  },
+  currentPlanSource: "default",
+  integrityIssues: [],
   currentSubscription: null,
   plans: [
     {
