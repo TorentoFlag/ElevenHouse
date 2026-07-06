@@ -216,9 +216,14 @@ export type CreateNumerologyCalculationRequest = z.infer<
   typeof createNumerologyCalculationRequestSchema
 >;
 
+const numerologyCalculationRecordResponseSchema = calculationRecordResponseSchema.extend({
+  module: z.literal("numerology"),
+  methodCode: numerologyMethodCodeSchema
+});
+
 export const numerologyCalculationResponseSchema = z
   .object({
-    calculation: calculationRecordResponseSchema,
+    calculation: numerologyCalculationRecordResponseSchema,
     currentVersion: calculationVersionResponseSchema,
     resultSnapshot: snapshotObjectSchema,
     settingsSnapshot: snapshotObjectSchema,

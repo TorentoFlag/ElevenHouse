@@ -1,9 +1,44 @@
 import { z } from "@elevenhouse/validation";
 
 const uuidSchema = z.string().uuid();
-const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const dateTimeSchema = z.string().datetime();
 const snapshotObjectSchema = z.record(z.string(), z.unknown());
+
+const parseIsoDate = (value: string): Date | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const isNotFutureIsoDate = (value: string): boolean => {
+  const parsed = parseIsoDate(value);
+  if (!parsed) return false;
+
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+
+  return parsed.getTime() <= todayUtc;
+};
+
+const dateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => parseIsoDate(value) !== null, { message: "Invalid calendar date" })
+  .refine(isNotFutureIsoDate, { message: "Date must not be in the future" });
 
 export const calculationModuleSchema = z.enum(["numerology", "chart", "matrix", "human_design"]);
 export type CalculationModule = z.infer<typeof calculationModuleSchema>;

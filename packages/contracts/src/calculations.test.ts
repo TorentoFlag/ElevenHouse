@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calculationIdParamSchema,
   calculationRecordResponseSchema,
   listCalculationsQuerySchema,
   listCalculationsResponseSchema
@@ -141,6 +142,32 @@ describe("calculation contracts", () => {
     ).toThrow();
   });
 
+  it("rejects invalid or future participant birth dates in responses", () => {
+    expect(() =>
+      calculationRecordResponseSchema.parse({
+        ...calculationRecordResponse,
+        participants: [
+          {
+            ...calculationRecordResponse.participants[0],
+            birthDate: "1990-02-31"
+          }
+        ]
+      })
+    ).toThrow();
+
+    expect(() =>
+      calculationRecordResponseSchema.parse({
+        ...calculationRecordResponse,
+        participants: [
+          {
+            ...calculationRecordResponse.participants[0],
+            birthDate: "2999-01-01"
+          }
+        ]
+      })
+    ).toThrow();
+  });
+
   it("parses a calculation list response", () => {
     expect(
       listCalculationsResponseSchema.parse({
@@ -151,5 +178,23 @@ describe("calculation contracts", () => {
       total: 1,
       calculations: [{ id: calculationRecordResponse.id }]
     });
+  });
+
+  it("parses calculationId params as strict UUID objects", () => {
+    expect(
+      calculationIdParamSchema.parse({
+        calculationId: calculationRecordResponse.id
+      })
+    ).toEqual({
+      calculationId: calculationRecordResponse.id
+    });
+
+    expect(() => calculationIdParamSchema.parse({ calculationId: "not-a-uuid" })).toThrow();
+    expect(() =>
+      calculationIdParamSchema.parse({
+        calculationId: calculationRecordResponse.id,
+        unexpected: true
+      })
+    ).toThrow();
   });
 });

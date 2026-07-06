@@ -282,4 +282,28 @@ describe("numerology contracts", () => {
       })
     ).toThrow();
   });
+
+  it("rejects non-numerology calculation modules in numerology responses", () => {
+    expect(() =>
+      numerologyCalculationResponseSchema.parse({
+        ...calculationResponse,
+        calculation: {
+          ...calculationResponse.calculation,
+          module: "chart"
+        }
+      })
+    ).toThrow();
+  });
+
+  it("rejects arbitrary method codes in numerology responses", () => {
+    expect(() =>
+      numerologyCalculationResponseSchema.parse({
+        ...calculationResponse,
+        calculation: {
+          ...calculationResponse.calculation,
+          methodCode: "unsupported-method"
+        }
+      })
+    ).toThrow();
+  });
 });
