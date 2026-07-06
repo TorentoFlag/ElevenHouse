@@ -61,8 +61,13 @@ export function calculatePythagoreanCompatibility(
   participants: NumerologyCompatibilityInput,
   settings: PythagoreanSettings
 ): PythagoreanCompatibilityResult {
-  const first = calculatePythagoreanIndividual(participants.first, settings);
-  const second = calculatePythagoreanIndividual(participants.second, settings);
+  const comparisonSettings: PythagoreanSettings = {
+    ...settings,
+    includePsychomatrix: true,
+    includeStrengthLines: true
+  };
+  const first = calculatePythagoreanIndividual(participants.first, comparisonSettings);
+  const second = calculatePythagoreanIndividual(participants.second, comparisonSettings);
 
   return {
     methodCode: "pythagorean",

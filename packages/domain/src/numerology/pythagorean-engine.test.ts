@@ -97,4 +97,26 @@ describe("calculatePythagoreanCompatibility", () => {
     expect(result.matrixComparisons).toHaveLength(9);
     expect(result.strengthLineComparisons).toHaveLength(8);
   });
+
+  it("computes comparison inputs when individual display blocks are disabled", () => {
+    const result = calculatePythagoreanCompatibility(
+      {
+        first: { fullName: "Мария Иванова", birthDate: "1990-03-14" },
+        second: { fullName: "Алексей Петров", birthDate: "1988-11-07" }
+      },
+      {
+        ...baseSettings,
+        includePsychomatrix: false,
+        includeStrengthLines: false
+      }
+    );
+
+    expect(result.matrixComparisons).toHaveLength(9);
+    expect(result.strengthLineComparisons).toHaveLength(8);
+    expect(
+      result.strengthLineComparisons.some(
+        (comparison) => comparison.valueA > 0 || comparison.valueB > 0
+      )
+    ).toBe(true);
+  });
 });
