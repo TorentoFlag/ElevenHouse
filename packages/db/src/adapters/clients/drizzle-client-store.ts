@@ -58,7 +58,8 @@ export function createDrizzleClientStore(database: ClientDrizzleDatabase): Clien
     ensureRelationship: (input) => ensureRelationship(database, input),
     upsertClientProfile: (input) => upsertClientProfile(database, input),
     upsertClientBirthData: (input) => upsertClientBirthData(database, input),
-    listAstrologerClients: (input) => listAstrologerClients(database, input)
+    listAstrologerClients: (input) => listAstrologerClients(database, input),
+    getAstrologerClient: (input) => getAstrologerClient(database, input)
   };
 }
 
@@ -223,9 +224,15 @@ async function listAstrologerClients(
     })
     .from(clientAstrologerRelationships)
     .leftJoin(clientProfiles, eq(clientProfiles.userId, clientAstrologerRelationships.clientUserId))
-    .leftJoin(clientBirthData, eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId))
+    .leftJoin(
+      clientBirthData,
+      eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId)
+    )
     .where(where)
-    .orderBy(desc(clientAstrologerRelationships.lastLinkedAt), desc(clientAstrologerRelationships.id))
+    .orderBy(
+      desc(clientAstrologerRelationships.lastLinkedAt),
+      desc(clientAstrologerRelationships.id)
+    )
     .limit(input.limit)
     .offset(input.offset);
 
@@ -235,6 +242,37 @@ async function listAstrologerClients(
     ),
     total: Number(totalRow?.value ?? 0)
   };
+}
+
+async function getAstrologerClient(
+  database: ClientDrizzleDatabase,
+  input: {
+    readonly astrologerUserId: string;
+    readonly clientUserId: string;
+  }
+): Promise<AstrologerClientListItem | null> {
+  const [row] = await database
+    .select({
+      relationship: clientAstrologerRelationships,
+      profile: clientProfiles,
+      birthData: clientBirthData
+    })
+    .from(clientAstrologerRelationships)
+    .leftJoin(clientProfiles, eq(clientProfiles.userId, clientAstrologerRelationships.clientUserId))
+    .leftJoin(
+      clientBirthData,
+      eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId)
+    )
+    .where(
+      and(
+        eq(clientAstrologerRelationships.astrologerUserId, input.astrologerUserId),
+        eq(clientAstrologerRelationships.clientUserId, input.clientUserId),
+        eq(clientAstrologerRelationships.status, "active")
+      )
+    )
+    .limit(1);
+
+  return row ? toAstrologerClientListItem(row.relationship, row.profile, row.birthData) : null;
 }
 
 async function hasRole(

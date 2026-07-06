@@ -5,6 +5,7 @@ import {
   ClientJoinIntentError,
   claimClientJoinIntent,
   createClientJoinIntent,
+  getAstrologerClient,
   listAstrologerClients,
   normalizeClientBirthDataInput,
   upsertClientBirthData,
@@ -243,6 +244,41 @@ describe("clients domain", () => {
       })
     ).resolves.toMatchObject({ total: 0, clients: [] });
   });
+
+  it("gets one active client relationship for the requested astrologer", async () => {
+    const store = createMemoryClientStore({
+      clientRoleUsers: [clientUserId],
+      astrologerRoleUsers: [astrologerUserId, secondAstrologerUserId]
+    });
+    await store.upsertClientProfile({
+      userId: clientUserId,
+      displayNameSnapshot: "Марина Краснова",
+      preferredLocale: "ru",
+      timezone: "Europe/Moscow",
+      now
+    });
+    await store.ensureRelationship({
+      clientUserId,
+      astrologerUserId,
+      source: "direct_link",
+      now
+    });
+
+    await expect(
+      getAstrologerClient({ store, astrologerUserId, clientUserId })
+    ).resolves.toMatchObject({
+      clientUserId,
+      displayName: "Марина Краснова",
+      relationshipStatus: "active"
+    });
+    await expect(
+      getAstrologerClient({
+        store,
+        astrologerUserId: secondAstrologerUserId,
+        clientUserId
+      })
+    ).resolves.toBeNull();
+  });
 });
 
 type MemoryClientProfile = {
@@ -365,7 +401,9 @@ function createMemoryClientStore(input: {
       });
     },
     upsertClientBirthData: async (birthInput: ClientStoreUpsertBirthDataInput) => {
-      const existingIndex = birthData.findIndex((item) => item.clientUserId === birthInput.clientUserId);
+      const existingIndex = birthData.findIndex(
+        (item) => item.clientUserId === birthInput.clientUserId
+      );
       const row: ClientBirthData = {
         id: birthData[existingIndex]?.id ?? `${birthInput.clientUserId}:birth-data`,
         clientUserId: birthInput.clientUserId,
@@ -380,12 +418,18 @@ function createMemoryClientStore(input: {
       }
       return row;
     },
-    listAstrologerClients: async ({ astrologerUserId: requestedAstrologerId, query, limit, offset }) => {
+    listAstrologerClients: async ({
+      astrologerUserId: requestedAstrologerId,
+      query,
+      limit,
+      offset
+    }) => {
       const normalizedQuery = query.trim().toLowerCase();
       const related = relationships
         .filter(
           (relationship) =>
-            relationship.astrologerUserId === requestedAstrologerId && relationship.status === "active"
+            relationship.astrologerUserId === requestedAstrologerId &&
+            relationship.status === "active"
         )
         .map((relationship) => {
           const profile = profiles.find((item) => item.userId === relationship.clientUserId);
@@ -400,9 +444,38 @@ function createMemoryClientStore(input: {
             birthData: clientBirthData
           };
         })
-        .filter((client) => !normalizedQuery || client.displayName?.toLowerCase().includes(normalizedQuery));
+        .filter(
+          (client) =>
+            !normalizedQuery || client.displayName?.toLowerCase().includes(normalizedQuery)
+        );
       const clients = related.slice(offset, offset + limit);
       return { clients, total: related.length } satisfies AstrologerClientList;
+    },
+    getAstrologerClient: async ({
+      astrologerUserId: requestedAstrologerId,
+      clientUserId: requestedClientId
+    }) => {
+      const relationship = relationships.find(
+        (item) =>
+          item.astrologerUserId === requestedAstrologerId &&
+          item.clientUserId === requestedClientId &&
+          item.status === "active"
+      );
+      if (!relationship) {
+        return null;
+      }
+      const profile = profiles.find((item) => item.userId === relationship.clientUserId);
+      const clientBirthData =
+        birthData.find((item) => item.clientUserId === relationship.clientUserId) ?? null;
+
+      return {
+        clientUserId: relationship.clientUserId,
+        displayName: profile?.displayNameSnapshot ?? null,
+        relationshipStatus: relationship.status,
+        firstLinkedAt: relationship.firstLinkedAt,
+        lastLinkedAt: relationship.lastLinkedAt,
+        birthData: clientBirthData
+      };
     }
   };
 

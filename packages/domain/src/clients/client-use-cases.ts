@@ -4,6 +4,7 @@ import { BirthDataValidationError, ClientJoinIntentError } from "./client-errors
 import type { ClientJoinIntentClaimStore, ClientStore } from "./client-store";
 import type {
   AstrologerClientList,
+  AstrologerClientListItem,
   ClientAstrologerRelationship,
   ClientBirthData,
   ClientBirthDataInput,
@@ -169,6 +170,20 @@ export function listAstrologerClients(input: {
     query: normalizeOptionalToNull(input.query) ?? "",
     limit: normalizeListLimit(input.limit),
     offset: normalizeListOffset(input.offset)
+  });
+}
+
+export function getAstrologerClient(input: {
+  readonly store: ClientStore;
+  readonly astrologerUserId: string;
+  readonly clientUserId: string;
+}): Promise<AstrologerClientListItem | null> {
+  return input.store.getAstrologerClient({
+    astrologerUserId: normalizeRequiredString(
+      input.astrologerUserId,
+      "Astrologer user id is required"
+    ),
+    clientUserId: normalizeRequiredString(input.clientUserId, "Client user id is required")
   });
 }
 

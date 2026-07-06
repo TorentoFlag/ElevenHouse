@@ -1,5 +1,6 @@
 import type {
   AstrologerClientList,
+  AstrologerClientListItem,
   ClientAstrologerRelationship,
   ClientBirthData,
   ClientJoinIntent,
@@ -44,6 +45,11 @@ export type ClientStoreListAstrologerClientsInput = {
   readonly offset: number;
 };
 
+export type ClientStoreGetAstrologerClientInput = {
+  readonly astrologerUserId: string;
+  readonly clientUserId: string;
+};
+
 export type ClientJoinIntentClaimStore = {
   readonly findJoinIntentByTokenHash: (input: {
     readonly tokenHash: string;
@@ -59,9 +65,7 @@ export type ClientJoinIntentClaimStore = {
 };
 
 export type ClientStore = ClientJoinIntentClaimStore & {
-  readonly createJoinIntent: (
-    input: ClientStoreCreateJoinIntentInput
-  ) => Promise<ClientJoinIntent>;
+  readonly createJoinIntent: (input: ClientStoreCreateJoinIntentInput) => Promise<ClientJoinIntent>;
   readonly upsertClientProfile: (input: ClientStoreUpsertProfileInput) => Promise<void>;
   readonly upsertClientBirthData: (
     input: ClientStoreUpsertBirthDataInput
@@ -69,4 +73,7 @@ export type ClientStore = ClientJoinIntentClaimStore & {
   readonly listAstrologerClients: (
     input: ClientStoreListAstrologerClientsInput
   ) => Promise<AstrologerClientList>;
+  readonly getAstrologerClient: (
+    input: ClientStoreGetAstrologerClientInput
+  ) => Promise<AstrologerClientListItem | null>;
 };

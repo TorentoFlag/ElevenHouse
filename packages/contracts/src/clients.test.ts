@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  astrologerClientResponseSchema,
   astrologerClientListResponseSchema,
   clientBirthDataUpsertRequestSchema,
   createClientJoinIntentRequestSchema,
@@ -49,5 +50,25 @@ describe("client contracts", () => {
         total: 1
       })
     ).toThrow();
+  });
+
+  it("accepts one astrologer client response for detail screens", () => {
+    expect(
+      astrologerClientResponseSchema.parse({
+        client: {
+          clientUserId: "11111111-1111-4111-8111-111111111111",
+          displayName: "Марина Краснова",
+          relationshipStatus: "active",
+          firstLinkedAt: "2026-07-06T10:00:00.000Z",
+          lastLinkedAt: "2026-07-06T10:05:00.000Z",
+          birthData: null
+        }
+      })
+    ).toMatchObject({
+      client: {
+        clientUserId: "11111111-1111-4111-8111-111111111111",
+        relationshipStatus: "active"
+      }
+    });
   });
 });

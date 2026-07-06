@@ -4,6 +4,7 @@ import { createAstrologerApiRuntimeConfig } from "./config/runtime-config";
 import { AiModule } from "./modules/ai/ai.module";
 import { AstrologerProfileModule } from "./modules/astrologer-profile/astrologer-profile.module";
 import { CalculationsModule } from "./modules/calculations/calculations.module";
+import { ClientsModule } from "./modules/clients/clients.module";
 import { DatabaseModule } from "./modules/database/database.module";
 import { DictionaryAiModule } from "./modules/dictionary-ai/dictionary-ai.module";
 import { DictionaryModule } from "./modules/dictionary/dictionary.module";
@@ -37,6 +38,7 @@ import { VerificationModule } from "./modules/verification/verification.module";
     ProductsModule,
     VerificationModule,
     CalculationsModule,
+    ClientsModule,
     NumerologyModule,
     AstrologerProfileModule,
     HealthModule
