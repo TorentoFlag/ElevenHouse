@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, foreignKey, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { calculationRecords } from "./calculation-records.schema";
 import { calculationVersions } from "./calculation-versions.schema";
 import {
@@ -15,9 +15,7 @@ export const calculationInterpretations = pgTable(
     calculationId: uuid("calculation_id")
       .notNull()
       .references(() => calculationRecords.id, { onDelete: "cascade" }),
-    versionId: uuid("version_id")
-      .notNull()
-      .references(() => calculationVersions.id, { onDelete: "cascade" }),
+    versionId: uuid("version_id").notNull(),
     source: text("source").notNull(),
     status: text("status").notNull().default("draft"),
     text: text("text").notNull(),
@@ -44,6 +42,11 @@ export const calculationInterpretations = pgTable(
       "calculation_interpretations_approved_at_check",
       sql`${table.status} <> 'approved' or ${table.approvedAt} is not null`
     ),
+    foreignKey({
+      columns: [table.versionId, table.calculationId],
+      foreignColumns: [calculationVersions.id, calculationVersions.calculationId],
+      name: "calculation_interpretations_version_calculation_fk"
+    }).onDelete("cascade"),
     index("calculation_interpretations_record_idx").on(table.calculationId),
     index("calculation_interpretations_version_idx").on(table.versionId)
   ]

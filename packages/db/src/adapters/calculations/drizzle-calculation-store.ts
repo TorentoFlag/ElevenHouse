@@ -71,7 +71,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
     create: (input) => database.transaction((transaction) => insertCalculation(transaction, input)),
     appendVersion: (input) =>
       database.transaction(async (transaction) => {
-        const row = await findOwnedCalculationRow(
+        const row = await lockOwnedMutableCalculationRow(
           transaction,
           input.ownerUserId,
           input.calculationId
@@ -104,7 +104,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
             )
           );
         const linkCount = await countLinks(transaction, input.calculationId);
-        const updatedRow = await updateOwnedCalculation(transaction, {
+        const updatedRow = await updateOwnedMutableCalculation(transaction, {
           ownerUserId: input.ownerUserId,
           calculationId: input.calculationId,
           patch: {
@@ -120,7 +120,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
       }),
     linkClient: (input) =>
       database.transaction(async (transaction) => {
-        const row = await findOwnedCalculationRow(
+        const row = await lockOwnedMutableCalculationRow(
           transaction,
           input.ownerUserId,
           input.calculationId
@@ -156,7 +156,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
                 eq(calculationClientLinks.clientId, input.clientId)
               )
             );
-          const updatedRow = await updateOwnedCalculation(transaction, {
+          const updatedRow = await updateOwnedMutableCalculation(transaction, {
             ownerUserId: input.ownerUserId,
             calculationId: input.calculationId,
             patch: {
@@ -170,7 +170,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           return record ?? null;
         }
 
-        const updatedRow = await updateOwnedCalculation(transaction, {
+        const updatedRow = await updateOwnedMutableCalculation(transaction, {
           ownerUserId: input.ownerUserId,
           calculationId: input.calculationId,
           patch: {
@@ -185,6 +185,13 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
       }),
     publishClientLink: (input) =>
       database.transaction(async (transaction) => {
+        const row = await lockOwnedMutableCalculationRow(
+          transaction,
+          input.ownerUserId,
+          input.calculationId
+        );
+        if (!row) return null;
+
         const [linkRow] = await transaction
           .update(calculationClientLinks)
           .set({
@@ -201,6 +208,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
                 from calculation_records
                 where calculation_records.id = ${calculationClientLinks.calculationId}
                   and calculation_records.owner_user_id = ${input.ownerUserId}
+                  and calculation_records.status <> 'archived'
               )`,
               sql`${input.expectedVersionId} = (
                 select calculation_versions.id
@@ -214,7 +222,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           .returning();
         if (!linkRow) return null;
 
-        const updatedRow = await updateOwnedCalculation(transaction, {
+        const updatedRow = await updateOwnedMutableCalculation(transaction, {
           ownerUserId: input.ownerUserId,
           calculationId: input.calculationId,
           patch: {
@@ -229,7 +237,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
       }),
     saveInterpretation: (input) =>
       database.transaction(async (transaction) => {
-        const row = await findOwnedCalculationRow(
+        const row = await lockOwnedMutableCalculationRow(
           transaction,
           input.ownerUserId,
           input.calculationId
@@ -251,7 +259,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           createdAt: new Date(input.now),
           updatedAt: new Date(input.now)
         });
-        const updatedRow = await updateOwnedCalculation(transaction, {
+        const updatedRow = await updateOwnedMutableCalculation(transaction, {
           ownerUserId: input.ownerUserId,
           calculationId: input.calculationId,
           patch: { updatedAt: new Date(input.now) }
@@ -263,6 +271,13 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
       }),
     approveInterpretation: (input) =>
       database.transaction(async (transaction) => {
+        const row = await lockOwnedMutableCalculationRow(
+          transaction,
+          input.ownerUserId,
+          input.calculationId
+        );
+        if (!row) return null;
+
         const [interpretationRow] = await transaction
           .update(calculationInterpretations)
           .set({
@@ -279,13 +294,14 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
                 from calculation_records
                 where calculation_records.id = ${calculationInterpretations.calculationId}
                   and calculation_records.owner_user_id = ${input.ownerUserId}
+                  and calculation_records.status <> 'archived'
               )`
             )
           )
           .returning();
         if (!interpretationRow) return null;
 
-        const updatedRow = await updateOwnedCalculation(transaction, {
+        const updatedRow = await updateOwnedMutableCalculation(transaction, {
           ownerUserId: input.ownerUserId,
           calculationId: input.calculationId,
           patch: { updatedAt: new Date(input.now) }
@@ -402,6 +418,26 @@ async function findOwnedCalculationRow(
   return row ?? null;
 }
 
+async function lockOwnedMutableCalculationRow(
+  database: CalculationDatabase,
+  ownerUserId: string,
+  calculationId: string
+): Promise<CalculationRecordRow | null> {
+  const [row] = await database
+    .select()
+    .from(calculationRecords)
+    .where(
+      and(
+        eq(calculationRecords.ownerUserId, ownerUserId),
+        eq(calculationRecords.id, calculationId),
+        sql`${calculationRecords.status} <> 'archived'`
+      )
+    )
+    .limit(1)
+    .for("update");
+  return row ?? null;
+}
+
 async function updateOwnedCalculation(
   database: CalculationDatabase,
   input: {
@@ -417,6 +453,28 @@ async function updateOwnedCalculation(
       and(
         eq(calculationRecords.ownerUserId, input.ownerUserId),
         eq(calculationRecords.id, input.calculationId)
+      )
+    )
+    .returning();
+  return row ?? null;
+}
+
+async function updateOwnedMutableCalculation(
+  database: CalculationDatabase,
+  input: {
+    readonly ownerUserId: string;
+    readonly calculationId: string;
+    readonly patch: Partial<CalculationRecordInsertRow>;
+  }
+): Promise<CalculationRecordRow | null> {
+  const [row] = await database
+    .update(calculationRecords)
+    .set(input.patch)
+    .where(
+      and(
+        eq(calculationRecords.ownerUserId, input.ownerUserId),
+        eq(calculationRecords.id, input.calculationId),
+        sql`${calculationRecords.status} <> 'archived'`
       )
     )
     .returning();

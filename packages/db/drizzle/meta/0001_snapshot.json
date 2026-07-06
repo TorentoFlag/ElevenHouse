@@ -3821,7 +3821,13 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "calculation_versions_identity_unique": {
+          "name": "calculation_versions_identity_unique",
+          "nullsNotDistinct": false,
+          "columns": ["id", "calculation_id"]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "calculation_versions_version_number_check": {
@@ -4084,12 +4090,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "calculation_interpretations_version_id_calculation_versions_id_fk": {
-          "name": "calculation_interpretations_version_id_calculation_versions_id_fk",
+        "calculation_interpretations_version_calculation_fk": {
+          "name": "calculation_interpretations_version_calculation_fk",
           "tableFrom": "calculation_interpretations",
           "tableTo": "calculation_versions",
-          "columnsFrom": ["version_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": ["version_id", "calculation_id"],
+          "columnsTo": ["id", "calculation_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4227,12 +4233,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "calculation_artifacts_version_id_calculation_versions_id_fk": {
-          "name": "calculation_artifacts_version_id_calculation_versions_id_fk",
+        "calculation_artifacts_version_calculation_fk": {
+          "name": "calculation_artifacts_version_calculation_fk",
           "tableFrom": "calculation_artifacts",
           "tableTo": "calculation_versions",
-          "columnsFrom": ["version_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": ["version_id", "calculation_id"],
+          "columnsTo": ["id", "calculation_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },

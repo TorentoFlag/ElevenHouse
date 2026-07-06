@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid
 } from "drizzle-orm/pg-core";
@@ -30,6 +31,7 @@ export const calculationVersions = pgTable(
   },
   (table) => [
     check("calculation_versions_version_number_check", sql`${table.versionNumber} > 0`),
+    unique("calculation_versions_identity_unique").on(table.id, table.calculationId),
     uniqueIndex("calculation_versions_record_version_unique").on(
       table.calculationId,
       table.versionNumber
