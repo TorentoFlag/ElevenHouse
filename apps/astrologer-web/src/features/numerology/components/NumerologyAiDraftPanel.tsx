@@ -1,4 +1,5 @@
 import type { NumerologyCalculationResponse } from "@elevenhouse/contracts";
+import { getCurrentVersionInterpretation } from "../model/numerologyPageModel";
 import { getLatestInterpretationText } from "../model/numerologyResultModel";
 import styles from "./NumerologyComponents.module.css";
 
@@ -22,7 +23,7 @@ export function NumerologyAiDraftPanel({
   onApprove
 }: NumerologyAiDraftPanelProps) {
   const savedText = getLatestInterpretationText(response);
-  const latestInterpretation = response?.calculation.interpretations.at(-1) ?? null;
+  const latestInterpretation = getCurrentVersionInterpretation(response?.calculation ?? null);
 
   return (
     <aside className={styles.aiPanel} aria-label="Трактовка">

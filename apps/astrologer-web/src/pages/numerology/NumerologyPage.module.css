@@ -60,69 +60,10 @@
 
 .clientStrip {
   display: flex;
+  width: min(560px, 42vw);
   align-items: center;
   gap: 8px;
   min-width: 0;
-}
-
-.clientKicker {
-  color: var(--eh-color-muted);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.clientButton {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-areas:
-    "avatar name"
-    "avatar date";
-  column-gap: 8px;
-  align-items: center;
-  min-width: 174px;
-  max-width: 240px;
-  padding: 6px 10px;
-  border: 1px solid var(--numerology-line-strong);
-  border-radius: 10px;
-  background: rgb(22 20 47 / 0.78);
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-}
-
-.clientButton span {
-  grid-area: avatar;
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border-radius: 9px;
-  background: rgb(139 92 246 / 0.2);
-  color: #d8c8ff;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.clientButton strong,
-.clientButton small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.clientButton strong {
-  grid-area: name;
-  font-size: 12.5px;
-  line-height: 1.2;
-}
-
-.clientButton small {
-  grid-area: date;
-  color: var(--eh-color-muted);
-  font-size: 10.5px;
 }
 
 .clientPlus {
@@ -170,45 +111,6 @@
 .toolButtonLinked:disabled {
   cursor: not-allowed;
   opacity: 0.45;
-}
-
-.historyBar {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 10px 18px;
-  border-bottom: 1px solid var(--numerology-line);
-  background: rgb(8 7 20 / 0.42);
-}
-
-.historyBar > aside {
-  display: flex;
-  width: auto;
-  max-width: min(520px, 50vw);
-  min-height: 0;
-  align-items: center;
-  gap: 10px;
-  padding: 0;
-  border-right: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-.historyBar > aside > div:first-child {
-  flex: 0 0 auto;
-  margin: 0;
-}
-
-.historyBar > aside > div:last-child {
-  display: flex;
-  gap: 8px;
-}
-
-.historyBar > aside button {
-  width: 180px;
-  flex: 0 0 180px;
 }
 
 .body {
@@ -367,8 +269,7 @@
     margin: -20px;
   }
 
-  .clientStrip,
-  .historyBar {
+  .clientStrip {
     width: 100%;
     overflow-x: auto;
   }

@@ -5,6 +5,7 @@ export type NumerologyDetailSelector = string;
 
 export type NumerologyWorkspaceParticipant = {
   readonly role: "subject" | "partner";
+  readonly clientId: string | null;
   readonly displayName: string;
   readonly initials: string;
   readonly birthDate: string;
@@ -510,6 +511,7 @@ function getParticipant(
 
   return {
     role,
+    clientId: participant.clientId,
     displayName,
     initials: getInitials(displayName),
     birthDate: participant.birthDate ?? String(inputSnapshot?.birthDate ?? ""),

@@ -1,12 +1,12 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import type { NumerologyCalculationResponse } from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
-import { SavedCalculationPicker } from "../../features/calculations/components/SavedCalculationPicker";
-import type { SavedCalculationPickerProps } from "../../features/calculations/components/SavedCalculationPicker";
+import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import {
   NumerologySetupModal,
   type NumerologySetupModalProps
 } from "../../features/numerology/components/NumerologySetupModal";
+import { NumerologyResultPanel } from "../../features/numerology/components/NumerologyResultPanel";
 import { NumerologyPageView, type NumerologyPageViewProps } from "./NumerologyPageView";
 import { createParticipantFormState } from "../../features/numerology/model/numerologyFormModel";
 
@@ -21,7 +21,7 @@ describe("NumerologyPageView", () => {
     expect(linkButton.props.disabled).toBe(true);
   });
 
-  it("enables link for CRM-linked participants and keeps publish disabled before approval", () => {
+  it("enables link for CRM-linked participants without rendering the hidden publish workflow", () => {
     const view = NumerologyPageView({
       ...baseProps(),
       selectedResponse: response({
@@ -31,7 +31,7 @@ describe("NumerologyPageView", () => {
     });
 
     expect(findButtonByText(view, "Привязать").props.disabled).toBe(false);
-    expect(findButtonByText(view, "Опубликовать").props.disabled).toBe(true);
+    expect(findOptionalButtonByText(view, "Опубликовать")).toBeNull();
   });
 
   it("exposes the reference workspace actions instead of a saved-calculation-first toolbar", () => {
@@ -47,12 +47,11 @@ describe("NumerologyPageView", () => {
     expect(findButtonByText(view, "Совместимость")).toBeDefined();
     expect(findButtonByText(view, "Презентация")).toBeDefined();
     expect(findButtonByText(view, "PDF").props.disabled).toBe(true);
-    expect(findElements(view).some((element) => includesText(element.props, "Сохраненные"))).toBe(
-      false
-    );
+    expect(findOptionalButtonByText(view, "Данные расчета")).toBeNull();
+    expect(findElements(view).some((element) => includesText(element.props, "Сохраненные"))).toBe(false);
   });
 
-  it("passes saved calculations to picker without recalculation callback", () => {
+  it("does not render the saved calculations picker on the reference workspace", () => {
     const onSelectSaved = vi.fn();
     const onRecalculate = vi.fn();
     const saved = response({
@@ -65,14 +64,11 @@ describe("NumerologyPageView", () => {
       onSelectSaved,
       onRecalculate
     });
-    const picker = findRequiredElementByType<SavedCalculationPickerProps>(
-      view,
-      SavedCalculationPicker
+
+    expect(findElements(view).some((element) => includesText(element.props, "СОХРАНЕННЫЕ"))).toBe(
+      false
     );
-
-    picker.props.onSelect(saved);
-
-    expect(onSelectSaved).toHaveBeenCalledWith(saved);
+    expect(onSelectSaved).not.toHaveBeenCalled();
     expect(onRecalculate).not.toHaveBeenCalled();
   });
 
@@ -91,47 +87,17 @@ describe("NumerologyPageView", () => {
           birthDate: ""
         }
       },
-      clientOptions: [
-        {
-          value: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e",
-          label: "Марина Краснова",
-          subtitle: "1990-03-14",
-          hasBirthDate: true,
-          birthData: {
-            id: "55555555-5555-4555-8555-555555555555",
-            clientUserId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e",
-            label: "Основные данные",
-            birthDate: "1990-03-14",
-            birthTime: null,
-            birthTimePrecision: "unknown",
-            birthPlaceText: null,
-            birthCountryCode: null,
-            birthCity: null,
-            birthRegion: null,
-            birthTimezone: null,
-            birthLatitude: null,
-            birthLongitude: null,
-            source: "client_profile",
-            createdAt: "2026-07-06T00:00:00.000Z",
-            updatedAt: "2026-07-06T00:00:00.000Z"
-          }
-        }
-      ]
     } as unknown as NumerologyPageViewProps);
     const modal = findRequiredElementByType<NumerologySetupModalProps>(view, NumerologySetupModal);
     const modalView = NumerologySetupModal(modal.props);
 
-    const renderedModalElements = findRenderedElements(modalView);
+    const renderedModalElements = findRenderedElements(modalView, { renderHookComponents: false });
 
     expect(
       renderedModalElements.some((element) => includesText(element.props, "CRM clientId"))
     ).toBe(false);
     expect(
-      renderedModalElements.some(
-        (element) =>
-          element.type === "select" &&
-          (element.props as Record<string, unknown>)["aria-label"] === "Клиент"
-      )
+      renderedModalElements.some((element) => element.type === ClientSearchCombobox)
     ).toBe(true);
   });
 
@@ -149,7 +115,6 @@ describe("NumerologyPageView", () => {
     };
     const modalView = NumerologySetupModal({
       state,
-      clientOptions: [],
       isSubmitting: false,
       onChange,
       onClose: vi.fn(),
@@ -171,13 +136,87 @@ describe("NumerologyPageView", () => {
       subject: createParticipantFormState("crm_client")
     });
   });
+
+  it("disables interpretation approval when the current version has no interpretation", () => {
+    const baseResponse = response({
+      source: "crm_client",
+      clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+    });
+    const previousVersion = baseResponse.calculation.versions[0]!;
+    const currentVersion = {
+      ...previousVersion,
+      id: "44444444-4444-4444-8444-444444444444",
+      versionNumber: 2,
+      resultChecksum: "checksum-2"
+    };
+    const view = NumerologyPageView({
+      ...baseProps(),
+      selectedResponse: {
+        ...baseResponse,
+        currentVersion,
+        resultSnapshot: currentVersion.resultSnapshot,
+        settingsSnapshot: currentVersion.settingsSnapshot,
+        inputSnapshot: currentVersion.inputSnapshot,
+        calculation: {
+          ...baseResponse.calculation,
+          versions: [previousVersion, currentVersion],
+          interpretations: [
+            {
+              id: "55555555-5555-4555-8555-555555555555",
+              versionId: previousVersion.id,
+              source: "manual",
+              status: "draft",
+              text: "Previous version draft",
+              modelId: null,
+              promptVersion: null,
+              approvedAt: null
+            }
+          ]
+        }
+      }
+    });
+    const resultPanel = findRequiredElementByType<{
+      readonly isApproveInterpretationDisabled?: boolean;
+    }>(view, NumerologyResultPanel);
+
+    expect(resultPanel.props.isApproveInterpretationDisabled).toBe(true);
+  });
+
+  it("disables client selection and recalculation while an action is pending", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      isBusy: true,
+      selectedResponse: response({
+        source: "crm_client",
+        clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+      })
+    });
+    const clientPickers = findElements(view).filter(
+      (element) => element.type === ClientSearchCombobox
+    ) as ReactElement<{ disabled?: boolean }>[];
+
+    expect(clientPickers).toHaveLength(1);
+    expect(clientPickers[0]?.props.disabled).toBe(true);
+    expect(findButtonByText(view, "Пересчитать").props.disabled).toBe(true);
+  });
+
+  it("does not expose the non-reference publish action in the workspace", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      selectedResponse: response({
+        source: "crm_client",
+        clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+      })
+    });
+
+    expect(findOptionalButtonByText(view, "Опубликовать")).toBeNull();
+  });
 });
 
 function baseProps(): NumerologyPageViewProps {
   return {
     calculations: [],
     selectedResponse: null,
-    clientOptions: [],
     formState: {
       mode: "individual",
       title: "",
@@ -212,6 +251,8 @@ function baseProps(): NumerologyPageViewProps {
     onOpenSetup: vi.fn(),
     onCloseSetup: vi.fn(),
     onFormChange: vi.fn(),
+    onSelectSubjectClient: vi.fn(),
+    onSelectPartnerClient: vi.fn(),
     onCreate: vi.fn(),
     onRecalculate: vi.fn(),
     onSelectSaved: vi.fn(),
@@ -287,15 +328,38 @@ function response(participant: {
   };
 }
 
-function findButtonByText(root: ReactElement, text: string): ReactElement<{ disabled?: boolean }> {
-  const result = findElements(root).find(
+function findButtonByText(
+  root: ReactElement,
+  text: string
+): ReactElement<{ disabled?: boolean; title?: string }> {
+  return findButtonByTextInElements(findElements(root), text);
+}
+
+function findOptionalButtonByText(
+  root: ReactElement,
+  text: string
+): ReactElement<{ disabled?: boolean; title?: string }> | null {
+  return (
+    (findElements(root).find(
+      (element) =>
+        element.type === "button" &&
+        includesText((element.props as { children?: unknown }).children, text)
+    ) as ReactElement<{ disabled?: boolean; title?: string }> | undefined) ?? null
+  );
+}
+
+function findButtonByTextInElements(
+  elements: readonly ReactElement[],
+  text: string
+): ReactElement<{ disabled?: boolean; title?: string }> {
+  const result = elements.find(
     (element) =>
       element.type === "button" &&
       includesText((element.props as { children?: unknown }).children, text)
   );
   if (!result) throw new Error(`Button not found: ${text}`);
 
-  return result as ReactElement<{ disabled?: boolean }>;
+  return result as ReactElement<{ disabled?: boolean; title?: string }>;
 }
 
 function findRequiredElementByType<TProps>(
@@ -321,18 +385,24 @@ function findElements(root: ReactElement): ReactElement[] {
   return result;
 }
 
-function findRenderedElements(root: ReactElement): ReactElement[] {
+function findRenderedElements(
+  root: ReactElement,
+  options: { readonly renderHookComponents?: boolean } = { renderHookComponents: true }
+): ReactElement[] {
   if (typeof root.type === "function") {
+    if (options.renderHookComponents === false && root.type === ClientSearchCombobox) {
+      return [root];
+    }
     const render = root.type as (props: unknown) => ReactNode;
     const rendered = render(root.props);
-    return isValidElement(rendered) ? findRenderedElements(rendered) : [];
+    return isValidElement(rendered) ? findRenderedElements(rendered, options) : [];
   }
 
   const result: ReactElement[] = [root];
   const children = (root.props as { children?: ReactNode }).children;
   for (const child of Children.toArray(children)) {
     if (isValidElement(child)) {
-      result.push(...findRenderedElements(child));
+      result.push(...findRenderedElements(child, options));
     }
   }
 
