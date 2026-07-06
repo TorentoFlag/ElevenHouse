@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { NumerologyValidationError } from "./numerology-errors";
 import { normalizeNumerologyName } from "./name-normalization";
 
 describe("normalizeNumerologyName", () => {
@@ -36,5 +37,20 @@ describe("normalizeNumerologyName", () => {
         shortIPolicy: "separate"
       })
     ).toBe("семён");
+  });
+
+  it("rejects malformed normalization policies", () => {
+    expect(() =>
+      normalizeNumerologyName("Семён", {
+        yoPolicy: "future_policy",
+        shortIPolicy: "separate"
+      } as never)
+    ).toThrow(NumerologyValidationError);
+    expect(() =>
+      normalizeNumerologyName("Сергей", {
+        yoPolicy: "separate",
+        shortIPolicy: "future_policy"
+      } as never)
+    ).toThrow(NumerologyValidationError);
   });
 });

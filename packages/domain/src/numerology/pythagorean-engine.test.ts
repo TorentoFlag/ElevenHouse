@@ -141,11 +141,31 @@ describe("calculatePythagoreanCompatibility", () => {
 
     expect(result.matrixComparisons).toHaveLength(9);
     expect(result.strengthLineComparisons).toHaveLength(8);
+    expect(result.individuals[0].psychomatrix).toBeUndefined();
+    expect(result.individuals[0].strengthLines).toEqual([]);
+    expect(result.individuals[1].psychomatrix).toBeUndefined();
+    expect(result.individuals[1].strengthLines).toEqual([]);
     expect(
       result.strengthLineComparisons.some(
         (comparison) => comparison.valueA > 0 || comparison.valueB > 0
       )
     ).toBe(true);
     expect(result.strengthLineComparisons[0]).not.toHaveProperty("label");
+  });
+
+  it("rejects names that cannot produce both soul and personality numbers", () => {
+    expect(() =>
+      calculatePythagoreanIndividual(
+        { fullName: "Ааа", birthDate: "1990-03-14" },
+        { ...baseSettings, includeNameNumbers: true }
+      )
+    ).toThrow(NumerologyValidationError);
+
+    expect(() =>
+      calculatePythagoreanIndividual(
+        { fullName: "Грг", birthDate: "1990-03-14" },
+        { ...baseSettings, includeNameNumbers: true }
+      )
+    ).toThrow(NumerologyValidationError);
   });
 });

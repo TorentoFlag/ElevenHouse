@@ -2,6 +2,7 @@ export type NumerologyMethodCode = "pythagorean" | "vedic" | "kabbalistic" | "au
 export type NumerologyCalculationMode = "individual" | "compatibility";
 export type NumerologyRelation = "match" | "close" | "different" | "tension";
 export type NumerologyDigit = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+export type NumerologyRootNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type MasterNumber = 11 | 22 | 33;
 
 export type MasterNumberSettings =
@@ -32,12 +33,12 @@ export type NumerologyMethodProfile = {
   readonly methodCode: NumerologyMethodCode;
   readonly methodVersion: string;
   readonly supportedModes: readonly NumerologyCalculationMode[];
-  readonly letterTable: Readonly<Record<string, number>>;
+  readonly letterTable: Readonly<Record<string, NumerologyRootNumber>>;
   readonly vowels: readonly string[];
   readonly strengthLines: readonly {
     readonly code: string;
     readonly label: string;
-    readonly cells: readonly string[];
+    readonly cells: readonly NumerologyDigit[];
   }[];
 };
 
@@ -77,7 +78,7 @@ export type PythagoreanPsychomatrix = {
 
 export type PythagoreanStrengthLineResult = {
   readonly code: string;
-  readonly cells: readonly string[];
+  readonly cells: readonly NumerologyDigit[];
   readonly value: number;
 };
 

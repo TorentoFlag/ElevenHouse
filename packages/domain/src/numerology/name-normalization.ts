@@ -5,6 +5,8 @@ export function normalizeNumerologyName(
   fullName: string,
   settings: NameNormalizationSettings
 ): string {
+  validateNameNormalizationSettings(settings);
+
   const letters = [...fullName.normalize("NFC").toLocaleLowerCase("ru-RU")].filter((character) =>
     /\p{Letter}/u.test(character)
   );
@@ -15,6 +17,17 @@ export function normalizeNumerologyName(
   }
 
   return normalized;
+}
+
+function validateNameNormalizationSettings(settings: NameNormalizationSettings): void {
+  if (
+    typeof settings !== "object" ||
+    settings === null ||
+    (settings.yoPolicy !== "separate" && settings.yoPolicy !== "as_e") ||
+    (settings.shortIPolicy !== "separate" && settings.shortIPolicy !== "as_i")
+  ) {
+    throw new NumerologyValidationError("Invalid numerology name normalization settings");
+  }
 }
 
 function normalizeRussianLetter(character: string, settings: NameNormalizationSettings): string {

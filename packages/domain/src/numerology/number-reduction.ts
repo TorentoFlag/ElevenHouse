@@ -28,7 +28,15 @@ function shouldPreserveMasterNumber(value: number, settings: MasterNumberSetting
 }
 
 function validateMasterNumberSettings(settings: MasterNumberSettings): void {
-  if (settings.mode !== "preserve_selected") return;
+  if (typeof settings !== "object" || settings === null) {
+    throw new NumerologyValidationError("Invalid master number settings");
+  }
+
+  if (settings.mode === "reduce_all" || settings.mode === "preserve_all") return;
+
+  if (settings.mode !== "preserve_selected" || !Array.isArray(settings.values)) {
+    throw new NumerologyValidationError("Invalid master number settings");
+  }
 
   if (!settings.values.every(isMasterNumber)) {
     throw new NumerologyValidationError("Unsupported master number");

@@ -8,6 +8,7 @@ import type {
   NumerologyMatrixComparison,
   NumerologyNumberComparison,
   NumerologyRelation,
+  NumerologyRootNumber,
   PythagoreanCompatibilityResult,
   PythagoreanIndividualResult,
   PythagoreanKeyNumberCode,
@@ -50,13 +51,12 @@ export function calculatePythagoreanCompatibility(
   participants: NumerologyCompatibilityInput,
   settings: PythagoreanSettings
 ): PythagoreanCompatibilityResult {
-  const comparisonSettings: PythagoreanSettings = {
-    ...settings,
-    includePsychomatrix: true,
-    includeStrengthLines: true
-  };
-  const first = calculatePythagoreanIndividual(participants.first, comparisonSettings);
-  const second = calculatePythagoreanIndividual(participants.second, comparisonSettings);
+  const first = calculatePythagoreanIndividual(participants.first, settings);
+  const second = calculatePythagoreanIndividual(participants.second, settings);
+  const firstComparisonMatrix = calculateParticipantPsychomatrix(participants.first);
+  const secondComparisonMatrix = calculateParticipantPsychomatrix(participants.second);
+  const firstComparisonStrengthLines = calculateStrengthLines(firstComparisonMatrix.cells);
+  const secondComparisonStrengthLines = calculateStrengthLines(secondComparisonMatrix.cells);
 
   return {
     methodCode: "pythagorean",
@@ -69,10 +69,13 @@ export function calculatePythagoreanCompatibility(
     ),
     keyNumberComparisons: compareKeyNumbers(first.keyNumbers, second.keyNumbers),
     matrixComparisons: compareMatrixCells(
-      getPsychomatrixForComparisons(first),
-      getPsychomatrixForComparisons(second)
+      firstComparisonMatrix.cells,
+      secondComparisonMatrix.cells
     ),
-    strengthLineComparisons: compareStrengthLines(first.strengthLines, second.strengthLines)
+    strengthLineComparisons: compareStrengthLines(
+      firstComparisonStrengthLines,
+      secondComparisonStrengthLines
+    )
   };
 }
 
@@ -99,7 +102,7 @@ function calculateForecastNumbers(
 }
 
 function calculateNameNumbers(
-  values: readonly { readonly letter: string; readonly value: number }[],
+  values: readonly { readonly letter: string; readonly value: NumerologyRootNumber }[],
   settings: PythagoreanSettings
 ): Pick<PythagoreanKeyNumbers, "expression" | "soul" | "personality"> {
   if (!settings.includeNameNumbers) return {};
@@ -107,6 +110,11 @@ function calculateNameNumbers(
   const vowels = new Set(pythagoreanProfileV1.vowels);
   const soulValues = values.filter(({ letter }) => vowels.has(letter));
   const personalityValues = values.filter(({ letter }) => !vowels.has(letter));
+  if (soulValues.length === 0 || personalityValues.length === 0) {
+    throw new NumerologyValidationError(
+      "Numerology name must contain both vowels and consonants for name numbers"
+    );
+  }
 
   return {
     expression: reduceNumber(sumNumbers(values.map(({ value }) => value)), settings.masterNumbers),
@@ -118,7 +126,9 @@ function calculateNameNumbers(
   };
 }
 
-function getNameValues(normalizedName: string): readonly { readonly letter: string; readonly value: number }[] {
+function getNameValues(
+  normalizedName: string
+): readonly { readonly letter: string; readonly value: NumerologyRootNumber }[] {
   return [...normalizedName].map((letter) => {
     const value = pythagoreanProfileV1.letterTable[letter];
     if (!value) {
@@ -161,7 +171,7 @@ function calculateStrengthLines(
   return pythagoreanProfileV1.strengthLines.map((line) => ({
     code: line.code,
     cells: line.cells,
-    value: line.cells.reduce((total, cell) => total + (cells[cell as NumerologyDigit]?.length ?? 0), 0)
+    value: line.cells.reduce((total, cell) => total + cells[cell].length, 0)
   }));
 }
 
@@ -241,11 +251,11 @@ function classifyCountDifference(difference: number): NumerologyRelation {
   return "tension";
 }
 
-function getPsychomatrixForComparisons(
-  result: PythagoreanIndividualResult
-): PythagoreanPsychomatrixCells {
-  const birthDate = parseIsoDate(result.participant.birthDate, "birthDate");
-  return result.psychomatrix?.cells ?? calculatePsychomatrix(birthDate, getDateFormulaDigits(birthDate)).cells;
+function calculateParticipantPsychomatrix(
+  participant: PythagoreanIndividualResult["participant"]
+): PythagoreanPsychomatrix {
+  const birthDate = parseIsoDate(participant.birthDate, "birthDate");
+  return calculatePsychomatrix(birthDate, getDateFormulaDigits(birthDate));
 }
 
 type ParsedIsoDate = {
