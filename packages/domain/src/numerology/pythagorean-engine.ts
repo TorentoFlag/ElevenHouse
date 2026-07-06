@@ -37,12 +37,13 @@ export function calculatePythagoreanIndividual(
 ): PythagoreanIndividualResult {
   const birthDate = parseIsoDate(participant.birthDate, "birthDate");
   const normalizedName = normalizeNumerologyName(participant.fullName, settings.nameNormalization);
+  const nameValues = getNameValues(normalizedName);
   const dateDigits = getDateFormulaDigits(birthDate);
   const keyNumbers: PythagoreanKeyNumbers = {
     lifePath: reduceNumber(sumNumbers(dateDigits), settings.masterNumbers),
     birthday: reduceNumber(Number(birthDate.day), settings.masterNumbers),
     ...calculateForecastNumbers(settings, birthDate),
-    ...calculateNameNumbers(normalizedName, settings)
+    ...calculateNameNumbers(nameValues, settings)
   };
   const matrix = calculatePsychomatrixFromDigits(dateDigits);
 
@@ -102,12 +103,11 @@ function calculateForecastNumbers(
 }
 
 function calculateNameNumbers(
-  normalizedName: string,
+  values: readonly { readonly letter: string; readonly value: number }[],
   settings: PythagoreanSettings
 ): Pick<PythagoreanKeyNumbers, "expression" | "soul" | "personality"> {
   if (!settings.includeNameNumbers) return {};
 
-  const values = getNameValues(normalizedName);
   const vowels = new Set(pythagoreanProfileV1.vowels);
   const soulValues = values.filter(({ letter }) => vowels.has(letter));
   const personalityValues = values.filter(({ letter }) => !vowels.has(letter));

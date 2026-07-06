@@ -17,6 +17,15 @@ describe("normalizeNumerologyName", () => {
         yoPolicy: "as_e",
         shortIpolicy: "as_i"
       })
-    ).toBe("семенмаиский");
+    ).toBe("семенмаискии");
+  });
+
+  it("folds final short i when configured", () => {
+    expect(
+      normalizeNumerologyName("Сергей", {
+        yoPolicy: "separate",
+        shortIpolicy: "as_i"
+      })
+    ).toBe("сергеи");
   });
 });

@@ -8,9 +8,7 @@ export function normalizeNumerologyName(
   const letters = [...fullName.toLocaleLowerCase("ru-RU")].filter((character) =>
     /\p{Letter}/u.test(character)
   );
-  const normalized = letters
-    .map((character, index) => normalizeRussianLetter(character, index, letters, settings))
-    .join("");
+  const normalized = letters.map((character) => normalizeRussianLetter(character, settings)).join("");
 
   if (!normalized) {
     throw new NumerologyValidationError("Numerology name must not be blank");
@@ -19,13 +17,8 @@ export function normalizeNumerologyName(
   return normalized;
 }
 
-function normalizeRussianLetter(
-  character: string,
-  index: number,
-  letters: readonly string[],
-  settings: NameNormalizationSettings
-): string {
+function normalizeRussianLetter(character: string, settings: NameNormalizationSettings): string {
   if (character === "ё" && settings.yoPolicy === "as_e") return "е";
-  if (character === "й" && settings.shortIpolicy === "as_i" && index < letters.length - 1) return "и";
+  if (character === "й" && settings.shortIpolicy === "as_i") return "и";
   return character;
 }

@@ -64,6 +64,20 @@ describe("calculatePythagoreanIndividual", () => {
       calculatePythagoreanIndividual({ fullName: "Мария", birthDate: "1990-02-31" }, baseSettings)
     ).toThrow(NumerologyValidationError);
   });
+
+  it("rejects unsupported name letters even when name numbers are disabled", () => {
+    expect(() =>
+      calculatePythagoreanIndividual(
+        { fullName: "John", birthDate: "1990-03-14" },
+        {
+          ...baseSettings,
+          includeNameNumbers: false,
+          includePsychomatrix: false,
+          includeStrengthLines: false
+        }
+      )
+    ).toThrow(NumerologyValidationError);
+  });
 });
 
 describe("calculatePythagoreanCompatibility", () => {
