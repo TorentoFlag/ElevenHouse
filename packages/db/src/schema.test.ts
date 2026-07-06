@@ -21,6 +21,7 @@ import {
   identityProviderValues,
   mediaAssets,
   mediaImageMimeTypeValues,
+  mediaMimeTypeValues,
   mediaPurposeValues,
   mediaStatusValues,
   mediaVariants,
@@ -57,7 +58,11 @@ import {
   productSubscriptionPeriodValues,
   productTypeValues,
   userProfiles,
-  userStatusValues
+  userStatusValues,
+  verificationApplications,
+  verificationApplicationDocuments,
+  verificationApplicationStatusValues,
+  verificationDocumentKindValues
 } from "./schema/index";
 
 const currentBaselineMigration = "packages/db/drizzle/0000_dazzling_metal_master.sql";
@@ -104,6 +109,46 @@ describe("database account schema constants", () => {
   it("keeps outbox event statuses explicit", () => {
     expect(outboxEventStatusValues).toEqual(["pending", "publishing", "published"]);
     expect(outboxEvents).toBeDefined();
+  });
+
+  it("exports verification tables and explicit values", () => {
+    expect(verificationApplicationStatusValues).toEqual([
+      "pending",
+      "approved",
+      "rejected",
+      "revoked"
+    ]);
+    expect(verificationDocumentKindValues).toEqual(["identity", "qualification"]);
+    expect(mediaPurposeValues).toContain("verification_identity_document");
+    expect(mediaPurposeValues).toContain("verification_qualification_document");
+    expect(mediaMimeTypeValues).toContain("application/pdf");
+    expect(verificationApplications).toBeDefined();
+    expect(verificationApplicationDocuments).toBeDefined();
+  });
+
+  it("keeps verification tables in the current baseline migration", () => {
+    const migration = readFileSync(currentBaselineMigration, "utf8");
+
+    expect(migration).toContain('CREATE TABLE "verification_applications"');
+    expect(migration).toContain('CREATE TABLE "verification_application_documents"');
+    expect(migration).toContain(
+      'CONSTRAINT "verification_applications_status_check" CHECK ("verification_applications"."status" in (\'pending\', \'approved\', \'rejected\', \'revoked\'))'
+    );
+    expect(migration).toContain(
+      'CONSTRAINT "verification_application_documents_kind_check" CHECK ("verification_application_documents"."kind" in (\'identity\', \'qualification\'))'
+    );
+    expect(migration).toContain(
+      'CREATE INDEX "verification_applications_owner_submitted_idx" ON "verification_applications" USING btree ("owner_user_id","submitted_at","id")'
+    );
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "verification_application_documents_application_media_unique" ON "verification_application_documents" USING btree ("application_id","media_id")'
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "verification_applications" ADD CONSTRAINT "verification_applications_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action'
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "verification_application_documents" ADD CONSTRAINT "verification_application_documents_media_id_media_assets_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action'
+    );
   });
 
   it("exports dictionary tables and explicit values", () => {
@@ -287,7 +332,13 @@ describe("database account schema constants", () => {
   });
 
   it("exports media tables and explicit values", () => {
-    expect(mediaPurposeValues).toEqual(["product_cover", "profile_avatar", "profile_cover"]);
+    expect(mediaPurposeValues).toEqual([
+      "product_cover",
+      "profile_avatar",
+      "profile_cover",
+      "verification_identity_document",
+      "verification_qualification_document"
+    ]);
     expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
     expect(mediaVisibilityValues).toEqual(["public", "private"]);
     expect(mediaImageMimeTypeValues).toEqual([
@@ -295,6 +346,13 @@ describe("database account schema constants", () => {
       "image/png",
       "image/webp",
       "image/avif"
+    ]);
+    expect(mediaMimeTypeValues).toEqual([
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/avif",
+      "application/pdf"
     ]);
     expect(mediaVariantValues).toEqual(["original", "preview", "card", "cover"]);
     expect(mediaAssets).toBeDefined();

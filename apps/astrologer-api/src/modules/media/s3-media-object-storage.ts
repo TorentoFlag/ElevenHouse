@@ -1,7 +1,10 @@
 import { HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import type { ObjectStoragePort, UploadedObjectMetadata } from "@elevenhouse/domain";
-import type { MediaImageMimeTypeValue } from "@elevenhouse/validation/media";
+import type {
+  ObjectStoragePort,
+  PresignedUploadInput,
+  UploadedObjectMetadata
+} from "@elevenhouse/domain";
 import type { MediaPublicUrlResolver } from "./media-response.mapper";
 
 export type S3MediaObjectStorageConfig = {
@@ -35,11 +38,7 @@ export class S3MediaObjectStorage implements ObjectStoragePort, MediaPublicUrlRe
       });
   }
 
-  async createPresignedUpload(input: {
-    readonly storageKey: string;
-    readonly mimeType: MediaImageMimeTypeValue;
-    readonly sizeBytes: number;
-  }) {
+  async createPresignedUpload(input: PresignedUploadInput) {
     const command = new PutObjectCommand({
       Bucket: this.config.bucket,
       Key: input.storageKey,

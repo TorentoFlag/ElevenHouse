@@ -115,6 +115,16 @@
       "import": "./dist/adapters/platform-billing/index.js",
       "require": "./dist/adapters/platform-billing/index.js"
     },
+    "./verification": {
+      "types": "./dist/adapters/verification/index.d.ts",
+      "import": "./dist/adapters/verification/index.js",
+      "require": "./dist/adapters/verification/index.js"
+    },
+    "./adapters/verification": {
+      "types": "./dist/adapters/verification/index.d.ts",
+      "import": "./dist/adapters/verification/index.js",
+      "require": "./dist/adapters/verification/index.js"
+    },
     "./calculations": {
       "types": "./dist/adapters/calculations/index.d.ts",
       "import": "./dist/adapters/calculations/index.js",

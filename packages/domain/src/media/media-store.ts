@@ -1,6 +1,6 @@
 import type {
   MediaAsset,
-  MediaImageMimeType,
+  MediaMimeType,
   MediaPurpose,
   MediaVisibility
 } from "./media-types";
@@ -13,7 +13,7 @@ export type MediaAssetStoreCreateInput = {
   readonly storageBucket: string;
   readonly storageKey: string;
   readonly originalFileName: string;
-  readonly mimeType: MediaImageMimeType;
+  readonly mimeType: MediaMimeType;
   readonly sizeBytes: number;
   readonly now: string;
 };

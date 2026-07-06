@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import {
   mediaImageMimeTypeValues,
+  mediaMimeTypeValues,
   mediaPurposeUploadLimits,
   mediaPurposeValues,
-  type MediaImageMimeTypeValue,
+  type MediaMimeTypeValue,
   type MediaPurposeValue
 } from "@elevenhouse/validation/media";
 import { normalizeRequiredString } from "../shared";
@@ -36,7 +37,7 @@ export async function createMediaUploadIntent(input: {
   const mimeType = parseMediaMimeType(input.input.mimeType);
   const limit = mediaPurposeUploadLimits[purpose];
 
-  if (!limit.allowedMimeTypes.includes(mimeType)) {
+  if (!(limit.allowedMimeTypes as readonly string[]).includes(mimeType)) {
     throw new MediaValidationError("Unsupported media MIME type for purpose");
   }
   if (!Number.isSafeInteger(input.input.sizeBytes) || input.input.sizeBytes <= 0) {
@@ -177,9 +178,9 @@ function parseMediaPurpose(value: string): MediaPurposeValue {
   return normalized;
 }
 
-function parseMediaMimeType(value: string): MediaImageMimeTypeValue {
+function parseMediaMimeType(value: string): MediaMimeTypeValue {
   const normalized = normalizeRequiredString(value, "Media MIME type is required").toLowerCase();
-  if (!isOneOf(mediaImageMimeTypeValues, normalized)) {
+  if (!isOneOf(mediaMimeTypeValues, normalized)) {
     throw new MediaValidationError("Unsupported media MIME type");
   }
   return normalized;
@@ -190,7 +191,7 @@ function buildStorageKey(input: {
   readonly purpose: MediaPurposeValue;
   readonly mediaId: string;
   readonly fileName: string;
-  readonly mimeType: MediaImageMimeTypeValue;
+  readonly mimeType: MediaMimeTypeValue;
 }): string {
   return `${input.ownerUserId}/${input.purpose}/${input.mediaId}/${toStorageFileName(
     input.fileName,
@@ -198,7 +199,7 @@ function buildStorageKey(input: {
   )}`;
 }
 
-function toStorageFileName(fileName: string, mimeType: MediaImageMimeTypeValue): string {
+function toStorageFileName(fileName: string, mimeType: MediaMimeTypeValue): string {
   const normalizedName = transliterate(fileName)
     .toLowerCase()
     .replace(/[^a-z0-9.]+/g, "-")
@@ -252,7 +253,7 @@ function transliterate(value: string): string {
     .join("");
 }
 
-function extensionForMimeType(mimeType: MediaImageMimeTypeValue): string {
+function extensionForMimeType(mimeType: MediaMimeTypeValue): string {
   switch (mimeType) {
     case "image/jpeg":
       return "jpg";
@@ -262,6 +263,8 @@ function extensionForMimeType(mimeType: MediaImageMimeTypeValue): string {
       return "webp";
     case "image/avif":
       return "avif";
+    case "application/pdf":
+      return "pdf";
   }
 }
 

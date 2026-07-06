@@ -56,6 +56,22 @@ describe("media contracts", () => {
     ).toThrow();
   });
 
+  it("accepts private verification document upload intents for PDF files", () => {
+    expect(
+      createMediaUploadIntentRequestSchema.parse({
+        purpose: "verification_identity_document",
+        fileName: " passport.pdf ",
+        mimeType: "application/pdf",
+        sizeBytes: 900_000
+      })
+    ).toEqual({
+      purpose: "verification_identity_document",
+      fileName: "passport.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 900_000
+    });
+  });
+
   it("describes a direct browser upload target without exposing storage secrets", () => {
     expect(
       mediaUploadIntentResponseSchema.parse({

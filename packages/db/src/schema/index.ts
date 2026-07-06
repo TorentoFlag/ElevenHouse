@@ -5,4 +5,5 @@ export * from "./products";
 export * from "./platform-billing";
 export * from "./media";
 export * from "./astrologer-profile";
+export * from "./verification";
 export * from "./calculations";

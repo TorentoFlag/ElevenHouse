@@ -1,8 +1,8 @@
-import type { MediaImageMimeType, UploadedObjectMetadata } from "./media-types";
+import type { MediaMimeType, UploadedObjectMetadata } from "./media-types";
 
 export type PresignedUploadInput = {
   readonly storageKey: string;
-  readonly mimeType: MediaImageMimeType;
+  readonly mimeType: MediaMimeType;
   readonly sizeBytes: number;
 };
 

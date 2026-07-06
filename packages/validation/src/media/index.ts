@@ -1,4 +1,10 @@
-export const mediaPurposeValues = ["product_cover", "profile_avatar", "profile_cover"] as const;
+export const mediaPurposeValues = [
+  "product_cover",
+  "profile_avatar",
+  "profile_cover",
+  "verification_identity_document",
+  "verification_qualification_document"
+] as const;
 export type MediaPurposeValue = (typeof mediaPurposeValues)[number];
 
 export const mediaStatusValues = [
@@ -21,6 +27,12 @@ export const mediaImageMimeTypeValues = [
 ] as const;
 export type MediaImageMimeTypeValue = (typeof mediaImageMimeTypeValues)[number];
 
+export const mediaDocumentMimeTypeValues = ["application/pdf"] as const;
+export type MediaDocumentMimeTypeValue = (typeof mediaDocumentMimeTypeValues)[number];
+
+export const mediaMimeTypeValues = [...mediaImageMimeTypeValues, ...mediaDocumentMimeTypeValues] as const;
+export type MediaMimeTypeValue = (typeof mediaMimeTypeValues)[number];
+
 export const mediaVariantValues = ["original", "preview", "card", "cover"] as const;
 export type MediaVariantValue = (typeof mediaVariantValues)[number];
 
@@ -39,12 +51,22 @@ export const mediaPurposeUploadLimits = {
     maxSizeBytes: 15_000_000,
     allowedMimeTypes: mediaImageMimeTypeValues,
     visibility: "public"
+  },
+  verification_identity_document: {
+    maxSizeBytes: 20_000_000,
+    allowedMimeTypes: ["image/jpeg", "image/png", "application/pdf"],
+    visibility: "private"
+  },
+  verification_qualification_document: {
+    maxSizeBytes: 20_000_000,
+    allowedMimeTypes: ["image/jpeg", "image/png", "application/pdf"],
+    visibility: "private"
   }
 } satisfies Record<
   MediaPurposeValue,
   {
     readonly maxSizeBytes: number;
-    readonly allowedMimeTypes: readonly MediaImageMimeTypeValue[];
+    readonly allowedMimeTypes: readonly MediaMimeTypeValue[];
     readonly visibility: MediaVisibilityValue;
   }
 >;

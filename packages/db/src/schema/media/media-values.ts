@@ -1,5 +1,6 @@
 export {
   mediaImageMimeTypeValues,
+  mediaMimeTypeValues,
   mediaPurposeValues,
   mediaStatusValues,
   mediaVariantValues,

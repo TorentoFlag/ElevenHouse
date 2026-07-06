@@ -1,5 +1,5 @@
 import {
-  mediaImageMimeTypeSchema,
+  mediaMimeTypeSchema,
   type MediaAssetResponse,
   type MediaPurpose
 } from "@elevenhouse/contracts";
@@ -16,7 +16,7 @@ export async function uploadMediaFile(input: UploadMediaFileInput): Promise<Medi
   const uploadIntent = await createMediaUploadIntent({
     purpose: input.purpose,
     fileName: input.file.name.trim(),
-    mimeType: mediaImageMimeTypeSchema.parse(input.file.type),
+    mimeType: mediaMimeTypeSchema.parse(input.file.type),
     sizeBytes: input.file.size
   });
   const response = await (input.fetcher ?? globalThis.fetch)(uploadIntent.upload.url, {

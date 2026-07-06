@@ -53,7 +53,8 @@ runtime setting so Express resolves proxy headers; controllers must not parse
 
 `astrologer-api` обслуживает authenticated workflows астрологов. В текущем коде
 реализованы health, identity/passwordless/session, dictionary, dictionary AI draft,
-products и provider-neutral AI generation через OpenAI.
+products, media uploads, profile/settings billing overview, verification
+application submission и provider-neutral AI generation через OpenAI.
 
 Ответственности:
 
@@ -65,6 +66,8 @@ products и provider-neutral AI generation через OpenAI.
 - Sessions и materials.
 - Wallet/finance views.
 - Analytics.
+- Verification submission and current verification status for the signed-in
+  astrologer.
 
 Примеры routes:
 
@@ -82,6 +85,9 @@ POST /products/:productId/publish
 POST /products/:productId/move-to-draft
 POST /products/:productId/archive
 POST /products/:productId/duplicate
+GET  /media/assets/:mediaId
+POST /media/upload-intents
+POST /media/assets/:mediaId/complete
 GET  /dictionary/categories
 GET  /dictionary/entries
 POST /dictionary/custom-entries
@@ -91,7 +97,17 @@ DELETE /dictionary/entries/:entryId
 DELETE /dictionary/entries
 DELETE /dictionary/platform-entries/:platformEntryId/override
 POST /dictionary/ai-draft
+GET  /astrologer-profile/me
+PUT  /astrologer-profile/me
+GET  /platform-billing/me
+GET  /verification/me
+POST /verification/applications
 ```
+
+Verification submission in `astrologer-api` only accepts astrologer-owned private
+identity and qualification media and creates a pending application. Approve,
+reject, revoke, escalation, reviewer identity and audit trails are moderator
+workflows for future `admin-api`.
 
 AI provider credentials, model selection and rate limits are backend-only
 `ASTROLOGER_*` runtime config. `astrologer-web` must call feature-specific routes

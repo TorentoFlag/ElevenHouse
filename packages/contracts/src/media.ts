@@ -1,5 +1,6 @@
 import {
   mediaImageMimeTypeValues,
+  mediaMimeTypeValues,
   mediaPurposeUploadLimits,
   mediaPurposeValues,
   mediaStatusValues,
@@ -26,6 +27,9 @@ export type MediaVisibility = z.infer<typeof mediaVisibilitySchema>;
 export const mediaImageMimeTypeSchema = z.enum(mediaImageMimeTypeValues);
 export type MediaImageMimeType = z.infer<typeof mediaImageMimeTypeSchema>;
 
+export const mediaMimeTypeSchema = z.enum(mediaMimeTypeValues);
+export type MediaMimeType = z.infer<typeof mediaMimeTypeSchema>;
+
 export const mediaVariantSchema = z.enum(mediaVariantValues);
 export type MediaVariant = z.infer<typeof mediaVariantSchema>;
 
@@ -33,14 +37,14 @@ export const createMediaUploadIntentRequestSchema = z
   .object({
     purpose: mediaPurposeSchema,
     fileName: nonEmptyStringSchema.max(255),
-    mimeType: mediaImageMimeTypeSchema,
+    mimeType: mediaMimeTypeSchema,
     sizeBytes: z.number().int().positive()
   })
   .strict()
   .superRefine((value, ctx) => {
     const limit = mediaPurposeUploadLimits[value.purpose];
 
-    if (!limit.allowedMimeTypes.includes(value.mimeType)) {
+    if (!(limit.allowedMimeTypes as readonly string[]).includes(value.mimeType)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["mimeType"],
@@ -106,7 +110,7 @@ export const mediaAssetResponseSchema = z
     status: mediaStatusSchema,
     visibility: mediaVisibilitySchema,
     originalFileName: nonEmptyStringSchema.max(255),
-    mimeType: mediaImageMimeTypeSchema,
+    mimeType: mediaMimeTypeSchema,
     sizeBytes: z.number().int().positive(),
     width: z.number().int().positive().nullable(),
     height: z.number().int().positive().nullable(),

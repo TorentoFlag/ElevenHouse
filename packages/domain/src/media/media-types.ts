@@ -1,5 +1,6 @@
 import type {
   MediaImageMimeTypeValue,
+  MediaMimeTypeValue,
   MediaPurposeValue,
   MediaStatusValue,
   MediaVariantValue,
@@ -10,6 +11,7 @@ export type MediaPurpose = MediaPurposeValue;
 export type MediaStatus = MediaStatusValue;
 export type MediaVisibility = MediaVisibilityValue;
 export type MediaImageMimeType = MediaImageMimeTypeValue;
+export type MediaMimeType = MediaMimeTypeValue;
 export type MediaVariantName = MediaVariantValue;
 
 export type MediaVariant = {
@@ -32,7 +34,7 @@ export type MediaAsset = {
   readonly storageBucket: string;
   readonly storageKey: string;
   readonly originalFileName: string;
-  readonly mimeType: MediaImageMimeType;
+  readonly mimeType: MediaMimeType;
   readonly sizeBytes: number;
   readonly checksumSha256: string | null;
   readonly width: number | null;

@@ -6,5 +6,6 @@ export * from "./products";
 export * from "./astrologer-profile";
 export * from "./media";
 export * from "./platform-billing";
+export * from "./verification";
 export * from "./calculations";
 export * from "./numerology";

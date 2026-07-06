@@ -4,12 +4,15 @@ import type {
   AstrologerProfileResponse,
   BillingIntegrityIssueResponse,
   BillingOverviewResponse,
+  GetAstrologerVerificationResponse,
   PlatformPlanFeatureCode,
   PlatformPlanResponse,
+  SubmitAstrologerVerificationRequest,
   UpsertAstrologerProfileRequest
 } from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import { ProfileSettingsForm } from "../../features/astrologer-profile/ui/ProfileSettingsForm";
+import { VerificationSettingsPanel } from "../../features/verification/ui/VerificationSettingsPanel";
 import { SettingsNavigation, type SettingsSection } from "./components/SettingsNavigation";
 import styles from "./SettingsPage.module.css";
 
@@ -19,18 +22,24 @@ export type SettingsPageViewProps = {
   readonly profile: AstrologerProfileResponse | null;
   readonly profileIntegrityIssues: readonly AstrologerProfileIntegrityIssueResponse[];
   readonly billingOverview: BillingOverviewResponse | null;
+  readonly verification?: GetAstrologerVerificationResponse | null;
   readonly selectedBillingCycle: "month" | "year" | null;
   readonly activeSectionId: SettingsSection["id"];
   readonly isLoading: boolean;
   readonly isError: boolean;
   readonly isBillingLoading: boolean;
   readonly isBillingError: boolean;
+  readonly isVerificationLoading?: boolean;
+  readonly isVerificationError?: boolean;
   readonly isSavingProfile: boolean;
+  readonly isSubmittingVerification?: boolean;
   readonly saveStatus: "saved" | null;
+  readonly verificationSubmitStatus?: "submitted" | null;
   readonly onSectionChange: (sectionId: SettingsSection["id"]) => void;
   readonly onBillingCycleChange: (billingCycle: "month" | "year") => void;
   readonly onProfileDirtyChange: (isDirty: boolean) => void;
   readonly onSaveProfile: (body: UpsertAstrologerProfileRequest) => void;
+  readonly onSubmitVerification?: (body: SubmitAstrologerVerificationRequest) => void;
 };
 
 const supportedSections = [
@@ -51,9 +60,9 @@ const supportedSections = [
   {
     id: "verification",
     title: "Верификация",
-    description: "Появится после Verification workflow",
+    description: "Документы и статус доверия",
     iconName: "check",
-    disabled: true
+    disabled: false
   },
   {
     id: "notifications",
@@ -105,18 +114,24 @@ export function SettingsPageView({
   profile,
   profileIntegrityIssues,
   billingOverview,
+  verification = null,
   selectedBillingCycle,
   activeSectionId,
   isLoading,
   isError,
   isBillingLoading,
   isBillingError,
+  isVerificationLoading = false,
+  isVerificationError = false,
   isSavingProfile,
+  isSubmittingVerification = false,
   saveStatus,
+  verificationSubmitStatus = null,
   onSectionChange,
   onBillingCycleChange,
   onProfileDirtyChange,
-  onSaveProfile
+  onSaveProfile,
+  onSubmitVerification = noopSubmitVerification
 }: SettingsPageViewProps) {
   const canEditProfile = !isLoading && !isError;
 
@@ -178,11 +193,23 @@ export function SettingsPageView({
                 onBillingCycleChange
               })
             : null}
+          {activeSectionId === "verification" ? (
+            <VerificationSettingsPanel
+              verification={verification}
+              isLoading={isVerificationLoading}
+              isError={isVerificationError}
+              isSubmitting={isSubmittingVerification}
+              submitStatus={verificationSubmitStatus}
+              onSubmit={onSubmitVerification}
+            />
+          ) : null}
         </main>
       </div>
     </section>
   );
 }
+
+function noopSubmitVerification(_body: SubmitAstrologerVerificationRequest): void {}
 
 function StatusBanner({
   tone,

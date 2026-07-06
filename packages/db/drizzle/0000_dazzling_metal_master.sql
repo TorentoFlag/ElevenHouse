@@ -222,10 +222,10 @@ CREATE TABLE "media_assets" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "media_assets_storage_bucket_storage_key_unique" UNIQUE("storage_bucket","storage_key"),
-	CONSTRAINT "media_assets_purpose_check" CHECK ("media_assets"."purpose" in ('product_cover', 'profile_avatar', 'profile_cover')),
+	CONSTRAINT "media_assets_purpose_check" CHECK ("media_assets"."purpose" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document')),
 	CONSTRAINT "media_assets_status_check" CHECK ("media_assets"."status" in ('uploading', 'processing', 'ready', 'failed', 'deleted')),
 	CONSTRAINT "media_assets_visibility_check" CHECK ("media_assets"."visibility" in ('public', 'private')),
-	CONSTRAINT "media_assets_mime_type_check" CHECK ("media_assets"."mime_type" in ('image/jpeg', 'image/png', 'image/webp', 'image/avif')),
+	CONSTRAINT "media_assets_mime_type_check" CHECK ("media_assets"."mime_type" in ('image/jpeg', 'image/png', 'image/webp', 'image/avif', 'application/pdf')),
 	CONSTRAINT "media_assets_size_bytes_check" CHECK ("media_assets"."size_bytes" > 0),
 	CONSTRAINT "media_assets_width_check" CHECK ("media_assets"."width" is null or "media_assets"."width" > 0),
 	CONSTRAINT "media_assets_height_check" CHECK ("media_assets"."height" is null or "media_assets"."height" > 0),
@@ -489,6 +489,30 @@ CREATE TABLE "astrologer_profiles" (
 	CONSTRAINT "astrologer_profiles_own_birth_time_check" CHECK ("astrologer_profiles"."own_birth_time" is null or "astrologer_profiles"."own_birth_time" ~ '^[0-9]{2}:[0-9]{2}$')
 );
 --> statement-breakpoint
+CREATE TABLE "verification_applications" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"rejection_reason" text,
+	"submitted_at" timestamp with time zone NOT NULL,
+	"reviewed_at" timestamp with time zone,
+	"reviewer_user_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "verification_applications_status_check" CHECK ("verification_applications"."status" in ('pending', 'approved', 'rejected', 'revoked')),
+	CONSTRAINT "verification_applications_rejection_reason_check" CHECK ("verification_applications"."status" <> 'rejected' or length(trim("verification_applications"."rejection_reason")) > 0),
+	CONSTRAINT "verification_applications_reviewed_at_check" CHECK ("verification_applications"."status" = 'pending' or "verification_applications"."reviewed_at" is not null)
+);
+--> statement-breakpoint
+CREATE TABLE "verification_application_documents" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"application_id" uuid NOT NULL,
+	"kind" text NOT NULL,
+	"media_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "verification_application_documents_kind_check" CHECK ("verification_application_documents"."kind" in ('identity', 'qualification'))
+);
+--> statement-breakpoint
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -521,6 +545,10 @@ ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_plan_id_platform
 ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_avatar_media_id_media_assets_id_fk" FOREIGN KEY ("avatar_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_cover_media_id_media_assets_id_fk" FOREIGN KEY ("cover_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "verification_applications" ADD CONSTRAINT "verification_applications_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "verification_applications" ADD CONSTRAINT "verification_applications_reviewer_user_id_users_id_fk" FOREIGN KEY ("reviewer_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "verification_application_documents" ADD CONSTRAINT "verification_application_documents_application_id_verification_applications_id_fk" FOREIGN KEY ("application_id") REFERENCES "public"."verification_applications"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "verification_application_documents" ADD CONSTRAINT "verification_application_documents_media_id_media_assets_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_email_login_unique" ON "auth_identities" USING btree (lower("email")) WHERE "auth_identities"."provider" = 'email' and "auth_identities"."email" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_phone_login_unique" ON "auth_identities" USING btree ("phone_number") WHERE "auth_identities"."provider" = 'phone' and "auth_identities"."phone_number" is not null;--> statement-breakpoint
@@ -579,4 +607,9 @@ CREATE UNIQUE INDEX "billing_payment_methods_provider_method_unique" ON "billing
 CREATE UNIQUE INDEX "billing_payment_methods_default_owner_unique" ON "billing_payment_methods" USING btree ("owner_user_id") WHERE "billing_payment_methods"."is_default" = true;--> statement-breakpoint
 CREATE INDEX "billing_invoices_owner_issued_idx" ON "billing_invoices" USING btree ("owner_user_id","issued_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "billing_invoices_provider_invoice_unique" ON "billing_invoices" USING btree ("provider","provider_invoice_id");--> statement-breakpoint
-CREATE INDEX "astrologer_profiles_public_handle_idx" ON "astrologer_profiles" USING btree ("public_handle");
+CREATE INDEX "astrologer_profiles_public_handle_idx" ON "astrologer_profiles" USING btree ("public_handle");--> statement-breakpoint
+CREATE INDEX "verification_applications_owner_submitted_idx" ON "verification_applications" USING btree ("owner_user_id","submitted_at","id");--> statement-breakpoint
+CREATE INDEX "verification_applications_status_submitted_idx" ON "verification_applications" USING btree ("status","submitted_at");--> statement-breakpoint
+CREATE INDEX "verification_application_documents_application_idx" ON "verification_application_documents" USING btree ("application_id");--> statement-breakpoint
+CREATE INDEX "verification_application_documents_media_idx" ON "verification_application_documents" USING btree ("media_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "verification_application_documents_application_media_unique" ON "verification_application_documents" USING btree ("application_id","media_id");

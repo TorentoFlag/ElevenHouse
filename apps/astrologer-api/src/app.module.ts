@@ -14,6 +14,7 @@ import { NumerologyModule } from "./modules/numerology/numerology.module";
 import { PlatformBillingModule } from "./modules/platform-billing/platform-billing.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { RedisModule } from "./modules/redis/redis.module";
+import { VerificationModule } from "./modules/verification/verification.module";
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { RedisModule } from "./modules/redis/redis.module";
     MediaModule,
     PlatformBillingModule,
     ProductsModule,
+    VerificationModule,
     CalculationsModule,
     NumerologyModule,
     AstrologerProfileModule,

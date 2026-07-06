@@ -62,9 +62,12 @@ export class AppModule {}
 - `dictionary-ai`
 - `health`
 - `identity`
+- `media`
+- `platform-billing`
 - `products`
 - `redis`
 - `security`
+- `verification`
 
 `apps/admin-api` пока отсутствует в коде. Admin/moderator/super_admin workflows
 не должны добавляться в `public-api` или `astrologer-api`; для них нужно создать
@@ -75,6 +78,8 @@ export class AppModule {}
 - `Identity`: регистрация, login, auth methods, sessions.
 - `Users/Roles`: account пользователя, roles, status, permissions.
 - `AstrologerProfile`: публичные и приватные данные профиля астролога.
+- `Verification`: заявка астролога на проверку личности и квалификации,
+  загрузка приватных документов и read model текущего статуса доверия.
 - `ClientProfile`: профиль клиента, ссылки на сохранённые birth data, preferences.
 - `Products`: consultations, packages, subscriptions, recorded products, courses.
 - `Availability`: schedule, slots, timezone-aware availability.
@@ -89,7 +94,8 @@ export class AppModule {}
 - `Messaging`: threads и messages там, где используется platform messaging.
 - `Content`: posts, lead magnets, materials, broadcasts, content products.
 - `Reviews`: review submission, moderation, display aggregates.
-- `Moderation`: queues, decisions, reasons, escalation.
+- `Moderation`: queues, decisions, reasons, escalation. Moderator decisions for
+  verification applications belong to future `admin-api`, not `astrologer-api`.
 - `Notifications`: notification preferences, templates, delivery logs.
 - `Analytics`: product и business metrics, event ingestion.
 - `Referral`: astrologer и client invitation flows.

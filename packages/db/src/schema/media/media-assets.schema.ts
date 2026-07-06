@@ -4,6 +4,7 @@ import { users } from "../identity/accounts.schema";
 import {
   formatMediaSqlValues,
   mediaImageMimeTypeValues,
+  mediaMimeTypeValues,
   mediaPurposeValues,
   mediaStatusValues,
   mediaVisibilityValues
@@ -51,7 +52,7 @@ export const mediaAssets = pgTable(
     ),
     check(
       "media_assets_mime_type_check",
-      sql`${table.mimeType} in ${sql.raw(formatMediaSqlValues(mediaImageMimeTypeValues))}`
+      sql`${table.mimeType} in ${sql.raw(formatMediaSqlValues(mediaMimeTypeValues))}`
     ),
     check("media_assets_size_bytes_check", sql`${table.sizeBytes} > 0`),
     check(

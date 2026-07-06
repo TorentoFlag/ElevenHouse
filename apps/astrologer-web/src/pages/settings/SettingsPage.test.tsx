@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   useState: vi.fn(),
   useCurrentAstrologerProfileQuery: vi.fn(),
   useCurrentBillingOverviewQuery: vi.fn(),
+  useCurrentAstrologerVerificationQuery: vi.fn(),
+  useSubmitAstrologerVerificationMutation: vi.fn(),
   useUpsertAstrologerProfileMutation: vi.fn(),
   settingsPageView: vi.fn()
 }));
@@ -42,6 +44,14 @@ vi.mock("../../features/platform-billing/model/useCurrentBillingOverviewQuery", 
   useCurrentBillingOverviewQuery: mocks.useCurrentBillingOverviewQuery
 }));
 
+vi.mock("../../features/verification/model/useCurrentAstrologerVerificationQuery", () => ({
+  useCurrentAstrologerVerificationQuery: mocks.useCurrentAstrologerVerificationQuery
+}));
+
+vi.mock("../../features/verification/model/useSubmitAstrologerVerificationMutation", () => ({
+  useSubmitAstrologerVerificationMutation: mocks.useSubmitAstrologerVerificationMutation
+}));
+
 vi.mock("./SettingsPageView", () => ({
   SettingsPageView: mocks.settingsPageView
 }));
@@ -70,6 +80,17 @@ describe("SettingsPage", () => {
       isLoading: false,
       isError: false
     });
+    mocks.useCurrentAstrologerVerificationQuery.mockReturnValue({
+      data: verification,
+      isLoading: false,
+      isError: false
+    });
+    mocks.useSubmitAstrologerVerificationMutation.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      isError: false,
+      isSuccess: false
+    });
     mocks.useUpsertAstrologerProfileMutation.mockReturnValue({
       mutate: vi.fn(),
       isPending: false,
@@ -88,15 +109,43 @@ describe("SettingsPage", () => {
         profile,
         profileIntegrityIssues: [],
         billingOverview,
+        verification,
         selectedBillingCycle: null,
         activeSectionId: "profile",
         isLoading: false,
         isError: false,
         isBillingLoading: false,
         isBillingError: false,
+        isVerificationLoading: false,
+        isVerificationError: false,
+        isSubmittingVerification: false,
         isSavingProfile: false
       })
     );
+  });
+
+  it("submits verification applications through the mutation hook", () => {
+    const mutate = vi.fn();
+    mocks.useSubmitAstrologerVerificationMutation.mockReturnValue({
+      mutate,
+      isPending: false,
+      isError: false,
+      isSuccess: false
+    });
+
+    renderElement(<SettingsPage />);
+    const props = getLatestMockProps(mocks.settingsPageView) as {
+      onSubmitVerification: (body: unknown) => void;
+    };
+    props.onSubmitVerification({
+      identityDocumentMediaId: "33333333-3333-4333-8333-333333333333",
+      qualificationDocumentMediaIds: ["44444444-4444-4444-8444-444444444444"]
+    });
+
+    expect(mutate).toHaveBeenCalledWith({
+      identityDocumentMediaId: "33333333-3333-4333-8333-333333333333",
+      qualificationDocumentMediaIds: ["44444444-4444-4444-8444-444444444444"]
+    });
   });
 
   it("passes a saved status after the profile mutation succeeds", () => {
@@ -253,3 +302,13 @@ const billingOverview = {
   paymentMethod: null,
   invoices: []
 } satisfies BillingOverviewResponse;
+
+const verification = {
+  status: "none",
+  application: null,
+  requirements: {
+    maxQualificationDocuments: 5,
+    allowedMimeTypes: ["image/jpeg", "image/png", "application/pdf"],
+    maxSizeBytes: 20_000_000
+  }
+} as const;

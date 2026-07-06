@@ -9,7 +9,13 @@ import {
 
 describe("media validation values", () => {
   it("defines the initial production media lifecycle vocabulary", () => {
-    expect(mediaPurposeValues).toEqual(["product_cover", "profile_avatar", "profile_cover"]);
+    expect(mediaPurposeValues).toEqual([
+      "product_cover",
+      "profile_avatar",
+      "profile_cover",
+      "verification_identity_document",
+      "verification_qualification_document"
+    ]);
     expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
     expect(mediaVisibilityValues).toEqual(["public", "private"]);
     expect(mediaImageMimeTypeValues).toEqual([
@@ -25,6 +31,19 @@ describe("media validation values", () => {
       maxSizeBytes: 15_000_000,
       allowedMimeTypes: mediaImageMimeTypeValues,
       visibility: "public"
+    });
+  });
+
+  it("keeps verification documents private and bounded to image or PDF files", () => {
+    expect(mediaPurposeUploadLimits.verification_identity_document).toEqual({
+      maxSizeBytes: 20_000_000,
+      allowedMimeTypes: ["image/jpeg", "image/png", "application/pdf"],
+      visibility: "private"
+    });
+    expect(mediaPurposeUploadLimits.verification_qualification_document).toEqual({
+      maxSizeBytes: 20_000_000,
+      allowedMimeTypes: ["image/jpeg", "image/png", "application/pdf"],
+      visibility: "private"
     });
   });
 });
