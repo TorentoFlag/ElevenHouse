@@ -274,6 +274,43 @@ describe("NumerologyPageView", () => {
     expect(getButtonIconName(view, "PDF")).toBe("doc");
     expect(findOptionalButtonByText(view, "Пересчитать")).toBeNull();
   });
+
+  it("uses form compatibility mode as the toolbar toggle state without opening presentation flow", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      formState: {
+        ...baseProps().formState,
+        mode: "compatibility",
+        partner: {
+          ...createParticipantFormState("crm_client"),
+          clientId: "4ab63db1-4f78-4d59-9b75-c21fc3ec9f6e",
+          displayName: "Марина Краснова",
+          fullName: "Марина Краснова",
+          birthDate: "1990-03-14"
+        }
+      },
+      selectedResponse: response({
+        source: "crm_client",
+        clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+      })
+    });
+    const clientPickers = findElements(view).filter(
+      (element) => element.type === ClientSearchCombobox
+    ) as ReactElement<{ label: string; excludeClientIds?: readonly string[] }>[];
+    const compatibilityButton = findButtonByText(view, "Совместимость") as ReactElement<{
+      "aria-pressed"?: boolean;
+    }>;
+
+    expect(clientPickers.map((picker) => picker.props.label)).toEqual(["Клиент", "Партнер"]);
+    expect(clientPickers[0]?.props.excludeClientIds).toEqual([
+      "4ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+    ]);
+    expect(clientPickers[1]?.props.excludeClientIds).toEqual([
+      "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+    ]);
+    expect(compatibilityButton.props["aria-pressed"]).toBe(true);
+    expect(findOptionalButtonByText(view, "Презентация")).toBeNull();
+  });
 });
 
 function baseProps(): NumerologyPageViewProps {

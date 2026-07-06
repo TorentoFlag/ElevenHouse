@@ -1,8 +1,9 @@
 .root {
   position: relative;
-  width: max-content;
-  max-width: 100%;
+  width: min(260px, 100%);
+  max-width: 260px;
   min-width: 0;
+  flex: 1 1 204px;
 }
 
 .floatingLabel {
@@ -25,9 +26,9 @@
   position: relative;
   z-index: 2;
   display: flex;
-  width: auto;
-  min-width: 204px;
-  max-width: 260px;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   box-sizing: border-box;
   min-height: 42px;
   align-items: center;

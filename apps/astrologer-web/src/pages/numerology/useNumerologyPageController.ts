@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type {
   CalculationRecordResponse,
   NumerologyCalculationResponse
@@ -8,7 +9,19 @@ import {
   getFirstLinkableClientId,
   getLatestCalculationVersion
 } from "../../features/calculations/model/calculationStatus";
-import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
+import {
+  astrologerClientListQueryOptions,
+  findClientSelectOption,
+  toClientSelectOptions,
+  type ClientSelectOption
+} from "../../features/clients/model/clientSelectorModel";
+import {
+  buildCompatibilityFormState,
+  buildIndividualFormState,
+  findExistingCalculationForParticipants,
+  getFirstCompatibilityPartner,
+  toClientOptionFromNumerologyParticipant
+} from "../../features/numerology/model/numerologyCompatibilityFlowModel";
 import {
   createInitialNumerologyForm,
   getNumerologyFormErrors,
@@ -35,6 +48,7 @@ import type { NumerologyPageViewProps } from "./NumerologyPageView";
 
 export function useNumerologyPageController(): NumerologyPageViewProps {
   const listQuery = useNumerologyCalculationListQuery();
+  const clientsQuery = useQuery(astrologerClientListQueryOptions({ limit: 100, offset: 0 }));
   const createMutation = useCreateNumerologyMutation();
   const linkMutation = useLinkCalculationClientMutation();
   const saveInterpretationMutation = useSaveCalculationInterpretationMutation();
@@ -43,6 +57,10 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const calculations = useMemo(
     () => listQuery.data?.calculations ?? [],
     [listQuery.data?.calculations]
+  );
+  const clientOptions = useMemo(
+    () => toClientSelectOptions(clientsQuery.data?.clients ?? []),
+    [clientsQuery.data?.clients]
   );
   const [selectedResponse, setSelectedResponse] = useState<NumerologyCalculationResponse | null>(
     null
@@ -108,11 +126,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     },
     onSelectDetail: setSelectedDetailSelector,
     onToggleYearMode: () => setIsYearMode((value) => !value),
-    onToggleCompatibilityMode: () => {
-      if (formState.mode === "compatibility") return;
-      setFormState((state) => ({ ...state, mode: "compatibility" }));
-      setIsSetupOpen(true);
-    },
+    onToggleCompatibilityMode: toggleCompatibilityMode,
     onOpenPresentation: () => setIsPresentationOpen(true),
     onClosePresentation: () => setIsPresentationOpen(false),
     onLink: () => {
@@ -186,7 +200,91 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     setFormState(nextState);
 
     if (getNumerologyFormErrors(nextState).length > 0) {
+      setErrorMessage(
+        nextState.mode === "compatibility"
+          ? "Выберите второго клиента с датой рождения для совместимости"
+          : "Заполните данные расчета"
+      );
+      return;
+    }
+
+    selectOrCreateCalculation(nextState);
+  }
+
+  function toggleCompatibilityMode(): void {
+    if (formState.mode === "compatibility") {
+      activateIndividualMode();
+      return;
+    }
+
+    activateCompatibilityMode();
+  }
+
+  function activateCompatibilityMode(): void {
+    const subject = getCurrentSubjectClient();
+    if (!subject?.hasBirthDate) {
+      setErrorMessage("Сначала выберите клиента с датой рождения");
       setIsSetupOpen(true);
+      return;
+    }
+
+    const currentPartner = getCurrentPartnerClient();
+    const partner =
+      currentPartner?.hasBirthDate && currentPartner.value !== subject.value
+        ? currentPartner
+        : getFirstCompatibilityPartner(clientOptions, subject.value);
+    const nextState = partner
+      ? buildCompatibilityFormState(formState, subject, partner)
+      : {
+          ...formState,
+          mode: "compatibility" as const,
+          title: `${subject.label}, совместимость`,
+          subject: toClientParticipantFormState(subject, formState.subject)
+        };
+
+    setIsYearMode(false);
+    setSelectedDetailSelector(null);
+    setFormState(nextState);
+
+    if (!partner) {
+      setErrorMessage("Выберите второго клиента с датой рождения для совместимости");
+      return;
+    }
+
+    selectOrCreateCalculation(nextState);
+  }
+
+  function activateIndividualMode(): void {
+    const subject = getCurrentSubjectClient();
+    if (!subject?.hasBirthDate) {
+      setErrorMessage("Сначала выберите клиента с датой рождения");
+      setIsSetupOpen(true);
+      return;
+    }
+
+    const nextState = buildIndividualFormState(formState, subject);
+    setSelectedDetailSelector(null);
+    setFormState(nextState);
+    selectOrCreateCalculation(nextState);
+  }
+
+  function selectOrCreateCalculation(nextState: NumerologyFormState): void {
+    const errors = getNumerologyFormErrors(nextState);
+    if (errors.length > 0) {
+      setErrorMessage(errors[0] ?? "Заполните данные расчета");
+      return;
+    }
+
+    const existing = findExistingCalculationForParticipants(calculations, {
+      mode: nextState.mode,
+      subjectClientId: nextState.subject.clientId,
+      ...(nextState.mode === "compatibility" ? { partnerClientId: nextState.partner.clientId } : {})
+    });
+
+    if (existing) {
+      selectCalculation(existing);
+      setIsSetupOpen(false);
+      setErrorMessage(null);
       return;
     }
 
@@ -195,6 +293,24 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       setSelectedResponse(response);
       setIsSetupOpen(false);
     }, setErrorMessage);
+  }
+
+  function getCurrentSubjectClient(): ClientSelectOption | null {
+    return getCurrentClient(formState.subject.clientId, formState.subject);
+  }
+
+  function getCurrentPartnerClient(): ClientSelectOption | null {
+    return getCurrentClient(formState.partner.clientId, formState.partner);
+  }
+
+  function getCurrentClient(
+    clientId: string,
+    participant: NumerologyFormState["subject"]
+  ): ClientSelectOption | null {
+    return (
+      findClientSelectOption(clientOptions, clientId) ??
+      toClientOptionFromNumerologyParticipant(participant)
+    );
   }
 }
 

@@ -8,6 +8,7 @@ import { NumerologyResultPanel } from "../../features/numerology/components/Nume
 import { NumerologySetupModal } from "../../features/numerology/components/NumerologySetupModal";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import type { NumerologyFormState } from "../../features/numerology/model/numerologyFormModel";
+import { toClientOptionFromNumerologyParticipant } from "../../features/numerology/model/numerologyCompatibilityFlowModel";
 import { buildNumerologyPageViewModel } from "../../features/numerology/model/numerologyPageModel";
 import { NumerologyPresentation } from "./NumerologyPresentation";
 import styles from "./NumerologyPage.module.css";
@@ -68,6 +69,13 @@ export function NumerologyPageView({
   onApproveInterpretation
 }: NumerologyPageViewProps) {
   const pageModel = buildNumerologyPageViewModel(selectedResponse, selectedDetailSelector, isBusy);
+  const isCompatibilityMode = formState.mode === "compatibility";
+  const selectedSubjectClient =
+    pageModel.selectedSubjectClient ?? toClientOptionFromNumerologyParticipant(formState.subject);
+  const selectedPartnerClient =
+    pageModel.selectedPartnerClient ?? toClientOptionFromNumerologyParticipant(formState.partner);
+  const subjectClientId = formState.subject.clientId || pageModel.subject?.clientId || "";
+  const partnerClientId = formState.partner.clientId || pageModel.partner?.clientId || "";
 
   return (
     <section className={styles.page} aria-labelledby="numerology-title">
@@ -81,22 +89,22 @@ export function NumerologyPageView({
         <div className={styles.clientStrip}>
           <ClientSearchCombobox
             label="Клиент"
-            value={pageModel.subject?.clientId ?? ""}
+            value={subjectClientId}
             placeholder="Выбрать клиента"
-            selectedClient={pageModel.selectedSubjectClient}
-            excludeClientIds={pageModel.partner?.clientId ? [pageModel.partner.clientId] : []}
+            selectedClient={selectedSubjectClient}
+            excludeClientIds={partnerClientId ? [partnerClientId] : []}
             disabled={pageModel.isClientSelectionDisabled}
             onSelect={onSelectSubjectClient}
           />
-          {pageModel.isCompatibility ? (
+          {isCompatibilityMode ? (
             <>
               <span className={styles.clientPlus}>+</span>
               <ClientSearchCombobox
                 label="Партнер"
-                value={pageModel.partner?.clientId ?? ""}
+                value={partnerClientId}
                 placeholder="Выбрать партнера"
-                selectedClient={pageModel.selectedPartnerClient}
-                excludeClientIds={pageModel.subject?.clientId ? [pageModel.subject.clientId] : []}
+                selectedClient={selectedPartnerClient}
+                excludeClientIds={subjectClientId ? [subjectClientId] : []}
                 disabled={pageModel.isClientSelectionDisabled}
                 onSelect={onSelectPartnerClient}
               />
@@ -107,7 +115,8 @@ export function NumerologyPageView({
         <button
           type="button"
           className={isYearMode ? styles.toolButtonActive : styles.toolButton}
-          disabled={!pageModel.model || pageModel.isCompatibility}
+          aria-pressed={isYearMode}
+          disabled={!pageModel.model || isCompatibilityMode}
           onClick={onToggleYearMode}
           title="Личные год и месяцы"
         >
@@ -116,7 +125,8 @@ export function NumerologyPageView({
         </button>
         <button
           type="button"
-          className={pageModel.isCompatibility ? styles.toolButtonActive : styles.toolButton}
+          className={isCompatibilityMode ? styles.toolButtonActive : styles.toolButton}
+          aria-pressed={isCompatibilityMode}
           disabled={!pageModel.model}
           onClick={onToggleCompatibilityMode}
           title="Нумерологическая совместимость пары"
@@ -124,16 +134,18 @@ export function NumerologyPageView({
           <Icon iconName="users" width={15} height={15} aria-hidden="true" />
           Совместимость
         </button>
-        <button
-          type="button"
-          className={styles.toolButton}
-          disabled={!pageModel.model || pageModel.isCompatibility}
-          onClick={onOpenPresentation}
-          title="Полноэкранный показ для сессии"
-        >
-          <Icon iconName="arrowUpRight" width={15} height={15} aria-hidden="true" />
-          Презентация
-        </button>
+        {!isCompatibilityMode ? (
+          <button
+            type="button"
+            className={styles.toolButton}
+            disabled={!pageModel.model}
+            onClick={onOpenPresentation}
+            title="Полноэкранный показ для сессии"
+          >
+            <Icon iconName="arrowUpRight" width={15} height={15} aria-hidden="true" />
+            Презентация
+          </button>
+        ) : null}
         <button
           type="button"
           className={pageModel.isCalculationLinked ? styles.toolButtonLinked : styles.toolButton}

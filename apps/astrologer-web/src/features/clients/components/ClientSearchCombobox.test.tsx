@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -88,6 +89,18 @@ describe("ClientSearchComboboxView", () => {
 
     expect(includesText(loadingView.props, "Загружаем еще клиентов")).toBe(true);
     expect(includesText(endView.props, "Все найденные клиенты загружены")).toBe(false);
+  });
+
+  it("keeps the trigger shrink-safe inside dense toolbar rows", () => {
+    const css = readFileSync(new URL("./ClientSearchCombobox.module.css", import.meta.url), "utf8");
+    const rootRule = getCssRule(css, ".root");
+    const triggerRule = getCssRule(css, ".trigger");
+
+    expect(rootRule).toContain("flex: 1 1 204px;");
+    expect(rootRule).toContain("max-width: 260px;");
+    expect(triggerRule).toContain("width: 100%;");
+    expect(triggerRule).toContain("min-width: 0;");
+    expect(triggerRule).toContain("max-width: none;");
   });
 });
 
@@ -182,4 +195,15 @@ function includesText(value: unknown, text: string): boolean {
   }
 
   return false;
+}
+
+function getCssRule(css: string, selector: string): string {
+  const match = new RegExp(`(?:^|\\n)${escapeRegExp(selector)}\\s*\\{(?<body>[^}]*)\\}`).exec(css);
+  if (!match?.groups?.body) throw new Error(`CSS rule not found: ${selector}`);
+
+  return match.groups.body;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
