@@ -157,6 +157,16 @@ describe("verifyPasswordlessCodeRequestSchema", () => {
       })
     ).toThrow();
   });
+
+  it("accepts optional client join intent token during public login verification", () => {
+    expect(
+      verifyPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        clientJoinIntentToken: "join_1234567890abcdef"
+      })
+    ).toMatchObject({ clientJoinIntentToken: "join_1234567890abcdef" });
+  });
 });
 
 describe("verifyPasswordlessCodeResponseSchema", () => {
@@ -216,6 +226,18 @@ describe("verifyRegistrationPasswordlessCodeRequestSchema", () => {
         roles: ["astrologer"]
       })
     ).toThrow();
+  });
+
+  it("accepts optional client join intent token during public registration verification", () => {
+    expect(
+      verifyRegistrationPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        displayName: "Марина",
+        roles: ["client"],
+        clientJoinIntentToken: "join_1234567890abcdef"
+      })
+    ).toMatchObject({ roles: ["client"], clientJoinIntentToken: "join_1234567890abcdef" });
   });
 });
 

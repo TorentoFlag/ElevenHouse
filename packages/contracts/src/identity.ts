@@ -1,5 +1,6 @@
 import { customerPlatformRoles } from "@elevenhouse/auth/roles";
 import { displayNameSchema, emailSchema, z } from "@elevenhouse/validation";
+import { clientJoinIntentTokenSchema } from "./clients";
 
 export const customerAccountRoleSchema = z.enum(customerPlatformRoles);
 const publicRegistrationRoleSchema = z.literal("client");
@@ -52,10 +53,16 @@ export type RequestPasswordlessCodeResponse = z.infer<
   typeof requestPasswordlessCodeResponseSchema
 >;
 
-export const verifyPasswordlessCodeRequestSchema = z.object({
+const baseVerifyPasswordlessCodeRequestSchema = z.object({
   challengeId: z.string().uuid(),
   code: z.string().regex(/^\d{6}$/)
 }).strict();
+
+export const verifyPasswordlessCodeRequestSchema = baseVerifyPasswordlessCodeRequestSchema
+  .extend({
+    clientJoinIntentToken: clientJoinIntentTokenSchema.optional()
+  })
+  .strict();
 
 export type VerifyPasswordlessCodeRequest = z.infer<
   typeof verifyPasswordlessCodeRequestSchema
@@ -148,7 +155,7 @@ export type AuthenticatedAstrologerAccountResponse = z.infer<
 >;
 
 export const verifyAstrologerPasswordlessCodeRequestSchema =
-  verifyPasswordlessCodeRequestSchema;
+  baseVerifyPasswordlessCodeRequestSchema;
 
 export type VerifyAstrologerPasswordlessCodeRequest = z.infer<
   typeof verifyAstrologerPasswordlessCodeRequestSchema
@@ -162,7 +169,7 @@ export type VerifyAstrologerPasswordlessCodeResponse = z.infer<
 >;
 
 export const verifyAstrologerRegistrationPasswordlessCodeRequestSchema =
-  verifyPasswordlessCodeRequestSchema.extend({
+  baseVerifyPasswordlessCodeRequestSchema.extend({
     displayName: displayNameSchema
   }).strict();
 

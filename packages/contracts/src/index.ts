@@ -9,3 +9,4 @@ export * from "./platform-billing";
 export * from "./verification";
 export * from "./calculations";
 export * from "./numerology";
+export * from "./clients";

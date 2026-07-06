@@ -1,0 +1,197 @@
+import { nonEmptyStringSchema, z } from "@elevenhouse/validation";
+import { astrologerPublicHandleSchema } from "./astrologer-profile";
+
+const uuidSchema = z.string().uuid();
+const timestampSchema = z.string().datetime();
+const nullableResponseStringSchema = z.string().trim().max(500).nullable();
+
+const birthDateSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }, "Invalid calendar date");
+
+const birthTimeSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{2}:\d{2}$/)
+  .refine((value) => {
+    const [hoursPart, minutesPart] = value.split(":");
+    const hours = Number(hoursPart);
+    const minutes = Number(minutesPart);
+    return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+  }, "Invalid time");
+
+const nullableTrimmedStringRequestSchema = z
+  .union([
+    z
+      .string()
+      .trim()
+      .max(500)
+      .transform((value) => (value.length === 0 ? null : value)),
+    z.null()
+  ])
+  .optional()
+  .transform((value) => value ?? null);
+
+const nullableBirthDateRequestSchema = z
+  .union([birthDateSchema, z.literal("").transform(() => null), z.null()])
+  .optional()
+  .transform((value) => value ?? null);
+
+const nullableBirthTimeRequestSchema = z
+  .union([birthTimeSchema, z.literal("").transform(() => null), z.null()])
+  .optional()
+  .transform((value) => value ?? null);
+
+const nullableCountryCodeRequestSchema = z
+  .union([
+    z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{2}$/),
+    z.literal("").transform(() => null),
+    z.null()
+  ])
+  .optional()
+  .transform((value) => value ?? null);
+
+export const clientBirthTimePrecisionSchema = z.enum(["exact", "approximate", "unknown"]);
+export type ClientBirthTimePrecision = z.infer<typeof clientBirthTimePrecisionSchema>;
+
+export const clientBirthDataSourceSchema = z.enum(["client_profile", "booking", "import", "manual"]);
+export type ClientBirthDataSource = z.infer<typeof clientBirthDataSourceSchema>;
+
+export const clientRelationshipStatusSchema = z.enum(["active", "archived", "blocked"]);
+export type ClientRelationshipStatus = z.infer<typeof clientRelationshipStatusSchema>;
+
+export const createClientJoinIntentRequestSchema = z
+  .object({
+    publicHandle: astrologerPublicHandleSchema
+  })
+  .strict();
+export type CreateClientJoinIntentRequest = z.infer<
+  typeof createClientJoinIntentRequestSchema
+>;
+
+export const clientJoinIntentTokenSchema = z.string().trim().min(16).max(256);
+export type ClientJoinIntentToken = z.infer<typeof clientJoinIntentTokenSchema>;
+
+export const createClientJoinIntentResponseSchema = z
+  .object({
+    token: clientJoinIntentTokenSchema,
+    astrologer: z
+      .object({
+        userId: uuidSchema,
+        publicHandle: astrologerPublicHandleSchema,
+        publicName: nonEmptyStringSchema.min(2).max(200)
+      })
+      .strict(),
+    expiresAt: timestampSchema
+  })
+  .strict();
+export type CreateClientJoinIntentResponse = z.infer<
+  typeof createClientJoinIntentResponseSchema
+>;
+
+export const clientBirthDataUpsertRequestSchema = z
+  .object({
+    label: nullableTrimmedStringRequestSchema,
+    birthDate: nullableBirthDateRequestSchema,
+    birthTime: nullableBirthTimeRequestSchema,
+    birthTimePrecision: clientBirthTimePrecisionSchema.optional().default("unknown"),
+    birthPlaceText: nullableTrimmedStringRequestSchema,
+    birthCountryCode: nullableCountryCodeRequestSchema,
+    birthCity: nullableTrimmedStringRequestSchema,
+    birthRegion: nullableTrimmedStringRequestSchema,
+    birthTimezone: nullableTrimmedStringRequestSchema,
+    birthLatitude: z.number().min(-90).max(90).nullable().optional().transform((value) => value ?? null),
+    birthLongitude: z.number().min(-180).max(180).nullable().optional().transform((value) => value ?? null)
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.birthTimePrecision === "unknown" && value.birthTime !== null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["birthTime"],
+        message: "Birth time must be empty when precision is unknown"
+      });
+    }
+  });
+export type ClientBirthDataUpsertRequest = z.infer<typeof clientBirthDataUpsertRequestSchema>;
+
+export const clientBirthDataResponseSchema = z
+  .object({
+    id: uuidSchema,
+    clientUserId: uuidSchema,
+    label: nullableResponseStringSchema,
+    birthDate: birthDateSchema.nullable(),
+    birthTime: birthTimeSchema.nullable(),
+    birthTimePrecision: clientBirthTimePrecisionSchema,
+    birthPlaceText: nullableResponseStringSchema,
+    birthCountryCode: z.string().regex(/^[A-Z]{2}$/).nullable(),
+    birthCity: nullableResponseStringSchema,
+    birthRegion: nullableResponseStringSchema,
+    birthTimezone: nullableResponseStringSchema,
+    birthLatitude: z.number().min(-90).max(90).nullable(),
+    birthLongitude: z.number().min(-180).max(180).nullable(),
+    source: clientBirthDataSourceSchema,
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema
+  })
+  .strict();
+export type ClientBirthDataResponse = z.infer<typeof clientBirthDataResponseSchema>;
+
+export const relatedAstrologerListResponseSchema = z
+  .object({
+    astrologers: z.array(
+      z
+        .object({
+          astrologerUserId: uuidSchema,
+          publicHandle: astrologerPublicHandleSchema,
+          publicName: nonEmptyStringSchema.min(2).max(200),
+          relationshipStatus: clientRelationshipStatusSchema,
+          firstLinkedAt: timestampSchema,
+          lastLinkedAt: timestampSchema
+        })
+        .strict()
+    )
+  })
+  .strict();
+export type RelatedAstrologerListResponse = z.infer<
+  typeof relatedAstrologerListResponseSchema
+>;
+
+export const astrologerClientListQuerySchema = z
+  .object({
+    query: z.string().trim().max(100).optional().default(""),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+    offset: z.coerce.number().int().min(0).optional().default(0)
+  })
+  .strict();
+export type AstrologerClientListQuery = z.infer<typeof astrologerClientListQuerySchema>;
+
+export const astrologerClientListResponseSchema = z
+  .object({
+    clients: z.array(
+      z
+        .object({
+          clientUserId: uuidSchema,
+          displayName: z.string().trim().min(1).max(200).nullable(),
+          relationshipStatus: clientRelationshipStatusSchema,
+          firstLinkedAt: timestampSchema,
+          lastLinkedAt: timestampSchema,
+          birthData: clientBirthDataResponseSchema.nullable()
+        })
+        .strict()
+    ),
+    total: z.number().int().min(0)
+  })
+  .strict();
+export type AstrologerClientListResponse = z.infer<
+  typeof astrologerClientListResponseSchema
+>;
