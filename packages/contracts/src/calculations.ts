@@ -116,7 +116,16 @@ export const calculationParticipantResponseSchema = z
     inputSnapshot: snapshotObjectSchema,
     manuallyOverridden: z.boolean()
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.source === "manual" && value.clientId !== null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["clientId"],
+        message: "Manual participant clientId must be null"
+      });
+    }
+  });
 export type CalculationParticipantResponse = z.infer<
   typeof calculationParticipantResponseSchema
 >;

@@ -288,5 +288,24 @@ export type NumerologyCalculationResponse = z.infer<
 >;
 
 function sameSnapshot(first: unknown, second: unknown): boolean {
-  return JSON.stringify(first) === JSON.stringify(second);
+  if (Object.is(first, second)) return true;
+  if (Array.isArray(first) || Array.isArray(second)) {
+    if (!Array.isArray(first) || !Array.isArray(second) || first.length !== second.length) {
+      return false;
+    }
+
+    return first.every((item, index) => sameSnapshot(item, second[index]));
+  }
+
+  if (!isPlainObject(first) || !isPlainObject(second)) return false;
+
+  const firstKeys = Object.keys(first).sort();
+  const secondKeys = Object.keys(second).sort();
+  if (!sameSnapshot(firstKeys, secondKeys)) return false;
+
+  return firstKeys.every((key) => sameSnapshot(first[key], second[key]));
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

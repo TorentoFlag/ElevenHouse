@@ -169,6 +169,20 @@ describe("calculation contracts", () => {
     ).toThrow();
   });
 
+  it("rejects manual response participants with CRM client ids", () => {
+    expect(() =>
+      calculationRecordResponseSchema.parse({
+        ...calculationRecordResponse,
+        participants: [
+          {
+            ...calculationRecordResponse.participants[0],
+            clientId: "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      })
+    ).toThrow();
+  });
+
   it("parses a calculation list response", () => {
     expect(
       listCalculationsResponseSchema.parse({

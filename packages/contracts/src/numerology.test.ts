@@ -316,12 +316,78 @@ describe("numerology contracts", () => {
       })
     ).toThrow();
 
+    expect(
+      numerologyCalculationResponseSchema.parse({
+        ...calculationResponse,
+        currentVersion: {
+          createdAt: calculationResponse.currentVersion.createdAt,
+          resultChecksum: calculationResponse.currentVersion.resultChecksum,
+          resultSummary: calculationResponse.currentVersion.resultSummary,
+          resultSnapshot: {
+            strengthLines: [],
+            keyNumbers: { birthday: 5, lifePath: 9 },
+            participant: {
+              birthDate: "1990-03-14",
+              fullName: "Maria Ivanova"
+            },
+            methodVersion: "pythagorean-v1",
+            methodCode: "pythagorean"
+          },
+          inputSnapshot: calculationResponse.currentVersion.inputSnapshot,
+          settingsSnapshot: calculationResponse.currentVersion.settingsSnapshot,
+          methodVersion: calculationResponse.currentVersion.methodVersion,
+          versionNumber: calculationResponse.currentVersion.versionNumber,
+          id: calculationResponse.currentVersion.id
+        },
+        resultSnapshot: {
+          keyNumbers: { birthday: 5, lifePath: 9 },
+          strengthLines: [],
+          methodCode: "pythagorean",
+          methodVersion: "pythagorean-v1",
+          participant: {
+            fullName: "Maria Ivanova",
+            birthDate: "1990-03-14"
+          }
+        }
+      }).currentVersion.id
+    ).toBe(calculationResponse.currentVersion.id);
+
     expect(() =>
       numerologyCalculationResponseSchema.parse({
         ...calculationResponse,
         resultSnapshot: {
           methodCode: "pythagorean",
           keyNumbers: { lifePath: 1 }
+        }
+      })
+    ).toThrow();
+
+    expect(() =>
+      numerologyCalculationResponseSchema.parse({
+        ...calculationResponse,
+        currentVersion: {
+          ...calculationResponse.currentVersion,
+          resultChecksum: "checksum-2"
+        }
+      })
+    ).toThrow();
+
+    expect(() =>
+      numerologyCalculationResponseSchema.parse({
+        ...calculationResponse,
+        settingsSnapshot: {
+          ...pythagoreanSettings,
+          includeStrengthLines: false
+        }
+      })
+    ).toThrow();
+
+    expect(() =>
+      numerologyCalculationResponseSchema.parse({
+        ...calculationResponse,
+        inputSnapshot: {
+          ...individualRequest,
+          title: "Changed title"
         }
       })
     ).toThrow();
