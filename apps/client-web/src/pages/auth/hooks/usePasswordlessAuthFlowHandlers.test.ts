@@ -10,6 +10,10 @@ import {
 import {
   verifyPasswordlessCode
 } from "../../../features/auth/api/verifyPasswordlessCode";
+import {
+  clearClientJoinIntentToken,
+  readClientJoinIntentToken
+} from "../../../features/client-join/model/clientJoinStorage";
 import { createInitialPhoneInputState } from "../helpers/phoneInputModel";
 import {
   type PasswordlessPendingCredential,
@@ -35,6 +39,11 @@ vi.mock("../../../features/auth/api/verifyPasswordlessCode", () => ({
 
 vi.mock("../../../features/auth/api/verifyRegistrationPasswordlessCode", () => ({
   verifyRegistrationPasswordlessCode: vi.fn()
+}));
+
+vi.mock("../../../features/client-join/model/clientJoinStorage", () => ({
+  readClientJoinIntentToken: vi.fn(() => null),
+  clearClientJoinIntentToken: vi.fn()
 }));
 
 vi.mock("../../../Application", () => ({
@@ -121,6 +130,7 @@ describe("usePasswordlessAuthFlowHandlers", () => {
   });
 
   it("verifies a submitted code and navigates to the account page", async () => {
+    vi.mocked(readClientJoinIntentToken).mockReturnValue("join_1234567890abcdef");
     vi.mocked(verifyPasswordlessCode).mockResolvedValue({
       account: {
         id: "user_1",
@@ -158,8 +168,10 @@ describe("usePasswordlessAuthFlowHandlers", () => {
 
     expect(verifyPasswordlessCode).toHaveBeenCalledWith({
       challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
-      code: "123456"
+      code: "123456",
+      clientJoinIntentToken: "join_1234567890abcdef"
     });
+    expect(clearClientJoinIntentToken).toHaveBeenCalledOnce();
     expect(state.navigate).toHaveBeenCalledWith("/me", { replace: true });
   });
 

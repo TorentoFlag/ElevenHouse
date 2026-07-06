@@ -10,6 +10,10 @@ import { application } from "../../../Application";
 import { requestPasswordlessCode } from "../../../features/auth/api/requestPasswordlessCode";
 import { verifyPasswordlessCode } from "../../../features/auth/api/verifyPasswordlessCode";
 import { verifyRegistrationPasswordlessCode } from "../../../features/auth/api/verifyRegistrationPasswordlessCode";
+import {
+  clearClientJoinIntentToken,
+  readClientJoinIntentToken
+} from "../../../features/client-join/model/clientJoinStorage";
 import { authQueryKeys } from "../../../features/auth/model/authQueryKeys";
 import {
   createPasswordlessCodeRequest,
@@ -149,7 +153,8 @@ export function usePasswordlessAuthFlowHandlers(input: {
           mode: input.pendingCredential.mode,
           challengeId: input.challenge.challengeId,
           code: submittedCode,
-          displayName: input.pendingCredential.displayName
+          displayName: input.pendingCredential.displayName,
+          clientJoinIntentToken: readClientJoinIntentToken()
         });
         const result =
           input.pendingCredential.mode === "register" && "displayName" in request
@@ -163,6 +168,7 @@ export function usePasswordlessAuthFlowHandlers(input: {
             roles: result.account.roles
           }
         });
+        clearClientJoinIntentToken();
         navigate("/me", { replace: true });
       } catch (error) {
         input.setServerError(resolveAuthErrorMessage(error, input.copy));

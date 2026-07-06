@@ -5,6 +5,7 @@ import { AuthPage } from "./pages/auth/AuthPage";
 import { HomePage } from "./pages/home/HomePage";
 import { MePage } from "./pages/me/MePage";
 import { NotFoundPage } from "./pages/not-found/NotFoundPage";
+import { PublicAstrologerPage } from "./pages/public-astrologer/PublicAstrologerPage";
 
 export const router = createBrowserRouter([
   {
@@ -17,6 +18,10 @@ export const router = createBrowserRouter([
       {
         path: "/auth",
         element: <AuthPage />
+      },
+      {
+        path: "/a/:handle",
+        element: <PublicAstrologerPage />
       },
       {
         element: <RequireCurrentAccount />,

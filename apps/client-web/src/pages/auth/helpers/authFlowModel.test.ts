@@ -163,4 +163,31 @@ describe("authFlowModel", () => {
       roles: ["client"]
     });
   });
+
+  it("adds client join intent token to verification payloads when present", () => {
+    expect(
+      createPasswordlessVerificationRequest({
+        mode: "login",
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        displayName: "",
+        clientJoinIntentToken: "join_1234567890abcdef"
+      })
+    ).toMatchObject({
+      clientJoinIntentToken: "join_1234567890abcdef"
+    });
+
+    expect(
+      createPasswordlessVerificationRequest({
+        mode: "register",
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        displayName: "Марина",
+        clientJoinIntentToken: "join_1234567890abcdef"
+      })
+    ).toMatchObject({
+      roles: ["client"],
+      clientJoinIntentToken: "join_1234567890abcdef"
+    });
+  });
 });

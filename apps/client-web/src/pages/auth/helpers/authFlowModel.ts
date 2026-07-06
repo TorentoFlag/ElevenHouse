@@ -116,19 +116,24 @@ export function createPasswordlessVerificationRequest(input: {
   readonly challengeId: string;
   readonly code: string;
   readonly displayName: string;
+  readonly clientJoinIntentToken?: string | null;
 }): VerifyPasswordlessCodeRequest | VerifyRegistrationPasswordlessCodeRequest {
+  const clientJoinIntentToken = input.clientJoinIntentToken?.trim() || undefined;
+
   if (input.mode === "register") {
     return verifyRegistrationPasswordlessCodeRequestSchema.parse({
       challengeId: input.challengeId,
       code: input.code,
       displayName: input.displayName,
-      roles: ["client"]
+      roles: ["client"],
+      ...(clientJoinIntentToken === undefined ? {} : { clientJoinIntentToken })
     });
   }
 
   return verifyPasswordlessCodeRequestSchema.parse({
     challengeId: input.challengeId,
-    code: input.code
+    code: input.code,
+    ...(clientJoinIntentToken === undefined ? {} : { clientJoinIntentToken })
   });
 }
 
