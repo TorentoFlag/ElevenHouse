@@ -4,6 +4,7 @@ import { AstrologerAppLayout } from "./layouts/AstrologerAppLayout";
 import { AuthPage } from "./pages/auth/AuthPage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
 import { NotFoundPage } from "./pages/not-found/NotFoundPage";
+import { NumerologyPage } from "./pages/numerology/NumerologyPage";
 import { ProductsPage } from "./pages/products/ProductsPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
@@ -34,6 +35,10 @@ export const astrologerRoutes = [
           {
             path: "/reference",
             element: <ReferencePage />
+          },
+          {
+            path: "/numerology",
+            element: <NumerologyPage />
           },
           {
             path: "/settings",

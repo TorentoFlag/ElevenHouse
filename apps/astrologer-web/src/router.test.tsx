@@ -5,6 +5,7 @@ import { RequireCurrentAccount } from "./features/auth/routes/RequireCurrentAcco
 import { AstrologerAppLayout } from "./layouts/AstrologerAppLayout";
 import { AuthPage } from "./pages/auth/AuthPage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
+import { NumerologyPage } from "./pages/numerology/NumerologyPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
 import { ProductsPage } from "./pages/products/ProductsPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
@@ -31,6 +32,7 @@ describe("astrologerRoutes", () => {
     );
     const dashboardRoute = shellRoute?.children?.find((route) => route.path === "/dashboard");
     const productsRoute = shellRoute?.children?.find((route) => route.path === "/products");
+    const numerologyRoute = shellRoute?.children?.find((route) => route.path === "/numerology");
     const referenceRoute = shellRoute?.children?.find((route) => route.path === "/reference");
     const settingsRoute = shellRoute?.children?.find((route) => route.path === "/settings");
 
@@ -46,6 +48,9 @@ describe("astrologerRoutes", () => {
       DashboardPage
     );
     expect(isValidElement(productsRoute?.element) && productsRoute.element.type).toBe(ProductsPage);
+    expect(isValidElement(numerologyRoute?.element) && numerologyRoute.element.type).toBe(
+      NumerologyPage
+    );
     expect(isValidElement(referenceRoute?.element) && referenceRoute.element.type).toBe(
       ReferencePage
     );

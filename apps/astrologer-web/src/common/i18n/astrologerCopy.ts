@@ -369,6 +369,7 @@ export const astrologerCopyByLocale = {
         items: [
           { id: "dashboard", title: "Дашборд", href: "/dashboard" },
           { id: "products", title: "Продукты", href: "/products" },
+          { id: "numerology", title: "Нумерология", href: "/numerology" },
           { id: "reference", title: "Справочники", href: "/reference" }
         ],
         footerItems: [{ id: "settings", title: "Настройки", href: "/settings" }]

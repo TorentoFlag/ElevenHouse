@@ -1,0 +1,118 @@
+.page {
+  --numerology-panel: rgb(13 12 32 / 0.6);
+  --numerology-subhead: rgb(13 12 32 / 0.85);
+  --numerology-line: rgb(216 212 236 / 0.08);
+  --numerology-accent: #f6d266;
+
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: calc(100dvh - var(--astrologer-app-header-height, 68px));
+  margin: -32px;
+  flex-direction: column;
+  color: var(--eh-color-moon-120);
+}
+
+.toolbar {
+  display: flex;
+  flex: 0 0 60px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--numerology-line);
+  background: var(--numerology-subhead);
+}
+
+.titleGroup {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.iconBox {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: rgb(246 210 102 / 0.14);
+  color: var(--numerology-accent);
+  font-family: var(--eh-font-mono);
+  font-weight: 900;
+}
+
+.title {
+  overflow: hidden;
+  margin: 0;
+  color: var(--eh-color-moon-120);
+  font-size: 17px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbarSpacer {
+  flex: 1;
+}
+
+.body {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: auto minmax(0, 1fr) minmax(280px, 360px);
+}
+
+.workspace {
+  min-width: 0;
+  padding: 18px 20px 40px;
+  overflow-y: auto;
+}
+
+.sidePanel {
+  border-left: 1px solid var(--numerology-line);
+  background: var(--numerology-panel);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.statusBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid rgb(216 212 236 / 0.12);
+  border-radius: 999px;
+  background: rgb(22 20 47 / 0.72);
+  color: var(--eh-color-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid rgb(244 122 122 / 0.26);
+  border-radius: 8px;
+  background: rgb(244 122 122 / 0.1);
+  color: #ff9c9c;
+  font-size: 13px;
+}
+
+@media (max-width: 960px) {
+  .body {
+    grid-template-columns: 1fr;
+  }
+
+  .sidePanel {
+    border-top: 1px solid var(--numerology-line);
+    border-left: 0;
+  }
+}
