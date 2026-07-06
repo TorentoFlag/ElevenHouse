@@ -1,6 +1,7 @@
 import type {
   AuthCodeEncryptionPort,
   AuthChallenge,
+  ClientJoinIntentClaimStore,
   PasswordlessAuthStore,
   PasswordlessAuthUnitOfWork
 } from "@elevenhouse/domain";
@@ -16,13 +17,15 @@ import {
 const now = new Date("2026-06-16T10:00:00.000Z");
 const codeSecret = "test-secret";
 
-function createPasswordlessAuthUnitOfWork(store: PasswordlessAuthStore): PasswordlessAuthUnitOfWork {
+function createPasswordlessAuthUnitOfWork<TStore extends PasswordlessAuthStore>(
+  store: TStore
+): PasswordlessAuthUnitOfWork<TStore> {
   return {
     transact: async (operation) => operation(store)
   };
 }
 
-function createBaseStore(): PasswordlessAuthStore {
+function createBaseStore(): PasswordlessAuthStore & ClientJoinIntentClaimStore {
   return {
     findPendingChallengeByIdentifier: vi.fn(async () => null),
     findLatestDeliveryByChallengeId: vi.fn(async () => null),
@@ -78,7 +81,8 @@ function createBaseStore(): PasswordlessAuthStore {
     recordSecurityEvent: vi.fn(async (input) => ({
       id: "event_1",
       ...input
-    }))
+    })),
+    ...createClientStoreMethods()
   };
 }
 
@@ -106,7 +110,7 @@ function createPendingChallenge(code: string): AuthChallenge {
 }
 
 function createHandler(input: {
-  readonly store: PasswordlessAuthStore;
+  readonly store: PasswordlessAuthStore & ClientJoinIntentClaimStore;
   readonly codeGenerator?: PasswordlessCodeGenerator;
   readonly authCodeEncryption?: AuthCodeEncryptionPort;
   readonly options?: Partial<PasswordlessAuthOptions>;
@@ -268,6 +272,30 @@ describe("DomainPasswordlessAuthHandler", () => {
       }
     });
   });
+
+  it("claims a client join intent inside the login transaction", async () => {
+    const store = {
+      ...createBaseStore(),
+      findChallengeById: vi.fn(async () => createPendingChallenge("123456"))
+    } satisfies PasswordlessAuthStore & ClientJoinIntentClaimStore;
+    const handler = createHandler({ store });
+
+    await handler.verifyCode({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      code: "123456",
+      clientJoinIntentToken: "join_1234567890abcdef"
+    });
+
+    expect(store.findJoinIntentByTokenHash).toHaveBeenCalledWith({
+      tokenHash: "sha256:e33b027e982588fdc45c1182c93d740ab110e2bee6d20a71f6279b400ddd425d"
+    });
+    expect(store.ensureRelationship).toHaveBeenCalledWith({
+      clientUserId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      astrologerUserId: "22222222-2222-4222-8222-222222222222",
+      source: "direct_link",
+      now: "2026-06-16T10:00:00.000Z"
+    });
+  });
 });
 
 function createTestEncryption(): AuthCodeEncryptionPort {
@@ -278,5 +306,47 @@ function createTestEncryption(): AuthCodeEncryptionPort {
       ciphertext: `encrypted:${input.code}`,
       authTag: "test-auth-tag"
     })
+  };
+}
+
+function createClientStoreMethods() {
+  return {
+    findJoinIntentByTokenHash: vi.fn(async () => ({
+      id: "44444444-4444-4444-8444-444444444444",
+      astrologerUserId: "22222222-2222-4222-8222-222222222222",
+      tokenHash: "sha256:e33b027e982588fdc45c1182c93d740ab110e2bee6d20a71f6279b400ddd425d",
+      publicHandleSnapshot: "alisa-vega",
+      status: "pending" as const,
+      expiresAt: "2026-06-16T10:30:00.000Z",
+      claimedByClientUserId: null,
+      claimedAt: null,
+      createdAt: "2026-06-16T10:00:00.000Z",
+      updatedAt: "2026-06-16T10:00:00.000Z"
+    })),
+    ensureRelationship: vi.fn(async (input) => ({
+      id: "relationship_1",
+      clientUserId: input.clientUserId,
+      astrologerUserId: input.astrologerUserId,
+      source: "direct_link" as const,
+      status: "active" as const,
+      firstLinkedAt: input.now,
+      lastLinkedAt: input.now,
+      archivedAt: null,
+      blockedAt: null,
+      createdAt: input.now,
+      updatedAt: input.now
+    })),
+    markJoinIntentClaimed: vi.fn(async (input) => ({
+      id: input.intentId,
+      astrologerUserId: "22222222-2222-4222-8222-222222222222",
+      tokenHash: "sha256:e33b027e982588fdc45c1182c93d740ab110e2bee6d20a71f6279b400ddd425d",
+      publicHandleSnapshot: "alisa-vega",
+      status: "claimed" as const,
+      expiresAt: "2026-06-16T10:30:00.000Z",
+      claimedByClientUserId: input.clientUserId,
+      claimedAt: input.now,
+      createdAt: "2026-06-16T10:00:00.000Z",
+      updatedAt: input.now
+    }))
   };
 }

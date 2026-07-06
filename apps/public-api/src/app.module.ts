@@ -3,6 +3,8 @@ import { ConfigModule } from "@nestjs/config";
 import { createPublicApiRuntimeConfig } from "./config/runtime-config";
 import { HealthModule } from "./modules/health/health.module";
 import { IdentityModule } from "./modules/identity/identity.module";
+import { ClientJoinModule } from "./modules/client-join/client-join.module";
+import { ClientProfileModule } from "./modules/client-profile/client-profile.module";
 
 @Module({
   imports: [
@@ -15,7 +17,9 @@ import { IdentityModule } from "./modules/identity/identity.module";
       ]
     }),
     HealthModule,
-    IdentityModule
+    IdentityModule,
+    ClientJoinModule,
+    ClientProfileModule
   ]
 })
 export class AppModule {}

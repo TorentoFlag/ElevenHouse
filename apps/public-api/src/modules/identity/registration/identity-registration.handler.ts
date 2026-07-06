@@ -1,10 +1,16 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { PasswordlessCustomerAccountRegistrationSessionUnitOfWork } from "@elevenhouse/domain";
+import type {
+  ClientJoinIntentClaimStore,
+  PasswordlessCustomerAccountRegistrationSessionStore,
+  PasswordlessCustomerAccountRegistrationSessionUnitOfWork
+} from "@elevenhouse/domain";
 import {
+  claimClientJoinIntent,
   verifyPasswordlessCodeAndRegisterCustomerAccountWithSession
 } from "@elevenhouse/domain";
 import type { VerifyRegistrationPasswordlessCodeResponse } from "@elevenhouse/contracts";
 import { SystemClock } from "../../../common/system-clock.js";
+import { hashClientJoinIntentToken } from "../../client-join/client-join-token.js";
 import type { PasswordlessAuthOptions } from "../passwordless/identity-passwordless.handler";
 import {
   PublicSessionTokenIssuer,
@@ -32,7 +38,9 @@ export type VerifyRegistrationWithSessionResult = {
 export class DomainRegistrationHandler {
   constructor(
     @Inject(PASSWORDLESS_CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK)
-    private readonly registration: PasswordlessCustomerAccountRegistrationSessionUnitOfWork,
+    private readonly registration: PasswordlessCustomerAccountRegistrationSessionUnitOfWork<
+      PasswordlessCustomerAccountRegistrationSessionStore & ClientJoinIntentClaimStore
+    >,
     private readonly sessionTokenIssuer: PublicSessionTokenIssuer,
     private readonly clock: SystemClock,
     @Inject(REGISTRATION_AUTH_OPTIONS)
@@ -44,13 +52,16 @@ export class DomainRegistrationHandler {
     readonly code: string;
     readonly displayName: string;
     readonly roles: readonly string[];
+    readonly clientJoinIntentToken?: string;
     readonly ipAddress?: string;
     readonly userAgent?: string;
   }): Promise<VerifyRegistrationWithSessionResult> {
     const now = this.clock.now();
     const expiresAt = new Date(now.getTime() + this.options.sessionTtlSeconds * 1000);
     const issuedToken: IssuedSessionToken = this.sessionTokenIssuer.issueSessionToken();
-    const result = await verifyPasswordlessCodeAndRegisterCustomerAccountWithSession({
+    const result = await verifyPasswordlessCodeAndRegisterCustomerAccountWithSession<
+      PasswordlessCustomerAccountRegistrationSessionStore & ClientJoinIntentClaimStore
+    >({
       registration: this.registration,
       challengeId: input.challengeId,
       code: input.code,
@@ -64,7 +75,20 @@ export class DomainRegistrationHandler {
         ...(input.ipAddress === undefined ? {} : { ipAddress: input.ipAddress }),
         ...(input.userAgent === undefined ? {} : { userAgent: input.userAgent })
       },
-      securityEventType: "registration_succeeded"
+      securityEventType: "registration_succeeded",
+      ...(input.clientJoinIntentToken === undefined
+        ? {}
+        : {
+            afterRegistered: async ({ store, account }) => {
+              await claimClientJoinIntent({
+                store,
+                token: input.clientJoinIntentToken ?? "",
+                tokenHasher: hashClientJoinIntentToken,
+                clientUserId: account.user.id,
+                now
+              });
+            }
+          })
     });
 
     return {

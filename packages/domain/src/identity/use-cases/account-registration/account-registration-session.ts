@@ -37,9 +37,12 @@ export type CustomerAccountRegistrationSessionUnitOfWork = {
 export type PasswordlessCustomerAccountRegistrationSessionStore =
   CustomerAccountRegistrationSessionStore & PasswordlessVerificationStore;
 
-export type PasswordlessCustomerAccountRegistrationSessionUnitOfWork = {
+export type PasswordlessCustomerAccountRegistrationSessionUnitOfWork<
+  TStore extends PasswordlessCustomerAccountRegistrationSessionStore =
+    PasswordlessCustomerAccountRegistrationSessionStore
+> = {
   readonly transact: <T>(
-    operation: (store: PasswordlessCustomerAccountRegistrationSessionStore) => Promise<T>
+    operation: (store: TStore) => Promise<T>
   ) => Promise<T>;
 };
 
@@ -75,8 +78,11 @@ export async function registerCustomerAccountWithSession(
   );
 }
 
-export async function verifyPasswordlessCodeAndRegisterCustomerAccountWithSession(input: {
-  readonly registration: PasswordlessCustomerAccountRegistrationSessionUnitOfWork;
+export async function verifyPasswordlessCodeAndRegisterCustomerAccountWithSession<
+  TStore extends PasswordlessCustomerAccountRegistrationSessionStore =
+    PasswordlessCustomerAccountRegistrationSessionStore
+>(input: {
+  readonly registration: PasswordlessCustomerAccountRegistrationSessionUnitOfWork<TStore>;
   readonly challengeId: string;
   readonly code: string;
   readonly codeSecret: string;
@@ -85,6 +91,10 @@ export async function verifyPasswordlessCodeAndRegisterCustomerAccountWithSessio
   readonly roles: readonly string[];
   readonly session: Omit<AuthSessionCreationInput, "userId" | "createdAt">;
   readonly securityEventType: AuthSecurityEventType;
+  readonly afterRegistered?: (input: {
+    readonly store: TStore;
+    readonly account: RegisteredCustomerAccountWithSession;
+  }) => Promise<void>;
 }): Promise<RegisteredCustomerAccountWithSession> {
   const roles = normalizeCustomerRoles(input.roles);
 
@@ -113,7 +123,7 @@ export async function verifyPasswordlessCodeAndRegisterCustomerAccountWithSessio
           }
     );
 
-    return registerCustomerAccountWithSessionInStore({
+    const account = await registerCustomerAccountWithSessionInStore({
       store,
       identity,
       displayName: input.displayName,
@@ -124,6 +134,9 @@ export async function verifyPasswordlessCodeAndRegisterCustomerAccountWithSessio
       },
       securityEventType: input.securityEventType
     });
+    await input.afterRegistered?.({ store, account });
+
+    return account;
   });
 }
 

@@ -5,15 +5,19 @@ import {
 } from "@elevenhouse/auth";
 import type {
   AuthCodeEncryptionPort,
+  ClientJoinIntentClaimStore,
   PasswordlessAuthChannel,
+  PasswordlessAuthStore,
   PasswordlessAuthUnitOfWork
 } from "@elevenhouse/domain";
 import {
+  claimClientJoinIntent,
   createAuthCodeDeliveryEncryptionAad,
   createNumericPasswordlessCode,
   requestPasswordlessCode,
   verifyPasswordlessCode
 } from "@elevenhouse/domain";
+import { hashClientJoinIntentToken } from "../../client-join/client-join-token.js";
 import type {
   RequestPasswordlessCodeRequest,
   RequestPasswordlessCodeResponse,
@@ -93,7 +97,9 @@ export class AesGcmAuthCodeEncryption implements AuthCodeEncryptionPort {
 export class DomainPasswordlessAuthHandler {
   constructor(
     @Inject(PASSWORDLESS_AUTH_UNIT_OF_WORK)
-    private readonly passwordlessAuth: PasswordlessAuthUnitOfWork,
+    private readonly passwordlessAuth: PasswordlessAuthUnitOfWork<
+      PasswordlessAuthStore & ClientJoinIntentClaimStore
+    >,
     @Inject(PASSWORDLESS_AUTH_CODE_ENCRYPTION)
     private readonly authCodeEncryption: AuthCodeEncryptionPort,
     @Inject(PUBLIC_AUTH_CODE_GENERATOR)
@@ -137,8 +143,8 @@ export class DomainPasswordlessAuthHandler {
     const now = this.clock.now();
     const expiresAt = new Date(now.getTime() + this.options.sessionTtlSeconds * 1000);
     const issuedToken = this.sessionTokenIssuer.issueSessionToken();
-    const result = await this.passwordlessAuth.transact((store) =>
-      verifyPasswordlessCode({
+    const result = await this.passwordlessAuth.transact(async (store) => {
+      const verified = await verifyPasswordlessCode({
         store,
         challengeId: input.challengeId,
         code: input.code,
@@ -151,8 +157,20 @@ export class DomainPasswordlessAuthHandler {
           ...(context.ipAddress === undefined ? {} : { ipAddress: context.ipAddress }),
           ...(context.userAgent === undefined ? {} : { userAgent: context.userAgent })
         }
-      })
-    );
+      });
+
+      if (input.clientJoinIntentToken) {
+        await claimClientJoinIntent({
+          store,
+          token: input.clientJoinIntentToken,
+          tokenHasher: hashClientJoinIntentToken,
+          clientUserId: verified.user.id,
+          now
+        });
+      }
+
+      return verified;
+    });
 
     if (result.user.status !== "active") {
       throw new Error(`Authenticated customer account has unexpected status: ${result.user.status}`);

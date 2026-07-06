@@ -16,6 +16,7 @@ import {
   type VerifyPasswordlessCodeRequest
 } from "@elevenhouse/contracts";
 import {
+  ClientJoinIntentError,
   PasswordlessCodeRequestCooldownError,
   PasswordlessCodeVerificationError
 } from "@elevenhouse/domain";
@@ -110,6 +111,12 @@ export class IdentityPasswordlessService {
     } catch (error) {
       if (error instanceof PasswordlessCodeVerificationError) {
         throw new UnauthorizedException("Invalid or expired passwordless code", {
+          cause: error
+        });
+      }
+
+      if (error instanceof ClientJoinIntentError) {
+        throw new BadRequestException("Invalid or expired client join intent token", {
           cause: error
         });
       }

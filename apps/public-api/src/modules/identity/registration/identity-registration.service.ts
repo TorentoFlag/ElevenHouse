@@ -11,6 +11,7 @@ import {
   type VerifyRegistrationPasswordlessCodeRequest
 } from "@elevenhouse/contracts";
 import {
+  ClientJoinIntentError,
   CustomerAccountIdentityConflictError,
   PasswordlessCodeVerificationError
 } from "@elevenhouse/domain";
@@ -60,6 +61,9 @@ export class IdentityRegistrationService {
         code: request.data.code,
         displayName: request.data.displayName,
         roles: request.data.roles,
+        ...(request.data.clientJoinIntentToken === undefined
+          ? {}
+          : { clientJoinIntentToken: request.data.clientJoinIntentToken }),
         ...(context.ipAddress === undefined ? {} : { ipAddress: context.ipAddress }),
         ...(context.userAgent === undefined ? {} : { userAgent: context.userAgent })
       });
@@ -77,6 +81,12 @@ export class IdentityRegistrationService {
 
       if (error instanceof CustomerAccountIdentityConflictError) {
         throw new ConflictException("Customer account identity already exists", {
+          cause: error
+        });
+      }
+
+      if (error instanceof ClientJoinIntentError) {
+        throw new BadRequestException("Invalid or expired client join intent token", {
           cause: error
         });
       }

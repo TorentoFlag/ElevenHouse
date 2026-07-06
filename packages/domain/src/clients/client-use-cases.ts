@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { normalizeRequiredString } from "../shared";
 import { BirthDataValidationError, ClientJoinIntentError } from "./client-errors";
-import type { ClientStore } from "./client-store";
+import type { ClientJoinIntentClaimStore, ClientStore } from "./client-store";
 import type {
   AstrologerClientList,
   ClientAstrologerRelationship,
@@ -95,7 +95,7 @@ export async function createClientJoinIntent(input: {
 }
 
 export async function claimClientJoinIntent(input: {
-  readonly store: ClientStore;
+  readonly store: ClientJoinIntentClaimStore;
   readonly token: string;
   readonly tokenHasher: (token: string) => string;
   readonly clientUserId: string;
