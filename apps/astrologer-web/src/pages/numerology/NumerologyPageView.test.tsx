@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import type { NumerologyCalculationResponse } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import { MotionContent } from "@elevenhouse/design-system/motion";
 import { describe, expect, it, vi } from "vitest";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import {
@@ -11,6 +12,7 @@ import {
 import { NumerologyResultPanel } from "../../features/numerology/components/NumerologyResultPanel";
 import { NumerologyPageView, type NumerologyPageViewProps } from "./NumerologyPageView";
 import { createParticipantFormState } from "../../features/numerology/model/numerologyFormModel";
+import styles from "./NumerologyPage.module.css";
 
 describe("NumerologyPageView", () => {
   it("disables link action for manual-only calculations", () => {
@@ -311,6 +313,40 @@ describe("NumerologyPageView", () => {
     expect(compatibilityButton.props["aria-pressed"]).toBe(true);
     expect(findOptionalButtonByText(view, "Презентация")).toBeNull();
   });
+
+  it("animates workspace changes with the shared motion primitive keyed by calculation version", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      selectedResponse: response({
+        source: "crm_client",
+        clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e",
+        calculationId: "11111111-1111-4111-8111-111111111111",
+        versionId: "33333333-3333-4333-8333-333333333333"
+      })
+    });
+    const motion = findRequiredElementByType<{
+      readonly className?: string;
+      readonly transitionKey: string;
+    }>(view, MotionContent);
+
+    expect(motion.props.className).toContain(styles.workspaceMotion);
+    expect(motion.props.transitionKey).toBe(
+      "individual:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333"
+    );
+  });
+
+  it("keeps numerology workspace motion subtle and reduced-motion compatible", () => {
+    const css = readFileSync(new URL("./NumerologyPage.module.css", import.meta.url), "utf8");
+    const motionRule = getCssRule(css, ".workspaceMotion");
+
+    expect(motionRule).toContain("--eh-motion-content-enter-y: 10px;");
+    expect(motionRule).toContain("--eh-motion-content-enter-scale: 0.998;");
+    expect(motionRule).toContain("--eh-motion-duration-normal: 340ms;");
+    expect(motionRule).toContain("will-change: opacity, transform;");
+    expect(css).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(css).toContain(".workspaceMotion");
+    expect(css).toContain("will-change: auto;");
+  });
 });
 
 function baseProps(): NumerologyPageViewProps {
@@ -371,9 +407,11 @@ function baseProps(): NumerologyPageViewProps {
 function response(participant: {
   readonly source: "manual" | "crm_client";
   readonly clientId: string | null;
+  readonly calculationId?: string;
+  readonly versionId?: string;
 }): NumerologyCalculationResponse {
   const calculation = {
-    id: "11111111-1111-4111-8111-111111111111",
+    id: participant.calculationId ?? "11111111-1111-4111-8111-111111111111",
     ownerUserId: "22222222-2222-4222-8222-222222222222",
     module: "numerology",
     mode: "individual",
@@ -394,7 +432,7 @@ function response(participant: {
     ],
     versions: [
       {
-        id: "33333333-3333-4333-8333-333333333333",
+        id: participant.versionId ?? "33333333-3333-4333-8333-333333333333",
         versionNumber: 1,
         methodVersion: "1.0.0",
         settingsSnapshot: { includeNameNumbers: true },

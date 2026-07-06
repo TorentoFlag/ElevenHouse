@@ -3,6 +3,7 @@ import type {
   NumerologyCalculationResponse
 } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import { MotionContent } from "@elevenhouse/design-system/motion";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import { NumerologyResultPanel } from "../../features/numerology/components/NumerologyResultPanel";
 import { NumerologySetupModal } from "../../features/numerology/components/NumerologySetupModal";
@@ -76,6 +77,7 @@ export function NumerologyPageView({
     pageModel.selectedPartnerClient ?? toClientOptionFromNumerologyParticipant(formState.partner);
   const subjectClientId = formState.subject.clientId || pageModel.subject?.clientId || "";
   const partnerClientId = formState.partner.clientId || pageModel.partner?.clientId || "";
+  const workspaceTransitionKey = getNumerologyWorkspaceTransitionKey(selectedResponse, formState);
 
   return (
     <section className={styles.page} aria-labelledby="numerology-title">
@@ -174,21 +176,26 @@ export function NumerologyPageView({
       <div className={styles.body}>
         <main className={styles.workspace}>
           {errorMessage ? <p className={styles.error}>{errorMessage}</p> : null}
-          <div className={styles.workspaceGrid}>
-            <NumerologyResultPanel
-              model={pageModel.model}
-              detail={pageModel.detail}
-              selectedSelector={pageModel.effectiveSelector}
-              isYearMode={isYearMode}
-              interpretationText={interpretationText}
-              isBusy={isBusy}
-              isApproveInterpretationDisabled={pageModel.isApproveInterpretationDisabled}
-              onInterpretationChange={onInterpretationChange}
-              onSaveInterpretation={onSaveInterpretation}
-              onApproveInterpretation={onApproveInterpretation}
-              onSelect={onSelectDetail}
-            />
-          </div>
+          <MotionContent
+            className={styles.workspaceMotion}
+            transitionKey={workspaceTransitionKey}
+          >
+            <div className={styles.workspaceGrid}>
+              <NumerologyResultPanel
+                model={pageModel.model}
+                detail={pageModel.detail}
+                selectedSelector={pageModel.effectiveSelector}
+                isYearMode={isYearMode}
+                interpretationText={interpretationText}
+                isBusy={isBusy}
+                isApproveInterpretationDisabled={pageModel.isApproveInterpretationDisabled}
+                onInterpretationChange={onInterpretationChange}
+                onSaveInterpretation={onSaveInterpretation}
+                onApproveInterpretation={onApproveInterpretation}
+                onSelect={onSelectDetail}
+              />
+            </div>
+          </MotionContent>
         </main>
       </div>
       {isSetupOpen ? (
@@ -205,4 +212,19 @@ export function NumerologyPageView({
       ) : null}
     </section>
   );
+}
+
+function getNumerologyWorkspaceTransitionKey(
+  selectedResponse: NumerologyCalculationResponse | null,
+  formState: NumerologyFormState
+): string {
+  if (!selectedResponse) {
+    return `${formState.mode}:empty`;
+  }
+
+  return [
+    selectedResponse.calculation.mode,
+    selectedResponse.calculation.id,
+    selectedResponse.currentVersion.id
+  ].join(":");
 }
