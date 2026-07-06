@@ -10,4 +10,5 @@ export * from "./media";
 export * from "./astrologer-profile";
 export * from "./platform-billing";
 export * from "./calculations";
+export * from "./numerology";
 export * from "./shared";

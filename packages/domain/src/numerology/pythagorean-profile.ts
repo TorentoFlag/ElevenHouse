@@ -1,0 +1,53 @@
+import type { NumerologyMethodProfile } from "./numerology-types";
+
+export const pythagoreanProfileV1: NumerologyMethodProfile = {
+  methodCode: "pythagorean",
+  methodVersion: "1.0.0",
+  supportedModes: ["individual", "compatibility"],
+  letterTable: {
+    а: 1,
+    и: 1,
+    с: 1,
+    ъ: 1,
+    б: 2,
+    й: 2,
+    т: 2,
+    ы: 2,
+    в: 3,
+    к: 3,
+    у: 3,
+    ь: 3,
+    г: 4,
+    л: 4,
+    ф: 4,
+    э: 4,
+    д: 5,
+    м: 5,
+    х: 5,
+    ю: 5,
+    е: 6,
+    н: 6,
+    ц: 6,
+    я: 6,
+    ё: 7,
+    о: 7,
+    ч: 7,
+    ж: 8,
+    п: 8,
+    ш: 8,
+    з: 9,
+    р: 9,
+    щ: 9
+  },
+  vowels: ["а", "е", "ё", "и", "о", "у", "ы", "э", "ю", "я"],
+  strengthLines: [
+    { code: "goal", label: "Целеустремленность", cells: ["1", "4", "7"] },
+    { code: "family", label: "Семейность", cells: ["2", "5", "8"] },
+    { code: "stability", label: "Стабильность", cells: ["3", "6", "9"] },
+    { code: "self_esteem", label: "Самооценка", cells: ["1", "2", "3"] },
+    { code: "material", label: "Материальность / быт", cells: ["4", "5", "6"] },
+    { code: "talent", label: "Талант", cells: ["7", "8", "9"] },
+    { code: "spirituality", label: "Духовность", cells: ["1", "5", "9"] },
+    { code: "temperament", label: "Темперамент", cells: ["3", "5", "7"] }
+  ]
+};
