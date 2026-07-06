@@ -6,7 +6,7 @@ describe("normalizeNumerologyName", () => {
     expect(
       normalizeNumerologyName(" Анна-Мария О'Коннор. ", {
         yoPolicy: "separate",
-        shortIpolicy: "separate"
+        shortIPolicy: "separate"
       })
     ).toBe("аннамарияоконнор");
   });
@@ -15,7 +15,7 @@ describe("normalizeNumerologyName", () => {
     expect(
       normalizeNumerologyName("Семён Майский", {
         yoPolicy: "as_e",
-        shortIpolicy: "as_i"
+        shortIPolicy: "as_i"
       })
     ).toBe("семенмаискии");
   });
@@ -24,8 +24,17 @@ describe("normalizeNumerologyName", () => {
     expect(
       normalizeNumerologyName("Сергей", {
         yoPolicy: "separate",
-        shortIpolicy: "as_i"
+        shortIPolicy: "as_i"
       })
     ).toBe("сергеи");
+  });
+
+  it("normalizes decomposed yo before applying policies", () => {
+    expect(
+      normalizeNumerologyName("Семе\u0308н", {
+        yoPolicy: "separate",
+        shortIPolicy: "separate"
+      })
+    ).toBe("семён");
   });
 });

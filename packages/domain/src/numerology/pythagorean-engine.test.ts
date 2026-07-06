@@ -8,7 +8,7 @@ import type { PythagoreanSettings } from "./numerology-types";
 
 const baseSettings: PythagoreanSettings = {
   masterNumbers: { mode: "reduce_all" },
-  nameNormalization: { yoPolicy: "separate", shortIpolicy: "separate" },
+  nameNormalization: { yoPolicy: "separate", shortIPolicy: "separate" },
   includeNameNumbers: false,
   includePsychomatrix: true,
   includeStrengthLines: true,
@@ -40,7 +40,34 @@ describe("calculatePythagoreanIndividual", () => {
       "8": "",
       "9": "999"
     });
-    expect(result.strengthLines.find((line) => line.code === "goal")?.value).toBe(5);
+    const goalLine = result.strengthLines.find((line) => line.code === "goal");
+    expect(goalLine?.value).toBe(5);
+    expect(goalLine).not.toHaveProperty("label");
+  });
+
+  it("uses numeric day first digit for single-digit birth day psychomatrix", () => {
+    const result = calculatePythagoreanIndividual(
+      { fullName: "Алексей Петров", birthDate: "1988-11-07" },
+      baseSettings
+    );
+
+    expect(result.psychomatrix?.workingNumbers).toEqual({
+      first: 35,
+      second: 8,
+      third: 21,
+      fourth: 3
+    });
+    expect(result.psychomatrix?.cells).toEqual({
+      "1": "1111",
+      "2": "2",
+      "3": "33",
+      "4": "",
+      "5": "5",
+      "6": "",
+      "7": "7",
+      "8": "888",
+      "9": "9"
+    });
   });
 
   it("preserves selected master numbers for name calculations", () => {
@@ -94,6 +121,7 @@ describe("calculatePythagoreanCompatibility", () => {
     expect(result.pairNumber).toBe(8);
     expect(result.keyNumberComparisons.length).toBeGreaterThan(0);
     expect(result.keyNumberComparisons.map((comparison) => comparison.code)).toContain("lifePath");
+    expect(result.keyNumberComparisons[0]).not.toHaveProperty("label");
     expect(result.matrixComparisons).toHaveLength(9);
     expect(result.strengthLineComparisons).toHaveLength(8);
   });
@@ -118,5 +146,6 @@ describe("calculatePythagoreanCompatibility", () => {
         (comparison) => comparison.valueA > 0 || comparison.valueB > 0
       )
     ).toBe(true);
+    expect(result.strengthLineComparisons[0]).not.toHaveProperty("label");
   });
 });

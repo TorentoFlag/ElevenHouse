@@ -20,17 +20,6 @@ import type {
 
 const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
-const keyNumberLabels: Readonly<Record<PythagoreanKeyNumberCode, string>> = {
-  lifePath: "Life path",
-  birthday: "Birthday",
-  personalYear: "Personal year",
-  personalMonth: "Personal month",
-  personalDay: "Personal day",
-  expression: "Expression",
-  soul: "Soul",
-  personality: "Personality"
-};
-
 export function calculatePythagoreanIndividual(
   participant: PythagoreanIndividualResult["participant"],
   settings: PythagoreanSettings
@@ -45,7 +34,7 @@ export function calculatePythagoreanIndividual(
     ...calculateForecastNumbers(settings, birthDate),
     ...calculateNameNumbers(nameValues, settings)
   };
-  const matrix = calculatePsychomatrixFromDigits(dateDigits);
+  const matrix = calculatePsychomatrix(birthDate, dateDigits);
 
   return {
     methodCode: "pythagorean",
@@ -95,7 +84,9 @@ function calculateForecastNumbers(
 
   const forecastDate = parseIsoDate(settings.forecastDate, "forecastDate");
   const personalYear = reduceNumber(
-    sumDigitsString(birthDate.day) + sumDigitsString(birthDate.month) + sumDigitsString(forecastDate.year),
+    sumDigitsString(birthDate.day) +
+      sumDigitsString(birthDate.month) +
+      sumDigitsString(forecastDate.year),
     settings.masterNumbers
   );
   const personalMonth = reduceNumber(personalYear + Number(forecastDate.month), settings.masterNumbers);
@@ -137,10 +128,13 @@ function getNameValues(normalizedName: string): readonly { readonly letter: stri
   });
 }
 
-function calculatePsychomatrixFromDigits(sourceDigits: readonly number[]): PythagoreanPsychomatrix {
+function calculatePsychomatrix(
+  birthDate: ParsedIsoDate,
+  sourceDigits: readonly number[]
+): PythagoreanPsychomatrix {
   const first = sumNumbers(sourceDigits);
   const second = reduceNumber(first, { mode: "reduce_all" });
-  const firstDayDigit = sourceDigits[0] ?? 0;
+  const firstDayDigit = Number(String(birthDate.dayNumber)[0]);
   const third = first - 2 * firstDayDigit;
   const fourth = reduceNumber(third, { mode: "reduce_all" });
   const matrixDigits = [
@@ -166,7 +160,6 @@ function calculateStrengthLines(
 ): readonly PythagoreanStrengthLineResult[] {
   return pythagoreanProfileV1.strengthLines.map((line) => ({
     code: line.code,
-    label: line.label,
     cells: line.cells,
     value: line.cells.reduce((total, cell) => total + (cells[cell as NumerologyDigit]?.length ?? 0), 0)
   }));
@@ -176,14 +169,24 @@ function compareKeyNumbers(
   first: PythagoreanKeyNumbers,
   second: PythagoreanKeyNumbers
 ): readonly NumerologyNumberComparison[] {
-  return (Object.keys(keyNumberLabels) as PythagoreanKeyNumberCode[]).flatMap((code) => {
+  const codes: readonly PythagoreanKeyNumberCode[] = [
+    "lifePath",
+    "birthday",
+    "personalYear",
+    "personalMonth",
+    "personalDay",
+    "expression",
+    "soul",
+    "personality"
+  ];
+
+  return codes.flatMap((code) => {
     const valueA = first[code];
     const valueB = second[code];
     if (valueA === undefined || valueB === undefined) return [];
     return [
       {
         code,
-        label: keyNumberLabels[code],
         valueA,
         valueB,
         relation: classifyNumberDifference(Math.abs(valueA - valueB))
@@ -217,7 +220,6 @@ function compareStrengthLines(
     const valueB = second.find((result) => result.code === line.code)?.value ?? 0;
     return {
       code: line.code,
-      label: line.label,
       valueA,
       valueB,
       relation: classifyCountDifference(Math.abs(valueA - valueB))
@@ -242,13 +244,15 @@ function classifyCountDifference(difference: number): NumerologyRelation {
 function getPsychomatrixForComparisons(
   result: PythagoreanIndividualResult
 ): PythagoreanPsychomatrixCells {
-  return result.psychomatrix?.cells ?? calculatePsychomatrixFromDigits(getDateFormulaDigits(parseIsoDate(result.participant.birthDate, "birthDate"))).cells;
+  const birthDate = parseIsoDate(result.participant.birthDate, "birthDate");
+  return result.psychomatrix?.cells ?? calculatePsychomatrix(birthDate, getDateFormulaDigits(birthDate)).cells;
 }
 
 type ParsedIsoDate = {
   readonly year: string;
   readonly month: string;
   readonly day: string;
+  readonly dayNumber: number;
 };
 
 function parseIsoDate(value: string, fieldName: string): ParsedIsoDate {
@@ -270,7 +274,7 @@ function parseIsoDate(value: string, fieldName: string): ParsedIsoDate {
     throw new NumerologyValidationError(`Invalid ISO date for ${fieldName}`);
   }
 
-  return { year, month, day };
+  return { year, month, day, dayNumber: Number(day) };
 }
 
 function getDateFormulaDigits(date: ParsedIsoDate): readonly number[] {

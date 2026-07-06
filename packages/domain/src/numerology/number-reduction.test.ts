@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { NumerologyValidationError } from "./numerology-errors";
 import { reduceNumber } from "./number-reduction";
 
 describe("reduceNumber", () => {
@@ -12,5 +13,11 @@ describe("reduceNumber", () => {
 
   it("reduces unselected master numbers", () => {
     expect(reduceNumber(33, { mode: "preserve_selected", values: [11, 22] })).toBe(6);
+  });
+
+  it("rejects unsupported selected master numbers", () => {
+    expect(() =>
+      reduceNumber(29, { mode: "preserve_selected", values: [29 as 11] })
+    ).toThrow(NumerologyValidationError);
   });
 });

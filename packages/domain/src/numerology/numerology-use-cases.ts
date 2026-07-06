@@ -14,7 +14,7 @@ export function calculateNumerologyIndividual(
   input: NumerologyIndividualUseCaseInput
 ): PythagoreanIndividualResult {
   if (input.methodCode !== "pythagorean") {
-    throw new NumerologyValidationError(`Unsupported numerology method: ${input.methodCode}`);
+    throw new NumerologyValidationError("Unsupported numerology method");
   }
 
   return calculatePythagoreanIndividual(input.participant, input.settings);
@@ -24,7 +24,7 @@ export function calculateNumerologyCompatibility(
   input: NumerologyCompatibilityUseCaseInput
 ): PythagoreanCompatibilityResult {
   if (input.methodCode !== "pythagorean") {
-    throw new NumerologyValidationError(`Unsupported numerology method: ${input.methodCode}`);
+    throw new NumerologyValidationError("Unsupported numerology method");
   }
 
   return calculatePythagoreanCompatibility(input.participants, input.settings);

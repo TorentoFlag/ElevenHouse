@@ -2,15 +2,16 @@ export type NumerologyMethodCode = "pythagorean" | "vedic" | "kabbalistic" | "au
 export type NumerologyCalculationMode = "individual" | "compatibility";
 export type NumerologyRelation = "match" | "close" | "different" | "tension";
 export type NumerologyDigit = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+export type MasterNumber = 11 | 22 | 33;
 
 export type MasterNumberSettings =
   | { readonly mode: "preserve_all" }
   | { readonly mode: "reduce_all" }
-  | { readonly mode: "preserve_selected"; readonly values: readonly number[] };
+  | { readonly mode: "preserve_selected"; readonly values: readonly MasterNumber[] };
 
 export type NameNormalizationSettings = {
   readonly yoPolicy: "separate" | "as_e";
-  readonly shortIpolicy: "separate" | "as_i";
+  readonly shortIPolicy: "separate" | "as_i";
 };
 
 export type NumerologyParticipantInput = {
@@ -76,7 +77,6 @@ export type PythagoreanPsychomatrix = {
 
 export type PythagoreanStrengthLineResult = {
   readonly code: string;
-  readonly label: string;
   readonly cells: readonly string[];
   readonly value: number;
 };
@@ -97,7 +97,6 @@ export type NumerologyCompatibilityInput = {
 
 export type NumerologyNumberComparison = {
   readonly code: string;
-  readonly label: string;
   readonly valueA: number;
   readonly valueB: number;
   readonly relation: NumerologyRelation;
@@ -122,13 +121,13 @@ export type PythagoreanCompatibilityResult = {
 };
 
 export type NumerologyIndividualUseCaseInput = {
-  readonly methodCode: NumerologyMethodCode;
+  readonly methodCode: "pythagorean";
   readonly participant: NumerologyParticipantInput;
   readonly settings: PythagoreanSettings;
 };
 
 export type NumerologyCompatibilityUseCaseInput = {
-  readonly methodCode: NumerologyMethodCode;
+  readonly methodCode: "pythagorean";
   readonly participants: NumerologyCompatibilityInput;
   readonly settings: PythagoreanSettings;
 };

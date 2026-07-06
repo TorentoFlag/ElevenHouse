@@ -5,7 +5,7 @@ export function normalizeNumerologyName(
   fullName: string,
   settings: NameNormalizationSettings
 ): string {
-  const letters = [...fullName.toLocaleLowerCase("ru-RU")].filter((character) =>
+  const letters = [...fullName.normalize("NFC").toLocaleLowerCase("ru-RU")].filter((character) =>
     /\p{Letter}/u.test(character)
   );
   const normalized = letters.map((character) => normalizeRussianLetter(character, settings)).join("");
@@ -19,6 +19,6 @@ export function normalizeNumerologyName(
 
 function normalizeRussianLetter(character: string, settings: NameNormalizationSettings): string {
   if (character === "ё" && settings.yoPolicy === "as_e") return "е";
-  if (character === "й" && settings.shortIpolicy === "as_i") return "и";
+  if (character === "й" && settings.shortIPolicy === "as_i") return "и";
   return character;
 }
