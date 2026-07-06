@@ -9,6 +9,7 @@ import type {
 } from "./calculation-store";
 import type {
   CalculationInterpretationSource,
+  CalculationModuleFilter,
   CalculationParticipant,
   CalculationStatusFilter
 } from "./calculation-types";
@@ -16,6 +17,7 @@ import type {
 export async function listCalculations(input: {
   readonly store: CalculationStore;
   readonly ownerUserId: string;
+  readonly module: CalculationModuleFilter;
   readonly status: CalculationStatusFilter;
   readonly limit: number;
   readonly offset: number;
@@ -29,6 +31,7 @@ export async function listCalculations(input: {
       input.ownerUserId,
       "Calculation owner user id is required"
     ),
+    module: input.module,
     status: input.status,
     limit,
     offset

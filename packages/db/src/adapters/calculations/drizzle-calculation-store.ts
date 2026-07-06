@@ -37,13 +37,14 @@ type CalculationDatabase = ElevenHouseDatabase | CalculationTransaction;
 export function createDrizzleCalculationStore(database: ElevenHouseDatabase): CalculationStore {
   return {
     listByOwner: async (query) => {
-      const where =
-        query.status === "all"
-          ? eq(calculationRecords.ownerUserId, query.ownerUserId)
-          : and(
-              eq(calculationRecords.ownerUserId, query.ownerUserId),
-              eq(calculationRecords.status, query.status)
-            );
+      const filters = [eq(calculationRecords.ownerUserId, query.ownerUserId)];
+      if (query.module !== "all") {
+        filters.push(eq(calculationRecords.module, query.module));
+      }
+      if (query.status !== "all") {
+        filters.push(eq(calculationRecords.status, query.status));
+      }
+      const where = and(...filters);
       const [totalRow] = await database
         .select({ value: count() })
         .from(calculationRecords)

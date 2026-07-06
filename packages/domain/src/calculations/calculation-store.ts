@@ -5,6 +5,7 @@ import type {
   CalculationInterpretationSource,
   CalculationMode,
   CalculationModule,
+  CalculationModuleFilter,
   CalculationParticipant,
   CalculationStatus,
   CalculationStatusFilter,
@@ -72,6 +73,7 @@ export type CalculationStore = {
    */
   readonly listByOwner: (query: {
     readonly ownerUserId: string;
+    readonly module: CalculationModuleFilter;
     readonly status: CalculationStatusFilter;
     readonly limit: number;
     readonly offset: number;

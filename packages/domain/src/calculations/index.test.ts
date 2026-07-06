@@ -58,10 +58,12 @@ function createMemoryStore(): MemoryStore {
 
   return {
     calls,
-    listByOwner: async ({ ownerUserId, status, limit, offset }) => {
+    listByOwner: async ({ ownerUserId, module, status, limit, offset }) => {
       const filtered = [...records.values()].filter(
         (record) =>
-          record.ownerUserId === ownerUserId && (status === "all" || record.status === status)
+          record.ownerUserId === ownerUserId &&
+          (module === "all" || record.module === module) &&
+          (status === "all" || record.status === status)
       );
       const ordered = filtered.sort(
         (left, right) =>
@@ -318,6 +320,7 @@ describe("calculations lifecycle", () => {
     const result = await listCalculations({
       store,
       ownerUserId,
+      module: "all",
       status: "calculated",
       limit: 1,
       offset: 1
@@ -326,6 +329,34 @@ describe("calculations lifecycle", () => {
     expect(result.total).toBe(2);
     expect(result.calculations).toHaveLength(1);
     expect(result.calculations[0]?.title).toBe("Owner active first");
+  });
+
+  it("filters calculation lists by module before pagination", async () => {
+    const store = createMemoryStore();
+    await createTestCalculation(store, {
+      idGenerator: () => "00000000-0000-4000-8000-000000000201",
+      title: "Numerology calculation"
+    });
+    await createTestCalculation(store, {
+      idGenerator: () => "00000000-0000-4000-8000-000000000202",
+      module: "chart",
+      methodCode: "natal",
+      title: "Chart calculation"
+    });
+
+    const result = await listCalculations({
+      store,
+      ownerUserId,
+      module: "numerology",
+      status: "all",
+      limit: 10,
+      offset: 0
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.calculations.map((calculation) => calculation.title)).toEqual([
+      "Numerology calculation"
+    ]);
   });
 
   it("orders calculation lists by updated date and id before pagination", async () => {
@@ -349,6 +380,7 @@ describe("calculations lifecycle", () => {
     const result = await listCalculations({
       store,
       ownerUserId,
+      module: "all",
       status: "all",
       limit: 2,
       offset: 1
@@ -394,6 +426,7 @@ describe("calculations lifecycle", () => {
       listCalculations({
         store,
         ownerUserId,
+        module: "all",
         status: "all",
         limit: 0,
         offset: 0
@@ -403,6 +436,7 @@ describe("calculations lifecycle", () => {
       listCalculations({
         store,
         ownerUserId,
+        module: "all",
         status: "all",
         limit: 10,
         offset: -1

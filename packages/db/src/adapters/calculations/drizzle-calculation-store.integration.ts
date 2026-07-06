@@ -115,7 +115,7 @@ describe("calculations Drizzle/PostgreSQL integration", () => {
       artifacts: []
     });
     await expect(
-      store.listByOwner({ ownerUserId, status: "all", limit: 10, offset: 0 })
+      store.listByOwner({ ownerUserId, module: "all", status: "all", limit: 10, offset: 0 })
     ).resolves.toMatchObject({
       total: 1,
       calculations: [{ id: created.id }]

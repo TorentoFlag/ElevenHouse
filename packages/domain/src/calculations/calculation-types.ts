@@ -1,4 +1,5 @@
 export type CalculationModule = "numerology" | "chart" | "matrix" | "human_design";
+export type CalculationModuleFilter = CalculationModule | "all";
 export type CalculationMode = "individual" | "compatibility";
 export type CalculationStatus = "calculated" | "linked" | "published" | "archived";
 export type CalculationStatusFilter = CalculationStatus | "all";
