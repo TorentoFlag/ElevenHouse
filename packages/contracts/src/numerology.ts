@@ -1,4 +1,5 @@
 import { z } from "@elevenhouse/validation";
+import { clientBirthTimePrecisionSchema } from "./clients";
 import {
   calculationSnapshotObjectSchema,
   calculationModeSchema,
@@ -9,6 +10,32 @@ import {
 } from "./calculations";
 
 const uuidSchema = z.string().uuid();
+const nullableSnapshotStringSchema = z.union([z.string().trim().max(500), z.null()]).optional();
+const optionalBirthTimeSchema = z
+  .union([
+    z
+      .string()
+      .trim()
+      .regex(/^\d{2}:\d{2}$/)
+      .refine((value) => {
+        const [hoursPart, minutesPart] = value.split(":");
+        const hours = Number(hoursPart);
+        const minutes = Number(minutesPart);
+        return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+      }, "Invalid time"),
+    z.null()
+  ])
+  .optional();
+const optionalCountryCodeSchema = z
+  .union([
+    z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{2}$/),
+    z.null()
+  ])
+  .optional();
 
 const isValidIsoDate = (value: string): boolean => parseIsoDate(value) !== null;
 
@@ -42,12 +69,7 @@ const parseIsoDate = (value: string): Date | null => {
   return parsed;
 };
 
-export const numerologyMethodCodeSchema = z.enum([
-  "pythagorean",
-  "vedic",
-  "kabbalistic",
-  "author"
-]);
+export const numerologyMethodCodeSchema = z.enum(["pythagorean", "vedic", "kabbalistic", "author"]);
 export type NumerologyMethodCode = z.infer<typeof numerologyMethodCodeSchema>;
 
 export const createNumerologyMethodCodeSchema = z.literal("pythagorean");
@@ -113,7 +135,16 @@ export const numerologyParticipantRequestSchema = z
     clientId: uuidSchema.nullable(),
     displayName: z.string().trim().min(1).max(200).optional(),
     fullName: z.string().trim().min(1).max(200).optional(),
-    birthDate: isoDateNotFutureSchema.optional()
+    birthDate: isoDateNotFutureSchema.optional(),
+    birthTime: optionalBirthTimeSchema,
+    birthTimePrecision: clientBirthTimePrecisionSchema.optional(),
+    birthPlaceText: nullableSnapshotStringSchema,
+    birthCountryCode: optionalCountryCodeSchema,
+    birthCity: nullableSnapshotStringSchema,
+    birthRegion: nullableSnapshotStringSchema,
+    birthTimezone: nullableSnapshotStringSchema,
+    birthLatitude: z.number().min(-90).max(90).nullable().optional(),
+    birthLongitude: z.number().min(-180).max(180).nullable().optional()
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -234,9 +265,7 @@ export const createNumerologyAiDraftRequestSchema = z
     versionId: uuidSchema
   })
   .strict();
-export type CreateNumerologyAiDraftRequest = z.infer<
-  typeof createNumerologyAiDraftRequestSchema
->;
+export type CreateNumerologyAiDraftRequest = z.infer<typeof createNumerologyAiDraftRequestSchema>;
 
 const numerologyCalculationRecordResponseSchema = calculationRecordResponseSchema.extend({
   module: z.literal("numerology"),
@@ -298,9 +327,7 @@ export const numerologyCalculationResponseSchema = z
       });
     }
   });
-export type NumerologyCalculationResponse = z.infer<
-  typeof numerologyCalculationResponseSchema
->;
+export type NumerologyCalculationResponse = z.infer<typeof numerologyCalculationResponseSchema>;
 
 function sameSnapshot(first: unknown, second: unknown): boolean {
   if (Object.is(first, second)) return true;

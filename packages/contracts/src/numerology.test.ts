@@ -198,10 +198,7 @@ describe("numerology contracts", () => {
       createNumerologyCalculationRequestSchema.parse({
         ...individualRequest,
         mode: "compatibility",
-        participants: [
-          subjectManualParticipant,
-          { ...partnerManualParticipant, role: "subject" }
-        ]
+        participants: [subjectManualParticipant, { ...partnerManualParticipant, role: "subject" }]
       })
     ).toThrow();
   });
@@ -248,15 +245,28 @@ describe("numerology contracts", () => {
     const crmParticipant = {
       ...subjectManualParticipant,
       source: "crm_client",
-      clientId: "44444444-4444-4444-8444-444444444444"
+      clientId: "44444444-4444-4444-8444-444444444444",
+      birthTime: "08:25",
+      birthTimePrecision: "exact",
+      birthPlaceText: "Москва, Россия",
+      birthCountryCode: "ru",
+      birthCity: "Москва",
+      birthRegion: "Москва",
+      birthTimezone: "Europe/Moscow",
+      birthLatitude: 55.7558,
+      birthLongitude: 37.6173
     } as const;
 
-    expect(createNumerologyCalculationRequestSchema.parse({
-      ...individualRequest,
-      participants: [crmParticipant]
-    }).participants[0]).toMatchObject({
+    expect(
+      createNumerologyCalculationRequestSchema.parse({
+        ...individualRequest,
+        participants: [crmParticipant]
+      }).participants[0]
+    ).toMatchObject({
       source: "crm_client",
-      clientId: "44444444-4444-4444-8444-444444444444"
+      clientId: "44444444-4444-4444-8444-444444444444",
+      birthCountryCode: "RU",
+      birthLatitude: 55.7558
     });
 
     for (const field of ["clientId", "displayName", "fullName", "birthDate"] as const) {

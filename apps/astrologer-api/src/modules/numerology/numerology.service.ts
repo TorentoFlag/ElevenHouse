@@ -1,15 +1,23 @@
-import { BadRequestException, Inject, Injectable, NotImplementedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotImplementedException
+} from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
 import {
   calculateNumerologyCompatibility,
   calculateNumerologyIndividual,
   createCalculation,
+  getAstrologerClient,
   getCalculation,
   NumerologyValidationError,
   recalculateCalculation,
   type CalculationParticipant,
   type CalculationRecord,
   type CalculationStore,
+  type ClientStore,
   type NumerologyCompatibilityInput,
   type NumerologyParticipantInput
 } from "@elevenhouse/domain";
@@ -30,6 +38,7 @@ import {
   toCalculationResponse
 } from "../calculations/calculations.service";
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
+import { CLIENT_STORE } from "../clients/clients.tokens";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 
 type NumerologySnapshotBundle = {
@@ -46,6 +55,7 @@ type NumerologySnapshotBundle = {
 export class NumerologyService {
   constructor(
     @Inject(CALCULATION_STORE) private readonly store: CalculationStore,
+    @Inject(CLIENT_STORE) private readonly clientStore: ClientStore,
     private readonly clock: SystemClock
   ) {}
 
@@ -57,6 +67,7 @@ export class NumerologyService {
     const ownerUserId = requireOwnerUserId(request);
 
     return mapNumerologyErrors(async () => {
+      await this.assertCrmParticipantsBelongToAstrologer(parsedBody, ownerUserId);
       const snapshot = buildNumerologySnapshots(parsedBody);
 
       return toNumerologyResponse(
@@ -92,6 +103,7 @@ export class NumerologyService {
     const ownerUserId = requireOwnerUserId(request);
 
     return mapNumerologyErrors(async () => {
+      await this.assertCrmParticipantsBelongToAstrologer(parsedBody, ownerUserId);
       const snapshot = buildNumerologySnapshots(parsedBody);
       const current = await getCalculation({
         store: this.store,
@@ -140,6 +152,38 @@ export class NumerologyService {
     });
 
     throw new NotImplementedException("Numerology AI draft generation is not configured");
+  }
+
+  private async assertCrmParticipantsBelongToAstrologer(
+    input: CreateNumerologyCalculationRequest,
+    astrologerUserId: string
+  ): Promise<void> {
+    const seenClientIds = new Set<string>();
+
+    for (const participant of input.participants) {
+      if (participant.source !== "crm_client") {
+        continue;
+      }
+      if (!participant.clientId) {
+        throw new BadRequestException("CRM participant clientId is required");
+      }
+      if (!participant.birthDate) {
+        throw new BadRequestException("CRM participant birthDate is required");
+      }
+      if (seenClientIds.has(participant.clientId)) {
+        throw new BadRequestException("Compatibility participants must use different clients");
+      }
+      seenClientIds.add(participant.clientId);
+
+      const client = await getAstrologerClient({
+        store: this.clientStore,
+        astrologerUserId,
+        clientUserId: participant.clientId
+      });
+      if (!client) {
+        throw new ForbiddenException("Client is not related to the current astrologer");
+      }
+    }
   }
 }
 
@@ -212,7 +256,16 @@ function toCalculationParticipant(
     birthDate: participant.birthDate ?? null,
     inputSnapshot: toJsonObject({
       fullName: participant.fullName,
-      birthDate: participant.birthDate
+      birthDate: participant.birthDate,
+      birthTime: participant.birthTime ?? null,
+      birthTimePrecision: participant.birthTimePrecision ?? null,
+      birthPlaceText: participant.birthPlaceText ?? null,
+      birthCountryCode: participant.birthCountryCode ?? null,
+      birthCity: participant.birthCity ?? null,
+      birthRegion: participant.birthRegion ?? null,
+      birthTimezone: participant.birthTimezone ?? null,
+      birthLatitude: participant.birthLatitude ?? null,
+      birthLongitude: participant.birthLongitude ?? null
     }),
     manuallyOverridden: false
   };

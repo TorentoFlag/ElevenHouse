@@ -8,10 +8,20 @@ import {
   numerologyCalculationResponseSchema
 } from "@elevenhouse/contracts";
 import type {
+  AstrologerClientList,
+  AstrologerClientListItem,
   AuthSessionAuthenticationStore,
   AuthSessionRevocationUnitOfWork,
   CalculationRecord,
   CalculationStore,
+  ClientAstrologerRelationship,
+  ClientBirthData,
+  ClientJoinIntent,
+  ClientStore,
+  ClientStoreCreateJoinIntentInput,
+  ClientStoreEnsureRelationshipInput,
+  ClientStoreUpsertBirthDataInput,
+  ClientStoreUpsertProfileInput,
   PasswordlessAuthUnitOfWork,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
@@ -19,6 +29,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SystemClock } from "../clock/system-clock.service";
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import { CalculationsModule } from "../calculations/calculations.module";
+import { CLIENT_STORE } from "../clients/clients.tokens";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import {
   AUTH_SESSION_AUTHENTICATION_STORE,
@@ -46,6 +57,7 @@ const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
 const otherOwnerUserId = "ca79ab01-e369-4b8f-a6a2-bcc0c2f99114";
 const clientId = "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e";
 const partnerClientId = "cf616b16-40a5-48bf-a82f-d180b13f0976";
+const unrelatedClientId = "df616b16-40a5-48bf-a82f-d180b13f0976";
 let currentCsrfToken = "";
 
 const defaultPasswordlessRateLimits = {
@@ -113,6 +125,8 @@ describe("numerology HTTP routes", () => {
       })
       .overrideProvider(CALCULATION_STORE)
       .useValue(calculationStore)
+      .overrideProvider(CLIENT_STORE)
+      .useValue(createClientStore())
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -165,9 +179,7 @@ describe("numerology HTTP routes", () => {
       { versionId: currentVersionId, text: "Проверенная трактовка совместимости." },
       csrfHeaders()
     );
-    const interpretationId = String(
-      saveInterpretationResponse.body.interpretations.at(-1)?.id
-    );
+    const interpretationId = String(saveInterpretationResponse.body.interpretations.at(-1)?.id);
     const approveResponse = await postJson(
       `/calculations/${crmCalculationId}/interpretations/${interpretationId}/approve`,
       {},
@@ -273,6 +285,31 @@ describe("numerology HTTP routes", () => {
     );
     expect(unsupportedMethodResponse.status).toBe(400);
     expect(aiDraftResponse.status).toBe(501);
+  });
+
+  it("rejects crm_client participants unrelated to the current astrologer", async () => {
+    const response = await postJson(
+      "/numerology/calculations",
+      {
+        mode: "individual",
+        methodCode: "pythagorean",
+        title: "Чужой клиент",
+        participants: [
+          {
+            role: "subject",
+            source: "crm_client",
+            clientId: unrelatedClientId,
+            displayName: "Чужой клиент",
+            fullName: "Чужой клиент",
+            birthDate: "1990-03-14"
+          }
+        ],
+        settings: pythagoreanSettings()
+      },
+      csrfHeaders()
+    );
+
+    expect(response.status).toBe(403);
   });
 
   async function getJson(path: string): Promise<HttpJsonResponse> {
@@ -392,8 +429,7 @@ function createCalculationStore(): CalculationStore {
     findByOwnerAndId: vi.fn(
       async (input) =>
         records.find(
-          (record) =>
-            record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+          (record) => record.ownerUserId === input.ownerUserId && record.id === input.calculationId
         ) ?? null
     ),
     create: vi.fn(async (input) => {
@@ -615,6 +651,88 @@ function pythagoreanSettings(): Record<string, unknown> {
     includeNameNumbers: true,
     includePsychomatrix: true,
     includeStrengthLines: true
+  };
+}
+
+function createClientStore(): ClientStore {
+  const relatedClients = new Map<string, AstrologerClientListItem>([
+    [
+      clientId,
+      createClientListItem({
+        clientUserId: clientId,
+        displayName: "Мария",
+        birthDate: "1990-03-14"
+      })
+    ],
+    [
+      partnerClientId,
+      createClientListItem({
+        clientUserId: partnerClientId,
+        displayName: "Алексей",
+        birthDate: "1988-11-02"
+      })
+    ]
+  ]);
+
+  return {
+    createJoinIntent: vi.fn(
+      async (_input: ClientStoreCreateJoinIntentInput): Promise<ClientJoinIntent> =>
+        raise("Unexpected create join intent call")
+    ),
+    findJoinIntentByTokenHash: vi.fn(async () => null),
+    markJoinIntentClaimed: vi.fn(async () => null),
+    ensureRelationship: vi.fn(
+      async (_input: ClientStoreEnsureRelationshipInput): Promise<ClientAstrologerRelationship> =>
+        raise("Unexpected ensure relationship call")
+    ),
+    upsertClientProfile: vi.fn(async (_input: ClientStoreUpsertProfileInput): Promise<void> => {}),
+    upsertClientBirthData: vi.fn(
+      async (_input: ClientStoreUpsertBirthDataInput): Promise<ClientBirthData> =>
+        raise("Unexpected upsert birth data call")
+    ),
+    listAstrologerClients: vi.fn(async (): Promise<AstrologerClientList> => {
+      const clients = [...relatedClients.values()];
+      return { clients, total: clients.length };
+    }),
+    getAstrologerClient: vi.fn(async ({ astrologerUserId, clientUserId: requestedClientId }) => {
+      if (astrologerUserId !== ownerUserId) {
+        return null;
+      }
+
+      return relatedClients.get(requestedClientId) ?? null;
+    })
+  };
+}
+
+function createClientListItem(input: {
+  readonly clientUserId: string;
+  readonly displayName: string;
+  readonly birthDate: string;
+}): AstrologerClientListItem {
+  return {
+    clientUserId: input.clientUserId,
+    displayName: input.displayName,
+    relationshipStatus: "active",
+    firstLinkedAt: now.toISOString(),
+    lastLinkedAt: now.toISOString(),
+    birthData: {
+      id: `${input.clientUserId}:birth-data`,
+      clientUserId: input.clientUserId,
+      label: "Основные данные",
+      birthDate: input.birthDate,
+      birthTime: null,
+      birthTimePrecision: "unknown",
+      birthPlaceText: null,
+      birthCountryCode: null,
+      birthCity: null,
+      birthRegion: null,
+      birthTimezone: null,
+      birthLatitude: null,
+      birthLongitude: null,
+      source: "client_profile",
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    }
   };
 }
 

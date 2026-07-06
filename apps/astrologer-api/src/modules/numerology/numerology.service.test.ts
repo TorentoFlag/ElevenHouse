@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { CalculationRecord, CalculationStore } from "@elevenhouse/domain";
+import type { CalculationRecord, CalculationStore, ClientStore } from "@elevenhouse/domain";
 import { numerologyCalculationResponseSchema } from "@elevenhouse/contracts";
 import { NumerologyService } from "./numerology.service";
 import type { SystemClock } from "../clock/system-clock.service";
@@ -11,7 +11,9 @@ const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
 describe("NumerologyService", () => {
   it("creates a saved Pythagorean individual calculation response", async () => {
     const store = createCreateOnlyCalculationStore();
-    const service = new NumerologyService(store, { now: () => now } as SystemClock);
+    const service = new NumerologyService(store, createUnusedClientStore(), {
+      now: () => now
+    } as SystemClock);
 
     const response = await service.createCalculation(validIndividualBody(), request());
 
@@ -77,6 +79,19 @@ function createCreateOnlyCalculationStore(): CalculationStore {
   };
 }
 
+function createUnusedClientStore(): ClientStore {
+  return {
+    createJoinIntent: vi.fn(async () => raise("Unexpected create join intent call")),
+    findJoinIntentByTokenHash: vi.fn(async () => null),
+    markJoinIntentClaimed: vi.fn(async () => null),
+    ensureRelationship: vi.fn(async () => raise("Unexpected ensure relationship call")),
+    upsertClientProfile: vi.fn(async () => undefined),
+    upsertClientBirthData: vi.fn(async () => raise("Unexpected upsert birth data call")),
+    listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
+    getAstrologerClient: vi.fn(async () => raise("Unexpected get astrologer client call"))
+  };
+}
+
 function request(): AstrologerSessionRequest {
   return {
     currentAstrologerAccount: {
@@ -109,4 +124,8 @@ function validIndividualBody(): Record<string, unknown> {
       includeStrengthLines: true
     }
   };
+}
+
+function raise(message: string): never {
+  throw new Error(message);
 }

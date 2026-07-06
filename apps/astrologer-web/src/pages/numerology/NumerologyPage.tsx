@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   createNumerologyCalculationRequestSchema,
   numerologyCalculationResponseSchema,
@@ -11,6 +12,10 @@ import {
   getFirstLinkableClientId,
   getLatestCalculationVersion
 } from "../../features/calculations/model/calculationStatus";
+import {
+  astrologerClientListQueryOptions,
+  toClientSelectOptions
+} from "../../features/clients/model/clientSelectorModel";
 import {
   createInitialNumerologyForm,
   createParticipantFormState,
@@ -31,6 +36,7 @@ import { NumerologyPageView } from "./NumerologyPageView";
 
 export function NumerologyPage() {
   const listQuery = useNumerologyCalculationListQuery();
+  const clientsQuery = useQuery(astrologerClientListQueryOptions());
   const createMutation = useCreateNumerologyMutation();
   const recalculateMutation = useRecalculateNumerologyMutation();
   const linkMutation = useLinkCalculationClientMutation();
@@ -38,11 +44,18 @@ export function NumerologyPage() {
   const approveInterpretationMutation = useApproveCalculationInterpretationMutation();
   const publishMutation = usePublishCalculationMutation();
   const calculations = listQuery.data?.calculations ?? [];
+  const clientOptions = useMemo(
+    () => toClientSelectOptions(clientsQuery.data?.clients ?? []),
+    [clientsQuery.data?.clients]
+  );
   const [selectedResponse, setSelectedResponse] = useState<NumerologyCalculationResponse | null>(
     null
   );
   const [formState, setFormState] = useState<NumerologyFormState>(createInitialNumerologyForm);
   const [isSetupOpen, setIsSetupOpen] = useState(false);
+  const [isYearMode, setIsYearMode] = useState(false);
+  const [isPresentationOpen, setIsPresentationOpen] = useState(false);
+  const [selectedDetailSelector, setSelectedDetailSelector] = useState<string | null>(null);
   const [interpretationText, setInterpretationText] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const isBusy =
@@ -62,6 +75,7 @@ export function NumerologyPage() {
 
   useEffect(() => {
     setInterpretationText(getLatestInterpretationText(selectedResponse));
+    setSelectedDetailSelector(null);
   }, [selectedResponse]);
 
   const selectedCalculation = selectedResponse?.calculation ?? null;
@@ -74,8 +88,12 @@ export function NumerologyPage() {
     <NumerologyPageView
       calculations={calculations}
       selectedResponse={selectedResponse}
+      clientOptions={clientOptions}
       formState={formState}
       isSetupOpen={isSetupOpen}
+      isYearMode={isYearMode}
+      isPresentationOpen={isPresentationOpen}
+      selectedDetailSelector={selectedDetailSelector}
       interpretationText={interpretationText}
       errorMessage={errorMessage}
       isBusy={isBusy}
@@ -103,6 +121,17 @@ export function NumerologyPage() {
         selectCalculation(calculation);
         setErrorMessage(null);
       }}
+      onSelectDetail={setSelectedDetailSelector}
+      onToggleYearMode={() => setIsYearMode((value) => !value)}
+      onToggleCompatibilityMode={() => {
+        if (formState.mode === "compatibility") return;
+        setFormState((state) => ({ ...state, mode: "compatibility" }));
+        setIsSetupOpen(true);
+      }}
+      onOpenPresentation={() => {
+        setIsPresentationOpen(true);
+      }}
+      onClosePresentation={() => setIsPresentationOpen(false)}
       onLink={() => {
         const clientId = getFirstLinkableClientId(selectedCalculation);
         if (!selectedCalculation || !clientId) return;
@@ -160,7 +189,9 @@ export function NumerologyPage() {
   }
 }
 
-function toNumerologyResponse(calculation: CalculationRecordResponse): NumerologyCalculationResponse {
+function toNumerologyResponse(
+  calculation: CalculationRecordResponse
+): NumerologyCalculationResponse {
   const currentVersion = getLatestCalculationVersion(calculation);
   if (!currentVersion) {
     throw new Error("Calculation has no versions");
@@ -211,6 +242,15 @@ function toParticipantFormState(
     clientId: participant.clientId ?? "",
     displayName: participant.displayName ?? "",
     fullName: participant.fullName ?? "",
-    birthDate: participant.birthDate ?? ""
+    birthDate: participant.birthDate ?? "",
+    birthTime: participant.birthTime ?? "",
+    birthTimePrecision: participant.birthTimePrecision ?? "unknown",
+    birthPlaceText: participant.birthPlaceText ?? "",
+    birthCountryCode: participant.birthCountryCode ?? "",
+    birthCity: participant.birthCity ?? "",
+    birthRegion: participant.birthRegion ?? "",
+    birthTimezone: participant.birthTimezone ?? "",
+    birthLatitude: participant.birthLatitude ?? null,
+    birthLongitude: participant.birthLongitude ?? null
   };
 }

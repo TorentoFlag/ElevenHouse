@@ -18,6 +18,7 @@ import { CLIENT_STORE } from "./clients.tokens";
         createDrizzleClientStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     }
-  ]
+  ],
+  exports: [CLIENT_STORE]
 })
 export class ClientsModule {}

@@ -1,9 +1,18 @@
+import {
+  findClientSelectOption,
+  type ClientSelectOption
+} from "../../clients/model/clientSelectorModel";
 import type { NumerologyFormState } from "../model/numerologyFormModel";
-import { getNumerologyFormErrors } from "../model/numerologyFormModel";
+import {
+  createParticipantFormState,
+  getNumerologyFormErrors,
+  toClientParticipantFormState
+} from "../model/numerologyFormModel";
 import styles from "./NumerologyComponents.module.css";
 
 export type NumerologySetupModalProps = {
   readonly state: NumerologyFormState;
+  readonly clientOptions: readonly ClientSelectOption[];
   readonly isSubmitting: boolean;
   readonly onChange: (state: NumerologyFormState) => void;
   readonly onClose: () => void;
@@ -12,6 +21,7 @@ export type NumerologySetupModalProps = {
 
 export function NumerologySetupModal({
   state,
+  clientOptions,
   isSubmitting,
   onChange,
   onClose,
@@ -56,6 +66,7 @@ export function NumerologySetupModal({
           <ParticipantFields
             label="Клиент"
             state={state}
+            clientOptions={clientOptions}
             participantKey="subject"
             onChange={onChange}
           />
@@ -63,6 +74,7 @@ export function NumerologySetupModal({
             <ParticipantFields
               label="Партнер"
               state={state}
+              clientOptions={clientOptions}
               participantKey="partner"
               onChange={onChange}
             />
@@ -72,7 +84,9 @@ export function NumerologySetupModal({
               <input
                 type="checkbox"
                 checked={state.includeNameNumbers}
-                onChange={(event) => onChange({ ...state, includeNameNumbers: event.target.checked })}
+                onChange={(event) =>
+                  onChange({ ...state, includeNameNumbers: event.target.checked })
+                }
               />
               Числа имени
             </label>
@@ -133,15 +147,18 @@ export function NumerologySetupModal({
 function ParticipantFields({
   label,
   state,
+  clientOptions,
   participantKey,
   onChange
 }: {
   readonly label: string;
   readonly state: NumerologyFormState;
+  readonly clientOptions: readonly ClientSelectOption[];
   readonly participantKey: "subject" | "partner";
   readonly onChange: (state: NumerologyFormState) => void;
 }) {
   const participant = state[participantKey];
+  const selectedClient = findClientSelectOption(clientOptions, participant.clientId);
   const update = (patch: Partial<typeof participant>) =>
     onChange({ ...state, [participantKey]: { ...participant, ...patch } });
 
@@ -153,50 +170,104 @@ function ParticipantFields({
         <select
           className={styles.select}
           value={participant.source}
-          onChange={(event) => update({ source: event.target.value as typeof participant.source })}
+          onChange={(event) => {
+            const source = event.target.value as typeof participant.source;
+            onChange({ ...state, [participantKey]: createParticipantFormState(source) });
+          }}
         >
           <option value="manual">Вручную</option>
-          <option value="crm_client">CRM-клиент</option>
+          <option value="crm_client">Клиент платформы</option>
         </select>
       </label>
       {participant.source === "crm_client" ? (
         <label className={styles.field}>
-          CRM clientId
-          <input
-            className={styles.input}
+          {label}
+          <select
+            className={styles.select}
+            aria-label={label}
             value={participant.clientId}
-            onChange={(event) => update({ clientId: event.target.value })}
-            placeholder="UUID клиента"
-          />
+            onChange={(event) => {
+              const option = findClientSelectOption(clientOptions, event.target.value);
+              if (!option) {
+                update(createEmptyClientPatch());
+                return;
+              }
+              onChange({
+                ...state,
+                [participantKey]: toClientParticipantFormState(option, participant)
+              });
+            }}
+          >
+            <option value="">Выберите клиента</option>
+            {clientOptions.map((option) => (
+              <option key={option.value} value={option.value} disabled={!option.hasBirthDate}>
+                {option.label} · {option.subtitle}
+              </option>
+            ))}
+          </select>
         </label>
       ) : null}
-      <label className={styles.field}>
-        Имя на экране
-        <input
-          className={styles.input}
-          value={participant.displayName}
-          onChange={(event) => update({ displayName: event.target.value })}
-          placeholder="Мария"
-        />
-      </label>
-      <label className={styles.field}>
-        Полное имя
-        <input
-          className={styles.input}
-          value={participant.fullName}
-          onChange={(event) => update({ fullName: event.target.value })}
-          placeholder="Мария Иванова"
-        />
-      </label>
-      <label className={styles.field}>
-        Дата рождения
-        <input
-          className={styles.input}
-          type="date"
-          value={participant.birthDate}
-          onChange={(event) => update({ birthDate: event.target.value })}
-        />
-      </label>
+      {participant.source === "crm_client" ? (
+        <div className={styles.clientSummary}>
+          <span>{selectedClient?.label ?? "Клиент не выбран"}</span>
+          <strong>
+            {selectedClient
+              ? participant.birthDate || "Дата рождения не заполнена"
+              : "Выберите клиента"}
+          </strong>
+          <small>
+            {participant.birthPlaceText || selectedClient?.subtitle || "Профиль клиента"}
+          </small>
+        </div>
+      ) : (
+        <>
+          <label className={styles.field}>
+            Имя на экране
+            <input
+              className={styles.input}
+              value={participant.displayName}
+              onChange={(event) => update({ displayName: event.target.value })}
+              placeholder="Мария"
+            />
+          </label>
+          <label className={styles.field}>
+            Полное имя
+            <input
+              className={styles.input}
+              value={participant.fullName}
+              onChange={(event) => update({ fullName: event.target.value })}
+              placeholder="Мария Иванова"
+            />
+          </label>
+          <label className={styles.field}>
+            Дата рождения
+            <input
+              className={styles.input}
+              type="date"
+              value={participant.birthDate}
+              onChange={(event) => update({ birthDate: event.target.value })}
+            />
+          </label>
+        </>
+      )}
     </fieldset>
   );
+}
+
+function createEmptyClientPatch(): Partial<NumerologyFormState["subject"]> {
+  return {
+    clientId: "",
+    displayName: "",
+    fullName: "",
+    birthDate: "",
+    birthTime: "",
+    birthTimePrecision: "unknown",
+    birthPlaceText: "",
+    birthCountryCode: "",
+    birthCity: "",
+    birthRegion: "",
+    birthTimezone: "",
+    birthLatitude: null,
+    birthLongitude: null
+  };
 }

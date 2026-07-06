@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createInitialNumerologyForm,
+  createParticipantFormState,
   getNumerologyFormErrors,
   toCreateNumerologyRequest,
   type NumerologyFormState
@@ -38,6 +39,7 @@ describe("numerologyFormModel", () => {
       ...validState(),
       mode: "compatibility",
       partner: {
+        ...createParticipantFormState("manual"),
         ...validState().partner,
         fullName: "",
         birthDate: ""
@@ -54,6 +56,7 @@ function validState(): NumerologyFormState {
     ...createInitialNumerologyForm(),
     title: "Мария, психоматрица",
     subject: {
+      ...createParticipantFormState("manual"),
       source: "manual",
       clientId: "",
       displayName: "",
@@ -61,6 +64,7 @@ function validState(): NumerologyFormState {
       birthDate: "1990-03-14"
     },
     partner: {
+      ...createParticipantFormState("manual"),
       source: "manual",
       clientId: "",
       displayName: "",
