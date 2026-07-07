@@ -12,7 +12,7 @@ COPY packages ./packages
 
 ARG APP_FILTER
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter "${APP_FILTER}" build
+RUN pnpm --filter "${APP_FILTER}..." build
 
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
 WORKDIR /workspace

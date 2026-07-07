@@ -1,12 +1,14 @@
 .git
 .github
 .turbo
+**/.turbo
 .DS_Store
 .env
 .env.*
 !.env.example
 node_modules
 dist
+**/dist
 coverage
 build
 out

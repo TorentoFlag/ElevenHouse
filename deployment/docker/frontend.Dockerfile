@@ -14,7 +14,7 @@ ARG APP_FILTER
 ARG VITE_ASTROLOGER_WEB_ORIGIN
 ENV VITE_ASTROLOGER_WEB_ORIGIN=${VITE_ASTROLOGER_WEB_ORIGIN}
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter "${APP_FILTER}" build
+RUN pnpm --filter "${APP_FILTER}..." build
 
 FROM caddy:2-alpine AS runtime
 ARG APP_DIR
