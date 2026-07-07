@@ -1,5 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
 @import "@elevenhouse/design-system/components/LanguageSwitcher.css";
+@import "@elevenhouse/design-system/motion.css";
 
 :root {
   --night: #0b0b1f;
@@ -26,6 +27,14 @@
   --pos-soft: rgba(78, 200, 160, 0.14);
   --font: "Onest", system-ui, -apple-system, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
+  --landing-motion-duration-fast: 240ms;
+  --landing-motion-duration-normal: 620ms;
+  --landing-motion-duration-slow: 860ms;
+  --landing-motion-duration-cinematic: 1120ms;
+  --landing-motion-ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+  --landing-motion-ease-soft: cubic-bezier(0.2, 0.84, 0.22, 1);
+  --landing-motion-ease-cinematic: cubic-bezier(0.19, 1, 0.22, 1);
+  --landing-motion-stagger-step: 96ms;
 }
 
 * {
@@ -81,6 +90,8 @@ button {
   inset: 0;
   pointer-events: none;
   z-index: 0;
+  animation: landingAmbientDrift 28s var(--landing-motion-ease-soft) infinite alternate;
+  will-change: transform, opacity;
 }
 
 .cos-page > *:not(.cos-page__ambient) {
@@ -169,8 +180,89 @@ button {
 }
 
 .landing-language-motion {
-  --eh-motion-content-enter-scale: 0.998;
-  --eh-motion-content-enter-y: 4px;
+  --eh-motion-content-enter-scale: 0.992;
+  --eh-motion-content-enter-y: 10px;
+  --eh-motion-duration-normal: 560ms;
+  --eh-motion-ease-standard: var(--landing-motion-ease-cinematic);
+}
+
+.motion-reveal {
+  --motion-delay: 0;
+  opacity: 0;
+  transform: translate3d(0, 34px, 0) scale(0.982);
+  transition:
+    opacity var(--landing-motion-duration-slow) var(--landing-motion-ease-soft),
+    transform var(--landing-motion-duration-cinematic) var(--landing-motion-ease-cinematic);
+  transition-delay: calc(var(--motion-delay) * var(--landing-motion-stagger-step));
+  transition-behavior: allow-discrete;
+  will-change: opacity, transform;
+}
+
+.motion-reveal[data-motion-visible="true"] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  will-change: auto;
+}
+
+.motion-reveal[data-motion-delay="1"] {
+  --motion-delay: 1;
+}
+
+.motion-reveal[data-motion-delay="2"] {
+  --motion-delay: 2;
+}
+
+.motion-reveal[data-motion-delay="3"] {
+  --motion-delay: 3;
+}
+
+.motion-reveal[data-motion-delay="4"] {
+  --motion-delay: 4;
+}
+
+.motion-reveal[data-motion-delay="5"] {
+  --motion-delay: 5;
+}
+
+.motion-reveal[data-motion-delay="6"] {
+  --motion-delay: 6;
+}
+
+.motion-reveal--fade {
+  transform: translate3d(0, 0, 0);
+}
+
+.motion-reveal--lift {
+  transform: translate3d(0, 42px, 0) scale(0.978);
+}
+
+.motion-reveal--rise {
+  transform: translate3d(0, 46px, 0);
+}
+
+.motion-reveal--scale {
+  transform: translate3d(0, 22px, 0) scale(0.92);
+}
+
+.motion-reveal--slide {
+  transform: translate3d(-30px, 0, 0) scale(0.99);
+}
+
+.panel-swap-motion {
+  width: 100%;
+  --eh-motion-content-enter-scale: 0.97;
+  --eh-motion-content-enter-y: 16px;
+  --eh-motion-duration-normal: 620ms;
+  --eh-motion-ease-standard: var(--landing-motion-ease-cinematic);
+}
+
+.feature-panel__copy .panel-swap-motion {
+  display: block;
+}
+
+.feature-panel__visual .panel-swap-motion {
+  display: grid;
+  place-items: center;
 }
 
 .logo {
@@ -220,8 +312,13 @@ button {
   filter: drop-shadow(0 4px 22px rgba(229, 156, 196, 0.35));
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 0.98;
+  line-height: 1.04;
   -webkit-text-fill-color: transparent;
+}
+
+.hero-title-line,
+.hero-title-line .ehMotionText {
+  display: block;
 }
 
 .cos-h2 {
@@ -246,14 +343,22 @@ button {
   color: #1a1230;
   font-weight: 700;
   transition:
-    transform 0.16s,
-    box-shadow 0.16s;
+    transform var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic),
+    box-shadow var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic),
+    filter var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic);
   white-space: nowrap;
 }
 
 .cos-pill:hover {
   box-shadow: 0 16px 44px -8px rgba(244, 122, 122, 0.6);
-  transform: translateY(-2px);
+  filter: saturate(1.06);
+  transform: translate3d(0, -3px, 0);
+}
+
+.cos-pill:active,
+.ghost-pill:active,
+.price-card__cta:active {
+  transform: translate3d(0, 0, 0) scale(0.985);
 }
 
 .l-glass {
@@ -262,15 +367,17 @@ button {
   background: rgba(255, 255, 255, 0.045);
   backdrop-filter: blur(8px);
   transition:
-    transform 0.2s,
-    border-color 0.2s,
-    background 0.2s;
+    transform var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic),
+    border-color var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic),
+    background var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic),
+    box-shadow var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic);
 }
 
 .l-glass:hover {
   border-color: rgba(244, 196, 48, 0.4);
   background: rgba(255, 255, 255, 0.07);
-  transform: translateY(-4px);
+  box-shadow: 0 18px 55px -34px rgba(244, 196, 48, 0.7);
+  transform: translate3d(0, -5px, 0);
 }
 
 .l-kick {
@@ -299,6 +406,16 @@ button {
   backdrop-filter: blur(6px);
   color: #fff;
   font-size: 15.5px;
+  transition:
+    transform var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic),
+    border-color var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic),
+    background var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic);
+}
+
+.ghost-pill:hover {
+  border-color: rgba(244, 196, 48, 0.4);
+  background: rgba(255, 255, 255, 0.12);
+  transform: translate3d(0, -3px, 0);
 }
 
 .hero-section {
@@ -347,6 +464,9 @@ button {
 }
 
 .hero-section h1 {
+  max-width: 960px;
+  margin-right: auto;
+  margin-left: auto;
   margin-bottom: 22px;
   font-size: 78px;
 }
@@ -569,10 +689,14 @@ button {
   text-align: left;
 }
 
+.showcase-tab:hover .showcase-tab__icon {
+  transform: translate3d(0, -1px, 0) scale(1.04);
+}
+
 .showcase-tab--active {
   border-color: rgba(244, 196, 48, 0.5);
   background: rgba(255, 255, 255, 0.08);
-  transform: translateY(-2px);
+  transform: translate3d(0, -2px, 0);
 }
 
 .showcase-tab__icon {
@@ -583,6 +707,7 @@ button {
   place-items: center;
   border-radius: 13px;
   color: #1a1230;
+  transition: transform var(--landing-motion-duration-fast) var(--landing-motion-ease-standard);
 }
 
 .showcase-tab b,
@@ -604,12 +729,37 @@ button {
 }
 
 .browser-mock {
+  position: relative;
   min-height: 378px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 22px;
   background: rgba(17, 15, 38, 0.86);
   box-shadow: 0 24px 70px -36px rgba(0, 0, 0, 0.9);
+}
+
+.browser-mock::after,
+.feature-panel::after,
+.price-card::after,
+.final-cta::after {
+  position: absolute;
+  inset: -35%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(244, 196, 48, 0.14), transparent 30%),
+    radial-gradient(circle at 70% 62%, rgba(139, 92, 246, 0.14), transparent 34%);
+  content: "";
+  opacity: 0;
+  transform: translate3d(-2%, 2%, 0) scale(1);
+  transition: opacity var(--landing-motion-duration-cinematic) var(--landing-motion-ease-soft);
+}
+
+.browser-mock[data-motion-visible="true"]::after,
+.feature-panel[data-motion-visible="true"]::after,
+.price-card[data-motion-visible="true"]::after,
+.final-cta[data-motion-visible="true"]::after {
+  animation: landingPanelFloat 16s var(--landing-motion-ease-soft) infinite alternate;
+  opacity: 1;
 }
 
 .browser-mock__top {
@@ -931,11 +1081,35 @@ button {
   color: #1a1230;
 }
 
+.feature-pill,
+.cycle-switch__button,
+.faq-item,
+.price-card__cta {
+  transition:
+    transform var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic),
+    border-color var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic),
+    background var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic),
+    color var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic),
+    box-shadow var(--landing-motion-duration-normal) var(--landing-motion-ease-cinematic);
+}
+
+.feature-pill:hover,
+.cycle-switch__button:hover,
+.faq-item:hover {
+  transform: translate3d(0, -2px, 0);
+}
+
 .feature-panel {
+  position: relative;
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
   overflow: hidden;
   padding: 0;
+}
+
+.feature-panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 .feature-panel__copy {
@@ -1286,10 +1460,23 @@ button {
   padding: 26px 24px;
 }
 
+.price-card > * {
+  position: relative;
+  z-index: 1;
+}
+
 .price-card--popular {
   border-color: rgba(244, 196, 48, 0.55);
   box-shadow: 0 24px 60px -18px rgba(244, 196, 48, 0.4);
-  transform: translateY(-6px);
+  transform: translate3d(0, -6px, 0);
+}
+
+.price-card:hover {
+  transform: translate3d(0, -5px, 0);
+}
+
+.price-card--popular:hover {
+  transform: translate3d(0, -9px, 0);
 }
 
 .price-card__line {
@@ -1331,6 +1518,13 @@ button {
   margin: 3px 0 18px;
   color: rgba(236, 232, 247, 0.55);
   font-size: 13px;
+}
+
+.price-cycle-motion {
+  --eh-motion-content-enter-scale: 0.972;
+  --eh-motion-content-enter-y: 12px;
+  --eh-motion-duration-normal: 540ms;
+  --eh-motion-ease-standard: var(--landing-motion-ease-cinematic);
 }
 
 .price-card__price {
@@ -1386,6 +1580,10 @@ button {
   border-radius: 999px;
   font-size: 14.5px;
   font-weight: 700;
+}
+
+.price-card__cta:hover {
+  transform: translate3d(0, -2px, 0);
 }
 
 .price-card__cta--ghost {
@@ -1518,7 +1716,7 @@ button {
 
 .final-cta__content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .final-cta h2 {
@@ -1770,6 +1968,77 @@ button {
   }
 }
 
+@keyframes landingAmbientDrift {
+  0% {
+    opacity: 0.82;
+    transform: translate3d(-1.2%, -0.8%, 0) scale(1.01);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate3d(1.4%, 1%, 0) scale(1.035);
+  }
+}
+
+@keyframes landingPanelFloat {
+  0% {
+    transform: translate3d(-3%, 2%, 0) scale(1);
+  }
+
+  100% {
+    transform: translate3d(3%, -2%, 0) scale(1.05);
+  }
+}
+
+.price-card--popular.motion-reveal,
+.showcase-tab--active.motion-reveal {
+  transform: translate3d(0, 34px, 0) scale(0.982);
+}
+
+.price-card--popular.motion-reveal[data-motion-visible="true"] {
+  transform: translate3d(0, -6px, 0) scale(1);
+}
+
+.showcase-tab--active.motion-reveal[data-motion-visible="true"] {
+  transform: translate3d(0, -2px, 0) scale(1);
+}
+
+.price-card--popular.motion-reveal[data-motion-visible="true"]:hover {
+  transform: translate3d(0, -9px, 0) scale(1);
+}
+
+.feature-pill:focus-visible,
+.showcase-tab:focus-visible,
+.cycle-switch__button:focus-visible,
+.faq-item:focus-visible,
+.cos-pill:focus-visible,
+.ghost-pill:focus-visible,
+.price-card__cta:focus-visible {
+  outline: 2px solid rgba(244, 196, 48, 0.72);
+  outline-offset: 3px;
+}
+
+@keyframes landingRevealIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.992);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .section-head[data-motion-visible="true"],
+  .final-cta[data-motion-visible="true"] {
+    animation: landingRevealIn var(--landing-motion-duration-slow) var(--landing-motion-ease-soft) both;
+    animation-range: entry 0% cover 32%;
+    animation-timeline: view();
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1778,6 +2047,36 @@ button {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+
+  .motion-reveal,
+  .motion-reveal[data-motion-visible="true"],
+  .price-card--popular.motion-reveal,
+  .price-card--popular.motion-reveal[data-motion-visible="true"],
+  .showcase-tab--active.motion-reveal,
+  .showcase-tab--active.motion-reveal[data-motion-visible="true"] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .cosmos-scene__blob,
+  .cosmos-scene__spark,
+  .cosmos-scene__planet,
+  .cos-page__ambient,
+  .browser-mock[data-motion-visible="true"]::after,
+  .feature-panel[data-motion-visible="true"]::after,
+  .price-card[data-motion-visible="true"]::after,
+  .final-cta[data-motion-visible="true"]::after,
+  .hero-scroll svg {
+    animation: none !important;
+  }
+
+  .browser-mock::after,
+  .feature-panel::after,
+  .price-card::after,
+  .final-cta::after {
+    opacity: 0;
   }
 }
 

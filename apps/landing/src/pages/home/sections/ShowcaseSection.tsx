@@ -1,7 +1,9 @@
+import { MotionContent } from "@elevenhouse/design-system/motion";
 import { useEffect, useState } from "react";
 import { FeatureVisual } from "../../../components/FeatureVisual";
 import { Icon } from "../../../components/Icon";
 import type { LandingCopy, LandingLanguage } from "../../../content/landingContent";
+import { LandingReveal } from "../../../motion/LandingReveal";
 import { SectionHead } from "../LandingPage";
 
 type ShowcaseId = LandingCopy["showcase"]["items"][number]["id"];
@@ -39,15 +41,18 @@ export function ShowcaseSection({
       <SectionHead kicker={copy.kicker} title={copy.title} />
       <div className="showcase-grid">
         <div className="showcase-tabs">
-          {showcaseItems.map((item) => (
-            <button
+          {showcaseItems.map((item, index) => (
+            <LandingReveal
+              as="button"
               className={item.id === activeId ? "l-glass showcase-tab showcase-tab--active" : "l-glass showcase-tab"}
+              delay={index + 1}
               key={item.id}
               onClick={() => {
                 setIsUserControlled(true);
                 setActiveId(item.id);
               }}
               type="button"
+              variant="slide"
             >
               <span
                 className="showcase-tab__icon"
@@ -61,17 +66,19 @@ export function ShowcaseSection({
                 <b>{item.title}</b>
                 <em>{item.text}</em>
               </span>
-            </button>
+            </LandingReveal>
           ))}
         </div>
-        <div className="browser-mock">
+        <LandingReveal className="browser-mock" delay={2} variant="lift">
           <div className="browser-mock__top">
             <span />
             <span />
             <span />
             <b>{active.title}</b>
           </div>
-          <FeatureVisual id={active.id} language={language} />
+          <MotionContent className="panel-swap-motion" transitionKey={`${language}-${active.id}`}>
+            <FeatureVisual id={active.id} language={language} />
+          </MotionContent>
           <div className="show-caption">
             {copy.captions.map((caption) => (
               <span key={caption}>
@@ -79,7 +86,7 @@ export function ShowcaseSection({
               </span>
             ))}
           </div>
-        </div>
+        </LandingReveal>
       </div>
     </section>
   );

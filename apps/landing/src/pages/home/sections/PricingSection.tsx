@@ -1,6 +1,8 @@
+import { MotionContent } from "@elevenhouse/design-system/motion";
 import { useState } from "react";
 import { Icon } from "../../../components/Icon";
 import type { LandingCopy } from "../../../content/landingContent";
+import { LandingReveal } from "../../../motion/LandingReveal";
 import { SectionHead } from "../LandingPage";
 
 export function PricingSection({ copy, ctaHref }: { readonly copy: LandingCopy["pricing"]; readonly ctaHref: string }) {
@@ -22,10 +24,15 @@ export function PricingSection({ copy, ctaHref }: { readonly copy: LandingCopy["
         ))}
       </div>
       <div className="pricing-grid">
-        {copy.plans.map((plan) => {
+        {copy.plans.map((plan, index) => {
           const price = cycle === "year" && plan.price > 0 ? Math.round(plan.price * 0.8) : plan.price;
           return (
-            <div className={plan.popular ? "l-glass price-card price-card--popular" : "l-glass price-card"} key={plan.id}>
+            <LandingReveal
+              className={plan.popular ? "l-glass price-card price-card--popular" : "l-glass price-card"}
+              delay={index + 1}
+              key={plan.id}
+              variant={plan.popular ? "scale" : "rise"}
+            >
               <span className="price-card__line" style={{ background: `linear-gradient(90deg, ${plan.color}, ${plan.color}66)` }} />
               {plan.popular ? <b className="cos-pill price-card__hit">{copy.hit}</b> : null}
               <span
@@ -39,13 +46,15 @@ export function PricingSection({ copy, ctaHref }: { readonly copy: LandingCopy["
               </span>
               <h3>{plan.name}</h3>
               <p>{plan.tagline}</p>
-              <div className="price-card__price">
-                <b className="tnum">{price === 0 ? "0 ₽" : `${price.toLocaleString(copy.locale)} ₽`}</b>
-                {price > 0 ? <span>{copy.perMonth}</span> : null}
-              </div>
-              <div className="price-card__fee">
-                {copy.fee} {plan.fee}% {cycle === "year" && price > 0 ? <em>{copy.saving}</em> : null}
-              </div>
+              <MotionContent className="price-cycle-motion" transitionKey={`${cycle}-${plan.id}-${price}`}>
+                <div className="price-card__price">
+                  <b className="tnum">{price === 0 ? "0 ₽" : `${price.toLocaleString(copy.locale)} ₽`}</b>
+                  {price > 0 ? <span>{copy.perMonth}</span> : null}
+                </div>
+                <div className="price-card__fee">
+                  {copy.fee} {plan.fee}% {cycle === "year" && price > 0 ? <em>{copy.saving}</em> : null}
+                </div>
+              </MotionContent>
               <div className="price-card__features">
                 {plan.features.map((feature) => (
                   <span key={feature}>
@@ -57,7 +66,7 @@ export function PricingSection({ copy, ctaHref }: { readonly copy: LandingCopy["
               <a className={plan.popular ? "cos-pill price-card__cta" : "price-card__cta price-card__cta--ghost"} href={ctaHref}>
                 {plan.price === 0 ? copy.start : `${copy.choose} ${plan.name}`}
               </a>
-            </div>
+            </LandingReveal>
           );
         })}
       </div>

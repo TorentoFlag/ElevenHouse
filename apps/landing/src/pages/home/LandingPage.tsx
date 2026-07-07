@@ -11,6 +11,7 @@ import {
   type LandingCopy,
   type LandingLanguage
 } from "../../content/landingContent";
+import { LandingReveal } from "../../motion/LandingReveal";
 import { FeatureSection } from "./sections/FeatureSection";
 import { FooterSection } from "./sections/FooterSection";
 import { HeroSection } from "./sections/HeroSection";
@@ -181,10 +182,10 @@ export function SectionHead({
   readonly subtitle?: string;
 }) {
   return (
-    <div className="section-head">
+    <LandingReveal className="section-head" variant="fade">
       <span className="l-kick">{kicker}</span>
       <h2 className="cos-h2">{title}</h2>
       {subtitle ? <p>{subtitle}</p> : null}
-    </div>
+    </LandingReveal>
   );
 }

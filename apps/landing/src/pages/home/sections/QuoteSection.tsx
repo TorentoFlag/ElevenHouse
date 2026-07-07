@@ -1,6 +1,7 @@
 import { Avatar } from "../../../components/Avatar";
 import { Icon } from "../../../components/Icon";
 import type { LandingCopy } from "../../../content/landingContent";
+import { LandingReveal } from "../../../motion/LandingReveal";
 import { SectionHead } from "../LandingPage";
 
 export function QuoteSection({ copy }: { readonly copy: LandingCopy["quotes"] }) {
@@ -8,8 +9,8 @@ export function QuoteSection({ copy }: { readonly copy: LandingCopy["quotes"] })
     <section className="section section--tight" id="quotes">
       <SectionHead kicker={copy.kicker} title={copy.title} />
       <div className="quote-grid">
-        {copy.items.map((quote) => (
-          <article className="l-glass quote-card" key={quote.name}>
+        {copy.items.map((quote, index) => (
+          <LandingReveal as="article" className="l-glass quote-card" delay={index + 1} key={quote.name} variant="rise">
             <div className="quote-card__stars">
               {Array.from({ length: 5 }, (_, index) => (
                 <Icon key={index} name="star" size={13} />
@@ -26,7 +27,7 @@ export function QuoteSection({ copy }: { readonly copy: LandingCopy["quotes"] })
                 <em>{quote.role}</em>
               </span>
             </div>
-          </article>
+          </LandingReveal>
         ))}
       </div>
     </section>

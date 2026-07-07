@@ -1,5 +1,6 @@
 import { Icon } from "../../../components/Icon";
 import type { LandingCopy } from "../../../content/landingContent";
+import { LandingReveal } from "../../../motion/LandingReveal";
 import { SectionHead } from "../LandingPage";
 
 export function PainSection({ copy }: { readonly copy: LandingCopy["pain"] }) {
@@ -7,7 +8,7 @@ export function PainSection({ copy }: { readonly copy: LandingCopy["pain"] }) {
     <section className="section section--top" id="pains">
       <SectionHead kicker={copy.kicker} title={copy.title} subtitle={copy.subtitle} />
       <div className="vs-grid">
-        <div className="l-glass vs-card">
+        <LandingReveal className="l-glass vs-card" delay={1} variant="slide">
           <h3>
             <span className="vs-card__bad">×</span>
             {copy.manualTitle}
@@ -18,8 +19,8 @@ export function PainSection({ copy }: { readonly copy: LandingCopy["pain"] }) {
               {row.problem}
             </p>
           ))}
-        </div>
-        <div className="l-glass vs-card vs-card--gold">
+        </LandingReveal>
+        <LandingReveal className="l-glass vs-card vs-card--gold" delay={2} variant="slide">
           <h3>
             <Icon name="spark" size={14} />
             {copy.productTitle}
@@ -30,16 +31,16 @@ export function PainSection({ copy }: { readonly copy: LandingCopy["pain"] }) {
               {row.solution}
             </p>
           ))}
-        </div>
+        </LandingReveal>
       </div>
       <div className="results-grid">
-        {copy.results.map((item) => (
-          <div className="l-glass result-card" key={item.label}>
+        {copy.results.map((item, index) => (
+          <LandingReveal className="l-glass result-card" delay={index + 1} key={item.label} variant="scale">
             <b className="tnum" style={{ color: item.color }}>
               {item.value}
             </b>
             <span>{item.label}</span>
-          </div>
+          </LandingReveal>
         ))}
       </div>
       <p className="section-note">{copy.note}</p>

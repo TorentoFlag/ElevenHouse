@@ -1,5 +1,6 @@
 import { Icon } from "../../../components/Icon";
 import type { LandingCopy } from "../../../content/landingContent";
+import { LandingReveal } from "../../../motion/LandingReveal";
 import { SectionHead } from "../LandingPage";
 
 export function HowSection({ copy, ctaHref }: { readonly copy: LandingCopy["how"]; readonly ctaHref: string }) {
@@ -27,7 +28,13 @@ export function HowSection({ copy, ctaHref }: { readonly copy: LandingCopy["how"
           />
         </svg>
         {copy.steps.map((step, index) => (
-          <div className="orbit-step" key={step.number} style={{ marginTop: index % 2 ? 56 : 0 }}>
+          <LandingReveal
+            className="orbit-step"
+            delay={index + 1}
+            key={step.number}
+            style={{ marginTop: index % 2 ? 56 : 0 }}
+            variant="rise"
+          >
             <div className="orbit-step__planet-wrap">
               <span
                 className="orbit-step__planet"
@@ -51,7 +58,7 @@ export function HowSection({ copy, ctaHref }: { readonly copy: LandingCopy["how"
                 <Icon name="spark" size={11} /> {step.meta}
               </span>
             </div>
-          </div>
+          </LandingReveal>
         ))}
       </div>
       <div className="section-action">
