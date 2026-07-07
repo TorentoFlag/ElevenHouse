@@ -141,15 +141,6 @@ Backend должен быть modular-first: строгие доменные г�
 - Если пользователь прямо попросил запустить сервис, перед запуском проверь, не занят ли стандартный порт уже существующим процессом. Не останавливай существующий процесс без отдельного явного разрешения пользователя.
 - Если пользователь прямо попросил остановить или перезапустить сервис, укажи, какой процесс и порт будут затронуты, и действуй только в рамках этой команды.
 
-## Правило браузерной QA из Codex CLI
-
-- Для UI QA из обычного терминального Codex CLI, включая `codex --yolo`, сначала используй Chrome Extension backend через `chrome@openai-bundled` и `agent.browsers.get("extension")`, если он доступен.
-- На этой машине Chrome Extension backend может быть заблокирован известной локальной проблемой Codex runtime: `agent.browsers.list()` возвращает `[]`, `agent.browsers.get("extension")` возвращает `Browser is not available: extension`, а в логах Codex есть `missing-code-signing-identity`. В этом состоянии не повторяй циклы переустановки Chrome plugin/extension, если Chrome запущен, расширение enabled, выбран правильный профиль и native host manifest корректный.
-- Если этот блокер воспроизводится, используй утверждённый Chrome/CDP fallback для локальной браузерной QA:
-  - запустить или проверить Chrome для QA: `codex-ui-chrome http://localhost:5174`
-  - проверить доступ к странице: `codex-ui-check http://localhost:5174`
-- Этот fallback считается browser-backed проверкой через настоящий Chrome и допустим для локального CLI UI QA, пока официальный Codex Chrome Extension backend заблокирован `missing-code-signing-identity`. Не подменяй браузерную QA shell-only проверками. Не используй Codex in-app browser (`iab`) как замену Chrome Extension backend из CLI, если пользователь явно не попросил.
-
 ## Правила разработки
 
 - Держи код в согласованных границах `apps/` и `packages/`.
