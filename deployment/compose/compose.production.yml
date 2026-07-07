@@ -1,0 +1,272 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      landing:
+        condition: service_started
+      client-web:
+        condition: service_started
+      astrologer-web:
+        condition: service_started
+      admin-web:
+        condition: service_started
+      public-api:
+        condition: service_healthy
+      astrologer-api:
+        condition: service_healthy
+      admin-api:
+        condition: service_healthy
+
+  landing:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-landing:${IMAGE_TAG}
+    restart: unless-stopped
+
+  client-web:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-client-web:${IMAGE_TAG}
+    restart: unless-stopped
+
+  astrologer-web:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-astrologer-web:${IMAGE_TAG}
+    restart: unless-stopped
+
+  admin-web:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-admin-web:${IMAGE_TAG}
+    restart: unless-stopped
+
+  public-api:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-public-api:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - ../env/.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  astrologer-api:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-astrologer-api:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - ../env/.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  admin-api:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-admin-api:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - ../env/.env.production
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3003/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  workers:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-workers:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - ../env/.env.production
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3010/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  payment-worker:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-payment-worker:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - ../env/.env.production
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3011/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  chart-worker:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-chart-worker:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - ../env/.env.production
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3012/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  notification-worker:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-notification-worker:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - ../env/.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3013/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  db-migrator:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-db-migrator:${IMAGE_TAG}
+    profiles:
+      - maintenance
+    env_file:
+      - ../env/.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file:
+      - ../env/.env.production
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  minio:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    env_file:
+      - ../env/.env.production
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/ready >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  minio-init:
+    image: quay.io/minio/mc:latest
+    restart: "no"
+    env_file:
+      - ../env/.env.production
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"; do
+          sleep 2
+        done
+        mc mb --ignore-existing "local/$${MINIO_MEDIA_BUCKET}"
+        cat >/tmp/elevenhouse-media-app-policy.json <<EOF
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": ["s3:PutObject", "s3:GetObject"],
+              "Resource": ["arn:aws:s3:::$${MINIO_MEDIA_BUCKET}/*"]
+            }
+          ]
+        }
+        EOF
+        cat >/tmp/elevenhouse-media-public-read-policy.json <<EOF
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {"AWS": ["*"]},
+              "Action": ["s3:GetObject"],
+              "Resource": [
+                "arn:aws:s3:::$${MINIO_MEDIA_BUCKET}/*/product_cover/*",
+                "arn:aws:s3:::$${MINIO_MEDIA_BUCKET}/*/profile_avatar/*",
+                "arn:aws:s3:::$${MINIO_MEDIA_BUCKET}/*/profile_cover/*"
+              ]
+            }
+          ]
+        }
+        EOF
+        cat >/tmp/elevenhouse-media-cors.xml <<'EOF'
+        <CORSConfiguration>
+          <CORSRule>
+            <AllowedOrigin>https://astrologer.elevenhouse.ai</AllowedOrigin>
+            <AllowedOrigin>https://app.elevenhouse.ai</AllowedOrigin>
+            <AllowedMethod>GET</AllowedMethod>
+            <AllowedMethod>HEAD</AllowedMethod>
+            <AllowedMethod>PUT</AllowedMethod>
+            <AllowedHeader>*</AllowedHeader>
+            <ExposeHeader>ETag</ExposeHeader>
+            <MaxAgeSeconds>3000</MaxAgeSeconds>
+          </CORSRule>
+        </CORSConfiguration>
+        EOF
+        mc admin user svcacct remove local "$${MINIO_APP_USER}" >/dev/null 2>&1 || true
+        mc admin user svcacct add local "$${MINIO_ROOT_USER}" \
+          --access-key "$${MINIO_APP_USER}" \
+          --secret-key "$${MINIO_APP_PASSWORD}" \
+          --policy /tmp/elevenhouse-media-app-policy.json
+        mc anonymous set-json /tmp/elevenhouse-media-public-read-policy.json "local/$${MINIO_MEDIA_BUCKET}"
+        mc cors set "local/$${MINIO_MEDIA_BUCKET}" /tmp/elevenhouse-media-cors.xml
+
+volumes:
+  caddy-data:
+  caddy-config:
+  postgres-data:
+  redis-data:
+  minio-data:

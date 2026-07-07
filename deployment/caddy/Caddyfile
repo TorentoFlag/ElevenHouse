@@ -1,0 +1,56 @@
+{
+	email admin@elevenhouse.ai
+}
+
+elevenhouse.ai {
+	encode zstd gzip
+	reverse_proxy landing:8080
+}
+
+app.elevenhouse.ai {
+	encode zstd gzip
+
+	handle /elevenhouse-media/* {
+		reverse_proxy minio:9000
+	}
+
+	handle_path /media/* {
+		reverse_proxy minio:9000
+	}
+
+	handle_path /api/* {
+		reverse_proxy public-api:3001
+	}
+
+	handle {
+		reverse_proxy client-web:8080
+	}
+}
+
+astrologer.elevenhouse.ai {
+	encode zstd gzip
+
+	handle_path /media/* {
+		reverse_proxy minio:9000
+	}
+
+	handle_path /api/* {
+		reverse_proxy astrologer-api:3002
+	}
+
+	handle {
+		reverse_proxy astrologer-web:8080
+	}
+}
+
+admin.elevenhouse.ai {
+	encode zstd gzip
+
+	handle_path /api/* {
+		reverse_proxy admin-api:3003
+	}
+
+	handle {
+		reverse_proxy admin-web:8080
+	}
+}
