@@ -6,7 +6,6 @@ import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { MotionContent } from "@elevenhouse/design-system/motion";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import { NumerologyResultPanel } from "../../features/numerology/components/NumerologyResultPanel";
-import { NumerologySetupModal } from "../../features/numerology/components/NumerologySetupModal";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import type { NumerologyFormState } from "../../features/numerology/model/numerologyFormModel";
 import { toClientOptionFromNumerologyParticipant } from "../../features/numerology/model/numerologyCompatibilityFlowModel";
@@ -18,19 +17,14 @@ export type NumerologyPageViewProps = {
   readonly calculations: readonly CalculationRecordResponse[];
   readonly selectedResponse: NumerologyCalculationResponse | null;
   readonly formState: NumerologyFormState;
-  readonly isSetupOpen: boolean;
   readonly isYearMode: boolean;
   readonly isPresentationOpen: boolean;
   readonly selectedDetailSelector: string | null;
   readonly interpretationText: string;
   readonly errorMessage: string | null;
   readonly isBusy: boolean;
-  readonly onOpenSetup: () => void;
-  readonly onCloseSetup: () => void;
-  readonly onFormChange: (state: NumerologyFormState) => void;
   readonly onSelectSubjectClient: (client: ClientSelectOption) => void;
   readonly onSelectPartnerClient: (client: ClientSelectOption) => void;
-  readonly onCreate: () => void;
   readonly onSelectSaved: (calculation: CalculationRecordResponse) => void;
   readonly onSelectDetail: (selector: string) => void;
   readonly onToggleYearMode: () => void;
@@ -47,18 +41,14 @@ export type NumerologyPageViewProps = {
 export function NumerologyPageView({
   selectedResponse,
   formState,
-  isSetupOpen,
   isYearMode,
   isPresentationOpen,
   selectedDetailSelector,
   interpretationText,
   errorMessage,
   isBusy,
-  onCloseSetup,
-  onFormChange,
   onSelectSubjectClient,
   onSelectPartnerClient,
-  onCreate,
   onSelectDetail,
   onToggleYearMode,
   onToggleCompatibilityMode,
@@ -180,33 +170,37 @@ export function NumerologyPageView({
             className={styles.workspaceMotion}
             transitionKey={workspaceTransitionKey}
           >
-            <div className={styles.workspaceGrid}>
-              <NumerologyResultPanel
-                model={pageModel.model}
-                detail={pageModel.detail}
-                selectedSelector={pageModel.effectiveSelector}
-                isYearMode={isYearMode}
-                interpretationText={interpretationText}
-                isBusy={isBusy}
-                isApproveInterpretationDisabled={pageModel.isApproveInterpretationDisabled}
-                onInterpretationChange={onInterpretationChange}
-                onSaveInterpretation={onSaveInterpretation}
-                onApproveInterpretation={onApproveInterpretation}
-                onSelect={onSelectDetail}
-              />
-            </div>
+            {pageModel.model ? (
+              <div className={styles.workspaceGrid}>
+                <NumerologyResultPanel
+                  model={pageModel.model}
+                  detail={pageModel.detail}
+                  selectedSelector={pageModel.effectiveSelector}
+                  isYearMode={isYearMode}
+                  interpretationText={interpretationText}
+                  isBusy={isBusy}
+                  isApproveInterpretationDisabled={pageModel.isApproveInterpretationDisabled}
+                  onInterpretationChange={onInterpretationChange}
+                  onSaveInterpretation={onSaveInterpretation}
+                  onApproveInterpretation={onApproveInterpretation}
+                  onSelect={onSelectDetail}
+                />
+              </div>
+            ) : (
+              <section className={styles.emptyState} aria-label="Пустое состояние нумерологии">
+                <span className={styles.emptyIcon}>#</span>
+                <div className={styles.emptyCopy}>
+                  <h2>Выберите клиента для нумерологии</h2>
+                  <p>
+                    Выберите клиента в панели выше, чтобы увидеть ключевые числа, психоматрицу и
+                    трактовку.
+                  </p>
+                </div>
+              </section>
+            )}
           </MotionContent>
         </main>
       </div>
-      {isSetupOpen ? (
-        <NumerologySetupModal
-          state={formState}
-          isSubmitting={isBusy}
-          onChange={onFormChange}
-          onClose={onCloseSetup}
-          onSubmit={onCreate}
-        />
-      ) : null}
       {isPresentationOpen && pageModel.model ? (
         <NumerologyPresentation model={pageModel.model} onClose={onClosePresentation} />
       ) : null}

@@ -5,10 +5,6 @@ import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { MotionContent } from "@elevenhouse/design-system/motion";
 import { describe, expect, it, vi } from "vitest";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
-import {
-  NumerologySetupModal,
-  type NumerologySetupModalProps
-} from "../../features/numerology/components/NumerologySetupModal";
 import { NumerologyResultPanel } from "../../features/numerology/components/NumerologyResultPanel";
 import { NumerologyPageView, type NumerologyPageViewProps } from "./NumerologyPageView";
 import { createParticipantFormState } from "../../features/numerology/model/numerologyFormModel";
@@ -74,69 +70,22 @@ describe("NumerologyPageView", () => {
     expect(onSelectSaved).not.toHaveBeenCalled();
   });
 
-  it("renders client selector instead of manual CRM UUID field", () => {
-    const view = NumerologyPageView({
-      ...baseProps(),
-      isSetupOpen: true,
-      formState: {
-        ...baseProps().formState,
-        subject: {
-          ...createParticipantFormState("crm_client"),
-          source: "crm_client",
-          clientId: "",
-          displayName: "",
-          fullName: "",
-          birthDate: ""
-        }
-      },
-    } as unknown as NumerologyPageViewProps);
-    const modal = findRequiredElementByType<NumerologySetupModalProps>(view, NumerologySetupModal);
-    const modalView = NumerologySetupModal(modal.props);
-
-    const renderedModalElements = findRenderedElements(modalView, { renderHookComponents: false });
-
-    expect(
-      renderedModalElements.some((element) => includesText(element.props, "CRM clientId"))
-    ).toBe(false);
-    expect(
-      renderedModalElements.some((element) => element.type === ClientSearchCombobox)
-    ).toBe(true);
-  });
-
-  it("resets stale manual participant data when switching to platform client source", () => {
-    const onChange = vi.fn();
-    const state = {
-      ...baseProps().formState,
-      title: "Мария, психоматрица",
-      subject: {
-        ...createParticipantFormState("manual"),
-        displayName: "Мария",
-        fullName: "Мария Иванова",
-        birthDate: "1990-04-17"
-      }
-    };
-    const modalView = NumerologySetupModal({
-      state,
-      isSubmitting: false,
-      onChange,
-      onClose: vi.fn(),
-      onSubmit: vi.fn()
-    });
-    const sourceSelect = findRenderedElements(modalView).find(
+  it("renders an empty state without the removed manual setup action", () => {
+    const view = NumerologyPageView(baseProps());
+    const emptyState = findElements(view).find(
       (element) =>
-        element.type === "select" &&
-        (element.props as { value?: unknown }).value === "manual"
+        element.type === "section" &&
+        (element.props as { className?: string }).className === styles.emptyState
     );
-    if (!sourceSelect) throw new Error("Source select not found");
 
-    (sourceSelect.props as { onChange: (event: { target: { value: string } }) => void }).onChange({
-      target: { value: "crm_client" }
-    });
-
-    expect(onChange).toHaveBeenCalledWith({
-      ...state,
-      subject: createParticipantFormState("crm_client")
-    });
+    expect(emptyState).toBeDefined();
+    expect(
+      emptyState ? elementIncludesText(emptyState, "Выберите клиента для нумерологии") : false
+    ).toBe(true);
+    expect(findOptionalButtonByText(view, "Создать расчет")).toBeNull();
+    expect(findElements(view).some((element) => elementIncludesText(element, "Новый расчет"))).toBe(
+      false
+    );
   });
 
   it("disables interpretation approval when the current version has no interpretation", () => {
@@ -377,19 +326,14 @@ function baseProps(): NumerologyPageViewProps {
       includeStrengthLines: true,
       forecastDate: ""
     },
-    isSetupOpen: false,
     isYearMode: false,
     isPresentationOpen: false,
     selectedDetailSelector: null,
     interpretationText: "",
     errorMessage: null,
     isBusy: false,
-    onOpenSetup: vi.fn(),
-    onCloseSetup: vi.fn(),
-    onFormChange: vi.fn(),
     onSelectSubjectClient: vi.fn(),
     onSelectPartnerClient: vi.fn(),
-    onCreate: vi.fn(),
     onSelectSaved: vi.fn(),
     onSelectDetail: vi.fn(),
     onToggleYearMode: vi.fn(),
@@ -468,7 +412,12 @@ function response(participant: {
 function findButtonByText(
   root: ReactElement,
   text: string
-): ReactElement<{ disabled?: boolean; title?: string }> {
+): ReactElement<{
+  disabled?: boolean;
+  title?: string;
+  className?: string;
+  onClick?: () => void;
+}> {
   return findButtonByTextInElements(findElements(root), text);
 }
 
@@ -523,30 +472,6 @@ function findElements(root: ReactElement): ReactElement[] {
   for (const child of Children.toArray(children)) {
     if (isValidElement(child)) {
       result.push(...findElements(child));
-    }
-  }
-
-  return result;
-}
-
-function findRenderedElements(
-  root: ReactElement,
-  options: { readonly renderHookComponents?: boolean } = { renderHookComponents: true }
-): ReactElement[] {
-  if (typeof root.type === "function") {
-    if (options.renderHookComponents === false && root.type === ClientSearchCombobox) {
-      return [root];
-    }
-    const render = root.type as (props: unknown) => ReactNode;
-    const rendered = render(root.props);
-    return isValidElement(rendered) ? findRenderedElements(rendered, options) : [];
-  }
-
-  const result: ReactElement[] = [root];
-  const children = (root.props as { children?: ReactNode }).children;
-  for (const child of Children.toArray(children)) {
-    if (isValidElement(child)) {
-      result.push(...findRenderedElements(child, options));
     }
   }
 

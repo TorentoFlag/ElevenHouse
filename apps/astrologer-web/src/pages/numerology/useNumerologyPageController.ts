@@ -66,7 +66,6 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     null
   );
   const [formState, setFormState] = useState<NumerologyFormState>(createInitialNumerologyForm);
-  const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [isYearMode, setIsYearMode] = useState(false);
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
   const [selectedDetailSelector, setSelectedDetailSelector] = useState<string | null>(null);
@@ -101,25 +100,14 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     calculations,
     selectedResponse,
     formState,
-    isSetupOpen,
     isYearMode,
     isPresentationOpen,
     selectedDetailSelector,
     interpretationText,
     errorMessage,
     isBusy,
-    onOpenSetup: () => setIsSetupOpen(true),
-    onCloseSetup: () => setIsSetupOpen(false),
-    onFormChange: setFormState,
     onSelectSubjectClient: (client) => selectPlatformClient("subject", client),
     onSelectPartnerClient: (client) => selectPlatformClient("partner", client),
-    onCreate: () => {
-      run(async () => {
-        const response = await createMutation.mutateAsync(toCreateNumerologyRequest(formState));
-        setSelectedResponse(response);
-        setIsSetupOpen(false);
-      }, setErrorMessage);
-    },
     onSelectSaved: (calculation) => {
       selectCalculation(calculation);
       setErrorMessage(null);
@@ -224,7 +212,6 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     const subject = getCurrentSubjectClient();
     if (!subject?.hasBirthDate) {
       setErrorMessage("Сначала выберите клиента с датой рождения");
-      setIsSetupOpen(true);
       return;
     }
 
@@ -258,7 +245,6 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     const subject = getCurrentSubjectClient();
     if (!subject?.hasBirthDate) {
       setErrorMessage("Сначала выберите клиента с датой рождения");
-      setIsSetupOpen(true);
       return;
     }
 
@@ -283,7 +269,6 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
 
     if (existing) {
       selectCalculation(existing);
-      setIsSetupOpen(false);
       setErrorMessage(null);
       return;
     }
@@ -291,7 +276,6 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     run(async () => {
       const response = await createMutation.mutateAsync(toCreateNumerologyRequest(nextState));
       setSelectedResponse(response);
-      setIsSetupOpen(false);
     }, setErrorMessage);
   }
 
