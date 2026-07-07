@@ -154,6 +154,17 @@ services:
       postgres:
         condition: service_healthy
 
+  db-seeder:
+    image: ${IMAGE_NAMESPACE}/elevenhouse-db-migrator:${IMAGE_TAG}
+    command: ["pnpm", "db:seed"]
+    profiles:
+      - maintenance
+    env_file:
+      - ../env/.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
