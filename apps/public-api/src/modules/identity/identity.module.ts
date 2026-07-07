@@ -151,6 +151,7 @@ import {
         }),
       inject: [PASSWORDLESS_RATE_LIMIT_OPTIONS, REDIS_CLIENT, ConfigService]
     }
-  ]
+  ],
+  exports: [IdentityCurrentSessionService, PublicSessionAuthGuard]
 })
 export class IdentityModule {}
