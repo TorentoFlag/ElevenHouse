@@ -32,3 +32,5 @@ export function createLogger(context: string, sink: LogSink = defaultSink): Logg
     error: (message, meta) => write("error", message, meta)
   };
 }
+
+export * from "./readiness";
