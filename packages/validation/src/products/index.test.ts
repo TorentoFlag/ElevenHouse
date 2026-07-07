@@ -84,6 +84,36 @@ describe("product invariant validation", () => {
     ]);
   });
 
+  it("collects type-specific create issues", () => {
+    expect(
+      collectProductCreateInvariantIssues({
+        type: "sub",
+        paymentModel: "once",
+        subscriptionPeriod: "month",
+        priceMinor: 100
+      })
+    ).toEqual([
+      {
+        path: ["paymentModel"],
+        message: "Subscription products require subscription payment model"
+      }
+    ]);
+
+    expect(
+      collectProductCreateInvariantIssues({
+        type: "course",
+        paymentModel: "once",
+        executionMode: "async",
+        accessGrants: []
+      })
+    ).toEqual([
+      {
+        path: ["accessGrants"],
+        message: "Course products require course access grant"
+      }
+    ]);
+  });
+
   it("collects out-of-range percent modifier issues", () => {
     expect(
       collectProductModifierInvariantIssues({

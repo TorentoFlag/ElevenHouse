@@ -126,6 +126,7 @@ describe("product contracts", () => {
     expect(() =>
       createProductRequestSchema.parse({
         ...validProductRequest,
+        type: "custom",
         paymentModel: "pack",
         packageSessionCount: undefined
       })
@@ -134,6 +135,7 @@ describe("product contracts", () => {
     expect(
       createProductRequestSchema.parse({
         ...validProductRequest,
+        type: "custom",
         paymentModel: "pack",
         packageSessionCount: 3,
         packageDiscountPercent: 15
@@ -147,6 +149,30 @@ describe("product contracts", () => {
         ...validProductRequest,
         paymentModel: "sub",
         subscriptionPeriod: undefined
+      })
+    ).toThrow();
+  });
+
+  it("rejects product type and scenario mismatches on create", () => {
+    expect(() =>
+      createProductRequestSchema.parse({
+        ...validProductRequest,
+        type: "sub",
+        executionMode: "async",
+        paymentModel: "once",
+        subscriptionPeriod: "month",
+        deliveryFormats: ["channel"],
+        accessGrants: ["channel"]
+      })
+    ).toThrow();
+
+    expect(() =>
+      createProductRequestSchema.parse({
+        ...validProductRequest,
+        type: "course",
+        executionMode: "async",
+        paymentModel: "once",
+        accessGrants: []
       })
     ).toThrow();
   });

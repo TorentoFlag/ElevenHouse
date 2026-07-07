@@ -18,11 +18,13 @@ import {
   productTypeValues,
   type ProductAccessGrantValue,
   type ProductDeliveryFormatValue,
+  type ProductExecutionModeValue,
   type ProductMethodValue,
   type ProductParticipantModeValue,
   type ProductPaymentModelValue,
   type ProductRequiredClientDataValue,
-  type ProductSubscriptionPeriodValue
+  type ProductSubscriptionPeriodValue,
+  type ProductTypeValue
 } from "@elevenhouse/validation/products";
 import { mediaAssetResponseSchema } from "./media";
 
@@ -216,6 +218,8 @@ const updateProductPayloadFields = {
 
 const addProductPayloadIssues = (
   value: {
+    readonly type?: ProductTypeValue;
+    readonly executionMode?: ProductExecutionModeValue;
     readonly paymentModel?: ProductPaymentModelValue;
     readonly packageSessionCount?: number | null;
     readonly subscriptionPeriod?: ProductSubscriptionPeriodValue | null;

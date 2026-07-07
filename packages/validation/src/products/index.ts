@@ -87,6 +87,8 @@ export type ProductUpdateInvariantInput = {
 };
 
 export type ProductCreateInvariantInput = ProductUpdateInvariantInput & {
+  readonly type?: ProductTypeValue;
+  readonly executionMode?: ProductExecutionModeValue;
   readonly paymentModel?: ProductPaymentModelValue;
   readonly packageSessionCount?: number | null;
   readonly subscriptionPeriod?: ProductSubscriptionPeriodValue | null;
@@ -104,6 +106,29 @@ export function collectProductCreateInvariantIssues(
   value: ProductCreateInvariantInput
 ): ProductInvariantIssue[] {
   const issues = collectProductUpdateInvariantIssues(value);
+  const fixedScenario = getFixedScenario(value.type);
+
+  if (
+    fixedScenario?.paymentModel !== undefined &&
+    value.paymentModel !== undefined &&
+    value.paymentModel !== fixedScenario.paymentModel
+  ) {
+    issues.push({
+      path: ["paymentModel"],
+      message: fixedScenario.paymentMessage
+    });
+  }
+
+  if (
+    fixedScenario?.executionMode !== undefined &&
+    value.executionMode !== undefined &&
+    value.executionMode !== fixedScenario.executionMode
+  ) {
+    issues.push({
+      path: ["executionMode"],
+      message: fixedScenario.executionMessage
+    });
+  }
 
   if (value.paymentModel === "pack" && value.packageSessionCount == null) {
     issues.push({
@@ -130,6 +155,13 @@ export function collectProductCreateInvariantIssues(
     issues.push({
       path: ["priceMinor"],
       message: "Free products must have zero price"
+    });
+  }
+
+  if (value.type === "course" && !value.accessGrants?.includes("course")) {
+    issues.push({
+      path: ["accessGrants"],
+      message: "Course products require course access grant"
     });
   }
 
@@ -193,4 +225,60 @@ function collectUniqueArrayIssues(
   }
 
   return [];
+}
+
+function getFixedScenario(type: ProductTypeValue | undefined):
+  | {
+      readonly paymentModel: ProductPaymentModelValue;
+      readonly paymentMessage: string;
+      readonly executionMode: ProductExecutionModeValue;
+      readonly executionMessage: string;
+    }
+  | undefined {
+  switch (type) {
+    case "single":
+      return {
+        paymentModel: "once",
+        paymentMessage: "One-off consultation products require one-time payment model",
+        executionMode: "live",
+        executionMessage: "One-off consultation products require live execution mode"
+      };
+    case "pack":
+      return {
+        paymentModel: "pack",
+        paymentMessage: "Package products require package payment model",
+        executionMode: "live",
+        executionMessage: "Package products require live execution mode"
+      };
+    case "async":
+      return {
+        paymentModel: "once",
+        paymentMessage: "Async result products require one-time payment model",
+        executionMode: "async",
+        executionMessage: "Async result products require async execution mode"
+      };
+    case "sub":
+      return {
+        paymentModel: "sub",
+        paymentMessage: "Subscription products require subscription payment model",
+        executionMode: "async",
+        executionMessage: "Subscription products require async execution mode"
+      };
+    case "mini":
+      return {
+        paymentModel: "once",
+        paymentMessage: "Mini-products require one-time payment model",
+        executionMode: "instant",
+        executionMessage: "Mini-products require instant execution mode"
+      };
+    case "course":
+      return {
+        paymentModel: "once",
+        paymentMessage: "Course products require one-time payment model",
+        executionMode: "async",
+        executionMessage: "Course products require async execution mode"
+      };
+    default:
+      return undefined;
+  }
 }

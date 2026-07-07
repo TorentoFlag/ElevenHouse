@@ -17,6 +17,7 @@ import {
   type ProductType,
   type UpdateProductRequest
 } from "@elevenhouse/contracts/products";
+import { normalizeProductDraftForType } from "./productTypeDraftNormalization";
 
 export type ProductFormDraft = {
   readonly type: ProductType;
@@ -153,8 +154,12 @@ export function createDefaultProductDraft(type: ProductType): ProductFormDraft {
     return {
       ...base,
       priceMinor: 1800000,
+      executionMode: "async",
+      paymentModel: "once",
       durationMinutes: null,
       durationLabel: "8 модулей",
+      packageSessionCount: null,
+      packageDiscountPercent: null,
       deliveryFormats: ["video", "file"],
       requiredClientData: ["question"],
       methods: [],
@@ -463,11 +468,11 @@ function clampPercentModifierValue(value: number): number {
 }
 
 export function toCreateProductRequest(draft: ProductFormDraft): CreateProductRequest {
-  return createProductRequestSchema.parse(toPayload(draft, "create"));
+  return createProductRequestSchema.parse(toPayload(normalizeProductDraftForType(draft), "create"));
 }
 
 export function toUpdateProductRequest(draft: ProductFormDraft): UpdateProductRequest {
-  return updateProductRequestSchema.parse(toPayload(draft, "update"));
+  return updateProductRequestSchema.parse(toPayload(normalizeProductDraftForType(draft), "update"));
 }
 
 function toPayload(draft: ProductFormDraft, mode: "create" | "update") {

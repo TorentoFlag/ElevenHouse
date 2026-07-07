@@ -30,6 +30,24 @@ import type { ProductConstructorSectionProps } from "../../types";
 import { ConstructorOptionGroup, LabeledStepper, SectionHeading } from "../ConstructorPrimitives";
 import styles from "../../ProductConstructorModal.module.css";
 
+export type BasicProductSectionId =
+  | "media"
+  | "basics"
+  | "format"
+  | "execution"
+  | "payment"
+  | "duration"
+  | "participants";
+
+type PaymentSectionMode = "all" | "package" | "subscription";
+
+type BasicProductSectionsProps = ProductConstructorSectionProps & {
+  readonly visibleSections?: readonly BasicProductSectionId[];
+  readonly paymentSectionMode?: PaymentSectionMode;
+  readonly durationTitle?: string;
+  readonly durationHint?: string;
+};
+
 export function BasicProductSections({
   copy,
   productCopy,
@@ -40,212 +58,245 @@ export function BasicProductSections({
   coverMediaUrl,
   coverUploadError,
   onCoverFileSelected,
-  onCoverRemove
-}: ProductConstructorSectionProps) {
+  onCoverRemove,
+  visibleSections,
+  paymentSectionMode = "all",
+  durationTitle,
+  durationHint
+}: BasicProductSectionsProps) {
   const { uiCopy, actions } = controller;
+  const isVisible = (section: BasicProductSectionId) =>
+    !visibleSections || visibleSections.includes(section);
 
   return (
     <>
-      <section
-        className={styles.constructorSectionPlain}
-        aria-labelledby="product-constructor-media"
-      >
-        <SectionHeading
-          id="product-constructor-media"
-          title={uiCopy.mediaLabel}
-          hint={uiCopy.mediaHint}
-        />
-        <div className={styles.constructorMediaRow}>
-          <label
-            className={styles.constructorCoverDropzone}
-            data-product-constructor-cover-dropzone="true"
-            data-uploading={isCoverUploading ? "true" : undefined}
-            aria-label={uiCopy.coverPlaceholder}
-            onDragOver={(event) => {
-              event.preventDefault();
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              const file = event.dataTransfer.files[0];
-              if (file) {
-                void onCoverFileSelected(file);
-              }
-            }}
-          >
-            {coverMediaUrl ? (
-              <>
-                <img src={coverMediaUrl} alt="" className={styles.constructorCoverImage} />
-                <button
-                  className={styles.constructorCoverRemoveButton}
-                  type="button"
-                  aria-label={uiCopy.removeCoverLabel}
-                  disabled={isCoverUploading}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    onCoverRemove();
-                  }}
-                >
-                  <Icon iconName="close" width={14} height={14} aria-hidden="true" />
-                </button>
-              </>
-            ) : (
-              <>
-                <Icon iconName="image" width={34} height={34} aria-hidden="true" />
-                <span>{isCoverUploading ? copy.savingLabel : uiCopy.coverPlaceholder}</span>
-              </>
-            )}
-            <input
-              className={styles.constructorFileInput}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif"
-              disabled={isCoverUploading}
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                event.currentTarget.value = "";
+      {isVisible("media") ? (
+        <section
+          className={styles.constructorSectionPlain}
+          aria-labelledby="product-constructor-media"
+        >
+          <SectionHeading
+            id="product-constructor-media"
+            title={uiCopy.mediaLabel}
+            hint={uiCopy.mediaHint}
+          />
+          <div className={styles.constructorMediaRow}>
+            <label
+              className={styles.constructorCoverDropzone}
+              data-product-constructor-cover-dropzone="true"
+              data-uploading={isCoverUploading ? "true" : undefined}
+              aria-label={uiCopy.coverPlaceholder}
+              onDragOver={(event) => {
+                event.preventDefault();
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const file = event.dataTransfer.files[0];
                 if (file) {
                   void onCoverFileSelected(file);
                 }
               }}
-            />
-          </label>
-          <div className={styles.constructorMediaFields}>
-            <label className={styles.constructorInputShell}>
-              <Icon iconName="video" width={17} height={17} aria-hidden="true" />
+            >
+              {coverMediaUrl ? (
+                <>
+                  <img src={coverMediaUrl} alt="" className={styles.constructorCoverImage} />
+                  <button
+                    className={styles.constructorCoverRemoveButton}
+                    type="button"
+                    aria-label={uiCopy.removeCoverLabel}
+                    disabled={isCoverUploading}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onCoverRemove();
+                    }}
+                  >
+                    <Icon iconName="close" width={14} height={14} aria-hidden="true" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Icon iconName="image" width={34} height={34} aria-hidden="true" />
+                  <span>{isCoverUploading ? copy.savingLabel : uiCopy.coverPlaceholder}</span>
+                </>
+              )}
               <input
-                className={styles.constructorInputBare}
-                value={draft.introVideoUrl}
-                placeholder={uiCopy.introVideoPlaceholder}
-                onChange={(event) =>
-                  actions.updateDraft({ introVideoUrl: event.currentTarget.value })
-                }
+                className={styles.constructorFileInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                disabled={isCoverUploading}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) {
+                    void onCoverFileSelected(file);
+                  }
+                }}
               />
             </label>
-            <p className={styles.constructorHint}>
-              {coverUploadError ? coverUploadError : uiCopy.introVideoHint}
-            </p>
+            <div className={styles.constructorMediaFields}>
+              <label className={styles.constructorInputShell}>
+                <Icon iconName="video" width={17} height={17} aria-hidden="true" />
+                <input
+                  className={styles.constructorInputBare}
+                  value={draft.introVideoUrl}
+                  placeholder={uiCopy.introVideoPlaceholder}
+                  onChange={(event) =>
+                    actions.updateDraft({ introVideoUrl: event.currentTarget.value })
+                  }
+                />
+              </label>
+              <p className={styles.constructorHint}>
+                {coverUploadError ? coverUploadError : uiCopy.introVideoHint}
+              </p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
-      <section
-        className={styles.constructorSectionPlain}
-        aria-labelledby="product-constructor-title"
-      >
-        <SectionHeading id="product-constructor-title" title={uiCopy.nameAndPriceLabel} />
-        <div className={styles.constructorFieldsGrid}>
+      {isVisible("basics") ? (
+        <section
+          className={styles.constructorSectionPlain}
+          aria-labelledby="product-constructor-title"
+        >
+          <SectionHeading id="product-constructor-title" title={uiCopy.nameAndPriceLabel} />
+          <div className={styles.constructorFieldsGrid}>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>{copy.titleLabel}</span>
+              <input
+                className={styles.textInput}
+                data-product-constructor-title="true"
+                value={draft.title}
+                placeholder={copy.titlePlaceholder}
+                autoFocus
+                onChange={(event) => actions.updateDraft({ title: event.currentTarget.value })}
+              />
+            </label>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>{copy.priceLabel}</span>
+              <span className={styles.constructorPriceInputShell}>
+                <input
+                  className={`${styles.textInput} ${styles.constructorPriceInput}`}
+                  inputMode="numeric"
+                  value={minorToMajorValue(draft.priceMinor)}
+                  onChange={(event) =>
+                    actions.updateDraft({
+                      priceMinor: majorValueToMinor(event.currentTarget.value)
+                    })
+                  }
+                />
+                <span aria-hidden="true">₽</span>
+              </span>
+            </label>
+          </div>
           <label className={styles.field}>
-            <span className={styles.fieldLabel}>{copy.titleLabel}</span>
+            <span className={styles.fieldLabel}>{copy.subtitleLabel}</span>
             <input
               className={styles.textInput}
-              data-product-constructor-title="true"
-              value={draft.title}
-              placeholder={copy.titlePlaceholder}
-              autoFocus
-              onChange={(event) => actions.updateDraft({ title: event.currentTarget.value })}
+              value={draft.subtitle}
+              placeholder={copy.subtitlePlaceholder}
+              onChange={(event) => actions.updateDraft({ subtitle: event.currentTarget.value })}
             />
           </label>
-          <label className={styles.field}>
-            <span className={styles.fieldLabel}>{copy.priceLabel}</span>
-            <span className={styles.constructorPriceInputShell}>
-              <input
-                className={`${styles.textInput} ${styles.constructorPriceInput}`}
-                inputMode="numeric"
-                value={minorToMajorValue(draft.priceMinor)}
-                onChange={(event) =>
-                  actions.updateDraft({ priceMinor: majorValueToMinor(event.currentTarget.value) })
-                }
-              />
-              <span aria-hidden="true">₽</span>
-            </span>
-          </label>
-        </div>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>{copy.subtitleLabel}</span>
-          <input
-            className={styles.textInput}
-            value={draft.subtitle}
-            placeholder={copy.subtitlePlaceholder}
-            onChange={(event) => actions.updateDraft({ subtitle: event.currentTarget.value })}
+        </section>
+      ) : null}
+
+      {isVisible("format") ? (
+        <section
+          className={styles.constructorSectionPlain}
+          aria-labelledby="product-constructor-format"
+        >
+          <SectionHeading id="product-constructor-format" title={copy.formatLabel} />
+          <ConstructorOptionGroup<ProductDeliveryFormat>
+            options={productDeliveryFormatOptions}
+            selectedValues={draft.deliveryFormats}
+            copyByValue={productCopy.deliveryFormats}
+            onToggle={actions.toggleDeliveryFormat}
           />
-        </label>
-      </section>
+        </section>
+      ) : null}
 
-      <section
-        className={styles.constructorSectionPlain}
-        aria-labelledby="product-constructor-format"
-      >
-        <SectionHeading id="product-constructor-format" title={copy.formatLabel} />
-        <ConstructorOptionGroup<ProductDeliveryFormat>
-          options={productDeliveryFormatOptions}
-          selectedValues={draft.deliveryFormats}
-          copyByValue={productCopy.deliveryFormats}
-          onToggle={actions.toggleDeliveryFormat}
-        />
-      </section>
-
-      <section
-        className={styles.constructorSectionPlain}
-        aria-labelledby="product-constructor-execution"
-      >
-        <SectionHeading id="product-constructor-execution" title={uiCopy.whenLabel} />
-        <ConstructorOptionGroup<ProductExecutionMode>
-          options={productExecutionModeOptions}
-          selectedValue={draft.executionMode}
-          copyByValue={uiCopy.executionModes}
-          onSelect={(value) => actions.updateDraft({ executionMode: value })}
-        />
-        {draft.executionMode === "async" ? (
-          <input
-            className={`${styles.textInput} ${styles.constructorShortInput}`}
-            value={draft.slaLabel}
-            placeholder={uiCopy.slaPlaceholder}
-            onChange={(event) => actions.updateDraft({ slaLabel: event.currentTarget.value })}
+      {isVisible("execution") ? (
+        <section
+          className={styles.constructorSectionPlain}
+          aria-labelledby="product-constructor-execution"
+        >
+          <SectionHeading id="product-constructor-execution" title={uiCopy.whenLabel} />
+          <ConstructorOptionGroup<ProductExecutionMode>
+            options={productExecutionModeOptions}
+            selectedValue={draft.executionMode}
+            copyByValue={uiCopy.executionModes}
+            onSelect={(value) => actions.updateDraft({ executionMode: value })}
           />
-        ) : null}
-      </section>
+          {draft.executionMode === "async" ? (
+            <input
+              className={`${styles.textInput} ${styles.constructorShortInput}`}
+              value={draft.slaLabel}
+              placeholder={uiCopy.slaPlaceholder}
+              onChange={(event) => actions.updateDraft({ slaLabel: event.currentTarget.value })}
+            />
+          ) : null}
+        </section>
+      ) : null}
 
-      <PaymentSection
-        copy={copy}
-        productCopy={productCopy}
-        locale={locale}
-        draft={draft}
-        controller={controller}
-        isCoverUploading={isCoverUploading}
-        coverMediaUrl={coverMediaUrl}
-        coverUploadError={coverUploadError}
-        onCoverFileSelected={onCoverFileSelected}
-        onCoverRemove={onCoverRemove}
-      />
-      <DurationSection
-        copy={copy}
-        productCopy={productCopy}
-        locale={locale}
-        draft={draft}
-        controller={controller}
-        isCoverUploading={isCoverUploading}
-        coverMediaUrl={coverMediaUrl}
-        coverUploadError={coverUploadError}
-        onCoverFileSelected={onCoverFileSelected}
-        onCoverRemove={onCoverRemove}
-      />
-      <ParticipantsSection
-        copy={copy}
-        productCopy={productCopy}
-        locale={locale}
-        draft={draft}
-        controller={controller}
-        isCoverUploading={isCoverUploading}
-        coverMediaUrl={coverMediaUrl}
-        coverUploadError={coverUploadError}
-        onCoverFileSelected={onCoverFileSelected}
-        onCoverRemove={onCoverRemove}
-      />
+      {isVisible("payment") ? (
+        <PaymentSection
+          copy={copy}
+          productCopy={productCopy}
+          locale={locale}
+          draft={draft}
+          controller={controller}
+          isCoverUploading={isCoverUploading}
+          coverMediaUrl={coverMediaUrl}
+          coverUploadError={coverUploadError}
+          onCoverFileSelected={onCoverFileSelected}
+          onCoverRemove={onCoverRemove}
+          mode={paymentSectionMode}
+        />
+      ) : null}
+      {isVisible("duration") ? (
+        <DurationSection
+          copy={copy}
+          productCopy={productCopy}
+          locale={locale}
+          draft={draft}
+          controller={controller}
+          isCoverUploading={isCoverUploading}
+          coverMediaUrl={coverMediaUrl}
+          coverUploadError={coverUploadError}
+          onCoverFileSelected={onCoverFileSelected}
+          onCoverRemove={onCoverRemove}
+          title={durationTitle}
+          hint={durationHint}
+        />
+      ) : null}
+      {isVisible("participants") ? (
+        <ParticipantsSection
+          copy={copy}
+          productCopy={productCopy}
+          locale={locale}
+          draft={draft}
+          controller={controller}
+          isCoverUploading={isCoverUploading}
+          coverMediaUrl={coverMediaUrl}
+          coverUploadError={coverUploadError}
+          onCoverFileSelected={onCoverFileSelected}
+          onCoverRemove={onCoverRemove}
+        />
+      ) : null}
     </>
   );
 }
 
-function PaymentSection({ copy, productCopy, draft, controller }: ProductConstructorSectionProps) {
+function PaymentSection({
+  copy,
+  productCopy,
+  draft,
+  controller,
+  mode = "all"
+}: ProductConstructorSectionProps & { readonly mode?: PaymentSectionMode }) {
   const { uiCopy, actions } = controller;
+  const showPackageControls = mode === "package" || draft.paymentModel === "pack";
+  const showSubscriptionControls = mode === "subscription" || draft.paymentModel === "sub";
 
   return (
     <section
@@ -253,13 +304,15 @@ function PaymentSection({ copy, productCopy, draft, controller }: ProductConstru
       aria-labelledby="product-constructor-payment"
     >
       <SectionHeading id="product-constructor-payment" title={copy.paymentModelLabel} />
-      <ConstructorOptionGroup<ProductPaymentModel>
-        options={productPaymentModelOptions}
-        selectedValue={draft.paymentModel}
-        copyByValue={uiCopy.paymentModels}
-        onSelect={(value) => actions.updateDraft({ paymentModel: value })}
-      />
-      {draft.paymentModel === "pack" ? (
+      {mode === "all" ? (
+        <ConstructorOptionGroup<ProductPaymentModel>
+          options={productPaymentModelOptions}
+          selectedValue={draft.paymentModel}
+          copyByValue={uiCopy.paymentModels}
+          onSelect={(value) => actions.updateDraft({ paymentModel: value })}
+        />
+      ) : null}
+      {showPackageControls ? (
         <div className={styles.constructorInlineControls}>
           <LabeledStepper label={copy.packageSessionCountLabel}>
             <NumberStepper
@@ -283,7 +336,7 @@ function PaymentSection({ copy, productCopy, draft, controller }: ProductConstru
           </LabeledStepper>
         </div>
       ) : null}
-      {draft.paymentModel === "sub" ? (
+      {showSubscriptionControls ? (
         <div className={styles.constructorInlineControls}>
           <div className={styles.constructorNestedControl}>
             <span className={styles.fieldLabel}>{copy.subscriptionPeriodLabel}</span>
@@ -305,14 +358,20 @@ function PaymentSection({ copy, productCopy, draft, controller }: ProductConstru
           </LabeledStepper>
         </div>
       ) : null}
-      {draft.paymentModel === "free" ? (
+      {mode === "all" && draft.paymentModel === "free" ? (
         <p className={styles.constructorNote}>{uiCopy.freeNote}</p>
       ) : null}
     </section>
   );
 }
 
-function DurationSection({ copy, draft, controller }: ProductConstructorSectionProps) {
+function DurationSection({
+  copy,
+  draft,
+  controller,
+  title,
+  hint
+}: ProductConstructorSectionProps & { readonly title?: string; readonly hint?: string }) {
   const { uiCopy, actions } = controller;
 
   return (
@@ -322,8 +381,8 @@ function DurationSection({ copy, draft, controller }: ProductConstructorSectionP
     >
       <SectionHeading
         id="product-constructor-duration"
-        title={uiCopy.volumeLabel}
-        hint={uiCopy.volumeHint}
+        title={title ?? uiCopy.volumeLabel}
+        hint={hint ?? uiCopy.volumeHint}
       />
       <input
         className={`${styles.textInput} ${styles.constructorShortInput}`}

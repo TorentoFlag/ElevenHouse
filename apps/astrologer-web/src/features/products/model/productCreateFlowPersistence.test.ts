@@ -1,4 +1,4 @@
-import type { ProductResponse } from "@elevenhouse/contracts";
+import type { CreateProductRequest, ProductResponse } from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { persistProductDraft } from "./productCreateFlowPersistence";
 import { createDefaultProductDraft } from "./productDraft";
@@ -52,7 +52,9 @@ const product = {
 
 describe("persistProductDraft", () => {
   it("creates a draft and publishes the created product when publish is requested", async () => {
-    const createProduct = vi.fn(async () => product);
+    const createProduct = vi.fn(
+      async (_body: CreateProductRequest): Promise<ProductResponse> => product
+    );
     const publishProduct = vi.fn(async () => ({ ...product, status: "active" as const }));
 
     await expect(
@@ -138,5 +140,36 @@ describe("persistProductDraft", () => {
         includedItems: visibleIncludedItems
       })
     );
+  });
+
+  it("normalizes hidden type-specific fields before creating a guided product", async () => {
+    let body: CreateProductRequest | undefined;
+    const createProduct = vi.fn(async (requestBody: CreateProductRequest) => {
+      body = requestBody;
+      return product;
+    });
+
+    await persistProductDraft({
+      draft: {
+        ...createDefaultProductDraft("single"),
+        title: product.title,
+        paymentModel: "sub",
+        subscriptionPeriod: "month",
+        trialDays: 14
+      },
+      editingProductId: null,
+      publish: false,
+      createProduct,
+      updateProduct: vi.fn(),
+      publishProduct: vi.fn()
+    });
+
+    expect(body).toMatchObject({
+      type: "single",
+      paymentModel: "once",
+      executionMode: "live",
+      subscriptionPeriod: undefined,
+      trialDays: undefined
+    });
   });
 });

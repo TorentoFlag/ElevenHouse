@@ -198,6 +198,58 @@ describe("ProductConstructorModal", () => {
     expect(serialized).not.toContain("Сценарий выполнения");
   });
 
+  it("keeps custom products as the full constructor", () => {
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft: createDefaultProductDraft("custom"),
+      isSaving: false,
+      ...defaultCoverUploadProps,
+      error: null,
+      onDraftChange: vi.fn(),
+      onSave: vi.fn(),
+      onPublish: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    const serialized = serializeRendered(modal);
+
+    expect(serialized).toContain("Формат поставки");
+    expect(serialized).toContain("Оплата");
+    expect(serialized).toContain("Участники");
+    expect(serialized).toContain("Метод / система");
+    expect(serialized).toContain("Данные от клиента");
+    expect(serialized).toContain("Доступ");
+    expect(serialized).toContain("Допы · модификаторы");
+  });
+
+  it("renders subscription products as a focused scenario instead of the full cube builder", () => {
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft: createDefaultProductDraft("sub"),
+      isSaving: false,
+      ...defaultCoverUploadProps,
+      error: null,
+      onDraftChange: vi.fn(),
+      onSave: vi.fn(),
+      onPublish: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    const serialized = serializeRendered(modal);
+
+    expect(serialized).toContain("Период подписки");
+    expect(serialized).toContain("Доступ");
+    expect(serialized).toContain("Что входит");
+    expect(serialized).not.toContain("Сессий в пакете");
+    expect(serialized).not.toContain("Вживую · слот");
+    expect(serialized).not.toContain("Метод / система");
+    expect(serialized).not.toContain("Допы · модификаторы");
+  });
+
   it("renders media, client-facing preview, enabled modifiers and cabinet artifacts", () => {
     const draft = {
       ...createDefaultProductDraft("single"),
