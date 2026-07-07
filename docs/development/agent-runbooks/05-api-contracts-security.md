@@ -20,10 +20,11 @@ checks ad hoc inside feature controllers.
 
 - `public-api`: guest/client/direct-link/booking/checkout/client cabinet.
 - `astrologer-api`: authenticated astrologer workspace.
-- `admin-api`: future internal moderator/admin/super_admin workflows.
+- `admin-api`: internal moderator/admin/super_admin workflows.
 
-If a route is admin/moderator/super_admin, stop before adding it to existing
-APIs and create or plan `admin-api` instead.
+If a route is admin/moderator/super_admin, stop before adding it to
+`public-api` or `astrologer-api`; it belongs in `admin-api` with explicit
+authorization and audit boundaries.
 
 ## Auth Rules
 

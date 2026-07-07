@@ -11,6 +11,7 @@ ElevenHouse/
     admin-web/
     public-api/
     astrologer-api/
+    admin-api/
     workers/
     payment-worker/
     notification-worker/
@@ -37,8 +38,10 @@ ElevenHouse/
     product/
 ```
 
-`apps/admin-api` является целевой будущей backend-поверхностью для
-moderator/admin/super_admin workflows, но сейчас отсутствует в коде.
+`apps/admin-api` является отдельной backend-поверхностью для
+moderator/admin/super_admin workflows. В текущем коде создана минимальная
+заготовка приложения с техническим `health` module; доменные admin workflows,
+auth/permissions и audit-contour ещё не реализованы.
 
 ## Apps
 

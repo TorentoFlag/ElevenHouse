@@ -19,7 +19,7 @@ Backend apps/processes:
 
 - `public-api`
 - `astrologer-api`
-- `admin-api` as the target internal API surface; not scaffolded in the current code yet
+- `admin-api` as the internal API surface; currently scaffolded with only a technical health module
 - `workers`
 - `payment-worker`
 - `notification-worker`

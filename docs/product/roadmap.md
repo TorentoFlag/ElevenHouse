@@ -102,7 +102,8 @@
 - Verification workflow.
 - Dispute workflows.
 - Platform settings: комиссии, тарифы, справочники, templates.
-- `admin-api` как отдельная backend-поверхность для внутренних workflows, если он ещё не создан к этому этапу.
+- развитие `admin-api` из health-only заготовки в отдельную backend-поверхность
+  для внутренних workflows.
 - Dedicated analytics storage, если потребуется нагрузкой или отчётностью.
 
 ## Явно вне текущего scope

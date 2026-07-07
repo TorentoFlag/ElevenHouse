@@ -73,7 +73,8 @@ ElevenHouse — закрытая SaaS/CRM-платформа для астрол
 
 - `public-api`
 - `astrologer-api`
-- `admin-api` для внутренних ролей; целевой app, пока не создан в текущем коде
+- `admin-api` для внутренних ролей; текущий код содержит минимальную health-only
+  заготовку, а доменные internal workflows ещё не реализованы
 - `workers`
 - `payment-worker`
 - `notification-worker`

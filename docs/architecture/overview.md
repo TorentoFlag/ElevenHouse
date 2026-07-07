@@ -27,16 +27,16 @@ Backend нужно разделить по профилю нагрузки и о
 
 - `public-api`: обслуживает `client-web`, прямые страницы астрологов, booking, клиентские заказы, публичные checkout flows.
 - `astrologer-api`: обслуживает `astrologer-web`, CRM и authenticated workflows астролога.
-- `admin-api`: целевой отдельный backend для `admin-web`, moderation/admin/super_admin workflows и audit-sensitive internal operations. В текущем коде ещё не создан.
+- `admin-api`: отдельный backend для `admin-web`, moderation/admin/super_admin workflows и audit-sensitive internal operations. В текущем коде создана минимальная health-only Nest-заготовка; доменные внутренние workflows ещё не реализованы.
 - `workers`: общие фоновые задачи.
 - `payment-worker`: payment webhooks, reconciliation, refunds, payout jobs.
 - `notification-worker`: email, SMS, Telegram, push, reminders, retry logic.
 - `chart-worker`: тяжёлые расчёты астрологических карт.
 
-В текущем коде существуют `public-api`, `astrologer-api`, `workers`,
-`payment-worker`, `notification-worker` и `chart-worker`; `admin-api` остаётся
-запланированной отдельной поверхностью и не должен заменяться admin workflows
-внутри `astrologer-api`.
+В текущем коде существуют `public-api`, `astrologer-api`, `admin-api`,
+`workers`, `payment-worker`, `notification-worker` и `chart-worker`. Admin
+workflows должны развиваться внутри `admin-api` и не должны заменяться admin
+workflows внутри `astrologer-api`.
 
 Эти процессы могут использовать общие domain packages и одну базу данных. Там, где полезно, они должны быть независимо deployable.
 

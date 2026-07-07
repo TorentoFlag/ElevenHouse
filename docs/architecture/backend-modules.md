@@ -69,9 +69,14 @@ export class AppModule {}
 - `security`
 - `verification`
 
-`apps/admin-api` пока отсутствует в коде. Admin/moderator/super_admin workflows
-не должны добавляться в `public-api` или `astrologer-api`; для них нужно создать
-отдельное Nest app с такой же feature-module структурой.
+`apps/admin-api` сейчас содержит:
+
+- `health`
+
+Это только минимальная Nest-заготовка отдельной внутренней API-поверхности.
+Admin/moderator/super_admin workflows не должны добавляться в `public-api` или
+`astrologer-api`; они должны добавляться в `admin-api` через такие же
+feature-module boundaries, explicit auth/permissions и audit logging.
 
 ## Основные модули
 
@@ -95,7 +100,7 @@ export class AppModule {}
 - `Content`: posts, lead magnets, materials, broadcasts, content products.
 - `Reviews`: review submission, moderation, display aggregates.
 - `Moderation`: queues, decisions, reasons, escalation. Moderator decisions for
-  verification applications belong to future `admin-api`, not `astrologer-api`.
+  verification applications belong to `admin-api`, not `astrologer-api`.
 - `Notifications`: notification preferences, templates, delivery logs.
 - `Analytics`: product и business metrics, event ingestion.
 - `Referral`: astrologer и client invitation flows.

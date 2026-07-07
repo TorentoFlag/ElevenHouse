@@ -107,7 +107,7 @@ POST /verification/applications
 Verification submission in `astrologer-api` only accepts astrologer-owned private
 identity and qualification media and creates a pending application. Approve,
 reject, revoke, escalation, reviewer identity and audit trails are moderator
-workflows for future `admin-api`.
+workflows for `admin-api`.
 
 AI provider credentials, model selection and rate limits are backend-only
 `ASTROLOGER_*` runtime config. `astrologer-web` must call feature-specific routes
@@ -115,9 +115,10 @@ and must not know provider keys, prompt ids or provider internals.
 
 ## Admin API
 
-`admin-api` является целевой отдельной поверхностью authenticated workflows
-администраторов, супер-администраторов и модераторов. В текущем коде app ещё не
-создан; `admin-web` существует как frontend shell.
+`admin-api` является отдельной поверхностью authenticated workflows
+администраторов, супер-администраторов и модераторов. В текущем коде app создан
+как минимальная health-only Nest-заготовка; `admin-web` существует как frontend
+shell, а доменные internal routes ещё не реализованы.
 
 Ответственности администратора/супер-администратора/модератора:
 
@@ -143,8 +144,8 @@ POST /identity/logout
 ```
 
 Новые admin/moderator/super_admin workflows не должны добавляться в `public-api`
-или `astrologer-api`. Они должны жить в будущем `admin-api` и вызывать domain
-use cases с audit logging.
+или `astrologer-api`. Они должны жить в `admin-api` и вызывать domain use cases
+с audit logging.
 
 ## Правило контрактов
 

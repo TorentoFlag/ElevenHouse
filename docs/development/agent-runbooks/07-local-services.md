@@ -28,6 +28,7 @@ dev-процессы без прямой явной команды пользо�
 - `admin-web`: `5175`
 - `public-api`: `3001`
 - `astrologer-api`: `3002`
+- `admin-api`: `3003`
 - `notification-worker`: readiness on `3013`
 - PostgreSQL: `5432`
 - Redis: `6379`
@@ -37,9 +38,11 @@ dev-процессы без прямой явной команды пользо�
 ```bash
 lsof -nP -iTCP:5174 -sTCP:LISTEN
 lsof -nP -iTCP:3002 -sTCP:LISTEN
+lsof -nP -iTCP:3003 -sTCP:LISTEN
 lsof -nP -iTCP:3013 -sTCP:LISTEN
-ps aux | rg "astrologer-api|astrologer-web|notification-worker|vite|node"
+ps aux | rg "admin-api|astrologer-api|astrologer-web|notification-worker|vite|node"
 curl -fsS http://localhost:3002/health
+curl -fsS http://localhost:3003/health
 curl -fsS http://localhost:3013/ready
 ```
 
@@ -65,6 +68,7 @@ pnpm --filter @elevenhouse/astrologer-web dev
 pnpm --filter @elevenhouse/admin-web dev
 pnpm --filter @elevenhouse/public-api dev
 pnpm --filter @elevenhouse/astrologer-api dev
+pnpm --filter @elevenhouse/admin-api dev
 pnpm --filter @elevenhouse/workers dev
 pnpm --filter @elevenhouse/payment-worker dev
 pnpm --filter @elevenhouse/notification-worker dev

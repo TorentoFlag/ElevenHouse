@@ -73,6 +73,7 @@ pnpm --filter @elevenhouse/astrologer-web dev
 pnpm --filter @elevenhouse/admin-web dev
 pnpm --filter @elevenhouse/public-api dev
 pnpm --filter @elevenhouse/astrologer-api dev
+pnpm --filter @elevenhouse/admin-api dev
 pnpm --filter @elevenhouse/workers dev
 pnpm --filter @elevenhouse/payment-worker dev
 pnpm --filter @elevenhouse/notification-worker dev
@@ -86,9 +87,12 @@ pnpm --filter @elevenhouse/chart-worker dev
 - `admin-web`: `5175`
 - `public-api`: `3001`
 - `astrologer-api`: `3002`
+- `admin-api`: `3003`
 - `notification-worker` readiness: `3013`
 
-`admin-api` пока не создан в коде, поэтому локальной команды запуска для него нет.
+`admin-api` сейчас является health-only заготовкой. Запускай его только когда
+явно нужна проверка внутренней API-поверхности; доменные admin routes ещё не
+реализованы.
 
 For local passwordless auth development, set
 `NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE=dev_console`. In this mode the

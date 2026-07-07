@@ -1,7 +1,7 @@
 # Runbook: Backend Feature Module
 
 Используй этот ранбук для Nest backend work in `apps/public-api`,
-`apps/astrologer-api` and future `apps/admin-api`.
+`apps/astrologer-api` and `apps/admin-api`.
 
 ## Цель
 
@@ -14,7 +14,7 @@ composition.
 - `public-api`: guest/client direct-link flows, booking, orders, payments,
   client cabinet.
 - `astrologer-api`: authenticated astrologer workspace workflows.
-- `admin-api`: future internal moderator/admin/super_admin workflows.
+- `admin-api`: internal moderator/admin/super_admin workflows.
 
 Never put admin/moderator/super_admin workflows into `public-api` or
 `astrologer-api`.
@@ -100,7 +100,8 @@ domain, app root modules or multiple surfaces.
 
 ## Stop Conditions
 
-- The feature belongs to `admin-api`, but that app does not exist yet.
+- The feature belongs to `admin-api`, but the required auth/permissions,
+  audit logging or domain use-case boundary is not defined yet.
 - A module needs payments/booking/order idempotency, but no idempotency design is
   present.
 - A workflow requires side effects that should be events/jobs, but the proposed

@@ -85,7 +85,7 @@ contracts, domain use cases и design system, не копируя prototype arch
   public reads и `astrologer-web` + `astrologer-api` для управления.
 - Client cabinet может показывать только уже связанных с клиентом астрологов.
   Не создавай discovery, catalog, search или recommendations.
-- Admin screens принадлежат `admin-web` + будущему `admin-api`.
+- Admin screens принадлежат `admin-web` + `admin-api`.
 - Mobile design files — это responsive requirements для web surfaces, не
   отдельное приложение и не iOS wrapper.
 
