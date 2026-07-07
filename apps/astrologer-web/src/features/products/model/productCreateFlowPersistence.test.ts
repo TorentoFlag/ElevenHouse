@@ -52,9 +52,7 @@ const product = {
 
 describe("persistProductDraft", () => {
   it("creates a draft and publishes the created product when publish is requested", async () => {
-    const createProduct = vi.fn(
-      async (_body: CreateProductRequest): Promise<ProductResponse> => product
-    );
+    const createProduct = vi.fn(async (): Promise<ProductResponse> => product);
     const publishProduct = vi.fn(async () => ({ ...product, status: "active" as const }));
 
     await expect(

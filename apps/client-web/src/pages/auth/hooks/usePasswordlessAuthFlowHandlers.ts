@@ -118,26 +118,7 @@ export function usePasswordlessAuthFlowHandlers(input: {
     } finally {
       input.setIsSubmitting(false);
     }
-  }, [
-    input.codeInputRef,
-    input.copy,
-    input.mode,
-    input.phoneInputState.normalizedValue,
-    input.phoneInputState.selectedCountry,
-    input.resetResendCountdown,
-    input.setAuthStep,
-    input.setChallenge,
-    input.setCode,
-    input.setEmailTouched,
-    input.setIsSubmitting,
-    input.setNameTouched,
-    input.setPendingCredential,
-    input.setPhoneTouched,
-    input.setServerError,
-    input.values.email,
-    input.values.name,
-    input.values.phone
-  ]);
+  }, [input]);
 
   const handleCodeSubmit = useCallback(
     async (submittedCode = input.code) => {
@@ -176,15 +157,7 @@ export function usePasswordlessAuthFlowHandlers(input: {
         input.setIsSubmitting(false);
       }
     },
-    [
-      input.challenge,
-      input.code,
-      input.copy,
-      input.pendingCredential,
-      input.setIsSubmitting,
-      input.setServerError,
-      navigate
-    ]
+    [input, navigate]
   );
 
   const handleResend = useCallback(async () => {
@@ -207,16 +180,7 @@ export function usePasswordlessAuthFlowHandlers(input: {
     } finally {
       input.setIsSubmitting(false);
     }
-  }, [
-    input.copy,
-    input.pendingCredential,
-    input.resendCountdownSeconds,
-    input.resetResendCountdown,
-    input.setChallenge,
-    input.setCode,
-    input.setIsSubmitting,
-    input.setServerError
-  ]);
+  }, [input]);
 
   const handleBackToCredentials = useCallback(() => {
     input.setAuthStep("credentials");
@@ -224,13 +188,7 @@ export function usePasswordlessAuthFlowHandlers(input: {
     input.setPendingCredential(null);
     input.setCode("");
     input.setServerError(null);
-  }, [
-    input.setAuthStep,
-    input.setChallenge,
-    input.setCode,
-    input.setPendingCredential,
-    input.setServerError
-  ]);
+  }, [input]);
 
   return {
     handleBackToCredentials,
