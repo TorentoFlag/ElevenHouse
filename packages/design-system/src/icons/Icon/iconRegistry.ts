@@ -24,12 +24,14 @@ import { Lightning } from "../Lightning/index.js";
 import { LogoMoon } from "../LogoMoon/index.js";
 import { Map } from "../Map/index.js";
 import { Mic } from "../Mic/index.js";
+import { Numerology } from "../Numerology/index.js";
 import { Orbit } from "../Orbit/index.js";
 import { Plus } from "../Plus/index.js";
 import { Pin } from "../Pin/index.js";
 import { Reference } from "../Reference/index.js";
 import { Refresh } from "../Refresh/index.js";
 import { Search } from "../Search/index.js";
+import { Settings } from "../Settings/index.js";
 import { Sparkle } from "../Sparkle/index.js";
 import { Star } from "../Star/index.js";
 import { Trash } from "../Trash/index.js";
@@ -66,12 +68,14 @@ export const iconRegistry = {
   logoMoon: LogoMoon,
   map: Map,
   mic: Mic,
+  numerology: Numerology,
   orbit: Orbit,
   plus: Plus,
   pin: Pin,
   reference: Reference,
   refresh: Refresh,
   search: Search,
+  settings: Settings,
   sparkle: Sparkle,
   star: Star,
   trash: Trash,

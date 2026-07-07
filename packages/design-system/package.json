@@ -175,6 +175,10 @@
       "types": "./dist/icons/LogoMoon/index.d.ts",
       "import": "./dist/icons/LogoMoon/index.js"
     },
+    "./icons/Numerology": {
+      "types": "./dist/icons/Numerology/index.d.ts",
+      "import": "./dist/icons/Numerology/index.js"
+    },
     "./icons/Orbit": {
       "types": "./dist/icons/Orbit/index.d.ts",
       "import": "./dist/icons/Orbit/index.js"
@@ -194,6 +198,10 @@
     "./icons/Search": {
       "types": "./dist/icons/Search/index.d.ts",
       "import": "./dist/icons/Search/index.js"
+    },
+    "./icons/Settings": {
+      "types": "./dist/icons/Settings/index.d.ts",
+      "import": "./dist/icons/Settings/index.js"
     },
     "./icons/Sparkle": {
       "types": "./dist/icons/Sparkle/index.d.ts",

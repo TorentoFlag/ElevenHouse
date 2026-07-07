@@ -1,8 +1,10 @@
 import { NavigationDrawer } from "@elevenhouse/design-system/navigation";
+import type { ReactElement } from "react";
 import { NavLink } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { astrologerCopyByLocale } from "../../common/i18n/astrologerCopy";
 import { AstrologerNavigationDrawerView } from "./components/AstrologerNavigationDrawerView";
+import { toNavigationDrawerItem } from "./helpers/navigationDrawerItems";
 import { renderNavigationLink } from "./components/renderNavigationLink";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
@@ -25,7 +27,7 @@ describe("AstrologerNavigationDrawerView", () => {
     expect(element.props.footerItems).toBeUndefined();
     expect(JSON.stringify(renderElement(element.props.footer))).toContain("Личная страница");
     expect(JSON.stringify(renderElement(element.props.footer))).toContain("Настройки");
-    expect(element.props.items).toHaveLength(3);
+    expect(element.props.items).toHaveLength(4);
     expect(element.props.items[0]).toMatchObject({
       id: "dashboard",
       title: "Дашборд",
@@ -39,12 +41,28 @@ describe("AstrologerNavigationDrawerView", () => {
     expect(element.props.items[1].icon.type).toBe(Icon);
     expect(element.props.items[1].icon.props.iconName).toBe("box");
     expect(element.props.items[2]).toMatchObject({
+      id: "numerology",
+      title: "Нумерология",
+      href: "/numerology"
+    });
+    expect(element.props.items[2].icon.type).toBe(Icon);
+    expect(element.props.items[2].icon.props.iconName).toBe("numerology");
+    expect(element.props.items[3]).toMatchObject({
       id: "reference",
       title: "Справочники",
       href: "/reference"
     });
-    expect(element.props.items[2].icon.type).toBe(Icon);
-    expect(element.props.items[2].icon.props.iconName).toBe("reference");
+    expect(element.props.items[3].icon.type).toBe(Icon);
+    expect(element.props.items[3].icon.props.iconName).toBe("reference");
+    const settingsCopy = astrologerCopyByLocale.ru.appShell.navigation.footerItems[0];
+    if (!settingsCopy) {
+      throw new Error("Expected settings footer navigation item to be present");
+    }
+    const settingsItem = toNavigationDrawerItem(settingsCopy);
+    const settingsIcon = settingsItem.icon as ReactElement<{ iconName: string }>;
+
+    expect(settingsIcon.type).toBe(Icon);
+    expect(settingsIcon?.props.iconName).toBe("settings");
   });
 
   it("passes collapsed state controls to the shared navigation drawer", () => {

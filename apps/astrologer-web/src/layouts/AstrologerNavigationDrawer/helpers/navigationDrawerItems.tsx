@@ -14,13 +14,13 @@ const iconByNavigationItemId = {
   products: <Icon iconName="box" width={20} height={20} aria-hidden="true" />,
   funnels: <Icon iconName="flow" width={20} height={20} aria-hidden="true" />,
   chartEngine: <Icon iconName="orbit" width={20} height={20} aria-hidden="true" />,
-  numerology: <Icon iconName="content" width={20} height={20} aria-hidden="true" />,
+  numerology: <Icon iconName="numerology" width={20} height={20} aria-hidden="true" />,
   destinyMatrix: <Icon iconName="orbit" width={20} height={20} aria-hidden="true" />,
   humanDesign: <Icon iconName="flow" width={20} height={20} aria-hidden="true" />,
   astroCalendar: <Icon iconName="orbit" width={20} height={20} aria-hidden="true" />,
   astroDiary: <Icon iconName="content" width={20} height={20} aria-hidden="true" />,
   reference: <Icon iconName="reference" width={20} height={20} aria-hidden="true" />,
-  settings: <Icon iconName="orbit" width={20} height={20} aria-hidden="true" />
+  settings: <Icon iconName="settings" width={20} height={20} aria-hidden="true" />
 } satisfies Record<AppShellNavigationItemId, ReactNode>;
 
 export function toNavigationDrawerItem(item: AppShellNavigationItemCopy): NavigationDrawerItem {
