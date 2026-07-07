@@ -32,9 +32,7 @@ function createStore(): CustomerAccountRegistrationSessionStore {
       ...(input.email === undefined ? {} : { email: input.email }),
       ...(input.phoneNumber === undefined ? {} : { phoneNumber: input.phoneNumber }),
       ...(input.emailVerifiedAt === undefined ? {} : { emailVerifiedAt: input.emailVerifiedAt }),
-      ...(input.phoneVerifiedAt === undefined
-        ? {}
-        : { phoneVerifiedAt: input.phoneVerifiedAt }),
+      ...(input.phoneVerifiedAt === undefined ? {} : { phoneVerifiedAt: input.phoneVerifiedAt }),
       createdAt: "2026-06-15T00:00:00.000Z",
       updatedAt: "2026-06-15T00:00:00.000Z"
     })),
@@ -42,9 +40,7 @@ function createStore(): CustomerAccountRegistrationSessionStore {
       id: `role_${input.role}`,
       userId: input.userId,
       role: input.role,
-      ...(input.assignedByUserId === undefined
-        ? {}
-        : { assignedByUserId: input.assignedByUserId }),
+      ...(input.assignedByUserId === undefined ? {} : { assignedByUserId: input.assignedByUserId }),
       assignedAt: "2026-06-15T00:00:00.000Z"
     })),
     createSession: vi.fn(async (input) => ({

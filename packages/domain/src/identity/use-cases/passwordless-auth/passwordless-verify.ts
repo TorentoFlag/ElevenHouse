@@ -51,6 +51,12 @@ export type PasswordlessRegistrationChallenge = {
   readonly requestedRoles: readonly ("client" | "astrologer")[];
 };
 
+export type PasswordlessTrustedStaticCode = {
+  readonly channel: "email" | "phone";
+  readonly identifierNormalized: string;
+  readonly code: string;
+};
+
 export async function verifyPasswordlessCodeForRegistration(input: {
   readonly store: PasswordlessVerificationStore;
   readonly challengeId: string;
@@ -58,6 +64,7 @@ export async function verifyPasswordlessCodeForRegistration(input: {
   readonly codeSecret: string;
   readonly now: Date;
   readonly roles?: readonly string[];
+  readonly trustedStaticCode?: PasswordlessTrustedStaticCode | null;
 }): Promise<PasswordlessRegistrationChallenge> {
   const challenge = await verifyUsableChallengeCode({
     store: input.store,
@@ -65,7 +72,8 @@ export async function verifyPasswordlessCodeForRegistration(input: {
     code: input.code,
     codeSecret: input.codeSecret,
     now: input.now,
-    authFlow: "registration"
+    authFlow: "registration",
+    trustedStaticCode: input.trustedStaticCode ?? null
   });
 
   if (input.roles) {
@@ -94,6 +102,7 @@ export async function verifyPasswordlessCode(input: {
   readonly codeSecret: string;
   readonly session: Omit<AuthSessionCreationInput, "userId">;
   readonly now: Date;
+  readonly trustedStaticCode?: PasswordlessTrustedStaticCode | null;
 }): Promise<PasswordlessAuthenticatedAccount> {
   const challengeId = input.challengeId.trim();
   const challenge = await verifyUsableChallengeCode({
@@ -102,7 +111,8 @@ export async function verifyPasswordlessCode(input: {
     code: input.code,
     codeSecret: input.codeSecret,
     now: input.now,
-    authFlow: "login"
+    authFlow: "login",
+    trustedStaticCode: input.trustedStaticCode ?? null
   });
 
   await input.store.consumeChallenge({
@@ -158,6 +168,7 @@ async function verifyUsableChallengeCode(input: {
   readonly codeSecret: string;
   readonly now: Date;
   readonly authFlow: "login" | "registration";
+  readonly trustedStaticCode: PasswordlessTrustedStaticCode | null;
 }): Promise<AuthChallenge> {
   const challengeId = input.challengeId.trim();
   if (!challengeId) {
@@ -174,7 +185,13 @@ async function verifyUsableChallengeCode(input: {
     code: input.code
   });
 
-  if (submittedCodeHash !== challenge.codeHash) {
+  const isTrustedStaticCode =
+    input.trustedStaticCode !== null &&
+    input.code === input.trustedStaticCode.code &&
+    challenge.channel === input.trustedStaticCode.channel &&
+    challenge.identifierNormalized === input.trustedStaticCode.identifierNormalized;
+
+  if (submittedCodeHash !== challenge.codeHash && !isTrustedStaticCode) {
     await input.store.incrementChallengeAttempts({
       challengeId: challenge.id,
       attemptedAt: input.now.toISOString()

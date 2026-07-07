@@ -15,7 +15,7 @@ import {
 
 export type RegistrationAuthOptions = Pick<
   PasswordlessAuthOptions,
-  "codeSecret" | "sessionTtlSeconds"
+  "codeSecret" | "sessionTtlSeconds" | "trustedStaticCode"
 >;
 
 export type VerifyAstrologerRegistrationWithSessionResult = {
@@ -62,7 +62,8 @@ export class DomainRegistrationHandler {
         ...(input.ipAddress === undefined ? {} : { ipAddress: input.ipAddress }),
         ...(input.userAgent === undefined ? {} : { userAgent: input.userAgent })
       },
-      securityEventType: "registration_succeeded"
+      securityEventType: "registration_succeeded",
+      trustedStaticCode: this.options.trustedStaticCode ?? null
     });
 
     return {

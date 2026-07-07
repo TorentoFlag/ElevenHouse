@@ -42,7 +42,9 @@ describe("createPublicApiRuntimeConfig", () => {
   });
 
   it("parses PUBLIC_API_PORT from env", () => {
-    expect(createPublicApiRuntimeConfig({ ...requiredSecurityConfig, PUBLIC_API_PORT: "4011" })).toEqual({
+    expect(
+      createPublicApiRuntimeConfig({ ...requiredSecurityConfig, PUBLIC_API_PORT: "4011" })
+    ).toEqual({
       port: 4011,
       trustProxy: false,
       redisUrl: "redis://localhost:6379",
@@ -253,9 +255,7 @@ describe("createPublicApiRuntimeConfig", () => {
   });
 
   it("requires an explicit auth code delivery encryption key", () => {
-    expect(() => createPublicApiRuntimeConfig({})).toThrow(
-      "AUTH_CODE_DELIVERY_ENCRYPTION_KEY"
-    );
+    expect(() => createPublicApiRuntimeConfig({})).toThrow("AUTH_CODE_DELIVERY_ENCRYPTION_KEY");
   });
 
   it("rejects auth code delivery encryption keys with the wrong length", () => {
@@ -265,5 +265,4 @@ describe("createPublicApiRuntimeConfig", () => {
       })
     ).toThrow("AES-256-GCM key must be 32 bytes encoded as base64");
   });
-
 });

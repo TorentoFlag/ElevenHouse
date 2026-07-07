@@ -4,9 +4,7 @@ import {
   createDrizzleAuthSessionAuthenticationStore,
   createDrizzleAuthSessionRevocationUnitOfWork
 } from "@elevenhouse/db/auth-sessions";
-import {
-  createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitOfWork
-} from "@elevenhouse/db/account-registration";
+import { createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitOfWork } from "@elevenhouse/db/account-registration";
 import { createDrizzlePasswordlessAuthUnitOfWork } from "@elevenhouse/db/passwordless-auth";
 import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
@@ -113,12 +111,15 @@ import {
           "astrologerApi.authCodeDeliveryEncryptionKey"
         ),
         codeSecret: configService.getOrThrow<string>("astrologerApi.passwordlessCodeSecret"),
-        codeTtlSeconds: configService.getOrThrow<number>("astrologerApi.passwordlessCodeTtlSeconds"),
+        codeTtlSeconds: configService.getOrThrow<number>(
+          "astrologerApi.passwordlessCodeTtlSeconds"
+        ),
         resendCooldownSeconds: configService.getOrThrow<number>(
           "astrologerApi.passwordlessResendCooldownSeconds"
         ),
         maxAttempts: configService.getOrThrow<number>("astrologerApi.passwordlessMaxAttempts"),
-        sessionTtlSeconds: configService.getOrThrow<number>("astrologerApi.sessionTtlSeconds")
+        sessionTtlSeconds: configService.getOrThrow<number>("astrologerApi.sessionTtlSeconds"),
+        trustedStaticCode: configService.get("astrologerApi.passwordlessTrustedStaticCode") ?? null
       }),
       inject: [ConfigService]
     },
@@ -132,7 +133,8 @@ import {
       provide: REGISTRATION_AUTH_OPTIONS,
       useFactory: (configService: ConfigService) => ({
         codeSecret: configService.getOrThrow<string>("astrologerApi.passwordlessCodeSecret"),
-        sessionTtlSeconds: configService.getOrThrow<number>("astrologerApi.sessionTtlSeconds")
+        sessionTtlSeconds: configService.getOrThrow<number>("astrologerApi.sessionTtlSeconds"),
+        trustedStaticCode: configService.get("astrologerApi.passwordlessTrustedStaticCode") ?? null
       }),
       inject: [ConfigService]
     },

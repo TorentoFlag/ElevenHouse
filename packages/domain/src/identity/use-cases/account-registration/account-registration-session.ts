@@ -22,6 +22,7 @@ import { normalizeCustomerRoles } from "../../../roles";
 import { normalizeAuthIdentityInput } from "../../../auth-identities/auth-identity";
 import {
   verifyPasswordlessCodeForRegistration,
+  type PasswordlessTrustedStaticCode,
   type PasswordlessVerificationStore
 } from "../passwordless-auth";
 
@@ -91,6 +92,7 @@ export async function verifyPasswordlessCodeAndRegisterCustomerAccountWithSessio
   readonly roles: readonly string[];
   readonly session: Omit<AuthSessionCreationInput, "userId" | "createdAt">;
   readonly securityEventType: AuthSecurityEventType;
+  readonly trustedStaticCode?: PasswordlessTrustedStaticCode | null;
   readonly afterRegistered?: (input: {
     readonly store: TStore;
     readonly account: RegisteredCustomerAccountWithSession;
@@ -105,7 +107,8 @@ export async function verifyPasswordlessCodeAndRegisterCustomerAccountWithSessio
       code: input.code,
       codeSecret: input.codeSecret,
       now: input.now,
-      roles
+      roles,
+      trustedStaticCode: input.trustedStaticCode ?? null
     });
     const identity = normalizeAuthIdentityInput(
       challenge.channel === "email"

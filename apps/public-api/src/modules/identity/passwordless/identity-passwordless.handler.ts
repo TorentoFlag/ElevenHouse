@@ -8,7 +8,8 @@ import type {
   ClientJoinIntentClaimStore,
   PasswordlessAuthChannel,
   PasswordlessAuthStore,
-  PasswordlessAuthUnitOfWork
+  PasswordlessAuthUnitOfWork,
+  PasswordlessTrustedStaticCode
 } from "@elevenhouse/domain";
 import {
   claimClientJoinIntent,
@@ -53,6 +54,7 @@ export type PasswordlessAuthOptions = {
   readonly resendCooldownSeconds: number;
   readonly maxAttempts: number;
   readonly sessionTtlSeconds: number;
+  readonly trustedStaticCode?: PasswordlessTrustedStaticCode | null;
 };
 
 export type VerifyPasswordlessCodeWithSessionResult = {
@@ -150,6 +152,7 @@ export class DomainPasswordlessAuthHandler {
         code: input.code,
         codeSecret: this.options.codeSecret,
         now,
+        trustedStaticCode: this.options.trustedStaticCode ?? null,
         session: {
           tokenHash: issuedToken.tokenHash,
           createdAt: now,

@@ -2,6 +2,11 @@ import { z } from "@elevenhouse/validation";
 import { parseBase64Aes256GcmKey, publicSessionCookieName } from "@elevenhouse/auth";
 
 const localPublicSessionCookieName = "elevenhouse_public_session";
+const localTrustedStaticPasswordlessCode = {
+  channel: "phone" as const,
+  identifierNormalized: "+78005553535",
+  code: "777777"
+};
 
 const publicApiRuntimeConfigSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -25,11 +30,7 @@ const publicApiRuntimeConfigSchema = z.object({
   AUTH_CODE_DELIVERY_ENCRYPTION_KEY: z.string().trim().min(1),
   PUBLIC_API_PASSWORDLESS_CODE_SECRET: z.string().trim().min(1).optional(),
   PUBLIC_API_PASSWORDLESS_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
-  PUBLIC_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(60),
+  PUBLIC_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
   PUBLIC_API_PASSWORDLESS_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   PUBLIC_API_PASSWORDLESS_REQUEST_CODE_IDENTIFIER_LIMIT: z.coerce
     .number()
@@ -57,22 +58,14 @@ const publicApiRuntimeConfigSchema = z.object({
     .int()
     .positive()
     .default(3600),
-  PUBLIC_API_PASSWORDLESS_VERIFY_CHALLENGE_LIMIT: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(5),
+  PUBLIC_API_PASSWORDLESS_VERIFY_CHALLENGE_LIMIT: z.coerce.number().int().positive().default(5),
   PUBLIC_API_PASSWORDLESS_VERIFY_CHALLENGE_WINDOW_SECONDS: z.coerce
     .number()
     .int()
     .positive()
     .default(900),
   PUBLIC_API_PASSWORDLESS_VERIFY_IP_LIMIT: z.coerce.number().int().positive().default(60),
-  PUBLIC_API_PASSWORDLESS_VERIFY_IP_WINDOW_SECONDS: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(900),
+  PUBLIC_API_PASSWORDLESS_VERIFY_IP_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
   PUBLIC_API_PASSWORDLESS_RATE_LIMIT_REDIS_KEY_PREFIX: z
     .string()
     .trim()
@@ -97,6 +90,7 @@ export type PublicApiRuntimeConfig = {
   readonly passwordlessCodeTtlSeconds: number;
   readonly passwordlessResendCooldownSeconds: number;
   readonly passwordlessMaxAttempts: number;
+  readonly passwordlessTrustedStaticCode: typeof localTrustedStaticPasswordlessCode | null;
   readonly passwordlessRateLimitRedisKeyPrefix: string;
   readonly passwordlessRateLimits: {
     readonly requestCodeIdentifier: {
@@ -175,14 +169,12 @@ export function createPublicApiRuntimeConfig(
       config.AUTH_CODE_DELIVERY_ENCRYPTION_KEY
     ),
     passwordlessCodeSecret:
-      config.PUBLIC_API_PASSWORDLESS_CODE_SECRET ??
-      "elevenhouse-dev-passwordless-code-secret",
+      config.PUBLIC_API_PASSWORDLESS_CODE_SECRET ?? "elevenhouse-dev-passwordless-code-secret",
     passwordlessCodeTtlSeconds: config.PUBLIC_API_PASSWORDLESS_CODE_TTL_SECONDS,
-    passwordlessResendCooldownSeconds:
-      config.PUBLIC_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS,
+    passwordlessResendCooldownSeconds: config.PUBLIC_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS,
     passwordlessMaxAttempts: config.PUBLIC_API_PASSWORDLESS_MAX_ATTEMPTS,
-    passwordlessRateLimitRedisKeyPrefix:
-      config.PUBLIC_API_PASSWORDLESS_RATE_LIMIT_REDIS_KEY_PREFIX,
+    passwordlessTrustedStaticCode: localTrustedStaticPasswordlessCode,
+    passwordlessRateLimitRedisKeyPrefix: config.PUBLIC_API_PASSWORDLESS_RATE_LIMIT_REDIS_KEY_PREFIX,
     passwordlessRateLimits: {
       requestCodeIdentifier: {
         limit: config.PUBLIC_API_PASSWORDLESS_REQUEST_CODE_IDENTIFIER_LIMIT,

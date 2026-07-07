@@ -23,7 +23,7 @@ import {
 
 export type RegistrationAuthOptions = Pick<
   PasswordlessAuthOptions,
-  "codeSecret" | "sessionTtlSeconds"
+  "codeSecret" | "sessionTtlSeconds" | "trustedStaticCode"
 >;
 
 export type VerifyRegistrationWithSessionResult = {
@@ -76,6 +76,7 @@ export class DomainRegistrationHandler {
         ...(input.userAgent === undefined ? {} : { userAgent: input.userAgent })
       },
       securityEventType: "registration_succeeded",
+      trustedStaticCode: this.options.trustedStaticCode ?? null,
       ...(input.clientJoinIntentToken === undefined
         ? {}
         : {

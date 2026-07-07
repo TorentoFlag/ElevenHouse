@@ -117,7 +117,8 @@ import {
           "publicApi.passwordlessResendCooldownSeconds"
         ),
         maxAttempts: configService.getOrThrow<number>("publicApi.passwordlessMaxAttempts"),
-        sessionTtlSeconds: configService.getOrThrow<number>("publicApi.sessionTtlSeconds")
+        sessionTtlSeconds: configService.getOrThrow<number>("publicApi.sessionTtlSeconds"),
+        trustedStaticCode: configService.get("publicApi.passwordlessTrustedStaticCode") ?? null
       }),
       inject: [ConfigService]
     },
@@ -131,7 +132,8 @@ import {
       provide: REGISTRATION_AUTH_OPTIONS,
       useFactory: (configService: ConfigService) => ({
         codeSecret: configService.getOrThrow<string>("publicApi.passwordlessCodeSecret"),
-        sessionTtlSeconds: configService.getOrThrow<number>("publicApi.sessionTtlSeconds")
+        sessionTtlSeconds: configService.getOrThrow<number>("publicApi.sessionTtlSeconds"),
+        trustedStaticCode: configService.get("publicApi.passwordlessTrustedStaticCode") ?? null
       }),
       inject: [ConfigService]
     },

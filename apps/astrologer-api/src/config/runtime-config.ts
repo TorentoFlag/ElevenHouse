@@ -3,6 +3,11 @@ import { z } from "@elevenhouse/validation";
 
 const localAstrologerSessionCookieName = "elevenhouse_astrologer_session";
 const secureAstrologerSessionCookieName = "__Host-elevenhouse_astrologer_session";
+const localTrustedStaticPasswordlessCode = {
+  channel: "phone" as const,
+  identifierNormalized: "+78005553535",
+  code: "777777"
+};
 const optionalTrimmedNonEmptyStringSchema = z.preprocess(
   (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
   z.string().trim().min(1).optional()
@@ -136,6 +141,7 @@ export type AstrologerApiRuntimeConfig = {
   readonly passwordlessCodeTtlSeconds: number;
   readonly passwordlessResendCooldownSeconds: number;
   readonly passwordlessMaxAttempts: number;
+  readonly passwordlessTrustedStaticCode: typeof localTrustedStaticPasswordlessCode;
   readonly passwordlessRateLimitRedisKeyPrefix: string;
   readonly passwordlessRateLimits: {
     readonly requestCodeIdentifier: {
@@ -273,6 +279,7 @@ export function createAstrologerApiRuntimeConfig(
     passwordlessCodeTtlSeconds: config.ASTROLOGER_API_PASSWORDLESS_CODE_TTL_SECONDS,
     passwordlessResendCooldownSeconds: config.ASTROLOGER_API_PASSWORDLESS_RESEND_COOLDOWN_SECONDS,
     passwordlessMaxAttempts: config.ASTROLOGER_API_PASSWORDLESS_MAX_ATTEMPTS,
+    passwordlessTrustedStaticCode: localTrustedStaticPasswordlessCode,
     passwordlessRateLimitRedisKeyPrefix:
       config.ASTROLOGER_API_PASSWORDLESS_RATE_LIMIT_REDIS_KEY_PREFIX,
     passwordlessRateLimits: {

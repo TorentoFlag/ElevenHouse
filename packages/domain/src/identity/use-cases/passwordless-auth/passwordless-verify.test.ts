@@ -11,10 +11,12 @@ const sessionCreatedAt = new Date("2026-06-15T10:03:00.000Z");
 const sessionExpiresAt = new Date("2026-06-22T10:03:00.000Z");
 const codeSecret = "test-secret";
 
-function createPendingChallenge(input: {
-  readonly code?: string;
-  readonly requestedRoles?: readonly ("client" | "astrologer")[];
-} = {}) {
+function createPendingChallenge(
+  input: {
+    readonly code?: string;
+    readonly requestedRoles?: readonly ("client" | "astrologer")[];
+  } = {}
+) {
   const code = input.code ?? "123456";
 
   return {
@@ -321,9 +323,7 @@ describe("verifyPasswordlessCode", () => {
       findChallengeById: vi.fn(async () => null)
     });
 
-    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(
-      PasswordlessCodeVerificationError
-    );
+    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(PasswordlessCodeVerificationError);
 
     expect(store.incrementChallengeAttempts).not.toHaveBeenCalled();
     expect(store.consumeChallenge).not.toHaveBeenCalled();
@@ -337,9 +337,7 @@ describe("verifyPasswordlessCode", () => {
       }))
     });
 
-    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(
-      PasswordlessCodeVerificationError
-    );
+    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(PasswordlessCodeVerificationError);
 
     expect(store.incrementChallengeAttempts).not.toHaveBeenCalled();
     expect(store.consumeChallenge).not.toHaveBeenCalled();
@@ -354,9 +352,7 @@ describe("verifyPasswordlessCode", () => {
       }))
     });
 
-    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(
-      PasswordlessCodeVerificationError
-    );
+    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(PasswordlessCodeVerificationError);
 
     expect(store.incrementChallengeAttempts).not.toHaveBeenCalled();
     expect(store.consumeChallenge).not.toHaveBeenCalled();
@@ -371,9 +367,7 @@ describe("verifyPasswordlessCode", () => {
       }))
     });
 
-    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(
-      PasswordlessCodeVerificationError
-    );
+    await expect(verifyWithStore(store)).rejects.toBeInstanceOf(PasswordlessCodeVerificationError);
 
     expect(store.incrementChallengeAttempts).not.toHaveBeenCalled();
     expect(store.consumeChallenge).not.toHaveBeenCalled();

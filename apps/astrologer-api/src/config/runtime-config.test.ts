@@ -345,7 +345,9 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_OPENAI_API_KEY: "openai-secret",
         ASTROLOGER_OPENAI_BASE_URL: "http://openai.internal"
       })
-    ).toThrow("ASTROLOGER_OPENAI_BASE_URL must use https in production when ASTROLOGER_AI_ENABLED=true");
+    ).toThrow(
+      "ASTROLOGER_OPENAI_BASE_URL must use https in production when ASTROLOGER_AI_ENABLED=true"
+    );
   });
 
   it("parses enabled AI runtime config", () => {
