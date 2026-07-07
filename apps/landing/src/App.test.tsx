@@ -1,10 +1,14 @@
 import { isValidElement } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { LANDING_APP_TITLE } from "./app-title";
-import { landingCopy, landingLanguages, landingSections, primaryCtaHref } from "./content/landingContent";
+import { landingCopy, landingLanguages, landingSections, loginHref, primaryCtaHref } from "./content/landingContent";
 
 describe("landing app shell", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("exposes the landing app title", () => {
     expect(LANDING_APP_TITLE).toBe("ElevenHouse Landing");
   });
@@ -24,8 +28,19 @@ describe("landing app shell", () => {
     ]);
   });
 
-  it("routes acquisition CTAs to astrologer registration", () => {
-    expect(primaryCtaHref).toBe("/auth?mode=register");
+  it("routes acquisition CTAs to the local astrologer auth app by default", () => {
+    expect(primaryCtaHref).toBe("http://localhost:5174/auth?mode=register");
+    expect(loginHref).toBe("http://localhost:5174/auth?mode=login");
+  });
+
+  it("routes acquisition CTAs to the deploy-specific astrologer auth origin", async () => {
+    vi.stubEnv("VITE_ASTROLOGER_WEB_ORIGIN", "https://app.elevenhouse.com");
+    vi.resetModules();
+
+    const content = await import("./content/landingContent");
+
+    expect(content.primaryCtaHref).toBe("https://app.elevenhouse.com/auth?mode=register");
+    expect(content.loginHref).toBe("https://app.elevenhouse.com/auth?mode=login");
   });
 
   it("provides English landing copy for the language switcher", () => {

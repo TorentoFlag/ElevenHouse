@@ -1,5 +1,7 @@
-export const primaryCtaHref = "/auth?mode=register";
-export const loginHref = "/auth?mode=login";
+import { createAuthHref } from "../config/authRoutes";
+
+export const primaryCtaHref = createAuthHref("register");
+export const loginHref = createAuthHref("login");
 
 export const landingSections = [
   { id: "hero", label: "Главная" },
