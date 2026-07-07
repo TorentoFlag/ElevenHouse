@@ -11,4 +11,5 @@ COPY apps ./apps
 COPY packages ./packages
 
 RUN pnpm install --frozen-lockfile
+RUN pnpm --filter "@elevenhouse/db..." build
 CMD ["pnpm", "db:migrate"]
