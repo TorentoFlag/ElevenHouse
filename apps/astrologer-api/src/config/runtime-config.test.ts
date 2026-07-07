@@ -21,6 +21,11 @@ const defaultAiConfig = {
     userPerDay: { limit: 150, windowSeconds: 86400 }
   }
 };
+const defaultTrustedStaticCode = {
+  channel: "phone",
+  code: "777777",
+  identifierNormalized: "+78005553535"
+};
 const defaultSecurityConfig = {
   trustProxy: false,
   sessionTtlSeconds: 604800,
@@ -36,6 +41,7 @@ const defaultSecurityConfig = {
   passwordlessCodeTtlSeconds: 600,
   passwordlessResendCooldownSeconds: 60,
   passwordlessMaxAttempts: 5,
+  passwordlessTrustedStaticCode: defaultTrustedStaticCode,
   passwordlessRateLimitRedisKeyPrefix: "elevenhouse:astrologer-api",
   passwordlessRateLimits: {
     requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
@@ -53,6 +59,9 @@ const defaultSecurityConfig = {
     forcePathStyle: true,
     publicBaseUrl: "http://localhost:9000/elevenhouse-local-media",
     uploadTtlSeconds: 900
+  },
+  billing: {
+    arcPayConfigured: false
   },
   ai: defaultAiConfig
 };

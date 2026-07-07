@@ -209,7 +209,7 @@ export function SettingsPageView({
   );
 }
 
-function noopSubmitVerification(_body: SubmitAstrologerVerificationRequest): void {}
+function noopSubmitVerification(): void {}
 
 function StatusBanner({
   tone,

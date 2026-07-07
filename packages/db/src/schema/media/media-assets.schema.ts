@@ -3,7 +3,6 @@ import { check, index, integer, pgTable, text, timestamp, unique, uuid } from "d
 import { users } from "../identity/accounts.schema";
 import {
   formatMediaSqlValues,
-  mediaImageMimeTypeValues,
   mediaMimeTypeValues,
   mediaPurposeValues,
   mediaStatusValues,

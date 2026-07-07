@@ -20,6 +20,11 @@ const defaultCsrfConfig = {
   csrfTokenTtlSeconds: 604800,
   allowedOrigins: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"]
 };
+const defaultTrustedStaticCode = {
+  channel: "phone",
+  code: "777777",
+  identifierNormalized: "+78005553535"
+};
 
 describe("createPublicApiRuntimeConfig", () => {
   it("uses the default public API port when env is not set", () => {
@@ -36,6 +41,7 @@ describe("createPublicApiRuntimeConfig", () => {
       passwordlessCodeTtlSeconds: 600,
       passwordlessResendCooldownSeconds: 60,
       passwordlessMaxAttempts: 5,
+      passwordlessTrustedStaticCode: defaultTrustedStaticCode,
       passwordlessRateLimitRedisKeyPrefix: "elevenhouse:public-api",
       passwordlessRateLimits: defaultPasswordlessRateLimits
     });
@@ -57,6 +63,7 @@ describe("createPublicApiRuntimeConfig", () => {
       passwordlessCodeTtlSeconds: 600,
       passwordlessResendCooldownSeconds: 60,
       passwordlessMaxAttempts: 5,
+      passwordlessTrustedStaticCode: defaultTrustedStaticCode,
       passwordlessRateLimitRedisKeyPrefix: "elevenhouse:public-api",
       passwordlessRateLimits: defaultPasswordlessRateLimits
     });
@@ -93,6 +100,7 @@ describe("createPublicApiRuntimeConfig", () => {
       passwordlessCodeTtlSeconds: 600,
       passwordlessResendCooldownSeconds: 60,
       passwordlessMaxAttempts: 5,
+      passwordlessTrustedStaticCode: defaultTrustedStaticCode,
       passwordlessRateLimitRedisKeyPrefix: "elevenhouse:public-api",
       passwordlessRateLimits: defaultPasswordlessRateLimits
     });
@@ -117,6 +125,7 @@ describe("createPublicApiRuntimeConfig", () => {
       passwordlessCodeTtlSeconds: 600,
       passwordlessResendCooldownSeconds: 60,
       passwordlessMaxAttempts: 5,
+      passwordlessTrustedStaticCode: defaultTrustedStaticCode,
       passwordlessRateLimitRedisKeyPrefix: "elevenhouse:public-api",
       passwordlessRateLimits: defaultPasswordlessRateLimits
     });

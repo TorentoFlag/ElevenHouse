@@ -6,19 +6,14 @@ import type {
   ClientBirthData,
   ClientJoinIntent,
   ClientStore,
-  ClientStoreCreateJoinIntentInput,
-  ClientStoreEnsureRelationshipInput,
   ClientStoreGetAstrologerClientInput,
   ClientStoreListAstrologerClientsInput,
-  ClientStoreUpsertBirthDataInput,
-  ClientStoreUpsertProfileInput
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { ClientsService } from "./clients.service";
 
 const astrologerUserId = "22222222-2222-4222-8222-222222222222";
-const secondAstrologerUserId = "33333333-3333-4333-8333-333333333333";
 const clientUserId = "11111111-1111-4111-8111-111111111111";
 const unrelatedClientUserId = "44444444-4444-4444-8444-444444444444";
 const now = "2026-07-06T10:00:00.000Z";
@@ -125,19 +120,17 @@ function createStore(): ClientStore {
 
   return {
     createJoinIntent: vi.fn(
-      async (_input: ClientStoreCreateJoinIntentInput): Promise<ClientJoinIntent> =>
-        raise("Unexpected create join intent call")
+      async (): Promise<ClientJoinIntent> => raise("Unexpected create join intent call")
     ),
     findJoinIntentByTokenHash: vi.fn(async () => null),
     markJoinIntentClaimed: vi.fn(async () => null),
     ensureRelationship: vi.fn(
-      async (_input: ClientStoreEnsureRelationshipInput): Promise<ClientAstrologerRelationship> =>
+      async (): Promise<ClientAstrologerRelationship> =>
         raise("Unexpected ensure relationship call")
     ),
-    upsertClientProfile: vi.fn(async (_input: ClientStoreUpsertProfileInput): Promise<void> => {}),
+    upsertClientProfile: vi.fn(async (): Promise<void> => {}),
     upsertClientBirthData: vi.fn(
-      async (_input: ClientStoreUpsertBirthDataInput): Promise<ClientBirthData> =>
-        raise("Unexpected upsert birth data call")
+      async (): Promise<ClientBirthData> => raise("Unexpected upsert birth data call")
     ),
     listAstrologerClients: vi.fn(
       async (input: ClientStoreListAstrologerClientsInput): Promise<AstrologerClientList> => {

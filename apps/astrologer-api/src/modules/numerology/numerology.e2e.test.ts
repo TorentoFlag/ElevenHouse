@@ -5,7 +5,10 @@ import { hashSessionToken } from "@elevenhouse/auth";
 import {
   calculationRecordResponseSchema,
   listCalculationsResponseSchema,
-  numerologyCalculationResponseSchema
+  numerologyCalculationResponseSchema,
+  type CalculationRecordResponse,
+  type ListCalculationsResponse,
+  type NumerologyCalculationResponse
 } from "@elevenhouse/contracts";
 import type {
   AstrologerClientList,
@@ -18,10 +21,6 @@ import type {
   ClientBirthData,
   ClientJoinIntent,
   ClientStore,
-  ClientStoreCreateJoinIntentInput,
-  ClientStoreEnsureRelationshipInput,
-  ClientStoreUpsertBirthDataInput,
-  ClientStoreUpsertProfileInput,
   PasswordlessAuthUnitOfWork,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
@@ -150,47 +149,47 @@ describe("numerology HTTP routes", () => {
     const missingCsrfResponse = await postJson("/numerology/calculations", manualIndividualBody(), {
       cookie: sessionCookieHeader()
     });
-    const manualCreateResponse = await postJson(
+    const manualCreateResponse = await postJson<NumerologyCalculationResponse>(
       "/numerology/calculations",
       manualIndividualBody(),
       csrfHeaders()
     );
     const manualCalculationId = String(manualCreateResponse.body.calculation.id);
-    const manualLinkResponse = await postJson(
+    const manualLinkResponse = await postJson<CalculationRecordResponse>(
       `/calculations/${manualCalculationId}/link-client`,
       { clientId },
       csrfHeaders()
     );
 
-    const crmCreateResponse = await postJson(
+    const crmCreateResponse = await postJson<NumerologyCalculationResponse>(
       "/numerology/calculations",
       crmCompatibilityBody(),
       csrfHeaders()
     );
     const crmCalculationId = String(crmCreateResponse.body.calculation.id);
     const currentVersionId = String(crmCreateResponse.body.currentVersion.id);
-    const linkResponse = await postJson(
+    const linkResponse = await postJson<CalculationRecordResponse>(
       `/calculations/${crmCalculationId}/link-client`,
       { clientId },
       csrfHeaders()
     );
-    const saveInterpretationResponse = await postJson(
+    const saveInterpretationResponse = await postJson<CalculationRecordResponse>(
       `/calculations/${crmCalculationId}/interpretations`,
       { versionId: currentVersionId, text: "Проверенная трактовка совместимости." },
       csrfHeaders()
     );
     const interpretationId = String(saveInterpretationResponse.body.interpretations.at(-1)?.id);
-    const approveResponse = await postJson(
+    const approveResponse = await postJson<CalculationRecordResponse>(
       `/calculations/${crmCalculationId}/interpretations/${interpretationId}/approve`,
       {},
       csrfHeaders()
     );
-    const publishResponse = await postJson(
+    const publishResponse = await postJson<CalculationRecordResponse>(
       `/calculations/${crmCalculationId}/publish`,
       { clientId },
       csrfHeaders()
     );
-    const recalculateResponse = await postJson(
+    const recalculateResponse = await postJson<NumerologyCalculationResponse>(
       `/numerology/calculations/${crmCalculationId}/recalculate`,
       {
         ...crmCompatibilityBody(),
@@ -228,7 +227,9 @@ describe("numerology HTTP routes", () => {
       versionIdGenerator: () => "b4473b5e-2920-432c-9483-511ea5bebd8e",
       now: now.toISOString()
     });
-    const listResponse = await getJson("/calculations?module=numerology&status=all");
+    const listResponse = await getJson<ListCalculationsResponse>(
+      "/calculations?module=numerology&status=all"
+    );
     const unsupportedMethodResponse = await postJson(
       "/numerology/calculations",
       { ...manualIndividualBody(), methodCode: "vedic" },
@@ -312,21 +313,21 @@ describe("numerology HTTP routes", () => {
     expect(response.status).toBe(403);
   });
 
-  async function getJson(path: string): Promise<HttpJsonResponse> {
+  async function getJson<TBody = unknown>(path: string): Promise<HttpJsonResponse<TBody>> {
     const response = await fetch(`${baseUrl}${path}`, {
       headers: {
         cookie: sessionCookieHeader()
       }
     });
 
-    return readJsonResponse(response);
+    return readJsonResponse<TBody>(response);
   }
 
-  async function postJson(
+  async function postJson<TBody = unknown>(
     path: string,
     body: unknown,
     headers: Record<string, string> = {}
-  ): Promise<HttpJsonResponse> {
+  ): Promise<HttpJsonResponse<TBody>> {
     const response = await fetch(`${baseUrl}${path}`, {
       method: "POST",
       headers: {
@@ -336,19 +337,19 @@ describe("numerology HTTP routes", () => {
       body: JSON.stringify(body)
     });
 
-    return readJsonResponse(response);
+    return readJsonResponse<TBody>(response);
   }
 });
 
-type HttpJsonResponse = {
+type HttpJsonResponse<TBody = unknown> = {
   readonly status: number;
-  readonly body: Record<string, any>;
+  readonly body: TBody;
 };
 
-async function readJsonResponse(response: Response): Promise<HttpJsonResponse> {
+async function readJsonResponse<TBody = unknown>(response: Response): Promise<HttpJsonResponse<TBody>> {
   return {
     status: response.status,
-    body: (await response.json()) as Record<string, any>
+    body: (await response.json()) as TBody
   };
 }
 
@@ -676,19 +677,17 @@ function createClientStore(): ClientStore {
 
   return {
     createJoinIntent: vi.fn(
-      async (_input: ClientStoreCreateJoinIntentInput): Promise<ClientJoinIntent> =>
-        raise("Unexpected create join intent call")
+      async (): Promise<ClientJoinIntent> => raise("Unexpected create join intent call")
     ),
     findJoinIntentByTokenHash: vi.fn(async () => null),
     markJoinIntentClaimed: vi.fn(async () => null),
     ensureRelationship: vi.fn(
-      async (_input: ClientStoreEnsureRelationshipInput): Promise<ClientAstrologerRelationship> =>
+      async (): Promise<ClientAstrologerRelationship> =>
         raise("Unexpected ensure relationship call")
     ),
-    upsertClientProfile: vi.fn(async (_input: ClientStoreUpsertProfileInput): Promise<void> => {}),
+    upsertClientProfile: vi.fn(async (): Promise<void> => {}),
     upsertClientBirthData: vi.fn(
-      async (_input: ClientStoreUpsertBirthDataInput): Promise<ClientBirthData> =>
-        raise("Unexpected upsert birth data call")
+      async (): Promise<ClientBirthData> => raise("Unexpected upsert birth data call")
     ),
     listAstrologerClients: vi.fn(async (): Promise<AstrologerClientList> => {
       const clients = [...relatedClients.values()];

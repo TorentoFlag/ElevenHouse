@@ -9,7 +9,6 @@ import type {
   CalculationRecord,
   CalculationStatus,
   CalculationStore,
-  CalculationStoreAppendVersionInput,
   CalculationStoreCreateInput,
   CalculationVersion
 } from "@elevenhouse/domain";

@@ -12,6 +12,7 @@ import type {
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AiGenerationService } from "../ai/ai-generation.service";
+import { SystemClock } from "../clock/system-clock.service";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { DICTIONARY_STORE } from "../dictionary/dictionary.tokens";
 import {
@@ -95,6 +96,10 @@ describe("dictionary AI HTTP routes", () => {
       .overrideProvider(ASTROLOGER_AUTH_CODE_GENERATOR)
       .useValue({
         generateCode: vi.fn(() => "123456")
+      })
+      .overrideProvider(SystemClock)
+      .useValue({
+        now: vi.fn(() => now)
       })
       .overrideProvider(DICTIONARY_STORE)
       .useValue(dictionaryStore)
@@ -271,7 +276,7 @@ function createAuthStore(): AuthSessionAuthenticationStore {
   };
 }
 
-function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
+function createConfigServiceStub(): Pick<ConfigService, "get" | "getOrThrow"> {
   const identityConfigService = createIdentityConfigServiceStub({
     sessionCookieName,
     csrfCookieName,
@@ -280,6 +285,7 @@ function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
   });
 
   return {
+    get: (key: string) => identityConfigService.get(key),
     getOrThrow: (key: string) => {
       if (key === "astrologerApi.ai") {
         return {

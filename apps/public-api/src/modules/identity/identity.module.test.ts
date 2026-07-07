@@ -144,6 +144,13 @@ describe("IdentityModule", () => {
       .useValue({ database: {} })
       .overrideProvider(ConfigService)
       .useValue({
+        get: vi.fn((key: string) => {
+          if (key === "publicApi.passwordlessTrustedStaticCode") {
+            return null;
+          }
+
+          return undefined;
+        }),
         getOrThrow: vi.fn((key: string) => {
           if (key === "publicApi.authCodeDeliveryEncryptionKey") {
             return Buffer.alloc(32, 1);
@@ -322,8 +329,15 @@ describe("IdentityModule", () => {
   });
 });
 
-function createConfigServiceStub(): Pick<ConfigService, "getOrThrow"> {
+function createConfigServiceStub(): Pick<ConfigService, "get" | "getOrThrow"> {
   return {
+    get: vi.fn((key: string) => {
+      if (key === "publicApi.passwordlessTrustedStaticCode") {
+        return null;
+      }
+
+      return undefined;
+    }),
     getOrThrow: vi.fn((key: string) => {
       if (key === "publicApi.authCodeDeliveryEncryptionKey") {
         return Buffer.alloc(32, 1);

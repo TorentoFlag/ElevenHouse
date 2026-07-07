@@ -6,8 +6,17 @@ export function createIdentityConfigServiceStub(input: {
   readonly csrfCookieName: string;
   readonly csrfHeaderName: string;
   readonly passwordlessRateLimits: PasswordlessRateLimitOptions;
-}): Pick<ConfigService, "getOrThrow"> {
+}): Pick<ConfigService, "get" | "getOrThrow"> {
+  const getOptional = (key: string): unknown => {
+    if (key === "publicApi.passwordlessTrustedStaticCode") {
+      return null;
+    }
+
+    return undefined;
+  };
+
   return {
+    get: getOptional,
     getOrThrow: (key: string) => {
       if (key === "publicApi.authCodeDeliveryEncryptionKey") {
         return Buffer.alloc(32, 1);

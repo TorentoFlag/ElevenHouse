@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import {
-  mediaImageMimeTypeValues,
   mediaMimeTypeValues,
   mediaPurposeUploadLimits,
   mediaPurposeValues,

@@ -15,10 +15,6 @@ import type {
   ClientBirthData,
   ClientJoinIntent,
   ClientStore,
-  ClientStoreCreateJoinIntentInput,
-  ClientStoreEnsureRelationshipInput,
-  ClientStoreUpsertBirthDataInput,
-  ClientStoreUpsertProfileInput,
   PasswordlessAuthUnitOfWork,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
@@ -261,19 +257,17 @@ function createClientStore(): ClientStore {
 
   return {
     createJoinIntent: vi.fn(
-      async (_input: ClientStoreCreateJoinIntentInput): Promise<ClientJoinIntent> =>
-        raise("Unexpected create join intent call")
+      async (): Promise<ClientJoinIntent> => raise("Unexpected create join intent call")
     ),
     findJoinIntentByTokenHash: vi.fn(async () => null),
     markJoinIntentClaimed: vi.fn(async () => null),
     ensureRelationship: vi.fn(
-      async (_input: ClientStoreEnsureRelationshipInput): Promise<ClientAstrologerRelationship> =>
+      async (): Promise<ClientAstrologerRelationship> =>
         raise("Unexpected ensure relationship call")
     ),
-    upsertClientProfile: vi.fn(async (_input: ClientStoreUpsertProfileInput): Promise<void> => {}),
+    upsertClientProfile: vi.fn(async (): Promise<void> => {}),
     upsertClientBirthData: vi.fn(
-      async (_input: ClientStoreUpsertBirthDataInput): Promise<ClientBirthData> =>
-        raise("Unexpected upsert birth data call")
+      async (): Promise<ClientBirthData> => raise("Unexpected upsert birth data call")
     ),
     listAstrologerClients: vi.fn(async (input): Promise<AstrologerClientList> => {
       const clients =
