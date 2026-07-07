@@ -8,6 +8,12 @@ export type BasicWorkerReadiness = {
   readonly timestamp: string;
 };
 
+export type SerializedError = {
+  readonly name: string;
+  readonly message: string;
+  readonly code?: string | number;
+};
+
 export function createReadinessResponse(
   service: string,
   now: Date = new Date()
@@ -44,7 +50,7 @@ export function createBasicWorkerReadinessServer(input: {
         service: input.service,
         status: "unready",
         timestamp: new Date().toISOString(),
-        error: normalizeErrorMessage(error)
+        error: serializeError(error)
       });
     }
   });
@@ -64,6 +70,60 @@ export function listenReadinessServer(input: {
   });
 }
 
+export function parseReadinessPort(
+  value: string | undefined,
+  fallback: number,
+  envName: string
+): number {
+  const normalizedValue = value?.trim();
+
+  if (!normalizedValue) {
+    return fallback;
+  }
+
+  if (!/^\d+$/.test(normalizedValue)) {
+    throw new Error(`${envName} must be an integer port in range 1..65535`);
+  }
+
+  const port = Number(normalizedValue);
+
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${envName} must be an integer port in range 1..65535`);
+  }
+
+  return port;
+}
+
+export function serializeError(error: unknown): SerializedError {
+  if (error instanceof Error) {
+    return withOptionalCode({
+      error,
+      name: normalizeText(error.name, "Error"),
+      message: normalizeText(error.message, "readiness check failed")
+    });
+  }
+
+  if (typeof error === "string") {
+    return {
+      name: "Error",
+      message: normalizeText(error, "readiness check failed")
+    };
+  }
+
+  if (isRecord(error)) {
+    return withOptionalCode({
+      error,
+      name: normalizeText(error.name, "Error"),
+      message: normalizeText(error.message, "readiness check failed")
+    });
+  }
+
+  return {
+    name: "Error",
+    message: "readiness check failed"
+  };
+}
+
 function getRequestPathname(request: IncomingMessage): string {
   return new URL(request.url ?? "/", "http://127.0.0.1").pathname;
 }
@@ -73,14 +133,37 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown):
   response.end(JSON.stringify(body));
 }
 
-function normalizeErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message.trim().slice(0, 500);
+function normalizeText(value: unknown, fallback: string): string {
+  if (typeof value !== "string") {
+    return fallback;
   }
 
-  if (typeof error === "string" && error.trim()) {
-    return error.trim().slice(0, 500);
+  const normalized = value.trim();
+
+  return normalized ? normalized.slice(0, 500) : fallback;
+}
+
+function withOptionalCode(input: {
+  readonly error: Error | Record<string, unknown>;
+  readonly name: string;
+  readonly message: string;
+}): SerializedError {
+  const code = (input.error as Record<string, unknown>).code;
+
+  if (typeof code === "string" || typeof code === "number") {
+    return {
+      name: input.name,
+      message: input.message,
+      code
+    };
   }
 
-  return "readiness check failed";
+  return {
+    name: input.name,
+    message: input.message
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

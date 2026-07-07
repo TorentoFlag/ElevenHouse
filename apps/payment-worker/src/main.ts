@@ -2,13 +2,15 @@ import {
   createBasicWorkerReadinessServer,
   createLogger,
   createReadinessResponse,
-  listenReadinessServer
+  listenReadinessServer,
+  parseReadinessPort,
+  serializeError
 } from "@elevenhouse/observability";
 
 const service = "payment-worker";
 const logger = createLogger(service);
 const readinessHost = process.env.PAYMENT_WORKER_HEALTH_HOST ?? "0.0.0.0";
-const readinessPort = Number.parseInt(process.env.PAYMENT_WORKER_HEALTH_PORT ?? "3011", 10);
+const readinessPort = parseReadinessPort(process.env.PAYMENT_WORKER_HEALTH_PORT, 3011, "PAYMENT_WORKER_HEALTH_PORT");
 const readinessServer = createBasicWorkerReadinessServer({ service });
 
 listenReadinessServer({
@@ -24,6 +26,6 @@ listenReadinessServer({
     });
   })
   .catch((error: unknown) => {
-    logger.error("payment worker readiness server failed", { error });
+    logger.error("payment worker readiness server failed", { error: serializeError(error) });
     process.exit(1);
   });
