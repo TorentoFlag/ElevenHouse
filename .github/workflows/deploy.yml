@@ -203,7 +203,7 @@ jobs:
           EOF
           echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml pull
-          if docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps postgres --status running >/dev/null 2>&1; then
+          if docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps --services --status running | grep -qx postgres; then
             ./backup-postgres.sh
           fi
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d postgres redis minio
