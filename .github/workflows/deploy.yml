@@ -1,0 +1,224 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ghcr.io/torentoflag
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify
+        run: pnpm verify
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    needs:
+      - verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: elevenhouse-landing
+            dockerfile: deployment/docker/frontend.Dockerfile
+            app_filter: "@elevenhouse/landing"
+            app_dir: landing
+            build_args: |
+              VITE_ASTROLOGER_WEB_ORIGIN=https://astrologer.elevenhouse.ai
+          - image: elevenhouse-client-web
+            dockerfile: deployment/docker/frontend.Dockerfile
+            app_filter: "@elevenhouse/client-web"
+            app_dir: client-web
+            build_args: ""
+          - image: elevenhouse-astrologer-web
+            dockerfile: deployment/docker/frontend.Dockerfile
+            app_filter: "@elevenhouse/astrologer-web"
+            app_dir: astrologer-web
+            build_args: ""
+          - image: elevenhouse-admin-web
+            dockerfile: deployment/docker/frontend.Dockerfile
+            app_filter: "@elevenhouse/admin-web"
+            app_dir: admin-web
+            build_args: ""
+          - image: elevenhouse-public-api
+            dockerfile: deployment/docker/backend.Dockerfile
+            app_filter: "@elevenhouse/public-api"
+            app_dir: public-api
+            build_args: ""
+          - image: elevenhouse-astrologer-api
+            dockerfile: deployment/docker/backend.Dockerfile
+            app_filter: "@elevenhouse/astrologer-api"
+            app_dir: astrologer-api
+            build_args: ""
+          - image: elevenhouse-admin-api
+            dockerfile: deployment/docker/backend.Dockerfile
+            app_filter: "@elevenhouse/admin-api"
+            app_dir: admin-api
+            build_args: ""
+          - image: elevenhouse-workers
+            dockerfile: deployment/docker/backend.Dockerfile
+            app_filter: "@elevenhouse/workers"
+            app_dir: workers
+            build_args: ""
+          - image: elevenhouse-payment-worker
+            dockerfile: deployment/docker/backend.Dockerfile
+            app_filter: "@elevenhouse/payment-worker"
+            app_dir: payment-worker
+            build_args: ""
+          - image: elevenhouse-chart-worker
+            dockerfile: deployment/docker/backend.Dockerfile
+            app_filter: "@elevenhouse/chart-worker"
+            app_dir: chart-worker
+            build_args: ""
+          - image: elevenhouse-notification-worker
+            dockerfile: deployment/docker/backend.Dockerfile
+            app_filter: "@elevenhouse/notification-worker"
+            app_dir: notification-worker
+            build_args: ""
+          - image: elevenhouse-db-migrator
+            dockerfile: deployment/docker/db-migrator.Dockerfile
+            app_filter: ""
+            app_dir: ""
+            build_args: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:latest
+          build-args: |
+            APP_FILTER=${{ matrix.app_filter }}
+            APP_DIR=${{ matrix.app_dir }}
+            ${{ matrix.build_args }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    needs:
+      - build-and-push
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        env:
+          PRODUCTION_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+          PRODUCTION_SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+        run: |
+          install -m 0700 -d ~/.ssh
+          printf '%s\n' "${PRODUCTION_SSH_KEY}" > ~/.ssh/elevenhouse
+          chmod 0600 ~/.ssh/elevenhouse
+          printf '%s\n' "${PRODUCTION_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/known_hosts
+
+      - name: Upload deployment files
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse "${PRODUCTION_USER}@${PRODUCTION_HOST}" 'install -d -m 0755 /opt/elevenhouse/compose /opt/elevenhouse/caddy && install -d -m 0700 /opt/elevenhouse/env /opt/elevenhouse/backups/postgres'
+          scp -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse deployment/compose/compose.production.yml "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/compose/compose.production.yml"
+          scp -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse deployment/caddy/Caddyfile "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/caddy/Caddyfile"
+          scp -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse deployment/server/backup-postgres.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/backup-postgres.sh"
+          scp -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse deployment/server/restore-postgres.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/restore-postgres.sh"
+
+      - name: Deploy over SSH
+        env:
+          PRODUCTION_GHCR_READ_TOKEN: ${{ secrets.PRODUCTION_GHCR_READ_TOKEN }}
+          PRODUCTION_GHCR_USERNAME: ${{ secrets.PRODUCTION_GHCR_USERNAME }}
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
+            IMAGE_NAMESPACE="${IMAGE_NAMESPACE}" \
+            IMAGE_TAG="${IMAGE_TAG}" \
+            GHCR_USERNAME="${PRODUCTION_GHCR_USERNAME}" \
+            GHCR_TOKEN="${PRODUCTION_GHCR_READ_TOKEN}" \
+            'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/elevenhouse
+          chmod +x backup-postgres.sh restore-postgres.sh
+          test -f env/.env.production
+          test "$(stat -c '%a' env/.env.production)" = "600"
+          install -d -m 0700 env backups/postgres
+          umask 077
+          cat > env/.env.deploy <<EOF
+          IMAGE_NAMESPACE=${IMAGE_NAMESPACE}
+          IMAGE_TAG=${IMAGE_TAG}
+          COMPOSE_PROJECT_NAME=elevenhouse
+          EOF
+          echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml pull
+          if docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps postgres --status running >/dev/null 2>&1; then
+            ./backup-postgres.sh
+          fi
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d postgres redis minio
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml up minio-init
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm db-migrator
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps
+          REMOTE
+
+      - name: Smoke check
+        run: |
+          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://elevenhouse.ai >/dev/null
+          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://app.elevenhouse.ai >/dev/null
+          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://app.elevenhouse.ai/api/health
+          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://astrologer.elevenhouse.ai >/dev/null
+          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://astrologer.elevenhouse.ai/api/health
+          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://admin.elevenhouse.ai >/dev/null
+          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://admin.elevenhouse.ai/api/health
