@@ -146,6 +146,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 20
     permissions:
       contents: read
     needs:
@@ -170,11 +171,12 @@ jobs:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
         run: |
-          ssh -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse "${PRODUCTION_USER}@${PRODUCTION_HOST}" 'install -d -m 0755 /opt/elevenhouse/compose /opt/elevenhouse/caddy && install -d -m 0700 /opt/elevenhouse/env /opt/elevenhouse/backups/postgres'
-          scp -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse deployment/compose/compose.production.yml "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/compose/compose.production.yml"
-          scp -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse deployment/caddy/Caddyfile "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/caddy/Caddyfile"
-          scp -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse deployment/server/backup-postgres.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/backup-postgres.sh"
-          scp -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse deployment/server/restore-postgres.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/restore-postgres.sh"
+          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
+          ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" 'install -d -m 0755 /opt/elevenhouse/compose /opt/elevenhouse/caddy && install -d -m 0700 /opt/elevenhouse/env /opt/elevenhouse/backups/postgres'
+          scp "${SSH_OPTS[@]}" deployment/compose/compose.production.yml "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/compose/compose.production.yml"
+          scp "${SSH_OPTS[@]}" deployment/caddy/Caddyfile "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/caddy/Caddyfile"
+          scp "${SSH_OPTS[@]}" deployment/server/backup-postgres.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/backup-postgres.sh"
+          scp "${SSH_OPTS[@]}" deployment/server/restore-postgres.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/restore-postgres.sh"
 
       - name: Deploy over SSH
         env:
@@ -183,7 +185,8 @@ jobs:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
         run: |
-          ssh -o StrictHostKeyChecking=yes -i ~/.ssh/elevenhouse "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
+          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
+          ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
             IMAGE_NAMESPACE="${IMAGE_NAMESPACE}" \
             IMAGE_TAG="${IMAGE_TAG}" \
             GHCR_USERNAME="${PRODUCTION_GHCR_USERNAME}" \
