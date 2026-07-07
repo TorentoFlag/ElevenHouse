@@ -23,12 +23,17 @@
     transform 0.12s ease;
 }
 
-.button:hover:not([aria-disabled="true"]) {
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.button:hover:not([aria-disabled="true"]):not(:disabled) {
   background: rgb(216 212 236 / 0.06);
   color: var(--eh-color-moon-120);
 }
 
-.button:active:not([aria-disabled="true"]) {
+.button:active:not([aria-disabled="true"]):not(:disabled) {
   transform: translateY(1px);
 }
 

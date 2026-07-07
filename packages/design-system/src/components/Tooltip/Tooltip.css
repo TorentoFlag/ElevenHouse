@@ -1,0 +1,41 @@
+.ehTooltip {
+  position: relative;
+  display: inline-flex;
+  width: fit-content;
+}
+
+.ehTooltip__bubble {
+  position: absolute;
+  z-index: 80;
+  left: 50%;
+  max-width: 240px;
+  padding: 7px 9px;
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-8);
+  background: rgb(22 20 47 / 0.98);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.32);
+  color: var(--eh-color-moon-120);
+  font: 700 12px / 1.3 var(--eh-font-sans);
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  transform: translate(-50%, 3px);
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+  white-space: normal;
+}
+
+.ehTooltip--top .ehTooltip__bubble {
+  bottom: calc(100% + 8px);
+}
+
+.ehTooltip--bottom .ehTooltip__bubble {
+  top: calc(100% + 8px);
+}
+
+.ehTooltip:hover .ehTooltip__bubble,
+.ehTooltip:focus-within .ehTooltip__bubble {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}

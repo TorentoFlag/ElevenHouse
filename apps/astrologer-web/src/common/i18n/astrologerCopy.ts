@@ -242,6 +242,7 @@ type ReferenceEntryModalCommonCopy = {
   aiDraftErrorLabel: string;
   aiDraftErrorTitle: string;
   aiDraftErrorAnnouncement: string;
+  aiDraftDisabledTooltip: string;
   cancelLabel: string;
   saveLabel: string;
   savingLabel: string;
@@ -509,6 +510,7 @@ export const astrologerCopyByLocale = {
         aiDraftErrorLabel: "Повторить AI-черновик",
         aiDraftErrorTitle: "Не удалось создать AI-черновик. Попробуйте ещё раз.",
         aiDraftErrorAnnouncement: "Не удалось создать AI-черновик",
+        aiDraftDisabledTooltip: "Сначала заполните название",
         saveLabel: "Сохранить",
         cancelLabel: "Отмена",
         savingLabel: "Сохраняем",
@@ -776,6 +778,7 @@ export const astrologerCopyByLocale = {
         aiDraftErrorLabel: "Retry AI draft",
         aiDraftErrorTitle: "Could not create the AI draft. Try again.",
         aiDraftErrorAnnouncement: "Could not create the AI draft",
+        aiDraftDisabledTooltip: "Fill in the title first",
         saveLabel: "Save",
         cancelLabel: "Cancel",
         savingLabel: "Saving",

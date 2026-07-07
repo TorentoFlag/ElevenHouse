@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { Children, isValidElement, type ReactElement } from "react";
 import { Chip } from "@elevenhouse/design-system/components/Chip";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
+import { Tooltip } from "@elevenhouse/design-system/components/Tooltip";
 import { describe, expect, it, vi } from "vitest";
 import { ReferenceAiDraftButton } from "../ReferenceAiDraftButton";
 import {
@@ -33,6 +34,7 @@ const copy = {
   aiDraftErrorLabel: "Повторить AI-черновик",
   aiDraftErrorTitle: "Не удалось создать AI-черновик. Попробуйте ещё раз.",
   aiDraftErrorAnnouncement: "Не удалось создать AI-черновик",
+  aiDraftDisabledTooltip: "Сначала заполните название",
   cancelLabel: "Отмена",
   saveLabel: "Сохранить",
   savingLabel: "Сохраняем",
@@ -376,6 +378,40 @@ describe("ReferenceEntryModalView", () => {
     expect(aiButton.props.state).toBe("error");
   });
 
+  it("disables the AI draft action and explains the requirement until title is filled", () => {
+    const view = ReferenceEntryModalView({
+      copy,
+      categories,
+      draft: {
+        categoryId: categories[0]?.id ?? "",
+        title: "   ",
+        content: ""
+      },
+      isCategoryEditable: true,
+      canSubmit: false,
+      isSaving: false,
+      isCreatingAiDraft: false,
+      fieldErrors: {},
+      errorMessage: null,
+      aiErrorMessage: null,
+      onClose: vi.fn(),
+      onDraftChange: vi.fn(),
+      onSubmit: vi.fn(),
+      onCreateAiDraft: vi.fn()
+    });
+
+    const aiButtonPath = findRequiredElementPathByDataAttribute(
+      view,
+      "data-reference-entry-modal-ai"
+    );
+    const aiButton = aiButtonPath.at(-1);
+    const tooltip = aiButtonPath.find((element) => element.type === Tooltip);
+
+    expect(tooltip?.props.content).toBe("Сначала заполните название");
+    expect(aiButton?.type).toBe(ReferenceAiDraftButton);
+    expect(aiButton?.props.disabled).toBe(true);
+  });
+
   it("keeps validation helper text hidden until the container decides errors are visible", () => {
     const view = ReferenceEntryModalView({
       copy,
@@ -420,6 +456,7 @@ type TestElementProps = {
   "aria-invalid"?: boolean;
   children?: unknown;
   closeLabel?: string;
+  content?: string;
   disabled?: boolean;
   className?: string;
   htmlFor?: string;

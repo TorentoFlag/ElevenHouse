@@ -12,3 +12,4 @@ export * from "./OtpAuthForm/index.js";
 export * from "./OtpCodeForm/index.js";
 export * from "./SegmentedTabs/index.js";
 export * from "./SelectableTile/index.js";
+export * from "./Tooltip/index.js";

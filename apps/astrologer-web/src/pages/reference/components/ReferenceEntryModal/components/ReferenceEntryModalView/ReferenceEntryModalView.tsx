@@ -6,6 +6,8 @@ import { Chip } from "@elevenhouse/design-system/components/Chip";
 import "@elevenhouse/design-system/components/Chip.css";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
 import "@elevenhouse/design-system/components/Modal.css";
+import { Tooltip } from "@elevenhouse/design-system/components/Tooltip";
+import "@elevenhouse/design-system/components/Tooltip.css";
 import type {
   ReferenceEntryDraft,
   ReferenceEntryDraftFieldErrors,
@@ -41,6 +43,7 @@ export type ReferenceEntryModalBaseCopy = {
   readonly aiDraftErrorLabel: string;
   readonly aiDraftErrorTitle: string;
   readonly aiDraftErrorAnnouncement: string;
+  readonly aiDraftDisabledTooltip: string;
   readonly cancelLabel: string;
   readonly saveLabel: string;
   readonly savingLabel: string;
@@ -92,6 +95,25 @@ export function ReferenceEntryModalView({
   onSubmit,
   onCreateAiDraft
 }: ReferenceEntryModalViewProps) {
+  const isAiDraftDisabled = !draft.title.trim();
+  const aiDraftButton = (
+    <ReferenceAiDraftButton
+      copy={{
+        label: copy.aiDraftLabel,
+        title: copy.aiDraftTitle,
+        loadingLabel: copy.aiDraftLoadingLabel,
+        loadingAnnouncement: copy.aiDraftLoadingAnnouncement,
+        errorLabel: copy.aiDraftErrorLabel,
+        errorTitle: copy.aiDraftErrorTitle,
+        errorAnnouncement: copy.aiDraftErrorAnnouncement
+      }}
+      state={isCreatingAiDraft ? "loading" : aiErrorMessage ? "error" : "active"}
+      disabled={isAiDraftDisabled}
+      data-reference-entry-modal-ai="true"
+      onClick={onCreateAiDraft}
+    />
+  );
+
   return (
     <Modal title={copy.title} closeLabel={copy.closeLabel} onClose={onClose}>
       <form
@@ -164,20 +186,11 @@ export function ReferenceEntryModalView({
             <label className={styles.label} htmlFor={CONTENT_TEXTAREA_ID}>
               {copy.contentLabel}
             </label>
-            <ReferenceAiDraftButton
-              copy={{
-                label: copy.aiDraftLabel,
-                title: copy.aiDraftTitle,
-                loadingLabel: copy.aiDraftLoadingLabel,
-                loadingAnnouncement: copy.aiDraftLoadingAnnouncement,
-                errorLabel: copy.aiDraftErrorLabel,
-                errorTitle: copy.aiDraftErrorTitle,
-                errorAnnouncement: copy.aiDraftErrorAnnouncement
-              }}
-              state={isCreatingAiDraft ? "loading" : aiErrorMessage ? "error" : "active"}
-              data-reference-entry-modal-ai="true"
-              onClick={onCreateAiDraft}
-            />
+            {isAiDraftDisabled ? (
+              <Tooltip content={copy.aiDraftDisabledTooltip}>{aiDraftButton}</Tooltip>
+            ) : (
+              aiDraftButton
+            )}
           </span>
           <textarea
             id={CONTENT_TEXTAREA_ID}

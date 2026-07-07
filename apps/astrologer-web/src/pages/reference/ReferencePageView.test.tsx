@@ -62,6 +62,7 @@ const copy = {
     aiDraftErrorLabel: "Повторить AI-черновик",
     aiDraftErrorTitle: "Не удалось создать AI-черновик. Попробуйте ещё раз.",
     aiDraftErrorAnnouncement: "Не удалось создать AI-черновик",
+    aiDraftDisabledTooltip: "Сначала заполните название",
     cancelLabel: "Отмена",
     saveLabel: "Сохранить",
     savingLabel: "Сохраняем",

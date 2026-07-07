@@ -84,6 +84,12 @@ export default defineConfig({
           import.meta.url
         )
       ),
+      "@elevenhouse/design-system/components/Tooltip": fileURLToPath(
+        new URL("../../packages/design-system/src/components/Tooltip/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/Tooltip.css": fileURLToPath(
+        new URL("../../packages/design-system/src/components/Tooltip/Tooltip.css", import.meta.url)
+      ),
       "@elevenhouse/design-system/components/NumberStepper": fileURLToPath(
         new URL(
           "../../packages/design-system/src/components/NumberStepper/index.ts",

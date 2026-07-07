@@ -16,7 +16,7 @@ export type ReferenceAiDraftButtonCopy = {
 
 export type ReferenceAiDraftButtonProps = Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
-  "aria-disabled" | "children" | "disabled" | "onClick"
+  "aria-disabled" | "children" | "onClick"
 > & {
   readonly copy: ReferenceAiDraftButtonCopy;
   readonly state: ReferenceAiDraftButtonState;
@@ -27,11 +27,13 @@ export function ReferenceAiDraftButton({
   copy,
   state,
   className,
+  disabled,
   onClick,
   type = "button",
   ...buttonProps
 }: ReferenceAiDraftButtonProps) {
   const isLoading = state === "loading";
+  const isDisabled = disabled === true;
   const stateClassName =
     state === "loading" ? styles.buttonLoading : state === "error" ? styles.buttonError : "";
   const label = state === "loading" ? copy.loadingLabel : state === "error" ? copy.errorLabel : copy.label;
@@ -49,9 +51,10 @@ export function ReferenceAiDraftButton({
       type={type}
       title={state === "error" ? copy.errorTitle : copy.title}
       data-state={state}
+      {...(isDisabled ? { disabled: true } : {})}
       aria-disabled={isLoading ? true : undefined}
       onClick={(event: MouseEvent<HTMLButtonElement>) => {
-        if (isLoading) {
+        if (isLoading || isDisabled) {
           event.preventDefault();
           return;
         }

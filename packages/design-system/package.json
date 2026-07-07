@@ -92,6 +92,11 @@
       "import": "./dist/components/SelectableTile/index.js"
     },
     "./components/SelectableTile.css": "./src/components/SelectableTile/SelectableTile.css",
+    "./components/Tooltip": {
+      "types": "./dist/components/Tooltip/index.d.ts",
+      "import": "./dist/components/Tooltip/index.js"
+    },
+    "./components/Tooltip.css": "./src/components/Tooltip/Tooltip.css",
     "./components/OtpAuthForm.css": "./src/components/OtpAuthForm/OtpAuthForm.css",
     "./components/OtpCodeForm": {
       "types": "./dist/components/OtpCodeForm/index.d.ts",
@@ -243,7 +248,8 @@
     "./src/components/OtpCodeForm/OtpCodeForm.css",
     "./src/components/LanguageSwitcher/LanguageSwitcher.css",
     "./src/components/SegmentedTabs/SegmentedTabs.css",
-    "./src/components/SelectableTile/SelectableTile.css"
+    "./src/components/SelectableTile/SelectableTile.css",
+    "./src/components/Tooltip/Tooltip.css"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
