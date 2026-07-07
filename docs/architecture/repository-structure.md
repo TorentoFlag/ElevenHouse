@@ -5,6 +5,7 @@
 ```text
 ElevenHouse/
   apps/
+    landing/
     client-web/
     astrologer-web/
     admin-web/
@@ -44,6 +45,9 @@ moderator/admin/super_admin workflows, но сейчас отсутствует 
 `apps/` содержит deployable applications и процессы.
 
 - Frontend apps — React + Vite.
+- `apps/landing` — публичная acquisition-поверхность ElevenHouse для
+  астрологов. Она ведёт в регистрацию `astrologer-web`, не обслуживает
+  клиентские direct-link booking flows и не является каталогом/discovery.
 - Backend apps — Nest.js. Внутри Nest apps feature modules должны жить в `src/modules/<module-name>/`; root `app.module.ts` импортирует module classes, а не напрямую собирает controllers/providers всех features.
 - Worker apps запускают queue processors и scheduled jobs.
 

@@ -10,6 +10,7 @@ Accepted
 
 Frontend apps:
 
+- `landing`
 - `client-web`
 - `astrologer-web`
 - `admin-web`
@@ -27,6 +28,9 @@ Backend apps/processes:
 ## Rationale
 
 У продукта разные профили трафика и разные пользовательские поверхности. Клиентский трафик ожидается значительно выше, чем трафик астрологов/админов, поэтому client surface и public API должны масштабироваться независимо.
+Публичная acquisition-поверхность для астрологов отделена в `landing`, чтобы
+её SEO/performance, статический контент и marketing lifecycle не смешивались с
+client direct-link flows или authenticated astrologer CRM.
 
 При этом домен глубоко связан: booking, orders, payments, wallet, notifications и admin support участвуют в одном business workflow. Если слишком рано разнести всё по независимым microservices, это добавит лишнюю distributed-system complexity.
 
