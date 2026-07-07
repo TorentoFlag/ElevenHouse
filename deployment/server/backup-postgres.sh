@@ -16,6 +16,7 @@ docker compose \
   -f "${COMPOSE_FILE}" \
   exec -T postgres \
   sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' \
+  </dev/null \
   >"${PARTIAL_FILE}"
 
 mv "${PARTIAL_FILE}" "${BACKUP_FILE}"

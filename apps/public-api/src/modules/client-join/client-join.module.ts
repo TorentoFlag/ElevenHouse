@@ -3,6 +3,7 @@ import {
   createDrizzleClientJoinProfileReader,
   createDrizzleClientStore
 } from "@elevenhouse/db/clients";
+import { SystemClock } from "../../common/system-clock.js";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { ClientJoinController } from "./client-join.controller";
@@ -18,6 +19,7 @@ import {
   controllers: [ClientJoinController],
   providers: [
     ClientJoinService,
+    SystemClock,
     {
       provide: CLIENT_JOIN_PROFILE_READER,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>

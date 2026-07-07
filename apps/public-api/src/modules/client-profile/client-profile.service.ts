@@ -9,7 +9,7 @@ import {
   type ClientBirthDataUpsertRequest,
   type RelatedAstrologerListResponse
 } from "@elevenhouse/contracts";
-import type { SystemClock } from "../../common/system-clock.js";
+import { SystemClock } from "../../common/system-clock.js";
 import { CLIENT_PROFILE_READER, CLIENT_PROFILE_STORE } from "./client-profile.tokens";
 
 export type ClientProfileReader = {

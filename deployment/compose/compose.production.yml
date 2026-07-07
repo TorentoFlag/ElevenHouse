@@ -209,6 +209,14 @@ services:
       - -c
       - |
         set -eu
+        if [ "$${#MINIO_APP_USER}" -lt 3 ] || [ "$${#MINIO_APP_USER}" -gt 20 ]; then
+          echo "MINIO_APP_USER length must be between 3 and 20 characters." >&2
+          exit 1
+        fi
+        if [ "$${#MINIO_APP_PASSWORD}" -lt 8 ] || [ "$${#MINIO_APP_PASSWORD}" -gt 40 ]; then
+          echo "MINIO_APP_PASSWORD length must be between 8 and 40 characters." >&2
+          exit 1
+        fi
         until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"; do
           sleep 2
         done
@@ -242,27 +250,13 @@ services:
           ]
         }
         EOF
-        cat >/tmp/elevenhouse-media-cors.xml <<'EOF'
-        <CORSConfiguration>
-          <CORSRule>
-            <AllowedOrigin>https://astrologer.elevenhouse.ai</AllowedOrigin>
-            <AllowedOrigin>https://app.elevenhouse.ai</AllowedOrigin>
-            <AllowedMethod>GET</AllowedMethod>
-            <AllowedMethod>HEAD</AllowedMethod>
-            <AllowedMethod>PUT</AllowedMethod>
-            <AllowedHeader>*</AllowedHeader>
-            <ExposeHeader>ETag</ExposeHeader>
-            <MaxAgeSeconds>3000</MaxAgeSeconds>
-          </CORSRule>
-        </CORSConfiguration>
-        EOF
         mc admin user svcacct remove local "$${MINIO_APP_USER}" >/dev/null 2>&1 || true
         mc admin user svcacct add local "$${MINIO_ROOT_USER}" \
           --access-key "$${MINIO_APP_USER}" \
           --secret-key "$${MINIO_APP_PASSWORD}" \
-          --policy /tmp/elevenhouse-media-app-policy.json
+          --policy /tmp/elevenhouse-media-app-policy.json \
+          >/dev/null
         mc anonymous set-json /tmp/elevenhouse-media-public-read-policy.json "local/$${MINIO_MEDIA_BUCKET}"
-        mc cors set "local/$${MINIO_MEDIA_BUCKET}" /tmp/elevenhouse-media-cors.xml
 
 volumes:
   caddy-data:

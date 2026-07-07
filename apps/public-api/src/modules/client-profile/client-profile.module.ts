@@ -3,6 +3,7 @@ import {
   createDrizzleClientProfileReader,
   createDrizzleClientStore
 } from "@elevenhouse/db/clients";
+import { SystemClock } from "../../common/system-clock.js";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
@@ -15,6 +16,7 @@ import { CLIENT_PROFILE_READER, CLIENT_PROFILE_STORE } from "./client-profile.to
   controllers: [ClientProfileController],
   providers: [
     ClientProfileService,
+    SystemClock,
     {
       provide: CLIENT_PROFILE_READER,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>

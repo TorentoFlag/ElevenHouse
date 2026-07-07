@@ -8,7 +8,7 @@ import {
   type CreateClientJoinIntentRequest,
   type CreateClientJoinIntentResponse
 } from "@elevenhouse/contracts";
-import type { SystemClock } from "../../common/system-clock.js";
+import { SystemClock } from "../../common/system-clock.js";
 import { hashClientJoinIntentToken } from "./client-join-token.js";
 import {
   CLIENT_JOIN_OPTIONS,
