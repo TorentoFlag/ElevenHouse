@@ -1,8 +1,4 @@
-import { NumerologyValidationError } from "./numerology-errors";
-import {
-  calculatePythagoreanCompatibility,
-  calculatePythagoreanIndividual
-} from "./pythagorean-engine";
+import { resolveNumerologyMethod } from "./method-registry";
 import type {
   NumerologyCompatibilityUseCaseInput,
   NumerologyIndividualUseCaseInput,
@@ -13,19 +9,17 @@ import type {
 export function calculateNumerologyIndividual(
   input: NumerologyIndividualUseCaseInput
 ): PythagoreanIndividualResult {
-  if (input.methodCode !== "pythagorean") {
-    throw new NumerologyValidationError("Unsupported numerology method");
-  }
-
-  return calculatePythagoreanIndividual(input.participant, input.settings);
+  return resolveNumerologyMethod(input.methodCode).calculateIndividual({
+    participant: input.participant,
+    periods: input.periods
+  });
 }
 
 export function calculateNumerologyCompatibility(
   input: NumerologyCompatibilityUseCaseInput
 ): PythagoreanCompatibilityResult {
-  if (input.methodCode !== "pythagorean") {
-    throw new NumerologyValidationError("Unsupported numerology method");
-  }
-
-  return calculatePythagoreanCompatibility(input.participants, input.settings);
+  return resolveNumerologyMethod(input.methodCode).calculateCompatibility({
+    participants: input.participants,
+    periods: input.periods
+  });
 }

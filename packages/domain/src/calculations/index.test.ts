@@ -138,7 +138,16 @@ function createMemoryStore(): MemoryStore {
       calls.replaceResult.push(input);
       const current = owned(input);
       if (!current) return { status: "not_found" as const };
-      if (exactKeyConflict || (exact(input) && exact(input)?.id !== current.id)) {
+      const duplicate = [...records.values()].find(
+        (record) =>
+          record.id !== current.id &&
+          record.ownerUserId === current.ownerUserId &&
+          record.module === current.module &&
+          record.mode === current.mode &&
+          record.methodCode === current.methodCode &&
+          record.requestFingerprint === input.requestFingerprint
+      );
+      if (exactKeyConflict || duplicate) {
         exactKeyConflict = false;
         return { status: "exact_key_conflict" as const };
       }
@@ -390,9 +399,9 @@ describe("current calculation lifecycle", () => {
       })
     ).rejects.toBeInstanceOf(CalculationAlreadyExistsError);
 
-    await expect(getCalculation({ store, ownerUserId, calculationId: created.id })).resolves.toEqual(
-      created
-    );
+    await expect(
+      getCalculation({ store, ownerUserId, calculationId: created.id })
+    ).resolves.toEqual(created);
   });
 
   it("binds publication to the current checksum and a current approved interpretation", async () => {
@@ -493,7 +502,12 @@ describe("current calculation lifecycle", () => {
       offset: 0
     });
     expect(listed.total).toBe(1);
-    const archived = await archiveCalculation({ store, ownerUserId, calculationId: created.id, now });
+    const archived = await archiveCalculation({
+      store,
+      ownerUserId,
+      calculationId: created.id,
+      now
+    });
     expect(archived.status).toBe("archived");
   });
 });

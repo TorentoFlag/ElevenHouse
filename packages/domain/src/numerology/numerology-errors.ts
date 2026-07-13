@@ -4,3 +4,10 @@ export class NumerologyValidationError extends Error {
     this.name = "NumerologyValidationError";
   }
 }
+
+export class UnsupportedNumerologyMethodError extends Error {
+  constructor(code: string) {
+    super(`Unsupported numerology method: ${code}`);
+    this.name = "UnsupportedNumerologyMethodError";
+  }
+}

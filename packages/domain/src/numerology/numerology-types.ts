@@ -1,66 +1,38 @@
-export type NumerologyMethodCode = "pythagorean" | "vedic" | "kabbalistic" | "author";
+export type NumerologyMethodCode = "pythagorean";
 export type NumerologyCalculationMode = "individual" | "compatibility";
 export type NumerologyRelation = "match" | "close" | "different" | "tension";
 export type NumerologyDigit = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 export type NumerologyRootNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
-export type MasterNumber = 11 | 22 | 33;
-
-export type MasterNumberSettings =
-  | { readonly mode: "preserve_all" }
-  | { readonly mode: "reduce_all" }
-  | { readonly mode: "preserve_selected"; readonly values: readonly MasterNumber[] };
-
-export type NameNormalizationSettings = {
-  readonly yoPolicy: "separate" | "as_e";
-  readonly shortIPolicy: "separate" | "as_i";
-};
+export type NumerologyLineLevel = "absent" | "weak" | "moderate" | "expressed" | "strong";
 
 export type NumerologyParticipantInput = {
-  readonly fullName: string;
+  readonly calculationName: string;
+  readonly calculationNameSource?: "crm_display_name" | "manual";
   readonly birthDate: string;
 };
 
-export type PythagoreanSettings = {
-  readonly masterNumbers: MasterNumberSettings;
-  readonly nameNormalization: NameNormalizationSettings;
-  readonly includeNameNumbers: boolean;
-  readonly includePsychomatrix: boolean;
-  readonly includeStrengthLines: boolean;
-  readonly forecastDate?: string;
+export type PythagoreanPeriodsRequest = {
+  readonly personalYear?: { readonly year: number };
+  readonly personalMonths?: { readonly year: number };
+  readonly personalDay?: { readonly date: string };
 };
 
-export type NumerologyMethodProfile = {
-  readonly methodCode: NumerologyMethodCode;
-  readonly methodVersion: string;
-  readonly supportedModes: readonly NumerologyCalculationMode[];
-  readonly letterTable: Readonly<Record<string, NumerologyRootNumber>>;
-  readonly vowels: readonly string[];
-  readonly strengthLines: readonly {
-    readonly code: string;
-    readonly label: string;
-    readonly cells: readonly NumerologyDigit[];
+export type PythagoreanPeriodNumbers = {
+  readonly personalYear?: { readonly year: number; readonly value: number };
+  readonly personalMonths?: readonly {
+    readonly year: number;
+    readonly month: number;
+    readonly value: number;
   }[];
+  readonly personalDay?: { readonly date: string; readonly value: number };
 };
-
-export type PythagoreanKeyNumberCode =
-  | "lifePath"
-  | "birthday"
-  | "personalYear"
-  | "personalMonth"
-  | "personalDay"
-  | "expression"
-  | "soul"
-  | "personality";
 
 export type PythagoreanKeyNumbers = {
   readonly lifePath: number;
   readonly birthday: number;
-  readonly personalYear?: number;
-  readonly personalMonth?: number;
-  readonly personalDay?: number;
-  readonly expression?: number;
-  readonly soul?: number;
-  readonly personality?: number;
+  readonly expression: number;
+  readonly soul: number;
+  readonly personality: number;
 };
 
 export type PythagoreanPsychomatrixCells = Readonly<Record<NumerologyDigit, string>>;
@@ -78,16 +50,20 @@ export type PythagoreanPsychomatrix = {
 
 export type PythagoreanStrengthLineResult = {
   readonly code: string;
+  readonly label: string;
   readonly cells: readonly NumerologyDigit[];
   readonly value: number;
+  readonly level: NumerologyLineLevel;
+  readonly levelLabel: string;
 };
 
 export type PythagoreanIndividualResult = {
   readonly methodCode: "pythagorean";
-  readonly methodVersion: string;
+  readonly mode: "individual";
   readonly participant: NumerologyParticipantInput;
   readonly keyNumbers: PythagoreanKeyNumbers;
-  readonly psychomatrix?: PythagoreanPsychomatrix;
+  readonly periods: PythagoreanPeriodNumbers;
+  readonly psychomatrix: PythagoreanPsychomatrix;
   readonly strengthLines: readonly PythagoreanStrengthLineResult[];
 };
 
@@ -96,39 +72,70 @@ export type NumerologyCompatibilityInput = {
   readonly second: NumerologyParticipantInput;
 };
 
-export type NumerologyNumberComparison = {
+export type PythagoreanComparisonBlock = "key_numbers" | "psychomatrix" | "strength_lines";
+
+export type PythagoreanComparison = {
+  readonly block: PythagoreanComparisonBlock;
   readonly code: string;
   readonly valueA: number;
   readonly valueB: number;
+  readonly difference: number;
   readonly relation: NumerologyRelation;
+  readonly explanation: string;
 };
 
-export type NumerologyMatrixComparison = {
-  readonly digit: NumerologyDigit;
-  readonly countA: number;
-  readonly countB: number;
+export type PythagoreanRelationCounts = Readonly<Record<NumerologyRelation, number>>;
+
+export type PythagoreanCompatibilityZone = {
+  readonly code: "identity" | "inner_world" | "resources" | "dynamics";
+  readonly comparisonCodes: readonly string[];
+  readonly counts: PythagoreanRelationCounts;
   readonly relation: NumerologyRelation;
+  readonly explanation: string;
+};
+
+export type PythagoreanCompatibilityConclusion = {
+  readonly code: "harmonious" | "mixed" | "attention";
+  readonly matchAndClose: number;
+  readonly differentAndTension: number;
+  readonly tension: number;
+  readonly explanation: string;
 };
 
 export type PythagoreanCompatibilityResult = {
   readonly methodCode: "pythagorean";
-  readonly methodVersion: string;
+  readonly mode: "compatibility";
   readonly participants: NumerologyCompatibilityInput;
   readonly individuals: readonly [PythagoreanIndividualResult, PythagoreanIndividualResult];
   readonly pairNumber: number;
-  readonly keyNumberComparisons: readonly NumerologyNumberComparison[];
-  readonly matrixComparisons: readonly NumerologyMatrixComparison[];
-  readonly strengthLineComparisons: readonly NumerologyNumberComparison[];
+  readonly comparisons: readonly PythagoreanComparison[];
+  readonly zones: readonly PythagoreanCompatibilityZone[];
+  readonly counts: Readonly<
+    Record<PythagoreanComparisonBlock | "total", PythagoreanRelationCounts>
+  >;
+  readonly conclusion: PythagoreanCompatibilityConclusion;
 };
 
 export type NumerologyIndividualUseCaseInput = {
-  readonly methodCode: "pythagorean";
+  readonly methodCode: NumerologyMethodCode;
   readonly participant: NumerologyParticipantInput;
-  readonly settings: PythagoreanSettings;
+  readonly periods: PythagoreanPeriodsRequest;
 };
 
 export type NumerologyCompatibilityUseCaseInput = {
-  readonly methodCode: "pythagorean";
+  readonly methodCode: NumerologyMethodCode;
   readonly participants: NumerologyCompatibilityInput;
-  readonly settings: PythagoreanSettings;
+  readonly periods: PythagoreanPeriodsRequest;
+};
+
+export type NumerologyMethodEngine = {
+  readonly methodCode: NumerologyMethodCode;
+  readonly calculateIndividual: (input: {
+    readonly participant: NumerologyParticipantInput;
+    readonly periods: PythagoreanPeriodsRequest;
+  }) => PythagoreanIndividualResult;
+  readonly calculateCompatibility: (input: {
+    readonly participants: NumerologyCompatibilityInput;
+    readonly periods: PythagoreanPeriodsRequest;
+  }) => PythagoreanCompatibilityResult;
 };

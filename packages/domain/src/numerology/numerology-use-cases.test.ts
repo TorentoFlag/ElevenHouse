@@ -1,24 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { NumerologyValidationError } from "./numerology-errors";
+import { UnsupportedNumerologyMethodError } from "./numerology-errors";
 import { calculateNumerologyIndividual } from "./numerology-use-cases";
-import type { NumerologyIndividualUseCaseInput, PythagoreanSettings } from "./numerology-types";
+import type { NumerologyIndividualUseCaseInput } from "./numerology-types";
 
-const settings: PythagoreanSettings = {
-  masterNumbers: { mode: "reduce_all" },
-  nameNormalization: { yoPolicy: "separate", shortIPolicy: "separate" },
-  includeNameNumbers: false,
-  includePsychomatrix: false,
-  includeStrengthLines: false
-};
+describe("numerology method registry", () => {
+  it("routes the only active method and rejects inactive placeholders", () => {
+    expect(
+      calculateNumerologyIndividual({
+        methodCode: "pythagorean",
+        participant: { calculationName: "Голубев Антон", birthDate: "2000-08-19" },
+        periods: {}
+      }).keyNumbers.lifePath
+    ).toBe(2);
 
-describe("numerology use cases", () => {
-  it("rejects unsupported future methods at runtime", () => {
     expect(() =>
       calculateNumerologyIndividual({
         methodCode: "vedic",
-        participant: { fullName: "Мария", birthDate: "1990-03-14" },
-        settings
+        participant: { calculationName: "Голубев Антон", birthDate: "2000-08-19" },
+        periods: {}
       } as unknown as NumerologyIndividualUseCaseInput)
-    ).toThrow(new NumerologyValidationError("Unsupported numerology method"));
+    ).toThrow(UnsupportedNumerologyMethodError);
   });
 });
