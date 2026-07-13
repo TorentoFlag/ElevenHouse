@@ -11,6 +11,8 @@ ElevenHouse. Они не заменяют `AGENTS.md`, архитектурны�
 3. Перед финальным ответом всегда пройди `08-verification-and-git.md`.
 4. Если менялись архитектура, scope, API boundaries или правила работы агентов,
    пройди `09-documentation-maintenance.md`.
+5. Точные команды бери из `../commands.md`, TDD и evidence requirements — из
+   `../testing-strategy.md`.
 
 ## Индекс
 

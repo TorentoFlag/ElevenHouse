@@ -69,9 +69,17 @@
    ```
 
 8. Перед изменениями сформулируй рабочую границу:
-   - какие apps/packages/docs входят в scope;
-   - какие файлы точно не трогать;
-   - какие проверки докажут результат.
+   - Outcome
+   - In scope
+   - Out of scope
+   - Source of truth
+   - Owned paths
+   - Risks and invariants
+   - Verification
+   - External authority / destructive actions
+
+Команды и authority requirements бери из `../commands.md`, а уровень
+доказательств — из `../testing-strategy.md`.
 
 ## Stop Conditions
 

@@ -7,6 +7,24 @@
 из `ElevenHouseDesign/` с production-поверхностями, доменными границами,
 контрактами, текущим кодом и design-system работами.
 
+## Порядок источников истины
+
+1. Current user instruction for the task.
+2. Accepted ADRs and canonical architecture/product documents.
+3. `design-reference-inventory.md` plus `ElevenHouseDesign` for visible UI/UX.
+4. Shared contracts and production code for implemented behavior.
+5. Runbooks for execution procedure.
+6. Plans/specs as temporary execution artifacts only.
+
+## Владение документацией
+
+- Architecture и module boundaries: `architecture/` и `decisions/`.
+- API surfaces и security boundaries: `api/api-boundaries.md`.
+- Product invariants и full scope: `product/`.
+- Runnable commands: `development/commands.md`.
+- TDD и evidence: `development/testing-strategy.md`.
+- Task routing и процедуры: `development/agent-runbooks/`.
+
 ## Читать в первую очередь
 
 - `architecture/overview.md` — высокоуровневая архитектура системы.
@@ -21,6 +39,8 @@
   задачам: intake, дизайн→production, frontend, backend, DB, contracts/security,
   workers/events, local services, verification/git, docs maintenance.
 - `decisions/` — architecture decision records.
+- `development/commands.md` — канонические команды и authority requirements.
+- `development/testing-strategy.md` — TDD contract и уровни evidence.
 
 ## Что не является production-архитектурой
 

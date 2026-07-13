@@ -9,6 +9,10 @@
 
 ## Pre-Final Verification
 
+Выбирай evidence level по `../testing-strategy.md`, а команды и их
+предусловия — по `../commands.md`. Не запускай или не перезапускай процессы ради
+verification без прямого разрешения пользователя.
+
 1. Проверь рабочее дерево:
 
    ```bash
@@ -37,57 +41,12 @@
    Если `pnpm verify` слишком широк из-за известных unrelated changes, запусти
    меньший набор и явно укажи непроверенный риск.
 
-## Suggested Commands By Change Type
+## Commands By Change Type
 
-Docs-only:
-
-```bash
-git diff --check
-rg -n "stale_phrase" docs AGENTS.md || true
-```
-
-Design system:
-
-```bash
-pnpm test packages/design-system/src/index.test.ts
-pnpm --filter @elevenhouse/design-system typecheck
-pnpm --filter @elevenhouse/design-system build
-```
-
-Frontend app:
-
-```bash
-pnpm test apps/<app>/src/<changed-test>.test.tsx
-pnpm --filter @elevenhouse/<app> typecheck
-pnpm --filter @elevenhouse/<app> build
-```
-
-Contracts/domain:
-
-```bash
-pnpm test packages/contracts/src/<module>.test.ts
-pnpm test packages/domain/src/<module>/index.test.ts
-pnpm --filter @elevenhouse/contracts typecheck
-pnpm --filter @elevenhouse/domain typecheck
-```
-
-Backend app:
-
-```bash
-pnpm test apps/<api>/src/modules/<module>/<module>.service.test.ts
-pnpm test apps/<api>/src/modules/<module>/<module>.e2e.test.ts
-pnpm --filter @elevenhouse/<api> typecheck
-pnpm --filter @elevenhouse/<api> build
-```
-
-DB:
-
-```bash
-pnpm test packages/db/src/schema.test.ts
-pnpm test packages/db/src/adapters/<module>/<adapter>.integration.ts
-pnpm --filter @elevenhouse/db typecheck
-pnpm --filter @elevenhouse/db build
-```
+Используй examples профильного runbook’а и canonical patterns из
+`../commands.md`. Для docs всегда запускай `git diff --check`; для
+contracts/domain/db/app composition расширяй targeted evidence до repository
+verification, если нет известного unrelated blocker.
 
 ## Commit Discipline
 
@@ -120,6 +79,7 @@ task.
 - What verification ran and its result.
 - What was not run and why.
 - Any unrelated changes noticed but not touched.
+- Skipped checks, reason and residual risk.
 
 ## Stop Conditions
 

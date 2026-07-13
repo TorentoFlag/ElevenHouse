@@ -9,6 +9,9 @@ or agent rules.
 Документация должна оставаться living source of truth and not compete with stale
 implementation plans.
 
+Команды docs verification бери из `../commands.md`, а требования к отчёту об
+evidence — из `../testing-strategy.md`.
+
 ## Документы по назначению
 
 - `AGENTS.md`: правила для агентов в репозитории.
@@ -63,12 +66,8 @@ that information into architecture docs, ADRs, inventory or runbooks.
    rg -n "old_term|old_surface|reference only|ops-api|admin workflow" docs AGENTS.md
    ```
 
-7. Run docs verification:
-
-   ```bash
-   git diff --check
-   git diff --stat -- docs AGENTS.md
-   ```
+7. Run scoped `git diff --check` and inspect the docs/`AGENTS.md` diff; exact
+   command patterns are canonical in `../commands.md`.
 
 ## Writing Rules
 
