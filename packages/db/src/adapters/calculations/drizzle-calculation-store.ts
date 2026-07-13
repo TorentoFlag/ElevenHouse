@@ -407,10 +407,8 @@ async function syncStatusFromLinks(
   row: CalculationRecordRow,
   now: string
 ): Promise<CalculationRecordRow> {
-  const [visible, links] = await Promise.all([
-    countVisibleLinks(database, row.id),
-    countLinks(database, row.id)
-  ]);
+  const visible = await countVisibleLinks(database, row.id);
+  const links = await countLinks(database, row.id);
   const status: CalculationStatus = visible > 0 ? "published" : links > 0 ? "linked" : "calculated";
   return (
     (await updateOwnedMutableCalculation(database, {
@@ -559,36 +557,34 @@ async function hydrateCalculations(
 ): Promise<CalculationRecord[]> {
   const ids = rows.map((row) => row.id);
   if (ids.length === 0) return [];
-  const [participantRows, linkRows, interpretationRows, artifactRows] = await Promise.all([
-    database
-      .select()
-      .from(calculationParticipants)
-      .where(inArray(calculationParticipants.calculationId, ids))
-      .orderBy(calculationParticipants.calculationId, calculationParticipants.order),
-    database
-      .select()
-      .from(calculationClientLinks)
-      .where(inArray(calculationClientLinks.calculationId, ids))
-      .orderBy(calculationClientLinks.calculationId, calculationClientLinks.linkedAt),
-    database
-      .select()
-      .from(calculationInterpretations)
-      .where(inArray(calculationInterpretations.calculationId, ids))
-      .orderBy(
-        calculationInterpretations.calculationId,
-        calculationInterpretations.createdAt,
-        calculationInterpretations.id
-      ),
-    database
-      .select()
-      .from(calculationArtifacts)
-      .where(inArray(calculationArtifacts.calculationId, ids))
-      .orderBy(
-        calculationArtifacts.calculationId,
-        calculationArtifacts.createdAt,
-        calculationArtifacts.id
-      )
-  ]);
+  const participantRows = await database
+    .select()
+    .from(calculationParticipants)
+    .where(inArray(calculationParticipants.calculationId, ids))
+    .orderBy(calculationParticipants.calculationId, calculationParticipants.order);
+  const linkRows = await database
+    .select()
+    .from(calculationClientLinks)
+    .where(inArray(calculationClientLinks.calculationId, ids))
+    .orderBy(calculationClientLinks.calculationId, calculationClientLinks.linkedAt);
+  const interpretationRows = await database
+    .select()
+    .from(calculationInterpretations)
+    .where(inArray(calculationInterpretations.calculationId, ids))
+    .orderBy(
+      calculationInterpretations.calculationId,
+      calculationInterpretations.createdAt,
+      calculationInterpretations.id
+    );
+  const artifactRows = await database
+    .select()
+    .from(calculationArtifacts)
+    .where(inArray(calculationArtifacts.calculationId, ids))
+    .orderBy(
+      calculationArtifacts.calculationId,
+      calculationArtifacts.createdAt,
+      calculationArtifacts.id
+    );
   const participants = groupParticipants(participantRows);
   const links = groupLinks(linkRows);
   const interpretations = groupInterpretations(interpretationRows);
@@ -699,14 +695,23 @@ function groupArtifacts(rows: readonly CalculationArtifactRow[]) {
 }
 
 function isExactRequestUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "23505" &&
-    "constraint" in error &&
-    error.constraint === "calculation_records_exact_request_unique"
-  );
+  let current: unknown = error;
+  const visited = new Set<object>();
+
+  while (typeof current === "object" && current !== null && !visited.has(current)) {
+    visited.add(current);
+    if (
+      "code" in current &&
+      current.code === "23505" &&
+      "constraint" in current &&
+      current.constraint === "calculation_records_exact_request_unique"
+    ) {
+      return true;
+    }
+    current = "cause" in current ? current.cause : null;
+  }
+
+  return false;
 }
 
 function toIsoString(value: Date | string): string {
