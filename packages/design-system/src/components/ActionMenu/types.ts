@@ -20,4 +20,6 @@ export type ActionMenuProps = Omit<ComponentPropsWithRef<"div">, "children"> & {
   readonly disabled?: boolean;
   readonly menuClassName?: string;
   readonly itemClassName?: string;
+  readonly triggerAriaLabel?: string;
+  readonly showChevron?: boolean;
 };

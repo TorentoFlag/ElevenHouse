@@ -13,6 +13,7 @@ import { Clock } from "../Clock/index.js";
 import { Close } from "../Close/index.js";
 import { Content } from "../Content/index.js";
 import { Doc } from "../Doc/index.js";
+import { Dots } from "../Dots/index.js";
 import { Edit } from "../Edit/index.js";
 import { FileDown } from "../FileDown/index.js";
 import { Flow } from "../Flow/index.js";
@@ -57,6 +58,7 @@ export const iconRegistry = {
   close: Close,
   content: Content,
   doc: Doc,
+  dots: Dots,
   edit: Edit,
   fileDown: FileDown,
   flow: Flow,

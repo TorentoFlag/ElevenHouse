@@ -64,6 +64,7 @@ export type AstrologerCopy = {
       title: string;
       closeLabel: string;
       description: string;
+      loadError: string;
     };
     editor: {
       title: string;
@@ -393,7 +394,8 @@ export const astrologerCopyByLocale = {
       createTypeModal: {
         title: "Новый продукт",
         closeLabel: "Закрыть выбор типа",
-        description: "Выберите тип — дальше откроется конструктор с нужными полями."
+        description: "Выберите тип — дальше откроется конструктор с нужными полями.",
+        loadError: "Не удалось загрузить шаблоны. Выберите тип вручную."
       },
       editor: {
         title: "Конструктор продукта",
@@ -661,7 +663,8 @@ export const astrologerCopyByLocale = {
       createTypeModal: {
         title: "Choose product type",
         closeLabel: "Close product type selection",
-        description: "The type sets starter defaults that can be adjusted in the editor."
+        description: "The type sets starter defaults that can be adjusted in the editor.",
+        loadError: "Could not load templates. Choose a product type manually."
       },
       editor: {
         title: "Product constructor",

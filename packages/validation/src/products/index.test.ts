@@ -4,13 +4,17 @@ import {
   collectProductModifierInvariantIssues,
   collectProductUpdateInvariantIssues,
   productPaymentModelValues,
-  productStatusValues
+  productStatusValues,
+  productTemplateLocaleValues,
+  productTemplateStatusValues
 } from "./index";
 
 describe("product validation taxonomy", () => {
   it("exports product taxonomy values as stable readonly tuples", () => {
     expect(productStatusValues).toEqual(["draft", "active", "archived"]);
     expect(productPaymentModelValues).toEqual(["once", "pack", "sub", "free"]);
+    expect(productTemplateStatusValues).toEqual(["active", "archived"]);
+    expect(productTemplateLocaleValues).toEqual(["ru", "en"]);
   });
 });
 

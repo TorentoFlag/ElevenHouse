@@ -6,4 +6,5 @@ export * from "./product-methods.schema";
 export * from "./product-access-grants.schema";
 export * from "./product-included-items.schema";
 export * from "./product-modifiers.schema";
+export * from "./product-templates.schema";
 export * from "./relations.schema";

@@ -9,3 +9,15 @@ export class ProductValidationError extends Error {
     super(message);
   }
 }
+
+export class ProductTemplateNotFoundError extends Error {
+  constructor() {
+    super("Product template not found");
+  }
+}
+
+export class ProductTemplateValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}

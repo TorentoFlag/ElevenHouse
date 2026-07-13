@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type MouseEvent
-} from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { classNames } from "../../helpers/classNames.js";
 import {
   getFirstEnabledActionMenuItemId,
@@ -22,6 +15,8 @@ export function ActionMenu({
   className,
   menuClassName,
   itemClassName,
+  triggerAriaLabel,
+  showChevron = true,
   ...rootProps
 }: ActionMenuProps) {
   const menuId = useId();
@@ -119,6 +114,7 @@ export function ActionMenu({
         className="ehActionMenu__trigger"
         type="button"
         aria-haspopup="menu"
+        aria-label={triggerAriaLabel}
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         disabled={disabled || items.length === 0}
@@ -133,9 +129,11 @@ export function ActionMenu({
         onKeyDown={handleTriggerKeyDown}
       >
         <span className="ehActionMenu__triggerLabel">{label}</span>
-        <span className="ehActionMenu__triggerChevron" aria-hidden="true">
-          ▾
-        </span>
+        {showChevron ? (
+          <span className="ehActionMenu__triggerChevron" aria-hidden="true">
+            ▾
+          </span>
+        ) : null}
       </button>
       {open ? (
         <div

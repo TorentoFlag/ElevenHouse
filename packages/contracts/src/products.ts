@@ -15,6 +15,8 @@ import {
   productRequiredClientDataValues,
   productStatusValues,
   productSubscriptionPeriodValues,
+  productTemplateLocaleValues,
+  productTemplateStatusValues,
   productTypeValues,
   type ProductAccessGrantValue,
   type ProductDeliveryFormatValue,
@@ -150,6 +152,18 @@ export type ProductCurrency = z.infer<typeof productCurrencySchema>;
 export const productAnalyticsStatusSchema = z.enum(productAnalyticsStatusValues);
 export type ProductAnalyticsStatus = z.infer<typeof productAnalyticsStatusSchema>;
 
+export const productTemplateStatusSchema = z.enum(productTemplateStatusValues);
+export type ProductTemplateStatus = z.infer<typeof productTemplateStatusSchema>;
+
+export const productTemplateLocaleSchema = z.enum(productTemplateLocaleValues);
+export type ProductTemplateLocale = z.infer<typeof productTemplateLocaleSchema>;
+
+export const productTemplateCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z0-9_]{3,80}$/);
+export type ProductTemplateCode = z.infer<typeof productTemplateCodeSchema>;
+
 export const productIncludedItemRequestSchema = z
   .object({
     text: nonEmptyStringSchema.max(300),
@@ -280,6 +294,52 @@ export const duplicateProductRequestSchema = z
   })
   .strict();
 export type DuplicateProductRequest = z.infer<typeof duplicateProductRequestSchema>;
+
+export const productTemplateResponseSchema = z
+  .object({
+    id: uuidSchema,
+    code: productTemplateCodeSchema,
+    locale: productTemplateLocaleSchema,
+    type: productTypeSchema,
+    status: productTemplateStatusSchema,
+    title: nonEmptyStringSchema.max(200),
+    subtitle: nullableStringSchema,
+    description: nullableStringSchema,
+    sortOrder: z.number().int().min(0),
+    payload: createProductRequestSchema,
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime()
+  })
+  .strict();
+export type ProductTemplateResponse = z.infer<typeof productTemplateResponseSchema>;
+
+export const listProductTemplatesQuerySchema = z
+  .object({
+    locale: productTemplateLocaleSchema.default("ru")
+  })
+  .strict();
+export type ListProductTemplatesQuery = z.infer<typeof listProductTemplatesQuerySchema>;
+
+export const listProductTemplatesResponseSchema = z.object({
+  templates: z.array(productTemplateResponseSchema)
+});
+export type ListProductTemplatesResponse = z.infer<typeof listProductTemplatesResponseSchema>;
+
+export const createProductFromTemplateParamsSchema = z
+  .object({
+    templateCode: productTemplateCodeSchema
+  })
+  .strict();
+export type CreateProductFromTemplateParams = z.infer<typeof createProductFromTemplateParamsSchema>;
+
+export const createProductFromTemplateRequestSchema = z
+  .object({
+    locale: productTemplateLocaleSchema
+  })
+  .strict();
+export type CreateProductFromTemplateRequest = z.infer<
+  typeof createProductFromTemplateRequestSchema
+>;
 
 export const productIdParamSchema = z.object({ productId: uuidSchema }).strict();
 export type ProductIdParam = z.infer<typeof productIdParamSchema>;

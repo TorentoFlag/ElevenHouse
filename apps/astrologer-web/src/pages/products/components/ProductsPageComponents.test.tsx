@@ -2,7 +2,8 @@ import { Children, isValidElement, type ReactElement, type ReactNode } from "rea
 import type {
   ListProductsResponse,
   ProductStatus,
-  ProductSummaryResponse
+  ProductSummaryResponse,
+  ProductTemplateResponse
 } from "@elevenhouse/contracts";
 import { Button } from "@elevenhouse/design-system/components/Button";
 import { ActionMenu } from "@elevenhouse/design-system/components/ActionMenu";
@@ -325,6 +326,35 @@ describe("Products page components", () => {
     expect(JSON.stringify(card.props.children)).toContain("4.9");
   });
 
+  it("matches the design reference card action model", () => {
+    const onEdit = vi.fn();
+    const card = ProductCard({
+      product,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      actions: {
+        ...productActions,
+        onEdit
+      },
+      isActionPending: false
+    });
+
+    const editButton = findRequiredElementByProp(card, "data-product-card-edit");
+    expect(editButton.props.className).toBe(styles.productEditButton);
+    editButton.props.onClick();
+    expect(onEdit).toHaveBeenCalledWith(product);
+
+    const actionMenu = findRequiredElementByType(card, ActionMenu);
+    expect(actionMenu.props.className).toBe(styles.productSecondaryActionsMenu);
+    expect(actionMenu.props.triggerAriaLabel).toBe("Действия продукта");
+    expect(actionMenu.props.showChevron).toBe(false);
+    expect((actionMenu.props.items ?? []).map((item) => item.id)).toEqual([
+      "duplicate",
+      "draft",
+      "archive"
+    ]);
+  });
+
   it("renders product type icon from the shared product icon mapping", () => {
     const card = ProductCard({
       product,
@@ -420,11 +450,11 @@ describe("Products page components", () => {
       }
     });
 
+    findRequiredElementByProp(card, "data-product-card-edit").props.onClick();
     const menuItems = findRequiredElementByType(card, ActionMenu).props.items ?? [];
     getArrayItem(menuItems, 0).onSelect();
     getArrayItem(menuItems, 1).onSelect();
     getArrayItem(menuItems, 2).onSelect();
-    getArrayItem(menuItems, 3).onSelect();
 
     expect(onEdit).toHaveBeenCalledWith(product);
     expect(onDuplicate).toHaveBeenCalledWith(product);
@@ -441,11 +471,13 @@ describe("Products page components", () => {
       isActionPending: true
     });
 
+    expect(findRequiredElementByProp(draftCard, "data-product-card-edit").props.disabled).toBe(
+      false
+    );
     const draftMenuItems = findRequiredElementByType(draftCard, ActionMenu).props.items ?? [];
-    expect(getArrayItem(draftMenuItems, 0).disabled).toBe(false);
+    expect(getArrayItem(draftMenuItems, 0).disabled).toBe(true);
     expect(getArrayItem(draftMenuItems, 1).disabled).toBe(true);
     expect(getArrayItem(draftMenuItems, 2).disabled).toBe(true);
-    expect(getArrayItem(draftMenuItems, 3).disabled).toBe(true);
 
     const activeCard = ProductCard({
       product: createProductWithStatus("active"),
@@ -474,8 +506,8 @@ describe("Products page components", () => {
       }
     });
     const draftItems = findRequiredElementByType(draftCard, ActionMenu).props.items ?? [];
+    getArrayItem(draftItems, 1).onSelect();
     getArrayItem(draftItems, 2).onSelect();
-    getArrayItem(draftItems, 3).onSelect();
     expect(draftItems.map((item) => item.id)).not.toContain("draft");
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "active");
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "archived");
@@ -492,8 +524,8 @@ describe("Products page components", () => {
       }
     });
     const activeItems = findRequiredElementByType(activeCard, ActionMenu).props.items ?? [];
+    getArrayItem(activeItems, 1).onSelect();
     getArrayItem(activeItems, 2).onSelect();
-    getArrayItem(activeItems, 3).onSelect();
     expect(activeItems.map((item) => item.id)).not.toContain("publish");
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "draft");
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "archived");
@@ -510,7 +542,7 @@ describe("Products page components", () => {
       }
     });
     const archivedItems = findRequiredElementByType(archivedCard, ActionMenu).props.items ?? [];
-    getArrayItem(archivedItems, 2).onSelect();
+    getArrayItem(archivedItems, 1).onSelect();
     expect(archivedItems.map((item) => item.id)).not.toContain("archive");
     expect(archivedItems.map((item) => item.id)).not.toContain("publish");
     expect(onStatusChange).toHaveBeenCalledWith(product.id, "draft");
@@ -547,12 +579,13 @@ describe("Products page components", () => {
       emptyLabel: "Нет продуктов в этом статусе"
     });
 
+    const editButtons = findRenderedElementsByProp(results, "data-product-card-edit");
+    getArrayItem(editButtons, 0).props.onClick();
     const menus = findRenderedElementsByType(results, ActionMenu);
     getArrayItem(getArrayItem(menus, 0).props.items ?? [], 0).onSelect();
     getArrayItem(getArrayItem(menus, 0).props.items ?? [], 1).onSelect();
-    getArrayItem(getArrayItem(menus, 0).props.items ?? [], 2).onSelect();
+    getArrayItem(getArrayItem(menus, 1).props.items ?? [], 1).onSelect();
     getArrayItem(getArrayItem(menus, 1).props.items ?? [], 2).onSelect();
-    getArrayItem(getArrayItem(menus, 1).props.items ?? [], 3).onSelect();
 
     expect(onEdit).toHaveBeenCalledWith(
       expect.objectContaining({ id: product.id, status: "draft" })
@@ -580,20 +613,31 @@ describe("Products page components", () => {
     });
 
     const menuItems = findRequiredRenderedElementByType(results, ActionMenu).props.items ?? [];
+    expect(getArrayItem(menuItems, 0).disabled).toBe(true);
     expect(getArrayItem(menuItems, 1).disabled).toBe(true);
-    expect(getArrayItem(menuItems, 2).disabled).toBe(true);
   });
 
-  it("renders product type selection modal with all product templates", () => {
+  it("renders product template selection modal with server templates and custom manual path", () => {
     const onSelect = vi.fn();
+    const onSelectTemplate = vi.fn();
     const onClose = vi.fn();
     const modal = ProductCreateTypeModal({
       copy: {
         title: "Выберите тип продукта",
         closeLabel: "Закрыть выбор типа",
-        description: "Тип задаст базовые параметры, которые можно изменить в редакторе."
+        description: "Тип задаст базовые параметры, которые можно изменить в редакторе.",
+        loadError: "Не удалось загрузить шаблоны. Выберите тип вручную."
       },
       types: productCopyByLocale.ru.types,
+      templates: [
+        createProductTemplate("individual_consultation", "single"),
+        createProductTemplate("quick_answer", "mini"),
+        createProductTemplate("custom_format", "custom")
+      ],
+      isTemplateLoading: false,
+      isTemplateError: false,
+      isTemplateActionPending: false,
+      onSelectTemplate,
       onSelect,
       onClose
     });
@@ -602,17 +646,12 @@ describe("Products page components", () => {
     expect(modalRoot.props.title).toBe("Выберите тип продукта");
     expect(modalRoot.props.closeLabel).toBe("Закрыть выбор типа");
 
-    const typeOptions = findElementsByProp(modal, "data-product-create-type");
-    expect(typeOptions.map((option) => option.props["data-product-create-type"])).toEqual([
-      "single",
-      "pack",
-      "async",
-      "sub",
-      "mini",
-      "course",
-      "custom"
+    const templateOptions = findElementsByProp(modal, "data-product-template-code");
+    expect(templateOptions.map((option) => option.props["data-product-template-code"])).toEqual([
+      "individual_consultation",
+      "quick_answer"
     ]);
-    typeOptions.forEach((option) => {
+    templateOptions.forEach((option) => {
       const icon = getArrayItem(Children.toArray(option.props.children), 0);
 
       expect(isValidElement(icon) ? icon.type : null).toBe(Icon);
@@ -623,7 +662,43 @@ describe("Products page components", () => {
         "true"
       );
     });
-    expect(JSON.stringify(modal.props.children)).toContain("Разовая консультация");
+    expect(JSON.stringify(modal.props.children)).toContain("Индивидуальная консультация");
+
+    getArrayItem(templateOptions, 0).props.onClick();
+    expect(onSelectTemplate).toHaveBeenCalledWith("individual_consultation");
+
+    const typeOptions = findElementsByProp(modal, "data-product-create-type");
+    expect(typeOptions.map((option) => option.props["data-product-create-type"])).toEqual([
+      "custom"
+    ]);
+    getArrayItem(typeOptions, 0).props.onClick();
+    expect(onSelect).toHaveBeenCalledWith("custom");
+  });
+
+  it("falls back to the complete manual type selection when templates cannot load", () => {
+    const onSelect = vi.fn();
+    const modal = ProductCreateTypeModal({
+      copy: {
+        title: "Выберите тип продукта",
+        closeLabel: "Закрыть выбор типа",
+        description: "Тип задаст базовые параметры, которые можно изменить в редакторе.",
+        loadError: "Не удалось загрузить шаблоны. Выберите тип вручную."
+      },
+      types: productCopyByLocale.ru.types,
+      templates: [],
+      isTemplateLoading: false,
+      isTemplateError: true,
+      isTemplateActionPending: false,
+      onSelectTemplate: vi.fn(),
+      onSelect,
+      onClose: vi.fn()
+    });
+
+    const typeOptions = findElementsByProp(modal, "data-product-create-type");
+    expect(typeOptions.map((option) => option.props["data-product-create-type"])).toEqual(
+      Object.keys(productCopyByLocale.ru.types)
+    );
+    expect(JSON.stringify(modal.props.children)).toContain("Не удалось загрузить шаблоны");
 
     getArrayItem(typeOptions, 0).props.onClick();
     expect(onSelect).toHaveBeenCalledWith("single");
@@ -639,10 +714,16 @@ describe("Products page components", () => {
       coverMediaUrl: null,
       isCoverUploading: false,
       coverUploadError: null,
+      templateSelectionError: null,
       isSaving: false,
+      productTemplates: [createProductTemplate("individual_consultation", "single")],
+      isProductTemplatesLoading: false,
+      isProductTemplatesError: false,
+      isTemplateActionPending: false,
       openTypeSelection: vi.fn(),
       closeTypeSelection: vi.fn(),
       selectType: vi.fn(),
+      selectTemplate: vi.fn(),
       editProduct: vi.fn(),
       updateDraft: vi.fn(),
       uploadProductCover: vi.fn(),
@@ -659,7 +740,8 @@ describe("Products page components", () => {
         createTypeModal: {
           title: "Выберите тип продукта",
           closeLabel: "Закрыть выбор типа",
-          description: "Тип задаст базовые параметры, которые можно изменить в редакторе."
+          description: "Тип задаст базовые параметры, которые можно изменить в редакторе.",
+          loadError: "Не удалось загрузить шаблоны. Выберите тип вручную."
         },
         editor: constructorCopy
       },
@@ -672,9 +754,12 @@ describe("Products page components", () => {
     const typeModal = findRequiredElementByType(flowView, ProductCreateTypeModal);
     expect(typeModal.props.portalTarget).toBe(modalTarget);
     expect(typeModal.props.backdropClassName).toBe(styles.productScopedModalBackdrop);
+    expect(typeModal.props.templates).toBe(flow.productTemplates);
     typeModal.props.onSelect("single");
+    typeModal.props.onSelectTemplate("individual_consultation");
     typeModal.props.onClose();
     expect(flow.selectType).toHaveBeenCalledWith("single");
+    expect(flow.selectTemplate).toHaveBeenCalledWith("individual_consultation");
     expect(flow.closeTypeSelection).toHaveBeenCalledOnce();
 
     const constructorModal = findRequiredElementByType(flowView, ProductConstructorModal);
@@ -732,14 +817,56 @@ type TestElementProps = {
   draft?: unknown;
   locale?: string;
   productCopy?: unknown;
+  templates?: unknown;
+  "data-product-template-code"?: string;
+  "data-product-card-edit"?: string;
+  triggerAriaLabel?: string;
+  showChevron?: boolean;
   onClose: () => void;
   onBackToTypeSelection: () => void;
   onCloseCreateFlow: () => void;
   onDraftChange: (draft: unknown) => void;
   onPublish: () => void | Promise<void>;
   onSave: () => void | Promise<void>;
-  onSelect: (type: string) => void;
+  onSelect: (value: string) => void;
+  onSelectTemplate: (code: string) => void;
 };
+
+function createProductTemplate(code: string, type: ProductTemplateResponse["type"]) {
+  return {
+    id: `44444444-4444-4444-8444-${code.padEnd(12, "0").slice(0, 12)}`,
+    code,
+    locale: "ru",
+    type,
+    status: "active",
+    title:
+      code === "quick_answer"
+        ? "Быстрый ответ"
+        : code === "custom_format"
+          ? "Свой формат"
+          : "Индивидуальная консультация",
+    subtitle: "Готовая заготовка",
+    description: "Описание заготовки",
+    sortOrder: 10,
+    payload: {
+      type,
+      title: "Индивидуальная консультация",
+      priceMinor: 490000,
+      currency: "RUB",
+      executionMode: type === "mini" ? "instant" : "live",
+      paymentModel: "once",
+      participantMode: "solo",
+      deliveryFormats: type === "mini" ? ["chat"] : ["video"],
+      requiredClientData: ["question"],
+      methods: [],
+      accessGrants: [],
+      includedItems: [{ text: "Один запрос", icon: "chat", order: 10 }],
+      modifiers: []
+    },
+    createdAt: "2026-07-02T00:00:00.000Z",
+    updatedAt: "2026-07-02T00:00:00.000Z"
+  } satisfies ProductTemplateResponse;
+}
 
 function createProductWithStatus(status: ProductStatus): ListProductsResponse["products"][number] {
   return {
@@ -782,6 +909,15 @@ function findElementsByProp(
   return matches;
 }
 
+function findRequiredElementByProp(root: unknown, propName: keyof TestElementProps) {
+  const element = findElementsByProp(root, propName)[0];
+  if (!element) {
+    throw new Error(`Expected React element with ${String(propName)}`);
+  }
+
+  return element;
+}
+
 function findRenderedElementsByType(
   root: unknown,
   type: unknown
@@ -789,6 +925,20 @@ function findRenderedElementsByType(
   const matches: Array<{ props: TestElementProps }> = [];
   visitRenderedElements(root, (element) => {
     if (element.type === type) {
+      matches.push(element as { props: TestElementProps });
+    }
+  });
+
+  return matches;
+}
+
+function findRenderedElementsByProp(
+  root: unknown,
+  propName: keyof TestElementProps
+): Array<{ props: TestElementProps }> {
+  const matches: Array<{ props: TestElementProps }> = [];
+  visitRenderedElements(root, (element) => {
+    if (propName in element.props) {
       matches.push(element as { props: TestElementProps });
     }
   });

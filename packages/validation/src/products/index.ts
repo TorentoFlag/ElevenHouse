@@ -74,6 +74,12 @@ export type ProductCurrencyValue = (typeof productCurrencyValues)[number];
 export const productAnalyticsStatusValues = ["ready", "unavailable"] as const;
 export type ProductAnalyticsStatusValue = (typeof productAnalyticsStatusValues)[number];
 
+export const productTemplateStatusValues = ["active", "archived"] as const;
+export type ProductTemplateStatusValue = (typeof productTemplateStatusValues)[number];
+
+export const productTemplateLocaleValues = ["ru", "en"] as const;
+export type ProductTemplateLocaleValue = (typeof productTemplateLocaleValues)[number];
+
 export type ProductInvariantIssue = {
   readonly path: readonly string[];
   readonly message: string;

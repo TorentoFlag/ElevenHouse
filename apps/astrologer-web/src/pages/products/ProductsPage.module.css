@@ -20,9 +20,9 @@
   z-index: 40;
   inset: 0;
   box-sizing: border-box;
-  padding: 24px;
-  background: rgb(7 6 15 / 0.7);
-  backdrop-filter: blur(4px);
+  padding: 30px;
+  background: rgb(7 6 15 / 0.6);
+  backdrop-filter: blur(3px);
 }
 
 .toolbar {
@@ -148,21 +148,22 @@
 
 .productGrid {
   display: grid;
+  align-items: start;
   gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
 .productCard {
-  min-height: 270px;
+  min-height: 226px;
   flex-direction: column;
   padding: 0;
-  overflow: hidden;
 }
 
 .productCardCover {
   width: 100%;
   aspect-ratio: 16 / 7;
   object-fit: cover;
+  border-radius: calc(var(--eh-card-radius) - 1px) calc(var(--eh-card-radius) - 1px) 0 0;
   border-bottom: 1px solid var(--eh-color-moon-300-alpha-14);
   background: var(--products-surface-3);
 }
@@ -171,7 +172,14 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 16px 18px 12px;
+  padding: 16px 18px;
+}
+
+.productCardHeader .productTypeIcon {
+  flex-basis: 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
 }
 
 .productHeading {
@@ -184,7 +192,7 @@
   overflow: hidden;
   color: var(--eh-color-muted);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.06em;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -194,7 +202,7 @@
 
 .productTitle {
   overflow: hidden;
-  margin: 3px 0 0;
+  margin: 2px 0 0;
   color: var(--eh-color-moon-120);
   font-size: 16px;
   font-weight: 700;
@@ -213,9 +221,16 @@
   border-radius: 999px;
   background: var(--products-surface-3);
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
+}
+
+.statusBadgeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentcolor;
 }
 
 .statusBadge-active {
@@ -237,33 +252,41 @@
 .productPriceLine {
   display: flex;
   align-items: baseline;
-  gap: 4px;
-  padding: 0 18px;
+  gap: 10px;
+  padding: 0 18px 14px;
 }
 
 .productPrice {
   color: var(--eh-color-moon-120);
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.1;
 }
 
-.productPriceSuffix,
-.productMeta {
+.productPriceSuffix {
   color: var(--eh-color-muted);
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .productMeta {
-  padding: 5px 18px 0;
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  color: var(--eh-color-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .includedList {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
   margin: 0;
   padding: 14px 18px 16px;
   list-style: none;
@@ -297,12 +320,61 @@
   font-weight: 600;
 }
 
+.productFooterMeta {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
 .productFooterSpacer {
   flex: 1 1 auto;
 }
 
-.productActionsMenu {
+.productSecondaryActionsMenu {
   flex: 0 0 auto;
+}
+
+.productSecondaryActionsMenu :global(.ehActionMenu__trigger) {
+  height: 31px;
+  padding: 6px 9px;
+  border-color: transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--eh-color-moon-500);
+}
+
+.productSecondaryActionsMenu :global(.ehActionMenu__trigger:hover:not(:disabled)),
+.productSecondaryActionsMenu :global(.ehActionMenu__trigger:focus-visible),
+.productSecondaryActionsMenu :global(.ehActionMenu__trigger[aria-expanded="true"]) {
+  border-color: var(--eh-color-moon-300-alpha-14);
+  background: var(--products-surface-3);
+  color: var(--eh-color-moon-120);
+}
+
+.productEditButton {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 11px;
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: 12px;
+  background: var(--products-surface-3);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.productEditButton:hover,
+.productEditButton:focus-visible {
+  border-color: rgb(244 196 48 / 0.32);
+  color: var(--products-accent-text);
+  outline: none;
 }
 
 .productFooter strong,
@@ -315,6 +387,9 @@
 
 .revenue,
 .rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   color: var(--products-accent-text);
 }
 
@@ -332,7 +407,7 @@
 }
 
 .productsModal {
-  width: min(760px, calc(100vw - 32px));
+  width: min(640px, calc(100vw - 32px));
 }
 
 .editorBreadcrumbs {
@@ -347,25 +422,49 @@
   line-height: 1.45;
 }
 
+.modalInlineError {
+  margin: -8px 0 16px;
+  color: var(--eh-color-danger-300, #ff9d9d);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .typeGrid {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .typeOption {
   display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 12px;
-  padding: 14px;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 16px;
   border: 1px solid var(--eh-color-moon-300-alpha-14);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--eh-color-night-900);
   color: inherit;
   cursor: pointer;
   font: inherit;
   text-align: left;
+}
+
+.typeOption > svg {
+  box-sizing: border-box;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  padding: 9px;
+  border-radius: 11px;
+  background: var(--eh-color-gold-alpha-14);
+  color: var(--products-accent-text);
+}
+
+.typeOption[data-product-create-type="custom"] {
+  border-color: rgb(244 196 48 / 0.42);
+  background: rgb(244 196 48 / 0.08);
 }
 
 .typeOption:hover,
@@ -378,14 +477,14 @@
 .typeOptionText {
   display: grid;
   min-width: 0;
-  gap: 5px;
+  gap: 3px;
 }
 
 .typeOptionTitle {
   overflow-wrap: anywhere;
   color: var(--eh-color-moon-120);
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -393,7 +492,7 @@
   color: var(--eh-color-muted);
   font-size: 12.5px;
   font-weight: 500;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .editorForm {

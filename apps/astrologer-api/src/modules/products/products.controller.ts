@@ -19,6 +19,21 @@ export class ProductsController {
     return this.productsService.getSummary(request);
   }
 
+  @Get("templates")
+  listProductTemplates(@Query() query: unknown) {
+    return this.productsService.listProductTemplates(query);
+  }
+
+  @Post("templates/:templateCode/drafts")
+  @RequireCsrf()
+  createProductFromTemplate(
+    @Param("templateCode") templateCode: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.productsService.createProductFromTemplate(templateCode, body, request);
+  }
+
   @Get(":productId")
   getProduct(@Param("productId") productId: string, @Req() request: AstrologerSessionRequest) {
     return this.productsService.getProduct(productId, request);

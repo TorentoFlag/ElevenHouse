@@ -33,8 +33,14 @@ export function ProductsCreateFlow({
         <ProductCreateTypeModal
           copy={copy.createTypeModal}
           types={productCopy.types}
+          templates={flow.productTemplates}
+          isTemplateLoading={flow.isProductTemplatesLoading}
+          isTemplateError={flow.isProductTemplatesError}
+          isTemplateActionPending={flow.isTemplateActionPending}
+          templateSelectionError={flow.templateSelectionError}
           portalTarget={modalTarget}
           backdropClassName={styles.productScopedModalBackdrop}
+          onSelectTemplate={flow.selectTemplate}
           onSelect={flow.selectType}
           onClose={flow.closeTypeSelection}
         />

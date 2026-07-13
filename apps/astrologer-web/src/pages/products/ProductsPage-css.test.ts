@@ -20,10 +20,27 @@ describe("ProductsPage.module.css", () => {
   it("uses stable responsive grid dimensions for product cards", () => {
     expect(productsPageCss).toContain(".productGrid {");
     expect(productsPageCss).toContain(
-      "grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));"
+      "grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));"
     );
     expect(productsPageCss).toContain(".productCard {");
     expect(productsPageCss).toContain("min-height:");
+  });
+
+  it("lets product action menus render outside the card bounds", () => {
+    const productCardRule = productsPageCss.match(/\.productCard \{[^}]+\}/)?.[0] ?? "";
+
+    expect(productCardRule).not.toContain("overflow: hidden;");
+    expect(productsPageCss).toContain("border-radius: calc(var(--eh-card-radius) - 1px)");
+  });
+
+  it("matches the design reference product card controls", () => {
+    expect(productsPageCss).toContain(".productSecondaryActionsMenu");
+    expect(productsPageCss).toContain(".productEditButton");
+    expect(productsPageCss).toContain(".productFooterMeta");
+    expect(productsPageCss).toContain("width: 40px;");
+    expect(productsPageCss).toContain("height: 40px;");
+    expect(productsPageCss).toContain("padding: 6px 9px;");
+    expect(productsPageCss).toContain("padding: 6px 11px;");
   });
 
   it("switches to a one-column mobile list without nested card layouts", () => {
@@ -41,14 +58,30 @@ describe("ProductsPage.module.css", () => {
     expect(productsPageCss).toContain(
       "min-height: calc(100dvh - var(--astrologer-app-header-height, 68px));"
     );
-    expect(productsPageCss).toContain("padding: 24px;");
-    expect(productsPageCss).toContain("background: rgb(7 6 15 / 0.7);");
-    expect(productsPageCss).toContain("backdrop-filter: blur(4px);");
+    expect(productsPageCss).toContain("padding: 30px;");
+    expect(productsPageCss).toContain("background: rgb(7 6 15 / 0.6);");
+    expect(productsPageCss).toContain("backdrop-filter: blur(3px);");
     expect(productsPageCss).not.toContain(
       "min-height: calc(100dvh - var(--astrologer-app-header-height, 68px) - 64px);"
     );
     expect(productsPageCss).not.toContain("padding: 56px 64px;");
     expect(productsPageCss).not.toContain("background: rgb(7 6 15 / 0.42);");
+  });
+
+  it("matches the design reference type-selection dialog geometry", () => {
+    const modalRule = productsPageCss.match(/\.productsModal \{[^}]+\}/)?.[0] ?? "";
+    const gridRule = productsPageCss.match(/\.typeGrid \{[^}]+\}/)?.[0] ?? "";
+    const optionRule = productsPageCss.match(/\.typeOption \{[^}]+\}/)?.[0] ?? "";
+    const titleRule = productsPageCss.match(/\.typeOptionTitle \{[^}]+\}/)?.[0] ?? "";
+
+    expect(modalRule).toContain("width: min(640px, calc(100vw - 32px));");
+    expect(gridRule).toContain("gap: 12px;");
+    expect(optionRule).toContain("align-items: flex-start;");
+    expect(optionRule).toContain("padding: 16px;");
+    expect(optionRule).toContain("border-radius: 14px;");
+    expect(titleRule).toContain("font-size: 14px;");
+    expect(titleRule).toContain("font-weight: 600;");
+    expect(productsPageCss).toContain('.typeOption[data-product-create-type="custom"] {');
   });
 
   it("matches the product constructor density from the design reference", () => {

@@ -36,4 +36,19 @@ describe("ActionMenu", () => {
     expect(actionMenuCss).toContain(".ehActionMenu__item");
     expect(actionMenuCss).toContain(".ehActionMenu__item--danger");
   });
+
+  it("supports an icon-only trigger with an explicit accessible label", () => {
+    const markup = renderToStaticMarkup(
+      <ActionMenu
+        label={<span aria-hidden="true">...</span>}
+        triggerAriaLabel="Статус продукта"
+        showChevron={false}
+        items={[{ id: "edit", label: "Изменить", onSelect: vi.fn() }]}
+      />
+    );
+
+    expect(markup).toContain('aria-label="Статус продукта"');
+    expect(markup).toContain("...");
+    expect(markup).not.toContain("ehActionMenu__triggerChevron");
+  });
 });

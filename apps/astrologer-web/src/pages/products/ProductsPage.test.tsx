@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   useDocumentTitle: vi.fn(),
   useProductListQuery: vi.fn(),
   useProductSummaryQuery: vi.fn(),
+  useProductTemplatesQuery: vi.fn(),
+  useCreateProductFromTemplateMutation: vi.fn(),
   useCreateProductMutation: vi.fn(),
   useUpdateProductMutation: vi.fn(),
   usePublishProductMutation: vi.fn(),
@@ -95,6 +97,14 @@ vi.mock("../../features/products/model/useProductSummaryQuery", () => ({
   useProductSummaryQuery: mocks.useProductSummaryQuery
 }));
 
+vi.mock("../../features/products/model/useProductTemplatesQuery", () => ({
+  useProductTemplatesQuery: mocks.useProductTemplatesQuery
+}));
+
+vi.mock("../../features/products/model/useCreateProductFromTemplateMutation", () => ({
+  useCreateProductFromTemplateMutation: mocks.useCreateProductFromTemplateMutation
+}));
+
 vi.mock("../../features/products/model/useCreateProductMutation", () => ({
   useCreateProductMutation: mocks.useCreateProductMutation
 }));
@@ -139,7 +149,8 @@ const productsCopy = {
   createTypeModal: {
     title: "Выберите тип продукта",
     closeLabel: "Закрыть выбор типа",
-    description: "Тип задаст базовые параметры, которые можно изменить в редакторе."
+    description: "Тип задаст базовые параметры, которые можно изменить в редакторе.",
+    loadError: "Не удалось загрузить шаблоны. Выберите тип вручную."
   },
   editor: {
     title: "Конструктор продукта",
@@ -317,6 +328,15 @@ describe("ProductsPage", () => {
     mocks.productsPageView.mockImplementation(() => null);
     mocks.productCreateTypeModal.mockImplementation(() => null);
     mocks.productConstructorModal.mockImplementation(() => null);
+    mocks.useProductTemplatesQuery.mockReturnValue({
+      data: { templates: [] },
+      isLoading: false,
+      isError: false
+    });
+    mocks.useCreateProductFromTemplateMutation.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false
+    });
     mocks.useCreateProductMutation.mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false

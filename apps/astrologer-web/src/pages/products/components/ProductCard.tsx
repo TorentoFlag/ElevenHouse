@@ -53,7 +53,7 @@ export function ProductCard({
       ) : null}
       <div className={styles.productCardHeader}>
         <span className={styles.productTypeIcon} aria-hidden="true">
-          <Icon iconName={getProductTypeIconName(product.type)} width={17} height={17} />
+          <Icon iconName={getProductTypeIconName(product.type)} width={20} height={20} />
         </span>
         <div className={styles.productHeading}>
           <span className={styles.productType}>{summary.typeLabel}</span>
@@ -67,24 +67,42 @@ export function ProductCard({
         {summary.price.suffix ? (
           <span className={styles.productPriceSuffix}>{summary.price.suffix}</span>
         ) : null}
+        {summary.metaLine ? <span className={styles.productMeta}>· {summary.metaLine}</span> : null}
       </div>
-      <div className={styles.productMeta}>{summary.metaLine}</div>
 
       <ProductIncludedItemsList items={product.includedItems} />
 
       <div className={styles.productFooter}>
-        <span>
-          {summary.salesLabel} <strong>{summary.salesCount}</strong>
+        <span className={styles.productFooterMeta}>
+          <span>
+            {summary.salesLabel} <strong>{summary.salesCount}</strong>
+          </span>
+          <span className={styles.revenue}>{summary.revenueLabel}</span>
+          {summary.ratingLabel ? (
+            <span className={styles.rating}>
+              <Icon iconName="star" width={12} height={12} aria-hidden="true" />
+              {summary.ratingLabel}
+            </span>
+          ) : null}
         </span>
-        <span className={styles.revenue}>{summary.revenueLabel}</span>
-        {summary.ratingLabel ? <span className={styles.rating}>{summary.ratingLabel}</span> : null}
         <span className={styles.productFooterSpacer} />
         <ActionMenu
-          className={styles.productActionsMenu}
-          label={actions.menuLabel}
-          items={createProductActionMenuItems(product, actions, isActionPending)}
+          className={styles.productSecondaryActionsMenu}
+          label={<Icon iconName="dots" width={15} height={15} aria-hidden="true" />}
+          triggerAriaLabel={actions.menuLabel}
+          showChevron={false}
+          items={createProductSecondaryActionMenuItems(product, actions, isActionPending)}
           align="end"
         />
+        <button
+          className={styles.productEditButton}
+          type="button"
+          data-product-card-edit={product.id}
+          disabled={false}
+          onClick={() => actions.onEdit(product)}
+        >
+          {actions.editLabel}
+        </button>
       </div>
     </Card>
   );
@@ -97,7 +115,10 @@ type ProductStatusBadgeProps = {
 
 function ProductStatusBadge({ label, tone }: ProductStatusBadgeProps) {
   return (
-    <span className={classNames(styles.statusBadge, styles[`statusBadge-${tone}`])}>{label}</span>
+    <span className={classNames(styles.statusBadge, styles[`statusBadge-${tone}`])}>
+      <span className={styles.statusBadgeDot} aria-hidden="true" />
+      {label}
+    </span>
   );
 }
 
@@ -108,7 +129,7 @@ type ProductIncludedItemsListProps = {
 function ProductIncludedItemsList({ items }: ProductIncludedItemsListProps) {
   return (
     <ul className={styles.includedList}>
-      {items.slice(0, 4).map((item) => (
+      {items.slice(0, 3).map((item) => (
         <li key={item.id} className={styles.includedItem}>
           <Icon
             iconName={resolveProductIconName(item.icon)}
@@ -123,19 +144,21 @@ function ProductIncludedItemsList({ items }: ProductIncludedItemsListProps) {
   );
 }
 
-function createProductActionMenuItems(
+function createProductSecondaryActionMenuItems(
   product: ProductResponse,
   actions: ProductCardActions,
   isActionPending: boolean
 ): readonly ActionMenuItem[] {
-  return getProductCardActionItems(product.status, actions).map((action) => ({
-    id: action.kind,
-    label: action.label,
-    icon: getProductActionIcon(action.kind),
-    disabled: isActionPending && action.kind !== "edit",
-    tone: action.kind === "archive" ? "danger" : "default",
-    onSelect: () => runProductCardAction(action, product, actions)
-  }));
+  return getProductCardActionItems(product.status, actions)
+    .filter((action) => action.kind !== "edit")
+    .map((action) => ({
+      id: action.kind,
+      label: action.label,
+      icon: getProductActionIcon(action.kind),
+      disabled: isActionPending,
+      tone: action.kind === "archive" ? "danger" : "default",
+      onSelect: () => runProductCardAction(action, product, actions)
+    }));
 }
 
 function getProductActionIcon(kind: ProductCardActionItem["kind"]) {

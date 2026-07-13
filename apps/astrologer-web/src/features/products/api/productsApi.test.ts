@@ -1,17 +1,21 @@
 import type {
   CreateProductRequest,
+  ListProductTemplatesResponse,
   ListProductsResponse,
   ProductResponse,
+  ProductTemplateResponse,
   ProductSummaryResponse
 } from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { application } from "../../../Application";
 import { archiveProduct } from "./archiveProduct";
 import { createProduct } from "./createProduct";
+import { createProductFromTemplate } from "./createProductFromTemplate";
 import { duplicateProduct } from "./duplicateProduct";
 import { getProduct } from "./getProduct";
 import { getProductSummary } from "./getProductSummary";
 import { listProducts } from "./listProducts";
+import { listProductTemplates } from "./listProductTemplates";
 import { moveProductToDraft } from "./moveProductToDraft";
 import { publishProduct } from "./publishProduct";
 import { updateProduct } from "./updateProduct";
@@ -108,6 +112,29 @@ const productSummaryResponse = {
   bestseller: null
 } satisfies ProductSummaryResponse;
 
+const productTemplate = {
+  id: "44444444-4444-4444-8444-444444444444",
+  code: "individual_consultation",
+  locale: "ru",
+  type: "single",
+  status: "active",
+  title: "Индивидуальная консультация",
+  subtitle: "Одна встреча",
+  description: "Стартовая заготовка",
+  sortOrder: 10,
+  payload: {
+    ...createProductRequest,
+    title: "Натальный разбор",
+    subtitle: "Полный разбор карты"
+  },
+  createdAt: "2026-07-02T00:00:00.000Z",
+  updatedAt: "2026-07-02T00:00:00.000Z"
+} satisfies ProductTemplateResponse;
+
+const listProductTemplatesResponse = {
+  templates: [productTemplate]
+} satisfies ListProductTemplatesResponse;
+
 describe("products API", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -140,6 +167,25 @@ describe("products API", () => {
     vi.spyOn(application.http, "get").mockResolvedValue({ products: [{ id: "not-a-uuid" }] });
 
     await expect(listProducts({ status: "all", limit: 50, offset: 0 })).rejects.toThrow();
+  });
+
+  it("loads product templates and creates drafts from template codes", async () => {
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(listProductTemplatesResponse);
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(productResponse);
+
+    await expect(listProductTemplates({ locale: "ru" })).resolves.toEqual(
+      listProductTemplatesResponse
+    );
+    await expect(
+      createProductFromTemplate({ templateCode: "individual_consultation", locale: "en" })
+    ).resolves.toEqual(productResponse);
+
+    expect(get).toHaveBeenCalledWith("/products/templates?locale=ru");
+    expect(post).toHaveBeenCalledWith(
+      "/products/templates/individual_consultation/drafts",
+      { locale: "en" },
+      { csrf: true }
+    );
   });
 
   it("creates and updates products through protected contract-backed requests", async () => {

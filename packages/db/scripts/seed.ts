@@ -8,6 +8,7 @@ import {
   dictionarySeedCategories,
   dictionarySeedPlatformEntries
 } from "./dictionary-seed-data/index";
+import { productTemplateSeedData } from "./product-template-seed-data/index";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -22,9 +23,10 @@ async function main() {
     await pool.query("select 1");
     await seedDictionaryCategories();
     await seedDictionaryPlatformEntries();
+    await seedProductTemplates();
     await seedPlatformPlans();
     console.log(
-      `Database seed completed: ${dictionarySeedCategories.length} dictionary categories, ${dictionarySeedPlatformEntries.length} dictionary platform entries and ${platformPlanSeedData.length} platform plans upserted`
+      `Database seed completed: ${dictionarySeedCategories.length} dictionary categories, ${dictionarySeedPlatformEntries.length} dictionary platform entries, ${productTemplateSeedData.length} product templates and ${platformPlanSeedData.length} platform plans upserted`
     );
   } finally {
     await pool.end();
@@ -93,6 +95,48 @@ async function seedDictionaryPlatformEntries() {
      set title = excluded.title,
          content = excluded.content,
          status = excluded.status,
+         updated_at = now()`,
+    values
+  );
+}
+
+async function seedProductTemplates() {
+  if (productTemplateSeedData.length === 0) {
+    return;
+  }
+
+  const valuesSql = productTemplateSeedData
+    .map((_, index) => {
+      const parameterOffset = index * 9;
+
+      return `($${parameterOffset + 1}, $${parameterOffset + 2}, $${parameterOffset + 3}, $${parameterOffset + 4}, $${parameterOffset + 5}, $${parameterOffset + 6}, $${parameterOffset + 7}, $${parameterOffset + 8}, $${parameterOffset + 9}::jsonb)`;
+    })
+    .join(", ");
+  const values = productTemplateSeedData.flatMap((template) => [
+    template.code,
+    template.locale,
+    template.type,
+    template.status,
+    template.title,
+    template.subtitle,
+    template.description,
+    template.sortOrder,
+    JSON.stringify(template.payload)
+  ]);
+
+  await pool.query(
+    `insert into product_templates (
+       code, locale, type, status, title, subtitle, description, sort_order, payload
+     )
+     values ${valuesSql}
+     on conflict (code, locale) do update
+     set type = excluded.type,
+         status = excluded.status,
+         title = excluded.title,
+         subtitle = excluded.subtitle,
+         description = excluded.description,
+         sort_order = excluded.sort_order,
+         payload = excluded.payload,
          updated_at = now()`,
     values
   );

@@ -28,7 +28,7 @@ export function ProductsPage() {
   });
   const summaryQuery = useProductSummaryQuery();
   const productCopy = productCopyByLocale[locale];
-  const createFlow = useProductCreateFlow(dictionary.products.saveErrorLabel);
+  const createFlow = useProductCreateFlow(locale, dictionary.products.saveErrorLabel);
   const publishMutation = usePublishProductMutation();
   const moveToDraftMutation = useMoveProductToDraftMutation();
   const archiveMutation = useArchiveProductMutation();

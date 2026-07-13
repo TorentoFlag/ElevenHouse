@@ -12,6 +12,7 @@ export * from "./Clock/index.js";
 export * from "./Close/index.js";
 export * from "./Content/index.js";
 export * from "./Doc/index.js";
+export * from "./Dots/index.js";
 export * from "./Edit/index.js";
 export * from "./FileDown/index.js";
 export * from "./Flow/index.js";

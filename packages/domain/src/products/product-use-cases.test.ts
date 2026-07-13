@@ -1,18 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
   archiveProduct,
+  createProductFromTemplate,
   createProduct,
   duplicateProduct,
   getProduct,
+  listProductTemplates,
   listProducts,
   moveProductToDraft,
   ProductNotFoundError,
+  ProductTemplateNotFoundError,
+  ProductTemplateValidationError,
   ProductValidationError,
   publishProduct,
   updateProduct,
   type Product,
   type ProductCreateInput,
   type ProductStore,
+  type ProductTemplate,
+  type ProductTemplateStore,
   type ProductUpdatePatch
 } from "./index";
 
@@ -266,7 +272,197 @@ describe("product use cases", () => {
     expect(copy.title).toBe("Natal reading (copy)");
     expect(copy.includedItems[0]?.id).not.toBe(product.includedItems[0]?.id);
   });
+
+  it("lists active product templates by locale", async () => {
+    const templateStore = new InMemoryProductTemplateStore([
+      createProductTemplate({ code: "individual_consultation", locale: "ru", status: "active" }),
+      createProductTemplate({ code: "individual_consultation", locale: "en", status: "active" }),
+      createProductTemplate({ code: "archived_template", locale: "ru", status: "archived" })
+    ]);
+
+    await expect(listProductTemplates({ store: templateStore, locale: "ru" })).resolves.toEqual([
+      expect.objectContaining({
+        code: "individual_consultation",
+        locale: "ru",
+        status: "active"
+      })
+    ]);
+  });
+
+  it("creates an owner draft product from an active product template", async () => {
+    const store = new InMemoryProductStore();
+    const templateStore = new InMemoryProductTemplateStore([
+      createProductTemplate({
+        code: "individual_consultation",
+        locale: "ru",
+        payload: {
+          ...baseTemplatePayload(),
+          title: "Индивидуальная консультация",
+          methods: []
+        }
+      })
+    ]);
+
+    const product = await createProductFromTemplate({
+      productStore: store,
+      templateStore,
+      ownerUserId: "owner-2",
+      templateCode: "individual_consultation",
+      locale: "ru",
+      now
+    });
+
+    expect(product).toMatchObject({
+      ownerUserId: "owner-2",
+      status: "draft",
+      title: "Индивидуальная консультация",
+      methods: []
+    });
+  });
+
+  it("normalizes omitted optional template payload fields before draft creation", async () => {
+    const store = new InMemoryProductStore();
+    const templateStore = new InMemoryProductTemplateStore([
+      createProductTemplate({
+        code: "quick_answer",
+        locale: "ru",
+        type: "mini",
+        payload: {
+          type: "mini",
+          title: "Быстрый ответ",
+          subtitle: "Короткий формат",
+          priceMinor: 150000,
+          currency: "RUB",
+          executionMode: "instant",
+          paymentModel: "once",
+          participantMode: "solo",
+          deliveryFormats: ["chat"],
+          requiredClientData: ["question"],
+          methods: [],
+          accessGrants: [],
+          includedItems: [{ text: "Один вопрос", icon: "chat", order: 10 }],
+          modifiers: []
+        } as ProductTemplate["payload"]
+      })
+    ]);
+
+    const product = await createProductFromTemplate({
+      productStore: store,
+      templateStore,
+      ownerUserId: "owner-2",
+      templateCode: "quick_answer",
+      locale: "ru",
+      now
+    });
+
+    expect(product).toMatchObject({
+      type: "mini",
+      title: "Быстрый ответ",
+      coverMediaId: null,
+      introVideoUrl: null,
+      durationMinutes: null,
+      packageSessionCount: null,
+      subscriptionPeriod: null,
+      groupSize: null
+    });
+  });
+
+  it("does not create products from missing or archived templates", async () => {
+    const store = new InMemoryProductStore();
+    const templateStore = new InMemoryProductTemplateStore([
+      createProductTemplate({ code: "archived_template", locale: "ru", status: "archived" })
+    ]);
+
+    await expect(
+      createProductFromTemplate({
+        productStore: store,
+        templateStore,
+        ownerUserId: "owner-1",
+        templateCode: "archived_template",
+        locale: "ru",
+        now
+      })
+    ).rejects.toBeInstanceOf(ProductTemplateNotFoundError);
+  });
+
+  it("rejects template payloads that reference account-owned media", async () => {
+    const store = new InMemoryProductStore();
+    const templateStore = new InMemoryProductTemplateStore([
+      createProductTemplate({
+        code: "unsafe_media_template",
+        locale: "ru",
+        payload: {
+          ...baseTemplatePayload(),
+          coverMediaId: "11111111-1111-4111-8111-111111111111"
+        }
+      })
+    ]);
+
+    await expect(
+      createProductFromTemplate({
+        productStore: store,
+        templateStore,
+        ownerUserId: "owner-1",
+        templateCode: "unsafe_media_template",
+        locale: "ru",
+        now
+      })
+    ).rejects.toBeInstanceOf(ProductTemplateValidationError);
+  });
 });
+
+class InMemoryProductTemplateStore implements ProductTemplateStore {
+  constructor(private readonly templates: ProductTemplate[]) {}
+
+  async listActiveByLocale(input: Parameters<ProductTemplateStore["listActiveByLocale"]>[0]) {
+    return this.templates
+      .filter((template) => template.locale === input.locale && template.status === "active")
+      .sort((left, right) => left.sortOrder - right.sortOrder);
+  }
+
+  async findActiveByCodeAndLocale(
+    input: Parameters<ProductTemplateStore["findActiveByCodeAndLocale"]>[0]
+  ) {
+    return (
+      this.templates.find(
+        (template) =>
+          template.code === input.code &&
+          template.locale === input.locale &&
+          template.status === "active"
+      ) ?? null
+    );
+  }
+}
+
+function createProductTemplate(
+  overrides: Partial<ProductTemplate> & { readonly code: string; readonly locale: "ru" | "en" }
+): ProductTemplate {
+  return {
+    id: `${overrides.locale}-${overrides.code}`,
+    code: overrides.code,
+    locale: overrides.locale,
+    type: overrides.type ?? "single",
+    status: overrides.status ?? "active",
+    title: overrides.title ?? "Индивидуальная консультация",
+    subtitle: overrides.subtitle ?? "Одна встреча с понятным результатом",
+    description: overrides.description ?? "Универсальная экспертная сессия.",
+    sortOrder: overrides.sortOrder ?? 10,
+    payload: overrides.payload ?? {
+      ...baseTemplatePayload(),
+      methods: []
+    },
+    createdAt: overrides.createdAt ?? now.toISOString(),
+    updatedAt: overrides.updatedAt ?? now.toISOString()
+  };
+}
+
+function baseTemplatePayload(): ProductTemplate["payload"] {
+  return Object.fromEntries(
+    Object.entries(baseInput).filter(
+      ([key, value]) => key !== "ownerUserId" && key !== "coverMediaId" && value !== null
+    )
+  ) as ProductTemplate["payload"];
+}
 
 function materializePatch(patch: ProductUpdatePatch, createId: () => string): Partial<Product> {
   const { includedItems, modifiers, ...rest } = patch;

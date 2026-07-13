@@ -8,6 +8,8 @@ import {
   type ProductLifetimeAnalytics,
   type ProductStore,
   type ProductStoreCreateInput,
+  type ProductTemplate,
+  type ProductTemplateStore,
   ProductValidationError
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
@@ -167,6 +169,87 @@ describe("ProductsService", () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it("lists active platform product templates", async () => {
+    const service = createService(createStore(), createMediaStore(), createPublicUrlResolver(), {
+      templateStore: createTemplateStore()
+    });
+
+    await expect(service.listProductTemplates({ locale: "ru" })).resolves.toEqual({
+      templates: [
+        expect.objectContaining({
+          code: "individual_consultation",
+          locale: "ru",
+          type: "single",
+          status: "active"
+        })
+      ]
+    });
+  });
+
+  it("creates owner draft products from active platform product templates", async () => {
+    const store = createStore();
+    const templateStore = createTemplateStore();
+    const service = createService(store, createMediaStore(), createPublicUrlResolver(), {
+      templateStore
+    });
+
+    await expect(
+      service.createProductFromTemplate(
+        "individual_consultation",
+        { locale: "ru" },
+        createAuthenticatedRequest()
+      )
+    ).resolves.toMatchObject({
+      ownerUserId,
+      status: "draft",
+      title: "Индивидуальная консультация"
+    });
+
+    expect(store.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerUserId,
+        status: "draft",
+        title: "Индивидуальная консультация"
+      })
+    );
+  });
+
+  it("creates product drafts from the requested template locale", async () => {
+    const store = createStore();
+    const englishTemplate = createProductTemplate({
+      locale: "en",
+      title: "Individual consultation",
+      subtitle: "One focused session",
+      payload: {
+        ...createProductTemplate().payload,
+        title: "Individual consultation",
+        subtitle: "One focused session",
+        durationLabel: "60 min",
+        includedItems: [{ text: "One online session", icon: "video", order: 10 }]
+      }
+    });
+    const findActiveByCodeAndLocale = vi.fn(async () => englishTemplate);
+    const service = createService(store, createMediaStore(), createPublicUrlResolver(), {
+      templateStore: createTemplateStore({ findActiveByCodeAndLocale })
+    });
+
+    await expect(
+      service.createProductFromTemplate(
+        "individual_consultation",
+        { locale: "en" },
+        createAuthenticatedRequest()
+      )
+    ).resolves.toMatchObject({
+      ownerUserId,
+      status: "draft",
+      title: "Individual consultation"
+    });
+    expect(findActiveByCodeAndLocale).toHaveBeenCalledWith({
+      code: "individual_consultation",
+      locale: "en"
+    });
+  });
+
   it("rejects requests without authenticated astrologer context", async () => {
     const service = createService(createStore());
 
@@ -177,10 +260,12 @@ describe("ProductsService", () => {
 function createService(
   store: ProductStore,
   mediaStore: MediaAssetStore = createMediaStore(),
-  publicUrlResolver: MediaPublicUrlResolver = createPublicUrlResolver()
+  publicUrlResolver: MediaPublicUrlResolver = createPublicUrlResolver(),
+  options: { readonly templateStore?: ProductTemplateStore } = {}
 ): ProductsService {
   return new ProductsService(
     store,
+    options.templateStore ?? createTemplateStore(),
     createNullAnalyticsReader(),
     mediaStore,
     publicUrlResolver,
@@ -274,6 +359,63 @@ function createStore(overrides: Partial<ProductStore> = {}): ProductStore {
       products.unshift(product);
       return product;
     }),
+    ...overrides
+  };
+}
+
+function createTemplateStore(overrides: Partial<ProductTemplateStore> = {}): ProductTemplateStore {
+  const templates = [createProductTemplate()];
+
+  return {
+    listActiveByLocale: vi.fn(async (input) =>
+      templates.filter(
+        (template) => template.locale === input.locale && template.status === "active"
+      )
+    ),
+    findActiveByCodeAndLocale: vi.fn(
+      async (input) =>
+        templates.find(
+          (template) =>
+            template.code === input.code &&
+            template.locale === input.locale &&
+            template.status === "active"
+        ) ?? null
+    ),
+    ...overrides
+  };
+}
+
+function createProductTemplate(overrides: Partial<ProductTemplate> = {}): ProductTemplate {
+  return {
+    id: "55555555-5555-4555-8555-555555555555",
+    code: "individual_consultation",
+    locale: "ru",
+    type: "single",
+    status: "active",
+    title: "Индивидуальная консультация",
+    subtitle: "Одна встреча с понятным результатом",
+    description: "Универсальная экспертная сессия.",
+    sortOrder: 10,
+    payload: {
+      type: "single",
+      title: "Индивидуальная консультация",
+      subtitle: "Одна встреча с понятным результатом",
+      priceMinor: 490000,
+      currency: "RUB",
+      executionMode: "live",
+      paymentModel: "once",
+      durationMinutes: 60,
+      durationLabel: "60 мин",
+      participantMode: "solo",
+      deliveryFormats: ["video"],
+      requiredClientData: ["question"],
+      methods: [],
+      accessGrants: [],
+      includedItems: [{ text: "Онлайн-встреча 1 : 1", icon: "video", order: 10 }],
+      modifiers: []
+    },
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
     ...overrides
   };
 }

@@ -59,6 +59,7 @@ import {
   productRequiredClientDataValues,
   products,
   productStatusValues,
+  productTemplates,
   productSubscriptionPeriodValues,
   productTypeValues,
   userProfiles,
@@ -71,6 +72,7 @@ import {
 
 const currentBaselineMigration = "packages/db/drizzle/0000_dazzling_metal_master.sql";
 const clientRelationshipsMigration = "packages/db/drizzle/0002_free_nomad.sql";
+const productTemplatesMigration = "packages/db/drizzle/0003_product_templates.sql";
 
 describe("database account schema constants", () => {
   it("keeps database role checks aligned with the application role model", () => {
@@ -161,7 +163,7 @@ describe("database account schema constants", () => {
     expect(migration).toContain('CREATE TABLE "verification_applications"');
     expect(migration).toContain('CREATE TABLE "verification_application_documents"');
     expect(migration).toContain(
-      'CONSTRAINT "verification_applications_status_check" CHECK ("verification_applications"."status" in (\'pending\', \'approved\', \'rejected\', \'revoked\'))'
+      "CONSTRAINT \"verification_applications_status_check\" CHECK (\"verification_applications\".\"status\" in ('pending', 'approved', 'rejected', 'revoked'))"
     );
     expect(migration).toContain(
       'CONSTRAINT "verification_application_documents_kind_check" CHECK ("verification_application_documents"."kind" in (\'identity\', \'qualification\'))'
@@ -293,6 +295,7 @@ describe("database account schema constants", () => {
     expect(productAccessGrants).toBeDefined();
     expect(productIncludedItems).toBeDefined();
     expect(productModifiers).toBeDefined();
+    expect(productTemplates).toBeDefined();
   });
 
   it("keeps product tables in the current baseline migration", () => {
@@ -320,6 +323,22 @@ describe("database account schema constants", () => {
     );
     expect(migration).toContain(
       'ALTER TABLE "products" ADD CONSTRAINT "products_cover_media_id_media_assets_id_fk" FOREIGN KEY ("cover_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action'
+    );
+  });
+
+  it("keeps product template tables in the product template migration", () => {
+    const migration = readFileSync(productTemplatesMigration, "utf8");
+
+    expect(migration).toContain('CREATE TABLE "product_templates"');
+    expect(migration).toContain(
+      'CONSTRAINT "product_templates_code_locale_unique" UNIQUE("code","locale")'
+    );
+    expect(migration).toContain('CONSTRAINT "product_templates_status_check"');
+    expect(migration).toContain('CONSTRAINT "product_templates_locale_check"');
+    expect(migration).toContain('CONSTRAINT "product_templates_type_check"');
+    expect(migration).toContain('CONSTRAINT "product_templates_sort_order_check"');
+    expect(migration).toContain(
+      'CREATE INDEX "product_templates_active_locale_order_idx" ON "product_templates" USING btree ("locale","sort_order","code") WHERE "product_templates"."status" = \'active\''
     );
   });
 

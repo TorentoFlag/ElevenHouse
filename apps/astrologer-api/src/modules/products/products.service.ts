@@ -9,13 +9,17 @@ import {
   archiveProduct,
   assertUsableMediaForOwner,
   createProduct,
+  createProductFromTemplate,
   duplicateProduct,
   getProduct,
+  listProductTemplates,
   listProducts,
   MediaNotFoundError,
   MediaValidationError,
   moveProductToDraft,
   ProductNotFoundError,
+  ProductTemplateNotFoundError,
+  ProductTemplateValidationError,
   ProductValidationError,
   publishProduct,
   updateProduct,
@@ -24,28 +28,37 @@ import {
   type ProductCreateInput,
   type MediaAssetStore,
   type ProductStore,
+  type ProductTemplate,
+  type ProductTemplateStore,
   type ProductUpdatePatch
 } from "@elevenhouse/domain";
 import {
+  createProductFromTemplateParamsSchema,
+  createProductFromTemplateRequestSchema,
   createProductRequestSchema,
   duplicateProductRequestSchema,
+  listProductTemplatesQuerySchema,
+  listProductTemplatesResponseSchema,
   listProductsQuerySchema,
   listProductsResponseSchema,
   productIdParamSchema,
   productResponseSchema,
   productSummaryResponseSchema,
+  productTemplateResponseSchema,
   updateProductRequestSchema,
   type CreateProductRequest,
+  type ListProductTemplatesResponse,
   type ListProductsResponse,
   type MediaAssetResponse,
   type ProductResponse,
   type ProductSummaryResponse,
+  type ProductTemplateResponse,
   type UpdateProductRequest
 } from "@elevenhouse/contracts";
 import type { ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
-import { PRODUCT_ANALYTICS_READER, PRODUCT_STORE } from "./products.tokens";
+import { PRODUCT_ANALYTICS_READER, PRODUCT_STORE, PRODUCT_TEMPLATE_STORE } from "./products.tokens";
 import { MEDIA_ASSET_STORE, MEDIA_PUBLIC_URL_RESOLVER } from "../media/media.tokens";
 import { toMediaAssetResponse, type MediaPublicUrlResolver } from "../media/media-response.mapper";
 
@@ -53,6 +66,7 @@ import { toMediaAssetResponse, type MediaPublicUrlResolver } from "../media/medi
 export class ProductsService {
   constructor(
     @Inject(PRODUCT_STORE) private readonly store: ProductStore,
+    @Inject(PRODUCT_TEMPLATE_STORE) private readonly templateStore: ProductTemplateStore,
     @Inject(PRODUCT_ANALYTICS_READER) private readonly analyticsReader: ProductAnalyticsReader,
     @Inject(MEDIA_ASSET_STORE) private readonly mediaStore: MediaAssetStore,
     @Inject(MEDIA_PUBLIC_URL_RESOLVER) private readonly publicUrlResolver: MediaPublicUrlResolver,
@@ -120,6 +134,18 @@ export class ProductsService {
     });
   }
 
+  async listProductTemplates(query: unknown): Promise<ListProductTemplatesResponse> {
+    const parsedQuery = parseContract(listProductTemplatesQuerySchema, query ?? {});
+    const templates = await listProductTemplates({
+      store: this.templateStore,
+      locale: parsedQuery.locale
+    });
+
+    return listProductTemplatesResponseSchema.parse({
+      templates: templates.map(toProductTemplateResponse)
+    });
+  }
+
   async createProduct(body: unknown, request: AstrologerSessionRequest): Promise<ProductResponse> {
     const parsedBody = parseContract(createProductRequestSchema, body);
     const ownerUserId = requireOwnerUserId(request);
@@ -132,6 +158,29 @@ export class ProductsService {
     const [response] = await this.mapProducts(ownerUserId, [product]);
 
     return productResponseSchema.parse(response);
+  }
+
+  async createProductFromTemplate(
+    templateCode: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<ProductResponse> {
+    const params = parseContract(createProductFromTemplateParamsSchema, { templateCode });
+    const parsedBody = parseContract(createProductFromTemplateRequestSchema, body);
+    const ownerUserId = requireOwnerUserId(request);
+
+    return mapProductErrors(async () => {
+      const product = await createProductFromTemplate({
+        productStore: this.store,
+        templateStore: this.templateStore,
+        ownerUserId,
+        templateCode: params.templateCode,
+        locale: parsedBody.locale,
+        now: this.clock.now()
+      });
+      const [response] = await this.mapProducts(ownerUserId, [product]);
+      return productResponseSchema.parse(response);
+    });
   }
 
   async updateProduct(
@@ -293,6 +342,10 @@ export class ProductsService {
   }
 }
 
+function toProductTemplateResponse(template: ProductTemplate): ProductTemplateResponse {
+  return productTemplateResponseSchema.parse(template);
+}
+
 function toCreateInput(body: CreateProductRequest, ownerUserId: string): ProductCreateInput {
   return {
     ownerUserId,
@@ -377,8 +430,12 @@ async function mapProductErrors<T>(operation: () => Promise<T>): Promise<T> {
     if (error instanceof ProductNotFoundError) {
       throw new NotFoundException("Product not found");
     }
+    if (error instanceof ProductTemplateNotFoundError) {
+      throw new NotFoundException("Product template not found");
+    }
     if (
       error instanceof ProductValidationError ||
+      error instanceof ProductTemplateValidationError ||
       error instanceof MediaValidationError ||
       error instanceof MediaNotFoundError
     ) {

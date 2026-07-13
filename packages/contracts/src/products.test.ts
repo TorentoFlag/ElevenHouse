@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  createProductFromTemplateParamsSchema,
+  createProductFromTemplateRequestSchema,
   createProductRequestSchema,
   duplicateProductRequestSchema,
+  listProductTemplatesResponseSchema,
   listProductsQuerySchema,
+  productTemplateResponseSchema,
   productResponseSchema,
   updateProductRequestSchema
 } from "./products";
@@ -266,6 +270,43 @@ describe("product contracts", () => {
       status: "all",
       limit: 50,
       offset: 0
+    });
+  });
+
+  it("accepts platform product template responses", () => {
+    const template = {
+      id: "55555555-5555-4555-8555-555555555555",
+      code: "individual_consultation",
+      locale: "ru",
+      type: "single",
+      status: "active",
+      title: "Индивидуальная консультация",
+      subtitle: "Одна встреча с понятным результатом",
+      description: "Подходит для консультаций, диагностики и экспертных сессий.",
+      sortOrder: 10,
+      payload: {
+        ...validProductRequest,
+        title: "Индивидуальная консультация",
+        subtitle: "Одна встреча с понятным результатом",
+        methods: []
+      },
+      createdAt: "2026-07-07T00:00:00.000Z",
+      updatedAt: "2026-07-07T00:00:00.000Z"
+    };
+
+    expect(productTemplateResponseSchema.parse(template)).toMatchObject({
+      code: "individual_consultation",
+      locale: "ru",
+      type: "single"
+    });
+    expect(
+      listProductTemplatesResponseSchema.parse({ templates: [template] }).templates
+    ).toHaveLength(1);
+    expect(createProductFromTemplateParamsSchema.parse({ templateCode: "quick_answer" })).toEqual({
+      templateCode: "quick_answer"
+    });
+    expect(createProductFromTemplateRequestSchema.parse({ locale: "en" })).toEqual({
+      locale: "en"
     });
   });
 

@@ -468,6 +468,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@elevenhouse/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@elevenhouse/domain':
         specifier: workspace:*
         version: link:../domain

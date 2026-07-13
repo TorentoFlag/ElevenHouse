@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
 import {
+  listProductTemplatesResponseSchema,
   listProductsResponseSchema,
   productResponseSchema,
   productSummaryResponseSchema
@@ -16,7 +17,9 @@ import type {
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork,
   Product,
   ProductStore,
-  ProductStoreCreateInput
+  ProductStoreCreateInput,
+  ProductTemplate,
+  ProductTemplateStore
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SystemClock } from "../clock/system-clock.service";
@@ -38,7 +41,7 @@ import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordle
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { ProductsModule } from "./products.module";
-import { PRODUCT_STORE } from "./products.tokens";
+import { PRODUCT_STORE, PRODUCT_TEMPLATE_STORE } from "./products.tokens";
 
 const now = new Date("2026-07-02T00:00:00.000Z");
 const sessionCookieName = "elevenhouse_astrologer_session";
@@ -61,9 +64,11 @@ describe("products HTTP routes", () => {
   let moduleRef: TestingModule;
   let baseUrl: string;
   let productStore: ProductStore;
+  let productTemplateStore: ProductTemplateStore;
 
   beforeEach(async () => {
     productStore = createProductStore();
+    productTemplateStore = createProductTemplateStore();
     const authStore = createAuthStore();
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async () => raise("Unexpected passwordless auth unit of work call")
@@ -114,6 +119,8 @@ describe("products HTTP routes", () => {
       })
       .overrideProvider(PRODUCT_STORE)
       .useValue(productStore)
+      .overrideProvider(PRODUCT_TEMPLATE_STORE)
+      .useValue(productTemplateStore)
       .overrideProvider(MEDIA_ASSET_STORE)
       .useValue(createMediaAssetStore())
       .compile();
@@ -227,6 +234,47 @@ describe("products HTTP routes", () => {
       grossRevenueMinor: 0,
       currency: "RUB",
       bestseller: null
+    });
+  });
+
+  it("lists localized templates and creates an owner draft with CSRF protection", async () => {
+    const unauthenticatedList = await fetch(`${baseUrl}/products/templates?locale=en`);
+    const templateList = await getJson("/products/templates?locale=en");
+    const missingCsrf = await postJson(
+      "/products/templates/individual_consultation/drafts",
+      { locale: "en" },
+      { cookie: sessionCookieHeader() }
+    );
+    const invalidBody = await postJson(
+      "/products/templates/individual_consultation/drafts",
+      {},
+      csrfHeaders()
+    );
+    const createdDraft = await postJson(
+      "/products/templates/individual_consultation/drafts",
+      { locale: "en" },
+      csrfHeaders()
+    );
+
+    expect(unauthenticatedList.status).toBe(401);
+    expect(templateList.status).toBe(200);
+    listProductTemplatesResponseSchema.parse(templateList.body);
+    expect(templateList.body).toMatchObject({
+      templates: [
+        {
+          code: "individual_consultation",
+          locale: "en",
+          title: "Individual consultation"
+        }
+      ]
+    });
+    expect(missingCsrf.status).toBe(403);
+    expect(invalidBody.status).toBe(400);
+    expect(createdDraft.status).toBe(201);
+    expect(createdDraft.body).toMatchObject({
+      ownerUserId,
+      status: "draft",
+      title: "Individual consultation"
     });
   });
 
@@ -391,6 +439,59 @@ function createProductStore(): ProductStore {
       products.unshift(product);
       return product;
     })
+  };
+}
+
+function createProductTemplateStore(): ProductTemplateStore {
+  const templates = [
+    createProductTemplate("ru", "Индивидуальная консультация"),
+    createProductTemplate("en", "Individual consultation")
+  ];
+
+  return {
+    listActiveByLocale: vi.fn(async ({ locale }) =>
+      templates.filter((template) => template.locale === locale)
+    ),
+    findActiveByCodeAndLocale: vi.fn(
+      async ({ code, locale }) =>
+        templates.find((template) => template.code === code && template.locale === locale) ?? null
+    )
+  };
+}
+
+function createProductTemplate(locale: "ru" | "en", title: string): ProductTemplate {
+  return {
+    id:
+      locale === "ru"
+        ? "55555555-5555-4555-8555-555555555555"
+        : "66666666-6666-4666-8666-666666666666",
+    code: "individual_consultation",
+    locale,
+    type: "single",
+    status: "active",
+    title,
+    subtitle: null,
+    description: null,
+    sortOrder: 10,
+    payload: {
+      type: "single",
+      title,
+      priceMinor: 490000,
+      currency: "RUB",
+      executionMode: "live",
+      paymentModel: "once",
+      durationMinutes: 60,
+      durationLabel: locale === "ru" ? "60 мин" : "60 min",
+      participantMode: "solo",
+      deliveryFormats: ["video"],
+      requiredClientData: ["question"],
+      methods: [],
+      accessGrants: [],
+      includedItems: [],
+      modifiers: []
+    },
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString()
   };
 }
 

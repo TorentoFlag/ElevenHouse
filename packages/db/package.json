@@ -165,6 +165,7 @@
     "typescript": "6.0.3"
   },
   "dependencies": {
+    "@elevenhouse/contracts": "workspace:*",
     "@elevenhouse/domain": "workspace:*",
     "@elevenhouse/validation": "workspace:*",
     "dotenv": "17.4.2",

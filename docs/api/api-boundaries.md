@@ -78,8 +78,10 @@ GET  /identity/me
 POST /identity/logout
 GET  /products
 GET  /products/summary
+GET  /products/templates?locale=ru|en
 GET  /products/:productId
 POST /products
+POST /products/templates/:templateCode/drafts
 PUT  /products/:productId
 POST /products/:productId/publish
 POST /products/:productId/move-to-draft
@@ -103,6 +105,13 @@ GET  /platform-billing/me
 GET  /verification/me
 POST /verification/applications
 ```
+
+`GET /products/templates` returns active platform-owned starter templates in the
+requested locale. `POST /products/templates/:templateCode/drafts` requires an
+authenticated astrologer session, CSRF protection and a strict `{ "locale":
+"ru" | "en" }` body; it creates a new owner-scoped product draft from the
+stored template payload. Template payloads never carry owner, status or media
+ownership state from another account.
 
 Verification submission in `astrologer-api` only accepts astrologer-owned private
 identity and qualification media and creates a pending application. Approve,

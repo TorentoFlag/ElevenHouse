@@ -1,16 +1,20 @@
 import type {
   CreateProductRequest,
   ListProductsQuery,
-  ProductResponse
+  ProductResponse,
+  ProductTemplateLocale
 } from "@elevenhouse/contracts";
 import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import { archiveProduct } from "../api/archiveProduct";
 import { createProduct } from "../api/createProduct";
+import { createProductFromTemplate } from "../api/createProductFromTemplate";
+import type { CreateProductFromTemplateInput } from "../api/createProductFromTemplate";
 import { duplicateProduct } from "../api/duplicateProduct";
 import type { DuplicateProductInput } from "../api/duplicateProduct";
 import { getProduct } from "../api/getProduct";
 import { getProductSummary } from "../api/getProductSummary";
 import { listProducts } from "../api/listProducts";
+import { listProductTemplates } from "../api/listProductTemplates";
 import { moveProductToDraft } from "../api/moveProductToDraft";
 import { publishProduct } from "../api/publishProduct";
 import { updateProduct, type UpdateProductInput } from "../api/updateProduct";
@@ -19,7 +23,8 @@ export const productsQueryKeys = {
   all: () => ["products"] as const,
   list: (query: ListProductsQuery) => ["products", "list", query] as const,
   summary: () => ["products", "summary"] as const,
-  detail: (productId: string) => ["products", "detail", productId] as const
+  detail: (productId: string) => ["products", "detail", productId] as const,
+  templates: (locale: ProductTemplateLocale) => ["products", "templates", locale] as const
 };
 
 export function productListQueryOptions(query: ListProductsQuery) {
@@ -44,9 +49,25 @@ export function productDetailQueryOptions(productId: string) {
   };
 }
 
+export function productTemplatesQueryOptions(locale: ProductTemplateLocale) {
+  return {
+    queryKey: productsQueryKeys.templates(locale),
+    queryFn: () => listProductTemplates({ locale })
+  };
+}
+
 export function createProductMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return {
     mutationFn: (body: CreateProductRequest) => createProduct(body),
+    onSuccess: () => invalidateProducts(queryClient)
+  };
+}
+
+export function createProductFromTemplateMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: CreateProductFromTemplateInput) => createProductFromTemplate(input),
     onSuccess: () => invalidateProducts(queryClient)
   };
 }
