@@ -1,6 +1,8 @@
 # Local Development Setup
 
-Этот документ описывает только технический запуск foundation-слоя.
+Этот документ описывает только технический запуск foundation-слоя. Каноническая
+матрица команд и предусловий находится в `commands.md`, стратегия тестирования
+и уровни evidence — в `testing-strategy.md`.
 
 ## Prerequisites
 
@@ -10,17 +12,14 @@
 
 ## Install
 
-```bash
-pnpm install
-```
+Установи зависимости командой `pnpm install`.
 
 Для локальных значений окружения можно использовать `.env.example` как источник дефолтов. Если нужен отдельный локальный файл, создай `.env` в корне репозитория.
 
 ## Local Infrastructure
 
-```bash
-docker compose up -d postgres redis minio minio-init
-```
+Команда запуска инфраструктуры приведена в `commands.md`. Управлять локальными
+процессами можно только по прямой команде пользователя.
 
 Сервисы:
 
@@ -38,47 +37,20 @@ Database schema и migrations живут в `packages/db` и управляют�
 
 При изменении DB schema не создаём цепочки incremental `ALTER`-миграций. Всегда пересобираем актуальную миграцию заново и делаем полный reset локальной базы.
 
-```bash
-pnpm db:generate
-pnpm db:migrate
-pnpm db:seed
-```
-
-Для полной пересборки локальной development базы:
-
-```bash
-pnpm db:reset
-```
+Команды generate/migrate/seed/reset, проверка фактического Docker-порта и
+требования к `DATABASE_URL` описаны в `commands.md`.
 
 `db:reset` сбрасывает только local development PostgreSQL schema и отказывается работать с `NODE_ENV=production` или non-local database hosts.
 
 ## Verification
 
-```bash
-pnpm verify
-```
-
-Команда выполняет:
-
-- `pnpm lint`
-- `pnpm typecheck`
-- `pnpm test`
-- `pnpm build`
+Используй TDD и evidence ladder из `testing-strategy.md`. Полная repository
+verification и targeted examples зафиксированы в `commands.md`.
 
 ## Development Servers
 
-```bash
-pnpm --filter @elevenhouse/client-web dev
-pnpm --filter @elevenhouse/astrologer-web dev
-pnpm --filter @elevenhouse/admin-web dev
-pnpm --filter @elevenhouse/public-api dev
-pnpm --filter @elevenhouse/astrologer-api dev
-pnpm --filter @elevenhouse/admin-api dev
-pnpm --filter @elevenhouse/workers dev
-pnpm --filter @elevenhouse/payment-worker dev
-pnpm --filter @elevenhouse/notification-worker dev
-pnpm --filter @elevenhouse/chart-worker dev
-```
+Команды приложений доступны через их `dev` scripts; точные примеры и правило
+явного разрешения на управление процессами находятся в `commands.md`.
 
 Порты по умолчанию:
 
