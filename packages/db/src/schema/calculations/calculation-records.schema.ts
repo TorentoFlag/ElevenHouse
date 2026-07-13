@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { users } from "../identity/accounts.schema";
 import {
   calculationModeValues,
@@ -18,9 +18,13 @@ export const calculationRecords = pgTable(
     module: text("module").notNull(),
     mode: text("mode").notNull(),
     methodCode: text("method_code").notNull(),
-    currentMethodVersion: text("current_method_version").notNull(),
     title: text("title").notNull(),
     status: text("status").notNull().default("calculated"),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    inputData: jsonb("input_data").notNull(),
+    resultData: jsonb("result_data").notNull(),
+    resultSummary: jsonb("result_summary").notNull(),
+    resultChecksum: text("result_checksum").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -36,6 +40,27 @@ export const calculationRecords = pgTable(
     check(
       "calculation_records_status_check",
       sql`${table.status} in ${sql.raw(formatCalculationSqlValues(calculationStatusValues))}`
+    ),
+    check(
+      "calculation_records_request_fingerprint_check",
+      sql`${table.requestFingerprint} ~ '^sha256:[a-f0-9]{64}$'`
+    ),
+    check("calculation_records_input_data_object_check", sql`jsonb_typeof(${table.inputData}) = 'object'`),
+    check("calculation_records_result_data_object_check", sql`jsonb_typeof(${table.resultData}) = 'object'`),
+    check(
+      "calculation_records_result_summary_object_check",
+      sql`jsonb_typeof(${table.resultSummary}) = 'object'`
+    ),
+    check(
+      "calculation_records_result_checksum_check",
+      sql`${table.resultChecksum} ~ '^sha256:[a-f0-9]{64}$'`
+    ),
+    uniqueIndex("calculation_records_exact_request_unique").on(
+      table.ownerUserId,
+      table.module,
+      table.mode,
+      table.methodCode,
+      table.requestFingerprint
     ),
     index("calculation_records_owner_updated_id_idx").on(
       table.ownerUserId,

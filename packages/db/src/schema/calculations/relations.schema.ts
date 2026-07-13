@@ -6,7 +6,6 @@ import { calculationClientLinks } from "./calculation-client-links.schema";
 import { calculationInterpretations } from "./calculation-interpretations.schema";
 import { calculationParticipants } from "./calculation-participants.schema";
 import { calculationRecords } from "./calculation-records.schema";
-import { calculationVersions } from "./calculation-versions.schema";
 
 export const calculationRecordsRelations = relations(calculationRecords, ({ many, one }) => ({
   owner: one(users, {
@@ -14,7 +13,6 @@ export const calculationRecordsRelations = relations(calculationRecords, ({ many
     references: [users.id]
   }),
   participants: many(calculationParticipants),
-  versions: many(calculationVersions),
   links: many(calculationClientLinks),
   interpretations: many(calculationInterpretations),
   artifacts: many(calculationArtifacts)
@@ -25,15 +23,6 @@ export const calculationParticipantsRelations = relations(calculationParticipant
     fields: [calculationParticipants.calculationId],
     references: [calculationRecords.id]
   })
-}));
-
-export const calculationVersionsRelations = relations(calculationVersions, ({ many, one }) => ({
-  calculation: one(calculationRecords, {
-    fields: [calculationVersions.calculationId],
-    references: [calculationRecords.id]
-  }),
-  interpretations: many(calculationInterpretations),
-  artifacts: many(calculationArtifacts)
 }));
 
 export const calculationClientLinksRelations = relations(calculationClientLinks, ({ one }) => ({
@@ -49,10 +38,6 @@ export const calculationInterpretationsRelations = relations(
     calculation: one(calculationRecords, {
       fields: [calculationInterpretations.calculationId],
       references: [calculationRecords.id]
-    }),
-    version: one(calculationVersions, {
-      fields: [calculationInterpretations.versionId],
-      references: [calculationVersions.id]
     })
   })
 );
@@ -61,10 +46,6 @@ export const calculationArtifactsRelations = relations(calculationArtifacts, ({ 
   calculation: one(calculationRecords, {
     fields: [calculationArtifacts.calculationId],
     references: [calculationRecords.id]
-  }),
-  version: one(calculationVersions, {
-    fields: [calculationArtifacts.versionId],
-    references: [calculationVersions.id]
   }),
   media: one(mediaAssets, {
     fields: [calculationArtifacts.mediaAssetId],

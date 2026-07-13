@@ -1,7 +1,6 @@
 export * from "./calculation-values";
 export * from "./calculation-records.schema";
 export * from "./calculation-participants.schema";
-export * from "./calculation-versions.schema";
 export * from "./calculation-client-links.schema";
 export * from "./calculation-interpretations.schema";
 export * from "./calculation-artifacts.schema";

@@ -203,56 +203,6 @@ CREATE TABLE "dictionary_astrologer_entries" (
 	CONSTRAINT "dictionary_astrologer_entries_custom_platform_check" CHECK ("dictionary_astrologer_entries"."entry_type" <> 'custom' or "dictionary_astrologer_entries"."platform_entry_id" is null)
 );
 --> statement-breakpoint
-CREATE TABLE "media_assets" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_user_id" uuid NOT NULL,
-	"purpose" text NOT NULL,
-	"status" text DEFAULT 'uploading' NOT NULL,
-	"visibility" text NOT NULL,
-	"storage_bucket" text NOT NULL,
-	"storage_key" text NOT NULL,
-	"original_file_name" text NOT NULL,
-	"mime_type" text NOT NULL,
-	"size_bytes" integer NOT NULL,
-	"checksum_sha256" text,
-	"width" integer,
-	"height" integer,
-	"alt_text" text,
-	"failure_reason" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "media_assets_storage_bucket_storage_key_unique" UNIQUE("storage_bucket","storage_key"),
-	CONSTRAINT "media_assets_purpose_check" CHECK ("media_assets"."purpose" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document')),
-	CONSTRAINT "media_assets_status_check" CHECK ("media_assets"."status" in ('uploading', 'processing', 'ready', 'failed', 'deleted')),
-	CONSTRAINT "media_assets_visibility_check" CHECK ("media_assets"."visibility" in ('public', 'private')),
-	CONSTRAINT "media_assets_mime_type_check" CHECK ("media_assets"."mime_type" in ('image/jpeg', 'image/png', 'image/webp', 'image/avif', 'application/pdf')),
-	CONSTRAINT "media_assets_size_bytes_check" CHECK ("media_assets"."size_bytes" > 0),
-	CONSTRAINT "media_assets_width_check" CHECK ("media_assets"."width" is null or "media_assets"."width" > 0),
-	CONSTRAINT "media_assets_height_check" CHECK ("media_assets"."height" is null or "media_assets"."height" > 0),
-	CONSTRAINT "media_assets_checksum_sha256_check" CHECK ("media_assets"."checksum_sha256" is null or "media_assets"."checksum_sha256" ~ '^[a-f0-9]{64}$'),
-	CONSTRAINT "media_assets_alt_text_length_check" CHECK ("media_assets"."alt_text" is null or length(trim("media_assets"."alt_text")) <= 300)
-);
---> statement-breakpoint
-CREATE TABLE "media_variants" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"asset_id" uuid NOT NULL,
-	"variant" text NOT NULL,
-	"storage_bucket" text NOT NULL,
-	"storage_key" text NOT NULL,
-	"mime_type" text NOT NULL,
-	"width" integer NOT NULL,
-	"height" integer NOT NULL,
-	"size_bytes" integer NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "media_variants_asset_variant_unique" UNIQUE("asset_id","variant"),
-	CONSTRAINT "media_variants_storage_bucket_storage_key_unique" UNIQUE("storage_bucket","storage_key"),
-	CONSTRAINT "media_variants_variant_check" CHECK ("media_variants"."variant" in ('original', 'preview', 'card', 'cover')),
-	CONSTRAINT "media_variants_mime_type_check" CHECK ("media_variants"."mime_type" in ('image/jpeg', 'image/png', 'image/webp', 'image/avif')),
-	CONSTRAINT "media_variants_width_check" CHECK ("media_variants"."width" > 0),
-	CONSTRAINT "media_variants_height_check" CHECK ("media_variants"."height" > 0),
-	CONSTRAINT "media_variants_size_bytes_check" CHECK ("media_variants"."size_bytes" > 0)
-);
---> statement-breakpoint
 CREATE TABLE "products" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"owner_user_id" uuid NOT NULL,
@@ -350,6 +300,76 @@ CREATE TABLE "product_modifiers" (
 	CONSTRAINT "product_modifiers_free_price_check" CHECK ("product_modifiers"."kind" <> 'free' or "product_modifiers"."price_minor" = 0)
 );
 --> statement-breakpoint
+CREATE TABLE "product_templates" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"code" text NOT NULL,
+	"locale" text NOT NULL,
+	"type" text NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"title" text NOT NULL,
+	"subtitle" text,
+	"description" text,
+	"sort_order" integer NOT NULL,
+	"payload" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "product_templates_code_locale_unique" UNIQUE("code","locale"),
+	CONSTRAINT "product_templates_status_check" CHECK ("product_templates"."status" in ('active', 'archived')),
+	CONSTRAINT "product_templates_locale_check" CHECK ("product_templates"."locale" in ('ru', 'en')),
+	CONSTRAINT "product_templates_type_check" CHECK ("product_templates"."type" in ('single', 'pack', 'async', 'sub', 'mini', 'course', 'custom')),
+	CONSTRAINT "product_templates_sort_order_check" CHECK ("product_templates"."sort_order" >= 0),
+	CONSTRAINT "product_templates_code_length_check" CHECK (length(trim("product_templates"."code")) between 3 and 80),
+	CONSTRAINT "product_templates_title_length_check" CHECK (length(trim("product_templates"."title")) between 1 and 200)
+);
+--> statement-breakpoint
+CREATE TABLE "billing_invoices" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"provider" text NOT NULL,
+	"provider_invoice_id" text NOT NULL,
+	"status" text NOT NULL,
+	"plan_id" text NOT NULL,
+	"billing_cycle" text NOT NULL,
+	"amount_minor" integer NOT NULL,
+	"currency" text NOT NULL,
+	"issued_at" timestamp with time zone NOT NULL,
+	"paid_at" timestamp with time zone,
+	"receipt_url" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "billing_invoices_provider_check" CHECK ("billing_invoices"."provider" in ('arc_pay')),
+	CONSTRAINT "billing_invoices_status_check" CHECK ("billing_invoices"."status" in ('paid', 'open', 'void', 'uncollectible')),
+	CONSTRAINT "billing_invoices_billing_cycle_check" CHECK ("billing_invoices"."billing_cycle" in ('month', 'year')),
+	CONSTRAINT "billing_invoices_amount_minor_check" CHECK ("billing_invoices"."amount_minor" >= 0),
+	CONSTRAINT "billing_invoices_currency_check" CHECK ("billing_invoices"."currency" in ('RUB'))
+);
+--> statement-breakpoint
+CREATE TABLE "billing_payment_methods" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"provider" text NOT NULL,
+	"provider_payment_method_id" text NOT NULL,
+	"brand" text NOT NULL,
+	"last4" text NOT NULL,
+	"expires_at" text NOT NULL,
+	"is_default" boolean DEFAULT false NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "billing_payment_methods_provider_check" CHECK ("billing_payment_methods"."provider" in ('arc_pay')),
+	CONSTRAINT "billing_payment_methods_brand_length_check" CHECK (length(trim("billing_payment_methods"."brand")) between 1 and 40),
+	CONSTRAINT "billing_payment_methods_last4_check" CHECK ("billing_payment_methods"."last4" ~ '^[0-9]{4}$'),
+	CONSTRAINT "billing_payment_methods_expires_at_check" CHECK ("billing_payment_methods"."expires_at" ~ '^[0-9]{2}/[0-9]{2}$')
+);
+--> statement-breakpoint
+CREATE TABLE "platform_plan_features" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"plan_id" text NOT NULL,
+	"value" text NOT NULL,
+	"order" integer NOT NULL,
+	CONSTRAINT "platform_plan_features_value_check" CHECK ("platform_plan_features"."value" in ('engine', 'pdf', 'natal', 'synastry', 'forecast', 'solar', 'matrix', 'numerology', 'hd', 'horar', 'vedic', 'astrocal', 'child', 'page', 'products', 'calendar', 'crm', 'funnels', 'group', 'ai', 'aicontent', 'triggers', 'content', 'autopost', 'journal', 'video', 'recordings', 'inbox', 'analytics', 'refs', 'team', 'whitelabel', 'api', 'priority')),
+	CONSTRAINT "platform_plan_features_order_check" CHECK ("platform_plan_features"."order" >= 0)
+);
+--> statement-breakpoint
 CREATE TABLE "platform_plans" (
 	"id" text PRIMARY KEY NOT NULL,
 	"code" text NOT NULL,
@@ -383,15 +403,6 @@ CREATE TABLE "platform_plans" (
 	CONSTRAINT "platform_plans_display_order_check" CHECK ("platform_plans"."display_order" >= 0)
 );
 --> statement-breakpoint
-CREATE TABLE "platform_plan_features" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"plan_id" text NOT NULL,
-	"value" text NOT NULL,
-	"order" integer NOT NULL,
-	CONSTRAINT "platform_plan_features_value_check" CHECK ("platform_plan_features"."value" in ('engine', 'pdf', 'natal', 'synastry', 'forecast', 'solar', 'matrix', 'numerology', 'hd', 'horar', 'vedic', 'astrocal', 'child', 'page', 'products', 'calendar', 'crm', 'funnels', 'group', 'ai', 'aicontent', 'triggers', 'content', 'autopost', 'journal', 'video', 'recordings', 'inbox', 'analytics', 'refs', 'team', 'whitelabel', 'api', 'priority')),
-	CONSTRAINT "platform_plan_features_order_check" CHECK ("platform_plan_features"."order" >= 0)
-);
---> statement-breakpoint
 CREATE TABLE "platform_subscriptions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"owner_user_id" uuid NOT NULL,
@@ -410,43 +421,54 @@ CREATE TABLE "platform_subscriptions" (
 	CONSTRAINT "platform_subscriptions_billing_cycle_check" CHECK ("platform_subscriptions"."billing_cycle" in ('month', 'year'))
 );
 --> statement-breakpoint
-CREATE TABLE "billing_payment_methods" (
+CREATE TABLE "media_assets" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"owner_user_id" uuid NOT NULL,
-	"provider" text NOT NULL,
-	"provider_payment_method_id" text NOT NULL,
-	"brand" text NOT NULL,
-	"last4" text NOT NULL,
-	"expires_at" text NOT NULL,
-	"is_default" boolean DEFAULT false NOT NULL,
+	"purpose" text NOT NULL,
+	"status" text DEFAULT 'uploading' NOT NULL,
+	"visibility" text NOT NULL,
+	"storage_bucket" text NOT NULL,
+	"storage_key" text NOT NULL,
+	"original_file_name" text NOT NULL,
+	"mime_type" text NOT NULL,
+	"size_bytes" integer NOT NULL,
+	"checksum_sha256" text,
+	"width" integer,
+	"height" integer,
+	"alt_text" text,
+	"failure_reason" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "billing_payment_methods_provider_check" CHECK ("billing_payment_methods"."provider" in ('arc_pay')),
-	CONSTRAINT "billing_payment_methods_brand_length_check" CHECK (length(trim("billing_payment_methods"."brand")) between 1 and 40),
-	CONSTRAINT "billing_payment_methods_last4_check" CHECK ("billing_payment_methods"."last4" ~ '^[0-9]{4}$'),
-	CONSTRAINT "billing_payment_methods_expires_at_check" CHECK ("billing_payment_methods"."expires_at" ~ '^[0-9]{2}/[0-9]{2}$')
+	CONSTRAINT "media_assets_storage_bucket_storage_key_unique" UNIQUE("storage_bucket","storage_key"),
+	CONSTRAINT "media_assets_purpose_check" CHECK ("media_assets"."purpose" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document')),
+	CONSTRAINT "media_assets_status_check" CHECK ("media_assets"."status" in ('uploading', 'processing', 'ready', 'failed', 'deleted')),
+	CONSTRAINT "media_assets_visibility_check" CHECK ("media_assets"."visibility" in ('public', 'private')),
+	CONSTRAINT "media_assets_mime_type_check" CHECK ("media_assets"."mime_type" in ('image/jpeg', 'image/png', 'image/webp', 'image/avif', 'application/pdf')),
+	CONSTRAINT "media_assets_size_bytes_check" CHECK ("media_assets"."size_bytes" > 0),
+	CONSTRAINT "media_assets_width_check" CHECK ("media_assets"."width" is null or "media_assets"."width" > 0),
+	CONSTRAINT "media_assets_height_check" CHECK ("media_assets"."height" is null or "media_assets"."height" > 0),
+	CONSTRAINT "media_assets_checksum_sha256_check" CHECK ("media_assets"."checksum_sha256" is null or "media_assets"."checksum_sha256" ~ '^[a-f0-9]{64}$'),
+	CONSTRAINT "media_assets_alt_text_length_check" CHECK ("media_assets"."alt_text" is null or length(trim("media_assets"."alt_text")) <= 300)
 );
 --> statement-breakpoint
-CREATE TABLE "billing_invoices" (
+CREATE TABLE "media_variants" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_user_id" uuid NOT NULL,
-	"provider" text NOT NULL,
-	"provider_invoice_id" text NOT NULL,
-	"status" text NOT NULL,
-	"plan_id" text NOT NULL,
-	"billing_cycle" text NOT NULL,
-	"amount_minor" integer NOT NULL,
-	"currency" text NOT NULL,
-	"issued_at" timestamp with time zone NOT NULL,
-	"paid_at" timestamp with time zone,
-	"receipt_url" text,
+	"asset_id" uuid NOT NULL,
+	"variant" text NOT NULL,
+	"storage_bucket" text NOT NULL,
+	"storage_key" text NOT NULL,
+	"mime_type" text NOT NULL,
+	"width" integer NOT NULL,
+	"height" integer NOT NULL,
+	"size_bytes" integer NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "billing_invoices_provider_check" CHECK ("billing_invoices"."provider" in ('arc_pay')),
-	CONSTRAINT "billing_invoices_status_check" CHECK ("billing_invoices"."status" in ('paid', 'open', 'void', 'uncollectible')),
-	CONSTRAINT "billing_invoices_billing_cycle_check" CHECK ("billing_invoices"."billing_cycle" in ('month', 'year')),
-	CONSTRAINT "billing_invoices_amount_minor_check" CHECK ("billing_invoices"."amount_minor" >= 0),
-	CONSTRAINT "billing_invoices_currency_check" CHECK ("billing_invoices"."currency" in ('RUB'))
+	CONSTRAINT "media_variants_asset_variant_unique" UNIQUE("asset_id","variant"),
+	CONSTRAINT "media_variants_storage_bucket_storage_key_unique" UNIQUE("storage_bucket","storage_key"),
+	CONSTRAINT "media_variants_variant_check" CHECK ("media_variants"."variant" in ('original', 'preview', 'card', 'cover')),
+	CONSTRAINT "media_variants_mime_type_check" CHECK ("media_variants"."mime_type" in ('image/jpeg', 'image/png', 'image/webp', 'image/avif')),
+	CONSTRAINT "media_variants_width_check" CHECK ("media_variants"."width" > 0),
+	CONSTRAINT "media_variants_height_check" CHECK ("media_variants"."height" > 0),
+	CONSTRAINT "media_variants_size_bytes_check" CHECK ("media_variants"."size_bytes" > 0)
 );
 --> statement-breakpoint
 CREATE TABLE "astrologer_profiles" (
@@ -513,6 +535,160 @@ CREATE TABLE "verification_application_documents" (
 	CONSTRAINT "verification_application_documents_kind_check" CHECK ("verification_application_documents"."kind" in ('identity', 'qualification'))
 );
 --> statement-breakpoint
+CREATE TABLE "calculation_records" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"module" text NOT NULL,
+	"mode" text NOT NULL,
+	"method_code" text NOT NULL,
+	"title" text NOT NULL,
+	"status" text DEFAULT 'calculated' NOT NULL,
+	"request_fingerprint" text NOT NULL,
+	"input_data" jsonb NOT NULL,
+	"result_data" jsonb NOT NULL,
+	"result_summary" jsonb NOT NULL,
+	"result_checksum" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "calculation_records_module_check" CHECK ("calculation_records"."module" in ('numerology', 'chart', 'matrix', 'human_design')),
+	CONSTRAINT "calculation_records_mode_check" CHECK ("calculation_records"."mode" in ('individual', 'compatibility')),
+	CONSTRAINT "calculation_records_status_check" CHECK ("calculation_records"."status" in ('calculated', 'linked', 'published', 'archived')),
+	CONSTRAINT "calculation_records_request_fingerprint_check" CHECK ("calculation_records"."request_fingerprint" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "calculation_records_input_data_object_check" CHECK (jsonb_typeof("calculation_records"."input_data") = 'object'),
+	CONSTRAINT "calculation_records_result_data_object_check" CHECK (jsonb_typeof("calculation_records"."result_data") = 'object'),
+	CONSTRAINT "calculation_records_result_summary_object_check" CHECK (jsonb_typeof("calculation_records"."result_summary") = 'object'),
+	CONSTRAINT "calculation_records_result_checksum_check" CHECK ("calculation_records"."result_checksum" ~ '^sha256:[a-f0-9]{64}$')
+);
+--> statement-breakpoint
+CREATE TABLE "calculation_participants" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"calculation_id" uuid NOT NULL,
+	"role" text NOT NULL,
+	"source" text NOT NULL,
+	"client_id" uuid,
+	"display_name" text NOT NULL,
+	"order" integer NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "calculation_participants_role_check" CHECK ("calculation_participants"."role" in ('subject', 'partner')),
+	CONSTRAINT "calculation_participants_source_check" CHECK ("calculation_participants"."source" in ('crm_client', 'manual')),
+	CONSTRAINT "calculation_participants_source_client_check" CHECK (("calculation_participants"."source" = 'crm_client' and "calculation_participants"."client_id" is not null) or ("calculation_participants"."source" = 'manual' and "calculation_participants"."client_id" is null)),
+	CONSTRAINT "calculation_participants_order_check" CHECK ("calculation_participants"."order" >= 0 and "calculation_participants"."order" < 2)
+);
+--> statement-breakpoint
+CREATE TABLE "calculation_client_links" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"calculation_id" uuid NOT NULL,
+	"client_id" uuid NOT NULL,
+	"visibility" text DEFAULT 'private_to_astrologer' NOT NULL,
+	"linked_at" timestamp with time zone NOT NULL,
+	"published_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "calculation_client_links_visibility_check" CHECK ("calculation_client_links"."visibility" in ('private_to_astrologer', 'visible_to_client')),
+	CONSTRAINT "calculation_client_links_published_at_check" CHECK ("calculation_client_links"."visibility" <> 'visible_to_client' or "calculation_client_links"."published_at" is not null)
+);
+--> statement-breakpoint
+CREATE TABLE "calculation_interpretations" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"calculation_id" uuid NOT NULL,
+	"source" text NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"text" text NOT NULL,
+	"model_id" text,
+	"prompt_version" text,
+	"approved_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "calculation_interpretations_source_check" CHECK ("calculation_interpretations"."source" in ('ai', 'manual')),
+	CONSTRAINT "calculation_interpretations_status_check" CHECK ("calculation_interpretations"."status" in ('draft', 'approved')),
+	CONSTRAINT "calculation_interpretations_approved_at_check" CHECK ("calculation_interpretations"."status" <> 'approved' or "calculation_interpretations"."approved_at" is not null)
+);
+--> statement-breakpoint
+CREATE TABLE "calculation_artifacts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"calculation_id" uuid NOT NULL,
+	"media_asset_id" uuid NOT NULL,
+	"artifact_type" text NOT NULL,
+	"status" text DEFAULT 'generating' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "calculation_artifacts_type_check" CHECK ("calculation_artifacts"."artifact_type" in ('pdf')),
+	CONSTRAINT "calculation_artifacts_status_check" CHECK ("calculation_artifacts"."status" in ('generating', 'ready', 'failed'))
+);
+--> statement-breakpoint
+CREATE TABLE "client_profiles" (
+	"user_id" uuid PRIMARY KEY NOT NULL,
+	"display_name_snapshot" text,
+	"preferred_locale" text,
+	"timezone" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "client_profiles_display_name_length_check" CHECK ("client_profiles"."display_name_snapshot" is null or length(trim("client_profiles"."display_name_snapshot")) between 1 and 200),
+	CONSTRAINT "client_profiles_preferred_locale_length_check" CHECK ("client_profiles"."preferred_locale" is null or length(trim("client_profiles"."preferred_locale")) between 2 and 20),
+	CONSTRAINT "client_profiles_timezone_length_check" CHECK ("client_profiles"."timezone" is null or length(trim("client_profiles"."timezone")) > 0)
+);
+--> statement-breakpoint
+CREATE TABLE "client_birth_data" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"client_user_id" uuid NOT NULL,
+	"label" text,
+	"birth_date" text,
+	"birth_time" text,
+	"birth_time_precision" text DEFAULT 'unknown' NOT NULL,
+	"birth_place_text" text,
+	"birth_country_code" text,
+	"birth_city" text,
+	"birth_region" text,
+	"birth_timezone" text,
+	"birth_latitude" double precision,
+	"birth_longitude" double precision,
+	"source" text DEFAULT 'client_profile' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "client_birth_data_time_precision_check" CHECK ("client_birth_data"."birth_time_precision" in ('exact', 'approximate', 'unknown')),
+	CONSTRAINT "client_birth_data_source_check" CHECK ("client_birth_data"."source" in ('client_profile', 'booking', 'import', 'manual')),
+	CONSTRAINT "client_birth_data_birth_date_check" CHECK ("client_birth_data"."birth_date" is null or "client_birth_data"."birth_date" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
+	CONSTRAINT "client_birth_data_birth_time_check" CHECK ("client_birth_data"."birth_time" is null or "client_birth_data"."birth_time" ~ '^[0-9]{2}:[0-9]{2}$'),
+	CONSTRAINT "client_birth_data_unknown_time_check" CHECK ("client_birth_data"."birth_time_precision" <> 'unknown' or "client_birth_data"."birth_time" is null),
+	CONSTRAINT "client_birth_data_country_code_check" CHECK ("client_birth_data"."birth_country_code" is null or "client_birth_data"."birth_country_code" ~ '^[A-Z]{2}$'),
+	CONSTRAINT "client_birth_data_latitude_check" CHECK ("client_birth_data"."birth_latitude" is null or ("client_birth_data"."birth_latitude" >= -90 and "client_birth_data"."birth_latitude" <= 90)),
+	CONSTRAINT "client_birth_data_longitude_check" CHECK ("client_birth_data"."birth_longitude" is null or ("client_birth_data"."birth_longitude" >= -180 and "client_birth_data"."birth_longitude" <= 180))
+);
+--> statement-breakpoint
+CREATE TABLE "client_astrologer_relationships" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"client_user_id" uuid NOT NULL,
+	"astrologer_user_id" uuid NOT NULL,
+	"source" text NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"first_linked_at" timestamp with time zone NOT NULL,
+	"last_linked_at" timestamp with time zone NOT NULL,
+	"archived_at" timestamp with time zone,
+	"blocked_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "client_astrologer_relationships_source_check" CHECK ("client_astrologer_relationships"."source" in ('direct_link', 'booking', 'order', 'lead_magnet', 'manual')),
+	CONSTRAINT "client_astrologer_relationships_status_check" CHECK ("client_astrologer_relationships"."status" in ('active', 'archived', 'blocked')),
+	CONSTRAINT "client_astrologer_relationships_distinct_users_check" CHECK ("client_astrologer_relationships"."client_user_id" <> "client_astrologer_relationships"."astrologer_user_id")
+);
+--> statement-breakpoint
+CREATE TABLE "client_join_intents" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"astrologer_user_id" uuid NOT NULL,
+	"token_hash" text NOT NULL,
+	"public_handle_snapshot" text NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"claimed_by_client_user_id" uuid,
+	"claimed_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "client_join_intents_status_check" CHECK ("client_join_intents"."status" in ('pending', 'claimed', 'expired')),
+	CONSTRAINT "client_join_intents_public_handle_check" CHECK ("client_join_intents"."public_handle_snapshot" ~ '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$'),
+	CONSTRAINT "client_join_intents_claimed_consistency_check" CHECK (("client_join_intents"."status" = 'claimed') = ("client_join_intents"."claimed_by_client_user_id" is not null and "client_join_intents"."claimed_at" is not null))
+);
+--> statement-breakpoint
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -526,8 +702,6 @@ ALTER TABLE "dictionary_platform_entries" ADD CONSTRAINT "dictionary_platform_en
 ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_category_id_dictionary_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."dictionary_categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_platform_entry_identity_fk" FOREIGN KEY ("platform_entry_id","category_id","code","locale") REFERENCES "public"."dictionary_platform_entries"("id","category_id","code","locale") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "media_assets" ADD CONSTRAINT "media_assets_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "media_variants" ADD CONSTRAINT "media_variants_asset_id_media_assets_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."media_assets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "products" ADD CONSTRAINT "products_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "products" ADD CONSTRAINT "products_cover_media_id_media_assets_id_fk" FOREIGN KEY ("cover_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "product_delivery_formats" ADD CONSTRAINT "product_delivery_formats_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -536,12 +710,14 @@ ALTER TABLE "product_methods" ADD CONSTRAINT "product_methods_product_id_product
 ALTER TABLE "product_access_grants" ADD CONSTRAINT "product_access_grants_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "product_included_items" ADD CONSTRAINT "product_included_items_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "product_modifiers" ADD CONSTRAINT "product_modifiers_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_plan_id_platform_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."platform_plans"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "billing_payment_methods" ADD CONSTRAINT "billing_payment_methods_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "platform_plan_features" ADD CONSTRAINT "platform_plan_features_plan_id_platform_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."platform_plans"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "platform_subscriptions" ADD CONSTRAINT "platform_subscriptions_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "platform_subscriptions" ADD CONSTRAINT "platform_subscriptions_plan_id_platform_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."platform_plans"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "billing_payment_methods" ADD CONSTRAINT "billing_payment_methods_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_plan_id_platform_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."platform_plans"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "media_assets" ADD CONSTRAINT "media_assets_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "media_variants" ADD CONSTRAINT "media_variants_asset_id_media_assets_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."media_assets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_avatar_media_id_media_assets_id_fk" FOREIGN KEY ("avatar_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_cover_media_id_media_assets_id_fk" FOREIGN KEY ("cover_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -549,6 +725,18 @@ ALTER TABLE "verification_applications" ADD CONSTRAINT "verification_application
 ALTER TABLE "verification_applications" ADD CONSTRAINT "verification_applications_reviewer_user_id_users_id_fk" FOREIGN KEY ("reviewer_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "verification_application_documents" ADD CONSTRAINT "verification_application_documents_application_id_verification_applications_id_fk" FOREIGN KEY ("application_id") REFERENCES "public"."verification_applications"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "verification_application_documents" ADD CONSTRAINT "verification_application_documents_media_id_media_assets_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_records" ADD CONSTRAINT "calculation_records_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_participants" ADD CONSTRAINT "calculation_participants_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_client_links" ADD CONSTRAINT "calculation_client_links_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_interpretations" ADD CONSTRAINT "calculation_interpretations_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_artifacts" ADD CONSTRAINT "calculation_artifacts_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_artifacts" ADD CONSTRAINT "calculation_artifacts_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_profiles" ADD CONSTRAINT "client_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_birth_data" ADD CONSTRAINT "client_birth_data_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_claimed_by_client_user_id_users_id_fk" FOREIGN KEY ("claimed_by_client_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_email_login_unique" ON "auth_identities" USING btree (lower("email")) WHERE "auth_identities"."provider" = 'email' and "auth_identities"."email" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_phone_login_unique" ON "auth_identities" USING btree ("phone_number") WHERE "auth_identities"."provider" = 'phone' and "auth_identities"."phone_number" is not null;--> statement-breakpoint
@@ -583,9 +771,6 @@ CREATE INDEX "dictionary_astrologer_entries_custom_owner_locale_category_index" 
 CREATE INDEX "dictionary_astrologer_entries_platform_entry_id_index" ON "dictionary_astrologer_entries" USING btree ("platform_entry_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "dictionary_astrologer_entries_override_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","platform_entry_id","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'override';--> statement-breakpoint
 CREATE UNIQUE INDEX "dictionary_astrologer_entries_custom_code_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","code","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'custom';--> statement-breakpoint
-CREATE INDEX "media_assets_owner_purpose_status_created_idx" ON "media_assets" USING btree ("owner_user_id","purpose","status","created_at");--> statement-breakpoint
-CREATE INDEX "media_assets_owner_created_id_idx" ON "media_assets" USING btree ("owner_user_id","created_at","id");--> statement-breakpoint
-CREATE INDEX "media_variants_asset_id_idx" ON "media_variants" USING btree ("asset_id");--> statement-breakpoint
 CREATE INDEX "products_owner_created_id_idx" ON "products" USING btree ("owner_user_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "products_owner_status_created_id_idx" ON "products" USING btree ("owner_user_id","status","created_at","id");--> statement-breakpoint
 CREATE INDEX "product_delivery_formats_product_id_idx" ON "product_delivery_formats" USING btree ("product_id");--> statement-breakpoint
@@ -598,18 +783,43 @@ CREATE INDEX "product_access_grants_product_id_idx" ON "product_access_grants" U
 CREATE UNIQUE INDEX "product_access_grants_product_value_unique" ON "product_access_grants" USING btree ("product_id","value");--> statement-breakpoint
 CREATE INDEX "product_included_items_product_id_idx" ON "product_included_items" USING btree ("product_id");--> statement-breakpoint
 CREATE INDEX "product_modifiers_product_id_idx" ON "product_modifiers" USING btree ("product_id");--> statement-breakpoint
+CREATE INDEX "product_templates_active_locale_order_idx" ON "product_templates" USING btree ("locale","sort_order","code") WHERE "product_templates"."status" = 'active';--> statement-breakpoint
+CREATE INDEX "billing_invoices_owner_issued_idx" ON "billing_invoices" USING btree ("owner_user_id","issued_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "billing_invoices_provider_invoice_unique" ON "billing_invoices" USING btree ("provider","provider_invoice_id");--> statement-breakpoint
+CREATE INDEX "billing_payment_methods_owner_created_idx" ON "billing_payment_methods" USING btree ("owner_user_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "billing_payment_methods_provider_method_unique" ON "billing_payment_methods" USING btree ("provider","provider_payment_method_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "billing_payment_methods_default_owner_unique" ON "billing_payment_methods" USING btree ("owner_user_id") WHERE "billing_payment_methods"."is_default" = true;--> statement-breakpoint
 CREATE INDEX "platform_plan_features_plan_id_idx" ON "platform_plan_features" USING btree ("plan_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "platform_plan_features_plan_value_unique" ON "platform_plan_features" USING btree ("plan_id","value");--> statement-breakpoint
 CREATE INDEX "platform_subscriptions_owner_created_idx" ON "platform_subscriptions" USING btree ("owner_user_id","created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "platform_subscriptions_current_owner_unique" ON "platform_subscriptions" USING btree ("owner_user_id") WHERE "platform_subscriptions"."is_current" = true;--> statement-breakpoint
-CREATE INDEX "billing_payment_methods_owner_created_idx" ON "billing_payment_methods" USING btree ("owner_user_id","created_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "billing_payment_methods_provider_method_unique" ON "billing_payment_methods" USING btree ("provider","provider_payment_method_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "billing_payment_methods_default_owner_unique" ON "billing_payment_methods" USING btree ("owner_user_id") WHERE "billing_payment_methods"."is_default" = true;--> statement-breakpoint
-CREATE INDEX "billing_invoices_owner_issued_idx" ON "billing_invoices" USING btree ("owner_user_id","issued_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "billing_invoices_provider_invoice_unique" ON "billing_invoices" USING btree ("provider","provider_invoice_id");--> statement-breakpoint
+CREATE INDEX "media_assets_owner_purpose_status_created_idx" ON "media_assets" USING btree ("owner_user_id","purpose","status","created_at");--> statement-breakpoint
+CREATE INDEX "media_assets_owner_created_id_idx" ON "media_assets" USING btree ("owner_user_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "media_variants_asset_id_idx" ON "media_variants" USING btree ("asset_id");--> statement-breakpoint
 CREATE INDEX "astrologer_profiles_public_handle_idx" ON "astrologer_profiles" USING btree ("public_handle");--> statement-breakpoint
 CREATE INDEX "verification_applications_owner_submitted_idx" ON "verification_applications" USING btree ("owner_user_id","submitted_at","id");--> statement-breakpoint
 CREATE INDEX "verification_applications_status_submitted_idx" ON "verification_applications" USING btree ("status","submitted_at");--> statement-breakpoint
 CREATE INDEX "verification_application_documents_application_idx" ON "verification_application_documents" USING btree ("application_id");--> statement-breakpoint
 CREATE INDEX "verification_application_documents_media_idx" ON "verification_application_documents" USING btree ("media_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "verification_application_documents_application_media_unique" ON "verification_application_documents" USING btree ("application_id","media_id");
+CREATE UNIQUE INDEX "verification_application_documents_application_media_unique" ON "verification_application_documents" USING btree ("application_id","media_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "calculation_records_exact_request_unique" ON "calculation_records" USING btree ("owner_user_id","module","mode","method_code","request_fingerprint");--> statement-breakpoint
+CREATE INDEX "calculation_records_owner_updated_id_idx" ON "calculation_records" USING btree ("owner_user_id","updated_at","id");--> statement-breakpoint
+CREATE INDEX "calculation_records_owner_status_updated_id_idx" ON "calculation_records" USING btree ("owner_user_id","status","updated_at","id");--> statement-breakpoint
+CREATE INDEX "calculation_records_owner_module_created_id_idx" ON "calculation_records" USING btree ("owner_user_id","module","created_at","id");--> statement-breakpoint
+CREATE INDEX "calculation_records_owner_status_module_created_id_idx" ON "calculation_records" USING btree ("owner_user_id","status","module","created_at","id");--> statement-breakpoint
+CREATE INDEX "calculation_participants_record_role_idx" ON "calculation_participants" USING btree ("calculation_id","role");--> statement-breakpoint
+CREATE INDEX "calculation_participants_record_order_idx" ON "calculation_participants" USING btree ("calculation_id","order");--> statement-breakpoint
+CREATE INDEX "calculation_client_links_record_idx" ON "calculation_client_links" USING btree ("calculation_id");--> statement-breakpoint
+CREATE INDEX "calculation_client_links_client_idx" ON "calculation_client_links" USING btree ("client_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "calculation_client_links_record_client_unique" ON "calculation_client_links" USING btree ("calculation_id","client_id");--> statement-breakpoint
+CREATE INDEX "calculation_interpretations_record_idx" ON "calculation_interpretations" USING btree ("calculation_id");--> statement-breakpoint
+CREATE INDEX "calculation_artifacts_record_idx" ON "calculation_artifacts" USING btree ("calculation_id");--> statement-breakpoint
+CREATE INDEX "calculation_artifacts_media_idx" ON "calculation_artifacts" USING btree ("media_asset_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "client_birth_data_client_unique" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
+CREATE INDEX "client_birth_data_client_idx" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "client_astrologer_relationships_unique" ON "client_astrologer_relationships" USING btree ("client_user_id","astrologer_user_id");--> statement-breakpoint
+CREATE INDEX "client_astrologer_relationships_astrologer_status_idx" ON "client_astrologer_relationships" USING btree ("astrologer_user_id","status");--> statement-breakpoint
+CREATE INDEX "client_astrologer_relationships_client_status_idx" ON "client_astrologer_relationships" USING btree ("client_user_id","status");--> statement-breakpoint
+CREATE UNIQUE INDEX "client_join_intents_token_hash_unique" ON "client_join_intents" USING btree ("token_hash");--> statement-breakpoint
+CREATE INDEX "client_join_intents_astrologer_status_idx" ON "client_join_intents" USING btree ("astrologer_user_id","status");--> statement-breakpoint
+CREATE INDEX "client_join_intents_claimed_client_idx" ON "client_join_intents" USING btree ("claimed_by_client_user_id");

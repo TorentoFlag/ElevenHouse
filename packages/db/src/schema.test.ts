@@ -70,9 +70,7 @@ import {
   verificationDocumentKindValues
 } from "./schema/index";
 
-const currentBaselineMigration = "packages/db/drizzle/0000_dazzling_metal_master.sql";
-const clientRelationshipsMigration = "packages/db/drizzle/0002_free_nomad.sql";
-const productTemplatesMigration = "packages/db/drizzle/0003_product_templates.sql";
+const currentBaselineMigration = "packages/db/drizzle/0000_sticky_rictor.sql";
 
 describe("database account schema constants", () => {
   it("keeps database role checks aligned with the application role model", () => {
@@ -120,8 +118,8 @@ describe("database account schema constants", () => {
     expect(clientJoinIntents).toBeDefined();
   });
 
-  it("keeps client relationship tables in their migration delta", () => {
-    const migration = readFileSync(clientRelationshipsMigration, "utf8");
+  it("keeps client relationship tables in the current baseline migration", () => {
+    const migration = readFileSync(currentBaselineMigration, "utf8");
 
     expect(migration).toContain('CREATE TABLE "client_profiles"');
     expect(migration).toContain('CREATE TABLE "client_birth_data"');
@@ -133,8 +131,6 @@ describe("database account schema constants", () => {
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "client_join_intents_token_hash_unique" ON "client_join_intents" USING btree ("token_hash")'
     );
-    expect(migration).not.toContain('CREATE TABLE "billing_invoices"');
-    expect(migration).not.toContain('CREATE TABLE "verification_applications"');
   });
 
   it("keeps outbox event statuses explicit", () => {
@@ -327,7 +323,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps product template tables in the product template migration", () => {
-    const migration = readFileSync(productTemplatesMigration, "utf8");
+    const migration = readFileSync(currentBaselineMigration, "utf8");
 
     expect(migration).toContain('CREATE TABLE "product_templates"');
     expect(migration).toContain(

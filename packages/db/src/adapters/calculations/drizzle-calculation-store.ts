@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import type {
   CalculationArtifact,
   CalculationClientLink,
@@ -10,7 +10,8 @@ import type {
   CalculationStatus,
   CalculationStore,
   CalculationStoreCreateInput,
-  CalculationVersion
+  CalculationStoreReplaceResultInput,
+  CalculationStoreReplaceResultOutcome
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
@@ -18,15 +19,13 @@ import {
   calculationClientLinks,
   calculationInterpretations,
   calculationParticipants,
-  calculationRecords,
-  calculationVersions
+  calculationRecords
 } from "../../schema";
 import { insertReturningOne } from "../../shared";
 
 type CalculationRecordRow = typeof calculationRecords.$inferSelect;
 type CalculationRecordInsertRow = typeof calculationRecords.$inferInsert;
 type CalculationParticipantRow = typeof calculationParticipants.$inferSelect;
-type CalculationVersionRow = typeof calculationVersions.$inferSelect;
 type CalculationClientLinkRow = typeof calculationClientLinks.$inferSelect;
 type CalculationInterpretationRow = typeof calculationInterpretations.$inferSelect;
 type CalculationArtifactRow = typeof calculationArtifacts.$inferSelect;
@@ -37,17 +36,10 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
   return {
     listByOwner: async (query) => {
       const filters = [eq(calculationRecords.ownerUserId, query.ownerUserId)];
-      if (query.module !== "all") {
-        filters.push(eq(calculationRecords.module, query.module));
-      }
-      if (query.status !== "all") {
-        filters.push(eq(calculationRecords.status, query.status));
-      }
+      if (query.module !== "all") filters.push(eq(calculationRecords.module, query.module));
+      if (query.status !== "all") filters.push(eq(calculationRecords.status, query.status));
       const where = and(...filters);
-      const [totalRow] = await database
-        .select({ value: count() })
-        .from(calculationRecords)
-        .where(where);
+      const [totalRow] = await database.select({ value: count() }).from(calculationRecords).where(where);
       const rows = await database
         .select()
         .from(calculationRecords)
@@ -55,7 +47,6 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
         .orderBy(desc(calculationRecords.updatedAt), desc(calculationRecords.id))
         .limit(query.limit)
         .offset(query.offset);
-
       return {
         calculations: await hydrateCalculations(database, rows),
         total: Number(totalRow?.value ?? 0)
@@ -63,13 +54,28 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
     },
     findByOwnerAndId: async (input) => {
       const row = await findOwnedCalculationRow(database, input.ownerUserId, input.calculationId);
-      if (!row) return null;
-
-      const [record] = await hydrateCalculations(database, [row]);
-      return record ?? null;
+      return row ? (await hydrateCalculations(database, [row]))[0] ?? null : null;
     },
-    create: (input) => database.transaction((transaction) => insertCalculation(transaction, input)),
-    appendVersion: (input) =>
+    findExact: async (input) => findExactCalculation(database, input),
+    create: async (input) => {
+      try {
+        return await database.transaction((transaction) => insertCalculation(transaction, input));
+      } catch (error) {
+        if (!isExactRequestUniqueViolation(error)) throw error;
+        const existing = await findExactCalculation(database, input);
+        if (!existing) throw error;
+        return existing;
+      }
+    },
+    replaceResult: async (input) => {
+      try {
+        return await database.transaction((transaction) => replaceResult(transaction, input));
+      } catch (error) {
+        if (isExactRequestUniqueViolation(error)) return { status: "exact_key_conflict" };
+        throw error;
+      }
+    },
+    ensureClientLinks: (input) =>
       database.transaction(async (transaction) => {
         const row = await lockOwnedMutableCalculationRow(
           transaction,
@@ -77,46 +83,9 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           input.calculationId
         );
         if (!row) return null;
-
-        const latestVersionNumber = await getLatestVersionNumber(transaction, input.calculationId);
-        await insertVersion(transaction, input.calculationId, {
-          id: input.versionIdGenerator(),
-          versionNumber: latestVersionNumber + 1,
-          methodVersion: input.methodVersion,
-          settingsSnapshot: input.settingsSnapshot,
-          inputSnapshot: input.inputSnapshot,
-          resultSnapshot: input.resultSnapshot,
-          resultSummary: input.resultSummary,
-          resultChecksum: input.resultChecksum,
-          createdAt: new Date(input.now)
-        });
-        await transaction
-          .update(calculationClientLinks)
-          .set({
-            visibility: "private_to_astrologer",
-            publishedAt: null,
-            updatedAt: new Date(input.now)
-          })
-          .where(
-            and(
-              eq(calculationClientLinks.calculationId, input.calculationId),
-              eq(calculationClientLinks.visibility, "visible_to_client")
-            )
-          );
-        const linkCount = await countLinks(transaction, input.calculationId);
-        const updatedRow = await updateOwnedMutableCalculation(transaction, {
-          ownerUserId: input.ownerUserId,
-          calculationId: input.calculationId,
-          patch: {
-            currentMethodVersion: input.methodVersion,
-            status: linkCount > 0 ? "linked" : "calculated",
-            updatedAt: new Date(input.now)
-          }
-        });
-        if (!updatedRow) return null;
-
-        const [record] = await hydrateCalculations(transaction, [updatedRow]);
-        return record ?? null;
+        await insertMissingClientLinks(transaction, input.calculationId, input.clientIds, input.now);
+        const updated = await syncStatusFromLinks(transaction, row, input.now);
+        return hydrateOne(transaction, updated);
       }),
     linkClient: (input) =>
       database.transaction(async (transaction) => {
@@ -126,62 +95,9 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           input.calculationId
         );
         if (!row) return null;
-
-        const [insertedLink] = await transaction
-          .insert(calculationClientLinks)
-          .values({
-            calculationId: input.calculationId,
-            clientId: input.clientId,
-            visibility: "private_to_astrologer",
-            linkedAt: new Date(input.now),
-            publishedAt: null,
-            createdAt: new Date(input.now),
-            updatedAt: new Date(input.now)
-          })
-          .onConflictDoNothing({
-            target: [calculationClientLinks.calculationId, calculationClientLinks.clientId]
-          })
-          .returning({ id: calculationClientLinks.id });
-        if (!insertedLink) {
-          await transaction
-            .update(calculationClientLinks)
-            .set({
-              visibility: "private_to_astrologer",
-              publishedAt: null,
-              updatedAt: new Date(input.now)
-            })
-            .where(
-              and(
-                eq(calculationClientLinks.calculationId, input.calculationId),
-                eq(calculationClientLinks.clientId, input.clientId)
-              )
-            );
-          const updatedRow = await updateOwnedMutableCalculation(transaction, {
-            ownerUserId: input.ownerUserId,
-            calculationId: input.calculationId,
-            patch: {
-              status: "linked",
-              updatedAt: new Date(input.now)
-            }
-          });
-          if (!updatedRow) return null;
-
-          const [record] = await hydrateCalculations(transaction, [updatedRow]);
-          return record ?? null;
-        }
-
-        const updatedRow = await updateOwnedMutableCalculation(transaction, {
-          ownerUserId: input.ownerUserId,
-          calculationId: input.calculationId,
-          patch: {
-            status: "linked",
-            updatedAt: new Date(input.now)
-          }
-        });
-        if (!updatedRow) return null;
-
-        const [record] = await hydrateCalculations(transaction, [updatedRow]);
-        return record ?? null;
+        await insertMissingClientLinks(transaction, input.calculationId, [input.clientId], input.now);
+        const updated = await syncStatusFromLinks(transaction, row, input.now);
+        return hydrateOne(transaction, updated);
       }),
     publishClientLink: (input) =>
       database.transaction(async (transaction) => {
@@ -190,9 +106,9 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           input.ownerUserId,
           input.calculationId
         );
-        if (!row) return null;
+        if (!row || row.resultChecksum !== input.expectedResultChecksum) return null;
 
-        const [linkRow] = await transaction
+        const [link] = await transaction
           .update(calculationClientLinks)
           .set({
             visibility: "visible_to_client",
@@ -204,36 +120,20 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
               eq(calculationClientLinks.calculationId, input.calculationId),
               eq(calculationClientLinks.clientId, input.clientId),
               sql`exists (
-                select 1
-                from calculation_records
-                where calculation_records.id = ${calculationClientLinks.calculationId}
-                  and calculation_records.owner_user_id = ${input.ownerUserId}
-                  and calculation_records.status <> 'archived'
-              )`,
-              sql`${input.expectedVersionId} = (
-                select calculation_versions.id
-                from calculation_versions
-                where calculation_versions.calculation_id = ${input.calculationId}
-                order by calculation_versions.version_number desc, calculation_versions.id desc
-                limit 1
+                select 1 from calculation_interpretations
+                where calculation_interpretations.calculation_id = ${input.calculationId}
+                  and calculation_interpretations.status = 'approved'
               )`
             )
           )
-          .returning();
-        if (!linkRow) return null;
-
-        const updatedRow = await updateOwnedMutableCalculation(transaction, {
+          .returning({ id: calculationClientLinks.id });
+        if (!link) return null;
+        const updated = await updateOwnedMutableCalculation(transaction, {
           ownerUserId: input.ownerUserId,
           calculationId: input.calculationId,
-          patch: {
-            status: "published",
-            updatedAt: new Date(input.now)
-          }
+          patch: { status: "published", updatedAt: new Date(input.now) }
         });
-        if (!updatedRow) return null;
-
-        const [record] = await hydrateCalculations(transaction, [updatedRow]);
-        return record ?? null;
+        return updated ? hydrateOne(transaction, updated) : null;
       }),
     saveInterpretation: (input) =>
       database.transaction(async (transaction) => {
@@ -243,13 +143,9 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           input.calculationId
         );
         if (!row) return null;
-        const versionExists = await hasVersion(transaction, input.calculationId, input.versionId);
-        if (!versionExists) return null;
-
         await transaction.insert(calculationInterpretations).values({
           id: input.interpretationIdGenerator(),
           calculationId: input.calculationId,
-          versionId: input.versionId,
           source: input.source,
           status: "draft",
           text: input.text,
@@ -259,15 +155,12 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           createdAt: new Date(input.now),
           updatedAt: new Date(input.now)
         });
-        const updatedRow = await updateOwnedMutableCalculation(transaction, {
+        const updated = await updateOwnedMutableCalculation(transaction, {
           ownerUserId: input.ownerUserId,
           calculationId: input.calculationId,
           patch: { updatedAt: new Date(input.now) }
         });
-        if (!updatedRow) return null;
-
-        const [record] = await hydrateCalculations(transaction, [updatedRow]);
-        return record ?? null;
+        return updated ? hydrateOne(transaction, updated) : null;
       }),
     approveInterpretation: (input) =>
       database.transaction(async (transaction) => {
@@ -277,8 +170,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           input.calculationId
         );
         if (!row) return null;
-
-        const [interpretationRow] = await transaction
+        const [approved] = await transaction
           .update(calculationInterpretations)
           .set({
             status: "approved",
@@ -288,43 +180,26 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           .where(
             and(
               eq(calculationInterpretations.id, input.interpretationId),
-              eq(calculationInterpretations.calculationId, input.calculationId),
-              sql`exists (
-                select 1
-                from calculation_records
-                where calculation_records.id = ${calculationInterpretations.calculationId}
-                  and calculation_records.owner_user_id = ${input.ownerUserId}
-                  and calculation_records.status <> 'archived'
-              )`
+              eq(calculationInterpretations.calculationId, input.calculationId)
             )
           )
-          .returning();
-        if (!interpretationRow) return null;
-
-        const updatedRow = await updateOwnedMutableCalculation(transaction, {
+          .returning({ id: calculationInterpretations.id });
+        if (!approved) return null;
+        const updated = await updateOwnedMutableCalculation(transaction, {
           ownerUserId: input.ownerUserId,
           calculationId: input.calculationId,
           patch: { updatedAt: new Date(input.now) }
         });
-        if (!updatedRow) return null;
-
-        const [record] = await hydrateCalculations(transaction, [updatedRow]);
-        return record ?? null;
+        return updated ? hydrateOne(transaction, updated) : null;
       }),
     archive: (input) =>
       database.transaction(async (transaction) => {
-        const updatedRow = await updateOwnedCalculation(transaction, {
+        const updated = await updateOwnedCalculation(transaction, {
           ownerUserId: input.ownerUserId,
           calculationId: input.calculationId,
-          patch: {
-            status: "archived",
-            updatedAt: new Date(input.now)
-          }
+          patch: { status: "archived", updatedAt: new Date(input.now) }
         });
-        if (!updatedRow) return null;
-
-        const [record] = await hydrateCalculations(transaction, [updatedRow]);
-        return record ?? null;
+        return updated ? hydrateOne(transaction, updated) : null;
       })
   };
 }
@@ -337,70 +212,192 @@ async function insertCalculation(
     () => database.insert(calculationRecords).values(toCalculationInsertRow(input)).returning(),
     "calculation_records"
   );
-
   if (input.participants.length > 0) {
     await database.insert(calculationParticipants).values(
-      input.participants.map((participant, index) => ({
+      input.participants.map((participant, order) => ({
         calculationId: row.id,
         role: participant.role,
         source: participant.source,
         clientId: participant.clientId,
         displayName: participant.displayName,
-        birthDate: participant.birthDate,
-        inputSnapshot: participant.inputSnapshot,
-        manuallyOverridden: participant.manuallyOverridden,
-        order: index,
+        order,
         createdAt: new Date(input.now),
         updatedAt: new Date(input.now)
       }))
     );
   }
-  await insertVersion(database, row.id, {
-    id: input.versionIdGenerator(),
-    versionNumber: 1,
-    methodVersion: input.methodVersion,
-    settingsSnapshot: input.settingsSnapshot,
-    inputSnapshot: input.inputSnapshot,
-    resultSnapshot: input.resultSnapshot,
-    resultSummary: input.resultSummary,
-    resultChecksum: input.resultChecksum,
-    createdAt: new Date(input.now)
-  });
-
-  const [record] = await hydrateCalculations(database, [row]);
-  if (!record) {
-    throw new Error("Expected inserted calculation to hydrate");
-  }
-  return record;
+  return hydrateOne(database, row);
 }
 
-async function insertVersion(
+async function replaceResult(
+  database: CalculationTransaction,
+  input: CalculationStoreReplaceResultInput
+): Promise<CalculationStoreReplaceResultOutcome> {
+  const row = await lockOwnedMutableCalculationRow(
+    database,
+    input.ownerUserId,
+    input.calculationId
+  );
+  if (!row) return { status: "not_found" };
+
+  const collision = await database
+    .select({ id: calculationRecords.id })
+    .from(calculationRecords)
+    .where(
+      and(
+        eq(calculationRecords.ownerUserId, row.ownerUserId),
+        eq(calculationRecords.module, row.module),
+        eq(calculationRecords.mode, row.mode),
+        eq(calculationRecords.methodCode, row.methodCode),
+        eq(calculationRecords.requestFingerprint, input.requestFingerprint),
+        ne(calculationRecords.id, row.id)
+      )
+    )
+    .limit(1);
+  if (collision.length > 0) return { status: "exact_key_conflict" };
+
+  const participantRows = await database
+    .select()
+    .from(calculationParticipants)
+    .where(eq(calculationParticipants.calculationId, input.calculationId))
+    .orderBy(calculationParticipants.order)
+    .for("update");
+  assertParticipantIdentity(participantRows, input.participants);
+  for (const [order, participant] of input.participants.entries()) {
+    await database
+      .update(calculationParticipants)
+      .set({ displayName: participant.displayName, updatedAt: new Date(input.now) })
+      .where(
+        and(
+          eq(calculationParticipants.calculationId, input.calculationId),
+          eq(calculationParticipants.order, order)
+        )
+      );
+  }
+
+  await database
+    .delete(calculationInterpretations)
+    .where(eq(calculationInterpretations.calculationId, input.calculationId));
+  await database
+    .delete(calculationArtifacts)
+    .where(eq(calculationArtifacts.calculationId, input.calculationId));
+  await database
+    .update(calculationClientLinks)
+    .set({
+      visibility: "private_to_astrologer",
+      publishedAt: null,
+      updatedAt: new Date(input.now)
+    })
+    .where(eq(calculationClientLinks.calculationId, input.calculationId));
+
+  const linkCount = await countLinks(database, input.calculationId);
+  const updated = await updateOwnedMutableCalculation(database, {
+    ownerUserId: input.ownerUserId,
+    calculationId: input.calculationId,
+    patch: {
+      requestFingerprint: input.requestFingerprint,
+      inputData: input.inputData,
+      resultData: input.resultData,
+      resultSummary: input.resultSummary,
+      resultChecksum: input.resultChecksum,
+      status: linkCount > 0 ? "linked" : "calculated",
+      updatedAt: new Date(input.now)
+    }
+  });
+  if (!updated) return { status: "not_found" };
+  return { status: "updated", calculation: await hydrateOne(database, updated) };
+}
+
+async function findExactCalculation(
+  database: CalculationDatabase,
+  input: {
+    readonly ownerUserId: string;
+    readonly module: CalculationModule;
+    readonly mode: CalculationMode;
+    readonly methodCode: string;
+    readonly requestFingerprint: string;
+  }
+): Promise<CalculationRecord | null> {
+  const [row] = await database
+    .select()
+    .from(calculationRecords)
+    .where(
+      and(
+        eq(calculationRecords.ownerUserId, input.ownerUserId),
+        eq(calculationRecords.module, input.module),
+        eq(calculationRecords.mode, input.mode),
+        eq(calculationRecords.methodCode, input.methodCode),
+        eq(calculationRecords.requestFingerprint, input.requestFingerprint)
+      )
+    )
+    .limit(1);
+  return row ? hydrateOne(database, row) : null;
+}
+
+async function insertMissingClientLinks(
   database: CalculationDatabase,
   calculationId: string,
-  input: {
-    readonly id: string;
-    readonly versionNumber: number;
-    readonly methodVersion: string;
-    readonly settingsSnapshot: unknown;
-    readonly inputSnapshot: unknown;
-    readonly resultSnapshot: unknown;
-    readonly resultSummary: unknown;
-    readonly resultChecksum: string;
-    readonly createdAt: Date;
-  }
+  clientIds: readonly string[],
+  now: string
 ): Promise<void> {
-  await database.insert(calculationVersions).values({
-    id: input.id,
-    calculationId,
-    versionNumber: input.versionNumber,
-    methodVersion: input.methodVersion,
-    settingsSnapshot: input.settingsSnapshot,
-    inputSnapshot: input.inputSnapshot,
-    resultSnapshot: input.resultSnapshot,
-    resultSummary: input.resultSummary,
-    resultChecksum: input.resultChecksum,
-    createdAt: input.createdAt
-  });
+  const uniqueClientIds = [...new Set(clientIds)];
+  if (uniqueClientIds.length === 0) return;
+  await database
+    .insert(calculationClientLinks)
+    .values(
+      uniqueClientIds.map((clientId) => ({
+        calculationId,
+        clientId,
+        visibility: "private_to_astrologer",
+        linkedAt: new Date(now),
+        publishedAt: null,
+        createdAt: new Date(now),
+        updatedAt: new Date(now)
+      }))
+    )
+    .onConflictDoNothing({
+      target: [calculationClientLinks.calculationId, calculationClientLinks.clientId]
+    });
+}
+
+async function syncStatusFromLinks(
+  database: CalculationDatabase,
+  row: CalculationRecordRow,
+  now: string
+): Promise<CalculationRecordRow> {
+  const [visible, links] = await Promise.all([
+    countVisibleLinks(database, row.id),
+    countLinks(database, row.id)
+  ]);
+  const status: CalculationStatus = visible > 0 ? "published" : links > 0 ? "linked" : "calculated";
+  return (
+    (await updateOwnedMutableCalculation(database, {
+      ownerUserId: row.ownerUserId,
+      calculationId: row.id,
+      patch: { status, updatedAt: new Date(now) }
+    })) ?? row
+  );
+}
+
+function assertParticipantIdentity(
+  rows: readonly CalculationParticipantRow[],
+  participants: readonly CalculationParticipant[]
+): void {
+  if (
+    rows.length !== participants.length ||
+    rows.some((row, index) => {
+      const participant = participants[index];
+      return (
+        !participant ||
+        row.order !== index ||
+        row.role !== participant.role ||
+        row.source !== participant.source ||
+        row.clientId !== participant.clientId
+      );
+    })
+  ) {
+    throw new Error("Calculation participant identity mismatch");
+  }
 }
 
 async function findOwnedCalculationRow(
@@ -430,7 +427,7 @@ async function lockOwnedMutableCalculationRow(
       and(
         eq(calculationRecords.ownerUserId, ownerUserId),
         eq(calculationRecords.id, calculationId),
-        sql`${calculationRecords.status} <> 'archived'`
+        ne(calculationRecords.status, "archived")
       )
     )
     .limit(1)
@@ -474,42 +471,11 @@ async function updateOwnedMutableCalculation(
       and(
         eq(calculationRecords.ownerUserId, input.ownerUserId),
         eq(calculationRecords.id, input.calculationId),
-        sql`${calculationRecords.status} <> 'archived'`
+        ne(calculationRecords.status, "archived")
       )
     )
     .returning();
   return row ?? null;
-}
-
-async function getLatestVersionNumber(
-  database: CalculationDatabase,
-  calculationId: string
-): Promise<number> {
-  const [row] = await database
-    .select({ versionNumber: calculationVersions.versionNumber })
-    .from(calculationVersions)
-    .where(eq(calculationVersions.calculationId, calculationId))
-    .orderBy(desc(calculationVersions.versionNumber), desc(calculationVersions.id))
-    .limit(1);
-  return row?.versionNumber ?? 0;
-}
-
-async function hasVersion(
-  database: CalculationDatabase,
-  calculationId: string,
-  versionId: string
-): Promise<boolean> {
-  const [row] = await database
-    .select({ id: calculationVersions.id })
-    .from(calculationVersions)
-    .where(
-      and(
-        eq(calculationVersions.calculationId, calculationId),
-        eq(calculationVersions.id, versionId)
-      )
-    )
-    .limit(1);
-  return Boolean(row);
 }
 
 async function countLinks(database: CalculationDatabase, calculationId: string): Promise<number> {
@@ -520,52 +486,71 @@ async function countLinks(database: CalculationDatabase, calculationId: string):
   return Number(row?.value ?? 0);
 }
 
+async function countVisibleLinks(
+  database: CalculationDatabase,
+  calculationId: string
+): Promise<number> {
+  const [row] = await database
+    .select({ value: count() })
+    .from(calculationClientLinks)
+    .where(
+      and(
+        eq(calculationClientLinks.calculationId, calculationId),
+        eq(calculationClientLinks.visibility, "visible_to_client")
+      )
+    );
+  return Number(row?.value ?? 0);
+}
+
+async function hydrateOne(
+  database: CalculationDatabase,
+  row: CalculationRecordRow
+): Promise<CalculationRecord> {
+  const [record] = await hydrateCalculations(database, [row]);
+  if (!record) throw new Error("Expected calculation to hydrate");
+  return record;
+}
+
 async function hydrateCalculations(
   database: CalculationDatabase,
   rows: readonly CalculationRecordRow[]
 ): Promise<CalculationRecord[]> {
-  const calculationIds = rows.map((row) => row.id);
-  if (calculationIds.length === 0) return [];
-
-  const participantRows = await database
-    .select()
-    .from(calculationParticipants)
-    .where(inArray(calculationParticipants.calculationId, calculationIds))
-    .orderBy(calculationParticipants.calculationId, calculationParticipants.order);
-  const versionRows = await database
-    .select()
-    .from(calculationVersions)
-    .where(inArray(calculationVersions.calculationId, calculationIds))
-    .orderBy(calculationVersions.calculationId, calculationVersions.versionNumber);
-  const linkRows = await database
-    .select()
-    .from(calculationClientLinks)
-    .where(inArray(calculationClientLinks.calculationId, calculationIds))
-    .orderBy(calculationClientLinks.calculationId, calculationClientLinks.linkedAt);
-  const interpretationRows = await database
-    .select()
-    .from(calculationInterpretations)
-    .where(inArray(calculationInterpretations.calculationId, calculationIds))
-    .orderBy(
-      calculationInterpretations.calculationId,
-      calculationInterpretations.createdAt,
-      calculationInterpretations.id
-    );
-  const artifactRows = await database
-    .select()
-    .from(calculationArtifacts)
-    .where(inArray(calculationArtifacts.calculationId, calculationIds))
-    .orderBy(
-      calculationArtifacts.calculationId,
-      calculationArtifacts.createdAt,
-      calculationArtifacts.id
-    );
-
-  const participantsByCalculation = groupParticipants(participantRows);
-  const versionsByCalculation = groupVersions(versionRows);
-  const linksByCalculation = groupLinks(linkRows);
-  const interpretationsByCalculation = groupInterpretations(interpretationRows);
-  const artifactsByCalculation = groupArtifacts(artifactRows);
+  const ids = rows.map((row) => row.id);
+  if (ids.length === 0) return [];
+  const [participantRows, linkRows, interpretationRows, artifactRows] = await Promise.all([
+    database
+      .select()
+      .from(calculationParticipants)
+      .where(inArray(calculationParticipants.calculationId, ids))
+      .orderBy(calculationParticipants.calculationId, calculationParticipants.order),
+    database
+      .select()
+      .from(calculationClientLinks)
+      .where(inArray(calculationClientLinks.calculationId, ids))
+      .orderBy(calculationClientLinks.calculationId, calculationClientLinks.linkedAt),
+    database
+      .select()
+      .from(calculationInterpretations)
+      .where(inArray(calculationInterpretations.calculationId, ids))
+      .orderBy(
+        calculationInterpretations.calculationId,
+        calculationInterpretations.createdAt,
+        calculationInterpretations.id
+      ),
+    database
+      .select()
+      .from(calculationArtifacts)
+      .where(inArray(calculationArtifacts.calculationId, ids))
+      .orderBy(
+        calculationArtifacts.calculationId,
+        calculationArtifacts.createdAt,
+        calculationArtifacts.id
+      )
+  ]);
+  const participants = groupParticipants(participantRows);
+  const links = groupLinks(linkRows);
+  const interpretations = groupInterpretations(interpretationRows);
+  const artifacts = groupArtifacts(artifactRows);
 
   return rows.map((row) => ({
     id: row.id,
@@ -573,14 +558,17 @@ async function hydrateCalculations(
     module: row.module as CalculationModule,
     mode: row.mode as CalculationMode,
     methodCode: row.methodCode,
-    currentMethodVersion: row.currentMethodVersion,
     title: row.title,
     status: row.status as CalculationStatus,
-    participants: participantsByCalculation.get(row.id) ?? [],
-    versions: versionsByCalculation.get(row.id) ?? [],
-    links: linksByCalculation.get(row.id) ?? [],
-    interpretations: interpretationsByCalculation.get(row.id) ?? [],
-    artifacts: artifactsByCalculation.get(row.id) ?? [],
+    requestFingerprint: row.requestFingerprint,
+    inputData: row.inputData,
+    resultData: row.resultData,
+    resultSummary: row.resultSummary,
+    resultChecksum: row.resultChecksum,
+    participants: participants.get(row.id) ?? [],
+    links: links.get(row.id) ?? [],
+    interpretations: interpretations.get(row.id) ?? [],
+    artifacts: artifacts.get(row.id) ?? [],
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt)
   }));
@@ -593,17 +581,19 @@ function toCalculationInsertRow(input: CalculationStoreCreateInput): Calculation
     module: input.module,
     mode: input.mode,
     methodCode: input.methodCode,
-    currentMethodVersion: input.methodVersion,
     title: input.title,
     status: "calculated",
+    requestFingerprint: input.requestFingerprint,
+    inputData: input.inputData,
+    resultData: input.resultData,
+    resultSummary: input.resultSummary,
+    resultChecksum: input.resultChecksum,
     createdAt: new Date(input.now),
     updatedAt: new Date(input.now)
   };
 }
 
-function groupParticipants(
-  rows: readonly CalculationParticipantRow[]
-): Map<string, CalculationParticipant[]> {
+function groupParticipants(rows: readonly CalculationParticipantRow[]) {
   const grouped = new Map<string, CalculationParticipant[]>();
   for (const row of rows) {
     const values = grouped.get(row.calculationId) ?? [];
@@ -611,39 +601,14 @@ function groupParticipants(
       role: row.role as CalculationParticipant["role"],
       source: row.source as CalculationParticipant["source"],
       clientId: row.clientId,
-      displayName: row.displayName,
-      birthDate: row.birthDate,
-      inputSnapshot: row.inputSnapshot,
-      manuallyOverridden: row.manuallyOverridden
+      displayName: row.displayName
     });
     grouped.set(row.calculationId, values);
   }
   return grouped;
 }
 
-function groupVersions(rows: readonly CalculationVersionRow[]): Map<string, CalculationVersion[]> {
-  const grouped = new Map<string, CalculationVersion[]>();
-  for (const row of rows) {
-    const values = grouped.get(row.calculationId) ?? [];
-    values.push({
-      id: row.id,
-      versionNumber: row.versionNumber,
-      methodVersion: row.methodVersion,
-      settingsSnapshot: row.settingsSnapshot,
-      inputSnapshot: row.inputSnapshot,
-      resultSnapshot: row.resultSnapshot,
-      resultSummary: row.resultSummary,
-      resultChecksum: row.resultChecksum,
-      createdAt: toIsoString(row.createdAt)
-    });
-    grouped.set(row.calculationId, values);
-  }
-  return grouped;
-}
-
-function groupLinks(
-  rows: readonly CalculationClientLinkRow[]
-): Map<string, CalculationClientLink[]> {
+function groupLinks(rows: readonly CalculationClientLinkRow[]) {
   const grouped = new Map<string, CalculationClientLink[]>();
   for (const row of rows) {
     const values = grouped.get(row.calculationId) ?? [];
@@ -658,15 +623,12 @@ function groupLinks(
   return grouped;
 }
 
-function groupInterpretations(
-  rows: readonly CalculationInterpretationRow[]
-): Map<string, CalculationInterpretation[]> {
+function groupInterpretations(rows: readonly CalculationInterpretationRow[]) {
   const grouped = new Map<string, CalculationInterpretation[]>();
   for (const row of rows) {
     const values = grouped.get(row.calculationId) ?? [];
     values.push({
       id: row.id,
-      versionId: row.versionId,
       source: row.source as CalculationInterpretation["source"],
       status: row.status as CalculationInterpretation["status"],
       text: row.text,
@@ -679,15 +641,12 @@ function groupInterpretations(
   return grouped;
 }
 
-function groupArtifacts(
-  rows: readonly CalculationArtifactRow[]
-): Map<string, CalculationArtifact[]> {
+function groupArtifacts(rows: readonly CalculationArtifactRow[]) {
   const grouped = new Map<string, CalculationArtifact[]>();
   for (const row of rows) {
     const values = grouped.get(row.calculationId) ?? [];
     values.push({
       id: row.id,
-      versionId: row.versionId,
       mediaAssetId: row.mediaAssetId,
       artifactType: row.artifactType as CalculationArtifact["artifactType"],
       status: row.status as CalculationArtifact["status"]
@@ -695,6 +654,17 @@ function groupArtifacts(
     grouped.set(row.calculationId, values);
   }
   return grouped;
+}
+
+function isExactRequestUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "23505" &&
+    "constraint" in error &&
+    error.constraint === "calculation_records_exact_request_unique"
+  );
 }
 
 function toIsoString(value: Date | string): string {

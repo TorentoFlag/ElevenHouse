@@ -1,15 +1,5 @@
 import { sql } from "drizzle-orm";
-import {
-  boolean,
-  check,
-  index,
-  integer,
-  jsonb,
-  pgTable,
-  text,
-  timestamp,
-  uuid
-} from "drizzle-orm/pg-core";
+import { check, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { calculationRecords } from "./calculation-records.schema";
 import {
   calculationParticipantRoleValues,
@@ -28,9 +18,6 @@ export const calculationParticipants = pgTable(
     source: text("source").notNull(),
     clientId: uuid("client_id"),
     displayName: text("display_name").notNull(),
-    birthDate: text("birth_date"),
-    inputSnapshot: jsonb("input_snapshot").notNull(),
-    manuallyOverridden: boolean("manually_overridden").notNull().default(false),
     order: integer("order").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -46,6 +33,12 @@ export const calculationParticipants = pgTable(
         formatCalculationSqlValues(calculationParticipantSourceValues)
       )}`
     ),
+    check(
+      "calculation_participants_source_client_check",
+      sql`(${table.source} = 'crm_client' and ${table.clientId} is not null) or (${table.source} = 'manual' and ${table.clientId} is null)`
+    ),
+    check("calculation_participants_order_check", sql`${table.order} >= 0 and ${table.order} < 2`),
+    index("calculation_participants_record_role_idx").on(table.calculationId, table.role),
     index("calculation_participants_record_order_idx").on(table.calculationId, table.order)
   ]
 );
