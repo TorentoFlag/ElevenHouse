@@ -82,7 +82,10 @@ describe("NumerologyService", () => {
     const store = createCalculationStore();
     const service = createService({ store });
 
-    const first = await service.createCalculation(compatibilityBody(clientId, partnerClientId), request());
+    const first = await service.createCalculation(
+      compatibilityBody(clientId, partnerClientId),
+      request()
+    );
     const reversed = await service.createCalculation(
       compatibilityBody(partnerClientId, clientId),
       request()
@@ -119,19 +122,17 @@ describe("NumerologyService", () => {
 
   it("returns a non-enumerating 404 for unrelated or incomplete CRM clients", async () => {
     const service = createService({ clients: [] });
-    await expectHttpCode(
-      service.preview(crmIndividualBody(), request()),
-      404,
-      "CLIENT_NOT_FOUND"
-    );
+    await expectHttpCode(service.preview(crmIndividualBody(), request()), 404, "CLIENT_NOT_FOUND");
   });
 });
 
-function createService(input: {
-  readonly store?: CalculationStore;
-  readonly timezone?: string;
-  readonly clients?: readonly AstrologerClientListItem[];
-} = {}): NumerologyService {
+function createService(
+  input: {
+    readonly store?: CalculationStore;
+    readonly timezone?: string;
+    readonly clients?: readonly AstrologerClientListItem[];
+  } = {}
+): NumerologyService {
   return new NumerologyService(
     input.store ?? createCalculationStore(),
     createClientStore(input.clients ?? defaultClients()),
@@ -142,7 +143,11 @@ function createService(input: {
 
 function createCalculationStore(): CalculationStore {
   const records: CalculationRecord[] = [];
-  const hydrateLinks = (record: CalculationRecord, clientIds: readonly string[], linkedAt: string) => ({
+  const hydrateLinks = (
+    record: CalculationRecord,
+    clientIds: readonly string[],
+    linkedAt: string
+  ) => ({
     ...record,
     status: clientIds.length > 0 ? ("linked" as const) : record.status,
     links: [
@@ -163,8 +168,7 @@ function createCalculationStore(): CalculationStore {
     findByOwnerAndId: vi.fn(
       async (input) =>
         records.find(
-          (record) =>
-            record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+          (record) => record.ownerUserId === input.ownerUserId && record.id === input.calculationId
         ) ?? null
     ),
     findExact: vi.fn(
@@ -206,8 +210,7 @@ function createCalculationStore(): CalculationStore {
     replaceResult: vi.fn(async () => ({ status: "not_found" as const })),
     ensureClientLinks: vi.fn(async (input) => {
       const index = records.findIndex(
-        (record) =>
-          record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+        (record) => record.ownerUserId === input.ownerUserId && record.id === input.calculationId
       );
       if (index < 0) return null;
       records[index] = hydrateLinks(records[index]!, input.clientIds, input.now);
@@ -309,7 +312,8 @@ function crmIndividualBody(): Record<string, unknown> {
 }
 
 function currentYearManualBody(): Record<string, unknown> {
-  const { title: _title, ...preview } = manualIndividualBody();
+  const preview = { ...manualIndividualBody() };
+  delete preview.title;
   return { ...preview, periodRequest: { kind: "current_year" } };
 }
 

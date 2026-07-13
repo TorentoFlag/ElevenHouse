@@ -5,16 +5,23 @@ import {
 import styles from "./NumerologyComponents.module.css";
 
 export type YearMonthsPanelProps = {
-  readonly personalYear: number | null;
+  readonly personalMonths: readonly {
+    readonly year: number;
+    readonly month: number;
+    readonly value: number;
+  }[];
   readonly currentDate: Date;
 };
 
-export function YearMonthsPanel({ personalYear, currentDate }: YearMonthsPanelProps) {
-  const monthPanel = buildPersonalMonthItems({ personalYear, currentDate });
+export function YearMonthsPanel({ personalMonths, currentDate }: YearMonthsPanelProps) {
+  const monthPanel = buildPersonalMonthItems({
+    personalMonths,
+    currentMonth: currentDate.getMonth() + 1
+  });
 
   return (
     <div className={styles.yearMonths}>
-      <span className={styles.kicker}>Личные месяцы · {monthPanel.year}</span>
+      <span className={styles.kicker}>Личные месяцы · {monthPanel.year ?? "—"}</span>
       <div>
         {monthPanel.items.map((month) => (
           <span data-current={month.isCurrent ? "true" : undefined} key={month.label}>

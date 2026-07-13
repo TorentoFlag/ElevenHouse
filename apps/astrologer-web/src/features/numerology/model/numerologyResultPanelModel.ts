@@ -1,11 +1,11 @@
 export type NumerologyPersonalMonthItem = {
   readonly label: string;
-  readonly value: number | null;
+  readonly value: number;
   readonly isCurrent: boolean;
 };
 
 export type NumerologyPersonalMonthPanelModel = {
-  readonly year: number;
+  readonly year: number | null;
   readonly items: readonly NumerologyPersonalMonthItem[];
 };
 
@@ -25,30 +25,31 @@ const monthLabels = [
 ] as const;
 
 export function buildPersonalMonthItems(input: {
-  readonly personalYear: number | null;
-  readonly currentDate: Date;
+  readonly personalMonths: readonly {
+    readonly year: number;
+    readonly month: number;
+    readonly value: number;
+  }[];
+  readonly currentMonth: number;
 }): NumerologyPersonalMonthPanelModel {
-  const currentMonth = input.currentDate.getMonth();
-
   return {
-    year: input.currentDate.getFullYear(),
-    items: monthLabels.map((label, index) => ({
-      label,
-      value: input.personalYear ? reduceNumerologyRoot(input.personalYear + index + 1) : null,
-      isCurrent: index === currentMonth
+    year: input.personalMonths[0]?.year ?? null,
+    items: input.personalMonths.map((month) => ({
+      label: monthLabels[month.month - 1] ?? String(month.month),
+      value: month.value,
+      isCurrent: month.month === input.currentMonth
     }))
   };
 }
 
 export function formatNullableNumerologyNumber(value: number | null): string {
-  if (value === null) return "—";
-  return String(value);
+  return value === null ? "—" : String(value);
 }
 
 export function getPersonalYear(model: {
-  readonly keyNumbers: readonly { readonly code: string; readonly value: number | null }[];
-}): number | null {
-  return model.keyNumbers.find((item) => item.code === "personalYear")?.value ?? null;
+  readonly personalYear: { readonly year: number; readonly value: number } | null;
+}): { readonly year: number; readonly value: number } | null {
+  return model.personalYear;
 }
 
 export function getPersonalYearEssence(model: {
@@ -58,14 +59,4 @@ export function getPersonalYearEssence(model: {
   }[];
 }): string | null {
   return model.keyNumbers.find((item) => item.code === "personalYear")?.meaning?.essence ?? null;
-}
-
-export function reduceNumerologyRoot(value: number): number {
-  let result = value;
-  while (result > 9) {
-    result = String(result)
-      .split("")
-      .reduce((total, digit) => total + Number(digit), 0);
-  }
-  return result;
 }

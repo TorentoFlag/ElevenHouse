@@ -54,7 +54,8 @@ runtime setting so Express resolves proxy headers; controllers must not parse
 `astrologer-api` обслуживает authenticated workflows астрологов. В текущем коде
 реализованы health, identity/passwordless/session, dictionary, dictionary AI draft,
 products, media uploads, profile/settings billing overview, verification
-application submission и provider-neutral AI generation через OpenAI.
+application submission, CRM clients, calculations, canonical Pythagorean
+numerology и provider-neutral AI generation через OpenAI.
 
 Ответственности:
 
@@ -104,7 +105,29 @@ PUT  /astrologer-profile/me
 GET  /platform-billing/me
 GET  /verification/me
 POST /verification/applications
+GET  /calculations?module=numerology&status=all
+GET  /calculations/:calculationId
+POST /numerology/preview
+POST /numerology/calculations
+POST /numerology/calculations/:calculationId/recalculate
+POST /calculations/:calculationId/interpretations
+POST /calculations/:calculationId/interpretations/:interpretationId/approve
+POST /calculations/:calculationId/publish
 ```
+
+`POST /numerology/preview` is authenticated and read-only, so it does not require
+CSRF and must not create calculation, participant-link or interpretation rows.
+State-changing numerology/calculation routes require CSRF. CRM request
+participants contain only owner-scoped client IDs; `astrologer-api` hydrates the
+current CRM display name and birth date before calculating. `current_year` is
+resolved with the astrologer profile timezone and the server clock.
+
+The server is the only numerology arithmetic authority. Persistence accepts the
+input, recalculates it and stores one current typed result with a canonical
+request fingerprint and SHA-256 result checksum. Recalculation atomically
+replaces that result, clears interpretations/artifacts and revokes publication.
+Publishing must name the expected current result checksum and requires an
+approved current interpretation.
 
 `GET /products/templates` returns active platform-owned starter templates in the
 requested locale. `POST /products/templates/:templateCode/drafts` requires an

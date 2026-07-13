@@ -18,7 +18,7 @@ export function NumerologyPresentation({ model, onClose }: NumerologyPresentatio
       <div className={styles.presentationHeader}>
         <div>
           <strong>{model.subject?.displayName ?? model.title}</strong>
-          <span>{model.subject?.birthDate ?? model.versionLabel}</span>
+          <span>{model.subject?.birthDate ?? ""}</span>
         </div>
         <button type="button" className="eh-button eh-button--secondary" onClick={onClose}>
           Закрыть

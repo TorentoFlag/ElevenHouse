@@ -16,9 +16,9 @@ describe("CalculationsService", () => {
     const store = createStore(manualCalculation());
     const service = createService(store);
 
-    await expect(
-      service.linkClient(calculationId, { clientId }, request())
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.linkClient(calculationId, { clientId }, request())).rejects.toBeInstanceOf(
+      BadRequestException
+    );
     expect(store.linkClient).not.toHaveBeenCalled();
   });
 
@@ -117,9 +117,7 @@ function publishableCalculation(): CalculationRecord {
   });
 }
 
-function baseCalculation(
-  overrides: Partial<CalculationRecord> = {}
-): CalculationRecord {
+function baseCalculation(overrides: Partial<CalculationRecord> = {}): CalculationRecord {
   return {
     id: calculationId,
     ownerUserId,

@@ -212,7 +212,10 @@ export class NumerologyService {
     throw new NotImplementedException("Numerology AI draft generation is not configured");
   }
 
-  private async prepare(input: NumerologyRequest, ownerUserId: string): Promise<PreparedCalculation> {
+  private async prepare(
+    input: NumerologyRequest,
+    ownerUserId: string
+  ): Promise<PreparedCalculation> {
     const participants = await this.hydrateParticipants(input.participants, ownerUserId);
     const periods = await this.resolvePeriods(input, ownerUserId);
     const canonicalParticipants = participants.map((participant) => ({

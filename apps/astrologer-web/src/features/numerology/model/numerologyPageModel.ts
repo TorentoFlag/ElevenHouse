@@ -1,16 +1,15 @@
 import {
-  createNumerologyCalculationRequestSchema,
   numerologyCalculationResponseSchema,
+  numerologyResultSchema,
   type CalculationInterpretationResponse,
   type CalculationRecordResponse,
-  type CreateNumerologyCalculationRequest,
-  type NumerologyCalculationResponse
+  type NumerologyCalculationResponse,
+  type NumerologyResult
 } from "@elevenhouse/contracts";
 import {
   canLinkCalculation,
   canPublishCalculation,
   getFirstLinkableClientId,
-  getLatestCalculationVersion,
   hasApprovedCurrentInterpretation,
   isCalculationLinked
 } from "../../calculations/model/calculationStatus";
@@ -22,7 +21,8 @@ import {
 import {
   createInitialNumerologyForm,
   createParticipantFormState,
-  type NumerologyFormState
+  type NumerologyFormState,
+  type NumerologyParticipantFormState
 } from "./numerologyFormModel";
 import {
   buildNumerologyWorkspaceModel,
@@ -33,7 +33,6 @@ import {
 
 export type NumerologyPageViewModel = {
   readonly calculation: CalculationRecordResponse | null;
-  readonly latestVersion: CalculationRecordResponse["versions"][number] | null;
   readonly linkableClientId: string | null;
   readonly isCalculationLinked: boolean;
   readonly linkDisabled: boolean;
@@ -41,6 +40,7 @@ export type NumerologyPageViewModel = {
   readonly publishDisabledReason: string | undefined;
   readonly isClientSelectionDisabled: boolean;
   readonly isApproveInterpretationDisabled: boolean;
+  readonly isSaveInterpretationDisabled: boolean;
   readonly model: NumerologyWorkspaceModel | null;
   readonly effectiveSelector: string | null;
   readonly detail: ReturnType<typeof getNumerologyDetail>;
@@ -53,136 +53,124 @@ export type NumerologyPageViewModel = {
 
 export function buildNumerologyPageViewModel(
   selectedResponse: NumerologyCalculationResponse | null,
+  previewResult: NumerologyResult | null,
+  formState: NumerologyFormState,
   selectedDetailSelector: string | null,
   isBusy: boolean
 ): NumerologyPageViewModel {
   const calculation = selectedResponse?.calculation ?? null;
-  const latestVersion = calculation ? getLatestCalculationVersion(calculation) : null;
-  const linkableClientId = getFirstLinkableClientId(calculation);
-  const currentVersionInterpretation = getCurrentVersionInterpretation(calculation);
-  const model = buildNumerologyWorkspaceModel(selectedResponse);
+  const linkableClientId = getFirstLinkableClientId(calculation) ?? firstCrmClientId(formState);
+  const currentInterpretation = getCurrentInterpretation(calculation);
+  const model = buildNumerologyWorkspaceModel(selectedResponse, previewResult, formState);
   const effectiveSelector = selectedDetailSelector ?? model?.defaultSelector ?? null;
   const detail = getNumerologyDetail(model, effectiveSelector);
   const isCompatibility = model?.mode === "compatibility";
-  const subject = model?.subject;
-  const partner = model?.partner;
 
   return {
     calculation,
-    latestVersion,
     linkableClientId,
     isCalculationLinked: isCalculationLinked(calculation),
-    linkDisabled: !canLinkCalculation(calculation) || isCalculationLinked(calculation) || isBusy,
+    linkDisabled:
+      isBusy ||
+      !linkableClientId ||
+      (!previewResult && (!canLinkCalculation(calculation) || isCalculationLinked(calculation))),
     publishDisabled: !canPublishCalculation(calculation) || isBusy,
     publishDisabledReason: getPublishDisabledReason(calculation, isBusy),
     isClientSelectionDisabled: isBusy,
     isApproveInterpretationDisabled:
-      !currentVersionInterpretation || currentVersionInterpretation.status === "approved" || isBusy,
+      !currentInterpretation || currentInterpretation.status === "approved" || isBusy,
+    isSaveInterpretationDisabled: !calculation || calculation.status === "archived" || isBusy,
     model,
     effectiveSelector,
     detail,
     isCompatibility,
-    subject,
-    partner,
-    selectedSubjectClient: toClientOptionFromParticipant(subject),
-    selectedPartnerClient: toClientOptionFromParticipant(partner)
+    subject: model?.subject,
+    partner: model?.partner,
+    selectedSubjectClient: toClientOptionFromParticipant(model?.subject),
+    selectedPartnerClient: toClientOptionFromParticipant(model?.partner)
   };
 }
 
 export function getCalculationTitle(state: NumerologyFormState): string {
   const subjectName = state.subject.displayName || "Клиент";
   if (state.mode === "compatibility") {
-    const partnerName = state.partner.displayName || "Партнер";
-
-    return `${subjectName} + ${partnerName}, совместимость`;
+    return `${subjectName} + ${state.partner.displayName || "Партнер"}, совместимость`;
   }
-
   return `${subjectName}, психоматрица`;
 }
 
-export function getCurrentVersionInterpretation(
+export function getCurrentInterpretation(
   calculation: CalculationRecordResponse | null
 ): CalculationInterpretationResponse | null {
-  const currentVersion = calculation ? getLatestCalculationVersion(calculation) : null;
-  if (!calculation || !currentVersion) return null;
-
-  return (
-    [...calculation.interpretations]
-      .reverse()
-      .find((interpretation) => interpretation.versionId === currentVersion.id) ?? null
-  );
+  return calculation?.interpretations.at(-1) ?? null;
 }
 
 function getPublishDisabledReason(
   calculation: CalculationRecordResponse | null,
   isBusy: boolean
 ): string | undefined {
-  if (!calculation) return "Создайте или выберите расчет";
+  if (!calculation) return "Сначала привяжите расчет к клиенту";
   if (isBusy) return "Действие выполняется";
   if (calculation.status === "archived") return "Архивный расчет нельзя публиковать";
   if (!isCalculationLinked(calculation)) return "Сначала привяжите расчет к клиенту";
   if (!hasApprovedCurrentInterpretation(calculation)) return "Нужна утвержденная трактовка";
-
   return undefined;
 }
 
 export function toNumerologyResponse(
   calculation: CalculationRecordResponse
 ): NumerologyCalculationResponse {
-  const currentVersion = getLatestCalculationVersion(calculation);
-  if (!currentVersion) {
-    throw new Error("Calculation has no versions");
-  }
-
   return numerologyCalculationResponseSchema.parse({
     calculation,
-    currentVersion,
-    resultSnapshot: currentVersion.resultSnapshot,
-    settingsSnapshot: currentVersion.settingsSnapshot,
-    inputSnapshot: currentVersion.inputSnapshot
+    result: numerologyResultSchema.parse(calculation.resultData)
   });
 }
 
 export function toNumerologyFormState(
   response: NumerologyCalculationResponse
 ): NumerologyFormState {
-  const parsed = createNumerologyCalculationRequestSchema.safeParse(response.inputSnapshot);
-  if (!parsed.success) return createInitialNumerologyForm();
-
-  const subject = parsed.data.participants.find((participant) => participant.role === "subject");
-  const partner = parsed.data.participants.find((participant) => participant.role === "partner");
+  const input = asRecord(response.calculation.inputData);
+  const inputParticipants = Array.isArray(input?.participants) ? input.participants : [];
+  const participantByRole = (role: "subject" | "partner") =>
+    inputParticipants.map(asRecord).find((participant) => participant?.role === role) ?? null;
+  const periodData = asRecord(input?.periods);
+  const personalDay = asRecord(periodData?.personalDay);
 
   return {
-    mode: parsed.data.mode,
-    title: parsed.data.title,
-    subject: subject ? toParticipantFormState(subject) : createParticipantFormState("manual"),
-    partner: partner ? toParticipantFormState(partner) : createParticipantFormState("manual"),
-    includeNameNumbers: parsed.data.settings.includeNameNumbers,
-    includePsychomatrix: parsed.data.settings.includePsychomatrix,
-    includeStrengthLines: parsed.data.settings.includeStrengthLines,
-    forecastDate: parsed.data.settings.forecastDate ?? ""
+    ...createInitialNumerologyForm(),
+    mode: response.calculation.mode,
+    title: response.calculation.title,
+    subject: toParticipantFormState(response, "subject", participantByRole("subject")),
+    partner: toParticipantFormState(response, "partner", participantByRole("partner")),
+    forecastDate: typeof personalDay?.date === "string" ? personalDay.date : ""
   };
 }
 
 function toParticipantFormState(
-  participant: CreateNumerologyCalculationRequest["participants"][number]
-) {
+  response: NumerologyCalculationResponse,
+  role: "subject" | "partner",
+  input: Record<string, unknown> | null
+): NumerologyParticipantFormState {
+  const saved = response.calculation.participants.find((participant) => participant.role === role);
+  if (!saved) return createParticipantFormState("manual");
+  const calculationName = typeof input?.calculationName === "string" ? input.calculationName : "";
+  const birthDate = typeof input?.birthDate === "string" ? input.birthDate : "";
   return {
-    source: participant.source,
-    clientId: participant.clientId ?? "",
-    displayName: participant.displayName ?? "",
-    fullName: participant.fullName ?? "",
-    birthDate: participant.birthDate ?? "",
-    birthTime: participant.birthTime ?? "",
-    birthTimePrecision: participant.birthTimePrecision ?? "unknown",
-    birthPlaceText: participant.birthPlaceText ?? "",
-    birthCountryCode: participant.birthCountryCode ?? "",
-    birthCity: participant.birthCity ?? "",
-    birthRegion: participant.birthRegion ?? "",
-    birthTimezone: participant.birthTimezone ?? "",
-    birthLatitude: participant.birthLatitude ?? null,
-    birthLongitude: participant.birthLongitude ?? null
+    ...createParticipantFormState(saved.source),
+    source: saved.source,
+    clientId: saved.clientId ?? "",
+    displayName: saved.displayName,
+    fullName: calculationName || saved.displayName,
+    birthDate
   };
+}
+
+function firstCrmClientId(state: NumerologyFormState): string | null {
+  return (
+    [state.subject, state.partner].find(
+      (participant) => participant.source === "crm_client" && participant.clientId
+    )?.clientId ?? null
+  );
 }
 
 function toClientOptionFromParticipant(
@@ -190,7 +178,6 @@ function toClientOptionFromParticipant(
 ): ClientSelectOption | null {
   if (!participant?.clientId) return null;
   const birthDateDisplay = formatBirthDate(participant.birthDate);
-
   return {
     value: participant.clientId,
     label: participant.displayName,
@@ -200,4 +187,10 @@ function toClientOptionFromParticipant(
     hasBirthDate: Boolean(participant.birthDate),
     birthData: null
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }

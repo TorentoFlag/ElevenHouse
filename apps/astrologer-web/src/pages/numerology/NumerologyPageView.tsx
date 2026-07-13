@@ -1,6 +1,7 @@
 import type {
   CalculationRecordResponse,
-  NumerologyCalculationResponse
+  NumerologyCalculationResponse,
+  NumerologyResult
 } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { MotionContent } from "@elevenhouse/design-system/motion";
@@ -16,6 +17,7 @@ import styles from "./NumerologyPage.module.css";
 export type NumerologyPageViewProps = {
   readonly calculations: readonly CalculationRecordResponse[];
   readonly selectedResponse: NumerologyCalculationResponse | null;
+  readonly previewResult: NumerologyResult | null;
   readonly formState: NumerologyFormState;
   readonly isYearMode: boolean;
   readonly isPresentationOpen: boolean;
@@ -40,6 +42,7 @@ export type NumerologyPageViewProps = {
 
 export function NumerologyPageView({
   selectedResponse,
+  previewResult,
   formState,
   isYearMode,
   isPresentationOpen,
@@ -59,7 +62,13 @@ export function NumerologyPageView({
   onSaveInterpretation,
   onApproveInterpretation
 }: NumerologyPageViewProps) {
-  const pageModel = buildNumerologyPageViewModel(selectedResponse, selectedDetailSelector, isBusy);
+  const pageModel = buildNumerologyPageViewModel(
+    selectedResponse,
+    previewResult,
+    formState,
+    selectedDetailSelector,
+    isBusy
+  );
   const isCompatibilityMode = formState.mode === "compatibility";
   const selectedSubjectClient =
     pageModel.selectedSubjectClient ?? toClientOptionFromNumerologyParticipant(formState.subject);
@@ -67,7 +76,11 @@ export function NumerologyPageView({
     pageModel.selectedPartnerClient ?? toClientOptionFromNumerologyParticipant(formState.partner);
   const subjectClientId = formState.subject.clientId || pageModel.subject?.clientId || "";
   const partnerClientId = formState.partner.clientId || pageModel.partner?.clientId || "";
-  const workspaceTransitionKey = getNumerologyWorkspaceTransitionKey(selectedResponse, formState);
+  const workspaceTransitionKey = getNumerologyWorkspaceTransitionKey(
+    selectedResponse,
+    previewResult,
+    formState
+  );
 
   return (
     <section className={styles.page} aria-labelledby="numerology-title">
@@ -166,10 +179,7 @@ export function NumerologyPageView({
       <div className={styles.body}>
         <main className={styles.workspace}>
           {errorMessage ? <p className={styles.error}>{errorMessage}</p> : null}
-          <MotionContent
-            className={styles.workspaceMotion}
-            transitionKey={workspaceTransitionKey}
-          >
+          <MotionContent className={styles.workspaceMotion} transitionKey={workspaceTransitionKey}>
             {pageModel.model ? (
               <div className={styles.workspaceGrid}>
                 <NumerologyResultPanel
@@ -180,6 +190,7 @@ export function NumerologyPageView({
                   interpretationText={interpretationText}
                   isBusy={isBusy}
                   isApproveInterpretationDisabled={pageModel.isApproveInterpretationDisabled}
+                  isSaveInterpretationDisabled={pageModel.isSaveInterpretationDisabled}
                   onInterpretationChange={onInterpretationChange}
                   onSaveInterpretation={onSaveInterpretation}
                   onApproveInterpretation={onApproveInterpretation}
@@ -210,15 +221,18 @@ export function NumerologyPageView({
 
 function getNumerologyWorkspaceTransitionKey(
   selectedResponse: NumerologyCalculationResponse | null,
+  previewResult: NumerologyResult | null,
   formState: NumerologyFormState
 ): string {
   if (!selectedResponse) {
-    return `${formState.mode}:empty`;
+    return previewResult
+      ? `${previewResult.mode}:${formState.subject.clientId}:${formState.partner.clientId}:preview`
+      : `${formState.mode}:empty`;
   }
 
   return [
     selectedResponse.calculation.mode,
     selectedResponse.calculation.id,
-    selectedResponse.currentVersion.id
+    selectedResponse.calculation.resultChecksum
   ].join(":");
 }

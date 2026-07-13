@@ -1,5 +1,5 @@
 import type { NumerologyCalculationResponse } from "@elevenhouse/contracts";
-import { getCurrentVersionInterpretation } from "../model/numerologyPageModel";
+import { getCurrentInterpretation } from "../model/numerologyPageModel";
 import { getLatestInterpretationText } from "../model/numerologyResultModel";
 import styles from "./NumerologyComponents.module.css";
 
@@ -23,7 +23,7 @@ export function NumerologyAiDraftPanel({
   onApprove
 }: NumerologyAiDraftPanelProps) {
   const savedText = getLatestInterpretationText(response);
-  const latestInterpretation = getCurrentVersionInterpretation(response?.calculation ?? null);
+  const latestInterpretation = getCurrentInterpretation(response?.calculation ?? null);
 
   return (
     <aside className={styles.aiPanel} aria-label="Трактовка">
@@ -48,7 +48,9 @@ export function NumerologyAiDraftPanel({
           <button
             type="button"
             className="eh-button eh-button--secondary"
-            disabled={!latestInterpretation || latestInterpretation.status === "approved" || isApproving}
+            disabled={
+              !latestInterpretation || latestInterpretation.status === "approved" || isApproving
+            }
             onClick={onApprove}
           >
             {isApproving ? "Утверждаем" : "Утвердить"}

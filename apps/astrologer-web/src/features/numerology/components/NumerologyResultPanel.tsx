@@ -3,10 +3,7 @@ import type {
   NumerologyWorkspaceDetail,
   NumerologyWorkspaceModel
 } from "../model/numerologyWorkspaceModel";
-import {
-  getPersonalYear,
-  getPersonalYearEssence
-} from "../model/numerologyResultPanelModel";
+import { getPersonalYear, getPersonalYearEssence } from "../model/numerologyResultPanelModel";
 import { CompatibilityWorkspace } from "./CompatibilityWorkspace";
 import { DetailPanel } from "./DetailPanel";
 import { PythagoreanMatrix } from "./PythagoreanMatrix";
@@ -28,6 +25,7 @@ export function NumerologyResultPanel({
   interpretationText,
   isBusy,
   isApproveInterpretationDisabled,
+  isSaveInterpretationDisabled,
   onInterpretationChange,
   onSaveInterpretation,
   onApproveInterpretation,
@@ -40,6 +38,7 @@ export function NumerologyResultPanel({
   readonly interpretationText: string;
   readonly isBusy: boolean;
   readonly isApproveInterpretationDisabled: boolean;
+  readonly isSaveInterpretationDisabled: boolean;
   readonly onInterpretationChange: (value: string) => void;
   readonly onSaveInterpretation: () => void;
   readonly onApproveInterpretation: () => void;
@@ -68,6 +67,7 @@ export function NumerologyResultPanel({
         interpretationText={interpretationText}
         isBusy={isBusy}
         isApproveInterpretationDisabled={isApproveInterpretationDisabled}
+        isSaveInterpretationDisabled={isSaveInterpretationDisabled}
         onInterpretationChange={onInterpretationChange}
         onSaveInterpretation={onSaveInterpretation}
         onApproveInterpretation={onApproveInterpretation}
@@ -96,9 +96,10 @@ export function NumerologyResultPanel({
         ))}
       </aside>
       <section className={styles.matrixColumn} aria-label="Психоматрица клиента">
-        {personalYear !== null && isYearMode ? (
+        {personalYear && isYearMode ? (
           <div className={styles.yearPill}>
-            Личный год {currentDate.getFullYear()} — число {personalYear} · {personalYearEssence}
+            Личный год {personalYear.year} — число {personalYear.value}
+            {personalYearEssence ? ` · ${personalYearEssence}` : ""}
           </div>
         ) : null}
         {model.matrix ? (
@@ -133,7 +134,9 @@ export function NumerologyResultPanel({
                 >
                   <span>{line.label}</span>
                   <span className={styles.lineMeter} aria-hidden="true">
-                    <span style={{ width: `${Math.min(100, Math.round((line.value / 7) * 100))}%` }} />
+                    <span
+                      style={{ width: `${Math.min(100, Math.round((line.value / 7) * 100))}%` }}
+                    />
                   </span>
                   <span className={styles.lineValue}>{line.value}</span>
                 </button>
@@ -141,13 +144,16 @@ export function NumerologyResultPanel({
             </div>
           </div>
         ) : null}
-        {isYearMode ? <YearMonthsPanel personalYear={personalYear} currentDate={currentDate} /> : null}
+        {isYearMode ? (
+          <YearMonthsPanel personalMonths={model.personalMonths} currentDate={currentDate} />
+        ) : null}
       </section>
       <DetailPanel
         detail={detail}
         interpretationText={interpretationText}
         isBusy={isBusy}
         isApproveInterpretationDisabled={isApproveInterpretationDisabled}
+        isSaveInterpretationDisabled={isSaveInterpretationDisabled}
         onInterpretationChange={onInterpretationChange}
         onSaveInterpretation={onSaveInterpretation}
         onApproveInterpretation={onApproveInterpretation}

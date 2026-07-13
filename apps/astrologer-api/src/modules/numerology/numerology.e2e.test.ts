@@ -2,7 +2,10 @@ import type { INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
-import { numerologyCalculationResponseSchema, numerologyPreviewResponseSchema } from "@elevenhouse/contracts";
+import {
+  numerologyCalculationResponseSchema,
+  numerologyPreviewResponseSchema
+} from "@elevenhouse/contracts";
 import type {
   AstrologerProfileStore,
   AuthSessionAuthenticationStore,
@@ -177,8 +180,7 @@ function createCalculationStore(): CalculationStore {
     findByOwnerAndId: vi.fn(
       async (input) =>
         records.find(
-          (record) =>
-            record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+          (record) => record.ownerUserId === input.ownerUserId && record.id === input.calculationId
         ) ?? null
     ),
     findExact: vi.fn(
@@ -217,11 +219,11 @@ function createCalculationStore(): CalculationStore {
       return record;
     }),
     replaceResult: vi.fn(async () => ({ status: "not_found" as const })),
-    ensureClientLinks: vi.fn(async (input) =>
-      records.find(
-        (record) =>
-          record.ownerUserId === input.ownerUserId && record.id === input.calculationId
-      ) ?? null
+    ensureClientLinks: vi.fn(
+      async (input) =>
+        records.find(
+          (record) => record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+        ) ?? null
     ),
     linkClient: vi.fn(async () => null),
     publishClientLink: vi.fn(async () => null),
@@ -286,7 +288,8 @@ function createAuthStore(): AuthSessionAuthenticationStore {
 }
 
 function previewBody(): Record<string, unknown> {
-  const { title: _title, ...preview } = persistBody();
+  const preview = { ...persistBody() };
+  delete preview.title;
   return preview;
 }
 

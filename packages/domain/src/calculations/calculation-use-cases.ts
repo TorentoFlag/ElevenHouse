@@ -57,8 +57,17 @@ export async function createCalculation(
     methodCode: required(input.methodCode, "Calculation method code is required"),
     title: required(input.title, "Calculation title is required"),
     participants: normalizeCalculationParticipants(input.participants),
-    linkClientIds: [...new Set(input.linkClientIds.map((clientId) => required(clientId, "Calculation client id is required")))],
-    requestFingerprint: digest(input.requestFingerprint, "Calculation request fingerprint is invalid"),
+    linkClientIds: [
+      ...new Set(
+        input.linkClientIds.map((clientId) =>
+          required(clientId, "Calculation client id is required")
+        )
+      )
+    ],
+    requestFingerprint: digest(
+      input.requestFingerprint,
+      "Calculation request fingerprint is invalid"
+    ),
     inputData: input.inputData,
     resultData: input.resultData,
     resultSummary: input.resultSummary,
@@ -300,8 +309,7 @@ function assertLinkClientsAreParticipants(
     clientIds.some(
       (clientId) =>
         !participants.some(
-          (participant) =>
-            participant.source === "crm_client" && participant.clientId === clientId
+          (participant) => participant.source === "crm_client" && participant.clientId === clientId
         )
     )
   ) {

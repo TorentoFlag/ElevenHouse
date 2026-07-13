@@ -1,4 +1,5 @@
-import type { NumerologyCalculationResponse } from "@elevenhouse/contracts";
+import type { NumerologyCalculationResponse, NumerologyResult } from "@elevenhouse/contracts";
+import type { NumerologyFormState } from "./numerologyFormModel";
 
 export type NumerologyWorkspaceMode = "individual" | "compatibility";
 export type NumerologyDetailSelector = string;
@@ -42,6 +43,7 @@ export type NumerologyWorkspaceStrengthLine = {
   readonly value: number;
   readonly cells: readonly string[];
   readonly level: string;
+  readonly levelCode: string;
   readonly text: string;
 };
 
@@ -74,12 +76,17 @@ export type NumerologyWorkspaceModel = {
   readonly mode: NumerologyWorkspaceMode;
   readonly title: string;
   readonly status: string;
-  readonly versionLabel: string | null;
   readonly subject: NumerologyWorkspaceParticipant | null;
   readonly partner: NumerologyWorkspaceParticipant | null;
   readonly keyNumbers: readonly NumerologyWorkspaceKeyNumber[];
   readonly matrix: NumerologyWorkspaceMatrix | null;
   readonly strengthLines: readonly NumerologyWorkspaceStrengthLine[];
+  readonly personalYear: { readonly year: number; readonly value: number } | null;
+  readonly personalMonths: readonly {
+    readonly year: number;
+    readonly month: number;
+    readonly value: number;
+  }[];
   readonly compatibility: NumerologyWorkspaceCompatibility | null;
   readonly defaultSelector: NumerologyDetailSelector | null;
 };
@@ -105,7 +112,7 @@ const keyNumberMeta: Record<string, { readonly label: string; readonly from: str
   soul: { label: "Число души", from: "гласные имени" },
   personality: { label: "Число личности", from: "согласные имени" },
   birthday: { label: "Число дня рождения", from: "день рождения" },
-  personalYear: { label: `Персональный год ${new Date().getFullYear()}`, from: "день, месяц + год" },
+  personalYear: { label: "Персональный год", from: "день, месяц + год" },
   personalMonth: { label: "Персональный месяц", from: "личный год + месяц" },
   personalDay: { label: "Персональный день", from: "личный месяц + день" }
 };
@@ -123,7 +130,10 @@ const keyNumberOrder = [
 
 const matrixDigits = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
-const cellMeta: Record<string, { readonly label: string; readonly empty: string; readonly levels: readonly string[] }> = {
+const cellMeta: Record<
+  string,
+  { readonly label: string; readonly empty: string; readonly levels: readonly string[] }
+> = {
   "1": {
     label: "Характер",
     empty: "Характер формируется через осознанные решения и среду.",
@@ -237,55 +247,123 @@ const cellMeta: Record<string, { readonly label: string; readonly empty: string;
 const strengthLineMeta: Record<string, { readonly label: string; readonly text: string }> = {
   goal: { label: "Целеустремленность", text: "Показывает способность держать цель и идти к ней." },
   family: { label: "Семейность", text: "Описывает сценарии близости, дома и поддержки." },
-  stability: { label: "Стабильность", text: "Показывает потребность в устойчивости и повторяемом ритме." },
-  selfEsteem: { label: "Самооценка", text: "Отвечает за внутреннюю опору и ощущение собственной ценности." },
-  material: { label: "Материя · быт", text: "Показывает отношение к деньгам, телу, быту и практическим задачам." },
+  stability: {
+    label: "Стабильность",
+    text: "Показывает потребность в устойчивости и повторяемом ритме."
+  },
+  self_esteem: {
+    label: "Самооценка",
+    text: "Отвечает за внутреннюю опору и ощущение собственной ценности."
+  },
+  material: {
+    label: "Материя · быт",
+    text: "Показывает отношение к деньгам, телу, быту и практическим задачам."
+  },
   talent: { label: "Талант", text: "Подсвечивает природную выразительность и творческие каналы." },
-  temperament: { label: "Темперамент", text: "Описывает интенсивность проявления и эмоциональный тонус." },
-  spirituality: { label: "Духовность", text: "Показывает связь с ценностями, смыслом и внутренним ориентиром." }
+  temperament: {
+    label: "Темперамент",
+    text: "Описывает интенсивность проявления и эмоциональный тонус."
+  },
+  spirituality: {
+    label: "Духовность",
+    text: "Показывает связь с ценностями, смыслом и внутренним ориентиром."
+  }
 };
 
 const numberMeanings: Record<number, NumerologyMeaning> = {
-  1: { essence: "Лидер, инициатор", text: "Сила числа в самостоятельности, старте и ясном выборе направления." },
-  2: { essence: "Дипломат, партнер", text: "Сила числа в чувствительности, сотрудничестве и умении слышать другого." },
-  3: { essence: "Творец, коммуникатор", text: "Сила числа в выражении, речи, образности и легкости контакта." },
-  4: { essence: "Структура, опора", text: "Сила числа в системе, дисциплине и надежном практическом результате." },
-  5: { essence: "Свобода, движение", text: "Сила числа в адаптивности, переменах и живом интересе к опыту." },
-  6: { essence: "Забота, красота", text: "Сила числа в ответственности, гармонии, доме и внимании к людям." },
-  7: { essence: "Поиск, глубина", text: "Сила числа в анализе, интуиции, внутренней честности и исследовании." },
-  8: { essence: "Материя, управление", text: "Сила числа в зрелой ответственности, ресурсах и управлении процессами." },
-  9: { essence: "Гуманист, завершение", text: "Сила числа в широте взгляда, мудрости, отдаче и завершении циклов без потери себя." },
-  11: { essence: "Проводник, вдохновение", text: "Мастер-число усиливает интуицию, видение и тонкую чувствительность к людям." },
-  22: { essence: "Мастер-строитель", text: "Мастер-число соединяет масштабное видение с практической реализацией." },
-  33: { essence: "Учитель, служение", text: "Мастер-число раскрывает заботу, наставничество и исцеляющее присутствие." }
+  1: {
+    essence: "Лидер, инициатор",
+    text: "Сила числа в самостоятельности, старте и ясном выборе направления."
+  },
+  2: {
+    essence: "Дипломат, партнер",
+    text: "Сила числа в чувствительности, сотрудничестве и умении слышать другого."
+  },
+  3: {
+    essence: "Творец, коммуникатор",
+    text: "Сила числа в выражении, речи, образности и легкости контакта."
+  },
+  4: {
+    essence: "Структура, опора",
+    text: "Сила числа в системе, дисциплине и надежном практическом результате."
+  },
+  5: {
+    essence: "Свобода, движение",
+    text: "Сила числа в адаптивности, переменах и живом интересе к опыту."
+  },
+  6: {
+    essence: "Забота, красота",
+    text: "Сила числа в ответственности, гармонии, доме и внимании к людям."
+  },
+  7: {
+    essence: "Поиск, глубина",
+    text: "Сила числа в анализе, интуиции, внутренней честности и исследовании."
+  },
+  8: {
+    essence: "Материя, управление",
+    text: "Сила числа в зрелой ответственности, ресурсах и управлении процессами."
+  },
+  9: {
+    essence: "Гуманист, завершение",
+    text: "Сила числа в широте взгляда, мудрости, отдаче и завершении циклов без потери себя."
+  },
+  11: {
+    essence: "Проводник, вдохновение",
+    text: "Мастер-число усиливает интуицию, видение и тонкую чувствительность к людям."
+  },
+  22: {
+    essence: "Мастер-строитель",
+    text: "Мастер-число соединяет масштабное видение с практической реализацией."
+  },
+  33: {
+    essence: "Учитель, служение",
+    text: "Мастер-число раскрывает заботу, наставничество и исцеляющее присутствие."
+  }
 };
 
 export function buildNumerologyWorkspaceModel(
-  response: NumerologyCalculationResponse | null
+  response: NumerologyCalculationResponse | null,
+  previewResult: NumerologyResult | null = null,
+  formState: NumerologyFormState | null = null
 ): NumerologyWorkspaceModel | null {
-  if (!response) return null;
+  const result = response?.result ?? previewResult;
+  if (!result) return null;
 
-  const snapshot = response.resultSnapshot as Record<string, unknown>;
-  const subject = getParticipant(response, "subject");
-  const partner = getParticipant(response, "partner");
-  const mode = response.calculation.mode;
-  const keyNumbers = buildKeyNumbers(snapshot, subject?.birthDate ?? null);
+  const snapshot = result as unknown as Record<string, unknown>;
+  const subject = getParticipant(response, result, formState, "subject");
+  const partner = getParticipant(response, result, formState, "partner");
+  const mode = result.mode;
+  const keyNumbers = buildKeyNumbers(snapshot);
   const matrix = buildMatrix(getRecord(snapshot.psychomatrix));
   const strengthLines = buildStrengthLines(snapshot.strengthLines);
   const compatibility = mode === "compatibility" ? buildCompatibility(response, snapshot) : null;
+  const periods = getRecord(snapshot.periods);
+  const personalYear = getPeriodValue(periods?.personalYear);
+  const personalMonths = Array.isArray(periods?.personalMonths)
+    ? periods.personalMonths.flatMap((month) => {
+        const item = getRecord(month);
+        return typeof item?.year === "number" &&
+          typeof item.month === "number" &&
+          typeof item.value === "number"
+          ? [{ year: item.year, month: item.month, value: item.value }]
+          : [];
+      })
+    : [];
 
   return {
     mode,
-    title: response.calculation.title,
-    status: response.calculation.status,
-    versionLabel: `версия ${response.currentVersion.versionNumber}`,
+    title: response?.calculation.title ?? formState?.title ?? "Предпросмотр расчета",
+    status: response?.calculation.status ?? "preview",
     subject,
     partner,
     keyNumbers,
     matrix,
     strengthLines,
+    personalYear,
+    personalMonths,
     compatibility,
-    defaultSelector: keyNumbers[0]?.selector ?? matrix?.cells.find((cell) => cell.count > 0)?.selector ?? null
+    defaultSelector:
+      keyNumbers[0]?.selector ?? matrix?.cells.find((cell) => cell.count > 0)?.selector ?? null
   };
 }
 
@@ -335,7 +413,7 @@ export function getNumerologyDetail(
       value: String(line.value),
       title: `Линия: ${line.label}`,
       subtitle: "линия силы психоматрицы",
-      text: `${line.text} ${getStrengthLineLevelText(line.level)}`,
+      text: `${line.text} ${getStrengthLineLevelText(line.levelCode)}`,
       formula: "Сумма количества цифр в трех ячейках линии."
     };
   }
@@ -344,16 +422,19 @@ export function getNumerologyDetail(
 }
 
 function buildKeyNumbers(
-  snapshot: Record<string, unknown>,
-  birthDate: string | null
+  snapshot: Record<string, unknown>
 ): readonly NumerologyWorkspaceKeyNumber[] {
   const keyNumbers = getRecord(snapshot.keyNumbers);
   if (!keyNumbers) return [];
+  const periods = getRecord(snapshot.periods);
+  const personalYear = getPeriodValue(periods?.personalYear);
+  const personalDayRecord = getRecord(periods?.personalDay);
+  const personalDayValue =
+    typeof personalDayRecord?.value === "number" ? personalDayRecord.value : null;
   const resolvedKeyNumbers: Record<string, unknown> = {
     ...keyNumbers,
-    ...(typeof keyNumbers.personalYear === "number" || !birthDate
-      ? {}
-      : { personalYear: calculatePersonalYear(birthDate, new Date().getFullYear()) })
+    ...(personalYear ? { personalYear: personalYear.value } : {}),
+    ...(personalDayValue !== null ? { personalDay: personalDayValue } : {})
   };
 
   return keyNumberOrder.flatMap((code) => {
@@ -365,7 +446,10 @@ function buildKeyNumbers(
       {
         code,
         selector: `key:${code}`,
-        label: meta.label,
+        label:
+          code === "personalYear" && personalYear
+            ? `${meta.label} ${personalYear.year}`
+            : meta.label,
         from: meta.from,
         value,
         meaning: numberMeanings[value] ?? null
@@ -374,14 +458,9 @@ function buildKeyNumbers(
   });
 }
 
-function calculatePersonalYear(birthDate: string, year: number): number | null {
-  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(birthDate);
-  if (!match) return null;
-
-  return reduceRoot(sumDigits(match[1]!) + sumDigits(match[2]!) + sumDigits(String(year)));
-}
-
-function buildMatrix(psychomatrix: Record<string, unknown> | null): NumerologyWorkspaceMatrix | null {
+function buildMatrix(
+  psychomatrix: Record<string, unknown> | null
+): NumerologyWorkspaceMatrix | null {
   const cells = getRecord(psychomatrix?.cells);
   if (!cells) return null;
 
@@ -405,7 +484,10 @@ function buildMatrix(psychomatrix: Record<string, unknown> | null): NumerologyWo
         label: meta.label,
         value,
         count,
-        text: count > 0 ? meta.levels[Math.min(count, meta.levels.length) - 1] ?? meta.levels.at(-1)! : meta.empty
+        text:
+          count > 0
+            ? (meta.levels[Math.min(count, meta.levels.length) - 1] ?? meta.levels.at(-1)!)
+            : meta.empty
       };
     })
   };
@@ -426,10 +508,13 @@ function buildStrengthLines(value: unknown): readonly NumerologyWorkspaceStrengt
       {
         code,
         selector: `line:${code}`,
-        label: meta.label,
+        label: typeof record.label === "string" ? record.label : meta.label,
         value: lineValue,
-        cells: Array.isArray(record.cells) ? record.cells.filter((cell): cell is string => typeof cell === "string") : [],
-        level: getStrengthLineLevel(lineValue),
+        cells: Array.isArray(record.cells)
+          ? record.cells.filter((cell): cell is string => typeof cell === "string")
+          : [],
+        level: typeof record.levelLabel === "string" ? record.levelLabel : "",
+        levelCode: typeof record.level === "string" ? record.level : "",
         text: meta.text
       }
     ];
@@ -437,18 +522,18 @@ function buildStrengthLines(value: unknown): readonly NumerologyWorkspaceStrengt
 }
 
 function buildCompatibility(
-  response: NumerologyCalculationResponse,
+  response: NumerologyCalculationResponse | null,
   snapshot: Record<string, unknown>
 ): NumerologyWorkspaceCompatibility {
   const individuals = Array.isArray(snapshot.individuals) ? snapshot.individuals : [];
-  const participants = response.calculation.participants;
+  const participants = response?.calculation.participants ?? [];
   const summaries = individuals.map((item, index) => {
     const individual = getRecord(item);
     const keyNumbers = getRecord(individual?.keyNumbers);
     const participant = participants[index];
     const displayName =
       participant?.displayName ||
-      (getRecord(individual?.participant)?.fullName as string | undefined) ||
+      (getRecord(individual?.participant)?.calculationName as string | undefined) ||
       (index === 0 ? "Клиент" : "Партнер");
 
     return {
@@ -462,7 +547,10 @@ function buildCompatibility(
 
   return {
     pairNumber: getNumber(snapshot.pairNumber),
-    pairMeaning: typeof snapshot.pairNumber === "number" ? numberMeanings[snapshot.pairNumber] ?? null : null,
+    pairMeaning:
+      typeof snapshot.pairNumber === "number"
+        ? (numberMeanings[snapshot.pairNumber] ?? null)
+        : null,
     participants: summaries,
     matrices: individuals.map((item, index) => ({
       participant: summaries[index] ?? {
@@ -474,7 +562,7 @@ function buildCompatibility(
       },
       matrix: buildMatrix(getRecord(getRecord(item)?.psychomatrix))
     })),
-    strengthLineComparisons: buildStrengthLineComparisons(snapshot.strengthLineComparisons)
+    strengthLineComparisons: buildStrengthLineComparisons(snapshot.comparisons)
   };
 }
 
@@ -483,7 +571,7 @@ function buildStrengthLineComparisons(value: unknown) {
 
   return value.flatMap((item) => {
     const record = getRecord(item);
-    if (!record) return [];
+    if (!record || record.block !== "strength_lines") return [];
     const code = typeof record.code === "string" ? record.code : "";
     const meta = strengthLineMeta[code];
     if (!meta) return [];
@@ -500,23 +588,41 @@ function buildStrengthLineComparisons(value: unknown) {
 }
 
 function getParticipant(
-  response: NumerologyCalculationResponse,
+  response: NumerologyCalculationResponse | null,
+  result: NumerologyResult,
+  formState: NumerologyFormState | null,
   role: "subject" | "partner"
 ): NumerologyWorkspaceParticipant | null {
-  const participant = response.calculation.participants.find((item) => item.role === role);
-  if (!participant) return null;
-
-  const inputSnapshot = getRecord(participant.inputSnapshot);
-  const displayName = participant.displayName || String(inputSnapshot?.fullName ?? "Клиент");
+  const saved = response?.calculation.participants.find((item) => item.role === role);
+  const formParticipant = formState?.[role === "subject" ? "subject" : "partner"];
+  const resultParticipant =
+    result.mode === "individual"
+      ? role === "subject"
+        ? result.participant
+        : null
+      : role === "subject"
+        ? result.participants.first
+        : result.participants.second;
+  if (!resultParticipant) return null;
+  const displayName =
+    saved?.displayName || formParticipant?.displayName || resultParticipant.calculationName;
 
   return {
     role,
-    clientId: participant.clientId,
+    clientId: saved?.clientId ?? (formParticipant?.clientId || null),
     displayName,
     initials: getInitials(displayName),
-    birthDate: participant.birthDate ?? String(inputSnapshot?.birthDate ?? ""),
-    sourceLabel: participant.source === "crm_client" ? "CRM-клиент" : "ручной ввод"
+    birthDate: resultParticipant.birthDate,
+    sourceLabel:
+      (saved?.source ?? formParticipant?.source) === "crm_client" ? "CRM-клиент" : "ручной ввод"
   };
+}
+
+function getPeriodValue(value: unknown): { readonly year: number; readonly value: number } | null {
+  const period = getRecord(value);
+  return typeof period?.year === "number" && typeof period.value === "number"
+    ? { year: period.year, value: period.value }
+    : null;
 }
 
 function getRecord(value: unknown): Record<string, unknown> | null {
@@ -538,17 +644,12 @@ function getInitials(name: string): string {
   return initials || "К";
 }
 
-function getStrengthLineLevel(value: number): string {
-  if (value <= 1) return "слабая";
-  if (value <= 3) return "умеренная";
-  if (value <= 5) return "сильная";
-  return "очень сильная";
-}
-
 function getStrengthLineLevelText(level: string): string {
-  if (level === "слабая") return "Эта сфера требует осознанной практики и поддержки.";
-  if (level === "умеренная") return "Сфера работает стабильно, без сильного перекоса.";
-  if (level === "сильная") return "На эту сферу можно опираться в рекомендациях.";
+  if (level === "absent" || level === "weak") {
+    return "Эта сфера требует осознанной практики и поддержки.";
+  }
+  if (level === "moderate") return "Сфера работает стабильно, без сильного перекоса.";
+  if (level === "expressed") return "На эту сферу можно опираться в рекомендациях.";
   return "Сфера может доминировать, поэтому важно держать баланс.";
 }
 
@@ -572,18 +673,4 @@ function getKeyNumberFormula(code: string): string | null {
     return "Буквы имени переводятся в числа по таблице метода и сводятся к корневому числу.";
   }
   return null;
-}
-
-function sumDigits(value: string): number {
-  return value
-    .split("")
-    .reduce((total, digit) => total + (Number.isFinite(Number(digit)) ? Number(digit) : 0), 0);
-}
-
-function reduceRoot(value: number): number {
-  let result = value;
-  while (result > 9) {
-    result = sumDigits(String(result));
-  }
-  return result;
 }

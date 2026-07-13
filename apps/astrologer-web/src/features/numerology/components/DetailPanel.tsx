@@ -6,6 +6,7 @@ export type DetailPanelProps = {
   readonly interpretationText: string;
   readonly isBusy: boolean;
   readonly isApproveInterpretationDisabled: boolean;
+  readonly isSaveInterpretationDisabled: boolean;
   readonly onInterpretationChange: (value: string) => void;
   readonly onSaveInterpretation: () => void;
   readonly onApproveInterpretation: () => void;
@@ -16,6 +17,7 @@ export function DetailPanel({
   interpretationText,
   isBusy,
   isApproveInterpretationDisabled,
+  isSaveInterpretationDisabled,
   onInterpretationChange,
   onSaveInterpretation,
   onApproveInterpretation
@@ -51,7 +53,7 @@ export function DetailPanel({
             <button
               type="button"
               className="eh-button eh-button--secondary"
-              disabled={isBusy}
+              disabled={isSaveInterpretationDisabled || isBusy}
               onClick={onSaveInterpretation}
             >
               Сохранить

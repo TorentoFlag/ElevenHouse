@@ -2,13 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   CalculationRecordResponse,
-  NumerologyCalculationResponse
+  NumerologyCalculationResponse,
+  NumerologyResult
 } from "@elevenhouse/contracts";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
-import {
-  getFirstLinkableClientId,
-  getLatestCalculationVersion
-} from "../../features/calculations/model/calculationStatus";
+import { getFirstLinkableClientId } from "../../features/calculations/model/calculationStatus";
 import {
   astrologerClientListQueryOptions,
   findClientSelectOption,
@@ -27,6 +25,7 @@ import {
   getNumerologyFormErrors,
   toClientParticipantFormState,
   toCreateNumerologyRequest,
+  toPreviewNumerologyRequest,
   type NumerologyFormState
 } from "../../features/numerology/model/numerologyFormModel";
 import {
@@ -34,12 +33,13 @@ import {
   useCreateNumerologyMutation,
   useLinkCalculationClientMutation,
   useNumerologyCalculationListQuery,
+  usePreviewNumerologyMutation,
   usePublishCalculationMutation,
   useSaveCalculationInterpretationMutation
 } from "../../features/numerology/model/numerologyHooks";
 import {
   getCalculationTitle,
-  getCurrentVersionInterpretation,
+  getCurrentInterpretation,
   toNumerologyFormState,
   toNumerologyResponse
 } from "../../features/numerology/model/numerologyPageModel";
@@ -50,6 +50,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const listQuery = useNumerologyCalculationListQuery();
   const clientsQuery = useQuery(astrologerClientListQueryOptions({ limit: 100, offset: 0 }));
   const createMutation = useCreateNumerologyMutation();
+  const previewMutation = usePreviewNumerologyMutation();
   const linkMutation = useLinkCalculationClientMutation();
   const saveInterpretationMutation = useSaveCalculationInterpretationMutation();
   const approveInterpretationMutation = useApproveCalculationInterpretationMutation();
@@ -65,6 +66,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const [selectedResponse, setSelectedResponse] = useState<NumerologyCalculationResponse | null>(
     null
   );
+  const [previewResult, setPreviewResult] = useState<NumerologyResult | null>(null);
   const [formState, setFormState] = useState<NumerologyFormState>(createInitialNumerologyForm);
   const [isYearMode, setIsYearMode] = useState(false);
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
@@ -73,6 +75,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const isBusy =
     createMutation.isPending ||
+    previewMutation.isPending ||
     linkMutation.isPending ||
     saveInterpretationMutation.isPending ||
     approveInterpretationMutation.isPending ||
@@ -81,9 +84,9 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   useDocumentTitle("ElevenHouse | Нумерология");
 
   useEffect(() => {
-    if (selectedResponse || calculations.length === 0) return;
+    if (selectedResponse || previewResult || calculations.length === 0) return;
     selectCalculation(calculations[0]!);
-  }, [calculations, selectedResponse]);
+  }, [calculations, previewResult, selectedResponse]);
 
   useEffect(() => {
     setInterpretationText(getLatestInterpretationText(selectedResponse));
@@ -91,14 +94,11 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   }, [selectedResponse]);
 
   const selectedCalculation = selectedResponse?.calculation ?? null;
-  const currentVersion = useMemo(
-    () => (selectedCalculation ? getLatestCalculationVersion(selectedCalculation) : null),
-    [selectedCalculation]
-  );
 
   return {
     calculations,
     selectedResponse,
+    previewResult,
     formState,
     isYearMode,
     isPresentationOpen,
@@ -118,6 +118,14 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     onOpenPresentation: () => setIsPresentationOpen(true),
     onClosePresentation: () => setIsPresentationOpen(false),
     onLink: () => {
+      if (!selectedCalculation && previewResult) {
+        run(async () => {
+          const response = await createMutation.mutateAsync(toCreateNumerologyRequest(formState));
+          setPreviewResult(null);
+          setSelectedResponse(response);
+        }, setErrorMessage);
+        return;
+      }
       const clientId = getFirstLinkableClientId(selectedCalculation);
       if (!selectedCalculation || !clientId) return;
       run(async () => {
@@ -134,27 +142,24 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       run(async () => {
         const calculation = await publishMutation.mutateAsync({
           calculationId: selectedCalculation.id,
-          body: { clientId }
+          body: { clientId, expectedResultChecksum: selectedCalculation.resultChecksum }
         });
         setSelectedResponse(toNumerologyResponse(calculation));
       }, setErrorMessage);
     },
     onInterpretationChange: setInterpretationText,
     onSaveInterpretation: () => {
-      if (!selectedCalculation || !currentVersion) return;
+      if (!selectedCalculation) return;
       run(async () => {
         const calculation = await saveInterpretationMutation.mutateAsync({
           calculationId: selectedCalculation.id,
-          body: {
-            versionId: currentVersion.id,
-            text: interpretationText
-          }
+          body: { text: interpretationText }
         });
         setSelectedResponse(toNumerologyResponse(calculation));
       }, setErrorMessage);
     },
     onApproveInterpretation: () => {
-      const latestInterpretation = getCurrentVersionInterpretation(selectedCalculation);
+      const latestInterpretation = getCurrentInterpretation(selectedCalculation);
       if (!selectedCalculation || !latestInterpretation) return;
       run(async () => {
         const calculation = await approveInterpretationMutation.mutateAsync({
@@ -168,6 +173,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
 
   function selectCalculation(calculation: CalculationRecordResponse): void {
     const response = toNumerologyResponse(calculation);
+    setPreviewResult(null);
     setSelectedResponse(response);
     setFormState(toNumerologyFormState(response));
   }
@@ -196,7 +202,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       return;
     }
 
-    selectOrCreateCalculation(nextState);
+    selectOrPreviewCalculation(nextState);
   }
 
   function toggleCompatibilityMode(): void {
@@ -238,7 +244,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       return;
     }
 
-    selectOrCreateCalculation(nextState);
+    selectOrPreviewCalculation(nextState);
   }
 
   function activateIndividualMode(): void {
@@ -251,10 +257,10 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     const nextState = buildIndividualFormState(formState, subject);
     setSelectedDetailSelector(null);
     setFormState(nextState);
-    selectOrCreateCalculation(nextState);
+    selectOrPreviewCalculation(nextState);
   }
 
-  function selectOrCreateCalculation(nextState: NumerologyFormState): void {
+  function selectOrPreviewCalculation(nextState: NumerologyFormState): void {
     const errors = getNumerologyFormErrors(nextState);
     if (errors.length > 0) {
       setErrorMessage(errors[0] ?? "Заполните данные расчета");
@@ -274,8 +280,9 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     }
 
     run(async () => {
-      const response = await createMutation.mutateAsync(toCreateNumerologyRequest(nextState));
-      setSelectedResponse(response);
+      const response = await previewMutation.mutateAsync(toPreviewNumerologyRequest(nextState));
+      setSelectedResponse(null);
+      setPreviewResult(response.result);
     }, setErrorMessage);
   }
 

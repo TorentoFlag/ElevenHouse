@@ -49,7 +49,9 @@ describe("NumerologyPageView", () => {
     expect(findButtonByText(view, "PDF").props.disabled).toBe(true);
     expect(findOptionalButtonByText(view, "Пересчитать")).toBeNull();
     expect(findOptionalButtonByText(view, "Данные расчета")).toBeNull();
-    expect(findElements(view).some((element) => includesText(element.props, "Сохраненные"))).toBe(false);
+    expect(findElements(view).some((element) => includesText(element.props, "Сохраненные"))).toBe(
+      false
+    );
   });
 
   it("does not render the saved calculations picker on the reference workspace", () => {
@@ -88,43 +90,14 @@ describe("NumerologyPageView", () => {
     );
   });
 
-  it("disables interpretation approval when the current version has no interpretation", () => {
+  it("disables interpretation approval when the current result has no interpretation", () => {
     const baseResponse = response({
       source: "crm_client",
       clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
     });
-    const previousVersion = baseResponse.calculation.versions[0]!;
-    const currentVersion = {
-      ...previousVersion,
-      id: "44444444-4444-4444-8444-444444444444",
-      versionNumber: 2,
-      resultChecksum: "checksum-2"
-    };
     const view = NumerologyPageView({
       ...baseProps(),
-      selectedResponse: {
-        ...baseResponse,
-        currentVersion,
-        resultSnapshot: currentVersion.resultSnapshot,
-        settingsSnapshot: currentVersion.settingsSnapshot,
-        inputSnapshot: currentVersion.inputSnapshot,
-        calculation: {
-          ...baseResponse.calculation,
-          versions: [previousVersion, currentVersion],
-          interpretations: [
-            {
-              id: "55555555-5555-4555-8555-555555555555",
-              versionId: previousVersion.id,
-              source: "manual",
-              status: "draft",
-              text: "Previous version draft",
-              modelId: null,
-              promptVersion: null,
-              approvedAt: null
-            }
-          ]
-        }
-      }
+      selectedResponse: baseResponse
     });
     const resultPanel = findRequiredElementByType<{
       readonly isApproveInterpretationDisabled?: boolean;
@@ -263,14 +236,13 @@ describe("NumerologyPageView", () => {
     expect(findOptionalButtonByText(view, "Презентация")).toBeNull();
   });
 
-  it("animates workspace changes with the shared motion primitive keyed by calculation version", () => {
+  it("animates workspace changes with the shared motion primitive keyed by result checksum", () => {
     const view = NumerologyPageView({
       ...baseProps(),
       selectedResponse: response({
         source: "crm_client",
         clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e",
-        calculationId: "11111111-1111-4111-8111-111111111111",
-        versionId: "33333333-3333-4333-8333-333333333333"
+        calculationId: "11111111-1111-4111-8111-111111111111"
       })
     });
     const motion = findRequiredElementByType<{
@@ -280,7 +252,7 @@ describe("NumerologyPageView", () => {
 
     expect(motion.props.className).toContain(styles.workspaceMotion);
     expect(motion.props.transitionKey).toBe(
-      "individual:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333"
+      `individual:11111111-1111-4111-8111-111111111111:sha256:${"b".repeat(64)}`
     );
   });
 
@@ -302,6 +274,7 @@ function baseProps(): NumerologyPageViewProps {
   return {
     calculations: [],
     selectedResponse: null,
+    previewResult: null,
     formState: {
       mode: "individual",
       title: "",
@@ -352,61 +325,65 @@ function response(participant: {
   readonly source: "manual" | "crm_client";
   readonly clientId: string | null;
   readonly calculationId?: string;
-  readonly versionId?: string;
 }): NumerologyCalculationResponse {
-  const calculation = {
-    id: participant.calculationId ?? "11111111-1111-4111-8111-111111111111",
-    ownerUserId: "22222222-2222-4222-8222-222222222222",
-    module: "numerology",
-    mode: "individual",
+  const result = {
     methodCode: "pythagorean",
-    currentMethodVersion: "1.0.0",
-    title: "Мария",
-    status: "calculated",
-    participants: [
-      {
-        role: "subject",
-        source: participant.source,
-        clientId: participant.clientId,
-        displayName: "Мария",
-        birthDate: "1990-03-14",
-        inputSnapshot: { fullName: "Мария Иванова", birthDate: "1990-03-14" },
-        manuallyOverridden: false
+    mode: "individual",
+    participant: {
+      calculationName: "Мария Иванова",
+      calculationNameSource:
+        participant.source === "crm_client" ? "crm_display_name" : "manual_entry",
+      birthDate: "1990-03-14"
+    },
+    keyNumbers: { lifePath: 9, birthday: 5, expression: 9, soul: 3, personality: 6 },
+    periods: {},
+    psychomatrix: {
+      sourceDigits: [1, 4, 0, 3, 1, 9, 9, 0],
+      workingNumbers: { first: 27, second: 9, third: 25, fourth: 7 },
+      cells: {
+        "1": "11",
+        "2": "",
+        "3": "3",
+        "4": "4",
+        "5": "",
+        "6": "",
+        "7": "7",
+        "8": "",
+        "9": "999"
       }
-    ],
-    versions: [
-      {
-        id: participant.versionId ?? "33333333-3333-4333-8333-333333333333",
-        versionNumber: 1,
-        methodVersion: "1.0.0",
-        settingsSnapshot: { includeNameNumbers: true },
-        inputSnapshot: { mode: "individual" },
-        resultSnapshot: {
-          methodCode: "pythagorean",
-          methodVersion: "1.0.0",
-          keyNumbers: { lifePath: 9 }
-        },
-        resultSummary: { keyNumbers: { lifePath: 9 } },
-        resultChecksum: "checksum",
-        createdAt: "2026-07-06T00:00:00.000Z"
-      }
-    ],
-    links: [],
-    interpretations: [],
-    artifacts: [],
-    createdAt: "2026-07-06T00:00:00.000Z",
-    updatedAt: "2026-07-06T00:00:00.000Z"
-  } satisfies NumerologyCalculationResponse["calculation"];
-
-  const currentVersion = calculation.versions[0]!;
-
-  return {
-    calculation,
-    currentVersion,
-    resultSnapshot: currentVersion.resultSnapshot,
-    settingsSnapshot: currentVersion.settingsSnapshot,
-    inputSnapshot: currentVersion.inputSnapshot
+    },
+    strengthLines: []
   };
+  return {
+    calculation: {
+      id: participant.calculationId ?? "11111111-1111-4111-8111-111111111111",
+      ownerUserId: "22222222-2222-4222-8222-222222222222",
+      module: "numerology",
+      mode: "individual",
+      methodCode: "pythagorean",
+      title: "Мария",
+      status: "calculated",
+      requestFingerprint: `sha256:${"a".repeat(64)}`,
+      inputData: {},
+      resultData: result,
+      resultSummary: {},
+      resultChecksum: `sha256:${"b".repeat(64)}`,
+      participants: [
+        {
+          role: "subject",
+          source: participant.source,
+          clientId: participant.clientId,
+          displayName: "Мария"
+        }
+      ],
+      links: [],
+      interpretations: [],
+      artifacts: [],
+      createdAt: "2026-07-06T00:00:00.000Z",
+      updatedAt: "2026-07-06T00:00:00.000Z"
+    },
+    result
+  } as unknown as NumerologyCalculationResponse;
 }
 
 function findButtonByText(

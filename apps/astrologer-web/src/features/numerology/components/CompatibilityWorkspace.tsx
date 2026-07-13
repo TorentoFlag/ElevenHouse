@@ -8,6 +8,7 @@ export type CompatibilityWorkspaceProps = {
   readonly interpretationText: string;
   readonly isBusy: boolean;
   readonly isApproveInterpretationDisabled: boolean;
+  readonly isSaveInterpretationDisabled: boolean;
   readonly onInterpretationChange: (value: string) => void;
   readonly onSaveInterpretation: () => void;
   readonly onApproveInterpretation: () => void;
@@ -18,6 +19,7 @@ export function CompatibilityWorkspace({
   interpretationText,
   isBusy,
   isApproveInterpretationDisabled,
+  isSaveInterpretationDisabled,
   onInterpretationChange,
   onSaveInterpretation,
   onApproveInterpretation
@@ -78,7 +80,9 @@ export function CompatibilityWorkspace({
             <span className={styles.detailValue}>{compatibility.pairNumber ?? "—"}</span>
             <span>
               <strong>Число пары</strong>
-              {compatibility.pairMeaning ? <small>{compatibility.pairMeaning.essence}</small> : null}
+              {compatibility.pairMeaning ? (
+                <small>{compatibility.pairMeaning.essence}</small>
+              ) : null}
             </span>
           </div>
         </div>
@@ -109,7 +113,7 @@ export function CompatibilityWorkspace({
               <button
                 type="button"
                 className="eh-button eh-button--secondary"
-                disabled={isBusy}
+                disabled={isSaveInterpretationDisabled || isBusy}
                 onClick={onSaveInterpretation}
               >
                 Сохранить

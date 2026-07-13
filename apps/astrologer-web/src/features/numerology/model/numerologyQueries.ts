@@ -1,7 +1,8 @@
 import type {
   CreateNumerologyCalculationRequest,
   ListCalculationsQuery,
-  RecalculateNumerologyCalculationRequest
+  RecalculateNumerologyCalculationRequest,
+  PreviewNumerologyRequest
 } from "@elevenhouse/contracts";
 import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import {
@@ -12,7 +13,11 @@ import {
   publishCalculation,
   saveCalculationInterpretation
 } from "../../calculations/api/calculationsApi";
-import { createNumerologyCalculation, recalculateNumerologyCalculation } from "../api/numerologyApi";
+import {
+  createNumerologyCalculation,
+  previewNumerology,
+  recalculateNumerologyCalculation
+} from "../api/numerologyApi";
 
 export const calculationsQueryKeys = {
   all: () => ["calculations"] as const,
@@ -45,6 +50,10 @@ export function createNumerologyMutationOptions(
     mutationFn: (body: CreateNumerologyCalculationRequest) => createNumerologyCalculation(body),
     onSuccess: () => invalidateCalculations(queryClient)
   };
+}
+
+export function previewNumerologyMutationOptions() {
+  return { mutationFn: (body: PreviewNumerologyRequest) => previewNumerology(body) };
 }
 
 export function recalculateNumerologyMutationOptions(

@@ -56,13 +56,17 @@ export class AppModule {}
 `apps/astrologer-api` сейчас содержит:
 
 - `ai`
+- `astrologer-profile`
+- `calculations`
 - `clock`
+- `clients`
 - `database`
 - `dictionary`
 - `dictionary-ai`
 - `health`
 - `identity`
 - `media`
+- `numerology`
 - `platform-billing`
 - `products`
 - `redis`
@@ -94,6 +98,12 @@ feature-module boundaries, explicit auth/permissions и audit logging.
 - `Wallet/Ledger`: баланс астролога, ledger entries, payouts, adjustments.
 - `Subscriptions`: recurring client subscriptions и platform plans для астрологов.
 - `BirthData`: дата, время, место рождения и правила consented sharing.
+- `Calculations`: owner-scoped current calculation result, participants, client
+  links, interpretations, publication checksum and artifacts. The module stores
+  one current result and does not maintain result-version history.
+- `Numerology`: typed preview/persist/recalculate orchestration and method
+  registry. The active `pythagorean` engine owns Pythagorean RU formulas;
+  controllers, frontend and generic calculation storage do not duplicate them.
 - `Charts`: расчёты астрологических карт и generated chart artifacts.
 - `Sessions`: lifecycle консультации, recordings, materials.
 - `Messaging`: threads и messages там, где используется platform messaging.

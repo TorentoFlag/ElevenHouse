@@ -65,11 +65,15 @@ export function findExistingCalculationForParticipants(
   return (
     calculations.find((calculation) => {
       if (calculation.module !== "numerology" || calculation.mode !== input.mode) return false;
-      const subject = calculation.participants.find((participant) => participant.role === "subject");
+      const subject = calculation.participants.find(
+        (participant) => participant.role === "subject"
+      );
       if (subject?.clientId !== input.subjectClientId) return false;
       if (input.mode === "individual") return true;
 
-      const partner = calculation.participants.find((participant) => participant.role === "partner");
+      const partner = calculation.participants.find(
+        (participant) => participant.role === "partner"
+      );
       return partner?.clientId === input.partnerClientId;
     }) ?? null
   );
@@ -90,8 +94,9 @@ export function toClientOptionFromNumerologyParticipant(
     label,
     initials: getClientInitials(label),
     subtitle:
-      [birthDateDisplay || participant.birthDate, participant.birthPlaceText].filter(Boolean).join(" · ") ||
-      "Дата рождения не заполнена",
+      [birthDateDisplay || participant.birthDate, participant.birthPlaceText]
+        .filter(Boolean)
+        .join(" · ") || "Дата рождения не заполнена",
     birthDateDisplay: birthDateDisplay || "—",
     hasBirthDate: Boolean(participant.birthDate),
     birthData: {

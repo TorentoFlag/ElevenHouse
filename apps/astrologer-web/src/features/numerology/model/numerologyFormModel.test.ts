@@ -4,6 +4,7 @@ import {
   createParticipantFormState,
   getNumerologyFormErrors,
   toCreateNumerologyRequest,
+  toPreviewNumerologyRequest,
   type NumerologyFormState
 } from "./numerologyFormModel";
 
@@ -18,20 +19,40 @@ describe("numerologyFormModel", () => {
     ]);
   });
 
-  it("creates an individual Pythagorean request with versioned settings", () => {
+  it("creates an individual Pythagorean request without client-side method settings", () => {
     const request = toCreateNumerologyRequest(validState());
 
     expect(request).toMatchObject({
       mode: "individual",
       methodCode: "pythagorean",
-      settings: {
-        masterNumbers: { mode: "preserve_selected", values: [11, 22, 33] },
-        includeNameNumbers: true,
-        includePsychomatrix: true,
-        includeStrengthLines: true
-      }
+      periodRequest: { kind: "current_year" }
     });
     expect(request.participants).toHaveLength(1);
+    expect(request).not.toHaveProperty("settings");
+  });
+
+  it("sends only the CRM identity and keeps preview free of persistence metadata", () => {
+    const state = {
+      ...validState(),
+      subject: {
+        ...validState().subject,
+        source: "crm_client" as const,
+        clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e",
+        displayName: "Голубев Антон",
+        fullName: "Stale browser name",
+        birthDate: "1999-01-01"
+      }
+    };
+
+    const persisted = toCreateNumerologyRequest(state);
+    const preview = toPreviewNumerologyRequest(state);
+
+    expect(persisted.participants[0]).toEqual({
+      role: "subject",
+      source: "crm_client",
+      clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+    });
+    expect(preview).not.toHaveProperty("title");
   });
 
   it("requires two participants for compatibility mode", () => {

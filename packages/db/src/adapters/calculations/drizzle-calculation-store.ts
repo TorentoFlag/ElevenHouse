@@ -39,7 +39,10 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
       if (query.module !== "all") filters.push(eq(calculationRecords.module, query.module));
       if (query.status !== "all") filters.push(eq(calculationRecords.status, query.status));
       const where = and(...filters);
-      const [totalRow] = await database.select({ value: count() }).from(calculationRecords).where(where);
+      const [totalRow] = await database
+        .select({ value: count() })
+        .from(calculationRecords)
+        .where(where);
       const rows = await database
         .select()
         .from(calculationRecords)
@@ -54,7 +57,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
     },
     findByOwnerAndId: async (input) => {
       const row = await findOwnedCalculationRow(database, input.ownerUserId, input.calculationId);
-      return row ? (await hydrateCalculations(database, [row]))[0] ?? null : null;
+      return row ? ((await hydrateCalculations(database, [row]))[0] ?? null) : null;
     },
     findExact: async (input) => findExactCalculation(database, input),
     create: async (input) => {
@@ -101,7 +104,12 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           input.calculationId
         );
         if (!row) return null;
-        await insertMissingClientLinks(transaction, input.calculationId, input.clientIds, input.now);
+        await insertMissingClientLinks(
+          transaction,
+          input.calculationId,
+          input.clientIds,
+          input.now
+        );
         const updated = await syncStatusFromLinks(transaction, row, input.now);
         return hydrateOne(transaction, updated);
       }),
@@ -113,7 +121,12 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           input.calculationId
         );
         if (!row) return null;
-        await insertMissingClientLinks(transaction, input.calculationId, [input.clientId], input.now);
+        await insertMissingClientLinks(
+          transaction,
+          input.calculationId,
+          [input.clientId],
+          input.now
+        );
         const updated = await syncStatusFromLinks(transaction, row, input.now);
         return hydrateOne(transaction, updated);
       }),
@@ -245,13 +258,16 @@ async function insertCalculation(
     );
   }
   await insertMissingClientLinks(database, row.id, input.linkClientIds, input.now);
-  const current = input.linkClientIds.length > 0
-    ? ((await database
-        .update(calculationRecords)
-        .set({ status: "linked", updatedAt: new Date(input.now) })
-        .where(eq(calculationRecords.id, row.id))
-        .returning())[0] ?? row)
-    : row;
+  const current =
+    input.linkClientIds.length > 0
+      ? ((
+          await database
+            .update(calculationRecords)
+            .set({ status: "linked", updatedAt: new Date(input.now) })
+            .where(eq(calculationRecords.id, row.id))
+            .returning()
+        )[0] ?? row)
+      : row;
   return hydrateOne(database, current);
 }
 

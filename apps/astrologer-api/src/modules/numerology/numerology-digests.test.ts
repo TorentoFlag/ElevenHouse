@@ -6,9 +6,7 @@ describe("numerology canonical JSON digests", () => {
     expect(stableJson({ z: 1, nested: { b: 2, a: 1 }, items: ["б", "а"] })).toBe(
       '{"items":["б","а"],"nested":{"a":1,"b":2},"z":1}'
     );
-    expect(sha256CanonicalJson({ b: 2, a: 1 })).toBe(
-      sha256CanonicalJson({ a: 1, b: 2 })
-    );
+    expect(sha256CanonicalJson({ b: 2, a: 1 })).toBe(sha256CanonicalJson({ a: 1, b: 2 }));
     expect(sha256CanonicalJson(["а", "б"])).not.toBe(sha256CanonicalJson(["б", "а"]));
   });
 

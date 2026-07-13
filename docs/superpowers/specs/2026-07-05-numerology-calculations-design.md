@@ -1,8 +1,13 @@
 # Numerology Calculations Design
 
 Date: 2026-07-05
-Status: design approved for planning
+Status: superseded
 Scope: ElevenHouse astrologer workspace, client cabinet visibility, shared calculation foundation
+
+> This historical design is superseded by
+> `docs/superpowers/specs/2026-07-14-pythagorean-ru-correction-design.md`.
+> In particular, method/result versioning, configurable Pythagorean profiles and
+> `calculation_versions` are not part of the current architecture.
 
 ## Goal
 

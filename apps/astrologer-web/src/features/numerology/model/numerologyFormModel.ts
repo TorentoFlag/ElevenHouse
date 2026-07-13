@@ -1,6 +1,9 @@
 import {
   createNumerologyCalculationRequestSchema,
-  type CreateNumerologyCalculationRequest
+  previewNumerologyRequestSchema,
+  type CreateNumerologyCalculationRequest,
+  type NumerologyParticipantRequest,
+  type PreviewNumerologyRequest
 } from "@elevenhouse/contracts";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
 
@@ -114,52 +117,54 @@ export function getNumerologyFormErrors(state: NumerologyFormState): readonly st
 export function toCreateNumerologyRequest(
   state: NumerologyFormState
 ): CreateNumerologyCalculationRequest {
-  const request = {
-    mode: state.mode,
-    methodCode: "pythagorean",
+  const common = {
+    methodCode: "pythagorean" as const,
     title: state.title.trim(),
-    participants:
-      state.mode === "individual"
-        ? [toParticipantRequest(state.subject, "subject")]
-        : [
+    periodRequest: toPeriodRequest(state.forecastDate)
+  };
+  const request =
+    state.mode === "individual"
+      ? {
+          ...common,
+          mode: "individual" as const,
+          participants: [toParticipantRequest(state.subject, "subject")] as const
+        }
+      : {
+          ...common,
+          mode: "compatibility" as const,
+          participants: [
             toParticipantRequest(state.subject, "subject"),
             toParticipantRequest(state.partner, "partner")
-          ],
-    settings: {
-      masterNumbers: { mode: "preserve_selected", values: [11, 22, 33] },
-      nameNormalization: { yoPolicy: "separate", shortIPolicy: "as_i" },
-      includeNameNumbers: state.includeNameNumbers,
-      includePsychomatrix: state.includePsychomatrix,
-      includeStrengthLines: state.includeStrengthLines,
-      ...(state.forecastDate ? { forecastDate: state.forecastDate } : {})
-    }
-  } satisfies CreateNumerologyCalculationRequest;
+          ] as const
+        };
+  return createNumerologyCalculationRequestSchema.parse(
+    request
+  ) as CreateNumerologyCalculationRequest;
+}
 
-  return createNumerologyCalculationRequestSchema.parse(request);
+export function toPreviewNumerologyRequest(state: NumerologyFormState): PreviewNumerologyRequest {
+  const persisted = toCreateNumerologyRequest(state) as unknown as Record<string, unknown>;
+  const request = { ...persisted };
+  delete request.title;
+  return previewNumerologyRequestSchema.parse(request) as PreviewNumerologyRequest;
 }
 
 function toParticipantRequest(
   participant: NumerologyParticipantFormState,
   role: "subject" | "partner"
-): CreateNumerologyCalculationRequest["participants"][number] {
+): NumerologyParticipantRequest {
+  if (participant.source === "crm_client") {
+    return { role, source: "crm_client", clientId: participant.clientId.trim() };
+  }
+  const calculationName = participant.fullName.trim();
   return {
     role,
-    source: participant.source,
-    clientId: participant.source === "crm_client" ? participant.clientId.trim() : null,
-    displayName: participant.displayName.trim() || participant.fullName.trim(),
-    fullName: participant.fullName.trim(),
-    birthDate: participant.birthDate,
-    ...(participant.birthTime ? { birthTime: participant.birthTime } : {}),
-    birthTimePrecision: participant.birthTimePrecision,
-    ...(participant.birthPlaceText ? { birthPlaceText: participant.birthPlaceText.trim() } : {}),
-    ...(participant.birthCountryCode
-      ? { birthCountryCode: participant.birthCountryCode.trim().toUpperCase() }
-      : {}),
-    ...(participant.birthCity ? { birthCity: participant.birthCity.trim() } : {}),
-    ...(participant.birthRegion ? { birthRegion: participant.birthRegion.trim() } : {}),
-    ...(participant.birthTimezone ? { birthTimezone: participant.birthTimezone.trim() } : {}),
-    ...(participant.birthLatitude !== null ? { birthLatitude: participant.birthLatitude } : {}),
-    ...(participant.birthLongitude !== null ? { birthLongitude: participant.birthLongitude } : {})
+    source: "manual",
+    clientId: null,
+    displayName: participant.displayName.trim() || calculationName,
+    calculationName,
+    calculationNameSource: "manual_entry",
+    birthDate: participant.birthDate
   };
 }
 
@@ -172,14 +177,20 @@ function addParticipantErrors(
     errors.push(`${label}: выберите клиента`);
     return;
   }
-  if (
-    participant.source === "crm_client" &&
-    participant.clientId.trim() &&
-    !participant.birthDate.trim()
-  ) {
-    errors.push(`${label}: у выбранного клиента нет даты рождения`);
-    return;
-  }
+  if (participant.source === "crm_client") return;
   if (!participant.fullName.trim()) errors.push(`${label}: введите полное имя`);
   if (!participant.birthDate.trim()) errors.push(`${label}: укажите дату рождения`);
+}
+
+function toPeriodRequest(
+  forecastDate: string
+): CreateNumerologyCalculationRequest["periodRequest"] {
+  if (!forecastDate) return { kind: "current_year" };
+  const year = Number(forecastDate.slice(0, 4));
+  return {
+    kind: "explicit",
+    personalYear: { year },
+    personalMonths: { year },
+    personalDay: { date: forecastDate }
+  };
 }

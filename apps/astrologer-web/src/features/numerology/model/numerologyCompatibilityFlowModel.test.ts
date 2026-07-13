@@ -89,11 +89,7 @@ describe("numerologyCompatibilityFlowModel", () => {
   });
 });
 
-function clientOption(
-  value: string,
-  label: string,
-  birthDate: string | null
-): ClientSelectOption {
+function clientOption(value: string, label: string, birthDate: string | null): ClientSelectOption {
   return {
     value,
     label,
@@ -138,10 +134,7 @@ function calculationRecord(input: {
       role: "subject",
       source: "crm_client",
       clientId: input.subjectClientId,
-      displayName: "Subject",
-      birthDate: "2000-08-19",
-      inputSnapshot: {},
-      manuallyOverridden: false
+      displayName: "Subject"
     }
   ];
 
@@ -150,10 +143,7 @@ function calculationRecord(input: {
       role: "partner",
       source: "crm_client",
       clientId: input.partnerClientId ?? null,
-      displayName: "Partner",
-      birthDate: "1990-03-14",
-      inputSnapshot: {},
-      manuallyOverridden: false
+      displayName: "Partner"
     });
   }
 
@@ -163,11 +153,14 @@ function calculationRecord(input: {
     module: "numerology",
     mode: input.mode,
     methodCode: "pythagorean",
-    currentMethodVersion: "1.0.0",
     title: input.id,
     status: "calculated",
+    requestFingerprint: `sha256:${"a".repeat(64)}`,
+    inputData: {},
+    resultData: {},
+    resultSummary: {},
+    resultChecksum: `sha256:${"b".repeat(64)}`,
     participants,
-    versions: [],
     links: [],
     interpretations: [],
     artifacts: [],
