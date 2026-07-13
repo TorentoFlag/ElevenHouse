@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ClockModule } from "../clock/clock.module";
+import { AstrologerProfileModule } from "../astrologer-profile/astrologer-profile.module";
 import { CalculationsModule } from "../calculations/calculations.module";
 import { ClientsModule } from "../clients/clients.module";
 import { IdentityModule } from "../identity/identity.module";
@@ -11,6 +12,7 @@ import { NumerologyService } from "./numerology.service";
 @Module({
   imports: [
     CalculationsModule,
+    AstrologerProfileModule,
     ClientsModule,
     ConfigModule,
     ClockModule,

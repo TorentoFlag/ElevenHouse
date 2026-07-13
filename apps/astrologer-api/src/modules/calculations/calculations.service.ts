@@ -121,6 +121,7 @@ export class CalculationsService {
           ownerUserId,
           calculationId: params.calculationId,
           clientId: parsedBody.clientId,
+          expectedResultChecksum: parsedBody.expectedResultChecksum,
           now: this.clock.now()
         })
       )
@@ -142,7 +143,6 @@ export class CalculationsService {
           store: this.store,
           ownerUserId,
           calculationId: params.calculationId,
-          versionId: parsedBody.versionId,
           source: "manual",
           text: parsedBody.text,
           modelId: null,

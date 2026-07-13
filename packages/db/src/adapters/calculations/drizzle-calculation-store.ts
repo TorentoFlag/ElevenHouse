@@ -64,7 +64,25 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
         if (!isExactRequestUniqueViolation(error)) throw error;
         const existing = await findExactCalculation(database, input);
         if (!existing) throw error;
-        return existing;
+        if (input.linkClientIds.length === 0) return existing;
+        return (
+          (await database.transaction(async (transaction) => {
+            const row = await lockOwnedMutableCalculationRow(
+              transaction,
+              existing.ownerUserId,
+              existing.id
+            );
+            if (!row) return null;
+            await insertMissingClientLinks(
+              transaction,
+              existing.id,
+              input.linkClientIds,
+              input.now
+            );
+            const updated = await syncStatusFromLinks(transaction, row, input.now);
+            return hydrateOne(transaction, updated);
+          })) ?? existing
+        );
       }
     },
     replaceResult: async (input) => {
@@ -226,7 +244,15 @@ async function insertCalculation(
       }))
     );
   }
-  return hydrateOne(database, row);
+  await insertMissingClientLinks(database, row.id, input.linkClientIds, input.now);
+  const current = input.linkClientIds.length > 0
+    ? ((await database
+        .update(calculationRecords)
+        .set({ status: "linked", updatedAt: new Date(input.now) })
+        .where(eq(calculationRecords.id, row.id))
+        .returning())[0] ?? row)
+    : row;
+  return hydrateOne(database, current);
 }
 
 async function replaceResult(

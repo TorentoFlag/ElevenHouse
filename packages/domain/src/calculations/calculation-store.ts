@@ -40,6 +40,7 @@ export type CalculationStoreCreateInput = CalculationSavedData & {
   readonly methodCode: string;
   readonly title: string;
   readonly participants: readonly CalculationParticipant[];
+  readonly linkClientIds: readonly string[];
   readonly idGenerator: () => string;
   readonly now: string;
 };

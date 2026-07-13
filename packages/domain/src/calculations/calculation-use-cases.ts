@@ -57,6 +57,7 @@ export async function createCalculation(
     methodCode: required(input.methodCode, "Calculation method code is required"),
     title: required(input.title, "Calculation title is required"),
     participants: normalizeCalculationParticipants(input.participants),
+    linkClientIds: [...new Set(input.linkClientIds.map((clientId) => required(clientId, "Calculation client id is required")))],
     requestFingerprint: digest(input.requestFingerprint, "Calculation request fingerprint is invalid"),
     inputData: input.inputData,
     resultData: input.resultData,
@@ -65,8 +66,18 @@ export async function createCalculation(
     idGenerator: input.idGenerator,
     now: input.now.toISOString()
   };
+  assertLinkClientsAreParticipants(normalized.participants, normalized.linkClientIds);
   const existing = await input.store.findExact(normalized);
-  return existing ?? input.store.create(normalized);
+  if (!existing) return input.store.create(normalized);
+  if (normalized.linkClientIds.length === 0) return existing;
+  return (
+    (await input.store.ensureClientLinks({
+      ownerUserId: existing.ownerUserId,
+      calculationId: existing.id,
+      clientIds: normalized.linkClientIds,
+      now: normalized.now
+    })) ?? existing
+  );
 }
 
 export async function recalculateCalculation(
@@ -278,6 +289,23 @@ function assertParticipantIdentityMatches(
     })
   ) {
     throw new CalculationParticipantMismatchError();
+  }
+}
+
+function assertLinkClientsAreParticipants(
+  participants: readonly CalculationParticipant[],
+  clientIds: readonly string[]
+): void {
+  if (
+    clientIds.some(
+      (clientId) =>
+        !participants.some(
+          (participant) =>
+            participant.source === "crm_client" && participant.clientId === clientId
+        )
+    )
+  ) {
+    throw new CalculationValidationError("Calculation can link only CRM participants");
   }
 }
 

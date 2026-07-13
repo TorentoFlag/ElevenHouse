@@ -22,6 +22,7 @@ import { ASTROLOGER_PROFILE_STORE } from "./astrologer-profile.tokens";
         createDrizzleAstrologerProfileStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     }
-  ]
+  ],
+  exports: [ASTROLOGER_PROFILE_STORE]
 })
 export class AstrologerProfileModule {}

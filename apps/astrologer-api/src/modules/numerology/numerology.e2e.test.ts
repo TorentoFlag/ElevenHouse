@@ -2,29 +2,19 @@ import type { INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
-import {
-  calculationRecordResponseSchema,
-  listCalculationsResponseSchema,
-  numerologyCalculationResponseSchema,
-  type CalculationRecordResponse,
-  type ListCalculationsResponse,
-  type NumerologyCalculationResponse
-} from "@elevenhouse/contracts";
+import { numerologyCalculationResponseSchema, numerologyPreviewResponseSchema } from "@elevenhouse/contracts";
 import type {
-  AstrologerClientList,
-  AstrologerClientListItem,
+  AstrologerProfileStore,
   AuthSessionAuthenticationStore,
   AuthSessionRevocationUnitOfWork,
   CalculationRecord,
   CalculationStore,
-  ClientAstrologerRelationship,
-  ClientBirthData,
-  ClientJoinIntent,
   ClientStore,
   PasswordlessAuthUnitOfWork,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ASTROLOGER_PROFILE_STORE } from "../astrologer-profile/astrologer-profile.tokens";
 import { SystemClock } from "../clock/system-clock.service";
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import { CalculationsModule } from "../calculations/calculations.module";
@@ -53,10 +43,6 @@ const csrfCookieName = "elevenhouse_astrologer_csrf";
 const csrfHeaderName = "x-csrf-token";
 const sessionToken = "raw-session-token";
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
-const otherOwnerUserId = "ca79ab01-e369-4b8f-a6a2-bcc0c2f99114";
-const clientId = "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e";
-const partnerClientId = "cf616b16-40a5-48bf-a82f-d180b13f0976";
-const unrelatedClientId = "df616b16-40a5-48bf-a82f-d180b13f0976";
 let currentCsrfToken = "";
 
 const defaultPasswordlessRateLimits = {
@@ -76,13 +62,13 @@ describe("numerology HTTP routes", () => {
   beforeEach(async () => {
     calculationStore = createCalculationStore();
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
-      transact: async () => raise("Unexpected passwordless auth unit of work call")
+      transact: async () => raise()
     };
     const authSessionRevocation: AuthSessionRevocationUnitOfWork = {
-      transact: async () => raise("Unexpected auth session revocation unit of work call")
+      transact: async () => raise()
     };
     const astrologerRegistration: PasswordlessCustomerAccountRegistrationSessionUnitOfWork = {
-      transact: async () => raise("Unexpected astrologer registration unit of work call")
+      transact: async () => raise()
     };
 
     moduleRef = await Test.createTestingModule({
@@ -110,22 +96,17 @@ describe("numerology HTTP routes", () => {
       .overrideProvider(PASSWORDLESS_RATE_LIMITER)
       .useValue(new TestPasswordlessRateLimiter(defaultPasswordlessRateLimits, () => now))
       .overrideProvider(RedisRuntimeService)
-      .useValue({
-        eval: vi.fn(async () => 0),
-        quit: vi.fn(async () => undefined)
-      })
+      .useValue({ eval: vi.fn(async () => 0), quit: vi.fn(async () => undefined) })
       .overrideProvider(ASTROLOGER_AUTH_CODE_GENERATOR)
-      .useValue({
-        generateCode: vi.fn(() => "123456")
-      })
+      .useValue({ generateCode: vi.fn(() => "123456") })
       .overrideProvider(SystemClock)
-      .useValue({
-        now: vi.fn(() => now)
-      })
+      .useValue({ now: vi.fn(() => now) })
       .overrideProvider(CALCULATION_STORE)
       .useValue(calculationStore)
       .overrideProvider(CLIENT_STORE)
-      .useValue(createClientStore())
+      .useValue(createUnusedClientStore())
+      .overrideProvider(ASTROLOGER_PROFILE_STORE)
+      .useValue(createProfileStore())
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -144,293 +125,71 @@ describe("numerology HTTP routes", () => {
     await moduleRef?.close();
   });
 
-  it("creates, recalculates, lists, links and publishes numerology calculations", async () => {
-    const unauthenticatedResponse = await fetch(`${baseUrl}/calculations`);
-    const missingCsrfResponse = await postJson("/numerology/calculations", manualIndividualBody(), {
+  it("keeps preview read-only and exempts it from CSRF while requiring authentication", async () => {
+    const unauthenticated = await postJson("/numerology/preview", previewBody());
+    const preview = await postJson("/numerology/preview", previewBody(), {
       cookie: sessionCookieHeader()
     });
-    const manualCreateResponse = await postJson<NumerologyCalculationResponse>(
-      "/numerology/calculations",
-      manualIndividualBody(),
-      csrfHeaders()
-    );
-    const manualCalculationId = String(manualCreateResponse.body.calculation.id);
-    const manualLinkResponse = await postJson<CalculationRecordResponse>(
-      `/calculations/${manualCalculationId}/link-client`,
-      { clientId },
-      csrfHeaders()
-    );
 
-    const crmCreateResponse = await postJson<NumerologyCalculationResponse>(
-      "/numerology/calculations",
-      crmCompatibilityBody(),
-      csrfHeaders()
-    );
-    const crmCalculationId = String(crmCreateResponse.body.calculation.id);
-    const currentVersionId = String(crmCreateResponse.body.currentVersion.id);
-    const linkResponse = await postJson<CalculationRecordResponse>(
-      `/calculations/${crmCalculationId}/link-client`,
-      { clientId },
-      csrfHeaders()
-    );
-    const saveInterpretationResponse = await postJson<CalculationRecordResponse>(
-      `/calculations/${crmCalculationId}/interpretations`,
-      { versionId: currentVersionId, text: "Проверенная трактовка совместимости." },
-      csrfHeaders()
-    );
-    const interpretationId = String(saveInterpretationResponse.body.interpretations.at(-1)?.id);
-    const approveResponse = await postJson<CalculationRecordResponse>(
-      `/calculations/${crmCalculationId}/interpretations/${interpretationId}/approve`,
-      {},
-      csrfHeaders()
-    );
-    const publishResponse = await postJson<CalculationRecordResponse>(
-      `/calculations/${crmCalculationId}/publish`,
-      { clientId },
-      csrfHeaders()
-    );
-    const recalculateResponse = await postJson<NumerologyCalculationResponse>(
-      `/numerology/calculations/${crmCalculationId}/recalculate`,
-      {
-        ...crmCompatibilityBody(),
-        settings: {
-          ...pythagoreanSettings(),
-          forecastDate: "2026-01-01"
-        }
-      },
-      csrfHeaders()
-    );
-    await calculationStore.create({
-      ownerUserId: otherOwnerUserId,
-      module: "numerology",
-      mode: "individual",
-      methodCode: "pythagorean",
-      methodVersion: "1.0.0",
-      title: "Other owner",
-      participants: [
-        {
-          role: "subject",
-          source: "manual",
-          clientId: null,
-          displayName: "Other",
-          birthDate: "1990-01-01",
-          inputSnapshot: {},
-          manuallyOverridden: false
-        }
-      ],
-      settingsSnapshot: {},
-      inputSnapshot: {},
-      resultSnapshot: { methodCode: "pythagorean" },
-      resultSummary: {},
-      resultChecksum: "other",
-      idGenerator: () => "fc676401-ef9f-45d2-93af-3836a14f76ba",
-      versionIdGenerator: () => "b4473b5e-2920-432c-9483-511ea5bebd8e",
-      now: now.toISOString()
-    });
-    const listResponse = await getJson<ListCalculationsResponse>(
-      "/calculations?module=numerology&status=all"
-    );
-    const unsupportedMethodResponse = await postJson(
-      "/numerology/calculations",
-      { ...manualIndividualBody(), methodCode: "vedic" },
-      csrfHeaders()
-    );
-    const aiDraftResponse = await postJson(
-      `/numerology/calculations/${crmCalculationId}/ai-draft`,
-      { versionId: String(recalculateResponse.body.currentVersion.id) },
-      csrfHeaders()
-    );
-
-    expect(unauthenticatedResponse.status).toBe(401);
-    expect(missingCsrfResponse.status).toBe(403);
-    expect(manualCreateResponse.status).toBe(201);
-    numerologyCalculationResponseSchema.parse(manualCreateResponse.body);
-    expect(manualCreateResponse.body.resultSnapshot).toMatchObject({
-      methodCode: "pythagorean",
-      keyNumbers: { lifePath: 9 }
-    });
-    expect(manualLinkResponse.status).toBe(400);
-    expect(crmCreateResponse.status).toBe(201);
-    numerologyCalculationResponseSchema.parse(crmCreateResponse.body);
-    expect(crmCreateResponse.body.resultSnapshot).toMatchObject({
-      methodCode: "pythagorean",
-      pairNumber: expect.any(Number)
-    });
-    expect(linkResponse.status).toBe(201);
-    expect(linkResponse.body).toMatchObject({ id: crmCalculationId, status: "linked" });
-    expect(saveInterpretationResponse.status).toBe(201);
-    expect(saveInterpretationResponse.body.interpretations.at(-1)).toMatchObject({
-      status: "draft",
-      source: "manual"
-    });
-    expect(approveResponse.status).toBe(201);
-    expect(approveResponse.body.interpretations.at(-1)).toMatchObject({ status: "approved" });
-    expect(publishResponse.status).toBe(201);
-    calculationRecordResponseSchema.parse(publishResponse.body);
-    expect(publishResponse.body).toMatchObject({ id: crmCalculationId, status: "published" });
-    expect(recalculateResponse.status).toBe(201);
-    expect(recalculateResponse.body.calculation).toMatchObject({
-      id: crmCalculationId,
-      status: "linked"
-    });
-    expect(recalculateResponse.body.calculation.versions).toHaveLength(2);
-    expect(recalculateResponse.body.calculation.links[0]).toMatchObject({
-      visibility: "private_to_astrologer",
-      publishedAt: null
-    });
-    expect(listResponse.status).toBe(200);
-    const parsedList = listCalculationsResponseSchema.parse(listResponse.body);
-    expect(parsedList.total).toBe(2);
-    expect(parsedList.calculations.map((calculation) => calculation.id)).not.toContain(
-      "fc676401-ef9f-45d2-93af-3836a14f76ba"
-    );
-    expect(unsupportedMethodResponse.status).toBe(400);
-    expect(aiDraftResponse.status).toBe(501);
+    expect(unauthenticated.status).toBe(401);
+    expect(preview.status).toBe(200);
+    numerologyPreviewResponseSchema.parse(preview.body);
+    expect(calculationStore.findExact).not.toHaveBeenCalled();
+    expect(calculationStore.create).not.toHaveBeenCalled();
   });
 
-  it("rejects crm_client participants unrelated to the current astrologer", async () => {
-    const response = await postJson(
+  it("requires CSRF for persistence and returns structured method errors", async () => {
+    const missingCsrf = await postJson("/numerology/calculations", persistBody(), {
+      cookie: sessionCookieHeader()
+    });
+    const created = await postJson("/numerology/calculations", persistBody(), csrfHeaders());
+    const unsupported = await postJson(
       "/numerology/calculations",
-      {
-        mode: "individual",
-        methodCode: "pythagorean",
-        title: "Чужой клиент",
-        participants: [
-          {
-            role: "subject",
-            source: "crm_client",
-            clientId: unrelatedClientId,
-            displayName: "Чужой клиент",
-            fullName: "Чужой клиент",
-            birthDate: "1990-03-14"
-          }
-        ],
-        settings: pythagoreanSettings()
-      },
+      { ...persistBody(), methodCode: "vedic" },
       csrfHeaders()
     );
 
-    expect(response.status).toBe(403);
+    expect(missingCsrf.status).toBe(403);
+    expect(created.status).toBe(201);
+    numerologyCalculationResponseSchema.parse(created.body);
+    expect(unsupported.status).toBe(422);
+    expect(unsupported.body).toMatchObject({ code: "UNSUPPORTED_NUMEROLOGY_METHOD" });
   });
 
-  async function getJson<TBody = unknown>(path: string): Promise<HttpJsonResponse<TBody>> {
-    const response = await fetch(`${baseUrl}${path}`, {
-      headers: {
-        cookie: sessionCookieHeader()
-      }
-    });
-
-    return readJsonResponse<TBody>(response);
-  }
-
-  async function postJson<TBody = unknown>(
+  async function postJson(
     path: string,
     body: unknown,
     headers: Record<string, string> = {}
-  ): Promise<HttpJsonResponse<TBody>> {
+  ): Promise<{ status: number; body: unknown }> {
     const response = await fetch(`${baseUrl}${path}`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...headers
-      },
+      headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body)
     });
-
-    return readJsonResponse<TBody>(response);
+    return { status: response.status, body: await response.json() };
   }
 });
 
-type HttpJsonResponse<TBody = unknown> = {
-  readonly status: number;
-  readonly body: TBody;
-};
-
-async function readJsonResponse<TBody = unknown>(response: Response): Promise<HttpJsonResponse<TBody>> {
-  return {
-    status: response.status,
-    body: (await response.json()) as TBody
-  };
-}
-
-function sessionCookieHeader(): string {
-  return `${sessionCookieName}=${sessionToken}`;
-}
-
-function authenticatedCookieHeader(): string {
-  return `${sessionCookieHeader()}; ${csrfCookieName}=${currentCsrfToken}`;
-}
-
-function csrfHeaders(): Record<string, string> {
-  return {
-    cookie: authenticatedCookieHeader(),
-    origin: "http://localhost:3000",
-    [csrfHeaderName]: currentCsrfToken
-  };
-}
-
-function createAuthStore(): AuthSessionAuthenticationStore {
-  const tokenHash = hashSessionToken(sessionToken);
-
-  return {
-    findByTokenHash: vi.fn(async (candidateTokenHash: string) => {
-      if (candidateTokenHash !== tokenHash) {
-        return null;
-      }
-
-      return {
-        session: {
-          id: "8624104d-6f9b-4983-958e-9dbec6f0473c",
-          userId: ownerUserId,
-          tokenHash,
-          status: "active" as const,
-          createdAt: now.toISOString(),
-          expiresAt: "2026-07-13T00:00:00.000Z"
-        },
-        user: {
-          id: ownerUserId,
-          status: "active" as const,
-          createdAt: now.toISOString(),
-          updatedAt: now.toISOString()
-        },
-        roleAssignments: [
-          {
-            id: "f7e4d8ea-7d14-4e54-a19a-9412307b3e8d",
-            userId: ownerUserId,
-            role: "astrologer" as const,
-            assignedAt: now.toISOString()
-          }
-        ]
-      };
-    })
-  };
-}
-
 function createCalculationStore(): CalculationStore {
   const records: CalculationRecord[] = [];
-
   return {
-    listByOwner: vi.fn(async (query) => {
-      const owned = records.filter((record) => record.ownerUserId === query.ownerUserId);
-      const filtered = owned.filter(
-        (record) =>
-          (query.module === "all" || record.module === query.module) &&
-          (query.status === "all" || record.status === query.status)
-      );
-      const ordered = [...filtered].sort(
-        (left, right) =>
-          right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id)
-      );
-
-      return {
-        calculations: ordered.slice(query.offset, query.offset + query.limit),
-        total: filtered.length
-      };
-    }),
+    listByOwner: vi.fn(async () => ({ calculations: records, total: records.length })),
     findByOwnerAndId: vi.fn(
       async (input) =>
         records.find(
-          (record) => record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+          (record) =>
+            record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+        ) ?? null
+    ),
+    findExact: vi.fn(
+      async (input) =>
+        records.find(
+          (record) =>
+            record.ownerUserId === input.ownerUserId &&
+            record.module === input.module &&
+            record.mode === input.mode &&
+            record.methodCode === input.methodCode &&
+            record.requestFingerprint === input.requestFingerprint
         ) ?? null
     ),
     create: vi.fn(async (input) => {
@@ -440,301 +199,129 @@ function createCalculationStore(): CalculationStore {
         module: input.module,
         mode: input.mode,
         methodCode: input.methodCode,
-        currentMethodVersion: input.methodVersion,
         title: input.title,
         status: "calculated",
         participants: input.participants,
-        versions: [
-          {
-            id: input.versionIdGenerator(),
-            versionNumber: 1,
-            methodVersion: input.methodVersion,
-            settingsSnapshot: input.settingsSnapshot,
-            inputSnapshot: input.inputSnapshot,
-            resultSnapshot: input.resultSnapshot,
-            resultSummary: input.resultSummary,
-            resultChecksum: input.resultChecksum,
-            createdAt: input.now
-          }
-        ],
+        requestFingerprint: input.requestFingerprint,
+        inputData: input.inputData,
+        resultData: input.resultData,
+        resultSummary: input.resultSummary,
+        resultChecksum: input.resultChecksum,
         links: [],
         interpretations: [],
         artifacts: [],
         createdAt: input.now,
         updatedAt: input.now
       };
-      records.unshift(record);
+      records.push(record);
       return record;
     }),
-    appendVersion: vi.fn(async (input) => {
-      const index = findRecordIndex(records, input.ownerUserId, input.calculationId);
-      if (index === -1) return null;
-      const current = records[index] ?? raise("Expected calculation record");
-      const next: CalculationRecord = {
-        ...current,
-        currentMethodVersion: input.methodVersion,
-        status: current.links.length > 0 ? "linked" : "calculated",
-        versions: [
-          ...current.versions,
-          {
-            id: input.versionIdGenerator(),
-            versionNumber: current.versions.length + 1,
-            methodVersion: input.methodVersion,
-            settingsSnapshot: input.settingsSnapshot,
-            inputSnapshot: input.inputSnapshot,
-            resultSnapshot: input.resultSnapshot,
-            resultSummary: input.resultSummary,
-            resultChecksum: input.resultChecksum,
-            createdAt: input.now
-          }
-        ],
-        links: current.links.map((link) => ({
-          ...link,
-          visibility: "private_to_astrologer",
-          publishedAt: null
-        })),
-        updatedAt: input.now
-      };
-      records[index] = next;
-      return next;
-    }),
-    linkClient: vi.fn(async (input) => {
-      const index = findRecordIndex(records, input.ownerUserId, input.calculationId);
-      if (index === -1) return null;
-      const current = records[index] ?? raise("Expected calculation record");
-      if (current.links.some((link) => link.clientId === input.clientId)) {
-        return current;
-      }
-      const next: CalculationRecord = {
-        ...current,
-        status: "linked",
-        links: [
-          ...current.links,
-          {
-            clientId: input.clientId,
-            visibility: "private_to_astrologer",
-            linkedAt: input.now,
-            publishedAt: null
-          }
-        ],
-        updatedAt: input.now
-      };
-      records[index] = next;
-      return next;
-    }),
-    publishClientLink: vi.fn(async (input) => {
-      const index = findRecordIndex(records, input.ownerUserId, input.calculationId);
-      if (index === -1) return null;
-      const current = records[index] ?? raise("Expected calculation record");
-      const next: CalculationRecord = {
-        ...current,
-        status: "published",
-        links: current.links.map((link) =>
-          link.clientId === input.clientId
-            ? { ...link, visibility: "visible_to_client", publishedAt: input.now }
-            : link
-        ),
-        updatedAt: input.now
-      };
-      records[index] = next;
-      return next;
-    }),
-    saveInterpretation: vi.fn(async (input) => {
-      const index = findRecordIndex(records, input.ownerUserId, input.calculationId);
-      if (index === -1) return null;
-      const current = records[index] ?? raise("Expected calculation record");
-      const next: CalculationRecord = {
-        ...current,
-        interpretations: [
-          ...current.interpretations,
-          {
-            id: input.interpretationIdGenerator(),
-            versionId: input.versionId,
-            source: input.source,
-            status: "draft",
-            text: input.text,
-            modelId: input.modelId,
-            promptVersion: input.promptVersion,
-            approvedAt: null
-          }
-        ],
-        updatedAt: input.now
-      };
-      records[index] = next;
-      return next;
-    }),
-    approveInterpretation: vi.fn(async (input) => {
-      const index = findRecordIndex(records, input.ownerUserId, input.calculationId);
-      if (index === -1) return null;
-      const current = records[index] ?? raise("Expected calculation record");
-      const next: CalculationRecord = {
-        ...current,
-        interpretations: current.interpretations.map((interpretation) =>
-          interpretation.id === input.interpretationId
-            ? { ...interpretation, status: "approved", approvedAt: input.now }
-            : interpretation
-        ),
-        updatedAt: input.now
-      };
-      records[index] = next;
-      return next;
-    }),
-    archive: vi.fn(async (input) => {
-      const index = findRecordIndex(records, input.ownerUserId, input.calculationId);
-      if (index === -1) return null;
-      const current = records[index] ?? raise("Expected calculation record");
-      const next: CalculationRecord = { ...current, status: "archived", updatedAt: input.now };
-      records[index] = next;
-      return next;
-    })
+    replaceResult: vi.fn(async () => ({ status: "not_found" as const })),
+    ensureClientLinks: vi.fn(async (input) =>
+      records.find(
+        (record) =>
+          record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+      ) ?? null
+    ),
+    linkClient: vi.fn(async () => null),
+    publishClientLink: vi.fn(async () => null),
+    saveInterpretation: vi.fn(async () => null),
+    approveInterpretation: vi.fn(async () => null),
+    archive: vi.fn(async () => null)
   };
 }
 
-function findRecordIndex(
-  records: readonly CalculationRecord[],
-  ownerUserId: string,
-  calculationId: string
-): number {
-  return records.findIndex(
-    (record) => record.ownerUserId === ownerUserId && record.id === calculationId
-  );
+function createUnusedClientStore(): ClientStore {
+  return {
+    createJoinIntent: vi.fn(async () => raise()),
+    findJoinIntentByTokenHash: vi.fn(async () => null),
+    markJoinIntentClaimed: vi.fn(async () => null),
+    ensureRelationship: vi.fn(async () => raise()),
+    upsertClientProfile: vi.fn(async () => undefined),
+    upsertClientBirthData: vi.fn(async () => raise()),
+    listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
+    getAstrologerClient: vi.fn(async () => null)
+  };
 }
 
-function manualIndividualBody(): Record<string, unknown> {
+function createProfileStore(): AstrologerProfileStore {
+  return {
+    findByOwnerUserId: vi.fn(async () => null),
+    upsert: vi.fn(async () => raise())
+  };
+}
+
+function createAuthStore(): AuthSessionAuthenticationStore {
+  const tokenHash = hashSessionToken(sessionToken);
+  return {
+    findByTokenHash: vi.fn(async (candidateTokenHash: string) =>
+      candidateTokenHash === tokenHash
+        ? {
+            session: {
+              id: "8624104d-6f9b-4983-958e-9dbec6f0473c",
+              userId: ownerUserId,
+              tokenHash,
+              status: "active" as const,
+              createdAt: now.toISOString(),
+              expiresAt: "2026-07-13T00:00:00.000Z"
+            },
+            user: {
+              id: ownerUserId,
+              status: "active" as const,
+              createdAt: now.toISOString(),
+              updatedAt: now.toISOString()
+            },
+            roleAssignments: [
+              {
+                id: "f7e4d8ea-7d14-4e54-a19a-9412307b3e8d",
+                userId: ownerUserId,
+                role: "astrologer" as const,
+                assignedAt: now.toISOString()
+              }
+            ]
+          }
+        : null
+    )
+  };
+}
+
+function previewBody(): Record<string, unknown> {
+  const { title: _title, ...preview } = persistBody();
+  return preview;
+}
+
+function persistBody(): Record<string, unknown> {
   return {
     mode: "individual",
     methodCode: "pythagorean",
-    title: "Мария, психоматрица",
+    title: "Голубев Антон",
     participants: [
       {
         role: "subject",
         source: "manual",
         clientId: null,
-        fullName: "Мария Иванова",
-        birthDate: "1990-03-14"
+        displayName: "Голубев Антон",
+        calculationName: "Голубев Антон",
+        calculationNameSource: "manual_entry",
+        birthDate: "2000-08-19"
       }
     ],
-    settings: pythagoreanSettings()
+    periodRequest: { kind: "explicit", personalYear: { year: 2026 } }
   };
 }
 
-function crmCompatibilityBody(): Record<string, unknown> {
+function sessionCookieHeader(): string {
+  return `${sessionCookieName}=${sessionToken}`;
+}
+
+function csrfHeaders(): Record<string, string> {
   return {
-    mode: "compatibility",
-    methodCode: "pythagorean",
-    title: "Мария и Алексей",
-    participants: [
-      {
-        role: "subject",
-        source: "crm_client",
-        clientId,
-        displayName: "Мария",
-        fullName: "Мария Иванова",
-        birthDate: "1990-03-14"
-      },
-      {
-        role: "partner",
-        source: "crm_client",
-        clientId: partnerClientId,
-        displayName: "Алексей",
-        fullName: "Алексей Петров",
-        birthDate: "1988-11-02"
-      }
-    ],
-    settings: pythagoreanSettings()
+    cookie: `${sessionCookieHeader()}; ${csrfCookieName}=${currentCsrfToken}`,
+    origin: "http://localhost:3000",
+    [csrfHeaderName]: currentCsrfToken
   };
 }
 
-function pythagoreanSettings(): Record<string, unknown> {
-  return {
-    masterNumbers: { mode: "preserve_selected", values: [11, 22] },
-    nameNormalization: { yoPolicy: "separate", shortIPolicy: "as_i" },
-    includeNameNumbers: true,
-    includePsychomatrix: true,
-    includeStrengthLines: true
-  };
-}
-
-function createClientStore(): ClientStore {
-  const relatedClients = new Map<string, AstrologerClientListItem>([
-    [
-      clientId,
-      createClientListItem({
-        clientUserId: clientId,
-        displayName: "Мария",
-        birthDate: "1990-03-14"
-      })
-    ],
-    [
-      partnerClientId,
-      createClientListItem({
-        clientUserId: partnerClientId,
-        displayName: "Алексей",
-        birthDate: "1988-11-02"
-      })
-    ]
-  ]);
-
-  return {
-    createJoinIntent: vi.fn(
-      async (): Promise<ClientJoinIntent> => raise("Unexpected create join intent call")
-    ),
-    findJoinIntentByTokenHash: vi.fn(async () => null),
-    markJoinIntentClaimed: vi.fn(async () => null),
-    ensureRelationship: vi.fn(
-      async (): Promise<ClientAstrologerRelationship> =>
-        raise("Unexpected ensure relationship call")
-    ),
-    upsertClientProfile: vi.fn(async (): Promise<void> => {}),
-    upsertClientBirthData: vi.fn(
-      async (): Promise<ClientBirthData> => raise("Unexpected upsert birth data call")
-    ),
-    listAstrologerClients: vi.fn(async (): Promise<AstrologerClientList> => {
-      const clients = [...relatedClients.values()];
-      return { clients, total: clients.length };
-    }),
-    getAstrologerClient: vi.fn(async ({ astrologerUserId, clientUserId: requestedClientId }) => {
-      if (astrologerUserId !== ownerUserId) {
-        return null;
-      }
-
-      return relatedClients.get(requestedClientId) ?? null;
-    })
-  };
-}
-
-function createClientListItem(input: {
-  readonly clientUserId: string;
-  readonly displayName: string;
-  readonly birthDate: string;
-}): AstrologerClientListItem {
-  return {
-    clientUserId: input.clientUserId,
-    displayName: input.displayName,
-    relationshipStatus: "active",
-    firstLinkedAt: now.toISOString(),
-    lastLinkedAt: now.toISOString(),
-    birthData: {
-      id: `${input.clientUserId}:birth-data`,
-      clientUserId: input.clientUserId,
-      label: "Основные данные",
-      birthDate: input.birthDate,
-      birthTime: null,
-      birthTimePrecision: "unknown",
-      birthPlaceText: null,
-      birthCountryCode: null,
-      birthCity: null,
-      birthRegion: null,
-      birthTimezone: null,
-      birthLatitude: null,
-      birthLongitude: null,
-      source: "client_profile",
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString()
-    }
-  };
-}
-
-function raise(message: string): never {
-  throw new Error(message);
+function raise(): never {
+  throw new Error("Unexpected dependency call");
 }

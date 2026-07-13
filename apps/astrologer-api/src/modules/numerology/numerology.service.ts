@@ -1,54 +1,70 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  NotImplementedException
-} from "@nestjs/common";
-import { createHash, randomUUID } from "node:crypto";
+import { Inject, Injectable, NotImplementedException } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import {
   calculateNumerologyCompatibility,
   calculateNumerologyIndividual,
   createCalculation,
   getAstrologerClient,
   getCalculation,
-  NumerologyValidationError,
   recalculateCalculation,
+  type AstrologerProfileStore,
   type CalculationParticipant,
   type CalculationRecord,
   type CalculationStore,
   type ClientStore,
-  type NumerologyCompatibilityInput,
-  type NumerologyParticipantInput
+  type NumerologyParticipantInput,
+  type PythagoreanPeriodsRequest
 } from "@elevenhouse/domain";
 import {
   calculationIdParamSchema,
   createNumerologyAiDraftRequestSchema,
-  createNumerologyCalculationRequestSchema,
   numerologyCalculationResponseSchema,
+  numerologyPreviewResponseSchema,
+  numerologyResultSchema,
+  persistNumerologyCalculationRequestSchema,
+  previewNumerologyRequestSchema,
   recalculateNumerologyCalculationRequestSchema,
-  type CreateNumerologyCalculationRequest,
-  type NumerologyCalculationResponse
+  type NumerologyCalculationResponse,
+  type NumerologyParticipantRequest,
+  type NumerologyPreviewResponse,
+  type NumerologyResult,
+  type PersistNumerologyCalculationRequest,
+  type PreviewNumerologyRequest,
+  type RecalculateNumerologyCalculationRequest
 } from "@elevenhouse/contracts";
+import { ASTROLOGER_PROFILE_STORE } from "../astrologer-profile/astrologer-profile.tokens";
 import { SystemClock } from "../clock/system-clock.service";
-import {
-  mapCalculationErrors,
-  parseContract,
-  requireOwnerUserId,
-  toCalculationResponse
-} from "../calculations/calculations.service";
+import { requireOwnerUserId, toCalculationResponse } from "../calculations/calculations.service";
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import { CLIENT_STORE } from "../clients/clients.tokens";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { type CanonicalJson, sha256CanonicalJson, stableJson } from "./numerology-digests";
+import {
+  mapNumerologyError,
+  numerologyHttpError,
+  NumerologyResultIntegrityError
+} from "./numerology-http-errors";
 
-type NumerologySnapshotBundle = {
-  readonly methodVersion: string;
-  readonly participants: readonly CalculationParticipant[];
-  readonly settingsSnapshot: Record<string, unknown>;
-  readonly inputSnapshot: Record<string, unknown>;
-  readonly resultSnapshot: Record<string, unknown>;
-  readonly resultSummary: Record<string, unknown>;
-  readonly resultChecksum: string;
+type NumerologyRequest =
+  | PreviewNumerologyRequest
+  | PersistNumerologyCalculationRequest
+  | RecalculateNumerologyCalculationRequest;
+
+type HydratedParticipant = {
+  readonly role: "subject" | "partner";
+  readonly source: "crm_client" | "manual";
+  readonly clientId: string | null;
+  readonly displayName: string;
+  readonly calculationInput: NumerologyParticipantInput;
+};
+
+type PreparedCalculation = {
+  readonly mode: "individual" | "compatibility";
+  readonly methodCode: "pythagorean";
+  readonly participants: readonly HydratedParticipant[];
+  readonly periods: PythagoreanPeriodsRequest;
+  readonly inputData: Record<string, CanonicalJson>;
+  readonly requestFingerprint: `sha256:${string}`;
 };
 
 @Injectable()
@@ -56,37 +72,76 @@ export class NumerologyService {
   constructor(
     @Inject(CALCULATION_STORE) private readonly store: CalculationStore,
     @Inject(CLIENT_STORE) private readonly clientStore: ClientStore,
+    @Inject(ASTROLOGER_PROFILE_STORE) private readonly profileStore: AstrologerProfileStore,
     private readonly clock: SystemClock
   ) {}
+
+  async preview(
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<NumerologyPreviewResponse> {
+    const parsedBody = parseNumerologyContract<PreviewNumerologyRequest>(
+      previewNumerologyRequestSchema,
+      body
+    );
+    const ownerUserId = requireOwnerUserId(request);
+
+    return mapNumerologyError(async () => {
+      const prepared = await this.prepare(parsedBody, ownerUserId);
+      return numerologyPreviewResponseSchema.parse({ result: calculate(prepared) });
+    });
+  }
 
   async createCalculation(
     body: unknown,
     request: AstrologerSessionRequest
   ): Promise<NumerologyCalculationResponse> {
-    const parsedBody = parseContract(createNumerologyCalculationRequestSchema, body);
+    const parsedBody = parseNumerologyContract<PersistNumerologyCalculationRequest>(
+      persistNumerologyCalculationRequestSchema,
+      body
+    );
     const ownerUserId = requireOwnerUserId(request);
 
-    return mapNumerologyErrors(async () => {
-      await this.assertCrmParticipantsBelongToAstrologer(parsedBody, ownerUserId);
-      const snapshot = buildNumerologySnapshots(parsedBody);
+    return mapNumerologyError(async () => {
+      const prepared = await this.prepare(parsedBody, ownerUserId);
+      const exact = await this.store.findExact({
+        ownerUserId,
+        module: "numerology",
+        mode: prepared.mode,
+        methodCode: prepared.methodCode,
+        requestFingerprint: prepared.requestFingerprint
+      });
+      const linkClientIds = crmClientIds(prepared.participants);
+      if (exact) {
+        const linked =
+          linkClientIds.length === 0
+            ? exact
+            : ((await this.store.ensureClientLinks({
+                ownerUserId,
+                calculationId: exact.id,
+                clientIds: linkClientIds,
+                now: this.clock.now().toISOString()
+              })) ?? exact);
+        return toNumerologyResponse(linked);
+      }
 
+      const result = calculate(prepared);
       return toNumerologyResponse(
         await createCalculation({
           store: this.store,
           ownerUserId,
           module: "numerology",
-          mode: parsedBody.mode,
-          methodCode: parsedBody.methodCode,
-          methodVersion: snapshot.methodVersion,
-          title: parsedBody.title,
-          participants: snapshot.participants,
-          settingsSnapshot: snapshot.settingsSnapshot,
-          inputSnapshot: snapshot.inputSnapshot,
-          resultSnapshot: snapshot.resultSnapshot,
-          resultSummary: snapshot.resultSummary,
-          resultChecksum: snapshot.resultChecksum,
+          mode: prepared.mode,
+          methodCode: prepared.methodCode,
+          title: requiredTitle(parsedBody),
+          participants: prepared.participants.map(toCalculationParticipant),
+          linkClientIds,
+          requestFingerprint: prepared.requestFingerprint,
+          inputData: prepared.inputData,
+          resultData: toJsonObject(result),
+          resultSummary: resultSummary(result),
+          resultChecksum: resultChecksum(result),
           idGenerator: randomUUID,
-          versionIdGenerator: randomUUID,
           now: this.clock.now()
         })
       );
@@ -98,32 +153,36 @@ export class NumerologyService {
     body: unknown,
     request: AstrologerSessionRequest
   ): Promise<NumerologyCalculationResponse> {
-    const params = parseContract(calculationIdParamSchema, { calculationId });
-    const parsedBody = parseContract(recalculateNumerologyCalculationRequestSchema, body);
+    const params = parseNumerologyContract<{ calculationId: string }>(calculationIdParamSchema, {
+      calculationId
+    });
+    const parsedBody = parseNumerologyContract<RecalculateNumerologyCalculationRequest>(
+      recalculateNumerologyCalculationRequestSchema,
+      body
+    );
     const ownerUserId = requireOwnerUserId(request);
 
-    return mapNumerologyErrors(async () => {
-      await this.assertCrmParticipantsBelongToAstrologer(parsedBody, ownerUserId);
-      const snapshot = buildNumerologySnapshots(parsedBody);
+    return mapNumerologyError(async () => {
       const current = await getCalculation({
         store: this.store,
         ownerUserId,
         calculationId: params.calculationId
       });
       assertRecalculationMatchesCurrentCalculation(current, parsedBody);
+      const prepared = await this.prepare(parsedBody, ownerUserId);
+      const result = calculate(prepared);
 
       return toNumerologyResponse(
         await recalculateCalculation({
           store: this.store,
           ownerUserId,
           calculationId: params.calculationId,
-          methodVersion: snapshot.methodVersion,
-          settingsSnapshot: snapshot.settingsSnapshot,
-          inputSnapshot: snapshot.inputSnapshot,
-          resultSnapshot: snapshot.resultSnapshot,
-          resultSummary: snapshot.resultSummary,
-          resultChecksum: snapshot.resultChecksum,
-          versionIdGenerator: randomUUID,
+          participants: prepared.participants.map(toCalculationParticipant),
+          requestFingerprint: prepared.requestFingerprint,
+          inputData: prepared.inputData,
+          resultData: toJsonObject(result),
+          resultSummary: resultSummary(result),
+          resultChecksum: resultChecksum(result),
           now: this.clock.now()
         })
       );
@@ -135,231 +194,294 @@ export class NumerologyService {
     body: unknown,
     request: AstrologerSessionRequest
   ): Promise<never> {
-    const params = parseContract(calculationIdParamSchema, { calculationId });
-    const parsedBody = parseContract(createNumerologyAiDraftRequestSchema, body);
+    const params = parseNumerologyContract<{ calculationId: string }>(calculationIdParamSchema, {
+      calculationId
+    });
+    parseNumerologyContract<Record<string, never>>(createNumerologyAiDraftRequestSchema, body);
     const ownerUserId = requireOwnerUserId(request);
 
-    await mapCalculationErrors(async () => {
+    await mapNumerologyError(async () => {
       const calculation = await getCalculation({
         store: this.store,
         ownerUserId,
         calculationId: params.calculationId
       });
-      if (!calculation.versions.some((version) => version.id === parsedBody.versionId)) {
-        throw new BadRequestException("Calculation version was not found");
-      }
-      return calculation;
+      validatedSavedResult(calculation);
     });
 
     throw new NotImplementedException("Numerology AI draft generation is not configured");
   }
 
-  private async assertCrmParticipantsBelongToAstrologer(
-    input: CreateNumerologyCalculationRequest,
-    astrologerUserId: string
-  ): Promise<void> {
-    const seenClientIds = new Set<string>();
+  private async prepare(input: NumerologyRequest, ownerUserId: string): Promise<PreparedCalculation> {
+    const participants = await this.hydrateParticipants(input.participants, ownerUserId);
+    const periods = await this.resolvePeriods(input, ownerUserId);
+    const canonicalParticipants = participants.map((participant) => ({
+      role: participant.role,
+      source: participant.source,
+      clientId: participant.clientId,
+      calculationName: participant.calculationInput.calculationName,
+      calculationNameSource: participant.calculationInput.calculationNameSource,
+      birthDate: participant.calculationInput.birthDate
+    }));
+    const inputData = toJsonObject({
+      methodCode: input.methodCode,
+      mode: input.mode,
+      participants: canonicalParticipants,
+      periods
+    });
+    const fingerprintParticipants = participants
+      .map((participant) =>
+        toJsonObject({
+          source: participant.source,
+          clientId: participant.clientId,
+          calculationName: participant.calculationInput.calculationName,
+          calculationNameSource: participant.calculationInput.calculationNameSource,
+          birthDate: participant.calculationInput.birthDate
+        })
+      )
+      .sort((first, second) => stableJson(first).localeCompare(stableJson(second)));
 
-    for (const participant of input.participants) {
-      if (participant.source !== "crm_client") {
-        continue;
-      }
-      if (!participant.clientId) {
-        throw new BadRequestException("CRM participant clientId is required");
-      }
-      if (!participant.birthDate) {
-        throw new BadRequestException("CRM participant birthDate is required");
-      }
-      if (seenClientIds.has(participant.clientId)) {
-        throw new BadRequestException("Compatibility participants must use different clients");
-      }
-      seenClientIds.add(participant.clientId);
+    return {
+      mode: input.mode,
+      methodCode: input.methodCode,
+      participants,
+      periods,
+      inputData,
+      requestFingerprint: sha256CanonicalJson({
+        methodCode: input.methodCode,
+        mode: input.mode,
+        participants: fingerprintParticipants,
+        periods: toJsonObject(periods)
+      })
+    };
+  }
 
-      const client = await getAstrologerClient({
-        store: this.clientStore,
-        astrologerUserId,
-        clientUserId: participant.clientId
-      });
-      if (!client) {
-        throw new ForbiddenException("Client is not related to the current astrologer");
-      }
+  private async hydrateParticipants(
+    participants: NumerologyRequest["participants"],
+    ownerUserId: string
+  ): Promise<readonly HydratedParticipant[]> {
+    const hydrated: HydratedParticipant[] = [];
+    for (const participant of participants) {
+      hydrated.push(await this.hydrateParticipant(participant, ownerUserId));
     }
+    return hydrated;
+  }
+
+  private async hydrateParticipant(
+    participant: NumerologyParticipantRequest,
+    ownerUserId: string
+  ): Promise<HydratedParticipant> {
+    if (participant.source === "manual") {
+      return {
+        role: participant.role,
+        source: participant.source,
+        clientId: null,
+        displayName: participant.displayName,
+        calculationInput: {
+          calculationName: participant.calculationName,
+          calculationNameSource: participant.calculationNameSource,
+          birthDate: participant.birthDate
+        }
+      };
+    }
+
+    const client = await getAstrologerClient({
+      store: this.clientStore,
+      astrologerUserId: ownerUserId,
+      clientUserId: participant.clientId
+    });
+    if (!client?.displayName || !client.birthData?.birthDate) {
+      throw numerologyHttpError(
+        404,
+        "CLIENT_NOT_FOUND",
+        "Client was not found or has incomplete calculation data"
+      );
+    }
+
+    return {
+      role: participant.role,
+      source: participant.source,
+      clientId: participant.clientId,
+      displayName: client.displayName,
+      calculationInput: {
+        calculationName: client.displayName,
+        calculationNameSource: "crm_display_name",
+        birthDate: client.birthData.birthDate
+      }
+    };
+  }
+
+  private async resolvePeriods(
+    input: NumerologyRequest,
+    ownerUserId: string
+  ): Promise<PythagoreanPeriodsRequest> {
+    if (input.periodRequest.kind === "explicit") {
+      return {
+        personalYear: input.periodRequest.personalYear,
+        personalMonths: input.periodRequest.personalMonths,
+        personalDay: input.periodRequest.personalDay
+      };
+    }
+
+    const profile = await this.profileStore.findByOwnerUserId({ ownerUserId });
+    const timezone = profile?.timezone;
+    if (!timezone || !isValidTimeZone(timezone)) {
+      throw numerologyHttpError(
+        409,
+        "ASTROLOGER_TIMEZONE_REQUIRED",
+        "A valid astrologer timezone is required for current-year periods"
+      );
+    }
+    const year = yearInTimeZone(this.clock.now(), timezone);
+    return { personalYear: { year }, personalMonths: { year } };
   }
 }
 
-function buildNumerologySnapshots(
-  input: CreateNumerologyCalculationRequest
-): NumerologySnapshotBundle {
+function calculate(prepared: PreparedCalculation): NumerologyResult {
   const result =
-    input.mode === "individual"
+    prepared.mode === "individual"
       ? calculateNumerologyIndividual({
-          methodCode: input.methodCode,
-          participant: toNumerologyParticipantInput(input.participants[0]!),
-          settings: input.settings
+          methodCode: prepared.methodCode,
+          participant: prepared.participants[0]!.calculationInput,
+          periods: prepared.periods
         })
       : calculateNumerologyCompatibility({
-          methodCode: input.methodCode,
-          participants: toCompatibilityInput(input),
-          settings: input.settings
+          methodCode: prepared.methodCode,
+          participants: {
+            first: prepared.participants[0]!.calculationInput,
+            second: prepared.participants[1]!.calculationInput
+          },
+          periods: prepared.periods
         });
-  const resultSnapshot = toJsonObject(result);
-  const settingsSnapshot = toJsonObject(input.settings);
-  const inputSnapshot = toJsonObject(input);
-
-  return {
-    methodVersion: result.methodVersion,
-    participants: input.participants.map(toCalculationParticipant),
-    settingsSnapshot,
-    inputSnapshot,
-    resultSnapshot,
-    resultSummary: toResultSummary(input.mode, resultSnapshot),
-    resultChecksum: sha256StableJson(resultSnapshot)
-  };
+  return numerologyResultSchema.parse(result);
 }
 
-function toCompatibilityInput(
-  input: CreateNumerologyCalculationRequest
-): NumerologyCompatibilityInput {
-  const subject = input.participants.find((participant) => participant.role === "subject");
-  const partner = input.participants.find((participant) => participant.role === "partner");
-  if (!subject || !partner) {
-    throw new BadRequestException("Compatibility numerology requires subject and partner roles");
-  }
-
-  return {
-    first: toNumerologyParticipantInput(subject),
-    second: toNumerologyParticipantInput(partner)
-  };
-}
-
-function toNumerologyParticipantInput(
-  participant: CreateNumerologyCalculationRequest["participants"][number]
-): NumerologyParticipantInput {
-  if (!participant.fullName || !participant.birthDate) {
-    throw new BadRequestException("Numerology participant fullName and birthDate are required");
-  }
-
-  return {
-    fullName: participant.fullName,
-    birthDate: participant.birthDate
-  };
-}
-
-function toCalculationParticipant(
-  participant: CreateNumerologyCalculationRequest["participants"][number]
-): CalculationParticipant {
+function toCalculationParticipant(participant: HydratedParticipant): CalculationParticipant {
   return {
     role: participant.role,
     source: participant.source,
     clientId: participant.clientId,
-    displayName: participant.displayName ?? participant.fullName ?? "",
-    birthDate: participant.birthDate ?? null,
-    inputSnapshot: toJsonObject({
-      fullName: participant.fullName,
-      birthDate: participant.birthDate,
-      birthTime: participant.birthTime ?? null,
-      birthTimePrecision: participant.birthTimePrecision ?? null,
-      birthPlaceText: participant.birthPlaceText ?? null,
-      birthCountryCode: participant.birthCountryCode ?? null,
-      birthCity: participant.birthCity ?? null,
-      birthRegion: participant.birthRegion ?? null,
-      birthTimezone: participant.birthTimezone ?? null,
-      birthLatitude: participant.birthLatitude ?? null,
-      birthLongitude: participant.birthLongitude ?? null
-    }),
-    manuallyOverridden: false
+    displayName: participant.displayName
   };
 }
 
-function toResultSummary(
-  mode: CreateNumerologyCalculationRequest["mode"],
-  resultSnapshot: Record<string, unknown>
-): Record<string, unknown> {
-  if (mode === "compatibility") {
-    return toJsonObject({
-      methodCode: resultSnapshot.methodCode,
-      methodVersion: resultSnapshot.methodVersion,
-      pairNumber: resultSnapshot.pairNumber
-    });
-  }
+function crmClientIds(participants: readonly HydratedParticipant[]): readonly string[] {
+  return participants.flatMap((participant) =>
+    participant.source === "crm_client" && participant.clientId ? [participant.clientId] : []
+  );
+}
 
-  const keyNumbers = resultSnapshot.keyNumbers;
-  return toJsonObject({
-    methodCode: resultSnapshot.methodCode,
-    methodVersion: resultSnapshot.methodVersion,
-    keyNumbers
-  });
+function resultSummary(result: NumerologyResult): Record<string, CanonicalJson> {
+  return result.mode === "individual"
+    ? toJsonObject({ methodCode: result.methodCode, keyNumbers: result.keyNumbers })
+    : toJsonObject({
+        methodCode: result.methodCode,
+        pairNumber: result.pairNumber,
+        counts: result.counts,
+        conclusion: result.conclusion
+      });
+}
+
+function resultChecksum(result: NumerologyResult): `sha256:${string}` {
+  return sha256CanonicalJson(toJsonObject(result));
 }
 
 function assertRecalculationMatchesCurrentCalculation(
   current: CalculationRecord,
-  input: CreateNumerologyCalculationRequest
+  input: RecalculateNumerologyCalculationRequest
 ): void {
   if (
     current.module !== "numerology" ||
     current.mode !== input.mode ||
     current.methodCode !== input.methodCode
   ) {
-    throw new BadRequestException("Recalculation request does not match existing calculation");
+    throw numerologyHttpError(
+      409,
+      "CALCULATION_PARTICIPANT_MISMATCH",
+      "Recalculation request does not match the saved calculation"
+    );
   }
 }
 
 function toNumerologyResponse(record: CalculationRecord): NumerologyCalculationResponse {
-  const currentVersion = record.versions.reduce<(typeof record.versions)[number] | null>(
-    (latest, version) => {
-      if (!latest || version.versionNumber > latest.versionNumber) return version;
-      return latest;
-    },
-    null
-  );
-  if (!currentVersion) {
-    throw new BadRequestException("Calculation has no versions");
-  }
-
+  const result = validatedSavedResult(record);
   return numerologyCalculationResponseSchema.parse({
     calculation: toCalculationResponse(record),
-    currentVersion,
-    resultSnapshot: currentVersion.resultSnapshot,
-    settingsSnapshot: currentVersion.settingsSnapshot,
-    inputSnapshot: currentVersion.inputSnapshot
+    result
   });
 }
 
-function toJsonObject(value: unknown): Record<string, unknown> {
+function validatedSavedResult(record: CalculationRecord): NumerologyResult {
+  const parsed = numerologyResultSchema.safeParse(record.resultData);
+  if (!parsed.success || resultChecksum(parsed.data) !== record.resultChecksum) {
+    throw new NumerologyResultIntegrityError();
+  }
+  if (parsed.data.mode !== record.mode || parsed.data.methodCode !== record.methodCode) {
+    throw new NumerologyResultIntegrityError();
+  }
+  return parsed.data;
+}
+
+function parseNumerologyContract<T>(
+  schema: { safeParse: (value: unknown) => { success: boolean; data?: unknown } },
+  value: unknown
+): T {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "methodCode" in value &&
+    typeof value.methodCode === "string" &&
+    value.methodCode !== "pythagorean"
+  ) {
+    throw numerologyHttpError(
+      422,
+      "UNSUPPORTED_NUMEROLOGY_METHOD",
+      `Unsupported numerology method: ${value.methodCode}`
+    );
+  }
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw numerologyHttpError(400, "NUMEROLOGY_VALIDATION_FAILED", "Invalid numerology request");
+  }
+  return result.data as T;
+}
+
+function requiredTitle(input: PersistNumerologyCalculationRequest): string {
+  const title = "title" in input ? input.title : undefined;
+  if (typeof title !== "string" || title.trim().length === 0) {
+    throw numerologyHttpError(400, "NUMEROLOGY_VALIDATION_FAILED", "Calculation title is required");
+  }
+  return title;
+}
+
+function toJsonObject(value: unknown): Record<string, CanonicalJson> {
   const normalized = JSON.parse(JSON.stringify(value)) as unknown;
   if (typeof normalized !== "object" || normalized === null || Array.isArray(normalized)) {
-    throw new BadRequestException("Expected structured numerology snapshot");
+    throw numerologyHttpError(
+      400,
+      "NUMEROLOGY_VALIDATION_FAILED",
+      "Expected a structured numerology value"
+    );
   }
-
-  return normalized as Record<string, unknown>;
+  return normalized as Record<string, CanonicalJson>;
 }
 
-function sha256StableJson(value: unknown): string {
-  return createHash("sha256").update(stableJson(value)).digest("hex");
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableJson).join(",")}]`;
-  }
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value as Record<string, unknown>)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
-      .join(",")}}`;
-  }
-
-  return JSON.stringify(value);
-}
-
-async function mapNumerologyErrors<T>(operation: () => Promise<T>): Promise<T> {
+function isValidTimeZone(timezone: string): boolean {
   try {
-    return await mapCalculationErrors(operation);
-  } catch (error) {
-    if (error instanceof NumerologyValidationError) {
-      throw new BadRequestException(error.message);
-    }
-
-    throw error;
+    new Intl.DateTimeFormat("en", { timeZone: timezone }).format(0);
+    return true;
+  } catch {
+    return false;
   }
+}
+
+function yearInTimeZone(date: Date, timezone: string): number {
+  const yearPart = new Intl.DateTimeFormat("en", {
+    timeZone: timezone,
+    year: "numeric"
+  })
+    .formatToParts(date)
+    .find((part) => part.type === "year")?.value;
+  if (!yearPart) throw new NumerologyResultIntegrityError();
+  return Number(yearPart);
 }

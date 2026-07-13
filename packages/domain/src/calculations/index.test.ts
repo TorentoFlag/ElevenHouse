@@ -274,6 +274,7 @@ function createTestCalculation(
     resultData: { lifePath: 2 },
     resultSummary: { lifePath: 2 },
     resultChecksum: digest("b"),
+    linkClientIds: [],
     idGenerator: () => "00000000-0000-4000-8000-000000000010",
     now,
     ...overrides
