@@ -113,6 +113,13 @@ authenticated astrologer session, CSRF protection and a strict `{ "locale":
 stored template payload. Template payloads never carry owner, status or media
 ownership state from another account.
 
+The `/products` constructor uses the payload returned by
+`GET /products/templates` as local form state. Selecting or closing a template
+does not call a write endpoint; persistence starts only after the astrologer
+explicitly saves or publishes the constructor form. The template-draft POST
+remains an explicit API operation for consumers that intentionally need an
+immediately persisted draft.
+
 Verification submission in `astrologer-api` only accepts astrologer-owned private
 identity and qualification media and creates a pending application. Approve,
 reject, revoke, escalation, reviewer identity and audit trails are moderator

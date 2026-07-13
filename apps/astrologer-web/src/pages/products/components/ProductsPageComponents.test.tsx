@@ -636,7 +636,6 @@ describe("Products page components", () => {
       ],
       isTemplateLoading: false,
       isTemplateError: false,
-      isTemplateActionPending: false,
       onSelectTemplate,
       onSelect,
       onClose
@@ -688,7 +687,6 @@ describe("Products page components", () => {
       templates: [],
       isTemplateLoading: false,
       isTemplateError: true,
-      isTemplateActionPending: false,
       onSelectTemplate: vi.fn(),
       onSelect,
       onClose: vi.fn()
@@ -719,7 +717,6 @@ describe("Products page components", () => {
       productTemplates: [createProductTemplate("individual_consultation", "single")],
       isProductTemplatesLoading: false,
       isProductTemplatesError: false,
-      isTemplateActionPending: false,
       openTypeSelection: vi.fn(),
       closeTypeSelection: vi.fn(),
       selectType: vi.fn(),

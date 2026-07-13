@@ -9,11 +9,11 @@ import type {
 import {
   createDefaultProductDraft,
   createProductDraftFromResponse,
+  createProductDraftFromTemplate,
   type ProductFormDraft
 } from "../../../features/products/model/productDraft";
 import { persistProductDraft } from "../../../features/products/model/productCreateFlowPersistence";
 import { uploadMediaFile } from "../../../features/media/api/uploadMediaFile";
-import { useCreateProductFromTemplateMutation } from "../../../features/products/model/useCreateProductFromTemplateMutation";
 import { useCreateProductMutation } from "../../../features/products/model/useCreateProductMutation";
 import { useProductTemplatesQuery } from "../../../features/products/model/useProductTemplatesQuery";
 import { usePublishProductMutation } from "../../../features/products/model/usePublishProductMutation";
@@ -34,7 +34,7 @@ type ProductCreateFlowAction =
   | { readonly type: "openTypeSelection" }
   | { readonly type: "closeTypeSelection" }
   | { readonly type: "selectType"; readonly productType: ProductType }
-  | { readonly type: "selectTemplateStarted" }
+  | { readonly type: "selectTemplate"; readonly template: ProductTemplateResponse }
   | { readonly type: "selectTemplateFailed"; readonly error: string }
   | { readonly type: "editProduct"; readonly product: ProductResponse }
   | { readonly type: "updateDraft"; readonly draft: ProductFormDraft }
@@ -80,12 +80,11 @@ export type ProductCreateFlow = {
   readonly productTemplates: readonly ProductTemplateResponse[];
   readonly isProductTemplatesLoading: boolean;
   readonly isProductTemplatesError: boolean;
-  readonly isTemplateActionPending: boolean;
   readonly isSaving: boolean;
   readonly openTypeSelection: () => void;
   readonly closeTypeSelection: () => void;
   readonly selectType: (type: ProductType) => void;
-  readonly selectTemplate: (templateCode: string) => Promise<void>;
+  readonly selectTemplate: (templateCode: string) => void;
   readonly editProduct: (product: ProductResponse) => void;
   readonly updateDraft: (draft: ProductFormDraft) => void;
   readonly uploadProductCover: (file: File) => Promise<void>;
@@ -107,12 +106,10 @@ export function useProductCreateFlow(
 ): ProductCreateFlow {
   const [state, dispatch] = useReducer(productCreateFlowReducer, initialProductCreateFlowState);
   const productTemplatesQuery = useProductTemplatesQuery(locale);
-  const createProductFromTemplateMutation = useCreateProductFromTemplateMutation();
   const createProductMutation = useCreateProductMutation();
   const updateProductMutation = useUpdateProductMutation();
   const publishProductMutation = usePublishProductMutation();
   const isSaving =
-    createProductFromTemplateMutation.isPending ||
     createProductMutation.isPending ||
     updateProductMutation.isPending ||
     publishProductMutation.isPending;
@@ -152,22 +149,20 @@ export function useProductCreateFlow(
 
     dispatch({ type: "saveFailed", error: genericError });
   };
-  const selectTemplate = async (templateCode: string) => {
+  const selectTemplate = (templateCode: string) => {
     if (isSaving || state.isCoverUploading) {
       return;
     }
 
-    dispatch({ type: "selectTemplateStarted" });
-
-    try {
-      const product = await createProductFromTemplateMutation.mutateAsync({
-        templateCode,
-        locale
-      });
-      dispatch({ type: "editProduct", product });
-    } catch {
+    const template = productTemplatesQuery.data?.templates.find(
+      (candidate) => candidate.code === templateCode
+    );
+    if (!template) {
       dispatch({ type: "selectTemplateFailed", error: genericError });
+      return;
     }
+
+    dispatch({ type: "selectTemplate", template });
   };
   const uploadProductCover = async (file: File) => {
     if (!state.editorDraft || state.isCoverUploading) {
@@ -199,7 +194,6 @@ export function useProductCreateFlow(
     productTemplates: productTemplatesQuery.data?.templates ?? [],
     isProductTemplatesLoading: productTemplatesQuery.isLoading,
     isProductTemplatesError: productTemplatesQuery.isError,
-    isTemplateActionPending: createProductFromTemplateMutation.isPending,
     isSaving,
     openTypeSelection: () => dispatch({ type: "openTypeSelection" }),
     closeTypeSelection: () => dispatch({ type: "closeTypeSelection" }),
@@ -268,17 +262,23 @@ function productCreateFlowReducer(
     };
   }
 
-  if (action.type === "selectTemplateStarted") {
-    return {
-      ...state,
-      templateSelectionError: null
-    };
-  }
-
   if (action.type === "selectTemplateFailed") {
     return {
       ...state,
       templateSelectionError: action.error
+    };
+  }
+
+  if (action.type === "selectTemplate") {
+    return {
+      isTypeModalOpen: false,
+      editorDraft: createProductDraftFromTemplate(action.template),
+      editingProductId: null,
+      editorError: null,
+      coverMediaUrl: null,
+      isCoverUploading: false,
+      coverUploadError: null,
+      templateSelectionError: null
     };
   }
 

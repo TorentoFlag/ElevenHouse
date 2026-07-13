@@ -36,7 +36,6 @@ export function ProductsCreateFlow({
           templates={flow.productTemplates}
           isTemplateLoading={flow.isProductTemplatesLoading}
           isTemplateError={flow.isProductTemplatesError}
-          isTemplateActionPending={flow.isTemplateActionPending}
           templateSelectionError={flow.templateSelectionError}
           portalTarget={modalTarget}
           backdropClassName={styles.productScopedModalBackdrop}

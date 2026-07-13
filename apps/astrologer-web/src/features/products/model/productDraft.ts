@@ -14,6 +14,7 @@ import {
   type ProductRequiredClientData,
   type ProductResponse,
   type ProductSubscriptionPeriod,
+  type ProductTemplateResponse,
   type ProductType,
   type UpdateProductRequest
 } from "@elevenhouse/contracts/products";
@@ -263,6 +264,40 @@ export function createProductDraftFromResponse(product: ProductResponse): Produc
         order
       })
     )
+  };
+}
+
+export function createProductDraftFromTemplate(
+  template: ProductTemplateResponse
+): ProductFormDraft {
+  const payload = template.payload;
+
+  return {
+    type: payload.type,
+    title: payload.title,
+    subtitle: payload.subtitle ?? "",
+    priceMinor: payload.priceMinor,
+    currency: payload.currency,
+    coverMediaId: payload.coverMediaId ?? "",
+    introVideoUrl: payload.introVideoUrl ?? "",
+    executionMode: payload.executionMode,
+    paymentModel: payload.paymentModel,
+    durationMinutes: payload.durationMinutes ?? null,
+    durationLabel: payload.durationLabel ?? "",
+    slaLabel: payload.slaLabel ?? "",
+    packageSessionCount: payload.packageSessionCount ?? null,
+    packageDiscountPercent: payload.packageDiscountPercent ?? null,
+    subscriptionPeriod: payload.subscriptionPeriod ?? null,
+    trialDays: payload.trialDays ?? null,
+    participantMode: payload.participantMode,
+    groupSize: payload.groupSize ?? null,
+    deliveryFormats: [...payload.deliveryFormats],
+    requiredClientData: [...payload.requiredClientData],
+    methods: [...payload.methods],
+    accessGrants: [...payload.accessGrants],
+    hiddenAutoIncludedKeys: [],
+    includedItems: payload.includedItems.map((item) => ({ ...item })),
+    modifiers: payload.modifiers.map((modifier) => ({ ...modifier }))
   };
 }
 

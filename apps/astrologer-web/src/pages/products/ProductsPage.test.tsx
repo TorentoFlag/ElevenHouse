@@ -3,7 +3,8 @@ import type {
   CreateProductRequest,
   ListProductsResponse,
   ProductStatus,
-  ProductSummaryResponse
+  ProductSummaryResponse,
+  ProductTemplateResponse
 } from "@elevenhouse/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductConstructorModalProps } from "./components/ProductConstructorModal";
@@ -515,6 +516,52 @@ describe("ProductsPage", () => {
     );
   });
 
+  it("does not persist a template draft when the constructor closes without saving", async () => {
+    const template = createProductTemplate();
+    const createFromTemplate = vi.fn().mockResolvedValue({
+      ...product,
+      id: "44444444-4444-4444-8444-444444444444",
+      title: template.payload.title
+    });
+    const createProduct = vi.fn().mockResolvedValue(product);
+    mocks.useProductTemplatesQuery.mockReturnValue({
+      data: { templates: [template] },
+      isLoading: false,
+      isError: false
+    });
+    mocks.useCreateProductFromTemplateMutation.mockReturnValue({
+      mutateAsync: createFromTemplate,
+      isPending: false
+    });
+    mocks.useCreateProductMutation.mockReturnValue({
+      mutateAsync: createProduct,
+      isPending: false
+    });
+
+    renderPage();
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onCreate();
+    renderPage();
+    getLatestMockProps<{ onSelectTemplate: (code: string) => void }>(
+      mocks.productCreateTypeModal
+    ).onSelectTemplate(template.code);
+
+    expect(createFromTemplate).not.toHaveBeenCalled();
+    expect(createProduct).not.toHaveBeenCalled();
+
+    renderPage();
+    const constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    expect(constructorProps.draft.title).toBe(template.payload.title);
+    expect(constructorProps.draft.includedItems).toEqual(template.payload.includedItems);
+
+    constructorProps.onClose();
+    renderPage();
+
+    expect(createFromTemplate).not.toHaveBeenCalled();
+    expect(createProduct).not.toHaveBeenCalled();
+  });
+
   it("saves a created draft through the products mutation and closes the editor", async () => {
     const mutateAsync = vi.fn().mockResolvedValue(product);
     mocks.useCreateProductMutation.mockReturnValue({
@@ -775,4 +822,38 @@ function getLatestMockProps<T>(mock: { mock: { calls: unknown[][] } }): T {
   }
 
   return lastCall[0] as T;
+}
+
+function createProductTemplate(): ProductTemplateResponse {
+  return {
+    id: "55555555-5555-4555-8555-555555555555",
+    code: "individual_consultation",
+    locale: "ru",
+    type: "single",
+    status: "active",
+    title: "Индивидуальная консультация",
+    subtitle: "Одна встреча с понятным результатом",
+    description: "Готовая заготовка консультации",
+    sortOrder: 10,
+    payload: {
+      type: "single",
+      title: "Индивидуальная консультация",
+      subtitle: "Одна встреча с понятным результатом",
+      priceMinor: 490000,
+      currency: "RUB",
+      executionMode: "live",
+      paymentModel: "once",
+      durationMinutes: 60,
+      durationLabel: "60 мин",
+      participantMode: "solo",
+      deliveryFormats: ["video"],
+      requiredClientData: ["question"],
+      methods: [],
+      accessGrants: [],
+      includedItems: [{ text: "Онлайн-встреча 1 : 1", icon: "video", order: 10 }],
+      modifiers: []
+    },
+    createdAt: "2026-07-13T00:00:00.000Z",
+    updatedAt: "2026-07-13T00:00:00.000Z"
+  };
 }

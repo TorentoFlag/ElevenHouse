@@ -20,7 +20,6 @@ export type ProductCreateTypeModalProps = {
   readonly templates: readonly ProductTemplateResponse[];
   readonly isTemplateLoading: boolean;
   readonly isTemplateError: boolean;
-  readonly isTemplateActionPending: boolean;
   readonly templateSelectionError?: string | null;
   readonly portalTarget?: Element | null;
   readonly backdropClassName?: string;
@@ -35,7 +34,6 @@ export function ProductCreateTypeModal({
   templates,
   isTemplateLoading,
   isTemplateError,
-  isTemplateActionPending,
   templateSelectionError,
   portalTarget,
   backdropClassName,
@@ -44,7 +42,6 @@ export function ProductCreateTypeModal({
   onClose
 }: ProductCreateTypeModalProps) {
   const selection = createProductTemplateSelectionModel(templates);
-  const areTemplateCardsDisabled = isTemplateLoading || isTemplateActionPending;
   const shouldUseManualFallback = isTemplateError && selection.templates.length === 0;
   const customCopy = selection.customTemplate ?? {
     code: "custom_format",
@@ -93,7 +90,7 @@ export function ProductCreateTypeModal({
               className={styles.typeOption}
               type="button"
               data-product-template-code={template.code}
-              disabled={areTemplateCardsDisabled}
+              disabled={isTemplateLoading}
               onClick={() => onSelectTemplate(template.code)}
             >
               <Icon
@@ -118,7 +115,6 @@ export function ProductCreateTypeModal({
             className={styles.typeOption}
             type="button"
             data-product-create-type={option.type}
-            disabled={isTemplateActionPending}
             onClick={() => onSelect(option.type)}
           >
             <Icon
