@@ -8,7 +8,11 @@ describe("numerology method registry", () => {
     expect(
       calculateNumerologyIndividual({
         methodCode: "pythagorean",
-        participant: { calculationName: "Голубев Антон", birthDate: "2000-08-19" },
+        participant: {
+          calculationName: "Голубев Антон",
+          calculationNameSource: "crm_display_name",
+          birthDate: "2000-08-19"
+        },
         periods: {}
       }).keyNumbers.lifePath
     ).toBe(2);
@@ -16,7 +20,11 @@ describe("numerology method registry", () => {
     expect(() =>
       calculateNumerologyIndividual({
         methodCode: "vedic",
-        participant: { calculationName: "Голубев Антон", birthDate: "2000-08-19" },
+        participant: {
+          calculationName: "Голубев Антон",
+          calculationNameSource: "crm_display_name",
+          birthDate: "2000-08-19"
+        },
         periods: {}
       } as unknown as NumerologyIndividualUseCaseInput)
     ).toThrow(UnsupportedNumerologyMethodError);

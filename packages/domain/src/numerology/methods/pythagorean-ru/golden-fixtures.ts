@@ -1,5 +1,9 @@
 export const golubevFixture = {
-  participant: { calculationName: "Голубев Антон", birthDate: "2000-08-19" },
+  participant: {
+    calculationName: "Голубев Антон",
+    calculationNameSource: "crm_display_name",
+    birthDate: "2000-08-19"
+  },
   expected: {
     keyNumbers: { lifePath: 2, birthday: 1, expression: 6, soul: 6, personality: 9 },
     workingNumbers: { first: 20, second: 2, third: 18, fourth: 9 },
@@ -28,7 +32,11 @@ export const golubevFixture = {
 } as const;
 
 export const koshkinaFixture = {
-  participant: { calculationName: "Кошкина Яна Владимировна", birthDate: "2002-03-16" },
+  participant: {
+    calculationName: "Кошкина Яна Владимировна",
+    calculationNameSource: "crm_display_name",
+    birthDate: "2002-03-16"
+  },
   expected: {
     keyNumbers: { lifePath: 5, birthday: 7, expression: 7, soul: 9, personality: 7 },
     workingNumbers: { first: 14, second: 5, third: 12, fourth: 3 },

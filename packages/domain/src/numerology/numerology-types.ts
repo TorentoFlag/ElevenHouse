@@ -7,7 +7,7 @@ export type NumerologyLineLevel = "absent" | "weak" | "moderate" | "expressed" |
 
 export type NumerologyParticipantInput = {
   readonly calculationName: string;
-  readonly calculationNameSource?: "crm_display_name" | "manual";
+  readonly calculationNameSource: "crm_display_name" | "manual_entry";
   readonly birthDate: string;
 };
 
