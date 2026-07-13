@@ -1,11 +1,16 @@
 import { normalizeRequiredString } from "../shared";
-import { CalculationNotFoundError, CalculationValidationError } from "./calculation-errors";
+import {
+  CalculationAlreadyExistsError,
+  CalculationNotFoundError,
+  CalculationParticipantMismatchError,
+  CalculationValidationError
+} from "./calculation-errors";
 import type {
   CalculationListResult,
   CalculationRecord,
   CalculationStore,
-  CalculationStoreAppendVersionInput,
-  CalculationStoreCreateInput
+  CalculationStoreCreateInput,
+  CalculationStoreReplaceResultInput
 } from "./calculation-store";
 import type {
   CalculationInterpretationSource,
@@ -22,19 +27,12 @@ export async function listCalculations(input: {
   readonly limit: number;
   readonly offset: number;
 }): Promise<CalculationListResult> {
-  // Store contract returns updatedAt desc, id desc with total counted before pagination.
-  const limit = normalizeListLimit(input.limit);
-  const offset = normalizeListOffset(input.offset);
-
   return input.store.listByOwner({
-    ownerUserId: normalizeRequiredCalculationString(
-      input.ownerUserId,
-      "Calculation owner user id is required"
-    ),
+    ownerUserId: required(input.ownerUserId, "Calculation owner user id is required"),
     module: input.module,
     status: input.status,
-    limit,
-    offset
+    limit: normalizeListLimit(input.limit),
+    offset: normalizeListOffset(input.offset)
   });
 }
 
@@ -52,68 +50,54 @@ export async function createCalculation(
     readonly now: Date;
   }
 ): Promise<CalculationRecord> {
-  return input.store.create({
-    ownerUserId: normalizeRequiredCalculationString(
-      input.ownerUserId,
-      "Calculation owner user id is required"
-    ),
+  const normalized: CalculationStoreCreateInput = {
+    ownerUserId: required(input.ownerUserId, "Calculation owner user id is required"),
     module: input.module,
     mode: input.mode,
-    methodCode: normalizeRequiredCalculationString(
-      input.methodCode,
-      "Calculation method code is required"
-    ),
-    methodVersion: normalizeRequiredCalculationString(
-      input.methodVersion,
-      "Calculation method version is required"
-    ),
-    title: normalizeRequiredCalculationString(input.title, "Calculation title is required"),
+    methodCode: required(input.methodCode, "Calculation method code is required"),
+    title: required(input.title, "Calculation title is required"),
     participants: normalizeCalculationParticipants(input.participants),
-    settingsSnapshot: input.settingsSnapshot,
-    inputSnapshot: input.inputSnapshot,
-    resultSnapshot: input.resultSnapshot,
+    requestFingerprint: digest(input.requestFingerprint, "Calculation request fingerprint is invalid"),
+    inputData: input.inputData,
+    resultData: input.resultData,
     resultSummary: input.resultSummary,
-    resultChecksum: normalizeRequiredCalculationString(
-      input.resultChecksum,
-      "Calculation result checksum is required"
-    ),
+    resultChecksum: digest(input.resultChecksum, "Calculation result checksum is invalid"),
     idGenerator: input.idGenerator,
-    versionIdGenerator: input.versionIdGenerator,
     now: input.now.toISOString()
-  });
+  };
+  const existing = await input.store.findExact(normalized);
+  return existing ?? input.store.create(normalized);
 }
 
 export async function recalculateCalculation(
-  input: Omit<CalculationStoreAppendVersionInput, "now"> & {
+  input: Omit<CalculationStoreReplaceResultInput, "now"> & {
     readonly store: CalculationStore;
-    readonly ownerUserId: string;
     readonly now: Date;
   }
 ): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
   assertCalculationCanBeChanged(record);
-  const updated = await input.store.appendVersion({
+  const participants = normalizeCalculationParticipants(input.participants);
+  assertParticipantIdentityMatches(record.participants, participants);
+
+  const outcome = await input.store.replaceResult({
     ownerUserId: record.ownerUserId,
     calculationId: record.id,
-    methodVersion: normalizeRequiredCalculationString(
-      input.methodVersion,
-      "Calculation method version is required"
+    participants,
+    requestFingerprint: digest(
+      input.requestFingerprint,
+      "Calculation request fingerprint is invalid"
     ),
-    settingsSnapshot: input.settingsSnapshot,
-    inputSnapshot: input.inputSnapshot,
-    resultSnapshot: input.resultSnapshot,
+    inputData: input.inputData,
+    resultData: input.resultData,
     resultSummary: input.resultSummary,
-    resultChecksum: normalizeRequiredCalculationString(
-      input.resultChecksum,
-      "Calculation result checksum is required"
-    ),
-    versionIdGenerator: input.versionIdGenerator,
+    resultChecksum: digest(input.resultChecksum, "Calculation result checksum is invalid"),
     now: input.now.toISOString()
   });
-  if (!updated) {
-    throw new CalculationNotFoundError();
-  }
-  return updated;
+
+  if (outcome.status === "not_found") throw new CalculationNotFoundError();
+  if (outcome.status === "exact_key_conflict") throw new CalculationAlreadyExistsError();
+  return outcome.calculation;
 }
 
 export async function linkCalculationToClient(input: {
@@ -125,10 +109,7 @@ export async function linkCalculationToClient(input: {
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
   assertCalculationCanBeChanged(record);
-  const clientId = normalizeRequiredCalculationString(
-    input.clientId,
-    "Calculation client id is required"
-  );
+  const clientId = required(input.clientId, "Calculation client id is required");
 
   if (
     !record.participants.some(
@@ -137,9 +118,7 @@ export async function linkCalculationToClient(input: {
   ) {
     throw new CalculationValidationError("Calculation can be linked only to a CRM participant");
   }
-  if (record.links.some((link) => link.clientId === clientId)) {
-    return record;
-  }
+  if (record.links.some((link) => link.clientId === clientId)) return record;
 
   const linked = await input.store.linkClient({
     ownerUserId: record.ownerUserId,
@@ -147,9 +126,7 @@ export async function linkCalculationToClient(input: {
     clientId,
     now: input.now.toISOString()
   });
-  if (!linked) {
-    throw new CalculationNotFoundError();
-  }
+  if (!linked) throw new CalculationNotFoundError();
   return linked;
 }
 
@@ -158,26 +135,24 @@ export async function publishCalculationToClient(input: {
   readonly ownerUserId: string;
   readonly calculationId: string;
   readonly clientId: string;
+  readonly expectedResultChecksum: string;
   readonly now: Date;
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
   assertCalculationCanBeChanged(record);
-  const clientId = normalizeRequiredCalculationString(
-    input.clientId,
-    "Calculation client id is required"
+  const clientId = required(input.clientId, "Calculation client id is required");
+  const expectedResultChecksum = digest(
+    input.expectedResultChecksum,
+    "Calculation result checksum is invalid"
   );
-  const latestVersion = getLatestVersion(record);
 
   if (!record.links.some((link) => link.clientId === clientId)) {
     throw new CalculationValidationError("Calculation must be linked before publishing");
   }
-  if (
-    !latestVersion ||
-    !record.interpretations.some(
-      (interpretation) =>
-        interpretation.versionId === latestVersion.id && interpretation.status === "approved"
-    )
-  ) {
+  if (record.resultChecksum !== expectedResultChecksum) {
+    throw new CalculationValidationError("Publication must target the current result checksum");
+  }
+  if (!record.interpretations.some((interpretation) => interpretation.status === "approved")) {
     throw new CalculationValidationError(
       "Calculation requires approved interpretation before publishing"
     );
@@ -187,11 +162,11 @@ export async function publishCalculationToClient(input: {
     ownerUserId: record.ownerUserId,
     calculationId: record.id,
     clientId,
-    expectedVersionId: latestVersion.id,
+    expectedResultChecksum,
     now: input.now.toISOString()
   });
   if (!published) {
-    throw new CalculationNotFoundError();
+    throw new CalculationValidationError("Calculation changed while it was being published");
   }
   return published;
 }
@@ -200,7 +175,6 @@ export async function saveCalculationInterpretation(input: {
   readonly store: CalculationStore;
   readonly ownerUserId: string;
   readonly calculationId: string;
-  readonly versionId: string;
   readonly source: CalculationInterpretationSource;
   readonly text: string;
   readonly modelId: string | null;
@@ -210,31 +184,17 @@ export async function saveCalculationInterpretation(input: {
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
   assertCalculationCanBeChanged(record);
-  const versionId = normalizeRequiredCalculationString(
-    input.versionId,
-    "Calculation version id is required"
-  );
-  if (!record.versions.some((version) => version.id === versionId)) {
-    throw new CalculationValidationError("Calculation version was not found");
-  }
-
   const saved = await input.store.saveInterpretation({
     ownerUserId: record.ownerUserId,
     calculationId: record.id,
-    versionId,
     source: input.source,
-    text: normalizeRequiredCalculationString(
-      input.text,
-      "Calculation interpretation text is required"
-    ),
+    text: required(input.text, "Calculation interpretation text is required"),
     modelId: input.modelId,
     promptVersion: input.promptVersion,
     interpretationIdGenerator: input.interpretationIdGenerator,
     now: input.now.toISOString()
   });
-  if (!saved) {
-    throw new CalculationNotFoundError();
-  }
+  if (!saved) throw new CalculationNotFoundError();
   return saved;
 }
 
@@ -247,7 +207,7 @@ export async function approveCalculationInterpretation(input: {
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
   assertCalculationCanBeChanged(record);
-  const interpretationId = normalizeRequiredCalculationString(
+  const interpretationId = required(
     input.interpretationId,
     "Calculation interpretation id is required"
   );
@@ -261,9 +221,7 @@ export async function approveCalculationInterpretation(input: {
     interpretationId,
     now: input.now.toISOString()
   });
-  if (!approved) {
-    throw new CalculationNotFoundError();
-  }
+  if (!approved) throw new CalculationNotFoundError();
   return approved;
 }
 
@@ -274,18 +232,13 @@ export async function archiveCalculation(input: {
   readonly now: Date;
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
-  if (record.status === "archived") {
-    return record;
-  }
-
+  if (record.status === "archived") return record;
   const archived = await input.store.archive({
     ownerUserId: record.ownerUserId,
     calculationId: record.id,
     now: input.now.toISOString()
   });
-  if (!archived) {
-    throw new CalculationNotFoundError();
-  }
+  if (!archived) throw new CalculationNotFoundError();
   return archived;
 }
 
@@ -295,15 +248,10 @@ async function requireOwnedCalculation(
   calculationId: string
 ): Promise<CalculationRecord> {
   const record = await store.findByOwnerAndId({
-    ownerUserId: normalizeRequiredCalculationString(
-      ownerUserId,
-      "Calculation owner user id is required"
-    ),
-    calculationId: normalizeRequiredCalculationString(calculationId, "Calculation id is required")
+    ownerUserId: required(ownerUserId, "Calculation owner user id is required"),
+    calculationId: required(calculationId, "Calculation id is required")
   });
-  if (!record) {
-    throw new CalculationNotFoundError();
-  }
+  if (!record) throw new CalculationNotFoundError();
   return record;
 }
 
@@ -313,63 +261,57 @@ function assertCalculationCanBeChanged(record: CalculationRecord): void {
   }
 }
 
-function getLatestVersion(record: CalculationRecord) {
-  return record.versions.reduce<(typeof record.versions)[number] | null>((latest, version) => {
-    if (!latest || version.versionNumber > latest.versionNumber) {
-      return version;
-    }
-    return latest;
-  }, null);
+function assertParticipantIdentityMatches(
+  current: readonly CalculationParticipant[],
+  proposed: readonly CalculationParticipant[]
+): void {
+  if (
+    current.length !== proposed.length ||
+    current.some((participant, index) => {
+      const candidate = proposed[index];
+      return (
+        !candidate ||
+        candidate.role !== participant.role ||
+        candidate.source !== participant.source ||
+        candidate.clientId !== participant.clientId
+      );
+    })
+  ) {
+    throw new CalculationParticipantMismatchError();
+  }
 }
 
 function normalizeCalculationParticipants(
   participants: readonly CalculationParticipant[]
 ): readonly CalculationParticipant[] {
-  if (participants.length === 0) {
-    throw new CalculationValidationError("Calculation requires at least one participant");
+  if (participants.length < 1 || participants.length > 2) {
+    throw new CalculationValidationError("Calculation requires one or two participants");
   }
-
+  const roles = new Set<string>();
   return participants.map((participant) => {
-    const displayName = normalizeRequiredCalculationString(
+    if (roles.has(participant.role)) {
+      throw new CalculationValidationError("Calculation participant roles must be unique");
+    }
+    roles.add(participant.role);
+    const displayName = required(
       participant.displayName,
       "Calculation participant display name is required"
     );
-    const birthDate =
-      participant.birthDate === null
-        ? null
-        : normalizeOptionalCalculationBirthDate(participant.birthDate);
-
     if (participant.source === "crm_client") {
       return {
         ...participant,
-        clientId: normalizeRequiredCalculationString(
+        clientId: required(
           participant.clientId ?? "",
           "CRM calculation participant requires client id"
         ),
-        displayName,
-        birthDate
+        displayName
       };
     }
-
     if (participant.clientId !== null) {
       throw new CalculationValidationError("Manual calculation participant cannot have client id");
     }
-
-    return {
-      ...participant,
-      clientId: null,
-      displayName,
-      birthDate
-    };
+    return { ...participant, clientId: null, displayName };
   });
-}
-
-function normalizeOptionalCalculationBirthDate(value: string): string {
-  const normalized = value.trim();
-  if (!normalized) {
-    throw new CalculationValidationError("Calculation participant birth date cannot be blank");
-  }
-  return normalized;
 }
 
 function normalizeListLimit(limit: number): number {
@@ -388,7 +330,13 @@ function normalizeListOffset(offset: number): number {
   return offset;
 }
 
-function normalizeRequiredCalculationString(value: string, message: string): string {
+function digest(value: string, message: string): string {
+  const normalized = required(value, message);
+  if (!/^sha256:[a-f0-9]{64}$/.test(normalized)) throw new CalculationValidationError(message);
+  return normalized;
+}
+
+function required(value: string, message: string): string {
   try {
     return normalizeRequiredString(value, message);
   } catch {

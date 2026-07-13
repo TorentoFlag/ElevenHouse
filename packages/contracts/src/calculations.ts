@@ -26,45 +26,10 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   ])
 );
 
-export const calculationSnapshotObjectSchema = plainObjectSchema.pipe(
+export const calculationJsonObjectSchema = plainObjectSchema.pipe(
   z.record(z.string(), jsonValueSchema)
 );
-
-const parseIsoDate = (value: string): Date | null => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return null;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-
-  if (
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month - 1 ||
-    parsed.getUTCDate() !== day
-  ) {
-    return null;
-  }
-
-  return parsed;
-};
-
-const isNotFutureIsoDate = (value: string): boolean => {
-  const parsed = parseIsoDate(value);
-  if (!parsed) return false;
-
-  const now = new Date();
-  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-
-  return parsed.getTime() <= todayUtc;
-};
-
-const dateSchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/)
-  .refine((value) => parseIsoDate(value) !== null, { message: "Invalid calendar date" })
-  .refine(isNotFutureIsoDate, { message: "Date must not be in the future" });
+const sha256DigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 
 export const calculationModuleSchema = z.enum(["numerology", "chart", "matrix", "human_design"]);
 export type CalculationModule = z.infer<typeof calculationModuleSchema>;
@@ -147,10 +112,7 @@ export const calculationParticipantResponseSchema = z
     role: calculationParticipantRoleSchema,
     source: calculationParticipantSourceSchema,
     clientId: uuidSchema.nullable(),
-    displayName: z.string().trim().min(1).max(200),
-    birthDate: dateSchema.nullable(),
-    inputSnapshot: calculationSnapshotObjectSchema,
-    manuallyOverridden: z.boolean()
+    displayName: z.string().trim().min(1).max(200)
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -173,21 +135,6 @@ export type CalculationParticipantResponse = z.infer<
   typeof calculationParticipantResponseSchema
 >;
 
-export const calculationVersionResponseSchema = z
-  .object({
-    id: uuidSchema,
-    versionNumber: z.number().int().positive(),
-    methodVersion: z.string().trim().min(1).max(120),
-    settingsSnapshot: calculationSnapshotObjectSchema,
-    inputSnapshot: calculationSnapshotObjectSchema,
-    resultSnapshot: calculationSnapshotObjectSchema,
-    resultSummary: calculationSnapshotObjectSchema,
-    resultChecksum: z.string().trim().min(1).max(256),
-    createdAt: dateTimeSchema
-  })
-  .strict();
-export type CalculationVersionResponse = z.infer<typeof calculationVersionResponseSchema>;
-
 export const calculationClientLinkResponseSchema = z
   .object({
     clientId: uuidSchema,
@@ -201,7 +148,6 @@ export type CalculationClientLinkResponse = z.infer<typeof calculationClientLink
 export const calculationInterpretationResponseSchema = z
   .object({
     id: uuidSchema,
-    versionId: uuidSchema,
     source: calculationInterpretationSourceSchema,
     status: calculationInterpretationStatusSchema,
     text: z.string().trim().min(1),
@@ -217,7 +163,6 @@ export type CalculationInterpretationResponse = z.infer<
 export const calculationArtifactResponseSchema = z
   .object({
     id: uuidSchema,
-    versionId: uuidSchema,
     mediaAssetId: uuidSchema,
     artifactType: z.literal("pdf"),
     status: z.enum(["generating", "ready", "failed"])
@@ -232,11 +177,14 @@ export const calculationRecordResponseSchema = z
     module: calculationModuleSchema,
     mode: calculationModeSchema,
     methodCode: z.string().trim().min(1).max(80),
-    currentMethodVersion: z.string().trim().min(1).max(120),
     title: z.string().trim().min(1).max(200),
     status: calculationStatusSchema,
+    requestFingerprint: sha256DigestSchema,
+    inputData: calculationJsonObjectSchema,
+    resultData: calculationJsonObjectSchema,
+    resultSummary: calculationJsonObjectSchema,
+    resultChecksum: sha256DigestSchema,
     participants: z.array(calculationParticipantResponseSchema).min(1).max(2),
-    versions: z.array(calculationVersionResponseSchema).min(1),
     links: z.array(calculationClientLinkResponseSchema),
     interpretations: z.array(calculationInterpretationResponseSchema),
     artifacts: z.array(calculationArtifactResponseSchema),
@@ -261,12 +209,16 @@ export const linkCalculationClientRequestSchema = z
   .strict();
 export type LinkCalculationClientRequest = z.infer<typeof linkCalculationClientRequestSchema>;
 
-export const publishCalculationRequestSchema = linkCalculationClientRequestSchema;
+export const publishCalculationRequestSchema = z
+  .object({
+    clientId: uuidSchema,
+    expectedResultChecksum: sha256DigestSchema
+  })
+  .strict();
 export type PublishCalculationRequest = z.infer<typeof publishCalculationRequestSchema>;
 
 export const saveCalculationInterpretationRequestSchema = z
   .object({
-    versionId: uuidSchema,
     text: z.string().trim().min(1).max(20_000)
   })
   .strict();

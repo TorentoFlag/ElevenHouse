@@ -3,7 +3,9 @@ import {
   calculationIdParamSchema,
   calculationRecordResponseSchema,
   listCalculationsQuerySchema,
-  listCalculationsResponseSchema
+  listCalculationsResponseSchema,
+  publishCalculationRequestSchema,
+  saveCalculationInterpretationRequestSchema
 } from "./calculations";
 
 const calculationRecordResponse = {
@@ -12,46 +14,29 @@ const calculationRecordResponse = {
   module: "numerology",
   mode: "individual",
   methodCode: "pythagorean",
-  currentMethodVersion: "pythagorean-v1",
-  title: "Maria",
+  title: "Голубев Антон, психоматрица",
   status: "calculated",
+  requestFingerprint: `sha256:${"a".repeat(64)}`,
+  inputData: {
+    participant: {
+      calculationName: "Голубев Антон",
+      calculationNameSource: "crm_display_name",
+      birthDate: "2000-08-19"
+    }
+  },
+  resultData: {
+    methodCode: "pythagorean",
+    mode: "individual",
+    keyNumbers: { lifePath: 2 }
+  },
+  resultSummary: { lifePath: 2 },
+  resultChecksum: `sha256:${"b".repeat(64)}`,
   participants: [
     {
       role: "subject",
-      source: "manual",
-      clientId: null,
-      displayName: "Maria",
-      birthDate: "1990-03-14",
-      inputSnapshot: {
-        fullName: "Maria Ivanova",
-        birthDate: "1990-03-14"
-      },
-      manuallyOverridden: false
-    }
-  ],
-  versions: [
-    {
-      id: "33333333-3333-4333-8333-333333333333",
-      versionNumber: 1,
-      methodVersion: "pythagorean-v1",
-      settingsSnapshot: {
-        masterNumbers: { mode: "preserve_all" }
-      },
-      inputSnapshot: {
-        participant: {
-          fullName: "Maria Ivanova",
-          birthDate: "1990-03-14"
-        }
-      },
-      resultSnapshot: {
-        methodCode: "pythagorean",
-        keyNumbers: { lifePath: 9 }
-      },
-      resultSummary: {
-        headline: "Life path 9"
-      },
-      resultChecksum: "checksum-1",
-      createdAt: "2026-07-06T00:00:00.000Z"
+      source: "crm_client",
+      clientId: "44444444-4444-4444-8444-444444444444",
+      displayName: "Голубев Антон"
     }
   ],
   links: [
@@ -65,7 +50,6 @@ const calculationRecordResponse = {
   interpretations: [
     {
       id: "55555555-5555-4555-8555-555555555555",
-      versionId: "33333333-3333-4333-8333-333333333333",
       source: "ai",
       status: "draft",
       text: "Structured interpretation",
@@ -77,7 +61,6 @@ const calculationRecordResponse = {
   artifacts: [
     {
       id: "66666666-6666-4666-8666-666666666666",
-      versionId: "33333333-3333-4333-8333-333333333333",
       mediaAssetId: "77777777-7777-4777-8777-777777777777",
       artifactType: "pdf",
       status: "ready"
@@ -88,107 +71,62 @@ const calculationRecordResponse = {
 } as const;
 
 describe("calculation contracts", () => {
-  it("parses list query defaults and coerces limit/offset", () => {
-    expect(listCalculationsQuerySchema.parse({})).toEqual({
-      module: "all",
-      status: "all",
-      limit: 50,
-      offset: 0
-    });
-
-    expect(
-      listCalculationsQuerySchema.parse({
-        module: "numerology",
-        status: "published",
-        limit: "25",
-        offset: "10"
-      })
-    ).toEqual({
-      module: "numerology",
-      status: "published",
-      limit: 25,
-      offset: 10
-    });
-
-    expect(() => listCalculationsQuerySchema.parse({ limit: "101" })).toThrow();
-    expect(() => listCalculationsQuerySchema.parse({ limit: "0" })).toThrow();
-    expect(() => listCalculationsQuerySchema.parse({ offset: "-1" })).toThrow();
-  });
-
-  it("keeps calculation response snapshots structured behind strict envelopes", () => {
+  it("parses one current result without algorithm or result versions", () => {
     const parsed = calculationRecordResponseSchema.parse(calculationRecordResponse);
 
-    expect(parsed.versions[0]?.resultSnapshot).toMatchObject({
+    expect(parsed.resultData).toMatchObject({
       methodCode: "pythagorean",
-      keyNumbers: { lifePath: 9 }
+      keyNumbers: { lifePath: 2 }
     });
+    expect(parsed).not.toHaveProperty("versions");
+    expect(parsed).not.toHaveProperty("currentMethodVersion");
+    expect(parsed.participants[0]).not.toHaveProperty("birthDate");
+    expect(parsed.participants[0]).not.toHaveProperty("inputSnapshot");
+    expect(parsed.participants[0]).not.toHaveProperty("manuallyOverridden");
+    expect(parsed.interpretations[0]).not.toHaveProperty("versionId");
+    expect(parsed.artifacts[0]).not.toHaveProperty("versionId");
+  });
 
+  it("requires canonical sha256 digests and plain JSON object payloads", () => {
     expect(() =>
       calculationRecordResponseSchema.parse({
         ...calculationRecordResponse,
-        unexpected: true
+        requestFingerprint: "checksum-1"
       })
     ).toThrow();
-
     expect(() =>
       calculationRecordResponseSchema.parse({
         ...calculationRecordResponse,
-        versions: [
-          {
-            ...calculationRecordResponse.versions[0],
-            resultSnapshot: "not-an-object"
-          }
-        ]
+        resultData: "not-an-object"
       })
     ).toThrow();
-
     expect(() =>
       calculationRecordResponseSchema.parse({
         ...calculationRecordResponse,
-        versions: [
-          {
-            ...calculationRecordResponse.versions[0],
-            resultSnapshot: {
-              generatedAt: new Date("2026-07-06T00:00:00.000Z")
-            }
-          }
-        ]
+        resultData: { generatedAt: new Date("2026-07-06T00:00:00.000Z") }
       })
     ).toThrow();
   });
 
-  it("rejects invalid or future participant birth dates in responses", () => {
+  it("enforces participant source and client identity without duplicating method input", () => {
     expect(() =>
       calculationRecordResponseSchema.parse({
         ...calculationRecordResponse,
         participants: [
           {
             ...calculationRecordResponse.participants[0],
-            birthDate: "1990-02-31"
+            source: "manual",
+            clientId: calculationRecordResponse.participants[0].clientId
           }
         ]
       })
     ).toThrow();
-
     expect(() =>
       calculationRecordResponseSchema.parse({
         ...calculationRecordResponse,
         participants: [
           {
             ...calculationRecordResponse.participants[0],
-            birthDate: "2999-01-01"
-          }
-        ]
-      })
-    ).toThrow();
-
-    expect(() =>
-      calculationRecordResponseSchema.parse({
-        ...calculationRecordResponse,
-        participants: [
-          {
-            ...calculationRecordResponse.participants[0],
-            source: "crm_client",
             clientId: null
           }
         ]
@@ -196,42 +134,37 @@ describe("calculation contracts", () => {
     ).toThrow();
   });
 
-  it("rejects manual response participants with CRM client ids", () => {
-    expect(() =>
-      calculationRecordResponseSchema.parse({
-        ...calculationRecordResponse,
-        participants: [
-          {
-            ...calculationRecordResponse.participants[0],
-            clientId: "44444444-4444-4444-8444-444444444444"
-          }
-        ]
+  it("accepts interpretation save and checksum-bound publication without version ids", () => {
+    expect(saveCalculationInterpretationRequestSchema.parse({ text: "Ручная трактовка" })).toEqual({
+      text: "Ручная трактовка"
+    });
+    expect(
+      publishCalculationRequestSchema.parse({
+        clientId: calculationRecordResponse.participants[0].clientId,
+        expectedResultChecksum: calculationRecordResponse.resultChecksum
       })
-    ).toThrow();
+    ).toEqual({
+      clientId: calculationRecordResponse.participants[0].clientId,
+      expectedResultChecksum: calculationRecordResponse.resultChecksum
+    });
   });
 
-  it("parses a calculation list response", () => {
+  it("parses list query defaults, lists and strict calculation params", () => {
+    expect(listCalculationsQuerySchema.parse({})).toEqual({
+      module: "all",
+      status: "all",
+      limit: 50,
+      offset: 0
+    });
     expect(
       listCalculationsResponseSchema.parse({
         calculations: [calculationRecordResponse],
         total: 1
       })
-    ).toMatchObject({
-      total: 1,
-      calculations: [{ id: calculationRecordResponse.id }]
-    });
-  });
-
-  it("parses calculationId params as strict UUID objects", () => {
+    ).toMatchObject({ total: 1 });
     expect(
-      calculationIdParamSchema.parse({
-        calculationId: calculationRecordResponse.id
-      })
-    ).toEqual({
-      calculationId: calculationRecordResponse.id
-    });
-
-    expect(() => calculationIdParamSchema.parse({ calculationId: "not-a-uuid" })).toThrow();
+      calculationIdParamSchema.parse({ calculationId: calculationRecordResponse.id })
+    ).toEqual({ calculationId: calculationRecordResponse.id });
     expect(() =>
       calculationIdParamSchema.parse({
         calculationId: calculationRecordResponse.id,

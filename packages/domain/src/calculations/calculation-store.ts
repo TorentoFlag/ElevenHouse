@@ -7,22 +7,20 @@ import type {
   CalculationModule,
   CalculationModuleFilter,
   CalculationParticipant,
+  CalculationSavedData,
   CalculationStatus,
-  CalculationStatusFilter,
-  CalculationVersion
+  CalculationStatusFilter
 } from "./calculation-types";
 
-export type CalculationRecord = {
+export type CalculationRecord = CalculationSavedData & {
   readonly id: string;
   readonly ownerUserId: string;
   readonly module: CalculationModule;
   readonly mode: CalculationMode;
   readonly methodCode: string;
-  readonly currentMethodVersion: string;
   readonly title: string;
   readonly status: CalculationStatus;
   readonly participants: readonly CalculationParticipant[];
-  readonly versions: readonly CalculationVersion[];
   readonly links: readonly CalculationClientLink[];
   readonly interpretations: readonly CalculationInterpretation[];
   readonly artifacts: readonly CalculationArtifact[];
@@ -35,42 +33,30 @@ export type CalculationListResult = {
   readonly total: number;
 };
 
-export type CalculationStoreCreateInput = {
+export type CalculationStoreCreateInput = CalculationSavedData & {
   readonly ownerUserId: string;
   readonly module: CalculationModule;
   readonly mode: CalculationMode;
   readonly methodCode: string;
-  readonly methodVersion: string;
   readonly title: string;
   readonly participants: readonly CalculationParticipant[];
-  readonly settingsSnapshot: unknown;
-  readonly inputSnapshot: unknown;
-  readonly resultSnapshot: unknown;
-  readonly resultSummary: unknown;
-  readonly resultChecksum: string;
   readonly idGenerator: () => string;
-  readonly versionIdGenerator: () => string;
   readonly now: string;
 };
 
-export type CalculationStoreAppendVersionInput = {
+export type CalculationStoreReplaceResultInput = CalculationSavedData & {
   readonly ownerUserId: string;
   readonly calculationId: string;
-  readonly methodVersion: string;
-  readonly settingsSnapshot: unknown;
-  readonly inputSnapshot: unknown;
-  readonly resultSnapshot: unknown;
-  readonly resultSummary: unknown;
-  readonly resultChecksum: string;
-  readonly versionIdGenerator: () => string;
+  readonly participants: readonly CalculationParticipant[];
   readonly now: string;
 };
 
+export type CalculationStoreReplaceResultOutcome =
+  | { readonly status: "updated"; readonly calculation: CalculationRecord }
+  | { readonly status: "not_found" }
+  | { readonly status: "exact_key_conflict" };
+
 export type CalculationStore = {
-  /**
-   * Returns calculations ordered by updatedAt desc, then id desc. The total is
-   * counted before limit/offset pagination.
-   */
   readonly listByOwner: (query: {
     readonly ownerUserId: string;
     readonly module: CalculationModuleFilter;
@@ -82,43 +68,39 @@ export type CalculationStore = {
     readonly ownerUserId: string;
     readonly calculationId: string;
   }) => Promise<CalculationRecord | null>;
+  readonly findExact: (input: {
+    readonly ownerUserId: string;
+    readonly module: CalculationModule;
+    readonly mode: CalculationMode;
+    readonly methodCode: string;
+    readonly requestFingerprint: string;
+  }) => Promise<CalculationRecord | null>;
   readonly create: (input: CalculationStoreCreateInput) => Promise<CalculationRecord>;
-  /**
-   * Appends a new immutable version. Implementations must also demote any
-   * visible client links transactionally so stale published results are no
-   * longer visible after recalculation, then set status to "linked" when
-   * links remain or "calculated" when they do not.
-   */
-  readonly appendVersion: (
-    input: CalculationStoreAppendVersionInput
-  ) => Promise<CalculationRecord | null>;
-  /**
-   * Links a CRM client idempotently. Adapters must enforce uniqueness for
-   * (calculationId, clientId), because the use-case precheck cannot prevent
-   * concurrent duplicate inserts by itself.
-   */
+  readonly replaceResult: (
+    input: CalculationStoreReplaceResultInput
+  ) => Promise<CalculationStoreReplaceResultOutcome>;
+  readonly ensureClientLinks: (input: {
+    readonly ownerUserId: string;
+    readonly calculationId: string;
+    readonly clientIds: readonly string[];
+    readonly now: string;
+  }) => Promise<CalculationRecord | null>;
   readonly linkClient: (input: {
     readonly ownerUserId: string;
     readonly calculationId: string;
     readonly clientId: string;
     readonly now: string;
   }) => Promise<CalculationRecord | null>;
-  /**
-   * Publishes the client link only when the expected version is still the
-   * calculation's latest version. Adapters must perform the check and update
-   * atomically, returning null if the latest version changed before publish.
-   */
   readonly publishClientLink: (input: {
     readonly ownerUserId: string;
     readonly calculationId: string;
     readonly clientId: string;
-    readonly expectedVersionId: string;
+    readonly expectedResultChecksum: string;
     readonly now: string;
   }) => Promise<CalculationRecord | null>;
   readonly saveInterpretation: (input: {
     readonly ownerUserId: string;
     readonly calculationId: string;
-    readonly versionId: string;
     readonly source: CalculationInterpretationSource;
     readonly text: string;
     readonly modelId: string | null;

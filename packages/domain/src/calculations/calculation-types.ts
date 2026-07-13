@@ -14,21 +14,14 @@ export type CalculationParticipant = {
   readonly source: CalculationParticipantSource;
   readonly clientId: string | null;
   readonly displayName: string;
-  readonly birthDate: string | null;
-  readonly inputSnapshot: unknown;
-  readonly manuallyOverridden: boolean;
 };
 
-export type CalculationVersion = {
-  readonly id: string;
-  readonly versionNumber: number;
-  readonly methodVersion: string;
-  readonly settingsSnapshot: unknown;
-  readonly inputSnapshot: unknown;
-  readonly resultSnapshot: unknown;
+export type CalculationSavedData = {
+  readonly requestFingerprint: string;
+  readonly inputData: unknown;
+  readonly resultData: unknown;
   readonly resultSummary: unknown;
   readonly resultChecksum: string;
-  readonly createdAt: string;
 };
 
 export type CalculationClientLink = {
@@ -40,7 +33,6 @@ export type CalculationClientLink = {
 
 export type CalculationInterpretation = {
   readonly id: string;
-  readonly versionId: string;
   readonly source: CalculationInterpretationSource;
   readonly status: CalculationInterpretationStatus;
   readonly text: string;
@@ -51,7 +43,6 @@ export type CalculationInterpretation = {
 
 export type CalculationArtifact = {
   readonly id: string;
-  readonly versionId: string;
   readonly mediaAssetId: string;
   readonly artifactType: "pdf";
   readonly status: "generating" | "ready" | "failed";
