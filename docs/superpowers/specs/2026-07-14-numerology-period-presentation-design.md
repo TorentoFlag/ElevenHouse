@@ -37,8 +37,10 @@ or links a saved calculation.
 - Applying or hiding a period does not save anything.
 - The selected year remains available while the user changes clients or
   temporarily enters compatibility mode.
-- Compatibility does not have a period calculation in this phase and therefore
-  does not send period parameters.
+- Compatibility does not expose a period calculation in this phase and never
+  sends the selected explicit year. Because the shared preview contract
+  requires `periodRequest`, compatibility keeps the existing neutral
+  `{ kind: "current_year" }` request value and ignores returned period data.
 - Presentation can include the current unsaved manual interpretation from the
   workspace. An empty interpretation section is omitted.
 - Compatibility presentation is complete rather than summarized: both
@@ -137,13 +139,15 @@ The controller maintains separate state for:
 - Selecting another individual client while period display is active requests
   a preview for that client and the same explicit year.
 - Entering compatibility mode retains `selectedYear` and period visibility in
-  controller state but sends no period parameters and shows no period section.
+  controller state but replaces the explicit-year request with the required
+  neutral `{ kind: "current_year" }` value and shows no period section.
 - Returning to individual mode restores the selected year and obtains the
   appropriate individual preview when the current model does not already match
   the selected client and year.
 - `Скрыть период` sets `isPeriodVisible = false` without resetting
   `selectedYear`. The period section disappears and subsequent individual
-  previews omit period parameters until the period is shown again.
+  previews use the required neutral `{ kind: "current_year" }` request value
+  until the selected period is shown again.
 - Client selection, mode switching, apply, and hide remain preview-only and
   have no persistence side effects.
 
@@ -257,7 +261,8 @@ tests first, implement the smallest coherent behavior, then widen evidence.
 
 - Explicit selected year maps to `personalYear` and `personalMonths` request
   fields and never to a personal-day request.
-- Hidden period and compatibility previews omit period parameters.
+- Hidden-period and compatibility previews use `{ kind: "current_year" }` and
+  never leak the retained explicit selected year into the request.
 - Returned server values are projected without arithmetic or normalization.
 
 ### 9.2 Controller Tests
