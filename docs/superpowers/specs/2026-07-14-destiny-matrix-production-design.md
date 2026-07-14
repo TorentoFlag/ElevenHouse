@@ -316,8 +316,11 @@ value is `reduce22(physical + energy)`:
 Муладхара   A   A1
 ```
 
-Totals reduce the sum of each column using `reduce22`. The output is a symbolic
-energy table and never a health assessment.
+The physical and energy totals reduce their respective column sums. The total
+emotion value is `reduce22(totalPhysical + totalEnergy)`, matching the method
+fixture `10 / 10 / 20` for `14.03.1990`; it is not a second reduction of the
+seven already-reduced row emotion values. The output is a symbolic energy table
+and never a health assessment.
 
 ### 6.6 Compatibility
 

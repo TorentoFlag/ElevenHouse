@@ -106,10 +106,15 @@ GET  /platform-billing/me
 GET  /verification/me
 POST /verification/applications
 GET  /calculations?module=numerology&status=all
+GET  /calculations?module=matrix&status=all
 GET  /calculations/:calculationId
 POST /numerology/preview
 POST /numerology/calculations
 POST /numerology/calculations/:calculationId/recalculate
+POST /matrix/preview
+POST /matrix/calculations
+POST /matrix/calculations/:calculationId/recalculate
+GET  /matrix/calculations/:calculationId/projection?year=2026
 POST /calculations/:calculationId/interpretations
 POST /calculations/:calculationId/interpretations/:interpretationId/approve
 POST /calculations/:calculationId/publish
@@ -128,6 +133,22 @@ request fingerprint and SHA-256 result checksum. Recalculation atomically
 replaces that result, clears interpretations/artifacts and revokes publication.
 Publishing must name the expected current result checksum and requires an
 approved current interpretation.
+
+`POST /matrix/preview` is authenticated and read-only. Matrix persistence
+accepts only existing owner-scoped active CRM client IDs: one for an individual
+calculation and two distinct clients for compatibility. The API hydrates names
+and birth dates, calculates with the sole `ladini_22` engine, and atomically
+links every participant when creating the generic `module = matrix` calculation
+record. Recalculation accepts an empty body and rehydrates the saved participant
+identities; callers cannot replace them.
+
+The saved Matrix fingerprint and result checksum cover only the invariant base
+calculation. `GET /matrix/calculations/:calculationId/projection` derives the
+current age cycle and requested annual forecast from the owned saved birth-date
+snapshot plus the astrologer's timezone. It performs no write and does not
+invalidate the saved result. Matrix exposes no module-specific publication,
+consultation, messaging or public-calculator route. Matrix POST mutations use
+the existing CSRF policy; preview and projection do not.
 
 `GET /products/templates` returns active platform-owned starter templates in the
 requested locale. `POST /products/templates/:templateCode/drafts` requires an
