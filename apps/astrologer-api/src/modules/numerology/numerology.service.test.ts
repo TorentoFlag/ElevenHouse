@@ -78,6 +78,25 @@ describe("NumerologyService", () => {
     expect(first.calculation.resultChecksum).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
+  it("persists and links a CRM-backed calculation in the same create operation", async () => {
+    const store = createCalculationStore();
+    const service = createService({ store });
+
+    const response = await service.createCalculation(
+      { ...crmIndividualBody(), title: "Голубев Антон" },
+      request()
+    );
+
+    expect(response.calculation).toMatchObject({
+      status: "linked",
+      links: [{ clientId }]
+    });
+    expect(store.create).toHaveBeenCalledWith(
+      expect.objectContaining({ linkClientIds: [clientId] })
+    );
+    expect(store.ensureClientLinks).not.toHaveBeenCalled();
+  });
+
   it("uses one compatibility fingerprint regardless of participant order", async () => {
     const store = createCalculationStore();
     const service = createService({ store });

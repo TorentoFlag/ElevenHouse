@@ -139,7 +139,9 @@ input, recalculates it and stores one current typed result with a canonical
 request fingerprint and SHA-256 result checksum. Recalculation atomically
 replaces that result, clears interpretations/artifacts and revokes publication.
 Publishing must name the expected current result checksum and requires an
-approved current interpretation.
+approved current interpretation. Creating a persisted numerology calculation
+atomically creates private links for every owner-scoped CRM participant; an
+exact create replay idempotently restores any missing participant links.
 
 `POST /matrix/preview` is authenticated and read-only. Matrix persistence
 accepts only existing owner-scoped active CRM client IDs: one for an individual
