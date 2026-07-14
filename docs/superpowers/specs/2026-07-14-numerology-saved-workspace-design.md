@@ -74,7 +74,7 @@ The existing client-selection preview flow remains side-effect free, and its
 
 ## 6. Recalculation And Archive
 
-For an active saved result, the toolbar exposes:
+For an active saved result, the toolbar `Расчёты` disclosure exposes:
 
 - `Пересчитать` — opens the editor with the current title, mode and
   participants; submit calls the replacement endpoint and returns to the new

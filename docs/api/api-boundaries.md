@@ -125,6 +125,7 @@ GET  /matrix/interpretations?locale=ru&arcana=9&context=portrait
 POST /calculations/:calculationId/interpretations
 POST /calculations/:calculationId/interpretations/:interpretationId/approve
 POST /calculations/:calculationId/publish
+POST /calculations/:calculationId/archive
 ```
 
 `POST /numerology/preview` is authenticated and read-only, so it does not require
@@ -137,7 +138,8 @@ resolved with the astrologer profile timezone and the server clock.
 The server is the only numerology arithmetic authority. Persistence accepts the
 input, recalculates it and stores one current typed result with a canonical
 request fingerprint and SHA-256 result checksum. Recalculation atomically
-replaces that result, clears interpretations/artifacts and revokes publication.
+replaces that result, applies an optional edited title, clears
+interpretations/artifacts and revokes publication.
 Publishing must name the expected current result checksum and requires an
 approved current interpretation. Creating a persisted numerology calculation
 atomically creates private links for every owner-scoped CRM participant; an

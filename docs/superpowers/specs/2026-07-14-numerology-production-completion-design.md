@@ -1,8 +1,8 @@
 # Numerology Production Completion Design
 
 Date: 2026-07-14
-Status: approved scope; Phase 1 implemented and verified automatically and in
-the authorized Chrome session through Computer Use
+Status: approved scope; Phases 1-3 implemented; Phase 3 verified automatically
+and partially verified in the authorized Chrome session through Computer Use
 Scope: production completion of the existing Pythagorean Numerology surface
 
 > This document extends the approved Pythagorean correction design. Formula,
@@ -123,6 +123,32 @@ Detailed approved design:
 5. Recalculation replaces the current result and invalidates stale
    interpretations/artifacts as already defined by the domain lifecycle.
 6. Selecting a CRM client alone continues to create no calculation record.
+
+Implementation evidence as of 2026-07-14:
+
+- The toolbar `Расчёты` disclosure lists active saved records, opens stored
+  results without invoking the engine, and contains explicit new,
+  recalculation, and archive actions.
+- A dedicated inline editor supports manual/CRM individual and compatibility
+  participants without restoring the removed setup modal.
+- Create, replacement recalculation, and archive reuse the existing owner-scoped
+  APIs. Recalculation updates the same record and now propagates an optional
+  edited title through service, domain, and Drizzle store boundaries.
+- The saved item retains native button semantics inside a separate `listitem`
+  wrapper; Chrome Computer Use exposed it as a button after the correction.
+- Focused verification covered 92 domain/API/frontend Numerology tests plus
+  domain, database, astrologer-api, and astrologer-web typechecks.
+- The full `pnpm verify` gate passed: lint, typecheck across 22 packages, all
+  351 test files / 1464 tests, and all 22 package builds.
+- Authorized-browser evidence covered an explicit manual save, count `0 → 1`,
+  stored-result open, prefilled recalculation editor, count remaining `1`,
+  compatibility editor with both participant groups, archive confirmation, and
+  count `1 → 0` with return to the empty state.
+- The running API process was a static `node apps/astrologer-api/dist/main.js`
+  instance. It therefore continued serving the pre-fix title behavior; live
+  confirmation of edited-title persistence remains blocked until that process
+  is rebuilt/restarted with explicit lifecycle permission. Automated service
+  and domain tests cover the corrected path in source.
 
 ### 4.4 Phase 4: AI Interpretation
 
