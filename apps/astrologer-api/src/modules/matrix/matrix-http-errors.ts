@@ -4,6 +4,7 @@ import {
   CalculationNotFoundError,
   CalculationParticipantMismatchError,
   CalculationValidationError,
+  MatrixNoteNotFoundError,
   MatrixValidationError,
   UnsupportedMatrixMethodError
 } from "@elevenhouse/domain";
@@ -14,6 +15,8 @@ export type MatrixErrorCode =
   | "MATRIX_CLIENT_BIRTH_DATE_REQUIRED"
   | "UNSUPPORTED_MATRIX_METHOD"
   | "MATRIX_CALCULATION_MISMATCH"
+  | "MATRIX_RESULT_CHANGED"
+  | "MATRIX_NOTE_NOT_FOUND"
   | "CALCULATION_PARTICIPANT_MISMATCH"
   | "CALCULATION_ALREADY_EXISTS"
   | "CALCULATION_NOT_FOUND"
@@ -51,6 +54,9 @@ export async function mapMatrixError<T>(operation: () => Promise<T>): Promise<T>
     }
     if (error instanceof UnsupportedMatrixMethodError) {
       throw matrixHttpError(422, "UNSUPPORTED_MATRIX_METHOD", error.message);
+    }
+    if (error instanceof MatrixNoteNotFoundError) {
+      throw matrixHttpError(404, "MATRIX_NOTE_NOT_FOUND", error.message);
     }
     if (error instanceof MatrixResultIntegrityError) {
       throw matrixHttpError(500, "CALCULATION_RESULT_INTEGRITY_ERROR", error.message);

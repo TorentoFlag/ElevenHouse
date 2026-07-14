@@ -4,6 +4,9 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
 import {
   matrixCalculationResponseSchema,
+  matrixInterpretationResponseSchema,
+  matrixNoteResponseSchema,
+  matrixNotesResponseSchema,
   matrixPreviewResponseSchema,
   matrixProjectionResponseSchema
 } from "@elevenhouse/contracts";
@@ -14,6 +17,7 @@ import type {
   CalculationRecord,
   CalculationStore,
   ClientStore,
+  MatrixNoteStore,
   PasswordlessAuthUnitOfWork,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
@@ -40,6 +44,7 @@ import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordle
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { MatrixModule } from "./matrix.module";
+import { MATRIX_NOTE_STORE } from "./matrix-notes.tokens";
 
 const now = new Date("2026-07-14T00:00:00.000Z");
 const sessionCookieName = "elevenhouse_astrologer_session";
@@ -63,9 +68,11 @@ describe("Matrix HTTP routes", () => {
   let moduleRef: TestingModule;
   let baseUrl: string;
   let calculationStore: CalculationStore;
+  let matrixNoteStore: MatrixNoteStore;
 
   beforeEach(async () => {
     calculationStore = createCalculationStore();
+    matrixNoteStore = createMatrixNoteStore();
     const passwordlessAuth: PasswordlessAuthUnitOfWork = { transact: async () => raise() };
     const authSessionRevocation: AuthSessionRevocationUnitOfWork = {
       transact: async () => raise()
@@ -108,6 +115,8 @@ describe("Matrix HTTP routes", () => {
       .useValue(calculationStore)
       .overrideProvider(CLIENT_STORE)
       .useValue(createClientStore())
+      .overrideProvider(MATRIX_NOTE_STORE)
+      .useValue(matrixNoteStore)
       .overrideProvider(ASTROLOGER_PROFILE_STORE)
       .useValue(createProfileStore())
       .compile();
@@ -195,6 +204,82 @@ describe("Matrix HTTP routes", () => {
     expect(publish.status).toBe(404);
   });
 
+  it("keeps note reads CSRF-exempt and requires CSRF for every note mutation", async () => {
+    const createdCalculation = await postJson("/matrix/calculations", persistBody(), csrfHeaders());
+    const calculation = matrixCalculationResponseSchema.parse(createdCalculation.body).calculation;
+    const calculationId = calculation.id;
+    const expectedResultChecksum = calculation.resultChecksum;
+    const unauthenticatedList = await getJson(`/matrix/calculations/${calculationId}/notes`);
+    const emptyList = await getJson(`/matrix/calculations/${calculationId}/notes`, {
+      cookie: sessionCookieHeader()
+    });
+    const missingCreateCsrf = await postJson(
+      `/matrix/calculations/${calculationId}/notes`,
+      { text: "Проверить границы.", expectedResultChecksum },
+      { cookie: sessionCookieHeader() }
+    );
+    const createdNote = await postJson(
+      `/matrix/calculations/${calculationId}/notes`,
+      { text: "Проверить границы.", expectedResultChecksum },
+      csrfHeaders()
+    );
+    const noteId = matrixNoteResponseSchema.parse(createdNote.body).note.id;
+    const missingUpdateCsrf = await requestJson(
+      "PUT",
+      `/matrix/calculations/${calculationId}/notes/${noteId}`,
+      { text: "Новый вывод.", expectedResultChecksum },
+      { cookie: sessionCookieHeader() }
+    );
+    const updatedNote = await requestJson(
+      "PUT",
+      `/matrix/calculations/${calculationId}/notes/${noteId}`,
+      { text: "Новый вывод.", expectedResultChecksum },
+      csrfHeaders()
+    );
+    const missingDeleteCsrf = await requestJson(
+      "DELETE",
+      `/matrix/calculations/${calculationId}/notes/${noteId}`,
+      undefined,
+      { cookie: sessionCookieHeader() }
+    );
+    const deletedNote = await requestJson(
+      "DELETE",
+      `/matrix/calculations/${calculationId}/notes/${noteId}`,
+      undefined,
+      csrfHeaders()
+    );
+
+    expect(unauthenticatedList.status).toBe(401);
+    expect(emptyList.status).toBe(200);
+    matrixNotesResponseSchema.parse(emptyList.body);
+    expect(missingCreateCsrf.status).toBe(403);
+    expect(createdNote.status).toBe(201);
+    expect(missingUpdateCsrf.status).toBe(403);
+    expect(updatedNote.status).toBe(200);
+    expect(missingDeleteCsrf.status).toBe(403);
+    expect(deletedNote.status).toBe(204);
+  });
+
+  it("exposes the authenticated read-only catalog without storage access", async () => {
+    const calculationReads = (calculationStore.findByOwnerAndId as ReturnType<typeof vi.fn>).mock
+      .calls.length;
+    const noteReads = (matrixNoteStore.listByCalculation as ReturnType<typeof vi.fn>).mock.calls
+      .length;
+    const unauthenticated = await getJson(
+      "/matrix/interpretations?locale=ru&arcana=9&context=portrait"
+    );
+    const response = await getJson(
+      "/matrix/interpretations?locale=ru&arcana=9&context=portrait",
+      { cookie: sessionCookieHeader() }
+    );
+
+    expect(unauthenticated.status).toBe(401);
+    expect(response.status).toBe(200);
+    matrixInterpretationResponseSchema.parse(response.body);
+    expect(calculationStore.findByOwnerAndId).toHaveBeenCalledTimes(calculationReads);
+    expect(matrixNoteStore.listByCalculation).toHaveBeenCalledTimes(noteReads);
+  });
+
   async function postJson(
     path: string,
     body: unknown,
@@ -215,6 +300,22 @@ describe("Matrix HTTP routes", () => {
     const response = await fetch(`${baseUrl}${path}`, { headers });
     return { status: response.status, body: await response.json() };
   }
+
+  async function requestJson(
+    method: "PUT" | "DELETE",
+    path: string,
+    body: unknown,
+    headers: Record<string, string> = {}
+  ): Promise<{ status: number; body: unknown }> {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers: { "content-type": "application/json", ...headers },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) })
+    });
+    const text = await response.text();
+    return { status: response.status, body: text ? JSON.parse(text) : null };
+  }
+
 });
 
 function createCalculationStore(): CalculationStore {
@@ -348,6 +449,66 @@ function createClientStore(): ClientStore {
           }
         : null
     )
+  };
+}
+
+function createMatrixNoteStore(): MatrixNoteStore {
+  const notes: Array<{
+    id: string;
+    calculationId: string;
+    ownerUserId: string;
+    text: string;
+    resultChecksum: string;
+    createdAt: string;
+    updatedAt: string;
+  }> = [];
+  return {
+    listByCalculation: vi.fn(async (input) =>
+      notes.filter(
+        (note) =>
+          note.ownerUserId === input.ownerUserId && note.calculationId === input.calculationId
+      )
+    ),
+    create: vi.fn(async (input) => {
+      const note = {
+        id: input.id,
+        calculationId: input.calculationId,
+        ownerUserId: input.ownerUserId,
+        text: input.text,
+        resultChecksum: input.resultChecksum,
+        createdAt: input.now,
+        updatedAt: input.now
+      };
+      notes.push(note);
+      return note;
+    }),
+    update: vi.fn(async (input) => {
+      const index = notes.findIndex(
+        (note) =>
+          note.id === input.noteId &&
+          note.calculationId === input.calculationId &&
+          note.ownerUserId === input.ownerUserId
+      );
+      if (index < 0) return null;
+      notes[index] = {
+        ...notes[index]!,
+        text: input.text,
+        resultChecksum: input.resultChecksum,
+        updatedAt: input.now
+      };
+      return notes[index]!;
+    }),
+    delete: vi.fn(async (input) => {
+      const index = notes.findIndex(
+        (note) =>
+          note.id === input.noteId &&
+          note.calculationId === input.calculationId &&
+          note.ownerUserId === input.ownerUserId
+      );
+      if (index < 0) return false;
+      notes.splice(index, 1);
+      return true;
+    })
   };
 }
 
