@@ -6,6 +6,12 @@ Scope: agent documentation hardening, Numerology deterministic calculation logic
 contracts, calculation lifecycle integration, persistence consistency, and the
 existing `/numerology` production surface
 
+> Production-completion scope discovered by the post-implementation audit is
+> defined in `2026-07-14-numerology-production-completion-design.md`. That
+> document extends the visible result, period, lifecycle, AI, presentation, and
+> PDF scope without changing the single-engine/no-version-history decisions in
+> this design.
+
 > This document is an implementation design artifact, not a permanent source of
 > truth. After implementation, durable decisions must be reflected in the
 > relevant architecture docs, ADRs, runbooks, and design inventory. The current

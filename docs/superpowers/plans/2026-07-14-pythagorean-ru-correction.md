@@ -1,5 +1,11 @@
 # Pythagorean RU Correction Implementation Plan
 
+> The post-implementation production audit found that the frontend portion of
+> this plan was only partially completed. The remaining result-completeness work
+> is tracked by `2026-07-14-numerology-result-completeness.md`; later period,
+> lifecycle, AI, presentation, and PDF phases are defined in
+> `../specs/2026-07-14-numerology-production-completion-design.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the incorrect Numerology implementation with one canonical Pythagorean RU engine, one current saved result per calculation, complete compatibility output, and server-only arithmetic while preserving the existing `/numerology` design.
