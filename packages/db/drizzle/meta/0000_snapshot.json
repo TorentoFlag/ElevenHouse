@@ -1,5 +1,5 @@
 {
-  "id": "ed3be2ae-00cf-4209-89d8-8c72f5d282a7",
+  "id": "83d33109-a7f5-4264-b28b-e5283a41e45a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -4986,7 +4986,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "calculation_records_id_owner_unique": {
+          "name": "calculation_records_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_user_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "calculation_records_module_check": {
@@ -6176,6 +6185,120 @@
         "client_join_intents_claimed_consistency_check": {
           "name": "client_join_intents_claimed_consistency_check",
           "value": "(\"client_join_intents\".\"status\" = 'claimed') = (\"client_join_intents\".\"claimed_by_client_user_id\" is not null and \"client_join_intents\".\"claimed_at\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.matrix_notes": {
+      "name": "matrix_notes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "calculation_id": {
+          "name": "calculation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result_checksum": {
+          "name": "result_checksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "matrix_notes_owner_calculation_created_id_idx": {
+          "name": "matrix_notes_owner_calculation_created_id_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "calculation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "matrix_notes_calculation_owner_fk": {
+          "name": "matrix_notes_calculation_owner_fk",
+          "tableFrom": "matrix_notes",
+          "tableTo": "calculation_records",
+          "columnsFrom": [
+            "calculation_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "matrix_notes_text_length_check": {
+          "name": "matrix_notes_text_length_check",
+          "value": "length(trim(\"matrix_notes\".\"text\")) between 1 and 10000"
+        },
+        "matrix_notes_result_checksum_check": {
+          "name": "matrix_notes_result_checksum_check",
+          "value": "\"matrix_notes\".\"result_checksum\" ~ '^sha256:[a-f0-9]{64}$'"
         }
       },
       "isRLSEnabled": false

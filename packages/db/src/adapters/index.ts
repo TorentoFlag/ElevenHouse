@@ -7,3 +7,4 @@ export * from "./astrologer-profile";
 export * from "./platform-billing";
 export * from "./verification";
 export * from "./clients";
+export * from "./matrix";

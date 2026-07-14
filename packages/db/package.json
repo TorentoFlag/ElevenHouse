@@ -144,6 +144,16 @@
       "types": "./dist/adapters/clients/index.d.ts",
       "import": "./dist/adapters/clients/index.js",
       "require": "./dist/adapters/clients/index.js"
+    },
+    "./matrix": {
+      "types": "./dist/adapters/matrix/index.d.ts",
+      "import": "./dist/adapters/matrix/index.js",
+      "require": "./dist/adapters/matrix/index.js"
+    },
+    "./adapters/matrix": {
+      "types": "./dist/adapters/matrix/index.d.ts",
+      "import": "./dist/adapters/matrix/index.js",
+      "require": "./dist/adapters/matrix/index.js"
     }
   },
   "scripts": {
