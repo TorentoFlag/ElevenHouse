@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   approveCalculationInterpretationMutationOptions,
+  archiveNumerologyMutationOptions,
   createNumerologyMutationOptions,
   previewNumerologyMutationOptions,
   linkCalculationClientMutationOptions,
@@ -52,4 +53,10 @@ export function usePublishCalculationMutation() {
   const queryClient = useQueryClient();
 
   return useMutation(publishCalculationMutationOptions(queryClient));
+}
+
+export function useArchiveNumerologyMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation(archiveNumerologyMutationOptions(queryClient));
 }

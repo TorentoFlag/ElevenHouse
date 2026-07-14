@@ -7,6 +7,7 @@ import type {
 import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import {
   approveCalculationInterpretation,
+  archiveCalculation,
   getCalculation,
   linkCalculationClient,
   listCalculations,
@@ -100,6 +101,15 @@ export function publishCalculationMutationOptions(
 ) {
   return {
     mutationFn: publishCalculation,
+    onSuccess: () => invalidateCalculations(queryClient)
+  };
+}
+
+export function archiveNumerologyMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (calculationId: string) => archiveCalculation(calculationId),
     onSuccess: () => invalidateCalculations(queryClient)
   };
 }
