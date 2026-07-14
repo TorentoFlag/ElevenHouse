@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { sha256CanonicalJson, stableJson } from "./numerology-digests";
+import { sha256CanonicalJson, stableJson } from "./canonical-json";
 
-describe("numerology canonical JSON digests", () => {
+describe("calculation canonical JSON digests", () => {
   it("sorts object keys recursively while preserving array order", () => {
     expect(stableJson({ z: 1, nested: { b: 2, a: 1 }, items: ["б", "а"] })).toBe(
       '{"items":["б","а"],"nested":{"a":1,"b":2},"z":1}'
@@ -13,4 +13,9 @@ describe("numerology canonical JSON digests", () => {
   it("hashes UTF-8 values as an explicit sha256 digest", () => {
     expect(sha256CanonicalJson({ name: "Голубев Антон" })).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    "rejects non-finite number %s",
+    (value) => expect(() => stableJson(value)).toThrow("Canonical JSON numbers must be finite")
+  );
 });
