@@ -22,6 +22,11 @@ export type NumerologyYearPickerProps = {
   readonly onRetry: () => void;
 };
 
+export function closeNumerologyYearPicker(close: () => void, restoreFocus: () => void): void {
+  close();
+  restoreFocus();
+}
+
 export function NumerologyYearPicker({
   selectedYear,
   isOpen,
@@ -59,8 +64,7 @@ export function NumerologyYearPicker({
   }, [isOpen, onToggle, selectedYear]);
 
   function closeAndRestoreFocus(): void {
-    onToggle();
-    requestAnimationFrame(() => triggerRef.current?.focus());
+    closeNumerologyYearPicker(onToggle, () => triggerRef.current?.focus());
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
@@ -73,8 +77,10 @@ export function NumerologyYearPicker({
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     if (parsedDraft.value === null) return;
-    onApply(parsedDraft.value);
-    requestAnimationFrame(() => triggerRef.current?.focus());
+    closeNumerologyYearPicker(
+      () => onApply(parsedDraft.value!),
+      () => triggerRef.current?.focus()
+    );
   }
 
   function stepYear(delta: -1 | 1): void {
@@ -158,7 +164,11 @@ export function NumerologyYearPicker({
           </button>
           <div className={styles.actions}>
             {isPeriodVisible ? (
-              <button type="button" className={styles.secondaryButton} onClick={onHide}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => closeNumerologyYearPicker(onHide, () => triggerRef.current?.focus())}
+              >
                 Скрыть период
               </button>
             ) : null}

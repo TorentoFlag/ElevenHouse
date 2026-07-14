@@ -1,8 +1,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { NumerologyYearPicker } from "./NumerologyYearPicker";
+import { closeNumerologyYearPicker, NumerologyYearPicker } from "./NumerologyYearPicker";
 
 describe("NumerologyYearPicker", () => {
+  it("runs the close action before restoring focus to the trigger", () => {
+    const calls: string[] = [];
+
+    closeNumerologyYearPicker(
+      () => calls.push("close"),
+      () => calls.push("focus")
+    );
+
+    expect(calls).toEqual(["close", "focus"]);
+  });
+
   it("exposes the selected year as an accessible disclosure control", () => {
     const markup = renderToStaticMarkup(
       <NumerologyYearPicker
