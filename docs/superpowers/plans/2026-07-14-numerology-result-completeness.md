@@ -409,10 +409,12 @@ curl -fsS http://localhost:3002/health
 Use running services without changing lifecycle. If a required service is
 absent, stop and request explicit startup authorization.
 
-- [ ] **Step 3: Verify the authorized browser flow with Computer Use**
+- [x] **Step 3: Verify the authorized browser flow with Computer Use**
 
-Blocked on 2026-07-14: `Sky Computer Use native pipe startup failed` on repeated
-connection attempts. No substitute browser surface was used.
+Verified on 2026-07-14 in the user's existing authorized Chrome tab. The live
+flow confirmed the Golubev fixture, the Koshkina compatibility result, all
+comparison sections and zones, counts `3/7/7/5`, the `mixed` conclusion, and
+the shared digit-8 matrix/comparison selection.
 
 In the existing Chrome profile:
 

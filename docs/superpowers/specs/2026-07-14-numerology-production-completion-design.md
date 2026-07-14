@@ -1,8 +1,8 @@
 # Numerology Production Completion Design
 
 Date: 2026-07-14
-Status: approved scope; Phase 1 implemented and automatically verified; live
-Computer Use verification blocked by native-pipe startup failure
+Status: approved scope; Phase 1 implemented and verified automatically and in
+the authorized Chrome session through Computer Use
 Scope: production completion of the existing Pythagorean Numerology surface
 
 > This document extends the approved Pythagorean correction design. Formula,
@@ -37,9 +37,10 @@ Phase 1 implementation status as of 2026-07-14:
   separators are normalized explicitly, and the unsigned third working-number
   rule is covered by tests.
 - Focused verification and the full repository `pnpm verify` gate pass.
-- Live verification in the user's authorized Chrome tab remains pending because
-  Computer Use fails to start its native pipe. This is an evidence gap, not an
-  application failure, and no alternative browser session was substituted.
+- Live verification in the user's authorized Chrome tab confirms the Golubev
+  individual fixture, the Golubev/Koshkina compatibility fixture, all 22
+  comparisons, four zones, counts `3/7/7/5`, the `mixed` conclusion, and the
+  shared digit-8 matrix/comparison selector.
 
 Remaining product-completion scope:
 
