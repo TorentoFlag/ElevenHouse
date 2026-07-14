@@ -12,6 +12,13 @@ export class CalculationValidationError extends Error {
   }
 }
 
+export class CalculationResultChangedError extends Error {
+  constructor() {
+    super("Calculation changed while interpretation was being saved");
+    this.name = "CalculationResultChangedError";
+  }
+}
+
 export class CalculationParticipantMismatchError extends Error {
   constructor() {
     super("Calculation participants do not match the saved calculation");

@@ -50,12 +50,8 @@ const calculationRecordResponse = {
   interpretations: [
     {
       id: "55555555-5555-4555-8555-555555555555",
-      source: "ai",
       status: "draft",
-      text: "Structured interpretation",
-      modelId: "gpt-5",
-      promptVersion: "numerology-v1",
-      approvedAt: null
+      text: "Structured interpretation"
     }
   ],
   artifacts: [
@@ -84,7 +80,26 @@ describe("calculation contracts", () => {
     expect(parsed.participants[0]).not.toHaveProperty("inputSnapshot");
     expect(parsed.participants[0]).not.toHaveProperty("manuallyOverridden");
     expect(parsed.interpretations[0]).not.toHaveProperty("versionId");
+    expect(parsed.interpretations[0]).not.toHaveProperty("source");
+    expect(parsed.interpretations[0]).not.toHaveProperty("modelId");
+    expect(parsed.interpretations[0]).not.toHaveProperty("promptVersion");
     expect(parsed.artifacts[0]).not.toHaveProperty("versionId");
+  });
+
+  it("rejects internal interpretation provenance in public responses", () => {
+    expect(() =>
+      calculationRecordResponseSchema.parse({
+        ...calculationRecordResponse,
+        interpretations: [
+          {
+            ...calculationRecordResponse.interpretations[0],
+            source: "ai",
+            modelId: "internal-model",
+            promptVersion: "internal-prompt@1"
+          }
+        ]
+      })
+    ).toThrow();
   });
 
   it("requires canonical sha256 digests and plain JSON object payloads", () => {
@@ -135,9 +150,18 @@ describe("calculation contracts", () => {
   });
 
   it("accepts interpretation save and checksum-bound publication without version ids", () => {
-    expect(saveCalculationInterpretationRequestSchema.parse({ text: "Ручная трактовка" })).toEqual({
-      text: "Ручная трактовка"
+    expect(
+      saveCalculationInterpretationRequestSchema.parse({
+        text: "Ручная трактовка",
+        expectedResultChecksum: calculationRecordResponse.resultChecksum
+      })
+    ).toEqual({
+      text: "Ручная трактовка",
+      expectedResultChecksum: calculationRecordResponse.resultChecksum
     });
+    expect(() =>
+      saveCalculationInterpretationRequestSchema.parse({ text: "Ручная трактовка" })
+    ).toThrow();
     expect(
       publishCalculationRequestSchema.parse({
         clientId: calculationRecordResponse.participants[0].clientId,

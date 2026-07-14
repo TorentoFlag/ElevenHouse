@@ -90,10 +90,25 @@ describe("calculations Drizzle/PostgreSQL integration", () => {
       clientIds: [clientId, partnerClientId, clientId],
       now: "2026-07-06T10:05:00.000Z"
     });
+    await expect(
+      saveCalculationInterpretation({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        expectedResultChecksum: digest("c"),
+        source: "manual",
+        text: "Stale interpretation",
+        modelId: null,
+        promptVersion: null,
+        interpretationIdGenerator: randomUUID,
+        now: new Date("2026-07-06T10:05:30.000Z")
+      })
+    ).rejects.toThrow("Calculation changed while interpretation was being saved");
     const draft = await saveCalculationInterpretation({
       store,
       ownerUserId,
       calculationId: created.id,
+      expectedResultChecksum: created.resultChecksum,
       source: "manual",
       text: "Approved interpretation",
       modelId: null,

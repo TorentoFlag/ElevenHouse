@@ -2,7 +2,8 @@ import { z } from "@elevenhouse/validation";
 import {
   calculationModeSchema,
   calculationParticipantRoleSchema,
-  calculationRecordResponseSchema
+  calculationRecordResponseSchema,
+  sha256DigestSchema
 } from "./calculations";
 
 const uuidSchema = z.string().uuid();
@@ -190,7 +191,9 @@ export type RecalculateNumerologyCalculationRequest = z.infer<
 export const createNumerologyCalculationRequestSchema = persistNumerologyCalculationRequestSchema;
 export type CreateNumerologyCalculationRequest = PersistNumerologyCalculationRequest;
 
-export const createNumerologyAiDraftRequestSchema = z.object({}).strict();
+export const createNumerologyAiDraftRequestSchema = z
+  .object({ expectedResultChecksum: sha256DigestSchema })
+  .strict();
 export type CreateNumerologyAiDraftRequest = z.infer<typeof createNumerologyAiDraftRequestSchema>;
 
 const calculationNameSourceSchema = z.enum(["crm_display_name", "manual_entry"]);

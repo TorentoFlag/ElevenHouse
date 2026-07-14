@@ -206,7 +206,7 @@ function createMemoryStore(): MemoryStore {
     },
     saveInterpretation: async (input) => {
       const current = owned(input);
-      if (!current) return null;
+      if (!current || current.resultChecksum !== input.expectedResultChecksum) return null;
       const record: CalculationRecord = {
         ...current,
         interpretations: [
@@ -287,6 +287,7 @@ async function saveAndApprove(store: CalculationStore, calculation: CalculationR
     store,
     ownerUserId,
     calculationId: calculation.id,
+    expectedResultChecksum: calculation.resultChecksum,
     source: "manual",
     text: "Проверенная трактовка.",
     modelId: null,
@@ -347,6 +348,30 @@ describe("current calculation lifecycle", () => {
     expect(replaced.artifacts).toEqual([]);
     expect(replaced.links.every((link) => link.visibility === "private_to_astrologer")).toBe(true);
     expect(replaced.status).toBe("linked");
+  });
+
+  it("rejects an interpretation saved against a stale result checksum", async () => {
+    const store = createMemoryStore();
+    const created = await createTestCalculation(store);
+
+    await expect(
+      saveCalculationInterpretation({
+        store,
+        ownerUserId,
+        calculationId: created.id,
+        expectedResultChecksum: digest("c"),
+        source: "manual",
+        text: "Устаревшая трактовка",
+        modelId: null,
+        promptVersion: null,
+        interpretationIdGenerator: () => "00000000-0000-4000-8000-000000000033",
+        now
+      })
+    ).rejects.toThrow("Calculation changed while interpretation was being saved");
+
+    await expect(
+      store.findByOwnerAndId({ ownerUserId, calculationId: created.id })
+    ).resolves.toMatchObject({ interpretations: [] });
   });
 
   it("rejects recalculation when CRM ids or participant roles change", async () => {

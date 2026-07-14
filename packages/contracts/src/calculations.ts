@@ -29,7 +29,7 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 export const calculationJsonObjectSchema = plainObjectSchema.pipe(
   z.record(z.string(), jsonValueSchema)
 );
-const sha256DigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+export const sha256DigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 
 export const calculationModuleSchema = z.enum(["numerology", "chart", "matrix", "human_design"]);
 export type CalculationModule = z.infer<typeof calculationModuleSchema>;
@@ -69,11 +69,6 @@ export const calculationClientVisibilitySchema = z.enum([
   "visible_to_client"
 ]);
 export type CalculationClientVisibility = z.infer<typeof calculationClientVisibilitySchema>;
-
-export const calculationInterpretationSourceSchema = z.enum(["ai", "manual"]);
-export type CalculationInterpretationSource = z.infer<
-  typeof calculationInterpretationSourceSchema
->;
 
 export const calculationInterpretationStatusSchema = z.enum(["draft", "approved"]);
 export type CalculationInterpretationStatus = z.infer<
@@ -148,12 +143,8 @@ export type CalculationClientLinkResponse = z.infer<typeof calculationClientLink
 export const calculationInterpretationResponseSchema = z
   .object({
     id: uuidSchema,
-    source: calculationInterpretationSourceSchema,
     status: calculationInterpretationStatusSchema,
-    text: z.string().trim().min(1),
-    modelId: z.string().trim().min(1).max(120).nullable(),
-    promptVersion: z.string().trim().min(1).max(120).nullable(),
-    approvedAt: dateTimeSchema.nullable()
+    text: z.string().trim().min(1)
   })
   .strict();
 export type CalculationInterpretationResponse = z.infer<
@@ -219,7 +210,8 @@ export type PublishCalculationRequest = z.infer<typeof publishCalculationRequest
 
 export const saveCalculationInterpretationRequestSchema = z
   .object({
-    text: z.string().trim().min(1).max(20_000)
+    text: z.string().trim().min(1).max(20_000),
+    expectedResultChecksum: sha256DigestSchema
   })
   .strict();
 export type SaveCalculationInterpretationRequest = z.infer<

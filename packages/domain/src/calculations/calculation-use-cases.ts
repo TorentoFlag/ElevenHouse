@@ -3,6 +3,7 @@ import {
   CalculationAlreadyExistsError,
   CalculationNotFoundError,
   CalculationParticipantMismatchError,
+  CalculationResultChangedError,
   CalculationValidationError
 } from "./calculation-errors";
 import type {
@@ -198,6 +199,7 @@ export async function saveCalculationInterpretation(input: {
   readonly store: CalculationStore;
   readonly ownerUserId: string;
   readonly calculationId: string;
+  readonly expectedResultChecksum: string;
   readonly source: CalculationInterpretationSource;
   readonly text: string;
   readonly modelId: string | null;
@@ -207,9 +209,17 @@ export async function saveCalculationInterpretation(input: {
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
   assertCalculationCanBeChanged(record);
+  const expectedResultChecksum = digest(
+    input.expectedResultChecksum,
+    "Expected calculation result checksum is required"
+  );
+  if (record.resultChecksum !== expectedResultChecksum) {
+    throw new CalculationResultChangedError();
+  }
   const saved = await input.store.saveInterpretation({
     ownerUserId: record.ownerUserId,
     calculationId: record.id,
+    expectedResultChecksum,
     source: input.source,
     text: required(input.text, "Calculation interpretation text is required"),
     modelId: input.modelId,
@@ -217,7 +227,7 @@ export async function saveCalculationInterpretation(input: {
     interpretationIdGenerator: input.interpretationIdGenerator,
     now: input.now.toISOString()
   });
-  if (!saved) throw new CalculationNotFoundError();
+  if (!saved) throw new CalculationResultChangedError();
   return saved;
 }
 

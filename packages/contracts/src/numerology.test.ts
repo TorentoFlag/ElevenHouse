@@ -324,7 +324,10 @@ describe("numerology contracts", () => {
     expect(recalculateNumerologyCalculationRequestSchema.parse(individualPreviewRequest)).toEqual(
       individualPreviewRequest
     );
-    expect(createNumerologyAiDraftRequestSchema.parse({})).toEqual({});
+    expect(
+      createNumerologyAiDraftRequestSchema.parse({ expectedResultChecksum: digest("b") })
+    ).toEqual({ expectedResultChecksum: digest("b") });
+    expect(() => createNumerologyAiDraftRequestSchema.parse({})).toThrow();
     expect(() => createNumerologyAiDraftRequestSchema.parse({ versionId: clientId })).toThrow();
   });
 

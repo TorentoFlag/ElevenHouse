@@ -35,14 +35,21 @@ describe("CalculationsService", () => {
     );
   });
 
-  it("saves an interpretation against the current calculation without a version id", async () => {
+  it("saves an interpretation against the expected current result without a version id", async () => {
     const record = manualCalculation();
     const store = createStore(record);
     (store.saveInterpretation as ReturnType<typeof vi.fn>).mockResolvedValue(record);
     const service = createService(store);
 
-    await service.saveManualInterpretation(calculationId, { text: "Проверено" }, request());
+    await service.saveManualInterpretation(
+      calculationId,
+      { text: "Проверено", expectedResultChecksum: checksum },
+      request()
+    );
 
+    expect(store.saveInterpretation).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedResultChecksum: checksum })
+    );
     expect(store.saveInterpretation).toHaveBeenCalledWith(
       expect.not.objectContaining({ versionId: expect.anything() })
     );

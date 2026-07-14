@@ -255,7 +255,10 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       run(async () => {
         const calculation = await saveInterpretationMutation.mutateAsync({
           calculationId: selectedCalculation.id,
-          body: { text: interpretationText }
+          body: {
+            text: interpretationText,
+            expectedResultChecksum: selectedCalculation.resultChecksum
+          }
         });
         setSelectedResponse(toNumerologyResponse(calculation));
       }, setErrorMessage);

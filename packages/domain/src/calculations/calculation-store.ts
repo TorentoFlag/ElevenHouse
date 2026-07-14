@@ -103,6 +103,7 @@ export type CalculationStore = {
   readonly saveInterpretation: (input: {
     readonly ownerUserId: string;
     readonly calculationId: string;
+    readonly expectedResultChecksum: string;
     readonly source: CalculationInterpretationSource;
     readonly text: string;
     readonly modelId: string | null;

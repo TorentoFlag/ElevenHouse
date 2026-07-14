@@ -173,7 +173,7 @@ export function createDrizzleCalculationStore(database: ElevenHouseDatabase): Ca
           input.ownerUserId,
           input.calculationId
         );
-        if (!row) return null;
+        if (!row || row.resultChecksum !== input.expectedResultChecksum) return null;
         await transaction.insert(calculationInterpretations).values({
           id: input.interpretationIdGenerator(),
           calculationId: input.calculationId,

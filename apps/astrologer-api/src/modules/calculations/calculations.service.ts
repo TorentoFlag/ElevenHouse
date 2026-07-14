@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -9,6 +10,7 @@ import {
   approveCalculationInterpretation,
   archiveCalculation,
   CalculationNotFoundError,
+  CalculationResultChangedError,
   CalculationValidationError,
   getCalculation,
   linkCalculationToClient,
@@ -143,6 +145,7 @@ export class CalculationsService {
           store: this.store,
           ownerUserId,
           calculationId: params.calculationId,
+          expectedResultChecksum: parsedBody.expectedResultChecksum,
           source: "manual",
           text: parsedBody.text,
           modelId: null,
@@ -201,7 +204,10 @@ export class CalculationsService {
 }
 
 export function toCalculationResponse(record: CalculationRecord): CalculationRecordResponse {
-  return calculationRecordResponseSchema.parse(record);
+  return calculationRecordResponseSchema.parse({
+    ...record,
+    interpretations: record.interpretations.map(({ id, status, text }) => ({ id, status, text }))
+  });
 }
 
 export function requireOwnerUserId(request: AstrologerSessionRequest): string {
@@ -228,6 +234,9 @@ export async function mapCalculationErrors<T>(operation: () => Promise<T>): Prom
   } catch (error) {
     if (error instanceof CalculationNotFoundError) {
       throw new NotFoundException("Calculation not found");
+    }
+    if (error instanceof CalculationResultChangedError) {
+      throw new ConflictException(error.message);
     }
     if (error instanceof CalculationValidationError) {
       throw new BadRequestException(error.message);
