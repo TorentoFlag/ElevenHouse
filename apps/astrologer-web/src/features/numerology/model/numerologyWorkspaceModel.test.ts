@@ -70,6 +70,26 @@ describe("numerologyWorkspaceModel", () => {
       text: "Близкие значения"
     });
   });
+
+  it("uses a formula specific to each key number", () => {
+    const workspace = buildNumerologyWorkspaceModel(response("individual"))!;
+
+    expect(getNumerologyDetail(workspace, "key:lifePath")?.formula).toBe(
+      "Сумма всех цифр даты рождения с последующим сведением числа."
+    );
+    expect(getNumerologyDetail(workspace, "key:expression")?.formula).toBe(
+      "Сумма значений всех букв полного имени по таблице Пифагора."
+    );
+    expect(getNumerologyDetail(workspace, "key:personalYear")?.formula).toBe(
+      "День и месяц рождения плюс цифры выбранного года."
+    );
+    expect(getNumerologyDetail(workspace, "key:lifePath")?.formula).not.toContain(
+      "выбранного периода"
+    );
+    expect(getNumerologyDetail(workspace, "key:lifePath")?.formula).not.toContain(
+      "настройками метода"
+    );
+  });
 });
 
 function response(mode: "individual" | "compatibility"): NumerologyCalculationResponse {

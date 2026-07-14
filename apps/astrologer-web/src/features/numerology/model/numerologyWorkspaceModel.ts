@@ -802,11 +802,15 @@ function getKeyNumberHint(code: string): string {
 }
 
 function getKeyNumberFormula(code: string): string | null {
-  if (code === "lifePath" || code === "birthday" || code.startsWith("personal")) {
-    return "Цифры даты рождения и выбранного периода суммируются и сводятся к корневому числу; мастер-числа сохраняются настройками метода.";
-  }
-  if (code === "expression" || code === "soul" || code === "personality") {
-    return "Буквы имени переводятся в числа по таблице метода и сводятся к корневому числу.";
-  }
-  return null;
+  const formulas: Record<string, string> = {
+    lifePath: "Сумма всех цифр даты рождения с последующим сведением числа.",
+    birthday: "Число дня рождения с последующим сведением числа.",
+    expression: "Сумма значений всех букв полного имени по таблице Пифагора.",
+    soul: "Сумма значений гласных полного имени по таблице Пифагора.",
+    personality: "Сумма значений согласных полного имени по таблице Пифагора.",
+    personalYear: "День и месяц рождения плюс цифры выбранного года.",
+    personalMonth: "Число личного года плюс номер выбранного месяца.",
+    personalDay: "Число личного месяца плюс день выбранной даты."
+  };
+  return formulas[code] ?? null;
 }

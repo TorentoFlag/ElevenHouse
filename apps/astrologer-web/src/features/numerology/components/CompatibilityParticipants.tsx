@@ -25,7 +25,6 @@ export function CompatibilityParticipants({
     </aside>
   );
 }
-
 function ParticipantNumber({ label, value }: { readonly label: string; readonly value: number | null }) {
   return (
     <div>
@@ -34,4 +33,3 @@ function ParticipantNumber({ label, value }: { readonly label: string; readonly 
     </div>
   );
 }
-
