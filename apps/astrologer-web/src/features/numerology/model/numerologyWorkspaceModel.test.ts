@@ -32,12 +32,42 @@ describe("numerologyWorkspaceModel", () => {
     const workspace = buildNumerologyWorkspaceModel(response("compatibility"))!;
 
     expect(workspace.compatibility?.pairNumber).toBe(1);
+    expect(workspace.compatibility?.participants[0]).toMatchObject({
+      lifePath: 9,
+      expression: 9,
+      soul: 3,
+      personality: 6,
+      birthday: 5
+    });
     expect(workspace.compatibility?.participants.map((item) => item.lifePath)).toEqual([9, 1]);
+    expect(workspace.compatibility?.keyNumberComparisons).toHaveLength(5);
+    expect(workspace.compatibility?.matrixComparisons).toHaveLength(9);
+    expect(workspace.compatibility?.strengthLineComparisons).toHaveLength(8);
+    expect(workspace.compatibility?.zones).toHaveLength(4);
+    expect(workspace.compatibility?.counts.total).toEqual({
+      match: 3,
+      close: 7,
+      different: 7,
+      tension: 5
+    });
+    expect(workspace.compatibility?.conclusion).toMatchObject({
+      code: "mixed",
+      explanation: "Смешанная совместимость"
+    });
     expect(workspace.compatibility?.strengthLineComparisons[0]).toMatchObject({
       label: "Целеустремленность",
       valueA: 5,
       valueB: 4,
-      relation: "close"
+      difference: 1,
+      relation: "close",
+      relationLabel: "Близкие значения",
+      explanation: "Близкие значения"
+    });
+    expect(getNumerologyDetail(workspace, "compatibility:strength_lines:goal")).toMatchObject({
+      title: "Целеустремленность",
+      value: "5 · 4",
+      subtitle: "Близкие значения",
+      text: "Близкие значения"
     });
   });
 });
@@ -144,25 +174,50 @@ function individual(name: string, birthDate: string, lifePath: number) {
 function compatibility() {
   const first = individual("Марина Краснова", "1990-03-14", 9);
   const second = individual("Дмитрий Лебедев", "1988-07-22", 1);
+  const comparisonGroups = [
+    ["key_numbers", ["lifePath", "birthday", "expression", "soul", "personality"]],
+    ["psychomatrix", ["1", "2", "3", "4", "5", "6", "7", "8", "9"]],
+    [
+      "strength_lines",
+      ["goal", "family", "stability", "self_esteem", "material", "talent", "spirituality", "temperament"]
+    ]
+  ] as const;
   return {
     methodCode: "pythagorean",
     mode: "compatibility",
     participants: { first: first.participant, second: second.participant },
     individuals: [first, second],
     pairNumber: 1,
-    comparisons: [
-      {
-        block: "strength_lines",
-        code: "goal",
-        valueA: 5,
-        valueB: 4,
+    comparisons: comparisonGroups.flatMap(([block, codes]) =>
+      codes.map((code, index) => ({
+        block,
+        code,
+        valueA: block === "strength_lines" && code === "goal" ? 5 : index,
+        valueB: block === "strength_lines" && code === "goal" ? 4 : index + 1,
         difference: 1,
         relation: "close",
-        explanation: "Близкие значения"
-      }
-    ],
-    zones: [],
-    counts: {},
-    conclusion: {}
+        explanation: block === "strength_lines" && code === "goal" ? "Близкие значения" : `${block}:${code}`
+      }))
+    ),
+    zones: ["identity", "inner_world", "resources", "dynamics"].map((code) => ({
+      code,
+      comparisonCodes: ["lifePath"],
+      counts: { match: 0, close: 1, different: 0, tension: 0 },
+      relation: "close",
+      explanation: code
+    })),
+    counts: {
+      key_numbers: { match: 0, close: 1, different: 3, tension: 1 },
+      psychomatrix: { match: 2, close: 4, different: 3, tension: 0 },
+      strength_lines: { match: 1, close: 2, different: 1, tension: 4 },
+      total: { match: 3, close: 7, different: 7, tension: 5 }
+    },
+    conclusion: {
+      code: "mixed",
+      matchAndClose: 10,
+      differentAndTension: 12,
+      tension: 5,
+      explanation: "Смешанная совместимость"
+    }
   };
 }
