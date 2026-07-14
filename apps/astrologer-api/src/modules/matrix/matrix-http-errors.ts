@@ -5,6 +5,10 @@ import {
   CalculationParticipantMismatchError,
   CalculationValidationError,
   MatrixNoteNotFoundError,
+  MatrixReportNotFoundError,
+  MatrixReportNotReadyError,
+  MatrixReportStaleError,
+  MatrixResultChangedError,
   MatrixValidationError,
   UnsupportedMatrixMethodError
 } from "@elevenhouse/domain";
@@ -17,6 +21,11 @@ export type MatrixErrorCode =
   | "MATRIX_CALCULATION_MISMATCH"
   | "MATRIX_RESULT_CHANGED"
   | "MATRIX_NOTE_NOT_FOUND"
+  | "MATRIX_REPORT_NOT_FOUND"
+  | "MATRIX_REPORT_NOT_READY"
+  | "MATRIX_REPORT_STALE"
+  | "MATRIX_PDF_NOT_FOUND"
+  | "MATRIX_PDF_NOT_READY"
   | "CALCULATION_PARTICIPANT_MISMATCH"
   | "CALCULATION_ALREADY_EXISTS"
   | "CALCULATION_NOT_FOUND"
@@ -57,6 +66,18 @@ export async function mapMatrixError<T>(operation: () => Promise<T>): Promise<T>
     }
     if (error instanceof MatrixNoteNotFoundError) {
       throw matrixHttpError(404, "MATRIX_NOTE_NOT_FOUND", error.message);
+    }
+    if (error instanceof MatrixReportNotFoundError) {
+      throw matrixHttpError(404, "MATRIX_REPORT_NOT_FOUND", error.message);
+    }
+    if (error instanceof MatrixReportNotReadyError) {
+      throw matrixHttpError(409, "MATRIX_REPORT_NOT_READY", error.message);
+    }
+    if (error instanceof MatrixReportStaleError) {
+      throw matrixHttpError(409, "MATRIX_REPORT_STALE", error.message);
+    }
+    if (error instanceof MatrixResultChangedError) {
+      throw matrixHttpError(409, "MATRIX_RESULT_CHANGED", error.message);
     }
     if (error instanceof MatrixResultIntegrityError) {
       throw matrixHttpError(500, "CALCULATION_RESULT_INTEGRITY_ERROR", error.message);

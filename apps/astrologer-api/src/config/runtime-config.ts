@@ -35,6 +35,11 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
   ASTROLOGER_MEDIA_STORAGE_REGION: z.string().trim().min(1).default("us-east-1"),
   ASTROLOGER_MEDIA_STORAGE_BUCKET: z.string().trim().min(1).default("elevenhouse-local-media"),
+  ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET: z
+    .string()
+    .trim()
+    .min(1)
+    .default("elevenhouse-local-private"),
   ASTROLOGER_MEDIA_STORAGE_ACCESS_KEY_ID: z.string().trim().min(1).default("elevenhouse"),
   ASTROLOGER_MEDIA_STORAGE_SECRET_ACCESS_KEY: z
     .string()
@@ -47,6 +52,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .transform((value) => value === "true"),
   ASTROLOGER_MEDIA_STORAGE_PUBLIC_BASE_URL: z.string().trim().url().optional(),
   ASTROLOGER_MEDIA_UPLOAD_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  ASTROLOGER_MEDIA_DOWNLOAD_TTL_SECONDS: z.coerce.number().int().positive().max(3600).default(300),
   ASTROLOGER_BILLING_ARC_PAY_ENABLED: z
     .enum(["true", "false"])
     .default("false")
@@ -113,7 +119,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_AI_FAST_DRAFT_MODEL: z.enum(["gpt-5.4-mini", "gpt-5.5"]).default("gpt-5.4-mini"),
   ASTROLOGER_AI_QUALITY_DRAFT_MODEL: z.enum(["gpt-5.4-mini", "gpt-5.5"]).default("gpt-5.5"),
   ASTROLOGER_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
-  ASTROLOGER_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(900),
+  ASTROLOGER_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(5000),
   ASTROLOGER_AI_RATE_LIMIT_USER_PER_MINUTE: z.coerce.number().int().positive().default(3),
   ASTROLOGER_AI_RATE_LIMIT_USER_PER_HOUR: z.coerce.number().int().positive().default(30),
   ASTROLOGER_AI_RATE_LIMIT_USER_PER_DAY: z.coerce.number().int().positive().default(150),
@@ -169,11 +175,13 @@ export type AstrologerApiRuntimeConfig = {
     readonly endpoint: string;
     readonly region: string;
     readonly bucket: string;
+    readonly privateBucket: string;
     readonly accessKeyId: string;
     readonly secretAccessKey: string;
     readonly forcePathStyle: boolean;
     readonly publicBaseUrl: string;
     readonly uploadTtlSeconds: number;
+    readonly downloadTtlSeconds: number;
   };
   readonly billing: {
     readonly arcPayConfigured: boolean;
@@ -209,6 +217,9 @@ export function createAstrologerApiRuntimeConfig(
   source: Record<string, string | undefined> = process.env
 ): AstrologerApiRuntimeConfig {
   const config = astrologerApiRuntimeConfigSchema.parse(source);
+  if (config.ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET === config.ASTROLOGER_MEDIA_STORAGE_BUCKET) {
+    throw new Error("Private and public media storage buckets must be different");
+  }
   const sessionCookieName =
     config.ASTROLOGER_API_SESSION_COOKIE_NAME ??
     (config.ASTROLOGER_API_SESSION_COOKIE_SECURE
@@ -308,11 +319,13 @@ export function createAstrologerApiRuntimeConfig(
       endpoint: mediaStorageEndpoint,
       region: config.ASTROLOGER_MEDIA_STORAGE_REGION,
       bucket: config.ASTROLOGER_MEDIA_STORAGE_BUCKET,
+      privateBucket: config.ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET,
       accessKeyId: config.ASTROLOGER_MEDIA_STORAGE_ACCESS_KEY_ID,
       secretAccessKey: config.ASTROLOGER_MEDIA_STORAGE_SECRET_ACCESS_KEY,
       forcePathStyle: config.ASTROLOGER_MEDIA_STORAGE_FORCE_PATH_STYLE,
       publicBaseUrl: mediaStoragePublicBaseUrl,
-      uploadTtlSeconds: config.ASTROLOGER_MEDIA_UPLOAD_TTL_SECONDS
+      uploadTtlSeconds: config.ASTROLOGER_MEDIA_UPLOAD_TTL_SECONDS,
+      downloadTtlSeconds: config.ASTROLOGER_MEDIA_DOWNLOAD_TTL_SECONDS
     },
     billing: {
       arcPayConfigured: config.ASTROLOGER_BILLING_ARC_PAY_ENABLED

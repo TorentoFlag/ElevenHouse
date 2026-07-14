@@ -7,8 +7,10 @@ import {
   matrixInterpretationResponseSchema,
   matrixNoteResponseSchema,
   matrixNotesResponseSchema,
+  matrixPdfJobResponseSchema,
   matrixPreviewResponseSchema,
-  matrixProjectionResponseSchema
+  matrixProjectionResponseSchema,
+  matrixReportResponseSchema
 } from "@elevenhouse/contracts";
 import type {
   AstrologerProfileStore,
@@ -18,6 +20,8 @@ import type {
   CalculationStore,
   ClientStore,
   MatrixNoteStore,
+  MatrixPdfJobStore,
+  MatrixReportStore,
   PasswordlessAuthUnitOfWork,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
@@ -45,6 +49,7 @@ import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { MatrixModule } from "./matrix.module";
 import { MATRIX_NOTE_STORE } from "./matrix-notes.tokens";
+import { MATRIX_PDF_JOB_STORE, MATRIX_REPORT_STORE } from "./matrix-report.tokens";
 
 const now = new Date("2026-07-14T00:00:00.000Z");
 const sessionCookieName = "elevenhouse_astrologer_session";
@@ -69,10 +74,14 @@ describe("Matrix HTTP routes", () => {
   let baseUrl: string;
   let calculationStore: CalculationStore;
   let matrixNoteStore: MatrixNoteStore;
+  let matrixReportStore: MatrixReportStore;
+  let matrixPdfJobStore: MatrixPdfJobStore;
 
   beforeEach(async () => {
     calculationStore = createCalculationStore();
     matrixNoteStore = createMatrixNoteStore();
+    matrixReportStore = createMatrixReportStore();
+    matrixPdfJobStore = createMatrixPdfJobStore();
     const passwordlessAuth: PasswordlessAuthUnitOfWork = { transact: async () => raise() };
     const authSessionRevocation: AuthSessionRevocationUnitOfWork = {
       transact: async () => raise()
@@ -117,6 +126,10 @@ describe("Matrix HTTP routes", () => {
       .useValue(createClientStore())
       .overrideProvider(MATRIX_NOTE_STORE)
       .useValue(matrixNoteStore)
+      .overrideProvider(MATRIX_REPORT_STORE)
+      .useValue(matrixReportStore)
+      .overrideProvider(MATRIX_PDF_JOB_STORE)
+      .useValue(matrixPdfJobStore)
       .overrideProvider(ASTROLOGER_PROFILE_STORE)
       .useValue(createProfileStore())
       .compile();
@@ -268,16 +281,58 @@ describe("Matrix HTTP routes", () => {
     const unauthenticated = await getJson(
       "/matrix/interpretations?locale=ru&arcana=9&context=portrait"
     );
-    const response = await getJson(
-      "/matrix/interpretations?locale=ru&arcana=9&context=portrait",
-      { cookie: sessionCookieHeader() }
-    );
+    const response = await getJson("/matrix/interpretations?locale=ru&arcana=9&context=portrait", {
+      cookie: sessionCookieHeader()
+    });
 
     expect(unauthenticated.status).toBe(401);
     expect(response.status).toBe(200);
     matrixInterpretationResponseSchema.parse(response.body);
     expect(calculationStore.findByOwnerAndId).toHaveBeenCalledTimes(calculationReads);
     expect(matrixNoteStore.listByCalculation).toHaveBeenCalledTimes(noteReads);
+  });
+
+  it("keeps report/PDF reads CSRF-exempt and requires CSRF for every mutation", async () => {
+    const createdCalculation = await postJson("/matrix/calculations", persistBody(), csrfHeaders());
+    const calculation = matrixCalculationResponseSchema.parse(createdCalculation.body).calculation;
+    const reportPath = `/matrix/calculations/${calculation.id}/report`;
+    const unauthenticated = await getJson(reportPath);
+    const empty = await getJson(reportPath, { cookie: sessionCookieHeader() });
+    const missingSaveCsrf = await requestJson(
+      "PUT",
+      reportPath,
+      reportBody(calculation.resultChecksum),
+      { cookie: sessionCookieHeader() }
+    );
+    const saved = await requestJson(
+      "PUT",
+      reportPath,
+      reportBody(calculation.resultChecksum),
+      csrfHeaders()
+    );
+    const missingPdfCsrf = await postJson(
+      `${reportPath}/pdf`,
+      { expectedResultChecksum: calculation.resultChecksum },
+      { cookie: sessionCookieHeader() }
+    );
+    const enqueued = await postJson(
+      `${reportPath}/pdf`,
+      { expectedResultChecksum: calculation.resultChecksum },
+      csrfHeaders()
+    );
+    const latest = await getJson(`${reportPath}/pdf`, { cookie: sessionCookieHeader() });
+
+    expect(unauthenticated.status).toBe(401);
+    expect(empty.status).toBe(200);
+    expect(matrixReportResponseSchema.parse(empty.body).report).toBeNull();
+    expect(missingSaveCsrf.status).toBe(403);
+    expect(saved.status).toBe(200);
+    expect(matrixReportResponseSchema.parse(saved.body).report?.status).toBe("ready");
+    expect(missingPdfCsrf.status).toBe(403);
+    expect(enqueued.status).toBe(202);
+    expect(matrixPdfJobResponseSchema.parse(enqueued.body).job?.status).toBe("queued");
+    expect(latest.status).toBe(200);
+    matrixPdfJobResponseSchema.parse(latest.body);
   });
 
   async function postJson(
@@ -315,7 +370,6 @@ describe("Matrix HTTP routes", () => {
     const text = await response.text();
     return { status: response.status, body: text ? JSON.parse(text) : null };
   }
-
 });
 
 function createCalculationStore(): CalculationStore {
@@ -509,6 +563,83 @@ function createMatrixNoteStore(): MatrixNoteStore {
       notes.splice(index, 1);
       return true;
     })
+  };
+}
+
+function createMatrixReportStore(): MatrixReportStore {
+  let report: Awaited<ReturnType<MatrixReportStore["findByCalculation"]>> = null;
+  return {
+    findByCalculation: vi.fn(async () => report),
+    upsert: vi.fn(async (input) => {
+      report = {
+        id: report?.id ?? input.id,
+        calculationId: input.calculationId,
+        ownerUserId: input.ownerUserId,
+        source: input.source,
+        status: input.status,
+        locale: input.locale,
+        content: input.content,
+        plainText: input.plainText,
+        resultChecksum: input.resultChecksum,
+        revision: (report?.revision ?? 0) + 1,
+        modelId: input.modelId,
+        promptVersion: input.promptVersion,
+        createdAt: report?.createdAt ?? input.now,
+        updatedAt: input.now
+      };
+      return report;
+    })
+  };
+}
+
+function createMatrixPdfJobStore(): MatrixPdfJobStore {
+  let job: Awaited<ReturnType<MatrixPdfJobStore["findLatestByCalculation"]>> = null;
+  return {
+    findLatestByCalculation: vi.fn(async () => job),
+    findById: vi.fn(async () => job),
+    enqueue: vi.fn(async (input) => {
+      job ??= {
+        id: input.id,
+        calculationId: input.calculationId,
+        ownerUserId: input.ownerUserId,
+        reportId: input.reportId,
+        reportRevision: input.reportRevision,
+        resultChecksum: input.resultChecksum,
+        locale: input.locale,
+        status: "queued",
+        artifactId: input.artifactId,
+        mediaAssetId: input.mediaAssetId,
+        failureReason: null,
+        createdAt: input.now,
+        updatedAt: input.now
+      };
+      return job;
+    }),
+    claimForRendering: vi.fn(async () => null),
+    complete: vi.fn(async () => null),
+    fail: vi.fn(async () => null)
+  };
+}
+
+function reportBody(expectedResultChecksum: string) {
+  return {
+    locale: "ru",
+    status: "ready",
+    expectedResultChecksum,
+    content: {
+      overview: "Общая картина",
+      corePortrait: "Ядро личности",
+      strengthsAndTalents: "Сильные стороны",
+      growthAreas: "Зоны роста",
+      moneyAndRealization: "Деньги и реализация",
+      relationships: "Отношения",
+      lineageThemes: "Родовые темы",
+      purposes: "Предназначения",
+      yearProjection: null,
+      reflectionQuestions: ["Что хочется исследовать?"],
+      practicalSteps: ["Выбрать один шаг."],
+      disclaimer: "Матрица — инструмент рефлексии."
+    }
   };
 }
 

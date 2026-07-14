@@ -79,11 +79,30 @@ export function createIdentityConfigServiceStub(input: {
           endpoint: "http://localhost:9000",
           region: "us-east-1",
           bucket: "elevenhouse-local-media",
+          privateBucket: "elevenhouse-local-private",
           accessKeyId: "elevenhouse",
           secretAccessKey: "elevenhouse-secret",
           forcePathStyle: true,
           publicBaseUrl: "http://localhost:9000/elevenhouse-local-media",
-          uploadTtlSeconds: 900
+          uploadTtlSeconds: 900,
+          downloadTtlSeconds: 300
+        };
+      }
+
+      if (key === "astrologerApi.ai") {
+        return {
+          enabled: false,
+          openAiBaseUrl: "https://api.openai.com/v1",
+          fastDraftModel: "gpt-5.4-mini",
+          qualityDraftModel: "gpt-5.5",
+          timeoutMs: 15_000,
+          maxOutputTokens: 5_000,
+          rateLimitRedisKeyPrefix: "test:ai",
+          rateLimits: {
+            userPerMinute: { limit: 3, windowSeconds: 60 },
+            userPerHour: { limit: 30, windowSeconds: 3_600 },
+            userPerDay: { limit: 150, windowSeconds: 86_400 }
+          }
         };
       }
 

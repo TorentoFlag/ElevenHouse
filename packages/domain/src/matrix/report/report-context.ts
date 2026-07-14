@@ -5,11 +5,7 @@ import type {
 } from "../interpretations/catalog-types";
 import { MatrixValidationError } from "../matrix-errors";
 import type { MatrixNote } from "../matrix-note-types";
-import type {
-  MatrixBaseResult,
-  MatrixData,
-  MatrixDerivedProjection
-} from "../matrix-types";
+import type { MatrixBaseResult, MatrixData, MatrixDerivedProjection } from "../matrix-types";
 import type { MatrixReportLocale } from "./report-types";
 
 export type MatrixReportAiContext = {
@@ -72,7 +68,9 @@ export function buildMatrixReportAiContext(input: {
     const note = input.notes.find((candidate) => candidate.id === id);
     if (!note) throw new MatrixValidationError(`Selected Matrix note ${id} was not found`);
     if (note.resultChecksum !== input.resultChecksum) {
-      throw new MatrixValidationError(`Selected Matrix note ${id} is not bound to the current Matrix result`);
+      throw new MatrixValidationError(
+        `Selected Matrix note ${id} is not bound to the current Matrix result`
+      );
     }
     return { id, text: note.text.trim().slice(0, 2_000) };
   });
@@ -88,10 +86,21 @@ export function buildMatrixReportAiContext(input: {
 
   const participants =
     input.result.mode === "individual"
-      ? [{ role: "subject" as const, label: firstName(input.result.participant.displayName, input.locale) }]
+      ? [
+          {
+            role: "subject" as const,
+            label: firstName(input.result.participant.displayName, input.locale)
+          }
+        ]
       : [
-          { role: "subject" as const, label: firstName(input.result.participants.first.displayName, input.locale) },
-          { role: "partner" as const, label: firstName(input.result.participants.second.displayName, input.locale) }
+          {
+            role: "subject" as const,
+            label: firstName(input.result.participants.first.displayName, input.locale)
+          },
+          {
+            role: "partner" as const,
+            label: firstName(input.result.participants.second.displayName, input.locale)
+          }
         ];
   const matrices =
     input.result.mode === "individual"
@@ -108,7 +117,11 @@ export function buildMatrixReportAiContext(input: {
           ...matrixCoordinates("subject", input.result.individuals[0].matrix),
           ...matrixCoordinates("partner", input.result.individuals[1].matrix),
           ...matrixCoordinates("composite", input.result.composite),
-          { key: "composite.compatibility", context: "compatibility" as const, arcana: input.result.composite.points.E }
+          {
+            key: "composite.compatibility",
+            context: "compatibility" as const,
+            arcana: input.result.composite.points.E
+          }
         ];
   if (projection) {
     interpretationCoordinates.push(
@@ -128,10 +141,21 @@ export function buildMatrixReportAiContext(input: {
     mode: input.result.mode,
     participants,
     matrices,
-    interpretations: interpretationCoordinates.map(({ key, context, arcana }) => ({
-      key,
-      ...resolveMatrixInterpretation({ locale: input.locale, context, arcana })
-    })),
+    interpretations: interpretationCoordinates.map(({ key, context, arcana }) => {
+      const entry = resolveMatrixInterpretation({ locale: input.locale, context, arcana });
+      return {
+        key,
+        catalogRevision: entry.catalogRevision,
+        arcana: entry.arcana,
+        context: entry.context,
+        title: entry.title,
+        constructive: entry.constructive,
+        shadow: entry.shadow,
+        reflectionQuestions: entry.reflectionQuestions,
+        practicalRecommendations: entry.practicalRecommendations,
+        reportSummary: entry.reportSummary
+      };
+    }),
     projection,
     selectedNotes
   };
@@ -167,5 +191,7 @@ function matrixCoordinates(
 }
 
 function firstName(displayName: string, locale: MatrixReportLocale): string {
-  return displayName.trim().split(/\s+/u)[0]?.slice(0, 100) || (locale === "ru" ? "Клиент" : "Client");
+  return (
+    displayName.trim().split(/\s+/u)[0]?.slice(0, 100) || (locale === "ru" ? "Клиент" : "Client")
+  );
 }

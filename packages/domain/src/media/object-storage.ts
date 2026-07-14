@@ -21,3 +21,14 @@ export type ObjectStoragePort = {
     readonly storageKey: string;
   }) => Promise<UploadedObjectMetadata | null>;
 };
+
+export type PrivateObjectStoragePort = {
+  readonly createPresignedDownload: (input: {
+    readonly storageBucket: string;
+    readonly storageKey: string;
+    readonly fileName: string;
+  }) => Promise<{
+    readonly url: string;
+    readonly expiresAt: string;
+  }>;
+};

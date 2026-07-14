@@ -45,7 +45,9 @@ services:
     command: >
       "until mc alias set local http://minio:9000 elevenhouse elevenhouse-secret; do sleep 2; done &&
       mc mb --ignore-existing local/elevenhouse-local-media &&
-      mc anonymous set download local/elevenhouse-local-media"
+      mc mb --ignore-existing local/elevenhouse-local-private &&
+      mc anonymous set download local/elevenhouse-local-media &&
+      mc anonymous set none local/elevenhouse-local-private"
 
 volumes:
   postgres-data:

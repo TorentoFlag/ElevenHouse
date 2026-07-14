@@ -1,7 +1,13 @@
-import { HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type {
   ObjectStoragePort,
+  PrivateObjectStoragePort,
   PresignedUploadInput,
   UploadedObjectMetadata
 } from "@elevenhouse/domain";
@@ -11,14 +17,18 @@ export type S3MediaObjectStorageConfig = {
   readonly endpoint: string;
   readonly region: string;
   readonly bucket: string;
+  readonly privateBucket: string;
   readonly accessKeyId: string;
   readonly secretAccessKey: string;
   readonly forcePathStyle: boolean;
   readonly publicBaseUrl: string;
   readonly uploadTtlSeconds: number;
+  readonly downloadTtlSeconds: number;
 };
 
-export class S3MediaObjectStorage implements ObjectStoragePort, MediaPublicUrlResolver {
+export class S3MediaObjectStorage
+  implements ObjectStoragePort, PrivateObjectStoragePort, MediaPublicUrlResolver
+{
   private readonly client: S3Client;
 
   constructor(
@@ -84,6 +94,28 @@ export class S3MediaObjectStorage implements ObjectStoragePort, MediaPublicUrlRe
       }
       throw error;
     }
+  }
+
+  async createPresignedDownload(input: {
+    readonly storageBucket: string;
+    readonly storageKey: string;
+    readonly fileName: string;
+  }) {
+    if (input.storageBucket !== this.config.privateBucket) {
+      throw new Error("Private download requested from an unexpected storage bucket");
+    }
+    const expiresAt = new Date(Date.now() + this.config.downloadTtlSeconds * 1000).toISOString();
+    const url = await getSignedUrl(
+      this.client,
+      new GetObjectCommand({
+        Bucket: input.storageBucket,
+        Key: input.storageKey,
+        ResponseContentType: "application/pdf",
+        ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(input.fileName)}`
+      }),
+      { expiresIn: this.config.downloadTtlSeconds }
+    );
+    return { url, expiresAt };
   }
 
   getPublicUrl(input: { readonly storageKey: string }): string {
