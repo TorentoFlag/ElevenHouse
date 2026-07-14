@@ -448,9 +448,11 @@ Reuse healthy processes. If a required port is absent, stop and report; do not s
 - [ ] **Step 3: Verify the existing authorized Chrome tab through Computer Use**
 
 Partial: individual golden values, 2025/2026 server previews, all twelve months,
-and hide/retain-year behavior were verified. The remaining scenarios are
-recorded in the design evidence because Computer Use stopped returning
-renderable Chrome frames.
+hide/retain-year behavior, both presentations, compatibility totals, scrolling,
+Escape, initial modal focus, and focus restoration were verified. Rapid request
+ordering, explicit Tab cycling, the year-picker focus fix, and a genuinely
+narrow window remain recorded in the design evidence because Computer Use lost
+actionable popover frames and rejected coordinate/resize actions.
 
 1. Confirm Golubev's unchanged golden individual values.
 2. Apply a retrospective year and verify selected label, personal year, and 12 returned months.

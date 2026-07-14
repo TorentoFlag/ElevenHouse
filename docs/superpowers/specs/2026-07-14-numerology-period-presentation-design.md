@@ -370,12 +370,23 @@ Authorized Chrome evidence completed through Computer Use against the existing
 - the current-year shortcut returns personal year `1` for 2026 and twelve
   months;
 - hiding the period removes the month section while retaining the selected
-  `Год · 2026` control.
+  `Год · 2026` control;
+- the individual presentation contains five base numbers, the selected year,
+  twelve months, the psychomatrix, working numbers, and all eight strength
+  lines;
+- the Golubev/Koshkina compatibility workspace and presentation contain both
+  participants, pair number `7`, all `5 + 9 + 8` comparisons, four zones,
+  total counts `3/7/7/5`, and the server `mixed` conclusion;
+- both presentation surfaces scroll without horizontal clipping at the tested
+  desktop sizes; opening moves focus to the close action, and Escape closes the
+  dialog and restores focus to the toolbar presentation action.
 
 The same live session exposed a focus-restoration defect in the year picker;
-`2a10045` fixes it through a RED/GREEN regression test. The Chrome Computer Use
-backend subsequently returned a black frame and frame-less popover elements,
-so live retesting of that fix, rapid-request ordering, both presentation
-dialogs, focus containment, scrolling, and the narrow layout remains pending.
-Their component/controller behavior is covered by the passing automated suite,
-but Phase 2 is therefore recorded as browser-verified only in part.
+`2a10045` fixes it through a RED/GREEN regression test. A later Computer Use
+session completed the individual and compatibility presentation checks above.
+Live retesting of the year-picker focus fix, rapid-request ordering, explicit
+Tab cycling, and a genuinely narrow window remains pending: popover elements
+intermittently lost actionable frames, and coordinate/resize actions returned
+`noWindowsAvailable`. Their component/controller behavior remains covered by
+the passing automated suite, so Phase 2 is still recorded as browser-verified
+in part rather than fully accepted.
