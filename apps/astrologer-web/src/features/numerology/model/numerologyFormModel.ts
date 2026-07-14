@@ -142,9 +142,12 @@ export function toCreateNumerologyRequest(
   ) as CreateNumerologyCalculationRequest;
 }
 
-export function toPreviewNumerologyRequest(state: NumerologyFormState): PreviewNumerologyRequest {
+export function toPreviewNumerologyRequest(
+  state: NumerologyFormState,
+  periodRequest: PreviewNumerologyRequest["periodRequest"] = toPeriodRequest(state.forecastDate)
+): PreviewNumerologyRequest {
   const persisted = toCreateNumerologyRequest(state) as unknown as Record<string, unknown>;
-  const request = { ...persisted };
+  const request = { ...persisted, periodRequest };
   delete request.title;
   return previewNumerologyRequestSchema.parse(request) as PreviewNumerologyRequest;
 }

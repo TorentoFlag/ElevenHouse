@@ -55,6 +55,20 @@ describe("numerologyFormModel", () => {
     expect(preview).not.toHaveProperty("title");
   });
 
+  it("uses an explicit preview period without adding a personal day", () => {
+    const request = toPreviewNumerologyRequest(validState(), {
+      kind: "explicit",
+      personalYear: { year: 2027 },
+      personalMonths: { year: 2027 }
+    });
+
+    expect(request.periodRequest).toEqual({
+      kind: "explicit",
+      personalYear: { year: 2027 },
+      personalMonths: { year: 2027 }
+    });
+  });
+
   it("requires two participants for compatibility mode", () => {
     const state = {
       ...validState(),
