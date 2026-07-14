@@ -4,6 +4,7 @@ export * from "./ladini-22/golden-fixtures";
 export * from "./ladini-22/individual";
 export * from "./ladini-22/projection";
 export * from "./interpretations/catalog";
+export * from "./report";
 export * from "./matrix-errors";
 export * from "./matrix-note-store";
 export * from "./matrix-note-types";
