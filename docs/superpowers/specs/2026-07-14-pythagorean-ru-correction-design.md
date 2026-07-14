@@ -1,7 +1,8 @@
 # Pythagorean RU Calculation Correction Design
 
 Date: 2026-07-14
-Status: approved design, implementation planned
+Status: implemented; remaining product-completion phases are tracked in
+`2026-07-14-numerology-production-completion-design.md`
 Scope: agent documentation hardening, Numerology deterministic calculation logic,
 contracts, calculation lifecycle integration, persistence consistency, and the
 existing `/numerology` production surface

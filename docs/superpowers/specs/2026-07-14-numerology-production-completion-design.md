@@ -1,7 +1,8 @@
 # Numerology Production Completion Design
 
 Date: 2026-07-14
-Status: approved scope, phased implementation
+Status: approved scope; Phase 1 implemented and automatically verified; live
+Computer Use verification blocked by native-pipe startup failure
 Scope: production completion of the existing Pythagorean Numerology surface
 
 > This document extends the approved Pythagorean correction design. Formula,
@@ -25,11 +26,26 @@ history, or client-side arithmetic.
 
 ## 2. Confirmed Current State
 
+Phase 1 implementation status as of 2026-07-14:
+
+- The frontend retains and renders the complete server compatibility result:
+  five key numbers, nine psychomatrix comparisons, eight strength-line
+  comparisons, four zones, relation counts, and the conclusion.
+- Participant summaries include all five key numbers, and matrix cells and
+  comparison rows share stable typed selectors.
+- Formula explanations are specific to the selected number, supported name
+  separators are normalized explicitly, and the unsigned third working-number
+  rule is covered by tests.
+- Focused verification and the full repository `pnpm verify` gate pass.
+- Live verification in the user's authorized Chrome tab remains pending because
+  Computer Use fails to start its native pipe. This is an evidence gap, not an
+  application failure, and no alternative browser session was substituted.
+
+Remaining product-completion scope:
+
 - The Golubev and Koshkina golden individual fixtures calculate correctly.
 - Their compatibility result calculates all 22 comparisons, four zones,
   relation counts, and a conclusion on the server.
-- The frontend currently discards most compatibility fields and renders only
-  the pair number, two matrices, and eight raw line pairs.
 - Current-year values and personal months are server-provided, but the user
   cannot choose another period.
 - Preview, persistence, recalculation, interpretation, and AI-draft endpoints

@@ -758,10 +758,6 @@ function getRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function getNumber(value: unknown): number | null {
-  return typeof value === "number" ? value : null;
-}
-
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const initials = parts
