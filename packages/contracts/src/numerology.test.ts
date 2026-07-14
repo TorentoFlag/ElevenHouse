@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   createNumerologyAiDraftRequestSchema,
+  numerologyComparisonSchema,
   numerologyCalculationResponseSchema,
+  numerologyCompatibilityConclusionSchema,
+  numerologyCompatibilityZoneSchema,
   numerologyPreviewResponseSchema,
+  numerologyRelationCountsSchema,
+  numerologyRelationSchema,
   persistNumerologyCalculationRequestSchema,
+  pythagoreanCompatibilityResultSchema,
   previewNumerologyRequestSchema,
   recalculateNumerologyCalculationRequestSchema
 } from "./numerology";
@@ -141,6 +147,67 @@ const calculationResponse = {
     updatedAt: "2026-07-06T00:00:00.000Z"
   },
   result: individualResult
+} as const;
+
+const secondIndividualResult = {
+  ...individualResult,
+  participant: {
+    calculationName: "Кошкина Яна Владимировна",
+    calculationNameSource: "crm_display_name",
+    birthDate: "2002-03-16"
+  },
+  keyNumbers: { lifePath: 5, birthday: 7, expression: 7, soul: 9, personality: 7 }
+} as const;
+
+const comparisonBlocks = [
+  ["key_numbers", ["lifePath", "birthday", "expression", "soul", "personality"]],
+  ["psychomatrix", ["1", "2", "3", "4", "5", "6", "7", "8", "9"]],
+  [
+    "strength_lines",
+    ["goal", "family", "stability", "self_esteem", "material", "talent", "spirituality", "temperament"]
+  ]
+] as const;
+
+const compatibilityResult = {
+  methodCode: "pythagorean",
+  mode: "compatibility",
+  participants: {
+    first: individualResult.participant,
+    second: secondIndividualResult.participant
+  },
+  individuals: [individualResult, secondIndividualResult],
+  pairNumber: 7,
+  comparisons: comparisonBlocks.flatMap(([block, codes]) =>
+    codes.map((code, index) => ({
+      block,
+      code,
+      valueA: index,
+      valueB: index + 1,
+      difference: 1,
+      relation: "close" as const,
+      explanation: `${block}:${code}`
+    }))
+  ),
+  zones: ["identity", "inner_world", "resources", "dynamics"].map((code) => ({
+    code,
+    comparisonCodes: ["lifePath"],
+    counts: { match: 0, close: 1, different: 0, tension: 0 },
+    relation: "close" as const,
+    explanation: code
+  })),
+  counts: {
+    key_numbers: { match: 0, close: 1, different: 3, tension: 1 },
+    psychomatrix: { match: 2, close: 4, different: 3, tension: 0 },
+    strength_lines: { match: 1, close: 2, different: 1, tension: 4 },
+    total: { match: 3, close: 7, different: 7, tension: 5 }
+  },
+  conclusion: {
+    code: "mixed",
+    matchAndClose: 10,
+    differentAndTension: 12,
+    tension: 5,
+    explanation: "Смешанная совместимость"
+  }
 } as const;
 
 describe("numerology contracts", () => {
@@ -281,5 +348,23 @@ describe("numerology contracts", () => {
         calculation: { ...calculationResponse.calculation, mode: "compatibility" }
       })
     ).toThrow();
+  });
+
+  it("exports and validates the complete compatibility contract surface", () => {
+    const result = pythagoreanCompatibilityResultSchema.parse(compatibilityResult);
+
+    expect(numerologyRelationSchema.parse("match")).toBe("match");
+    expect(
+      numerologyRelationCountsSchema.parse({ match: 3, close: 7, different: 7, tension: 5 })
+    ).toEqual({ match: 3, close: 7, different: 7, tension: 5 });
+    expect(numerologyComparisonSchema.parse(result.comparisons[0])).toBeDefined();
+    expect(numerologyCompatibilityZoneSchema.parse(result.zones[0])).toBeDefined();
+    expect(numerologyCompatibilityConclusionSchema.parse(result.conclusion)).toBeDefined();
+    expect(result.comparisons.filter(({ block }) => block === "key_numbers")).toHaveLength(5);
+    expect(result.comparisons.filter(({ block }) => block === "psychomatrix")).toHaveLength(9);
+    expect(result.comparisons.filter(({ block }) => block === "strength_lines")).toHaveLength(8);
+    expect(result.zones).toHaveLength(4);
+    expect(result.counts.total).toEqual({ match: 3, close: 7, different: 7, tension: 5 });
+    expect(result.conclusion.code).toBe("mixed");
   });
 });

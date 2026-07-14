@@ -286,8 +286,10 @@ export const pythagoreanIndividualResultSchema = z
   .strict();
 export type PythagoreanIndividualResult = z.infer<typeof pythagoreanIndividualResultSchema>;
 
-const relationSchema = z.enum(["match", "close", "different", "tension"]);
-const relationCountsSchema = z
+export const numerologyRelationSchema = z.enum(["match", "close", "different", "tension"]);
+export type NumerologyRelation = z.infer<typeof numerologyRelationSchema>;
+
+export const numerologyRelationCountsSchema = z
   .object({
     match: z.number().int().min(0),
     close: z.number().int().min(0),
@@ -295,26 +297,44 @@ const relationCountsSchema = z
     tension: z.number().int().min(0)
   })
   .strict();
-const comparisonSchema = z
+export type NumerologyRelationCounts = z.infer<typeof numerologyRelationCountsSchema>;
+
+export const numerologyComparisonSchema = z
   .object({
     block: z.enum(["key_numbers", "psychomatrix", "strength_lines"]),
     code: z.string().trim().min(1),
     valueA: z.number().int().min(0),
     valueB: z.number().int().min(0),
     difference: z.number().int().min(0),
-    relation: relationSchema,
+    relation: numerologyRelationSchema,
     explanation: z.string().trim().min(1)
   })
   .strict();
-const zoneSchema = z
+export type NumerologyComparison = z.infer<typeof numerologyComparisonSchema>;
+
+export const numerologyCompatibilityZoneSchema = z
   .object({
     code: z.enum(["identity", "inner_world", "resources", "dynamics"]),
     comparisonCodes: z.array(z.string().trim().min(1)).min(1),
-    counts: relationCountsSchema,
-    relation: relationSchema,
+    counts: numerologyRelationCountsSchema,
+    relation: numerologyRelationSchema,
     explanation: z.string().trim().min(1)
   })
   .strict();
+export type NumerologyCompatibilityZone = z.infer<typeof numerologyCompatibilityZoneSchema>;
+
+export const numerologyCompatibilityConclusionSchema = z
+  .object({
+    code: z.enum(["harmonious", "mixed", "attention"]),
+    matchAndClose: z.number().int().min(0),
+    differentAndTension: z.number().int().min(0),
+    tension: z.number().int().min(0),
+    explanation: z.string().trim().min(1)
+  })
+  .strict();
+export type NumerologyCompatibilityConclusion = z.infer<
+  typeof numerologyCompatibilityConclusionSchema
+>;
 
 export const pythagoreanCompatibilityResultSchema = z
   .object({
@@ -328,25 +348,17 @@ export const pythagoreanCompatibilityResultSchema = z
       .strict(),
     individuals: z.tuple([pythagoreanIndividualResultSchema, pythagoreanIndividualResultSchema]),
     pairNumber: z.number().int().min(0).max(33),
-    comparisons: z.array(comparisonSchema).length(22),
-    zones: z.array(zoneSchema).length(4),
+    comparisons: z.array(numerologyComparisonSchema).length(22),
+    zones: z.array(numerologyCompatibilityZoneSchema).length(4),
     counts: z
       .object({
-        key_numbers: relationCountsSchema,
-        psychomatrix: relationCountsSchema,
-        strength_lines: relationCountsSchema,
-        total: relationCountsSchema
+        key_numbers: numerologyRelationCountsSchema,
+        psychomatrix: numerologyRelationCountsSchema,
+        strength_lines: numerologyRelationCountsSchema,
+        total: numerologyRelationCountsSchema
       })
       .strict(),
-    conclusion: z
-      .object({
-        code: z.enum(["harmonious", "mixed", "attention"]),
-        matchAndClose: z.number().int().min(0),
-        differentAndTension: z.number().int().min(0),
-        tension: z.number().int().min(0),
-        explanation: z.string().trim().min(1)
-      })
-      .strict()
+    conclusion: numerologyCompatibilityConclusionSchema
   })
   .strict();
 export type PythagoreanCompatibilityResult = z.infer<typeof pythagoreanCompatibilityResultSchema>;
