@@ -1,7 +1,8 @@
 # Numerology Period And Presentation Design
 
 Date: 2026-07-14
-Status: approved design; implementation not started
+Status: implemented; scoped automated verification passed; repository and
+authorized-browser verification pending
 Scope: Phase 2 of Pythagorean Numerology production completion
 
 > This document refines Phase 2 of
@@ -329,3 +330,26 @@ After this phase is implemented and verified, Phase 3 may add the explicit
 saved-calculation workspace lifecycle. It must build on the read-only period
 and presentation behavior defined here without turning year selection or view
 toggles into implicit persistence actions.
+
+## 12. Implementation Evidence
+
+Implementation commits:
+
+- `0db6383` adds typed explicit-period request projection, validation, and the
+  latest-preview guard.
+- `be1a6e6` adds the toolbar year picker, preview orchestration, stale-response
+  protection, period error/retry state, and retrospective-month correction.
+- `298940e` replaces the incomplete presentation overlay with complete
+  individual and compatibility renderers composed through the shared
+  accessible `Modal`.
+
+Scoped evidence completed on 2026-07-14:
+
+- all 11 Numerology frontend test files pass (`52` tests);
+- scoped Numerology ESLint passes;
+- `@elevenhouse/astrologer-web` typecheck passes;
+- `@elevenhouse/astrologer-web` production build passes.
+
+The repository-wide `pnpm verify` gate and the authorized Chrome flow remain
+pending and must be recorded separately before Phase 2 is described as fully
+verified.
