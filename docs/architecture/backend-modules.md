@@ -108,7 +108,11 @@ feature-module boundaries, explicit auth/permissions и audit logging.
 - `Matrix`: CRM-only typed preview/link/recalculate orchestration for the single
   `ladini_22` engine. Individual and compatibility base results are persisted
   through `Calculations`; current-age and annual forecast projections are
-  derived read-only and excluded from saved checksums.
+  derived read-only and excluded from saved checksums. Astrologer-private notes
+  live behind a Matrix-owned persistence port, retain the result checksum they
+  were written against, and derive stale state on read. The Matrix-owned RU/EN
+  interpretation catalog is deterministic and revisioned; it performs no
+  runtime AI or translation calls.
 - `Charts`: расчёты астрологических карт и generated chart artifacts.
 - `Sessions`: lifecycle консультации, recordings, materials.
 - `Messaging`: threads и messages там, где используется platform messaging.

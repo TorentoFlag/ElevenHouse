@@ -1,10 +1,17 @@
 # Destiny Matrix Production Design
 
 Date: 2026-07-14
-Status: approved product and architecture design; implementation plan pending
+Status: approved product and architecture design; backend slices 1–4 implemented
 Scope: authenticated astrologer Matrix workspace, deterministic Ladini 22
 calculation, CRM client linking, expert notes, AI report draft, PDF generation,
 and a non-functional future-chat affordance
+
+Implementation status on 2026-07-14: the canonical engine, CRM-only
+preview/link/recalculation, compatibility and read-only projection are ready.
+Astrologer-private checksum-bound note CRUD and the revisioned RU/EN
+interpretation catalog are also ready. AI report drafting, report persistence,
+PDF generation, the disabled chat presentation and the production frontend
+remain pending.
 
 > This document is an implementation design artifact, not a permanent source
 > of truth. After implementation, durable decisions must be reflected in the
