@@ -128,11 +128,7 @@ function individualResult(): NumerologyCalculationResponse["result"] {
 function interpretation(id: string, text: string) {
   return {
     id,
-    source: "manual" as const,
     status: "draft" as const,
-    text,
-    modelId: null,
-    promptVersion: null,
-    approvedAt: null
+    text
   };
 }
