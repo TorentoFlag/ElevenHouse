@@ -100,6 +100,9 @@ The line value remains a raw count. It is not converted to a 1-10 score.
 
 ### 4.2 Phase 2: Period And Presentation Completion
 
+Detailed approved design:
+`2026-07-14-numerology-period-presentation-design.md`.
+
 1. Add explicit year selection without adding method configuration.
 2. Request the selected year from the server and render its returned personal
    year and months.
