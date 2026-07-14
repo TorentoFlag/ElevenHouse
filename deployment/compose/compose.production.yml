@@ -232,6 +232,7 @@ services:
           sleep 2
         done
         mc mb --ignore-existing "local/$${MINIO_MEDIA_BUCKET}"
+        mc mb --ignore-existing "local/$${MINIO_PRIVATE_BUCKET}"
         cat >/tmp/elevenhouse-media-app-policy.json <<EOF
         {
           "Version": "2012-10-17",
@@ -239,7 +240,10 @@ services:
             {
               "Effect": "Allow",
               "Action": ["s3:PutObject", "s3:GetObject"],
-              "Resource": ["arn:aws:s3:::$${MINIO_MEDIA_BUCKET}/*"]
+              "Resource": [
+                "arn:aws:s3:::$${MINIO_MEDIA_BUCKET}/*",
+                "arn:aws:s3:::$${MINIO_PRIVATE_BUCKET}/*"
+              ]
             }
           ]
         }
@@ -268,6 +272,7 @@ services:
           --policy /tmp/elevenhouse-media-app-policy.json \
           >/dev/null
         mc anonymous set-json /tmp/elevenhouse-media-public-read-policy.json "local/$${MINIO_MEDIA_BUCKET}"
+        mc anonymous set none "local/$${MINIO_PRIVATE_BUCKET}"
 
 volumes:
   caddy-data:

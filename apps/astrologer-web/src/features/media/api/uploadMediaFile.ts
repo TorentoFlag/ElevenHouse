@@ -1,13 +1,13 @@
 import {
   mediaMimeTypeSchema,
   type MediaAssetResponse,
-  type MediaPurpose
+  type MediaUploadPurpose
 } from "@elevenhouse/contracts";
 import { completeMediaUpload } from "./completeMediaUpload";
 import { createMediaUploadIntent } from "./createMediaUploadIntent";
 
 export type UploadMediaFileInput = {
-  readonly purpose: MediaPurpose;
+  readonly purpose: MediaUploadPurpose;
   readonly file: File;
   readonly fetcher?: typeof fetch;
 };

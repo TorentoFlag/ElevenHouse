@@ -66,6 +66,7 @@ export class AppModule {}
 - `health`
 - `identity`
 - `media`
+- `matrix`
 - `numerology`
 - `platform-billing`
 - `products`
@@ -104,6 +105,14 @@ feature-module boundaries, explicit auth/permissions и audit logging.
 - `Numerology`: typed preview/persist/recalculate orchestration and method
   registry. The active `pythagorean` engine owns Pythagorean RU formulas;
   controllers, frontend and generic calculation storage do not duplicate them.
+- `Matrix`: CRM-only typed preview/link/recalculate orchestration for the single
+  `ladini_22` engine. Individual and compatibility base results are persisted
+  through `Calculations`; current-age and annual forecast projections are
+  derived read-only and excluded from saved checksums. Astrologer-private notes
+  live behind a Matrix-owned persistence port, retain the result checksum they
+  were written against, and derive stale state on read. The Matrix-owned RU/EN
+  interpretation catalog is deterministic and revisioned; it performs no
+  runtime AI or translation calls.
 - `Charts`: расчёты астрологических карт и generated chart artifacts.
 - `Sessions`: lifecycle консультации, recordings, materials.
 - `Messaging`: threads и messages там, где используется platform messaging.

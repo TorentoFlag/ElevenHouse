@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm";
-import { check, index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid
+} from "drizzle-orm/pg-core";
 import { users } from "../identity/accounts.schema";
 import {
   calculationModeValues,
@@ -55,6 +65,7 @@ export const calculationRecords = pgTable(
       "calculation_records_result_checksum_check",
       sql`${table.resultChecksum} ~ '^sha256:[a-f0-9]{64}$'`
     ),
+    unique("calculation_records_id_owner_unique").on(table.id, table.ownerUserId),
     uniqueIndex("calculation_records_exact_request_unique").on(
       table.ownerUserId,
       table.module,

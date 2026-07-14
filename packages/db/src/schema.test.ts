@@ -381,7 +381,8 @@ describe("database account schema constants", () => {
       "profile_avatar",
       "profile_cover",
       "verification_identity_document",
-      "verification_qualification_document"
+      "verification_qualification_document",
+      "matrix_report_pdf"
     ]);
     expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
     expect(mediaVisibilityValues).toEqual(["public", "private"]);
@@ -417,6 +418,7 @@ describe("database account schema constants", () => {
     expect(migration).toContain('CONSTRAINT "media_assets_visibility_check"');
     expect(migration).toContain('CONSTRAINT "media_assets_mime_type_check"');
     expect(migration).toContain('CONSTRAINT "media_assets_size_bytes_check"');
+    expect(migration).toContain('CONSTRAINT "media_assets_ready_size_bytes_check"');
     expect(migration).toContain('CONSTRAINT "media_assets_checksum_sha256_check"');
     expect(migration).toContain(
       'ALTER TABLE "media_assets" ADD CONSTRAINT "media_assets_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action'

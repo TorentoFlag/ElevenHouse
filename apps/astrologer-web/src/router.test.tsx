@@ -5,6 +5,7 @@ import { RequireCurrentAccount } from "./features/auth/routes/RequireCurrentAcco
 import { AstrologerAppLayout } from "./layouts/AstrologerAppLayout";
 import { AuthPage } from "./pages/auth/AuthPage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
+import { MatrixPage } from "./pages/matrix/MatrixPage";
 import { NumerologyPage } from "./pages/numerology/NumerologyPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
 import { ProductsPage } from "./pages/products/ProductsPage";
@@ -33,6 +34,7 @@ describe("astrologerRoutes", () => {
     const dashboardRoute = shellRoute?.children?.find((route) => route.path === "/dashboard");
     const productsRoute = shellRoute?.children?.find((route) => route.path === "/products");
     const numerologyRoute = shellRoute?.children?.find((route) => route.path === "/numerology");
+    const matrixRoute = shellRoute?.children?.find((route) => route.path === "/matrix");
     const referenceRoute = shellRoute?.children?.find((route) => route.path === "/reference");
     const settingsRoute = shellRoute?.children?.find((route) => route.path === "/settings");
 
@@ -51,6 +53,7 @@ describe("astrologerRoutes", () => {
     expect(isValidElement(numerologyRoute?.element) && numerologyRoute.element.type).toBe(
       NumerologyPage
     );
+    expect(isValidElement(matrixRoute?.element) && matrixRoute.element.type).toBe(MatrixPage);
     expect(isValidElement(referenceRoute?.element) && referenceRoute.element.type).toBe(
       ReferencePage
     );

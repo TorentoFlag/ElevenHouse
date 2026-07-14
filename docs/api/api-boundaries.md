@@ -55,7 +55,9 @@ runtime setting so Express resolves proxy headers; controllers must not parse
 реализованы health, identity/passwordless/session, dictionary, dictionary AI draft,
 products, media uploads, profile/settings billing overview, verification
 application submission, CRM clients, calculations, canonical Pythagorean
-numerology и provider-neutral AI generation через OpenAI.
+numerology, canonical Ladini 22 Matrix calculations with private notes and a
+versioned interpretation catalog, и provider-neutral AI generation через
+OpenAI.
 
 Ответственности:
 
@@ -106,10 +108,20 @@ GET  /platform-billing/me
 GET  /verification/me
 POST /verification/applications
 GET  /calculations?module=numerology&status=all
+GET  /calculations?module=matrix&status=all
 GET  /calculations/:calculationId
 POST /numerology/preview
 POST /numerology/calculations
 POST /numerology/calculations/:calculationId/recalculate
+POST /matrix/preview
+POST /matrix/calculations
+POST /matrix/calculations/:calculationId/recalculate
+GET  /matrix/calculations/:calculationId/projection?year=2026
+GET  /matrix/calculations/:calculationId/notes
+POST /matrix/calculations/:calculationId/notes
+PUT  /matrix/calculations/:calculationId/notes/:noteId
+DELETE /matrix/calculations/:calculationId/notes/:noteId
+GET  /matrix/interpretations?locale=ru&arcana=9&context=portrait
 POST /calculations/:calculationId/interpretations
 POST /calculations/:calculationId/interpretations/:interpretationId/approve
 POST /calculations/:calculationId/publish
@@ -128,6 +140,32 @@ request fingerprint and SHA-256 result checksum. Recalculation atomically
 replaces that result, clears interpretations/artifacts and revokes publication.
 Publishing must name the expected current result checksum and requires an
 approved current interpretation.
+
+`POST /matrix/preview` is authenticated and read-only. Matrix persistence
+accepts only existing owner-scoped active CRM client IDs: one for an individual
+calculation and two distinct clients for compatibility. The API hydrates names
+and birth dates, calculates with the sole `ladini_22` engine, and atomically
+links every participant when creating the generic `module = matrix` calculation
+record. Recalculation accepts an empty body and rehydrates the saved participant
+identities; callers cannot replace them.
+
+The saved Matrix fingerprint and result checksum cover only the invariant base
+calculation. `GET /matrix/calculations/:calculationId/projection` derives the
+current age cycle and requested annual forecast from the owned saved birth-date
+snapshot plus the astrologer's timezone. It performs no write and does not
+invalidate the saved result. Matrix exposes no module-specific publication,
+consultation, messaging or public-calculator route. Matrix POST mutations use
+the existing CSRF policy; preview and projection do not.
+
+Matrix notes are astrologer-private and exist only under an owned persisted
+`module = matrix`, `method_code = ladini_22` calculation. Create and update
+require the caller's `expectedResultChecksum` to equal the current saved result;
+otherwise the API returns `409 MATRIX_RESULT_CHANGED` and performs no write.
+Each note retains its historical result checksum. Reads derive `stale` by
+comparing it with the current calculation, while delete remains allowed for
+both current and stale notes. GET note and catalog routes are authenticated and
+CSRF-exempt; note POST, PUT and DELETE routes require CSRF. The revisioned RU/EN
+catalog is authored in code and has no storage, AI or translation side effect.
 
 `GET /products/templates` returns active platform-owned starter templates in the
 requested locale. `POST /products/templates/:templateCode/drafts` requires an

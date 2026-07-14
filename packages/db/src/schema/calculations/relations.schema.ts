@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import { users } from "../identity/accounts.schema";
 import { mediaAssets } from "../media/media-assets.schema";
+import { matrixNotes } from "../matrix/matrix-notes.schema";
 import { calculationArtifacts } from "./calculation-artifacts.schema";
 import { calculationClientLinks } from "./calculation-client-links.schema";
 import { calculationInterpretations } from "./calculation-interpretations.schema";
@@ -15,7 +16,8 @@ export const calculationRecordsRelations = relations(calculationRecords, ({ many
   participants: many(calculationParticipants),
   links: many(calculationClientLinks),
   interpretations: many(calculationInterpretations),
-  artifacts: many(calculationArtifacts)
+  artifacts: many(calculationArtifacts),
+  matrixNotes: many(matrixNotes)
 }));
 
 export const calculationParticipantsRelations = relations(calculationParticipants, ({ one }) => ({

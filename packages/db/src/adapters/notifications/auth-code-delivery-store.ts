@@ -164,7 +164,12 @@ function toAuthCodeDeliveryWorkItem(input: {
 }): AuthCodeDeliveryWorkItem {
   const payload = input.payload;
 
-  if (payload.challengeId !== input.challengeId || payload.deliveryId !== input.deliveryId) {
+  if (
+    !("challengeId" in payload) ||
+    !("deliveryId" in payload) ||
+    payload.challengeId !== input.challengeId ||
+    payload.deliveryId !== input.deliveryId
+  ) {
     throw new Error(`Outbox event ${input.outboxEventId} does not match delivery aggregate`);
   }
 

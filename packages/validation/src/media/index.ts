@@ -3,9 +3,19 @@ export const mediaPurposeValues = [
   "profile_avatar",
   "profile_cover",
   "verification_identity_document",
-  "verification_qualification_document"
+  "verification_qualification_document",
+  "matrix_report_pdf"
 ] as const;
 export type MediaPurposeValue = (typeof mediaPurposeValues)[number];
+
+export const mediaUploadPurposeValues = [
+  "product_cover",
+  "profile_avatar",
+  "profile_cover",
+  "verification_identity_document",
+  "verification_qualification_document"
+] as const;
+export type MediaUploadPurposeValue = (typeof mediaUploadPurposeValues)[number];
 
 export const mediaStatusValues = [
   "uploading",
@@ -63,7 +73,7 @@ export const mediaPurposeUploadLimits = {
     visibility: "private"
   }
 } satisfies Record<
-  MediaPurposeValue,
+  MediaUploadPurposeValue,
   {
     readonly maxSizeBytes: number;
     readonly allowedMimeTypes: readonly MediaMimeTypeValue[];

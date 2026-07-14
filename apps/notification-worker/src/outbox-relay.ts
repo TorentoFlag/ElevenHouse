@@ -18,6 +18,7 @@ export async function relayPendingOutboxEvents(input: {
   readonly logger?: Logger;
 }): Promise<number> {
   const events = await input.store.claimPending({
+    eventTypes: [authCodeDeliveryRequestedEventType],
     limit: input.batchSize,
     now: input.now,
     stalePublishingBefore: new Date(input.now.getTime() - input.publishingLockTimeoutMs)

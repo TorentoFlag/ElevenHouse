@@ -9,4 +9,7 @@ export * from "./platform-billing";
 export * from "./verification";
 export * from "./calculations";
 export * from "./numerology";
+export * from "./matrix";
+export * from "./matrix-notes";
+export * from "./matrix-report";
 export * from "./clients";

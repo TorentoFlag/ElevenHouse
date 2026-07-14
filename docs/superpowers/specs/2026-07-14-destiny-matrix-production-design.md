@@ -1,10 +1,17 @@
 # Destiny Matrix Production Design
 
 Date: 2026-07-14
-Status: approved product and architecture design; implementation plan pending
+Status: approved product and architecture design; backend slices 1–4 implemented
 Scope: authenticated astrologer Matrix workspace, deterministic Ladini 22
 calculation, CRM client linking, expert notes, AI report draft, PDF generation,
 and a non-functional future-chat affordance
+
+Implementation status on 2026-07-14: the canonical engine, CRM-only
+preview/link/recalculation, compatibility and read-only projection are ready.
+Astrologer-private checksum-bound note CRUD and the revisioned RU/EN
+interpretation catalog are also ready. AI report drafting, report persistence,
+PDF generation, the disabled chat presentation and the production frontend
+remain pending.
 
 > This document is an implementation design artifact, not a permanent source
 > of truth. After implementation, durable decisions must be reflected in the
@@ -316,8 +323,11 @@ value is `reduce22(physical + energy)`:
 Муладхара   A   A1
 ```
 
-Totals reduce the sum of each column using `reduce22`. The output is a symbolic
-energy table and never a health assessment.
+The physical and energy totals reduce their respective column sums. The total
+emotion value is `reduce22(totalPhysical + totalEnergy)`, matching the method
+fixture `10 / 10 / 20` for `14.03.1990`; it is not a second reduction of the
+seven already-reduced row emotion values. The output is a symbolic energy table
+and never a health assessment.
 
 ### 6.6 Compatibility
 
@@ -663,18 +673,18 @@ The left rail navigates result sections; it does not own calculation logic.
 
 Use tabs:
 
-- `Трактовка`;
+- `Разбор`;
 - `Заметки`;
-- `AI`;
-- `Отчёт`.
+- `Отчёт`, including the explicit AI-draft action.
 
 There is no consultation-session state and no separate client-publication tab.
 
 ### 13.5 Frontend Architecture
 
-- Page composition lives under `pages/destiny-matrix/`.
+- Page composition lives under `pages/matrix/`, matching the production
+  `/matrix` route.
 - API/query/mutation orchestration and derived view state live under focused
-  `features/destiny-matrix/model/` files.
+  `features/matrix/model/` files.
 - Each non-trivial component lives in its own file.
 - Reusable visual primitives are extracted to `packages/design-system` only
   when they are genuinely cross-feature.

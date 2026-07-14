@@ -8,3 +8,4 @@ export * from "./astrologer-profile";
 export * from "./verification";
 export * from "./calculations";
 export * from "./clients";
+export * from "./matrix";

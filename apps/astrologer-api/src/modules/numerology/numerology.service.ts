@@ -11,9 +11,12 @@ import {
   type CalculationParticipant,
   type CalculationRecord,
   type CalculationStore,
+  type CanonicalJson,
   type ClientStore,
   type NumerologyParticipantInput,
-  type PythagoreanPeriodsRequest
+  type PythagoreanPeriodsRequest,
+  sha256CanonicalJson,
+  stableJson
 } from "@elevenhouse/domain";
 import {
   calculationIdParamSchema,
@@ -38,7 +41,6 @@ import { requireOwnerUserId, toCalculationResponse } from "../calculations/calcu
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import { CLIENT_STORE } from "../clients/clients.tokens";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
-import { type CanonicalJson, sha256CanonicalJson, stableJson } from "./numerology-digests";
 import {
   mapNumerologyError,
   numerologyHttpError,

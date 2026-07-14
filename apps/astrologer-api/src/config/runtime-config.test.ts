@@ -13,7 +13,7 @@ const defaultAiConfig = {
   fastDraftModel: "gpt-5.4-mini",
   qualityDraftModel: "gpt-5.5",
   timeoutMs: 15000,
-  maxOutputTokens: 900,
+  maxOutputTokens: 5000,
   rateLimitRedisKeyPrefix: "elevenhouse:astrologer-api:ai",
   rateLimits: {
     userPerMinute: { limit: 3, windowSeconds: 60 },
@@ -54,11 +54,13 @@ const defaultSecurityConfig = {
     endpoint: "http://localhost:9000",
     region: "us-east-1",
     bucket: "elevenhouse-local-media",
+    privateBucket: "elevenhouse-local-private",
     accessKeyId: "elevenhouse",
     secretAccessKey: "elevenhouse-secret",
     forcePathStyle: true,
     publicBaseUrl: "http://localhost:9000/elevenhouse-local-media",
-    uploadTtlSeconds: 900
+    uploadTtlSeconds: 900,
+    downloadTtlSeconds: 300
   },
   billing: {
     arcPayConfigured: false
@@ -118,23 +120,37 @@ describe("createAstrologerApiRuntimeConfig", () => {
       ASTROLOGER_MEDIA_STORAGE_ENDPOINT: "https://s3.storage.example/",
       ASTROLOGER_MEDIA_STORAGE_REGION: "eu-central-1",
       ASTROLOGER_MEDIA_STORAGE_BUCKET: "elevenhouse-prod-media",
+      ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET: "elevenhouse-prod-private",
       ASTROLOGER_MEDIA_STORAGE_ACCESS_KEY_ID: "prod-key",
       ASTROLOGER_MEDIA_STORAGE_SECRET_ACCESS_KEY: "prod-secret",
       ASTROLOGER_MEDIA_STORAGE_FORCE_PATH_STYLE: "false",
       ASTROLOGER_MEDIA_STORAGE_PUBLIC_BASE_URL: "https://cdn.elevenhouse.com/media/",
-      ASTROLOGER_MEDIA_UPLOAD_TTL_SECONDS: "600"
+      ASTROLOGER_MEDIA_UPLOAD_TTL_SECONDS: "600",
+      ASTROLOGER_MEDIA_DOWNLOAD_TTL_SECONDS: "120"
     });
 
     expect(config.mediaStorage).toEqual({
       endpoint: "https://s3.storage.example",
       region: "eu-central-1",
       bucket: "elevenhouse-prod-media",
+      privateBucket: "elevenhouse-prod-private",
       accessKeyId: "prod-key",
       secretAccessKey: "prod-secret",
       forcePathStyle: false,
       publicBaseUrl: "https://cdn.elevenhouse.com/media",
-      uploadTtlSeconds: 600
+      uploadTtlSeconds: 600,
+      downloadTtlSeconds: 120
     });
+  });
+
+  it("rejects a private report bucket that is also anonymously served media", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_MEDIA_STORAGE_BUCKET: "shared",
+        ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET: "shared"
+      })
+    ).toThrow("must be different");
   });
 
   it("parses astrologer session settings from env", () => {

@@ -37,6 +37,7 @@ export const mediaAssets = pgTable(
       table.storageBucket,
       table.storageKey
     ),
+    unique("media_assets_id_owner_unique").on(table.id, table.ownerUserId),
     check(
       "media_assets_purpose_check",
       sql`${table.purpose} in ${sql.raw(formatMediaSqlValues(mediaPurposeValues))}`
@@ -53,7 +54,11 @@ export const mediaAssets = pgTable(
       "media_assets_mime_type_check",
       sql`${table.mimeType} in ${sql.raw(formatMediaSqlValues(mediaMimeTypeValues))}`
     ),
-    check("media_assets_size_bytes_check", sql`${table.sizeBytes} > 0`),
+    check("media_assets_size_bytes_check", sql`${table.sizeBytes} >= 0`),
+    check(
+      "media_assets_ready_size_bytes_check",
+      sql`${table.status} <> 'ready' or ${table.sizeBytes} > 0`
+    ),
     check(
       "media_assets_width_check",
       sql`${table.width} is null or ${table.width} > 0`

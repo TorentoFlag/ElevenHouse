@@ -14,6 +14,7 @@ import {
   MEDIA_ASSET_STORE,
   MEDIA_ID_GENERATOR,
   MEDIA_OBJECT_STORAGE,
+  MEDIA_PRIVATE_OBJECT_STORAGE,
   MEDIA_PUBLIC_URL_RESOLVER
 } from "./media.tokens";
 
@@ -45,10 +46,19 @@ import {
       useExisting: S3MediaObjectStorage
     },
     {
+      provide: MEDIA_PRIVATE_OBJECT_STORAGE,
+      useExisting: S3MediaObjectStorage
+    },
+    {
       provide: MEDIA_ID_GENERATOR,
       useValue: randomUUID
     }
   ],
-  exports: [MediaService, MEDIA_ASSET_STORE, MEDIA_PUBLIC_URL_RESOLVER]
+  exports: [
+    MediaService,
+    MEDIA_ASSET_STORE,
+    MEDIA_PUBLIC_URL_RESOLVER,
+    MEDIA_PRIVATE_OBJECT_STORAGE
+  ]
 })
 export class MediaModule {}

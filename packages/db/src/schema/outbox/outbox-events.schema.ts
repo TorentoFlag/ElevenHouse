@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type {
   AuthCodeDeliveryRequestedPayload,
+  MatrixPdfRequestedPayload,
   RedactedAuthCodeDeliveryRequestedPayload
 } from "@elevenhouse/domain";
 
@@ -9,7 +10,8 @@ export const outboxEventStatusValues = ["pending", "publishing", "published"] as
 
 export type OutboxEventPayload =
   | AuthCodeDeliveryRequestedPayload
-  | RedactedAuthCodeDeliveryRequestedPayload;
+  | RedactedAuthCodeDeliveryRequestedPayload
+  | MatrixPdfRequestedPayload;
 
 export const outboxEvents = pgTable(
   "outbox_events",

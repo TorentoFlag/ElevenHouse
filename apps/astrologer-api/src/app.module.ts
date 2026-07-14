@@ -11,6 +11,7 @@ import { DictionaryModule } from "./modules/dictionary/dictionary.module";
 import { HealthModule } from "./modules/health/health.module";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { MediaModule } from "./modules/media/media.module";
+import { MatrixModule } from "./modules/matrix/matrix.module";
 import { NumerologyModule } from "./modules/numerology/numerology.module";
 import { PlatformBillingModule } from "./modules/platform-billing/platform-billing.module";
 import { ProductsModule } from "./modules/products/products.module";
@@ -40,6 +41,7 @@ import { VerificationModule } from "./modules/verification/verification.module";
     CalculationsModule,
     ClientsModule,
     NumerologyModule,
+    MatrixModule,
     AstrologerProfileModule,
     HealthModule
   ]
