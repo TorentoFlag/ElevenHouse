@@ -15,3 +15,12 @@ export class UnsupportedMatrixMethodError extends Error {
     this.name = "UnsupportedMatrixMethodError";
   }
 }
+
+export class MatrixNoteNotFoundError extends Error {
+  readonly code = "MATRIX_NOTE_NOT_FOUND";
+
+  constructor() {
+    super("Matrix note was not found");
+    this.name = "MatrixNoteNotFoundError";
+  }
+}
