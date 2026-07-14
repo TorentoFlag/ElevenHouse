@@ -429,13 +429,13 @@ Run Prettier check and `git diff --check`, then commit only these docs as `docs:
 
 - Modify only Phase 2 evidence docs or regression files justified by a browser defect.
 
-- [ ] **Step 1: Run repository gate**
+- [x] **Step 1: Run repository gate**
 
 Run: `pnpm verify`
 
 Expected: lint, typechecks, tests, and builds exit 0. Report any unrelated pre-existing failure exactly.
 
-- [ ] **Step 2: Diagnose services read-only**
+- [x] **Step 2: Diagnose services read-only**
 
 ```bash
 lsof -nP -iTCP:5174 -sTCP:LISTEN
@@ -447,6 +447,11 @@ Reuse healthy processes. If a required port is absent, stop and report; do not s
 
 - [ ] **Step 3: Verify the existing authorized Chrome tab through Computer Use**
 
+Partial: individual golden values, 2025/2026 server previews, all twelve months,
+and hide/retain-year behavior were verified. The remaining scenarios are
+recorded in the design evidence because Computer Use stopped returning
+renderable Chrome frames.
+
 1. Confirm Golubev's unchanged golden individual values.
 2. Apply a retrospective year and verify selected label, personal year, and 12 returned months.
 3. Use current-year shortcut and verify a fresh server preview.
@@ -456,10 +461,10 @@ Reuse healthy processes. If a required port is absent, stop and report; do not s
 7. Verify Golubev/Koshkina presentation: both people, pair, 5+9+8 comparisons, 4 zones, counts `3/7/7/5`, mixed conclusion.
 8. Verify Escape, Tab containment, close button, focus restoration, scrolling, and narrow layout.
 
-- [ ] **Step 4: Correct browser defects through TDD**
+- [x] **Step 4: Correct browser defects through TDD**
 
 For every defect: add focused failing regression test, observe RED, apply minimal fix, observe GREEN, rerun the browser step.
 
-- [ ] **Step 5: Record evidence and close**
+- [x] **Step 5: Record evidence and close**
 
 Update the spec/inventory with exact evidence, run Prettier check plus `git diff --check`, commit `docs: confirm Numerology period presentation`, and verify `git status --short` is clean. Final report must separate implemented, verified, partial, deferred, blocked, skipped/residual risk, and untouched foreign changes.

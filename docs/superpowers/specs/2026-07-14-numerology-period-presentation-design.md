@@ -1,8 +1,8 @@
 # Numerology Period And Presentation Design
 
 Date: 2026-07-14
-Status: implemented; scoped automated verification passed; repository and
-authorized-browser verification pending
+Status: implemented; scoped and repository automated verification passed;
+authorized-browser verification partial
 Scope: Phase 2 of Pythagorean Numerology production completion
 
 > This document refines Phase 2 of
@@ -342,14 +342,40 @@ Implementation commits:
 - `298940e` replaces the incomplete presentation overlay with complete
   individual and compatibility renderers composed through the shared
   accessible `Modal`.
+- `2a10045` restores focus to the year-picker disclosure after applying or
+  hiding a period, with a focused regression test.
 
 Scoped evidence completed on 2026-07-14:
 
-- all 11 Numerology frontend test files pass (`52` tests);
+- all 11 Numerology frontend test files pass (`53` tests);
 - scoped Numerology ESLint passes;
 - `@elevenhouse/astrologer-web` typecheck passes;
 - `@elevenhouse/astrologer-web` production build passes.
 
-The repository-wide `pnpm verify` gate and the authorized Chrome flow remain
-pending and must be recorded separately before Phase 2 is described as fully
-verified.
+Repository evidence completed after the focus fix on 2026-07-14:
+
+- `pnpm verify` exits `0`;
+- repository lint passes;
+- all `31/31` typecheck tasks pass;
+- all `314` test files and `1305` tests pass;
+- all `22/22` build tasks pass.
+
+Authorized Chrome evidence completed through Computer Use against the existing
+`localhost:5174/numerology` session:
+
+- Golubev's base values, matrix, working numbers, and eight raw line counts
+  remain unchanged;
+- applying 2025 returns personal year `9` and all twelve server-provided
+  personal months (`1, 11, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3`);
+- the current-year shortcut returns personal year `1` for 2026 and twelve
+  months;
+- hiding the period removes the month section while retaining the selected
+  `Год · 2026` control.
+
+The same live session exposed a focus-restoration defect in the year picker;
+`2a10045` fixes it through a RED/GREEN regression test. The Chrome Computer Use
+backend subsequently returned a black frame and frame-less popover elements,
+so live retesting of that fix, rapid-request ordering, both presentation
+dialogs, focus containment, scrolling, and the narrow layout remains pending.
+Their component/controller behavior is covered by the passing automated suite,
+but Phase 2 is therefore recorded as browser-verified only in part.
