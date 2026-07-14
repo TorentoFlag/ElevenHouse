@@ -440,11 +440,13 @@ CREATE TABLE "media_assets" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "media_assets_storage_bucket_storage_key_unique" UNIQUE("storage_bucket","storage_key"),
-	CONSTRAINT "media_assets_purpose_check" CHECK ("media_assets"."purpose" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document')),
+	CONSTRAINT "media_assets_id_owner_unique" UNIQUE("id","owner_user_id"),
+	CONSTRAINT "media_assets_purpose_check" CHECK ("media_assets"."purpose" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document', 'matrix_report_pdf')),
 	CONSTRAINT "media_assets_status_check" CHECK ("media_assets"."status" in ('uploading', 'processing', 'ready', 'failed', 'deleted')),
 	CONSTRAINT "media_assets_visibility_check" CHECK ("media_assets"."visibility" in ('public', 'private')),
 	CONSTRAINT "media_assets_mime_type_check" CHECK ("media_assets"."mime_type" in ('image/jpeg', 'image/png', 'image/webp', 'image/avif', 'application/pdf')),
-	CONSTRAINT "media_assets_size_bytes_check" CHECK ("media_assets"."size_bytes" > 0),
+	CONSTRAINT "media_assets_size_bytes_check" CHECK ("media_assets"."size_bytes" >= 0),
+	CONSTRAINT "media_assets_ready_size_bytes_check" CHECK ("media_assets"."status" <> 'ready' or "media_assets"."size_bytes" > 0),
 	CONSTRAINT "media_assets_width_check" CHECK ("media_assets"."width" is null or "media_assets"."width" > 0),
 	CONSTRAINT "media_assets_height_check" CHECK ("media_assets"."height" is null or "media_assets"."height" > 0),
 	CONSTRAINT "media_assets_checksum_sha256_check" CHECK ("media_assets"."checksum_sha256" is null or "media_assets"."checksum_sha256" ~ '^[a-f0-9]{64}$'),
@@ -614,6 +616,7 @@ CREATE TABLE "calculation_artifacts" (
 	"status" text DEFAULT 'generating' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "calculation_artifacts_id_calculation_unique" UNIQUE("id","calculation_id"),
 	CONSTRAINT "calculation_artifacts_type_check" CHECK ("calculation_artifacts"."artifact_type" in ('pdf')),
 	CONSTRAINT "calculation_artifacts_status_check" CHECK ("calculation_artifacts"."status" in ('generating', 'ready', 'failed'))
 );
@@ -702,6 +705,54 @@ CREATE TABLE "matrix_notes" (
 	CONSTRAINT "matrix_notes_result_checksum_check" CHECK ("matrix_notes"."result_checksum" ~ '^sha256:[a-f0-9]{64}$')
 );
 --> statement-breakpoint
+CREATE TABLE "matrix_pdf_jobs" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"calculation_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"report_id" uuid NOT NULL,
+	"report_revision" integer NOT NULL,
+	"result_checksum" text NOT NULL,
+	"locale" text NOT NULL,
+	"status" text DEFAULT 'queued' NOT NULL,
+	"artifact_id" uuid NOT NULL,
+	"media_asset_id" uuid NOT NULL,
+	"failure_reason" text,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "matrix_pdf_jobs_idempotency_unique" UNIQUE("owner_user_id","calculation_id","report_id","report_revision","result_checksum","locale"),
+	CONSTRAINT "matrix_pdf_jobs_report_revision_check" CHECK ("matrix_pdf_jobs"."report_revision" > 0),
+	CONSTRAINT "matrix_pdf_jobs_result_checksum_check" CHECK ("matrix_pdf_jobs"."result_checksum" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "matrix_pdf_jobs_locale_check" CHECK ("matrix_pdf_jobs"."locale" in ('ru', 'en')),
+	CONSTRAINT "matrix_pdf_jobs_status_check" CHECK ("matrix_pdf_jobs"."status" in ('queued', 'processing', 'ready', 'failed')),
+	CONSTRAINT "matrix_pdf_jobs_failure_reason_check" CHECK ("matrix_pdf_jobs"."failure_reason" is null or length(trim("matrix_pdf_jobs"."failure_reason")) between 1 and 500)
+);
+--> statement-breakpoint
+CREATE TABLE "matrix_report_drafts" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"calculation_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"source" text NOT NULL,
+	"status" text NOT NULL,
+	"locale" text NOT NULL,
+	"content" jsonb NOT NULL,
+	"plain_text" text NOT NULL,
+	"result_checksum" text NOT NULL,
+	"revision" integer DEFAULT 1 NOT NULL,
+	"model_id" text,
+	"prompt_version" text,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "matrix_report_drafts_calculation_unique" UNIQUE("calculation_id"),
+	CONSTRAINT "matrix_report_drafts_identity_unique" UNIQUE("id","calculation_id","owner_user_id"),
+	CONSTRAINT "matrix_report_drafts_source_check" CHECK ("matrix_report_drafts"."source" in ('manual', 'ai')),
+	CONSTRAINT "matrix_report_drafts_status_check" CHECK ("matrix_report_drafts"."status" in ('draft', 'ready')),
+	CONSTRAINT "matrix_report_drafts_locale_check" CHECK ("matrix_report_drafts"."locale" in ('ru', 'en')),
+	CONSTRAINT "matrix_report_drafts_content_object_check" CHECK (jsonb_typeof("matrix_report_drafts"."content") = 'object'),
+	CONSTRAINT "matrix_report_drafts_plain_text_length_check" CHECK (length(trim("matrix_report_drafts"."plain_text")) between 1 and 50000),
+	CONSTRAINT "matrix_report_drafts_result_checksum_check" CHECK ("matrix_report_drafts"."result_checksum" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "matrix_report_drafts_revision_check" CHECK ("matrix_report_drafts"."revision" > 0)
+);
+--> statement-breakpoint
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -751,6 +802,11 @@ ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_
 ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_claimed_by_client_user_id_users_id_fk" FOREIGN KEY ("claimed_by_client_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "matrix_notes" ADD CONSTRAINT "matrix_notes_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "matrix_pdf_jobs" ADD CONSTRAINT "matrix_pdf_jobs_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "matrix_pdf_jobs" ADD CONSTRAINT "matrix_pdf_jobs_report_id_fk" FOREIGN KEY ("report_id","calculation_id","owner_user_id") REFERENCES "public"."matrix_report_drafts"("id","calculation_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "matrix_pdf_jobs" ADD CONSTRAINT "matrix_pdf_jobs_artifact_id_fk" FOREIGN KEY ("artifact_id","calculation_id") REFERENCES "public"."calculation_artifacts"("id","calculation_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "matrix_pdf_jobs" ADD CONSTRAINT "matrix_pdf_jobs_media_asset_id_fk" FOREIGN KEY ("media_asset_id","owner_user_id") REFERENCES "public"."media_assets"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "matrix_report_drafts" ADD CONSTRAINT "matrix_report_drafts_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_email_login_unique" ON "auth_identities" USING btree (lower("email")) WHERE "auth_identities"."provider" = 'email' and "auth_identities"."email" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_phone_login_unique" ON "auth_identities" USING btree ("phone_number") WHERE "auth_identities"."provider" = 'phone' and "auth_identities"."phone_number" is not null;--> statement-breakpoint
@@ -837,4 +893,7 @@ CREATE INDEX "client_astrologer_relationships_client_status_idx" ON "client_astr
 CREATE UNIQUE INDEX "client_join_intents_token_hash_unique" ON "client_join_intents" USING btree ("token_hash");--> statement-breakpoint
 CREATE INDEX "client_join_intents_astrologer_status_idx" ON "client_join_intents" USING btree ("astrologer_user_id","status");--> statement-breakpoint
 CREATE INDEX "client_join_intents_claimed_client_idx" ON "client_join_intents" USING btree ("claimed_by_client_user_id");--> statement-breakpoint
-CREATE INDEX "matrix_notes_owner_calculation_created_id_idx" ON "matrix_notes" USING btree ("owner_user_id","calculation_id","created_at","id");
+CREATE INDEX "matrix_notes_owner_calculation_created_id_idx" ON "matrix_notes" USING btree ("owner_user_id","calculation_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "matrix_pdf_jobs_owner_calculation_created_idx" ON "matrix_pdf_jobs" USING btree ("owner_user_id","calculation_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "matrix_pdf_jobs_status_updated_idx" ON "matrix_pdf_jobs" USING btree ("status","updated_at");--> statement-breakpoint
+CREATE INDEX "matrix_report_drafts_owner_calculation_idx" ON "matrix_report_drafts" USING btree ("owner_user_id","calculation_id");

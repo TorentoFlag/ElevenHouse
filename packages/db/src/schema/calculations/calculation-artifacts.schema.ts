@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { mediaAssets } from "../media/media-assets.schema";
 import { calculationRecords } from "./calculation-records.schema";
 import {
@@ -24,6 +24,7 @@ export const calculationArtifacts = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
+    unique("calculation_artifacts_id_calculation_unique").on(table.id, table.calculationId),
     check(
       "calculation_artifacts_type_check",
       sql`${table.artifactType} in ${sql.raw(formatCalculationSqlValues(calculationArtifactTypeValues))}`

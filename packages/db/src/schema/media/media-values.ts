@@ -3,6 +3,7 @@ export {
   mediaMimeTypeValues,
   mediaPurposeValues,
   mediaStatusValues,
+  mediaUploadPurposeValues,
   mediaVariantValues,
   mediaVisibilityValues
 } from "@elevenhouse/validation/media";

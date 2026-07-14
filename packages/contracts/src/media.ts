@@ -3,6 +3,7 @@ import {
   mediaMimeTypeValues,
   mediaPurposeUploadLimits,
   mediaPurposeValues,
+  mediaUploadPurposeValues,
   mediaStatusValues,
   mediaVariantValues,
   mediaVisibilityValues
@@ -17,6 +18,9 @@ const checksumSha256Schema = z.string().trim().regex(/^[a-f0-9]{64}$/);
 
 export const mediaPurposeSchema = z.enum(mediaPurposeValues);
 export type MediaPurpose = z.infer<typeof mediaPurposeSchema>;
+
+export const mediaUploadPurposeSchema = z.enum(mediaUploadPurposeValues);
+export type MediaUploadPurpose = z.infer<typeof mediaUploadPurposeSchema>;
 
 export const mediaStatusSchema = z.enum(mediaStatusValues);
 export type MediaStatus = z.infer<typeof mediaStatusSchema>;
@@ -35,7 +39,7 @@ export type MediaVariant = z.infer<typeof mediaVariantSchema>;
 
 export const createMediaUploadIntentRequestSchema = z
   .object({
-    purpose: mediaPurposeSchema,
+    purpose: mediaUploadPurposeSchema,
     fileName: nonEmptyStringSchema.max(255),
     mimeType: mediaMimeTypeSchema,
     sizeBytes: z.number().int().positive()

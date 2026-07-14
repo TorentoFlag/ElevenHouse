@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import {
   mediaMimeTypeValues,
   mediaPurposeUploadLimits,
-  mediaPurposeValues,
+  mediaUploadPurposeValues,
   type MediaMimeTypeValue,
-  type MediaPurposeValue
+  type MediaPurposeValue,
+  type MediaUploadPurposeValue
 } from "@elevenhouse/validation/media";
 import { normalizeRequiredString } from "../shared";
 import {
@@ -169,9 +170,9 @@ export async function assertUsableMediaForOwner(input: {
   return asset;
 }
 
-function parseMediaPurpose(value: string): MediaPurposeValue {
+function parseMediaPurpose(value: string): MediaUploadPurposeValue {
   const normalized = normalizeRequiredString(value, "Media purpose is required");
-  if (!isOneOf(mediaPurposeValues, normalized)) {
+  if (!isOneOf(mediaUploadPurposeValues, normalized)) {
     throw new MediaValidationError("Unsupported media purpose");
   }
   return normalized;
@@ -187,7 +188,7 @@ function parseMediaMimeType(value: string): MediaMimeTypeValue {
 
 function buildStorageKey(input: {
   readonly ownerUserId: string;
-  readonly purpose: MediaPurposeValue;
+  readonly purpose: MediaUploadPurposeValue;
   readonly mediaId: string;
   readonly fileName: string;
   readonly mimeType: MediaMimeTypeValue;

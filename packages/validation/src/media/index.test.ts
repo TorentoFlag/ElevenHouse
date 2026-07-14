@@ -3,6 +3,7 @@ import {
   mediaImageMimeTypeValues,
   mediaPurposeUploadLimits,
   mediaPurposeValues,
+  mediaUploadPurposeValues,
   mediaStatusValues,
   mediaVisibilityValues
 } from "./index";
@@ -14,7 +15,8 @@ describe("media validation values", () => {
       "profile_avatar",
       "profile_cover",
       "verification_identity_document",
-      "verification_qualification_document"
+      "verification_qualification_document",
+      "matrix_report_pdf"
     ]);
     expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
     expect(mediaVisibilityValues).toEqual(["public", "private"]);
@@ -24,6 +26,12 @@ describe("media validation values", () => {
       "image/webp",
       "image/avif"
     ]);
+  });
+
+  it("keeps generated Matrix reports out of the browser-upload vocabulary", () => {
+    expect(mediaUploadPurposeValues).not.toContain("matrix_report_pdf");
+    expect(mediaPurposeValues).toContain("matrix_report_pdf");
+    expect(mediaPurposeUploadLimits).not.toHaveProperty("matrix_report_pdf");
   });
 
   it("keeps product cover uploads bounded to raster image files", () => {
