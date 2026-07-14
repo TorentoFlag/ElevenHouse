@@ -68,9 +68,11 @@ describe("Matrix report and PDF persistence schema", () => {
         "matrix_pdf_jobs_media_asset_id_fk"
       ])
     );
-    expect(config.uniqueConstraints.map((constraint) => constraint.name)).toContain(
-      "matrix_pdf_jobs_idempotency_unique"
+    const idempotencyIndex = config.indexes.find(
+      (index) => index.config.name === "matrix_pdf_jobs_idempotency_unique"
     );
+    expect(idempotencyIndex?.config.unique).toBe(true);
+    expect(idempotencyIndex?.config.where).toBeDefined();
   });
 
   it("keeps report and PDF ownership constraints in the checked-in baseline", () => {

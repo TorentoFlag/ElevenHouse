@@ -14,6 +14,18 @@ const checksum = `sha256:${"a".repeat(64)}`;
 const now = new Date("2026-07-14T12:00:00.000Z");
 
 describe("createDrizzleMatrixPdfJobStore", () => {
+  it("supports the worker-only lookup by globally unique job id", async () => {
+    const fake = createFakeDatabase([jobRow({ status: "ready" })]);
+
+    await expect(
+      createDrizzleMatrixPdfJobStore(fake.database as never).findByJobId({ jobId })
+    ).resolves.toMatchObject({ id: jobId, status: "ready" });
+
+    const query = render(fake.executed[0]);
+    expect(query.sql).toContain('where "matrix_pdf_jobs"."id" =');
+    expect(query.sql).not.toContain('"owner_user_id" =');
+  });
+
   it("enqueues media, artifact, job and outbox atomically behind locked eligibility", async () => {
     const fake = createFakeDatabase([jobRow()]);
     const job = await createDrizzleMatrixPdfJobStore(fake.database as never).enqueue({
@@ -42,6 +54,9 @@ describe("createDrizzleMatrixPdfJobStore", () => {
     expect(query.sql).toContain('insert into "outbox_events"');
     expect(query.sql).toContain("matrix.pdf.requested.v1");
     expect(query.sql).toContain("not exists (select 1 from existing_job)");
+    expect(query.sql).toContain(
+      "\"matrix_pdf_jobs\".\"status\" in ('queued', 'processing', 'ready')"
+    );
   });
 
   it("maps an immutable render claim with private storage coordinates", async () => {
@@ -67,7 +82,7 @@ describe("createDrizzleMatrixPdfJobStore", () => {
       originalFileName: "Матрица судьбы.pdf"
     });
     const query = render(fake.executed[0]);
-    expect(query.sql).toContain('"status" in (\'queued\', \'processing\')');
+    expect(query.sql).toContain("\"status\" in ('queued', 'processing')");
     expect(query.sql).toContain('"matrix_report_drafts"."status" = \'ready\'');
     expect(query.sql).toContain('"calculation_records"."result_checksum"');
   });
@@ -84,7 +99,7 @@ describe("createDrizzleMatrixPdfJobStore", () => {
     const completeSql = render(completeFake.executed[0]).sql;
     expect(completeSql).toContain('update "media_assets"');
     expect(completeSql).toContain('update "calculation_artifacts"');
-    expect(completeSql).toContain('"status" = \'ready\'');
+    expect(completeSql).toContain("\"status\" = 'ready'");
 
     const failFake = createFakeDatabase([jobRow({ status: "failed", failureReason: "render" })]);
     await createDrizzleMatrixPdfJobStore(failFake.database as never).fail({
@@ -95,7 +110,7 @@ describe("createDrizzleMatrixPdfJobStore", () => {
     const failSql = render(failFake.executed[0]).sql;
     expect(failSql).toContain('update "media_assets"');
     expect(failSql).toContain('update "calculation_artifacts"');
-    expect(failSql).toContain('"status" = \'failed\'');
+    expect(failSql).toContain("\"status\" = 'failed'");
   });
 });
 

@@ -7,7 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
-  unique,
+  uniqueIndex,
   uuid
 } from "drizzle-orm/pg-core";
 import { calculationArtifacts } from "../calculations/calculation-artifacts.schema";
@@ -38,14 +38,16 @@ export const matrixPdfJobs = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
   },
   (table) => [
-    unique("matrix_pdf_jobs_idempotency_unique").on(
-      table.ownerUserId,
-      table.calculationId,
-      table.reportId,
-      table.reportRevision,
-      table.resultChecksum,
-      table.locale
-    ),
+    uniqueIndex("matrix_pdf_jobs_idempotency_unique")
+      .on(
+        table.ownerUserId,
+        table.calculationId,
+        table.reportId,
+        table.reportRevision,
+        table.resultChecksum,
+        table.locale
+      )
+      .where(sql`${table.status} <> 'failed'`),
     check("matrix_pdf_jobs_report_revision_check", sql`${table.reportRevision} > 0`),
     check(
       "matrix_pdf_jobs_result_checksum_check",

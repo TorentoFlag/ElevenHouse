@@ -11,6 +11,8 @@ export type MatrixPdfJobStore = {
     readonly calculationId: string;
     readonly jobId: string;
   }) => Promise<MatrixPdfJob | null>;
+  /** Worker lookup by globally unique job id. Never expose this unscoped method through HTTP. */
+  readonly findByJobId: (input: { readonly jobId: string }) => Promise<MatrixPdfJob | null>;
   /** Atomically validates report/calculation state and creates or reuses the idempotent job. */
   readonly enqueue: (input: {
     readonly id: string;

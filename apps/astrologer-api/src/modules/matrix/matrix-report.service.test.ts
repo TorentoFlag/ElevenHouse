@@ -189,6 +189,7 @@ function createHarness(input: { readonly report?: MatrixReportDraft } = {}) {
   const pdfJobStore: MatrixPdfJobStore = {
     findLatestByCalculation: vi.fn(async () => pdfJob),
     findById: vi.fn(async () => ({ ...pdfJob, status: "ready" as const })),
+    findByJobId: vi.fn(async () => ({ ...pdfJob, status: "ready" as const })),
     enqueue: vi.fn(async () => pdfJob),
     claimForRendering: vi.fn(),
     complete: vi.fn(),

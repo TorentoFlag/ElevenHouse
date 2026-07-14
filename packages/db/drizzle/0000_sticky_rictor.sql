@@ -719,7 +719,6 @@ CREATE TABLE "matrix_pdf_jobs" (
 	"failure_reason" text,
 	"created_at" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone NOT NULL,
-	CONSTRAINT "matrix_pdf_jobs_idempotency_unique" UNIQUE("owner_user_id","calculation_id","report_id","report_revision","result_checksum","locale"),
 	CONSTRAINT "matrix_pdf_jobs_report_revision_check" CHECK ("matrix_pdf_jobs"."report_revision" > 0),
 	CONSTRAINT "matrix_pdf_jobs_result_checksum_check" CHECK ("matrix_pdf_jobs"."result_checksum" ~ '^sha256:[a-f0-9]{64}$'),
 	CONSTRAINT "matrix_pdf_jobs_locale_check" CHECK ("matrix_pdf_jobs"."locale" in ('ru', 'en')),
@@ -894,6 +893,7 @@ CREATE UNIQUE INDEX "client_join_intents_token_hash_unique" ON "client_join_inte
 CREATE INDEX "client_join_intents_astrologer_status_idx" ON "client_join_intents" USING btree ("astrologer_user_id","status");--> statement-breakpoint
 CREATE INDEX "client_join_intents_claimed_client_idx" ON "client_join_intents" USING btree ("claimed_by_client_user_id");--> statement-breakpoint
 CREATE INDEX "matrix_notes_owner_calculation_created_id_idx" ON "matrix_notes" USING btree ("owner_user_id","calculation_id","created_at","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "matrix_pdf_jobs_idempotency_unique" ON "matrix_pdf_jobs" USING btree ("owner_user_id","calculation_id","report_id","report_revision","result_checksum","locale") WHERE "matrix_pdf_jobs"."status" <> 'failed';--> statement-breakpoint
 CREATE INDEX "matrix_pdf_jobs_owner_calculation_created_idx" ON "matrix_pdf_jobs" USING btree ("owner_user_id","calculation_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "matrix_pdf_jobs_status_updated_idx" ON "matrix_pdf_jobs" USING btree ("status","updated_at");--> statement-breakpoint
 CREATE INDEX "matrix_report_drafts_owner_calculation_idx" ON "matrix_report_drafts" USING btree ("owner_user_id","calculation_id");

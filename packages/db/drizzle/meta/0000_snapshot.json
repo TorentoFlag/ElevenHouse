@@ -1,5 +1,5 @@
 {
-  "id": "cdf210de-00b1-402f-b329-b96ad6373581",
+  "id": "dc0e642a-3b77-4b80-b1ee-815916a85768",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -6409,6 +6409,52 @@
         }
       },
       "indexes": {
+        "matrix_pdf_jobs_idempotency_unique": {
+          "name": "matrix_pdf_jobs_idempotency_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "calculation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "report_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "report_revision",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "result_checksum",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"matrix_pdf_jobs\".\"status\" <> 'failed'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "matrix_pdf_jobs_owner_calculation_created_idx": {
           "name": "matrix_pdf_jobs_owner_calculation_created_idx",
           "columns": [
@@ -6529,20 +6575,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "matrix_pdf_jobs_idempotency_unique": {
-          "name": "matrix_pdf_jobs_idempotency_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "owner_user_id",
-            "calculation_id",
-            "report_id",
-            "report_revision",
-            "result_checksum",
-            "locale"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
         "matrix_pdf_jobs_report_revision_check": {

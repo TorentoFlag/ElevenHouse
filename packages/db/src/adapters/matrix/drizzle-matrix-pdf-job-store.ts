@@ -51,6 +51,15 @@ export function createDrizzleMatrixPdfJobStore(database: ElevenHouseDatabase): M
       `);
       return toOptionalJob(result.rows[0] as MatrixPdfJobRow | undefined);
     },
+    findByJobId: async (input) => {
+      const result = await database.execute(sql<MatrixPdfJobRow>`
+        select ${jobSelectColumns()}
+        from ${matrixPdfJobs}
+        where ${matrixPdfJobs.id} = ${input.jobId}
+        limit 1
+      `);
+      return toOptionalJob(result.rows[0] as MatrixPdfJobRow | undefined);
+    },
     enqueue: async (input) => {
       const now = new Date(input.now);
       const result = await database.execute(sql<MatrixPdfJobRow>`
@@ -86,6 +95,7 @@ export function createDrizzleMatrixPdfJobStore(database: ElevenHouseDatabase): M
             and ${matrixPdfJobs.locale} = eligible.locale
           where ${matrixPdfJobs.ownerUserId} = ${input.ownerUserId}
             and ${matrixPdfJobs.calculationId} = ${input.calculationId}
+            and ${matrixPdfJobs.status} in ('queued', 'processing', 'ready')
         ),
         created_media as (
           insert into ${mediaAssets} (

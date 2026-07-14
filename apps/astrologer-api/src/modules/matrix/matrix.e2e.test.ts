@@ -597,6 +597,7 @@ function createMatrixPdfJobStore(): MatrixPdfJobStore {
   return {
     findLatestByCalculation: vi.fn(async () => job),
     findById: vi.fn(async () => job),
+    findByJobId: vi.fn(async (input) => (job?.id === input.jobId ? job : null)),
     enqueue: vi.fn(async (input) => {
       job ??= {
         id: input.id,
