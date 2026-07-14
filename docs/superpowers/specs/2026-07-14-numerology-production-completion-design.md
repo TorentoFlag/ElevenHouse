@@ -157,6 +157,9 @@ Implementation evidence as of 2026-07-14:
 
 ### 4.4 Phase 4: AI Interpretation
 
+Detailed approved design:
+`2026-07-14-numerology-ai-interpretation-design.md`.
+
 1. Expose AI draft creation for saved individual and compatibility results.
 2. Show generation progress and explicit provider/configuration errors.
 3. Keep AI output as an editable draft requiring astrologer approval.
