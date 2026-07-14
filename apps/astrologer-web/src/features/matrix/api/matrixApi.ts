@@ -97,7 +97,10 @@ export async function updateMatrixNote(input: {
   readonly noteId: string;
   readonly body: UpdateMatrixNoteRequest;
 }): Promise<MatrixNoteResponse> {
-  const params = matrixNoteIdParamSchema.parse(input);
+  const params = matrixNoteIdParamSchema.parse({
+    calculationId: input.calculationId,
+    noteId: input.noteId
+  });
   return matrixNoteResponseSchema.parse(
     await application.http.put(
       `/matrix/calculations/${params.calculationId}/notes/${params.noteId}`,

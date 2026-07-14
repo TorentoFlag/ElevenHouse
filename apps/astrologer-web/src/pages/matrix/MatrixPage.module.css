@@ -811,39 +811,36 @@
   color: #ff9c9c;
   font-size: 12px;
 }
-.presentationOverlay {
-  position: fixed;
+:global(.ehModal__backdrop).presentationOverlay {
   z-index: 1000;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
   padding: 26px 30px;
   background: radial-gradient(900px 560px at 50% 0%, #1b1738, #080717 70%);
+  backdrop-filter: none;
 }
-.presentationHeader {
+:global(.ehModal__dialog).presentationDialog {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  width: 100%;
+  max-height: calc(100dvh - 52px);
+  flex-direction: column;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
-.presentationHeader div {
-  display: grid;
-  gap: 3px;
+:global(.ehModal__content).presentationContent {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  padding: 0;
+  overflow: hidden;
 }
-.presentationHeader span {
-  color: var(--matrix-gold);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.presentationHeader strong {
-  font-size: 20px;
-}
-.presentationHeader button {
-  padding: 0 14px;
+.presentationEscapeHint {
+  color: var(--eh-color-muted);
+  font-size: 12px;
+  font-weight: 650;
 }
 .presentationBody {
   display: grid;
+  width: 100%;
   min-height: 0;
   flex: 1;
   grid-template-columns: minmax(420px, 1fr) 340px;

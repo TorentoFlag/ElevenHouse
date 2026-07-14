@@ -1,5 +1,5 @@
 import type { MatrixData } from "@elevenhouse/contracts";
-import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import { Modal } from "@elevenhouse/design-system/components/Modal";
 import { MatrixOctagram } from "../../features/matrix/components/MatrixOctagram";
 import styles from "./MatrixPage.module.css";
 
@@ -13,22 +13,15 @@ export function MatrixPresentation({
   readonly onClose: () => void;
 }) {
   return (
-    <div
-      className={styles.presentationOverlay}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Презентация Матрицы судьбы"
+    <Modal
+      title={`Матрица судьбы · ${title}`}
+      right={<span className={styles.presentationEscapeHint}>Esc · Выйти</span>}
+      closeLabel="Закрыть презентацию"
+      backdropClassName={styles.presentationOverlay}
+      className={styles.presentationDialog}
+      contentClassName={styles.presentationContent}
+      onClose={onClose}
     >
-      <header className={styles.presentationHeader}>
-        <div>
-          <span>Матрица судьбы</span>
-          <strong>{title}</strong>
-        </div>
-        <button type="button" onClick={onClose}>
-          <Icon iconName="close" width={18} height={18} />
-          Закрыть
-        </button>
-      </header>
       <div className={styles.presentationBody}>
         <MatrixOctagram matrix={matrix} selected="E" compact />
         <div className={styles.presentationSummary}>
@@ -40,6 +33,6 @@ export function MatrixPresentation({
           </p>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
