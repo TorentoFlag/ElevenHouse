@@ -37,8 +37,10 @@ export type NumerologyPageViewProps = {
   readonly interpretationText: string;
   readonly errorMessage: string | null;
   readonly periodErrorMessage: string | null;
+  readonly aiDraftErrorMessage: string | null;
   readonly isBusy: boolean;
   readonly isPreviewPending: boolean;
+  readonly isCreatingAiDraft: boolean;
   readonly editorState: NumerologyEditorState | null;
   readonly editorErrors: readonly string[];
   readonly archiveTarget: CalculationRecordResponse | null;
@@ -72,6 +74,7 @@ export type NumerologyPageViewProps = {
   readonly onLink: () => void;
   readonly onPublish: () => void;
   readonly onInterpretationChange: (value: string) => void;
+  readonly onCreateAiDraft: () => void;
   readonly onSaveInterpretation: () => void;
   readonly onApproveInterpretation: () => void;
 };
@@ -89,8 +92,10 @@ export function NumerologyPageView({
   interpretationText,
   errorMessage,
   periodErrorMessage,
+  aiDraftErrorMessage,
   isBusy,
   isPreviewPending,
+  isCreatingAiDraft,
   editorState,
   editorErrors,
   archiveTarget,
@@ -117,6 +122,7 @@ export function NumerologyPageView({
   onClosePresentation,
   onLink,
   onInterpretationChange,
+  onCreateAiDraft,
   onSaveInterpretation,
   onApproveInterpretation
 }: NumerologyPageViewProps) {
@@ -125,6 +131,7 @@ export function NumerologyPageView({
     previewResult,
     formState,
     selectedDetailSelector,
+    interpretationText,
     isBusy || Boolean(editorState)
   );
   const savedItems = getActiveNumerologyCalculations(calculations).map(toSavedCalculationListItem);
@@ -266,10 +273,14 @@ export function NumerologyPageView({
                   selectedSelector={pageModel.effectiveSelector}
                   isPeriodVisible={isPeriodVisible}
                   interpretationText={interpretationText}
-                  isBusy={isBusy}
+                  isCreatingAiDraft={isCreatingAiDraft}
+                  aiDraftErrorMessage={aiDraftErrorMessage}
+                  isAiDraftDisabled={pageModel.isAiDraftDisabled}
+                  aiDraftDisabledReason={pageModel.aiDraftDisabledReason}
                   isApproveInterpretationDisabled={pageModel.isApproveInterpretationDisabled}
                   isSaveInterpretationDisabled={pageModel.isSaveInterpretationDisabled}
                   onInterpretationChange={onInterpretationChange}
+                  onCreateAiDraft={onCreateAiDraft}
                   onSaveInterpretation={onSaveInterpretation}
                   onApproveInterpretation={onApproveInterpretation}
                   onSelect={onSelectDetail}

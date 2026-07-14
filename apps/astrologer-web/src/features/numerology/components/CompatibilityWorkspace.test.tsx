@@ -13,12 +13,16 @@ describe("CompatibilityWorkspace", () => {
         model={model}
         selectedSelector="compatibility:conclusion"
         interpretationText=""
-        isBusy={false}
+        isCreatingAiDraft={false}
+        aiDraftErrorMessage={null}
+        isAiDraftDisabled={false}
+        aiDraftDisabledReason={null}
         isApproveInterpretationDisabled
         isSaveInterpretationDisabled
         onInterpretationChange={vi.fn()}
         onSaveInterpretation={vi.fn()}
         onApproveInterpretation={vi.fn()}
+        onCreateAiDraft={vi.fn()}
         onSelect={vi.fn()}
       />
     );

@@ -1,8 +1,13 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { archiveCalculation } from "../../calculations/api/calculationsApi";
-import { useArchiveNumerologyMutation } from "./numerologyHooks";
-import { archiveNumerologyMutationOptions, calculationsQueryKeys } from "./numerologyQueries";
+import { createNumerologyAiDraft } from "../api/numerologyApi";
+import { useArchiveNumerologyMutation, useCreateNumerologyAiDraftMutation } from "./numerologyHooks";
+import {
+  archiveNumerologyMutationOptions,
+  calculationsQueryKeys,
+  createNumerologyAiDraftMutationOptions
+} from "./numerologyQueries";
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
@@ -16,6 +21,11 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
 vi.mock("../../calculations/api/calculationsApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../calculations/api/calculationsApi")>();
   return { ...actual, archiveCalculation: vi.fn() };
+});
+
+vi.mock("../api/numerologyApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api/numerologyApi")>();
+  return { ...actual, createNumerologyAiDraft: vi.fn() };
 });
 
 describe("numerology query options", () => {
@@ -38,5 +48,23 @@ describe("numerology query options", () => {
     expect(useArchiveNumerologyMutation()).toHaveProperty("mutationFn");
     expect(useQueryClient).toHaveBeenCalled();
     expect(useMutation).toHaveBeenCalled();
+  });
+
+  it("creates an AI draft and invalidates calculation queries", async () => {
+    const invalidateQueries = vi.fn(async () => undefined);
+    const queryClient = { invalidateQueries } satisfies Pick<QueryClient, "invalidateQueries">;
+    const input = {
+      calculationId: "11111111-1111-4111-8111-111111111111",
+      body: { expectedResultChecksum: `sha256:${"a".repeat(64)}` }
+    } as const;
+    vi.mocked(createNumerologyAiDraft).mockResolvedValue({} as never);
+    const options = createNumerologyAiDraftMutationOptions(queryClient);
+
+    await options.mutationFn(input);
+    await options.onSuccess();
+
+    expect(createNumerologyAiDraft).toHaveBeenCalledWith(input);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: calculationsQueryKeys.all() });
+    expect(useCreateNumerologyAiDraftMutation()).toHaveProperty("mutationFn");
   });
 });

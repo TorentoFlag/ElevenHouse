@@ -1,5 +1,6 @@
 import type {
   CreateNumerologyCalculationRequest,
+  CreateNumerologyAiDraftRequest,
   ListCalculationsQuery,
   RecalculateNumerologyCalculationRequest,
   PreviewNumerologyRequest
@@ -15,6 +16,7 @@ import {
   saveCalculationInterpretation
 } from "../../calculations/api/calculationsApi";
 import {
+  createNumerologyAiDraft,
   createNumerologyCalculation,
   previewNumerology,
   recalculateNumerologyCalculation
@@ -65,6 +67,18 @@ export function recalculateNumerologyMutationOptions(
       readonly calculationId: string;
       readonly body: RecalculateNumerologyCalculationRequest;
     }) => recalculateNumerologyCalculation(input),
+    onSuccess: () => invalidateCalculations(queryClient)
+  };
+}
+
+export function createNumerologyAiDraftMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: {
+      readonly calculationId: string;
+      readonly body: CreateNumerologyAiDraftRequest;
+    }) => createNumerologyAiDraft(input),
     onSuccess: () => invalidateCalculations(queryClient)
   };
 }

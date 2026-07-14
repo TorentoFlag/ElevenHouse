@@ -414,6 +414,54 @@
   gap: 8px;
 }
 
+.interpretationHeading {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.aiDraftButtonTooltip {
+  display: inline-flex;
+}
+
+.aiDraftButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid rgb(139 92 246 / 0.32);
+  border-radius: 8px;
+  background: rgb(139 92 246 / 0.12);
+  color: #d8c8ff;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.aiDraftButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.interpretationActions {
+  align-items: center;
+}
+
+.interpretationStatus {
+  min-height: 0;
+}
+
+.interpretationStatus:empty {
+  display: none;
+}
+
+.interpretationStatus p {
+  margin: 0;
+  color: #f4a8b1;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
 .participantCard {
   display: grid;
   gap: 8px;

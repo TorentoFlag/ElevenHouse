@@ -53,10 +53,14 @@ export async function recalculateNumerologyCalculation(input: {
 export async function createNumerologyAiDraft(input: {
   readonly calculationId: string;
   readonly body: CreateNumerologyAiDraftRequest;
-}): Promise<never> {
+}): Promise<NumerologyCalculationResponse> {
   const body = createNumerologyAiDraftRequestSchema.parse(input.body);
 
-  return application.http.post(`/numerology/calculations/${input.calculationId}/ai-draft`, body, {
-    csrf: true
-  });
+  return numerologyCalculationResponseSchema.parse(
+    await application.http.post(
+      `/numerology/calculations/${input.calculationId}/ai-draft`,
+      body,
+      { csrf: true }
+    )
+  );
 }

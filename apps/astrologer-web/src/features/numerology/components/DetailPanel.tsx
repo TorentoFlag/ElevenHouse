@@ -1,26 +1,35 @@
 import type { NumerologyWorkspaceDetail } from "../model/numerologyWorkspaceModel";
 import styles from "./NumerologyComponents.module.css";
+import { NumerologyInterpretationEditor } from "./NumerologyInterpretationEditor";
 
 export type DetailPanelProps = {
   readonly detail: NumerologyWorkspaceDetail | null;
   readonly interpretationText: string;
-  readonly isBusy: boolean;
+  readonly isCreatingAiDraft: boolean;
+  readonly aiDraftErrorMessage: string | null;
+  readonly isAiDraftDisabled: boolean;
+  readonly aiDraftDisabledReason: string | null;
   readonly isApproveInterpretationDisabled: boolean;
   readonly isSaveInterpretationDisabled: boolean;
   readonly onInterpretationChange: (value: string) => void;
   readonly onSaveInterpretation: () => void;
   readonly onApproveInterpretation: () => void;
+  readonly onCreateAiDraft: () => void;
 };
 
 export function DetailPanel({
   detail,
   interpretationText,
-  isBusy,
+  isCreatingAiDraft,
+  aiDraftErrorMessage,
+  isAiDraftDisabled,
+  aiDraftDisabledReason,
   isApproveInterpretationDisabled,
   isSaveInterpretationDisabled,
   onInterpretationChange,
   onSaveInterpretation,
-  onApproveInterpretation
+  onApproveInterpretation,
+  onCreateAiDraft
 }: DetailPanelProps) {
   return (
     <aside className={styles.detailPanel} aria-label="Трактовка выбранного элемента">
@@ -42,32 +51,20 @@ export function DetailPanel({
             <p>{detail.formula}</p>
           </div>
         ) : null}
-        <div className={styles.manualInterpretation}>
-          <span className={styles.kicker}>Ручная трактовка</span>
-          <textarea
-            value={interpretationText}
-            onChange={(event) => onInterpretationChange(event.target.value)}
-            placeholder="Введите ручную трактовку для клиента"
-          />
-          <div>
-            <button
-              type="button"
-              className="eh-button eh-button--secondary"
-              disabled={isSaveInterpretationDisabled || isBusy}
-              onClick={onSaveInterpretation}
-            >
-              Сохранить
-            </button>
-            <button
-              type="button"
-              className="eh-button eh-button--primary"
-              disabled={isApproveInterpretationDisabled}
-              onClick={onApproveInterpretation}
-            >
-              Утвердить
-            </button>
-          </div>
-        </div>
+        <NumerologyInterpretationEditor
+          text={interpretationText}
+          placeholder="Введите трактовку для клиента"
+          isCreatingAiDraft={isCreatingAiDraft}
+          aiDraftErrorMessage={aiDraftErrorMessage}
+          aiDraftDisabled={isAiDraftDisabled}
+          aiDraftDisabledReason={aiDraftDisabledReason}
+          saveDisabled={isSaveInterpretationDisabled}
+          approveDisabled={isApproveInterpretationDisabled}
+          onTextChange={onInterpretationChange}
+          onCreateAiDraft={onCreateAiDraft}
+          onSave={onSaveInterpretation}
+          onApprove={onApproveInterpretation}
+        />
       </div>
     </aside>
   );

@@ -23,12 +23,16 @@ export function NumerologyResultPanel({
   selectedSelector,
   isPeriodVisible,
   interpretationText,
-  isBusy,
+  isCreatingAiDraft,
+  aiDraftErrorMessage,
+  isAiDraftDisabled,
+  aiDraftDisabledReason,
   isApproveInterpretationDisabled,
   isSaveInterpretationDisabled,
   onInterpretationChange,
   onSaveInterpretation,
   onApproveInterpretation,
+  onCreateAiDraft,
   onSelect
 }: {
   readonly model: NumerologyWorkspaceModel | null;
@@ -36,12 +40,16 @@ export function NumerologyResultPanel({
   readonly selectedSelector: string | null;
   readonly isPeriodVisible: boolean;
   readonly interpretationText: string;
-  readonly isBusy: boolean;
+  readonly isCreatingAiDraft: boolean;
+  readonly aiDraftErrorMessage: string | null;
+  readonly isAiDraftDisabled: boolean;
+  readonly aiDraftDisabledReason: string | null;
   readonly isApproveInterpretationDisabled: boolean;
   readonly isSaveInterpretationDisabled: boolean;
   readonly onInterpretationChange: (value: string) => void;
   readonly onSaveInterpretation: () => void;
   readonly onApproveInterpretation: () => void;
+  readonly onCreateAiDraft: () => void;
   readonly onSelect: (selector: string) => void;
 }) {
   const [currentDate] = useState(() => new Date());
@@ -66,12 +74,16 @@ export function NumerologyResultPanel({
         model={model}
         selectedSelector={selectedSelector}
         interpretationText={interpretationText}
-        isBusy={isBusy}
+        isCreatingAiDraft={isCreatingAiDraft}
+        aiDraftErrorMessage={aiDraftErrorMessage}
+        isAiDraftDisabled={isAiDraftDisabled}
+        aiDraftDisabledReason={aiDraftDisabledReason}
         isApproveInterpretationDisabled={isApproveInterpretationDisabled}
         isSaveInterpretationDisabled={isSaveInterpretationDisabled}
         onInterpretationChange={onInterpretationChange}
         onSaveInterpretation={onSaveInterpretation}
         onApproveInterpretation={onApproveInterpretation}
+        onCreateAiDraft={onCreateAiDraft}
         onSelect={onSelect}
       />
     );
@@ -153,12 +165,16 @@ export function NumerologyResultPanel({
       <DetailPanel
         detail={detail}
         interpretationText={interpretationText}
-        isBusy={isBusy}
+        isCreatingAiDraft={isCreatingAiDraft}
+        aiDraftErrorMessage={aiDraftErrorMessage}
+        isAiDraftDisabled={isAiDraftDisabled}
+        aiDraftDisabledReason={aiDraftDisabledReason}
         isApproveInterpretationDisabled={isApproveInterpretationDisabled}
         isSaveInterpretationDisabled={isSaveInterpretationDisabled}
         onInterpretationChange={onInterpretationChange}
         onSaveInterpretation={onSaveInterpretation}
         onApproveInterpretation={onApproveInterpretation}
+        onCreateAiDraft={onCreateAiDraft}
       />
     </>
   );

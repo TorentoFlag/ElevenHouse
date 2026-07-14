@@ -4,17 +4,22 @@ import { CompatibilityComparisonList } from "./CompatibilityComparisonList";
 import { CompatibilityParticipants } from "./CompatibilityParticipants";
 import { CompatibilitySummary } from "./CompatibilitySummary";
 import { PythagoreanMatrix } from "./PythagoreanMatrix";
+import { NumerologyInterpretationEditor } from "./NumerologyInterpretationEditor";
 
 export type CompatibilityWorkspaceProps = {
   readonly model: NumerologyWorkspaceModel;
   readonly selectedSelector: string | null;
   readonly interpretationText: string;
-  readonly isBusy: boolean;
+  readonly isCreatingAiDraft: boolean;
+  readonly aiDraftErrorMessage: string | null;
+  readonly isAiDraftDisabled: boolean;
+  readonly aiDraftDisabledReason: string | null;
   readonly isApproveInterpretationDisabled: boolean;
   readonly isSaveInterpretationDisabled: boolean;
   readonly onInterpretationChange: (value: string) => void;
   readonly onSaveInterpretation: () => void;
   readonly onApproveInterpretation: () => void;
+  readonly onCreateAiDraft: () => void;
   readonly onSelect: (selector: string) => void;
 };
 
@@ -22,12 +27,16 @@ export function CompatibilityWorkspace({
   model,
   selectedSelector,
   interpretationText,
-  isBusy,
+  isCreatingAiDraft,
+  aiDraftErrorMessage,
+  isAiDraftDisabled,
+  aiDraftDisabledReason,
   isApproveInterpretationDisabled,
   isSaveInterpretationDisabled,
   onInterpretationChange,
   onSaveInterpretation,
   onApproveInterpretation,
+  onCreateAiDraft,
   onSelect
 }: CompatibilityWorkspaceProps) {
   const compatibility = model.compatibility;
@@ -101,32 +110,20 @@ export function CompatibilityWorkspace({
             selectedSelector={selectedSelector}
             onSelect={onSelect}
           />
-          <div className={styles.manualInterpretation}>
-            <span className={styles.kicker}>Ручная трактовка</span>
-            <textarea
-              value={interpretationText}
-              onChange={(event) => onInterpretationChange(event.target.value)}
-              placeholder="Введите ручную трактовку для пары"
-            />
-            <div>
-              <button
-                type="button"
-                className="eh-button eh-button--secondary"
-                disabled={isSaveInterpretationDisabled || isBusy}
-                onClick={onSaveInterpretation}
-              >
-                Сохранить
-              </button>
-              <button
-                type="button"
-                className="eh-button eh-button--primary"
-                disabled={isApproveInterpretationDisabled}
-                onClick={onApproveInterpretation}
-              >
-                Утвердить
-              </button>
-            </div>
-          </div>
+          <NumerologyInterpretationEditor
+            text={interpretationText}
+            placeholder="Введите трактовку для пары"
+            isCreatingAiDraft={isCreatingAiDraft}
+            aiDraftErrorMessage={aiDraftErrorMessage}
+            aiDraftDisabled={isAiDraftDisabled}
+            aiDraftDisabledReason={aiDraftDisabledReason}
+            saveDisabled={isSaveInterpretationDisabled}
+            approveDisabled={isApproveInterpretationDisabled}
+            onTextChange={onInterpretationChange}
+            onCreateAiDraft={onCreateAiDraft}
+            onSave={onSaveInterpretation}
+            onApprove={onApproveInterpretation}
+          />
         </div>
       </aside>
     </>

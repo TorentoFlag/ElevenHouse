@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   approveCalculationInterpretationMutationOptions,
   archiveNumerologyMutationOptions,
+  createNumerologyAiDraftMutationOptions,
   createNumerologyMutationOptions,
   previewNumerologyMutationOptions,
   linkCalculationClientMutationOptions,
@@ -23,6 +24,12 @@ export function useCreateNumerologyMutation() {
 
 export function usePreviewNumerologyMutation() {
   return useMutation(previewNumerologyMutationOptions());
+}
+
+export function useCreateNumerologyAiDraftMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation(createNumerologyAiDraftMutationOptions(queryClient));
 }
 
 export function useRecalculateNumerologyMutation() {

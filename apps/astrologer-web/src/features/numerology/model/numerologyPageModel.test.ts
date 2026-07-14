@@ -20,9 +20,31 @@ describe("numerologyPageModel", () => {
     const saved = response();
     const form = createInitialNumerologyForm();
 
-    expect(buildNumerologyPageViewModel(saved, null, form, null, false)).toMatchObject({
+    expect(buildNumerologyPageViewModel(saved, null, form, null, "", false)).toMatchObject({
       publishDisabled: true,
       publishDisabledReason: "Сначала привяжите расчет к клиенту"
+    });
+  });
+
+  it("blocks AI and approval when the visible interpretation has unsaved changes", () => {
+    const base = response();
+    const saved = {
+      ...base,
+      calculation: {
+        ...base.calculation,
+        interpretations: [
+          interpretation("11111111-1111-4111-8111-111111111111", "Сохранённый текст")
+        ]
+      }
+    };
+
+    expect(
+      buildNumerologyPageViewModel(saved, null, createInitialNumerologyForm(), null, "Изменено", false)
+    ).toMatchObject({
+      isAiDraftDisabled: true,
+      aiDraftDisabledReason: "Сначала сохраните или отмените изменения",
+      isApproveInterpretationDisabled: true,
+      isSaveInterpretationDisabled: false
     });
   });
 });

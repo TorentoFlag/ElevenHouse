@@ -31,6 +31,7 @@ import {
 import {
   useApproveCalculationInterpretationMutation,
   useArchiveNumerologyMutation,
+  useCreateNumerologyAiDraftMutation,
   useCreateNumerologyMutation,
   useLinkCalculationClientMutation,
   useNumerologyCalculationListQuery,
@@ -45,6 +46,10 @@ import {
   toNumerologyFormState,
   toNumerologyResponse
 } from "../../features/numerology/model/numerologyPageModel";
+import {
+  getNumerologyAiDraftErrorMessage,
+  getNumerologyInterpretationState
+} from "../../features/numerology/model/numerologyInterpretationModel";
 import { getLatestInterpretationText } from "../../features/numerology/model/numerologyResultModel";
 import {
   createNewNumerologyEditorState,
@@ -75,6 +80,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const publishMutation = usePublishCalculationMutation();
   const recalculateMutation = useRecalculateNumerologyMutation();
   const archiveMutation = useArchiveNumerologyMutation();
+  const createAiDraftMutation = useCreateNumerologyAiDraftMutation();
   const calculations = useMemo(
     () => listQuery.data?.calculations ?? [],
     [listQuery.data?.calculations]
@@ -100,10 +106,13 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const [interpretationText, setInterpretationText] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [periodErrorMessage, setPeriodErrorMessage] = useState<string | null>(null);
+  const [aiDraftErrorMessage, setAiDraftErrorMessage] = useState<string | null>(null);
   const [editorState, setEditorState] = useState<NumerologyEditorState | null>(null);
   const [editorErrors, setEditorErrors] = useState<readonly string[]>([]);
   const [archiveTarget, setArchiveTarget] = useState<CalculationRecordResponse | null>(null);
   const previewGuardRef = useRef(createLatestPreviewGuard());
+  const aiDraftGuardRef = useRef(createLatestPreviewGuard());
+  const aiDraftInFlightRef = useRef(false);
   const isPreviewPending = previewMutation.isPending;
   const isBusy =
     createMutation.isPending ||
@@ -113,7 +122,8 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     approveInterpretationMutation.isPending ||
     publishMutation.isPending ||
     recalculateMutation.isPending ||
-    archiveMutation.isPending;
+    archiveMutation.isPending ||
+    createAiDraftMutation.isPending;
 
   useDocumentTitle("ElevenHouse | Нумерология");
 
@@ -142,8 +152,10 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     interpretationText,
     errorMessage,
     periodErrorMessage,
+    aiDraftErrorMessage,
     isBusy,
     isPreviewPending,
+    isCreatingAiDraft: createAiDraftMutation.isPending,
     editorState,
     editorErrors,
     archiveTarget,
@@ -179,6 +191,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       setEditorState(null);
       setEditorErrors([]);
       setErrorMessage(null);
+      setAiDraftErrorMessage(null);
     },
     onRequestArchive: () => {
       if (selectedCalculation?.status === "archived") return;
@@ -249,7 +262,11 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
         setSelectedResponse(toNumerologyResponse(calculation));
       }, setErrorMessage);
     },
-    onInterpretationChange: setInterpretationText,
+    onInterpretationChange: (value) => {
+      setInterpretationText(value);
+      setAiDraftErrorMessage(null);
+    },
+    onCreateAiDraft: createAiDraft,
     onSaveInterpretation: () => {
       if (!selectedCalculation) return;
       run(async () => {
@@ -278,6 +295,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
 
   function selectCalculation(calculation: CalculationRecordResponse): void {
     previewGuardRef.current.invalidate();
+    aiDraftGuardRef.current.invalidate();
     const response = toNumerologyResponse(calculation);
     setPreviewResult(null);
     setSelectedResponse(response);
@@ -285,23 +303,28 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     setEditorState(null);
     setEditorErrors([]);
     setArchiveTarget(null);
+    setAiDraftErrorMessage(null);
   }
 
   function openCreateEditor(): void {
     previewGuardRef.current.invalidate();
+    aiDraftGuardRef.current.invalidate();
     setEditorState(createNewNumerologyEditorState());
     setEditorErrors([]);
     setArchiveTarget(null);
     setErrorMessage(null);
+    setAiDraftErrorMessage(null);
   }
 
   function openRecalculationEditor(): void {
     if (!selectedCalculation || selectedCalculation.status === "archived") return;
     previewGuardRef.current.invalidate();
+    aiDraftGuardRef.current.invalidate();
     setEditorState(createRecalculationEditorState(selectedCalculation));
     setEditorErrors([]);
     setArchiveTarget(null);
     setErrorMessage(null);
+    setAiDraftErrorMessage(null);
   }
 
   function submitEditor(): void {
@@ -328,6 +351,30 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     }, setErrorMessage);
   }
 
+  function createAiDraft(): void {
+    if (aiDraftInFlightRef.current) return;
+    const requestId = aiDraftGuardRef.current.begin();
+    setAiDraftErrorMessage(null);
+    aiDraftInFlightRef.current = true;
+
+    void (async () => {
+      const outcome = await requestNumerologyAiDraft({
+        calculation: selectedCalculation,
+        editorText: interpretationText,
+        isBusy,
+        mutate: (input) => createAiDraftMutation.mutateAsync(input)
+      });
+      aiDraftInFlightRef.current = false;
+      if (!aiDraftGuardRef.current.isCurrent(requestId)) return;
+
+      if (outcome.kind === "success") {
+        setSelectedResponse(outcome.response);
+      } else if (outcome.kind === "error") {
+        setAiDraftErrorMessage(outcome.message);
+      }
+    })();
+  }
+
   function confirmArchive(): void {
     if (!archiveTarget) return;
     const archivedId = archiveTarget.id;
@@ -346,6 +393,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
         return;
       }
       previewGuardRef.current.invalidate();
+      aiDraftGuardRef.current.invalidate();
       setSelectedResponse(null);
       setPreviewResult(null);
       setFormState(createInitialNumerologyForm());
@@ -486,6 +534,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
         if (!previewGuardRef.current.isCurrent(requestId)) return;
         setPeriodErrorMessage(null);
         setErrorMessage(null);
+        aiDraftGuardRef.current.invalidate();
         setSelectedResponse(null);
         setPreviewResult(response.result);
       } catch (error) {
@@ -511,6 +560,38 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       findClientSelectOption(clientOptions, clientId) ??
       toClientOptionFromNumerologyParticipant(participant)
     );
+  }
+}
+
+export type NumerologyAiDraftRequestOutcome =
+  | { readonly kind: "skipped" }
+  | { readonly kind: "success"; readonly response: NumerologyCalculationResponse }
+  | { readonly kind: "error"; readonly message: string };
+
+export async function requestNumerologyAiDraft(input: {
+  readonly calculation: CalculationRecordResponse | null;
+  readonly editorText: string;
+  readonly isBusy: boolean;
+  readonly mutate: (request: {
+    readonly calculationId: string;
+    readonly body: { readonly expectedResultChecksum: string };
+  }) => Promise<NumerologyCalculationResponse>;
+}): Promise<NumerologyAiDraftRequestOutcome> {
+  const state = getNumerologyInterpretationState(
+    input.calculation,
+    input.editorText,
+    input.isBusy
+  );
+  if (!input.calculation || state.aiDisabled) return { kind: "skipped" };
+
+  try {
+    const response = await input.mutate({
+      calculationId: input.calculation.id,
+      body: { expectedResultChecksum: input.calculation.resultChecksum }
+    });
+    return { kind: "success", response };
+  } catch (error) {
+    return { kind: "error", message: getNumerologyAiDraftErrorMessage(error) };
   }
 }
 

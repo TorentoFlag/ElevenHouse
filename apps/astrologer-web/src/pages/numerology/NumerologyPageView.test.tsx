@@ -169,6 +169,42 @@ describe("NumerologyPageView", () => {
     expect(resultPanel.props.isApproveInterpretationDisabled).toBe(true);
   });
 
+  it("blocks AI generation and approval while the interpretation has unsaved changes", () => {
+    const baseResponse = response({
+      source: "crm_client",
+      clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+    });
+    const selectedResponse = {
+      ...baseResponse,
+      calculation: {
+        ...baseResponse.calculation,
+        interpretations: [
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            status: "draft" as const,
+            text: "Сохранённый текст"
+          }
+        ]
+      }
+    };
+    const view = NumerologyPageView({
+      ...baseProps(),
+      selectedResponse,
+      interpretationText: "Изменённый текст"
+    });
+    const resultPanel = findRequiredElementByType<{
+      readonly isAiDraftDisabled: boolean;
+      readonly aiDraftDisabledReason: string | null;
+      readonly isApproveInterpretationDisabled: boolean;
+    }>(view, NumerologyResultPanel);
+
+    expect(resultPanel.props).toMatchObject({
+      isAiDraftDisabled: true,
+      aiDraftDisabledReason: "Сначала сохраните или отмените изменения",
+      isApproveInterpretationDisabled: true
+    });
+  });
+
   it("passes the current period and unsaved interpretation into presentation", () => {
     const view = NumerologyPageView({
       ...baseProps(),
@@ -395,8 +431,10 @@ function baseProps(): NumerologyPageViewProps {
     interpretationText: "",
     errorMessage: null,
     periodErrorMessage: null,
+    aiDraftErrorMessage: null,
     isBusy: false,
     isPreviewPending: false,
+    isCreatingAiDraft: false,
     editorState: null,
     editorErrors: [],
     archiveTarget: null,
@@ -424,6 +462,7 @@ function baseProps(): NumerologyPageViewProps {
     onLink: vi.fn(),
     onPublish: vi.fn(),
     onInterpretationChange: vi.fn(),
+    onCreateAiDraft: vi.fn(),
     onSaveInterpretation: vi.fn(),
     onApproveInterpretation: vi.fn()
   };

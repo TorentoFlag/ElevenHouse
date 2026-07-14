@@ -24,6 +24,7 @@ import {
   type NumerologyFormState,
   type NumerologyParticipantFormState
 } from "./numerologyFormModel";
+import { getNumerologyInterpretationState } from "./numerologyInterpretationModel";
 import {
   buildNumerologyWorkspaceModel,
   getNumerologyDetail,
@@ -41,6 +42,8 @@ export type NumerologyPageViewModel = {
   readonly isClientSelectionDisabled: boolean;
   readonly isApproveInterpretationDisabled: boolean;
   readonly isSaveInterpretationDisabled: boolean;
+  readonly isAiDraftDisabled: boolean;
+  readonly aiDraftDisabledReason: string | null;
   readonly model: NumerologyWorkspaceModel | null;
   readonly effectiveSelector: string | null;
   readonly detail: ReturnType<typeof getNumerologyDetail>;
@@ -56,11 +59,16 @@ export function buildNumerologyPageViewModel(
   previewResult: NumerologyResult | null,
   formState: NumerologyFormState,
   selectedDetailSelector: string | null,
+  interpretationText: string,
   isBusy: boolean
 ): NumerologyPageViewModel {
   const calculation = selectedResponse?.calculation ?? null;
   const linkableClientId = getFirstLinkableClientId(calculation) ?? firstCrmClientId(formState);
-  const currentInterpretation = getCurrentInterpretation(calculation);
+  const interpretationState = getNumerologyInterpretationState(
+    calculation,
+    interpretationText,
+    isBusy
+  );
   const model = buildNumerologyWorkspaceModel(selectedResponse, previewResult, formState);
   const effectiveSelector = selectedDetailSelector ?? model?.defaultSelector ?? null;
   const detail = getNumerologyDetail(model, effectiveSelector);
@@ -77,9 +85,10 @@ export function buildNumerologyPageViewModel(
     publishDisabled: !canPublishCalculation(calculation) || isBusy,
     publishDisabledReason: getPublishDisabledReason(calculation, isBusy),
     isClientSelectionDisabled: isBusy,
-    isApproveInterpretationDisabled:
-      !currentInterpretation || currentInterpretation.status === "approved" || isBusy,
-    isSaveInterpretationDisabled: !calculation || calculation.status === "archived" || isBusy,
+    isApproveInterpretationDisabled: interpretationState.approveDisabled,
+    isSaveInterpretationDisabled: interpretationState.saveDisabled,
+    isAiDraftDisabled: interpretationState.aiDisabled,
+    aiDraftDisabledReason: interpretationState.aiDisabledReason,
     model,
     effectiveSelector,
     detail,
