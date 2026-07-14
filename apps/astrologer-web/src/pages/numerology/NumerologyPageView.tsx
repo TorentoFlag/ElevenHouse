@@ -11,7 +11,7 @@ import type { ClientSelectOption } from "../../features/clients/model/clientSele
 import type { NumerologyFormState } from "../../features/numerology/model/numerologyFormModel";
 import { toClientOptionFromNumerologyParticipant } from "../../features/numerology/model/numerologyCompatibilityFlowModel";
 import { buildNumerologyPageViewModel } from "../../features/numerology/model/numerologyPageModel";
-import { NumerologyPresentation } from "./NumerologyPresentation";
+import { NumerologyPresentationDialog } from "./NumerologyPresentationDialog";
 import { NumerologyYearPicker } from "./NumerologyYearPicker";
 import styles from "./NumerologyPage.module.css";
 
@@ -227,7 +227,12 @@ export function NumerologyPageView({
         </main>
       </div>
       {isPresentationOpen && pageModel.model ? (
-        <NumerologyPresentation model={pageModel.model} onClose={onClosePresentation} />
+        <NumerologyPresentationDialog
+          model={pageModel.model}
+          isPeriodVisible={isPeriodVisible}
+          interpretationText={interpretationText}
+          onClose={onClosePresentation}
+        />
       ) : null}
     </section>
   );

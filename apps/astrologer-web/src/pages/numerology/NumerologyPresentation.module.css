@@ -1,0 +1,480 @@
+.backdrop {
+  z-index: 1000;
+  align-items: stretch;
+  padding: 18px;
+  background: radial-gradient(1100px 700px at 50% -8%, #1b1738, #080717 70%);
+  backdrop-filter: none;
+}
+
+.dialog {
+  --presentation-surface: rgb(28 24 58 / 0.78);
+  --presentation-line: rgb(216 212 236 / 0.14);
+  --presentation-accent: #f6d266;
+
+  width: min(1440px, 100%);
+  max-height: calc(100dvh - 36px);
+  border-color: var(--presentation-line);
+  border-radius: 20px;
+  background: rgb(10 9 24 / 0.96);
+}
+
+.content {
+  max-height: calc(100dvh - 108px);
+  padding: 8px 26px 32px;
+  overscroll-behavior: contain;
+}
+
+.escapeHint {
+  color: var(--eh-color-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.presentation {
+  display: grid;
+  max-width: 1320px;
+  margin: 0 auto;
+  gap: 26px;
+}
+
+.identity,
+.participantIdentity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.identity div,
+.participantIdentity {
+  min-width: 0;
+}
+
+.identity div {
+  display: grid;
+  gap: 3px;
+}
+
+.identity strong,
+.participantIdentity strong {
+  color: var(--eh-color-moon-120);
+  font-size: 18px;
+}
+
+.identity span:not(.avatar) {
+  color: var(--eh-color-muted);
+  font-size: 13px;
+}
+
+.avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  border: 1px solid rgb(246 210 102 / 0.32);
+  border-radius: 13px;
+  background: rgb(246 210 102 / 0.1);
+  color: var(--presentation-accent);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.section {
+  display: grid;
+  gap: 14px;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sectionHeading span {
+  color: var(--eh-color-muted);
+  font-size: 12px;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--eh-color-moon-120);
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.keyGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.keyCard,
+.monthCard,
+.matrixCell,
+.lineCard,
+.participantCard,
+.zoneCard,
+.countGrid article,
+.comparisonRow {
+  border: 1px solid var(--presentation-line);
+  border-radius: 14px;
+  background: var(--presentation-surface);
+}
+
+.keyCard {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 14px;
+}
+
+.keyCard > strong {
+  color: var(--presentation-accent);
+  font: 800 27px/1 var(--eh-font-mono);
+}
+
+.keyCard span {
+  color: var(--eh-color-moon-120);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.keyCard small,
+.matrixCell small,
+.sectionHeading span {
+  color: var(--eh-color-muted);
+  line-height: 1.45;
+}
+
+.yearCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgb(246 210 102 / 0.26);
+  border-radius: 14px;
+  background: rgb(246 210 102 / 0.1);
+}
+
+.yearCard span {
+  color: var(--presentation-accent);
+  font: 800 26px/1 var(--eh-font-mono);
+}
+
+.monthGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.monthCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.monthCard small {
+  color: var(--eh-color-muted);
+}
+
+.monthCard strong {
+  color: var(--presentation-accent);
+  font-family: var(--eh-font-mono);
+}
+
+.matrixGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.matrixCell {
+  display: grid;
+  min-height: 138px;
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  padding: 14px;
+  text-align: center;
+}
+
+.matrixCell > strong {
+  color: var(--eh-color-moon-120);
+  font: 800 25px/1 var(--eh-font-mono);
+}
+
+.matrixCell > span {
+  color: var(--presentation-accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lineGrid,
+.zoneGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lineCard,
+.zoneCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 14px;
+  padding: 13px 14px;
+}
+
+.lineCard div,
+.zoneCard div {
+  display: grid;
+  gap: 3px;
+}
+
+.lineCard div span,
+.zoneCard div span,
+.zoneCard small {
+  color: var(--eh-color-muted);
+  font-size: 11px;
+}
+
+.lineCard > b {
+  color: var(--presentation-accent);
+  font: 800 20px/1 var(--eh-font-mono);
+}
+
+.lineCard p,
+.zoneCard p,
+.comparisonRow p,
+.pairCard p,
+.conclusion p,
+.interpretation p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--eh-color-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.participants {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.participantCard {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.participantNumbers {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.participantNumbers span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 9px;
+  border-radius: 10px;
+  background: rgb(216 212 236 / 0.05);
+}
+
+.participantNumbers small {
+  overflow: hidden;
+  color: var(--eh-color-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.participantNumbers strong {
+  color: var(--presentation-accent);
+  font: 800 18px/1 var(--eh-font-mono);
+}
+
+.pairCard {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid rgb(246 210 102 / 0.24);
+  border-radius: 16px;
+  background: rgb(246 210 102 / 0.09);
+}
+
+.pairCard > strong {
+  color: var(--presentation-accent);
+  font: 800 42px/1 var(--eh-font-mono);
+}
+
+.pairCard h3,
+.pairCard p {
+  margin: 0;
+}
+
+.pairCard div {
+  display: grid;
+  gap: 4px;
+}
+
+.pairCard span {
+  color: var(--presentation-accent);
+  font-size: 12px;
+}
+
+.comparisonList {
+  display: grid;
+  gap: 8px;
+}
+
+.comparisonRow {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.8fr) auto minmax(260px, 1.2fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.comparisonHeading,
+.comparisonValues {
+  display: grid;
+  gap: 3px;
+}
+
+.comparisonHeading span {
+  color: var(--presentation-accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.comparisonValues b {
+  font-family: var(--eh-font-mono);
+}
+
+.comparisonValues small {
+  color: var(--eh-color-muted);
+}
+
+.comparisonRow p {
+  grid-column: auto;
+}
+
+.countGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.countGrid article {
+  display: grid;
+  gap: 5px;
+  padding: 13px;
+}
+
+.countGrid article span {
+  color: var(--eh-color-muted);
+  font-size: 11px;
+}
+
+.conclusion,
+.interpretation {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid rgb(246 210 102 / 0.25);
+  border-radius: 16px;
+  background: rgb(246 210 102 / 0.08);
+}
+
+.conclusion > span {
+  color: var(--presentation-accent);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.conclusion h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+@media (max-width: 980px) {
+  .keyGrid,
+  .countGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .participantNumbers {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .comparisonRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .comparisonRow p {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 700px) {
+  .backdrop {
+    padding: 0;
+  }
+
+  .dialog {
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .content {
+    max-height: calc(100dvh - 68px);
+    padding: 6px 16px 24px;
+  }
+
+  .escapeHint {
+    display: none;
+  }
+
+  .participants,
+  .lineGrid,
+  .zoneGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .monthGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .matrixCell {
+    min-height: 105px;
+    padding: 9px;
+  }
+}
+
+@media (max-width: 480px) {
+  .keyGrid,
+  .countGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .participantNumbers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .comparisonRow {
+    grid-template-columns: 1fr;
+  }
+
+  .comparisonRow p {
+    grid-column: auto;
+  }
+}

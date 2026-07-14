@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import { NumerologyResultPanel } from "../../features/numerology/components/NumerologyResultPanel";
 import { NumerologyPageView, type NumerologyPageViewProps } from "./NumerologyPageView";
+import { NumerologyPresentationDialog } from "./NumerologyPresentationDialog";
 import { NumerologyYearPicker } from "./NumerologyYearPicker";
 import { createParticipantFormState } from "../../features/numerology/model/numerologyFormModel";
 import styles from "./NumerologyPage.module.css";
@@ -122,6 +123,25 @@ describe("NumerologyPageView", () => {
     }>(view, NumerologyResultPanel);
 
     expect(resultPanel.props.isApproveInterpretationDisabled).toBe(true);
+  });
+
+  it("passes the current period and unsaved interpretation into presentation", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      selectedResponse: response({
+        source: "crm_client",
+        clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+      }),
+      isPresentationOpen: true,
+      interpretationText: "Текущий несохраненный текст"
+    });
+    const presentation = findRequiredElementByType<{
+      readonly isPeriodVisible: boolean;
+      readonly interpretationText: string;
+    }>(view, NumerologyPresentationDialog);
+
+    expect(presentation.props.isPeriodVisible).toBe(true);
+    expect(presentation.props.interpretationText).toBe("Текущий несохраненный текст");
   });
 
   it("disables client selection and recalculation while an action is pending", () => {
