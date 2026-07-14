@@ -609,9 +609,14 @@ calculation engine.
 Include at minimum:
 
 - `07.01.2000` working numbers `10, 1, 4, 4`;
+- `30.01.1000` working numbers `5, 5, 1, 1`; the third number is the
+  unsigned magnitude of the raw subtraction, because a minus sign is not a
+  psychomatrix digit;
 - preservation of `11`, `22`, and `33` in scalar indicators;
 - separate canonical handling of `Ё` and `Й`;
-- separators versus unsupported symbols;
+- whitespace, period, hyphen and Unicode dash variants, straight/curly
+  apostrophes and quotes, and guillemets are ignored name separators; other
+  unsupported symbols remain validation errors;
 - missing name, vowel, or consonant;
 - future personal year, month, and day;
 - invalid/future birth date;

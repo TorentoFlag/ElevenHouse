@@ -10,4 +10,13 @@ describe("Pythagorean RU psychomatrix", () => {
       fourth: 4
     });
   });
+
+  it("uses the unsigned magnitude when the raw third working number is negative", () => {
+    expect(calculatePsychomatrix("1000-01-30").workingNumbers).toEqual({
+      first: 5,
+      second: 5,
+      third: 1,
+      fourth: 1
+    });
+  });
 });

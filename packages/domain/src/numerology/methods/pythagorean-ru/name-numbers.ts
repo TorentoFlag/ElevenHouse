@@ -5,6 +5,27 @@ import { reduceScalar } from "./reduction";
 
 type NameNumbers = Pick<PythagoreanKeyNumbers, "expression" | "soul" | "personality">;
 
+const IGNORED_NAME_SEPARATORS = new Set([
+  ".",
+  "-",
+  "‐",
+  "‑",
+  "‒",
+  "–",
+  "—",
+  "―",
+  "'",
+  "‘",
+  "’",
+  "ʼ",
+  '"',
+  "“",
+  "”",
+  "„",
+  "«",
+  "»"
+]);
+
 export function calculateNameNumbers(calculationName: string): NameNumbers {
   const normalized = normalizeCalculationName(calculationName);
   const letters = [...normalized];
@@ -30,7 +51,7 @@ export function normalizeCalculationName(calculationName: string): string {
       normalized.push(character);
       continue;
     }
-    if (character === " " || character === "-" || character === "'" || character === "’") {
+    if (/\s/u.test(character) || IGNORED_NAME_SEPARATORS.has(character)) {
       continue;
     }
     throw new NumerologyValidationError(`Unsupported numerology name character: ${character}`);

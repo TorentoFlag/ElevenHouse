@@ -18,6 +18,22 @@ describe("Pythagorean RU name numbers", () => {
     expect(normalizeCalculationName("Алёна Йогина")).toContain("й");
   });
 
+  it("ignores approved punctuation separators without changing name numbers", () => {
+    const expected = { expression: 6, soul: 6, personality: 9 };
+    const equivalentNames = [
+      "Голубев Антон",
+      "Голубев. Антон",
+      "«Голубев» Антон",
+      '"Голубев" Антон',
+      "Голубев — Антон",
+      "Голубев’Антон"
+    ];
+
+    expect(equivalentNames.map(calculateNameNumbers)).toEqual(
+      equivalentNames.map(() => expected)
+    );
+  });
+
   it.each(["Anton", "Антон2", "Антон🙂"])("rejects unsupported name %s", (name) => {
     expect(() => calculateNameNumbers(name)).toThrow(NumerologyValidationError);
   });
