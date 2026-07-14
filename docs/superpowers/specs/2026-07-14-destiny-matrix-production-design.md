@@ -96,11 +96,15 @@ It is not:
 
 - `Личная`: individual Matrix for one CRM client.
 - `Совместимость`: two individual matrices plus one deterministic composite.
-- `Прогноз`: a year/age projection over an individual Matrix. It is not a third
-  generic calculation mode and does not require widening
+- `Прогноз`: an annual projection over an individual Matrix. The current age
+  cycle remains a separate result block. Forecast is not a third generic
+  calculation mode and does not require widening
   `CalculationMode = individual | compatibility`.
 - A year projection is calculated by the server for an explicit calendar year.
   The current year is resolved in the astrologer's timezone.
+- Forecast and current-age context are read-only derived views. Switching a
+  year never mutates the linked base calculation, invalidates notes, or creates
+  another saved calculation.
 
 ### 4.4 Notes
 
@@ -221,9 +225,10 @@ supportedProjection: year
 
 `engineRevision` is an internal reproducibility field, not a user-selectable
 method version. It is included in saved `inputData`, `resultData`, the request
-fingerprint, AI context, and report provenance. A future formula correction
-increments it and requires new golden fixtures. Old executable branches are not
-kept in the runtime registry.
+fingerprint, AI context, and report provenance. Derived forecast responses carry
+the same revision without becoming part of the saved base result. A future
+formula correction increments it and requires new golden fixtures. Old
+executable branches are not kept in the runtime registry.
 
 ### 6.2 Reduction
 
@@ -325,17 +330,18 @@ energy table and never a health assessment.
   deduplication is order-independent.
 - The persisted calculation is linked to both CRM clients in one transaction.
 
-### 6.7 Year And Age Projection
+### 6.7 Year Forecast And Current Age Cycle
 
 - The request contains an explicit Gregorian year or `current_year`.
 - `current_year` is resolved using the astrologer's valid IANA timezone and the
   server clock.
-- Age is calculated from the complete birth date, including day and month. The
-  prototype's month-only age calculation is not copied.
 - `personalYear = reduce22(day + month + sumDigits(selectedYear))`.
 - `challenge = reduce22(personalYear + E)`.
 - `resource = reduce22(personalYear + A)`.
-- The active decade point follows the approved perimeter order
+- The current age is resolved independently from the selected forecast year,
+  using the complete birth date, the server clock, and the astrologer's
+  timezone. The prototype's month-only age calculation is not copied.
+- The current active decade point follows the approved perimeter order
   `A, tl, B, tr, C, br, D, bl` for ages `0–79`.
 - The perimeter cycle repeats every 80 years. Ages `80+` use `age % 80`, with
   explicit fixtures at the `79 -> 80` and `89 -> 90` boundaries.
@@ -370,7 +376,13 @@ type PreviewMatrixRequest = {
     | { kind: "explicit_year"; year: number };
 };
 
-type PersistMatrixCalculationRequest = PreviewMatrixRequest;
+type PersistMatrixCalculationRequest = {
+  methodCode: "ladini_22";
+  mode: "individual" | "compatibility";
+  participants: readonly MatrixParticipantRequest[];
+};
+
+type RecalculateMatrixCalculationRequest = Record<string, never>;
 ```
 
 The server owns title construction, participant names, birth-date snapshots,
@@ -387,7 +399,8 @@ It includes:
 - complete point map;
 - purposes and zones;
 - energy map;
-- optional year projection;
+- saved base result for calculation responses;
+- current age cycle and optional year forecast in preview/projection responses;
 - composite plus both individuals for compatibility;
 - interpretation catalog revision;
 - result checksum for stale-content and report binding.
@@ -403,6 +416,7 @@ All routes belong to authenticated `astrologer-api`:
 POST   /matrix/preview
 POST   /matrix/calculations
 POST   /matrix/calculations/:calculationId/recalculate
+GET    /matrix/calculations/:calculationId/projection?year=2026
 GET    /matrix/calculations/:calculationId/notes
 POST   /matrix/calculations/:calculationId/notes
 PUT    /matrix/calculations/:calculationId/notes/:noteId
@@ -439,16 +453,23 @@ method_code = ladini_22
 status = linked after creation
 ```
 
-`input_data` contains the canonical hydrated birth-date snapshot, projection
-request, method code, and engine revision. `result_data` contains the typed
-Matrix result. `result_summary` contains small list/detail summary fields.
+`input_data` contains the canonical hydrated birth-date snapshot, method code,
+and engine revision. `result_data` contains only the typed base Matrix result.
+Current age cycles and year forecasts are derived on read and are not part of
+the saved result checksum. `result_summary` contains small list/detail summary
+fields.
 
 The fingerprint includes:
 
 - method code and engine revision;
 - mode;
-- order-independent participant identities and canonical birth dates;
-- projection kind and selected year.
+- order-independent participant identities and canonical birth dates.
+
+The projection endpoint reads the owned saved birth-date snapshot and returns a
+derived view for the requested year plus the current age cycle. It does not
+write, change the calculation checksum, or invalidate notes, reports, links, or
+artifacts. A report that deliberately includes a forecast stores the selected
+year alongside its own report provenance.
 
 ### 9.2 Matrix Notes
 
