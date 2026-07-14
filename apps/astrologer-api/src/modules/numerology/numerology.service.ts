@@ -1,12 +1,18 @@
-import { Inject, Injectable, NotImplementedException } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
+import {
+  numerologyInterpretationDraftPromptV1,
+  renderNumerologyInterpretationText
+} from "@elevenhouse/ai";
 import {
   calculateNumerologyCompatibility,
   calculateNumerologyIndividual,
+  CalculationResultChangedError,
   createCalculation,
   getAstrologerClient,
   getCalculation,
   recalculateCalculation,
+  saveCalculationInterpretation,
   type AstrologerProfileStore,
   type CalculationParticipant,
   type CalculationRecord,
@@ -27,6 +33,7 @@ import {
   persistNumerologyCalculationRequestSchema,
   previewNumerologyRequestSchema,
   recalculateNumerologyCalculationRequestSchema,
+  type CreateNumerologyAiDraftRequest,
   type NumerologyCalculationResponse,
   type NumerologyParticipantRequest,
   type NumerologyPreviewResponse,
@@ -35,6 +42,7 @@ import {
   type PreviewNumerologyRequest,
   type RecalculateNumerologyCalculationRequest
 } from "@elevenhouse/contracts";
+import { AiGenerationService } from "../ai/ai-generation.service";
 import { ASTROLOGER_PROFILE_STORE } from "../astrologer-profile/astrologer-profile.tokens";
 import { SystemClock } from "../clock/system-clock.service";
 import { requireOwnerUserId, toCalculationResponse } from "../calculations/calculations.service";
@@ -46,6 +54,7 @@ import {
   numerologyHttpError,
   NumerologyResultIntegrityError
 } from "./numerology-http-errors";
+import { buildNumerologyAiContext } from "./numerology-ai-context";
 
 type NumerologyRequest =
   | PreviewNumerologyRequest
@@ -75,7 +84,8 @@ export class NumerologyService {
     @Inject(CALCULATION_STORE) private readonly store: CalculationStore,
     @Inject(CLIENT_STORE) private readonly clientStore: ClientStore,
     @Inject(ASTROLOGER_PROFILE_STORE) private readonly profileStore: AstrologerProfileStore,
-    private readonly clock: SystemClock
+    private readonly clock: SystemClock,
+    private readonly aiGeneration: AiGenerationService
   ) {}
 
   async preview(
@@ -196,23 +206,55 @@ export class NumerologyService {
     calculationId: string,
     body: unknown,
     request: AstrologerSessionRequest
-  ): Promise<never> {
+  ): Promise<NumerologyCalculationResponse> {
     const params = parseNumerologyContract<{ calculationId: string }>(calculationIdParamSchema, {
       calculationId
     });
-    parseNumerologyContract<Record<string, never>>(createNumerologyAiDraftRequestSchema, body);
+    const parsedBody = parseNumerologyContract<CreateNumerologyAiDraftRequest>(
+      createNumerologyAiDraftRequestSchema,
+      body
+    );
     const ownerUserId = requireOwnerUserId(request);
 
-    await mapNumerologyError(async () => {
+    return mapNumerologyError(async () => {
       const calculation = await getCalculation({
         store: this.store,
         ownerUserId,
         calculationId: params.calculationId
       });
-      validatedSavedResult(calculation);
+      if (calculation.status === "archived") {
+        throw numerologyHttpError(
+          409,
+          "CALCULATION_ARCHIVED",
+          "Archived calculation cannot generate an interpretation"
+        );
+      }
+      if (calculation.resultChecksum !== parsedBody.expectedResultChecksum) {
+        throw new CalculationResultChangedError();
+      }
+      const result = validatedSavedResult(calculation);
+      const profile = await this.profileStore.findByOwnerUserId({ ownerUserId });
+      const locale = profile?.locale === "en" ? "en" : "ru";
+      const generated = await this.aiGeneration.generate({
+        prompt: numerologyInterpretationDraftPromptV1,
+        input: buildNumerologyAiContext(result, locale),
+        ownerUserId,
+        feature: "numerology.interpretationDraft"
+      });
+      const saved = await saveCalculationInterpretation({
+        store: this.store,
+        ownerUserId,
+        calculationId: calculation.id,
+        expectedResultChecksum: parsedBody.expectedResultChecksum,
+        source: "ai",
+        text: renderNumerologyInterpretationText(generated.output, locale),
+        modelId: null,
+        promptVersion: null,
+        interpretationIdGenerator: randomUUID,
+        now: this.clock.now()
+      });
+      return toNumerologyResponse(saved);
     });
-
-    throw new NotImplementedException("Numerology AI draft generation is not configured");
   }
 
   private async prepare(

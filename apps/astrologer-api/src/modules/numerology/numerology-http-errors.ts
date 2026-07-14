@@ -3,6 +3,7 @@ import {
   CalculationAlreadyExistsError,
   CalculationNotFoundError,
   CalculationParticipantMismatchError,
+  CalculationResultChangedError,
   CalculationValidationError,
   NumerologyValidationError,
   UnsupportedNumerologyMethodError
@@ -16,6 +17,8 @@ export type NumerologyErrorCode =
   | "CALCULATION_ALREADY_EXISTS"
   | "CALCULATION_NOT_FOUND"
   | "CALCULATION_RESULT_INTEGRITY_ERROR"
+  | "CALCULATION_RESULT_CHANGED"
+  | "CALCULATION_ARCHIVED"
   | "ASTROLOGER_TIMEZONE_REQUIRED";
 
 export class NumerologyResultIntegrityError extends Error {
@@ -46,6 +49,9 @@ export async function mapNumerologyError<T>(operation: () => Promise<T>): Promis
     }
     if (error instanceof CalculationAlreadyExistsError) {
       throw numerologyHttpError(409, "CALCULATION_ALREADY_EXISTS", error.message);
+    }
+    if (error instanceof CalculationResultChangedError) {
+      throw numerologyHttpError(409, "CALCULATION_RESULT_CHANGED", error.message);
     }
     if (error instanceof UnsupportedNumerologyMethodError) {
       throw numerologyHttpError(422, "UNSUPPORTED_NUMEROLOGY_METHOD", error.message);

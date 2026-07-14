@@ -38,6 +38,7 @@ import { createIdentityConfigServiceStub } from "../identity/testing/identity-co
 import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordless-rate-limiter";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
+import { AiGenerationService } from "../ai/ai-generation.service";
 import { NumerologyModule } from "./numerology.module";
 
 const now = new Date("2026-07-06T00:00:00.000Z");
@@ -110,6 +111,8 @@ describe("numerology HTTP routes", () => {
       .useValue(createUnusedClientStore())
       .overrideProvider(ASTROLOGER_PROFILE_STORE)
       .useValue(createProfileStore())
+      .overrideProvider(AiGenerationService)
+      .useValue(createAiGeneration())
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -157,6 +160,33 @@ describe("numerology HTTP routes", () => {
     numerologyCalculationResponseSchema.parse(created.body);
     expect(unsupported.status).toBe(422);
     expect(unsupported.body).toMatchObject({ code: "UNSUPPORTED_NUMEROLOGY_METHOD" });
+  });
+
+  it("creates a checksum-bound AI draft without exposing internal metadata", async () => {
+    const created = numerologyCalculationResponseSchema.parse(
+      (await postJson("/numerology/calculations", persistBody(), csrfHeaders())).body
+    );
+    const missingCsrf = await postJson(
+      `/numerology/calculations/${created.calculation.id}/ai-draft`,
+      { expectedResultChecksum: created.calculation.resultChecksum },
+      { cookie: sessionCookieHeader() }
+    );
+    const generated = await postJson(
+      `/numerology/calculations/${created.calculation.id}/ai-draft`,
+      { expectedResultChecksum: created.calculation.resultChecksum },
+      csrfHeaders()
+    );
+
+    expect(missingCsrf.status).toBe(403);
+    expect(generated.status).toBe(201);
+    const response = numerologyCalculationResponseSchema.parse(generated.body);
+    expect(response.calculation.interpretations[0]).toMatchObject({
+      status: "draft",
+      text: expect.stringContaining("ОБЗОР")
+    });
+    expect(response.calculation.interpretations[0]).not.toHaveProperty("source");
+    expect(response.calculation.interpretations[0]).not.toHaveProperty("modelId");
+    expect(response.calculation.interpretations[0]).not.toHaveProperty("promptVersion");
   });
 
   async function postJson(
@@ -227,7 +257,38 @@ function createCalculationStore(): CalculationStore {
     ),
     linkClient: vi.fn(async () => null),
     publishClientLink: vi.fn(async () => null),
-    saveInterpretation: vi.fn(async () => null),
+    saveInterpretation: vi.fn(async (input) => {
+      const index = records.findIndex(
+        (record) => record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+      );
+      const current = records[index];
+      if (
+        index < 0 ||
+        !current ||
+        current.status === "archived" ||
+        current.resultChecksum !== input.expectedResultChecksum
+      ) {
+        return null;
+      }
+      const updated: CalculationRecord = {
+        ...current,
+        interpretations: [
+          ...current.interpretations,
+          {
+            id: input.interpretationIdGenerator(),
+            source: input.source,
+            status: "draft",
+            text: input.text,
+            modelId: input.modelId,
+            promptVersion: input.promptVersion,
+            approvedAt: null
+          }
+        ],
+        updatedAt: input.now
+      };
+      records[index] = updated;
+      return updated;
+    }),
     approveInterpretation: vi.fn(async () => null),
     archive: vi.fn(async () => null)
   };
@@ -251,6 +312,25 @@ function createProfileStore(): AstrologerProfileStore {
     findByOwnerUserId: vi.fn(async () => null),
     upsert: vi.fn(async () => raise())
   };
+}
+
+function createAiGeneration(): AiGenerationService {
+  return {
+    generate: vi.fn(async () => ({
+      provider: "openai" as const,
+      model: "internal-secret-model",
+      finishReason: "stop" as const,
+      output: {
+        overview: "Обзор.",
+        strengths: "Сильные стороны.",
+        growthAreas: "Зоны роста.",
+        sessionFocus: "Фокус консультации.",
+        periodFocus: "Фокус периода.",
+        reflectionQuestions: ["Первый вопрос?", "Второй вопрос?", "Третий вопрос?"],
+        disclaimer: "Только для рефлексии."
+      }
+    }))
+  } as unknown as AiGenerationService;
 }
 
 function createAuthStore(): AuthSessionAuthenticationStore {

@@ -8,6 +8,7 @@ import type {
   ClientStore
 } from "@elevenhouse/domain";
 import { numerologyCalculationResponseSchema } from "@elevenhouse/contracts";
+import type { AiGenerationService } from "../ai/ai-generation.service";
 import type { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { NumerologyService } from "./numerology.service";
@@ -176,20 +177,169 @@ describe("NumerologyService", () => {
     const service = createService({ clients: [] });
     await expectHttpCode(service.preview(crmIndividualBody(), request()), 404, "CLIENT_NOT_FOUND");
   });
+
+  it("generates and saves a public-safe AI draft without secret metadata or PII", async () => {
+    const store = createCalculationStore();
+    const aiGeneration = createAiGeneration();
+    const service = createService({ store, aiGeneration, locale: "en" });
+    const saved = await service.createCalculation(manualIndividualBody(), request());
+    const internal = await store.findByOwnerAndId({
+      ownerUserId,
+      calculationId: saved.calculation.id
+    });
+    if (!internal) throw new Error("Expected saved calculation");
+    vi.mocked(store.saveInterpretation).mockImplementationOnce(async (input) => ({
+      ...internal,
+      interpretations: [
+        {
+          id: input.interpretationIdGenerator(),
+          source: input.source,
+          status: "draft",
+          text: input.text,
+          modelId: input.modelId,
+          promptVersion: input.promptVersion,
+          approvedAt: null
+        }
+      ]
+    }));
+
+    const response = await service.createAiDraft(
+      saved.calculation.id,
+      { expectedResultChecksum: saved.calculation.resultChecksum },
+      request()
+    );
+
+    expect(response.calculation.interpretations[0]).toEqual({
+      id: expect.any(String),
+      status: "draft",
+      text: expect.stringContaining("OVERVIEW")
+    });
+    expect(store.saveInterpretation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedResultChecksum: saved.calculation.resultChecksum,
+        source: "ai",
+        modelId: null,
+        promptVersion: null
+      })
+    );
+    const generationInput = vi.mocked(aiGeneration.generate).mock.calls[0]?.[0];
+    expect(generationInput).toMatchObject({ feature: "numerology.interpretationDraft" });
+    expect(JSON.stringify(generationInput?.input)).not.toContain("Голубев");
+    expect(JSON.stringify(generationInput?.input)).not.toContain("2000-08-19");
+    expect(generationInput?.input).toMatchObject({ locale: "en", mode: "individual" });
+  });
+
+  it("rejects stale AI generation before and after the provider call", async () => {
+    const store = createCalculationStore();
+    const aiGeneration = createAiGeneration();
+    const service = createService({ store, aiGeneration });
+    const saved = await service.createCalculation(manualIndividualBody(), request());
+
+    await expectHttpCode(
+      service.createAiDraft(
+        saved.calculation.id,
+        { expectedResultChecksum: `sha256:${"c".repeat(64)}` },
+        request()
+      ),
+      409,
+      "CALCULATION_RESULT_CHANGED"
+    );
+    expect(aiGeneration.generate).not.toHaveBeenCalled();
+
+    vi.mocked(store.saveInterpretation).mockResolvedValueOnce(null);
+    await expectHttpCode(
+      service.createAiDraft(
+        saved.calculation.id,
+        { expectedResultChecksum: saved.calculation.resultChecksum },
+        request()
+      ),
+      409,
+      "CALCULATION_RESULT_CHANGED"
+    );
+    expect(aiGeneration.generate).toHaveBeenCalledOnce();
+  });
+
+  it("generates compatibility from the complete anonymous compatibility result", async () => {
+    const store = createCalculationStore();
+    const aiGeneration = createAiGeneration();
+    const service = createService({ store, aiGeneration });
+    const saved = await service.createCalculation(
+      compatibilityBody(clientId, partnerClientId),
+      request()
+    );
+    const internal = await store.findByOwnerAndId({
+      ownerUserId,
+      calculationId: saved.calculation.id
+    });
+    if (!internal) throw new Error("Expected saved compatibility calculation");
+    vi.mocked(store.saveInterpretation).mockImplementationOnce(async (input) => ({
+      ...internal,
+      interpretations: [
+        {
+          id: input.interpretationIdGenerator(),
+          source: "ai",
+          status: "draft",
+          text: input.text,
+          modelId: null,
+          promptVersion: null,
+          approvedAt: null
+        }
+      ]
+    }));
+
+    await service.createAiDraft(
+      saved.calculation.id,
+      { expectedResultChecksum: saved.calculation.resultChecksum },
+      request()
+    );
+
+    expect(vi.mocked(aiGeneration.generate).mock.calls[0]?.[0].input).toMatchObject({
+      mode: "compatibility",
+      pairNumber: 7,
+      conclusion: { code: "mixed" }
+    });
+  });
+
+  it("rejects archived calculations before calling the provider", async () => {
+    const store = createCalculationStore();
+    const aiGeneration = createAiGeneration();
+    const service = createService({ store, aiGeneration });
+    const saved = await service.createCalculation(manualIndividualBody(), request());
+    const internal = await store.findByOwnerAndId({
+      ownerUserId,
+      calculationId: saved.calculation.id
+    });
+    if (!internal) throw new Error("Expected saved calculation");
+    vi.mocked(store.findByOwnerAndId).mockResolvedValueOnce({ ...internal, status: "archived" });
+
+    await expectHttpCode(
+      service.createAiDraft(
+        saved.calculation.id,
+        { expectedResultChecksum: saved.calculation.resultChecksum },
+        request()
+      ),
+      409,
+      "CALCULATION_ARCHIVED"
+    );
+    expect(aiGeneration.generate).not.toHaveBeenCalled();
+  });
 });
 
 function createService(
   input: {
     readonly store?: CalculationStore;
     readonly timezone?: string;
+    readonly locale?: "ru" | "en";
     readonly clients?: readonly AstrologerClientListItem[];
+    readonly aiGeneration?: AiGenerationService;
   } = {}
 ): NumerologyService {
   return new NumerologyService(
     input.store ?? createCalculationStore(),
     createClientStore(input.clients ?? defaultClients()),
-    createProfileStore(input.timezone ?? "Europe/Moscow"),
-    { now: () => now } as SystemClock
+    createProfileStore(input.timezone ?? "Europe/Moscow", input.locale ?? "ru"),
+    { now: () => now } as SystemClock,
+    input.aiGeneration ?? createAiGeneration()
   );
 }
 
@@ -292,7 +442,7 @@ function createClientStore(clients: readonly AstrologerClientListItem[]): Client
   };
 }
 
-function createProfileStore(timezone: string): AstrologerProfileStore {
+function createProfileStore(timezone: string, locale: "ru" | "en"): AstrologerProfileStore {
   return {
     findByOwnerUserId: vi.fn(async () => ({
       ownerUserId,
@@ -301,7 +451,7 @@ function createProfileStore(timezone: string): AstrologerProfileStore {
       headline: null,
       bio: null,
       timezone,
-      locale: "ru",
+      locale,
       avatarMediaId: null,
       coverMediaId: null,
       consultationLanguages: ["ru"],
@@ -317,6 +467,25 @@ function createProfileStore(timezone: string): AstrologerProfileStore {
     })),
     upsert: vi.fn(async () => raise())
   };
+}
+
+function createAiGeneration(): AiGenerationService {
+  return {
+    generate: vi.fn(async () => ({
+      provider: "openai" as const,
+      model: "internal-secret-model",
+      finishReason: "stop" as const,
+      output: {
+        overview: "Overview.",
+        strengths: "Strengths.",
+        growthAreas: "Growth areas.",
+        sessionFocus: "Session focus.",
+        periodFocus: "Period focus.",
+        reflectionQuestions: ["Question one?", "Question two?", "Question three?"],
+        disclaimer: "For reflection only."
+      }
+    }))
+  } as unknown as AiGenerationService;
 }
 
 function defaultClients(): readonly AstrologerClientListItem[] {
