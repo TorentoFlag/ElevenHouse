@@ -153,6 +153,7 @@ function createMemoryStore(): MemoryStore {
       }
       const record: CalculationRecord = {
         ...current,
+        title: input.title ?? current.title,
         requestFingerprint: input.requestFingerprint,
         inputData: input.inputData,
         resultData: input.resultData,
@@ -330,6 +331,7 @@ describe("current calculation lifecycle", () => {
       store,
       ownerUserId,
       calculationId: created.id,
+      title: "Голубев Антон, обновлённый расчёт",
       participants: created.participants,
       requestFingerprint: digest("c"),
       inputData: { participant: { calculationName: "Голубев Антон" } },
@@ -340,6 +342,7 @@ describe("current calculation lifecycle", () => {
     });
 
     expect(replaced.resultData).toEqual({ lifePath: 2, expression: 6 });
+    expect(replaced.title).toBe("Голубев Антон, обновлённый расчёт");
     expect(replaced.interpretations).toEqual([]);
     expect(replaced.artifacts).toEqual([]);
     expect(replaced.links.every((link) => link.visibility === "private_to_astrologer")).toBe(true);

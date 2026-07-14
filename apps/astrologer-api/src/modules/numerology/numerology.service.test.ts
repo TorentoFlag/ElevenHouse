@@ -97,6 +97,39 @@ describe("NumerologyService", () => {
     expect(store.ensureClientLinks).not.toHaveBeenCalled();
   });
 
+  it("passes an edited title through replacement recalculation", async () => {
+    const store = createCalculationStore();
+    const service = createService({ store });
+    const saved = await service.createCalculation(manualIndividualBody(), request());
+    vi.mocked(store.replaceResult).mockImplementationOnce(async (input) => ({
+      status: "updated" as const,
+      calculation: {
+        ...saved.calculation,
+        title: input.title ?? saved.calculation.title,
+        participants: input.participants,
+        requestFingerprint: input.requestFingerprint,
+        inputData: input.inputData,
+        resultData: input.resultData,
+        resultSummary: input.resultSummary,
+        resultChecksum: input.resultChecksum,
+        interpretations: [],
+        artifacts: [],
+        updatedAt: input.now
+      }
+    }));
+
+    const response = await service.recalculate(
+      saved.calculation.id,
+      { ...manualIndividualBody(), title: "Голубев Антон, обновлённый расчёт" },
+      request()
+    );
+
+    expect(store.replaceResult).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Голубев Антон, обновлённый расчёт" })
+    );
+    expect(response.calculation.title).toBe("Голубев Антон, обновлённый расчёт");
+  });
+
   it("uses one compatibility fingerprint regardless of participant order", async () => {
     const store = createCalculationStore();
     const service = createService({ store });

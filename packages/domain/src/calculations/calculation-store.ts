@@ -48,6 +48,7 @@ export type CalculationStoreCreateInput = CalculationSavedData & {
 export type CalculationStoreReplaceResultInput = CalculationSavedData & {
   readonly ownerUserId: string;
   readonly calculationId: string;
+  readonly title?: string;
   readonly participants: readonly CalculationParticipant[];
   readonly now: string;
 };

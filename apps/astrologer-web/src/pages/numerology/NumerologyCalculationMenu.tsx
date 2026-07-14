@@ -37,21 +37,21 @@ export function NumerologyCalculationMenu({
         <div className={styles.calculationList} role="list">
           {items.length > 0 ? (
             items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                role="listitem"
-                className={styles.calculationItem}
-                aria-current={item.id === selectedCalculationId ? "true" : undefined}
-                disabled={disabled}
-                onClick={() => onSelect(item.calculation)}
-              >
-                <span className={styles.calculationItemTitle}>{item.title}</span>
-                <span className={styles.calculationItemMeta}>
-                  {item.modeLabel} · {item.participantLabel} ·{" "}
-                  <time dateTime={item.updatedAt}>{formatUpdatedAt(item.updatedAt)}</time>
-                </span>
-              </button>
+              <div key={item.id} role="listitem">
+                <button
+                  type="button"
+                  className={styles.calculationItem}
+                  aria-current={item.id === selectedCalculationId ? "true" : undefined}
+                  disabled={disabled}
+                  onClick={() => onSelect(item.calculation)}
+                >
+                  <span className={styles.calculationItemTitle}>{item.title}</span>
+                  <span className={styles.calculationItemMeta}>
+                    {item.modeLabel} · {item.participantLabel} ·{" "}
+                    <time dateTime={item.updatedAt}>{formatUpdatedAt(item.updatedAt)}</time>
+                  </span>
+                </button>
+              </div>
             ))
           ) : (
             <p className={styles.calculationEmpty}>Сохранённых расчётов пока нет</p>

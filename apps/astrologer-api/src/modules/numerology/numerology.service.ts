@@ -87,7 +87,6 @@ export class NumerologyService {
       body
     );
     const ownerUserId = requireOwnerUserId(request);
-
     return mapNumerologyError(async () => {
       const prepared = await this.prepare(parsedBody, ownerUserId);
       return numerologyPreviewResponseSchema.parse({ result: calculate(prepared) });
@@ -163,6 +162,7 @@ export class NumerologyService {
       body
     );
     const ownerUserId = requireOwnerUserId(request);
+    const title = "title" in parsedBody ? parsedBody.title : undefined;
 
     return mapNumerologyError(async () => {
       const current = await getCalculation({
@@ -179,6 +179,7 @@ export class NumerologyService {
           store: this.store,
           ownerUserId,
           calculationId: params.calculationId,
+          ...(title === undefined ? {} : { title }),
           participants: prepared.participants.map(toCalculationParticipant),
           requestFingerprint: prepared.requestFingerprint,
           inputData: prepared.inputData,

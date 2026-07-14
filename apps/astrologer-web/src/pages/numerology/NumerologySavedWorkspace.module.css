@@ -82,6 +82,8 @@
 
 .calculationItem {
   display: grid;
+  box-sizing: border-box;
+  width: 100%;
   gap: 5px;
   padding: 11px 12px;
   border: 1px solid transparent;

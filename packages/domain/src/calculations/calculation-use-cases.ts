@@ -103,6 +103,9 @@ export async function recalculateCalculation(
   const outcome = await input.store.replaceResult({
     ownerUserId: record.ownerUserId,
     calculationId: record.id,
+    ...(input.title === undefined
+      ? {}
+      : { title: required(input.title, "Calculation title is required") }),
     participants,
     requestFingerprint: digest(
       input.requestFingerprint,

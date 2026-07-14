@@ -34,6 +34,14 @@ describe("Numerology saved workspace components", () => {
     const savedButton = findButton(view, "Антон Голубев");
 
     expect(savedButton.props["aria-current"]).toBe("true");
+    expect((savedButton.props as { role?: string }).role).toBeUndefined();
+    expect(
+      findElements(view).some(
+        (element) =>
+          (element.props as { role?: string }).role === "listitem" &&
+          elementIncludesText(element, "Антон Голубев")
+      )
+    ).toBe(true);
     savedButton.props.onClick?.();
     findButton(view, "Новый расчёт").props.onClick?.();
     findButton(view, "Пересчитать").props.onClick?.();

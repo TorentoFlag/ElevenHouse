@@ -337,6 +337,7 @@ async function replaceResult(
     ownerUserId: input.ownerUserId,
     calculationId: input.calculationId,
     patch: {
+      ...(input.title === undefined ? {} : { title: input.title }),
       requestFingerprint: input.requestFingerprint,
       inputData: input.inputData,
       resultData: input.resultData,
