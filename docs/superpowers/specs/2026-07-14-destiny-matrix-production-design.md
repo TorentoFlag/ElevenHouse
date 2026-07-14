@@ -673,18 +673,18 @@ The left rail navigates result sections; it does not own calculation logic.
 
 Use tabs:
 
-- `Трактовка`;
+- `Разбор`;
 - `Заметки`;
-- `AI`;
-- `Отчёт`.
+- `Отчёт`, including the explicit AI-draft action.
 
 There is no consultation-session state and no separate client-publication tab.
 
 ### 13.5 Frontend Architecture
 
-- Page composition lives under `pages/destiny-matrix/`.
+- Page composition lives under `pages/matrix/`, matching the production
+  `/matrix` route.
 - API/query/mutation orchestration and derived view state live under focused
-  `features/destiny-matrix/model/` files.
+  `features/matrix/model/` files.
 - Each non-trivial component lives in its own file.
 - Reusable visual primitives are extracted to `packages/design-system` only
   when they are genuinely cross-feature.

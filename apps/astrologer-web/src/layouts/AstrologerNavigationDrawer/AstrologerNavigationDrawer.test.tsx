@@ -27,7 +27,7 @@ describe("AstrologerNavigationDrawerView", () => {
     expect(element.props.footerItems).toBeUndefined();
     expect(JSON.stringify(renderElement(element.props.footer))).toContain("Личная страница");
     expect(JSON.stringify(renderElement(element.props.footer))).toContain("Настройки");
-    expect(element.props.items).toHaveLength(4);
+    expect(element.props.items).toHaveLength(5);
     expect(element.props.items[0]).toMatchObject({
       id: "dashboard",
       title: "Дашборд",
@@ -48,12 +48,19 @@ describe("AstrologerNavigationDrawerView", () => {
     expect(element.props.items[2].icon.type).toBe(Icon);
     expect(element.props.items[2].icon.props.iconName).toBe("numerology");
     expect(element.props.items[3]).toMatchObject({
+      id: "destinyMatrix",
+      title: "Матрица судьбы",
+      href: "/matrix"
+    });
+    expect(element.props.items[3].icon.type).toBe(Icon);
+    expect(element.props.items[3].icon.props.iconName).toBe("orbit");
+    expect(element.props.items[4]).toMatchObject({
       id: "reference",
       title: "Справочники",
       href: "/reference"
     });
-    expect(element.props.items[3].icon.type).toBe(Icon);
-    expect(element.props.items[3].icon.props.iconName).toBe("reference");
+    expect(element.props.items[4].icon.type).toBe(Icon);
+    expect(element.props.items[4].icon.props.iconName).toBe("reference");
     const settingsCopy = astrologerCopyByLocale.ru.appShell.navigation.footerItems[0];
     if (!settingsCopy) {
       throw new Error("Expected settings footer navigation item to be present");

@@ -122,35 +122,30 @@ describe("Matrix report use cases", () => {
     const report = storedReport();
     expect(assertMatrixReportPdfEligible({ report, currentResultChecksum: checksum })).toBe(report);
     expect(() =>
-      assertMatrixReportPdfEligible({ report: { ...report, status: "draft" }, currentResultChecksum: checksum })
+      assertMatrixReportPdfEligible({
+        report: { ...report, status: "draft" },
+        currentResultChecksum: checksum
+      })
     ).toThrow("ready");
-    expect(() =>
-      assertMatrixReportPdfEligible({ report, currentResultChecksum: nextChecksum })
-    ).toMatchErrorCode("MATRIX_REPORT_STALE");
-    expect(() =>
-      assertMatrixReportPdfEligible({ report: null, currentResultChecksum: checksum })
-    ).toMatchErrorCode("MATRIX_REPORT_NOT_FOUND");
+    expectErrorCode(
+      () => assertMatrixReportPdfEligible({ report, currentResultChecksum: nextChecksum }),
+      "MATRIX_REPORT_STALE"
+    );
+    expectErrorCode(
+      () => assertMatrixReportPdfEligible({ report: null, currentResultChecksum: checksum }),
+      "MATRIX_REPORT_NOT_FOUND"
+    );
   });
 });
 
-expect.extend({
-  toMatchErrorCode(received: () => unknown, expected: string) {
-    try {
-      received();
-      return { pass: false, message: () => `Expected function to throw ${expected}` };
-    } catch (error) {
-      const code = error instanceof Error && "code" in error ? (error as { code: unknown }).code : null;
-      return {
-        pass: code === expected,
-        message: () => `Expected error code ${expected}, received ${String(code)}`
-      };
-    }
-  }
-});
-
-declare module "vitest" {
-  interface Assertion<T = any> {
-    toMatchErrorCode(expected: string): T;
+function expectErrorCode(operation: () => unknown, expected: string): void {
+  try {
+    operation();
+    throw new Error(`Expected function to throw ${expected}`);
+  } catch (error) {
+    const code =
+      error instanceof Error && "code" in error ? (error as { code: unknown }).code : null;
+    expect(code).toBe(expected);
   }
 }
 
