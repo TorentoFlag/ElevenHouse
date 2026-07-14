@@ -11,6 +11,17 @@ import { createParticipantFormState } from "../../features/numerology/model/nume
 import styles from "./NumerologyPage.module.css";
 
 describe("NumerologyPageView", () => {
+  it("waits for the compatibility partner without raising an error banner", () => {
+    const controllerSource = readFileSync(
+      new URL("./useNumerologyPageController.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(controllerSource).not.toContain(
+      "Выберите второго клиента с датой рождения для совместимости"
+    );
+  });
+
   it("disables link action for manual-only calculations", () => {
     const view = NumerologyPageView({
       ...baseProps(),

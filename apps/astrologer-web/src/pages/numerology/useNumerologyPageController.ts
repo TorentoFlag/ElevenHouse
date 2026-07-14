@@ -194,11 +194,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     setFormState(nextState);
 
     if (getNumerologyFormErrors(nextState).length > 0) {
-      setErrorMessage(
-        nextState.mode === "compatibility"
-          ? "Выберите второго клиента с датой рождения для совместимости"
-          : "Заполните данные расчета"
-      );
+      setErrorMessage(null);
       return;
     }
 
@@ -240,7 +236,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     setFormState(nextState);
 
     if (!partner) {
-      setErrorMessage("Выберите второго клиента с датой рождения для совместимости");
+      setErrorMessage(null);
       return;
     }
 
