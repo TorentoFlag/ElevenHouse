@@ -21,7 +21,7 @@ export function NumerologyResultPanel({
   model,
   detail,
   selectedSelector,
-  isYearMode,
+  isPeriodVisible,
   interpretationText,
   isBusy,
   isApproveInterpretationDisabled,
@@ -34,7 +34,7 @@ export function NumerologyResultPanel({
   readonly model: NumerologyWorkspaceModel | null;
   readonly detail: NumerologyWorkspaceDetail | null;
   readonly selectedSelector: string | null;
-  readonly isYearMode: boolean;
+  readonly isPeriodVisible: boolean;
   readonly interpretationText: string;
   readonly isBusy: boolean;
   readonly isApproveInterpretationDisabled: boolean;
@@ -98,7 +98,7 @@ export function NumerologyResultPanel({
         ))}
       </aside>
       <section className={styles.matrixColumn} aria-label="Психоматрица клиента">
-        {personalYear && isYearMode ? (
+        {personalYear && isPeriodVisible ? (
           <div className={styles.yearPill}>
             Личный год {personalYear.year} — число {personalYear.value}
             {personalYearEssence ? ` · ${personalYearEssence}` : ""}
@@ -146,7 +146,7 @@ export function NumerologyResultPanel({
             </div>
           </div>
         ) : null}
-        {isYearMode ? (
+        {isPeriodVisible ? (
           <YearMonthsPanel personalMonths={model.personalMonths} currentDate={currentDate} />
         ) : null}
       </section>

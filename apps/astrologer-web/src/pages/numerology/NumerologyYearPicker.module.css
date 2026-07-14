@@ -1,0 +1,180 @@
+.root {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.trigger,
+.triggerActive {
+  display: inline-flex;
+  min-height: 37px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 14px;
+  background: rgb(30 27 62);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.triggerActive {
+  border-color: rgb(246 210 102 / 0.35);
+  background: rgb(246 210 102 / 0.12);
+  color: #f6d266;
+}
+
+.trigger:disabled,
+.triggerActive:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.busyMark {
+  min-width: 10px;
+  color: #f6d266;
+}
+
+.popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 10px);
+  right: 0;
+  display: grid;
+  width: 270px;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 16px;
+  background: rgb(22 20 47);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.42);
+}
+
+.label {
+  color: var(--eh-color-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.yearRow {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  gap: 8px;
+}
+
+.stepButton,
+.currentYearButton,
+.secondaryButton,
+.primaryButton {
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 10px;
+  background: rgb(216 212 236 / 0.06);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.stepButton {
+  min-height: 38px;
+  font-size: 18px;
+}
+
+.input {
+  min-width: 0;
+  border: 1px solid rgb(216 212 236 / 0.16);
+  border-radius: 10px;
+  outline: none;
+  background: rgb(12 11 30);
+  color: var(--eh-color-moon-120);
+  font: 700 15px/1 var(--eh-font-mono);
+  text-align: center;
+}
+
+.input:focus {
+  border-color: rgb(246 210 102 / 0.62);
+  box-shadow: 0 0 0 3px rgb(246 210 102 / 0.12);
+}
+
+.input[aria-invalid="true"] {
+  border-color: rgb(244 122 122 / 0.6);
+}
+
+.validationError {
+  color: #ff9c9c;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.currentYearButton {
+  min-height: 34px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.secondaryButton,
+.primaryButton {
+  min-height: 34px;
+  padding: 8px 11px;
+}
+
+.primaryButton {
+  border-color: rgb(246 210 102 / 0.34);
+  background: #f6d266;
+  color: #171329;
+}
+
+.stepButton:disabled,
+.primaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.errorNotice {
+  position: absolute;
+  z-index: 29;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  width: max-content;
+  max-width: 320px;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgb(244 122 122 / 0.26);
+  border-radius: 10px;
+  background: rgb(45 22 42);
+  color: #ffb0b0;
+  box-shadow: 0 16px 42px rgb(0 0 0 / 0.36);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.errorNotice button {
+  border: 0;
+  background: transparent;
+  color: #f6d266;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .popover,
+  .errorNotice {
+    right: auto;
+    left: 0;
+  }
+}

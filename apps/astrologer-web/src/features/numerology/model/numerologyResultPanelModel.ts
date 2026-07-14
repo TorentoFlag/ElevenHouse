@@ -30,6 +30,7 @@ export function buildPersonalMonthItems(input: {
     readonly month: number;
     readonly value: number;
   }[];
+  readonly currentYear: number;
   readonly currentMonth: number;
 }): NumerologyPersonalMonthPanelModel {
   return {
@@ -37,7 +38,7 @@ export function buildPersonalMonthItems(input: {
     items: input.personalMonths.map((month) => ({
       label: monthLabels[month.month - 1] ?? String(month.month),
       value: month.value,
-      isCurrent: month.month === input.currentMonth
+      isCurrent: month.year === input.currentYear && month.month === input.currentMonth
     }))
   };
 }

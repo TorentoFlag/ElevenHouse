@@ -14,6 +14,7 @@ describe("numerologyResultPanelModel", () => {
         month: index + 1,
         value: [1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3][index]!
       })),
+      currentYear: 2026,
       currentMonth: 7
     });
 
@@ -22,6 +23,16 @@ describe("numerologyResultPanelModel", () => {
     expect(months.items[0]).toMatchObject({ label: "Янв", value: 1, isCurrent: false });
     expect(months.items[6]).toMatchObject({ label: "Июл", value: 7, isCurrent: true });
     expect(months.items[11]).toMatchObject({ label: "Дек", value: 3, isCurrent: false });
+  });
+
+  it("does not mark the same month as current in a retrospective year", () => {
+    const months = buildPersonalMonthItems({
+      personalMonths: [{ year: 2025, month: 7, value: 4 }],
+      currentYear: 2026,
+      currentMonth: 7
+    });
+
+    expect(months.items[0]?.isCurrent).toBe(false);
   });
 
   it("reads the server-provided personal year and formats nullable values", () => {

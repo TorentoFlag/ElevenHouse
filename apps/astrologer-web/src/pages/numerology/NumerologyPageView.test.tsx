@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import { NumerologyResultPanel } from "../../features/numerology/components/NumerologyResultPanel";
 import { NumerologyPageView, type NumerologyPageViewProps } from "./NumerologyPageView";
+import { NumerologyYearPicker } from "./NumerologyYearPicker";
 import { createParticipantFormState } from "../../features/numerology/model/numerologyFormModel";
 import styles from "./NumerologyPage.module.css";
 
@@ -54,7 +55,13 @@ describe("NumerologyPageView", () => {
       })
     });
 
-    expect(findButtonByText(view, "Год")).toBeDefined();
+    const yearPicker = findRequiredElementByType<{
+      readonly selectedYear: number;
+      readonly isPeriodVisible: boolean;
+    }>(view, NumerologyYearPicker);
+
+    expect(yearPicker.props.selectedYear).toBe(2027);
+    expect(yearPicker.props.isPeriodVisible).toBe(true);
     expect(findButtonByText(view, "Совместимость")).toBeDefined();
     expect(findButtonByText(view, "Презентация")).toBeDefined();
     expect(findButtonByText(view, "PDF").props.disabled).toBe(true);
@@ -202,7 +209,7 @@ describe("NumerologyPageView", () => {
       })
     });
 
-    expect(getButtonIconName(view, "Год")).toBe("clock");
+    expect(findRequiredElementByType(view, NumerologyYearPicker)).toBeDefined();
     expect(getButtonIconName(view, "Совместимость")).toBe("users");
     expect(getButtonIconName(view, "Презентация")).toBe("arrowUpRight");
     expect(getButtonIconName(view, "Привязать")).toBe("pin");
@@ -210,7 +217,7 @@ describe("NumerologyPageView", () => {
     expect(findOptionalButtonByText(view, "Пересчитать")).toBeNull();
   });
 
-  it("uses form compatibility mode as the toolbar toggle state without opening presentation flow", () => {
+  it("keeps period selection unavailable in compatibility while exposing presentation", () => {
     const view = NumerologyPageView({
       ...baseProps(),
       formState: {
@@ -235,6 +242,10 @@ describe("NumerologyPageView", () => {
     const compatibilityButton = findButtonByText(view, "Совместимость") as ReactElement<{
       "aria-pressed"?: boolean;
     }>;
+    const yearPicker = findRequiredElementByType<{
+      readonly disabled: boolean;
+      readonly isOpen: boolean;
+    }>(view, NumerologyYearPicker);
 
     expect(clientPickers.map((picker) => picker.props.label)).toEqual(["Клиент", "Партнер"]);
     expect(clientPickers[0]?.props.excludeClientIds).toEqual([
@@ -244,7 +255,9 @@ describe("NumerologyPageView", () => {
       "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
     ]);
     expect(compatibilityButton.props["aria-pressed"]).toBe(true);
-    expect(findOptionalButtonByText(view, "Презентация")).toBeNull();
+    expect(yearPicker.props.disabled).toBe(true);
+    expect(yearPicker.props.isOpen).toBe(false);
+    expect(findButtonByText(view, "Презентация")).toBeDefined();
   });
 
   it("animates workspace changes with the shared motion primitive keyed by result checksum", () => {
@@ -310,17 +323,24 @@ function baseProps(): NumerologyPageViewProps {
       includeStrengthLines: true,
       forecastDate: ""
     },
-    isYearMode: false,
+    selectedYear: 2027,
+    isPeriodVisible: true,
+    isYearPickerOpen: false,
     isPresentationOpen: false,
     selectedDetailSelector: null,
     interpretationText: "",
     errorMessage: null,
+    periodErrorMessage: null,
     isBusy: false,
+    isPreviewPending: false,
     onSelectSubjectClient: vi.fn(),
     onSelectPartnerClient: vi.fn(),
     onSelectSaved: vi.fn(),
     onSelectDetail: vi.fn(),
-    onToggleYearMode: vi.fn(),
+    onToggleYearPicker: vi.fn(),
+    onApplyYear: vi.fn(),
+    onHidePeriod: vi.fn(),
+    onRetryPeriod: vi.fn(),
     onToggleCompatibilityMode: vi.fn(),
     onOpenPresentation: vi.fn(),
     onClosePresentation: vi.fn(),

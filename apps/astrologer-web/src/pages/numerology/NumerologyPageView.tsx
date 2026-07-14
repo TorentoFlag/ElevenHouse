@@ -12,6 +12,7 @@ import type { NumerologyFormState } from "../../features/numerology/model/numero
 import { toClientOptionFromNumerologyParticipant } from "../../features/numerology/model/numerologyCompatibilityFlowModel";
 import { buildNumerologyPageViewModel } from "../../features/numerology/model/numerologyPageModel";
 import { NumerologyPresentation } from "./NumerologyPresentation";
+import { NumerologyYearPicker } from "./NumerologyYearPicker";
 import styles from "./NumerologyPage.module.css";
 
 export type NumerologyPageViewProps = {
@@ -19,17 +20,24 @@ export type NumerologyPageViewProps = {
   readonly selectedResponse: NumerologyCalculationResponse | null;
   readonly previewResult: NumerologyResult | null;
   readonly formState: NumerologyFormState;
-  readonly isYearMode: boolean;
+  readonly selectedYear: number;
+  readonly isPeriodVisible: boolean;
+  readonly isYearPickerOpen: boolean;
   readonly isPresentationOpen: boolean;
   readonly selectedDetailSelector: string | null;
   readonly interpretationText: string;
   readonly errorMessage: string | null;
+  readonly periodErrorMessage: string | null;
   readonly isBusy: boolean;
+  readonly isPreviewPending: boolean;
   readonly onSelectSubjectClient: (client: ClientSelectOption) => void;
   readonly onSelectPartnerClient: (client: ClientSelectOption) => void;
   readonly onSelectSaved: (calculation: CalculationRecordResponse) => void;
   readonly onSelectDetail: (selector: string) => void;
-  readonly onToggleYearMode: () => void;
+  readonly onToggleYearPicker: () => void;
+  readonly onApplyYear: (year: number) => void;
+  readonly onHidePeriod: () => void;
+  readonly onRetryPeriod: () => void;
   readonly onToggleCompatibilityMode: () => void;
   readonly onOpenPresentation: () => void;
   readonly onClosePresentation: () => void;
@@ -44,16 +52,23 @@ export function NumerologyPageView({
   selectedResponse,
   previewResult,
   formState,
-  isYearMode,
+  selectedYear,
+  isPeriodVisible,
+  isYearPickerOpen,
   isPresentationOpen,
   selectedDetailSelector,
   interpretationText,
   errorMessage,
+  periodErrorMessage,
   isBusy,
+  isPreviewPending,
   onSelectSubjectClient,
   onSelectPartnerClient,
   onSelectDetail,
-  onToggleYearMode,
+  onToggleYearPicker,
+  onApplyYear,
+  onHidePeriod,
+  onRetryPeriod,
   onToggleCompatibilityMode,
   onOpenPresentation,
   onClosePresentation,
@@ -117,17 +132,18 @@ export function NumerologyPageView({
           ) : null}
         </div>
         <div className={styles.toolbarSpacer} />
-        <button
-          type="button"
-          className={isYearMode ? styles.toolButtonActive : styles.toolButton}
-          aria-pressed={isYearMode}
+        <NumerologyYearPicker
+          selectedYear={selectedYear}
+          isOpen={isYearPickerOpen && !isCompatibilityMode}
+          isPeriodVisible={isPeriodVisible}
+          isPreviewPending={isPreviewPending}
+          errorMessage={isCompatibilityMode ? null : periodErrorMessage}
           disabled={!pageModel.model || isCompatibilityMode}
-          onClick={onToggleYearMode}
-          title="Личные год и месяцы"
-        >
-          <Icon iconName="clock" width={15} height={15} aria-hidden="true" />
-          Год
-        </button>
+          onToggle={onToggleYearPicker}
+          onApply={onApplyYear}
+          onHide={onHidePeriod}
+          onRetry={onRetryPeriod}
+        />
         <button
           type="button"
           className={isCompatibilityMode ? styles.toolButtonActive : styles.toolButton}
@@ -139,18 +155,16 @@ export function NumerologyPageView({
           <Icon iconName="users" width={15} height={15} aria-hidden="true" />
           Совместимость
         </button>
-        {!isCompatibilityMode ? (
-          <button
-            type="button"
-            className={styles.toolButton}
-            disabled={!pageModel.model}
-            onClick={onOpenPresentation}
-            title="Полноэкранный показ для сессии"
-          >
-            <Icon iconName="arrowUpRight" width={15} height={15} aria-hidden="true" />
-            Презентация
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className={styles.toolButton}
+          disabled={!pageModel.model}
+          onClick={onOpenPresentation}
+          title="Полноэкранный показ для сессии"
+        >
+          <Icon iconName="arrowUpRight" width={15} height={15} aria-hidden="true" />
+          Презентация
+        </button>
         <button
           type="button"
           className={pageModel.isCalculationLinked ? styles.toolButtonLinked : styles.toolButton}
@@ -186,7 +200,7 @@ export function NumerologyPageView({
                   model={pageModel.model}
                   detail={pageModel.detail}
                   selectedSelector={pageModel.effectiveSelector}
-                  isYearMode={isYearMode}
+                  isPeriodVisible={isPeriodVisible}
                   interpretationText={interpretationText}
                   isBusy={isBusy}
                   isApproveInterpretationDisabled={pageModel.isApproveInterpretationDisabled}

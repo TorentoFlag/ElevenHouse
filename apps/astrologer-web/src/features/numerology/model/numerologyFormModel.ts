@@ -147,7 +147,7 @@ export function toPreviewNumerologyRequest(
   periodRequest: PreviewNumerologyRequest["periodRequest"] = toPeriodRequest(state.forecastDate)
 ): PreviewNumerologyRequest {
   const persisted = toCreateNumerologyRequest(state) as unknown as Record<string, unknown>;
-  const request = { ...persisted, periodRequest };
+  const request: Record<string, unknown> = { ...persisted, periodRequest };
   delete request.title;
   return previewNumerologyRequestSchema.parse(request) as PreviewNumerologyRequest;
 }

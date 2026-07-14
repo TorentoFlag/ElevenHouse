@@ -16,6 +16,7 @@ export type YearMonthsPanelProps = {
 export function YearMonthsPanel({ personalMonths, currentDate }: YearMonthsPanelProps) {
   const monthPanel = buildPersonalMonthItems({
     personalMonths,
+    currentYear: currentDate.getFullYear(),
     currentMonth: currentDate.getMonth() + 1
   });
 

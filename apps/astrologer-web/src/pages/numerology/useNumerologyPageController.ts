@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   CalculationRecordResponse,
@@ -44,6 +44,11 @@ import {
   toNumerologyResponse
 } from "../../features/numerology/model/numerologyPageModel";
 import { getLatestInterpretationText } from "../../features/numerology/model/numerologyResultModel";
+import {
+  createLatestPreviewGuard,
+  toNumerologyPreviewPeriodRequest,
+  type NumerologyPeriodSelection
+} from "../../features/numerology/model/numerologyPeriodModel";
 import type { NumerologyPageViewProps } from "./NumerologyPageView";
 
 export function useNumerologyPageController(): NumerologyPageViewProps {
@@ -68,14 +73,19 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   );
   const [previewResult, setPreviewResult] = useState<NumerologyResult | null>(null);
   const [formState, setFormState] = useState<NumerologyFormState>(createInitialNumerologyForm);
-  const [isYearMode, setIsYearMode] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [isPeriodVisible, setIsPeriodVisible] = useState(false);
+  const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
   const [selectedDetailSelector, setSelectedDetailSelector] = useState<string | null>(null);
   const [interpretationText, setInterpretationText] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [periodErrorMessage, setPeriodErrorMessage] = useState<string | null>(null);
+  const previewGuardRef = useRef(createLatestPreviewGuard());
+  const isPreviewPending = previewMutation.isPending;
   const isBusy =
     createMutation.isPending ||
-    previewMutation.isPending ||
+    isPreviewPending ||
     linkMutation.isPending ||
     saveInterpretationMutation.isPending ||
     approveInterpretationMutation.isPending ||
@@ -100,12 +110,16 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     selectedResponse,
     previewResult,
     formState,
-    isYearMode,
+    selectedYear,
+    isPeriodVisible,
+    isYearPickerOpen,
     isPresentationOpen,
     selectedDetailSelector,
     interpretationText,
     errorMessage,
+    periodErrorMessage,
     isBusy,
+    isPreviewPending,
     onSelectSubjectClient: (client) => selectPlatformClient("subject", client),
     onSelectPartnerClient: (client) => selectPlatformClient("partner", client),
     onSelectSaved: (calculation) => {
@@ -113,7 +127,32 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       setErrorMessage(null);
     },
     onSelectDetail: setSelectedDetailSelector,
-    onToggleYearMode: () => setIsYearMode((value) => !value),
+    onToggleYearPicker: () => setIsYearPickerOpen((value) => !value),
+    onApplyYear: (year) => {
+      if (formState.mode !== "individual") return;
+      const selection = { selectedYear: year, isVisible: true } as const;
+      setSelectedYear(year);
+      setIsPeriodVisible(true);
+      setIsYearPickerOpen(false);
+      selectOrPreviewCalculation(formState, {
+        periodSelection: selection,
+        forcePreview: true,
+        errorTarget: "period"
+      });
+    },
+    onHidePeriod: () => {
+      setIsPeriodVisible(false);
+      setIsYearPickerOpen(false);
+      setPeriodErrorMessage(null);
+    },
+    onRetryPeriod: () => {
+      if (formState.mode !== "individual") return;
+      selectOrPreviewCalculation(formState, {
+        periodSelection: { selectedYear, isVisible: true },
+        forcePreview: true,
+        errorTarget: "period"
+      });
+    },
     onToggleCompatibilityMode: toggleCompatibilityMode,
     onOpenPresentation: () => setIsPresentationOpen(true),
     onClosePresentation: () => setIsPresentationOpen(false),
@@ -172,6 +211,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   };
 
   function selectCalculation(calculation: CalculationRecordResponse): void {
+    previewGuardRef.current.invalidate();
     const response = toNumerologyResponse(calculation);
     setPreviewResult(null);
     setSelectedResponse(response);
@@ -198,7 +238,11 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       return;
     }
 
-    selectOrPreviewCalculation(nextState);
+    selectOrPreviewCalculation(nextState, {
+      periodSelection: { selectedYear, isVisible: isPeriodVisible },
+      forcePreview: isPeriodVisible,
+      errorTarget: isPeriodVisible ? "period" : "page"
+    });
   }
 
   function toggleCompatibilityMode(): void {
@@ -231,7 +275,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
           subject: toClientParticipantFormState(subject, formState.subject)
         };
 
-    setIsYearMode(false);
+    setIsYearPickerOpen(false);
     setSelectedDetailSelector(null);
     setFormState(nextState);
 
@@ -253,10 +297,21 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     const nextState = buildIndividualFormState(formState, subject);
     setSelectedDetailSelector(null);
     setFormState(nextState);
-    selectOrPreviewCalculation(nextState);
+    selectOrPreviewCalculation(nextState, {
+      periodSelection: { selectedYear, isVisible: isPeriodVisible },
+      forcePreview: isPeriodVisible,
+      errorTarget: isPeriodVisible ? "period" : "page"
+    });
   }
 
-  function selectOrPreviewCalculation(nextState: NumerologyFormState): void {
+  function selectOrPreviewCalculation(
+    nextState: NumerologyFormState,
+    options: {
+      readonly periodSelection?: NumerologyPeriodSelection;
+      readonly forcePreview?: boolean;
+      readonly errorTarget?: "page" | "period";
+    } = {}
+  ): void {
     const errors = getNumerologyFormErrors(nextState);
     if (errors.length > 0) {
       setErrorMessage(errors[0] ?? "Заполните данные расчета");
@@ -269,17 +324,39 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       ...(nextState.mode === "compatibility" ? { partnerClientId: nextState.partner.clientId } : {})
     });
 
-    if (existing) {
+    if (existing && !options.forcePreview) {
       selectCalculation(existing);
       setErrorMessage(null);
       return;
     }
 
-    run(async () => {
-      const response = await previewMutation.mutateAsync(toPreviewNumerologyRequest(nextState));
-      setSelectedResponse(null);
-      setPreviewResult(response.result);
-    }, setErrorMessage);
+    const periodSelection = options.periodSelection ?? {
+      selectedYear,
+      isVisible: isPeriodVisible
+    };
+    const errorTarget = options.errorTarget ?? "page";
+    const requestId = previewGuardRef.current.begin();
+    const setPreviewError = errorTarget === "period" ? setPeriodErrorMessage : setErrorMessage;
+    setPreviewError(null);
+
+    void (async () => {
+      try {
+        const response = await previewMutation.mutateAsync(
+          toPreviewNumerologyRequest(
+            nextState,
+            toNumerologyPreviewPeriodRequest(nextState.mode, periodSelection)
+          )
+        );
+        if (!previewGuardRef.current.isCurrent(requestId)) return;
+        setPeriodErrorMessage(null);
+        setErrorMessage(null);
+        setSelectedResponse(null);
+        setPreviewResult(response.result);
+      } catch (error) {
+        if (!previewGuardRef.current.isCurrent(requestId)) return;
+        setPreviewError(error instanceof Error ? error.message : "Не удалось обновить расчет");
+      }
+    })();
   }
 
   function getCurrentSubjectClient(): ClientSelectOption | null {
