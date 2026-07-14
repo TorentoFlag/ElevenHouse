@@ -9,8 +9,17 @@ import { ClientSearchCombobox } from "../../features/clients/components/ClientSe
 import { NumerologyResultPanel } from "../../features/numerology/components/NumerologyResultPanel";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import type { NumerologyFormState } from "../../features/numerology/model/numerologyFormModel";
+import type { NumerologyParticipantFormState } from "../../features/numerology/model/numerologyFormModel";
 import { toClientOptionFromNumerologyParticipant } from "../../features/numerology/model/numerologyCompatibilityFlowModel";
 import { buildNumerologyPageViewModel } from "../../features/numerology/model/numerologyPageModel";
+import {
+  getActiveNumerologyCalculations,
+  toSavedCalculationListItem,
+  type NumerologyEditorState
+} from "../../features/numerology/model/numerologySavedWorkspaceModel";
+import { NumerologyArchiveDialog } from "./NumerologyArchiveDialog";
+import { NumerologyCalculationEditor } from "./NumerologyCalculationEditor";
+import { NumerologyCalculationMenu } from "./NumerologyCalculationMenu";
 import { NumerologyPresentationDialog } from "./NumerologyPresentationDialog";
 import { NumerologyYearPicker } from "./NumerologyYearPicker";
 import styles from "./NumerologyPage.module.css";
@@ -30,9 +39,28 @@ export type NumerologyPageViewProps = {
   readonly periodErrorMessage: string | null;
   readonly isBusy: boolean;
   readonly isPreviewPending: boolean;
+  readonly editorState: NumerologyEditorState | null;
+  readonly editorErrors: readonly string[];
+  readonly archiveTarget: CalculationRecordResponse | null;
   readonly onSelectSubjectClient: (client: ClientSelectOption) => void;
   readonly onSelectPartnerClient: (client: ClientSelectOption) => void;
   readonly onSelectSaved: (calculation: CalculationRecordResponse) => void;
+  readonly onOpenCreate: () => void;
+  readonly onOpenRecalculate: () => void;
+  readonly onEditorFormChange: (patch: Partial<NumerologyFormState>) => void;
+  readonly onEditorParticipantChange: (
+    participantKey: "subject" | "partner",
+    patch: Partial<NumerologyParticipantFormState>
+  ) => void;
+  readonly onEditorSelectClient: (
+    participantKey: "subject" | "partner",
+    client: ClientSelectOption
+  ) => void;
+  readonly onSubmitEditor: () => void;
+  readonly onCancelEditor: () => void;
+  readonly onRequestArchive: () => void;
+  readonly onCloseArchive: () => void;
+  readonly onConfirmArchive: () => void;
   readonly onSelectDetail: (selector: string) => void;
   readonly onToggleYearPicker: () => void;
   readonly onApplyYear: (year: number) => void;
@@ -49,6 +77,7 @@ export type NumerologyPageViewProps = {
 };
 
 export function NumerologyPageView({
+  calculations,
   selectedResponse,
   previewResult,
   formState,
@@ -62,8 +91,22 @@ export function NumerologyPageView({
   periodErrorMessage,
   isBusy,
   isPreviewPending,
+  editorState,
+  editorErrors,
+  archiveTarget,
   onSelectSubjectClient,
   onSelectPartnerClient,
+  onSelectSaved,
+  onOpenCreate,
+  onOpenRecalculate,
+  onEditorFormChange,
+  onEditorParticipantChange,
+  onEditorSelectClient,
+  onSubmitEditor,
+  onCancelEditor,
+  onRequestArchive,
+  onCloseArchive,
+  onConfirmArchive,
   onSelectDetail,
   onToggleYearPicker,
   onApplyYear,
@@ -82,8 +125,9 @@ export function NumerologyPageView({
     previewResult,
     formState,
     selectedDetailSelector,
-    isBusy
+    isBusy || Boolean(editorState)
   );
+  const savedItems = getActiveNumerologyCalculations(calculations).map(toSavedCalculationListItem);
   const isCompatibilityMode = formState.mode === "compatibility";
   const selectedSubjectClient =
     pageModel.selectedSubjectClient ?? toClientOptionFromNumerologyParticipant(formState.subject);
@@ -106,6 +150,15 @@ export function NumerologyPageView({
             Нумерология
           </h1>
         </div>
+        <NumerologyCalculationMenu
+          items={savedItems}
+          selectedCalculationId={selectedResponse?.calculation.id ?? null}
+          disabled={isBusy}
+          onSelect={onSelectSaved}
+          onCreate={onOpenCreate}
+          onRecalculate={onOpenRecalculate}
+          onArchive={onRequestArchive}
+        />
         <div className={styles.clientStrip}>
           <ClientSearchCombobox
             label="Клиент"
@@ -191,10 +244,21 @@ export function NumerologyPageView({
         </button>
       </header>
       <div className={styles.body}>
-        <main className={styles.workspace}>
+        <main className={`${styles.workspace}${editorState ? ` ${styles.workspaceEditor}` : ""}`}>
           {errorMessage ? <p className={styles.error}>{errorMessage}</p> : null}
           <MotionContent className={styles.workspaceMotion} transitionKey={workspaceTransitionKey}>
-            {pageModel.model ? (
+            {editorState ? (
+              <NumerologyCalculationEditor
+                editor={editorState}
+                errors={editorErrors}
+                isBusy={isBusy}
+                onFormChange={onEditorFormChange}
+                onParticipantChange={onEditorParticipantChange}
+                onSelectClient={onEditorSelectClient}
+                onSubmit={onSubmitEditor}
+                onCancel={onCancelEditor}
+              />
+            ) : pageModel.model ? (
               <div className={styles.workspaceGrid}>
                 <NumerologyResultPanel
                   model={pageModel.model}
@@ -232,6 +296,14 @@ export function NumerologyPageView({
           isPeriodVisible={isPeriodVisible}
           interpretationText={interpretationText}
           onClose={onClosePresentation}
+        />
+      ) : null}
+      {archiveTarget ? (
+        <NumerologyArchiveDialog
+          calculationTitle={archiveTarget.title}
+          isPending={isBusy}
+          onConfirm={onConfirmArchive}
+          onClose={onCloseArchive}
         />
       ) : null}
     </section>

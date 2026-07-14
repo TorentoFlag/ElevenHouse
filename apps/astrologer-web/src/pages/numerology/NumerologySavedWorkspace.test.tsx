@@ -20,22 +20,30 @@ describe("Numerology saved workspace components", () => {
   it("lists saved calculations, marks the current one and opens selected records", () => {
     const onSelect = vi.fn();
     const onCreate = vi.fn();
+    const onRecalculate = vi.fn();
+    const onArchive = vi.fn();
     const view = NumerologyCalculationMenu({
       items: [savedItem("11111111-1111-4111-8111-111111111111", "Антон Голубев")],
       selectedCalculationId: "11111111-1111-4111-8111-111111111111",
       disabled: false,
       onSelect,
-      onCreate
+      onCreate,
+      onRecalculate,
+      onArchive
     });
     const savedButton = findButton(view, "Антон Голубев");
 
     expect(savedButton.props["aria-current"]).toBe("true");
     savedButton.props.onClick?.();
     findButton(view, "Новый расчёт").props.onClick?.();
+    findButton(view, "Пересчитать").props.onClick?.();
+    findButton(view, "В архив").props.onClick?.();
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ id: "11111111-1111-4111-8111-111111111111" })
     );
     expect(onCreate).toHaveBeenCalledOnce();
+    expect(onRecalculate).toHaveBeenCalledOnce();
+    expect(onArchive).toHaveBeenCalledOnce();
   });
 
   it("renders manual individual fields and explicit persistence actions", () => {

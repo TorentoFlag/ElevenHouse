@@ -30,11 +30,13 @@ import {
 } from "../../features/numerology/model/numerologyFormModel";
 import {
   useApproveCalculationInterpretationMutation,
+  useArchiveNumerologyMutation,
   useCreateNumerologyMutation,
   useLinkCalculationClientMutation,
   useNumerologyCalculationListQuery,
   usePreviewNumerologyMutation,
   usePublishCalculationMutation,
+  useRecalculateNumerologyMutation,
   useSaveCalculationInterpretationMutation
 } from "../../features/numerology/model/numerologyHooks";
 import {
@@ -44,6 +46,17 @@ import {
   toNumerologyResponse
 } from "../../features/numerology/model/numerologyPageModel";
 import { getLatestInterpretationText } from "../../features/numerology/model/numerologyResultModel";
+import {
+  createNewNumerologyEditorState,
+  createRecalculationEditorState,
+  getActiveNumerologyCalculations,
+  getNumerologyEditorErrors,
+  toNumerologyCreateRequest,
+  toNumerologyRecalculateRequest,
+  updateNumerologyEditorForm,
+  updateNumerologyEditorParticipant,
+  type NumerologyEditorState
+} from "../../features/numerology/model/numerologySavedWorkspaceModel";
 import {
   createLatestPreviewGuard,
   toNumerologyPreviewPeriodRequest,
@@ -60,9 +73,15 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const saveInterpretationMutation = useSaveCalculationInterpretationMutation();
   const approveInterpretationMutation = useApproveCalculationInterpretationMutation();
   const publishMutation = usePublishCalculationMutation();
+  const recalculateMutation = useRecalculateNumerologyMutation();
+  const archiveMutation = useArchiveNumerologyMutation();
   const calculations = useMemo(
     () => listQuery.data?.calculations ?? [],
     [listQuery.data?.calculations]
+  );
+  const activeCalculations = useMemo(
+    () => getActiveNumerologyCalculations(calculations),
+    [calculations]
   );
   const clientOptions = useMemo(
     () => toClientSelectOptions(clientsQuery.data?.clients ?? []),
@@ -81,6 +100,9 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const [interpretationText, setInterpretationText] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [periodErrorMessage, setPeriodErrorMessage] = useState<string | null>(null);
+  const [editorState, setEditorState] = useState<NumerologyEditorState | null>(null);
+  const [editorErrors, setEditorErrors] = useState<readonly string[]>([]);
+  const [archiveTarget, setArchiveTarget] = useState<CalculationRecordResponse | null>(null);
   const previewGuardRef = useRef(createLatestPreviewGuard());
   const isPreviewPending = previewMutation.isPending;
   const isBusy =
@@ -89,14 +111,16 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     linkMutation.isPending ||
     saveInterpretationMutation.isPending ||
     approveInterpretationMutation.isPending ||
-    publishMutation.isPending;
+    publishMutation.isPending ||
+    recalculateMutation.isPending ||
+    archiveMutation.isPending;
 
   useDocumentTitle("ElevenHouse | Нумерология");
 
   useEffect(() => {
-    if (selectedResponse || previewResult || calculations.length === 0) return;
-    selectCalculation(calculations[0]!);
-  }, [calculations, previewResult, selectedResponse]);
+    if (selectedResponse || previewResult || activeCalculations.length === 0) return;
+    selectCalculation(activeCalculations[0]!);
+  }, [activeCalculations, previewResult, selectedResponse]);
 
   useEffect(() => {
     setInterpretationText(getLatestInterpretationText(selectedResponse));
@@ -120,12 +144,51 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     periodErrorMessage,
     isBusy,
     isPreviewPending,
+    editorState,
+    editorErrors,
+    archiveTarget,
     onSelectSubjectClient: (client) => selectPlatformClient("subject", client),
     onSelectPartnerClient: (client) => selectPlatformClient("partner", client),
     onSelectSaved: (calculation) => {
       selectCalculation(calculation);
       setErrorMessage(null);
     },
+    onOpenCreate: openCreateEditor,
+    onOpenRecalculate: openRecalculationEditor,
+    onEditorFormChange: (patch) => {
+      setEditorState((current) => (current ? updateNumerologyEditorForm(current, patch) : current));
+      setEditorErrors([]);
+    },
+    onEditorParticipantChange: (participantKey, patch) => {
+      setEditorState((current) =>
+        current ? updateNumerologyEditorParticipant(current, participantKey, patch) : current
+      );
+      setEditorErrors([]);
+    },
+    onEditorSelectClient: (participantKey, client) => {
+      setEditorState((current) => {
+        if (!current) return current;
+        return updateNumerologyEditorParticipant(current, participantKey, {
+          ...toClientParticipantFormState(client, current.form[participantKey])
+        });
+      });
+      setEditorErrors([]);
+    },
+    onSubmitEditor: submitEditor,
+    onCancelEditor: () => {
+      setEditorState(null);
+      setEditorErrors([]);
+      setErrorMessage(null);
+    },
+    onRequestArchive: () => {
+      if (selectedCalculation?.status === "archived") return;
+      setArchiveTarget(selectedCalculation);
+    },
+    onCloseArchive: () => {
+      if (archiveMutation.isPending) return;
+      setArchiveTarget(null);
+    },
+    onConfirmArchive: confirmArchive,
     onSelectDetail: setSelectedDetailSelector,
     onToggleYearPicker: () => setIsYearPickerOpen((value) => !value),
     onApplyYear: (year) => {
@@ -216,6 +279,76 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     setPreviewResult(null);
     setSelectedResponse(response);
     setFormState(toNumerologyFormState(response));
+    setEditorState(null);
+    setEditorErrors([]);
+    setArchiveTarget(null);
+  }
+
+  function openCreateEditor(): void {
+    previewGuardRef.current.invalidate();
+    setEditorState(createNewNumerologyEditorState());
+    setEditorErrors([]);
+    setArchiveTarget(null);
+    setErrorMessage(null);
+  }
+
+  function openRecalculationEditor(): void {
+    if (!selectedCalculation || selectedCalculation.status === "archived") return;
+    previewGuardRef.current.invalidate();
+    setEditorState(createRecalculationEditorState(selectedCalculation));
+    setEditorErrors([]);
+    setArchiveTarget(null);
+    setErrorMessage(null);
+  }
+
+  function submitEditor(): void {
+    if (!editorState) return;
+    const errors = getNumerologyEditorErrors(editorState);
+    if (errors.length > 0) {
+      setEditorErrors(errors);
+      return;
+    }
+
+    run(async () => {
+      const response =
+        editorState.kind === "recalculate" && editorState.calculationId
+          ? await recalculateMutation.mutateAsync({
+              calculationId: editorState.calculationId,
+              body: toNumerologyRecalculateRequest(editorState)
+            })
+          : await createMutation.mutateAsync(toNumerologyCreateRequest(editorState));
+      setPreviewResult(null);
+      setSelectedResponse(response);
+      setFormState(toNumerologyFormState(response));
+      setEditorState(null);
+      setEditorErrors([]);
+    }, setErrorMessage);
+  }
+
+  function confirmArchive(): void {
+    if (!archiveTarget) return;
+    const archivedId = archiveTarget.id;
+    run(async () => {
+      await archiveMutation.mutateAsync(archivedId);
+      setArchiveTarget(null);
+      setEditorState(null);
+      setEditorErrors([]);
+
+      if (selectedCalculation?.id !== archivedId) return;
+      const nextCalculation = activeCalculations.find(
+        (calculation) => calculation.id !== archivedId
+      );
+      if (nextCalculation) {
+        selectCalculation(nextCalculation);
+        return;
+      }
+      previewGuardRef.current.invalidate();
+      setSelectedResponse(null);
+      setPreviewResult(null);
+      setFormState(createInitialNumerologyForm());
+      setSelectedDetailSelector(null);
+      setInterpretationText("");
+    }, setErrorMessage);
   }
 
   function selectPlatformClient(
@@ -318,7 +451,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       return;
     }
 
-    const existing = findExistingCalculationForParticipants(calculations, {
+    const existing = findExistingCalculationForParticipants(activeCalculations, {
       mode: nextState.mode,
       subjectClientId: nextState.subject.clientId,
       ...(nextState.mode === "compatibility" ? { partnerClientId: nextState.partner.clientId } : {})

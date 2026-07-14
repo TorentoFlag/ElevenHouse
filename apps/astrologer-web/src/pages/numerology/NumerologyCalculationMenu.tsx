@@ -8,6 +8,8 @@ export type NumerologyCalculationMenuProps = {
   readonly disabled: boolean;
   readonly onSelect: (calculation: CalculationRecordResponse) => void;
   readonly onCreate: () => void;
+  readonly onRecalculate: () => void;
+  readonly onArchive: () => void;
 };
 
 export function NumerologyCalculationMenu({
@@ -15,7 +17,9 @@ export function NumerologyCalculationMenu({
   selectedCalculationId,
   disabled,
   onSelect,
-  onCreate
+  onCreate,
+  onRecalculate,
+  onArchive
 }: NumerologyCalculationMenuProps) {
   return (
     <details className={styles.calculationMenu}>
@@ -53,6 +57,21 @@ export function NumerologyCalculationMenu({
             <p className={styles.calculationEmpty}>Сохранённых расчётов пока нет</p>
           )}
         </div>
+        {selectedCalculationId ? (
+          <div className={styles.calculationMenuActions}>
+            <button type="button" disabled={disabled} onClick={onRecalculate}>
+              Пересчитать
+            </button>
+            <button
+              type="button"
+              className={styles.calculationArchiveAction}
+              disabled={disabled}
+              onClick={onArchive}
+            >
+              В архив
+            </button>
+          </div>
+        ) : null}
       </div>
     </details>
   );

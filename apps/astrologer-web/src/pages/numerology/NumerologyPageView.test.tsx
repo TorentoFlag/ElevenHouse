@@ -8,6 +8,9 @@ import { ClientSearchCombobox } from "../../features/clients/components/ClientSe
 import { NumerologyResultPanel } from "../../features/numerology/components/NumerologyResultPanel";
 import { NumerologyPageView, type NumerologyPageViewProps } from "./NumerologyPageView";
 import { NumerologyPresentationDialog } from "./NumerologyPresentationDialog";
+import { NumerologyArchiveDialog } from "./NumerologyArchiveDialog";
+import { NumerologyCalculationEditor } from "./NumerologyCalculationEditor";
+import { NumerologyCalculationMenu } from "./NumerologyCalculationMenu";
 import { NumerologyYearPicker } from "./NumerologyYearPicker";
 import { createParticipantFormState } from "../../features/numerology/model/numerologyFormModel";
 import styles from "./NumerologyPage.module.css";
@@ -22,6 +25,19 @@ describe("NumerologyPageView", () => {
     expect(controllerSource).not.toContain(
       "Выберите второго клиента с датой рождения для совместимости"
     );
+  });
+
+  it("wires explicit create, replacement recalculation and archive mutations", () => {
+    const controllerSource = readFileSync(
+      new URL("./useNumerologyPageController.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(controllerSource).toContain("useRecalculateNumerologyMutation");
+    expect(controllerSource).toContain("useArchiveNumerologyMutation");
+    expect(controllerSource).toContain("toNumerologyRecalculateRequest");
+    expect(controllerSource).toContain("onSubmitEditor");
+    expect(controllerSource).toContain("onConfirmArchive");
   });
 
   it("disables link action for manual-only calculations", () => {
@@ -47,7 +63,7 @@ describe("NumerologyPageView", () => {
     expect(findOptionalButtonByText(view, "Опубликовать")).toBeNull();
   });
 
-  it("exposes the reference workspace actions instead of a saved-calculation-first toolbar", () => {
+  it("keeps the reference workspace actions and adds explicit lifecycle controls", () => {
     const view = NumerologyPageView({
       ...baseProps(),
       selectedResponse: response({
@@ -66,14 +82,13 @@ describe("NumerologyPageView", () => {
     expect(findButtonByText(view, "Совместимость")).toBeDefined();
     expect(findButtonByText(view, "Презентация")).toBeDefined();
     expect(findButtonByText(view, "PDF").props.disabled).toBe(true);
-    expect(findOptionalButtonByText(view, "Пересчитать")).toBeNull();
-    expect(findOptionalButtonByText(view, "Данные расчета")).toBeNull();
-    expect(findElements(view).some((element) => includesText(element.props, "Сохраненные"))).toBe(
-      false
-    );
+    const calculationMenu = renderCalculationMenu(view);
+    expect(findButtonByText(calculationMenu, "Пересчитать")).toBeDefined();
+    expect(findButtonByText(calculationMenu, "В архив")).toBeDefined();
+    expect(findRequiredElementByType(view, NumerologyCalculationMenu)).toBeDefined();
   });
 
-  it("does not render the saved calculations picker on the reference workspace", () => {
+  it("passes active saved calculations to the workspace menu", () => {
     const onSelectSaved = vi.fn();
     const saved = response({
       source: "manual",
@@ -85,13 +100,17 @@ describe("NumerologyPageView", () => {
       onSelectSaved
     });
 
-    expect(findElements(view).some((element) => includesText(element.props, "СОХРАНЕННЫЕ"))).toBe(
-      false
-    );
-    expect(onSelectSaved).not.toHaveBeenCalled();
+    const menu = findRequiredElementByType<{
+      readonly items: readonly unknown[];
+      readonly onSelect: (calculation: unknown) => void;
+    }>(view, NumerologyCalculationMenu);
+
+    expect(menu.props.items).toHaveLength(1);
+    menu.props.onSelect(saved);
+    expect(onSelectSaved).toHaveBeenCalledWith(saved);
   });
 
-  it("renders an empty state without the removed manual setup action", () => {
+  it("renders an empty state with a separate inline creation entry point", () => {
     const view = NumerologyPageView(baseProps());
     const emptyState = findElements(view).find(
       (element) =>
@@ -103,10 +122,35 @@ describe("NumerologyPageView", () => {
     expect(
       emptyState ? elementIncludesText(emptyState, "Выберите клиента для нумерологии") : false
     ).toBe(true);
-    expect(findOptionalButtonByText(view, "Создать расчет")).toBeNull();
-    expect(findElements(view).some((element) => elementIncludesText(element, "Новый расчет"))).toBe(
+    const menu = findRequiredElementByType(view, NumerologyCalculationMenu);
+    expect(menu).toBeDefined();
+  });
+
+  it("replaces the result area with the inline editor without removing the toolbar", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      editorState: {
+        kind: "create",
+        calculationId: null,
+        form: baseProps().formState
+      }
+    });
+
+    expect(findRequiredElementByType(view, NumerologyCalculationMenu)).toBeDefined();
+    expect(findRequiredElementByType(view, NumerologyCalculationEditor)).toBeDefined();
+    expect(findElements(view).some((element) => element.type === NumerologyResultPanel)).toBe(
       false
     );
+  });
+
+  it("renders archive confirmation only for the requested calculation", () => {
+    const archiveTarget = response({ source: "manual", clientId: null }).calculation;
+    const view = NumerologyPageView({ ...baseProps(), archiveTarget });
+
+    const dialog = findRequiredElementByType<{
+      readonly calculationTitle: string;
+    }>(view, NumerologyArchiveDialog);
+    expect(dialog.props.calculationTitle).toBe(archiveTarget.title);
   });
 
   it("disables interpretation approval when the current result has no interpretation", () => {
@@ -159,7 +203,7 @@ describe("NumerologyPageView", () => {
 
     expect(clientPickers).toHaveLength(1);
     expect(clientPickers[0]?.props.disabled).toBe(true);
-    expect(findOptionalButtonByText(view, "Пересчитать")).toBeNull();
+    expect(findButtonByText(renderCalculationMenu(view), "Пересчитать").props.disabled).toBe(true);
   });
 
   it("does not expose the non-reference publish action in the workspace", () => {
@@ -234,7 +278,7 @@ describe("NumerologyPageView", () => {
     expect(getButtonIconName(view, "Презентация")).toBe("arrowUpRight");
     expect(getButtonIconName(view, "Привязать")).toBe("pin");
     expect(getButtonIconName(view, "PDF")).toBe("doc");
-    expect(findOptionalButtonByText(view, "Пересчитать")).toBeNull();
+    expect(findButtonByText(renderCalculationMenu(view), "Пересчитать")).toBeDefined();
   });
 
   it("keeps period selection unavailable in compatibility while exposing presentation", () => {
@@ -353,9 +397,22 @@ function baseProps(): NumerologyPageViewProps {
     periodErrorMessage: null,
     isBusy: false,
     isPreviewPending: false,
+    editorState: null,
+    editorErrors: [],
+    archiveTarget: null,
     onSelectSubjectClient: vi.fn(),
     onSelectPartnerClient: vi.fn(),
     onSelectSaved: vi.fn(),
+    onOpenCreate: vi.fn(),
+    onOpenRecalculate: vi.fn(),
+    onEditorFormChange: vi.fn(),
+    onEditorParticipantChange: vi.fn(),
+    onEditorSelectClient: vi.fn(),
+    onSubmitEditor: vi.fn(),
+    onCancelEditor: vi.fn(),
+    onRequestArchive: vi.fn(),
+    onCloseArchive: vi.fn(),
+    onConfirmArchive: vi.fn(),
     onSelectDetail: vi.fn(),
     onToggleYearPicker: vi.fn(),
     onApplyYear: vi.fn(),
@@ -491,6 +548,14 @@ function findRequiredElementByType<TProps>(
   if (!result) throw new Error("Element not found");
 
   return result as ReactElement<TProps>;
+}
+
+function renderCalculationMenu(root: ReactElement): ReactElement {
+  const menu = findRequiredElementByType<Parameters<typeof NumerologyCalculationMenu>[0]>(
+    root,
+    NumerologyCalculationMenu
+  );
+  return NumerologyCalculationMenu(menu.props);
 }
 
 function findElements(root: ReactElement): ReactElement[] {

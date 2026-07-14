@@ -139,6 +139,10 @@
   overflow: hidden;
 }
 
+.workspaceEditor {
+  overflow-y: auto;
+}
+
 .workspaceMotion {
   --eh-motion-content-enter-y: 10px;
   --eh-motion-content-enter-scale: 0.998;
