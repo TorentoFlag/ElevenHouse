@@ -144,11 +144,16 @@ Implementation evidence as of 2026-07-14:
   stored-result open, prefilled recalculation editor, count remaining `1`,
   compatibility editor with both participant groups, archive confirmation, and
   count `1 → 0` with return to the empty state.
-- The running API process was a static `node apps/astrologer-api/dist/main.js`
-  instance. It therefore continued serving the pre-fix title behavior; live
-  confirmation of edited-title persistence remains blocked until that process
-  is rebuilt/restarted with explicit lifecycle permission. Automated service
-  and domain tests cover the corrected path in source.
+- After rebuilding, the authorized local API lifecycle restart replaced the
+  stale static process on port `3002`; `/health` returned `status: ok` from the
+  new `node apps/astrologer-api/dist/main.js` process.
+- A fresh authorized-browser scenario then created one manual calculation,
+  opened its prefilled recalculation editor, changed the title to
+  `E2E title after restart`, and kept the active count at `1`. Database evidence
+  confirmed that the same calculation id was updated in place, its title and
+  `updated_at` changed, and no replacement row or historical version was
+  created. The disposable record was archived through the confirmation flow,
+  returning the active browser list to `0`.
 
 ### 4.4 Phase 4: AI Interpretation
 
