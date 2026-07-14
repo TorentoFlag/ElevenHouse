@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   outboxEvents,
   outboxEventStatusValues,
@@ -18,6 +18,7 @@ export type ClaimedOutboxEvent = {
 
 export type OutboxRelayStore = {
   readonly claimPending: (input: {
+    readonly eventTypes: readonly string[];
     readonly limit: number;
     readonly now: Date;
     readonly stalePublishingBefore: Date;
@@ -37,18 +38,25 @@ export type OutboxRelayStore = {
 export function createDrizzleOutboxRelayStore(database: ElevenHouseDatabase): OutboxRelayStore {
   return {
     claimPending: async (input) => {
+      if (input.eventTypes.length === 0) {
+        throw new Error("At least one outbox event type is required");
+      }
+
       const rows = await database.transaction(async (transaction) => {
         const result = await transaction.execute(sql<ClaimedOutboxEvent>`
           with claimed as (
             select id
             from ${outboxEvents}
-            where (
-                ${outboxEvents.status} = 'pending'
-                and ${outboxEvents.availableAt} <= ${input.now}
-              )
-              or (
-                ${outboxEvents.status} = 'publishing'
-                and ${outboxEvents.lockedAt} <= ${input.stalePublishingBefore}
+            where ${inArray(outboxEvents.eventType, input.eventTypes)}
+              and (
+                (
+                  ${outboxEvents.status} = 'pending'
+                  and ${outboxEvents.availableAt} <= ${input.now}
+                )
+                or (
+                  ${outboxEvents.status} = 'publishing'
+                  and ${outboxEvents.lockedAt} <= ${input.stalePublishingBefore}
+                )
               )
             order by ${outboxEvents.createdAt}
             limit ${input.limit}

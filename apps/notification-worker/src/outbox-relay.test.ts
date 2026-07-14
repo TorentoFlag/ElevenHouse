@@ -53,6 +53,7 @@ describe("relayPendingOutboxEvents", () => {
     ).resolves.toBe(1);
 
     expect(store.claimPending).toHaveBeenCalledWith({
+      eventTypes: ["identity.auth_code_delivery_requested"],
       limit: 10,
       now,
       stalePublishingBefore: new Date("2026-06-16T09:59:00.000Z")
