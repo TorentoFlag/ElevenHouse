@@ -105,6 +105,10 @@ feature-module boundaries, explicit auth/permissions и audit logging.
 - `Numerology`: typed preview/persist/recalculate orchestration and method
   registry. The active `pythagorean` engine owns Pythagorean RU formulas;
   controllers, frontend and generic calculation storage do not duplicate them.
+  AI interpretation orchestration accepts only owned saved results, minimizes
+  them to anonymous deterministic numeric context, delegates structured text
+  generation to `Ai`, and persists an editable draft through the checksum-safe
+  `Calculations` interpretation use case. AI never participates in arithmetic.
 - `Matrix`: CRM-only typed preview/link/recalculate orchestration for the single
   `ladini_22` engine. Individual and compatibility base results are persisted
   through `Calculations`; current-age and annual forecast projections are

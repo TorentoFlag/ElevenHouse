@@ -165,6 +165,34 @@ Detailed approved design:
 3. Keep AI output as an editable draft requiring astrologer approval.
 4. Never use AI text as a source for deterministic numbers or relations.
 
+Implementation evidence as of 2026-07-14:
+
+- The existing provider-neutral `AiModule` now generates strict structured
+  individual and compatibility drafts from anonymous deterministic result
+  context; names, dates, ids, checksums and raw inputs are excluded.
+- Generation and manual interpretation writes require the current result
+  checksum. The database adapter checks it while holding the calculation row,
+  preventing a draft generated for an old result from being attached after
+  recalculation.
+- The shared interpretation editor exposes generation progress, explicit
+  retryable errors, editing, save and approval in both result modes. Dirty text
+  disables generation with `Сначала сохраните или отмените изменения` and also
+  disables approval.
+- Public calculation interpretation contracts expose only `id`, `status` and
+  `text`; provider, model, prompt and internal provenance stay outside the
+  frontend contract.
+- AI output is always a draft and never changes deterministic values,
+  publication state or calculation lifecycle. Phase 5 PDF export remains the
+  only unimplemented phase in this completion sequence.
+- Focused verification passed 24 Numerology-related test files / 120 tests,
+  typechecks for contracts, domain, AI, database, API and web, and both
+  production application builds. Repository `pnpm verify` passed lint, all 31
+  typecheck tasks, 356 test files / 1486 tests, and all 22 build tasks.
+- Read-only process evidence found the current astrologer API listening on
+  `3002` with an `ok` health response. No process was listening on the canonical
+  frontend port `5173`, so Phase 4 authorized-browser evidence is intentionally
+  pending; no replacement frontend process or alternate port was started.
+
 ### 4.5 Phase 5: PDF Export
 
 1. Add an astrologer-api export endpoint for a saved, owner-scoped calculation.

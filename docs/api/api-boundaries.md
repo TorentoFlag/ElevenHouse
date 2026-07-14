@@ -113,6 +113,7 @@ GET  /calculations/:calculationId
 POST /numerology/preview
 POST /numerology/calculations
 POST /numerology/calculations/:calculationId/recalculate
+POST /numerology/calculations/:calculationId/ai-draft
 POST /matrix/preview
 POST /matrix/calculations
 POST /matrix/calculations/:calculationId/recalculate
@@ -144,6 +145,23 @@ Publishing must name the expected current result checksum and requires an
 approved current interpretation. Creating a persisted numerology calculation
 atomically creates private links for every owner-scoped CRM participant; an
 exact create replay idempotently restores any missing participant links.
+
+`POST /numerology/calculations/:calculationId/ai-draft` accepts the strict body
+`{ "expectedResultChecksum": "sha256:..." }` for an owned, saved,
+non-archived `pythagorean` calculation. The server checks the checksum before
+generation and again during the conditional interpretation write, so a
+recalculation racing with AI generation cannot attach stale text to the new
+result. Manual interpretation saves use the same expected-checksum guard.
+
+Numerology sends the AI service only anonymous, already calculated numeric
+result blocks for individual or compatibility mode. Names, birth dates, CRM and
+owner identifiers, calculation identifiers, fingerprints, checksums and raw
+inputs are excluded. AI output is saved only as an editable draft and cannot
+change deterministic numbers, relations or conclusions. The response is the
+updated `NumerologyCalculationResponse`; every public interpretation contains
+only `id`, `status` and `text`. Internal source, provider model and prompt
+metadata are not exposed to frontend consumers. Approval remains a separate
+explicit mutation against a saved interpretation id.
 
 `POST /matrix/preview` is authenticated and read-only. Matrix persistence
 accepts only existing owner-scoped active CRM client IDs: one for an individual
