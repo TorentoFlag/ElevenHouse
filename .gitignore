@@ -24,3 +24,4 @@ ElevenHouseDesign
 # Agent instructions and generated planning artifacts
 .claude/
 .cursor/
+.worktrees/
