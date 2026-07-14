@@ -64,6 +64,7 @@ export function NumerologyResultPanel({
     return (
       <CompatibilityWorkspace
         model={model}
+        selectedSelector={selectedSelector}
         interpretationText={interpretationText}
         isBusy={isBusy}
         isApproveInterpretationDisabled={isApproveInterpretationDisabled}
@@ -71,6 +72,7 @@ export function NumerologyResultPanel({
         onInterpretationChange={onInterpretationChange}
         onSaveInterpretation={onSaveInterpretation}
         onApproveInterpretation={onApproveInterpretation}
+        onSelect={onSelect}
       />
     );
   }

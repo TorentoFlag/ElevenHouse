@@ -1,10 +1,13 @@
-import { formatNullableNumerologyNumber } from "../model/numerologyResultPanelModel";
 import type { NumerologyWorkspaceModel } from "../model/numerologyWorkspaceModel";
 import styles from "./NumerologyComponents.module.css";
+import { CompatibilityComparisonList } from "./CompatibilityComparisonList";
+import { CompatibilityParticipants } from "./CompatibilityParticipants";
+import { CompatibilitySummary } from "./CompatibilitySummary";
 import { PythagoreanMatrix } from "./PythagoreanMatrix";
 
 export type CompatibilityWorkspaceProps = {
   readonly model: NumerologyWorkspaceModel;
+  readonly selectedSelector: string | null;
   readonly interpretationText: string;
   readonly isBusy: boolean;
   readonly isApproveInterpretationDisabled: boolean;
@@ -12,45 +15,27 @@ export type CompatibilityWorkspaceProps = {
   readonly onInterpretationChange: (value: string) => void;
   readonly onSaveInterpretation: () => void;
   readonly onApproveInterpretation: () => void;
+  readonly onSelect: (selector: string) => void;
 };
 
 export function CompatibilityWorkspace({
   model,
+  selectedSelector,
   interpretationText,
   isBusy,
   isApproveInterpretationDisabled,
   isSaveInterpretationDisabled,
   onInterpretationChange,
   onSaveInterpretation,
-  onApproveInterpretation
+  onApproveInterpretation,
+  onSelect
 }: CompatibilityWorkspaceProps) {
   const compatibility = model.compatibility;
   if (!compatibility) return null;
 
   return (
     <>
-      <aside className={styles.keyRail} aria-label="Участники совместимости">
-        {compatibility.participants.map((participant) => (
-          <div className={styles.participantCard} key={participant.displayName}>
-            <span className={styles.avatar}>{participant.initials}</span>
-            <strong>{participant.displayName}</strong>
-            <dl>
-              <div>
-                <dt>Путь</dt>
-                <dd>{formatNullableNumerologyNumber(participant.lifePath)}</dd>
-              </div>
-              <div>
-                <dt>Выражение</dt>
-                <dd>{formatNullableNumerologyNumber(participant.expression)}</dd>
-              </div>
-              <div>
-                <dt>Душа</dt>
-                <dd>{formatNullableNumerologyNumber(participant.soul)}</dd>
-              </div>
-            </dl>
-          </div>
-        ))}
-      </aside>
+      <CompatibilityParticipants participants={compatibility.participants} />
       <section className={styles.compatibilityMatrixGrid} aria-label="Матрицы совместимости">
         {compatibility.matrices.map((item) => (
           <div className={styles.compatibilityMatrix} key={item.participant.displayName}>
@@ -62,8 +47,9 @@ export function CompatibilityWorkspace({
             {item.matrix ? (
               <PythagoreanMatrix
                 cells={item.matrix.cells}
-                selectedSelector={null}
-                onSelect={() => undefined}
+                selectedSelector={selectedSelector}
+                selectorForDigit={(digit) => `compatibility:psychomatrix:digit_${digit}`}
+                onSelect={onSelect}
               />
             ) : null}
           </div>
@@ -79,29 +65,42 @@ export function CompatibilityWorkspace({
           <div className={styles.detailTitleRow}>
             <span className={styles.detailValue}>{compatibility.pairNumber ?? "—"}</span>
             <span>
-              <strong>Число пары</strong>
-              {compatibility.pairMeaning ? (
-                <small>{compatibility.pairMeaning.essence}</small>
-              ) : null}
+              <strong>{compatibility.conclusion.label}</strong>
+              {compatibility.pairMeaning ? <small>{compatibility.pairMeaning.essence}</small> : null}
             </span>
           </div>
         </div>
         <div className={styles.detailBody}>
-          <p>
-            {compatibility.pairMeaning?.text ??
-              "Сравнение строится по ключевым числам, матрицам и линиям силы двух участников."}
-          </p>
-          <div className={styles.comparisonList}>
-            <span className={styles.kicker}>Линии матриц</span>
-            {compatibility.strengthLineComparisons.map((line) => (
-              <div className={styles.comparisonRow} key={line.code}>
-                <span>{line.label}</span>
-                <strong>{line.valueA}</strong>
-                <small>·</small>
-                <strong>{line.valueB}</strong>
-              </div>
-            ))}
-          </div>
+          <p>{compatibility.conclusion.explanation}</p>
+          <CompatibilityComparisonList
+            title="Ключевые числа"
+            ariaLabel="Ключевые числа пары"
+            comparisons={compatibility.keyNumberComparisons}
+            selectedSelector={selectedSelector}
+            onSelect={onSelect}
+          />
+          <CompatibilityComparisonList
+            title="Психоматрица"
+            ariaLabel="Сравнение психоматриц"
+            comparisons={compatibility.matrixComparisons}
+            selectedSelector={selectedSelector}
+            onSelect={onSelect}
+          />
+          <CompatibilityComparisonList
+            title="Линии матриц"
+            ariaLabel="Линии совместимости"
+            comparisons={compatibility.strengthLineComparisons}
+            selectedSelector={selectedSelector}
+            onSelect={onSelect}
+          />
+          <CompatibilitySummary
+            pairNumber={compatibility.pairNumber}
+            zones={compatibility.zones}
+            counts={compatibility.counts.total}
+            conclusion={compatibility.conclusion}
+            selectedSelector={selectedSelector}
+            onSelect={onSelect}
+          />
           <div className={styles.manualInterpretation}>
             <span className={styles.kicker}>Ручная трактовка</span>
             <textarea
