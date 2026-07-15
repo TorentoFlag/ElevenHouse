@@ -12,7 +12,7 @@ const defaultAiConfig = {
   openAiBaseUrl: "https://api.openai.com/v1",
   fastDraftModel: "gpt-5.4-mini",
   qualityDraftModel: "gpt-5.5",
-  timeoutMs: 15000,
+  timeoutMs: 90_000,
   maxOutputTokens: 5000,
   rateLimitRedisKeyPrefix: "elevenhouse:astrologer-api:ai",
   rateLimits: {

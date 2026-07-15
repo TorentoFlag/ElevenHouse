@@ -118,7 +118,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_OPENAI_BASE_URL: z.string().trim().url().default("https://api.openai.com/v1"),
   ASTROLOGER_AI_FAST_DRAFT_MODEL: z.enum(["gpt-5.4-mini", "gpt-5.5"]).default("gpt-5.4-mini"),
   ASTROLOGER_AI_QUALITY_DRAFT_MODEL: z.enum(["gpt-5.4-mini", "gpt-5.5"]).default("gpt-5.5"),
-  ASTROLOGER_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
+  ASTROLOGER_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
   ASTROLOGER_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(5000),
   ASTROLOGER_AI_RATE_LIMIT_USER_PER_MINUTE: z.coerce.number().int().positive().default(3),
   ASTROLOGER_AI_RATE_LIMIT_USER_PER_HOUR: z.coerce.number().int().positive().default(30),
