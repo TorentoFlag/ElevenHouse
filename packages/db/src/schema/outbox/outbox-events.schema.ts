@@ -14,7 +14,6 @@ import type {
   AuthCodeDeliveryRequestedPayload,
   CalculationPdfDeleteRequestedPayload,
   CalculationPdfRequestedPayload,
-  MatrixPdfRequestedPayload,
   RedactedAuthCodeDeliveryRequestedPayload
 } from "@elevenhouse/domain";
 
@@ -23,7 +22,6 @@ export const outboxEventStatusValues = ["pending", "publishing", "published"] as
 export type OutboxEventPayload =
   | AuthCodeDeliveryRequestedPayload
   | RedactedAuthCodeDeliveryRequestedPayload
-  | MatrixPdfRequestedPayload
   | CalculationPdfRequestedPayload
   | CalculationPdfDeleteRequestedPayload;
 

@@ -681,7 +681,7 @@ export async function executeNumerologyPdfAction(input: {
       return "enqueued";
     }
   } catch (error) {
-    throw new Error(getNumerologyPdfActionErrorMessage(error));
+    throw new Error(getNumerologyPdfActionErrorMessage(error), { cause: error });
   }
 
   return "skipped";

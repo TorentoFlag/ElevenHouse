@@ -63,6 +63,12 @@ describe("Numerology PDF renderer", () => {
     expect(first.bytes.toString("latin1")).not.toContain("/JS");
     expect(JSON.stringify(buildNumerologyPdfContent(en))).toContain("Core numbers");
   });
+
+  it("keeps the standard compatibility report compact enough to avoid an orphan conclusion", async () => {
+    const rendered = await createNumerologyPdfRenderer().render(document(compatibilityResult()));
+
+    expect(rendered.pageCount).toBeLessThanOrEqual(7);
+  });
 });
 
 function document(

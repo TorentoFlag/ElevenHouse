@@ -23,9 +23,16 @@ export type PdfLayout = {
   readonly drawTable: (
     heading: string,
     headers: readonly string[],
-    rows: readonly (readonly string[])[]
+    rows: readonly (readonly string[])[],
+    options?: PdfTableOptions
   ) => void;
   readonly save: () => Promise<{ readonly bytes: Buffer; readonly pageCount: number }>;
+};
+
+export type PdfTableOptions = {
+  readonly columnWeights?: readonly number[];
+  readonly fontSize?: number;
+  readonly lineHeight?: number;
 };
 
 export async function createPdfLayout(input: {
@@ -160,21 +167,30 @@ class DefaultPdfLayout implements PdfLayout {
   drawTable(
     heading: string,
     headers: readonly string[],
-    rows: readonly (readonly string[])[]
+    rows: readonly (readonly string[])[],
+    options: PdfTableOptions = {}
   ): void {
     if (headers.length === 0 || rows.length === 0) return;
     this.drawHeading(heading);
-    const columnWidth = contentWidth / headers.length;
+    const weights = normalizedColumnWeights(headers.length, options.columnWeights);
+    const weightTotal = weights.reduce((total, weight) => total + weight, 0);
+    const columnWidths = weights.map((weight) => (contentWidth * weight) / weightTotal);
+    const columnWidthAt = (index: number) => columnWidths[index] ?? contentWidth / headers.length;
+    const fontSize = options.fontSize ?? 9;
+    const lineHeight = options.lineHeight ?? 13;
     const drawRow = (cells: readonly string[], header: boolean) => {
       const lines = headers.map((_, index) =>
         wrapText(
           normalizeText(cells[index] ?? ""),
           header ? this.semibold : this.regular,
-          9,
-          columnWidth - 12
+          fontSize,
+          columnWidthAt(index) - 12
         )
       );
-      const rowHeight = Math.max(25, Math.max(...lines.map((value) => value.length)) * 13 + 10);
+      const rowHeight = Math.max(
+        25,
+        Math.max(...lines.map((value) => value.length)) * lineHeight + 10
+      );
       this.ensureSpace(rowHeight);
       const top = this.y + 5;
       this.page.drawRectangle({
@@ -186,25 +202,27 @@ class DefaultPdfLayout implements PdfLayout {
         borderColor: rgb(0.86, 0.84, 0.9),
         borderWidth: 0.5
       });
+      let columnOffset = 0;
       lines.forEach((cellLines, columnIndex) => {
-        const x = marginX + columnIndex * columnWidth + 6;
+        const x = marginX + columnOffset + 6;
         cellLines.forEach((line, lineIndex) => {
           this.page.drawText(line, {
             x,
-            y: top - 14 - lineIndex * 13,
+            y: top - 14 - lineIndex * lineHeight,
             font: header ? this.semibold : this.regular,
-            size: 9,
+            size: fontSize,
             color: rgb(0.16, 0.14, 0.21)
           });
         });
         if (columnIndex > 0) {
           this.page.drawLine({
-            start: { x: marginX + columnIndex * columnWidth, y: top },
-            end: { x: marginX + columnIndex * columnWidth, y: top - rowHeight },
+            start: { x: marginX + columnOffset, y: top },
+            end: { x: marginX + columnOffset, y: top - rowHeight },
             thickness: 0.5,
             color: rgb(0.86, 0.84, 0.9)
           });
         }
+        columnOffset += columnWidthAt(columnIndex);
       });
       this.y = top - rowHeight - 1;
     };
@@ -290,6 +308,19 @@ class DefaultPdfLayout implements PdfLayout {
   private addPage(): PDFPage {
     return this.document.addPage([pageWidth, pageHeight]);
   }
+}
+
+function normalizedColumnWeights(
+  columnCount: number,
+  requested: readonly number[] | undefined
+): readonly number[] {
+  if (
+    requested?.length === columnCount &&
+    requested.every((weight) => Number.isFinite(weight) && weight > 0)
+  ) {
+    return requested;
+  }
+  return Array.from({ length: columnCount }, () => 1);
 }
 
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {

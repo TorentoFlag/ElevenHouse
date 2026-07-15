@@ -93,8 +93,10 @@ export async function processCalculationPdfJob(input: {
         reason: normalizeErrorMessage(error),
         now: input.now.toISOString()
       });
-      if (!failed) throw new Error("Calculation PDF failure could not be persisted");
-      throw new UnrecoverableError(error.message);
+      if (!failed) {
+        throw new Error("Calculation PDF failure could not be persisted", { cause: error });
+      }
+      throw createUnrecoverableError(error);
     }
     if (input.finalAttempt) {
       await input.store.fail({
@@ -106,6 +108,12 @@ export async function processCalculationPdfJob(input: {
     }
     throw error;
   }
+}
+
+function createUnrecoverableError(error: CalculationPdfPermanentError): UnrecoverableError {
+  const unrecoverableError = new UnrecoverableError(error.message);
+  unrecoverableError.cause = error;
+  return unrecoverableError;
 }
 
 function normalizeErrorMessage(error: unknown): string {

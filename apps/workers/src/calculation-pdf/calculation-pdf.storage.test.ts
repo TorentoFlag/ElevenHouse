@@ -14,7 +14,10 @@ const config = {
 describe("calculation PDF object storage", () => {
   it("uploads deterministic private PDF metadata", async () => {
     const send = vi.fn(
-      async (_command: PutObjectCommand | DeleteObjectCommand | HeadBucketCommand) => ({})
+      async (command: PutObjectCommand | DeleteObjectCommand | HeadBucketCommand) => {
+        void command;
+        return {};
+      }
     );
     const storage = createS3CalculationPdfObjectStorage(config, { send });
     const bytes = Buffer.from("%PDF-test");
@@ -41,7 +44,10 @@ describe("calculation PDF object storage", () => {
 
   it("uses idempotent S3 deletion and rejects unexpected buckets", async () => {
     const send = vi.fn(
-      async (_command: PutObjectCommand | DeleteObjectCommand | HeadBucketCommand) => ({})
+      async (command: PutObjectCommand | DeleteObjectCommand | HeadBucketCommand) => {
+        void command;
+        return {};
+      }
     );
     const storage = createS3CalculationPdfObjectStorage(config, { send });
 
@@ -61,7 +67,10 @@ describe("calculation PDF object storage", () => {
 
   it("checks readiness against the configured private bucket", async () => {
     const send = vi.fn(
-      async (_command: PutObjectCommand | DeleteObjectCommand | HeadBucketCommand) => ({})
+      async (command: PutObjectCommand | DeleteObjectCommand | HeadBucketCommand) => {
+        void command;
+        return {};
+      }
     );
     const storage = createS3CalculationPdfObjectStorage(config, { send });
 

@@ -7,7 +7,7 @@ import type {
   PythagoreanIndividualResult
 } from "@elevenhouse/contracts";
 import type { NumerologyPdfDocument } from "./calculation-pdf.documents";
-import { createPdfLayout } from "./pdf-layout";
+import { createPdfLayout, type PdfTableOptions } from "./pdf-layout";
 
 type KeyValue = { readonly label: string; readonly value: string };
 
@@ -25,6 +25,7 @@ export type NumerologyPdfBlock =
       readonly heading: string;
       readonly headers: readonly string[];
       readonly rows: readonly (readonly string[])[];
+      readonly layout?: PdfTableOptions;
     };
 
 export type NumerologyPdfRenderer = {
@@ -63,7 +64,7 @@ export function createNumerologyPdfRenderer(
         } else if (block.kind === "key_values") {
           layout.drawKeyValues(block.heading, block.items);
         } else {
-          layout.drawTable(block.heading, block.headers, block.rows);
+          layout.drawTable(block.heading, block.headers, block.rows, block.layout);
         }
       }
       return layout.save();
@@ -253,7 +254,12 @@ function compatibilityBlocks(
         labels.relation,
         labels.explanation
       ],
-      rows: result.comparisons.map((comparison) => comparisonRow(comparison, labels))
+      rows: result.comparisons.map((comparison) => comparisonRow(comparison, labels)),
+      layout: {
+        columnWeights: [1.1, 1.4, 0.4, 0.4, 0.65, 1.1, 1.55],
+        fontSize: 8,
+        lineHeight: 11
+      }
     },
     {
       kind: "table",
