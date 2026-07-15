@@ -1,0 +1,194 @@
+import { Inject, Injectable } from "@nestjs/common";
+import {
+  calculationIdParamSchema,
+  calculationPdfJobIdParamSchema,
+  calculationPdfLatestQuerySchema,
+  requestCalculationPdfSchema,
+  type CalculationPdfDownloadResponse,
+  type CalculationPdfJobResponse,
+  type CalculationPdfLatestQuery,
+  type RequestCalculationPdf
+} from "@elevenhouse/contracts";
+import type {
+  CalculationInterpretation,
+  CalculationRecord,
+  CalculationStore
+} from "@elevenhouse/domain";
+import { requireOwnerUserId } from "../calculations/calculations.service";
+import { CALCULATION_STORE } from "../calculations/calculations.tokens";
+import {
+  CalculationPdfNotFoundError,
+  CalculationPdfNotReadyError,
+  CalculationPdfResultChangedError
+} from "../calculations/pdf/calculation-pdf.errors";
+import { CalculationPdfService } from "../calculations/pdf/calculation-pdf.service";
+import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { numerologyHttpError } from "./numerology-http-errors";
+
+@Injectable()
+export class NumerologyPdfService {
+  constructor(
+    @Inject(CALCULATION_STORE) private readonly calculationStore: CalculationStore,
+    private readonly calculationPdf: CalculationPdfService
+  ) {}
+
+  async latest(
+    calculationId: string,
+    query: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<CalculationPdfJobResponse> {
+    const params = parseCalculationId(calculationId);
+    const parsedQuery = parseLatestQuery(query);
+    const ownerUserId = requireOwnerUserId(request);
+    return mapNumerologyPdfErrors(async () => {
+      await this.ownedNumerology(ownerUserId, params.calculationId);
+      return this.calculationPdf.latest({
+        ownerUserId,
+        calculationId: params.calculationId,
+        locale: parsedQuery.locale
+      });
+    });
+  }
+
+  async enqueue(
+    calculationId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<CalculationPdfJobResponse> {
+    const params = parseCalculationId(calculationId);
+    const parsedBody = parseRequest(body);
+    const ownerUserId = requireOwnerUserId(request);
+    return mapNumerologyPdfErrors(async () => {
+      const calculation = await this.ownedNumerology(ownerUserId, params.calculationId);
+      const interpretation = selectCurrentApprovedInterpretation(calculation.interpretations);
+      return this.calculationPdf.request({
+        ownerUserId,
+        calculationId: calculation.id,
+        expectedResultChecksum: parsedBody.expectedResultChecksum,
+        locale: parsedBody.locale,
+        sourceLocator: {
+          kind: "approved_interpretation",
+          interpretationId: interpretation?.id ?? null
+        },
+        renderContract: "numerology-pythagorean",
+        originalFileName: parsedBody.locale === "ru" ? "Нумерология.pdf" : "Numerology.pdf"
+      });
+    });
+  }
+
+  async download(
+    calculationId: string,
+    jobId: string,
+    request: AstrologerSessionRequest
+  ): Promise<CalculationPdfDownloadResponse> {
+    const parsed = calculationPdfJobIdParamSchema.safeParse({ calculationId, jobId });
+    if (!parsed.success) {
+      throw numerologyHttpError(
+        400,
+        "NUMEROLOGY_VALIDATION_FAILED",
+        "Invalid Numerology PDF request"
+      );
+    }
+    const ownerUserId = requireOwnerUserId(request);
+    return mapNumerologyPdfErrors(async () => {
+      await this.ownedNumerology(ownerUserId, parsed.data.calculationId);
+      return this.calculationPdf.download({
+        ownerUserId,
+        calculationId: parsed.data.calculationId,
+        jobId: parsed.data.jobId
+      });
+    });
+  }
+
+  private async ownedNumerology(
+    ownerUserId: string,
+    calculationId: string
+  ): Promise<CalculationRecord> {
+    const calculation = await this.calculationStore.findByOwnerAndId({
+      ownerUserId,
+      calculationId
+    });
+    if (!calculation) {
+      throw numerologyHttpError(404, "CALCULATION_NOT_FOUND", "Calculation not found");
+    }
+    if (
+      calculation.status === "archived" ||
+      calculation.module !== "numerology" ||
+      calculation.methodCode !== "pythagorean"
+    ) {
+      throw numerologyHttpError(
+        409,
+        "NUMEROLOGY_CALCULATION_MISMATCH",
+        "Calculation is not a supported Pythagorean Numerology record"
+      );
+    }
+    return calculation;
+  }
+}
+
+export function selectCurrentApprovedInterpretation(
+  interpretations: readonly CalculationInterpretation[]
+): CalculationInterpretation | null {
+  return (
+    interpretations
+      .filter(
+        (interpretation) =>
+          interpretation.status === "approved" && interpretation.approvedAt !== null
+      )
+      .sort(
+        (left, right) =>
+          right.approvedAt!.localeCompare(left.approvedAt!) ||
+          right.updatedAt.localeCompare(left.updatedAt) ||
+          right.id.localeCompare(left.id)
+      )[0] ?? null
+  );
+}
+
+function parseCalculationId(calculationId: string): { readonly calculationId: string } {
+  const parsed = calculationIdParamSchema.safeParse({ calculationId });
+  if (!parsed.success) {
+    throw numerologyHttpError(
+      400,
+      "NUMEROLOGY_VALIDATION_FAILED",
+      "Invalid Numerology PDF request"
+    );
+  }
+  return parsed.data;
+}
+
+function parseLatestQuery(query: unknown): CalculationPdfLatestQuery {
+  const parsed = calculationPdfLatestQuerySchema.safeParse(query);
+  if (!parsed.success) {
+    throw numerologyHttpError(400, "NUMEROLOGY_VALIDATION_FAILED", "Invalid Numerology PDF query");
+  }
+  return parsed.data;
+}
+
+function parseRequest(body: unknown): RequestCalculationPdf {
+  const parsed = requestCalculationPdfSchema.safeParse(body);
+  if (!parsed.success) {
+    throw numerologyHttpError(
+      400,
+      "NUMEROLOGY_VALIDATION_FAILED",
+      "Invalid Numerology PDF request"
+    );
+  }
+  return parsed.data;
+}
+
+async function mapNumerologyPdfErrors<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof CalculationPdfResultChangedError) {
+      throw numerologyHttpError(409, "CALCULATION_RESULT_CHANGED", error.message);
+    }
+    if (error instanceof CalculationPdfNotReadyError) {
+      throw numerologyHttpError(409, "NUMEROLOGY_PDF_NOT_READY", error.message);
+    }
+    if (error instanceof CalculationPdfNotFoundError) {
+      throw numerologyHttpError(404, "NUMEROLOGY_PDF_NOT_FOUND", error.message);
+    }
+    throw error;
+  }
+}

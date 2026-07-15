@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
 import {
+  calculationPdfJobResponseSchema,
   numerologyCalculationResponseSchema,
   numerologyPreviewResponseSchema
 } from "@elevenhouse/contracts";
@@ -10,6 +11,7 @@ import type {
   AstrologerProfileStore,
   AuthSessionAuthenticationStore,
   AuthSessionRevocationUnitOfWork,
+  CalculationPdfJobStore,
   CalculationRecord,
   CalculationStore,
   ClientStore,
@@ -21,6 +23,7 @@ import { ASTROLOGER_PROFILE_STORE } from "../astrologer-profile/astrologer-profi
 import { SystemClock } from "../clock/system-clock.service";
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import { CalculationsModule } from "../calculations/calculations.module";
+import { CALCULATION_PDF_JOB_STORE } from "../calculations/pdf/calculation-pdf.tokens";
 import { CLIENT_STORE } from "../clients/clients.tokens";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import {
@@ -62,9 +65,11 @@ describe("numerology HTTP routes", () => {
   let moduleRef: TestingModule;
   let baseUrl: string;
   let calculationStore: CalculationStore;
+  let calculationPdfJobStore: CalculationPdfJobStore;
 
   beforeEach(async () => {
     calculationStore = createCalculationStore();
+    calculationPdfJobStore = createCalculationPdfJobStore();
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async () => raise()
     };
@@ -107,6 +112,8 @@ describe("numerology HTTP routes", () => {
       .useValue({ now: vi.fn(() => now) })
       .overrideProvider(CALCULATION_STORE)
       .useValue(calculationStore)
+      .overrideProvider(CALCULATION_PDF_JOB_STORE)
+      .useValue(calculationPdfJobStore)
       .overrideProvider(CLIENT_STORE)
       .useValue(createUnusedClientStore())
       .overrideProvider(ASTROLOGER_PROFILE_STORE)
@@ -189,6 +196,101 @@ describe("numerology HTTP routes", () => {
     expect(response.calculation.interpretations[0]).not.toHaveProperty("promptVersion");
   });
 
+  it("serves locale-scoped PDF lifecycle routes for individual and compatibility calculations", async () => {
+    const unauthenticated = await getJson(
+      "/numerology/calculations/00000000-0000-4000-8000-000000000001/report/pdf?locale=ru"
+    );
+    const individual = numerologyCalculationResponseSchema.parse(
+      (await postJson("/numerology/calculations", persistBody(), csrfHeaders())).body
+    ).calculation;
+    const pdfPath = `/numerology/calculations/${individual.id}/report/pdf`;
+    const invalidQuery = await getJson(pdfPath, { cookie: sessionCookieHeader() });
+    const missingCsrf = await postJson(
+      pdfPath,
+      { expectedResultChecksum: individual.resultChecksum, locale: "ru" },
+      { cookie: sessionCookieHeader() }
+    );
+    const invalidLocale = await postJson(
+      pdfPath,
+      { expectedResultChecksum: individual.resultChecksum, locale: "de" },
+      csrfHeaders()
+    );
+    const enqueued = await postJson(
+      pdfPath,
+      { expectedResultChecksum: individual.resultChecksum, locale: "ru" },
+      csrfHeaders()
+    );
+    const parsedEnqueued = calculationPdfJobResponseSchema.parse(enqueued.body);
+    const latest = await getJson(`${pdfPath}?locale=ru`, {
+      cookie: sessionCookieHeader()
+    });
+
+    const compatibility = numerologyCalculationResponseSchema.parse(
+      (await postJson("/numerology/calculations", compatibilityPersistBody(), csrfHeaders())).body
+    ).calculation;
+    const compatibilityEnqueued = await postJson(
+      `/numerology/calculations/${compatibility.id}/report/pdf`,
+      { expectedResultChecksum: compatibility.resultChecksum, locale: "en" },
+      csrfHeaders()
+    );
+
+    expect(unauthenticated.status).toBe(401);
+    expect(invalidQuery.status).toBe(400);
+    expect(missingCsrf.status).toBe(403);
+    expect(invalidLocale.status).toBe(400);
+    expect(enqueued.status).toBe(202);
+    expect(parsedEnqueued.job).toMatchObject({ status: "queued", locale: "ru" });
+    expect(latest.status).toBe(200);
+    expect(calculationPdfJobResponseSchema.parse(latest.body).job?.id).toBe(parsedEnqueued.job?.id);
+    expect(compatibilityEnqueued.status).toBe(202);
+    expect(calculationPdfJobResponseSchema.parse(compatibilityEnqueued.body).job).toMatchObject({
+      calculationId: compatibility.id,
+      locale: "en",
+      status: "queued"
+    });
+  });
+
+  it("rejects stale PDF requests and downloads against the current checksum", async () => {
+    const calculation = numerologyCalculationResponseSchema.parse(
+      (await postJson("/numerology/calculations", persistBody(), csrfHeaders())).body
+    ).calculation;
+    const pdfPath = `/numerology/calculations/${calculation.id}/report/pdf`;
+    const staleRequest = await postJson(
+      pdfPath,
+      { expectedResultChecksum: `sha256:${"f".repeat(64)}`, locale: "ru" },
+      csrfHeaders()
+    );
+    const enqueued = calculationPdfJobResponseSchema.parse(
+      (
+        await postJson(
+          pdfPath,
+          { expectedResultChecksum: calculation.resultChecksum, locale: "ru" },
+          csrfHeaders()
+        )
+      ).body
+    );
+    const current = await calculationStore.findByOwnerAndId({
+      ownerUserId,
+      calculationId: calculation.id
+    });
+    if (!current || !enqueued.job) throw new Error("Expected current calculation and PDF job");
+    const changedCalculation = {
+      ...current,
+      resultChecksum: `sha256:${"e".repeat(64)}`
+    };
+    vi.mocked(calculationStore.findByOwnerAndId)
+      .mockResolvedValueOnce(changedCalculation)
+      .mockResolvedValueOnce(changedCalculation);
+    const staleDownload = await getJson(`${pdfPath}/${enqueued.job.id}/download`, {
+      cookie: sessionCookieHeader()
+    });
+
+    expect(staleRequest.status).toBe(409);
+    expect(staleRequest.body).toMatchObject({ code: "CALCULATION_RESULT_CHANGED" });
+    expect(staleDownload.status).toBe(409);
+    expect(staleDownload.body).toMatchObject({ code: "CALCULATION_RESULT_CHANGED" });
+  });
+
   async function postJson(
     path: string,
     body: unknown,
@@ -199,6 +301,14 @@ describe("numerology HTTP routes", () => {
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body)
     });
+    return { status: response.status, body: await response.json() };
+  }
+
+  async function getJson(
+    path: string,
+    headers: Record<string, string> = {}
+  ): Promise<{ status: number; body: unknown }> {
+    const response = await fetch(`${baseUrl}${path}`, { headers });
     return { status: response.status, body: await response.json() };
   }
 });
@@ -281,7 +391,8 @@ function createCalculationStore(): CalculationStore {
             text: input.text,
             modelId: input.modelId,
             promptVersion: input.promptVersion,
-            approvedAt: null
+            approvedAt: null,
+            updatedAt: input.now
           }
         ],
         updatedAt: input.now
@@ -291,6 +402,60 @@ function createCalculationStore(): CalculationStore {
     }),
     approveInterpretation: vi.fn(async () => null),
     archive: vi.fn(async () => null)
+  };
+}
+
+function createCalculationPdfJobStore(): CalculationPdfJobStore {
+  const jobs = new Map<
+    string,
+    NonNullable<Awaited<ReturnType<CalculationPdfJobStore["findById"]>>>
+  >();
+  return {
+    findLatestByCalculation: vi.fn(
+      async (input) =>
+        [...jobs.values()]
+          .filter(
+            (job) =>
+              job.ownerUserId === input.ownerUserId &&
+              job.calculationId === input.calculationId &&
+              job.locale === input.locale
+          )
+          .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null
+    ),
+    findById: vi.fn(async (input) => {
+      const job = jobs.get(input.jobId);
+      if (!job) return null;
+      return job.ownerUserId === input.ownerUserId && job.calculationId === input.calculationId
+        ? job
+        : null;
+    }),
+    findByJobId: vi.fn(async (input) => jobs.get(input.jobId) ?? null),
+    enqueue: vi.fn(async (input) => {
+      const job = {
+        id: input.id,
+        calculationId: input.calculationId,
+        ownerUserId: input.ownerUserId,
+        module: input.module,
+        methodCode: input.methodCode,
+        resultChecksum: input.resultChecksum,
+        locale: input.locale,
+        sourceLocator: input.sourceLocator,
+        documentFingerprint: input.documentFingerprint,
+        status: "queued" as const,
+        artifactId: input.artifactId,
+        mediaAssetId: input.mediaAssetId,
+        failureCode: null,
+        failureReason: null,
+        pageCount: null,
+        createdAt: input.now,
+        updatedAt: input.now
+      };
+      jobs.set(job.id, job);
+      return job;
+    }),
+    claimForRendering: vi.fn(async () => null),
+    complete: vi.fn(async () => null),
+    fail: vi.fn(async () => null)
   };
 }
 
@@ -387,6 +552,27 @@ function persistBody(): Record<string, unknown> {
         calculationName: "Голубев Антон",
         calculationNameSource: "manual_entry",
         birthDate: "2000-08-19"
+      }
+    ],
+    periodRequest: { kind: "explicit", personalYear: { year: 2026 } }
+  };
+}
+
+function compatibilityPersistBody(): Record<string, unknown> {
+  return {
+    mode: "compatibility",
+    methodCode: "pythagorean",
+    title: "Голубев Антон + Кошкина Яна Владимировна",
+    participants: [
+      ...(persistBody().participants as Array<Record<string, unknown>>),
+      {
+        role: "partner",
+        source: "manual",
+        clientId: null,
+        displayName: "Кошкина Яна Владимировна",
+        calculationName: "Кошкина Яна Владимировна",
+        calculationNameSource: "manual_entry",
+        birthDate: "2002-03-16"
       }
     ],
     periodRequest: { kind: "explicit", personalYear: { year: 2026 } }

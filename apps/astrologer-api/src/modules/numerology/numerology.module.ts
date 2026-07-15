@@ -8,6 +8,8 @@ import { ClientsModule } from "../clients/clients.module";
 import { IdentityModule } from "../identity/identity.module";
 import { SecurityModule } from "../security/security.module";
 import { NumerologyController } from "./numerology.controller";
+import { NumerologyPdfController } from "./numerology-pdf.controller";
+import { NumerologyPdfService } from "./numerology-pdf.service";
 import { NumerologyService } from "./numerology.service";
 
 @Module({
@@ -21,7 +23,7 @@ import { NumerologyService } from "./numerology.service";
     IdentityModule,
     SecurityModule
   ],
-  controllers: [NumerologyController],
-  providers: [NumerologyService]
+  controllers: [NumerologyController, NumerologyPdfController],
+  providers: [NumerologyService, NumerologyPdfService]
 })
 export class NumerologyModule {}

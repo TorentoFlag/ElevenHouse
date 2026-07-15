@@ -18,6 +18,11 @@ export const requestCalculationPdfSchema = z
   .strict();
 export type RequestCalculationPdf = z.infer<typeof requestCalculationPdfSchema>;
 
+export const calculationPdfLatestQuerySchema = z
+  .object({ locale: calculationPdfLocaleSchema })
+  .strict();
+export type CalculationPdfLatestQuery = z.infer<typeof calculationPdfLatestQuerySchema>;
+
 export const calculationPdfJobSchema = z
   .object({
     id: uuidSchema,

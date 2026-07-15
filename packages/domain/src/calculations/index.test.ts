@@ -225,7 +225,8 @@ function createMemoryStore(): MemoryStore {
             text: input.text,
             modelId: input.modelId,
             promptVersion: input.promptVersion,
-            approvedAt: null
+            approvedAt: null,
+            updatedAt: input.now
           }
         ],
         updatedAt: input.now
@@ -240,7 +241,12 @@ function createMemoryStore(): MemoryStore {
         ...current,
         interpretations: current.interpretations.map((interpretation) =>
           interpretation.id === input.interpretationId
-            ? { ...interpretation, status: "approved", approvedAt: input.now }
+            ? {
+                ...interpretation,
+                status: "approved",
+                approvedAt: input.now,
+                updatedAt: input.now
+              }
             : interpretation
         ),
         updatedAt: input.now

@@ -198,7 +198,8 @@ describe("NumerologyService", () => {
           text: input.text,
           modelId: input.modelId,
           promptVersion: input.promptVersion,
-          approvedAt: null
+          approvedAt: null,
+          updatedAt: input.now
         }
       ]
     }));
@@ -282,7 +283,8 @@ describe("NumerologyService", () => {
           text: input.text,
           modelId: null,
           promptVersion: null,
-          approvedAt: null
+          approvedAt: null,
+          updatedAt: input.now
         }
       ]
     }));

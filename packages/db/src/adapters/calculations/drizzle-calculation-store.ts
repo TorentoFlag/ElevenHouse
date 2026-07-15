@@ -718,7 +718,8 @@ function groupInterpretations(rows: readonly CalculationInterpretationRow[]) {
       text: row.text,
       modelId: row.modelId,
       promptVersion: row.promptVersion,
-      approvedAt: row.approvedAt ? toIsoString(row.approvedAt) : null
+      approvedAt: row.approvedAt ? toIsoString(row.approvedAt) : null,
+      updatedAt: toIsoString(row.updatedAt)
     });
     grouped.set(row.calculationId, values);
   }

@@ -39,6 +39,7 @@ export type CalculationInterpretation = {
   readonly modelId: string | null;
   readonly promptVersion: string | null;
   readonly approvedAt: string | null;
+  readonly updatedAt: string;
 };
 
 export type CalculationArtifact = {

@@ -4,6 +4,7 @@ import {
   calculationPdfJobIdParamSchema,
   calculationPdfJobResponseSchema,
   calculationPdfJobSchema,
+  calculationPdfLatestQuerySchema,
   requestCalculationPdfSchema
 } from "./calculation-pdf";
 
@@ -95,6 +96,10 @@ describe("calculation PDF contracts", () => {
   });
 
   it("validates owner-scoped route parameters and expiring download responses", () => {
+    expect(calculationPdfLatestQuerySchema.parse({ locale: "ru" })).toEqual({ locale: "ru" });
+    expect(
+      calculationPdfLatestQuerySchema.safeParse({ locale: "ru", model: "secret" }).success
+    ).toBe(false);
     expect(calculationPdfJobIdParamSchema.parse({ calculationId, jobId })).toEqual({
       calculationId,
       jobId

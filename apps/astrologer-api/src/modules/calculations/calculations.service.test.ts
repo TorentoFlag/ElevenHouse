@@ -118,7 +118,8 @@ function publishableCalculation(): CalculationRecord {
         text: "Проверено",
         modelId: null,
         promptVersion: null,
-        approvedAt: now.toISOString()
+        approvedAt: now.toISOString(),
+        updatedAt: now.toISOString()
       }
     ]
   });
