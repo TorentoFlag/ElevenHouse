@@ -114,6 +114,9 @@ POST /numerology/preview
 POST /numerology/calculations
 POST /numerology/calculations/:calculationId/recalculate
 POST /numerology/calculations/:calculationId/ai-draft
+GET  /numerology/calculations/:calculationId/report/pdf?locale=ru|en
+POST /numerology/calculations/:calculationId/report/pdf
+GET  /numerology/calculations/:calculationId/report/pdf/:jobId/download
 POST /matrix/preview
 POST /matrix/calculations
 POST /matrix/calculations/:calculationId/recalculate
@@ -123,6 +126,9 @@ POST /matrix/calculations/:calculationId/notes
 PUT  /matrix/calculations/:calculationId/notes/:noteId
 DELETE /matrix/calculations/:calculationId/notes/:noteId
 GET  /matrix/interpretations?locale=ru&arcana=9&context=portrait
+GET  /matrix/calculations/:calculationId/report/pdf
+POST /matrix/calculations/:calculationId/report/pdf
+GET  /matrix/calculations/:calculationId/report/pdf/:jobId/download
 POST /calculations/:calculationId/interpretations
 POST /calculations/:calculationId/interpretations/:interpretationId/approve
 POST /calculations/:calculationId/publish
@@ -163,6 +169,16 @@ only `id`, `status` and `text`. Internal source, provider model and prompt
 metadata are not exposed to frontend consumers. Approval remains a separate
 explicit mutation against a saved interpretation id.
 
+Numerology PDF routes are owner-scoped to a current, non-archived
+`module = numerology`, `method_code = pythagorean` saved calculation. Latest
+state is read per `locale`; enqueue requires CSRF and the strict body
+`{ "expectedResultChecksum": "sha256:...", "locale": "ru" | "en" }`.
+Individual and compatibility documents include the complete deterministic
+result. If a current approved interpretation exists, its text is included;
+absence of approved text does not block export, and draft/dirty text is never
+accepted from the browser. Download succeeds only for a ready current job and
+returns a short-lived private presigned URL.
+
 `POST /matrix/preview` is authenticated and read-only. Matrix persistence
 accepts only existing owner-scoped active CRM client IDs: one for an individual
 calculation and two distinct clients for compatibility. The API hydrates names
@@ -188,6 +204,16 @@ comparing it with the current calculation, while delete remains allowed for
 both current and stale notes. GET note and catalog routes are authenticated and
 CSRF-exempt; note POST, PUT and DELETE routes require CSRF. The revisioned RU/EN
 catalog is authored in code and has no storage, AI or translation side effect.
+
+Matrix and Numerology PDF endpoints delegate to one calculation-PDF lifecycle.
+Matrix enqueue additionally requires its current checksum-bound report to be
+`ready`; its locale comes from that report. Enqueue is idempotent for the same
+authoritative document fingerprint. Recalculation atomically invalidates
+current PDF jobs/artifact references and writes cleanup events; old jobs cannot
+be downloaded, and object deletion is performed asynchronously by `workers`.
+API responses expose public job state and the presigned URL only: storage keys,
+buckets, source locators, document fingerprints, provider/model and prompt
+metadata are never frontend contracts.
 
 `GET /products/templates` returns active platform-owned starter templates in the
 requested locale. `POST /products/templates/:templateCode/drafts` requires an

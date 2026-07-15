@@ -76,6 +76,17 @@
 - Lead magnets на основе birth data.
 - Astrological triggers и reminders.
 
+Реализованный foundation внутри этапа:
+
+- [x] Один канонический Pythagorean engine для individual, personal periods и
+      compatibility без frontend arithmetic и без истории версий результата.
+- [x] Один канонический `ladini_22` Matrix engine для individual и
+      compatibility с private notes/report workflow.
+- [x] Общий private calculation-PDF contour для Matrix и Numerology: checksum
+      guard, transactional outbox, BullMQ worker, RU/EN renderer, presigned
+      download и cleanup после перерасчёта. Полный production rollout всё ещё
+      требует deployment с актуальными API/worker images и operational smoke test.
+
 ## Этап 6: Контент, подписки, автоматизация
 
 Цель: реализовать расширенные способы монетизации и удержания внутри платформы.

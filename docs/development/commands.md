@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Full verification | `pnpm verify` | No service startup; shared-layer completion gate |
 | Numerology domain tests | `pnpm test packages/domain/src/numerology` | No long-running process |
-| Calculation integration test | `INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/adapters/calculations/drizzle-calculation-store.integration.ts` | Load root `.env` first; both URLs must point to existing local PostgreSQL |
+| Calculation integration tests | `INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/adapters/calculations/drizzle-calculation-pdf-job-store.integration.ts packages/db/src/adapters/calculations/drizzle-calculation-store.integration.ts` | Load root `.env` first; both URLs must point to existing local PostgreSQL |
 | Domain typecheck | `pnpm --filter @elevenhouse/domain typecheck` | No long-running process |
 | Domain build | `pnpm --filter @elevenhouse/domain build` | No long-running process |
 | Generate migration | `pnpm db:generate` | Rebuild current baseline after schema changes |
@@ -43,6 +43,21 @@ INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/a
 Integration guard отклоняет non-local PostgreSQL targets. До запуска проверь,
 что `DATABASE_URL` указывает именно на локальную базу ElevenHouse, а не на БД
 соседнего проекта.
+
+Для полного persistence-контура расчётов запускай оба адаптера:
+
+```bash
+INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration \
+  packages/db/src/adapters/calculations/drizzle-calculation-pdf-job-store.integration.ts \
+  packages/db/src/adapters/calculations/drizzle-calculation-store.integration.ts
+```
+
+Production `workers` требует явных `WORKERS_CALCULATION_PDF_*`, `REDIS_URL` и
+private object-storage settings. Локальные defaults разрешены только вне
+`NODE_ENV=production`. Readiness доступна на `/ready` и считается успешной
+только при доступности PostgreSQL, calculation PDF queue/worker и private
+object storage. Compose задаёт `stop_grace_period: 60s`; Redis queue transport
+должен сохранять AOF и использовать `maxmemory-policy=noeviction`.
 
 ## Process management
 
@@ -114,4 +129,3 @@ INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/a
 
 Обе переменные должны указывать на существующий локальный PostgreSQL; guard
 отклоняет non-local targets.
-

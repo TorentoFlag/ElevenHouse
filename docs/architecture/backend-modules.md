@@ -101,7 +101,11 @@ feature-module boundaries, explicit auth/permissions и audit logging.
 - `BirthData`: дата, время, место рождения и правила consented sharing.
 - `Calculations`: owner-scoped current calculation result, participants, client
   links, interpretations, publication checksum and artifacts. The module stores
-  one current result and does not maintain result-version history.
+  one current result and does not maintain result-version history. It also owns
+  the generic private calculation-PDF lifecycle: idempotent jobs, transactional
+  outbox events, checksum validation, artifact/media references and delayed
+  cleanup after recalculation or archival. Module adapters select the allowed
+  render source; controllers do not enqueue BullMQ jobs directly.
 - `Numerology`: typed preview/persist/recalculate orchestration and method
   registry. The active `pythagorean` engine owns Pythagorean RU formulas;
   controllers, frontend and generic calculation storage do not duplicate them.
@@ -109,6 +113,10 @@ feature-module boundaries, explicit auth/permissions и audit logging.
   them to anonymous deterministic numeric context, delegates structured text
   generation to `Ai`, and persists an editable draft through the checksum-safe
   `Calculations` interpretation use case. AI never participates in arithmetic.
+  Pythagorean individual and compatibility PDFs always render the complete
+  deterministic current result in RU or EN. The current approved interpretation
+  is included when present, but approval is not required to export; drafts and
+  unsaved editor text never enter the document.
 - `Matrix`: CRM-only typed preview/link/recalculate orchestration for the single
   `ladini_22` engine. Individual and compatibility base results are persisted
   through `Calculations`; current-age and annual forecast projections are
@@ -116,7 +124,9 @@ feature-module boundaries, explicit auth/permissions и audit logging.
   live behind a Matrix-owned persistence port, retain the result checksum they
   were written against, and derive stale state on read. The Matrix-owned RU/EN
   interpretation catalog is deterministic and revisioned; it performs no
-  runtime AI or translation calls.
+  runtime AI or translation calls. Matrix PDF export requires the current saved
+  report to be explicitly ready and renders that checksum-bound report through
+  the same generic calculation-PDF contour.
 - `Charts`: расчёты астрологических карт и generated chart artifacts.
 - `Sessions`: lifecycle консультации, recordings, materials.
 - `Messaging`: threads и messages там, где используется platform messaging.
@@ -147,6 +157,15 @@ Client starts booking
 ```
 
 Controllers должны только оркестрировать use cases. В них не должна жить бизнес-логика workflow.
+
+`apps/workers` owns the `calculation.pdf` BullMQ queue and the outbox relay for
+render/delete jobs. Queue payloads contain identifiers only. The worker reloads
+the authoritative calculation/report source, rejects stale checksums, renders a
+deterministic document, writes it to private object storage and marks the job
+ready. A renderer registry keyed by calculation module and method is the
+extension point for future methods such as a separate Vedic numerology engine;
+adding a method does not branch Pythagorean formulas or duplicate queue/storage
+infrastructure.
 
 ## Кандидаты на будущее выделение
 

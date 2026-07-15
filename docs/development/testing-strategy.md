@@ -49,6 +49,22 @@ responses на service/controller/e2e уровне.
 интеракции и видимое соответствие каноническому дизайну. Browser evidence не
 заменяется только DOM unit-тестом.
 
+Для generated PDF browser evidence дополняется проверкой самого файла:
+
+- `pdfinfo` подтверждает валидный PDF и ожидаемое число страниц;
+- `pdftotext` подтверждает обязательные deterministic sections и отсутствие
+  закрытых metadata;
+- каждая страница рендерится в PNG и визуально проверяется на clipping,
+  overlap, glyphs, page breaks, contrast и footer collisions;
+- individual/compatibility и RU/EN проверяются отдельными fixtures;
+- recalculation обязана сделать старый download недоступным и создать новый
+  current-checksum job.
+
+Для async contour отдельно проверяются idempotency, retry exhaustion,
+permanent-vs-transient errors, transactional outbox relay, private storage,
+cleanup ordering и readiness. Unit renderer test не заменяет PostgreSQL
+integration и реальный browser flow через API + worker.
+
 ### 6. Repository verification
 
 Для shared contracts/domain/db, app composition или нескольких поверхностей
@@ -70,4 +86,3 @@ pnpm verify
 
 Нельзя использовать формулировку «готово» для видимого пользовательского scope,
 если обязательный уровень evidence не выполнен.
-

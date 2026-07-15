@@ -39,6 +39,9 @@ ElevenHouse — закрытая SaaS/CRM-платформа для астрол
 - Reviews, ratings, moderation.
 - Content, lead magnets, broadcasts, subscriptions.
 - Astrology engine: charts, транзиты, синастрия, настройки школ и расчётов.
+- Специализированные расчёты: каноническая пифагорейская нумерология и Матрица
+  судьбы в individual/compatibility modes, сохранённые результаты, трактовки и
+  private PDF materials на русском и английском.
 - Notifications: reminders, booking/payment/session events, templates, preferences.
 - Analytics: dashboards for astrologers and platform analytics.
 - Referral programs.
@@ -56,6 +59,8 @@ ElevenHouse — закрытая SaaS/CRM-платформа для астрол
 - Время хранится в UTC и отображается в timezone пользователя.
 - Деньги хранятся в minor units с explicit currency.
 - Payment webhooks и worker jobs должны быть idempotent.
+- Generated calculation materials доступны только владельцу через private
+  storage; перерасчёт аннулирует старый PDF вместо ведения истории результатов.
 - Slot holds должны предотвращать double booking.
 - Admin actions должны идти через domain use cases и audit log.
 - Sensitive data и recordings требуют явных consent records.

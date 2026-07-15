@@ -28,7 +28,8 @@ Backend нужно разделить по профилю нагрузки и о
 - `public-api`: обслуживает `client-web`, прямые страницы астрологов, booking, клиентские заказы, публичные checkout flows.
 - `astrologer-api`: обслуживает `astrologer-web`, CRM и authenticated workflows астролога.
 - `admin-api`: отдельный backend для `admin-web`, moderation/admin/super_admin workflows и audit-sensitive internal operations. В текущем коде создана минимальная health-only Nest-заготовка; доменные внутренние workflows ещё не реализованы.
-- `workers`: общие фоновые задачи.
+- `workers`: общие фоновые задачи, включая transactional-outbox relay и
+  детерминированный private PDF export для сохранённых расчётов.
 - `payment-worker`: payment webhooks, reconciliation, refunds, payout jobs.
 - `notification-worker`: email, SMS, Telegram, push, reminders, retry logic.
 - `chart-worker`: тяжёлые расчёты астрологических карт.
@@ -51,6 +52,13 @@ workflows внутри `astrologer-api`.
 - Object storage для avatars, covers, recordings, files, generated materials.
 - CDN для frontend assets и публичных media.
 - Observability для logs, metrics, traces и audit trails.
+
+Calculation PDF artifacts хранятся только в private object storage и выдаются
+owner-scoped короткоживущими presigned URLs. PostgreSQL является источником
+job/result state, Redis/BullMQ — транспортом идентификаторов, а не копией
+расчётных или AI-данных. Production Redis для очередей работает с AOF и
+`maxmemory-policy=noeviction`; worker получает достаточный graceful-shutdown
+интервал для завершения ограниченной PDF-задачи.
 
 Позже могут появиться ClickHouse/BigQuery для аналитики, dedicated search или выделенные сервисы для chart calculations, notifications или billing.
 

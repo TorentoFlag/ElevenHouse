@@ -94,6 +94,7 @@ services:
   workers:
     image: ${IMAGE_NAMESPACE}/elevenhouse-workers:${IMAGE_TAG}
     restart: unless-stopped
+    stop_grace_period: 60s
     env_file:
       - ../env/.env.production
     healthcheck:
@@ -182,7 +183,7 @@ services:
   redis:
     image: redis:8-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     volumes:
       - redis-data:/data
     healthcheck:
