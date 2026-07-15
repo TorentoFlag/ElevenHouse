@@ -4,17 +4,22 @@ const schema = z.object({
   REDIS_URL: z.string().trim().url().default("redis://localhost:6379"),
   WORKERS_HEALTH_HOST: z.string().trim().min(1).default("0.0.0.0"),
   WORKERS_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3010),
-  WORKERS_MATRIX_PDF_OUTBOX_RELAY_INTERVAL_MS: z.coerce.number().int().positive().default(1000),
-  WORKERS_MATRIX_PDF_OUTBOX_RELAY_BATCH_SIZE: z.coerce
+  WORKERS_CALCULATION_PDF_OUTBOX_RELAY_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(1000),
+  WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE: z.coerce
     .number()
     .int()
     .positive()
     .max(500)
     .default(25),
-  WORKERS_MATRIX_PDF_OUTBOX_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
-  WORKERS_MATRIX_PDF_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
-  WORKERS_MATRIX_PDF_BACKOFF_MS: z.coerce.number().int().positive().default(1000),
-  WORKERS_MATRIX_PDF_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(2),
+  WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
+  WORKERS_CALCULATION_PDF_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+  WORKERS_CALCULATION_PDF_BACKOFF_MS: z.coerce.number().int().positive().default(1000),
+  WORKERS_CALCULATION_PDF_JITTER: z.coerce.number().min(0).max(1).default(0.5),
+  WORKERS_CALCULATION_PDF_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(2),
   ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
   ASTROLOGER_MEDIA_STORAGE_REGION: z.string().trim().min(1).default("us-east-1"),
   ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET: z
@@ -41,12 +46,13 @@ export function createWorkersRuntimeConfig(
     redisUrl: value.REDIS_URL,
     healthHost: value.WORKERS_HEALTH_HOST,
     healthPort: value.WORKERS_HEALTH_PORT,
-    outboxRelayIntervalMs: value.WORKERS_MATRIX_PDF_OUTBOX_RELAY_INTERVAL_MS,
-    outboxRelayBatchSize: value.WORKERS_MATRIX_PDF_OUTBOX_RELAY_BATCH_SIZE,
-    outboxLockTimeoutMs: value.WORKERS_MATRIX_PDF_OUTBOX_LOCK_TIMEOUT_MS,
-    matrixPdfAttempts: value.WORKERS_MATRIX_PDF_ATTEMPTS,
-    matrixPdfBackoffMs: value.WORKERS_MATRIX_PDF_BACKOFF_MS,
-    matrixPdfConcurrency: value.WORKERS_MATRIX_PDF_CONCURRENCY,
+    outboxRelayIntervalMs: value.WORKERS_CALCULATION_PDF_OUTBOX_RELAY_INTERVAL_MS,
+    outboxRelayBatchSize: value.WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE,
+    outboxLockTimeoutMs: value.WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS,
+    calculationPdfAttempts: value.WORKERS_CALCULATION_PDF_ATTEMPTS,
+    calculationPdfBackoffMs: value.WORKERS_CALCULATION_PDF_BACKOFF_MS,
+    calculationPdfJitter: value.WORKERS_CALCULATION_PDF_JITTER,
+    calculationPdfConcurrency: value.WORKERS_CALCULATION_PDF_CONCURRENCY,
     storage: {
       endpoint: value.ASTROLOGER_MEDIA_STORAGE_ENDPOINT,
       region: value.ASTROLOGER_MEDIA_STORAGE_REGION,

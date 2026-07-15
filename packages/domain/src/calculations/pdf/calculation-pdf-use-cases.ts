@@ -1,5 +1,6 @@
 import { CalculationResultChangedError, CalculationValidationError } from "../calculation-errors";
 import { sha256CanonicalJson } from "../canonical-json";
+import type { CalculationInterpretation } from "../calculation-types";
 import type {
   CalculationPdfJob,
   CalculationPdfLocale,
@@ -93,6 +94,24 @@ export function isReusableCalculationPdfJob(
     job.resultChecksum === identity.resultChecksum &&
     job.locale === identity.locale &&
     job.documentFingerprint === identity.documentFingerprint
+  );
+}
+
+export function selectCurrentApprovedCalculationInterpretation(
+  interpretations: readonly CalculationInterpretation[]
+): CalculationInterpretation | null {
+  return (
+    interpretations
+      .filter(
+        (interpretation) =>
+          interpretation.status === "approved" && interpretation.approvedAt !== null
+      )
+      .sort(
+        (left, right) =>
+          right.approvedAt!.localeCompare(left.approvedAt!) ||
+          right.updatedAt.localeCompare(left.updatedAt) ||
+          right.id.localeCompare(left.id)
+      )[0] ?? null
   );
 }
 

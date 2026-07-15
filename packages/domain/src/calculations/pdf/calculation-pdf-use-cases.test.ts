@@ -4,7 +4,8 @@ import {
   calculationPdfDocumentFingerprint,
   isReusableCalculationPdfJob,
   normalizeCalculationPdfSourceLocator,
-  publicCalculationPdfFailureReason
+  publicCalculationPdfFailureReason,
+  selectCurrentApprovedCalculationInterpretation
 } from "./calculation-pdf-use-cases";
 import { CalculationResultChangedError, CalculationValidationError } from "../calculation-errors";
 import type { CalculationPdfJob } from "./calculation-pdf-types";
@@ -140,7 +141,43 @@ describe("calculation PDF use cases", () => {
     );
     expect(publicCalculationPdfFailureReason(pdfJob())).toBeNull();
   });
+
+  it("selects the current approved interpretation deterministically", () => {
+    expect(
+      selectCurrentApprovedCalculationInterpretation([
+        interpretation({ id: "draft", status: "draft", approvedAt: null }),
+        interpretation({ id: "a", approvedAt: "2026-07-15T10:00:00.000Z" }),
+        interpretation({ id: "b", approvedAt: "2026-07-15T11:00:00.000Z" }),
+        interpretation({
+          id: "c",
+          approvedAt: "2026-07-15T11:00:00.000Z",
+          updatedAt: "2026-07-15T12:00:00.000Z"
+        })
+      ])?.id
+    ).toBe("c");
+    expect(
+      selectCurrentApprovedCalculationInterpretation([
+        interpretation({ id: "draft", status: "draft", approvedAt: null })
+      ])
+    ).toBeNull();
+  });
 });
+
+function interpretation(
+  overrides: Partial<import("../calculation-types").CalculationInterpretation> = {}
+): import("../calculation-types").CalculationInterpretation {
+  return {
+    id: "interpretation",
+    source: "manual",
+    status: "approved",
+    text: "Текст",
+    modelId: null,
+    promptVersion: null,
+    approvedAt: "2026-07-15T10:00:00.000Z",
+    updatedAt: "2026-07-15T10:00:00.000Z",
+    ...overrides
+  };
+}
 
 function pdfJob(): CalculationPdfJob {
   return {
@@ -148,7 +185,7 @@ function pdfJob(): CalculationPdfJob {
     calculationId: "calculation-1",
     ownerUserId: "owner-1",
     module: "numerology",
-    methodCode: "pythagorean_ru",
+    methodCode: "pythagorean",
     resultChecksum: checksum,
     locale: "ru",
     sourceLocator: { kind: "approved_interpretation", interpretationId: null },

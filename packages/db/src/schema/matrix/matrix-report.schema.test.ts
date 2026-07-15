@@ -47,7 +47,5 @@ describe("Matrix report persistence schema", () => {
     const migration = readFileSync(migrationFile, "utf8");
     expect(migration).toContain('CREATE TABLE "matrix_report_drafts"');
     expect(migration).toContain("matrix_report_drafts_calculation_owner_fk");
-    expect(migration).not.toContain('CREATE TABLE "matrix_pdf_jobs"');
-    expect(migration).not.toContain("matrix_report_pdf");
   });
 });

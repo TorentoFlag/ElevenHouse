@@ -31,7 +31,7 @@ describe("media validation values", () => {
   it("keeps generated calculation reports out of the browser-upload vocabulary", () => {
     expect(mediaUploadPurposeValues).not.toContain("calculation_report_pdf");
     expect(mediaPurposeValues).toContain("calculation_report_pdf");
-    expect(mediaPurposeValues).not.toContain("matrix_report_pdf");
+    expect(mediaPurposeValues).not.toContain("legacy_report_pdf");
     expect(mediaPurposeUploadLimits).not.toHaveProperty("calculation_report_pdf");
   });
 

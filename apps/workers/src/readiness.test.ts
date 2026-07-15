@@ -9,8 +9,9 @@ describe("workers readiness", () => {
         now: new Date("2026-06-09T00:00:00.000Z"),
         checks: {
           postgres: vi.fn(async () => undefined),
-          matrixPdfQueue: vi.fn(async () => undefined),
-          matrixPdfWorker: vi.fn(async () => undefined)
+          calculationPdfQueue: vi.fn(async () => undefined),
+          calculationPdfWorker: vi.fn(async () => undefined),
+          privateObjectStorage: vi.fn(async () => undefined)
         }
       })
     ).resolves.toEqual({
@@ -19,8 +20,9 @@ describe("workers readiness", () => {
       timestamp: "2026-06-09T00:00:00.000Z",
       dependencies: {
         postgres: { status: "ready" },
-        matrixPdfQueue: { status: "ready" },
-        matrixPdfWorker: { status: "ready" }
+        calculationPdfQueue: { status: "ready" },
+        calculationPdfWorker: { status: "ready" },
+        privateObjectStorage: { status: "ready" }
       }
     });
   });
@@ -31,18 +33,20 @@ describe("workers readiness", () => {
         service: "workers",
         checks: {
           postgres: vi.fn(async () => undefined),
-          matrixPdfQueue: vi.fn(async () => {
+          calculationPdfQueue: vi.fn(async () => {
             throw new Error("redis unavailable");
           }),
-          matrixPdfWorker: vi.fn(async () => undefined)
+          calculationPdfWorker: vi.fn(async () => undefined),
+          privateObjectStorage: vi.fn(async () => undefined)
         }
       })
     ).resolves.toMatchObject({
       status: "unready",
       dependencies: {
         postgres: { status: "ready" },
-        matrixPdfQueue: { status: "unready", error: "redis unavailable" },
-        matrixPdfWorker: { status: "ready" }
+        calculationPdfQueue: { status: "unready", error: "redis unavailable" },
+        calculationPdfWorker: { status: "ready" },
+        privateObjectStorage: { status: "ready" }
       }
     });
   });

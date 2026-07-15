@@ -9,11 +9,8 @@ import {
   type CalculationPdfLatestQuery,
   type RequestCalculationPdf
 } from "@elevenhouse/contracts";
-import type {
-  CalculationInterpretation,
-  CalculationRecord,
-  CalculationStore
-} from "@elevenhouse/domain";
+import type { CalculationRecord, CalculationStore } from "@elevenhouse/domain";
+import { selectCurrentApprovedCalculationInterpretation } from "@elevenhouse/domain";
 import { requireOwnerUserId } from "../calculations/calculations.service";
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import {
@@ -60,7 +57,9 @@ export class NumerologyPdfService {
     const ownerUserId = requireOwnerUserId(request);
     return mapNumerologyPdfErrors(async () => {
       const calculation = await this.ownedNumerology(ownerUserId, params.calculationId);
-      const interpretation = selectCurrentApprovedInterpretation(calculation.interpretations);
+      const interpretation = selectCurrentApprovedCalculationInterpretation(
+        calculation.interpretations
+      );
       return this.calculationPdf.request({
         ownerUserId,
         calculationId: calculation.id,
@@ -124,24 +123,6 @@ export class NumerologyPdfService {
     }
     return calculation;
   }
-}
-
-export function selectCurrentApprovedInterpretation(
-  interpretations: readonly CalculationInterpretation[]
-): CalculationInterpretation | null {
-  return (
-    interpretations
-      .filter(
-        (interpretation) =>
-          interpretation.status === "approved" && interpretation.approvedAt !== null
-      )
-      .sort(
-        (left, right) =>
-          right.approvedAt!.localeCompare(left.approvedAt!) ||
-          right.updatedAt.localeCompare(left.updatedAt) ||
-          right.id.localeCompare(left.id)
-      )[0] ?? null
-  );
 }
 
 function parseCalculationId(calculationId: string): { readonly calculationId: string } {

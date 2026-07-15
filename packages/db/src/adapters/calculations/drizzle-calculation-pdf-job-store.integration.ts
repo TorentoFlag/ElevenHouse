@@ -39,7 +39,7 @@ describe("calculation PDF Drizzle/PostgreSQL integration", () => {
       ownerUserId,
       calculationId: calculation.id,
       module: "numerology" as const,
-      methodCode: "pythagorean_ru",
+      methodCode: "pythagorean",
       resultChecksum: calculation.resultChecksum,
       locale: "ru" as const,
       sourceLocator: {
@@ -73,7 +73,7 @@ describe("calculation PDF Drizzle/PostgreSQL integration", () => {
       ownerUserId,
       calculationId: calculation.id,
       module: "numerology",
-      methodCode: "pythagorean_ru",
+      methodCode: "pythagorean",
       status: "queued",
       sourceLocator: { kind: "approved_interpretation", interpretationId: null }
     });
@@ -138,7 +138,7 @@ describe("calculation PDF Drizzle/PostgreSQL integration", () => {
       ownerUserId,
       calculationId: calculation.id,
       module: "numerology",
-      methodCode: "pythagorean_ru",
+      methodCode: "pythagorean",
       resultChecksum: calculation.resultChecksum,
       locale: "en",
       sourceLocator: { kind: "approved_interpretation", interpretationId: null },
@@ -160,7 +160,7 @@ describe("calculation PDF Drizzle/PostgreSQL integration", () => {
       ownerUserId,
       calculationId: calculation.id,
       module: "numerology",
-      methodCode: "pythagorean_ru",
+      methodCode: "pythagorean",
       resultChecksum: calculation.resultChecksum,
       locale: "en",
       sourceLocator: { kind: "approved_interpretation", interpretationId: null },
@@ -187,7 +187,7 @@ describe("calculation PDF Drizzle/PostgreSQL integration", () => {
       ownerUserId,
       module: "numerology",
       mode: "individual",
-      methodCode: "pythagorean_ru",
+      methodCode: "pythagorean",
       title: "PDF integration",
       participants: [
         {

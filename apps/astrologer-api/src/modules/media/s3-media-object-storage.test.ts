@@ -40,7 +40,7 @@ describe("S3MediaObjectStorage private downloads", () => {
     await expect(
       storage.createPresignedDownload({
         storageBucket: config.privateBucket,
-        storageKey: "owner/matrix_report_pdf/job/report.pdf",
+        storageKey: "owner/calculation_report_pdf/job/report.pdf",
         fileName: "Матрица судьбы.pdf"
       })
     ).resolves.toEqual({
@@ -53,7 +53,7 @@ describe("S3MediaObjectStorage private downloads", () => {
     const command = getSignedUrl.mock.calls[0]![1] as GetObjectCommand;
     expect(command.input).toMatchObject({
       Bucket: config.privateBucket,
-      Key: "owner/matrix_report_pdf/job/report.pdf",
+      Key: "owner/calculation_report_pdf/job/report.pdf",
       ResponseContentType: "application/pdf"
     });
     expect(command.input.ResponseContentDisposition).toContain("attachment;");
@@ -64,7 +64,7 @@ describe("S3MediaObjectStorage private downloads", () => {
     await expect(
       storage.createPresignedDownload({
         storageBucket: config.bucket,
-        storageKey: "owner/matrix_report_pdf/job/report.pdf",
+        storageKey: "owner/calculation_report_pdf/job/report.pdf",
         fileName: "report.pdf"
       })
     ).rejects.toThrow("unexpected storage bucket");

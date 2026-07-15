@@ -404,6 +404,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1079.0
         version: 3.1079.0
+      '@elevenhouse/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@elevenhouse/db':
         specifier: workspace:*
         version: link:../../packages/db

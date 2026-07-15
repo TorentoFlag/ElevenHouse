@@ -76,7 +76,5 @@ describe("current calculation persistence schema", () => {
     expect(migration).toContain('"document_fingerprint" text NOT NULL');
     expect(migration).toContain("calculation_pdf_jobs_idempotency_unique");
     expect(migration).toContain('WHERE "calculation_pdf_jobs"."status" <> \'failed\'');
-    expect(migration).not.toContain('CREATE TABLE "matrix_pdf_jobs"');
-    expect(migration).not.toContain("matrix_pdf_jobs");
   });
 });

@@ -10,9 +10,10 @@ describe("createWorkersRuntimeConfig", () => {
       outboxRelayIntervalMs: 1000,
       outboxRelayBatchSize: 25,
       outboxLockTimeoutMs: 60000,
-      matrixPdfAttempts: 5,
-      matrixPdfBackoffMs: 1000,
-      matrixPdfConcurrency: 2,
+      calculationPdfAttempts: 5,
+      calculationPdfBackoffMs: 1000,
+      calculationPdfJitter: 0.5,
+      calculationPdfConcurrency: 2,
       storage: {
         endpoint: "http://localhost:9000",
         region: "us-east-1",
@@ -28,16 +29,18 @@ describe("createWorkersRuntimeConfig", () => {
     expect(
       createWorkersRuntimeConfig({
         REDIS_URL: "rediss://worker:secret@redis.internal:6380/2",
-        WORKERS_MATRIX_PDF_ATTEMPTS: "7",
-        WORKERS_MATRIX_PDF_CONCURRENCY: "4",
+        WORKERS_CALCULATION_PDF_ATTEMPTS: "7",
+        WORKERS_CALCULATION_PDF_JITTER: "0.25",
+        WORKERS_CALCULATION_PDF_CONCURRENCY: "4",
         ASTROLOGER_MEDIA_STORAGE_ENDPOINT: "https://objects.internal",
         ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET: "elevenhouse-private",
         ASTROLOGER_MEDIA_STORAGE_FORCE_PATH_STYLE: "false"
       })
     ).toMatchObject({
       redisUrl: "rediss://worker:secret@redis.internal:6380/2",
-      matrixPdfAttempts: 7,
-      matrixPdfConcurrency: 4,
+      calculationPdfAttempts: 7,
+      calculationPdfJitter: 0.25,
+      calculationPdfConcurrency: 4,
       storage: {
         endpoint: "https://objects.internal",
         privateBucket: "elevenhouse-private",
@@ -47,6 +50,9 @@ describe("createWorkersRuntimeConfig", () => {
   });
 
   it("rejects unsafe queue bounds", () => {
-    expect(() => createWorkersRuntimeConfig({ WORKERS_MATRIX_PDF_CONCURRENCY: "50" })).toThrow();
+    expect(() =>
+      createWorkersRuntimeConfig({ WORKERS_CALCULATION_PDF_CONCURRENCY: "50" })
+    ).toThrow();
+    expect(() => createWorkersRuntimeConfig({ WORKERS_CALCULATION_PDF_JITTER: "1.5" })).toThrow();
   });
 });

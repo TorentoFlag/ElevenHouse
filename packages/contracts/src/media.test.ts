@@ -72,11 +72,11 @@ describe("media contracts", () => {
     });
   });
 
-  it("rejects direct browser uploads for generated Matrix report artifacts", () => {
+  it("rejects direct browser uploads for generated calculation report artifacts", () => {
     expect(() =>
       createMediaUploadIntentRequestSchema.parse({
-        purpose: "matrix_report_pdf",
-        fileName: "matrix.pdf",
+        purpose: "calculation_report_pdf",
+        fileName: "calculation.pdf",
         mimeType: "application/pdf",
         sizeBytes: 900_000
       })

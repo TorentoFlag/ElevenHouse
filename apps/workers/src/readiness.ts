@@ -7,8 +7,9 @@ export type WorkerReadiness = {
   readonly timestamp: string;
   readonly dependencies: {
     readonly postgres: Dependency;
-    readonly matrixPdfQueue: Dependency;
-    readonly matrixPdfWorker: Dependency;
+    readonly calculationPdfQueue: Dependency;
+    readonly calculationPdfWorker: Dependency;
+    readonly privateObjectStorage: Dependency;
   };
 };
 
@@ -16,17 +17,25 @@ export async function createWorkerReadiness(input: {
   readonly service: string;
   readonly checks: {
     readonly postgres: () => Promise<void>;
-    readonly matrixPdfQueue: () => Promise<void>;
-    readonly matrixPdfWorker: () => Promise<void>;
+    readonly calculationPdfQueue: () => Promise<void>;
+    readonly calculationPdfWorker: () => Promise<void>;
+    readonly privateObjectStorage: () => Promise<void>;
   };
   readonly now?: Date;
 }): Promise<WorkerReadiness> {
-  const [postgres, matrixPdfQueue, matrixPdfWorker] = await Promise.all([
-    run(input.checks.postgres),
-    run(input.checks.matrixPdfQueue),
-    run(input.checks.matrixPdfWorker)
-  ]);
-  const dependencies = { postgres, matrixPdfQueue, matrixPdfWorker };
+  const [postgres, calculationPdfQueue, calculationPdfWorker, privateObjectStorage] =
+    await Promise.all([
+      run(input.checks.postgres),
+      run(input.checks.calculationPdfQueue),
+      run(input.checks.calculationPdfWorker),
+      run(input.checks.privateObjectStorage)
+    ]);
+  const dependencies = {
+    postgres,
+    calculationPdfQueue,
+    calculationPdfWorker,
+    privateObjectStorage
+  };
   return {
     service: input.service,
     status: Object.values(dependencies).every((dependency) => dependency.status === "ready")
