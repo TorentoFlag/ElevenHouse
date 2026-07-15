@@ -1,8 +1,19 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid
+} from "drizzle-orm/pg-core";
 import type {
   AuthCodeDeliveryRequestedPayload,
-  MatrixPdfRequestedPayload,
+  CalculationPdfDeleteRequestedPayload,
+  CalculationPdfRequestedPayload,
   RedactedAuthCodeDeliveryRequestedPayload
 } from "@elevenhouse/domain";
 
@@ -11,7 +22,8 @@ export const outboxEventStatusValues = ["pending", "publishing", "published"] as
 export type OutboxEventPayload =
   | AuthCodeDeliveryRequestedPayload
   | RedactedAuthCodeDeliveryRequestedPayload
-  | MatrixPdfRequestedPayload;
+  | CalculationPdfRequestedPayload
+  | CalculationPdfDeleteRequestedPayload;
 
 export const outboxEvents = pgTable(
   "outbox_events",
@@ -30,7 +42,10 @@ export const outboxEvents = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
-    check("outbox_events_status_check", sql`${table.status} in ('pending', 'publishing', 'published')`),
+    check(
+      "outbox_events_status_check",
+      sql`${table.status} in ('pending', 'publishing', 'published')`
+    ),
     check("outbox_events_attempts_check", sql`${table.attempts} >= 0`),
     check(
       "outbox_events_pending_not_published_check",

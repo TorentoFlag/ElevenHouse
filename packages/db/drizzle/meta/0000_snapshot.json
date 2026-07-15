@@ -1,5 +1,5 @@
 {
-  "id": "dc0e642a-3b77-4b80-b1ee-815916a85768",
+  "id": "a23dcbc1-dc4e-4bd9-8dcc-7170b56bcfa8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -3965,7 +3965,7 @@
       "checkConstraints": {
         "media_assets_purpose_check": {
           "name": "media_assets_purpose_check",
-          "value": "\"media_assets\".\"purpose\" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document', 'matrix_report_pdf')"
+          "value": "\"media_assets\".\"purpose\" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document', 'calculation_report_pdf')"
         },
         "media_assets_status_check": {
           "name": "media_assets_status_check",
@@ -5584,6 +5584,310 @@
       },
       "isRLSEnabled": false
     },
+    "public.calculation_pdf_jobs": {
+      "name": "calculation_pdf_jobs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "calculation_id": {
+          "name": "calculation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "module": {
+          "name": "module",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "method_code": {
+          "name": "method_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result_checksum": {
+          "name": "result_checksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "locale": {
+          "name": "locale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_locator": {
+          "name": "source_locator",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "document_fingerprint": {
+          "name": "document_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "artifact_id": {
+          "name": "artifact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "media_asset_id": {
+          "name": "media_asset_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "failure_code": {
+          "name": "failure_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure_reason": {
+          "name": "failure_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "page_count": {
+          "name": "page_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "calculation_pdf_jobs_idempotency_unique": {
+          "name": "calculation_pdf_jobs_idempotency_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "calculation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "result_checksum",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "document_fingerprint",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"calculation_pdf_jobs\".\"status\" <> 'failed'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "calculation_pdf_jobs_owner_calculation_locale_created_idx": {
+          "name": "calculation_pdf_jobs_owner_calculation_locale_created_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "calculation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "calculation_pdf_jobs_status_updated_idx": {
+          "name": "calculation_pdf_jobs_status_updated_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "calculation_pdf_jobs_calculation_owner_fk": {
+          "name": "calculation_pdf_jobs_calculation_owner_fk",
+          "tableFrom": "calculation_pdf_jobs",
+          "tableTo": "calculation_records",
+          "columnsFrom": [
+            "calculation_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "calculation_pdf_jobs_artifact_id_fk": {
+          "name": "calculation_pdf_jobs_artifact_id_fk",
+          "tableFrom": "calculation_pdf_jobs",
+          "tableTo": "calculation_artifacts",
+          "columnsFrom": [
+            "artifact_id",
+            "calculation_id"
+          ],
+          "columnsTo": [
+            "id",
+            "calculation_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "calculation_pdf_jobs_media_asset_id_fk": {
+          "name": "calculation_pdf_jobs_media_asset_id_fk",
+          "tableFrom": "calculation_pdf_jobs",
+          "tableTo": "media_assets",
+          "columnsFrom": [
+            "media_asset_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "calculation_pdf_jobs_module_check": {
+          "name": "calculation_pdf_jobs_module_check",
+          "value": "\"calculation_pdf_jobs\".\"module\" in ('numerology', 'chart', 'matrix', 'human_design')"
+        },
+        "calculation_pdf_jobs_method_code_check": {
+          "name": "calculation_pdf_jobs_method_code_check",
+          "value": "length(trim(\"calculation_pdf_jobs\".\"method_code\")) between 1 and 100"
+        },
+        "calculation_pdf_jobs_result_checksum_check": {
+          "name": "calculation_pdf_jobs_result_checksum_check",
+          "value": "\"calculation_pdf_jobs\".\"result_checksum\" ~ '^sha256:[a-f0-9]{64}$'"
+        },
+        "calculation_pdf_jobs_locale_check": {
+          "name": "calculation_pdf_jobs_locale_check",
+          "value": "\"calculation_pdf_jobs\".\"locale\" in ('ru', 'en')"
+        },
+        "calculation_pdf_jobs_source_locator_object_check": {
+          "name": "calculation_pdf_jobs_source_locator_object_check",
+          "value": "jsonb_typeof(\"calculation_pdf_jobs\".\"source_locator\") = 'object'"
+        },
+        "calculation_pdf_jobs_document_fingerprint_check": {
+          "name": "calculation_pdf_jobs_document_fingerprint_check",
+          "value": "\"calculation_pdf_jobs\".\"document_fingerprint\" ~ '^sha256:[a-f0-9]{64}$'"
+        },
+        "calculation_pdf_jobs_status_check": {
+          "name": "calculation_pdf_jobs_status_check",
+          "value": "\"calculation_pdf_jobs\".\"status\" in ('queued', 'processing', 'ready', 'failed')"
+        },
+        "calculation_pdf_jobs_failure_code_check": {
+          "name": "calculation_pdf_jobs_failure_code_check",
+          "value": "\"calculation_pdf_jobs\".\"failure_code\" is null or length(trim(\"calculation_pdf_jobs\".\"failure_code\")) between 1 and 100"
+        },
+        "calculation_pdf_jobs_failure_reason_check": {
+          "name": "calculation_pdf_jobs_failure_reason_check",
+          "value": "\"calculation_pdf_jobs\".\"failure_reason\" is null or length(trim(\"calculation_pdf_jobs\".\"failure_reason\")) between 1 and 500"
+        },
+        "calculation_pdf_jobs_page_count_check": {
+          "name": "calculation_pdf_jobs_page_count_check",
+          "value": "\"calculation_pdf_jobs\".\"page_count\" is null or \"calculation_pdf_jobs\".\"page_count\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.client_profiles": {
       "name": "client_profiles",
       "schema": "",
@@ -6320,283 +6624,6 @@
         "matrix_notes_result_checksum_check": {
           "name": "matrix_notes_result_checksum_check",
           "value": "\"matrix_notes\".\"result_checksum\" ~ '^sha256:[a-f0-9]{64}$'"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.matrix_pdf_jobs": {
-      "name": "matrix_pdf_jobs",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "calculation_id": {
-          "name": "calculation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "owner_user_id": {
-          "name": "owner_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "report_id": {
-          "name": "report_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "report_revision": {
-          "name": "report_revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "result_checksum": {
-          "name": "result_checksum",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "locale": {
-          "name": "locale",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'queued'"
-        },
-        "artifact_id": {
-          "name": "artifact_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "media_asset_id": {
-          "name": "media_asset_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "failure_reason": {
-          "name": "failure_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "matrix_pdf_jobs_idempotency_unique": {
-          "name": "matrix_pdf_jobs_idempotency_unique",
-          "columns": [
-            {
-              "expression": "owner_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "calculation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_revision",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "result_checksum",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "locale",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"matrix_pdf_jobs\".\"status\" <> 'failed'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "matrix_pdf_jobs_owner_calculation_created_idx": {
-          "name": "matrix_pdf_jobs_owner_calculation_created_idx",
-          "columns": [
-            {
-              "expression": "owner_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "calculation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "matrix_pdf_jobs_status_updated_idx": {
-          "name": "matrix_pdf_jobs_status_updated_idx",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "updated_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "matrix_pdf_jobs_calculation_owner_fk": {
-          "name": "matrix_pdf_jobs_calculation_owner_fk",
-          "tableFrom": "matrix_pdf_jobs",
-          "tableTo": "calculation_records",
-          "columnsFrom": [
-            "calculation_id",
-            "owner_user_id"
-          ],
-          "columnsTo": [
-            "id",
-            "owner_user_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "matrix_pdf_jobs_report_id_fk": {
-          "name": "matrix_pdf_jobs_report_id_fk",
-          "tableFrom": "matrix_pdf_jobs",
-          "tableTo": "matrix_report_drafts",
-          "columnsFrom": [
-            "report_id",
-            "calculation_id",
-            "owner_user_id"
-          ],
-          "columnsTo": [
-            "id",
-            "calculation_id",
-            "owner_user_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "matrix_pdf_jobs_artifact_id_fk": {
-          "name": "matrix_pdf_jobs_artifact_id_fk",
-          "tableFrom": "matrix_pdf_jobs",
-          "tableTo": "calculation_artifacts",
-          "columnsFrom": [
-            "artifact_id",
-            "calculation_id"
-          ],
-          "columnsTo": [
-            "id",
-            "calculation_id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "matrix_pdf_jobs_media_asset_id_fk": {
-          "name": "matrix_pdf_jobs_media_asset_id_fk",
-          "tableFrom": "matrix_pdf_jobs",
-          "tableTo": "media_assets",
-          "columnsFrom": [
-            "media_asset_id",
-            "owner_user_id"
-          ],
-          "columnsTo": [
-            "id",
-            "owner_user_id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "matrix_pdf_jobs_report_revision_check": {
-          "name": "matrix_pdf_jobs_report_revision_check",
-          "value": "\"matrix_pdf_jobs\".\"report_revision\" > 0"
-        },
-        "matrix_pdf_jobs_result_checksum_check": {
-          "name": "matrix_pdf_jobs_result_checksum_check",
-          "value": "\"matrix_pdf_jobs\".\"result_checksum\" ~ '^sha256:[a-f0-9]{64}$'"
-        },
-        "matrix_pdf_jobs_locale_check": {
-          "name": "matrix_pdf_jobs_locale_check",
-          "value": "\"matrix_pdf_jobs\".\"locale\" in ('ru', 'en')"
-        },
-        "matrix_pdf_jobs_status_check": {
-          "name": "matrix_pdf_jobs_status_check",
-          "value": "\"matrix_pdf_jobs\".\"status\" in ('queued', 'processing', 'ready', 'failed')"
-        },
-        "matrix_pdf_jobs_failure_reason_check": {
-          "name": "matrix_pdf_jobs_failure_reason_check",
-          "value": "\"matrix_pdf_jobs\".\"failure_reason\" is null or length(trim(\"matrix_pdf_jobs\".\"failure_reason\")) between 1 and 500"
         }
       },
       "isRLSEnabled": false

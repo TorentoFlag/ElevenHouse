@@ -382,7 +382,7 @@ describe("database account schema constants", () => {
       "profile_cover",
       "verification_identity_document",
       "verification_qualification_document",
-      "matrix_report_pdf"
+      "calculation_report_pdf"
     ]);
     expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
     expect(mediaVisibilityValues).toEqual(["public", "private"]);

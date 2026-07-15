@@ -20,6 +20,7 @@ import {
   matrixReportLocaleValues
 } from "./matrix-values";
 
+/** @deprecated Transitional adapter-only schema. Not exported into the baseline. */
 export const matrixPdfJobs = pgTable(
   "matrix_pdf_jobs",
   {

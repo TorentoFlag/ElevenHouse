@@ -441,7 +441,7 @@ CREATE TABLE "media_assets" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "media_assets_storage_bucket_storage_key_unique" UNIQUE("storage_bucket","storage_key"),
 	CONSTRAINT "media_assets_id_owner_unique" UNIQUE("id","owner_user_id"),
-	CONSTRAINT "media_assets_purpose_check" CHECK ("media_assets"."purpose" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document', 'matrix_report_pdf')),
+	CONSTRAINT "media_assets_purpose_check" CHECK ("media_assets"."purpose" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document', 'calculation_report_pdf')),
 	CONSTRAINT "media_assets_status_check" CHECK ("media_assets"."status" in ('uploading', 'processing', 'ready', 'failed', 'deleted')),
 	CONSTRAINT "media_assets_visibility_check" CHECK ("media_assets"."visibility" in ('public', 'private')),
 	CONSTRAINT "media_assets_mime_type_check" CHECK ("media_assets"."mime_type" in ('image/jpeg', 'image/png', 'image/webp', 'image/avif', 'application/pdf')),
@@ -621,6 +621,36 @@ CREATE TABLE "calculation_artifacts" (
 	CONSTRAINT "calculation_artifacts_status_check" CHECK ("calculation_artifacts"."status" in ('generating', 'ready', 'failed'))
 );
 --> statement-breakpoint
+CREATE TABLE "calculation_pdf_jobs" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"calculation_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"module" text NOT NULL,
+	"method_code" text NOT NULL,
+	"result_checksum" text NOT NULL,
+	"locale" text NOT NULL,
+	"source_locator" jsonb NOT NULL,
+	"document_fingerprint" text NOT NULL,
+	"status" text DEFAULT 'queued' NOT NULL,
+	"artifact_id" uuid NOT NULL,
+	"media_asset_id" uuid NOT NULL,
+	"failure_code" text,
+	"failure_reason" text,
+	"page_count" integer,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "calculation_pdf_jobs_module_check" CHECK ("calculation_pdf_jobs"."module" in ('numerology', 'chart', 'matrix', 'human_design')),
+	CONSTRAINT "calculation_pdf_jobs_method_code_check" CHECK (length(trim("calculation_pdf_jobs"."method_code")) between 1 and 100),
+	CONSTRAINT "calculation_pdf_jobs_result_checksum_check" CHECK ("calculation_pdf_jobs"."result_checksum" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "calculation_pdf_jobs_locale_check" CHECK ("calculation_pdf_jobs"."locale" in ('ru', 'en')),
+	CONSTRAINT "calculation_pdf_jobs_source_locator_object_check" CHECK (jsonb_typeof("calculation_pdf_jobs"."source_locator") = 'object'),
+	CONSTRAINT "calculation_pdf_jobs_document_fingerprint_check" CHECK ("calculation_pdf_jobs"."document_fingerprint" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "calculation_pdf_jobs_status_check" CHECK ("calculation_pdf_jobs"."status" in ('queued', 'processing', 'ready', 'failed')),
+	CONSTRAINT "calculation_pdf_jobs_failure_code_check" CHECK ("calculation_pdf_jobs"."failure_code" is null or length(trim("calculation_pdf_jobs"."failure_code")) between 1 and 100),
+	CONSTRAINT "calculation_pdf_jobs_failure_reason_check" CHECK ("calculation_pdf_jobs"."failure_reason" is null or length(trim("calculation_pdf_jobs"."failure_reason")) between 1 and 500),
+	CONSTRAINT "calculation_pdf_jobs_page_count_check" CHECK ("calculation_pdf_jobs"."page_count" is null or "calculation_pdf_jobs"."page_count" > 0)
+);
+--> statement-breakpoint
 CREATE TABLE "client_profiles" (
 	"user_id" uuid PRIMARY KEY NOT NULL,
 	"display_name_snapshot" text,
@@ -705,27 +735,6 @@ CREATE TABLE "matrix_notes" (
 	CONSTRAINT "matrix_notes_result_checksum_check" CHECK ("matrix_notes"."result_checksum" ~ '^sha256:[a-f0-9]{64}$')
 );
 --> statement-breakpoint
-CREATE TABLE "matrix_pdf_jobs" (
-	"id" uuid PRIMARY KEY NOT NULL,
-	"calculation_id" uuid NOT NULL,
-	"owner_user_id" uuid NOT NULL,
-	"report_id" uuid NOT NULL,
-	"report_revision" integer NOT NULL,
-	"result_checksum" text NOT NULL,
-	"locale" text NOT NULL,
-	"status" text DEFAULT 'queued' NOT NULL,
-	"artifact_id" uuid NOT NULL,
-	"media_asset_id" uuid NOT NULL,
-	"failure_reason" text,
-	"created_at" timestamp with time zone NOT NULL,
-	"updated_at" timestamp with time zone NOT NULL,
-	CONSTRAINT "matrix_pdf_jobs_report_revision_check" CHECK ("matrix_pdf_jobs"."report_revision" > 0),
-	CONSTRAINT "matrix_pdf_jobs_result_checksum_check" CHECK ("matrix_pdf_jobs"."result_checksum" ~ '^sha256:[a-f0-9]{64}$'),
-	CONSTRAINT "matrix_pdf_jobs_locale_check" CHECK ("matrix_pdf_jobs"."locale" in ('ru', 'en')),
-	CONSTRAINT "matrix_pdf_jobs_status_check" CHECK ("matrix_pdf_jobs"."status" in ('queued', 'processing', 'ready', 'failed')),
-	CONSTRAINT "matrix_pdf_jobs_failure_reason_check" CHECK ("matrix_pdf_jobs"."failure_reason" is null or length(trim("matrix_pdf_jobs"."failure_reason")) between 1 and 500)
-);
---> statement-breakpoint
 CREATE TABLE "matrix_report_drafts" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"calculation_id" uuid NOT NULL,
@@ -794,6 +803,9 @@ ALTER TABLE "calculation_client_links" ADD CONSTRAINT "calculation_client_links_
 ALTER TABLE "calculation_interpretations" ADD CONSTRAINT "calculation_interpretations_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "calculation_artifacts" ADD CONSTRAINT "calculation_artifacts_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "calculation_artifacts" ADD CONSTRAINT "calculation_artifacts_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_artifact_id_fk" FOREIGN KEY ("artifact_id","calculation_id") REFERENCES "public"."calculation_artifacts"("id","calculation_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_media_asset_id_fk" FOREIGN KEY ("media_asset_id","owner_user_id") REFERENCES "public"."media_assets"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_profiles" ADD CONSTRAINT "client_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_birth_data" ADD CONSTRAINT "client_birth_data_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -801,10 +813,6 @@ ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_
 ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_claimed_by_client_user_id_users_id_fk" FOREIGN KEY ("claimed_by_client_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "matrix_notes" ADD CONSTRAINT "matrix_notes_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "matrix_pdf_jobs" ADD CONSTRAINT "matrix_pdf_jobs_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "matrix_pdf_jobs" ADD CONSTRAINT "matrix_pdf_jobs_report_id_fk" FOREIGN KEY ("report_id","calculation_id","owner_user_id") REFERENCES "public"."matrix_report_drafts"("id","calculation_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "matrix_pdf_jobs" ADD CONSTRAINT "matrix_pdf_jobs_artifact_id_fk" FOREIGN KEY ("artifact_id","calculation_id") REFERENCES "public"."calculation_artifacts"("id","calculation_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "matrix_pdf_jobs" ADD CONSTRAINT "matrix_pdf_jobs_media_asset_id_fk" FOREIGN KEY ("media_asset_id","owner_user_id") REFERENCES "public"."media_assets"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "matrix_report_drafts" ADD CONSTRAINT "matrix_report_drafts_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_email_login_unique" ON "auth_identities" USING btree (lower("email")) WHERE "auth_identities"."provider" = 'email' and "auth_identities"."email" is not null;--> statement-breakpoint
@@ -884,6 +892,9 @@ CREATE UNIQUE INDEX "calculation_client_links_record_client_unique" ON "calculat
 CREATE INDEX "calculation_interpretations_record_idx" ON "calculation_interpretations" USING btree ("calculation_id");--> statement-breakpoint
 CREATE INDEX "calculation_artifacts_record_idx" ON "calculation_artifacts" USING btree ("calculation_id");--> statement-breakpoint
 CREATE INDEX "calculation_artifacts_media_idx" ON "calculation_artifacts" USING btree ("media_asset_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "calculation_pdf_jobs_idempotency_unique" ON "calculation_pdf_jobs" USING btree ("owner_user_id","calculation_id","result_checksum","locale","document_fingerprint") WHERE "calculation_pdf_jobs"."status" <> 'failed';--> statement-breakpoint
+CREATE INDEX "calculation_pdf_jobs_owner_calculation_locale_created_idx" ON "calculation_pdf_jobs" USING btree ("owner_user_id","calculation_id","locale","created_at","id");--> statement-breakpoint
+CREATE INDEX "calculation_pdf_jobs_status_updated_idx" ON "calculation_pdf_jobs" USING btree ("status","updated_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "client_birth_data_client_unique" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
 CREATE INDEX "client_birth_data_client_idx" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "client_astrologer_relationships_unique" ON "client_astrologer_relationships" USING btree ("client_user_id","astrologer_user_id");--> statement-breakpoint
@@ -893,7 +904,4 @@ CREATE UNIQUE INDEX "client_join_intents_token_hash_unique" ON "client_join_inte
 CREATE INDEX "client_join_intents_astrologer_status_idx" ON "client_join_intents" USING btree ("astrologer_user_id","status");--> statement-breakpoint
 CREATE INDEX "client_join_intents_claimed_client_idx" ON "client_join_intents" USING btree ("claimed_by_client_user_id");--> statement-breakpoint
 CREATE INDEX "matrix_notes_owner_calculation_created_id_idx" ON "matrix_notes" USING btree ("owner_user_id","calculation_id","created_at","id");--> statement-breakpoint
-CREATE UNIQUE INDEX "matrix_pdf_jobs_idempotency_unique" ON "matrix_pdf_jobs" USING btree ("owner_user_id","calculation_id","report_id","report_revision","result_checksum","locale") WHERE "matrix_pdf_jobs"."status" <> 'failed';--> statement-breakpoint
-CREATE INDEX "matrix_pdf_jobs_owner_calculation_created_idx" ON "matrix_pdf_jobs" USING btree ("owner_user_id","calculation_id","created_at","id");--> statement-breakpoint
-CREATE INDEX "matrix_pdf_jobs_status_updated_idx" ON "matrix_pdf_jobs" USING btree ("status","updated_at");--> statement-breakpoint
 CREATE INDEX "matrix_report_drafts_owner_calculation_idx" ON "matrix_report_drafts" USING btree ("owner_user_id","calculation_id");

@@ -4,4 +4,5 @@ export * from "./calculation-participants.schema";
 export * from "./calculation-client-links.schema";
 export * from "./calculation-interpretations.schema";
 export * from "./calculation-artifacts.schema";
+export * from "./calculation-pdf-jobs.schema";
 export * from "./relations.schema";

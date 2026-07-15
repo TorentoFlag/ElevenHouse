@@ -4,7 +4,7 @@ export const mediaPurposeValues = [
   "profile_cover",
   "verification_identity_document",
   "verification_qualification_document",
-  "matrix_report_pdf"
+  "calculation_report_pdf"
 ] as const;
 export type MediaPurposeValue = (typeof mediaPurposeValues)[number];
 
@@ -17,13 +17,7 @@ export const mediaUploadPurposeValues = [
 ] as const;
 export type MediaUploadPurposeValue = (typeof mediaUploadPurposeValues)[number];
 
-export const mediaStatusValues = [
-  "uploading",
-  "processing",
-  "ready",
-  "failed",
-  "deleted"
-] as const;
+export const mediaStatusValues = ["uploading", "processing", "ready", "failed", "deleted"] as const;
 export type MediaStatusValue = (typeof mediaStatusValues)[number];
 
 export const mediaVisibilityValues = ["public", "private"] as const;
@@ -40,7 +34,10 @@ export type MediaImageMimeTypeValue = (typeof mediaImageMimeTypeValues)[number];
 export const mediaDocumentMimeTypeValues = ["application/pdf"] as const;
 export type MediaDocumentMimeTypeValue = (typeof mediaDocumentMimeTypeValues)[number];
 
-export const mediaMimeTypeValues = [...mediaImageMimeTypeValues, ...mediaDocumentMimeTypeValues] as const;
+export const mediaMimeTypeValues = [
+  ...mediaImageMimeTypeValues,
+  ...mediaDocumentMimeTypeValues
+] as const;
 export type MediaMimeTypeValue = (typeof mediaMimeTypeValues)[number];
 
 export const mediaVariantValues = ["original", "preview", "card", "cover"] as const;

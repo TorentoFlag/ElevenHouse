@@ -16,7 +16,7 @@ describe("media validation values", () => {
       "profile_cover",
       "verification_identity_document",
       "verification_qualification_document",
-      "matrix_report_pdf"
+      "calculation_report_pdf"
     ]);
     expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
     expect(mediaVisibilityValues).toEqual(["public", "private"]);
@@ -28,10 +28,11 @@ describe("media validation values", () => {
     ]);
   });
 
-  it("keeps generated Matrix reports out of the browser-upload vocabulary", () => {
-    expect(mediaUploadPurposeValues).not.toContain("matrix_report_pdf");
-    expect(mediaPurposeValues).toContain("matrix_report_pdf");
-    expect(mediaPurposeUploadLimits).not.toHaveProperty("matrix_report_pdf");
+  it("keeps generated calculation reports out of the browser-upload vocabulary", () => {
+    expect(mediaUploadPurposeValues).not.toContain("calculation_report_pdf");
+    expect(mediaPurposeValues).toContain("calculation_report_pdf");
+    expect(mediaPurposeValues).not.toContain("matrix_report_pdf");
+    expect(mediaPurposeUploadLimits).not.toHaveProperty("calculation_report_pdf");
   });
 
   it("keeps product cover uploads bounded to raster image files", () => {

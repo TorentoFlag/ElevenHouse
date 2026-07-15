@@ -12,11 +12,11 @@ import type { ElevenHouseDatabase } from "../../runtime";
 import {
   calculationArtifacts,
   calculationRecords,
-  matrixPdfJobs,
   matrixReportDrafts,
   mediaAssets,
   outboxEvents
 } from "../../schema";
+import { matrixPdfJobs } from "../../schema/matrix/matrix-pdf-jobs.schema";
 
 type MatrixPdfJobRow = typeof matrixPdfJobs.$inferSelect;
 type MatrixPdfClaimRow = MatrixPdfJobRow & {

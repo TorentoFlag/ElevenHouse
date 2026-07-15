@@ -6,6 +6,7 @@ import { calculationArtifacts } from "./calculation-artifacts.schema";
 import { calculationClientLinks } from "./calculation-client-links.schema";
 import { calculationInterpretations } from "./calculation-interpretations.schema";
 import { calculationParticipants } from "./calculation-participants.schema";
+import { calculationPdfJobs } from "./calculation-pdf-jobs.schema";
 import { calculationRecords } from "./calculation-records.schema";
 
 export const calculationRecordsRelations = relations(calculationRecords, ({ many, one }) => ({
@@ -17,6 +18,7 @@ export const calculationRecordsRelations = relations(calculationRecords, ({ many
   links: many(calculationClientLinks),
   interpretations: many(calculationInterpretations),
   artifacts: many(calculationArtifacts),
+  pdfJobs: many(calculationPdfJobs),
   matrixNotes: many(matrixNotes)
 }));
 
@@ -51,6 +53,21 @@ export const calculationArtifactsRelations = relations(calculationArtifacts, ({ 
   }),
   media: one(mediaAssets, {
     fields: [calculationArtifacts.mediaAssetId],
+    references: [mediaAssets.id]
+  })
+}));
+
+export const calculationPdfJobsRelations = relations(calculationPdfJobs, ({ one }) => ({
+  calculation: one(calculationRecords, {
+    fields: [calculationPdfJobs.calculationId],
+    references: [calculationRecords.id]
+  }),
+  artifact: one(calculationArtifacts, {
+    fields: [calculationPdfJobs.artifactId],
+    references: [calculationArtifacts.id]
+  }),
+  media: one(mediaAssets, {
+    fields: [calculationPdfJobs.mediaAssetId],
     references: [mediaAssets.id]
   })
 }));

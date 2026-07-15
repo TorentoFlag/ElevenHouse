@@ -21,6 +21,10 @@ export const calculationArtifactTypeValues = ["pdf"] as const;
 
 export const calculationArtifactStatusValues = ["generating", "ready", "failed"] as const;
 
+export const calculationPdfLocaleValues = ["ru", "en"] as const;
+
+export const calculationPdfJobStatusValues = ["queued", "processing", "ready", "failed"] as const;
+
 export function formatCalculationSqlValues(values: readonly string[]): string {
   return `(${values.map((value) => `'${value}'`).join(", ")})`;
 }
