@@ -2,8 +2,8 @@
 
 Date: 2026-07-14
 Status: approved scope; Phases 1-4 implemented; Phase 4 verified automatically
-and its live failure path verified in the authorized Chrome session through
-Computer Use; successful provider generation remains externally blocked
+and through successful live generation in the authorized Chrome session with
+Computer Use
 Scope: production completion of the existing Pythagorean Numerology surface
 
 > This document extends the approved Pythagorean correction design. Formula,
@@ -199,10 +199,15 @@ Implementation evidence as of 2026-07-14:
   regression test now covers the SDK error and the adapter converts it to the
   existing typed timeout, which produces the explicit retryable UI message
   `AI временно недоступен. Повторите позже` instead of an unhandled `500`.
-- The authorized local `astrologer-api` process was rebuilt and restarted only
-  on port `3002`; `/health` returned `status: ok`. The external provider still
-  timed out during the verification window, so a successful generated draft,
-  manual save and approval could not be exercised live in this session.
+- After the global provider timeout was increased to 90 seconds, the authorized
+  local `astrologer-api` process was rebuilt and restarted only on port `3002`;
+  `/health` returned `status: ok`. The same saved compatibility calculation then
+  generated and persisted a complete editable draft in about 20-25 seconds.
+  The browser restored participant controls, kept `Сохранить` disabled for the
+  already-persisted clean text, enabled `Утвердить`, and showed no retry error.
+  Read-only database evidence confirmed an `ai` interpretation in `draft`
+  status while internal model and prompt-version columns remained null. The
+  draft was deliberately not approved during verification.
 
 ### 4.5 Phase 5: PDF Export
 
