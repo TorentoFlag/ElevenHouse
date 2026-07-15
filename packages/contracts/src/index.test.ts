@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   authenticatedCustomerAccountResponseSchema,
   astrologerProfileResponseSchema,
+  calculationPdfJobResponseSchema,
   dictionaryCategoriesResponseSchema,
   dictionaryEntriesResponseSchema,
   healthResponseSchema,
@@ -36,5 +37,9 @@ describe("contracts public barrel", () => {
 
   it("exports astrologer profile contracts", () => {
     expect(astrologerProfileResponseSchema.parse).toBeTypeOf("function");
+  });
+
+  it("exports calculation PDF contracts", () => {
+    expect(calculationPdfJobResponseSchema.parse).toBeTypeOf("function");
   });
 });

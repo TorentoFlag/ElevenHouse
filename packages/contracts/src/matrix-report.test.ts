@@ -16,15 +16,14 @@ const checksum = `sha256:${"a".repeat(64)}`;
 describe("Matrix report contracts", () => {
   it("accepts one strict editable report structure", () => {
     expect(matrixReportContentSchema.parse(content())).toEqual(content());
+    expect(matrixReportContentSchema.safeParse({ ...content(), unknown: true }).success).toBe(
+      false
+    );
+    expect(matrixReportContentSchema.safeParse({ ...content(), overview: "   " }).success).toBe(
+      false
+    );
     expect(
-      matrixReportContentSchema.safeParse({ ...content(), unknown: true }).success
-    ).toBe(false);
-    expect(
-      matrixReportContentSchema.safeParse({ ...content(), overview: "   " }).success
-    ).toBe(false);
-    expect(
-      matrixReportContentSchema.safeParse({ ...content(), corePortrait: "x".repeat(5_001) })
-        .success
+      matrixReportContentSchema.safeParse({ ...content(), corePortrait: "x".repeat(5_001) }).success
     ).toBe(false);
   });
 
@@ -120,6 +119,26 @@ describe("Matrix report contracts", () => {
         expiresAt: "2026-07-14T00:05:00.000Z"
       }).url
     ).toContain("signature=");
+    expect(
+      matrixPdfJobResponseSchema.safeParse({
+        job: {
+          id: jobId,
+          calculationId,
+          reportId,
+          reportRevision: 2,
+          resultChecksum: checksum,
+          locale: "ru",
+          status: "ready",
+          artifactId: null,
+          mediaAssetId: null,
+          failureReason: null,
+          createdAt: "2026-07-14T00:00:00.000Z",
+          updatedAt: "2026-07-14T00:00:00.000Z",
+          documentFingerprint: checksum
+        },
+        currentResultChecksum: checksum
+      }).success
+    ).toBe(false);
   });
 });
 
@@ -136,6 +155,7 @@ function content() {
     yearProjection: null,
     reflectionQuestions: ["Что сейчас важно заметить?"],
     practicalSteps: ["Записать один конкретный шаг."],
-    disclaimer: "Материал предназначен для саморефлексии и не является профессиональной консультацией."
+    disclaimer:
+      "Материал предназначен для саморефлексии и не является профессиональной консультацией."
   };
 }

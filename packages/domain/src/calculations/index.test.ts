@@ -10,6 +10,7 @@ import {
   recalculateCalculation,
   saveCalculationInterpretation
 } from "./calculation-use-cases";
+import { calculationPdfDocumentFingerprint } from "./pdf";
 import {
   CalculationAlreadyExistsError,
   CalculationParticipantMismatchError,
@@ -27,6 +28,12 @@ const clientId = "00000000-0000-4000-8000-000000000002";
 const partnerClientId = "00000000-0000-4000-8000-000000000003";
 const now = new Date("2026-07-06T10:00:00.000Z");
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
+
+describe("calculations public barrel", () => {
+  it("exports calculation PDF primitives", () => {
+    expect(calculationPdfDocumentFingerprint).toBeTypeOf("function");
+  });
+});
 
 type MemoryStore = CalculationStore & {
   readonly forceExactKeyConflict: () => void;

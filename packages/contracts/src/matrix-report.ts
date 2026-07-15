@@ -1,4 +1,5 @@
 import { z } from "@elevenhouse/validation";
+import { calculationPdfDownloadResponseSchema, calculationPdfJobSchema } from "./calculation-pdf";
 
 const uuidSchema = z.string().uuid();
 const dateTimeSchema = z.string().datetime();
@@ -98,18 +99,9 @@ export type MatrixPdfJobIdParam = z.infer<typeof matrixPdfJobIdParamSchema>;
 
 export const matrixPdfJobSchema = z
   .object({
-    id: uuidSchema,
-    calculationId: uuidSchema,
+    ...calculationPdfJobSchema.shape,
     reportId: uuidSchema,
-    reportRevision: z.number().int().min(1),
-    resultChecksum: checksumSchema,
-    locale: matrixReportLocaleSchema,
-    status: z.enum(["queued", "processing", "ready", "failed"]),
-    artifactId: uuidSchema.nullable(),
-    mediaAssetId: uuidSchema.nullable(),
-    failureReason: z.string().trim().min(1).max(500).nullable(),
-    createdAt: dateTimeSchema,
-    updatedAt: dateTimeSchema
+    reportRevision: z.number().int().min(1)
   })
   .strict();
 export type MatrixPdfJob = z.infer<typeof matrixPdfJobSchema>;
@@ -119,7 +111,5 @@ export const matrixPdfJobResponseSchema = z
   .strict();
 export type MatrixPdfJobResponse = z.infer<typeof matrixPdfJobResponseSchema>;
 
-export const matrixPdfDownloadResponseSchema = z
-  .object({ url: z.string().url(), expiresAt: dateTimeSchema })
-  .strict();
+export const matrixPdfDownloadResponseSchema = calculationPdfDownloadResponseSchema;
 export type MatrixPdfDownloadResponse = z.infer<typeof matrixPdfDownloadResponseSchema>;
