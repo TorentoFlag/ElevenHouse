@@ -1,9 +1,11 @@
 import type {
-  CreateNumerologyCalculationRequest,
+  CalculationPdfLocale,
   CreateNumerologyAiDraftRequest,
+  CreateNumerologyCalculationRequest,
   ListCalculationsQuery,
+  PreviewNumerologyRequest,
   RecalculateNumerologyCalculationRequest,
-  PreviewNumerologyRequest
+  RequestCalculationPdf
 } from "@elevenhouse/contracts";
 import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import {
@@ -18,9 +20,17 @@ import {
 import {
   createNumerologyAiDraft,
   createNumerologyCalculation,
+  downloadNumerologyPdf,
+  enqueueNumerologyPdf,
+  getLatestNumerologyPdf,
   previewNumerology,
   recalculateNumerologyCalculation
 } from "../api/numerologyApi";
+
+export const numerologyPdfQueryKeys = {
+  detail: (calculationId: string, locale: CalculationPdfLocale, resultChecksum: string) =>
+    ["numerology", "pdf", calculationId, locale, resultChecksum] as const
+};
 
 export const calculationsQueryKeys = {
   all: () => ["calculations"] as const,
@@ -43,6 +53,27 @@ export function calculationDetailQueryOptions(calculationId: string) {
     queryKey: calculationsQueryKeys.detail(calculationId),
     queryFn: () => getCalculation(calculationId),
     enabled: Boolean(calculationId)
+  };
+}
+
+export function numerologyPdfQueryOptions(input: {
+  readonly calculationId: string;
+  readonly locale: CalculationPdfLocale;
+  readonly resultChecksum: string;
+}) {
+  return {
+    queryKey: numerologyPdfQueryKeys.detail(
+      input.calculationId,
+      input.locale,
+      input.resultChecksum
+    ),
+    queryFn: () =>
+      getLatestNumerologyPdf({ calculationId: input.calculationId, locale: input.locale }),
+    enabled: Boolean(input.calculationId && input.resultChecksum),
+    refetchInterval: (query: { state: { data?: { job: { status: string } | null } } }) => {
+      const status = query.state.data?.job?.status;
+      return status === "queued" || status === "processing" ? 1500 : false;
+    }
   };
 }
 
@@ -82,6 +113,33 @@ export function createNumerologyAiDraftMutationOptions(
     onSuccess: () => invalidateCalculations(queryClient)
   };
 }
+
+export function enqueueNumerologyPdfMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: { readonly calculationId: string; readonly body: RequestCalculationPdf }) =>
+      enqueueNumerologyPdf(input),
+    onSuccess: (
+      _data: unknown,
+      input: {
+        readonly calculationId: string;
+        readonly body: RequestCalculationPdf;
+      }
+    ) =>
+      queryClient.invalidateQueries({
+        queryKey: numerologyPdfQueryKeys.detail(
+          input.calculationId,
+          input.body.locale,
+          input.body.expectedResultChecksum
+        )
+      })
+  };
+}
+
+export const downloadNumerologyPdfMutationOptions = () => ({
+  mutationFn: downloadNumerologyPdf
+});
 
 export function linkCalculationClientMutationOptions(
   queryClient: Pick<QueryClient, "invalidateQueries">

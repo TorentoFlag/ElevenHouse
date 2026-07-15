@@ -4,13 +4,17 @@ import {
   archiveNumerologyMutationOptions,
   createNumerologyAiDraftMutationOptions,
   createNumerologyMutationOptions,
+  downloadNumerologyPdfMutationOptions,
+  enqueueNumerologyPdfMutationOptions,
   previewNumerologyMutationOptions,
   linkCalculationClientMutationOptions,
   numerologyCalculationListQueryOptions,
+  numerologyPdfQueryOptions,
   publishCalculationMutationOptions,
   recalculateNumerologyMutationOptions,
   saveCalculationInterpretationMutationOptions
 } from "./numerologyQueries";
+import type { CalculationPdfLocale } from "@elevenhouse/contracts";
 
 export function useNumerologyCalculationListQuery() {
   return useQuery(numerologyCalculationListQueryOptions());
@@ -24,6 +28,24 @@ export function useCreateNumerologyMutation() {
 
 export function usePreviewNumerologyMutation() {
   return useMutation(previewNumerologyMutationOptions());
+}
+
+export function useNumerologyPdfQuery(input: {
+  readonly calculationId: string;
+  readonly locale: CalculationPdfLocale;
+  readonly resultChecksum: string;
+}) {
+  return useQuery(numerologyPdfQueryOptions(input));
+}
+
+export function useEnqueueNumerologyPdfMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation(enqueueNumerologyPdfMutationOptions(queryClient));
+}
+
+export function useDownloadNumerologyPdfMutation() {
+  return useMutation(downloadNumerologyPdfMutationOptions());
 }
 
 export function useCreateNumerologyAiDraftMutation() {

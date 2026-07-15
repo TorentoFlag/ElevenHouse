@@ -88,6 +88,59 @@ describe("NumerologyPageView", () => {
     expect(findRequiredElementByType(view, NumerologyCalculationMenu)).toBeDefined();
   });
 
+  it("shows the save-first PDF tooltip for previews", () => {
+    const view = NumerologyPageView(baseProps());
+    const pdfButton = findButtonByText(view, "PDF");
+
+    expect(pdfButton.props).toMatchObject({
+      disabled: true,
+      title: "Сначала сохраните расчёт"
+    });
+  });
+
+  it("exposes ready and retry PDF actions without changing the toolbar slot", () => {
+    const onPdf = vi.fn();
+    const readyView = NumerologyPageView({
+      ...baseProps(),
+      pdfLabel: "Скачать PDF",
+      pdfDisabled: false,
+      pdfTitle: "Скачать готовый PDF",
+      onPdf
+    });
+    const readyButton = findButtonByText(readyView, "Скачать PDF");
+
+    readyButton.props.onClick?.();
+    expect(readyButton.props.disabled).toBe(false);
+    expect(readyButton.props.title).toBe("Скачать готовый PDF");
+    expect(onPdf).toHaveBeenCalledOnce();
+
+    const retryView = NumerologyPageView({
+      ...baseProps(),
+      pdfLabel: "Повторить",
+      pdfDisabled: false,
+      pdfTitle: "Повторить формирование PDF",
+      pdfErrorMessage: "Не удалось сформировать PDF: временная ошибка"
+    });
+    expect(findButtonByText(retryView, "Повторить").props.disabled).toBe(false);
+    expect(
+      findElements(retryView).some((element) =>
+        elementIncludesText(element, "Не удалось сформировать PDF: временная ошибка")
+      )
+    ).toBe(true);
+  });
+
+  it("keeps a queued PDF visibly pending and prevents a duplicate click", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      pdfLabel: "PDF готовится…",
+      pdfDisabled: true,
+      pdfTitle: "PDF формируется"
+    });
+    const pdfButton = findButtonByText(view, "PDF готовится…");
+
+    expect(pdfButton.props).toMatchObject({ disabled: true, title: "PDF формируется" });
+  });
+
   it("passes active saved calculations to the workspace menu", () => {
     const onSelectSaved = vi.fn();
     const saved = response({
@@ -432,6 +485,10 @@ function baseProps(): NumerologyPageViewProps {
     errorMessage: null,
     periodErrorMessage: null,
     aiDraftErrorMessage: null,
+    pdfLabel: "PDF",
+    pdfDisabled: true,
+    pdfTitle: "Сначала сохраните расчёт",
+    pdfErrorMessage: null,
     isBusy: false,
     isPreviewPending: false,
     isCreatingAiDraft: false,
@@ -464,7 +521,8 @@ function baseProps(): NumerologyPageViewProps {
     onInterpretationChange: vi.fn(),
     onCreateAiDraft: vi.fn(),
     onSaveInterpretation: vi.fn(),
-    onApproveInterpretation: vi.fn()
+    onApproveInterpretation: vi.fn(),
+    onPdf: vi.fn()
   };
 }
 

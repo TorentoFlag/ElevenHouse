@@ -38,6 +38,10 @@ export type NumerologyPageViewProps = {
   readonly errorMessage: string | null;
   readonly periodErrorMessage: string | null;
   readonly aiDraftErrorMessage: string | null;
+  readonly pdfLabel: string;
+  readonly pdfDisabled: boolean;
+  readonly pdfTitle: string;
+  readonly pdfErrorMessage: string | null;
   readonly isBusy: boolean;
   readonly isPreviewPending: boolean;
   readonly isCreatingAiDraft: boolean;
@@ -77,6 +81,7 @@ export type NumerologyPageViewProps = {
   readonly onCreateAiDraft: () => void;
   readonly onSaveInterpretation: () => void;
   readonly onApproveInterpretation: () => void;
+  readonly onPdf: () => void;
 };
 
 export function NumerologyPageView({
@@ -93,6 +98,10 @@ export function NumerologyPageView({
   errorMessage,
   periodErrorMessage,
   aiDraftErrorMessage,
+  pdfLabel,
+  pdfDisabled,
+  pdfTitle,
+  pdfErrorMessage,
   isBusy,
   isPreviewPending,
   isCreatingAiDraft,
@@ -124,7 +133,8 @@ export function NumerologyPageView({
   onInterpretationChange,
   onCreateAiDraft,
   onSaveInterpretation,
-  onApproveInterpretation
+  onApproveInterpretation,
+  onPdf
 }: NumerologyPageViewProps) {
   const pageModel = buildNumerologyPageViewModel(
     selectedResponse,
@@ -243,16 +253,22 @@ export function NumerologyPageView({
         <button
           type="button"
           className={styles.toolButton}
-          disabled
-          title="PDF-экспорт подключим после backend export endpoint"
+          disabled={pdfDisabled}
+          title={pdfTitle}
+          onClick={onPdf}
         >
           <Icon iconName="doc" width={15} height={15} aria-hidden="true" />
-          PDF
+          {pdfLabel}
         </button>
       </header>
       <div className={styles.body}>
         <main className={`${styles.workspace}${editorState ? ` ${styles.workspaceEditor}` : ""}`}>
           {errorMessage ? <p className={styles.error}>{errorMessage}</p> : null}
+          {pdfErrorMessage ? (
+            <p className={styles.error} role="alert">
+              {pdfErrorMessage}
+            </p>
+          ) : null}
           <MotionContent className={styles.workspaceMotion} transitionKey={workspaceTransitionKey}>
             {editorState ? (
               <NumerologyCalculationEditor

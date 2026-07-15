@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useI18n } from "@elevenhouse/i18n";
 import type {
+  CalculationPdfDownloadResponse,
+  CalculationPdfJob,
+  CalculationPdfLocale,
   CalculationRecordResponse,
   NumerologyCalculationResponse,
   NumerologyResult
 } from "@elevenhouse/contracts";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
+import { HttpError } from "../../common/http/HttpError";
 import { getFirstLinkableClientId } from "../../features/calculations/model/calculationStatus";
 import {
   astrologerClientListQueryOptions,
@@ -33,13 +38,20 @@ import {
   useArchiveNumerologyMutation,
   useCreateNumerologyAiDraftMutation,
   useCreateNumerologyMutation,
+  useDownloadNumerologyPdfMutation,
+  useEnqueueNumerologyPdfMutation,
   useLinkCalculationClientMutation,
   useNumerologyCalculationListQuery,
+  useNumerologyPdfQuery,
   usePreviewNumerologyMutation,
   usePublishCalculationMutation,
   useRecalculateNumerologyMutation,
   useSaveCalculationInterpretationMutation
 } from "../../features/numerology/model/numerologyHooks";
+import {
+  buildNumerologyPdfAction,
+  type NumerologyPdfAction
+} from "../../features/numerology/model/numerologyPdfModel";
 import {
   getCalculationTitle,
   getCurrentInterpretation,
@@ -70,6 +82,7 @@ import {
 import type { NumerologyPageViewProps } from "./NumerologyPageView";
 
 export function useNumerologyPageController(): NumerologyPageViewProps {
+  const { locale } = useI18n();
   const listQuery = useNumerologyCalculationListQuery();
   const clientsQuery = useQuery(astrologerClientListQueryOptions({ limit: 100, offset: 0 }));
   const createMutation = useCreateNumerologyMutation();
@@ -81,6 +94,8 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const recalculateMutation = useRecalculateNumerologyMutation();
   const archiveMutation = useArchiveNumerologyMutation();
   const createAiDraftMutation = useCreateNumerologyAiDraftMutation();
+  const enqueuePdfMutation = useEnqueueNumerologyPdfMutation();
+  const downloadPdfMutation = useDownloadNumerologyPdfMutation();
   const calculations = useMemo(
     () => listQuery.data?.calculations ?? [],
     [listQuery.data?.calculations]
@@ -113,6 +128,13 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const previewGuardRef = useRef(createLatestPreviewGuard());
   const aiDraftGuardRef = useRef(createLatestPreviewGuard());
   const aiDraftInFlightRef = useRef(false);
+  const selectedCalculation = selectedResponse?.calculation ?? null;
+  const pdfQuery = useNumerologyPdfQuery({
+    calculationId: selectedCalculation?.id ?? "",
+    locale,
+    resultChecksum: selectedCalculation?.resultChecksum ?? ""
+  });
+  const pdfJob = pdfQuery.data?.job ?? null;
   const isPreviewPending = previewMutation.isPending;
   const isBusy =
     createMutation.isPending ||
@@ -123,7 +145,17 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     publishMutation.isPending ||
     recalculateMutation.isPending ||
     archiveMutation.isPending ||
-    createAiDraftMutation.isPending;
+    createAiDraftMutation.isPending ||
+    enqueuePdfMutation.isPending ||
+    downloadPdfMutation.isPending;
+  const pdfAction = buildNumerologyPdfAction({
+    calculationId: selectedCalculation?.id ?? "",
+    resultChecksum: selectedCalculation?.resultChecksum ?? "",
+    currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
+    job: pdfJob,
+    editorOpen: Boolean(editorState),
+    isBusy
+  });
 
   useDocumentTitle("ElevenHouse | Нумерология");
 
@@ -136,8 +168,6 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     setInterpretationText(getLatestInterpretationText(selectedResponse));
     setSelectedDetailSelector(null);
   }, [selectedResponse]);
-
-  const selectedCalculation = selectedResponse?.calculation ?? null;
 
   return {
     calculations,
@@ -153,6 +183,10 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     errorMessage,
     periodErrorMessage,
     aiDraftErrorMessage,
+    pdfLabel: pdfAction.label,
+    pdfDisabled: pdfAction.disabled,
+    pdfTitle: pdfAction.title,
+    pdfErrorMessage: pdfAction.errorMessage,
     isBusy,
     isPreviewPending,
     isCreatingAiDraft: createAiDraftMutation.isPending,
@@ -290,6 +324,21 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
         });
         setSelectedResponse(toNumerologyResponse(calculation));
       }, setErrorMessage);
+    },
+    onPdf: () => {
+      void run(
+        () =>
+          executeNumerologyPdfAction({
+            calculation: selectedCalculation,
+            locale,
+            kind: pdfAction.kind,
+            job: pdfJob,
+            enqueue: (input) => enqueuePdfMutation.mutateAsync(input),
+            download: (input) => downloadPdfMutation.mutateAsync(input),
+            openUrl: (url) => window.open(url, "_blank", "noopener,noreferrer")
+          }).then(() => undefined),
+        setErrorMessage
+      );
     }
   };
 
@@ -577,11 +626,7 @@ export async function requestNumerologyAiDraft(input: {
     readonly body: { readonly expectedResultChecksum: string };
   }) => Promise<NumerologyCalculationResponse>;
 }): Promise<NumerologyAiDraftRequestOutcome> {
-  const state = getNumerologyInterpretationState(
-    input.calculation,
-    input.editorText,
-    input.isBusy
-  );
+  const state = getNumerologyInterpretationState(input.calculation, input.editorText, input.isBusy);
   if (!input.calculation || state.aiDisabled) return { kind: "skipped" };
 
   try {
@@ -593,6 +638,66 @@ export async function requestNumerologyAiDraft(input: {
   } catch (error) {
     return { kind: "error", message: getNumerologyAiDraftErrorMessage(error) };
   }
+}
+
+export async function executeNumerologyPdfAction(input: {
+  readonly calculation: CalculationRecordResponse | null;
+  readonly locale: CalculationPdfLocale;
+  readonly kind: NumerologyPdfAction["kind"];
+  readonly job: CalculationPdfJob | null;
+  readonly enqueue: (request: {
+    readonly calculationId: string;
+    readonly body: {
+      readonly expectedResultChecksum: string;
+      readonly locale: CalculationPdfLocale;
+    };
+  }) => Promise<unknown>;
+  readonly download: (request: {
+    readonly calculationId: string;
+    readonly jobId: string;
+  }) => Promise<CalculationPdfDownloadResponse>;
+  readonly openUrl: (url: string) => unknown;
+}): Promise<"skipped" | "enqueued" | "downloaded"> {
+  if (!input.calculation) return "skipped";
+
+  try {
+    if (input.kind === "download" && input.job?.status === "ready") {
+      const response = await input.download({
+        calculationId: input.calculation.id,
+        jobId: input.job.id
+      });
+      input.openUrl(response.url);
+      return "downloaded";
+    }
+
+    if (input.kind === "request" || input.kind === "retry") {
+      await input.enqueue({
+        calculationId: input.calculation.id,
+        body: {
+          expectedResultChecksum: input.calculation.resultChecksum,
+          locale: input.locale
+        }
+      });
+      return "enqueued";
+    }
+  } catch (error) {
+    throw new Error(getNumerologyPdfActionErrorMessage(error));
+  }
+
+  return "skipped";
+}
+
+function getNumerologyPdfActionErrorMessage(error: unknown): string {
+  if (error instanceof HttpError) {
+    if (error.status === 409) {
+      return "Расчёт изменился. Обновите страницу и сформируйте PDF заново";
+    }
+    if (error.status === 404) {
+      return "PDF-экспорт временно недоступен. Повторите позже";
+    }
+  }
+
+  return "Не удалось выполнить действие с PDF. Повторите позже";
 }
 
 async function run(operation: () => Promise<void>, setError: (message: string | null) => void) {

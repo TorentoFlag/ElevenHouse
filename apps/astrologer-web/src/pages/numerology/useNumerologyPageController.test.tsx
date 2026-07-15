@@ -1,10 +1,14 @@
 import type {
+  CalculationPdfJob,
   CalculationRecordResponse,
   NumerologyCalculationResponse
 } from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { HttpError } from "../../common/http/HttpError";
-import { requestNumerologyAiDraft } from "./useNumerologyPageController";
+import {
+  executeNumerologyPdfAction,
+  requestNumerologyAiDraft
+} from "./useNumerologyPageController";
 
 const checksum = `sha256:${"a".repeat(64)}`;
 const calculation = {
@@ -79,3 +83,100 @@ describe("Numerology AI draft controller", () => {
     });
   });
 });
+
+describe("Numerology PDF controller action", () => {
+  it("enqueues the current result in the active interface locale", async () => {
+    const enqueue = vi.fn(async () => undefined);
+
+    await expect(
+      executeNumerologyPdfAction({
+        calculation,
+        locale: "en",
+        kind: "request",
+        job: null,
+        enqueue,
+        download: vi.fn(),
+        openUrl: vi.fn()
+      })
+    ).resolves.toBe("enqueued");
+    expect(enqueue).toHaveBeenCalledWith({
+      calculationId: calculation.id,
+      body: { expectedResultChecksum: checksum, locale: "en" }
+    });
+  });
+
+  it("opens only the backend-provided private URL for a ready job", async () => {
+    const job = pdfJob("ready");
+    const openUrl = vi.fn();
+    const download = vi.fn(async () => ({
+      url: "https://objects.example.test/private/report.pdf?signature=signed",
+      expiresAt: "2026-07-15T00:10:00.000Z"
+    }));
+
+    await expect(
+      executeNumerologyPdfAction({
+        calculation,
+        locale: "ru",
+        kind: "download",
+        job,
+        enqueue: vi.fn(),
+        download,
+        openUrl
+      })
+    ).resolves.toBe("downloaded");
+    expect(download).toHaveBeenCalledWith({ calculationId: calculation.id, jobId: job.id });
+    expect(openUrl).toHaveBeenCalledWith(
+      "https://objects.example.test/private/report.pdf?signature=signed"
+    );
+  });
+
+  it("does nothing for disabled and pending actions", async () => {
+    const enqueue = vi.fn();
+    const download = vi.fn();
+
+    await expect(
+      executeNumerologyPdfAction({
+        calculation,
+        locale: "ru",
+        kind: "pending",
+        job: pdfJob("processing"),
+        enqueue,
+        download,
+        openUrl: vi.fn()
+      })
+    ).resolves.toBe("skipped");
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(download).not.toHaveBeenCalled();
+  });
+
+  it("does not leak a raw HTTP error when the PDF endpoint is unavailable", async () => {
+    await expect(
+      executeNumerologyPdfAction({
+        calculation,
+        locale: "ru",
+        kind: "request",
+        job: null,
+        enqueue: vi.fn(async () => {
+          throw new HttpError(404, null);
+        }),
+        download: vi.fn(),
+        openUrl: vi.fn()
+      })
+    ).rejects.toThrow("PDF-экспорт временно недоступен. Повторите позже");
+  });
+});
+
+function pdfJob(status: CalculationPdfJob["status"]): CalculationPdfJob {
+  return {
+    id: "33333333-3333-4333-8333-333333333333",
+    calculationId: calculation.id,
+    resultChecksum: checksum,
+    locale: "ru",
+    status,
+    artifactId: null,
+    mediaAssetId: null,
+    failureReason: null,
+    createdAt: "2026-07-15T00:00:00.000Z",
+    updatedAt: "2026-07-15T00:00:00.000Z"
+  };
+}
