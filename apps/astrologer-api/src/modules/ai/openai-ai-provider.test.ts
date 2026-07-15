@@ -1,5 +1,6 @@
 import { Test } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
+import OpenAI from "openai";
 import { z } from "@elevenhouse/validation";
 import { describe, expect, it, vi } from "vitest";
 import { AI_OPENAI_CLIENT } from "./ai.tokens";
@@ -192,6 +193,21 @@ describe("OpenAiProvider", () => {
       responses: {
         create: vi.fn(async () => {
           throw new DOMException("Aborted", "AbortError");
+        })
+      }
+    };
+    const provider = new OpenAiProvider(createConfigService({ timeoutMs: 1 }), client);
+
+    await expect(provider.generateStructured(createProviderInput())).rejects.toBeInstanceOf(
+      AiProviderTimeoutError
+    );
+  });
+
+  it("maps OpenAI SDK timeout errors to timeout errors", async () => {
+    const client: OpenAiClient = {
+      responses: {
+        create: vi.fn(async () => {
+          throw new OpenAI.APIConnectionTimeoutError();
         })
       }
     };

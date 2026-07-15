@@ -114,7 +114,7 @@ export class OpenAiProvider implements AiGenerationPort {
         model
       });
     } catch (error) {
-      if (isAbortError(error)) {
+      if (isTimeoutError(error)) {
         throw new AiProviderTimeoutError("AI provider request timed out");
       }
 
@@ -304,4 +304,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isAbortError(error: unknown): boolean {
   return isRecord(error) && error.name === "AbortError";
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof OpenAI.APIConnectionTimeoutError || isAbortError(error);
 }

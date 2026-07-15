@@ -1,8 +1,9 @@
 # Numerology Production Completion Design
 
 Date: 2026-07-14
-Status: approved scope; Phases 1-3 implemented; Phase 3 verified automatically
-and partially verified in the authorized Chrome session through Computer Use
+Status: approved scope; Phases 1-4 implemented; Phase 4 verified automatically
+and its live failure path verified in the authorized Chrome session through
+Computer Use; successful provider generation remains externally blocked
 Scope: production completion of the existing Pythagorean Numerology surface
 
 > This document extends the approved Pythagorean correction design. Formula,
@@ -187,11 +188,21 @@ Implementation evidence as of 2026-07-14:
 - Focused verification passed 24 Numerology-related test files / 120 tests,
   typechecks for contracts, domain, AI, database, API and web, and both
   production application builds. Repository `pnpm verify` passed lint, all 31
-  typecheck tasks, 356 test files / 1486 tests, and all 22 build tasks.
-- Read-only process evidence found the current astrologer API listening on
-  `3002` with an `ok` health response. No process was listening on the canonical
-  frontend port `5173`, so Phase 4 authorized-browser evidence is intentionally
-  pending; no replacement frontend process or alternate port was started.
+  typecheck tasks, 356 test files / 1487 tests, and all 22 build tasks.
+- Authorized-browser verification on the user-provided frontend port `5174`
+  covered saved individual and compatibility results, AI action enablement,
+  generation progress, disabled participant inputs and duplicate submission
+  protection, dirty-text gating with the tooltip `Сначала сохраните или
+  отмените изменения`, and restoration of the editable state after failure.
+- The live provider request exposed that OpenAI SDK
+  `APIConnectionTimeoutError` was not mapped by the provider adapter. A focused
+  regression test now covers the SDK error and the adapter converts it to the
+  existing typed timeout, which produces the explicit retryable UI message
+  `AI временно недоступен. Повторите позже` instead of an unhandled `500`.
+- The authorized local `astrologer-api` process was rebuilt and restarted only
+  on port `3002`; `/health` returned `status: ok`. The external provider still
+  timed out during the verification window, so a successful generated draft,
+  manual save and approval could not be exercised live in this session.
 
 ### 4.5 Phase 5: PDF Export
 
