@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   approveCalculationInterpretation,
   archiveCalculation,
+  CALCULATION_PDF_DELETE_REQUESTED_EVENT,
   CalculationAlreadyExistsError,
   createCalculation,
   linkCalculationToClient,
@@ -13,7 +14,7 @@ import {
 } from "@elevenhouse/domain";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import { createPostgresRuntime } from "../../runtime";
-import { createDrizzleCalculationStore } from "./index";
+import { createDrizzleCalculationPdfJobStore, createDrizzleCalculationStore } from "./index";
 
 const databaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -29,6 +30,9 @@ describe("calculations Drizzle/PostgreSQL integration", () => {
   afterAll(async () => {
     try {
       if (ownerUserIds.length > 0) {
+        await runtime.pool.query("delete from calculation_records where owner_user_id = any($1)", [
+          ownerUserIds
+        ]);
         await runtime.pool.query("delete from users where id = any($1)", [ownerUserIds]);
       }
     } finally {
@@ -231,6 +235,144 @@ describe("calculations Drizzle/PostgreSQL integration", () => {
     ).resolves.toMatchObject({ requestFingerprint: digest("e"), resultData: { lifePath: 2 } });
   });
 
+  it("invalidates current PDFs and schedules delayed private object cleanup on recalculation", async () => {
+    const store = createDrizzleCalculationStore(runtime.database);
+    const pdfStore = createDrizzleCalculationPdfJobStore(runtime.database);
+    const ownerUserId = await createUser();
+    ownerUserIds.push(ownerUserId);
+    const participant = createParticipants(randomUUID()).slice(0, 1);
+    const calculation = await createCalculation({
+      store,
+      ownerUserId,
+      module: "numerology",
+      mode: "individual",
+      methodCode: "pythagorean_ru",
+      title: "Current PDF cleanup",
+      participants: participant,
+      linkClientIds: [],
+      requestFingerprint: digest("4"),
+      inputData: { name: "Current" },
+      resultData: { lifePath: 4 },
+      resultSummary: { lifePath: 4 },
+      resultChecksum: digest("5"),
+      idGenerator: randomUUID,
+      now: new Date("2026-07-15T12:00:00.000Z")
+    });
+    const unrelated = await createCalculation({
+      store,
+      ownerUserId,
+      module: "numerology",
+      mode: "individual",
+      methodCode: "pythagorean_ru",
+      title: "Unrelated PDF",
+      participants: participant,
+      linkClientIds: [],
+      requestFingerprint: digest("6"),
+      inputData: { name: "Unrelated" },
+      resultData: { lifePath: 6 },
+      resultSummary: { lifePath: 6 },
+      resultChecksum: digest("7"),
+      idGenerator: randomUUID,
+      now: new Date("2026-07-15T12:00:00.000Z")
+    });
+
+    const currentMediaIds: string[] = [];
+    for (const [locale, fingerprint] of [
+      ["ru", digest("8")],
+      ["en", digest("9")]
+    ] as const) {
+      const ids = candidatePdfIds();
+      currentMediaIds.push(ids.mediaAssetId);
+      await pdfStore.enqueue({
+        ...ids,
+        ownerUserId,
+        calculationId: calculation.id,
+        module: "numerology",
+        methodCode: "pythagorean_ru",
+        resultChecksum: calculation.resultChecksum,
+        locale,
+        sourceLocator: { kind: "approved_interpretation", interpretationId: null },
+        documentFingerprint: fingerprint,
+        privateStorageBucket: "calculation-pdfs",
+        storageKey: `owners/${ownerUserId}/calculation-pdfs/${ids.id}.pdf`,
+        originalFileName: "numerology.pdf",
+        now: "2026-07-15T12:01:00.000Z"
+      });
+    }
+    const unrelatedIds = candidatePdfIds();
+    await pdfStore.enqueue({
+      ...unrelatedIds,
+      ownerUserId,
+      calculationId: unrelated.id,
+      module: "numerology",
+      methodCode: "pythagorean_ru",
+      resultChecksum: unrelated.resultChecksum,
+      locale: "ru",
+      sourceLocator: { kind: "approved_interpretation", interpretationId: null },
+      documentFingerprint: digest("0"),
+      privateStorageBucket: "calculation-pdfs",
+      storageKey: `owners/${ownerUserId}/calculation-pdfs/${unrelatedIds.id}.pdf`,
+      originalFileName: "numerology.pdf",
+      now: "2026-07-15T12:01:00.000Z"
+    });
+
+    await recalculateCalculation({
+      store,
+      ownerUserId,
+      calculationId: calculation.id,
+      participants: calculation.participants,
+      requestFingerprint: digest("d"),
+      inputData: { recalculated: true },
+      resultData: { lifePath: 9 },
+      resultSummary: { lifePath: 9 },
+      resultChecksum: digest("e"),
+      now: new Date("2026-07-15T12:10:00.000Z")
+    });
+
+    const state = await runtime.pool.query<{
+      current_jobs: string;
+      current_artifacts: string;
+      current_media: string;
+      unrelated_jobs: string;
+    }>(
+      `select
+         (select count(*) from calculation_pdf_jobs where calculation_id = $1) as current_jobs,
+         (select count(*) from calculation_artifacts where calculation_id = $1) as current_artifacts,
+         (select count(*) from media_assets where id = any($2)) as current_media,
+         (select count(*) from calculation_pdf_jobs where calculation_id = $3) as unrelated_jobs`,
+      [calculation.id, currentMediaIds, unrelated.id]
+    );
+    expect(state.rows[0]).toEqual({
+      current_jobs: "0",
+      current_artifacts: "0",
+      current_media: "2",
+      unrelated_jobs: "1"
+    });
+    const cleanupEvents = await runtime.pool.query<{
+      aggregate_id: string;
+      payload: { mediaAssetId: string };
+      available_at: Date;
+    }>(
+      `select aggregate_id, payload, available_at
+       from outbox_events
+       where event_type = $1 and aggregate_id = any($2)
+       order by aggregate_id`,
+      [CALCULATION_PDF_DELETE_REQUESTED_EVENT, currentMediaIds]
+    );
+    expect(cleanupEvents.rows).toHaveLength(2);
+    expect(cleanupEvents.rows.map((event) => event.aggregate_id).sort()).toEqual(
+      [...currentMediaIds].sort()
+    );
+    expect(cleanupEvents.rows.map((event) => event.payload.mediaAssetId).sort()).toEqual(
+      [...currentMediaIds].sort()
+    );
+    expect(
+      cleanupEvents.rows.every(
+        (event) => event.available_at.toISOString() === "2026-07-15T13:10:00.000Z"
+      )
+    ).toBe(true);
+  });
+
   async function createUser(): Promise<string> {
     const result = await runtime.pool.query<{ id: string }>(
       "insert into users (status) values ('active') returning id"
@@ -263,4 +405,13 @@ function getIntegrationDatabaseUrl(value: string | undefined): string {
 
 function raise(message: string): never {
   throw new Error(message);
+}
+
+function candidatePdfIds() {
+  return {
+    id: randomUUID(),
+    mediaAssetId: randomUUID(),
+    artifactId: randomUUID(),
+    outboxEventId: randomUUID()
+  };
 }

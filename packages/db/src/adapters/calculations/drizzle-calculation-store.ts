@@ -13,13 +13,16 @@ import type {
   CalculationStoreReplaceResultInput,
   CalculationStoreReplaceResultOutcome
 } from "@elevenhouse/domain";
+import { CALCULATION_PDF_DELETE_REQUESTED_EVENT } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
   calculationArtifacts,
   calculationClientLinks,
   calculationInterpretations,
   calculationParticipants,
-  calculationRecords
+  calculationPdfJobs,
+  calculationRecords,
+  outboxEvents
 } from "../../schema";
 import { insertReturningOne } from "../../shared";
 
@@ -320,6 +323,10 @@ async function replaceResult(
   await database
     .delete(calculationInterpretations)
     .where(eq(calculationInterpretations.calculationId, input.calculationId));
+  await scheduleCalculationPdfCleanup(database, input.calculationId, input.now);
+  await database
+    .delete(calculationPdfJobs)
+    .where(eq(calculationPdfJobs.calculationId, input.calculationId));
   await database
     .delete(calculationArtifacts)
     .where(eq(calculationArtifacts.calculationId, input.calculationId));
@@ -349,6 +356,44 @@ async function replaceResult(
   });
   if (!updated) return { status: "not_found" };
   return { status: "updated", calculation: await hydrateOne(database, updated) };
+}
+
+async function scheduleCalculationPdfCleanup(
+  database: CalculationTransaction,
+  calculationId: string,
+  now: string
+): Promise<void> {
+  const pdfArtifacts = await database
+    .select({ mediaAssetId: calculationArtifacts.mediaAssetId })
+    .from(calculationArtifacts)
+    .where(
+      and(
+        eq(calculationArtifacts.calculationId, calculationId),
+        eq(calculationArtifacts.artifactType, "pdf")
+      )
+    );
+  const mediaAssetIds = [...new Set(pdfArtifacts.map((artifact) => artifact.mediaAssetId))];
+  if (mediaAssetIds.length === 0) return;
+
+  const occurredAt = new Date(now);
+  const availableAt = new Date(occurredAt.getTime() + 60 * 60 * 1_000);
+  await database
+    .insert(outboxEvents)
+    .values(
+      mediaAssetIds.map((mediaAssetId) => ({
+        eventType: CALCULATION_PDF_DELETE_REQUESTED_EVENT,
+        aggregateId: mediaAssetId,
+        payload: { mediaAssetId },
+        status: "pending",
+        attempts: 0,
+        availableAt,
+        createdAt: occurredAt,
+        updatedAt: occurredAt
+      }))
+    )
+    .onConflictDoNothing({
+      target: [outboxEvents.eventType, outboxEvents.aggregateId]
+    });
 }
 
 async function findExactCalculation(
