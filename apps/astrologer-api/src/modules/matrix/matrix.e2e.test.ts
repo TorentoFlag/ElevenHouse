@@ -20,7 +20,7 @@ import type {
   CalculationStore,
   ClientStore,
   MatrixNoteStore,
-  MatrixPdfJobStore,
+  CalculationPdfJobStore,
   MatrixReportStore,
   PasswordlessAuthUnitOfWork,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
@@ -30,6 +30,7 @@ import { ASTROLOGER_PROFILE_STORE } from "../astrologer-profile/astrologer-profi
 import { SystemClock } from "../clock/system-clock.service";
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import { CalculationsModule } from "../calculations/calculations.module";
+import { CALCULATION_PDF_JOB_STORE } from "../calculations/pdf/calculation-pdf.tokens";
 import { CLIENT_STORE } from "../clients/clients.tokens";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import {
@@ -49,7 +50,7 @@ import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { MatrixModule } from "./matrix.module";
 import { MATRIX_NOTE_STORE } from "./matrix-notes.tokens";
-import { MATRIX_PDF_JOB_STORE, MATRIX_REPORT_STORE } from "./matrix-report.tokens";
+import { MATRIX_REPORT_STORE } from "./matrix-report.tokens";
 
 const now = new Date("2026-07-14T00:00:00.000Z");
 const sessionCookieName = "elevenhouse_astrologer_session";
@@ -75,13 +76,13 @@ describe("Matrix HTTP routes", () => {
   let calculationStore: CalculationStore;
   let matrixNoteStore: MatrixNoteStore;
   let matrixReportStore: MatrixReportStore;
-  let matrixPdfJobStore: MatrixPdfJobStore;
+  let calculationPdfJobStore: CalculationPdfJobStore;
 
   beforeEach(async () => {
     calculationStore = createCalculationStore();
     matrixNoteStore = createMatrixNoteStore();
     matrixReportStore = createMatrixReportStore();
-    matrixPdfJobStore = createMatrixPdfJobStore();
+    calculationPdfJobStore = createCalculationPdfJobStore();
     const passwordlessAuth: PasswordlessAuthUnitOfWork = { transact: async () => raise() };
     const authSessionRevocation: AuthSessionRevocationUnitOfWork = {
       transact: async () => raise()
@@ -128,8 +129,8 @@ describe("Matrix HTTP routes", () => {
       .useValue(matrixNoteStore)
       .overrideProvider(MATRIX_REPORT_STORE)
       .useValue(matrixReportStore)
-      .overrideProvider(MATRIX_PDF_JOB_STORE)
-      .useValue(matrixPdfJobStore)
+      .overrideProvider(CALCULATION_PDF_JOB_STORE)
+      .useValue(calculationPdfJobStore)
       .overrideProvider(ASTROLOGER_PROFILE_STORE)
       .useValue(createProfileStore())
       .compile();
@@ -592,8 +593,8 @@ function createMatrixReportStore(): MatrixReportStore {
   };
 }
 
-function createMatrixPdfJobStore(): MatrixPdfJobStore {
-  let job: Awaited<ReturnType<MatrixPdfJobStore["findLatestByCalculation"]>> = null;
+function createCalculationPdfJobStore(): CalculationPdfJobStore {
+  let job: Awaited<ReturnType<CalculationPdfJobStore["findLatestByCalculation"]>> = null;
   return {
     findLatestByCalculation: vi.fn(async () => job),
     findById: vi.fn(async () => job),
@@ -603,14 +604,18 @@ function createMatrixPdfJobStore(): MatrixPdfJobStore {
         id: input.id,
         calculationId: input.calculationId,
         ownerUserId: input.ownerUserId,
-        reportId: input.reportId,
-        reportRevision: input.reportRevision,
+        module: input.module,
+        methodCode: input.methodCode,
         resultChecksum: input.resultChecksum,
         locale: input.locale,
+        sourceLocator: input.sourceLocator,
+        documentFingerprint: input.documentFingerprint,
         status: "queued",
         artifactId: input.artifactId,
         mediaAssetId: input.mediaAssetId,
+        failureCode: null,
         failureReason: null,
+        pageCount: null,
         createdAt: input.now,
         updatedAt: input.now
       };

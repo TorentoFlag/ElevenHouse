@@ -2,7 +2,6 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import {
   createDrizzleMatrixNoteStore,
-  createDrizzleMatrixPdfJobStore,
   createDrizzleMatrixReportStore
 } from "@elevenhouse/db/matrix";
 import { randomUUID } from "node:crypto";
@@ -17,17 +16,15 @@ import { IdentityModule } from "../identity/identity.module";
 import { MediaModule } from "../media/media.module";
 import { SecurityModule } from "../security/security.module";
 import { MatrixController } from "./matrix.controller";
+import { MatrixPdfController } from "./matrix-pdf.controller";
+import { MatrixPdfService } from "./matrix-pdf.service";
 import { MatrixNotesController } from "./matrix-notes.controller";
 import { MatrixNotesService } from "./matrix-notes.service";
 import { MATRIX_NOTE_STORE } from "./matrix-notes.tokens";
 import { MatrixService } from "./matrix.service";
 import { MatrixReportController } from "./matrix-report.controller";
 import { MatrixReportService } from "./matrix-report.service";
-import {
-  MATRIX_PDF_JOB_STORE,
-  MATRIX_REPORT_ID_GENERATOR,
-  MATRIX_REPORT_STORE
-} from "./matrix-report.tokens";
+import { MATRIX_REPORT_ID_GENERATOR, MATRIX_REPORT_STORE } from "./matrix-report.tokens";
 
 @Module({
   imports: [
@@ -42,11 +39,17 @@ import {
     IdentityModule,
     SecurityModule
   ],
-  controllers: [MatrixController, MatrixNotesController, MatrixReportController],
+  controllers: [
+    MatrixController,
+    MatrixNotesController,
+    MatrixReportController,
+    MatrixPdfController
+  ],
   providers: [
     MatrixService,
     MatrixNotesService,
     MatrixReportService,
+    MatrixPdfService,
     {
       provide: MATRIX_NOTE_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
@@ -57,12 +60,6 @@ import {
       provide: MATRIX_REPORT_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleMatrixReportStore(postgresRuntime.database),
-      inject: [PostgresRuntimeService]
-    },
-    {
-      provide: MATRIX_PDF_JOB_STORE,
-      useFactory: (postgresRuntime: PostgresRuntimeService) =>
-        createDrizzleMatrixPdfJobStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     },
     {

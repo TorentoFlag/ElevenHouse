@@ -46,32 +46,4 @@ export class MatrixReportController {
   ) {
     return this.reportService.generateAiDraft(calculationId, body, request);
   }
-
-  @Get("calculations/:calculationId/report/pdf")
-  latestPdf(
-    @Param("calculationId") calculationId: string,
-    @Req() request: AstrologerSessionRequest
-  ) {
-    return this.reportService.latestPdf(calculationId, request);
-  }
-
-  @Post("calculations/:calculationId/report/pdf")
-  @HttpCode(HttpStatus.ACCEPTED)
-  @RequireCsrf()
-  enqueuePdf(
-    @Param("calculationId") calculationId: string,
-    @Body() body: unknown,
-    @Req() request: AstrologerSessionRequest
-  ) {
-    return this.reportService.enqueuePdf(calculationId, body, request);
-  }
-
-  @Get("calculations/:calculationId/report/pdf/:jobId/download")
-  downloadPdf(
-    @Param("calculationId") calculationId: string,
-    @Param("jobId") jobId: string,
-    @Req() request: AstrologerSessionRequest
-  ) {
-    return this.reportService.downloadPdf(calculationId, jobId, request);
-  }
 }
