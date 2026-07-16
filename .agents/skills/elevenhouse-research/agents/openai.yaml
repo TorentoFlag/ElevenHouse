@@ -1,0 +1,4 @@
+interface:
+  display_name: "ElevenHouse Research"
+  short_description: "Research architecture and product decisions"
+  default_prompt: "Use $elevenhouse-research to research this ElevenHouse decision and recommend an evidence-backed direction."

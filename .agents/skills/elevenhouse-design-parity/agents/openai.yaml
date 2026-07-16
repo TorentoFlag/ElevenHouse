@@ -1,0 +1,4 @@
+interface:
+  display_name: "ElevenHouse Design Parity"
+  short_description: "Match production UI to visual references"
+  default_prompt: "Use $elevenhouse-design-parity to implement and verify this UI against ElevenHouseDesign."

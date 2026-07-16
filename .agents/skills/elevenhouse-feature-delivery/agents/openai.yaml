@@ -1,0 +1,4 @@
+interface:
+  display_name: "ElevenHouse Feature Delivery"
+  short_description: "Deliver full production feature contours"
+  default_prompt: "Use $elevenhouse-feature-delivery to implement this ElevenHouse feature end to end."

@@ -22,7 +22,7 @@
 - [x] (2026-07-16) Research and approved design recorded in `docs/superpowers/specs/2026-07-16-agent-operating-system-design.md`.
 - [x] (2026-07-16) Added and tested the deterministic documentation verifier; 5 fixture tests pass.
 - [x] (2026-07-16) Rewrote root routing and canonical agent operating model; `AGENTS.md` is 13.7 KiB.
-- [ ] Add research, feature-delivery and design-parity repo skills.
+- [x] (2026-07-16) Added research, feature-delivery and design-parity repo skills; deterministic discovery checks pass.
 - [ ] Strengthen design, frontend, testing and verification runbooks.
 - [ ] Correct known active-document drift.
 - [ ] Run complete documentation and repository-scoped verification.
@@ -30,6 +30,7 @@
 ## Surprises & Discoveries
 
 - The audit found no broken relative Markdown links before implementation.
+- The official skill `quick_validate.py` requires unavailable PyYAML; validation uses the dependency-free repository verifier. Subagent forward-testing is prohibited by current delegation policy.
 - `public-api` already contains `client-join` and `client-profile`, while active docs still call the client relationship contour missing.
 - Docker Compose already includes MinIO, while the local-services runbook says it includes only PostgreSQL and Redis.
 - `media-storage.md` is written as a future implementation plan despite the media schema, adapters, API routes and MinIO infrastructure already existing.
@@ -173,23 +174,23 @@ Make research and plan selection deterministic from risk/novelty and add definit
 - Skills use concise YAML `name` and `description` frontmatter.
 - Skills reference canonical docs rather than copying volatile architecture facts.
 
-- [ ] **Step 1: Apply skill-authoring guidance**
+- [x] **Step 1: Apply skill-authoring guidance**
 
 Read and follow the available `skill-creator` and `superpowers:writing-skills` instructions before creating skill files.
 
-- [ ] **Step 2: Create `elevenhouse-feature-delivery`**
+- [x] **Step 2: Create `elevenhouse-feature-delivery`**
 
 Trigger on non-trivial ElevenHouse feature implementation. Route the agent through intake, full-contour discovery, applicable research/design skills, a living plan, TDD, self-review and required evidence.
 
-- [ ] **Step 3: Create `elevenhouse-research`**
+- [x] **Step 3: Create `elevenhouse-research`**
 
 Trigger on novel/risky architecture and product-solution research. Require question, sources, findings, options, recommendation, rejected alternatives and decisions requiring the user.
 
-- [ ] **Step 4: Create `elevenhouse-design-parity`**
+- [x] **Step 4: Create `elevenhouse-design-parity`**
 
 Trigger on any visible UI implementation or review. Require exact reference/production route-state pairs, before/after screenshots, computed-style measurements, real network-backed E2E and documented intentional deviations.
 
-- [ ] **Step 5: Verify skill discovery shape**
+- [x] **Step 5: Verify skill discovery shape**
 
 Run:
 
