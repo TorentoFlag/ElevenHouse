@@ -3,8 +3,10 @@
 ## Public API
 
 `public-api` обслуживает высоконагруженные client-facing flows. В текущем коде
-реализованы health и identity/passwordless/session routes; booking, orders и
-payments остаются будущими модулями этой поверхности.
+реализованы health, identity/passwordless/session, direct-link client join,
+related-astrologer read и client birth-data routes. Booking, orders, payments,
+public profile read model и остальная часть client cabinet остаются будущими
+модулями этой поверхности.
 
 Ответственности:
 
@@ -27,6 +29,10 @@ POST /identity/passwordless/verify-code
 POST /identity/registration/passwordless/verify-code
 GET  /identity/me
 POST /identity/logout
+POST /client-join-intents
+GET  /me/astrologers
+GET  /me/birth-data
+PUT  /me/birth-data
 GET  /a/:handle
 POST /booking/intent
 POST /booking/:intentId/select-slot
@@ -48,6 +54,17 @@ public registration.
 behind a trusted reverse proxy must enable the explicit `PUBLIC_API_TRUST_PROXY`
 runtime setting so Express resolves proxy headers; controllers must not parse
 `X-Forwarded-For` directly.
+
+`POST /client-join-intents` resolves an active visible astrologer by exact
+public handle and returns a short-lived opaque join token plus the safe public
+identity required by the entry screen. Passwordless login/registration may
+consume that token to create or reactivate the explicit client-astrologer
+relationship. `GET /me/astrologers` lists only active explicit relationships;
+it cannot search, recommend or enumerate unrelated astrologers.
+
+`GET/PUT /me/birth-data` is client-role and owner scoped. It stores the client's
+own reusable birth-data record; sharing that record with an astrologer/order is
+a separate consent-bound workflow and is not implied by profile storage.
 
 ## Astrologer API
 

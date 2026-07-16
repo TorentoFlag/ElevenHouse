@@ -24,7 +24,7 @@
 - [x] (2026-07-16) Rewrote root routing and canonical agent operating model; `AGENTS.md` is 13.7 KiB.
 - [x] (2026-07-16) Added research, feature-delivery and design-parity repo skills; deterministic discovery checks pass.
 - [x] (2026-07-16) Strengthened design, frontend, testing and verification contracts with runtime and visual evidence gates.
-- [ ] Correct known active-document drift.
+- [x] (2026-07-16) Corrected client, media, MinIO and design-inventory drift; added ADR 0009 for design authority.
 - [ ] Run complete documentation and repository-scoped verification.
 
 ## Surprises & Discoveries
@@ -252,19 +252,19 @@ Require self-review for fallbacks, oversized files, missing edge states, stale d
 - Current-state claims must match discoverable code and configuration.
 - Future target architecture must be visibly separated from implemented baseline.
 
-- [ ] **Step 1: Correct public client-contour state**
+- [x] **Step 1: Correct public client-contour state**
 
 Record existing `client-join` and `client-profile` modules/contracts without overstating missing booking/orders/payment work.
 
-- [ ] **Step 2: Convert media storage to current/remaining state**
+- [x] **Step 2: Convert media storage to current/remaining state**
 
 Document implemented schema, adapters, S3-compatible storage, MinIO, API routes and current purposes; retain only genuine remaining work as gaps.
 
-- [ ] **Step 3: Correct local infrastructure statements**
+- [x] **Step 3: Correct local infrastructure statements**
 
 List PostgreSQL, Redis, MinIO and `minio-init` accurately while preserving the no-unrequested-process-management rule.
 
-- [ ] **Step 4: Refresh design inventory framing and statuses**
+- [x] **Step 4: Refresh design inventory framing and statuses**
 
 Remove stale “first implementation slice” guidance, update validation date, make its role a mapping/status inventory rather than product/visual authority, and correct facts verified from current code.
 

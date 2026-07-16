@@ -12,10 +12,10 @@ Accepted
 
 У ElevenHouse три поверхности, которые должны ощущаться целостно, но обслуживать разные workflow: client booking, astrologer CRM и admin operations. Собственная design system даёт контроль над tokens, primitives, layouts, forms, feedback states и domain-specific components.
 
-`ElevenHouseDesign/` является каноническим сверстанным дизайном для экранов,
-UX-flow, терминологии и видимого функционального scope. Его нужно реализовывать
-через production design system и приложения, а не копировать как component
-architecture.
+`ElevenHouseDesign/` является каноническим visual contract для соответствующего
+screen/state. Product behavior, terminology with business meaning и functional
+scope определяются product/domain sources. Подробное разделение authority
+зафиксировано в ADR 0009.
 
 ## Consequences
 

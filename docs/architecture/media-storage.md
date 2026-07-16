@@ -2,199 +2,135 @@
 
 ## Goal
 
-Add a production media contour for product covers, profile avatars/covers, public page images, content media, session materials and future recordings without coupling business modules to a specific storage vendor.
+Keep media lifecycle, ownership, purpose validation and object storage outside
+business modules while allowing Products, AstrologerProfile, Verification and
+generated calculation artifacts to reference safe media assets.
 
-## Current State
+## Implemented baseline
 
-- Product and astrologer profile records already store `coverMediaId` and profile records also store `avatarMediaId`.
-- These fields are plain text values with no media table, no owner validation, no upload lifecycle and no renderable URL contract.
-- Product constructor and profile settings show media controls, but they do not upload files.
-- `ElevenHouseDesign/app/image-slot.js` is a visual/UX reference only. It must not become production architecture.
+The current repository implements:
 
-## Target Architecture
+- shared validation and contracts for media purpose, status, visibility, MIME,
+  upload limits, upload intents, completion and safe responses;
+- domain `MediaAssetStore` and `ObjectStoragePort` plus upload-intent/completion
+  use cases;
+- Drizzle `media_assets`, `media_variants`, constraints, relations and adapter;
+- S3-compatible presigned PUT/object-head adapter in `astrologer-api`;
+- authenticated CSRF-protected `POST /media/upload-intents` and
+  `POST /media/:mediaId/complete` routes;
+- local MinIO public/private buckets through Docker Compose and `minio-init`;
+- frontend direct-upload API flow in `astrologer-web`;
+- Product cover upload UI and owner/purpose/ready validation;
+- AstrologerProfile avatar/cover owner/purpose/ready validation and explicit
+  read-model integrity issues;
+- private Verification document purposes;
+- private calculation PDF assets, lifecycle and cleanup through the generic
+  calculation-PDF contour.
 
-Media is a separate cross-cutting domain contour. Business modules reference media by id and validate ownership/purpose through media domain use cases.
+Product/profile records store media IDs, while API read models resolve safe
+media responses. Business modules do not store provider credentials, bucket
+policies or presigned upload logic.
+
+## Ownership and dependency direction
 
 ```text
 astrologer-web
-  -> astrologer-api /media/upload-intents
-  -> S3-compatible object storage direct upload
-  -> astrologer-api /media/:mediaId/complete
-  -> media domain/store
-  -> image processing and variants
-  -> products/profile/public page reference media ids
+  -> astrologer-api media feature
+  -> media domain use cases and ports
+  -> packages/db media adapter
+  -> S3-compatible ObjectStoragePort
 ```
 
-## Local And Production Storage
+Business modules validate a referenced asset by owner, expected purpose and
+ready status before saving its ID. They consume media ports/read models; they do
+not call provider SDKs directly.
 
-- Local development uses MinIO because it is S3-compatible and gives close parity with production object storage.
-- Production uses an S3-compatible provider: AWS S3, Yandex Object Storage, Selectel, Cloudflare R2 or another equivalent.
-- Application code depends on `ObjectStoragePort`, not on a provider SDK directly.
-- MinIO is infrastructure, not a product fallback. Tests should use fake storage for unit/e2e and MinIO for opt-in integration tests.
+## Purposes and visibility
 
-## Upload Lifecycle
+Browser-uploadable purposes:
 
-1. The frontend validates obvious client-side constraints: file selected, accepted MIME, size hint.
-2. `astrologer-web` calls `POST /media/upload-intents` with `purpose`, `fileName`, `mimeType` and `sizeBytes`.
-3. `astrologer-api` authenticates the astrologer, validates purpose/limits and creates `media_asset(status="uploading")`.
-4. Backend returns a short-lived presigned upload target and the media asset id.
-5. Browser uploads the file directly to S3/MinIO.
-6. Frontend calls `POST /media/:mediaId/complete`.
-7. Backend verifies object existence, size and content type, then marks the asset `processing` or `ready`.
-8. Image processing creates variants and strips metadata.
-9. Business entities save only `coverMediaId`, `avatarMediaId` or other media references after the asset is owned by the same user and has the expected purpose.
+- `product_cover` — public image;
+- `profile_avatar` — public image;
+- `profile_cover` — public image;
+- `verification_identity_document` — private image/PDF;
+- `verification_qualification_document` — private image/PDF.
 
-## Media Purposes
+`calculation_report_pdf` is private and worker-created; it is deliberately not
+a browser upload purpose.
 
-Initial purposes:
+Each purpose owns exact MIME/size/visibility rules in
+`packages/validation/src/media`. Do not duplicate those limits in apps.
 
-- `product_cover`
-- `profile_avatar`
-- `profile_cover`
+## Upload lifecycle
 
-Future purposes:
+1. Frontend validates the selected file through shared media schemas.
+2. `POST /media/upload-intents` authenticates the astrologer, validates purpose
+   and limits, creates an owner-scoped `uploading` asset and returns a
+   short-lived presigned PUT target.
+3. Browser uploads directly to the S3-compatible store with returned headers.
+4. `POST /media/:mediaId/complete` verifies ownership and object existence/
+   metadata, then transitions the asset to ready and returns a safe response.
+5. A business mutation accepts the media ID only after owner/purpose/ready
+   validation.
 
-- `public_page_image`
-- `content_image`
-- `content_attachment`
-- `session_material`
-- `session_recording`
+Frontend never decides bucket, storage key, visibility or asset ownership.
 
-Each purpose owns limits for file size, dimensions, allowed MIME types, public/private visibility and variant recipe.
+## Local and production storage
 
-## Data Model
+- Local development uses MinIO with `elevenhouse-local-media` and
+  `elevenhouse-local-private`.
+- Production uses an S3-compatible provider configured behind
+  `ObjectStoragePort`.
+- Public URLs are resolved through backend configuration; private artifacts use
+  short-lived owner-scoped presigned download URLs.
+- MinIO is local infrastructure, not a product fallback.
 
-`media_assets`:
+## API boundaries
 
-- `id`
-- `owner_user_id`
-- `purpose`
-- `status`: `uploading | processing | ready | failed | deleted`
-- `visibility`: `public | private`
-- `storage_bucket`
-- `storage_key`
-- `original_file_name`
-- `mime_type`
-- `size_bytes`
-- `checksum_sha256`
-- `width`
-- `height`
-- `alt_text`
-- `failure_reason`
-- `created_at`
-- `updated_at`
+Implemented `astrologer-api` commands:
 
-`media_variants`:
+- `POST /media/upload-intents`;
+- `POST /media/:mediaId/complete`.
 
-- `id`
-- `media_asset_id`
-- `variant`
-- `storage_bucket`
-- `storage_key`
-- `mime_type`
-- `width`
-- `height`
-- `size_bytes`
-- `public_url`
-- `created_at`
+Business read models embed safe media data when needed. There is no generic
+public route for arbitrary asset IDs, and `public-api` must not expose private
+verification or calculation assets.
 
-## API Boundaries
+## Product integration
 
-`astrologer-api` owns authenticated media management for astrologer workspace uploads:
+Products reject `coverMediaId` when the asset is missing, belongs to another
+owner, has another purpose or is not ready. Product responses include
+`coverMediaId` and resolved `coverMedia` when valid.
 
-- `POST /media/upload-intents`
-- `POST /media/:mediaId/complete`
-- `GET /media/:mediaId`
-- `DELETE /media/:mediaId`
+AstrologerProfile applies the same checks for avatar/cover. Reads surface typed
+integrity issues when a stored reference cannot resolve instead of guessing a
+replacement image or silently hiding data corruption.
 
-`public-api` will later serve public read models that embed public media variants. It must not expose arbitrary private media ids.
+Verification accepts only owner-scoped private identity/qualification assets.
+Calculation PDF creation is worker-owned and follows ADR 0008.
 
-## Product Integration
+## Remaining explicit gaps
 
-Product create/update must reject a `coverMediaId` when:
+The following are not implied by the existing upload baseline and require their
+own feature changes:
 
-- media does not exist;
-- media is not owned by the current astrologer;
-- media purpose is not `product_cover`;
-- media is deleted or failed.
+- asynchronous image processing, metadata stripping and generated variants;
+- generic replace/delete lifecycle with reference checks and retention rules;
+- public-page/content/session/recording purposes and access policies;
+- profile avatar/cover upload UX completion where a surface still lacks it;
+- CDN/image transformation policy beyond current public URL resolution;
+- malware scanning and recording-specific compliance/retention.
 
-Product responses should include both:
-
-- `coverMediaId` for write compatibility;
-- `coverMedia` for UI rendering when present.
-
-## Frontend UX
-
-The product constructor cover dropzone should support:
-
-- click to browse;
-- drag and drop;
-- local preview before upload completion;
-- upload progress;
-- upload error and retry;
-- remove/replace;
-- disabled save/publish while upload is in flight;
-- preview card rendering using the uploaded media variant.
-
-The reusable frontend split should be:
-
-- `features/media/api/*` for media API calls;
-- `features/media/model/*` for upload state and validation;
-- `components/MediaDropzone` only if it stays generic and business-agnostic;
-- product-specific wiring remains inside ProductConstructor sections.
-
-## Implementation Plan
-
-### Phase 1: Contracts And Domain
-
-1. Add shared validation values for media purposes, status, visibility and upload limits.
-2. Add media contracts for upload intent, complete and response.
-3. Add domain media types, store port and storage port.
-4. Add use cases for creating upload intent, completing upload and resolving media for business modules.
-
-### Phase 2: Database
-
-1. Add `media_assets` and `media_variants` schema.
-2. Add Drizzle store adapter.
-3. Rebuild the current baseline migration according to project DB rules.
-4. Add schema/store tests.
-
-### Phase 3: Storage Infrastructure
-
-1. Add MinIO to `docker-compose.yml`.
-2. Add `.env.example` media storage variables.
-3. Add S3-compatible object storage adapter.
-4. Add bucket CORS setup documentation and optional MinIO init container.
-
-### Phase 4: Astrologer API
-
-1. Add Nest `media` feature module.
-2. Add authenticated, CSRF-protected upload intent and complete routes.
-3. Wire media store and object storage adapter in the module.
-4. Add e2e tests with fake object storage.
-
-### Phase 5: Product Guardrails
-
-1. Update products service to validate `coverMediaId`.
-2. Embed `coverMedia` in product responses.
-3. Update products tests and contracts.
-
-### Phase 6: Frontend
-
-1. Add media API calls and upload state machine.
-2. Add media dropzone UI with drag/drop, preview, progress, error and remove.
-3. Integrate product constructor cover upload.
-4. Render uploaded cover in constructor preview and product cards.
-5. Reuse the same contour for profile avatar/cover after product cover is stable.
+Do not fake these capabilities with a local URL, placeholder asset or provider
+fallback. Add purpose-specific contracts, domain behavior and integration tests
+when each contour is implemented.
 
 ## Verification
 
-- Contract and validation tests.
-- Domain use-case tests with fake store/storage.
-- DB schema and adapter tests.
-- Astrologer API e2e tests with fake object storage.
-- Frontend model/component tests for upload states.
-- Browser visual QA for product constructor cover upload.
-- `pnpm --filter @elevenhouse/design-system build` only if UI primitives change.
-- `pnpm --filter @elevenhouse/astrologer-web typecheck && pnpm --filter @elevenhouse/astrologer-web build`.
-- Relevant API package typecheck/build/tests.
+- validation/contract and domain use-case tests;
+- schema/adapter integration tests for constraints and ownership;
+- API service/e2e tests with controlled object-storage adapter;
+- real MinIO integration when storage semantics are changed;
+- frontend upload state tests and real browser upload flow;
+- owner/purpose/visibility negative cases;
+- Design Parity for every visible upload control/state.

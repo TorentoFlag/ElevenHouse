@@ -1,20 +1,17 @@
 # Design Implementation Inventory
 
-This inventory is the primary source of truth for mapping the implemented
-`ElevenHouseDesign/` design project to production surfaces, domain ownership,
-API/contracts readiness, frontend readiness and design-system work.
+This inventory maps `ElevenHouseDesign/` design areas to production surfaces,
+domain ownership, API/contracts readiness, frontend readiness and design-system
+work. It is a current status/mapping document, not a product-priority roadmap.
 
-`ElevenHouseDesign/` is not just visual inspiration. It is the canonical
-implemented product design for screens, UX flows, terminology and visible
-functional scope. At the same time, its JSX file structure, UMD script loading,
-`window.*` globals, `localStorage` persistence, mock datasets, demo switcher and
-one-file component boundaries are prototype architecture and must not be copied
-into production. Production implementation must rebuild these flows through the
-documented apps, packages, contracts, domain use cases and design-system
-primitives.
+The exact reference screen/state is the visual contract for layout, controls,
+spacing, typography, colors, icons and responsive presentation. Product behavior
+comes from user/product/ADR/contracts/domain truth. JSX structure, UMD loading,
+`window.*`, localStorage, mock data, demo routing and one-file prototype
+boundaries are neither business rules nor production architecture.
 
-When other project documentation describes product surfaces or feature scope, it
-must stay consistent with this inventory and with the current production code.
+Current-state claims in this inventory must stay aligned with production code.
+Feature priority stays in user decisions and product planning, not this file.
 
 ## Status Legend
 
@@ -28,7 +25,7 @@ must stay consistent with this inventory and with the current production code.
 
 ## Validated Design Project Facts
 
-Validated against the repository on 2026-07-03.
+Validated against the repository on 2026-07-16.
 
 - `ElevenHouseDesign/ElevenHouse.html` loads a single browser prototype with
   React UMD, Babel-in-browser, Three.js, many JSX files and a root demo router.
@@ -54,10 +51,11 @@ Validated against the repository on 2026-07-03.
 
 ### Backend
 
-`apps/public-api` currently exposes health and client identity/passwordless
-session routes. Its `identity` module imports database, redis and security
-modules for the identity workflow. Booking, orders, payments, public page reads
-and client cabinet APIs are missing.
+`apps/public-api` currently exposes health, client identity/passwordless
+sessions, direct-link join intents, related-astrologer reads and client birth
+data. It has `client-join` and `client-profile` feature modules alongside
+identity/database/redis/security. Booking, orders, payments, full public profile
+reads and the rest of the client cabinet remain missing.
 
 `apps/astrologer-api` currently has these feature modules:
 
@@ -88,13 +86,15 @@ workflows still require dedicated admin feature modules, authorization,
 permissions and audit logging, and must not be added to `public-api` or
 `astrologer-api`.
 
-Shared contracts exist for `identity`, `products`, `dictionary`, `ai-drafts`,
-`astrologer-profile`, `media`, `platform-billing`, `verification` and `health`.
+Shared contracts exist for `identity`, `clients`, `products`, `dictionary`,
+`ai-drafts`, `astrologer-profile`, `media`, `platform-billing`, `verification`,
+calculations/numerology/matrix and `health`.
 
 Domain and DB layers currently cover identity/accounts/roles/auth sessions,
-products and localized platform product templates, dictionary, media assets,
-verification applications/documents, outbox,
-auth-code delivery and `AstrologerProfile`. The `AstrologerProfile` API surface
+client profiles/relationships/join intents/birth data, products and localized
+platform product templates, dictionary, media assets, verification
+applications/documents, calculations/numerology/matrix, outbox, auth-code
+delivery and `AstrologerProfile`. The `AstrologerProfile` API surface
 covers current profile read/upsert and explicit media integrity issues on reads;
 public-page read/edit, notification preferences, integrations and payouts remain
 separate missing contours. Verification moderator decisions remain a future
@@ -121,7 +121,9 @@ separate missing contours. Verification moderator decisions remain a future
 
 - Public home placeholder.
 - Client auth page.
-- Authenticated `/me` placeholder.
+- `/a/:handle` direct-link entry backed by a server-created join intent.
+- Authenticated `/me` foundation backed by related-astrologer and client
+  birth-data APIs; the complete cabinet remains missing.
 
 `apps/admin-web` currently has only a shell placeholder.
 
@@ -167,7 +169,7 @@ production apps. Page-specific business composition stays in the owning app.
 | Personal public page editor/preview | `page.jsx`, `page-data.jsx`, `landing-sales.jsx`                                                                                                                                                                                  | editor in `astrologer-web`; public rendering in `client-web`                           | `AstrologerProfile`, `PublicPage`, `Products`, `Availability`, `Reviews`, `LeadMagnets`, `Content`, `Promotions`                                                                               | profile/products partial; public page, availability, reviews and lead magnets missing                                                                                                                                                         | missing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Public page blocks, block ordering controls, preview frame, story/editor primitives                                                                       | Public page reads belong to `public-api`; astrologer editing belongs to `astrologer-api`.                                                                                                                                                                                       |
 | Chart engine                        | `engine.jsx`, `engine-data.jsx`, `engine-wheel.jsx`, `engine-modes.jsx`, `engine-tables.jsx`, `wheel.jsx`, `astro-store.jsx`                                                                                                      | future `/chart-engine` in `astrologer-web`                                             | `BirthData`, `Charts`, `ChartWorker`, `Ai`                                                                                                                                                     | missing except generic AI                                                                                                                                                                                                                     | missing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Chart wheel/canvas, subject picker, tables, interpretation panels                                                                                         | Heavy calculations must go through chart domain/worker. Design helpers are not production-grade chart services.                                                                                                                                                                 |
 | Numerology                          | `numerology.jsx`, `numerology-data.jsx`, `numerology-extra.jsx`                                                                                                                                                                   | `/numerology` in `astrologer-web`                                                      | `Calculations`, `Numerology`, `Clients`, `AstrologerProfile`, `Ai`, `Media`                                                                                                                    | Canonical Pythagorean RU preview/persist/recalculate, checksum-safe AI interpretation and generic PDF job contracts; complete typed individual, period and compatibility results                 | Phases 1–4 plus checksum-bound RU/EN PDF export are implemented for saved individual and compatibility results: the toolbar preserves the canonical layout, disables unsaved editor state, polls async jobs and exposes private download/retry states. AI receives anonymous deterministic context only; public interpretation responses expose only id, status and text. Live ready/download evidence still requires the current API and worker processes to be loaded. | Canonical toolbar, three-column result, compatibility matrices, year picker, server-provided period values, full presentation overlay, shared interpretation editor with AI draft action | Client selection and year controls use read-only preview. One canonical Pythagorean engine remains active without method/result version history or frontend arithmetic. Lines remain raw counts. AI cannot change deterministic values. Future methods use separate engines behind the registry and typed contracts. |
-| Destiny matrix                      | `matrix.jsx`, `matrix-data.jsx`, `matrix-graph.jsx`, `matrix-modes.jsx`                                                                                                                                                           | `/matrix` in `astrologer-web`                                                          | `Calculations`, `Matrix`, `Clients`, `AstrologerProfile`, `Ai`, `Media`                                                                                                                        | complete typed preview/persist/projection, private-note CRUD, revisioned RU/EN interpretation catalog, editable AI report and idempotent private PDF workflow                                                                                                                                              | implemented in code; automated frontend verification passed, final live visual/browser evidence pending the worktree frontend being served                                                                                                                             | Matrix graph, section navigation, energy table, year selector, notes/report panels                                                                        | CRM-only `ladini_22`; note/report staleness is checksum-derived, all notes remain astrologer-private, chat is a disabled no-network placeholder, and there is no publication or consultation state; see the production design spec.                                                                                                                                              |
+| Destiny matrix                      | `matrix.jsx`, `matrix-data.jsx`, `matrix-graph.jsx`, `matrix-modes.jsx`                                                                                                                                                           | `/matrix` in `astrologer-web`                                                          | `Calculations`, `Matrix`, `Clients`, `AstrologerProfile`, `Ai`, `Media`                                                                                                                        | complete typed preview/persist/projection, private-note CRUD, revisioned RU/EN interpretation catalog, editable AI report and idempotent private PDF workflow                                                                                                                                              | implemented in code; automated frontend verification passed, final live visual/browser evidence pending the worktree frontend being served                                                                                                                             | Matrix graph, section navigation, energy table, year selector, notes/report panels                                                                        | CRM-only `ladini_22`; note/report staleness is checksum-derived and all notes remain astrologer-private. Chat/publication/consultation are outside the approved current Matrix behavior rather than simulated workflows; see the production design spec.                                                                                                                                              |
 | Human Design                        | `hd.jsx`, `hd-data.jsx`, `hd-graph.jsx`, `hd-modes.jsx`                                                                                                                                                                           | future `/human-design` in `astrologer-web`                                             | `Charts` or dedicated `HumanDesign`, `BirthData`, `Ai`                                                                                                                                         | missing                                                                                                                                                                                                                                       | missing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Bodygraph, centers/channels tables, comparison panels                                                                                                     | Requires authoritative calculation rules and test fixtures before product integration.                                                                                                                                                                                          |
 | Astro calendar                      | `astro-calendar.jsx`, `astro-calendar-data.jsx`                                                                                                                                                                                   | future `/astro-calendar` in `astrologer-web`                                           | `Charts`, `AstroCalendar`, `Notifications`, `Automation`, `Clients`                                                                                                                            | missing                                                                                                                                                                                                                                       | missing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Astro calendar views, event cards, trigger controls                                                                                                       | Can become a read model from chart/calendar calculations plus automation triggers.                                                                                                                                                                                              |
 | Journal                             | `journal.jsx`, `journal-data.jsx`                                                                                                                                                                                                 | future `/journal` in `astrologer-web`; client-visible subset in `client-web`           | `Journal`, `ClientProfile`, `BirthData`, `Charts`, `Subscriptions`, `Consent`                                                                                                                  | missing                                                                                                                                                                                                                                       | missing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Timeline, diary prompts, shared notes                                                                                                                     | Separate astrologer private notes from client-visible shared journal entries.                                                                                                                                                                                                   |
@@ -202,13 +204,13 @@ not to `astrologer-web` or `astrologer-api`.
 
 | Design area                         | Design files                                                                               | Production surface                                            | Domain ownership                                                                                                                                         | API/contracts status                                      | Frontend status                                | Notes                                                                                                                                                                                               |
 | ----------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public astrologer page              | `page.jsx`, `page-data.jsx`, `landing-sales.jsx`                                           | `client-web` public direct-link routes backed by `public-api` | `AstrologerProfile`, `PublicPage`, `Products`, `Availability`, `Reviews`, `LeadMagnets`, `Content`, `Promotions`                                         | profile foundation partial; public read contracts missing | missing                                        | Public reads must use separate public contracts. Direct-link pages must not become SEO discovery or a public catalog.                                                                               |
+| Public astrologer page              | `page.jsx`, `page-data.jsx`, `landing-sales.jsx`                                           | `client-web` public direct-link routes backed by `public-api` | `AstrologerProfile`, `PublicPage`, `Products`, `Availability`, `Reviews`, `LeadMagnets`, `Content`, `Promotions`                                         | join intent/public identity partial; full public read contracts missing | direct-link entry foundation only              | Current `/a/:handle` resolves a join intent and safe public identity. Full page/products/availability reads remain missing; the route must never become discovery or a public catalog.                 |
 | Booking and checkout entry          | `page.jsx`, `client.jsx`, `calendar-panels.jsx`, screenshots `*-book*`, `*-chk*`, `*-pay*` | `client-web` booking/checkout flow with `public-api`          | `Booking`, `Availability`, `Orders`, `Payments`, `Products`, `ClientProfile`                                                                             | missing except public identity                            | missing                                        | Requires slot holds, idempotent order/payment commands, explicit timezone display and failure/expiry handling.                                                                                      |
-| Client registration during booking  | `app.jsx`, `client.jsx` (`ClientRegister`)                                                 | `client-web` + `public-api`                                   | `Identity`, `ClientProfile`, `Booking`                                                                                                                   | public identity ready; booking/client profile missing     | auth page exists; booking registration missing | Registration must be explicit client-only and direct-link scoped.                                                                                                                                   |
-| Client cabinet                      | `client.jsx`, `client-data.jsx`                                                            | authenticated `client-web` routes                             | `ClientProfile`, `ClientAstrologerRelationship`, `Bookings`, `Orders`, `Sessions`, `Materials`, `Subscriptions`, `BirthData`, `Journal`, `Notifications` | missing                                                   | `/me` placeholder only                         | The design's "all astrologers" selector may show only astrologers already connected through direct links, purchases, bookings, lead magnets or manual relationship; it must never become discovery. |
+| Client registration during booking  | `app.jsx`, `client.jsx` (`ClientRegister`)                                                 | `client-web` + `public-api`                                   | `Identity`, `ClientProfile`, `Booking`                                                                                                                   | public identity + direct-link relationship ready; booking missing | auth consumes join token; booking registration missing | Registration is explicit client-only and direct-link scoped. Booking context remains a separate missing contour.                                                                                    |
+| Client cabinet                      | `client.jsx`, `client-data.jsx`                                                            | authenticated `client-web` routes                             | `ClientProfile`, `ClientAstrologerRelationship`, `Bookings`, `Orders`, `Sessions`, `Materials`, `Subscriptions`, `BirthData`, `Journal`, `Notifications` | related astrologers and own birth data ready; remaining modules missing | `/me` foundation only                          | The current page reads explicit relationships and owner-scoped birth data. Full cabinet sections remain missing; no discovery/search/recommendations.                                                |
 | Client sessions and materials       | `client.jsx`, `session-call.jsx`                                                           | `client-web` authenticated session/material routes            | `Sessions`, `Bookings`, `Orders`, `Recordings`, `Materials`, `Media`, `Consent`                                                                          | missing                                                   | missing                                        | Recording playback and downloadable materials require consent, retention and access-control rules.                                                                                                  |
 | Client feed and subscriptions       | `client.jsx`, `client-data.jsx`, `content-data.jsx` where client-visible                   | `client-web` authenticated feed/subscription routes           | `Content`, `Subscriptions`, `Orders`, `Payments`, `Notifications`                                                                                        | missing                                                   | missing                                        | Feed must be scoped to astrologers the client already follows/has relationships with.                                                                                                               |
-| Client birth data, charts and diary | `client.jsx`, `client-data.jsx`, `journal.jsx` where client-visible                        | `client-web` authenticated personal data/chart/journal routes | `BirthData`, `Charts`, `Journal`, `Consent`, `ClientProfile`                                                                                             | missing                                                   | missing                                        | Birth data sharing is consent-bound per order/relationship.                                                                                                                                         |
+| Client birth data, charts and diary | `client.jsx`, `client-data.jsx`, `journal.jsx` where client-visible                        | `client-web` authenticated personal data/chart/journal routes | `BirthData`, `Charts`, `Journal`, `Consent`, `ClientProfile`                                                                                             | own client birth-data read/upsert ready; sharing/charts/journal missing | basic birth-data form only                     | Profile storage does not imply sharing. Birth data sharing remains consent-bound per order/relationship.                                                                                            |
 | Client notifications and disputes   | `client.jsx`, `client-data.jsx`, admin dispute screens for operator side                   | `client-web` plus future support/admin workflows              | `Notifications`, `Disputes`, `Payments`, `Orders`, `AuditLog`                                                                                            | missing                                                   | missing                                        | Client dispute creation must be public/client-side; resolution belongs to `admin-api`.                                                                                                              |
 
 ## Admin Surface Mapping
@@ -264,78 +266,13 @@ Do not extract components that encode unresolved business state transitions. For
 example, booking cancellation, payout request and moderation actions need domain
 use cases before shared UI should imply behavior.
 
-## Recommended Integration Sequence
+## Using this inventory
 
-1. **Products/Product Constructor**
-   - Backend/contracts: existing `Products` contract is ready for most core
-     fields.
-   - Frontend: complete the constructor mapped to `CreateProductRequest` and
-     `UpdateProductRequest`.
-   - Design system: continue using extracted selectable tiles, number stepper
-     and icon picker; add form block/list/modifier primitives only when they are
-     reusable.
-   - Remaining explicit gap: media upload/storage, generated artifacts and real
-     product analytics.
+For a task, select the exact design row, verify its status against current code,
+then use product/architecture sources to define behavior and the reference
+screen/state to define visual acceptance. Do not infer priority from table order
+or use a `partial` frontend to simulate a `missing` backend workflow.
 
-2. **Reference/Dictionary Refinement**
-   - Backend/contracts: ready.
-   - Frontend: refine visual parity and editor ergonomics; keep AI draft flow
-     provider-neutral.
-   - Design system: long-form editor and source/status filter patterns if
-     reusable.
-
-3. **Astrologer Profile, Public Page and Onboarding Foundation**
-   - Continue hardening profile-backed settings and shell integration on top of
-     the existing `AstrologerProfile` DB/API wiring and read-model integrity
-     issue contracts.
-   - Add `PublicPage` editing contracts separately from public read contracts.
-   - Keep payout, verification, plan and schedule steps behind their own domain
-     modules rather than a single generic onboarding blob.
-
-4. **Availability, Calendar, Booking and Sessions**
-   - Implement timezone-aware availability first.
-   - Add slot holds, booking/session read models and idempotent booking/order
-     commands.
-   - Booking/order/payment commands must require idempotency where applicable.
-
-5. **Client Cabinet**
-   - Implement client profile, relationships to astrologers, orders/bookings,
-     materials and consent-aware birth data.
-   - Preserve direct-link relationship boundaries. Multiple astrologers in the
-     client cabinet are allowed only when the client already has explicit
-     relationships with them.
-
-6. **Finance/Wallet and Analytics**
-   - Implement ledger/payment read models before finance UI.
-   - Analytics screens should read backend aggregates, not compute business
-     metrics from frontend mock data.
-
-7. **Charts and Specialized Calculation Surfaces**
-   - Define calculation ports, worker contracts and test fixtures before porting
-     chart, numerology, matrix or human-design screens.
-
-8. **Automation, Content, Messaging and Notifications**
-   - Build on domain events, outbox/jobs and provider adapters.
-   - Avoid browser-local automation execution.
-
-9. **Admin Surface**
-   - Implement admin/moderator/super-admin workflows only inside `admin-api`
-     feature modules after auth/permissions and audit boundaries are defined.
-   - Route internal actions through domain use cases and audit logs.
-
-## First Implementation Slice Candidate
-
-The safest first code slice remains `Products/Product Constructor` because it
-has the highest overlap between the design and existing production backend:
-
-- Existing API supports product CRUD/status transitions/duplicate and localized
-  platform-template draft creation.
-- Existing shared contract already models product type, delivery formats,
-  execution mode, payment model, participant mode, required data, methods,
-  access grants, included items and modifiers.
-- Existing frontend already has product list, summary, create/update mutations
-  and template-to-local-draft plus draft-to-contract mapping in progress.
-
-The implementation should not copy `ProductConstructor` directly. It should
-rebuild the interaction with production React components, shared contracts,
-React Query mutations and design-system primitives.
+When implementation changes readiness, update only the affected current-state
+cells and evidence notes. Product sequencing belongs in an approved roadmap or
+user decision; durable architecture belongs in architecture docs/ADR.

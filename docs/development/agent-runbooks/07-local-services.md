@@ -50,13 +50,17 @@ Use `/ready` for `notification-worker`; `/health` is not its readiness endpoint.
 
 ## Infrastructure
 
-Docker compose in this repo provides only PostgreSQL and Redis:
+Docker Compose в этом repo определяет PostgreSQL, Redis, MinIO и one-shot
+`minio-init`, который создаёт public/private local buckets и выставляет их
+policy:
 
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres redis minio minio-init
 ```
 
 Run this only when the user explicitly asked to start infrastructure or services.
+Для существующей infrastructure используй read-only `docker compose ps` и
+health/readiness checks; не перезапускай её ради проверки.
 
 ## Start Commands
 

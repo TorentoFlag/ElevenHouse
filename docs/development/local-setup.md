@@ -28,6 +28,11 @@
 - MinIO S3 API: `localhost:9000`
 - MinIO console: `http://localhost:9001`
 - Local media bucket: `elevenhouse-local-media`
+- Local private bucket: `elevenhouse-local-private`
+
+`minio-init` — one-shot setup service: создаёт оба bucket, разрешает anonymous
+download только для `elevenhouse-local-media` и сохраняет private policy для
+`elevenhouse-local-private`.
 
 Переменные окружения для локального запуска описаны в `.env.example`.
 
