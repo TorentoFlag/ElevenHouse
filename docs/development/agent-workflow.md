@@ -1,60 +1,159 @@
 # Agent Workflow
 
-Этот документ дополняет `AGENTS.md` техническими правилами параллельной работы.
-
-Операционные процедуры для повторяемых задач лежат в
-`docs/development/agent-runbooks/`. Для любой нетривиальной задачи агент сначала
-проходит `agent-runbooks/00-task-intake.md`, затем выбирает профильный ранбук и
-перед финальным ответом проходит `agent-runbooks/08-verification-and-git.md`.
+Этот документ определяет стандартный end-to-end pipeline нетривиальной работы в
+ElevenHouse. Цель — дать агенту автономию в техническом исполнении при явных
+product, architecture, security и external-authority границах.
 
 ## Task Intake Output
 
-Перед изменениями зафиксируй рабочую рамку:
+До планирования зафиксируй:
 
-- Outcome
-- In scope
-- Out of scope
-- Source of truth
-- Owned paths
-- Risks and invariants
-- Verification
-- External authority / destructive actions
+- Outcome и observable definition of done.
+- In scope и out of scope.
+- Product, architecture, visual и implemented-state sources of truth.
+- Owned paths и замеченные unowned changes.
+- Risks, invariants, security/data/payment/consent impact.
+- Required technical/product research.
+- Current runtime/service state и доступная browser surface.
+- Verification matrix: automated, integration, runtime E2E, design parity.
+- External authority и destructive actions.
 
-Команды бери из `commands.md`, уровни доказательств — из
-`testing-strategy.md`.
+Точные команды бери из `commands.md`, research contract — из
+`research-strategy.md`, evidence levels — из `testing-strategy.md`.
+
+## Autonomous Feature Pipeline
+
+### 1. Establish evidence
+
+Проверь `git status`, релевантный current code, recent history, canonical docs и
+реальное состояние сервисов read-only командами. Не исходи из плана или memory,
+если факт легко проверить в checkout/runtime.
+
+### 2. Trace the complete contour
+
+До решения перечисли весь затронутый путь:
+
+```text
+user route/state
+  -> frontend composition and feature model
+  -> shared/generated contract
+  -> owning API module
+  -> domain use case and ports
+  -> DB adapter/schema/transaction
+  -> events/jobs/providers
+  -> security/config/observability
+  -> tests/deploy/operations
+```
+
+Прочитай существующие sibling implementations и reusable primitives. Не
+создавай второй parallel pattern без доказанной необходимости.
+
+### 3. Research unknowns
+
+Новая или risky architecture требует current technical research. Неоднозначный
+product workflow может требовать product research. Зафиксируй question,
+sources, sourced facts, inference, alternatives, recommendation и conflicts с
+ADR/product scope. Следуй `research-strategy.md`.
+
+### 4. Decide at the right level
+
+Самостоятельно выбирай routine implementation details внутри принятых
+boundaries. Пользователю выноси только решения, которые меняют product meaning,
+accepted architecture, security/privacy, destructive authority, external state
+или долгосрочный subsystem contract.
+
+Если запрос ведёт к костылю, silent fallback или security/reliability debt,
+объясни проблему evidence-first и предложи production target state.
+
+### 5. Plan the observable outcome
+
+Для multi-step работы создай living ExecPlan. План разбивает работу по
+independently verifiable behavior, а не по техническим слоям без результата.
+Каждый milestone заканчивается командой и наблюдаемым acceptance.
+
+### 6. Implement with behavioral TDD
+
+Для каждого behavior:
+
+1. напиши минимальный failing test;
+2. подтверди правильную причину failure;
+3. внеси production change;
+4. подтверди green;
+5. refactor при green;
+6. расширь verification по dependency surface.
+
+Не меняй тест, чтобы скрыть неверное production behavior. Не добавляй fake
+provider success, browser-only domain state, test-only production API или
+silent fallback.
+
+### 7. Exercise the real system
+
+Если scope видим пользователю, automated tests недостаточно. Используй уже
+запущенные сервисы, exact role/route/locale/data state и настоящий браузер.
+Browser/Computer Use проверяет rendered interaction; Developer mode/CDP — DOM,
+computed styles, console и network. Lifecycle процессов не меняется без прямой
+команды пользователя.
+
+### 8. Prove visual fidelity
+
+Для UI выполни `elevenhouse-design-parity`: reference screenshot/measurements
+до правок, production screenshot/measurements после, одинаковые viewport/state,
+edge/responsive states и список обоснованных deviations. Business behavior
+берётся из product/domain truth, visual treatment — из reference.
+
+### 9. Review and iterate
+
+Перед завершением перечитай весь diff и проверь:
+
+- correctness, security, idempotency и data integrity;
+- dependency/module ownership;
+- missing edge/error/retry states;
+- silent fallback, mock или placeholder behavior;
+- duplicated/oversized files и derived logic в JSX;
+- tests, runtime/browser evidence и stale docs;
+- accidental unrelated edits.
+
+Повторяй implement → test → runtime inspect → compare → review, пока весь
+requested scope не доказан либо не останется genuine external blocker.
+
+## Living ExecPlan
+
+ExecPlan для сложной работы — self-contained living document. Новый агент без
+предыдущего thread context должен суметь выполнить его end-to-end.
+
+Обязательные sections:
+
+- `Purpose / Big Picture`: user-visible outcome и как его увидеть.
+- `Progress`: timestamped completed, pending и partial items.
+- `Surprises & Discoveries`: неожиданные факты с evidence.
+- `Decision Log`: decision, rationale, date/author.
+- `Outcomes & Retrospective`: achieved behavior, gaps, lessons.
+- `Context and Orientation`: current state, exact paths, defined terms.
+- `Interfaces and Dependencies`: signatures/contracts и dependency direction.
+- `Plan of Work`: milestones и decomposition.
+- `Concrete Steps`: exact commands, working directory и expected observation.
+- `Validation and Acceptance`: automated/runtime/visual proof.
+- `Idempotence and Recovery`: safe retry, destructive boundaries и cleanup.
+- `Artifacts and Notes`: concise evidence locations.
+
+Обновляй progress, discoveries, decisions и outcomes во время исполнения. Не
+оставляй `TBD`, vague «add tests/error handling» или ссылки на незафиксированный
+контекст. После утверждённого плана продолжай между milestones самостоятельно,
+пока не пересечена authority/decision boundary.
 
 ## Parallel Work
 
-Над проектом могут одновременно работать несколько агентов. Каждый агент работает только с файлами, относящимися к его текущей задаче.
+Делегируй только когда пользователь или applicable instruction/skill явно
+разрешает subagents и задачи независимы. Каждый worker получает bounded scope,
+owned paths, inputs, outputs и verification. Main agent независимо проверяет
+diff/evidence; agent report не считается proof.
 
-Правила:
+Без разрешения на delegation выполняй тот же pipeline inline. Всегда сохраняй
+unowned changes и не смешивай их с текущим scope.
 
-- Перед изменениями прочитать релевантные docs и локальные файлы задачи.
-- Перед нетривиальными изменениями открыть соответствующий runbook из
-  `docs/development/agent-runbooks/`.
-- Не делать unrelated cleanup, formatting или refactor.
-- Не откатывать изменения, которые агент сам не вносил.
-- Если встречены чужие изменения, считать их валидной работой пользователя или другого агента.
-- Если чужие изменения пересекаются с текущей задачей, адаптировать решение к ним.
-- Если конфликт невозможно безопасно разрешить локально, остановиться и коротко описать конфликт пользователю.
+## Completion
 
-## Technical Focus
-
-Агент оценивает решения по техническим критериям:
-
-- module boundaries;
-- dependency direction;
-- contract clarity;
-- testability;
-- operational reliability;
-- security posture;
-- maintainability;
-- developer experience.
-
-Бизнес-стратегия, маркетинг, монетизация и продуктовые приоритеты обсуждаются только по явной просьбе пользователя.
-
-## Verification
-
-После изменений выбери минимальную достаточную проверку по
-`testing-strategy.md` и точную команду по `commands.md`. Если проверка не может
-быть выполнена, явно укажи причину и фактический непроверенный риск.
+Перед final response пройди `agent-runbooks/08-verification-and-git.md`.
+Completion claim разрешена только после свежих команд и observable evidence.
+Если process/browser/external dependency недоступна, соответствующая acceptance
+остаётся blocked и указывается вместе с residual risk.

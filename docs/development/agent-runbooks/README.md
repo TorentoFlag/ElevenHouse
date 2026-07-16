@@ -13,6 +13,10 @@ ElevenHouse. Они не заменяют `AGENTS.md`, архитектурны�
    пройди `09-documentation-maintenance.md`.
 5. Точные команды бери из `../commands.md`, TDD и evidence requirements — из
    `../testing-strategy.md`.
+6. Для novel/risky architecture или product alternatives применяй
+   `../research-strategy.md` и repo skill `elevenhouse-research`.
+7. Для non-trivial feature используй `elevenhouse-feature-delivery`; для любого
+   visible UI — также `elevenhouse-design-parity`.
 
 ## Индекс
 
@@ -28,12 +32,21 @@ ElevenHouse. Они не заменяют `AGENTS.md`, архитектурны�
 - `08-verification-and-git.md` — проверки, status, commit/push discipline.
 - `09-documentation-maintenance.md` — когда и как обновлять документацию.
 
+Repo-scoped skills:
+
+- `.agents/skills/elevenhouse-feature-delivery/SKILL.md` — полный autonomous
+  feature pipeline;
+- `.agents/skills/elevenhouse-research/SKILL.md` — architecture/product
+  research;
+- `.agents/skills/elevenhouse-design-parity/SKILL.md` — browser-backed visual
+  fidelity.
+
 ## Базовые правила
 
-- `docs/architecture/design-reference-inventory.md` является primary source of
-  truth для связи сверстанного дизайна с production-кодом.
-- `ElevenHouseDesign/` задаёт UX, layout, терминологию и видимый scope, но не
-  задаёт production frontend architecture.
+- `docs/architecture/design-reference-inventory.md` связывает design areas с
+  production surfaces и readiness; он не определяет product priority.
+- `ElevenHouseDesign/` задаёт visual contract соответствующего screen/state, но
+  не business logic, persistence или production frontend architecture.
 - Не добавляй admin/moderator/super_admin workflows в `public-api` или
   `astrologer-api`; для них нужен отдельный `admin-api`.
 - Не запускай, не останавливай и не перезапускай локальные long-running

@@ -21,7 +21,7 @@
 
 - [x] (2026-07-16) Research and approved design recorded in `docs/superpowers/specs/2026-07-16-agent-operating-system-design.md`.
 - [x] (2026-07-16) Added and tested the deterministic documentation verifier; 5 fixture tests pass.
-- [ ] Rewrite the root routing and canonical agent operating model.
+- [x] (2026-07-16) Rewrote root routing and canonical agent operating model; `AGENTS.md` is 13.7 KiB.
 - [ ] Add research, feature-delivery and design-parity repo skills.
 - [ ] Strengthen design, frontend, testing and verification runbooks.
 - [ ] Correct known active-document drift.
@@ -140,23 +140,23 @@ Expected: tests pass; repository check may initially report the stale statements
 - `agent-workflow.md` defines the autonomous pipeline and living ExecPlan format.
 - `research-strategy.md` owns technical and product research rules.
 
-- [ ] **Step 1: Rewrite `AGENTS.md` as a concise map**
+- [x] **Step 1: Rewrite `AGENTS.md` as a concise map**
 
 Retain product, architecture, security, DB, process authority, no-fallback, visual contract and completion rules. Add explicit routing to the three repo skills and research strategy. Keep it below the verifier threshold.
 
-- [ ] **Step 2: Separate sources of truth in `docs/README.md`**
+- [x] **Step 2: Separate sources of truth in `docs/README.md`**
 
 Define product truth, architecture truth, visual truth, implemented-state evidence and artifact lifecycle. Make clear that design business behavior is only input until accepted by product/domain sources.
 
-- [ ] **Step 3: Replace the lightweight workflow with the approved pipeline**
+- [x] **Step 3: Replace the lightweight workflow with the approved pipeline**
 
 Document intake, contour discovery, research, decisions, living plan, TDD, runtime/browser validation, visual parity, self-review and evidence reporting. Include mandatory `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` plan sections.
 
-- [ ] **Step 4: Add the research strategy**
+- [x] **Step 4: Add the research strategy**
 
 Include source hierarchy, freshness, direct-link citations, inference labels, bounded spikes, ADR conflict handling, product-pattern comparison, privacy/accessibility analysis and the no-silent-scope-change boundary.
 
-- [ ] **Step 5: Update runbook routing and intake**
+- [x] **Step 5: Update runbook routing and intake**
 
 Make research and plan selection deterministic from risk/novelty and add definition-of-done, runtime state and research requirements to intake output.
 

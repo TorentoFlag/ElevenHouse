@@ -23,7 +23,14 @@
    - если они не относятся к задаче, игнорируй;
    - если пересекаются с задачей, сначала прочитай их и адаптируй решение.
 
-3. Прочитай обязательный базовый контекст:
+3. Определи источники по виду истины:
+
+   - product truth: user instruction, `docs/product/`, contracts/domain;
+   - architecture truth: ADR, architecture/API/security docs, current code;
+   - visual truth: exact `ElevenHouseDesign` screen/state для visible UI;
+   - implemented-state evidence: tests, generated schema, runtime/network/logs.
+
+4. Прочитай обязательный базовый контекст:
 
    ```text
    AGENTS.md
@@ -37,7 +44,7 @@
    docs/decisions/
    ```
 
-4. Для API/backend задач дополнительно прочитай:
+5. Для API/backend задач дополнительно прочитай:
 
    ```text
    docs/api/api-boundaries.md
@@ -45,14 +52,14 @@
    docs/decisions/0007-cookie-auth-csrf-and-idempotency.md
    ```
 
-5. Для DB задач дополнительно прочитай:
+6. Для DB задач дополнительно прочитай:
 
    ```text
    docs/decisions/0006-drizzle-database-tooling.md
    docs/development/agent-runbooks/04-database-and-migrations.md
    ```
 
-6. Для UI задач дополнительно прочитай:
+7. Для UI задач дополнительно прочитай:
 
    ```text
    docs/decisions/0002-react-vite-without-next.md
@@ -61,22 +68,44 @@
    docs/development/agent-runbooks/02-frontend-production.md
    ```
 
-7. Найди релевантные production-файлы через быстрые команды:
+8. Найди релевантные production-файлы и history через быстрые команды:
 
    ```bash
    rg --files apps packages docs | sort
    rg -n "relevant_term" apps packages docs
+   git log --oneline --all -- relevant/path
    ```
 
-8. Перед изменениями сформулируй рабочую границу:
+9. Трассируй complete contour, а не только первый call site:
+
+   ```text
+   route/state -> frontend -> contract -> API -> domain -> DB
+               -> events/workers -> security/config/observability -> tests/deploy
+   ```
+
+10. Определи research requirement по `../research-strategy.md`:
+    - technical research обязателен для novel/risky architecture и
+      unfamiliar stack behavior;
+    - product research нужен для requested alternatives или ambiguous workflow;
+    - если research не нужен, зафиксируй, какой existing contract/pattern делает
+      решение однозначным.
+
+11. До изменений сформулируй рабочую границу:
    - Outcome
+   - Observable definition of done
    - In scope
    - Out of scope
-   - Source of truth
+   - Product / architecture / visual / implemented-state sources
    - Owned paths
    - Risks and invariants
-   - Verification
+   - Required research and decisions
+   - Current runtime/browser state
+   - Automated / integration / runtime E2E / design-parity verification
    - External authority / destructive actions
+
+12. Для multi-step task создай self-contained living ExecPlan по
+    `../agent-workflow.md`. Пользователю выноси material product/architecture
+    choices; routine implementation decomposition делает агент.
 
 Команды и authority requirements бери из `../commands.md`, а уровень
 доказательств — из `../testing-strategy.md`.
@@ -99,4 +128,7 @@
 - Ты знаешь релевантные документы и ADR.
 - Ты знаешь текущий git status.
 - Ты отделил свои будущие изменения от чужих.
+- Ты трассировал полный dependency/runtime contour.
+- Ты определил research requirement и definition of done.
+- Ты знаешь runtime/browser availability для required acceptance.
 - Ты выбрал специализированный ранбук для следующего шага.

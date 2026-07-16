@@ -1,66 +1,119 @@
 # Документация ElevenHouse
 
-Эта папка — проектная память ElevenHouse. Агенты и разработчики должны использовать её как источник правды по архитектуре, scope и продуктовым решениям, а при расхождении с кодом актуализировать документацию по фактической реализации.
+`docs/` — versioned system of record для продукта, архитектуры и выполнения
+работы в ElevenHouse. Корневой `AGENTS.md` служит короткой картой и набором hard
+invariants; подробные знания загружаются по задаче через этот индекс, runbook'и
+и repo-scoped skills.
 
-Для соответствия сверстанному дизайну главным источником правды является
-`architecture/design-reference-inventory.md`. Он связывает реализованный дизайн
-из `ElevenHouseDesign/` с production-поверхностями, доменными границами,
-контрактами, текущим кодом и design-system работами.
+## Виды истины и приоритет
 
-## Порядок источников истины
+### Product truth
 
-1. Current user instruction for the task.
-2. Accepted ADRs and canonical architecture/product documents.
-3. `design-reference-inventory.md` plus `ElevenHouseDesign` for visible UI/UX.
-4. Shared contracts and production code for implemented behavior.
-5. Runbooks for execution procedure.
-6. Plans/specs as temporary execution artifacts only.
+1. Последняя явная инструкция пользователя.
+2. `product/full-functional-scope.md` и другие принятые product documents.
+3. Accepted ADR, shared contracts и domain rules.
 
-## Владение документацией
+Product research и `ElevenHouseDesign` могут выявить варианты или edge states,
+но не меняют business scope, роли, consent или закрытую direct-link модель без
+явного решения пользователя.
 
-- Architecture и module boundaries: `architecture/` и `decisions/`.
-- API surfaces и security boundaries: `api/api-boundaries.md`.
-- Product invariants и full scope: `product/`.
-- Runnable commands: `development/commands.md`.
-- TDD и evidence: `development/testing-strategy.md`.
-- Task routing и процедуры: `development/agent-runbooks/`.
+### Architecture truth
 
-## Читать в первую очередь
+1. Accepted records в `decisions/`.
+2. Canonical architecture/API/security/data/operations documents.
+3. Проверенный current production code и generated schema для фактически
+   реализованного состояния.
 
-- `architecture/overview.md` — высокоуровневая архитектура системы.
-- `architecture/repository-structure.md` — ожидаемая структура monorepo.
-- `architecture/backend-modules.md` — доменные границы backend.
-- `architecture/account-role-model.md` — модель аккаунтов, ролей и базовые auth-инварианты.
-- `architecture/design-reference-inventory.md` — первичная карта соответствия реализованного `ElevenHouseDesign/` production-поверхностям, доменным модулям, контрактам, текущему коду и design-system работам.
-- `product/roadmap.md` — техническая roadmap разработки полной версии.
-- `product/full-functional-scope.md` — полный функциональный scope продукта.
-- `api/api-boundaries.md` — разделение public, astrologer и будущего admin API.
-- `development/agent-runbooks/` — операционные ранбуки для агентов по типовым
-  задачам: intake, дизайн→production, frontend, backend, DB, contracts/security,
-  workers/events, local services, verification/git, docs maintenance.
-- `decisions/` — architecture decision records.
-- `development/commands.md` — канонические команды и authority requirements.
-- `development/testing-strategy.md` — TDD contract и уровни evidence.
+Если код и canonical architecture расходятся, агент устанавливает факты,
+исправляет drift в scope задачи и не строит новую работу поверх скрытого
+конфликта.
 
-## Что не является production-архитектурой
+### Visual truth
 
-Папка `ElevenHouseDesign/` — канонический сверстанный дизайн экранов, UX-flow,
-терминологии и видимого функционального scope. Её нужно использовать через
+Exact screen/state в `ElevenHouseDesign/` — визуальный контракт для layout,
+controls, spacing, typography, colors, borders, radii, shadows, icons и
+responsive presentation. Mapping к production surface живёт в
 `architecture/design-reference-inventory.md`.
 
-При этом файлы `ElevenHouseDesign/` не описывают production frontend
-architecture. JSX-структура, `window.*` globals, `localStorage` state, mock
-datasets, demo-router, `DemoSwitch` и `TweaksPanel` не переносятся в production
-как архитектурная модель.
+Prototype business logic, JSX boundaries, `window.*`, localStorage, mock data,
+demo-router, `DemoSwitch`, `TweaksPanel` и browser persistence не являются
+product или architecture truth. Production workflow может отличаться по
+утверждённым бизнес-правилам, сохраняя visual language соответствующего
+состояния.
 
-Не хранить в `docs/` исполненные agentic implementation plans/specs как источник правды. После реализации такие планы быстро расходятся с кодом и мешают агентам. Архитектурные решения фиксируются в `docs/architecture/` и `docs/decisions/`, а актуальное поведение проверяется по коду.
+### Evidence и procedure
 
-## Краткое описание продукта
+- Current behavior доказывают code, tests, runtime, logs, network и browser
+  evidence.
+- `development/` и runbook'и определяют процедуру выполнения.
+- Specs/plans помогают исполнению, но не заменяют current canonical docs.
 
-ElevenHouse — закрытая SaaS/CRM-платформа для астрологов. Она помогает астрологам продавать консультации, управлять клиентами, вести бронирования и оплаты, доставлять материалы, запускать подписки и анализировать свою практику.
+## Canonical ownership
 
-Платформа не является публичным маркетплейсом астрологов. Клиент попадает внутрь только по прямой ссылке астролога. В текущем scope платформа не должна рекомендовать конкурирующих астрологов или показывать публичный каталог. Клиентский кабинет может показывать только тех астрологов, с которыми у клиента уже есть явная связь через прямую ссылку, покупку, запись, лид-магнит или ручное добавление.
+- `product/` — product invariants и полный утверждённый scope.
+- `architecture/` — system map, module ownership, data/infrastructure design и
+  design-to-production inventory.
+- `api/api-boundaries.md` — API ownership, contracts, authorization и browser
+  security.
+- `decisions/` — durable accepted architecture decisions и consequences.
+- `development/agent-workflow.md` — автономный feature pipeline и living
+  ExecPlan contract.
+- `development/research-strategy.md` — technical и product research.
+- `development/testing-strategy.md` — TDD, runtime E2E, design parity и evidence
+  ladder.
+- `development/commands.md` — проверенные commands и authority requirements.
+- `development/agent-runbooks/` — task-specific procedures.
+- `.agents/skills/` — reusable task workflows с progressive disclosure.
 
-## Важное правило scope
+## Стартовый маршрут агента
 
-ТЗ описывает полный функционал продукта. Документация проекта не должна самовольно менять продуктовый scope или бизнес-стратегию. Roadmap в этом репозитории означает техническую очередность разработки и управление зависимостями между частями полной системы.
+Для нетривиальной задачи:
+
+1. `development/agent-runbooks/00-task-intake.md`;
+2. релевантный product/architecture/API/ADR context;
+3. соответствующий repo skill и specialized runbook;
+4. `development/agent-workflow.md` для полного pipeline;
+5. `development/agent-runbooks/08-verification-and-git.md` перед завершением;
+6. `development/agent-runbooks/09-documentation-maintenance.md`, если изменились
+   behavior, boundaries, workflow или status.
+
+## Быстрый индекс
+
+- `architecture/overview.md` — high-level system map.
+- `architecture/repository-structure.md` — apps/packages и dependency direction.
+- `architecture/backend-modules.md` — domain/module ownership.
+- `architecture/account-role-model.md` — accounts, roles и authorization
+  invariants.
+- `architecture/design-reference-inventory.md` — current mapping design areas к
+  production surfaces и readiness.
+- `product/full-functional-scope.md` — полный крупный functional scope.
+- `product/roadmap.md` — technical dependency order, не business strategy.
+- `api/api-boundaries.md` — public/astrologer/admin API split.
+- `development/local-setup.md` — local environment facts без authority на
+  process lifecycle.
+
+## Specs и plans
+
+`docs/superpowers/specs/` хранит согласованные design artifacts, а
+`docs/superpowers/plans/` — self-contained living ExecPlans. Они обязаны иметь
+явный status/progress и observable acceptance, но после реализации не являются
+источником текущего поведения.
+
+Durable decisions из выполненного плана переносятся в product/architecture/API,
+ADR или runbook. Исторические планы не переписываются задним числом под current
+code; их status и retrospective объясняют outcome и remaining gaps.
+
+## Documentation quality gate
+
+После изменения `AGENTS.md`, canonical docs, runbook'ов или `.agents/skills`
+запусти:
+
+```bash
+pnpm docs:check:test
+pnpm docs:check
+git diff --check
+```
+
+Verifier проверяет обязательную структуру, repo skills, relative links и
+известные противоречивые active statements. Он read-only и позже может быть
+подключён к hooks/CI без изменения документационного контракта.
