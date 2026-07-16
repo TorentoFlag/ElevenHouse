@@ -211,6 +211,7 @@ jobs:
           fi
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d postgres redis minio
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up --force-recreate --exit-code-from minio-init minio-init
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-baseline-reconciler </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-migrator </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-seeder </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d

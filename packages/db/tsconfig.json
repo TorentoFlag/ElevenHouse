@@ -9,6 +9,7 @@
     ]
   },
   "include": [
-    "src"
+    "src",
+    "scripts/reconcile-production-baseline.ts"
   ]
 }

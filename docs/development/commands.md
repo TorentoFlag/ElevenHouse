@@ -12,6 +12,7 @@
 | Domain typecheck | `pnpm --filter @elevenhouse/domain typecheck` | No long-running process |
 | Domain build | `pnpm --filter @elevenhouse/domain build` | No long-running process |
 | Generate migration | `pnpm db:generate` | Rebuild current baseline after schema changes |
+| Reconcile deployed baseline | `pnpm --filter @elevenhouse/db db:reconcile-production-baseline` | Deploy maintenance step only; requires an approved known ledger and production backup |
 | Reset local DB | `pnpm db:reset` | Explicitly required task; local DB only; destructive; `DATABASE_URL` must identify the active ElevenHouse DB |
 
 ## Runnable now
@@ -58,6 +59,11 @@ private object-storage settings. Локальные defaults разрешены 
 только при доступности PostgreSQL, calculation PDF queue/worker и private
 object storage. Compose задаёт `stop_grace_period: 60s`; Redis queue transport
 должен сохранять AOF и использовать `maxmemory-policy=noeviction`.
+
+Production deploy запускает `db-baseline-reconciler` после backup и до
+`db-migrator`. Reconciler допускает только fresh DB, текущий baseline или
+зафиксированную approved legacy history; любое другое состояние завершает
+deploy без частичного DDL благодаря одной PostgreSQL transaction.
 
 ## Process management
 

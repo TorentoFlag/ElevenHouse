@@ -22,6 +22,14 @@ incremental migration chains during active development.
 Всегда пересобирай актуальную миграцию заново и делай полный reset локальной
 базы через `db:reset`.
 
+Это правило относится к repository baseline и локальной development DB. Уже
+развёрнутая production DB не сбрасывается и не получает новый baseline поверх
+существующих таблиц. При смене baseline для известного production state нужен
+явный reconciliation step с approved migration hashes, schema/data guards,
+transactional DDL/data migration, advisory lock и записью нового baseline в
+ledger только после успешного перехода. Неизвестное состояние должно завершать
+deploy ошибкой.
+
 ## Пошаговая процедура
 
 1. Confirm domain ownership in `docs/architecture/backend-modules.md`.
@@ -53,6 +61,11 @@ incremental migration chains during active development.
     ```
 
     Do not run this against non-local or production DBs.
+
+11. Если предыдущий baseline уже развёрнут в production, добавь или обнови
+    production reconciliation и его integration fixture. Проверь как минимум:
+    approved legacy transition, сохранение данных, повторный no-op запуск и
+    отказ на неизвестной migration history.
 
 ## Schema Test Expectations
 

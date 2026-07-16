@@ -36,4 +36,12 @@ Drizzle хорошо подходит текущей modular-first архите�
 - Domain layer не должен напрямую размазывать SQL/ORM details по apps.
 - `db:reset` предназначен только для локальной development базы и должен отказываться работать с production или non-local hosts.
 - Изменения schema вносятся через пересборку актуальной миграции и полный reset локальной базы, а не через цепочку incremental `ALTER` migrations.
+- Пересобранный baseline нельзя повторно применять поверх уже существующей
+  production schema. Если baseline был пересобран после production deploy,
+  deploy обязан сначала выполнить отдельный fail-closed reconciliation:
+  распознать только явно одобренную migration history, проверить legacy schema
+  и data invariants, выполнить data/DDL transition в одной транзакции и только
+  после успешной проверки записать текущий baseline в Drizzle ledger.
+- Production database никогда не сбрасывается ради синхронизации baseline.
+  Неизвестная migration history или schema drift останавливают deploy.
 - Бизнес-таблицы добавляются отдельными focused feature changes вместе с domain/use-case кодом.
