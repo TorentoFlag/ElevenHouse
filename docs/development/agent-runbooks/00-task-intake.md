@@ -24,7 +24,6 @@
    - если пересекаются с задачей, сначала прочитай их и адаптируй решение.
 
 3. Определи источники по виду истины:
-
    - product truth: user instruction, `docs/product/`, contracts/domain;
    - architecture truth: ADR, architecture/API/security docs, current code;
    - visual truth: exact `ElevenHouseDesign` screen/state для visible UI;
@@ -91,17 +90,20 @@
       решение однозначным.
 
 11. До изменений сформулируй рабочую границу:
-   - Outcome
-   - Observable definition of done
-   - In scope
-   - Out of scope
-   - Product / architecture / visual / implemented-state sources
-   - Owned paths
-   - Risks and invariants
-   - Required research and decisions
-   - Current runtime/browser state
-   - Automated / integration / runtime E2E / design-parity verification
-   - External authority / destructive actions
+
+    ```text
+    Outcome
+    Observable definition of done
+    In scope
+    Out of scope
+    Product / architecture / visual / implemented-state sources
+    Owned paths
+    Risks and invariants
+    Required research and decisions
+    Current runtime/browser state
+    Automated / integration / runtime E2E / design-parity verification
+    External authority / destructive actions
+    ```
 
 12. Для multi-step task создай self-contained living ExecPlan по
     `../agent-workflow.md`. Пользователю выноси material product/architecture

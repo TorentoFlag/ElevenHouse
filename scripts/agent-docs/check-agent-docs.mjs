@@ -7,14 +7,8 @@ const maxAgentsBytes = 16 * 1024;
 const requiredFiles = new Map([
   ["AGENTS.md", ["# ElevenHouse", "## Источники истины", "## Обязательный рабочий цикл"]],
   ["docs/README.md", ["# Документация ElevenHouse"]],
-  [
-    "docs/development/agent-workflow.md",
-    ["## Autonomous Feature Pipeline", "## Living ExecPlan"]
-  ],
-  [
-    "docs/development/research-strategy.md",
-    ["## Technical Research", "## Product Research"]
-  ],
+  ["docs/development/agent-workflow.md", ["## Autonomous Feature Pipeline", "## Living ExecPlan"]],
+  ["docs/development/research-strategy.md", ["## Technical Research", "## Product Research"]],
   [
     "docs/development/testing-strategy.md",
     ["## TDD contract", "## Runtime E2E", "## Design Parity"]
@@ -92,7 +86,10 @@ export async function checkAgentDocs({ rootDir = process.cwd() } = {}) {
   for (const relativePath of markdownFiles) {
     const content = await readFile(path.join(rootDir, relativePath), "utf8");
     for (const link of extractRelativeMarkdownLinks(content)) {
-      const resolvedPath = path.resolve(path.dirname(path.join(rootDir, relativePath)), link.target);
+      const resolvedPath = path.resolve(
+        path.dirname(path.join(rootDir, relativePath)),
+        link.target
+      );
       if (!(await pathExists(resolvedPath))) {
         errors.push(
           `${relativePath}:${link.line}: broken relative link ${JSON.stringify(link.original)}`
@@ -182,10 +179,7 @@ function extractRelativeMarkdownLinks(content) {
   for (const match of content.matchAll(pattern)) {
     const original = match[1].trim().replace(/^<|>$/g, "");
     const withoutFragment = original.split("#", 1)[0].split("?", 1)[0];
-    if (
-      withoutFragment.length === 0 ||
-      /^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(withoutFragment)
-    ) {
+    if (withoutFragment.length === 0 || /^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(withoutFragment)) {
       continue;
     }
 

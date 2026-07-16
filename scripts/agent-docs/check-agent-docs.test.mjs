@@ -9,16 +9,9 @@ import { checkAgentDocs } from "./check-agent-docs.mjs";
 const requiredFiles = {
   "AGENTS.md": ["# ElevenHouse", "## Источники истины", "## Обязательный рабочий цикл"],
   "docs/README.md": ["# Документация ElevenHouse"],
-  "docs/development/agent-workflow.md": [
-    "## Autonomous Feature Pipeline",
-    "## Living ExecPlan"
-  ],
+  "docs/development/agent-workflow.md": ["## Autonomous Feature Pipeline", "## Living ExecPlan"],
   "docs/development/research-strategy.md": ["## Technical Research", "## Product Research"],
-  "docs/development/testing-strategy.md": [
-    "## TDD contract",
-    "## Runtime E2E",
-    "## Design Parity"
-  ],
+  "docs/development/testing-strategy.md": ["## TDD contract", "## Runtime E2E", "## Design Parity"],
   "docs/development/commands.md": ["pnpm docs:check"],
   "docs/development/agent-runbooks/README.md": ["# Agent Runbooks"]
 };
@@ -64,7 +57,11 @@ test("accepts a minimal valid agent documentation tree", async () => {
 
 test("rejects broken relative Markdown links", async () => {
   const rootDir = await createValidFixture();
-  await writeFixtureFile(rootDir, "docs/README.md", "# Документация ElevenHouse\n\n[Missing](./missing.md)\n");
+  await writeFixtureFile(
+    rootDir,
+    "docs/README.md",
+    "# Документация ElevenHouse\n\n[Missing](./missing.md)\n"
+  );
 
   const result = await checkAgentDocs({ rootDir });
 

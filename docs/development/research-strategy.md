@@ -85,24 +85,30 @@ Decision affected:
 Accessed: YYYY-MM-DD
 
 ### Sources
+
 - [Direct official/primary source](https://example.com) — relevance/version
 
 ### Findings
+
 - Sourced fact: ...
 - Inference: ...
 - Repository evidence: `path/to/file`
 
 ### Options
+
 1. Option, benefits, risks, migration/operations impact.
 2. Option, benefits, risks, migration/operations impact.
 
 ### Recommendation
+
 Selected direction and why it fits ElevenHouse.
 
 ### Rejected alternatives
+
 Alternative and concrete rejection reason.
 
 ### User decisions
+
 Only material product/architecture decisions that cannot be derived safely.
 ```
 
