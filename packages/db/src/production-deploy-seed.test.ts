@@ -31,4 +31,13 @@ describe("production database seed deployment", () => {
     expect(deployWorkflow).toContain(seederRun);
     expect(deployWorkflow.indexOf(seederRun)).toBeGreaterThan(deployWorkflow.indexOf(migratorRun));
   });
+
+  it("waits for every production healthcheck before declaring the deploy successful", () => {
+    const upAndWait = "up -d --wait --wait-timeout 180";
+
+    expect(deployWorkflow).toContain(upAndWait);
+    expect(deployWorkflow.indexOf(upAndWait)).toBeLessThan(
+      deployWorkflow.lastIndexOf("docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps")
+    );
+  });
 });

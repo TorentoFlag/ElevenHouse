@@ -214,7 +214,7 @@ jobs:
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-baseline-reconciler </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-migrator </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-seeder </dev/null
-          docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --wait --wait-timeout 180
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps
           REMOTE
 
