@@ -23,7 +23,7 @@
 - [x] (2026-07-16) Added and tested the deterministic documentation verifier; 5 fixture tests pass.
 - [x] (2026-07-16) Rewrote root routing and canonical agent operating model; `AGENTS.md` is 13.7 KiB.
 - [x] (2026-07-16) Added research, feature-delivery and design-parity repo skills; deterministic discovery checks pass.
-- [ ] Strengthen design, frontend, testing and verification runbooks.
+- [x] (2026-07-16) Strengthened design, frontend, testing and verification contracts with runtime and visual evidence gates.
 - [ ] Correct known active-document drift.
 - [ ] Run complete documentation and repository-scoped verification.
 
@@ -215,23 +215,23 @@ Expected: all repo skill frontmatter and required references pass.
 - Visible UI completion requires automated tests plus runtime E2E and design-parity evidence.
 - Missing runtime/browser access produces a blocked check, never an inferred success.
 
-- [ ] **Step 1: Expand the evidence ladder**
+- [x] **Step 1: Expand the evidence ladder**
 
 Define behavioral unit, integration, API, frontend, runtime E2E, design parity, accessibility and repository gates. Specify when each is mandatory and what evidence is recorded.
 
-- [ ] **Step 2: Correct the design-transfer contract**
+- [x] **Step 2: Correct the design-transfer contract**
 
 Replace any claim that prototype UX/business flow is automatically canonical. Require the agent to reconcile product behavior first, then reproduce exact visual language for the approved states. Remove placeholder/silent-disabled behavior as an acceptable completion strategy.
 
-- [ ] **Step 3: Add exact browser procedure**
+- [x] **Step 3: Add exact browser procedure**
 
 Require route, role, locale, viewport, data fixture/state, screenshot, DOM/computed styles, interactions, network, console, responsive states and comparison artifacts. Prefer Browser/Computer Use for rendered interaction and Developer mode/CDP for inspection.
 
-- [ ] **Step 4: Strengthen frontend decomposition**
+- [x] **Step 4: Strengthen frontend decomposition**
 
 Require one focused component per file by default, feature models for derived logic, app-owned composition, design-system extraction only for stable reusable primitives, and explicit accessibility behavior.
 
-- [ ] **Step 5: Strengthen completion and docs maintenance**
+- [x] **Step 5: Strengthen completion and docs maintenance**
 
 Require self-review for fallbacks, oversized files, missing edge states, stale docs and incomplete visual evidence. Add `pnpm docs:check` to docs acceptance.
 

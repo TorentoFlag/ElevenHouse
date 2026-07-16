@@ -1,107 +1,116 @@
 # Runbook: Design To Production
 
-Используй этот ранбук, когда задача связана с переносом экранов, UX-flow,
-терминологии или состояний из `ElevenHouseDesign/` в production-код.
+Используй этот runbook для любого visible UI/UX изменения, переноса screen/state
+из `ElevenHouseDesign/` или проверки visual parity.
 
 ## Цель
 
-Реализовать канонический сверстанный дизайн через production apps, packages,
-contracts, domain use cases и design system, не копируя prototype architecture.
+Реализовать утверждённое production behavior в точном visual language
+`ElevenHouseDesign`, сохраняя real contracts, domain state, accessibility и
+production component architecture.
 
-## Source Of Truth
+## Source model
 
-1. `docs/architecture/design-reference-inventory.md`
-2. `ElevenHouseDesign/ElevenHouse.html`
-3. релевантные `ElevenHouseDesign/app/*.jsx`
-4. релевантные `ElevenHouseDesign/screenshots/*.png`
-5. production-код в `apps/` и `packages/`
+- Product behavior: user instruction → product docs → ADR → contracts/domain.
+- Architecture: architecture/API/security docs → current production code.
+- Visual contract: exact `ElevenHouseDesign` screen/state.
+- Mapping/readiness: `docs/architecture/design-reference-inventory.md`.
+- Proof: tests + real browser/network/runtime evidence.
 
-Если дизайн и inventory расходятся, сначала проверь код и дизайн, затем
-обнови inventory или явно зафиксируй расхождение пользователю.
+Design prototype не является automatic source для business scope,
+authorization, persistence, state transitions или component boundaries. Его
+mock behavior может раскрыть product question; вопрос исследуется/решается до
+implementation, а не копируется молча.
 
-## Что можно брать из дизайна
+## Required pre-change evidence
 
-- Состав экранов и функциональных зон.
-- Layout, визуальную иерархию, состояния, терминологию.
-- User flow и expected interactions.
-- Иконографику, visual vocabulary, responsive states.
-- Смысл mock data как product requirements.
+1. Найди design area в inventory и owning production surface.
+2. Зафиксируй exact pair:
+   - reference route/state;
+   - production route/state;
+   - role, locale, viewport, data prerequisites;
+   - approved business differences.
+3. Read-only проверь стандартные ports. Используй существующие процессы; не
+   меняй lifecycle без прямой команды пользователя.
+4. Открой exact reference state в Browser/Computer Use.
+5. Сними screenshot каждого affected desktop/mobile state.
+6. Через Developer mode/CDP измерь:
+   - width/height, grid/flex geometry;
+   - margin/padding/gap;
+   - font family/size/weight/line-height/letter spacing;
+   - colors, borders, radii, shadows;
+   - z-index, overflow, scroll behavior;
+   - hover/focus/active/disabled/open/closed states.
+7. Прочитай релевантные design JSX/CSS только для visual composition и
+   interaction evidence.
 
-## Что нельзя переносить как production architecture
+## Production decomposition
 
-- `window.*` globals.
-- `localStorage` как источник business state.
-- Demo-router и `DemoSwitch`.
-- `TweaksPanel`.
-- UMD/Babel-in-browser загрузку.
-- Mock datasets как runtime data layer.
-- Однофайловые prototype component boundaries.
-- `image-slot.js` как production media module.
+Раздели работу на:
 
-## Пошаговая процедура
+- stable reusable visual primitives в `packages/design-system`;
+- app-owned page/layout composition;
+- focused components (один component на файл по умолчанию);
+- feature model для derived state, mappings и transitions;
+- validated shared/generated contracts;
+- domain/API/DB/worker gaps полного behavior contour.
 
-1. Найди строку в inventory для design area.
-2. Если строки нет, добавь её до реализации:
-   - design files;
-   - production surface;
-   - domain ownership;
-   - API/contracts readiness;
-   - frontend readiness;
-   - design-system needs;
-   - integration notes.
-3. Открой релевантные design files:
+Не переноси `window.*`, localStorage business state, mock datasets, demo-router,
+`DemoSwitch`, `TweaksPanel`, `image-slot.js`, one-file prototype boundaries или
+browser calculation helpers.
 
-   ```bash
-   sed -n '1,260p' ElevenHouseDesign/app/<file>.jsx
-   ```
+Если approved behavior требует отсутствующий backend/domain contour, реализуй
+его в текущем scope либо обозначь material blocker. Не выдавай fake success,
+local-only workflow, silent fallback, скрыто disabled control или placeholder за
+completed feature.
 
-4. Открой production surface:
+## Implementation loop
 
-   ```bash
-   rg -n "route_or_component_name" apps packages
-   ```
+1. Напиши failing behavioral test для первого approved state/interaction.
+2. Реализуй production slice через correct contracts/boundaries.
+3. Подтверди targeted green и продолжай до полного state matrix.
+4. Exercise real network-backed production flow.
+5. Capture production screenshot/measurements при том же viewport/state.
+6. Compare geometry, tokens, iconography и interactions.
+7. Исправляй расхождения и повторяй, пока acceptance evidence не совпадает.
 
-5. Раздели дизайн на:
-   - reusable UI primitives для `packages/design-system`;
-   - app-specific composition для `apps/<surface>`;
-   - API contract gaps для `packages/contracts`;
-   - domain/use-case gaps для `packages/domain`;
-   - DB gaps для `packages/db`;
-   - worker/event gaps для async side effects.
+Проверь loading, empty, success, validation, error, disabled, retry,
+responsive, keyboard и focus states, затронутые задачей. Для modal/select/
+dropdown/table/sidebar/overlay static screenshot одного closed state
+недостаточен.
 
-6. Реализуй только production-supported behavior. Если дизайн показывает
-   поведение без backend/domain основы, делай typed disabled/empty state или
-   scoped placeholder, но не имитируй business workflow в браузере.
+## Product-specific boundaries
 
-7. Проверь все видимые поверхности, а не только первый call site:
+- Public astrologer page: `client-web` + `public-api` reads; management:
+  `astrologer-web` + `astrologer-api`.
+- Client cabinet показывает только уже связанных астрологов; design selector не
+  разрешает discovery/catalog/search/recommendations.
+- Admin screens: `admin-web` + `admin-api` с permissions/audit.
+- Mobile design — responsive state той же web surface, не iOS wrapper.
 
-   ```bash
-   rg -n "component|label|icon|route|copy" apps packages
-   ```
+## Evidence artifacts
 
-## Special Rules
+Сохраняй task-specific evidence под `.design-qa/<task>/` или в согласованной
+artifact location:
 
-- Публичные страницы астрологов принадлежат `client-web` + `public-api` для
-  public reads и `astrologer-web` + `astrologer-api` для управления.
-- Client cabinet может показывать только уже связанных с клиентом астрологов.
-  Не создавай discovery, catalog, search или recommendations.
-- Admin screens принадлежат `admin-web` + `admin-api`.
-- Mobile design files — это responsive requirements для web surfaces, не
-  отдельное приложение и не iOS wrapper.
+- reference screenshot(s);
+- production screenshot(s);
+- side-by-side/diff, если доступен;
+- route/state/viewport matrix;
+- relevant computed-style measurements;
+- intentional deviations с rationale/source.
 
-## Verification
-
-- Для UI: targeted component tests плюс typecheck/build релевантного app/package.
-- Для docs-only design mapping: `git diff --check` и grep на старые/ложные
-  формулировки.
-- Для visual parity, если есть running app и пользователь разрешил процессы:
-  проверить существующий dev server read-only; запускать новый только по явной
-  команде пользователя.
+Не используй один mutable root `design-qa.md` как доказательство для всех
+будущих tasks.
 
 ## Done Checklist
 
-- Inventory актуален для затронутой design area.
-- Prototype runtime не перенесён в production.
-- Все visible call sites проверены через `rg`.
-- Unsupported flows не симулируют backend/domain state в браузере.
-- Проверки выполнены или риск явно указан.
+- Product behavior и visual contract не смешаны.
+- Exact reference/production state pair зафиксирован.
+- Full contour реализован без prototype runtime/fake fallback.
+- Focused component/model boundaries соблюдены.
+- Automated behavior, Runtime E2E, accessibility и Design Parity evidence
+  выполнены по `../testing-strategy.md`.
+- Console/network и edge/responsive states проверены.
+- Inventory/docs обновлены по фактическому current state.
+- Blocked browser/runtime acceptance не названа pass.

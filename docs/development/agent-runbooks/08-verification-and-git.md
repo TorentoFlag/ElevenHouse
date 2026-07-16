@@ -32,7 +32,18 @@ verification без прямого разрешения пользователя
 
 4. Запусти targeted tests для изменённых слоёв.
 
-5. Если менялись shared contracts/domain/db/app shell, расширь проверку:
+5. Сопоставь acceptance claims с evidence level:
+   - domain/contract;
+   - adapter/integration;
+   - API/security;
+   - frontend behavior;
+   - Runtime E2E;
+   - Design Parity/accessibility;
+   - repository gate.
+
+   Для visible scope component tests не закрывают Runtime E2E/Design Parity.
+
+6. Если менялись shared contracts/domain/db/app shell, расширь проверку:
 
    ```bash
    pnpm verify
@@ -40,6 +51,21 @@ verification без прямого разрешения пользователя
 
    Если `pnpm verify` слишком широк из-за известных unrelated changes, запусти
    меньший набор и явно укажи непроверенный риск.
+
+7. Выполни self-review полного diff:
+   - correctness/security/idempotency/data integrity;
+   - module/dependency direction;
+   - missing error/retry/edge states;
+   - mock, silent fallback, fake success, placeholder completion;
+   - oversized files, duplicated logic, derived behavior in JSX;
+   - stale docs и unrelated edits.
+
+8. Для agent documentation выполни:
+
+   ```bash
+   pnpm docs:check:test
+   pnpm docs:check
+   ```
 
 ## Commands By Change Type
 
@@ -80,17 +106,22 @@ task.
 - What was not run and why.
 - Any unrelated changes noticed but not touched.
 - Skipped checks, reason and residual risk.
+- Для UI: exact reference/production route-state, viewport и artifact paths.
 
 ## Stop Conditions
 
 - Verification command fails.
 - Diff includes unrelated files you cannot separate safely.
 - Tests require starting services but user did not permit process management.
+- Runtime/visual acceptance требует недоступную browser surface: mark blocked,
+  не заменяй pass более узким тестом.
 - You are about to claim "done" without fresh verification.
 
 ## Done Checklist
 
 - `git diff --check` passed.
 - Targeted verification ran.
+- Every acceptance claim mapped to sufficient evidence level.
+- Whole-diff fallback/boundary/size/docs review completed.
 - Status/diff reviewed.
 - Final answer names skipped verification or residual risk.

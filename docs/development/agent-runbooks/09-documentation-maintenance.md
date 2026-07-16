@@ -24,6 +24,8 @@ evidence — из `../testing-strategy.md`.
 - `docs/product/*.md`: full product scope and technical roadmap.
 - `docs/development/*.md`: operational workflow and local setup.
 - `docs/development/agent-runbooks/*.md`: repeatable agent procedures.
+- `.agents/skills/*`: reusable task workflows; volatile architecture facts stay
+  in canonical docs, not copied into skill bodies.
 
 ## What Not To Keep As Living Docs
 
@@ -58,7 +60,9 @@ that information into architecture docs, ADRs, inventory or runbooks.
 
 4. Update references from secondary docs.
 
-5. Remove stale docs that now conflict with canonical docs.
+5. Remove or correct stale active docs that now conflict with canonical docs.
+   Historical specs/plans keep their original content and receive lifecycle/
+   retrospective metadata only when needed.
 
 6. Check for contradictory language:
 
@@ -66,16 +70,26 @@ that information into architecture docs, ADRs, inventory or runbooks.
    rg -n "old_term|old_surface|reference only|ops-api|admin workflow" docs AGENTS.md
    ```
 
-7. Run scoped `git diff --check` and inspect the docs/`AGENTS.md` diff; exact
-   command patterns are canonical in `../commands.md`.
+7. Run documentation gates and inspect the complete diff:
+
+   ```bash
+   pnpm docs:check:test
+   pnpm docs:check
+   git diff --check
+   ```
 
 ## Writing Rules
 
 - Prefer concrete paths, module names and commands.
 - Say "missing", "partial" or "ready" explicitly where readiness matters.
 - Avoid business-priority language unless user asks for strategy.
-- Do not call ElevenHouse MVP/prototype/temporary.
+- Do not call the production product MVP/prototype/temporary. The design code
+  may be described as a prototype runtime when separating it from production
+  architecture.
 - If a fact is based on current working tree, say so when it may change.
+- Keep product, architecture, visual and implemented-state truth explicit.
+- Skills describe judgment/procedure; mechanically decidable rules belong in
+  scripts/checkers.
 
 ## Stop Conditions
 
@@ -91,3 +105,4 @@ that information into architecture docs, ADRs, inventory or runbooks.
 - Stale implementation plans/specs removed or ignored.
 - `rg` found no old contradictory wording.
 - `git diff --check` passed.
+- `pnpm docs:check:test` and `pnpm docs:check` passed.
