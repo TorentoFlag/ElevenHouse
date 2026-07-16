@@ -20,7 +20,7 @@
 ## Progress
 
 - [x] (2026-07-16) Research and approved design recorded in `docs/superpowers/specs/2026-07-16-agent-operating-system-design.md`.
-- [ ] Add and test the deterministic documentation verifier.
+- [x] (2026-07-16) Added and tested the deterministic documentation verifier; 5 fixture tests pass.
 - [ ] Rewrite the root routing and canonical agent operating model.
 - [ ] Add research, feature-delivery and design-parity repo skills.
 - [ ] Strengthen design, frontend, testing and verification runbooks.
@@ -83,11 +83,11 @@ Pending implementation.
 - Produces `checkAgentDocs({ rootDir }) -> { filesChecked, errors }` and a CLI that exits non-zero on errors.
 - Checks relative Markdown links, required canonical files/headings, root instruction size, skill frontmatter, and known contradictory active-doc statements.
 
-- [ ] **Step 1: Write failing verifier tests**
+- [x] **Step 1: Write failing verifier tests**
 
 Use `node:test` temporary repositories to prove that the checker rejects a broken link, missing skill frontmatter, oversized `AGENTS.md`, and a known stale statement, while accepting a minimal valid fixture.
 
-- [ ] **Step 2: Run the tests and confirm red**
+- [x] **Step 2: Run the tests and confirm red**
 
 Run:
 
@@ -97,11 +97,11 @@ node --test scripts/agent-docs/check-agent-docs.test.mjs
 
 Expected: failure because `check-agent-docs.mjs` does not exist.
 
-- [ ] **Step 3: Implement the dependency-free checker**
+- [x] **Step 3: Implement the dependency-free checker**
 
 The CLI must print one error per line with a file-relative location and finish with either `agent-docs: ok` or a non-zero summary. It must not write files.
 
-- [ ] **Step 4: Expose canonical commands**
+- [x] **Step 4: Expose canonical commands**
 
 Add:
 
@@ -112,7 +112,7 @@ Add:
 
 Document both commands in `docs/development/commands.md`.
 
-- [ ] **Step 5: Verify green**
+- [x] **Step 5: Verify green**
 
 Run:
 

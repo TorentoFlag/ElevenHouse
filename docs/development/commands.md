@@ -7,6 +7,8 @@
 | Purpose | Command | Preconditions / authority |
 | --- | --- | --- |
 | Full verification | `pnpm verify` | No service startup; shared-layer completion gate |
+| Agent documentation verification | `pnpm docs:check` | Read-only; validates canonical docs, repo skills, links and known contradictions |
+| Agent documentation checker tests | `pnpm docs:check:test` | Read-only; deterministic Node test fixtures, no services |
 | Numerology domain tests | `pnpm test packages/domain/src/numerology` | No long-running process |
 | Calculation integration tests | `INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/adapters/calculations/drizzle-calculation-pdf-job-store.integration.ts packages/db/src/adapters/calculations/drizzle-calculation-store.integration.ts` | Load root `.env` first; both URLs must point to existing local PostgreSQL |
 | Domain typecheck | `pnpm --filter @elevenhouse/domain typecheck` | No long-running process |
@@ -23,11 +25,24 @@
 pnpm test packages/domain/src/numerology
 pnpm --filter @elevenhouse/domain typecheck
 pnpm --filter @elevenhouse/domain build
+pnpm docs:check:test
+pnpm docs:check
 pnpm verify
 ```
 
 Выбирай самый узкий тест, доказывающий изменение, затем расширяй проверку по
 `testing-strategy.md`.
+
+Для изменения `AGENTS.md`, canonical docs, runbook'ов или `.agents/skills`
+запускай оба documentation gate:
+
+```bash
+pnpm docs:check:test
+pnpm docs:check
+```
+
+Первый проверяет сам verifier на изолированных fixtures. Второй проверяет
+фактическое состояние репозитория и ничего не изменяет.
 
 ## Requires existing infrastructure
 
