@@ -157,7 +157,7 @@ services:
 
   db-baseline-reconciler:
     image: ${IMAGE_NAMESPACE}/elevenhouse-db-migrator:${IMAGE_TAG}
-    command: ["pnpm", "db:reconcile-production-baseline"]
+    command: ["pnpm", "--filter", "@elevenhouse/db", "db:reconcile-production-baseline"]
     profiles:
       - maintenance
     env_file:

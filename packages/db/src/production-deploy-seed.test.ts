@@ -14,7 +14,7 @@ describe("production database seed deployment", () => {
     expect(existsSync(productionBaselineReconciler)).toBe(true);
     expect(productionCompose).toContain("db-baseline-reconciler:");
     expect(productionCompose).toContain(
-      'command: ["pnpm", "db:reconcile-production-baseline"]'
+      'command: ["pnpm", "--filter", "@elevenhouse/db", "db:reconcile-production-baseline"]'
     );
     expect(deployWorkflow).toContain(reconcilerRun);
     expect(deployWorkflow.indexOf(reconcilerRun)).toBeLessThan(
