@@ -17,11 +17,17 @@ describe("numerologySavedWorkspaceModel", () => {
   it("keeps active calculations ordered by their latest update", () => {
     const older = calculation({
       id: "11111111-1111-4111-8111-111111111111",
+      links: [clientLink("44444444-4444-4444-8444-444444444444")],
       updatedAt: "2026-07-01T10:00:00.000Z"
     });
     const newer = calculation({
       id: "22222222-2222-4222-8222-222222222222",
+      links: [clientLink("55555555-5555-4555-8555-555555555555")],
       updatedAt: "2026-07-02T10:00:00.000Z"
+    });
+    const unlinked = calculation({
+      id: "44444444-4444-4444-8444-444444444444",
+      updatedAt: "2026-07-04T10:00:00.000Z"
     });
     const archived = calculation({
       id: "33333333-3333-4333-8333-333333333333",
@@ -30,7 +36,7 @@ describe("numerologySavedWorkspaceModel", () => {
     });
 
     expect(
-      getActiveNumerologyCalculations([older, archived, newer]).map((item) => item.id)
+      getActiveNumerologyCalculations([older, archived, unlinked, newer]).map((item) => item.id)
     ).toEqual([newer.id, older.id]);
   });
 
@@ -51,6 +57,19 @@ describe("numerologySavedWorkspaceModel", () => {
       mode: "individual",
       subject: { source: "manual", fullName: "", birthDate: "" }
     });
+  });
+
+  it("prefills a new calculation with the current CRM subject", () => {
+    const subject = {
+      ...createNewNumerologyEditorState().form.subject,
+      source: "crm_client" as const,
+      clientId: "44444444-4444-4444-8444-444444444444",
+      displayName: "Антон Голубев",
+      fullName: "Антон Голубев",
+      birthDate: "2000-08-19"
+    };
+
+    expect(createNewNumerologyEditorState(subject).form.subject).toEqual(subject);
   });
 
   it("rehydrates the current record for replacement recalculation", () => {
@@ -91,6 +110,8 @@ describe("numerologySavedWorkspaceModel", () => {
       createNewNumerologyEditorState(),
       "subject",
       {
+        source: "crm_client",
+        clientId: "44444444-4444-4444-8444-444444444444",
         fullName: "Мария Иванова",
         displayName: "Мария Иванова",
         birthDate: "1990-03-14"
@@ -105,7 +126,12 @@ describe("numerologySavedWorkspaceModel", () => {
     expect(toNumerologyCreateRequest(titledCreate)).toMatchObject({
       title: "Мария, психоматрица",
       mode: "individual",
-      participants: [{ source: "manual", calculationName: "Мария Иванова" }]
+      participants: [
+        {
+          source: "crm_client",
+          clientId: "44444444-4444-4444-8444-444444444444"
+        }
+      ]
     });
     expect(toNumerologyRecalculateRequest(recalculateEditor)).toMatchObject({
       title: "Мария, психоматрица",
@@ -158,6 +184,15 @@ function calculation(overrides: Partial<CalculationRecordResponse>): Calculation
     updatedAt: "2026-07-01T10:00:00.000Z",
     ...overrides
   } as CalculationRecordResponse;
+}
+
+function clientLink(clientId: string): CalculationRecordResponse["links"][number] {
+  return {
+    clientId,
+    visibility: "private_to_astrologer",
+    linkedAt: "2026-07-01T10:00:00.000Z",
+    publishedAt: null
+  };
 }
 
 function individualResult(): NumerologyCalculationResponse["result"] {

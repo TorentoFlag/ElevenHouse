@@ -172,10 +172,19 @@ export const previewNumerologyRequestSchema = z.discriminatedUnion("mode", [
 ]);
 export type PreviewNumerologyRequest = z.infer<typeof previewNumerologyRequestSchema>;
 
-export const persistNumerologyCalculationRequestSchema = z.discriminatedUnion("mode", [
-  individualRequestSchema("required"),
-  compatibilityRequestSchema("required")
-]);
+export const persistNumerologyCalculationRequestSchema = z
+  .discriminatedUnion("mode", [
+    individualRequestSchema("required"),
+    compatibilityRequestSchema("required")
+  ])
+  .superRefine((value, ctx) => {
+    if (value.participants.some((participant) => participant.source === "crm_client")) return;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["participants"],
+      message: "Persisted numerology calculation requires at least one CRM client"
+    });
+  });
 export type PersistNumerologyCalculationRequest = z.infer<
   typeof persistNumerologyCalculationRequestSchema
 >;

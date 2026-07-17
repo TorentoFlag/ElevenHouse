@@ -50,6 +50,7 @@ const csrfCookieName = "elevenhouse_astrologer_csrf";
 const csrfHeaderName = "x-csrf-token";
 const sessionToken = "raw-session-token";
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
+const clientUserId = "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e";
 let currentCsrfToken = "";
 
 const defaultPasswordlessRateLimits = {
@@ -115,7 +116,7 @@ describe("numerology HTTP routes", () => {
       .overrideProvider(CALCULATION_PDF_JOB_STORE)
       .useValue(calculationPdfJobStore)
       .overrideProvider(CLIENT_STORE)
-      .useValue(createUnusedClientStore())
+      .useValue(createClientStore())
       .overrideProvider(ASTROLOGER_PROFILE_STORE)
       .useValue(createProfileStore())
       .overrideProvider(AiGenerationService)
@@ -161,12 +162,19 @@ describe("numerology HTTP routes", () => {
       { ...persistBody(), methodCode: "vedic" },
       csrfHeaders()
     );
+    const manualOnly = await postJson(
+      "/numerology/calculations",
+      manualPersistBody(),
+      csrfHeaders()
+    );
 
     expect(missingCsrf.status).toBe(403);
     expect(created.status).toBe(201);
     numerologyCalculationResponseSchema.parse(created.body);
     expect(unsupported.status).toBe(422);
     expect(unsupported.body).toMatchObject({ code: "UNSUPPORTED_NUMEROLOGY_METHOD" });
+    expect(manualOnly.status).toBe(400);
+    expect(manualOnly.body).toMatchObject({ code: "NUMEROLOGY_VALIDATION_FAILED" });
   });
 
   it("creates a checksum-bound AI draft without exposing internal metadata", async () => {
@@ -334,7 +342,7 @@ function createCalculationStore(): CalculationStore {
             record.requestFingerprint === input.requestFingerprint
         ) ?? null
     ),
-    create: vi.fn(async (input) => {
+    create: vi.fn(async (input: Parameters<CalculationStore["create"]>[0]) => {
       const record: CalculationRecord = {
         id: input.idGenerator(),
         ownerUserId: input.ownerUserId,
@@ -342,14 +350,19 @@ function createCalculationStore(): CalculationStore {
         mode: input.mode,
         methodCode: input.methodCode,
         title: input.title,
-        status: "calculated",
+        status: input.linkClientIds.length > 0 ? "linked" : "calculated",
         participants: input.participants,
         requestFingerprint: input.requestFingerprint,
         inputData: input.inputData,
         resultData: input.resultData,
         resultSummary: input.resultSummary,
         resultChecksum: input.resultChecksum,
-        links: [],
+        links: input.linkClientIds.map((clientId) => ({
+          clientId,
+          visibility: "private_to_astrologer" as const,
+          linkedAt: input.now,
+          publishedAt: null
+        })),
         interpretations: [],
         artifacts: [],
         createdAt: input.now,
@@ -459,7 +472,7 @@ function createCalculationPdfJobStore(): CalculationPdfJobStore {
   };
 }
 
-function createUnusedClientStore(): ClientStore {
+function createClientStore(): ClientStore {
   return {
     createJoinIntent: vi.fn(async () => raise()),
     findJoinIntentByTokenHash: vi.fn(async () => null),
@@ -468,7 +481,35 @@ function createUnusedClientStore(): ClientStore {
     upsertClientProfile: vi.fn(async () => undefined),
     upsertClientBirthData: vi.fn(async () => raise()),
     listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
-    getAstrologerClient: vi.fn(async () => null)
+    getAstrologerClient: vi.fn(async (input) =>
+      input.astrologerUserId === ownerUserId && input.clientUserId === clientUserId
+        ? {
+            clientUserId,
+            displayName: "Голубев Антон",
+            relationshipStatus: "active" as const,
+            firstLinkedAt: now.toISOString(),
+            lastLinkedAt: now.toISOString(),
+            birthData: {
+              id: "4ab63db1-4f78-4d59-9b75-c21fc3ec9f6e",
+              clientUserId,
+              label: null,
+              birthDate: "2000-08-19",
+              birthTime: null,
+              birthTimePrecision: "unknown" as const,
+              birthPlaceText: null,
+              birthCountryCode: null,
+              birthCity: null,
+              birthRegion: null,
+              birthTimezone: null,
+              birthLatitude: null,
+              birthLongitude: null,
+              source: "manual" as const,
+              createdAt: now.toISOString(),
+              updatedAt: now.toISOString()
+            }
+          }
+        : null
+    )
   };
 }
 
@@ -533,7 +574,7 @@ function createAuthStore(): AuthSessionAuthenticationStore {
 }
 
 function previewBody(): Record<string, unknown> {
-  const preview = { ...persistBody() };
+  const preview = { ...manualPersistBody() };
   delete preview.title;
   return preview;
 }
@@ -543,17 +584,7 @@ function persistBody(): Record<string, unknown> {
     mode: "individual",
     methodCode: "pythagorean",
     title: "Голубев Антон",
-    participants: [
-      {
-        role: "subject",
-        source: "manual",
-        clientId: null,
-        displayName: "Голубев Антон",
-        calculationName: "Голубев Антон",
-        calculationNameSource: "manual_entry",
-        birthDate: "2000-08-19"
-      }
-    ],
+    participants: [{ role: "subject", source: "crm_client", clientId: clientUserId }],
     periodRequest: { kind: "explicit", personalYear: { year: 2026 } }
   };
 }
@@ -573,6 +604,26 @@ function compatibilityPersistBody(): Record<string, unknown> {
         calculationName: "Кошкина Яна Владимировна",
         calculationNameSource: "manual_entry",
         birthDate: "2002-03-16"
+      }
+    ],
+    periodRequest: { kind: "explicit", personalYear: { year: 2026 } }
+  };
+}
+
+function manualPersistBody(): Record<string, unknown> {
+  return {
+    mode: "individual",
+    methodCode: "pythagorean",
+    title: "Мария Иванова",
+    participants: [
+      {
+        role: "subject",
+        source: "manual",
+        clientId: null,
+        displayName: "Мария Иванова",
+        calculationName: "Мария Иванова",
+        calculationNameSource: "manual_entry",
+        birthDate: "1990-03-14"
       }
     ],
     periodRequest: { kind: "explicit", personalYear: { year: 2026 } }

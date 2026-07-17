@@ -39,10 +39,10 @@ export function NumerologyCalculationEditor({
   const actionLabel = isBusy
     ? editor.kind === "recalculate"
       ? "Пересчёт…"
-      : "Сохранение…"
+      : "Расчёт…"
     : editor.kind === "recalculate"
       ? "Пересчитать"
-      : "Рассчитать и сохранить";
+      : "Рассчитать";
 
   return (
     <section className={styles.editor} aria-labelledby="numerology-editor-title">
@@ -56,21 +56,23 @@ export function NumerologyCalculationEditor({
         <p>
           {editor.kind === "recalculate"
             ? "Текущий результат будет заменён без создания истории версий."
-            : "Ручные участники сохраняются только внутри расчёта и не создают CRM-клиентов."}
+            : "Ручные участники используются только для текущего расчёта и не создают CRM-клиентов."}
         </p>
       </div>
 
       <div className={styles.editorFields}>
-        <label className={styles.fieldWide}>
-          <span>Название расчёта</span>
-          <input
-            aria-label="Название расчёта"
-            value={editor.form.title}
-            maxLength={200}
-            disabled={isBusy}
-            onChange={(event) => onFormChange({ title: event.currentTarget.value })}
-          />
-        </label>
+        {editor.kind === "recalculate" ? (
+          <label className={styles.fieldWide}>
+            <span>Название расчёта</span>
+            <input
+              aria-label="Название расчёта"
+              value={editor.form.title}
+              maxLength={200}
+              disabled={isBusy}
+              onChange={(event) => onFormChange({ title: event.currentTarget.value })}
+            />
+          </label>
+        ) : null}
         <label className={styles.fieldWide}>
           <span>Тип расчёта</span>
           <select

@@ -57,7 +57,7 @@ describe("Numerology saved workspace components", () => {
     savedButton.props.onClick?.();
     findButton(view, "Новый расчёт").props.onClick?.();
     findButton(view, "Пересчитать").props.onClick?.();
-    findButton(view, "В архив").props.onClick?.();
+    findButton(view, "Удалить расчёт").props.onClick?.();
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ id: "11111111-1111-4111-8111-111111111111" })
     );
@@ -66,7 +66,7 @@ describe("Numerology saved workspace components", () => {
     expect(onArchive).toHaveBeenCalledOnce();
   });
 
-  it("renders manual individual fields and explicit persistence actions", () => {
+  it("renders manual individual fields and a preview action", () => {
     const onParticipantChange = vi.fn();
     const onSubmit = vi.fn();
     const onCancel = vi.fn();
@@ -92,7 +92,14 @@ describe("Numerology saved workspace components", () => {
 
     expect(findInput(participantView, "Полное имя клиента")).toBeDefined();
     expect(findInput(participantView, "Дата рождения клиента")).toBeDefined();
-    findButton(view, "Рассчитать и сохранить").props.onClick?.();
+    expect(
+      findElements(view).some(
+        (element) =>
+          element.type === "input" &&
+          (element.props as { "aria-label"?: string })["aria-label"] === "Название расчёта"
+      )
+    ).toBe(false);
+    findButton(view, "Рассчитать").props.onClick?.();
     findButton(view, "Отмена").props.onClick?.();
     expect(onSubmit).toHaveBeenCalledOnce();
     expect(onCancel).toHaveBeenCalledOnce();
@@ -128,7 +135,7 @@ describe("Numerology saved workspace components", () => {
     expect(pickers.map((picker) => picker.props.label)).toEqual(["Партнер"]);
   });
 
-  it("uses a shared modal for explicit archive confirmation", () => {
+  it("uses a shared modal for explicit delete confirmation", () => {
     const onConfirm = vi.fn();
     const onClose = vi.fn();
     const view = NumerologyArchiveDialog({
@@ -142,8 +149,14 @@ describe("Numerology saved workspace components", () => {
       onClose: () => void;
     }>(view, Modal);
 
-    expect(modal.props.title).toBe("Переместить расчёт в архив?");
-    findButton(view, "В архив").props.onClick?.();
+    expect(modal.props.title).toBe("Удалить расчёт?");
+    expect(
+      elementIncludesText(
+        view,
+        "«Антон Голубев, психоматрица» исчезнет из рабочего пространства. Восстановить его через интерфейс не получится."
+      )
+    ).toBe(true);
+    findButton(view, "Удалить").props.onClick?.();
     expect(onConfirm).toHaveBeenCalledOnce();
     modal.props.onClose();
     expect(onClose).toHaveBeenCalledOnce();
@@ -167,8 +180,8 @@ describe("Numerology saved workspace components", () => {
       onClose: vi.fn()
     });
 
-    expect(findButton(editorView, "Сохранение…").props.disabled).toBe(true);
-    expect(findButton(archiveView, "Перемещение…").props.disabled).toBe(true);
+    expect(findButton(editorView, "Расчёт…").props.disabled).toBe(true);
+    expect(findButton(archiveView, "Удаление…").props.disabled).toBe(true);
   });
 });
 

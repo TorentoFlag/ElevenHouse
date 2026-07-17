@@ -1,9 +1,11 @@
 import {
   createNumerologyCalculationRequestSchema,
   previewNumerologyRequestSchema,
+  recalculateNumerologyCalculationRequestSchema,
   type CreateNumerologyCalculationRequest,
   type NumerologyParticipantRequest,
-  type PreviewNumerologyRequest
+  type PreviewNumerologyRequest,
+  type RecalculateNumerologyCalculationRequest
 } from "@elevenhouse/contracts";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
 
@@ -96,7 +98,6 @@ export function toClientParticipantFormState(
 
 export function getNumerologyFormErrors(state: NumerologyFormState): readonly string[] {
   const errors: string[] = [];
-  if (!state.title.trim()) errors.push("Введите название расчета");
   addParticipantErrors(errors, state.subject, "Клиент");
 
   if (state.mode === "compatibility") {
@@ -114,29 +115,32 @@ export function getNumerologyFormErrors(state: NumerologyFormState): readonly st
   return errors;
 }
 
+export function getNumerologyRecalculationErrors(state: NumerologyFormState): readonly string[] {
+  return [
+    ...(!state.title.trim() ? ["Введите название расчета"] : []),
+    ...getNumerologyFormErrors(state)
+  ];
+}
+
+export function hasNumerologyCrmParticipant(state: NumerologyFormState): boolean {
+  return participantsForState(state).some((participant) => participant.source === "crm_client");
+}
+
+export function getNumerologyCalculationTitle(state: NumerologyFormState): string {
+  const subjectName = participantName(state.subject, "Клиент");
+  if (state.mode === "compatibility") {
+    return `${subjectName} + ${participantName(state.partner, "Партнер")}, совместимость`;
+  }
+  return `${subjectName}, психоматрица`;
+}
+
 export function toCreateNumerologyRequest(
   state: NumerologyFormState
 ): CreateNumerologyCalculationRequest {
-  const common = {
-    methodCode: "pythagorean" as const,
-    title: state.title.trim(),
-    periodRequest: toPeriodRequest(state.forecastDate)
+  const request = {
+    ...toRequestBase(state),
+    title: state.title.trim() || getNumerologyCalculationTitle(state)
   };
-  const request =
-    state.mode === "individual"
-      ? {
-          ...common,
-          mode: "individual" as const,
-          participants: [toParticipantRequest(state.subject, "subject")] as const
-        }
-      : {
-          ...common,
-          mode: "compatibility" as const,
-          participants: [
-            toParticipantRequest(state.subject, "subject"),
-            toParticipantRequest(state.partner, "partner")
-          ] as const
-        };
   return createNumerologyCalculationRequestSchema.parse(
     request
   ) as CreateNumerologyCalculationRequest;
@@ -146,10 +150,50 @@ export function toPreviewNumerologyRequest(
   state: NumerologyFormState,
   periodRequest: PreviewNumerologyRequest["periodRequest"] = toPeriodRequest(state.forecastDate)
 ): PreviewNumerologyRequest {
-  const persisted = toCreateNumerologyRequest(state) as unknown as Record<string, unknown>;
-  const request: Record<string, unknown> = { ...persisted, periodRequest };
-  delete request.title;
-  return previewNumerologyRequestSchema.parse(request) as PreviewNumerologyRequest;
+  return previewNumerologyRequestSchema.parse({
+    ...toRequestBase(state),
+    periodRequest
+  }) as PreviewNumerologyRequest;
+}
+
+export function toRecalculateNumerologyRequest(
+  state: NumerologyFormState
+): RecalculateNumerologyCalculationRequest {
+  return recalculateNumerologyCalculationRequestSchema.parse({
+    ...toRequestBase(state),
+    title: state.title.trim() || getNumerologyCalculationTitle(state)
+  }) as RecalculateNumerologyCalculationRequest;
+}
+
+function toRequestBase(state: NumerologyFormState) {
+  const common = {
+    methodCode: "pythagorean" as const,
+    periodRequest: toPeriodRequest(state.forecastDate)
+  };
+  return state.mode === "individual"
+    ? {
+        ...common,
+        mode: "individual" as const,
+        participants: [toParticipantRequest(state.subject, "subject")] as const
+      }
+    : {
+        ...common,
+        mode: "compatibility" as const,
+        participants: [
+          toParticipantRequest(state.subject, "subject"),
+          toParticipantRequest(state.partner, "partner")
+        ] as const
+      };
+}
+
+function participantsForState(
+  state: NumerologyFormState
+): readonly NumerologyParticipantFormState[] {
+  return state.mode === "compatibility" ? [state.subject, state.partner] : [state.subject];
+}
+
+function participantName(participant: NumerologyParticipantFormState, fallback: string): string {
+  return participant.displayName.trim() || participant.fullName.trim() || fallback;
 }
 
 function toParticipantRequest(

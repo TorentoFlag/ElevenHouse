@@ -16,12 +16,9 @@ export function NumerologyArchiveDialog({
   onClose
 }: NumerologyArchiveDialogProps) {
   return (
-    <Modal title="Переместить расчёт в архив?" closeLabel="Закрыть" onClose={onClose}>
+    <Modal title="Удалить расчёт?" closeLabel="Закрыть" onClose={onClose}>
       <div className={styles.archiveDialog}>
-        <p>
-          «{calculationTitle}» исчезнет из активного списка. Данные сохранятся в архиве и не будут
-          удалены физически.
-        </p>
+        <p>{`«${calculationTitle}» исчезнет из рабочего пространства. Восстановить его через интерфейс не получится.`}</p>
         <div className={styles.archiveActions}>
           <button
             type="button"
@@ -29,7 +26,7 @@ export function NumerologyArchiveDialog({
             disabled={isPending}
             onClick={onConfirm}
           >
-            {isPending ? "Перемещение…" : "В архив"}
+            {isPending ? "Удаление…" : "Удалить"}
           </button>
           <button
             type="button"

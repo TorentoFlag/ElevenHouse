@@ -58,7 +58,7 @@ describe("NumerologyPageView", () => {
     expect(menu.props.triggerAriaLabel).toBe("Действия расчёта");
     expect(menu.props.items.map((item) => item.id)).toEqual([
       "presentation",
-      "link",
+      "delete",
       "pdf"
     ]);
     expect(findOptionalButtonByText(view, "Презентация")).toBeNull();
@@ -68,7 +68,7 @@ describe("NumerologyPageView", () => {
 
   it("maps each enabled menu command to its existing callback exactly once", () => {
     const onOpenPresentation = vi.fn();
-    const onLink = vi.fn();
+    const onRequestArchive = vi.fn();
     const onPdf = vi.fn();
     const view = NumerologyPageView({
       ...baseProps(),
@@ -79,16 +79,16 @@ describe("NumerologyPageView", () => {
       pdfDisabled: false,
       pdfTitle: "Сформировать PDF",
       onOpenPresentation,
-      onLink,
+      onRequestArchive,
       onPdf
     });
 
     getActionMenuItem(view, "presentation").onSelect();
-    getActionMenuItem(view, "link").onSelect();
+    getActionMenuItem(view, "delete").onSelect();
     getActionMenuItem(view, "pdf").onSelect();
 
     expect(onOpenPresentation).toHaveBeenCalledOnce();
-    expect(onLink).toHaveBeenCalledOnce();
+    expect(onRequestArchive).toHaveBeenCalledOnce();
     expect(onPdf).toHaveBeenCalledOnce();
     expect(findOptionalButtonByText(view, "Опубликовать")).toBeNull();
   });
@@ -130,7 +130,7 @@ describe("NumerologyPageView", () => {
     expect(getToolbarActionMenu(view)).toBeDefined();
     const calculationMenu = renderCalculationMenu(view);
     expect(findButtonByText(calculationMenu, "Пересчитать")).toBeDefined();
-    expect(findButtonByText(calculationMenu, "В архив")).toBeDefined();
+    expect(findButtonByText(calculationMenu, "Удалить расчёт")).toBeDefined();
     expect(findRequiredElementByType(view, NumerologyCalculationMenu)).toBeDefined();
   });
 
@@ -194,8 +194,8 @@ describe("NumerologyPageView", () => {
   it("passes active saved calculations to the workspace menu", () => {
     const onSelectSaved = vi.fn();
     const saved = response({
-      source: "manual",
-      clientId: null
+      source: "crm_client",
+      clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
     }).calculation;
     const view = NumerologyPageView({
       ...baseProps(),
@@ -445,7 +445,8 @@ describe("NumerologyPageView", () => {
     expect(findRequiredElementByType(view, NumerologyYearPicker)).toBeDefined();
     expect(getButtonIconName(view, "Совместимость")).toBe("users");
     expect(getActionMenuIconName(view, "presentation")).toBe("arrowUpRight");
-    expect(getActionMenuIconName(view, "link")).toBe("pin");
+    expect(getActionMenuIconName(view, "delete")).toBe("trash");
+    expect(getActionMenuItem(view, "delete").tone).toBe("danger");
     expect(getActionMenuIconName(view, "pdf")).toBe("doc");
     expect(findButtonByText(renderCalculationMenu(view), "Пересчитать")).toBeDefined();
   });
@@ -643,7 +644,7 @@ function response(participant: {
       mode: "individual",
       methodCode: "pythagorean",
       title: "Мария",
-      status: "calculated",
+      status: participant.clientId ? "linked" : "calculated",
       requestFingerprint: `sha256:${"a".repeat(64)}`,
       inputData: {},
       resultData: result,
@@ -657,7 +658,16 @@ function response(participant: {
           displayName: "Мария"
         }
       ],
-      links: [],
+      links: participant.clientId
+        ? [
+            {
+              clientId: participant.clientId,
+              visibility: "private_to_astrologer",
+              linkedAt: "2026-07-06T00:00:00.000Z",
+              publishedAt: null
+            }
+          ]
+        : [],
       interpretations: [],
       artifacts: [],
       createdAt: "2026-07-06T00:00:00.000Z",

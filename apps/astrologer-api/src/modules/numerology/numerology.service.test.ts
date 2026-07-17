@@ -69,8 +69,8 @@ describe("NumerologyService", () => {
     const store = createCalculationStore();
     const service = createService({ store });
 
-    const first = await service.createCalculation(manualIndividualBody(), request());
-    const replay = await service.createCalculation(manualIndividualBody(), request());
+    const first = await service.createCalculation(persistedIndividualBody(), request());
+    const replay = await service.createCalculation(persistedIndividualBody(), request());
 
     numerologyCalculationResponseSchema.parse(first);
     expect(replay.calculation.id).toBe(first.calculation.id);
@@ -98,10 +98,29 @@ describe("NumerologyService", () => {
     expect(store.ensureClientLinks).not.toHaveBeenCalled();
   });
 
+  it("persists mixed compatibility with a link only for the CRM participant", async () => {
+    const store = createCalculationStore();
+    const service = createService({ store });
+
+    const response = await service.createCalculation(mixedCompatibilityBody(), request());
+
+    expect(response.calculation).toMatchObject({
+      status: "linked",
+      links: [{ clientId }],
+      participants: [
+        { role: "subject", source: "crm_client", clientId },
+        { role: "partner", source: "manual", clientId: null }
+      ]
+    });
+    expect(store.create).toHaveBeenCalledWith(
+      expect.objectContaining({ linkClientIds: [clientId] })
+    );
+  });
+
   it("passes an edited title through replacement recalculation", async () => {
     const store = createCalculationStore();
     const service = createService({ store });
-    const saved = await service.createCalculation(manualIndividualBody(), request());
+    const saved = await service.createCalculation(persistedIndividualBody(), request());
     vi.mocked(store.replaceResult).mockImplementationOnce(async (input) => ({
       status: "updated" as const,
       calculation: {
@@ -121,7 +140,7 @@ describe("NumerologyService", () => {
 
     const response = await service.recalculate(
       saved.calculation.id,
-      { ...manualIndividualBody(), title: "Голубев Антон, обновлённый расчёт" },
+      { ...persistedIndividualBody(), title: "Голубев Антон, обновлённый расчёт" },
       request()
     );
 
@@ -151,7 +170,7 @@ describe("NumerologyService", () => {
   it("rejects a saved result whose checksum no longer matches", async () => {
     const store = createCalculationStore();
     const service = createService({ store });
-    await service.createCalculation(manualIndividualBody(), request());
+    await service.createCalculation(persistedIndividualBody(), request());
     const existing = await store.findExact({
       ownerUserId,
       module: "numerology",
@@ -161,13 +180,15 @@ describe("NumerologyService", () => {
         .requestFingerprint
     });
     if (!existing) throw new Error("Expected saved calculation");
-    (store.findExact as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const corrupted = {
       ...existing,
       resultChecksum: `sha256:${"0".repeat(64)}`
-    });
+    };
+    (store.findExact as ReturnType<typeof vi.fn>).mockResolvedValueOnce(corrupted);
+    (store.ensureClientLinks as ReturnType<typeof vi.fn>).mockResolvedValueOnce(corrupted);
 
     await expectHttpCode(
-      service.createCalculation(manualIndividualBody(), request()),
+      service.createCalculation(persistedIndividualBody(), request()),
       500,
       "CALCULATION_RESULT_INTEGRITY_ERROR"
     );
@@ -182,7 +203,7 @@ describe("NumerologyService", () => {
     const store = createCalculationStore();
     const aiGeneration = createAiGeneration();
     const service = createService({ store, aiGeneration, locale: "en" });
-    const saved = await service.createCalculation(manualIndividualBody(), request());
+    const saved = await service.createCalculation(persistedIndividualBody(), request());
     const internal = await store.findByOwnerAndId({
       ownerUserId,
       calculationId: saved.calculation.id
@@ -234,7 +255,7 @@ describe("NumerologyService", () => {
     const store = createCalculationStore();
     const aiGeneration = createAiGeneration();
     const service = createService({ store, aiGeneration });
-    const saved = await service.createCalculation(manualIndividualBody(), request());
+    const saved = await service.createCalculation(persistedIndividualBody(), request());
 
     await expectHttpCode(
       service.createAiDraft(
@@ -306,7 +327,7 @@ describe("NumerologyService", () => {
     const store = createCalculationStore();
     const aiGeneration = createAiGeneration();
     const service = createService({ store, aiGeneration });
-    const saved = await service.createCalculation(manualIndividualBody(), request());
+    const saved = await service.createCalculation(persistedIndividualBody(), request());
     const internal = await store.findByOwnerAndId({
       ownerUserId,
       calculationId: saved.calculation.id
@@ -534,6 +555,10 @@ function crmIndividualBody(): Record<string, unknown> {
   };
 }
 
+function persistedIndividualBody(): Record<string, unknown> {
+  return { ...crmIndividualBody(), title: "Голубев Антон" };
+}
+
 function currentYearManualBody(): Record<string, unknown> {
   const preview = { ...manualIndividualBody() };
   delete preview.title;
@@ -568,6 +593,27 @@ function compatibilityBody(subjectId: string, partnerId: string): Record<string,
     participants: [
       { role: "subject", source: "crm_client", clientId: subjectId },
       { role: "partner", source: "crm_client", clientId: partnerId }
+    ],
+    periodRequest: { kind: "explicit", personalYear: { year: 2026 } }
+  };
+}
+
+function mixedCompatibilityBody(): Record<string, unknown> {
+  return {
+    mode: "compatibility",
+    methodCode: "pythagorean",
+    title: "Голубев Антон + Мария Иванова",
+    participants: [
+      { role: "subject", source: "crm_client", clientId },
+      {
+        role: "partner",
+        source: "manual",
+        clientId: null,
+        displayName: "Мария Иванова",
+        calculationName: "Мария Иванова",
+        calculationNameSource: "manual_entry",
+        birthDate: "1990-03-14"
+      }
     ],
     periodRequest: { kind: "explicit", personalYear: { year: 2026 } }
   };

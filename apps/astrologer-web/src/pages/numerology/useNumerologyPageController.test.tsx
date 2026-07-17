@@ -1,11 +1,14 @@
 import type {
   CalculationPdfJob,
   CalculationRecordResponse,
-  NumerologyCalculationResponse
+  NumerologyCalculationResponse,
+  NumerologyPreviewResponse
 } from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { HttpError } from "../../common/http/HttpError";
+import { createInitialNumerologyForm } from "../../features/numerology/model/numerologyFormModel";
 import {
+  executeNumerologyEditorSubmission,
   executeNumerologyPdfAction,
   requestNumerologyAiDraft
 } from "./useNumerologyPageController";
@@ -24,6 +27,70 @@ const calculation = {
   ]
 } as CalculationRecordResponse;
 const response = { calculation } as NumerologyCalculationResponse;
+
+describe("Numerology editor submission", () => {
+  it("previews a new manual calculation without persisting it", async () => {
+    const previewResponse = { result: { mode: "individual" } } as NumerologyPreviewResponse;
+    const preview = vi.fn(async () => previewResponse);
+    const recalculate = vi.fn();
+
+    await expect(
+      executeNumerologyEditorSubmission({
+        editor: {
+          kind: "create",
+          calculationId: null,
+          form: manualEditorForm()
+        },
+        preview,
+        recalculate
+      })
+    ).resolves.toEqual({
+      kind: "preview",
+      response: previewResponse,
+      form: manualEditorForm()
+    });
+    expect(preview).toHaveBeenCalledWith({
+      mode: "individual",
+      methodCode: "pythagorean",
+      periodRequest: { kind: "current_year" },
+      participants: [
+        {
+          role: "subject",
+          source: "manual",
+          clientId: null,
+          displayName: "Антон Голубев",
+          calculationName: "Антон Голубев",
+          calculationNameSource: "manual_entry",
+          birthDate: "1990-01-02"
+        }
+      ]
+    });
+    expect(recalculate).not.toHaveBeenCalled();
+  });
+
+  it("keeps recalculation on the persisted mutation", async () => {
+    const preview = vi.fn();
+    const recalculate = vi.fn(async () => response);
+    const form = { ...manualEditorForm(), title: "Обновлённый расчёт" };
+
+    await expect(
+      executeNumerologyEditorSubmission({
+        editor: {
+          kind: "recalculate",
+          calculationId: calculation.id,
+          form
+        },
+        preview,
+        recalculate
+      })
+    ).resolves.toEqual({ kind: "recalculated", response });
+    expect(preview).not.toHaveBeenCalled();
+    expect(recalculate).toHaveBeenCalledWith({
+      calculationId: calculation.id,
+      body: expect.objectContaining({ title: "Обновлённый расчёт" })
+    });
+  });
+});
 
 describe("Numerology AI draft controller", () => {
   it("sends the selected calculation id and current result checksum", async () => {
@@ -178,5 +245,18 @@ function pdfJob(status: CalculationPdfJob["status"]): CalculationPdfJob {
     failureReason: null,
     createdAt: "2026-07-15T00:00:00.000Z",
     updatedAt: "2026-07-15T00:00:00.000Z"
+  };
+}
+
+function manualEditorForm() {
+  const initial = createInitialNumerologyForm();
+  return {
+    ...initial,
+    subject: {
+      ...initial.subject,
+      displayName: "Антон Голубев",
+      fullName: "Антон Голубев",
+      birthDate: "1990-01-02"
+    }
   };
 }

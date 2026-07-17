@@ -164,7 +164,16 @@ const comparisonBlocks = [
   ["psychomatrix", ["1", "2", "3", "4", "5", "6", "7", "8", "9"]],
   [
     "strength_lines",
-    ["goal", "family", "stability", "self_esteem", "material", "talent", "spirituality", "temperament"]
+    [
+      "goal",
+      "family",
+      "stability",
+      "self_esteem",
+      "material",
+      "talent",
+      "spirituality",
+      "temperament"
+    ]
   ]
 ] as const;
 
@@ -268,6 +277,48 @@ describe("numerology contracts", () => {
         participants: [{ ...manual.participants[0], birthDate: "2999-01-01" }]
       })
     ).toThrow();
+  });
+
+  it("keeps manual compatibility preview-only while allowing mixed persistence", () => {
+    const manualSubject = {
+      role: "subject" as const,
+      source: "manual" as const,
+      clientId: null,
+      displayName: "Антон",
+      calculationName: "Голубев Антон",
+      calculationNameSource: "manual_entry" as const,
+      birthDate: "2000-08-19"
+    };
+    const manualPartner = {
+      role: "partner" as const,
+      source: "manual" as const,
+      clientId: null,
+      displayName: "Мария",
+      calculationName: "Мария Иванова",
+      calculationNameSource: "manual_entry" as const,
+      birthDate: "1990-03-14"
+    };
+    const manualCompatibility = {
+      mode: "compatibility" as const,
+      methodCode: "pythagorean" as const,
+      participants: [manualSubject, manualPartner] as const,
+      periodRequest: { kind: "current_year" as const }
+    };
+
+    expect(previewNumerologyRequestSchema.safeParse(manualCompatibility).success).toBe(true);
+    expect(
+      persistNumerologyCalculationRequestSchema.safeParse({
+        ...manualCompatibility,
+        title: "Антон + Мария, совместимость"
+      }).success
+    ).toBe(false);
+    expect(
+      persistNumerologyCalculationRequestSchema.safeParse({
+        ...manualCompatibility,
+        title: "Антон + Мария, совместимость",
+        participants: [individualPreviewRequest.participants[0], manualPartner]
+      }).success
+    ).toBe(true);
   });
 
   it("enforces mode roles, unique CRM clients, supported method and explicit period validity", () => {

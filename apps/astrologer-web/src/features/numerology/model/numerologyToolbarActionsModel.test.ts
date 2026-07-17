@@ -8,6 +8,7 @@ describe("buildNumerologyToolbarActions", () => {
         id: "presentation",
         label: "Открыть презентацию",
         iconName: "arrowUpRight",
+        tone: "default",
         disabled: false,
         description: null
       },
@@ -15,6 +16,7 @@ describe("buildNumerologyToolbarActions", () => {
         id: "link",
         label: "Привязать к клиенту",
         iconName: "pin",
+        tone: "default",
         disabled: false,
         description: null
       },
@@ -22,6 +24,7 @@ describe("buildNumerologyToolbarActions", () => {
         id: "pdf",
         label: "Сформировать PDF",
         iconName: "doc",
+        tone: "default",
         disabled: false,
         description: null
       }
@@ -30,14 +33,13 @@ describe("buildNumerologyToolbarActions", () => {
 
   it("shows linked, unavailable and pending states with reasons", () => {
     expect(
-      buildNumerologyToolbarActions(
-        baseInput({ isCalculationLinked: true, linkDisabled: true })
-      )[1]
+      buildNumerologyToolbarActions(baseInput({ isCalculationLinked: true, linkDisabled: true }))[1]
     ).toEqual({
-      id: "link",
-      label: "Привязано к клиенту",
-      iconName: "check",
-      disabled: true,
+      id: "delete",
+      label: "Удалить расчёт",
+      iconName: "trash",
+      tone: "danger",
+      disabled: false,
       description: null
     });
 

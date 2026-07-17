@@ -180,6 +180,7 @@ export function NumerologyPageView({
   const toolbarActionHandlers = {
     presentation: onOpenPresentation,
     link: onLink,
+    delete: onRequestArchive,
     pdf: onPdf
   } satisfies Readonly<Record<NumerologyToolbarActionId, () => void>>;
 
@@ -357,6 +358,7 @@ function createToolbarActionMenuItems(
       </span>
     ),
     icon: <Icon iconName={action.iconName} width={15} height={15} aria-hidden="true" />,
+    tone: action.tone,
     disabled: action.disabled,
     onSelect: handlers[action.id]
   }));

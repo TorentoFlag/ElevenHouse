@@ -7,7 +7,9 @@ import {
   createInitialNumerologyForm,
   createParticipantFormState,
   getNumerologyFormErrors,
+  getNumerologyRecalculationErrors,
   toCreateNumerologyRequest,
+  toRecalculateNumerologyRequest,
   type NumerologyFormState,
   type NumerologyParticipantFormState
 } from "./numerologyFormModel";
@@ -35,7 +37,10 @@ export function getActiveNumerologyCalculations(
 ): readonly CalculationRecordResponse[] {
   return calculations
     .filter(
-      (calculation) => calculation.module === "numerology" && calculation.status !== "archived"
+      (calculation) =>
+        calculation.module === "numerology" &&
+        calculation.status !== "archived" &&
+        calculation.links.length > 0
     )
     .slice()
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
@@ -56,11 +61,17 @@ export function toSavedCalculationListItem(
   };
 }
 
-export function createNewNumerologyEditorState(): NumerologyEditorState {
+export function createNewNumerologyEditorState(
+  prefilledSubject?: NumerologyParticipantFormState
+): NumerologyEditorState {
+  const form = createInitialNumerologyForm();
   return {
     kind: "create",
     calculationId: null,
-    form: createInitialNumerologyForm()
+    form: {
+      ...form,
+      subject: prefilledSubject?.source === "crm_client" ? { ...prefilledSubject } : form.subject
+    }
   };
 }
 
@@ -102,7 +113,9 @@ export function updateNumerologyEditorParticipant(
 }
 
 export function getNumerologyEditorErrors(editor: NumerologyEditorState): readonly string[] {
-  return getNumerologyFormErrors(editor.form);
+  return editor.kind === "recalculate"
+    ? getNumerologyRecalculationErrors(editor.form)
+    : getNumerologyFormErrors(editor.form);
 }
 
 export function toNumerologyCreateRequest(
@@ -114,5 +127,5 @@ export function toNumerologyCreateRequest(
 export function toNumerologyRecalculateRequest(
   editor: NumerologyEditorState
 ): RecalculateNumerologyCalculationRequest {
-  return toCreateNumerologyRequest(editor.form) as RecalculateNumerologyCalculationRequest;
+  return toRecalculateNumerologyRequest(editor.form);
 }

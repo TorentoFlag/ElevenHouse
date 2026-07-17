@@ -7,7 +7,10 @@ import type {
   CalculationPdfLocale,
   CalculationRecordResponse,
   NumerologyCalculationResponse,
-  NumerologyResult
+  NumerologyPreviewResponse,
+  NumerologyResult,
+  PreviewNumerologyRequest,
+  RecalculateNumerologyCalculationRequest
 } from "@elevenhouse/contracts";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { HttpError } from "../../common/http/HttpError";
@@ -28,6 +31,7 @@ import {
 import {
   createInitialNumerologyForm,
   getNumerologyFormErrors,
+  hasNumerologyCrmParticipant,
   toClientParticipantFormState,
   toCreateNumerologyRequest,
   toPreviewNumerologyRequest,
@@ -68,7 +72,6 @@ import {
   createRecalculationEditorState,
   getActiveNumerologyCalculations,
   getNumerologyEditorErrors,
-  toNumerologyCreateRequest,
   toNumerologyRecalculateRequest,
   updateNumerologyEditorForm,
   updateNumerologyEditorParticipant,
@@ -268,6 +271,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     onClosePresentation: () => setIsPresentationOpen(false),
     onLink: () => {
       if (!selectedCalculation && previewResult) {
+        if (!hasNumerologyCrmParticipant(formState)) return;
         run(async () => {
           const response = await createMutation.mutateAsync(toCreateNumerologyRequest(formState));
           setPreviewResult(null);
@@ -358,7 +362,11 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   function openCreateEditor(): void {
     previewGuardRef.current.invalidate();
     aiDraftGuardRef.current.invalidate();
-    setEditorState(createNewNumerologyEditorState());
+    setEditorState(
+      createNewNumerologyEditorState(
+        formState.subject.source === "crm_client" ? formState.subject : undefined
+      )
+    );
     setEditorErrors([]);
     setArchiveTarget(null);
     setErrorMessage(null);
@@ -384,20 +392,32 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       return;
     }
 
-    run(async () => {
-      const response =
-        editorState.kind === "recalculate" && editorState.calculationId
-          ? await recalculateMutation.mutateAsync({
-              calculationId: editorState.calculationId,
-              body: toNumerologyRecalculateRequest(editorState)
-            })
-          : await createMutation.mutateAsync(toNumerologyCreateRequest(editorState));
-      setPreviewResult(null);
-      setSelectedResponse(response);
-      setFormState(toNumerologyFormState(response));
-      setEditorState(null);
-      setEditorErrors([]);
-    }, setErrorMessage);
+    const submittedEditor = editorState;
+    run(
+      async () => {
+        const outcome = await executeNumerologyEditorSubmission({
+          editor: submittedEditor,
+          preview: (body) => previewMutation.mutateAsync(body),
+          recalculate: (input) => recalculateMutation.mutateAsync(input)
+        });
+
+        if (outcome.kind === "preview") {
+          setSelectedResponse(null);
+          setPreviewResult(outcome.response.result);
+          setFormState(outcome.form);
+        } else {
+          setPreviewResult(null);
+          setSelectedResponse(outcome.response);
+          setFormState(toNumerologyFormState(outcome.response));
+        }
+        setEditorState(null);
+        setEditorErrors([]);
+      },
+      (message) => {
+        setErrorMessage(null);
+        setEditorErrors(message ? [message] : []);
+      }
+    );
   }
 
   function createAiDraft(): void {
@@ -610,6 +630,34 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       toClientOptionFromNumerologyParticipant(participant)
     );
   }
+}
+
+export type NumerologyEditorSubmissionOutcome =
+  | {
+      readonly kind: "preview";
+      readonly response: NumerologyPreviewResponse;
+      readonly form: NumerologyFormState;
+    }
+  | { readonly kind: "recalculated"; readonly response: NumerologyCalculationResponse };
+
+export async function executeNumerologyEditorSubmission(input: {
+  readonly editor: NumerologyEditorState;
+  readonly preview: (body: PreviewNumerologyRequest) => Promise<NumerologyPreviewResponse>;
+  readonly recalculate: (request: {
+    readonly calculationId: string;
+    readonly body: RecalculateNumerologyCalculationRequest;
+  }) => Promise<NumerologyCalculationResponse>;
+}): Promise<NumerologyEditorSubmissionOutcome> {
+  if (input.editor.kind === "recalculate" && input.editor.calculationId) {
+    const response = await input.recalculate({
+      calculationId: input.editor.calculationId,
+      body: toNumerologyRecalculateRequest(input.editor)
+    });
+    return { kind: "recalculated", response };
+  }
+
+  const response = await input.preview(toPreviewNumerologyRequest(input.editor.form));
+  return { kind: "preview", response, form: input.editor.form };
 }
 
 export type NumerologyAiDraftRequestOutcome =

@@ -1,9 +1,10 @@
-export type NumerologyToolbarActionId = "presentation" | "link" | "pdf";
+export type NumerologyToolbarActionId = "presentation" | "link" | "delete" | "pdf";
 
 export type NumerologyToolbarAction = {
   readonly id: NumerologyToolbarActionId;
   readonly label: string;
-  readonly iconName: "arrowUpRight" | "pin" | "check" | "doc";
+  readonly iconName: "arrowUpRight" | "pin" | "trash" | "doc";
+  readonly tone: "default" | "danger";
   readonly disabled: boolean;
   readonly description: string | null;
 };
@@ -27,6 +28,7 @@ export function buildNumerologyToolbarActions(
       id: "presentation",
       label: "Открыть презентацию",
       iconName: "arrowUpRight",
+      tone: "default",
       disabled: !input.hasResult,
       description: input.hasResult ? null : "Сначала выберите клиента"
     },
@@ -35,6 +37,7 @@ export function buildNumerologyToolbarActions(
       id: "pdf",
       label: getPdfMenuLabel(input.pdfLabel, input.pdfTitle),
       iconName: "doc",
+      tone: "default",
       disabled: input.pdfDisabled,
       description: input.pdfDisabled ? input.pdfTitle : null
     }
@@ -44,11 +47,12 @@ export function buildNumerologyToolbarActions(
 function buildLinkAction(input: NumerologyToolbarActionsInput): NumerologyToolbarAction {
   if (input.isCalculationLinked) {
     return {
-      id: "link",
-      label: "Привязано к клиенту",
-      iconName: "check",
-      disabled: true,
-      description: null
+      id: "delete",
+      label: "Удалить расчёт",
+      iconName: "trash",
+      tone: "danger",
+      disabled: input.isBusy,
+      description: input.isBusy ? "Действие выполняется" : null
     };
   }
 
@@ -56,6 +60,7 @@ function buildLinkAction(input: NumerologyToolbarActionsInput): NumerologyToolba
     id: "link",
     label: "Привязать к клиенту",
     iconName: "pin",
+    tone: "default",
     disabled: input.linkDisabled,
     description: getLinkDisabledReason(input)
   };

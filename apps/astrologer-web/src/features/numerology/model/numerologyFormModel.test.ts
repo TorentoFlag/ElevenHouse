@@ -9,18 +9,17 @@ import {
 } from "./numerologyFormModel";
 
 describe("numerologyFormModel", () => {
-  it("validates required participant fields", () => {
+  it("validates required participant fields without requiring a preview title", () => {
     const state = createInitialNumerologyForm();
 
     expect(getNumerologyFormErrors(state)).toEqual([
-      "Введите название расчета",
       "Клиент: введите полное имя",
       "Клиент: укажите дату рождения"
     ]);
   });
 
   it("creates an individual Pythagorean request without client-side method settings", () => {
-    const request = toCreateNumerologyRequest(validState());
+    const request = toCreateNumerologyRequest(validCrmState());
 
     expect(request).toMatchObject({
       mode: "individual",
@@ -33,9 +32,9 @@ describe("numerologyFormModel", () => {
 
   it("sends only the CRM identity and keeps preview free of persistence metadata", () => {
     const state = {
-      ...validState(),
+      ...validCrmState(),
       subject: {
-        ...validState().subject,
+        ...validCrmState().subject,
         source: "crm_client" as const,
         clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e",
         displayName: "Голубев Антон",
@@ -66,6 +65,28 @@ describe("numerologyFormModel", () => {
       kind: "explicit",
       personalYear: { year: 2027 },
       personalMonths: { year: 2027 }
+    });
+  });
+
+  it("previews manual input without a title or persistence validation", () => {
+    const state = { ...validState(), title: "" };
+
+    expect(toPreviewNumerologyRequest(state)).toMatchObject({
+      mode: "individual",
+      participants: [{ source: "manual", calculationName: "Мария Иванова" }]
+    });
+  });
+
+  it("derives a compatibility title when persisting a mixed preview", () => {
+    const state = {
+      ...validState(),
+      mode: "compatibility" as const,
+      title: "",
+      subject: validCrmState().subject
+    };
+
+    expect(toCreateNumerologyRequest(state)).toMatchObject({
+      title: "Голубев Антон + Алексей Петров, совместимость"
     });
   });
 
@@ -105,6 +126,20 @@ function validState(): NumerologyFormState {
       displayName: "",
       fullName: "Алексей Петров",
       birthDate: "1988-11-02"
+    }
+  };
+}
+
+function validCrmState(): NumerologyFormState {
+  return {
+    ...validState(),
+    subject: {
+      ...createParticipantFormState("crm_client"),
+      source: "crm_client",
+      clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e",
+      displayName: "Голубев Антон",
+      fullName: "Голубев Антон",
+      birthDate: "2000-08-19"
     }
   };
 }

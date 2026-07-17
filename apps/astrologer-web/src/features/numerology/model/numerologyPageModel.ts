@@ -21,6 +21,7 @@ import {
 import {
   createInitialNumerologyForm,
   createParticipantFormState,
+  getNumerologyCalculationTitle,
   type NumerologyFormState,
   type NumerologyParticipantFormState
 } from "./numerologyFormModel";
@@ -100,13 +101,7 @@ export function buildNumerologyPageViewModel(
   };
 }
 
-export function getCalculationTitle(state: NumerologyFormState): string {
-  const subjectName = state.subject.displayName || "Клиент";
-  if (state.mode === "compatibility") {
-    return `${subjectName} + ${state.partner.displayName || "Партнер"}, совместимость`;
-  }
-  return `${subjectName}, психоматрица`;
-}
+export const getCalculationTitle = getNumerologyCalculationTitle;
 
 export function getCurrentInterpretation(
   calculation: CalculationRecordResponse | null

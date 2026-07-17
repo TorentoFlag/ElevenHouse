@@ -68,7 +68,7 @@ export function NumerologyCalculationMenu({
               disabled={disabled}
               onClick={onArchive}
             >
-              В архив
+              Удалить расчёт
             </button>
           </div>
         ) : null}
