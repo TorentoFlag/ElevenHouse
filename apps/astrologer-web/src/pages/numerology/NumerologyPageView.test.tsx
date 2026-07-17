@@ -450,7 +450,7 @@ describe("NumerologyPageView", () => {
     expect(findButtonByText(renderCalculationMenu(view), "Пересчитать")).toBeDefined();
   });
 
-  it("keeps period selection unavailable in compatibility while exposing presentation", () => {
+  it("hides period selection in compatibility while exposing presentation", () => {
     const view = NumerologyPageView({
       ...baseProps(),
       formState: {
@@ -475,11 +475,6 @@ describe("NumerologyPageView", () => {
     const compatibilityButton = findButtonByText(view, "Совместимость") as ReactElement<{
       "aria-pressed"?: boolean;
     }>;
-    const yearPicker = findRequiredElementByType<{
-      readonly disabled: boolean;
-      readonly isOpen: boolean;
-    }>(view, NumerologyYearPicker);
-
     expect(clientPickers.map((picker) => picker.props.label)).toEqual(["Клиент", "Партнер"]);
     expect(clientPickers[0]?.props.excludeClientIds).toEqual([
       "4ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
@@ -488,8 +483,9 @@ describe("NumerologyPageView", () => {
       "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
     ]);
     expect(compatibilityButton.props["aria-pressed"]).toBe(true);
-    expect(yearPicker.props.disabled).toBe(true);
-    expect(yearPicker.props.isOpen).toBe(false);
+    expect(
+      findElements(view).some((element) => element.type === NumerologyYearPicker)
+    ).toBe(false);
     expect(getActionMenuItem(view, "presentation")).toBeDefined();
   });
 

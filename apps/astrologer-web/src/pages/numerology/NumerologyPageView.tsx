@@ -231,18 +231,20 @@ export function NumerologyPageView({
           </div>
           <div className={styles.toolbarSpacer} />
           <div className={styles.controlStrip}>
-            <NumerologyYearPicker
-              selectedYear={selectedYear}
-              isOpen={isYearPickerOpen && !isCompatibilityMode}
-              isPeriodVisible={isPeriodVisible}
-              isPreviewPending={isPreviewPending}
-              errorMessage={isCompatibilityMode ? null : periodErrorMessage}
-              disabled={!pageModel.model || isCompatibilityMode}
-              onToggle={onToggleYearPicker}
-              onApply={onApplyYear}
-              onHide={onHidePeriod}
-              onRetry={onRetryPeriod}
-            />
+            {!isCompatibilityMode ? (
+              <NumerologyYearPicker
+                selectedYear={selectedYear}
+                isOpen={isYearPickerOpen}
+                isPeriodVisible={isPeriodVisible}
+                isPreviewPending={isPreviewPending}
+                errorMessage={periodErrorMessage}
+                disabled={!pageModel.model}
+                onToggle={onToggleYearPicker}
+                onApply={onApplyYear}
+                onHide={onHidePeriod}
+                onRetry={onRetryPeriod}
+              />
+            ) : null}
             <button
               type="button"
               className={isCompatibilityMode ? styles.toolButtonActive : styles.toolButton}
