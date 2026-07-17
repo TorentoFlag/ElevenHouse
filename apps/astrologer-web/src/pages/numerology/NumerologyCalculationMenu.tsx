@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { CalculationRecordResponse } from "@elevenhouse/contracts";
 import { Popover } from "@elevenhouse/design-system/components/Popover";
 import "@elevenhouse/design-system/components/Popover.css";
@@ -14,6 +15,11 @@ export type NumerologyCalculationMenuProps = {
   readonly onArchive: () => void;
 };
 
+type NumerologyCalculationMenuViewProps = NumerologyCalculationMenuProps & {
+  readonly isOpen: boolean;
+  readonly onOpenChange: (isOpen: boolean) => void;
+};
+
 export function NumerologyCalculationMenu({
   items,
   selectedCalculationId,
@@ -23,8 +29,43 @@ export function NumerologyCalculationMenu({
   onRecalculate,
   onArchive
 }: NumerologyCalculationMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return renderNumerologyCalculationMenu({
+    items,
+    selectedCalculationId,
+    disabled,
+    onSelect,
+    onCreate,
+    onRecalculate,
+    onArchive,
+    isOpen,
+    onOpenChange: setIsOpen
+  });
+}
+
+export function renderNumerologyCalculationMenu({
+  items,
+  selectedCalculationId,
+  disabled,
+  onSelect,
+  onCreate,
+  onRecalculate,
+  onArchive,
+  isOpen,
+  onOpenChange
+}: NumerologyCalculationMenuViewProps) {
+  const runAndClose = (action: () => void) => {
+    onOpenChange(false);
+    action();
+  };
+
   return (
-    <Popover className={styles.calculationMenu}>
+    <Popover
+      className={styles.calculationMenu}
+      open={isOpen}
+      onOpenChange={onOpenChange}
+    >
       <Popover.Trigger
         className={styles.calculationMenuTrigger}
         aria-label="Список расчётов"
@@ -40,7 +81,11 @@ export function NumerologyCalculationMenu({
       >
         <div className={styles.calculationMenuHeader}>
           <strong id="saved-calculations-title">Сохранённые расчёты</strong>
-          <button type="button" disabled={disabled} onClick={onCreate}>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => runAndClose(onCreate)}
+          >
             Новый расчёт
           </button>
         </div>
@@ -53,7 +98,7 @@ export function NumerologyCalculationMenu({
                   className={styles.calculationItem}
                   aria-current={item.id === selectedCalculationId ? "true" : undefined}
                   disabled={disabled}
-                  onClick={() => onSelect(item.calculation)}
+                  onClick={() => runAndClose(() => onSelect(item.calculation))}
                 >
                   <span className={styles.calculationItemTitle}>{item.title}</span>
                   <span className={styles.calculationItemMeta}>
@@ -69,14 +114,18 @@ export function NumerologyCalculationMenu({
         </div>
         {selectedCalculationId ? (
           <div className={styles.calculationMenuActions}>
-            <button type="button" disabled={disabled} onClick={onRecalculate}>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => runAndClose(onRecalculate)}
+            >
               Пересчитать
             </button>
             <button
               type="button"
               className={styles.calculationArchiveAction}
               disabled={disabled}
-              onClick={onArchive}
+              onClick={() => runAndClose(onArchive)}
             >
               Удалить расчёт
             </button>

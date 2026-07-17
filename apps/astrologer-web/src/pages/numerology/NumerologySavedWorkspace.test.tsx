@@ -16,7 +16,7 @@ import {
   NumerologyParticipantFields,
   type NumerologyParticipantFieldsProps
 } from "./NumerologyCalculationEditor";
-import { NumerologyCalculationMenu } from "./NumerologyCalculationMenu";
+import { renderNumerologyCalculationMenu } from "./NumerologyCalculationMenu";
 
 describe("Numerology saved workspace components", () => {
   it("anchors the calculations popover to the trigger's left edge", () => {
@@ -35,14 +35,16 @@ describe("Numerology saved workspace components", () => {
     const onCreate = vi.fn();
     const onRecalculate = vi.fn();
     const onArchive = vi.fn();
-    const view = NumerologyCalculationMenu({
+    const view = renderNumerologyCalculationMenu({
       items: [savedItem("11111111-1111-4111-8111-111111111111", "Антон Голубев")],
       selectedCalculationId: "11111111-1111-4111-8111-111111111111",
       disabled: false,
       onSelect,
       onCreate,
       onRecalculate,
-      onArchive
+      onArchive,
+      isOpen: true,
+      onOpenChange: vi.fn()
     });
     const popover = findRequiredElementByType(view, Popover);
     const content = findRequiredElementByType<{

@@ -11,7 +11,10 @@ import { NumerologyPageView, type NumerologyPageViewProps } from "./NumerologyPa
 import { NumerologyPresentationDialog } from "./NumerologyPresentationDialog";
 import { NumerologyArchiveDialog } from "./NumerologyArchiveDialog";
 import { NumerologyCalculationEditor } from "./NumerologyCalculationEditor";
-import { NumerologyCalculationMenu } from "./NumerologyCalculationMenu";
+import {
+  NumerologyCalculationMenu,
+  renderNumerologyCalculationMenu
+} from "./NumerologyCalculationMenu";
 import { NumerologyYearPicker } from "./NumerologyYearPicker";
 import { createParticipantFormState } from "../../features/numerology/model/numerologyFormModel";
 import styles from "./NumerologyPage.module.css";
@@ -782,7 +785,11 @@ function renderCalculationMenu(root: ReactElement): ReactElement {
     root,
     NumerologyCalculationMenu
   );
-  return NumerologyCalculationMenu(menu.props);
+  return renderNumerologyCalculationMenu({
+    ...menu.props,
+    isOpen: true,
+    onOpenChange: vi.fn()
+  });
 }
 
 function findElements(root: ReactElement): ReactElement[] {
