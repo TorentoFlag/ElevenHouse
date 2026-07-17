@@ -95,7 +95,7 @@ expanded, its body contains one compact action row:
 The localized RU labels are:
 
 - `Создать AI-черновик`;
-- expand icon accessible label and tooltip:
+- expand icon accessible label:
   `Открыть редактор трактовки`.
 
 The English equivalents are:
@@ -103,11 +103,11 @@ The English equivalents are:
 - `Create AI draft`;
 - `Open interpretation editor`.
 
-The expand control uses the shared `IconButton`, medium size (`36px`), the
-`default` variant, and a shared `Tooltip`. It exposes
-`aria-haspopup="dialog"` and a stable accessible name. The icon is a dedicated
-`expand` glyph. `arrowUpRight` is not reused because it conventionally
-suggests an external destination rather than an in-context editor.
+The expand control uses the shared `IconButton`, medium size (`36px`), and the
+`default` variant. It exposes `aria-haspopup="dialog"` and a stable accessible
+name without a visual tooltip or `aria-describedby`. The icon is a dedicated
+`expand` glyph. `arrowUpRight` is not reused because it conventionally suggests
+an external destination rather than an in-context editor.
 
 Activating the expand icon opens the modal without generating new content.
 Activating `Создать AI-черновик` opens the modal immediately and then invokes
@@ -260,8 +260,8 @@ order. Wider mobile viewports keep both actions in one row.
 ## 8. Accessibility Contract
 
 - Expand action is a semantic button with an accessible verb-first name,
-  tooltip on hover and focus, visible focus, and at least the shared `36px`
-  target size.
+  visible focus, and at least the shared `36px` target size. It has no visual
+  tooltip or `aria-describedby`.
 - Dialog has `role="dialog"`, `aria-modal="true"`, a visible title connected
   through `aria-labelledby`, and a visible close button.
 - Initial focus goes to the textarea, not the close button.
@@ -272,8 +272,8 @@ order. Wider mobile viewports keep both actions in one row.
 - Textarea has a persistent visible label; placeholder text is not its label.
 - Loading and errors use the existing `aria-live`/alert contract without
   replacing the user's last valid text.
-- Button disabled reasons remain perceivable; tooltip content is supplementary,
-  not the only source of critical error information.
+- AI button disabled reasons remain perceivable and are not coupled to the
+  expand button's accessible name.
 - Focus rings, contrast, target size, text zoom, reduced motion, and keyboard
   order are verified in the real browser.
 
@@ -303,7 +303,8 @@ Expected implementation ownership:
   optional initial-focus target with backward-compatible default;
 - design-system icon registry and focused icon tests:
   dedicated `expand` glyph;
-- existing design-system `IconButton` and `Tooltip` are reused, not forked.
+- the existing design-system `IconButton` is reused directly, without a
+  `Tooltip` wrapper.
 
 No page-specific workflow moves into `packages/design-system`. No backend,
 contract, domain, DB, AI prompt, or worker file is expected to change.
@@ -368,8 +369,8 @@ Accessed: 2026-07-17.
   proportional to the expected input.
 - **Repository evidence:** the current textarea has `min-height: 126px` and
   lives in the narrow right detail column.
-- **Repository evidence:** ElevenHouse already has shared `Modal`, `IconButton`,
-  and `Tooltip` primitives plus established reference modal styling.
+- **Repository evidence:** ElevenHouse already has shared `Modal` and
+  `IconButton` primitives plus established reference modal styling.
 - **Inference:** one large modal is the smallest intervention that materially
   improves reading/editing while preserving calculation context and the
   existing three-column workspace.
@@ -417,7 +418,7 @@ Implementation follows behavioral TDD:
 3. GREEN implementation with no controller/API behavior change.
 4. Affected Numerology component, view, controller, interpretation-state, and
    individual/compatibility tests.
-5. Design-system Modal/IconButton/Tooltip/icon registry tests and package export
+5. Design-system Modal/IconButton/icon registry tests and package export
    checks.
 6. Targeted ESLint, both affected package typechecks/builds, `git diff --check`,
    then the repository gate appropriate to the combined surface.

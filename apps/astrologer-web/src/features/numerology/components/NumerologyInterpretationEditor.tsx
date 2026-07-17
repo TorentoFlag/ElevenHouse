@@ -2,8 +2,6 @@ import { Button } from "@elevenhouse/design-system/components/Button";
 import "@elevenhouse/design-system/components/Button.css";
 import { IconButton } from "@elevenhouse/design-system/components/IconButton";
 import "@elevenhouse/design-system/components/IconButton.css";
-import { Tooltip } from "@elevenhouse/design-system/components/Tooltip";
-import "@elevenhouse/design-system/components/Tooltip.css";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { useId, useRef, useState, type MouseEvent } from "react";
 import type { NumerologyInterpretationCopy } from "../../../common/i18n/astrologerCopy";
@@ -116,16 +114,14 @@ export function NumerologyInterpretationEditor({
               />
             </span>
             <span ref={expandTriggerContainerRef}>
-              <Tooltip content={copy.openEditorLabel} id={`${regionId}-expand-tooltip`}>
-                <IconButton
-                  aria-haspopup="dialog"
-                  label={copy.openEditorLabel}
-                  icon={<Icon iconName="expand" aria-hidden="true" />}
-                  size="medium"
-                  variant="default"
-                  onClick={openEditor}
-                />
-              </Tooltip>
+              <IconButton
+                aria-haspopup="dialog"
+                label={copy.openEditorLabel}
+                icon={<Icon iconName="expand" aria-hidden="true" />}
+                size="medium"
+                variant="default"
+                onClick={openEditor}
+              />
             </span>
           </div>
         </div>

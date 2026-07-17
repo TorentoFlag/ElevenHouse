@@ -6,7 +6,7 @@
 
 **Architecture:** Keep `interpretationText`, dirty state, mutation state, and callbacks in the existing Numerology controller/model contour. `NumerologyInterpretationEditor` owns only disclosure/modal presentation state and composes a new app-owned `NumerologyInterpretationModal`; the shared design system gains only a generic optional initial-focus target and a reusable `expand` icon.
 
-**Tech Stack:** React 19, TypeScript 6, CSS Modules, ElevenHouse design-system `Modal`/`IconButton`/`Tooltip`/`Button`, shared i18n dictionary, Vitest with jsdom for interaction tests, Computer Use in the existing Chrome session.
+**Tech Stack:** React 19, TypeScript 6, CSS Modules, ElevenHouse design-system `Modal`/`IconButton`/`Button`, shared i18n dictionary, Vitest with jsdom for interaction tests, Computer Use in the existing Chrome session.
 
 ## Progress
 
@@ -56,7 +56,7 @@ presentation state; `NumerologyInterpretationModal` owns only composition.
 
 ## Interfaces and Dependencies
 
-The app consumes the shared `Modal`, `Button`, `IconButton`, `Tooltip`, and
+The app consumes the shared `Modal`, `Button`, `IconButton`, and
 `Icon` APIs. The only shared API extension is optional `Modal.initialFocusRef`;
 the only shared visual addition is the registered `expand` icon. No contract,
 API, domain, DB, worker, or deployment interface changed.
@@ -802,16 +802,14 @@ Replace inline textarea/actions/error with:
     />
   </span>
   <span ref={expandTriggerContainerRef}>
-    <Tooltip content={copy.openEditorLabel} id={`${regionId}-expand-tooltip`}>
-      <IconButton
-        aria-haspopup="dialog"
-        label={copy.openEditorLabel}
-        icon={<Icon iconName="expand" aria-hidden="true" />}
-        size="medium"
-        variant="default"
-        onClick={openEditor}
-      />
-    </Tooltip>
+    <IconButton
+      aria-haspopup="dialog"
+      label={copy.openEditorLabel}
+      icon={<Icon iconName="expand" aria-hidden="true" />}
+      size="medium"
+      variant="default"
+      onClick={openEditor}
+    />
   </span>
 </div>
 <NumerologyInterpretationModal
@@ -834,7 +832,7 @@ The explicit close handler preserves exact trigger focus when possible and uses
 the enabled expand control when the AI trigger is temporarily disabled by an
 in-flight request.
 
-Use `copy.sectionLabel` in the disclosure header. Import the shared IconButton/Tooltip CSS and remove obsolete inline textarea/action/status rules from `NumerologyComponents.module.css`.
+Use `copy.sectionLabel` in the disclosure header. Import the shared IconButton CSS and remove obsolete inline textarea/action/status rules from `NumerologyComponents.module.css`. Do not wrap the expand control in a visual tooltip; its `label` remains the accessible name.
 
 - [ ] **Step 5: Pass typed copy through both modes**
 
@@ -983,7 +981,7 @@ Save artifacts as:
 Verify:
 
 - disclosure opens by mouse and keyboard;
-- expand control tooltip/name and `aria-haspopup="dialog"`;
+- expand control accessible name, no visual tooltip, and `aria-haspopup="dialog"`;
 - expand opens without an AI request;
 - AI action opens and creates exactly one network request;
 - textarea receives initial focus;

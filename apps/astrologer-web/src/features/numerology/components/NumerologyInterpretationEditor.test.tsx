@@ -40,6 +40,8 @@ describe("NumerologyInterpretationEditor", () => {
     );
     expect(expandButton).not.toBeNull();
     expect(expandButton?.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(container.querySelector('[role="tooltip"]')).toBeNull();
+    expect(expandButton?.hasAttribute("aria-describedby")).toBe(false);
 
     act(() => expandButton?.click());
     expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();

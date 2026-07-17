@@ -16,7 +16,8 @@ Date: 2026-07-17
 The focused interaction tests cover no inline textarea, separate AI and expand
 semantics, dialog opening, parent-owned text editing and close/reopen retention,
 Save/Approve callbacks without implicit close, RU/EN copy, preferred initial
-focus, fallback focus, and return focus.
+focus, fallback focus, return focus, and the absence of a visual tooltip or
+`aria-describedby` on the expand control.
 
 ## Runtime availability
 
