@@ -17,6 +17,13 @@ import {
   type CalendarRendererEntry,
   type CalendarRendererProps
 } from "../model/calendarRenderer";
+import {
+  calendarGridClassNames,
+  calendarGridGeometry,
+  getCalendarDayHeaderClassName,
+  getCalendarDayHeaderInnerClassName,
+  getCalendarSlotLaneClassName
+} from "../model/calendarGridGeometry";
 
 const viewNames = {
   day: "timeGridDay",
@@ -56,6 +63,21 @@ export function FullCalendarRenderer(props: CalendarRendererProps): ReactElement
       initialDate={props.visibleRange.start}
       headerToolbar={false}
       allDaySlot={false}
+      slotMinTime={calendarGridGeometry.slotMinTime}
+      slotMaxTime={calendarGridGeometry.slotMaxTime}
+      slotDuration={calendarGridGeometry.slotDuration}
+      snapDuration={calendarGridGeometry.snapDuration}
+      slotHeaderInterval={calendarGridGeometry.slotHeaderInterval}
+      slotHeaderFormat={calendarGridGeometry.slotHeaderFormat}
+      slotMinHeight={calendarGridGeometry.slotMinHeight}
+      scrollTime={calendarGridGeometry.scrollTime}
+      scrollTimeReset={false}
+      expandRows={false}
+      dayHeaderClass={getCalendarDayHeaderClassName}
+      dayHeaderInnerClass={getCalendarDayHeaderInnerClassName}
+      slotHeaderClass={calendarGridClassNames.slotHeader}
+      slotHeaderInnerClass={calendarGridClassNames.slotHeaderInner}
+      slotLaneClass={getCalendarSlotLaneClassName}
       editable={false}
       eventStartEditable={false}
       eventDurationEditable={false}

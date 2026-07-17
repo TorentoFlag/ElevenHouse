@@ -187,13 +187,13 @@
   border-color: var(--calendar-line);
 }
 
-.calendarCanvas :global(.fc-col-header-cell) {
-  height: 54px;
+.calendarCanvas :global(.eh-calendar-day-header) {
+  height: 52px;
   background: rgb(13 12 32 / 0.96);
   vertical-align: middle;
 }
 
-.calendarCanvas :global(.fc-col-header-cell-cushion) {
+.calendarCanvas :global(.eh-calendar-day-header-inner) {
   padding: 15px 8px;
   color: var(--calendar-muted);
   font-size: 12px;
@@ -202,11 +202,21 @@
   text-transform: uppercase;
 }
 
-.calendarCanvas :global(.fc-timegrid-slot) {
-  height: 58px;
+.calendarCanvas :global(.eh-calendar-slot-lane) {
+  height: 56px;
 }
 
-.calendarCanvas :global(.fc-timegrid-slot-label-cushion) {
+.calendarCanvas :global(.eh-calendar-slot-header) {
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
+}
+
+.calendarCanvas :global(.eh-calendar-slot-lane--minor) {
+  border-top-color: transparent;
+}
+
+.calendarCanvas :global(.eh-calendar-slot-header-inner) {
   padding-right: 10px;
   color: var(--calendar-muted);
   font-family: var(--eh-font-mono, monospace);

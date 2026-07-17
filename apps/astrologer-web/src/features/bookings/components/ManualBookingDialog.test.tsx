@@ -51,4 +51,12 @@ describe("ManualBookingDialog", () => {
 
     expect(source).toContain("returnFocusElement?.focus()");
   });
+
+  it("keeps an unavailable clicked hour unselected until a server slot is chosen", () => {
+    const source = readFileSync(new URL("./ManualBookingDialog.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("resolveManualBookingStart({");
+    expect(source).toContain('<option value="" disabled>{props.copy.dateLabel}</option>');
+    expect(source).toContain('<option value="" disabled>{props.copy.timeLabel}</option>');
+  });
 });

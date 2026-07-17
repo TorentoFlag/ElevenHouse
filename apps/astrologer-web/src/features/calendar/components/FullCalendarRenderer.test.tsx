@@ -60,6 +60,49 @@ describe("FullCalendarRenderer", () => {
     ]);
   });
 
+  it("uses the design-reference time range and 56px hourly geometry", () => {
+    const calendar = FullCalendarRenderer(createProps()) as ReactElement<{
+      dayHeaderClass(info: { view: { type: string } }): string | false;
+      dayHeaderInnerClass(info: { view: { type: string } }): string | false;
+      slotLaneClass(info: { isMinor: boolean }): string;
+      [key: string]: unknown;
+    }>;
+
+    expect(calendar.props.slotMinTime).toBe("08:00:00");
+    expect(calendar.props.slotMaxTime).toBe("21:00:00");
+    expect(calendar.props.slotDuration).toBe("01:00:00");
+    expect(calendar.props.snapDuration).toBe("01:00:00");
+    expect(calendar.props.slotHeaderInterval).toBe("01:00:00");
+    expect(calendar.props.slotHeaderFormat).toEqual({
+      hour: "numeric",
+      minute: "2-digit",
+      omitZeroMinute: false,
+      meridiem: false
+    });
+    expect(calendar.props.slotMinHeight).toBe(56);
+    expect(calendar.props.scrollTime).toBe("08:00:00");
+    expect(calendar.props.scrollTimeReset).toBe(false);
+    expect(calendar.props.expandRows).toBe(false);
+    expect(calendar.props.dayHeaderClass({ view: { type: "timeGridWeek" } })).toBe(
+      "eh-calendar-day-header"
+    );
+    expect(
+      calendar.props.dayHeaderInnerClass({ view: { type: "timeGridDay" } })
+    ).toBe("eh-calendar-day-header-inner");
+    expect(calendar.props.dayHeaderClass({ view: { type: "dayGridMonth" } })).toBe(false);
+    expect(
+      calendar.props.dayHeaderInnerClass({ view: { type: "dayGridMonth" } })
+    ).toBe(false);
+    expect(calendar.props.slotHeaderClass).toBe("eh-calendar-slot-header");
+    expect(calendar.props.slotHeaderInnerClass).toBe("eh-calendar-slot-header-inner");
+    expect(calendar.props.slotLaneClass({ isMinor: false })).toBe(
+      "eh-calendar-slot-lane"
+    );
+    expect(calendar.props.slotLaneClass({ isMinor: true })).toBe(
+      "eh-calendar-slot-lane eh-calendar-slot-lane--minor"
+    );
+  });
+
   it("reinitializes the calendar engine when navigation changes the visible range", () => {
     const firstProps = createProps();
     const nextProps = {
@@ -92,7 +135,7 @@ describe("FullCalendarRenderer", () => {
     });
     calendar.props.select({
       startStr: "2026-05-29T10:00:00.000Z",
-      endStr: "2026-05-29T10:30:00.000Z"
+      endStr: "2026-05-29T11:00:00.000Z"
     });
 
     expect(props.onEntryActivate).toHaveBeenCalledWith(entryId);
@@ -102,7 +145,7 @@ describe("FullCalendarRenderer", () => {
     });
     expect(props.onEmptyRangeSelect).toHaveBeenCalledWith({
       start: "2026-05-29T10:00:00.000Z",
-      end: "2026-05-29T10:30:00.000Z"
+      end: "2026-05-29T11:00:00.000Z"
     });
   });
 

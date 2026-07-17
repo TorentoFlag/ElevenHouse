@@ -166,6 +166,16 @@ is not valid production behavior.
    shipped.
 10. **Existing client means an active owner-scoped relationship.** The first
     slice does not silently create a guest or global client record.
+11. **An hourly grid click is a booking intent, not an availability override.**
+    Clicking anywhere in the visible `08:00-09:00` cell requests `08:00` as the
+    preferred start and opens the manual-booking form. The form remains editable
+    but offers only product-specific starts returned by the owner-scoped
+    availability projection. It selects the requested hour start when available,
+    otherwise another valid start inside that hour. If the selected product has
+    no valid start in the requested hour, the UI does not silently move the
+    booking to another hour and keeps creation disabled until the astrologer
+    chooses an available start. Arbitrary time entry and any availability or
+    overlap bypass are forbidden.
 
 ## Domain Boundaries
 

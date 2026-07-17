@@ -76,8 +76,15 @@ an app-owned agenda rather than a compressed seven-column grid.
   dialog, owner-scoped slot query, real product assignment and authenticated
   create/reload flow are implemented and browser-proved. The reference-shaped
   booking-detail panel now loads an authoritative booking snapshot and has
-  authenticated open/close/focus-return browser evidence. Mobile agenda,
-  conflict-browser evidence and exact whole-calendar reference parity remain open.
+  authenticated open/close/focus-return browser evidence. Desktop day/week time
+  grids now use the measured reference contract: 08:00–21:00, 56 px per hour,
+  52 px day header and 60 px time gutter through public FullCalendar v7 class
+  hooks. Whole-hour grid clicks now produce a one-hour booking intent, while the
+  manual-booking form resolves that preference only against server-returned
+  product slots. Automated evidence is green; fresh browser interaction evidence
+  is pending because Computer Use could not start its system service while both
+  frontend and API remained healthy. Mobile agenda, conflict-browser evidence
+  and exact whole-calendar reference parity remain open.
 - [ ] Task 9: reference-parity desktop and mobile UI.
 - [ ] Task 10: runtime, visual, accessibility and repository verification.
 
@@ -158,6 +165,13 @@ an app-owned agenda rather than a compressed seven-column grid.
 - Runtime browser verification found that the normal empty-state card obscured
   the interactive time grid. A focused RED/GREEN component test now keeps the
   empty grid unobstructed in both calendar and availability modes.
+- FullCalendar v7 hashes its internal layout class names. Legacy selectors such
+  as `.fc-timegrid-slot` do not match the rendered DOM, so stable geometry must
+  use public `dayHeaderClass`, `slotHeaderClass` and `slotLaneClass` hooks. The
+  first geometry pass measured 26 half-hour lanes at 28 px; user interaction
+  then exposed that each visible hour still selected only one half. The revised
+  public contract uses 13 one-hour lanes at 56 px plus a one-hour snap duration;
+  fresh browser remeasurement remains pending.
 - The authenticated manual-booking flow created and activated a real local
   product, assigned it to the persisted schedule, created a confirmed booking
   for an existing CRM client, survived a full reload and removed the occupied
@@ -211,6 +225,11 @@ an app-owned agenda rather than a compressed seven-column grid.
 - **2026-07-17, agent:** expose exact product-specific candidate starts as an
   owner-scoped Booking read endpoint. The UI may group and label returned
   instants but never derives domain slots from schedule rules.
+- **2026-07-17, user:** a calendar hour click may prefill an editable booking
+  time, but no arbitrary time or availability/overlap bypass may exist.
+- **2026-07-17, agent:** represent the click as a one-hour preferred range and
+  resolve it by instant only against current product slots. If no returned start
+  belongs to that hour, keep time unselected rather than silently moving hours.
 
 ## Outcomes & Retrospective
 
@@ -300,7 +319,11 @@ formatting, loading and retry states, and focus restoration. Authenticated
   event. A follow-up review added current-calendar-timezone formatting,
   non-truncating price presentation and stale-detail cleanup across navigation;
   the browser proves the panel does not resurrect after leaving and returning to
-  the booking range. Mobile agenda, conflict-browser evidence and exact
+  the booking range. The desktop grid-geometry follow-up replaces FullCalendar's
+  compressed 00:00–24:00 default with the reference's fixed 08:00–21:00 range,
+  56 px hourly cadence and public v7 styling hooks. Same-viewport reference,
+  week and day evidence is stored in `.design-qa/calendar-program-a/`. Mobile
+  agenda, conflict-browser evidence and exact
   whole-calendar parity remain unfinished, so Task 9 remains open.
 Program A is not complete until database, network-backed browser, visual and
 accessibility acceptance are also recorded here with exact evidence and risk.
@@ -750,6 +773,28 @@ ALTER TABLE "schedule_reservations"
 - [ ] Implement desktop day/week and conditionally DayGrid month. If measured
   parity needs private FullCalendar DOM coupling, use app-owned
   `CalendarMonthView` over the same view model.
+- [ ] Implement hourly booking intent without availability bypass; automated
+  work is complete and Runtime E2E remains blocked:
+  1. [x] RED in `FullCalendarRenderer.test.tsx`: require `slotDuration` and
+     `snapDuration` `01:00:00`, `slotMinHeight` `56`, and a select callback that
+     forwards the exclusive one-hour range.
+  2. [x] GREEN in `calendarGridGeometry.ts`, `FullCalendarRenderer.tsx` and
+     `CalendarPage.module.css`: render one 56 px lane per hour while preserving
+     minute-accurate event placement.
+  3. [x] RED in a focused `manualBookingPrefill.test.ts`: require exact-instant
+     prefill across ISO offsets, earliest valid server start inside the clicked
+     hour, and an empty selection when the hour has no valid start.
+  4. [x] GREEN in `manualBookingPrefill.ts` and `ManualBookingDialog.tsx`: consume
+     only API-returned starts, show explicit empty date/time options when the
+     requested hour is unavailable, and keep submit disabled until a valid start
+     is chosen.
+  5. [x] Focused calendar/booking tests, astrologer-web typecheck/build, targeted
+     lint and docs checks pass. The remaining app suite passes after excluding
+     three concurrently changed numerology test files whose new hook/menu failures
+     are unrelated to calendar.
+  6. [ ] Run the authenticated browser click on `/calendar`; Computer Use service
+     startup failure currently blocks proving that the modal defaults inside the
+     clicked hour.
 - [ ] Implement mobile agenda/sheets with shared queries and mutations.
 - [ ] Render only server-backed first-slice statuses. Omit revenue, payment,
   completion, no-show, Google and Astro controls.
@@ -779,6 +824,45 @@ ALTER TABLE "schedule_reservations"
 - [ ] Review `git status --short`, `git diff --cached`, every owned path diff,
   untracked files and `git diff --check`. Separate unowned changes in the final
   report and do not commit without user authority.
+
+## Research: Hourly Selection Granularity
+
+**Question:** Which public FullCalendar v7 options make a visible hour cell
+produce a one-hour selection without coupling to internal DOM?
+
+**Decision affected:** desktop day/week selection geometry only. Availability
+projection and booking validation remain server-owned.
+
+**Accessed:** 2026-07-17.
+
+### Sources
+
+- [FullCalendar `slotDuration`](https://fullcalendar.io/docs/slotDuration) —
+  official documentation for displayed time-slot frequency.
+- [FullCalendar `snapDuration`](https://fullcalendar.io/docs/snapDuration) —
+  official documentation stating that selection granularity follows this
+  duration and defaults to `slotDuration`.
+- [FullCalendar `select`](https://fullcalendar.io/docs/select-callback) —
+  official callback contract; `end` is exclusive and ISO strings carry the
+  configured timezone offset.
+
+### Findings and decision
+
+- **Sourced fact:** `slotDuration` controls displayed lanes, while
+  `snapDuration` controls selection granularity. Both accept public duration
+  values, so `01:00:00` expresses the approved whole-hour intent without DOM
+  interception.
+- **Repository evidence:** server-returned available starts remain the only
+  accepted values in `createManualBookingCommand`; the browser cannot invent or
+  force a start outside projection.
+- **Inference:** pass the clicked hour start as a preference, canonicalize ISO
+  offsets by instant, and resolve only against the current product's returned
+  slots. A missing candidate in `[preferredStart, preferredStart + 1 hour)`
+  must remain unselected rather than silently changing hours.
+- **Rejected:** free-form time plus server rejection, because it creates a
+  knowingly invalid intermediate state and conflicts with the user's explicit
+  no-bypass invariant.
+- **User decision:** arbitrary or conflicting time entry is forbidden.
 
 ## Validation and Acceptance
 

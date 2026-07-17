@@ -15,6 +15,10 @@ import {
   getBookableManualBookingProducts,
   toManualBookingSlotOptions
 } from "../model/manualBookingForm";
+import {
+  isCurrentManualBookingSlotResponse,
+  resolveManualBookingStart
+} from "../model/manualBookingPrefill";
 import { useAvailableBookingSlotsQuery } from "../model/useAvailableBookingSlotsQuery";
 import styles from "./ManualBookingDialog.module.css";
 
@@ -75,16 +79,26 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
     },
     Boolean(selectedProduct)
   );
+  const hasCurrentSlotResponse = isCurrentManualBookingSlotResponse({
+    selectedProductId: selectedProduct?.id ?? null,
+    responseProductId: slotsQuery.data?.productId ?? null,
+    isPlaceholderData: slotsQuery.isPlaceholderData
+  });
+  const isSlotsLoading =
+    !slotsQuery.isError &&
+    (slotsQuery.isLoading || slotsQuery.isFetching || slotsQuery.isPlaceholderData);
   const slotOptions = useMemo(
     () =>
-      slotsQuery.data ? toManualBookingSlotOptions(slotsQuery.data, props.locale) : [],
-    [props.locale, slotsQuery.data]
+      hasCurrentSlotResponse && slotsQuery.data
+        ? toManualBookingSlotOptions(slotsQuery.data, props.locale)
+        : [],
+    [hasCurrentSlotResponse, props.locale, slotsQuery.data]
   );
-  const effectiveStartAt = resolveSelectedStartAt(
-    slotOptions.map((slot) => slot.value),
+  const effectiveStartAt = resolveManualBookingStart({
+    availableStarts: slotOptions.map((slot) => slot.value),
     selectedStartAt,
-    props.prefillStartAt
-  );
+    preferredStartAt: props.prefillStartAt
+  });
   const selectedSlot = slotOptions.find((slot) => slot.value === effectiveStartAt) ?? null;
   const dateOptions = uniqueBy(
     slotOptions.map((slot) => ({ value: slot.dateKey, label: slot.dateLabel })),
@@ -213,14 +227,14 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
 
         {selectedProduct ? (
           <section className={styles.slotSection} aria-label={props.copy.summaryLabel}>
-            {slotsQuery.isLoading ? <p className={styles.state}>{props.copy.loadingSlotsLabel}</p> : null}
+            {isSlotsLoading ? <p className={styles.state}>{props.copy.loadingSlotsLabel}</p> : null}
             {slotsQuery.isError ? (
               <div className={styles.state} role="alert">
                 <span>{props.copy.slotsErrorLabel}</span>
                 <button type="button" onClick={() => void slotsQuery.refetch()}>{props.copy.retryLabel}</button>
               </div>
             ) : null}
-            {!slotsQuery.isLoading && !slotsQuery.isError && slotOptions.length === 0 ? (
+            {!isSlotsLoading && !slotsQuery.isError && slotOptions.length === 0 ? (
               <p className={styles.state}>{props.copy.noSlotsLabel}</p>
             ) : null}
             {slotOptions.length > 0 ? (
@@ -236,6 +250,7 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
                       )
                     }
                   >
+                    <option value="" disabled>{props.copy.dateLabel}</option>
                     {dateOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
                   </select>
                 </label>
@@ -246,6 +261,7 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
                     disabled={props.isCreating}
                     onChange={(event) => setSelectedStartAt(event.target.value)}
                   >
+                    <option value="" disabled>{props.copy.timeLabel}</option>
                     {slotsForDate.map((slot) => <option value={slot.value} key={slot.value}>{slot.timeLabel}</option>)}
                   </select>
                 </label>
@@ -274,16 +290,6 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
       </form>
     </dialog>
   );
-}
-
-function resolveSelectedStartAt(
-  availableStarts: readonly string[],
-  selectedStartAt: string,
-  prefillStartAt: string | null
-): string {
-  if (availableStarts.includes(selectedStartAt)) return selectedStartAt;
-  if (prefillStartAt && availableStarts.includes(prefillStartAt)) return prefillStartAt;
-  return availableStarts[0] ?? "";
 }
 
 function uniqueBy<T>(values: readonly T[], key: (value: T) => string): readonly T[] {

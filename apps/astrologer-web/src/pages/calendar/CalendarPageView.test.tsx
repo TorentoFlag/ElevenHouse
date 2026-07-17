@@ -72,6 +72,17 @@ describe("CalendarPageView", () => {
     expect(css).toContain("--fc-classic-now: var(--calendar-accent)");
   });
 
+  it("matches the desktop reference header, time gutter and hourly-line geometry", () => {
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+
+    expect(css).toMatch(/\.eh-calendar-day-header\)\s*\{[^}]*height:\s*52px/s);
+    expect(css).toMatch(/\.eh-calendar-slot-header\)\s*\{[^}]*width:\s*60px/s);
+    expect(css).toMatch(/\.eh-calendar-slot-lane\)\s*\{[^}]*height:\s*56px/s);
+    expect(css).toMatch(
+      /\.eh-calendar-slot-lane--minor\)\s*\{[^}]*border-top-color:\s*transparent/s
+    );
+  });
+
   it("replaces the summary with the production availability editor in availability mode", () => {
     const props = baseProps();
     const markup = renderToStaticMarkup(
