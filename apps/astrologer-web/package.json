@@ -11,6 +11,7 @@
     "@elevenhouse/contracts": "workspace:*",
     "@elevenhouse/design-system": "workspace:*",
     "@elevenhouse/i18n": "workspace:*",
+    "@elevenhouse/numerology-presentation": "workspace:*",
     "@elevenhouse/validation": "workspace:*",
     "@fullcalendar/react": "7.0.0",
     "@tanstack/react-query": "^5.101.0",

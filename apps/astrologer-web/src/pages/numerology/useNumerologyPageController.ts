@@ -174,6 +174,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   }, [selectedResponse]);
 
   return {
+    locale,
     calculations,
     selectedResponse,
     previewResult,

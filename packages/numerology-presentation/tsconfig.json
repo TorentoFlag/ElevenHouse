@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "paths": {
+      "@elevenhouse/contracts": ["../contracts/dist/index.d.ts"]
+    },
+    "types": ["vitest"]
+  },
+  "include": ["src"]
+}

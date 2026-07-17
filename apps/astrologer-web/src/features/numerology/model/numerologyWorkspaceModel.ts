@@ -8,6 +8,14 @@ import type {
   NumerologyResult,
   PythagoreanCompatibilityResult
 } from "@elevenhouse/contracts";
+import {
+  formatNumerologyComparison,
+  formatNumerologyConclusion,
+  formatNumerologyZone,
+  getNumerologyComparisonIndicatorLabel,
+  getNumerologyCompatibilityLabels,
+  type NumerologyPresentationLocale
+} from "@elevenhouse/numerology-presentation";
 import type { NumerologyFormState } from "./numerologyFormModel";
 
 export type NumerologyWorkspaceMode = "individual" | "compatibility";
@@ -168,26 +176,6 @@ const keyNumberOrder = [
 ] as const;
 
 const matrixDigits = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
-
-const relationLabels: Record<NumerologyRelation, string> = {
-  match: "Совпадение",
-  close: "Близкие значения",
-  different: "Различие",
-  tension: "Напряжение"
-};
-
-const compatibilityZoneLabels: Record<NumerologyCompatibilityZone["code"], string> = {
-  identity: "Идентичность",
-  inner_world: "Внутренний мир",
-  resources: "Ресурсы",
-  dynamics: "Динамика"
-};
-
-const compatibilityConclusionLabels: Record<NumerologyCompatibilityConclusion["code"], string> = {
-  harmonious: "Гармоничная совместимость",
-  mixed: "Смешанная совместимость",
-  attention: "Совместимость требует внимания"
-};
 
 const cellMeta: Record<
   string,
@@ -383,7 +371,8 @@ const numberMeanings: Record<number, NumerologyMeaning> = {
 export function buildNumerologyWorkspaceModel(
   response: NumerologyCalculationResponse | null,
   previewResult: NumerologyResult | null = null,
-  formState: NumerologyFormState | null = null
+  formState: NumerologyFormState | null = null,
+  locale: NumerologyPresentationLocale = "ru"
 ): NumerologyWorkspaceModel | null {
   const result = response?.result ?? previewResult;
   if (!result) return null;
@@ -396,7 +385,7 @@ export function buildNumerologyWorkspaceModel(
   const matrix = buildMatrix(getRecord(snapshot.psychomatrix));
   const strengthLines = buildStrengthLines(snapshot.strengthLines);
   const compatibility =
-    result.mode === "compatibility" ? buildCompatibility(response, result) : null;
+    result.mode === "compatibility" ? buildCompatibility(response, result, locale) : null;
   const periods = getRecord(snapshot.periods);
   const personalYear = getPeriodValue(periods?.personalYear);
   const personalMonths = Array.isArray(periods?.personalMonths)
@@ -631,7 +620,8 @@ function buildStrengthLines(value: unknown): readonly NumerologyWorkspaceStrengt
 
 function buildCompatibility(
   response: NumerologyCalculationResponse | null,
-  result: PythagoreanCompatibilityResult
+  result: PythagoreanCompatibilityResult,
+  locale: NumerologyPresentationLocale
 ): NumerologyWorkspaceCompatibility {
   const individuals = result.individuals;
   const participants = response?.calculation.participants ?? [];
@@ -654,7 +644,10 @@ function buildCompatibility(
     };
   });
 
-  const comparisons = result.comparisons.map(toWorkspaceCompatibilityComparison);
+  const labels = getNumerologyCompatibilityLabels(locale);
+  const comparisons = result.comparisons.map((comparison) =>
+    toWorkspaceCompatibilityComparison(comparison, locale)
+  );
 
   return {
     pairNumber: result.pairNumber,
@@ -679,39 +672,32 @@ function buildCompatibility(
     zones: result.zones.map((zone) => ({
       ...zone,
       selector: `compatibility:zone:${zone.code}`,
-      label: compatibilityZoneLabels[zone.code],
-      relationLabel: relationLabels[zone.relation]
+      label: labels.zoneLabels[zone.code],
+      relationLabel: labels.relationLabels[zone.relation],
+      explanation: formatNumerologyZone(zone, locale)
     })),
     counts: result.counts,
     conclusion: {
       ...result.conclusion,
       selector: "compatibility:conclusion",
-      label: compatibilityConclusionLabels[result.conclusion.code]
+      label: labels.conclusionLabels[result.conclusion.code],
+      explanation: formatNumerologyConclusion(result.conclusion, locale)
     }
   };
 }
 
 function toWorkspaceCompatibilityComparison(
-  comparison: NumerologyComparison
+  comparison: NumerologyComparison,
+  locale: NumerologyPresentationLocale
 ): NumerologyWorkspaceCompatibilityComparison {
+  const labels = getNumerologyCompatibilityLabels(locale);
   return {
     ...comparison,
     selector: `compatibility:${comparison.block}:${comparison.code}`,
-    label: getCompatibilityComparisonLabel(comparison),
-    relationLabel: relationLabels[comparison.relation]
+    label: getNumerologyComparisonIndicatorLabel(comparison, locale),
+    relationLabel: labels.relationLabels[comparison.relation],
+    explanation: formatNumerologyComparison(comparison, locale)
   };
-}
-
-function getCompatibilityComparisonLabel(comparison: NumerologyComparison): string {
-  if (comparison.block === "key_numbers") {
-    return keyNumberMeta[comparison.code]?.label ?? comparison.code;
-  }
-  if (comparison.block === "psychomatrix") {
-    const digit = comparison.code.replace(/^digit_/, "");
-    const meta = cellMeta[digit];
-    return meta ? `${meta.label} · цифра ${digit}` : comparison.code;
-  }
-  return strengthLineMeta[comparison.code]?.label ?? comparison.code;
 }
 
 function getParticipant(

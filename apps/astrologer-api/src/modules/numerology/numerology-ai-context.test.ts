@@ -39,24 +39,63 @@ describe("Numerology AI context", () => {
     expect(serialized).not.toContain("sourceDigits");
   });
 
-  it("keeps all compatibility conclusions without either participant identity", () => {
-    const result = calculateNumerologyCompatibility({
+  it("keeps typed compatibility facts but localizes explanations without identity data", () => {
+    const calculated = calculateNumerologyCompatibility({
       methodCode: "pythagorean",
       participants: { first: golubev, second: koshkina },
       periods: {}
     });
+    const result = {
+      ...calculated,
+      comparisons: calculated.comparisons.map((comparison) => ({
+        ...comparison,
+        explanation: "RAW key_numbers lifePath mixed"
+      })),
+      zones: calculated.zones.map((zone) => ({
+        ...zone,
+        explanation: "RAW inner_world different"
+      })),
+      conclusion: { ...calculated.conclusion, explanation: "RAW mixed" }
+    };
 
-    const context = buildNumerologyAiContext(result, "en");
-    const serialized = JSON.stringify(context);
+    const enContext = buildNumerologyAiContext(result, "en");
+    const ruContext = buildNumerologyAiContext(result, "ru");
+    const serialized = JSON.stringify({ enContext, ruContext });
 
-    expect(context).toMatchObject({
+    expect(enContext).toMatchObject({
       locale: "en",
       mode: "compatibility",
       pairNumber: 7,
-      conclusion: { code: "mixed" }
+      conclusion: {
+        code: "mixed",
+        explanation:
+          "Matches and close values — 10; differences and tensions — 12. Result: mixed compatibility."
+      }
     });
-    expect(context.mode === "compatibility" && context.comparisons).toHaveLength(22);
-    expect(context.mode === "compatibility" && context.zones).toHaveLength(4);
+    expect(enContext.mode === "compatibility" && enContext.comparisons[0]).toMatchObject({
+      block: "key_numbers",
+      code: "lifePath",
+      explanation:
+        "Life path number: 2 and 5. Difference — 3. The method classifies this as “Different”."
+    });
+    expect(ruContext).toMatchObject({
+      locale: "ru",
+      mode: "compatibility",
+      conclusion: {
+        code: "mixed",
+        explanation:
+          "Совпадения и близкие значения — 10; различия и напряжения — 12. Итог: смешанная совместимость."
+      }
+    });
+    expect(ruContext.mode === "compatibility" && ruContext.comparisons[0]).toMatchObject({
+      block: "key_numbers",
+      code: "lifePath",
+      explanation:
+        "Число жизненного пути: 2 и 5. Разница — 3. По методике это категория «Различие»."
+    });
+    expect(enContext.mode === "compatibility" && enContext.comparisons).toHaveLength(22);
+    expect(enContext.mode === "compatibility" && enContext.zones).toHaveLength(4);
+    expect(serialized).not.toContain("RAW");
     expect(serialized).not.toContain("Голубев");
     expect(serialized).not.toContain("Кошкина");
     expect(serialized).not.toContain("2000-08-19");

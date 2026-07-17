@@ -1,12 +1,10 @@
 import type {
+  CalculationPdfLocale,
   CalculationRecordResponse,
   NumerologyCalculationResponse,
   NumerologyResult
 } from "@elevenhouse/contracts";
-import {
-  ActionMenu,
-  type ActionMenuItem
-} from "@elevenhouse/design-system/components/ActionMenu";
+import { ActionMenu, type ActionMenuItem } from "@elevenhouse/design-system/components/ActionMenu";
 import "@elevenhouse/design-system/components/ActionMenu.css";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { MotionContent } from "@elevenhouse/design-system/motion";
@@ -35,6 +33,7 @@ import { NumerologyYearPicker } from "./NumerologyYearPicker";
 import styles from "./NumerologyPage.module.css";
 
 export type NumerologyPageViewProps = {
+  readonly locale: CalculationPdfLocale;
   readonly calculations: readonly CalculationRecordResponse[];
   readonly selectedResponse: NumerologyCalculationResponse | null;
   readonly previewResult: NumerologyResult | null;
@@ -95,6 +94,7 @@ export type NumerologyPageViewProps = {
 };
 
 export function NumerologyPageView({
+  locale,
   calculations,
   selectedResponse,
   previewResult,
@@ -152,7 +152,8 @@ export function NumerologyPageView({
     formState,
     selectedDetailSelector,
     interpretationText,
-    isBusy || Boolean(editorState)
+    isBusy || Boolean(editorState),
+    locale
   );
   const savedItems = getActiveNumerologyCalculations(calculations).map(toSavedCalculationListItem);
   const isCompatibilityMode = formState.mode === "compatibility";

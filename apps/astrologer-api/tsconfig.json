@@ -5,6 +5,12 @@
     "emitDecoratorMetadata": true,
     "module": "Node16",
     "moduleResolution": "Node16",
+    "paths": {
+      "@elevenhouse/contracts": ["../../packages/contracts/dist/index.d.ts"],
+      "@elevenhouse/numerology-presentation": [
+        "../../packages/numerology-presentation/dist/index.d.ts"
+      ]
+    },
     "types": [
       "node"
     ]

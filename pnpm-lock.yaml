@@ -139,6 +139,9 @@ importers:
       '@elevenhouse/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@elevenhouse/numerology-presentation':
+        specifier: workspace:*
+        version: link:../../packages/numerology-presentation
       '@elevenhouse/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -194,6 +197,9 @@ importers:
       '@elevenhouse/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@elevenhouse/numerology-presentation':
+        specifier: workspace:*
+        version: link:../../packages/numerology-presentation
       '@elevenhouse/validation':
         specifier: workspace:*
         version: link:../../packages/validation
@@ -419,6 +425,9 @@ importers:
       '@elevenhouse/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@elevenhouse/numerology-presentation':
+        specifier: workspace:*
+        version: link:../../packages/numerology-presentation
       '@elevenhouse/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -587,6 +596,16 @@ importers:
       react:
         specifier: 19.2.7
         version: 19.2.7
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/numerology-presentation:
+    dependencies:
+      '@elevenhouse/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
       typescript:
         specifier: 6.0.3
         version: 6.0.3

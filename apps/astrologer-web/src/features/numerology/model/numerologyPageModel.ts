@@ -6,6 +6,7 @@ import {
   type NumerologyCalculationResponse,
   type NumerologyResult
 } from "@elevenhouse/contracts";
+import type { NumerologyPresentationLocale } from "@elevenhouse/numerology-presentation";
 import {
   canLinkCalculation,
   canPublishCalculation,
@@ -61,7 +62,8 @@ export function buildNumerologyPageViewModel(
   formState: NumerologyFormState,
   selectedDetailSelector: string | null,
   interpretationText: string,
-  isBusy: boolean
+  isBusy: boolean,
+  locale: NumerologyPresentationLocale = "ru"
 ): NumerologyPageViewModel {
   const calculation = selectedResponse?.calculation ?? null;
   const linkableClientId = getFirstLinkableClientId(calculation) ?? firstCrmClientId(formState);
@@ -70,7 +72,7 @@ export function buildNumerologyPageViewModel(
     interpretationText,
     isBusy
   );
-  const model = buildNumerologyWorkspaceModel(selectedResponse, previewResult, formState);
+  const model = buildNumerologyWorkspaceModel(selectedResponse, previewResult, formState, locale);
   const effectiveSelector = selectedDetailSelector ?? model?.defaultSelector ?? null;
   const detail = getNumerologyDetail(model, effectiveSelector);
   const isCompatibility = model?.mode === "compatibility";

@@ -41,6 +41,52 @@ describe("Numerology PDF renderer", () => {
     expect(JSON.stringify(content)).toContain("Итог совместимости");
   });
 
+  it("uses the shared RU and EN compatibility audit copy instead of raw explanations", () => {
+    const result = compatibilityResult();
+    const hostile = {
+      ...result,
+      comparisons: result.comparisons.map((comparison) => ({
+        ...comparison,
+        explanation: "RAW key_numbers lifePath mixed"
+      })),
+      zones: result.zones.map((zone) => ({
+        ...zone,
+        explanation: "RAW inner_world different"
+      })),
+      conclusion: { ...result.conclusion, explanation: "RAW mixed" }
+    };
+    const ruContent = buildNumerologyPdfContent(document(hostile, "ru"));
+    const enContent = buildNumerologyPdfContent(document(hostile, "en"));
+    const ruComparison = table(ruContent, "22 сравнения").rows[0];
+    const enComparison = table(enContent, "22 comparisons").rows[0];
+
+    expect(ruComparison).toEqual([
+      "Ключевые числа",
+      "Число жизненного пути",
+      "2",
+      "5",
+      "3",
+      "Различие",
+      "Число жизненного пути: 2 и 5. Разница — 3. По методике это категория «Различие»."
+    ]);
+    expect(enComparison).toEqual([
+      "Core numbers",
+      "Life path number",
+      "2",
+      "5",
+      "3",
+      "Different",
+      "Life path number: 2 and 5. Difference — 3. The method classifies this as “Different”."
+    ]);
+    expect(section(ruContent, "Вывод").text).toBe(
+      "Совпадения и близкие значения — 10; различия и напряжения — 12. Итог: смешанная совместимость."
+    );
+    expect(section(enContent, "Conclusion").text).toBe(
+      "Matches and close values — 10; differences and tensions — 12. Result: mixed compatibility."
+    );
+    expect(JSON.stringify({ ruContent, enContent })).not.toContain("RAW");
+  });
+
   it("renders deterministic RU and EN multi-page PDFs with inert long text", async () => {
     const renderer = createNumerologyPdfRenderer();
     const ru = document(
@@ -95,5 +141,11 @@ function keyValues(content: ReturnType<typeof buildNumerologyPdfContent>, headin
 function table(content: ReturnType<typeof buildNumerologyPdfContent>, heading: string) {
   const block = content.find((item) => item.kind === "table" && item.heading === heading);
   if (!block || block.kind !== "table") throw new Error(`Missing ${heading}`);
+  return block;
+}
+
+function section(content: ReturnType<typeof buildNumerologyPdfContent>, heading: string) {
+  const block = content.find((item) => item.kind === "section" && item.heading === heading);
+  if (!block || block.kind !== "section") throw new Error(`Missing ${heading}`);
   return block;
 }

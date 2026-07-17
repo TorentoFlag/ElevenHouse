@@ -12,6 +12,7 @@
     "@elevenhouse/contracts": "workspace:*",
     "@elevenhouse/db": "workspace:*",
     "@elevenhouse/domain": "workspace:*",
+    "@elevenhouse/numerology-presentation": "workspace:*",
     "@elevenhouse/observability": "workspace:*",
     "@elevenhouse/validation": "workspace:*",
     "@pdf-lib/fontkit": "^1.1.1",

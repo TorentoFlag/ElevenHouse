@@ -6,6 +6,11 @@ import type {
   PythagoreanCompatibilityResult,
   PythagoreanIndividualResult
 } from "@elevenhouse/domain";
+import {
+  formatNumerologyComparison,
+  formatNumerologyConclusion,
+  formatNumerologyZone
+} from "@elevenhouse/numerology-presentation";
 
 const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
@@ -42,16 +47,19 @@ export function buildNumerologyAiContext(
       valueB: comparison.valueB,
       difference: comparison.difference,
       relation: comparison.relation,
-      explanation: comparison.explanation
+      explanation: formatNumerologyComparison(comparison, locale)
     })),
     zones: result.zones.map((zone) => ({
       code: zone.code,
       counts: zone.counts,
       relation: zone.relation,
-      explanation: zone.explanation
+      explanation: formatNumerologyZone(zone, locale)
     })),
     counts: result.counts,
-    conclusion: result.conclusion
+    conclusion: {
+      ...result.conclusion,
+      explanation: formatNumerologyConclusion(result.conclusion, locale)
+    }
   };
 }
 

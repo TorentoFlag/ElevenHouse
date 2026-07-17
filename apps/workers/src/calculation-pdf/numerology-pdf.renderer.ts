@@ -1,11 +1,17 @@
 import type {
   NumerologyComparison,
   NumerologyCompatibilityZone,
-  NumerologyRelation,
   NumerologyRelationCounts,
   PythagoreanCompatibilityResult,
   PythagoreanIndividualResult
 } from "@elevenhouse/contracts";
+import {
+  formatNumerologyComparison,
+  formatNumerologyConclusion,
+  getNumerologyComparisonIndicatorLabel,
+  getNumerologyCompatibilityLabels,
+  type NumerologyPresentationLocale
+} from "@elevenhouse/numerology-presentation";
 import type { NumerologyPdfDocument } from "./calculation-pdf.documents";
 import { createPdfLayout, type PdfTableOptions } from "./pdf-layout";
 
@@ -236,6 +242,7 @@ function compatibilityBlocks(
   result: PythagoreanCompatibilityResult,
   labels: Labels
 ): readonly NumerologyPdfBlock[] {
+  const presentation = getNumerologyCompatibilityLabels(labels.locale);
   return [
     {
       kind: "key_values",
@@ -272,7 +279,7 @@ function compatibilityBlocks(
       heading: labels.totalCounts,
       headers: [labels.block, labels.match, labels.close, labels.different, labels.tension],
       rows: (Object.keys(result.counts) as Array<keyof typeof result.counts>).map((block) => [
-        labels.blockLabels[block],
+        presentation.blockLabels[block],
         String(result.counts[block].match),
         String(result.counts[block].close),
         String(result.counts[block].different),
@@ -283,7 +290,7 @@ function compatibilityBlocks(
       kind: "key_values",
       heading: labels.conclusion,
       items: [
-        { label: labels.result, value: labels.conclusionLabels[result.conclusion.code] },
+        { label: labels.result, value: presentation.conclusionLabels[result.conclusion.code] },
         { label: labels.matchAndClose, value: String(result.conclusion.matchAndClose) },
         {
           label: labels.differentAndTension,
@@ -295,36 +302,31 @@ function compatibilityBlocks(
     {
       kind: "section",
       heading: labels.conclusionText,
-      text: labels.conclusionExplanation(result.conclusion)
+      text: formatNumerologyConclusion(result.conclusion, labels.locale)
     }
   ];
 }
 
 function comparisonRow(comparison: NumerologyComparison, labels: Labels): readonly string[] {
-  const indicator = indicatorLabel(comparison, labels);
+  const presentation = getNumerologyCompatibilityLabels(labels.locale);
+  const indicator = getNumerologyComparisonIndicatorLabel(comparison, labels.locale);
   return [
-    labels.blockLabels[comparison.block],
+    presentation.blockLabels[comparison.block],
     indicator,
     String(comparison.valueA),
     String(comparison.valueB),
     String(comparison.difference),
-    labels.relationLabels[comparison.relation],
-    labels.comparisonExplanation(indicator, comparison)
+    presentation.relationLabels[comparison.relation],
+    formatNumerologyComparison(comparison, labels.locale)
   ];
 }
 
-function indicatorLabel(comparison: NumerologyComparison, labels: Labels): string {
-  if (comparison.block === "psychomatrix") {
-    return `${labels.digit} ${comparison.code.replace("digit_", "")}`;
-  }
-  return labels.indicatorLabels[comparison.code] ?? comparison.code;
-}
-
 function zoneRow(zone: NumerologyCompatibilityZone, labels: Labels): readonly string[] {
+  const presentation = getNumerologyCompatibilityLabels(labels.locale);
   return [
-    labels.zoneLabels[zone.code],
+    presentation.zoneLabels[zone.code],
     String(zone.comparisonCodes.length),
-    labels.relationLabels[zone.relation],
+    presentation.relationLabels[zone.relation],
     formatCounts(zone.counts, labels)
   ];
 }
@@ -335,14 +337,8 @@ function formatCounts(counts: NumerologyRelationCounts, labels: Labels): string 
 
 const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
-const ruRelationLabels: Readonly<Record<NumerologyRelation, string>> = {
-  match: "Совпадение",
-  close: "Близкие значения",
-  different: "Различие",
-  tension: "Напряжение"
-};
-
 const ru = {
+  locale: "ru" as const,
   title: "Нумерология",
   individualSubtitle: "Персональный аналитический отчёт",
   compatibilitySubtitle: "Аналитический отчёт о совместимости",
@@ -429,24 +425,6 @@ const ru = {
     expressed: "Выраженная линия",
     strong: "Сильная линия"
   },
-  relationLabels: ruRelationLabels,
-  zoneLabels: {
-    identity: "Идентичность",
-    inner_world: "Внутренний мир",
-    resources: "Ресурсы",
-    dynamics: "Динамика"
-  },
-  conclusionLabels: {
-    harmonious: "Гармоничная совместимость",
-    mixed: "Смешанная совместимость",
-    attention: "Совместимость требует внимания"
-  },
-  blockLabels: {
-    key_numbers: "Ключевые числа",
-    psychomatrix: "Психоматрица",
-    strength_lines: "Линии силы",
-    total: "Всего"
-  },
   lineLabels: {
     goal: "Целеустремлённость",
     family: "Семейность",
@@ -456,26 +434,7 @@ const ru = {
     talent: "Талант",
     spirituality: "Духовность",
     temperament: "Темперамент"
-  } as Record<string, string>,
-  indicatorLabels: {
-    lifePath: "Число жизненного пути",
-    birthday: "Число дня рождения",
-    expression: "Число выражения",
-    soul: "Число души",
-    personality: "Число личности",
-    goal: "Целеустремлённость",
-    family: "Семейность",
-    stability: "Стабильность",
-    self_esteem: "Самооценка",
-    material: "Быт и материальность",
-    talent: "Талант",
-    spirituality: "Духовность",
-    temperament: "Темперамент"
-  } as Record<string, string>,
-  comparisonExplanation: (indicator: string, comparison: NumerologyComparison) =>
-    `${indicator}: значения ${comparison.valueA} и ${comparison.valueB}, разница ${comparison.difference}, ${ruRelationLabels[comparison.relation].toLowerCase()}.`,
-  conclusionExplanation: (conclusion: PythagoreanCompatibilityResult["conclusion"]) =>
-    `Совпадения и близкие значения: ${conclusion.matchAndClose}; различия и напряжения: ${conclusion.differentAndTension}; напряжения: ${conclusion.tension}.`
+  } as Record<string, string>
 } as const;
 
 type WidenLabels<Value> = Value extends (...args: infer Args) => infer Result
@@ -488,10 +447,13 @@ type WidenLabels<Value> = Value extends (...args: infer Args) => infer Result
         ? string
         : Value;
 
-type Labels = WidenLabels<typeof ru>;
+type Labels = WidenLabels<Omit<typeof ru, "locale">> & {
+  readonly locale: NumerologyPresentationLocale;
+};
 
 const en: Labels = {
   ...ru,
+  locale: "en",
   title: "Numerology",
   individualSubtitle: "Personal analytical report",
   compatibilitySubtitle: "Compatibility analytical report",
@@ -578,24 +540,6 @@ const en: Labels = {
     expressed: "Expressed",
     strong: "Strong"
   },
-  relationLabels: { match: "Match", close: "Close", different: "Different", tension: "Tension" },
-  zoneLabels: {
-    identity: "Identity",
-    inner_world: "Inner world",
-    resources: "Resources",
-    dynamics: "Dynamics"
-  },
-  conclusionLabels: {
-    harmonious: "Harmonious compatibility",
-    mixed: "Mixed compatibility",
-    attention: "Compatibility requires attention"
-  },
-  blockLabels: {
-    key_numbers: "Core numbers",
-    psychomatrix: "Psychomatrix",
-    strength_lines: "Strength lines",
-    total: "Total"
-  },
   lineLabels: {
     goal: "Purpose",
     family: "Family",
@@ -605,24 +549,5 @@ const en: Labels = {
     talent: "Talent",
     spirituality: "Spirituality",
     temperament: "Temperament"
-  },
-  indicatorLabels: {
-    lifePath: "Life path number",
-    birthday: "Birthday number",
-    expression: "Expression number",
-    soul: "Soul number",
-    personality: "Personality number",
-    goal: "Purpose",
-    family: "Family",
-    stability: "Stability",
-    self_esteem: "Self-esteem",
-    material: "Material life",
-    talent: "Talent",
-    spirituality: "Spirituality",
-    temperament: "Temperament"
-  },
-  comparisonExplanation: (indicator, comparison) =>
-    `${indicator}: values ${comparison.valueA} and ${comparison.valueB}, difference ${comparison.difference}, ${en.relationLabels[comparison.relation].toLowerCase()}.`,
-  conclusionExplanation: (conclusion) =>
-    `Matches and close values: ${conclusion.matchAndClose}; differences and tensions: ${conclusion.differentAndTension}; tensions: ${conclusion.tension}.`
+  }
 };

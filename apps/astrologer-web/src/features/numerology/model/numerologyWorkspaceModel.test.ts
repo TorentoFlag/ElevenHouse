@@ -52,23 +52,56 @@ describe("numerologyWorkspaceModel", () => {
     });
     expect(workspace.compatibility?.conclusion).toMatchObject({
       code: "mixed",
-      explanation: "Смешанная совместимость"
+      explanation:
+        "Совпадения и близкие значения — 10; различия и напряжения — 12. Итог: смешанная совместимость."
     });
     expect(workspace.compatibility?.strengthLineComparisons[0]).toMatchObject({
-      label: "Целеустремленность",
+      label: "Целеустремлённость",
       valueA: 5,
       valueB: 4,
       difference: 1,
       relation: "close",
       relationLabel: "Близкие значения",
-      explanation: "Близкие значения"
+      explanation:
+        "Целеустремлённость: 5 и 4. Разница — 1. По методике это категория «Близкие значения»."
     });
     expect(getNumerologyDetail(workspace, "compatibility:strength_lines:goal")).toMatchObject({
-      title: "Целеустремленность",
+      title: "Целеустремлённость",
       value: "5 · 4",
       subtitle: "Близкие значения",
-      text: "Близкие значения"
+      text:
+        "Целеустремлённость: 5 и 4. Разница — 1. По методике это категория «Близкие значения»."
     });
+    expect(JSON.stringify(workspace.compatibility)).not.toContain("RAW compatibility code");
+  });
+
+  it("formats compatibility presentation in the requested English locale", () => {
+    const workspace = buildNumerologyWorkspaceModel(
+      response("compatibility"),
+      null,
+      null,
+      "en"
+    )!;
+
+    expect(workspace.compatibility?.keyNumberComparisons[0]).toMatchObject({
+      label: "Life path number",
+      relationLabel: "Close values",
+      explanation:
+        "Life path number: 0 and 1. Difference — 1. The method classifies this as “Close values”."
+    });
+    expect(workspace.compatibility?.zones[0]).toMatchObject({
+      label: "Identity",
+      relationLabel: "Close values",
+      explanation:
+        "Identity. Comparisons: 1. Overall category: “Close values”. Matches: 0; close values: 1; differences: 0; tensions: 0."
+    });
+    expect(workspace.compatibility?.conclusion).toMatchObject({
+      code: "mixed",
+      label: "Mixed compatibility",
+      explanation:
+        "Matches and close values — 10; differences and tensions — 12. Result: mixed compatibility."
+    });
+    expect(JSON.stringify(workspace.compatibility)).not.toContain("RAW compatibility code");
   });
 
   it("uses a formula specific to each key number", () => {
@@ -216,7 +249,7 @@ function compatibility() {
         valueB: block === "strength_lines" && code === "goal" ? 4 : index + 1,
         difference: 1,
         relation: "close",
-        explanation: block === "strength_lines" && code === "goal" ? "Близкие значения" : `${block}:${code}`
+        explanation: `RAW compatibility code ${block}:${code}`
       }))
     ),
     zones: ["identity", "inner_world", "resources", "dynamics"].map((code) => ({
@@ -224,7 +257,7 @@ function compatibility() {
       comparisonCodes: ["lifePath"],
       counts: { match: 0, close: 1, different: 0, tension: 0 },
       relation: "close",
-      explanation: code
+      explanation: `RAW compatibility code ${code}`
     })),
     counts: {
       key_numbers: { match: 0, close: 1, different: 3, tension: 1 },
@@ -237,7 +270,7 @@ function compatibility() {
       matchAndClose: 10,
       differentAndTension: 12,
       tension: 5,
-      explanation: "Смешанная совместимость"
+      explanation: "RAW compatibility code mixed"
     }
   };
 }

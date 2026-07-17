@@ -36,7 +36,11 @@
         "../../packages/design-system/src/icons/Icon/index.ts"
       ],
       "@elevenhouse/i18n": ["../../packages/i18n/src/index.ts"],
-      "@elevenhouse/contracts/products": ["../../packages/contracts/src/products.ts"]
+      "@elevenhouse/numerology-presentation": [
+        "../../packages/numerology-presentation/src/index.ts"
+      ],
+      "@elevenhouse/contracts/products": ["../../packages/contracts/src/products.ts"],
+      "@elevenhouse/contracts": ["../../packages/contracts/src/index.ts"]
     },
     "types": ["vite/client", "vitest"]
   },

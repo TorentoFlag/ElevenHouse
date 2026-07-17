@@ -56,11 +56,7 @@ describe("NumerologyPageView", () => {
 
     expect(menu.props.label).toBe("Действия");
     expect(menu.props.triggerAriaLabel).toBe("Действия расчёта");
-    expect(menu.props.items.map((item) => item.id)).toEqual([
-      "presentation",
-      "delete",
-      "pdf"
-    ]);
+    expect(menu.props.items.map((item) => item.id)).toEqual(["presentation", "delete", "pdf"]);
     expect(findOptionalButtonByText(view, "Презентация")).toBeNull();
     expect(findOptionalButtonByText(view, "Привязать")).toBeNull();
     expect(findOptionalButtonByText(view, "Скачать PDF")).toBeNull();
@@ -103,9 +99,7 @@ describe("NumerologyPageView", () => {
     });
 
     expect(getActionMenuItem(view, "link").disabled).toBe(true);
-    expect(includesText(getActionMenuItem(view, "link").label, "Нужен CRM-участник")).toBe(
-      true
-    );
+    expect(includesText(getActionMenuItem(view, "link").label, "Нужен CRM-участник")).toBe(true);
     expect(getActionMenuItem(view, "pdf").disabled).toBe(true);
     expect(includesText(getActionMenuItem(view, "pdf").label, "PDF формируется")).toBe(true);
   });
@@ -484,9 +478,7 @@ describe("NumerologyPageView", () => {
       "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
     ]);
     expect(compatibilityButton.props["aria-pressed"]).toBe(true);
-    expect(
-      findElements(view).some((element) => element.type === NumerologyYearPicker)
-    ).toBe(false);
+    expect(findElements(view).some((element) => element.type === NumerologyYearPicker)).toBe(false);
     expect(getActionMenuItem(view, "presentation")).toBeDefined();
   });
 
@@ -526,6 +518,7 @@ describe("NumerologyPageView", () => {
 
 function baseProps(): NumerologyPageViewProps {
   return {
+    locale: "ru",
     calculations: [],
     selectedResponse: null,
     previewResult: null,
@@ -723,9 +716,7 @@ function getButtonIconName(root: ReactElement, text: string): string | null {
   return (icon?.props as { iconName?: string } | undefined)?.iconName ?? null;
 }
 
-function getToolbarActionMenu(
-  root: ReactElement
-): ReactElement<Parameters<typeof ActionMenu>[0]> {
+function getToolbarActionMenu(root: ReactElement): ReactElement<Parameters<typeof ActionMenu>[0]> {
   return findRequiredElementByType<Parameters<typeof ActionMenu>[0]>(root, ActionMenu);
 }
 

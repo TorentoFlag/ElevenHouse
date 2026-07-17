@@ -153,6 +153,9 @@ export default defineConfig({
       "@elevenhouse/i18n": fileURLToPath(
         new URL("../../packages/i18n/src/index.ts", import.meta.url)
       ),
+      "@elevenhouse/numerology-presentation": fileURLToPath(
+        new URL("../../packages/numerology-presentation/src/index.ts", import.meta.url)
+      ),
       "@elevenhouse/validation/phone": fileURLToPath(
         new URL("../../packages/validation/src/phone/index.ts", import.meta.url)
       ),
