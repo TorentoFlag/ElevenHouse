@@ -57,3 +57,14 @@ export type CreateManualBookingResult = {
   readonly booking: Booking;
   readonly replayed: boolean;
 };
+
+export type AvailableBookingSlot = {
+  readonly startAt: string;
+  readonly endAt: string;
+};
+
+export type AvailableBookingSlotsResult = {
+  readonly productId: string;
+  readonly timeZone: string;
+  readonly slots: readonly AvailableBookingSlot[];
+};

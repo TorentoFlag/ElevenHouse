@@ -53,11 +53,28 @@ describe("FullCalendarRenderer", () => {
     expect(calendar.props.selectable).toBe(true);
     expect(calendar.props.timeZone).toBe("Europe/Moscow");
     expect(calendar.props.locale).toBe("ru");
-    expect(calendar.props.plugins).toHaveLength(3);
+    expect(calendar.props.plugins).toHaveLength(4);
     expect(calendar.props.events).toEqual([
       expect.objectContaining({ id: entryId, display: "auto" }),
       expect.objectContaining({ display: "background" })
     ]);
+  });
+
+  it("reinitializes the calendar engine when navigation changes the visible range", () => {
+    const firstProps = createProps();
+    const nextProps = {
+      ...firstProps,
+      visibleRange: {
+        start: "2026-06-01T00:00:00.000Z",
+        end: "2026-06-08T00:00:00.000Z"
+      }
+    };
+
+    const firstCalendar = FullCalendarRenderer(firstProps) as ReactElement;
+    const nextCalendar = FullCalendarRenderer(nextProps) as ReactElement;
+
+    expect(firstCalendar.key).toBe("week:2026-05-25T00:00:00.000Z");
+    expect(nextCalendar.key).toBe("week:2026-06-01T00:00:00.000Z");
   });
 
   it("routes engine callbacks back through stable app identifiers and ISO ranges", () => {
@@ -132,6 +149,28 @@ describe("FullCalendarRenderer", () => {
     });
 
     expect(leakingFiles).toEqual([]);
+  });
+
+  it("loads the FullCalendar layout skeleton required by the v7 renderer", () => {
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "FullCalendarRenderer.tsx"),
+      "utf8"
+    );
+
+    expect(source).toContain('import "@fullcalendar/react/skeleton.css"');
+  });
+
+  it("uses the v7 classic theme for complete grid geometry and borders", () => {
+    const calendar = FullCalendarRenderer(createProps()) as ReactElement<{
+      plugins: readonly unknown[];
+    }>;
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "FullCalendarRenderer.tsx"),
+      "utf8"
+    );
+
+    expect(calendar.props.plugins).toHaveLength(4);
+    expect(source).toContain('import "@fullcalendar/react/themes/classic/theme.css"');
   });
 });
 

@@ -306,6 +306,55 @@ export const createManualBookingRequestSchema = z
   .strict();
 export type CreateManualBookingRequest = z.infer<typeof createManualBookingRequestSchema>;
 
+export const availableBookingSlotsQuerySchema = z
+  .object({
+    productId: uuidSchema,
+    start: instantSchema,
+    end: instantSchema
+  })
+  .strict()
+  .superRefine((range, context) => {
+    const start = Date.parse(range.start);
+    const end = Date.parse(range.end);
+    if (end <= start) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["end"],
+        message: "Slot range end must be after start"
+      });
+      return;
+    }
+    if (end - start > 93 * 24 * 60 * 60 * 1_000) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["end"],
+        message: "Slot range cannot exceed 93 days"
+      });
+    }
+  });
+export type AvailableBookingSlotsQuery = z.infer<typeof availableBookingSlotsQuerySchema>;
+
+const availableBookingSlotSchema = z
+  .object({
+    startAt: instantSchema,
+    endAt: instantSchema
+  })
+  .strict()
+  .refine((slot) => Date.parse(slot.startAt) < Date.parse(slot.endAt), {
+    message: "Booking slot end must be after start"
+  });
+
+export const availableBookingSlotsResponseSchema = z
+  .object({
+    productId: uuidSchema,
+    timeZone: ianaTimeZoneSchema,
+    slots: z.array(availableBookingSlotSchema).max(10_000)
+  })
+  .strict();
+export type AvailableBookingSlotsResponse = z.infer<
+  typeof availableBookingSlotsResponseSchema
+>;
+
 const bookingPolicySnapshotSchema = z
   .object({
     bufferBeforeMinutes: nonNegativeMinuteSchema,
@@ -346,6 +395,20 @@ export const manualBookingResponseSchema = z
   })
   .strict();
 export type ManualBookingResponse = z.infer<typeof manualBookingResponseSchema>;
+
+export const bookingResponseSchema = z
+  .object({
+    booking: manualBookingSchema
+  })
+  .strict();
+export type BookingResponse = z.infer<typeof bookingResponseSchema>;
+
+export const bookingParamsSchema = z
+  .object({
+    bookingId: uuidSchema
+  })
+  .strict();
+export type BookingParams = z.infer<typeof bookingParamsSchema>;
 
 function isIanaTimeZone(value: string): boolean {
   try {

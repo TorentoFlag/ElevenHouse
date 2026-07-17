@@ -7,6 +7,9 @@ import FullCalendar, {
 } from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/react/daygrid";
 import interactionPlugin from "@fullcalendar/react/interaction";
+import "@fullcalendar/react/skeleton.css";
+import classicThemePlugin from "@fullcalendar/react/themes/classic";
+import "@fullcalendar/react/themes/classic/theme.css";
 import timeGridPlugin from "@fullcalendar/react/timegrid";
 import type { ReactElement } from "react";
 import {
@@ -47,8 +50,8 @@ export function FullCalendarRenderer(props: CalendarRendererProps): ReactElement
 
   return (
     <FullCalendar
-      key={props.view}
-      plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+      key={`${props.view}:${props.visibleRange.start}`}
+      plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, classicThemePlugin]}
       initialView={viewNames[props.view]}
       initialDate={props.visibleRange.start}
       headerToolbar={false}

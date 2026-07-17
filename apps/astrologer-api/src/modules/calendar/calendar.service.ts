@@ -52,17 +52,22 @@ export class CalendarService {
           startAt: range.start,
           endAt: range.end
         }),
-        getDefaultAvailabilitySchedule({ store: this.availabilityStore, ownerUserId })
+        getOptionalDefaultAvailabilitySchedule({
+          store: this.availabilityStore,
+          ownerUserId
+        })
       ]);
       return calendarRangeResponseSchema.parse({
         timeZone: range.timeZone,
         range: { start: range.start, end: range.end },
         entries: readModel.entries,
-        availability: projectAvailabilityBackgrounds({
-          schedule,
-          rangeStartAt: range.start,
-          rangeEndAt: range.end
-        }),
+        availability: schedule
+          ? projectAvailabilityBackgrounds({
+              schedule,
+              rangeStartAt: range.start,
+              rangeEndAt: range.end
+            })
+          : [],
         summary: readModel.summary
       });
     });
@@ -109,6 +114,18 @@ export class CalendarService {
       });
       return manualBlockResponseSchema.parse({ block: toBlockResponse(block), replayed: false });
     });
+  }
+}
+
+async function getOptionalDefaultAvailabilitySchedule(input: {
+  readonly store: AvailabilityStore;
+  readonly ownerUserId: string;
+}) {
+  try {
+    return await getDefaultAvailabilitySchedule(input);
+  } catch (error) {
+    if (error instanceof AvailabilityScheduleNotFoundError) return null;
+    throw error;
   }
 }
 

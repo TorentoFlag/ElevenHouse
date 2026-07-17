@@ -102,6 +102,40 @@ describe("ClientSearchComboboxView", () => {
     expect(triggerRule).toContain("min-width: 0;");
     expect(triggerRule).toContain("max-width: none;");
   });
+
+  it("can select clients without birth data and expand to a modal field", () => {
+    const onSelect = vi.fn();
+    const withoutBirthDate = {
+      ...clientOption("Новый Клиент", "2000-01-01"),
+      hasBirthDate: false,
+      birthData: null
+    };
+    const view = ClientSearchComboboxView({
+      ...baseProps(),
+      isOpen: true,
+      clients: [withoutBirthDate],
+      requireBirthDate: false,
+      fullWidth: true,
+      onSelect
+    });
+    const root = findRequiredElement(
+      view,
+      (element) =>
+        element.type === "div" &&
+        "data-full-width" in (element.props as Record<string, unknown>)
+    );
+    const option = findRequiredElement(
+      view,
+      (element) =>
+        element.type === "button" && (element.props as { role?: unknown }).role === "option"
+    );
+
+    (option.props as { onClick: () => void }).onClick();
+
+    expect((root.props as { "data-full-width"?: unknown })["data-full-width"]).toBe("true");
+    expect((option.props as { disabled?: unknown }).disabled).toBe(false);
+    expect(onSelect).toHaveBeenCalledWith(withoutBirthDate);
+  });
 });
 
 function baseProps(): ClientSearchComboboxViewProps {

@@ -3,6 +3,7 @@ import { Temporal } from "@js-temporal/polyfill";
 import {
   AvailabilityScheduleNotFoundError,
   evaluateProjectedStart,
+  projectAvailableSlots,
   type AvailabilityStore,
   type ProjectedStartEvaluation
 } from "../availability";
@@ -27,9 +28,51 @@ import type {
 import type {
   Booking,
   BookingProduct,
+  AvailableBookingSlotsResult,
   CreateManualBookingInput,
   CreateManualBookingResult
 } from "./booking-types";
+
+export async function getAvailableBookingSlots(input: {
+  readonly availabilityStore: AvailabilityStore;
+  readonly productReader: BookingProductReader;
+  readonly ownerUserId: string;
+  readonly productId: string;
+  readonly rangeStartAt: string;
+  readonly rangeEndAt: string;
+  readonly now: Date;
+}): Promise<AvailableBookingSlotsResult> {
+  const ownerUserId = normalizeRequiredString(input.ownerUserId, "Booking owner is required");
+  const productId = normalizeRequiredString(input.productId, "Booking product is required");
+  const [schedule, product] = await Promise.all([
+    input.availabilityStore.findDefaultByOwner({ ownerUserId }),
+    input.productReader.findByOwnerAndId({ ownerUserId, productId })
+  ]);
+  if (!schedule) throw new AvailabilityScheduleNotFoundError();
+  if (!isSchedulableProduct(product) || !schedule.productIds.includes(product.id)) {
+    throw new ProductNotBookableError();
+  }
+  const context = await input.availabilityStore.readProjectionContext({
+    ownerUserId,
+    scheduleId: schedule.id,
+    rangeStartAt: input.rangeStartAt,
+    rangeEndAt: input.rangeEndAt
+  });
+  if (!context) throw new AvailabilityScheduleNotFoundError();
+
+  const slots = projectAvailableSlots({
+    context,
+    productDurationMinutes: product.durationMinutes,
+    rangeStartAt: input.rangeStartAt,
+    rangeEndAt: input.rangeEndAt,
+    now: input.now.toISOString()
+  });
+  return {
+    productId,
+    timeZone: schedule.timeZone,
+    slots: slots.map((slot) => ({ startAt: slot.serviceStartAt, endAt: slot.serviceEndAt }))
+  };
+}
 
 const manualBookingScope = "bookings.manual.create" as const;
 
@@ -177,14 +220,19 @@ function isBookableProduct(
   product: BookingProduct | null,
   deliveryFormat: CreateManualBookingInput["deliveryFormat"]
 ): product is BookingProduct & { readonly durationMinutes: number } {
+  return isSchedulableProduct(product) && product.deliveryFormats.includes(deliveryFormat);
+}
+
+function isSchedulableProduct(
+  product: BookingProduct | null
+): product is BookingProduct & { readonly durationMinutes: number } {
   return Boolean(
     product &&
       product.status === "active" &&
       product.executionMode === "live" &&
       product.participantMode === "solo" &&
       product.durationMinutes !== null &&
-      product.durationMinutes > 0 &&
-      product.deliveryFormats.includes(deliveryFormat)
+      product.durationMinutes > 0
   );
 }
 

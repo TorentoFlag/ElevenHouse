@@ -3,6 +3,36 @@ import { HttpClient } from "./HttpClient";
 import { HttpError } from "./HttpError";
 
 describe("HttpClient", () => {
+  it("forwards explicit idempotency headers on protected commands", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ ok: true }));
+    const http = new HttpClient({
+      basePath: "/api",
+      fetcher,
+      csrf: {
+        cookieName: "csrf",
+        headerName: "x-csrf-token",
+        readCookie: () => "csrf-token"
+      }
+    });
+
+    await http.post(
+      "/bookings/manual",
+      { productId: "product-1" },
+      { csrf: true, headers: { "idempotency-key": "booking-command-1" } }
+    );
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/bookings/manual",
+      expect.objectContaining({
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": "booking-command-1",
+          "x-csrf-token": "csrf-token"
+        }
+      })
+    );
+  });
+
   it("sends JSON requests through the configured base path with included credentials", async () => {
     const fetcher = vi.fn(async () => jsonResponse({ ok: true }));
     const http = new HttpClient({

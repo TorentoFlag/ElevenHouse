@@ -31,6 +31,29 @@ const assertRequiredProductActionCopy = (
 ): AstrologerCopy["products"]["actions"] => copy;
 
 describe("astrologerCopy", () => {
+  it("contains locale-safe calendar navigation and page labels", () => {
+    expect(astrologerCopyByLocale.ru.appShell.navigation.items).toContainEqual({
+      id: "calendar",
+      title: "Календарь",
+      href: "/calendar"
+    });
+    expect(astrologerCopyByLocale.en.appShell.navigation.items).toContainEqual({
+      id: "calendar",
+      title: "Calendar",
+      href: "/calendar"
+    });
+    expect(astrologerCopyByLocale.ru.calendar.views).toEqual({
+      day: "День",
+      week: "Неделя",
+      month: "Месяц"
+    });
+    expect(astrologerCopyByLocale.en.calendar.views).toEqual({
+      day: "Day",
+      week: "Week",
+      month: "Month"
+    });
+  });
+
   it("requires reference entry modal create and edit labels", () => {
     expect(
       assertRequiredReferenceEntryModalEditLabels(astrologerCopyByLocale.ru.reference.entryModal)

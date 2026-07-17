@@ -6,6 +6,12 @@
   flex: 1 1 204px;
 }
 
+.root[data-full-width="true"] {
+  width: 100%;
+  max-width: none;
+  flex-basis: 100%;
+}
+
 .floatingLabel {
   position: absolute;
   z-index: 3;

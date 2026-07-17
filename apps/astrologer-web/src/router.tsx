@@ -9,6 +9,7 @@ import { NumerologyPage } from "./pages/numerology/NumerologyPage";
 import { ProductsPage } from "./pages/products/ProductsPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
+import { CalendarPage } from "./pages/calendar/CalendarPage";
 
 export const astrologerRoutes = [
   {
@@ -28,6 +29,10 @@ export const astrologerRoutes = [
           {
             path: "/dashboard",
             element: <DashboardPage />
+          },
+          {
+            path: "/calendar",
+            element: <CalendarPage />
           },
           {
             path: "/products",

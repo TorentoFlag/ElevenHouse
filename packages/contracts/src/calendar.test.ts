@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   availabilityScheduleResponseSchema,
+  availableBookingSlotsQuerySchema,
+  availableBookingSlotsResponseSchema,
+  bookingParamsSchema,
+  bookingResponseSchema,
   calendarRangeQuerySchema,
   calendarRangeResponseSchema,
   createManualBlockRequestSchema,
@@ -45,6 +49,72 @@ const validSchedule = {
 } as const;
 
 describe("calendar contracts", () => {
+  it("bounds a product-specific available-slot query and response", () => {
+    const query = {
+      productId,
+      start: "2026-05-25T00:00:00.000Z",
+      end: "2026-06-01T00:00:00.000Z"
+    };
+    const response = {
+      productId,
+      timeZone: "Europe/Moscow",
+      slots: [
+        {
+          startAt: "2026-05-29T07:00:00.000Z",
+          endAt: "2026-05-29T08:00:00.000Z"
+        }
+      ]
+    };
+    const [firstSlot] = response.slots;
+    expect(firstSlot).toBeDefined();
+
+    expect(availableBookingSlotsQuerySchema.parse(query)).toEqual(query);
+    expect(availableBookingSlotsResponseSchema.parse(response)).toEqual(response);
+    expect(
+      availableBookingSlotsQuerySchema.safeParse({
+        ...query,
+        end: "2026-09-01T00:00:00.000Z"
+      }).success
+    ).toBe(false);
+    expect(
+      availableBookingSlotsResponseSchema.safeParse({
+        ...response,
+        slots: [{ startAt: firstSlot!.endAt, endAt: firstSlot!.startAt }]
+      }).success
+    ).toBe(false);
+  });
+
+  it("parses booking read params and a response without replay metadata", () => {
+    expect(bookingParamsSchema.parse({ bookingId })).toEqual({ bookingId });
+    expect(bookingParamsSchema.safeParse({ bookingId: "not-a-uuid" }).success).toBe(false);
+    expect(
+      bookingResponseSchema.parse({
+        booking: {
+          id: bookingId,
+          reservationId,
+          clientUserId,
+          productId,
+          state: "confirmed",
+          startAt: "2026-05-29T08:00:00.000Z",
+          endAt: "2026-05-29T09:00:00.000Z",
+          productTitle: "Натальный разбор",
+          durationMinutes: 60,
+          deliveryFormat: "video",
+          priceMinor: 490000,
+          currency: "RUB",
+          timeZone: "Europe/Moscow",
+          policySnapshot: {
+            bufferBeforeMinutes: 10,
+            bufferAfterMinutes: 10,
+            minimumNoticeMinutes: 360
+          },
+          createdAt: "2026-05-20T08:00:00.000Z",
+          updatedAt: "2026-05-20T08:00:00.000Z"
+        }
+      })
+    ).not.toHaveProperty("replayed");
+  });
+
   it("accepts only UUID manual block route identifiers", () => {
     expect(manualBlockParamsSchema.parse({ blockId: bookingId })).toEqual({
       blockId: bookingId

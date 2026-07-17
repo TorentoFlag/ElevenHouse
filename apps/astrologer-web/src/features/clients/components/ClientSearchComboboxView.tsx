@@ -20,6 +20,8 @@ export type ClientSearchComboboxViewProps = {
   readonly activeClientId: string | null;
   readonly errorMessage: string | null;
   readonly disabled?: boolean;
+  readonly requireBirthDate?: boolean;
+  readonly fullWidth?: boolean;
   readonly loadMoreRef?: (node: HTMLDivElement | null) => void;
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly onSearchChange: (value: string) => void;
@@ -43,6 +45,8 @@ export function ClientSearchComboboxView({
   activeClientId,
   errorMessage,
   disabled = false,
+  requireBirthDate = true,
+  fullWidth = false,
   loadMoreRef,
   onOpenChange,
   onSearchChange,
@@ -54,7 +58,7 @@ export function ClientSearchComboboxView({
   const activeOptionId = activeClientId ? `${id}-option-${activeClientId}` : undefined;
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} data-full-width={fullWidth ? "true" : undefined}>
       <span className={styles.floatingLabel}>{label}</span>
       <button
         type="button"
@@ -110,7 +114,8 @@ export function ClientSearchComboboxView({
                     key: event.key,
                     clients,
                     activeClientId,
-                    hasNextPage
+                    hasNextPage,
+                    requireBirthDate
                   });
                   if (action.kind === "ignore") return;
 
@@ -147,11 +152,11 @@ export function ClientSearchComboboxView({
                     className={styles.option}
                     data-active={isActive ? "true" : undefined}
                     data-selected={isSelected ? "true" : undefined}
-                    disabled={!client.hasBirthDate}
+                    disabled={requireBirthDate && !client.hasBirthDate}
                     key={client.value}
                     onMouseEnter={() => onActiveClientChange(client.value)}
                     onClick={() => {
-                      if (client.hasBirthDate) {
+                      if (!requireBirthDate || client.hasBirthDate) {
                         onSelect(client);
                       }
                     }}

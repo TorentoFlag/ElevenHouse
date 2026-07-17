@@ -58,6 +58,29 @@ describe("CalendarService", () => {
     expect(response.summary).not.toHaveProperty("revenue");
   });
 
+  it("returns an empty availability projection when a new astrologer has no schedule yet", async () => {
+    const service = createService({
+      availabilityStore: createAvailabilityStore({
+        findDefaultByOwner: vi.fn(async () => null)
+      })
+    });
+
+    await expect(
+      service.getRange(
+        {
+          start: "2026-07-20T00:00:00Z",
+          end: "2026-07-21T00:00:00Z",
+          timeZone: "Europe/Moscow"
+        },
+        request()
+      )
+    ).resolves.toMatchObject({
+      entries: [],
+      availability: [],
+      summary: { bookingCount: 0, bookedMinutes: 0 }
+    });
+  });
+
   it("creates and idempotently releases owner-scoped manual blocks", async () => {
     const commandStore = createCommandStore();
     const service = createService({ commandStore });
@@ -106,13 +129,13 @@ function request() {
   return { currentAstrologerAccount: { account: { id: ownerUserId } } } as never;
 }
 
-function createService(overrides: { commandStore?: ManualCalendarBlockCommandStore } = {}) {
-  const availabilityStore: AvailabilityStore = {
-    findDefaultByOwner: vi.fn(async () => schedule),
-    putDefault: vi.fn(async () => ({ kind: "created" as const, schedule })),
-    replace: vi.fn(async () => ({ kind: "updated" as const, schedule })),
-    readProjectionContext: vi.fn(async () => null)
-  };
+function createService(
+  overrides: {
+    availabilityStore?: AvailabilityStore;
+    commandStore?: ManualCalendarBlockCommandStore;
+  } = {}
+) {
+  const availabilityStore = overrides.availabilityStore ?? createAvailabilityStore();
   const readStore: CalendarReadStore = {
     readRange: vi.fn(async () => ({
       entries: [],
@@ -125,6 +148,16 @@ function createService(overrides: { commandStore?: ManualCalendarBlockCommandSto
     overrides.commandStore ?? createCommandStore(),
     { now: () => new Date("2026-07-17T09:00:00Z") }
   );
+}
+
+function createAvailabilityStore(overrides: Partial<AvailabilityStore> = {}): AvailabilityStore {
+  return {
+    findDefaultByOwner: vi.fn(async () => schedule),
+    putDefault: vi.fn(async () => ({ kind: "created" as const, schedule })),
+    replace: vi.fn(async () => ({ kind: "updated" as const, schedule })),
+    readProjectionContext: vi.fn(async () => null),
+    ...overrides
+  };
 }
 
 function createCommandStore(

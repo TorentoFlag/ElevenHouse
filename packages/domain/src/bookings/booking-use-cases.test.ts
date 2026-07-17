@@ -17,7 +17,7 @@ import type {
   ManualBookingClaim
 } from "./booking-ports";
 import type { Booking, BookingProduct } from "./booking-types";
-import { createManualBooking, getBooking } from "./booking-use-cases";
+import { createManualBooking, getAvailableBookingSlots, getBooking } from "./booking-use-cases";
 
 const ownerUserId = "11111111-1111-4111-8111-111111111111";
 const clientUserId = "22222222-2222-4222-8222-222222222222";
@@ -157,6 +157,51 @@ const request = {
 };
 
 describe("booking use cases", () => {
+  it("projects server-authoritative slots for an assigned live product", async () => {
+    const availabilityStore = createAvailabilityStore(schedule, [
+      {
+        occupiedStartAt: "2026-05-29T06:50:00.000Z",
+        occupiedEndAt: "2026-05-29T08:10:00.000Z"
+      }
+    ]);
+
+    await expect(
+      getAvailableBookingSlots({
+        availabilityStore,
+        productReader: createProductReader(),
+        ownerUserId,
+        productId,
+        rangeStartAt: "2026-05-28T21:00:00.000Z",
+        rangeEndAt: "2026-05-29T21:00:00.000Z",
+        now: new Date("2026-05-20T00:00:00.000Z")
+      })
+    ).resolves.toEqual({
+      productId,
+      timeZone: "Europe/Moscow",
+      slots: []
+    });
+    expect(availabilityStore.readProjectionContext).toHaveBeenCalledWith({
+      ownerUserId,
+      scheduleId,
+      rangeStartAt: "2026-05-28T21:00:00.000Z",
+      rangeEndAt: "2026-05-29T21:00:00.000Z"
+    });
+  });
+
+  it("rejects slot projection for a product not assigned to the schedule", async () => {
+    await expect(
+      getAvailableBookingSlots({
+        availabilityStore: createAvailabilityStore({ ...schedule, productIds: [] }),
+        productReader: createProductReader(),
+        ownerUserId,
+        productId,
+        rangeStartAt: "2026-05-28T21:00:00.000Z",
+        rangeEndAt: "2026-05-29T21:00:00.000Z",
+        now: new Date("2026-05-20T00:00:00.000Z")
+      })
+    ).rejects.toBeInstanceOf(ProductNotBookableError);
+  });
+
   it("creates an idempotent claim with immutable product and schedule snapshots", async () => {
     const commandStore = createCommandStore();
     const now = new Date("2026-05-20T00:00:00.000Z");

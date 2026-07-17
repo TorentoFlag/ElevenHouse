@@ -17,6 +17,7 @@ export type HttpRequestOptions = {
   readonly method?: "DELETE" | "GET" | "POST" | "PUT";
   readonly body?: unknown;
   readonly csrf?: boolean;
+  readonly headers?: Readonly<Record<string, string>>;
 };
 
 export class HttpClient {
@@ -106,7 +107,7 @@ export class HttpClient {
   }
 
   private createHeaders(options: HttpRequestOptions): Record<string, string> {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...options.headers };
 
     if (options.body !== undefined) {
       headers["content-type"] = "application/json";

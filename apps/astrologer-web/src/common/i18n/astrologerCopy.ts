@@ -55,6 +55,92 @@ export type AstrologerCopy = {
     title: string;
     kicker: string;
   };
+  calendar: {
+    documentTitle: string;
+    title: string;
+    views: Record<"day" | "week" | "month", string>;
+    todayLabel: string;
+    previousLabel: string;
+    nextLabel: string;
+    showPanelLabel: string;
+    hidePanelLabel: string;
+    availabilityLabel: string;
+    availabilityDoneLabel: string;
+    createBookingLabel: string;
+    loadingLabel: string;
+    errorLabel: string;
+    retryLabel: string;
+    emptyLabel: string;
+    conflictMessage: string;
+    manualBooking: {
+      eyebrow: string;
+      title: string;
+      closeLabel: string;
+      clientLabel: string;
+      clientPlaceholder: string;
+      serviceLabel: string;
+      dateLabel: string;
+      timeLabel: string;
+      formatLabel: string;
+      summaryLabel: string;
+      loadingProductsLabel: string;
+      productsErrorLabel: string;
+      noScheduleLabel: string;
+      noProductsLabel: string;
+      loadingSlotsLabel: string;
+      slotsErrorLabel: string;
+      noSlotsLabel: string;
+      retryLabel: string;
+      cancelLabel: string;
+      createLabel: string;
+      creatingLabel: string;
+      genericErrorLabel: string;
+      durationLabel: (minutes: number) => string;
+    };
+    availabilityEditor: {
+      instruction: string;
+      title: string;
+      description: string;
+      startIntervalLabel: string;
+      bufferBeforeLabel: string;
+      bufferAfterLabel: string;
+      minimumNoticeLabel: string;
+      bookingHorizonLabel: string;
+      maximumBookingsLabel: string;
+      unlimitedLabel: string;
+      minutesShort: string;
+      hoursShort: string;
+      daysShort: string;
+      immediateLabel: string;
+      weeklyTitle: string;
+      weeklyDescription: string;
+      weekdays: readonly string[];
+      unavailableLabel: string;
+      addPeriodLabel: string;
+      removePeriodLabel: string;
+      fromLabel: string;
+      toLabel: string;
+      overridesTitle: string;
+      overridesDescription: string;
+      overrideDateLabel: string;
+      addOverrideLabel: string;
+      availableLabel: string;
+      closedLabel: string;
+      removeOverrideLabel: string;
+      productsTitle: string;
+      productsDescription: string;
+      productsEmptyLabel: string;
+      productsLoadingLabel: string;
+      productsErrorLabel: string;
+      saveLabel: string;
+      savingLabel: string;
+      loadErrorLabel: string;
+      saveErrorLabel: string;
+      conflictErrorLabel: string;
+      savedLabel: string;
+      retryLabel: string;
+    };
+  };
   products: {
     documentTitle: string;
     title: string;
@@ -374,6 +460,7 @@ export const astrologerCopyByLocale = {
         },
         items: [
           { id: "dashboard", title: "Дашборд", href: "/dashboard" },
+          { id: "calendar", title: "Календарь", href: "/calendar" },
           { id: "products", title: "Продукты", href: "/products" },
           { id: "numerology", title: "Нумерология", href: "/numerology" },
           { id: "destinyMatrix", title: "Матрица судьбы", href: "/matrix" },
@@ -386,6 +473,92 @@ export const astrologerCopyByLocale = {
       documentTitle: "ElevenHouse | Кабинет астролога",
       kicker: "Astrologer surface",
       title: "ElevenHouse Astrologer Web"
+    },
+    calendar: {
+      documentTitle: "ElevenHouse | Календарь",
+      title: "Календарь",
+      views: { day: "День", week: "Неделя", month: "Месяц" },
+      todayLabel: "Сегодня",
+      previousLabel: "Предыдущий период",
+      nextLabel: "Следующий период",
+      showPanelLabel: "Показать панель",
+      hidePanelLabel: "Скрыть панель",
+      availabilityLabel: "Доступность",
+      availabilityDoneLabel: "Готово",
+      createBookingLabel: "Запись",
+      loadingLabel: "Загружаем календарь",
+      errorLabel: "Не удалось загрузить календарь",
+      retryLabel: "Повторить",
+      emptyLabel: "На этот период записей нет",
+      conflictMessage: "Это время уже занято. Календарь обновлён — выберите другой слот.",
+      manualBooking: {
+        eyebrow: "Новая запись",
+        title: "Записать клиента",
+        closeLabel: "Закрыть окно записи",
+        clientLabel: "Клиент",
+        clientPlaceholder: "Имя или поиск в CRM…",
+        serviceLabel: "Услуга",
+        dateLabel: "День",
+        timeLabel: "Время",
+        formatLabel: "Формат",
+        summaryLabel: "Параметры записи",
+        loadingProductsLabel: "Загружаем услуги…",
+        productsErrorLabel: "Не удалось загрузить услуги.",
+        noScheduleLabel: "Сначала настройте доступность и сохраните расписание.",
+        noProductsLabel: "Нет активных услуг, подключённых к расписанию.",
+        loadingSlotsLabel: "Ищем доступное время…",
+        slotsErrorLabel: "Не удалось загрузить доступное время.",
+        noSlotsLabel: "В этом периоде нет доступного времени.",
+        retryLabel: "Повторить",
+        cancelLabel: "Отмена",
+        createLabel: "Создать запись",
+        creatingLabel: "Создаём…",
+        genericErrorLabel: "Не удалось создать запись. Проверьте данные и повторите.",
+        durationLabel: (minutes) => `${minutes} мин · онлайн`
+      },
+      availabilityEditor: {
+        instruction: "Настройте рабочие часы и правила записи. Изменения применятся после сохранения.",
+        title: "Настройка доступности",
+        description: "Время хранится в часовом поясе вашего профиля.",
+        startIntervalLabel: "Шаг начала записи",
+        bufferBeforeLabel: "Буфер до",
+        bufferAfterLabel: "Буфер после",
+        minimumNoticeLabel: "Минимум до записи",
+        bookingHorizonLabel: "Горизонт записи",
+        maximumBookingsLabel: "Макс. записей в день",
+        unlimitedLabel: "Без лимита",
+        minutesShort: "мин",
+        hoursShort: "ч.",
+        daysShort: "дн.",
+        immediateLabel: "Сразу",
+        weeklyTitle: "Рабочие часы",
+        weeklyDescription: "Можно добавить несколько периодов в один день.",
+        weekdays: ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"],
+        unavailableLabel: "Недоступно",
+        addPeriodLabel: "Добавить период",
+        removePeriodLabel: "Удалить период",
+        fromLabel: "С",
+        toLabel: "До",
+        overridesTitle: "Исключения по датам",
+        overridesDescription: "Отпуск, выходной или особые часы на конкретную дату.",
+        overrideDateLabel: "Дата исключения",
+        addOverrideLabel: "Добавить дату",
+        availableLabel: "Особые часы",
+        closedLabel: "Недоступно весь день",
+        removeOverrideLabel: "Удалить исключение",
+        productsTitle: "Услуги для записи",
+        productsDescription: "Выберите активные услуги, которые используют это расписание.",
+        productsEmptyLabel: "Активных услуг пока нет.",
+        productsLoadingLabel: "Загружаем услуги",
+        productsErrorLabel: "Не удалось загрузить услуги",
+        saveLabel: "Сохранить доступность",
+        savingLabel: "Сохраняем…",
+        loadErrorLabel: "Не удалось загрузить доступность.",
+        saveErrorLabel: "Не удалось сохранить доступность. Проверьте периоды и повторите.",
+        conflictErrorLabel: "Расписание изменилось в другой вкладке. Данные обновлены — внесите изменения ещё раз.",
+        savedLabel: "Доступность сохранена",
+        retryLabel: "Повторить"
+      }
     },
     products: {
       documentTitle: "ElevenHouse | Продукты",
@@ -645,6 +818,7 @@ export const astrologerCopyByLocale = {
         },
         items: [
           { id: "dashboard", title: "Dashboard", href: "/dashboard" },
+          { id: "calendar", title: "Calendar", href: "/calendar" },
           { id: "products", title: "Products", href: "/products" },
           { id: "numerology", title: "Numerology", href: "/numerology" },
           { id: "destinyMatrix", title: "Destiny Matrix", href: "/matrix" },
@@ -657,6 +831,92 @@ export const astrologerCopyByLocale = {
       documentTitle: "ElevenHouse | Astrologer dashboard",
       kicker: "Astrologer surface",
       title: "ElevenHouse Astrologer Web"
+    },
+    calendar: {
+      documentTitle: "ElevenHouse | Calendar",
+      title: "Calendar",
+      views: { day: "Day", week: "Week", month: "Month" },
+      todayLabel: "Today",
+      previousLabel: "Previous period",
+      nextLabel: "Next period",
+      showPanelLabel: "Show panel",
+      hidePanelLabel: "Hide panel",
+      availabilityLabel: "Availability",
+      availabilityDoneLabel: "Done",
+      createBookingLabel: "Booking",
+      loadingLabel: "Loading calendar",
+      errorLabel: "Could not load calendar",
+      retryLabel: "Retry",
+      emptyLabel: "No bookings in this period",
+      conflictMessage: "This time is no longer available. Choose another slot from the refreshed calendar.",
+      manualBooking: {
+        eyebrow: "New booking",
+        title: "Book a client",
+        closeLabel: "Close booking dialog",
+        clientLabel: "Client",
+        clientPlaceholder: "Name or CRM search…",
+        serviceLabel: "Service",
+        dateLabel: "Day",
+        timeLabel: "Time",
+        formatLabel: "Format",
+        summaryLabel: "Booking details",
+        loadingProductsLabel: "Loading services…",
+        productsErrorLabel: "Could not load services.",
+        noScheduleLabel: "Set and save availability before creating a booking.",
+        noProductsLabel: "No active services are connected to this schedule.",
+        loadingSlotsLabel: "Finding available times…",
+        slotsErrorLabel: "Could not load available times.",
+        noSlotsLabel: "There are no available times in this period.",
+        retryLabel: "Retry",
+        cancelLabel: "Cancel",
+        createLabel: "Create booking",
+        creatingLabel: "Creating…",
+        genericErrorLabel: "Could not create the booking. Check the details and try again.",
+        durationLabel: (minutes) => `${minutes} min · online`
+      },
+      availabilityEditor: {
+        instruction: "Set working hours and booking rules. Changes apply after you save.",
+        title: "Availability settings",
+        description: "Times are stored in your profile time zone.",
+        startIntervalLabel: "Start interval",
+        bufferBeforeLabel: "Buffer before",
+        bufferAfterLabel: "Buffer after",
+        minimumNoticeLabel: "Minimum notice",
+        bookingHorizonLabel: "Booking horizon",
+        maximumBookingsLabel: "Max. bookings per day",
+        unlimitedLabel: "No limit",
+        minutesShort: "min",
+        hoursShort: "hr",
+        daysShort: "days",
+        immediateLabel: "Immediately",
+        weeklyTitle: "Working hours",
+        weeklyDescription: "You can add multiple periods to one day.",
+        weekdays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        unavailableLabel: "Unavailable",
+        addPeriodLabel: "Add period",
+        removePeriodLabel: "Remove period",
+        fromLabel: "From",
+        toLabel: "To",
+        overridesTitle: "Date overrides",
+        overridesDescription: "Vacation, a day off, or special hours for one date.",
+        overrideDateLabel: "Override date",
+        addOverrideLabel: "Add date",
+        availableLabel: "Special hours",
+        closedLabel: "Unavailable all day",
+        removeOverrideLabel: "Remove override",
+        productsTitle: "Bookable products",
+        productsDescription: "Select active products that use this schedule.",
+        productsEmptyLabel: "There are no active products yet.",
+        productsLoadingLabel: "Loading products",
+        productsErrorLabel: "Could not load products",
+        saveLabel: "Save availability",
+        savingLabel: "Saving…",
+        loadErrorLabel: "Could not load availability.",
+        saveErrorLabel: "Could not save availability. Check the periods and try again.",
+        conflictErrorLabel: "The schedule changed in another tab. It has been refreshed; apply your changes again.",
+        savedLabel: "Availability saved",
+        retryLabel: "Retry"
+      }
     },
     products: {
       documentTitle: "ElevenHouse | Products",

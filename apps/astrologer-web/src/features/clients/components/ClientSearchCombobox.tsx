@@ -22,6 +22,8 @@ export type ClientSearchComboboxProps = {
   readonly selectedClient: ClientSelectOption | null;
   readonly excludeClientIds?: readonly string[];
   readonly disabled?: boolean;
+  readonly requireBirthDate?: boolean;
+  readonly fullWidth?: boolean;
   readonly onSelect: (client: ClientSelectOption) => void;
 };
 
@@ -33,6 +35,8 @@ export function ClientSearchCombobox({
   selectedClient,
   excludeClientIds = [],
   disabled = false,
+  requireBirthDate = true,
+  fullWidth = false,
   onSelect
 }: ClientSearchComboboxProps) {
   const generatedId = useId();
@@ -64,10 +68,10 @@ export function ClientSearchCombobox({
       (current) =>
         current ??
         effectiveSelectedClient?.value ??
-        getSelectableClientOptions(clients)[0]?.value ??
+        getSelectableClientOptions(clients, requireBirthDate)[0]?.value ??
         null
     );
-  }, [clients, effectiveSelectedClient?.value, isOpen]);
+  }, [clients, effectiveSelectedClient?.value, isOpen, requireBirthDate]);
 
   useEffect(() => {
     if (!isOpen || !query.hasNextPage || query.isFetchingNextPage) return;
@@ -100,6 +104,8 @@ export function ClientSearchCombobox({
       activeClientId={activeClientId}
       errorMessage={query.error instanceof Error ? "Не удалось загрузить клиентов" : null}
       disabled={disabled}
+      requireBirthDate={requireBirthDate}
+      fullWidth={fullWidth}
       loadMoreRef={(node) => {
         loadMoreNodeRef.current = node;
       }}

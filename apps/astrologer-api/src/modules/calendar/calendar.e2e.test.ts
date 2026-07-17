@@ -183,7 +183,7 @@ describe("availability and calendar HTTP routes", () => {
     });
   });
 
-  it("validates bounded IANA ranges and omits finance from owner-scoped summaries", async () => {
+  it("validates bounded IANA ranges and returns an owner-scoped empty calendar before schedule setup", async () => {
     const missingRange = await requestJson("GET", "/calendar/range", undefined, auth());
     const invalidZone = await requestJson(
       "GET",
@@ -216,7 +216,12 @@ describe("availability and calendar HTTP routes", () => {
     expect(range.status).toBe(200);
     calendarRangeResponseSchema.parse(range.body);
     expect(range.body.summary).not.toHaveProperty("revenue");
-    expect(hidden.status).toBe(404);
+    expect(hidden.status).toBe(200);
+    expect(hidden.body).toMatchObject({
+      entries: [],
+      availability: [],
+      summary: { bookingCount: 0, bookedMinutes: 0 }
+    });
   });
 
   it("requires CSRF and idempotency for block creation, then releases only owned blocks", async () => {

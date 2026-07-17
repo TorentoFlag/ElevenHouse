@@ -73,6 +73,10 @@ describe("clientSelectorModel", () => {
     const withoutBirthDate = clientOption("client-disabled", "Клиент без даты", false);
 
     expect(getSelectableClientOptions([marina, anton, withoutBirthDate])).toEqual([marina, anton]);
+    expect(getSelectableClientOptions([marina, withoutBirthDate], false)).toEqual([
+      marina,
+      withoutBirthDate
+    ]);
     expect(
       getAvailableClientSelectOptions({
         options: [marina, anton],

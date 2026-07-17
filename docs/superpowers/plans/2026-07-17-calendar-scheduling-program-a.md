@@ -67,8 +67,15 @@ an app-owned agenda rather than a compressed seven-column grid.
 - [x] Task 5: database adapters and transactional integration evidence.
 - [x] Task 6: Availability and Calendar API modules with HTTP auth, CSRF,
   owner-scope, validation, idempotency and conflict evidence.
-- [ ] Task 7: Booking API module and security policy.
-- [ ] Task 8: frontend queries, state model and route integration.
+- [x] Task 7: Booking API module and astrologer-local idempotency security policy.
+- [x] Task 8: frontend queries, state model and route integration.
+- [ ] Task 9 partial: desktop shell, interactive empty grid, day/week/month
+  navigation, summary-panel toggle and the production availability editor render
+  in the authenticated browser. Recurring periods, date overrides, schedule
+  policies and product assignments save through the real API. The manual-booking
+  dialog, owner-scoped slot query, real product assignment and authenticated
+  create/reload flow are implemented and browser-proved. Booking details, mobile
+  agenda, conflict-browser evidence and exact reference parity remain open.
 - [ ] Task 9: reference-parity desktop and mobile UI.
 - [ ] Task 10: runtime, visual, accessibility and repository verification.
 
@@ -118,6 +125,40 @@ an app-owned agenda rather than a compressed seven-column grid.
   owner-scoped lookup so `400` is not conflated with safe `404`.
 - The design server was reachable during research, but no controllable browser
   target was exposed. Visual acceptance remains a hard gate, not an assumption.
+- During Task 8 the reference, frontend and API ports were all reachable. The
+  existing Chrome session exposed an unrelated active DevTools/window state,
+  so exact reference capture still could not be completed safely through the
+  required Computer Use surface. This remains a Task 9/10 visual gate.
+- Authenticated runtime E2E exposed that a newly created astrologer profile has
+  no default schedule, while the calendar read treated that valid onboarding
+  state as `404 schedule_not_found`. The read model now returns an empty
+  availability projection; schedule GET/PUT retain their explicit not-found and
+  create semantics.
+- FullCalendar React v7 does not inject its layout/theme CSS. Without the
+  exported `skeleton.css` and a theme plugin/CSS, the month view collapses into
+  a vertical list and time-grid borders use browser defaults. The adapter now
+  owns the v7 skeleton/classic theme imports and the page supplies ElevenHouse
+  theme variables.
+- Runtime E2E confirms that the current availability and manual-booking buttons
+  initially only changed reducer state. The availability editor and manual
+  booking dialog are now mounted; the booking detail panel remains a Task 9
+  failure, not an accepted placeholder.
+- Manual booking requires product-specific candidate starts, while the calendar
+  range endpoint intentionally exposes only duration-free working backgrounds.
+  `GET /bookings/available-slots` now projects exact owner-scoped starts through
+  the existing domain projector; React does not duplicate notice, buffer,
+  horizon, daily-limit, reservation or DST arithmetic.
+- The existing Chrome/Computer Use surface initially timed out while retrieving
+  AX state, then became controllable after the user reopened the target tab. The
+  explicitly authorized API restart exposed the new route and enabled the real
+  authenticated create flow.
+- Runtime browser verification found that the normal empty-state card obscured
+  the interactive time grid. A focused RED/GREEN component test now keeps the
+  empty grid unobstructed in both calendar and availability modes.
+- The authenticated manual-booking flow created and activated a real local
+  product, assigned it to the persisted schedule, created a confirmed booking
+  for an existing CRM client, survived a full reload and removed the occupied
+  `09:00` start from the next slot response. No direct SQL fixture was used.
 
 ## Decision Log
 
@@ -158,6 +199,15 @@ an app-owned agenda rather than a compressed seven-column grid.
   not reset or mutate the main ElevenHouse application database.
 - **2026-07-17, agent:** omit finance/statuses owned by later domains instead of
   deriving misleading totals from bookings.
+- **2026-07-17, agent:** calendar range reads are valid before default schedule
+  creation and return `availability: []`; only schedule-specific reads and
+  commands require an existing schedule.
+- **2026-07-17, agent:** import FullCalendar v7 skeleton and classic theme only
+  inside the adapter, then override its public CSS variables at the page
+  boundary instead of coupling production styles to obfuscated v7 classes.
+- **2026-07-17, agent:** expose exact product-specific candidate starts as an
+  owner-scoped Booking read endpoint. The UI may group and label returned
+  instants but never derives domain slots from schedule rules.
 
 ## Outcomes & Retrospective
 
@@ -205,6 +255,43 @@ ranges, optimistic version conflict, idempotent block replay/release, changed
 request reuse and overlap conflict. GREEN is 23 focused tests, seven isolated
 PostgreSQL adapter tests, astrologer-api typecheck/build and repository verify
 with 387 files / 1670 tests.
+Task 7 added an astrologer-local idempotency guard/policy, a Booking Nest
+feature module, narrow client/product reader composition and stable safe error
+mapping. RED was recorded for the missing guard, BookingService and HTTP module.
+GREEN covers scalar/array header normalization, auth, CSRF, missing/invalid key,
+create/replay, changed-request reuse, active CRM/product validation, overlap
+conflict and owner-safe GET. Focused GREEN is 30 tests plus astrologer-api
+typecheck/build; persisted concurrency remains covered by the seven scheduling
+PostgreSQL integration cases from Task 5.
+Task 8 added contract-validated calendar, availability, manual-block and booking
+frontend APIs; Temporal-based day/week/month ranges; keep-previous-data queries;
+mutation invalidation; stale-slot conflict recovery; and reducer-owned page
+state for view, range, summary panel, selected entry, availability mode and
+dialogs. `/calendar` is now an authenticated route with RU/EN navigation and a
+functional server-backed integration surface. RED was recorded for all missing
+modules, copy, route and idempotency-header propagation. Focused GREEN is 32
+tests plus astrologer-web typecheck/build. Exact desktop/mobile composition,
+dialogs and design parity remain Task 9 rather than being represented as a
+completed visual surface.
+Task 9 currently has authenticated runtime evidence for the desktop calendar
+shell, empty range, day/week/month transitions, month navigation, summary-panel
+toggle and availability create/update/reload. The first browser run failed on
+`schedule_not_found` and missing FullCalendar v7 CSS; both now have RED/GREEN
+regression coverage. The availability editor maps the prototype's misleading
+slot-duration label to the domain's start interval, supports multiple weekly
+periods, date overrides, policy fields and active-product assignments, and does
+not copy unrelated reschedule/no-show/Google controls. Browser evidence also
+caught and removed empty-state overlays that hid the availability and normal
+calendar grids. The
+evidence is under `.design-qa/calendar-program-a/`. The manual-booking slice now
+adds a bounded slot-read contract/domain/API path, CRM client selection without
+a birth-data precondition, schedule-assigned product filtering, exact server
+slot selection, idempotent create command, conflict retry, RU/EN copy and a
+native modal shell. Contract/domain/API/frontend focused tests and affected
+typechecks are green. Its authenticated create/reload flow, persistence after a
+full reload and occupied-slot removal are browser-proved. Booking details,
+mobile agenda, conflict-browser evidence and exact reference parity remain
+unfinished, so Task 9 remains open.
 Program A is not complete until database, network-backed browser, visual and
 accessibility acceptance are also recorded here with exact evidence and risk.
 
@@ -569,8 +656,8 @@ ALTER TABLE "schedule_reservations"
 
 - Create: `apps/astrologer-api/src/modules/security/idempotency/idempotency.guard.ts`
 - Create: `apps/astrologer-api/src/modules/security/idempotency/idempotency.guard.test.ts`
-- Create: `apps/astrologer-api/src/modules/security/route-policy/route-security-metadata.ts`
-- Create: `apps/astrologer-api/src/modules/security/route-policy/route-security-policy.ts`
+- Modify: `apps/astrologer-api/src/modules/security/route-policy/route-security-metadata.ts`
+- Modify: `apps/astrologer-api/src/modules/security/route-policy/route-security-policy.ts`
 - Modify: `apps/astrologer-api/src/modules/security/security.module.ts`
 - Create: `apps/astrologer-api/src/modules/bookings/bookings.module.ts`
 - Create: `apps/astrologer-api/src/modules/bookings/bookings.controller.ts`
@@ -580,13 +667,13 @@ ALTER TABLE "schedule_reservations"
 - Create: `apps/astrologer-api/src/modules/bookings/bookings.e2e.test.ts`
 - Modify: `apps/astrologer-api/src/app.module.ts`
 
-- [ ] Port the public API's header-shape behavior through new astrologer-local
+- [x] Port the public API's header-shape behavior through new astrologer-local
   code and tests; do not import another app's internals.
-- [ ] Write E2E tests for auth, CSRF, missing/invalid idempotency key, replay,
+- [x] Write E2E tests for auth, CSRF, missing/invalid idempotency key, replay,
   changed request, active-client/product checks, overlap conflict and safe GET.
-- [ ] Run focused tests and record RED.
-- [ ] Implement thin controller/service/module wiring and stable error mapping.
-- [ ] Run focused tests, API typecheck and build; record GREEN.
+- [x] Run focused tests and record RED.
+- [x] Implement thin controller/service/module wiring and stable error mapping.
+- [x] Run focused tests, API typecheck and build; record GREEN.
 
 ### Task 8: Add frontend data model, state and route integration
 
@@ -610,14 +697,14 @@ ALTER TABLE "schedule_reservations"
 - Modify: astrologer navigation and RU/EN locale dictionaries at their existing
   canonical files discovered immediately before this task.
 
-- [ ] Write tests for day/week/month range navigation, panel persistence during
+- [x] Write tests for day/week/month range navigation, panel persistence during
   range refetch, stale booking conflict recovery, validated responses and
   locale-safe labels.
-- [ ] Run focused tests and record RED.
-- [ ] Implement query options, mutations and a controller that owns view/range,
+- [x] Run focused tests and record RED.
+- [x] Implement query options, mutations and a controller that owns view/range,
   selected entry, availability mode and dialog state outside JSX.
-- [ ] Add `/calendar` and navigation entry without changing unrelated routes.
-- [ ] Run focused tests, frontend typecheck and build; record GREEN.
+- [x] Add `/calendar` and navigation entry without changing unrelated routes.
+- [x] Run focused tests, frontend typecheck and build; record GREEN.
 
 ### Task 9: Build the reference-parity desktop and mobile surface
 
@@ -642,6 +729,10 @@ ALTER TABLE "schedule_reservations"
 - [ ] Write component tests for toolbar, panel toggle, accessible event
   activation, keyboard availability forms, dialog focus restoration, conflict
   live announcement, mobile agenda and RU/EN copy; record RED.
+- [x] Add the production manual-booking dialog with CRM client selection,
+  assigned live/solo product selection, exact server slots, loading/empty/error/
+  retry/conflict states and RU/EN copy. Prototype-only guest, custom-service and
+  payment controls remain intentionally absent.
 - [ ] Implement desktop day/week and conditionally DayGrid month. If measured
   parity needs private FullCalendar DOM coupling, use app-owned
   `CalendarMonthView` over the same view model.
@@ -666,8 +757,9 @@ ALTER TABLE "schedule_reservations"
 - [ ] Diagnose ports read-only. If required services are already running, use
   them; if a standard port is absent, stop and report rather than starting it.
 - [ ] In the authorized existing browser, execute authenticated network-backed
-  availability save, booking create, conflict and reload flows. Inspect network
-  requests, console, persistence and owner isolation.
+  availability save, booking create, conflict and reload flows. Availability,
+  create and reload are proved; conflict, explicit network inspection and
+  owner-isolation browser evidence remain.
 - [ ] Capture all reference/production viewport pairs and compare metrics,
   loading, empty, error, retry, keyboard, focus, contrast and touch targets.
 - [ ] Review `git status --short`, `git diff --cached`, every owned path diff,
@@ -708,5 +800,25 @@ owned patch, and never reset, stash or overwrite the other work.
 - Execution plan: this file.
 - Visual source: `ElevenHouseDesign/app/calendar*.jsx` and
   `ElevenHouseDesign/app/mobile-calendar.jsx`.
-- Browser evidence is currently pending an exposed authorized browser target;
-  no shell or component-test result substitutes for that gate.
+- Manual-booking targeted verification on 2026-07-17: 25 files / 132 tests,
+  contracts/domain/API/web typechecks and astrologer API/web builds passed.
+- Fresh repository verification passed lint, all 33 typecheck tasks, 403 test
+  files / 1763 tests and all 23 build tasks. Documentation checks also passed.
+- The authorized API restart completed on 2026-07-17: PID `94987` listens on
+  `3002`, `/health` returned `200`, and the new slot route returned the expected
+  unauthenticated `401` instead of route-not-found.
+- Authenticated Computer Use evidence on the user's existing Chrome session now
+  covers product publication, schedule-product assignment, manual-booking modal,
+  successful create, calendar refresh, full browser reload and occupied-slot
+  removal. The local test booking is `20 July 2026 09:00 Europe/Moscow` for
+  `Лушников Артур Олегович` and `Индивидуальная консультация`.
+- Browser screenshots are
+  `.design-qa/calendar-program-a/production-manual-booking-dialog.png`,
+  `.design-qa/calendar-program-a/production-manual-booking-created.png` and
+  `.design-qa/calendar-program-a/production-manual-booking-created-reloaded.png`.
+  The user-supplied modal reference remains
+  `.design-qa/calendar-program-a/reference-manual-booking-user.png`.
+- No direct SQL fixture was inserted. Exact reference metrics, mobile states,
+  booking detail, browser conflict and a conclusive first-Escape/focus-return
+  result remain outside the recorded pass; Computer Use keyboard delivery was
+  inconsistent after the user switched Chrome windows.

@@ -115,9 +115,10 @@ export function getAvailableClientSelectOptions(input: {
 }
 
 export function getSelectableClientOptions(
-  options: readonly ClientSelectOption[]
+  options: readonly ClientSelectOption[],
+  requireBirthDate = true
 ): readonly ClientSelectOption[] {
-  return options.filter((client) => client.hasBirthDate);
+  return requireBirthDate ? options.filter((client) => client.hasBirthDate) : options;
 }
 
 export function resolveSelectedClientOption(
@@ -149,8 +150,12 @@ export function getClientSearchComboboxKeyAction(input: {
   readonly clients: readonly ClientSelectOption[];
   readonly activeClientId: string | null;
   readonly hasNextPage: boolean;
+  readonly requireBirthDate?: boolean;
 }): ClientSearchComboboxKeyAction {
-  const enabledClients = getSelectableClientOptions(input.clients);
+  const enabledClients = getSelectableClientOptions(
+    input.clients,
+    input.requireBirthDate ?? true
+  );
   if (input.key === "Escape") {
     return { kind: "close" };
   }

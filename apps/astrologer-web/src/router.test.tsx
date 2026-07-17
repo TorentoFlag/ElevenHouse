@@ -10,6 +10,7 @@ import { NumerologyPage } from "./pages/numerology/NumerologyPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
 import { ProductsPage } from "./pages/products/ProductsPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
+import { CalendarPage } from "./pages/calendar/CalendarPage";
 import { astrologerRoutes } from "./router";
 
 vi.mock("react-router", async (importOriginal) => {
@@ -33,6 +34,7 @@ describe("astrologerRoutes", () => {
     );
     const dashboardRoute = shellRoute?.children?.find((route) => route.path === "/dashboard");
     const productsRoute = shellRoute?.children?.find((route) => route.path === "/products");
+    const calendarRoute = shellRoute?.children?.find((route) => route.path === "/calendar");
     const numerologyRoute = shellRoute?.children?.find((route) => route.path === "/numerology");
     const matrixRoute = shellRoute?.children?.find((route) => route.path === "/matrix");
     const referenceRoute = shellRoute?.children?.find((route) => route.path === "/reference");
@@ -50,6 +52,7 @@ describe("astrologerRoutes", () => {
       DashboardPage
     );
     expect(isValidElement(productsRoute?.element) && productsRoute.element.type).toBe(ProductsPage);
+    expect(isValidElement(calendarRoute?.element) && calendarRoute.element.type).toBe(CalendarPage);
     expect(isValidElement(numerologyRoute?.element) && numerologyRoute.element.type).toBe(
       NumerologyPage
     );

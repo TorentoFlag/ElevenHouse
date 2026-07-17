@@ -107,6 +107,14 @@ POST /products/:productId/publish
 POST /products/:productId/move-to-draft
 POST /products/:productId/archive
 POST /products/:productId/duplicate
+GET  /availability/schedules/default
+PUT  /availability/schedules/default
+GET  /calendar/range?start=<instant>&end=<instant>&timeZone=<iana>
+POST /calendar/blocks
+DELETE /calendar/blocks/:blockId
+POST /bookings/manual
+GET  /bookings/available-slots?productId=<uuid>&start=<instant>&end=<instant>
+GET  /bookings/:bookingId
 GET  /media/assets/:mediaId
 POST /media/upload-intents
 POST /media/assets/:mediaId/complete
@@ -151,6 +159,15 @@ POST /calculations/:calculationId/interpretations/:interpretationId/approve
 POST /calculations/:calculationId/publish
 POST /calculations/:calculationId/archive
 ```
+
+Availability, calendar and manual-booking routes are authenticated and owner
+scoped. Availability and calendar reads are side-effect free. Their mutations
+require CSRF; manual-block and manual-booking creation additionally require a
+valid `Idempotency-Key`. Booking creation validates an active CRM relationship,
+an active live product and an exact currently available start before the
+transactional scheduling adapter claims the owner-wide occupied range. Replays
+return the persisted result; reuse with a different request and overlap races
+return stable safe conflict codes.
 
 `POST /numerology/preview` is authenticated and read-only, so it does not require
 CSRF and must not create calculation, participant-link or interpretation rows.
