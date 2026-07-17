@@ -78,22 +78,24 @@ export function calendarPageStateReducer(
 ): CalendarPageState {
   switch (action.type) {
     case "set_view":
-      return { ...state, view: action.view };
+      return closeBookingDetail({ ...state, view: action.view });
     case "navigate":
-      return {
+      return closeBookingDetail({
         ...state,
         anchorDate: moveCalendarAnchor(
           state.anchorDate,
           state.view,
           action.direction === "next" ? 1 : -1
         )
-      };
+      });
     case "go_today":
-      return { ...state, anchorDate: action.today };
+      return closeBookingDetail({ ...state, anchorDate: action.today });
     case "select_entry":
       return { ...state, selectedEntryId: action.entryId };
     case "set_availability_mode":
-      return { ...state, isAvailabilityMode: action.enabled };
+      return action.enabled
+        ? closeBookingDetail({ ...state, isAvailabilityMode: true })
+        : { ...state, isAvailabilityMode: false };
     case "set_summary_panel":
       return { ...state, isSummaryPanelOpen: action.open };
     case "open_dialog":
@@ -109,6 +111,12 @@ export function calendarPageStateReducer(
     case "booking_conflict":
       return { ...state, conflictMessage: action.message };
   }
+}
+
+function closeBookingDetail(state: CalendarPageState): CalendarPageState {
+  return state.dialog === "booking_detail"
+    ? { ...state, dialog: null, selectedEntryId: null }
+    : state;
 }
 
 type CalendarPageControllerInput = {
@@ -177,6 +185,8 @@ export function useCalendarPageController(input: CalendarPageControllerInput) {
     isAvailabilityProductsLoading: availabilityProductsQuery.isLoading,
     isAvailabilityProductsError: availabilityProductsQuery.isError,
     isBookingCreating: createBookingMutation.isPending,
+    isBookingDetailLoading: bookingQuery.isLoading,
+    isBookingDetailError: bookingQuery.isError,
     isCommandPending:
       createBlockMutation.isPending ||
       releaseBlockMutation.isPending ||
@@ -191,6 +201,7 @@ export function useCalendarPageController(input: CalendarPageControllerInput) {
       void availabilityQuery.refetch();
       void availabilityProductsQuery.refetch();
     },
+    onRetryBookingDetail: () => bookingQuery.refetch(),
     onSetView: (view: CalendarView) => dispatch({ type: "set_view", view }),
     onPrevious: () => dispatch({ type: "navigate", direction: "previous" }),
     onNext: () => dispatch({ type: "navigate", direction: "next" }),

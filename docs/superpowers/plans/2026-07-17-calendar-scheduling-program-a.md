@@ -74,8 +74,10 @@ an app-owned agenda rather than a compressed seven-column grid.
   in the authenticated browser. Recurring periods, date overrides, schedule
   policies and product assignments save through the real API. The manual-booking
   dialog, owner-scoped slot query, real product assignment and authenticated
-  create/reload flow are implemented and browser-proved. Booking details, mobile
-  agenda, conflict-browser evidence and exact reference parity remain open.
+  create/reload flow are implemented and browser-proved. The reference-shaped
+  booking-detail panel now loads an authoritative booking snapshot and has
+  authenticated open/close/focus-return browser evidence. Mobile agenda,
+  conflict-browser evidence and exact whole-calendar reference parity remain open.
 - [ ] Task 9: reference-parity desktop and mobile UI.
 - [ ] Task 10: runtime, visual, accessibility and repository verification.
 
@@ -141,8 +143,9 @@ an app-owned agenda rather than a compressed seven-column grid.
   theme variables.
 - Runtime E2E confirms that the current availability and manual-booking buttons
   initially only changed reducer state. The availability editor and manual
-  booking dialog are now mounted; the booking detail panel remains a Task 9
-  failure, not an accepted placeholder.
+  booking dialog are now mounted. The booking-detail reducer/query path is now
+  mounted as an app-owned panel; loading, error/retry and authoritative success
+  states replace the weekly summary without copying unsupported prototype actions.
 - Manual booking requires product-specific candidate starts, while the calendar
   range endpoint intentionally exposes only duration-free working backgrounds.
   `GET /bookings/available-slots` now projects exact owner-scoped starts through
@@ -289,9 +292,16 @@ a birth-data precondition, schedule-assigned product filtering, exact server
 slot selection, idempotent create command, conflict retry, RU/EN copy and a
 native modal shell. Contract/domain/API/frontend focused tests and affected
 typechecks are green. Its authenticated create/reload flow, persistence after a
-full reload and occupied-slot removal are browser-proved. Booking details,
-mobile agenda, conflict-browser evidence and exact reference parity remain
-unfinished, so Task 9 remains open.
+full reload and occupied-slot removal are browser-proved. The booking-detail
+slice adds a measured app-owned panel, RU/EN copy, locale/timezone-safe snapshot
+formatting, loading and retry states, and focus restoration. Authenticated
+  Computer Use evidence proves opening the persisted booking, server-backed
+  content, initial close-button focus, closing and focus return to the calendar
+  event. A follow-up review added current-calendar-timezone formatting,
+  non-truncating price presentation and stale-detail cleanup across navigation;
+  the browser proves the panel does not resurrect after leaving and returning to
+  the booking range. Mobile agenda, conflict-browser evidence and exact
+  whole-calendar parity remain unfinished, so Task 9 remains open.
 Program A is not complete until database, network-backed browser, visual and
 accessibility acceptance are also recorded here with exact evidence and risk.
 
@@ -733,6 +743,10 @@ ALTER TABLE "schedule_reservations"
   assigned live/solo product selection, exact server slots, loading/empty/error/
   retry/conflict states and RU/EN copy. Prototype-only guest, custom-service and
   payment controls remain intentionally absent.
+- [x] Add the measured booking-detail panel over the owner-scoped GET query,
+  including authoritative client/product/time/price/delivery data, loading and
+  retry states, initial close focus and focus restoration. Prototype-only AI,
+  session, client-card and lifecycle actions remain intentionally absent.
 - [ ] Implement desktop day/week and conditionally DayGrid month. If measured
   parity needs private FullCalendar DOM coupling, use app-owned
   `CalendarMonthView` over the same view model.
@@ -802,8 +816,17 @@ owned patch, and never reset, stash or overwrite the other work.
   `ElevenHouseDesign/app/mobile-calendar.jsx`.
 - Manual-booking targeted verification on 2026-07-17: 25 files / 132 tests,
   contracts/domain/API/web typechecks and astrologer API/web builds passed.
+- Booking-detail targeted verification on 2026-07-17: 14 files / 56 tests,
+  repository lint, all 33 typecheck tasks, all 23 build tasks and documentation
+  checks passed. The component focus/retry lifecycle runs in jsdom.
 - Fresh repository verification passed lint, all 33 typecheck tasks, 403 test
   files / 1763 tests and all 23 build tasks. Documentation checks also passed.
+- The post-slice `pnpm verify` rerun reached the shared test suite and stopped on
+  the unrelated committed numerology expectation in
+  `CompatibilityWorkspace.test.tsx` (1 failed, 1773 passed). Its lint and all
+  typechecks passed; the full repository build was then run independently and
+  passed. A full suite excluding only that known file passed 404 files / 1772
+  tests.
 - The authorized API restart completed on 2026-07-17: PID `94987` listens on
   `3002`, `/health` returned `200`, and the new slot route returned the expected
   unauthenticated `401` instead of route-not-found.
@@ -818,7 +841,11 @@ owned patch, and never reset, stash or overwrite the other work.
   `.design-qa/calendar-program-a/production-manual-booking-created-reloaded.png`.
   The user-supplied modal reference remains
   `.design-qa/calendar-program-a/reference-manual-booking-user.png`.
-- No direct SQL fixture was inserted. Exact reference metrics, mobile states,
-  booking detail, browser conflict and a conclusive first-Escape/focus-return
-  result remain outside the recorded pass; Computer Use keyboard delivery was
-  inconsistent after the user switched Chrome windows.
+- Booking-detail visual evidence is
+  `.design-qa/calendar-program-a/reference-booking-detail.jpg` and
+  `.design-qa/calendar-program-a/production-booking-detail.jpg`. The browser
+  pass proved initial close-button focus and event focus restoration on close.
+- No direct SQL fixture was inserted. Whole-calendar exact reference metrics,
+  mobile states, browser conflict and a conclusive first-Escape result remain
+  outside the recorded pass; Computer Use keyboard delivery was inconsistent
+  after the user switched Chrome windows.

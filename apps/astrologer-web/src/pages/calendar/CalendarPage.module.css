@@ -286,6 +286,199 @@
   background: rgb(10 9 29 / 0.96);
 }
 
+.bookingDetailPanel {
+  display: flex;
+  width: 340px;
+  min-width: 0;
+  height: 100%;
+  flex: 0 0 340px;
+  flex-direction: column;
+  border-left: 1px solid var(--calendar-line);
+  background: rgb(10 9 29 / 0.96);
+}
+
+.bookingDetailHeader {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--calendar-line);
+}
+
+.bookingStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid rgb(169 140 255 / 0.46);
+  border-radius: 999px;
+  background: rgb(86 57 164 / 0.26);
+  color: #b99cff;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.bookingStatusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.bookingDetailCloseButton {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  margin: -5px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--calendar-muted);
+  cursor: pointer;
+}
+
+.bookingDetailCloseButton:hover {
+  background: var(--calendar-surface-raised);
+  color: var(--eh-color-moon-120);
+}
+
+.bookingDetailCloseButton:focus-visible {
+  outline: 2px solid var(--calendar-purple);
+  outline-offset: 2px;
+}
+
+.bookingDetailContent {
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.bookingIdentity {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 16px;
+}
+
+.bookingIdentity > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bookingIdentity strong {
+  overflow: hidden;
+  color: var(--eh-color-moon-120);
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookingIdentity span:not(.bookingAvatar) {
+  overflow: hidden;
+  color: #f6d266;
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookingAvatar {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  place-items: center;
+  border: 1px solid rgb(169 140 255 / 0.24);
+  border-radius: 14px;
+  background: rgb(86 57 164 / 0.35);
+  color: #ddd4ff;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.bookingDetailList {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--calendar-line);
+  border-radius: 12px;
+  background: rgb(17 15 38 / 0.88);
+}
+
+.bookingDetailRow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border-top: 1px solid var(--calendar-line);
+}
+
+.bookingDetailRow:first-child {
+  border-top: 0;
+}
+
+.bookingDetailRow dt {
+  display: flex;
+  flex: 0 0 auto;
+  color: var(--calendar-muted);
+}
+
+.bookingDetailRow dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--eh-color-moon-120);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookingProductAndPrice {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.bookingDetailProduct {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bookingDetailPrice {
+  flex: 0 0 auto;
+}
+
+.bookingDetailState {
+  display: grid;
+  min-height: 150px;
+  gap: 12px;
+  place-items: center;
+  align-content: center;
+  color: var(--calendar-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.bookingDetailState button {
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--calendar-line-strong);
+  border-radius: 10px;
+  background: var(--calendar-surface-raised);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
 .availabilityPanel {
   width: 390px;
   min-width: 0;
@@ -696,6 +889,11 @@
     flex-basis: 240px;
   }
 
+  .bookingDetailPanel {
+    width: 320px;
+    flex-basis: 320px;
+  }
+
   .availabilityPanel {
     width: 350px;
     flex-basis: 350px;
@@ -742,6 +940,14 @@
 
   .summaryPanel {
     display: none;
+  }
+
+  .bookingDetailPanel {
+    position: absolute;
+    z-index: 8;
+    inset: 0;
+    width: 100%;
+    border-left: 0;
   }
 
   .availabilityPanel {

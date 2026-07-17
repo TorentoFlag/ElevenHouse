@@ -90,7 +90,53 @@ describe("CalendarPageView", () => {
     expect(markup).not.toContain("Правила переноса");
     expect(markup).not.toContain("На этот период записей нет");
   });
+
+  it("replaces the summary with server-backed booking details for the selected entry", () => {
+    const props = baseProps();
+    const selectedEntry = props.calendar.entries[0];
+    const markup = renderToStaticMarkup(
+      <CalendarPageView
+        {...props}
+        calendar={{
+          ...props.calendar,
+          dialog: "booking_detail",
+          selectedEntryId: selectedEntry?.id ?? null,
+          selectedEntry: selectedEntry ?? null,
+          selectedBooking: bookingFixture,
+          isBookingDetailLoading: false,
+          isBookingDetailError: false
+        }}
+      />
+    );
+
+    expect(markup).toContain('aria-label="Детали записи"');
+    expect(markup).toContain("Марина К.");
+    expect(markup).not.toContain("2 сессии");
+  });
 });
+
+const bookingFixture = {
+  id: "4fa66e6e-cb18-4d2b-81c5-4fd84bd334ae",
+  reservationId: "6fc48a44-cc13-4307-9531-17a0bd95b85a",
+  clientUserId: "e0b69d64-2f20-4368-a8d0-acb676f1a574",
+  productId: "45f17dc4-3160-48bd-9743-081dc32d64b9",
+  state: "confirmed" as const,
+  startAt: "2026-07-17T08:00:00.000Z",
+  endAt: "2026-07-17T09:00:00.000Z",
+  productTitle: "Натальный разбор",
+  durationMinutes: 60,
+  deliveryFormat: "video" as const,
+  priceMinor: 490_000,
+  currency: "RUB" as const,
+  timeZone: "Europe/Moscow",
+  policySnapshot: {
+    bufferBeforeMinutes: 10,
+    bufferAfterMinutes: 10,
+    minimumNoticeMinutes: 360
+  },
+  createdAt: "2026-07-10T09:00:00.000Z",
+  updatedAt: "2026-07-10T09:00:00.000Z"
+};
 
 function baseProps(): CalendarPageViewProps {
   return {
@@ -142,10 +188,13 @@ function baseProps(): CalendarPageViewProps {
       isAvailabilityProductsLoading: false,
       isAvailabilityProductsError: false,
       isBookingCreating: false,
+      isBookingDetailLoading: false,
+      isBookingDetailError: false,
       isCommandPending: false,
       onRetry: vi.fn(),
       onRetryAvailability: vi.fn(),
       onRetryManualBookingResources: vi.fn(),
+      onRetryBookingDetail: vi.fn(),
       onSetView: vi.fn(),
       onPrevious: vi.fn(),
       onNext: vi.fn(),

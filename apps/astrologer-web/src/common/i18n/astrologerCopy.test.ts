@@ -52,6 +52,16 @@ describe("astrologerCopy", () => {
       week: "Week",
       month: "Month"
     });
+    expect(astrologerCopyByLocale.ru.calendar.bookingDetail).toMatchObject({
+      panelLabel: "Детали записи",
+      confirmedLabel: "Подтверждена",
+      closeLabel: "Закрыть детали записи"
+    });
+    expect(astrologerCopyByLocale.en.calendar.bookingDetail).toMatchObject({
+      panelLabel: "Booking details",
+      confirmedLabel: "Confirmed",
+      closeLabel: "Close booking details"
+    });
   });
 
   it("requires reference entry modal create and edit labels", () => {

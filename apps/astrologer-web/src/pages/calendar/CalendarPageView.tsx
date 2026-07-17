@@ -4,6 +4,7 @@ import { CalendarSummaryPanel } from "./components/CalendarSummaryPanel";
 import { AvailabilityEditorPanel } from "./components/AvailabilityEditorPanel";
 import { CalendarToolbar } from "./components/CalendarToolbar";
 import { CalendarWorkspace } from "./components/CalendarWorkspace";
+import { BookingDetailPanel } from "./components/BookingDetailPanel";
 import { ManualBookingDialog } from "../../features/bookings/components/ManualBookingDialog";
 import type { useCalendarPageController } from "./useCalendarPageController";
 import styles from "./CalendarPage.module.css";
@@ -66,6 +67,18 @@ export function CalendarPageView({ copy, locale, calendar }: CalendarPageViewPro
             isSaving={calendar.isCommandPending}
             onRetry={calendar.onRetryAvailability}
             onSave={calendar.onSaveSchedule}
+          />
+        ) : calendar.dialog === "booking_detail" && calendar.selectedEntry?.kind === "booking" ? (
+          <BookingDetailPanel
+            copy={copy.bookingDetail}
+            locale={locale}
+            timeZone={calendar.timeZone}
+            entry={calendar.selectedEntry}
+            booking={calendar.selectedBooking}
+            isLoading={calendar.isBookingDetailLoading}
+            isError={calendar.isBookingDetailError}
+            onRetry={calendar.onRetryBookingDetail}
+            onClose={calendar.onCloseDialog}
           />
         ) : calendar.isSummaryPanelOpen ? (
           <CalendarSummaryPanel locale={locale} summary={calendar.summary} />

@@ -72,6 +72,21 @@ export type AstrologerCopy = {
     retryLabel: string;
     emptyLabel: string;
     conflictMessage: string;
+    bookingDetail: {
+      panelLabel: string;
+      closeLabel: string;
+      confirmedLabel: string;
+      loadingLabel: string;
+      errorLabel: string;
+      retryLabel: string;
+      fieldLabels: {
+        productAndPrice: string;
+        date: string;
+        time: string;
+        deliveryFormat: string;
+      };
+      deliveryFormats: Record<"video" | "audio" | "chat" | "text" | "file" | "channel", string>;
+    };
     manualBooking: {
       eyebrow: string;
       title: string;
@@ -491,6 +506,28 @@ export const astrologerCopyByLocale = {
       retryLabel: "Повторить",
       emptyLabel: "На этот период записей нет",
       conflictMessage: "Это время уже занято. Календарь обновлён — выберите другой слот.",
+      bookingDetail: {
+        panelLabel: "Детали записи",
+        closeLabel: "Закрыть детали записи",
+        confirmedLabel: "Подтверждена",
+        loadingLabel: "Загружаем детали записи",
+        errorLabel: "Не удалось загрузить детали записи",
+        retryLabel: "Повторить",
+        fieldLabels: {
+          productAndPrice: "Услуга и стоимость",
+          date: "Дата",
+          time: "Время и длительность",
+          deliveryFormat: "Формат"
+        },
+        deliveryFormats: {
+          video: "Видеозвонок",
+          audio: "Аудиозвонок",
+          chat: "Чат",
+          text: "Текст",
+          file: "Файл",
+          channel: "Канал"
+        }
+      },
       manualBooking: {
         eyebrow: "Новая запись",
         title: "Записать клиента",
@@ -849,6 +886,28 @@ export const astrologerCopyByLocale = {
       retryLabel: "Retry",
       emptyLabel: "No bookings in this period",
       conflictMessage: "This time is no longer available. Choose another slot from the refreshed calendar.",
+      bookingDetail: {
+        panelLabel: "Booking details",
+        closeLabel: "Close booking details",
+        confirmedLabel: "Confirmed",
+        loadingLabel: "Loading booking details",
+        errorLabel: "Could not load booking details",
+        retryLabel: "Retry",
+        fieldLabels: {
+          productAndPrice: "Service and price",
+          date: "Date",
+          time: "Time and duration",
+          deliveryFormat: "Format"
+        },
+        deliveryFormats: {
+          video: "Video call",
+          audio: "Audio call",
+          chat: "Chat",
+          text: "Text",
+          file: "File",
+          channel: "Channel"
+        }
+      },
       manualBooking: {
         eyebrow: "New booking",
         title: "Book a client",

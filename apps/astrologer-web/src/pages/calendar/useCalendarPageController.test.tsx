@@ -25,7 +25,7 @@ describe("calendar page controller state", () => {
     });
   });
 
-  it("keeps panel and dialog state during range navigation/refetch", () => {
+  it("closes stale booking details when the visible range changes", () => {
     const initial = {
       ...createInitialCalendarPageState({ today: "2026-05-29" }),
       dialog: "booking_detail" as const,
@@ -35,8 +35,24 @@ describe("calendar page controller state", () => {
 
     expect(next.anchorDate).toBe("2026-05-22");
     expect(next.isSummaryPanelOpen).toBe(true);
-    expect(next.dialog).toBe("booking_detail");
-    expect(next.selectedEntryId).toBe("booking-1");
+    expect(next.dialog).toBeNull();
+    expect(next.selectedEntryId).toBeNull();
+  });
+
+  it("closes stale booking details before entering availability mode", () => {
+    const initial = {
+      ...createInitialCalendarPageState({ today: "2026-05-29" }),
+      dialog: "booking_detail" as const,
+      selectedEntryId: "booking-1"
+    };
+
+    expect(
+      calendarPageStateReducer(initial, { type: "set_availability_mode", enabled: true })
+    ).toMatchObject({
+      dialog: null,
+      selectedEntryId: null,
+      isAvailabilityMode: true
+    });
   });
 });
 
