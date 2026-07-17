@@ -44,6 +44,20 @@ export type AuthVisualCopy = {
   avatarInitials: string[];
 };
 
+export type NumerologyInterpretationCopy = {
+  readonly sectionLabel: string;
+  readonly createAiDraftLabel: string;
+  readonly creatingAiDraftLabel: string;
+  readonly openEditorLabel: string;
+  readonly modalTitle: string;
+  readonly closeModalLabel: string;
+  readonly textLabel: string;
+  readonly individualPlaceholder: string;
+  readonly compatibilityPlaceholder: string;
+  readonly saveDraftLabel: string;
+  readonly approveLabel: string;
+};
+
 export type AstrologerCopy = {
   auth: AuthCopy;
   appShell: {
@@ -155,6 +169,9 @@ export type AstrologerCopy = {
       savedLabel: string;
       retryLabel: string;
     };
+  };
+  numerology: {
+    interpretation: NumerologyInterpretationCopy;
   };
   products: {
     documentTitle: string;
@@ -597,6 +614,21 @@ export const astrologerCopyByLocale = {
         retryLabel: "Повторить"
       }
     },
+    numerology: {
+      interpretation: {
+        sectionLabel: "AI-разбор портрета",
+        createAiDraftLabel: "Создать AI-черновик",
+        creatingAiDraftLabel: "Создаём AI-черновик…",
+        openEditorLabel: "Открыть редактор трактовки",
+        modalTitle: "Трактовка нумерологического портрета",
+        closeModalLabel: "Закрыть редактор трактовки",
+        textLabel: "Текст трактовки",
+        individualPlaceholder: "Введите трактовку для клиента",
+        compatibilityPlaceholder: "Введите трактовку для пары",
+        saveDraftLabel: "Сохранить черновик",
+        approveLabel: "Утвердить"
+      }
+    },
     products: {
       documentTitle: "ElevenHouse | Продукты",
       title: "Продукты",
@@ -975,6 +1007,21 @@ export const astrologerCopyByLocale = {
         conflictErrorLabel: "The schedule changed in another tab. It has been refreshed; apply your changes again.",
         savedLabel: "Availability saved",
         retryLabel: "Retry"
+      }
+    },
+    numerology: {
+      interpretation: {
+        sectionLabel: "AI portrait interpretation",
+        createAiDraftLabel: "Create AI draft",
+        creatingAiDraftLabel: "Creating AI draft…",
+        openEditorLabel: "Open interpretation editor",
+        modalTitle: "Numerology portrait interpretation",
+        closeModalLabel: "Close interpretation editor",
+        textLabel: "Interpretation text",
+        individualPlaceholder: "Enter an interpretation for the client",
+        compatibilityPlaceholder: "Enter an interpretation for the pair",
+        saveDraftLabel: "Save draft",
+        approveLabel: "Approve"
       }
     },
     products: {

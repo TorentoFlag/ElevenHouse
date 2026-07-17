@@ -15,6 +15,7 @@ import { Content } from "../Content/index.js";
 import { Doc } from "../Doc/index.js";
 import { Dots } from "../Dots/index.js";
 import { Edit } from "../Edit/index.js";
+import { Expand } from "../Expand/index.js";
 import { FileDown } from "../FileDown/index.js";
 import { Flow } from "../Flow/index.js";
 import { Gift } from "../Gift/index.js";
@@ -60,6 +61,7 @@ export const iconRegistry = {
   doc: Doc,
   dots: Dots,
   edit: Edit,
+  expand: Expand,
   fileDown: FileDown,
   flow: Flow,
   gift: Gift,

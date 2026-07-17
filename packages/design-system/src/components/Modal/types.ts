@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
 export type ModalProps = {
   readonly title: ReactNode;
@@ -10,5 +10,6 @@ export type ModalProps = {
   readonly backdropClassName?: string;
   readonly className?: string;
   readonly contentClassName?: string;
+  readonly initialFocusRef?: RefObject<HTMLElement | null>;
   readonly onClose: () => void;
 };

@@ -11,6 +11,7 @@ describe("design-system root exports", () => {
     expect(designSystem.ChevronDown).toBeTypeOf("function");
     expect(designSystem.ChevronLeft).toBeTypeOf("function");
     expect(designSystem.ChevronRight).toBeTypeOf("function");
+    expect(designSystem.Expand).toBeTypeOf("function");
     expect(designSystem.Icon).toBeTypeOf("function");
     expect(designSystem.IconPicker).toBeTypeOf("function");
     expect(designSystem.InfiniteScrollTrigger).toBeTypeOf("function");

@@ -266,6 +266,24 @@ describe("NumerologyPageView", () => {
     expect(resultPanel.props.isApproveInterpretationDisabled).toBe(true);
   });
 
+  it("passes the selected locale interpretation copy to the result workspace", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      locale: "en",
+      selectedResponse: response({
+        source: "crm_client",
+        clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+      })
+    });
+    const resultPanel = findRequiredElementByType<{
+      readonly interpretationCopy?: { readonly openEditorLabel: string };
+    }>(view, NumerologyResultPanel);
+
+    expect(resultPanel.props.interpretationCopy?.openEditorLabel).toBe(
+      "Open interpretation editor"
+    );
+  });
+
   it("blocks AI generation and approval while the interpretation has unsaved changes", () => {
     const baseResponse = response({
       source: "crm_client",

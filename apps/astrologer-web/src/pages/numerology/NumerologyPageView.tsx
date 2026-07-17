@@ -8,6 +8,7 @@ import { ActionMenu, type ActionMenuItem } from "@elevenhouse/design-system/comp
 import "@elevenhouse/design-system/components/ActionMenu.css";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { MotionContent } from "@elevenhouse/design-system/motion";
+import { astrologerCopyByLocale } from "../../common/i18n/astrologerCopy";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import { NumerologyResultPanel } from "../../features/numerology/components/NumerologyResultPanel";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
@@ -155,6 +156,7 @@ export function NumerologyPageView({
     isBusy || Boolean(editorState),
     locale
   );
+  const interpretationCopy = astrologerCopyByLocale[locale].numerology.interpretation;
   const savedItems = getActiveNumerologyCalculations(calculations).map(toSavedCalculationListItem);
   const isCompatibilityMode = formState.mode === "compatibility";
   const selectedSubjectClient =
@@ -295,6 +297,7 @@ export function NumerologyPageView({
                   detail={pageModel.detail}
                   selectedSelector={pageModel.effectiveSelector}
                   isPeriodVisible={isPeriodVisible}
+                  interpretationCopy={interpretationCopy}
                   interpretationText={interpretationText}
                   isCreatingAiDraft={isCreatingAiDraft}
                   aiDraftErrorMessage={aiDraftErrorMessage}

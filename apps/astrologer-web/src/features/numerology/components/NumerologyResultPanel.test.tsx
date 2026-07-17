@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { astrologerCopyByLocale } from "../../../common/i18n/astrologerCopy";
 import type { NumerologyWorkspaceModel } from "../model/numerologyWorkspaceModel";
 import { NumerologyResultPanel } from "./NumerologyResultPanel";
 
@@ -36,6 +37,7 @@ function renderPanel(): string {
       detail={null}
       selectedSelector="line:family"
       isPeriodVisible={false}
+      interpretationCopy={astrologerCopyByLocale.ru.numerology.interpretation}
       interpretationText=""
       isCreatingAiDraft={false}
       aiDraftErrorMessage={null}

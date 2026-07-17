@@ -1,3 +1,4 @@
+import type { NumerologyInterpretationCopy } from "../../../common/i18n/astrologerCopy";
 import type { NumerologyWorkspaceModel } from "../model/numerologyWorkspaceModel";
 import styles from "./NumerologyComponents.module.css";
 import { CompatibilityComparisonList } from "./CompatibilityComparisonList";
@@ -8,6 +9,7 @@ import { NumerologyInterpretationEditor } from "./NumerologyInterpretationEditor
 
 export type CompatibilityWorkspaceProps = {
   readonly model: NumerologyWorkspaceModel;
+  readonly interpretationCopy: NumerologyInterpretationCopy;
   readonly selectedSelector: string | null;
   readonly interpretationText: string;
   readonly isCreatingAiDraft: boolean;
@@ -25,6 +27,7 @@ export type CompatibilityWorkspaceProps = {
 
 export function CompatibilityWorkspace({
   model,
+  interpretationCopy,
   selectedSelector,
   interpretationText,
   isCreatingAiDraft,
@@ -114,8 +117,9 @@ export function CompatibilityWorkspace({
             onSelect={onSelect}
           />
           <NumerologyInterpretationEditor
+            copy={interpretationCopy}
             text={interpretationText}
-            placeholder="Введите трактовку для пары"
+            placeholder={interpretationCopy.compatibilityPlaceholder}
             isCreatingAiDraft={isCreatingAiDraft}
             aiDraftErrorMessage={aiDraftErrorMessage}
             aiDraftDisabled={isAiDraftDisabled}

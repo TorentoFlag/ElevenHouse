@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, type MouseEvent } from "react";
 import { IconButton } from "../IconButton/index.js";
 import { Icon } from "../../icons/Icon/index.js";
 import { classNames } from "../../helpers/classNames.js";
-import { getFocusableElements } from "./helpers/getFocusableElements.js";
+import { getInitialFocusElement } from "./helpers/getInitialFocusElement.js";
 import { handleDialogKeyDown } from "./helpers/handleDialogKeyDown.js";
 import type { ModalProps } from "./types.js";
 
@@ -17,6 +17,7 @@ export function Modal({
   backdropClassName,
   className,
   contentClassName,
+  initialFocusRef,
   onClose
 }: ModalProps) {
   const titleId = useId();
@@ -34,8 +35,11 @@ export function Modal({
 
     requestAnimationFrame(() => {
       const dialog = dialogRef.current;
-      const firstFocusable = dialog ? getFocusableElements(dialog)[0] : null;
-      (firstFocusable ?? dialog)?.focus();
+      if (!dialog) {
+        return;
+      }
+
+      getInitialFocusElement(dialog, initialFocusRef?.current).focus();
     });
 
     return () => {
@@ -45,7 +49,7 @@ export function Modal({
         previousActiveElementRef.current.focus();
       }
     };
-  }, [open]);
+  }, [initialFocusRef, open]);
 
   if (!open) {
     return null;

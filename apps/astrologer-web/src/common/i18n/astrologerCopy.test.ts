@@ -31,6 +31,35 @@ const assertRequiredProductActionCopy = (
 ): AstrologerCopy["products"]["actions"] => copy;
 
 describe("astrologerCopy", () => {
+  it("contains complete Numerology interpretation editor copy in both locales", () => {
+    expect(astrologerCopyByLocale.ru.numerology.interpretation).toEqual({
+      sectionLabel: "AI-разбор портрета",
+      createAiDraftLabel: "Создать AI-черновик",
+      creatingAiDraftLabel: "Создаём AI-черновик…",
+      openEditorLabel: "Открыть редактор трактовки",
+      modalTitle: "Трактовка нумерологического портрета",
+      closeModalLabel: "Закрыть редактор трактовки",
+      textLabel: "Текст трактовки",
+      individualPlaceholder: "Введите трактовку для клиента",
+      compatibilityPlaceholder: "Введите трактовку для пары",
+      saveDraftLabel: "Сохранить черновик",
+      approveLabel: "Утвердить"
+    });
+    expect(astrologerCopyByLocale.en.numerology.interpretation).toEqual({
+      sectionLabel: "AI portrait interpretation",
+      createAiDraftLabel: "Create AI draft",
+      creatingAiDraftLabel: "Creating AI draft…",
+      openEditorLabel: "Open interpretation editor",
+      modalTitle: "Numerology portrait interpretation",
+      closeModalLabel: "Close interpretation editor",
+      textLabel: "Interpretation text",
+      individualPlaceholder: "Enter an interpretation for the client",
+      compatibilityPlaceholder: "Enter an interpretation for the pair",
+      saveDraftLabel: "Save draft",
+      approveLabel: "Approve"
+    });
+  });
+
   it("contains locale-safe calendar navigation and page labels", () => {
     expect(astrologerCopyByLocale.ru.appShell.navigation.items).toContainEqual({
       id: "calendar",

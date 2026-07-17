@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { astrologerCopyByLocale } from "../../../common/i18n/astrologerCopy";
 import type {
   NumerologyWorkspaceCompatibilityComparison,
   NumerologyWorkspaceModel
@@ -28,8 +29,9 @@ describe("CompatibilityWorkspace", () => {
     const markup = renderWorkspace("compatibility:key_numbers:lifePath");
 
     expect(markup.match(/aria-expanded="true"/g)).toHaveLength(1);
-    expect(markup.match(/aria-expanded="false"/g)).toHaveLength(2);
+    expect(markup.match(/aria-expanded="false"/g)).toHaveLength(3);
     expect(markup).toContain('data-expanded="true"');
+    expect(markup).toContain("AI-разбор портрета");
   });
 });
 
@@ -37,6 +39,7 @@ function renderWorkspace(selectedSelector: string): string {
   return renderToStaticMarkup(
     <CompatibilityWorkspace
       model={model}
+      interpretationCopy={astrologerCopyByLocale.ru.numerology.interpretation}
       selectedSelector={selectedSelector}
       interpretationText=""
       isCreatingAiDraft={false}

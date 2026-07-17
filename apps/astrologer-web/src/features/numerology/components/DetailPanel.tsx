@@ -1,9 +1,11 @@
+import type { NumerologyInterpretationCopy } from "../../../common/i18n/astrologerCopy";
 import type { NumerologyWorkspaceDetail } from "../model/numerologyWorkspaceModel";
 import styles from "./NumerologyComponents.module.css";
 import { NumerologyInterpretationEditor } from "./NumerologyInterpretationEditor";
 
 export type DetailPanelProps = {
   readonly detail: NumerologyWorkspaceDetail | null;
+  readonly interpretationCopy: NumerologyInterpretationCopy;
   readonly interpretationText: string;
   readonly isCreatingAiDraft: boolean;
   readonly aiDraftErrorMessage: string | null;
@@ -19,6 +21,7 @@ export type DetailPanelProps = {
 
 export function DetailPanel({
   detail,
+  interpretationCopy,
   interpretationText,
   isCreatingAiDraft,
   aiDraftErrorMessage,
@@ -52,8 +55,9 @@ export function DetailPanel({
           </div>
         ) : null}
         <NumerologyInterpretationEditor
+          copy={interpretationCopy}
           text={interpretationText}
-          placeholder="Введите трактовку для клиента"
+          placeholder={interpretationCopy.individualPlaceholder}
           isCreatingAiDraft={isCreatingAiDraft}
           aiDraftErrorMessage={aiDraftErrorMessage}
           aiDraftDisabled={isAiDraftDisabled}

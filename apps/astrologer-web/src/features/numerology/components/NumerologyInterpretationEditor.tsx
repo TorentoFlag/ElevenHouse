@@ -1,10 +1,17 @@
 import { Button } from "@elevenhouse/design-system/components/Button";
 import "@elevenhouse/design-system/components/Button.css";
+import { IconButton } from "@elevenhouse/design-system/components/IconButton";
+import "@elevenhouse/design-system/components/IconButton.css";
+import { Tooltip } from "@elevenhouse/design-system/components/Tooltip";
+import "@elevenhouse/design-system/components/Tooltip.css";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
-import { useId, useState } from "react";
+import { useId, useRef, useState, type MouseEvent } from "react";
+import type { NumerologyInterpretationCopy } from "../../../common/i18n/astrologerCopy";
+import { NumerologyInterpretationModal } from "./NumerologyInterpretationModal";
 import styles from "./NumerologyComponents.module.css";
 
 export type NumerologyInterpretationEditorProps = {
+  readonly copy: NumerologyInterpretationCopy;
   readonly text: string;
   readonly placeholder: string;
   readonly isCreatingAiDraft: boolean;
@@ -20,6 +27,7 @@ export type NumerologyInterpretationEditorProps = {
 };
 
 export function NumerologyInterpretationEditor({
+  copy,
   text,
   placeholder,
   isCreatingAiDraft,
@@ -37,6 +45,30 @@ export function NumerologyInterpretationEditor({
   const [isExpanded, setIsExpanded] = useState(
     () => isCreatingAiDraft || aiDraftErrorMessage !== null
   );
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const expandTriggerContainerRef = useRef<HTMLSpanElement>(null);
+  const returnFocusRef = useRef<HTMLButtonElement | null>(null);
+
+  function openEditor(event: MouseEvent<HTMLButtonElement>): void {
+    returnFocusRef.current = event.currentTarget;
+    setIsModalOpen(true);
+  }
+
+  function createAiDraft(event: MouseEvent<HTMLButtonElement>): void {
+    returnFocusRef.current = event.currentTarget;
+    setIsModalOpen(true);
+    onCreateAiDraft();
+  }
+
+  function closeEditor(): void {
+    setIsModalOpen(false);
+    requestAnimationFrame(() => {
+      const preferred = returnFocusRef.current;
+      const fallback = expandTriggerContainerRef.current?.querySelector("button") ?? null;
+      const target = preferred && !preferred.disabled ? preferred : fallback;
+      target?.focus();
+    });
+  }
 
   return (
     <div
@@ -52,7 +84,7 @@ export function NumerologyInterpretationEditor({
       >
         <span className={styles.interpretationDisclosureLabel}>
           <Icon iconName="sparkle" width={14} height={14} aria-hidden="true" />
-          <span>AI-разбор портрета</span>
+          <span>{copy.sectionLabel}</span>
         </span>
         <span
           aria-hidden="true"
@@ -64,50 +96,54 @@ export function NumerologyInterpretationEditor({
       </button>
       {isExpanded ? (
         <div className={styles.interpretationContent} id={regionId}>
-          <span
-            className={styles.aiDraftButtonTooltip}
-            title={aiDraftDisabledReason ?? undefined}
-          >
-            <Button
-              className={styles.aiDraftButton}
-              disabled={aiDraftDisabled}
-              onClick={onCreateAiDraft}
-              size="small"
-              startIcon={
-                <Icon iconName="sparkle" width={13} height={13} aria-hidden="true" />
-              }
-              title={isCreatingAiDraft ? "Создаём черновик…" : "Создать AI-черновик"}
-              variant="glass"
-            />
-          </span>
-          <textarea
-            aria-label="Текст трактовки"
-            value={text}
-            onChange={(event) => onTextChange(event.target.value)}
-            placeholder={placeholder}
-            disabled={isCreatingAiDraft}
-          />
-          <div className={styles.interpretationActions}>
-            <Button
-              disabled={saveDisabled}
-              onClick={onSave}
-              size="small"
-              title="Сохранить"
-              variant="glass"
-            />
-            <Button
-              disabled={approveDisabled}
-              onClick={onApprove}
-              size="small"
-              title="Утвердить"
-              variant="brand"
-            />
-          </div>
-          <div className={styles.interpretationStatus} aria-live="polite">
-            {aiDraftErrorMessage ? <p role="alert">{aiDraftErrorMessage}</p> : null}
+          <div className={styles.interpretationActionRow}>
+            <span
+              className={styles.aiDraftButtonTooltip}
+              title={aiDraftDisabledReason ?? undefined}
+            >
+              <Button
+                className={styles.aiDraftButton}
+                disabled={aiDraftDisabled}
+                onClick={createAiDraft}
+                size="small"
+                startIcon={
+                  <Icon iconName="sparkle" width={13} height={13} aria-hidden="true" />
+                }
+                title={
+                  isCreatingAiDraft ? copy.creatingAiDraftLabel : copy.createAiDraftLabel
+                }
+                variant="glass"
+              />
+            </span>
+            <span ref={expandTriggerContainerRef}>
+              <Tooltip content={copy.openEditorLabel} id={`${regionId}-expand-tooltip`}>
+                <IconButton
+                  aria-haspopup="dialog"
+                  label={copy.openEditorLabel}
+                  icon={<Icon iconName="expand" aria-hidden="true" />}
+                  size="medium"
+                  variant="default"
+                  onClick={openEditor}
+                />
+              </Tooltip>
+            </span>
           </div>
         </div>
       ) : null}
+      <NumerologyInterpretationModal
+        open={isModalOpen}
+        copy={copy}
+        text={text}
+        placeholder={placeholder}
+        isCreatingAiDraft={isCreatingAiDraft}
+        aiDraftErrorMessage={aiDraftErrorMessage}
+        saveDisabled={saveDisabled}
+        approveDisabled={approveDisabled}
+        onClose={closeEditor}
+        onTextChange={onTextChange}
+        onSave={onSave}
+        onApprove={onApprove}
+      />
     </div>
   );
 }

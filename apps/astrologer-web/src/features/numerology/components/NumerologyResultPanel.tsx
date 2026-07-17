@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { NumerologyInterpretationCopy } from "../../../common/i18n/astrologerCopy";
 import type {
   NumerologyWorkspaceDetail,
   NumerologyWorkspaceModel
@@ -27,6 +28,7 @@ export function NumerologyResultPanel({
   detail,
   selectedSelector,
   isPeriodVisible,
+  interpretationCopy,
   interpretationText,
   isCreatingAiDraft,
   aiDraftErrorMessage,
@@ -44,6 +46,7 @@ export function NumerologyResultPanel({
   readonly detail: NumerologyWorkspaceDetail | null;
   readonly selectedSelector: string | null;
   readonly isPeriodVisible: boolean;
+  readonly interpretationCopy: NumerologyInterpretationCopy;
   readonly interpretationText: string;
   readonly isCreatingAiDraft: boolean;
   readonly aiDraftErrorMessage: string | null;
@@ -77,6 +80,7 @@ export function NumerologyResultPanel({
     return (
       <CompatibilityWorkspace
         model={model}
+        interpretationCopy={interpretationCopy}
         selectedSelector={selectedSelector}
         interpretationText={interpretationText}
         isCreatingAiDraft={isCreatingAiDraft}
@@ -168,6 +172,7 @@ export function NumerologyResultPanel({
       </section>
       <DetailPanel
         detail={detail}
+        interpretationCopy={interpretationCopy}
         interpretationText={interpretationText}
         isCreatingAiDraft={isCreatingAiDraft}
         aiDraftErrorMessage={aiDraftErrorMessage}

@@ -84,6 +84,7 @@ describe("Icon", () => {
       "doc",
       "dots",
       "edit",
+      "expand",
       "fileDown",
       "flow",
       "gift",
