@@ -3,7 +3,9 @@ import {
   buildPersonalMonthItems,
   formatNullableNumerologyNumber,
   getPersonalYear,
-  getPersonalYearEssence
+  getPersonalYearEssence,
+  getStrengthLineAccessibleLabel,
+  getStrengthLineMeterPercent
 } from "./numerologyResultPanelModel";
 
 describe("numerologyResultPanelModel", () => {
@@ -48,5 +50,24 @@ describe("numerologyResultPanelModel", () => {
         keyNumbers: [{ code: "personalYear", meaning: { essence: "завершение цикла" } }]
       })
     ).toBe("завершение цикла");
+  });
+
+  it("maps strength-line levels to their semantic meter positions", () => {
+    expect(getStrengthLineMeterPercent("absent")).toBe(0);
+    expect(getStrengthLineMeterPercent("weak")).toBe(25);
+    expect(getStrengthLineMeterPercent("moderate")).toBe(50);
+    expect(getStrengthLineMeterPercent("expressed")).toBe(75);
+    expect(getStrengthLineMeterPercent("strong")).toBe(100);
+    expect(getStrengthLineMeterPercent("unknown")).toBe(0);
+  });
+
+  it("describes a strength line without presenting its meter as a measured percentage", () => {
+    expect(
+      getStrengthLineAccessibleLabel({
+        label: "Семейность",
+        value: 3,
+        level: "Выраженная линия"
+      })
+    ).toBe("Семейность, 3, Выраженная линия");
   });
 });

@@ -3,7 +3,12 @@ import type {
   NumerologyWorkspaceDetail,
   NumerologyWorkspaceModel
 } from "../model/numerologyWorkspaceModel";
-import { getPersonalYear, getPersonalYearEssence } from "../model/numerologyResultPanelModel";
+import {
+  getPersonalYear,
+  getPersonalYearEssence,
+  getStrengthLineAccessibleLabel,
+  getStrengthLineMeterPercent
+} from "../model/numerologyResultPanelModel";
 import { CompatibilityWorkspace } from "./CompatibilityWorkspace";
 import { DetailPanel } from "./DetailPanel";
 import { PythagoreanMatrix } from "./PythagoreanMatrix";
@@ -140,6 +145,7 @@ export function NumerologyResultPanel({
             <div className={styles.linesGrid}>
               {model.strengthLines.map((line) => (
                 <button
+                  aria-label={getStrengthLineAccessibleLabel(line)}
                   className={styles.lineButton}
                   data-selected={selectedSelector === line.selector ? "true" : undefined}
                   key={line.code}
@@ -148,9 +154,7 @@ export function NumerologyResultPanel({
                 >
                   <span>{line.label}</span>
                   <span className={styles.lineMeter} aria-hidden="true">
-                    <span
-                      style={{ width: `${Math.min(100, Math.round((line.value / 7) * 100))}%` }}
-                    />
+                    <span style={{ width: `${getStrengthLineMeterPercent(line.levelCode)}%` }} />
                   </span>
                   <span className={styles.lineValue}>{line.value}</span>
                 </button>

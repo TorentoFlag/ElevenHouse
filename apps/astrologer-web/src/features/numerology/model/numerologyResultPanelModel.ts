@@ -24,6 +24,14 @@ const monthLabels = [
   "Дек"
 ] as const;
 
+const strengthLineMeterPercentByLevel: Readonly<Record<string, number>> = {
+  absent: 0,
+  weak: 25,
+  moderate: 50,
+  expressed: 75,
+  strong: 100
+};
+
 export function buildPersonalMonthItems(input: {
   readonly personalMonths: readonly {
     readonly year: number;
@@ -60,4 +68,16 @@ export function getPersonalYearEssence(model: {
   }[];
 }): string | null {
   return model.keyNumbers.find((item) => item.code === "personalYear")?.meaning?.essence ?? null;
+}
+
+export function getStrengthLineMeterPercent(level: string): number {
+  return strengthLineMeterPercentByLevel[level] ?? 0;
+}
+
+export function getStrengthLineAccessibleLabel(line: {
+  readonly label: string;
+  readonly value: number;
+  readonly level: string;
+}): string {
+  return `${line.label}, ${line.value}, ${line.level}`;
 }
