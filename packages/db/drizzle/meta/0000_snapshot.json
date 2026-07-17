@@ -1,5 +1,5 @@
 {
-  "id": "a23dcbc1-dc4e-4bd9-8dcc-7170b56bcfa8",
+  "id": "29ae569f-8a30-4f7e-9ae4-902483a559c9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2172,7 +2172,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "products_id_owner_unique": {
+          "name": "products_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_user_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "products_status_check": {
@@ -6806,6 +6815,1434 @@
         "matrix_report_drafts_revision_check": {
           "name": "matrix_report_drafts_revision_check",
           "value": "\"matrix_report_drafts\".\"revision\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.availability_date_overrides": {
+      "name": "availability_date_overrides",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "local_date": {
+          "name": "local_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "availability_date_overrides_schedule_date_idx": {
+          "name": "availability_date_overrides_schedule_date_idx",
+          "columns": [
+            {
+              "expression": "schedule_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "local_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "availability_date_overrides_schedule_owner_fk": {
+          "name": "availability_date_overrides_schedule_owner_fk",
+          "tableFrom": "availability_date_overrides",
+          "tableTo": "availability_schedules",
+          "columnsFrom": [
+            "schedule_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "availability_date_overrides_identity_unique": {
+          "name": "availability_date_overrides_identity_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "schedule_id",
+            "owner_user_id"
+          ]
+        },
+        "availability_date_overrides_schedule_date_unique": {
+          "name": "availability_date_overrides_schedule_date_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "schedule_id",
+            "local_date"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "availability_date_overrides_mode_check": {
+          "name": "availability_date_overrides_mode_check",
+          "value": "\"availability_date_overrides\".\"mode\" in ('available', 'unavailable')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.availability_override_periods": {
+      "name": "availability_override_periods",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "override_id": {
+          "name": "override_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_minute": {
+          "name": "start_minute",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_minute": {
+          "name": "end_minute",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "availability_override_periods_override_start_idx": {
+          "name": "availability_override_periods_override_start_idx",
+          "columns": [
+            {
+              "expression": "override_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "start_minute",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "availability_override_periods_override_schedule_owner_fk": {
+          "name": "availability_override_periods_override_schedule_owner_fk",
+          "tableFrom": "availability_override_periods",
+          "tableTo": "availability_date_overrides",
+          "columnsFrom": [
+            "override_id",
+            "schedule_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "schedule_id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "availability_override_periods_override_range_unique": {
+          "name": "availability_override_periods_override_range_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "override_id",
+            "start_minute",
+            "end_minute"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "availability_override_periods_range_check": {
+          "name": "availability_override_periods_range_check",
+          "value": "\"availability_override_periods\".\"start_minute\" >= 0 and \"availability_override_periods\".\"end_minute\" <= 1440 and \"availability_override_periods\".\"start_minute\" < \"availability_override_periods\".\"end_minute\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.availability_product_assignments": {
+      "name": "availability_product_assignments",
+      "schema": "",
+      "columns": {
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "availability_product_assignments_owner_product_idx": {
+          "name": "availability_product_assignments_owner_product_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "availability_product_assignments_schedule_owner_fk": {
+          "name": "availability_product_assignments_schedule_owner_fk",
+          "tableFrom": "availability_product_assignments",
+          "tableTo": "availability_schedules",
+          "columnsFrom": [
+            "schedule_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "availability_product_assignments_product_owner_fk": {
+          "name": "availability_product_assignments_product_owner_fk",
+          "tableFrom": "availability_product_assignments",
+          "tableTo": "products",
+          "columnsFrom": [
+            "product_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "availability_product_assignments_pk": {
+          "name": "availability_product_assignments_pk",
+          "columns": [
+            "schedule_id",
+            "product_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.availability_schedules": {
+      "name": "availability_schedules",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Default'"
+        },
+        "time_zone": {
+          "name": "time_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_default": {
+          "name": "is_default",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "start_interval_minutes": {
+          "name": "start_interval_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "buffer_before_minutes": {
+          "name": "buffer_before_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "buffer_after_minutes": {
+          "name": "buffer_after_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "minimum_notice_minutes": {
+          "name": "minimum_notice_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "booking_horizon_days": {
+          "name": "booking_horizon_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "maximum_bookings_per_day": {
+          "name": "maximum_bookings_per_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "availability_schedules_default_owner_unique": {
+          "name": "availability_schedules_default_owner_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"availability_schedules\".\"is_default\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "availability_schedules_owner_updated_idx": {
+          "name": "availability_schedules_owner_updated_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "availability_schedules_owner_user_id_users_id_fk": {
+          "name": "availability_schedules_owner_user_id_users_id_fk",
+          "tableFrom": "availability_schedules",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "availability_schedules_id_owner_unique": {
+          "name": "availability_schedules_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "availability_schedules_name_length_check": {
+          "name": "availability_schedules_name_length_check",
+          "value": "length(trim(\"availability_schedules\".\"name\")) between 1 and 120"
+        },
+        "availability_schedules_time_zone_length_check": {
+          "name": "availability_schedules_time_zone_length_check",
+          "value": "length(trim(\"availability_schedules\".\"time_zone\")) between 1 and 100"
+        },
+        "availability_schedules_version_check": {
+          "name": "availability_schedules_version_check",
+          "value": "\"availability_schedules\".\"version\" > 0"
+        },
+        "availability_schedules_start_interval_check": {
+          "name": "availability_schedules_start_interval_check",
+          "value": "\"availability_schedules\".\"start_interval_minutes\" between 1 and 1440"
+        },
+        "availability_schedules_buffer_before_check": {
+          "name": "availability_schedules_buffer_before_check",
+          "value": "\"availability_schedules\".\"buffer_before_minutes\" between 0 and 10080"
+        },
+        "availability_schedules_buffer_after_check": {
+          "name": "availability_schedules_buffer_after_check",
+          "value": "\"availability_schedules\".\"buffer_after_minutes\" between 0 and 10080"
+        },
+        "availability_schedules_minimum_notice_check": {
+          "name": "availability_schedules_minimum_notice_check",
+          "value": "\"availability_schedules\".\"minimum_notice_minutes\" between 0 and 525600"
+        },
+        "availability_schedules_booking_horizon_check": {
+          "name": "availability_schedules_booking_horizon_check",
+          "value": "\"availability_schedules\".\"booking_horizon_days\" between 1 and 730"
+        },
+        "availability_schedules_maximum_bookings_check": {
+          "name": "availability_schedules_maximum_bookings_check",
+          "value": "\"availability_schedules\".\"maximum_bookings_per_day\" is null or \"availability_schedules\".\"maximum_bookings_per_day\" between 1 and 100"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.availability_weekly_periods": {
+      "name": "availability_weekly_periods",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "weekday": {
+          "name": "weekday",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_minute": {
+          "name": "start_minute",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_minute": {
+          "name": "end_minute",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "availability_weekly_periods_schedule_day_idx": {
+          "name": "availability_weekly_periods_schedule_day_idx",
+          "columns": [
+            {
+              "expression": "schedule_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "weekday",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "start_minute",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "availability_weekly_periods_schedule_owner_fk": {
+          "name": "availability_weekly_periods_schedule_owner_fk",
+          "tableFrom": "availability_weekly_periods",
+          "tableTo": "availability_schedules",
+          "columnsFrom": [
+            "schedule_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "availability_weekly_periods_schedule_day_range_unique": {
+          "name": "availability_weekly_periods_schedule_day_range_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "schedule_id",
+            "weekday",
+            "start_minute",
+            "end_minute"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "availability_weekly_periods_weekday_check": {
+          "name": "availability_weekly_periods_weekday_check",
+          "value": "\"availability_weekly_periods\".\"weekday\" between 1 and 7"
+        },
+        "availability_weekly_periods_range_check": {
+          "name": "availability_weekly_periods_range_check",
+          "value": "\"availability_weekly_periods\".\"start_minute\" >= 0 and \"availability_weekly_periods\".\"end_minute\" <= 1440 and \"availability_weekly_periods\".\"start_minute\" < \"availability_weekly_periods\".\"end_minute\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.bookings": {
+      "name": "bookings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_user_id": {
+          "name": "client_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reservation_id": {
+          "name": "reservation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'confirmed'"
+        },
+        "service_start_at": {
+          "name": "service_start_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "service_end_at": {
+          "name": "service_end_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "product_title_snapshot": {
+          "name": "product_title_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_minutes_snapshot": {
+          "name": "duration_minutes_snapshot",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delivery_format_snapshot": {
+          "name": "delivery_format_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price_minor_snapshot": {
+          "name": "price_minor_snapshot",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency_snapshot": {
+          "name": "currency_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "time_zone_snapshot": {
+          "name": "time_zone_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_snapshot": {
+          "name": "policy_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "bookings_owner_service_idx": {
+          "name": "bookings_owner_service_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "service_start_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bookings_owner_client_created_idx": {
+          "name": "bookings_owner_client_created_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "client_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "bookings_client_user_id_users_id_fk": {
+          "name": "bookings_client_user_id_users_id_fk",
+          "tableFrom": "bookings",
+          "tableTo": "users",
+          "columnsFrom": [
+            "client_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "bookings_reservation_owner_fk": {
+          "name": "bookings_reservation_owner_fk",
+          "tableFrom": "bookings",
+          "tableTo": "schedule_reservations",
+          "columnsFrom": [
+            "reservation_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "bookings_product_owner_fk": {
+          "name": "bookings_product_owner_fk",
+          "tableFrom": "bookings",
+          "tableTo": "products",
+          "columnsFrom": [
+            "product_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "bookings_reservation_unique": {
+          "name": "bookings_reservation_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "reservation_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "bookings_state_check": {
+          "name": "bookings_state_check",
+          "value": "\"bookings\".\"state\" in ('confirmed', 'cancelled')"
+        },
+        "bookings_service_range_check": {
+          "name": "bookings_service_range_check",
+          "value": "\"bookings\".\"service_start_at\" < \"bookings\".\"service_end_at\""
+        },
+        "bookings_product_title_length_check": {
+          "name": "bookings_product_title_length_check",
+          "value": "length(trim(\"bookings\".\"product_title_snapshot\")) between 1 and 200"
+        },
+        "bookings_duration_check": {
+          "name": "bookings_duration_check",
+          "value": "\"bookings\".\"duration_minutes_snapshot\" between 1 and 1440"
+        },
+        "bookings_delivery_format_check": {
+          "name": "bookings_delivery_format_check",
+          "value": "\"bookings\".\"delivery_format_snapshot\" in ('video', 'audio', 'chat', 'text', 'file', 'channel')"
+        },
+        "bookings_price_check": {
+          "name": "bookings_price_check",
+          "value": "\"bookings\".\"price_minor_snapshot\" >= 0"
+        },
+        "bookings_currency_check": {
+          "name": "bookings_currency_check",
+          "value": "\"bookings\".\"currency_snapshot\" in ('RUB')"
+        },
+        "bookings_time_zone_length_check": {
+          "name": "bookings_time_zone_length_check",
+          "value": "length(trim(\"bookings\".\"time_zone_snapshot\")) between 1 and 100"
+        },
+        "bookings_policy_snapshot_check": {
+          "name": "bookings_policy_snapshot_check",
+          "value": "jsonb_typeof(\"bookings\".\"policy_snapshot\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.manual_calendar_blocks": {
+      "name": "manual_calendar_blocks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reservation_id": {
+          "name": "reservation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "manual_calendar_blocks_owner_state_updated_idx": {
+          "name": "manual_calendar_blocks_owner_state_updated_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "manual_calendar_blocks_reservation_owner_fk": {
+          "name": "manual_calendar_blocks_reservation_owner_fk",
+          "tableFrom": "manual_calendar_blocks",
+          "tableTo": "schedule_reservations",
+          "columnsFrom": [
+            "reservation_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "manual_calendar_blocks_reservation_unique": {
+          "name": "manual_calendar_blocks_reservation_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "reservation_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "manual_calendar_blocks_title_length_check": {
+          "name": "manual_calendar_blocks_title_length_check",
+          "value": "length(trim(\"manual_calendar_blocks\".\"title\")) between 1 and 120"
+        },
+        "manual_calendar_blocks_state_check": {
+          "name": "manual_calendar_blocks_state_check",
+          "value": "\"manual_calendar_blocks\".\"state\" in ('active', 'released')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.schedule_reservations": {
+      "name": "schedule_reservations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "schedule_id": {
+          "name": "schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lifecycle": {
+          "name": "lifecycle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "service_start_at": {
+          "name": "service_start_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "service_end_at": {
+          "name": "service_end_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occupied_start_at": {
+          "name": "occupied_start_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occupied_end_at": {
+          "name": "occupied_end_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_aggregate_id": {
+          "name": "source_aggregate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hold_expires_at": {
+          "name": "hold_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "schedule_reservations_owner_service_idx": {
+          "name": "schedule_reservations_owner_service_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "service_start_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "service_end_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "schedule_reservations_owner_lifecycle_occupied_idx": {
+          "name": "schedule_reservations_owner_lifecycle_occupied_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lifecycle",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occupied_start_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occupied_end_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "schedule_reservations_hold_expiry_idx": {
+          "name": "schedule_reservations_hold_expiry_idx",
+          "columns": [
+            {
+              "expression": "lifecycle",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "hold_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "schedule_reservations_schedule_owner_fk": {
+          "name": "schedule_reservations_schedule_owner_fk",
+          "tableFrom": "schedule_reservations",
+          "tableTo": "availability_schedules",
+          "columnsFrom": [
+            "schedule_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "schedule_reservations_id_owner_unique": {
+          "name": "schedule_reservations_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "schedule_reservations_kind_check": {
+          "name": "schedule_reservations_kind_check",
+          "value": "\"schedule_reservations\".\"kind\" in ('booking', 'hold', 'manual_block')"
+        },
+        "schedule_reservations_lifecycle_check": {
+          "name": "schedule_reservations_lifecycle_check",
+          "value": "\"schedule_reservations\".\"lifecycle\" in ('active', 'consumed', 'released', 'expired', 'cancelled')"
+        },
+        "schedule_reservations_service_range_check": {
+          "name": "schedule_reservations_service_range_check",
+          "value": "\"schedule_reservations\".\"service_start_at\" < \"schedule_reservations\".\"service_end_at\""
+        },
+        "schedule_reservations_occupied_range_check": {
+          "name": "schedule_reservations_occupied_range_check",
+          "value": "\"schedule_reservations\".\"occupied_start_at\" < \"schedule_reservations\".\"occupied_end_at\" and \"schedule_reservations\".\"occupied_start_at\" <= \"schedule_reservations\".\"service_start_at\" and \"schedule_reservations\".\"occupied_end_at\" >= \"schedule_reservations\".\"service_end_at\""
+        },
+        "schedule_reservations_source_check": {
+          "name": "schedule_reservations_source_check",
+          "value": "(\"schedule_reservations\".\"kind\" in ('booking', 'manual_block') and \"schedule_reservations\".\"source_aggregate_id\" is not null) or \"schedule_reservations\".\"kind\" = 'hold'"
+        },
+        "schedule_reservations_hold_expiry_check": {
+          "name": "schedule_reservations_hold_expiry_check",
+          "value": "(\"schedule_reservations\".\"kind\" = 'hold' and \"schedule_reservations\".\"hold_expires_at\" is not null) or (\"schedule_reservations\".\"kind\" <> 'hold' and \"schedule_reservations\".\"hold_expires_at\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.idempotency_commands": {
+      "name": "idempotency_commands",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "api_surface": {
+          "name": "api_surface",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command_scope": {
+          "name": "command_scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'processing'"
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idempotency_commands_scope_key_unique": {
+          "name": "idempotency_commands_scope_key_unique",
+          "columns": [
+            {
+              "expression": "api_surface",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "command_scope",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idempotency_commands_expiry_idx": {
+          "name": "idempotency_commands_expiry_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idempotency_commands_actor_created_idx": {
+          "name": "idempotency_commands_actor_created_idx",
+          "columns": [
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "idempotency_commands_actor_user_id_users_id_fk": {
+          "name": "idempotency_commands_actor_user_id_users_id_fk",
+          "tableFrom": "idempotency_commands",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "idempotency_commands_api_surface_length_check": {
+          "name": "idempotency_commands_api_surface_length_check",
+          "value": "length(trim(\"idempotency_commands\".\"api_surface\")) between 1 and 100"
+        },
+        "idempotency_commands_scope_length_check": {
+          "name": "idempotency_commands_scope_length_check",
+          "value": "length(trim(\"idempotency_commands\".\"command_scope\")) between 1 and 150"
+        },
+        "idempotency_commands_key_length_check": {
+          "name": "idempotency_commands_key_length_check",
+          "value": "length(\"idempotency_commands\".\"key\") between 8 and 255"
+        },
+        "idempotency_commands_request_hash_check": {
+          "name": "idempotency_commands_request_hash_check",
+          "value": "\"idempotency_commands\".\"request_hash\" ~ '^sha256:[a-f0-9]{64}$'"
+        },
+        "idempotency_commands_state_check": {
+          "name": "idempotency_commands_state_check",
+          "value": "\"idempotency_commands\".\"state\" in ('processing', 'completed')"
+        },
+        "idempotency_commands_result_state_check": {
+          "name": "idempotency_commands_result_state_check",
+          "value": "(\"idempotency_commands\".\"state\" = 'processing' and \"idempotency_commands\".\"result\" is null) or (\"idempotency_commands\".\"state\" = 'completed' and jsonb_typeof(\"idempotency_commands\".\"result\") = 'object')"
         }
       },
       "isRLSEnabled": false

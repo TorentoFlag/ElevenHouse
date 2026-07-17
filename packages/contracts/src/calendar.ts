@@ -41,7 +41,15 @@ const localPeriodSchema = z
   });
 
 const weeklyPeriodSchema = localPeriodSchema.extend({
-  weekday: z.number().int().min(1).max(7)
+  weekday: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+    z.literal(6),
+    z.literal(7)
+  ])
 });
 
 const dateOverrideSchema = z
@@ -97,6 +105,17 @@ export const replaceAvailabilityScheduleRequestSchema = z
   .superRefine(addScheduleAggregateIssues);
 export type ReplaceAvailabilityScheduleRequest = z.infer<
   typeof replaceAvailabilityScheduleRequestSchema
+>;
+
+export const putDefaultAvailabilityScheduleRequestSchema = z
+  .object({
+    expectedVersion: z.number().int().positive().nullable(),
+    ...scheduleAggregateFields
+  })
+  .strict()
+  .superRefine(addScheduleAggregateIssues);
+export type PutDefaultAvailabilityScheduleRequest = z.infer<
+  typeof putDefaultAvailabilityScheduleRequestSchema
 >;
 
 export const availabilityScheduleSchema = z
@@ -216,6 +235,66 @@ export const calendarRangeResponseSchema = z
   })
   .strict();
 export type CalendarRangeResponse = z.infer<typeof calendarRangeResponseSchema>;
+
+export const createManualBlockRequestSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120),
+    startAt: instantSchema,
+    endAt: instantSchema
+  })
+  .strict()
+  .superRefine((block, context) => {
+    const start = Date.parse(block.startAt);
+    const end = Date.parse(block.endAt);
+    if (end <= start) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endAt"],
+        message: "Manual block end must be after start"
+      });
+      return;
+    }
+    if (end - start > 366 * 24 * 60 * 60 * 1_000) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endAt"],
+        message: "Manual block cannot exceed 366 days"
+      });
+    }
+  });
+export type CreateManualBlockRequest = z.infer<typeof createManualBlockRequestSchema>;
+
+export const manualBlockSchema = z
+  .object({
+    id: uuidSchema,
+    reservationId: uuidSchema,
+    title: z.string().trim().min(1).max(120),
+    state: z.enum(["active", "released"]),
+    startAt: instantSchema,
+    endAt: instantSchema,
+    createdAt: instantSchema,
+    updatedAt: instantSchema
+  })
+  .strict()
+  .refine((block) => Date.parse(block.startAt) < Date.parse(block.endAt), {
+    message: "Manual block end must be after start"
+  });
+export type ManualBlock = z.infer<typeof manualBlockSchema>;
+
+export const manualBlockResponseSchema = z
+  .object({
+    block: manualBlockSchema,
+    replayed: z.boolean()
+  })
+  .strict();
+export type ManualBlockResponse = z.infer<typeof manualBlockResponseSchema>;
+
+export const manualBlockParamsSchema = z
+  .object({
+    blockId: uuidSchema
+  })
+  .strict();
+export type ManualBlockParams = z.infer<typeof manualBlockParamsSchema>;
 
 export const createManualBookingRequestSchema = z
   .object({

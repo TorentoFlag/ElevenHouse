@@ -305,6 +305,12 @@ The following focused schema groups belong under `packages/db/src/schema/`.
   - price minor/currency snapshot;
   - timezone and policy snapshot;
   - created/updated timestamps.
+- `manual_calendar_blocks`
+  - owner astrologer;
+  - reservation ID;
+  - owner-visible title;
+  - state `active | released`;
+  - created/updated timestamps.
 - `idempotency_commands`
   - API surface, authenticated actor, command scope and key;
   - canonical request hash;
@@ -330,9 +336,13 @@ response before use.
 
 - `GET /availability/schedules/default`
   - returns schedule policy, weekly periods, overrides in a bounded date range,
-    and assigned product IDs.
-- `PUT /availability/schedules/:scheduleId`
-  - replaces the complete validated schedule aggregate with an expected version;
+    and assigned product IDs;
+  - returns safe `404 schedule_not_found` when no default exists and never
+    creates state as a read side effect.
+- `PUT /availability/schedules/default`
+  - creates the first default schedule when `expectedVersion` is `null`, or
+    replaces the complete validated default aggregate when it is a positive
+    version;
   - requires CSRF;
   - returns `409` with current version on optimistic conflict.
 - `GET /calendar/range?start=<instant>&end=<instant>&timeZone=<iana>`
@@ -346,6 +356,14 @@ response before use.
   - requires CSRF and `Idempotency-Key`;
   - atomically validates ownership/product/schedule and claims occupancy;
   - returns the contract-shaped booking and calendar entry.
+- `POST /calendar/blocks`
+  - accepts an owner-visible title and exact UTC start/end instants;
+  - requires CSRF and `Idempotency-Key`;
+  - atomically creates a manual-block reservation and block record, using the
+    same owner-wide overlap invariant as bookings.
+- `DELETE /calendar/blocks/:blockId`
+  - requires CSRF;
+  - idempotently releases an owner-scoped active block and its reservation.
 - `GET /bookings/:bookingId`
   - returns an owner-scoped booking detail used by the right panel.
 
@@ -360,6 +378,7 @@ response before use.
 - `booking_notice_violation`
 - `booking_horizon_violation`
 - `daily_booking_limit_reached`
+- `manual_block_not_found`
 - `idempotency_key_reused_with_different_request`
 
 Errors contain stable codes and safe field context. They do not expose another
@@ -539,6 +558,13 @@ model, overlap protection and future external-calendar integration.
   — wall-clock versus exact time and DST ambiguity handling.
 - [PostgreSQL range types](https://www.postgresql.org/docs/17/rangetypes.html#RANGETYPES-CONSTRAINT)
   — GiST exclusion constraints for non-overlapping reservations.
+- [PostgreSQL constraints](https://www.postgresql.org/docs/current/ddl-constraints.html)
+  and [CREATE TABLE](https://www.postgresql.org/docs/current/sql-createtable.html)
+  — exclusion and partial-constraint semantics.
+- [PostgreSQL btree_gist](https://www.postgresql.org/docs/current/btree-gist.html)
+  — GiST equality operator classes for scalar owner IDs.
+- [Drizzle indexes and constraints](https://orm.drizzle.team/docs/indexes-constraints)
+  — supported schema DSL used to verify the exclusion-constraint gap.
 - [Google appointment schedules](https://support.google.com/calendar/answer/10729749)
   — recurring periods, adjusted availability, buffers, notice and daily limits.
 - [Google incremental synchronization](https://developers.google.com/workspace/calendar/api/guides/sync)
@@ -558,7 +584,15 @@ model, overlap protection and future external-calendar integration.
 - **Inference:** A renderer adapter can preserve ElevenHouse presentation while
   avoiding the cost and accessibility risk of writing all calendar geometry.
 - **Sourced fact:** PostgreSQL exclusion constraints directly express the
-  non-overlap invariant required for booking occupancy.
+  non-overlap invariant required for booking occupancy; `tstzrange(..., '[)')`
+  permits adjacent reservations and a partial predicate limits the constraint
+  to active rows.
+- **Repository and sourced finding:** installed Drizzle ORM/Kit can express the
+  scheduling tables, foreign keys, checks and indexes, but its documented and
+  installed schema DSL has no first-class exclusion-constraint declaration.
+- **Inference:** the baseline generator therefore needs a deterministic,
+  fail-closed and idempotent SQL augmentation, covered by tests, instead of
+  weakening the invariant to application-only checks.
 - **Inference:** Weekly availability must remain local-time recurrence while
   concrete reservations remain exact UTC instants.
 - **Sourced fact:** External calendar notifications are not a complete event
@@ -669,6 +703,11 @@ does not create disabled simulations of Programs B-E.
   status remain authoritative.
 - New outbox payload variants are added only with the slice that sends real
   notifications.
+- Production baseline reconciliation recognizes only the explicitly approved
+  predecessor histories, applies the scheduling DDL transactionally and then
+  records the new baseline hash. Unknown histories fail closed.
+- The first default schedule is created only by the authenticated CSRF-protected
+  `PUT` command; reads remain side-effect free.
 - Deployment readiness does not depend on FullCalendar; it is a frontend
   dependency behind an adapter.
 

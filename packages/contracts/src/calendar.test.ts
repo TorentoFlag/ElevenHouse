@@ -3,8 +3,12 @@ import {
   availabilityScheduleResponseSchema,
   calendarRangeQuerySchema,
   calendarRangeResponseSchema,
+  createManualBlockRequestSchema,
   createManualBookingRequestSchema,
+  manualBlockResponseSchema,
+  manualBlockParamsSchema,
   manualBookingResponseSchema,
+  putDefaultAvailabilityScheduleRequestSchema,
   replaceAvailabilityScheduleRequestSchema
 } from "./calendar";
 
@@ -41,6 +45,13 @@ const validSchedule = {
 } as const;
 
 describe("calendar contracts", () => {
+  it("accepts only UUID manual block route identifiers", () => {
+    expect(manualBlockParamsSchema.parse({ blockId: bookingId })).toEqual({
+      blockId: bookingId
+    });
+    expect(manualBlockParamsSchema.safeParse({ blockId: "not-a-uuid" }).success).toBe(false);
+  });
+
   it("parses a complete availability schedule response", () => {
     expect(availabilityScheduleResponseSchema.parse({ schedule: validSchedule })).toEqual({
       schedule: validSchedule
@@ -71,6 +82,31 @@ describe("calendar contracts", () => {
           { weekday: 1, startMinute: 720, endMinute: 840 }
         ]
       }).success
+    ).toBe(false);
+  });
+
+  it("accepts create-or-update semantics for the default schedule", () => {
+    const request = {
+      expectedVersion: null,
+      timeZone: validSchedule.timeZone,
+      startIntervalMinutes: validSchedule.startIntervalMinutes,
+      bufferBeforeMinutes: validSchedule.bufferBeforeMinutes,
+      bufferAfterMinutes: validSchedule.bufferAfterMinutes,
+      minimumNoticeMinutes: validSchedule.minimumNoticeMinutes,
+      bookingHorizonDays: validSchedule.bookingHorizonDays,
+      maximumBookingsPerDay: validSchedule.maximumBookingsPerDay,
+      weeklyPeriods: validSchedule.weeklyPeriods,
+      dateOverrides: validSchedule.dateOverrides,
+      productIds: validSchedule.productIds
+    };
+
+    expect(putDefaultAvailabilityScheduleRequestSchema.parse(request)).toEqual(request);
+    expect(
+      putDefaultAvailabilityScheduleRequestSchema.parse({ ...request, expectedVersion: 3 })
+    ).toEqual({ ...request, expectedVersion: 3 });
+    expect(
+      putDefaultAvailabilityScheduleRequestSchema.safeParse({ ...request, expectedVersion: 0 })
+        .success
     ).toBe(false);
   });
 
@@ -192,6 +228,39 @@ describe("calendar contracts", () => {
         clientUserId,
         productId,
         projectedStartAt: request.projectedStartAt
+      }).success
+    ).toBe(false);
+  });
+
+  it("bounds manual blocks and parses their persisted response", () => {
+    const request = {
+      title: "Отпуск",
+      startAt: "2026-05-28T10:00:00.000Z",
+      endAt: "2026-05-28T15:00:00.000Z"
+    } as const;
+    const response = {
+      block: {
+        id: bookingId,
+        reservationId,
+        title: request.title,
+        state: "active",
+        startAt: request.startAt,
+        endAt: request.endAt,
+        createdAt: "2026-05-20T10:00:00.000Z",
+        updatedAt: "2026-05-20T10:00:00.000Z"
+      },
+      replayed: false
+    } as const;
+
+    expect(createManualBlockRequestSchema.parse(request)).toEqual(request);
+    expect(manualBlockResponseSchema.parse(response)).toEqual(response);
+    expect(
+      createManualBlockRequestSchema.safeParse({ ...request, endAt: request.startAt }).success
+    ).toBe(false);
+    expect(
+      createManualBlockRequestSchema.safeParse({
+        ...request,
+        endAt: "2027-06-01T10:00:00.000Z"
       }).success
     ).toBe(false);
   });

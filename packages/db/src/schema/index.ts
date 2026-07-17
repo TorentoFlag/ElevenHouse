@@ -9,3 +9,4 @@ export * from "./verification";
 export * from "./calculations";
 export * from "./clients";
 export * from "./matrix";
+export * from "./scheduling";

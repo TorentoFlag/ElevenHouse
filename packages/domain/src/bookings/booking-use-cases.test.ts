@@ -65,6 +65,7 @@ function createAvailabilityStore(
 ): AvailabilityStore {
   return {
     findDefaultByOwner: vi.fn(async () => scheduleOverride),
+    putDefault: vi.fn(async () => ({ kind: "not_found" as const })),
     replace: vi.fn(async () => ({ kind: "not_found" as const })),
     readProjectionContext: vi.fn(async () => ({
       schedule: scheduleOverride,

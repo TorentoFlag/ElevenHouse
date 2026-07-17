@@ -2,8 +2,10 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { createAstrologerApiRuntimeConfig } from "./config/runtime-config";
 import { AiModule } from "./modules/ai/ai.module";
+import { AvailabilityModule } from "./modules/availability/availability.module";
 import { AstrologerProfileModule } from "./modules/astrologer-profile/astrologer-profile.module";
 import { CalculationsModule } from "./modules/calculations/calculations.module";
+import { CalendarModule } from "./modules/calendar/calendar.module";
 import { ClientsModule } from "./modules/clients/clients.module";
 import { DatabaseModule } from "./modules/database/database.module";
 import { DictionaryAiModule } from "./modules/dictionary-ai/dictionary-ai.module";
@@ -37,6 +39,8 @@ import { VerificationModule } from "./modules/verification/verification.module";
     MediaModule,
     PlatformBillingModule,
     ProductsModule,
+    AvailabilityModule,
+    CalendarModule,
     VerificationModule,
     CalculationsModule,
     ClientsModule,

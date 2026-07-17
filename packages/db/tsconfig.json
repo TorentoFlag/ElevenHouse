@@ -10,6 +10,7 @@
   },
   "include": [
     "src",
+    "scripts/augment-scheduling-baseline.ts",
     "scripts/reconcile-production-baseline.ts"
   ]
 }

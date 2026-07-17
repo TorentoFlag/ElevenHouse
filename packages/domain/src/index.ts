@@ -17,3 +17,4 @@ export * from "./clients";
 export * from "./shared";
 export * from "./availability";
 export * from "./bookings";
+export * from "./calendar";

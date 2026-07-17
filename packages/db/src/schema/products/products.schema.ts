@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, integer, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { users } from "../identity/accounts.schema";
 import { mediaAssets } from "../media/media-assets.schema";
 import {
@@ -45,6 +45,7 @@ export const products = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
+    unique("products_id_owner_unique").on(table.id, table.ownerUserId),
     check(
       "products_status_check",
       sql`${table.status} in ${sql.raw(formatSqlValues(productStatusValues))}`

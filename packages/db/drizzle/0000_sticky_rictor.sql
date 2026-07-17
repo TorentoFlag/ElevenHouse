@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+--> statement-breakpoint
 CREATE TABLE "users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"status" text DEFAULT 'active' NOT NULL,
@@ -227,6 +229,7 @@ CREATE TABLE "products" (
 	"group_size" integer,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "products_id_owner_unique" UNIQUE("id","owner_user_id"),
 	CONSTRAINT "products_status_check" CHECK ("products"."status" in ('draft', 'active', 'archived')),
 	CONSTRAINT "products_type_check" CHECK ("products"."type" in ('single', 'pack', 'async', 'sub', 'mini', 'course', 'custom')),
 	CONSTRAINT "products_currency_check" CHECK ("products"."currency" in ('RUB')),
@@ -761,6 +764,160 @@ CREATE TABLE "matrix_report_drafts" (
 	CONSTRAINT "matrix_report_drafts_revision_check" CHECK ("matrix_report_drafts"."revision" > 0)
 );
 --> statement-breakpoint
+CREATE TABLE "availability_date_overrides" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"schedule_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"local_date" date NOT NULL,
+	"mode" text NOT NULL,
+	CONSTRAINT "availability_date_overrides_identity_unique" UNIQUE("id","schedule_id","owner_user_id"),
+	CONSTRAINT "availability_date_overrides_schedule_date_unique" UNIQUE("schedule_id","local_date"),
+	CONSTRAINT "availability_date_overrides_mode_check" CHECK ("availability_date_overrides"."mode" in ('available', 'unavailable'))
+);
+--> statement-breakpoint
+CREATE TABLE "availability_override_periods" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"override_id" uuid NOT NULL,
+	"schedule_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"start_minute" integer NOT NULL,
+	"end_minute" integer NOT NULL,
+	CONSTRAINT "availability_override_periods_override_range_unique" UNIQUE("override_id","start_minute","end_minute"),
+	CONSTRAINT "availability_override_periods_range_check" CHECK ("availability_override_periods"."start_minute" >= 0 and "availability_override_periods"."end_minute" <= 1440 and "availability_override_periods"."start_minute" < "availability_override_periods"."end_minute")
+);
+--> statement-breakpoint
+CREATE TABLE "availability_product_assignments" (
+	"schedule_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"product_id" uuid NOT NULL,
+	CONSTRAINT "availability_product_assignments_pk" PRIMARY KEY("schedule_id","product_id")
+);
+--> statement-breakpoint
+CREATE TABLE "availability_schedules" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"name" text DEFAULT 'Default' NOT NULL,
+	"time_zone" text NOT NULL,
+	"is_default" boolean DEFAULT true NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	"start_interval_minutes" integer NOT NULL,
+	"buffer_before_minutes" integer DEFAULT 0 NOT NULL,
+	"buffer_after_minutes" integer DEFAULT 0 NOT NULL,
+	"minimum_notice_minutes" integer DEFAULT 0 NOT NULL,
+	"booking_horizon_days" integer NOT NULL,
+	"maximum_bookings_per_day" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "availability_schedules_id_owner_unique" UNIQUE("id","owner_user_id"),
+	CONSTRAINT "availability_schedules_name_length_check" CHECK (length(trim("availability_schedules"."name")) between 1 and 120),
+	CONSTRAINT "availability_schedules_time_zone_length_check" CHECK (length(trim("availability_schedules"."time_zone")) between 1 and 100),
+	CONSTRAINT "availability_schedules_version_check" CHECK ("availability_schedules"."version" > 0),
+	CONSTRAINT "availability_schedules_start_interval_check" CHECK ("availability_schedules"."start_interval_minutes" between 1 and 1440),
+	CONSTRAINT "availability_schedules_buffer_before_check" CHECK ("availability_schedules"."buffer_before_minutes" between 0 and 10080),
+	CONSTRAINT "availability_schedules_buffer_after_check" CHECK ("availability_schedules"."buffer_after_minutes" between 0 and 10080),
+	CONSTRAINT "availability_schedules_minimum_notice_check" CHECK ("availability_schedules"."minimum_notice_minutes" between 0 and 525600),
+	CONSTRAINT "availability_schedules_booking_horizon_check" CHECK ("availability_schedules"."booking_horizon_days" between 1 and 730),
+	CONSTRAINT "availability_schedules_maximum_bookings_check" CHECK ("availability_schedules"."maximum_bookings_per_day" is null or "availability_schedules"."maximum_bookings_per_day" between 1 and 100)
+);
+--> statement-breakpoint
+CREATE TABLE "availability_weekly_periods" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"schedule_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"weekday" integer NOT NULL,
+	"start_minute" integer NOT NULL,
+	"end_minute" integer NOT NULL,
+	CONSTRAINT "availability_weekly_periods_schedule_day_range_unique" UNIQUE("schedule_id","weekday","start_minute","end_minute"),
+	CONSTRAINT "availability_weekly_periods_weekday_check" CHECK ("availability_weekly_periods"."weekday" between 1 and 7),
+	CONSTRAINT "availability_weekly_periods_range_check" CHECK ("availability_weekly_periods"."start_minute" >= 0 and "availability_weekly_periods"."end_minute" <= 1440 and "availability_weekly_periods"."start_minute" < "availability_weekly_periods"."end_minute")
+);
+--> statement-breakpoint
+CREATE TABLE "bookings" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"client_user_id" uuid NOT NULL,
+	"product_id" uuid NOT NULL,
+	"reservation_id" uuid NOT NULL,
+	"state" text DEFAULT 'confirmed' NOT NULL,
+	"service_start_at" timestamp with time zone NOT NULL,
+	"service_end_at" timestamp with time zone NOT NULL,
+	"product_title_snapshot" text NOT NULL,
+	"duration_minutes_snapshot" integer NOT NULL,
+	"delivery_format_snapshot" text NOT NULL,
+	"price_minor_snapshot" integer NOT NULL,
+	"currency_snapshot" text NOT NULL,
+	"time_zone_snapshot" text NOT NULL,
+	"policy_snapshot" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "bookings_reservation_unique" UNIQUE("reservation_id"),
+	CONSTRAINT "bookings_state_check" CHECK ("bookings"."state" in ('confirmed', 'cancelled')),
+	CONSTRAINT "bookings_service_range_check" CHECK ("bookings"."service_start_at" < "bookings"."service_end_at"),
+	CONSTRAINT "bookings_product_title_length_check" CHECK (length(trim("bookings"."product_title_snapshot")) between 1 and 200),
+	CONSTRAINT "bookings_duration_check" CHECK ("bookings"."duration_minutes_snapshot" between 1 and 1440),
+	CONSTRAINT "bookings_delivery_format_check" CHECK ("bookings"."delivery_format_snapshot" in ('video', 'audio', 'chat', 'text', 'file', 'channel')),
+	CONSTRAINT "bookings_price_check" CHECK ("bookings"."price_minor_snapshot" >= 0),
+	CONSTRAINT "bookings_currency_check" CHECK ("bookings"."currency_snapshot" in ('RUB')),
+	CONSTRAINT "bookings_time_zone_length_check" CHECK (length(trim("bookings"."time_zone_snapshot")) between 1 and 100),
+	CONSTRAINT "bookings_policy_snapshot_check" CHECK (jsonb_typeof("bookings"."policy_snapshot") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "manual_calendar_blocks" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"reservation_id" uuid NOT NULL,
+	"title" text NOT NULL,
+	"state" text DEFAULT 'active' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "manual_calendar_blocks_reservation_unique" UNIQUE("reservation_id"),
+	CONSTRAINT "manual_calendar_blocks_title_length_check" CHECK (length(trim("manual_calendar_blocks"."title")) between 1 and 120),
+	CONSTRAINT "manual_calendar_blocks_state_check" CHECK ("manual_calendar_blocks"."state" in ('active', 'released'))
+);
+--> statement-breakpoint
+CREATE TABLE "schedule_reservations" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"schedule_id" uuid NOT NULL,
+	"kind" text NOT NULL,
+	"lifecycle" text DEFAULT 'active' NOT NULL,
+	"service_start_at" timestamp with time zone NOT NULL,
+	"service_end_at" timestamp with time zone NOT NULL,
+	"occupied_start_at" timestamp with time zone NOT NULL,
+	"occupied_end_at" timestamp with time zone NOT NULL,
+	"source_aggregate_id" uuid,
+	"hold_expires_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "schedule_reservations_id_owner_unique" UNIQUE("id","owner_user_id"),
+	CONSTRAINT "schedule_reservations_kind_check" CHECK ("schedule_reservations"."kind" in ('booking', 'hold', 'manual_block')),
+	CONSTRAINT "schedule_reservations_lifecycle_check" CHECK ("schedule_reservations"."lifecycle" in ('active', 'consumed', 'released', 'expired', 'cancelled')),
+	CONSTRAINT "schedule_reservations_service_range_check" CHECK ("schedule_reservations"."service_start_at" < "schedule_reservations"."service_end_at"),
+	CONSTRAINT "schedule_reservations_occupied_range_check" CHECK ("schedule_reservations"."occupied_start_at" < "schedule_reservations"."occupied_end_at" and "schedule_reservations"."occupied_start_at" <= "schedule_reservations"."service_start_at" and "schedule_reservations"."occupied_end_at" >= "schedule_reservations"."service_end_at"),
+	CONSTRAINT "schedule_reservations_source_check" CHECK (("schedule_reservations"."kind" in ('booking', 'manual_block') and "schedule_reservations"."source_aggregate_id" is not null) or "schedule_reservations"."kind" = 'hold'),
+	CONSTRAINT "schedule_reservations_hold_expiry_check" CHECK (("schedule_reservations"."kind" = 'hold' and "schedule_reservations"."hold_expires_at" is not null) or ("schedule_reservations"."kind" <> 'hold' and "schedule_reservations"."hold_expires_at" is null))
+);
+--> statement-breakpoint
+CREATE TABLE "idempotency_commands" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"api_surface" text NOT NULL,
+	"actor_user_id" uuid NOT NULL,
+	"command_scope" text NOT NULL,
+	"key" text NOT NULL,
+	"request_hash" text NOT NULL,
+	"state" text DEFAULT 'processing' NOT NULL,
+	"result" jsonb,
+	"expires_at" timestamp with time zone NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "idempotency_commands_api_surface_length_check" CHECK (length(trim("idempotency_commands"."api_surface")) between 1 and 100),
+	CONSTRAINT "idempotency_commands_scope_length_check" CHECK (length(trim("idempotency_commands"."command_scope")) between 1 and 150),
+	CONSTRAINT "idempotency_commands_key_length_check" CHECK (length("idempotency_commands"."key") between 8 and 255),
+	CONSTRAINT "idempotency_commands_request_hash_check" CHECK ("idempotency_commands"."request_hash" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "idempotency_commands_state_check" CHECK ("idempotency_commands"."state" in ('processing', 'completed')),
+	CONSTRAINT "idempotency_commands_result_state_check" CHECK (("idempotency_commands"."state" = 'processing' and "idempotency_commands"."result" is null) or ("idempotency_commands"."state" = 'completed' and jsonb_typeof("idempotency_commands"."result") = 'object'))
+);
+--> statement-breakpoint
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -814,6 +971,18 @@ ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_astrologer
 ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_claimed_by_client_user_id_users_id_fk" FOREIGN KEY ("claimed_by_client_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "matrix_notes" ADD CONSTRAINT "matrix_notes_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "matrix_report_drafts" ADD CONSTRAINT "matrix_report_drafts_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_date_overrides" ADD CONSTRAINT "availability_date_overrides_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_override_periods" ADD CONSTRAINT "availability_override_periods_override_schedule_owner_fk" FOREIGN KEY ("override_id","schedule_id","owner_user_id") REFERENCES "public"."availability_date_overrides"("id","schedule_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_product_assignments" ADD CONSTRAINT "availability_product_assignments_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_product_assignments" ADD CONSTRAINT "availability_product_assignments_product_owner_fk" FOREIGN KEY ("product_id","owner_user_id") REFERENCES "public"."products"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_schedules" ADD CONSTRAINT "availability_schedules_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_weekly_periods" ADD CONSTRAINT "availability_weekly_periods_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_reservation_owner_fk" FOREIGN KEY ("reservation_id","owner_user_id") REFERENCES "public"."schedule_reservations"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_product_owner_fk" FOREIGN KEY ("product_id","owner_user_id") REFERENCES "public"."products"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "manual_calendar_blocks" ADD CONSTRAINT "manual_calendar_blocks_reservation_owner_fk" FOREIGN KEY ("reservation_id","owner_user_id") REFERENCES "public"."schedule_reservations"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_reservations" ADD CONSTRAINT "schedule_reservations_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "idempotency_commands" ADD CONSTRAINT "idempotency_commands_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_email_login_unique" ON "auth_identities" USING btree (lower("email")) WHERE "auth_identities"."provider" = 'email' and "auth_identities"."email" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_phone_login_unique" ON "auth_identities" USING btree ("phone_number") WHERE "auth_identities"."provider" = 'phone' and "auth_identities"."phone_number" is not null;--> statement-breakpoint
@@ -904,4 +1073,26 @@ CREATE UNIQUE INDEX "client_join_intents_token_hash_unique" ON "client_join_inte
 CREATE INDEX "client_join_intents_astrologer_status_idx" ON "client_join_intents" USING btree ("astrologer_user_id","status");--> statement-breakpoint
 CREATE INDEX "client_join_intents_claimed_client_idx" ON "client_join_intents" USING btree ("claimed_by_client_user_id");--> statement-breakpoint
 CREATE INDEX "matrix_notes_owner_calculation_created_id_idx" ON "matrix_notes" USING btree ("owner_user_id","calculation_id","created_at","id");--> statement-breakpoint
-CREATE INDEX "matrix_report_drafts_owner_calculation_idx" ON "matrix_report_drafts" USING btree ("owner_user_id","calculation_id");
+CREATE INDEX "matrix_report_drafts_owner_calculation_idx" ON "matrix_report_drafts" USING btree ("owner_user_id","calculation_id");--> statement-breakpoint
+CREATE INDEX "availability_date_overrides_schedule_date_idx" ON "availability_date_overrides" USING btree ("schedule_id","local_date");--> statement-breakpoint
+CREATE INDEX "availability_override_periods_override_start_idx" ON "availability_override_periods" USING btree ("override_id","start_minute");--> statement-breakpoint
+CREATE INDEX "availability_product_assignments_owner_product_idx" ON "availability_product_assignments" USING btree ("owner_user_id","product_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "availability_schedules_default_owner_unique" ON "availability_schedules" USING btree ("owner_user_id") WHERE "availability_schedules"."is_default" = true;--> statement-breakpoint
+CREATE INDEX "availability_schedules_owner_updated_idx" ON "availability_schedules" USING btree ("owner_user_id","updated_at");--> statement-breakpoint
+CREATE INDEX "availability_weekly_periods_schedule_day_idx" ON "availability_weekly_periods" USING btree ("schedule_id","weekday","start_minute");--> statement-breakpoint
+CREATE INDEX "bookings_owner_service_idx" ON "bookings" USING btree ("owner_user_id","service_start_at","id");--> statement-breakpoint
+CREATE INDEX "bookings_owner_client_created_idx" ON "bookings" USING btree ("owner_user_id","client_user_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "manual_calendar_blocks_owner_state_updated_idx" ON "manual_calendar_blocks" USING btree ("owner_user_id","state","updated_at");--> statement-breakpoint
+CREATE INDEX "schedule_reservations_owner_service_idx" ON "schedule_reservations" USING btree ("owner_user_id","service_start_at","service_end_at");--> statement-breakpoint
+CREATE INDEX "schedule_reservations_owner_lifecycle_occupied_idx" ON "schedule_reservations" USING btree ("owner_user_id","lifecycle","occupied_start_at","occupied_end_at");--> statement-breakpoint
+CREATE INDEX "schedule_reservations_hold_expiry_idx" ON "schedule_reservations" USING btree ("lifecycle","hold_expires_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "idempotency_commands_scope_key_unique" ON "idempotency_commands" USING btree ("api_surface","actor_user_id","command_scope","key");--> statement-breakpoint
+CREATE INDEX "idempotency_commands_expiry_idx" ON "idempotency_commands" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "idempotency_commands_actor_created_idx" ON "idempotency_commands" USING btree ("actor_user_id","created_at");
+--> statement-breakpoint
+ALTER TABLE "schedule_reservations"
+  ADD CONSTRAINT "schedule_reservations_active_owner_range_exclude"
+  EXCLUDE USING gist (
+    "owner_user_id" WITH =,
+    tstzrange("occupied_start_at", "occupied_end_at", '[)') WITH &&
+  ) WHERE ("lifecycle" = 'active');

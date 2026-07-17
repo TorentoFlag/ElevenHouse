@@ -13,6 +13,7 @@ import type {
 import type { AvailabilitySchedule } from "./availability-types";
 import {
   getDefaultAvailabilitySchedule,
+  putDefaultAvailabilitySchedule,
   replaceAvailabilitySchedule
 } from "./availability-use-cases";
 
@@ -51,6 +52,10 @@ function createStore(
 ): AvailabilityStore {
   return {
     findDefaultByOwner: vi.fn(async () => schedule),
+    putDefault: vi.fn(async () => ({
+      kind: "created" as const,
+      schedule: { ...schedule, version: 1 }
+    })),
     replace: vi.fn(async () => replaceResult),
     readProjectionContext: vi.fn(async () => null)
   };
@@ -85,6 +90,39 @@ describe("availability use cases", () => {
 
     await expect(getDefaultAvailabilitySchedule({ store, ownerUserId })).resolves.toEqual(schedule);
     expect(store.findDefaultByOwner).toHaveBeenCalledWith({ ownerUserId });
+  });
+
+  it("creates the first default schedule and updates it through one optimistic command", async () => {
+    const store = createStore();
+    const productReader = createProductReader();
+    const now = new Date("2026-05-20T10:00:00.000Z");
+
+    await expect(
+      putDefaultAvailabilitySchedule({
+        store,
+        productReader,
+        ownerUserId,
+        input: { ...replacement, expectedVersion: null },
+        now
+      })
+    ).resolves.toMatchObject({ version: 1 });
+    expect(store.putDefault).toHaveBeenCalledWith({
+      ownerUserId,
+      ...replacement,
+      expectedVersion: null,
+      now: now.toISOString()
+    });
+
+    vi.mocked(store.putDefault).mockResolvedValue({ kind: "version_conflict", currentVersion: 2 });
+    await expect(
+      putDefaultAvailabilitySchedule({
+        store,
+        productReader,
+        ownerUserId,
+        input: replacement,
+        now
+      })
+    ).rejects.toEqual(new AvailabilityVersionConflictError(2));
   });
 
   it("uses a safe not-found error for a missing owner schedule", async () => {

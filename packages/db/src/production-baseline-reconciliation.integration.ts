@@ -56,6 +56,9 @@ describeWithDatabase("production baseline reconciliation", () => {
       legacy_versions_table: string | null;
       pdf_jobs_table: string | null;
       matrix_notes_table: string | null;
+      availability_schedules_table: string | null;
+      schedule_reservations_table: string | null;
+      exclusion_count: string;
       request_fingerprint: string;
       result_checksum: string;
       result_data: unknown;
@@ -64,11 +67,16 @@ describeWithDatabase("production baseline reconciliation", () => {
       SELECT
         (SELECT count(*)::text
            FROM drizzle.__drizzle_migrations
-          WHERE hash = '911332efe5ba14b352244a8176412cf637dccdb25141aa1792dcad35c63831de'
-            AND created_at = 1784111509389) AS current_baseline_count,
+          WHERE hash = '6f57cc8ca0c825a1f6da1911970a0d202d34c4177886d6d08f38a6edf2eb0860'
+            AND created_at = 1784275401007) AS current_baseline_count,
         to_regclass('public.calculation_versions')::text AS legacy_versions_table,
         to_regclass('public.calculation_pdf_jobs')::text AS pdf_jobs_table,
         to_regclass('public.matrix_notes')::text AS matrix_notes_table,
+        to_regclass('public.availability_schedules')::text AS availability_schedules_table,
+        to_regclass('public.schedule_reservations')::text AS schedule_reservations_table,
+        (SELECT count(*)::text FROM pg_constraint
+          WHERE conname = 'schedule_reservations_active_owner_range_exclude'
+            AND contype = 'x') AS exclusion_count,
         request_fingerprint,
         result_checksum,
         result_data,
@@ -82,6 +90,9 @@ describeWithDatabase("production baseline reconciliation", () => {
       legacy_versions_table: null,
       pdf_jobs_table: "calculation_pdf_jobs",
       matrix_notes_table: "matrix_notes",
+      availability_schedules_table: "availability_schedules",
+      schedule_reservations_table: "schedule_reservations",
+      exclusion_count: "1",
       result_checksum: sha256CanonicalJson(currentResult),
       result_data: currentResult,
       input_data: currentInputData
@@ -106,6 +117,51 @@ describeWithDatabase("production baseline reconciliation", () => {
     const secondRun = await runReconciler(databaseUrl);
     expect(secondRun.exitCode).toBe(0);
     expect(secondRun.output).toContain("Current production baseline is already recorded");
+  }, 30_000);
+
+  it("moves the approved previous baseline to scheduling without touching existing data", async () => {
+    const previousDatabaseName = `elevenhouse_previous_${randomUUID().replaceAll("-", "")}`;
+    const previousUrl = new URL(integrationDatabaseUrl!);
+    previousUrl.pathname = `/${previousDatabaseName}`;
+    let previousClient: Client | undefined;
+
+    try {
+      await adminClient.query(`CREATE DATABASE ${previousDatabaseName}`);
+      previousClient = new Client({ connectionString: previousUrl.toString() });
+      await previousClient.connect();
+      await previousClient.query(previousProductionFixtureSql());
+
+      const run = await runReconciler(previousUrl.toString());
+      expect(run, run.output).toMatchObject({ exitCode: 0 });
+      expect(run.output).toContain("Previous production baseline reconciled");
+
+      const state = await previousClient.query<{
+        current_baseline_count: string;
+        product_title: string;
+        schedule_table: string | null;
+        exclusion_count: string;
+      }>(`
+        SELECT
+          (SELECT count(*)::text
+             FROM drizzle.__drizzle_migrations
+            WHERE hash = '6f57cc8ca0c825a1f6da1911970a0d202d34c4177886d6d08f38a6edf2eb0860'
+              AND created_at = 1784275401007) AS current_baseline_count,
+          (SELECT title FROM products WHERE id = '50000000-0000-0000-0000-000000000001') AS product_title,
+          to_regclass('public.availability_schedules')::text AS schedule_table,
+          (SELECT count(*)::text FROM pg_constraint
+            WHERE conname = 'schedule_reservations_active_owner_range_exclude'
+              AND contype = 'x') AS exclusion_count
+      `);
+      expect(state.rows[0]).toEqual({
+        current_baseline_count: "1",
+        product_title: "Persisted product",
+        schedule_table: "availability_schedules",
+        exclusion_count: "1"
+      });
+    } finally {
+      await previousClient?.end();
+      await adminClient.query(`DROP DATABASE IF EXISTS ${previousDatabaseName} WITH (FORCE)`);
+    }
   }, 30_000);
 
   it("refuses an unknown migration history even when the current baseline hash is present", async () => {
@@ -283,6 +339,10 @@ function legacyProductionFixtureSql(): string {
       ('3d071b976aeeb1b5a4954aef46eadce7209a5ecef66a81e1680c3f3986694bd7', 1783969326835);
 
     CREATE TABLE users (id uuid PRIMARY KEY);
+    CREATE TABLE products (
+      id uuid PRIMARY KEY,
+      owner_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE
+    );
     CREATE TABLE media_assets (
       id uuid PRIMARY KEY,
       owner_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -423,6 +483,47 @@ function legacyProductionFixtureSql(): string {
       '30000000-0000-0000-0000-000000000003',
       '10000000-0000-0000-0000-000000000002',
       'partner', 'manual', NULL, 'Second participant', '{}', 1
+    );
+  `;
+}
+
+function previousProductionFixtureSql(): string {
+  return `
+    CREATE SCHEMA drizzle;
+    CREATE TABLE drizzle.__drizzle_migrations (
+      id serial PRIMARY KEY,
+      hash text NOT NULL,
+      created_at bigint
+    );
+    INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES
+      ('911332efe5ba14b352244a8176412cf637dccdb25141aa1792dcad35c63831de', 1784111509389);
+
+    CREATE TABLE users (id uuid PRIMARY KEY);
+    CREATE TABLE products (
+      id uuid PRIMARY KEY,
+      owner_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title text NOT NULL
+    );
+    CREATE TABLE calculation_records (
+      id uuid PRIMARY KEY,
+      request_fingerprint text NOT NULL,
+      input_data jsonb NOT NULL,
+      result_data jsonb NOT NULL,
+      result_summary jsonb NOT NULL,
+      result_checksum text NOT NULL
+    );
+    CREATE TABLE calculation_pdf_jobs (
+      id uuid PRIMARY KEY,
+      document_fingerprint text NOT NULL
+    );
+    CREATE TABLE matrix_notes (id uuid PRIMARY KEY);
+    CREATE TABLE matrix_report_drafts (id uuid PRIMARY KEY);
+
+    INSERT INTO users (id) VALUES ('00000000-0000-0000-0000-000000000001');
+    INSERT INTO products (id, owner_user_id, title) VALUES (
+      '50000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000001',
+      'Persisted product'
     );
   `;
 }

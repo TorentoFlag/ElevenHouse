@@ -27,10 +27,25 @@ export type AvailabilityStoreReplaceResult =
   | { readonly kind: "not_found" }
   | { readonly kind: "version_conflict"; readonly currentVersion: number };
 
+export type AvailabilityStorePutDefaultInput = Omit<
+  AvailabilityStoreReplaceInput,
+  "scheduleId" | "expectedVersion"
+> & {
+  readonly expectedVersion: number | null;
+};
+
+export type AvailabilityStorePutDefaultResult =
+  | { readonly kind: "created" | "updated"; readonly schedule: AvailabilitySchedule }
+  | { readonly kind: "not_found" }
+  | { readonly kind: "version_conflict"; readonly currentVersion: number };
+
 export type AvailabilityStore = {
   readonly findDefaultByOwner: (input: {
     readonly ownerUserId: string;
   }) => Promise<AvailabilitySchedule | null>;
+  readonly putDefault: (
+    input: AvailabilityStorePutDefaultInput
+  ) => Promise<AvailabilityStorePutDefaultResult>;
   readonly replace: (
     input: AvailabilityStoreReplaceInput
   ) => Promise<AvailabilityStoreReplaceResult>;

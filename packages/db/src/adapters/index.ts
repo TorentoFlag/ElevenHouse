@@ -8,3 +8,4 @@ export * from "./platform-billing";
 export * from "./verification";
 export * from "./clients";
 export * from "./matrix";
+export * from "./scheduling";

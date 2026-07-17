@@ -8,35 +8,14 @@ import {
   type NumerologyParticipantInput
 } from "@elevenhouse/domain";
 import { Client, type QueryResultRow } from "pg";
+import {
+  classifyBaselineHistory,
+  currentBaseline,
+  schedulingBaselineDdl,
+  type MigrationLedgerRow
+} from "./production-baseline-plan";
 
-const currentBaseline = {
-  hash: "911332efe5ba14b352244a8176412cf637dccdb25141aa1792dcad35c63831de",
-  createdAt: "1784111509389"
-} as const;
-
-const approvedLegacyMigrations = [
-  {
-    hash: "9a042354672db97fda448a68804c61952d81d2c39e4b67b8581de04984c3fff8",
-    createdAt: "1782996784018"
-  },
-  {
-    hash: "9cfb3eebacfd55d703748c65b7a6210c8037cb881f66c3d7bf110d1489357baa",
-    createdAt: "1783327724152"
-  },
-  {
-    hash: "c52a5a3cc5c9acd8e50b32643661dbe8f922844711ad08a8e30b22d72eb09829",
-    createdAt: "1783335783810"
-  },
-  {
-    hash: "3d071b976aeeb1b5a4954aef46eadce7209a5ecef66a81e1680c3f3986694bd7",
-    createdAt: "1783969326835"
-  }
-] as const;
-
-type MigrationRow = QueryResultRow & {
-  readonly hash: string;
-  readonly created_at: string;
-};
+type MigrationRow = QueryResultRow & MigrationLedgerRow;
 
 type LegacyCalculationRow = QueryResultRow & {
   readonly id: string;
@@ -79,23 +58,30 @@ async function main(): Promise<void> {
       );
       const migrations = await readMigrationLedger();
 
-      if (hasCurrentBaseline(migrations)) {
-        assertApprovedCurrentLedger(migrations);
+      const history = classifyBaselineHistory(migrations);
+      if (history === "unknown") {
+        throw new Error("Refusing to reconcile an unknown migration history");
+      }
+      if (history === "current") {
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
         console.log("Current production baseline is already recorded");
       } else {
-        assertApprovedLegacyLedger(migrations);
-        await assertLegacySchemaAndData();
-        await migrateLegacyCalculations();
-        await client.query(legacyToCurrentDdl);
-        await client.query(
-          `INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)`,
-          [currentBaseline.hash, currentBaseline.createdAt]
-        );
+        if (history === "legacy_calculations") {
+          await assertLegacySchemaAndData();
+          await migrateLegacyCalculations();
+          await client.query(legacyToCurrentDdl);
+        }
+        await assertPreSchedulingSchemaShape();
+        await client.query(schedulingBaselineDdl);
+        await recordCurrentBaseline();
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
-        console.log("Legacy production baseline reconciled to the current baseline");
+        console.log(
+          history === "legacy_calculations"
+            ? "Legacy production baseline reconciled to the current baseline"
+            : "Previous production baseline reconciled to the current baseline"
+        );
       }
     }
   } catch (error) {
@@ -121,45 +107,10 @@ async function readMigrationLedger(): Promise<readonly MigrationRow[]> {
   return result.rows;
 }
 
-function hasCurrentBaseline(migrations: readonly MigrationRow[]): boolean {
-  return migrations.some(
-    (migration) =>
-      migration.hash === currentBaseline.hash && migration.created_at === currentBaseline.createdAt
-  );
-}
-
-function assertApprovedCurrentLedger(migrations: readonly MigrationRow[]): void {
-  const currentOnly = matchesMigrationHistory(migrations, [currentBaseline]);
-  const reconciledLegacy = matchesMigrationHistory(migrations, [
-    ...approvedLegacyMigrations,
-    currentBaseline
-  ]);
-  if (!currentOnly && !reconciledLegacy) {
-    throw new Error(
-      "Refusing to reconcile an unknown migration history; current baseline ledger contains unapproved entries"
-    );
-  }
-}
-
-function assertApprovedLegacyLedger(migrations: readonly MigrationRow[]): void {
-  if (!matchesMigrationHistory(migrations, approvedLegacyMigrations)) {
-    throw new Error(
-      "Refusing to reconcile an unknown migration history; expected the approved four-migration production baseline"
-    );
-  }
-}
-
-function matchesMigrationHistory(
-  migrations: readonly MigrationRow[],
-  expected: readonly { readonly hash: string; readonly createdAt: string }[]
-): boolean {
-  return (
-    migrations.length === expected.length &&
-    migrations.every(
-      (migration, index) =>
-        migration.hash === expected[index]?.hash &&
-        migration.created_at === expected[index]?.createdAt
-    )
+async function recordCurrentBaseline(): Promise<void> {
+  await client.query(
+    `INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)`,
+    [currentBaseline.hash, currentBaseline.createdAt]
   );
 }
 
@@ -469,14 +420,60 @@ function assertCanonicalObject(
 }
 
 async function assertCurrentSchemaShape(): Promise<void> {
+  await assertPreSchedulingSchemaShape();
+  for (const relation of [
+    "public.availability_schedules",
+    "public.availability_weekly_periods",
+    "public.availability_date_overrides",
+    "public.availability_override_periods",
+    "public.availability_product_assignments",
+    "public.schedule_reservations",
+    "public.manual_calendar_blocks",
+    "public.bookings",
+    "public.idempotency_commands"
+  ]) {
+    if (!(await relationExists(relation))) {
+      throw new Error(`Current production relation is missing: ${relation}`);
+    }
+  }
+
+  const schedulingInvariants = await client.query<{
+    exclusion_count: string;
+    extension_count: string;
+    product_owner_unique_count: string;
+  }>(`
+    SELECT
+      (SELECT count(*)::text
+         FROM pg_constraint
+        WHERE conname = 'schedule_reservations_active_owner_range_exclude'
+          AND contype = 'x') AS exclusion_count,
+      (SELECT count(*)::text
+         FROM pg_extension
+        WHERE extname = 'btree_gist') AS extension_count,
+      (SELECT count(*)::text
+         FROM pg_constraint
+        WHERE conname = 'products_id_owner_unique'
+          AND contype = 'u') AS product_owner_unique_count
+  `);
+  if (
+    schedulingInvariants.rows[0]?.exclusion_count !== "1" ||
+    schedulingInvariants.rows[0]?.extension_count !== "1" ||
+    schedulingInvariants.rows[0]?.product_owner_unique_count !== "1"
+  ) {
+    throw new Error("Current production schema is missing scheduling invariants");
+  }
+}
+
+async function assertPreSchedulingSchemaShape(): Promise<void> {
   for (const relation of [
     "public.calculation_records",
     "public.calculation_pdf_jobs",
     "public.matrix_notes",
-    "public.matrix_report_drafts"
+    "public.matrix_report_drafts",
+    "public.products"
   ]) {
     if (!(await relationExists(relation))) {
-      throw new Error(`Current production relation is missing: ${relation}`);
+      throw new Error(`Previous production relation is missing: ${relation}`);
     }
   }
   if (await relationExists("public.calculation_versions")) {

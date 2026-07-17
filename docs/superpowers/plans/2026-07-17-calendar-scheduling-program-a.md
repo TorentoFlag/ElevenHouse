@@ -62,9 +62,11 @@ an app-owned agenda rather than a compressed seven-column grid.
 - [x] Task 2: availability domain and timezone projection.
 - [x] Task 3: booking domain and idempotent command contract; persisted
   concurrency/reuse evidence remains in Task 5.
-- [ ] Task 4: scheduling persistence and overlap invariant.
-- [ ] Task 5: database adapters and transactional integration evidence.
-- [ ] Task 6: Availability and Calendar API modules.
+- [x] Task 4: scheduling persistence and overlap invariant, including tested
+  baseline augmentation and production-history reconciliation.
+- [x] Task 5: database adapters and transactional integration evidence.
+- [x] Task 6: Availability and Calendar API modules with HTTP auth, CSRF,
+  owner-scope, validation, idempotency and conflict evidence.
 - [ ] Task 7: Booking API module and security policy.
 - [ ] Task 8: frontend queries, state model and route integration.
 - [ ] Task 9: reference-parity desktop and mobile UI.
@@ -87,6 +89,33 @@ an app-owned agenda rather than a compressed seven-column grid.
   first-class schema DSL for the required multi-column partial exclusion
   constraint. The checked-in baseline must therefore receive a deterministic,
   tested SQL augmentation after generation.
+- The first default schedule needs an explicit create path: a read must not
+  silently create it, and update-by-ID cannot address a schedule that does not
+  exist yet.
+- Manual blocks were in the first-slice read model but initially lacked a
+  mutation contract. They use the same owner-wide reservation invariant and an
+  explicit create/release lifecycle.
+- Drizzle generation expects either a valid migration journal or an absent
+  metadata directory; an empty `meta/` directory fails before generation.
+- The DB package compiles as Node16/CommonJS, so executable generator scripts
+  use `__dirname`/`require.main` instead of `import.meta`.
+- Drizzle wraps PostgreSQL errors in `DrizzleQueryError`; expected constraint
+  translation must walk the safe `cause` chain and match both code and named
+  constraint instead of inspecting only the wrapper.
+- Parallel hydration queries on one transaction client trigger a pg 9 removal
+  warning. Transaction-bound hydration is sequential; pool-backed independent
+  reads may remain parallel.
+- Reusing a parameterized timezone expression in SELECT and GROUP BY creates
+  distinct bind positions. Daily booking counts group by the selected local-date
+  column ordinal, preserving parameterization and PostgreSQL equivalence.
+- Calendar range responses require schedule working-window backgrounds, while
+  the existing domain projection intentionally models product-specific starts.
+  A separate range-bounded, timezone-aware domain projector now exposes working
+  intervals without inventing a product duration in the API layer.
+- HTTP E2E exposed two gaps hidden by service tests: feature modules using the
+  exported CSRF guard still need `ConfigModule` in their local Nest context,
+  and malformed manual-block route IDs must be contract-parsed before an
+  owner-scoped lookup so `400` is not conflated with safe `404`.
 - The design server was reachable during research, but no controllable browser
   target was exposed. Visual acceptance remains a hard gate, not an assumption.
 
@@ -110,6 +139,23 @@ an app-owned agenda rather than a compressed seven-column grid.
   create an unstable booking snapshot.
 - **2026-07-17, agent:** a single transactional Booking store owns persisted
   idempotency replay and occupancy claim so an API retry cannot split them.
+- **2026-07-17, agent:** `PUT /availability/schedules/default` uses
+  `expectedVersion: null` to create and a positive version to update; `GET`
+  remains side-effect free.
+- **2026-07-17, agent:** manual block creation and release are explicit
+  idempotent commands backed by `schedule_reservations`, not synthetic calendar
+  entries.
+- **2026-07-17, agent:** owner-scoped composite foreign keys bind schedule,
+  product, reservation, booking and manual-block ownership at the database
+  boundary.
+- **2026-07-17, agent:** production baseline reconciliation accepts only known
+  predecessor histories and fails closed for any unknown history.
+- **2026-07-17, agent:** default-schedule create/update, manual-block commands
+  and calendar range reads receive persistence-agnostic domain ports before DB
+  adapters; infrastructure does not invent parallel contracts.
+- **2026-07-17, agent:** scheduling integration tests create isolated temporary
+  databases from the checked-in baseline and drop them after each file; they do
+  not reset or mutate the main ElevenHouse application database.
 - **2026-07-17, agent:** omit finance/statuses owned by later domains instead of
   deriving misleading totals from bookings.
 
@@ -134,6 +180,31 @@ recorded for the missing booking module and changed contract. GREEN is 35
 focused contract/domain tests plus domain build and contracts/domain typecheck.
 Concurrent same-key execution and different-request reuse are persistence
 properties intentionally proved with the transactional adapter in Task 5.
+Task 4 added nine scheduling tables, owner-scoped composite references, the
+active owner/range GiST exclusion constraint, a deterministic fail-closed
+baseline augmenter and explicit production-baseline reconciliation for known
+predecessor histories. RED was recorded for missing schemas, augmentation and
+reconciliation planning modules. GREEN is 18 focused tests, DB typecheck/build
+and three isolated PostgreSQL reconciliation integration cases. The current
+local application database was not reset.
+Task 5 added the default-schedule create/update port, manual-block command
+domain, bounded calendar read port and four Drizzle adapter factories.
+Persisted idempotency, booking/manual-block occupancy and aggregate replacement
+are single-transaction operations. RED was recorded for every missing domain
+and adapter surface, projection-context hydration, wrapped PostgreSQL errors
+and timezone grouping. GREEN is 46 focused tests, seven isolated PostgreSQL
+integration cases, domain/DB typecheck and builds, with pg deprecation tracing
+enabled and no warnings. The main local application database was not reset.
+Task 6 added Availability and Calendar Nest feature modules,
+thin controllers, contract-parsing services, owner scoping, CSRF-decorated
+mutations, adapter composition and stable domain-error mapping. A new domain
+availability-background projector has RED/GREEN evidence. HTTP E2E first failed
+on missing ConfigModule wiring and malformed block-ID handling, then passed for
+auth, CSRF, owner isolation, side-effect-free missing schedule, bounded IANA
+ranges, optimistic version conflict, idempotent block replay/release, changed
+request reuse and overlap conflict. GREEN is 23 focused tests, seven isolated
+PostgreSQL adapter tests, astrologer-api typecheck/build and repository verify
+with 387 files / 1670 tests.
 Program A is not complete until database, network-backed browser, visual and
 accessibility acceptance are also recorded here with exact evidence and risk.
 
@@ -142,7 +213,8 @@ accessibility acceptance are also recorded here with exact evidence and risk.
 The approved design is
 `docs/superpowers/specs/2026-07-17-calendar-scheduling-design.md`. Domain code
 belongs under `packages/domain/src/availability` and
-`packages/domain/src/bookings`; contracts under `packages/contracts/src`;
+`packages/domain/src/bookings`, with range read contracts under
+`packages/domain/src/calendar`; contracts under `packages/contracts/src`;
 schema and adapters under `packages/db`; Nest features under
 `apps/astrologer-api/src/modules`; and page/feature code under
 `apps/astrologer-web/src/pages/calendar` and
@@ -171,8 +243,8 @@ export type CalendarRangeResponse = {
   };
 };
 
-export type ReplaceAvailabilityScheduleRequest = {
-  expectedVersion: number;
+export type PutDefaultAvailabilityScheduleRequest = {
+  expectedVersion: number | null;
   timeZone: string;
   startIntervalMinutes: number;
   bufferBeforeMinutes: number;
@@ -199,6 +271,12 @@ export type CreateManualBookingRequest = {
   deliveryFormat: ProductDeliveryFormat;
   projectedStartAt: string;
 };
+
+export type CreateManualBlockRequest = {
+  title: string;
+  startAt: string;
+  endAt: string;
+};
 ```
 
 The domain ports remain persistence-agnostic:
@@ -206,15 +284,24 @@ The domain ports remain persistence-agnostic:
 ```ts
 export interface AvailabilityStore {
   findDefaultByOwner(ownerUserId: string): Promise<AvailabilitySchedule | null>;
+  putDefault(input: PutDefaultAvailabilityInput): Promise<PutDefaultAvailabilityResult>;
   replace(input: ReplaceAvailabilityInput): Promise<AvailabilitySchedule>;
   readProjectionContext(input: ProjectionContextQuery): Promise<ProjectionContext>;
 }
 
 export interface BookingCommandStore {
-  createManualBooking(
+  executeManualBooking(
     command: CreateManualBookingCommand,
     create: () => Promise<ClaimedBooking>
   ): Promise<{ kind: "created" | "replayed"; booking: Booking }>;
+}
+
+export interface ManualCalendarBlockCommandStore {
+  executeCreate(
+    command: CreateManualBlockCommand,
+    create: () => Promise<ManualCalendarBlockClaim>
+  ): Promise<{ kind: "created" | "replayed"; block: ManualCalendarBlock }>;
+  release(input: ReleaseManualBlockInput): Promise<ManualCalendarBlock | null>;
 }
 
 export interface CalendarReadStore {
@@ -362,25 +449,36 @@ network-backed browser flow.
 - Create: `packages/db/src/schema/scheduling/idempotency-commands.schema.ts`
 - Create: `packages/db/src/schema/scheduling/index.ts`
 - Create: `packages/db/src/schema/scheduling/scheduling.schema.test.ts`
+- Modify: `packages/db/src/schema/products/products.schema.ts`
 - Modify: `packages/db/src/schema/index.ts`
 - Create: `packages/db/scripts/augment-scheduling-baseline.ts`
 - Create: `packages/db/scripts/augment-scheduling-baseline.test.ts`
+- Create: `packages/db/scripts/production-baseline-plan.ts`
+- Create: `packages/db/scripts/production-baseline-plan.test.ts`
+- Modify: `packages/db/scripts/reconcile-production-baseline.ts`
+- Modify:
+  `packages/db/src/production-baseline-reconciliation.integration.ts`
 - Modify: `packages/db/package.json`
+- Modify: `packages/db/tsconfig.json`
 - Regenerate: `packages/db/drizzle/0000_*.sql`
 - Regenerate: `packages/db/drizzle/meta/0000_snapshot.json`
 - Regenerate: `packages/db/drizzle/meta/_journal.json`
 
-- [ ] Write schema tests for owner/reference/check/unique/index constraints and
+- [x] Write schema tests for owner/reference/check/unique/index constraints and
   the checked-in baseline's `btree_gist` extension plus GiST exclusion SQL.
-- [ ] Write augmentation tests using a temporary migration fixture; require
+- [x] Write augmentation tests using a temporary migration fixture; require
   idempotent insertion of exactly one named exclusion constraint.
-- [ ] Run focused tests and record RED.
-- [ ] Implement Drizzle tables and deterministic augmentation script. Change
+- [x] Run focused tests and record RED.
+- [x] Implement Drizzle tables and deterministic augmentation script. Change
   `db:generate` to run Drizzle generation followed by the augmentation.
-- [ ] Generate the current baseline using the documented baseline workflow.
+- [x] Generate the current baseline using the documented baseline workflow.
   Do not reset a database in this task.
-- [ ] Run focused schema/script tests, DB typecheck and `git diff --check`;
+- [x] Run focused schema/script tests, DB typecheck and `git diff --check`;
   inspect the complete regenerated baseline and metadata diff.
+- [x] Add a hash-verified production reconciliation plan for the current and
+  approved predecessor histories; prove legacy conversion, previous-baseline
+  upgrade, repeat no-op and unknown-history refusal in isolated PostgreSQL
+  integration databases.
 
 The baseline must contain the semantic equivalent of:
 
@@ -398,25 +496,43 @@ ALTER TABLE "schedule_reservations"
 
 **Files:**
 
+- Modify: `packages/domain/src/availability/availability-store.ts`
+- Modify: `packages/domain/src/availability/availability-use-cases.ts`
+- Modify: `packages/domain/src/availability/availability-use-cases.test.ts`
+- Create: `packages/domain/src/availability/manual-calendar-blocks.ts`
+- Create: `packages/domain/src/availability/manual-calendar-blocks.test.ts`
+- Create: `packages/domain/src/calendar/calendar-read.ts`
+- Create: `packages/domain/src/calendar/calendar-read.test.ts`
+- Create: `packages/domain/src/calendar/index.ts`
+- Modify: `packages/domain/src/index.ts`
 - Create: `packages/db/src/adapters/scheduling/drizzle-availability-store.ts`
 - Create: `packages/db/src/adapters/scheduling/drizzle-calendar-read-store.ts`
 - Create: `packages/db/src/adapters/scheduling/drizzle-booking-command-store.ts`
+- Create: `packages/db/src/adapters/scheduling/drizzle-manual-block-command-store.ts`
+- Create:
+  `packages/db/src/adapters/scheduling/drizzle-idempotent-scheduling-command.ts`
 - Create: `packages/db/src/adapters/scheduling/drizzle-availability-store.integration.ts`
 - Create: `packages/db/src/adapters/scheduling/drizzle-booking-command-store.integration.ts`
 - Create: `packages/db/src/adapters/scheduling/index.ts`
+- Modify: `packages/db/src/adapters/index.ts`
+- Modify: `packages/db/src/index.ts`
 - Modify: `packages/db/package.json`
 
-- [ ] Write integration tests for aggregate replacement/version conflict,
+- [x] Add the missing persistence-agnostic default-schedule, manual-block and
+  calendar-read domain ports/use cases with failing tests before adapters.
+- [x] Write integration tests for aggregate replacement/version conflict,
   owner scoping and rollback on invalid child data.
-- [ ] Write integration tests that race overlapping claims, permit adjacent
+- [x] Write integration tests that race overlapping claims, permit adjacent
   ranges, replay an identical idempotency key, reject a changed request and
   roll back reservation when booking insertion fails.
-- [ ] Run tests against the already configured local test database only if it
+- [x] Write integration tests for idempotent manual-block creation and release,
+  owner isolation and conflicts with active bookings/blocks.
+- [x] Run tests against the already configured local test database only if it
   is listening; otherwise record the environment blocker without starting it.
-- [ ] Implement minimal adapters and translate exclusion violations to
+- [x] Implement minimal adapters and translate exclusion violations to
   `slot_no_longer_available` without leaking SQL details.
-- [ ] Export only adapter factories from `@elevenhouse/db/scheduling`.
-- [ ] Run unit, integration, typecheck and build checks as the environment
+- [x] Export only adapter factories from `@elevenhouse/db/scheduling`.
+- [x] Run unit, integration, typecheck and build checks as the environment
   permits; record exact skipped evidence.
 
 ### Task 6: Expose Availability and Calendar API modules
@@ -428,7 +544,6 @@ ALTER TABLE "schedule_reservations"
 - Create: `apps/astrologer-api/src/modules/availability/availability.service.ts`
 - Create: `apps/astrologer-api/src/modules/availability/availability.tokens.ts`
 - Create: `apps/astrologer-api/src/modules/availability/availability.service.test.ts`
-- Create: `apps/astrologer-api/src/modules/availability/availability.e2e.test.ts`
 - Create: `apps/astrologer-api/src/modules/calendar/calendar.module.ts`
 - Create: `apps/astrologer-api/src/modules/calendar/calendar.controller.ts`
 - Create: `apps/astrologer-api/src/modules/calendar/calendar.service.ts`
@@ -436,14 +551,17 @@ ALTER TABLE "schedule_reservations"
 - Create: `apps/astrologer-api/src/modules/calendar/calendar.e2e.test.ts`
 - Modify: `apps/astrologer-api/src/app.module.ts`
 
-- [ ] Write E2E tests for authentication, owner scoping, required/bounded range,
-  IANA timezone validation, CSRF and optimistic `409` response.
-- [ ] Assert summary contains bookings/minutes/status counts and no finance
+- [x] Write E2E tests for authentication, owner scoping, required/bounded range,
+  IANA timezone validation, side-effect-free missing default, CSRF, create with
+  `expectedVersion: null` and optimistic update `409` response.
+- [x] Write E2E tests for idempotent manual-block creation/release, owner
+  isolation and overlap conflicts.
+- [x] Assert summary contains bookings/minutes/status counts and no finance
   fields.
-- [ ] Run focused E2E tests and record RED.
-- [ ] Implement feature modules with thin controllers, contract parsing in
+- [x] Run focused E2E tests and record RED.
+- [x] Implement feature modules with thin controllers, contract parsing in
   services and adapter factories in module composition roots.
-- [ ] Run focused unit/E2E tests, API typecheck and build; record GREEN.
+- [x] Run focused unit/E2E tests, API typecheck and build; record GREEN.
 
 ### Task 7: Expose manual Booking API with persisted idempotency
 
@@ -479,7 +597,9 @@ ALTER TABLE "schedule_reservations"
 - Create: `apps/astrologer-web/src/features/calendar/model/calendarRange.test.ts`
 - Create: `apps/astrologer-web/src/features/calendar/model/useCalendarRangeQuery.ts`
 - Create: `apps/astrologer-web/src/features/availability/api/getAvailabilitySchedule.ts`
-- Create: `apps/astrologer-web/src/features/availability/api/replaceAvailabilitySchedule.ts`
+- Create: `apps/astrologer-web/src/features/availability/api/putDefaultAvailabilitySchedule.ts`
+- Create: `apps/astrologer-web/src/features/calendar/api/createManualBlock.ts`
+- Create: `apps/astrologer-web/src/features/calendar/api/releaseManualBlock.ts`
 - Create: `apps/astrologer-web/src/features/bookings/api/createManualBooking.ts`
 - Create: `apps/astrologer-web/src/features/bookings/api/getBooking.ts`
 - Create: `apps/astrologer-web/src/features/bookings/model/useCreateManualBookingMutation.ts`

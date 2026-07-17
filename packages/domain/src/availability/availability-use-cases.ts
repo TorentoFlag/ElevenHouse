@@ -9,6 +9,7 @@ import {
 import type {
   AvailabilityProductReader,
   AvailabilityStore,
+  AvailabilityStorePutDefaultInput,
   AvailabilityStoreReplaceInput
 } from "./availability-store";
 import type {
@@ -23,6 +24,11 @@ export type ReplaceAvailabilityScheduleInput = Omit<
   "ownerUserId" | "scheduleId" | "now"
 >;
 
+export type PutDefaultAvailabilityScheduleInput = Omit<
+  AvailabilityStorePutDefaultInput,
+  "ownerUserId" | "now"
+>;
+
 export async function getDefaultAvailabilitySchedule(input: {
   readonly store: AvailabilityStore;
   readonly ownerUserId: string;
@@ -35,6 +41,40 @@ export async function getDefaultAvailabilitySchedule(input: {
   });
   if (!schedule) throw new AvailabilityScheduleNotFoundError();
   return schedule;
+}
+
+export async function putDefaultAvailabilitySchedule(input: {
+  readonly store: AvailabilityStore;
+  readonly productReader: AvailabilityProductReader;
+  readonly ownerUserId: string;
+  readonly input: PutDefaultAvailabilityScheduleInput;
+  readonly now: Date;
+}): Promise<AvailabilitySchedule> {
+  const ownerUserId = normalizeRequiredString(
+    input.ownerUserId,
+    "Availability owner user id is required"
+  );
+  if (input.input.expectedVersion !== null) {
+    requireIntegerInRange(
+      input.input.expectedVersion,
+      1,
+      Number.MAX_SAFE_INTEGER,
+      "Expected version"
+    );
+  }
+  validateScheduleAggregate(input.input);
+  await assertBookableProducts(input.productReader, ownerUserId, input.input.productIds);
+
+  const result = await input.store.putDefault({
+    ownerUserId,
+    ...input.input,
+    now: input.now.toISOString()
+  });
+  if (result.kind === "not_found") throw new AvailabilityScheduleNotFoundError();
+  if (result.kind === "version_conflict") {
+    throw new AvailabilityVersionConflictError(result.currentVersion);
+  }
+  return result.schedule;
 }
 
 export async function replaceAvailabilitySchedule(input: {
@@ -53,18 +93,9 @@ export async function replaceAvailabilitySchedule(input: {
     input.scheduleId,
     "Availability schedule id is required"
   );
-  validateReplacement(input.input);
-
-  const bookableProductIds = new Set(
-    await input.productReader.findBookableProductIds({
-      ownerUserId,
-      productIds: input.input.productIds
-    })
-  );
-  const invalidProductId = input.input.productIds.find(
-    (productId) => !bookableProductIds.has(productId)
-  );
-  if (invalidProductId) throw new AvailabilityProductNotBookableError(invalidProductId);
+  requireIntegerInRange(input.input.expectedVersion, 1, Number.MAX_SAFE_INTEGER, "Expected version");
+  validateScheduleAggregate(input.input);
+  await assertBookableProducts(input.productReader, ownerUserId, input.input.productIds);
 
   const result = await input.store.replace({
     ownerUserId,
@@ -80,8 +111,21 @@ export async function replaceAvailabilitySchedule(input: {
   return result.schedule;
 }
 
-function validateReplacement(input: ReplaceAvailabilityScheduleInput): void {
-  requireIntegerInRange(input.expectedVersion, 1, Number.MAX_SAFE_INTEGER, "Expected version");
+async function assertBookableProducts(
+  productReader: AvailabilityProductReader,
+  ownerUserId: string,
+  productIds: readonly string[]
+): Promise<void> {
+  const bookableProductIds = new Set(
+    await productReader.findBookableProductIds({ ownerUserId, productIds })
+  );
+  const invalidProductId = productIds.find((productId) => !bookableProductIds.has(productId));
+  if (invalidProductId) throw new AvailabilityProductNotBookableError(invalidProductId);
+}
+
+function validateScheduleAggregate(
+  input: Omit<AvailabilityStoreReplaceInput, "ownerUserId" | "scheduleId" | "expectedVersion" | "now">
+): void {
   validateTimeZone(input.timeZone);
   requireIntegerInRange(input.startIntervalMinutes, 1, 1_440, "Start interval");
   requireIntegerInRange(input.bufferBeforeMinutes, 0, 10_080, "Buffer before");
