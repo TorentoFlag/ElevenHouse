@@ -577,6 +577,11 @@
   background: rgb(246 210 102 / 0.08);
 }
 
+.comparisonRow:focus-visible {
+  outline: 2px solid rgb(246 210 102 / 0.72);
+  outline-offset: 2px;
+}
+
 .comparisonHeading,
 .comparisonHeading strong,
 .comparisonHeading small {
@@ -589,6 +594,19 @@
 .comparisonHeading {
   display: grid;
   gap: 2px;
+}
+
+.comparisonRow[data-expanded="true"] {
+  align-items: start;
+}
+
+.comparisonRow[data-expanded="true"] .comparisonHeading,
+.comparisonRow[data-expanded="true"] .comparisonHeading strong,
+.comparisonRow[data-expanded="true"] .comparisonHeading small {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .comparisonHeading small,

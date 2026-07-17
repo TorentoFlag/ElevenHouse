@@ -8,24 +8,7 @@ import { CompatibilityWorkspace } from "./CompatibilityWorkspace";
 
 describe("CompatibilityWorkspace", () => {
   it("renders every compatibility evidence section and all five participant numbers", () => {
-    const markup = renderToStaticMarkup(
-      <CompatibilityWorkspace
-        model={model}
-        selectedSelector="compatibility:conclusion"
-        interpretationText=""
-        isCreatingAiDraft={false}
-        aiDraftErrorMessage={null}
-        isAiDraftDisabled={false}
-        aiDraftDisabledReason={null}
-        isApproveInterpretationDisabled
-        isSaveInterpretationDisabled
-        onInterpretationChange={vi.fn()}
-        onSaveInterpretation={vi.fn()}
-        onApproveInterpretation={vi.fn()}
-        onCreateAiDraft={vi.fn()}
-        onSelect={vi.fn()}
-      />
-    );
+    const markup = renderWorkspace("compatibility:conclusion");
 
     expect(markup).toContain("Число личности");
     expect(markup).toContain("Число дня рождения");
@@ -38,8 +21,38 @@ describe("CompatibilityWorkspace", () => {
     expect(markup).toContain("7 близких");
     expect(markup).toContain("7 различий");
     expect(markup).toContain("5 напряжений");
+    expect(markup).not.toContain('aria-expanded="true"');
+  });
+
+  it("exposes exactly one selected comparison as expanded", () => {
+    const markup = renderWorkspace("compatibility:key_numbers:lifePath");
+
+    expect(markup.match(/aria-expanded="true"/g)).toHaveLength(1);
+    expect(markup.match(/aria-expanded="false"/g)).toHaveLength(2);
+    expect(markup).toContain('data-expanded="true"');
   });
 });
+
+function renderWorkspace(selectedSelector: string): string {
+  return renderToStaticMarkup(
+    <CompatibilityWorkspace
+      model={model}
+      selectedSelector={selectedSelector}
+      interpretationText=""
+      isCreatingAiDraft={false}
+      aiDraftErrorMessage={null}
+      isAiDraftDisabled={false}
+      aiDraftDisabledReason={null}
+      isApproveInterpretationDisabled
+      isSaveInterpretationDisabled
+      onInterpretationChange={vi.fn()}
+      onSaveInterpretation={vi.fn()}
+      onApproveInterpretation={vi.fn()}
+      onCreateAiDraft={vi.fn()}
+      onSelect={vi.fn()}
+    />
+  );
+}
 
 const comparisons = {
   keyNumberComparisons: [comparison("key_numbers", "lifePath", "Число жизненного пути")],

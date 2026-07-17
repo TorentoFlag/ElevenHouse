@@ -86,6 +86,7 @@ export function CompatibilityWorkspace({
             ariaLabel="Ключевые числа пары"
             comparisons={compatibility.keyNumberComparisons}
             selectedSelector={selectedSelector}
+            collapsedSelector={compatibility.conclusion.selector}
             onSelect={onSelect}
           />
           <CompatibilityComparisonList
@@ -93,6 +94,7 @@ export function CompatibilityWorkspace({
             ariaLabel="Сравнение психоматриц"
             comparisons={compatibility.matrixComparisons}
             selectedSelector={selectedSelector}
+            collapsedSelector={compatibility.conclusion.selector}
             onSelect={onSelect}
           />
           <CompatibilityComparisonList
@@ -100,6 +102,7 @@ export function CompatibilityWorkspace({
             ariaLabel="Линии совместимости"
             comparisons={compatibility.strengthLineComparisons}
             selectedSelector={selectedSelector}
+            collapsedSelector={compatibility.conclusion.selector}
             onSelect={onSelect}
           />
           <CompatibilitySummary
