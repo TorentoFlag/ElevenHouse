@@ -14,6 +14,21 @@ describe("ProfileSettingsForm", () => {
     expect(markup).toContain('role="radio"');
     expect(markup).toContain('aria-checked="true"');
   });
+
+  it("explains the required IANA timezone format and rejects a persisted UTC offset label", () => {
+    const markup = renderToStaticMarkup(
+      <ProfileSettingsForm
+        locale="ru"
+        profile={{ ...profile, timezone: "UTC+3" }}
+        isSaving={false}
+        onSave={vi.fn()}
+      />
+    );
+
+    expect(markup).toContain('placeholder="Europe/Moscow"');
+    expect(markup).toContain("Укажите часовой пояс в формате Europe/Moscow");
+    expect(markup).toContain('aria-invalid="true"');
+  });
 });
 
 const profile = {

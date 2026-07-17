@@ -14,6 +14,7 @@ import type {
 } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type { SupportedLocale } from "@elevenhouse/i18n";
+import { ianaTimeZoneSchema } from "@elevenhouse/validation";
 import {
   PROFILE_LANGUAGE_OPTIONS,
   PROFILE_METHOD_OPTIONS,
@@ -64,6 +65,7 @@ export function ProfileSettingsForm({
   const previousInitialDraftRef = useRef(initialDraft);
   const draftRef = useRef(draft);
   const validationMessage = getProfileSettingsDraftValidationMessage(draft);
+  const isTimezoneInvalid = !ianaTimeZoneSchema.safeParse(draft.timezone).success;
   const isDirty = isProfileSettingsDraftDirty(initialDraft, draft);
   const isUploadingMedia = Boolean(mediaPreview.uploadingTarget);
 
@@ -436,10 +438,12 @@ export function ProfileSettingsForm({
       <section className={styles.settingsGroup}>
         <h2>Локаль</h2>
         <div className={styles.fieldGrid}>
-          <Field label="Часовой пояс">
+          <Field label="Часовой пояс" hint="IANA · например Europe/Moscow">
             <input
               value={draft.timezone}
               onChange={(event) => updateDraft("timezone", event.target.value)}
+              placeholder="Europe/Moscow"
+              aria-invalid={isTimezoneInvalid}
               required
             />
           </Field>

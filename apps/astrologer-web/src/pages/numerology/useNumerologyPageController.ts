@@ -8,13 +8,14 @@ import type {
   CalculationRecordResponse,
   NumerologyCalculationResponse,
   NumerologyPreviewResponse,
-  NumerologyResult,
   PreviewNumerologyRequest,
-  RecalculateNumerologyCalculationRequest
+  RecalculateNumerologyCalculationRequest,
+  NumerologyResult
 } from "@elevenhouse/contracts";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { HttpError } from "../../common/http/HttpError";
 import { getFirstLinkableClientId } from "../../features/calculations/model/calculationStatus";
+import { getNumerologyActionErrorMessage } from "../../features/numerology/model/numerologyActionErrorModel";
 import {
   astrologerClientListQueryOptions,
   findClientSelectOption,
@@ -416,7 +417,10 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       (message) => {
         setErrorMessage(null);
         setEditorErrors(message ? [message] : []);
-      }
+      },
+      submittedEditor.kind === "create"
+        ? "Не удалось выполнить расчёт"
+        : "Не удалось сохранить расчёт"
     );
   }
 
@@ -608,7 +612,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
         setPreviewResult(response.result);
       } catch (error) {
         if (!previewGuardRef.current.isCurrent(requestId)) return;
-        setPreviewError(error instanceof Error ? error.message : "Не удалось обновить расчет");
+        setPreviewError(getNumerologyActionErrorMessage(error, "Не удалось обновить расчёт"));
       }
     })();
   }
@@ -748,11 +752,15 @@ function getNumerologyPdfActionErrorMessage(error: unknown): string {
   return "Не удалось выполнить действие с PDF. Повторите позже";
 }
 
-async function run(operation: () => Promise<void>, setError: (message: string | null) => void) {
+async function run(
+  operation: () => Promise<void>,
+  setError: (message: string | null) => void,
+  fallback = "Не удалось выполнить действие"
+) {
   try {
     setError(null);
     await operation();
   } catch (error) {
-    setError(error instanceof Error ? error.message : "Не удалось выполнить действие");
+    setError(getNumerologyActionErrorMessage(error, fallback));
   }
 }

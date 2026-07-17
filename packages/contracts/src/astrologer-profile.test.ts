@@ -96,7 +96,9 @@ describe("astrologer profile contracts", () => {
   });
 
   it("allows an absent current profile response", () => {
-    expect(getAstrologerProfileResponseSchema.parse({ profile: null, integrityIssues: [] })).toEqual({
+    expect(
+      getAstrologerProfileResponseSchema.parse({ profile: null, integrityIssues: [] })
+    ).toEqual({
       profile: null,
       integrityIssues: []
     });
@@ -216,6 +218,15 @@ describe("astrologer profile contracts", () => {
       upsertAstrologerProfileRequestSchema.parse({
         ...validUpsertRequest,
         consultationLanguages: ["Русский", "русский"]
+      })
+    ).toThrow();
+  });
+
+  it("rejects timezone labels that are not valid IANA time zones", () => {
+    expect(() =>
+      upsertAstrologerProfileRequestSchema.parse({
+        ...validUpsertRequest,
+        timezone: "UTC+3"
       })
     ).toThrow();
   });

@@ -50,7 +50,14 @@ describe("AstrologerProfileService", () => {
           return createMediaAsset("product_cover", avatarMediaId);
         }
         if (input.mediaId === coverMediaId) {
-          return createMediaAsset("profile_cover", coverMediaId, "cover.png", 1600, 600, "uploading");
+          return createMediaAsset(
+            "profile_cover",
+            coverMediaId,
+            "cover.png",
+            1600,
+            600,
+            "uploading"
+          );
         }
         return null;
       })
@@ -152,6 +159,22 @@ describe("AstrologerProfileService", () => {
       ownerUserId,
       mediaId: coverMediaId
     });
+  });
+
+  it("rejects non-IANA profile timezones before persistence", async () => {
+    const store = createStore();
+    const service = createService(store);
+
+    await expect(
+      service.upsertCurrentProfile(
+        {
+          ...validBody(),
+          timezone: "UTC+3"
+        },
+        createAuthenticatedRequest()
+      )
+    ).rejects.toThrow(BadRequestException);
+    expect(store.upsert).not.toHaveBeenCalled();
   });
 
   it("maps invalid bodies, unauthenticated requests and handle conflicts", async () => {

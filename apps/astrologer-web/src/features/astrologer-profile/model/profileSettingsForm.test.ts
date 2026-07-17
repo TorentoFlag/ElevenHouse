@@ -152,6 +152,12 @@ describe("profileSettingsForm", () => {
         consultationLanguages: []
       })
     ).toBe("Выберите хотя бы один язык консультаций");
+    expect(
+      getProfileSettingsDraftValidationMessage({
+        ...draft,
+        timezone: "UTC+3"
+      })
+    ).toBe("Укажите часовой пояс в формате Europe/Moscow");
   });
 
   it("tracks whether the editable profile changed from the last loaded backend state", () => {

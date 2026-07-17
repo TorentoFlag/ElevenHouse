@@ -209,7 +209,7 @@ export function getProfileSettingsDraftValidationMessage(
     return "Выберите хотя бы один язык консультаций";
   }
   if (issuePath === "timezone") {
-    return "Укажите часовой пояс";
+    return "Укажите часовой пояс в формате Europe/Moscow";
   }
   if (issuePath === "locale") {
     return "Укажите язык профиля";

@@ -1,4 +1,4 @@
-import { nonEmptyStringSchema, z } from "@elevenhouse/validation";
+import { ianaTimeZoneSchema, nonEmptyStringSchema, z } from "@elevenhouse/validation";
 import { mediaAssetResponseSchema } from "./media";
 
 const uuidSchema = z.string().uuid();
@@ -198,7 +198,7 @@ const astrologerProfileRequestFieldsSchema = z
     publicName: publicNameSchema,
     headline: createNullableTrimmedStringSchema(240),
     bio: createNullableTrimmedStringSchema(4000),
-    timezone: requiredTrimmedStringSchema,
+    timezone: ianaTimeZoneSchema,
     locale: astrologerProfileLocaleSchema,
     avatarMediaId: nullableUuidSchema,
     coverMediaId: nullableUuidSchema,
