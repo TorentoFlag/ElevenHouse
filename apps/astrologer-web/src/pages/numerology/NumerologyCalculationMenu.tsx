@@ -1,4 +1,6 @@
 import type { CalculationRecordResponse } from "@elevenhouse/contracts";
+import { Popover } from "@elevenhouse/design-system/components/Popover";
+import "@elevenhouse/design-system/components/Popover.css";
 import type { SavedNumerologyCalculationListItem } from "../../features/numerology/model/numerologySavedWorkspaceModel";
 import styles from "./NumerologySavedWorkspace.module.css";
 
@@ -22,14 +24,22 @@ export function NumerologyCalculationMenu({
   onArchive
 }: NumerologyCalculationMenuProps) {
   return (
-    <details className={styles.calculationMenu}>
-      <summary className={styles.calculationMenuTrigger} aria-label="Открыть список расчётов">
+    <Popover className={styles.calculationMenu}>
+      <Popover.Trigger
+        className={styles.calculationMenuTrigger}
+        aria-label="Список расчётов"
+      >
         Расчёты
         <span className={styles.calculationCount}>{items.length}</span>
-      </summary>
-      <div className={styles.calculationPopover}>
+      </Popover.Trigger>
+      <Popover.Content
+        align="start"
+        className={styles.calculationPopover}
+        role="group"
+        aria-labelledby="saved-calculations-title"
+      >
         <div className={styles.calculationMenuHeader}>
-          <strong>Сохранённые расчёты</strong>
+          <strong id="saved-calculations-title">Сохранённые расчёты</strong>
           <button type="button" disabled={disabled} onClick={onCreate}>
             Новый расчёт
           </button>
@@ -72,8 +82,8 @@ export function NumerologyCalculationMenu({
             </button>
           </div>
         ) : null}
-      </div>
-    </details>
+      </Popover.Content>
+    </Popover>
   );
 }
 

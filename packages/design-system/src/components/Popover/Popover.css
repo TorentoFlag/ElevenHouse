@@ -1,0 +1,18 @@
+.ehPopover {
+  position: relative;
+  display: inline-flex;
+}
+
+.ehPopover__content {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+}
+
+.ehPopover__content--start {
+  left: 0;
+}
+
+.ehPopover__content--end {
+  right: 0;
+}

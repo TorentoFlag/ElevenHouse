@@ -33,6 +33,11 @@
       "import": "./dist/components/ActionMenu/index.js"
     },
     "./components/ActionMenu.css": "./src/components/ActionMenu/ActionMenu.css",
+    "./components/Popover": {
+      "types": "./dist/components/Popover/index.d.ts",
+      "import": "./dist/components/Popover/index.js"
+    },
+    "./components/Popover.css": "./src/components/Popover/Popover.css",
     "./components/Button": {
       "types": "./dist/components/Button/index.d.ts",
       "import": "./dist/components/Button/index.js"
@@ -246,6 +251,7 @@
     "./src/navigation/NavigationDrawer/NavigationDrawer.css",
     "./src/components/OtpAuthForm/OtpAuthForm.css",
     "./src/components/OtpCodeForm/OtpCodeForm.css",
+    "./src/components/Popover/Popover.css",
     "./src/components/LanguageSwitcher/LanguageSwitcher.css",
     "./src/components/SegmentedTabs/SegmentedTabs.css",
     "./src/components/SelectableTile/SelectableTile.css",

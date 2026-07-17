@@ -15,14 +15,11 @@
   background: rgb(30 27 62);
   color: var(--eh-color-moon-120);
   cursor: pointer;
+  font-family: inherit;
   font-size: 13px;
   font-weight: 600;
   list-style: none;
   white-space: nowrap;
-}
-
-.calculationMenuTrigger::-webkit-details-marker {
-  display: none;
 }
 
 .calculationCount {

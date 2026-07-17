@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
+import { Popover } from "@elevenhouse/design-system/components/Popover";
 import { describe, expect, it, vi } from "vitest";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import {
@@ -43,8 +44,20 @@ describe("Numerology saved workspace components", () => {
       onRecalculate,
       onArchive
     });
+    const popover = findRequiredElementByType(view, Popover);
+    const content = findRequiredElementByType<{
+      align?: string;
+      role?: string;
+      "aria-labelledby"?: string;
+    }>(view, Popover.Content);
+    const trigger = findRequiredElementByType<{ "aria-label"?: string }>(view, Popover.Trigger);
     const savedButton = findButton(view, "Антон Голубев");
 
+    expect(popover).toBeDefined();
+    expect(content.props.align).toBe("start");
+    expect(content.props.role).toBe("group");
+    expect(content.props["aria-labelledby"]).toBe("saved-calculations-title");
+    expect(trigger.props["aria-label"]).toBe("Список расчётов");
     expect(savedButton.props["aria-current"]).toBe("true");
     expect((savedButton.props as { role?: string }).role).toBeUndefined();
     expect(

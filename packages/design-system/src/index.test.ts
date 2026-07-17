@@ -18,6 +18,7 @@ describe("design-system root exports", () => {
     expect(designSystem.LayoutGrid).toBeTypeOf("function");
     expect(designSystem.NumberStepper).toBeTypeOf("function");
     expect(designSystem.OtpAuthForm).toBeTypeOf("function");
+    expect(designSystem.Popover).toBeTypeOf("function");
     expect(designSystem.Plus).toBeTypeOf("function");
     expect(designSystem.Reference).toBeTypeOf("function");
     expect(designSystem.Search).toBeTypeOf("function");

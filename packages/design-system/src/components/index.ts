@@ -10,6 +10,7 @@ export * from "./Modal/index.js";
 export * from "./NumberStepper/index.js";
 export * from "./OtpAuthForm/index.js";
 export * from "./OtpCodeForm/index.js";
+export * from "./Popover/index.js";
 export * from "./SegmentedTabs/index.js";
 export * from "./SelectableTile/index.js";
 export * from "./Tooltip/index.js";

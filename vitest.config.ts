@@ -26,6 +26,12 @@ export default defineConfig({
           import.meta.url
         )
       ),
+      "@elevenhouse/design-system/components/Popover": fileURLToPath(
+        new URL("./packages/design-system/src/components/Popover/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/design-system/components/Popover.css": fileURLToPath(
+        new URL("./packages/design-system/src/components/Popover/Popover.css", import.meta.url)
+      ),
       "@elevenhouse/design-system/components/SelectableTile": fileURLToPath(
         new URL("./packages/design-system/src/components/SelectableTile/index.ts", import.meta.url)
       ),
