@@ -20,7 +20,8 @@ ElevenHouse. Они не заменяют `AGENTS.md`, архитектурны�
 
 ## Индекс
 
-- `00-task-intake.md` — старт задачи, чтение контекста, границы, чужие изменения.
+- `00-task-intake.md` — shared-main baseline, контекст, owned paths и безопасные
+  concurrent edits.
 - `01-design-to-production.md` — перенос `ElevenHouseDesign/` в production.
 - `02-frontend-production.md` — React/Vite apps, design system, UI-поверхности.
 - `03-backend-feature-module.md` — Nest feature modules и domain use cases.
@@ -29,7 +30,8 @@ ElevenHouse. Они не заменяют `AGENTS.md`, архитектурны�
   idempotency.
 - `06-workers-and-events.md` — outbox, queues, payments, notifications, charts.
 - `07-local-services.md` — диагностика и запуск локальных сервисов.
-- `08-verification-and-git.md` — проверки, status, commit/push discipline.
+- `08-verification-and-git.md` — проверки, shared index и path-scoped
+  commit/push discipline.
 - `09-documentation-maintenance.md` — когда и как обновлять документацию.
 
 Repo-scoped skills:

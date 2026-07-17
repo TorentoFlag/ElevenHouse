@@ -9,19 +9,37 @@
 Быстро понять задачу, выбрать правильные документы, не задеть чужие изменения и
 не начать строить поверх неверной архитектурной предпосылки.
 
+## Shared-main intake
+
+Работа выполняется в существующем checkout на `main`. До чтения target paths
+сними shared baseline:
+
+```bash
+git branch --show-current
+git status --short
+git diff --cached --name-status
+```
+
+Если current branch не `main`, не переключай его самостоятельно: сообщи
+blocker. Раздели owned paths задачи, существующие unowned modifications,
+untracked files и staged entries. Dirty tree ожидаем и не требует cleanup,
+worktree, stash или новой ветки.
+
+Непосредственно перед каждой связной группой правок заново прочитай complete
+target file и выполни `git diff -- <path>`. Если файл изменился после первого
+осмотра, обнови решение по current content; не применяй stale patch.
+
 ## Шаги
 
-1. Проверь текущий статус:
-
-   ```bash
-   git status --short
-   ```
+1. Проверь shared-main baseline командами выше и зафиксируй owned/unowned paths.
 
 2. Если есть изменения, которых ты не делал:
    - считай их работой пользователя или другого агента;
    - не откатывай и не форматируй их;
    - если они не относятся к задаче, игнорируй;
-   - если пересекаются с задачей, сначала прочитай их и адаптируй решение.
+   - если пересекаются с задачей, перечитай current file/path diff и адаптируй
+     решение;
+   - спрашивай пользователя только при несовместимом semantic conflict.
 
 3. Определи источники по виду истины:
    - product truth: user instruction, `docs/product/`, contracts/domain;
@@ -128,8 +146,9 @@
 
 - Ты знаешь целевую production surface.
 - Ты знаешь релевантные документы и ADR.
-- Ты знаешь текущий git status.
+- Ты подтвердил `main`, текущие status и staged paths.
 - Ты отделил свои будущие изменения от чужих.
+- Ты знаешь, что target files будут перечитаны непосредственно перед edits.
 - Ты трассировал полный dependency/runtime contour.
 - Ты определил research requirement и definition of done.
 - Ты знаешь runtime/browser availability для required acceptance.

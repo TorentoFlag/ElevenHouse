@@ -7,13 +7,24 @@ import test from "node:test";
 import { checkAgentDocs } from "./check-agent-docs.mjs";
 
 const requiredFiles = {
-  "AGENTS.md": ["# ElevenHouse", "## Источники истины", "## Обязательный рабочий цикл"],
+  "AGENTS.md": [
+    "# ElevenHouse",
+    "## Источники истины",
+    "## Обязательный рабочий цикл",
+    "## Shared-main concurrency"
+  ],
   "docs/README.md": ["# Документация ElevenHouse"],
-  "docs/development/agent-workflow.md": ["## Autonomous Feature Pipeline", "## Living ExecPlan"],
+  "docs/development/agent-workflow.md": [
+    "## Autonomous Feature Pipeline",
+    "## Living ExecPlan",
+    "## Shared Checkout Protocol"
+  ],
   "docs/development/research-strategy.md": ["## Technical Research", "## Product Research"],
   "docs/development/testing-strategy.md": ["## TDD contract", "## Runtime E2E", "## Design Parity"],
   "docs/development/commands.md": ["pnpm docs:check"],
-  "docs/development/agent-runbooks/README.md": ["# Agent Runbooks"]
+  "docs/development/agent-runbooks/README.md": ["# Agent Runbooks"],
+  "docs/development/agent-runbooks/00-task-intake.md": ["## Shared-main intake"],
+  "docs/development/agent-runbooks/08-verification-and-git.md": ["## Shared Index"]
 };
 
 const skills = [
@@ -30,10 +41,12 @@ async function createValidFixture() {
   }
 
   for (const skill of skills) {
+    const sharedMainMarker =
+      skill === "elevenhouse-feature-delivery" ? "\n## Shared-main execution\n" : "";
     await writeFixtureFile(
       rootDir,
       `.agents/skills/${skill}/SKILL.md`,
-      `---\nname: ${skill}\ndescription: Use when testing ${skill}.\n---\n\n# ${skill}\n`
+      `---\nname: ${skill}\ndescription: Use when testing ${skill}.\n---\n\n# ${skill}\n${sharedMainMarker}`
     );
   }
 
@@ -92,6 +105,50 @@ test("rejects an oversized root instruction file", async () => {
   const result = await checkAgentDocs({ rootDir });
 
   assert.ok(result.errors.some((error) => error.includes("exceeds 16 KiB")));
+});
+
+test("rejects root instructions without the shared-main policy", async () => {
+  const rootDir = await createValidFixture();
+  await writeFixtureFile(
+    rootDir,
+    "AGENTS.md",
+    "# ElevenHouse\n\n## Источники истины\n\n## Обязательный рабочий цикл\n"
+  );
+
+  const result = await checkAgentDocs({ rootDir });
+
+  assert.ok(
+    result.errors.some(
+      (error) =>
+        error.includes("AGENTS.md") && error.includes("## Shared-main concurrency")
+    )
+  );
+});
+
+test("rejects a required generic worktree workflow in feature delivery", async () => {
+  const rootDir = await createValidFixture();
+  await writeFixtureFile(
+    rootDir,
+    ".agents/skills/elevenhouse-feature-delivery/SKILL.md",
+    [
+      "---",
+      "name: elevenhouse-feature-delivery",
+      "description: Use when testing feature delivery.",
+      "---",
+      "",
+      "# Feature Delivery",
+      "",
+      "## Shared-main execution",
+      "",
+      "**REQUIRED SUB-SKILL:** Use superpowers:using-git-worktrees."
+    ].join("\n")
+  );
+
+  const result = await checkAgentDocs({ rootDir });
+
+  assert.ok(
+    result.errors.some((error) => error.includes("forbidden shared-main contradiction"))
+  );
 });
 
 test("rejects known contradictory active-document statements", async () => {

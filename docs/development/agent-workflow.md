@@ -141,12 +141,51 @@ ExecPlan для сложной работы — self-contained living document. 
 контекст. После утверждённого плана продолжай между milestones самостоятельно,
 пока не пересечена authority/decision boundary.
 
+## Shared Checkout Protocol
+
+ElevenHouse выполняется в существующем checkout на `main`; worktree и отдельная
+feature branch не являются этапами подготовки. Без прямой команды пользователя
+не вызывай generic worktree workflow и не выполняй `checkout`, `switch`,
+`stash`, `rebase` или `cherry-pick`. Если checkout находится не на `main`, не
+переключай branch самостоятельно: сообщи точное состояние как blocker.
+
+В intake зафиксируй shared baseline:
+
+```bash
+git branch --show-current
+git status --short
+git diff --cached --name-status
+```
+
+Раздели ожидаемые owned paths, существующие unowned paths и staged entries.
+Dirty tree ожидаем при параллельной работе и сам по себе не блокирует задачу.
+
+Перед каждой связной группой edits:
+
+1. заново прочитай complete target files;
+2. выполни `git diff -- <path>` для каждого target;
+3. сравни current content с предпосылками плана;
+4. только затем примени минимальный patch.
+
+После группы правок снова проверь target diff и `git status --short`. Перед
+verification и final response обнови shared baseline ещё раз. Если target
+изменился параллельно, перечитай combined file, сохрани совместимые намерения и
+перезапусти affected checks. Не применяй stale patch и не откатывай чужую
+работу.
+
+Пользователю выносится только semantic conflict, который нельзя разрешить без
+выбора между несовместимыми product, architecture, security или data
+намерениями. Report содержит exact paths, оба намерения и варианты решения.
+Shared-index правила staging/commit определяет
+`agent-runbooks/08-verification-and-git.md`.
+
 ## Parallel Work
 
 Делегируй только когда пользователь или applicable instruction/skill явно
 разрешает subagents и задачи независимы. Каждый worker получает bounded scope,
 owned paths, inputs, outputs и verification. Main agent независимо проверяет
-diff/evidence; agent report не считается proof.
+diff/evidence; agent report не считается proof. Все workers видят тот же
+checkout: delegation не создаёт filesystem или Git isolation.
 
 Без разрешения на delegation выполняй тот же pipeline inline. Всегда сохраняй
 unowned changes и не смешивай их с текущим scope.

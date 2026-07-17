@@ -29,6 +29,11 @@
       "types": "./dist/numerology.d.ts",
       "import": "./dist/numerology.js",
       "require": "./dist/numerology.js"
+    },
+    "./calendar": {
+      "types": "./dist/calendar.d.ts",
+      "import": "./dist/calendar.js",
+      "require": "./dist/calendar.js"
     }
   },
   "scripts": {

@@ -5,16 +5,33 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const maxAgentsBytes = 16 * 1024;
 
 const requiredFiles = new Map([
-  ["AGENTS.md", ["# ElevenHouse", "## Источники истины", "## Обязательный рабочий цикл"]],
+  [
+    "AGENTS.md",
+    [
+      "# ElevenHouse",
+      "## Источники истины",
+      "## Обязательный рабочий цикл",
+      "## Shared-main concurrency"
+    ]
+  ],
   ["docs/README.md", ["# Документация ElevenHouse"]],
-  ["docs/development/agent-workflow.md", ["## Autonomous Feature Pipeline", "## Living ExecPlan"]],
+  [
+    "docs/development/agent-workflow.md",
+    ["## Autonomous Feature Pipeline", "## Living ExecPlan", "## Shared Checkout Protocol"]
+  ],
   ["docs/development/research-strategy.md", ["## Technical Research", "## Product Research"]],
   [
     "docs/development/testing-strategy.md",
     ["## TDD contract", "## Runtime E2E", "## Design Parity"]
   ],
   ["docs/development/commands.md", ["pnpm docs:check"]],
-  ["docs/development/agent-runbooks/README.md", ["# Agent Runbooks"]]
+  ["docs/development/agent-runbooks/README.md", ["# Agent Runbooks"]],
+  ["docs/development/agent-runbooks/00-task-intake.md", ["## Shared-main intake"]],
+  ["docs/development/agent-runbooks/08-verification-and-git.md", ["## Shared Index"]],
+  [
+    ".agents/skills/elevenhouse-feature-delivery/SKILL.md",
+    ["## Shared-main execution"]
+  ]
 ]);
 
 const requiredSkills = [
@@ -43,6 +60,15 @@ const staleStatements = [
     file: "docs/architecture/media-storage.md",
     pattern: /## Implementation Plan/i,
     label: "implemented media architecture is still presented as a future plan"
+  }
+];
+
+const forbiddenSharedMainStatements = [
+  {
+    file: ".agents/skills/elevenhouse-feature-delivery/SKILL.md",
+    pattern:
+      /\*\*REQUIRED SUB-SKILL:\*\*\s*Use\s+`?superpowers:using-git-worktrees`?[.!]?/i,
+    label: "feature delivery requires the generic worktree workflow"
   }
 ];
 
@@ -107,6 +133,20 @@ export async function checkAgentDocs({ rootDir = process.cwd() } = {}) {
     const content = await readFile(absolutePath, "utf8");
     if (stale.pattern.test(content)) {
       errors.push(`${stale.file}: known stale statement (${stale.label})`);
+    }
+  }
+
+  for (const contradiction of forbiddenSharedMainStatements) {
+    const absolutePath = path.join(rootDir, contradiction.file);
+    if (!(await pathExists(absolutePath))) {
+      continue;
+    }
+
+    const content = await readFile(absolutePath, "utf8");
+    if (contradiction.pattern.test(content)) {
+      errors.push(
+        `${contradiction.file}: forbidden shared-main contradiction (${contradiction.label})`
+      );
     }
   }
 

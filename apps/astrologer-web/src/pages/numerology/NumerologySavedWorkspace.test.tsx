@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
 import { describe, expect, it, vi } from "vitest";
@@ -17,6 +18,17 @@ import {
 import { NumerologyCalculationMenu } from "./NumerologyCalculationMenu";
 
 describe("Numerology saved workspace components", () => {
+  it("anchors the calculations popover to the trigger's left edge", () => {
+    const css = readFileSync(
+      new URL("./NumerologySavedWorkspace.module.css", import.meta.url),
+      "utf8"
+    );
+    const popoverRule = css.match(/\.calculationPopover\s*\{([^}]*)\}/)?.[1] ?? "";
+
+    expect(popoverRule).toContain("left: 0;");
+    expect(popoverRule).not.toContain("right: 0;");
+  });
+
   it("lists saved calculations, marks the current one and opens selected records", () => {
     const onSelect = vi.fn();
     const onCreate = vi.fn();

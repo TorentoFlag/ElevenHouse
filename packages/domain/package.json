@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@elevenhouse/auth": "workspace:*",
-    "@elevenhouse/validation": "workspace:*"
+    "@elevenhouse/validation": "workspace:*",
+    "@js-temporal/polyfill": "0.5.1"
   },
   "devDependencies": {
     "@types/node": "25.9.2",

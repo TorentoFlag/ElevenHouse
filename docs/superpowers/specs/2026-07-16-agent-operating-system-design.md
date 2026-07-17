@@ -1,7 +1,10 @@
 # ElevenHouse Agent Operating System Design
 
 **Date:** 2026-07-16
-**Status:** Approved direction; implementation pending
+**Status:** Implemented
+**Supersession:** Worktree isolation in the original upgrade path is replaced
+by the
+[Shared Main Concurrency Design](./2026-07-16-shared-main-concurrency-design.md).
 
 ## Purpose
 
@@ -17,8 +20,8 @@ production, hiding missing behavior behind fallbacks, or declaring visible UI
 complete without browser evidence and visual comparison.
 
 This design establishes the documentation and skill foundation for that
-workflow. Mechanical enforcement through Codex hooks, CI policy, isolated
-worktree runtimes, automated visual regression and local observability is a
+workflow. Mechanical enforcement through Codex hooks, CI policy, shared-main
+coordination checks, automated visual regression and local observability is a
 future phase built on the same contracts.
 
 ## User and Agent Responsibilities
@@ -320,10 +323,10 @@ This phase intentionally exposes stable enforcement points:
 - repo-scoped skills with explicit triggers.
 
 A later phase can attach Codex hooks and CI to those same commands, add
-structural linters and file-size policies, provision isolated per-worktree
-services, automate screenshot comparison, expose logs/metrics/traces to agents,
-and run scheduled documentation gardening. No policy needs to be redesigned;
-declarative checks become mechanically enforced.
+structural linters and file-size policies, add non-destructive shared-checkout
+coordination checks, automate screenshot comparison, expose logs/metrics/traces
+to agents, and run scheduled documentation gardening. No policy needs to be
+redesigned; declarative checks become mechanically enforced.
 
 ## Scope of the Documentation Revision
 

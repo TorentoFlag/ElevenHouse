@@ -97,6 +97,27 @@ scope без решения пользователя.
 спрашивай пользователя о routine implementation details, которые можно вывести
 из кода, docs, research и принятых boundaries.
 
+## Shared-main concurrency
+
+Работай в существующем checkout ElevenHouse на `main`. Без прямой команды
+пользователя не создавай Git worktree/ветку и не выполняй `git checkout`,
+`switch`, `stash`, `rebase` или `cherry-pick`. Эта repo policy имеет приоритет
+над generic worktree/feature-branch skill.
+
+Checkout, filesystem и Git index общие. В intake зафиксируй branch, status,
+staged и owned paths. Перед каждой связной группой правок перечитай target files
+и `git diff -- <path>`; после неё обнови diff/status. Не применяй stale patch.
+
+При пересечении сохрани совместимые намерения и проверь combined state.
+Остановись только при несовместимом product/architecture/security/data
+semantic conflict; назови exact paths и варианты. Не откатывай и не скрывай
+чужое изменение.
+
+Staging/commit требуют authority задачи. Проверь cached diff, добавляй exact
+owned paths и не очищай общий index через broad add/reset/unstage. При чужих
+staged changes не создавай combined commit: оставь свои изменения
+незакоммиченными либо запроси решение пользователя.
+
 ## Архитектурные границы
 
 Deployable apps:

@@ -27,6 +27,21 @@ novel/risky architecture, unfamiliar stack behavior, or product alternatives.
 **REQUIRED SUB-SKILL:** Use `elevenhouse-design-parity` for any visible UI
 creation, transfer, modification or completion claim.
 
+## Shared-main execution
+
+Execute in the existing ElevenHouse checkout on `main`. Do not use
+`superpowers:using-git-worktrees`, create/switch a branch, stash, rebase or
+relocate the task unless the user directly requests that Git operation.
+
+At intake, before every coherent edit group, and before verification, refresh
+the shared state exactly as required by `00-task-intake.md` and
+`agent-workflow.md`. Re-read changed target files and adapt compatible
+concurrent work; escalate only an irreconcilable semantic conflict.
+
+Before staging or commit, follow the shared-index gate in
+`08-verification-and-git.md`. Never sweep another agent's staged entries into a
+combined commit or clear them to manufacture a clean index.
+
 ## Delivery loop
 
 1. Record outcome, non-scope, definition of done, owned paths, authority,

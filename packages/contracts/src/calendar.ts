@@ -1,0 +1,357 @@
+import { z } from "@elevenhouse/validation";
+import {
+  productCurrencyValues,
+  productDeliveryFormatValues
+} from "@elevenhouse/validation/products";
+
+const uuidSchema = z.string().uuid();
+const instantSchema = z.string().datetime({ offset: true });
+const wallClockMinuteSchema = z.number().int().min(0).max(1_440);
+const positiveMinuteSchema = z.number().int().positive().max(1_440);
+const nonNegativeMinuteSchema = z.number().int().min(0).max(10_080);
+
+export const ianaTimeZoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .refine(isIanaTimeZone, "Invalid IANA time zone");
+export type IanaTimeZone = z.infer<typeof ianaTimeZoneSchema>;
+
+export const isoCalendarDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(isIsoCalendarDate, "Invalid calendar date");
+export type IsoCalendarDate = z.infer<typeof isoCalendarDateSchema>;
+
+export const calendarViewSchema = z.enum(["day", "week", "month"]);
+export type CalendarView = z.infer<typeof calendarViewSchema>;
+
+export const calendarDisplayStatusSchema = z.enum(["confirmed", "blocked"]);
+export type CalendarDisplayStatus = z.infer<typeof calendarDisplayStatusSchema>;
+
+const localPeriodSchema = z
+  .object({
+    startMinute: wallClockMinuteSchema,
+    endMinute: wallClockMinuteSchema
+  })
+  .strict()
+  .refine((period) => period.startMinute < period.endMinute, {
+    message: "Period start must be before period end"
+  });
+
+const weeklyPeriodSchema = localPeriodSchema.extend({
+  weekday: z.number().int().min(1).max(7)
+});
+
+const dateOverrideSchema = z
+  .object({
+    date: isoCalendarDateSchema,
+    mode: z.enum(["available", "unavailable"]),
+    periods: z.array(localPeriodSchema).max(12)
+  })
+  .strict()
+  .superRefine((override, context) => {
+    if (override.mode === "available" && override.periods.length === 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["periods"],
+        message: "Available override requires at least one period"
+      });
+    }
+
+    if (override.mode === "unavailable" && override.periods.length > 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["periods"],
+        message: "Unavailable override cannot contain periods"
+      });
+    }
+
+    addPeriodOverlapIssues(override.periods, context, ["periods"]);
+  });
+
+const schedulePolicyFields = {
+  timeZone: ianaTimeZoneSchema,
+  startIntervalMinutes: positiveMinuteSchema,
+  bufferBeforeMinutes: nonNegativeMinuteSchema,
+  bufferAfterMinutes: nonNegativeMinuteSchema,
+  minimumNoticeMinutes: z.number().int().min(0).max(525_600),
+  bookingHorizonDays: z.number().int().min(1).max(730),
+  maximumBookingsPerDay: z.number().int().positive().max(100).nullable()
+};
+
+const scheduleAggregateFields = {
+  ...schedulePolicyFields,
+  weeklyPeriods: z.array(weeklyPeriodSchema).max(84),
+  dateOverrides: z.array(dateOverrideSchema).max(730),
+  productIds: z.array(uuidSchema).max(500)
+};
+
+export const replaceAvailabilityScheduleRequestSchema = z
+  .object({
+    expectedVersion: z.number().int().positive(),
+    ...scheduleAggregateFields
+  })
+  .strict()
+  .superRefine(addScheduleAggregateIssues);
+export type ReplaceAvailabilityScheduleRequest = z.infer<
+  typeof replaceAvailabilityScheduleRequestSchema
+>;
+
+export const availabilityScheduleSchema = z
+  .object({
+    id: uuidSchema,
+    name: z.string().trim().min(1).max(120),
+    version: z.number().int().positive(),
+    ...scheduleAggregateFields
+  })
+  .strict()
+  .superRefine(addScheduleAggregateIssues);
+export type AvailabilitySchedule = z.infer<typeof availabilityScheduleSchema>;
+
+export const availabilityScheduleResponseSchema = z
+  .object({ schedule: availabilityScheduleSchema })
+  .strict();
+export type AvailabilityScheduleResponse = z.infer<
+  typeof availabilityScheduleResponseSchema
+>;
+
+export const calendarRangeQuerySchema = z
+  .object({
+    start: instantSchema,
+    end: instantSchema,
+    timeZone: ianaTimeZoneSchema
+  })
+  .strict()
+  .superRefine((range, context) => {
+    const start = Date.parse(range.start);
+    const end = Date.parse(range.end);
+
+    if (end <= start) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["end"],
+        message: "Range end must be after range start"
+      });
+      return;
+    }
+
+    if (end - start > 93 * 24 * 60 * 60 * 1_000) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["end"],
+        message: "Calendar range cannot exceed 93 days"
+      });
+    }
+  });
+export type CalendarRangeQuery = z.infer<typeof calendarRangeQuerySchema>;
+
+const availabilityBackgroundSchema = z
+  .object({
+    startAt: instantSchema,
+    endAt: instantSchema
+  })
+  .strict()
+  .refine((range) => Date.parse(range.startAt) < Date.parse(range.endAt), {
+    message: "Availability end must be after start"
+  });
+export type AvailabilityBackground = z.infer<typeof availabilityBackgroundSchema>;
+
+const calendarEntrySchema = z
+  .object({
+    id: uuidSchema,
+    kind: z.enum(["booking", "manual_block"]),
+    startAt: instantSchema,
+    endAt: instantSchema,
+    title: z.string().trim().min(1).max(200),
+    subtitle: z.string().trim().min(1).max(200).nullable(),
+    deliveryFormat: z.enum(productDeliveryFormatValues).nullable(),
+    displayStatus: calendarDisplayStatusSchema
+  })
+  .strict()
+  .superRefine((entry, context) => {
+    if (Date.parse(entry.startAt) >= Date.parse(entry.endAt)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endAt"],
+        message: "Calendar entry end must be after start"
+      });
+    }
+
+    const expectedStatus = entry.kind === "booking" ? "confirmed" : "blocked";
+    if (entry.displayStatus !== expectedStatus) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["displayStatus"],
+        message: `Expected ${expectedStatus} status for ${entry.kind}`
+      });
+    }
+  });
+export type CalendarEntry = z.infer<typeof calendarEntrySchema>;
+
+export const calendarRangeResponseSchema = z
+  .object({
+    timeZone: ianaTimeZoneSchema,
+    range: z
+      .object({ start: instantSchema, end: instantSchema })
+      .strict()
+      .refine((range) => Date.parse(range.start) < Date.parse(range.end), {
+        message: "Calendar range end must be after start"
+      }),
+    entries: z.array(calendarEntrySchema).max(5_000),
+    availability: z.array(availabilityBackgroundSchema).max(5_000),
+    summary: z
+      .object({
+        bookingCount: z.number().int().min(0),
+        bookedMinutes: z.number().int().min(0),
+        byDisplayStatus: z
+          .object({
+            confirmed: z.number().int().min(0).optional(),
+            blocked: z.number().int().min(0).optional()
+          })
+          .strict()
+      })
+      .strict()
+  })
+  .strict();
+export type CalendarRangeResponse = z.infer<typeof calendarRangeResponseSchema>;
+
+export const createManualBookingRequestSchema = z
+  .object({
+    clientUserId: uuidSchema,
+    productId: uuidSchema,
+    deliveryFormat: z.enum(productDeliveryFormatValues),
+    projectedStartAt: instantSchema
+  })
+  .strict();
+export type CreateManualBookingRequest = z.infer<typeof createManualBookingRequestSchema>;
+
+const bookingPolicySnapshotSchema = z
+  .object({
+    bufferBeforeMinutes: nonNegativeMinuteSchema,
+    bufferAfterMinutes: nonNegativeMinuteSchema,
+    minimumNoticeMinutes: z.number().int().min(0).max(525_600)
+  })
+  .strict();
+
+export const manualBookingSchema = z
+  .object({
+    id: uuidSchema,
+    reservationId: uuidSchema,
+    clientUserId: uuidSchema,
+    productId: uuidSchema,
+    state: z.literal("confirmed"),
+    startAt: instantSchema,
+    endAt: instantSchema,
+    productTitle: z.string().trim().min(1).max(200),
+    durationMinutes: positiveMinuteSchema,
+    deliveryFormat: z.enum(productDeliveryFormatValues),
+    priceMinor: z.number().int().min(0),
+    currency: z.enum(productCurrencyValues),
+    timeZone: ianaTimeZoneSchema,
+    policySnapshot: bookingPolicySnapshotSchema,
+    createdAt: instantSchema,
+    updatedAt: instantSchema
+  })
+  .strict()
+  .refine((booking) => Date.parse(booking.startAt) < Date.parse(booking.endAt), {
+    message: "Booking end must be after start"
+  });
+export type ManualBooking = z.infer<typeof manualBookingSchema>;
+
+export const manualBookingResponseSchema = z
+  .object({
+    booking: manualBookingSchema,
+    replayed: z.boolean()
+  })
+  .strict();
+export type ManualBookingResponse = z.infer<typeof manualBookingResponseSchema>;
+
+function isIanaTimeZone(value: string): boolean {
+  try {
+    Intl.DateTimeFormat("en", { timeZone: value }).format();
+    return value.includes("/") || value === "UTC";
+  } catch {
+    return false;
+  }
+}
+
+function isIsoCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+}
+
+function addScheduleAggregateIssues(
+  aggregate: {
+    weeklyPeriods: Array<{ weekday: number; startMinute: number; endMinute: number }>;
+    dateOverrides: Array<{
+      date: string;
+      periods: Array<{ startMinute: number; endMinute: number }>;
+    }>;
+    productIds: string[];
+  },
+  context: z.RefinementCtx
+): void {
+  for (let weekday = 1; weekday <= 7; weekday += 1) {
+    const periods = aggregate.weeklyPeriods.filter((period) => period.weekday === weekday);
+    addPeriodOverlapIssues(periods, context, ["weeklyPeriods"]);
+  }
+
+  const overrideDates = new Set<string>();
+  aggregate.dateOverrides.forEach((override, index) => {
+    if (overrideDates.has(override.date)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["dateOverrides", index, "date"],
+        message: "Date override must be unique"
+      });
+    }
+    overrideDates.add(override.date);
+  });
+
+  const productIds = new Set<string>();
+  aggregate.productIds.forEach((productId, index) => {
+    if (productIds.has(productId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["productIds", index],
+        message: "Product assignment must be unique"
+      });
+    }
+    productIds.add(productId);
+  });
+}
+
+function addPeriodOverlapIssues(
+  periods: Array<{ startMinute: number; endMinute: number }>,
+  context: z.RefinementCtx,
+  path: Array<string | number>
+): void {
+  const sorted = periods
+    .map((period, index) => ({ ...period, index }))
+    .sort((left, right) => left.startMinute - right.startMinute || left.endMinute - right.endMinute);
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    const previous = sorted[index - 1];
+    const current = sorted[index];
+    if (previous && current && current.startMinute < previous.endMinute) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [...path, current.index],
+        message: "Availability periods cannot overlap"
+      });
+    }
+  }
+}

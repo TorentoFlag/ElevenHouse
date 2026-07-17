@@ -16,7 +16,9 @@ verification без прямого разрешения пользователя
 1. Проверь рабочее дерево:
 
    ```bash
+   git branch --show-current
    git status --short
+   git diff --cached --name-status
    ```
 
 2. Отдели свои изменения от чужих:
@@ -74,6 +76,28 @@ verification без прямого разрешения пользователя
 contracts/domain/db/app composition расширяй targeted evidence до repository
 verification, если нет известного unrelated blocker.
 
+## Shared Index
+
+Git index разделяется всеми агентами и пользователем так же, как filesystem.
+До staging или commit выполни:
+
+```bash
+git status --short
+git diff -- <owned-path>...
+git diff --cached --name-status
+git diff --cached -- <relevant-path>...
+```
+
+Если cached diff содержит изменения, которых ты не делал, не очищай index через
+`git reset`, `git restore --staged` или аналог и не включай их в свой commit.
+Не используй `git add .`, `git add -A` или другую broad staging команду.
+Добавляй только exact owned paths после повторной проверки их current diff.
+
+При наличии unowned staged entries не создавай aggregate commit. Оставь свои
+изменения unstaged/uncommitted; если authority задачи требует commit, сообщи
+exact staged paths и запроси решение пользователя. Никогда не заявляй
+авторство над combined diff другого агента.
+
 ## Commit Discipline
 
 Commit only when the user explicitly asks or the current task includes
@@ -85,12 +109,14 @@ Before commit:
 git status --short
 git diff --stat
 git diff --check
+git diff --cached --name-status
 ```
 
 Stage only relevant files:
 
 ```bash
 git add <file1> <file2>
+git diff --cached --name-status
 git diff --cached --stat
 git diff --cached --check
 git commit -m "<type>: <summary>"
@@ -123,5 +149,5 @@ task.
 - Targeted verification ran.
 - Every acceptance claim mapped to sufficient evidence level.
 - Whole-diff fallback/boundary/size/docs review completed.
-- Status/diff reviewed.
+- Branch, status, owned path diffs и shared index reviewed.
 - Final answer names skipped verification or residual risk.
