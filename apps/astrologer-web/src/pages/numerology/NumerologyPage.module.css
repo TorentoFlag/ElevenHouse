@@ -19,15 +19,42 @@
 
 .toolbar {
   box-sizing: border-box;
-  display: flex;
-  flex: 0 0 60px;
-  height: 60px;
-  align-items: center;
-  gap: 12px;
+  display: block;
+  flex: 0 0 auto;
+  min-height: 60px;
   min-width: 0;
   padding: 0 20px;
   border-bottom: 1px solid var(--numerology-line);
   background: var(--numerology-subhead);
+  container-name: numerology-toolbar;
+  container-type: inline-size;
+}
+
+.toolbarLayout {
+  display: grid;
+  width: 100%;
+  min-height: 59px;
+  align-items: center;
+  gap: 12px;
+  grid-template-areas: "context participants spacer controls";
+  grid-template-columns: auto minmax(352px, 560px) minmax(12px, 1fr) auto;
+}
+
+.contextStrip,
+.controlStrip {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.contextStrip {
+  grid-area: context;
+}
+
+.controlStrip {
+  justify-content: flex-end;
+  grid-area: controls;
 }
 
 .titleGroup {
@@ -61,24 +88,30 @@
 
 .clientStrip {
   display: flex;
-  width: min(560px, 42vw);
+  width: 100%;
+  min-width: 352px;
   align-items: center;
   gap: 8px;
-  min-width: 0;
+  grid-area: participants;
+}
+
+.clientStrip > div {
+  min-width: 156px;
+  flex: 1 1 0;
 }
 
 .clientPlus {
+  flex: 0 0 auto;
   color: var(--eh-color-muted);
 }
 
 .toolbarSpacer {
-  flex: 1;
   min-width: 12px;
+  grid-area: spacer;
 }
 
 .toolButton,
-.toolButtonActive,
-.toolButtonLinked {
+.toolButtonActive {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -104,15 +137,8 @@
   color: var(--numerology-accent);
 }
 
-.toolButtonLinked {
-  border-color: rgb(78 200 160 / 0.35);
-  background: rgb(78 200 160 / 0.14);
-  color: rgb(78 200 160);
-}
-
 .toolButton svg,
-.toolButtonActive svg,
-.toolButtonLinked svg {
+.toolButtonActive svg {
   flex: 0 0 auto;
 }
 
@@ -122,9 +148,34 @@
   opacity: 0.45;
 }
 
-.toolButtonLinked:disabled {
-  cursor: default;
-  opacity: 1;
+.toolbarActionsMenu :global(.ehActionMenu__trigger) {
+  min-height: 37px;
+  padding: 10px 16px;
+  border: 1px solid var(--numerology-line-strong);
+  border-radius: 14px;
+  background: rgb(30 27 62);
+  color: var(--eh-color-moon-120);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toolbarActionsMenu :global(.ehActionMenu__popover) {
+  min-width: 230px;
+}
+
+.toolbarActionsMenu :global(.ehActionMenu__item) {
+  align-items: flex-start;
+}
+
+.toolbarActionLabel {
+  display: grid;
+  gap: 2px;
+}
+
+.toolbarActionDescription {
+  color: var(--eh-color-muted);
+  font-size: 10.5px;
+  font-weight: 500;
 }
 
 .body {
@@ -219,14 +270,46 @@
   font-size: 13px;
 }
 
-@media (max-width: 1180px) {
-  .toolbar {
-    flex-wrap: wrap;
-    height: auto;
-    min-height: 60px;
-    padding: 10px 18px;
+@container numerology-toolbar (max-width: 1040px) {
+  .toolbarLayout {
+    padding: 10px 0;
+    grid-template-areas: "context controls" "participants participants";
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  .clientStrip {
+    width: min(560px, 100%);
+  }
+
+  .toolbarSpacer {
+    display: none;
+  }
+}
+
+@container numerology-toolbar (max-width: 700px) {
+  .toolbarLayout {
+    grid-template-areas: "context" "participants" "controls";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .contextStrip,
+  .controlStrip {
+    width: 100%;
+  }
+
+  .controlStrip {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .clientStrip {
+    min-width: 0;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 1180px) {
   .workspaceGrid {
     grid-template-columns: 1fr;
   }
@@ -235,11 +318,6 @@
 @media (max-width: 760px) {
   .page {
     margin: -20px;
-  }
-
-  .clientStrip {
-    width: 100%;
-    overflow-x: auto;
   }
 
   .emptyState {

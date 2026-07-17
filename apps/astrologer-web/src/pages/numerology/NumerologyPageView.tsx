@@ -3,6 +3,11 @@ import type {
   NumerologyCalculationResponse,
   NumerologyResult
 } from "@elevenhouse/contracts";
+import {
+  ActionMenu,
+  type ActionMenuItem
+} from "@elevenhouse/design-system/components/ActionMenu";
+import "@elevenhouse/design-system/components/ActionMenu.css";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { MotionContent } from "@elevenhouse/design-system/motion";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
@@ -12,6 +17,11 @@ import type { NumerologyFormState } from "../../features/numerology/model/numero
 import type { NumerologyParticipantFormState } from "../../features/numerology/model/numerologyFormModel";
 import { toClientOptionFromNumerologyParticipant } from "../../features/numerology/model/numerologyCompatibilityFlowModel";
 import { buildNumerologyPageViewModel } from "../../features/numerology/model/numerologyPageModel";
+import {
+  buildNumerologyToolbarActions,
+  type NumerologyToolbarAction,
+  type NumerologyToolbarActionId
+} from "../../features/numerology/model/numerologyToolbarActionsModel";
 import {
   getActiveNumerologyCalculations,
   toSavedCalculationListItem,
@@ -157,109 +167,102 @@ export function NumerologyPageView({
     previewResult,
     formState
   );
+  const toolbarActions = buildNumerologyToolbarActions({
+    hasResult: Boolean(pageModel.model),
+    isBusy,
+    isCalculationLinked: pageModel.isCalculationLinked,
+    linkDisabled: pageModel.linkDisabled,
+    hasLinkableClient: Boolean(pageModel.linkableClientId),
+    pdfLabel,
+    pdfDisabled,
+    pdfTitle
+  });
+  const toolbarActionHandlers = {
+    presentation: onOpenPresentation,
+    link: onLink,
+    pdf: onPdf
+  } satisfies Readonly<Record<NumerologyToolbarActionId, () => void>>;
 
   return (
     <section className={styles.page} aria-labelledby="numerology-title">
       <header className={styles.toolbar} role="toolbar" aria-label="Инструменты нумерологии">
-        <div className={styles.titleGroup}>
-          <span className={styles.iconBox}>#</span>
-          <h1 className={styles.title} id="numerology-title">
-            Нумерология
-          </h1>
+        <div className={styles.toolbarLayout}>
+          <div className={styles.contextStrip}>
+            <div className={styles.titleGroup}>
+              <span className={styles.iconBox}>#</span>
+              <h1 className={styles.title} id="numerology-title">
+                Нумерология
+              </h1>
+            </div>
+            <NumerologyCalculationMenu
+              items={savedItems}
+              selectedCalculationId={selectedResponse?.calculation.id ?? null}
+              disabled={isBusy}
+              onSelect={onSelectSaved}
+              onCreate={onOpenCreate}
+              onRecalculate={onOpenRecalculate}
+              onArchive={onRequestArchive}
+            />
+          </div>
+          <div className={styles.clientStrip}>
+            <ClientSearchCombobox
+              label="Клиент"
+              value={subjectClientId}
+              placeholder="Выбрать клиента"
+              selectedClient={selectedSubjectClient}
+              excludeClientIds={partnerClientId ? [partnerClientId] : []}
+              disabled={pageModel.isClientSelectionDisabled}
+              onSelect={onSelectSubjectClient}
+            />
+            {isCompatibilityMode ? (
+              <>
+                <span className={styles.clientPlus}>+</span>
+                <ClientSearchCombobox
+                  label="Партнер"
+                  value={partnerClientId}
+                  placeholder="Выбрать партнера"
+                  selectedClient={selectedPartnerClient}
+                  excludeClientIds={subjectClientId ? [subjectClientId] : []}
+                  disabled={pageModel.isClientSelectionDisabled}
+                  onSelect={onSelectPartnerClient}
+                />
+              </>
+            ) : null}
+          </div>
+          <div className={styles.toolbarSpacer} />
+          <div className={styles.controlStrip}>
+            <NumerologyYearPicker
+              selectedYear={selectedYear}
+              isOpen={isYearPickerOpen && !isCompatibilityMode}
+              isPeriodVisible={isPeriodVisible}
+              isPreviewPending={isPreviewPending}
+              errorMessage={isCompatibilityMode ? null : periodErrorMessage}
+              disabled={!pageModel.model || isCompatibilityMode}
+              onToggle={onToggleYearPicker}
+              onApply={onApplyYear}
+              onHide={onHidePeriod}
+              onRetry={onRetryPeriod}
+            />
+            <button
+              type="button"
+              className={isCompatibilityMode ? styles.toolButtonActive : styles.toolButton}
+              aria-pressed={isCompatibilityMode}
+              disabled={!pageModel.model}
+              onClick={onToggleCompatibilityMode}
+              title="Нумерологическая совместимость пары"
+            >
+              <Icon iconName="users" width={15} height={15} aria-hidden="true" />
+              Совместимость
+            </button>
+            <ActionMenu
+              className={styles.toolbarActionsMenu}
+              label="Действия"
+              triggerAriaLabel="Действия расчёта"
+              align="end"
+              items={createToolbarActionMenuItems(toolbarActions, toolbarActionHandlers)}
+            />
+          </div>
         </div>
-        <NumerologyCalculationMenu
-          items={savedItems}
-          selectedCalculationId={selectedResponse?.calculation.id ?? null}
-          disabled={isBusy}
-          onSelect={onSelectSaved}
-          onCreate={onOpenCreate}
-          onRecalculate={onOpenRecalculate}
-          onArchive={onRequestArchive}
-        />
-        <div className={styles.clientStrip}>
-          <ClientSearchCombobox
-            label="Клиент"
-            value={subjectClientId}
-            placeholder="Выбрать клиента"
-            selectedClient={selectedSubjectClient}
-            excludeClientIds={partnerClientId ? [partnerClientId] : []}
-            disabled={pageModel.isClientSelectionDisabled}
-            onSelect={onSelectSubjectClient}
-          />
-          {isCompatibilityMode ? (
-            <>
-              <span className={styles.clientPlus}>+</span>
-              <ClientSearchCombobox
-                label="Партнер"
-                value={partnerClientId}
-                placeholder="Выбрать партнера"
-                selectedClient={selectedPartnerClient}
-                excludeClientIds={subjectClientId ? [subjectClientId] : []}
-                disabled={pageModel.isClientSelectionDisabled}
-                onSelect={onSelectPartnerClient}
-              />
-            </>
-          ) : null}
-        </div>
-        <div className={styles.toolbarSpacer} />
-        <NumerologyYearPicker
-          selectedYear={selectedYear}
-          isOpen={isYearPickerOpen && !isCompatibilityMode}
-          isPeriodVisible={isPeriodVisible}
-          isPreviewPending={isPreviewPending}
-          errorMessage={isCompatibilityMode ? null : periodErrorMessage}
-          disabled={!pageModel.model || isCompatibilityMode}
-          onToggle={onToggleYearPicker}
-          onApply={onApplyYear}
-          onHide={onHidePeriod}
-          onRetry={onRetryPeriod}
-        />
-        <button
-          type="button"
-          className={isCompatibilityMode ? styles.toolButtonActive : styles.toolButton}
-          aria-pressed={isCompatibilityMode}
-          disabled={!pageModel.model}
-          onClick={onToggleCompatibilityMode}
-          title="Нумерологическая совместимость пары"
-        >
-          <Icon iconName="users" width={15} height={15} aria-hidden="true" />
-          Совместимость
-        </button>
-        <button
-          type="button"
-          className={styles.toolButton}
-          disabled={!pageModel.model}
-          onClick={onOpenPresentation}
-          title="Полноэкранный показ для сессии"
-        >
-          <Icon iconName="arrowUpRight" width={15} height={15} aria-hidden="true" />
-          Презентация
-        </button>
-        <button
-          type="button"
-          className={pageModel.isCalculationLinked ? styles.toolButtonLinked : styles.toolButton}
-          disabled={pageModel.linkDisabled}
-          onClick={onLink}
-          title={pageModel.linkableClientId ? undefined : "Нужен CRM-участник"}
-        >
-          <Icon
-            iconName={pageModel.isCalculationLinked ? "check" : "pin"}
-            width={15}
-            height={15}
-            aria-hidden="true"
-          />
-          {pageModel.isCalculationLinked ? "Привязана" : "Привязать"}
-        </button>
-        <button
-          type="button"
-          className={styles.toolButton}
-          disabled={pdfDisabled}
-          title={pdfTitle}
-          onClick={onPdf}
-        >
-          <Icon iconName="doc" width={15} height={15} aria-hidden="true" />
-          {pdfLabel}
-        </button>
       </header>
       <div className={styles.body}>
         <main className={`${styles.workspace}${editorState ? ` ${styles.workspaceEditor}` : ""}`}>
@@ -335,6 +338,26 @@ export function NumerologyPageView({
       ) : null}
     </section>
   );
+}
+
+function createToolbarActionMenuItems(
+  actions: readonly NumerologyToolbarAction[],
+  handlers: Readonly<Record<NumerologyToolbarActionId, () => void>>
+): readonly ActionMenuItem[] {
+  return actions.map((action) => ({
+    id: action.id,
+    label: (
+      <span className={styles.toolbarActionLabel}>
+        <span>{action.label}</span>
+        {action.description ? (
+          <small className={styles.toolbarActionDescription}>{action.description}</small>
+        ) : null}
+      </span>
+    ),
+    icon: <Icon iconName={action.iconName} width={15} height={15} aria-hidden="true" />,
+    disabled: action.disabled,
+    onSelect: handlers[action.id]
+  }));
 }
 
 function getNumerologyWorkspaceTransitionKey(

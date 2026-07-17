@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import type { NumerologyCalculationResponse } from "@elevenhouse/contracts";
+import { ActionMenu, type ActionMenuItem } from "@elevenhouse/design-system/components/ActionMenu";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { MotionContent } from "@elevenhouse/design-system/motion";
 import { describe, expect, it, vi } from "vitest";
@@ -40,27 +41,73 @@ describe("NumerologyPageView", () => {
     expect(controllerSource).toContain("onConfirmArchive");
   });
 
-  it("disables link action for manual-only calculations", () => {
-    const view = NumerologyPageView({
-      ...baseProps(),
-      selectedResponse: response({ source: "manual", clientId: null })
-    });
-    const linkButton = findButtonByText(view, "Привязать");
-
-    expect(linkButton.props.disabled).toBe(true);
-  });
-
-  it("enables link for CRM-linked participants without rendering the hidden publish workflow", () => {
+  it("moves rare preparation commands into one labeled actions menu", () => {
     const view = NumerologyPageView({
       ...baseProps(),
       selectedResponse: response({
         source: "crm_client",
         clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
-      })
+      }),
+      pdfLabel: "Скачать PDF",
+      pdfDisabled: false,
+      pdfTitle: "Скачать готовый PDF"
+    });
+    const menu = getToolbarActionMenu(view);
+
+    expect(menu.props.label).toBe("Действия");
+    expect(menu.props.triggerAriaLabel).toBe("Действия расчёта");
+    expect(menu.props.items.map((item) => item.id)).toEqual([
+      "presentation",
+      "link",
+      "pdf"
+    ]);
+    expect(findOptionalButtonByText(view, "Презентация")).toBeNull();
+    expect(findOptionalButtonByText(view, "Привязать")).toBeNull();
+    expect(findOptionalButtonByText(view, "Скачать PDF")).toBeNull();
+  });
+
+  it("maps each enabled menu command to its existing callback exactly once", () => {
+    const onOpenPresentation = vi.fn();
+    const onLink = vi.fn();
+    const onPdf = vi.fn();
+    const view = NumerologyPageView({
+      ...baseProps(),
+      selectedResponse: response({
+        source: "crm_client",
+        clientId: "3ab63db1-4f78-4d59-9b75-c21fc3ec9f6e"
+      }),
+      pdfDisabled: false,
+      pdfTitle: "Сформировать PDF",
+      onOpenPresentation,
+      onLink,
+      onPdf
     });
 
-    expect(findButtonByText(view, "Привязать").props.disabled).toBe(false);
+    getActionMenuItem(view, "presentation").onSelect();
+    getActionMenuItem(view, "link").onSelect();
+    getActionMenuItem(view, "pdf").onSelect();
+
+    expect(onOpenPresentation).toHaveBeenCalledOnce();
+    expect(onLink).toHaveBeenCalledOnce();
+    expect(onPdf).toHaveBeenCalledOnce();
     expect(findOptionalButtonByText(view, "Опубликовать")).toBeNull();
+  });
+
+  it("keeps link and PDF disabled reasons visible inside the menu", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      selectedResponse: response({ source: "manual", clientId: null }),
+      pdfLabel: "PDF готовится…",
+      pdfDisabled: true,
+      pdfTitle: "PDF формируется"
+    });
+
+    expect(getActionMenuItem(view, "link").disabled).toBe(true);
+    expect(includesText(getActionMenuItem(view, "link").label, "Нужен CRM-участник")).toBe(
+      true
+    );
+    expect(getActionMenuItem(view, "pdf").disabled).toBe(true);
+    expect(includesText(getActionMenuItem(view, "pdf").label, "PDF формируется")).toBe(true);
   });
 
   it("keeps the reference workspace actions and adds explicit lifecycle controls", () => {
@@ -80,25 +127,23 @@ describe("NumerologyPageView", () => {
     expect(yearPicker.props.selectedYear).toBe(2027);
     expect(yearPicker.props.isPeriodVisible).toBe(true);
     expect(findButtonByText(view, "Совместимость")).toBeDefined();
-    expect(findButtonByText(view, "Презентация")).toBeDefined();
-    expect(findButtonByText(view, "PDF").props.disabled).toBe(true);
+    expect(getToolbarActionMenu(view)).toBeDefined();
     const calculationMenu = renderCalculationMenu(view);
     expect(findButtonByText(calculationMenu, "Пересчитать")).toBeDefined();
     expect(findButtonByText(calculationMenu, "В архив")).toBeDefined();
     expect(findRequiredElementByType(view, NumerologyCalculationMenu)).toBeDefined();
   });
 
-  it("shows the save-first PDF tooltip for previews", () => {
+  it("shows the save-first reason for preview PDF export", () => {
     const view = NumerologyPageView(baseProps());
-    const pdfButton = findButtonByText(view, "PDF");
+    const pdfItem = getActionMenuItem(view, "pdf");
 
-    expect(pdfButton.props).toMatchObject({
-      disabled: true,
-      title: "Сначала сохраните расчёт"
-    });
+    expect(pdfItem.disabled).toBe(true);
+    expect(includesText(pdfItem.label, "Скачать PDF")).toBe(true);
+    expect(includesText(pdfItem.label, "Сначала сохраните расчёт")).toBe(true);
   });
 
-  it("exposes ready and retry PDF actions without changing the toolbar slot", () => {
+  it("exposes ready and retry PDF actions without changing controller behavior", () => {
     const onPdf = vi.fn();
     const readyView = NumerologyPageView({
       ...baseProps(),
@@ -107,11 +152,11 @@ describe("NumerologyPageView", () => {
       pdfTitle: "Скачать готовый PDF",
       onPdf
     });
-    const readyButton = findButtonByText(readyView, "Скачать PDF");
+    const readyItem = getActionMenuItem(readyView, "pdf");
 
-    readyButton.props.onClick?.();
-    expect(readyButton.props.disabled).toBe(false);
-    expect(readyButton.props.title).toBe("Скачать готовый PDF");
+    readyItem.onSelect();
+    expect(readyItem.disabled).toBe(false);
+    expect(includesText(readyItem.label, "Скачать PDF")).toBe(true);
     expect(onPdf).toHaveBeenCalledOnce();
 
     const retryView = NumerologyPageView({
@@ -121,7 +166,10 @@ describe("NumerologyPageView", () => {
       pdfTitle: "Повторить формирование PDF",
       pdfErrorMessage: "Не удалось сформировать PDF: временная ошибка"
     });
-    expect(findButtonByText(retryView, "Повторить").props.disabled).toBe(false);
+    expect(getActionMenuItem(retryView, "pdf").disabled).toBe(false);
+    expect(
+      includesText(getActionMenuItem(retryView, "pdf").label, "Повторить формирование PDF")
+    ).toBe(true);
     expect(
       findElements(retryView).some((element) =>
         elementIncludesText(element, "Не удалось сформировать PDF: временная ошибка")
@@ -129,16 +177,18 @@ describe("NumerologyPageView", () => {
     ).toBe(true);
   });
 
-  it("keeps a queued PDF visibly pending and prevents a duplicate click", () => {
+  it("keeps a queued PDF visibly pending and prevents duplicate selection", () => {
     const view = NumerologyPageView({
       ...baseProps(),
       pdfLabel: "PDF готовится…",
       pdfDisabled: true,
       pdfTitle: "PDF формируется"
     });
-    const pdfButton = findButtonByText(view, "PDF готовится…");
+    const pdfItem = getActionMenuItem(view, "pdf");
 
-    expect(pdfButton.props).toMatchObject({ disabled: true, title: "PDF формируется" });
+    expect(pdfItem.disabled).toBe(true);
+    expect(includesText(pdfItem.label, "PDF готовится…")).toBe(true);
+    expect(includesText(pdfItem.label, "PDF формируется")).toBe(true);
   });
 
   it("passes active saved calculations to the workspace menu", () => {
@@ -324,36 +374,66 @@ describe("NumerologyPageView", () => {
     );
   });
 
-  it("keeps the desktop toolbar title from shrinking before the client selector", () => {
+  it("uses a content-aware toolbar grid without shrinking its title", () => {
     const css = readFileSync(new URL("./NumerologyPage.module.css", import.meta.url), "utf8");
     const toolbarRule = getCssRule(css, ".toolbar");
+    const toolbarLayoutRule = getCssRule(css, ".toolbarLayout");
     const titleGroupRule = getCssRule(css, ".titleGroup");
     const titleRule = getCssRule(css, ".title");
 
-    expect(toolbarRule).toContain("height: 60px;");
+    expect(toolbarRule).toContain("container-type: inline-size;");
+    expect(toolbarRule).toContain("min-height: 60px;");
     expect(toolbarRule).toContain("padding: 0 20px;");
+    expect(toolbarLayoutRule).toContain(
+      'grid-template-areas: "context participants spacer controls";'
+    );
+    expect(toolbarLayoutRule).toContain("grid-template-columns:");
     expect(titleGroupRule).toContain("flex: 0 0 auto;");
     expect(titleRule).not.toContain("text-overflow: ellipsis;");
   });
 
-  it("keeps reference action buttons at fixed content width", () => {
-    const css = readFileSync(new URL("./NumerologyPage.module.css", import.meta.url), "utf8");
-    const toolButtonRule = getCssRule(css, ".toolButton,\n.toolButtonActive,\n.toolButtonLinked");
-    const linkedRule = getCssRule(css, ".toolButtonLinked");
-    const linkedDisabledRule = getCssRule(css, ".toolButtonLinked:disabled");
+  it("keeps client and partner inside one readable participant group", () => {
+    const view = NumerologyPageView({
+      ...baseProps(),
+      formState: {
+        ...baseProps().formState,
+        mode: "compatibility",
+        partner: {
+          ...createParticipantFormState("crm_client"),
+          clientId: "4ab63db1-4f78-4d59-9b75-c21fc3ec9f6e",
+          displayName: "Марина Краснова",
+          fullName: "Марина Краснова",
+          birthDate: "1990-03-14"
+        }
+      }
+    });
+    const layout = findRequiredElementByClassName(view, styles.toolbarLayout);
+    const participants = findRequiredElementByClassName(layout, styles.clientStrip);
+    const participantPickers = findElements(participants).filter(
+      (element) => element.type === ClientSearchCombobox
+    );
 
-    expect(toolButtonRule).toContain("flex: 0 0 auto;");
-    expect(toolButtonRule).toContain("gap: 8px;");
-    expect(toolButtonRule).toContain("min-height: 37px;");
-    expect(toolButtonRule).toContain("padding: 10px 16px;");
-    expect(toolButtonRule).toContain("border-radius: 14px;");
-    expect(toolButtonRule).toContain("font-size: 13px;");
-    expect(toolButtonRule).toContain("font-weight: 600;");
-    expect(linkedRule).toContain("color: rgb(78 200 160);");
-    expect(linkedDisabledRule).toContain("opacity: 1;");
+    expect(findRequiredElementByClassName(layout, styles.contextStrip)).toBeDefined();
+    expect(findRequiredElementByClassName(layout, styles.controlStrip)).toBeDefined();
+    expect(participantPickers).toHaveLength(2);
+    expect(elementIncludesText(participants, "+")).toBe(true);
   });
 
-  it("matches the reference action row icons and button set", () => {
+  it("moves the whole participant group between rows at content-width breakpoints", () => {
+    const css = readFileSync(new URL("./NumerologyPage.module.css", import.meta.url), "utf8");
+    const clientStripRule = getCssRule(css, ".clientStrip");
+
+    expect(clientStripRule).toContain("grid-area: participants;");
+    expect(clientStripRule).toContain("min-width: 352px;");
+    expect(css).toContain(".clientStrip > div");
+    expect(css).toContain("min-width: 156px;");
+    expect(css).toContain("@container numerology-toolbar (max-width: 1040px)");
+    expect(css).toContain('grid-template-areas: "context controls" "participants participants";');
+    expect(css).toContain("@container numerology-toolbar (max-width: 700px)");
+    expect(css).toContain('grid-template-areas: "context" "participants" "controls";');
+  });
+
+  it("matches the approved menu icons and directly visible calculation controls", () => {
     const view = NumerologyPageView({
       ...baseProps(),
       selectedResponse: response({
@@ -364,9 +444,9 @@ describe("NumerologyPageView", () => {
 
     expect(findRequiredElementByType(view, NumerologyYearPicker)).toBeDefined();
     expect(getButtonIconName(view, "Совместимость")).toBe("users");
-    expect(getButtonIconName(view, "Презентация")).toBe("arrowUpRight");
-    expect(getButtonIconName(view, "Привязать")).toBe("pin");
-    expect(getButtonIconName(view, "PDF")).toBe("doc");
+    expect(getActionMenuIconName(view, "presentation")).toBe("arrowUpRight");
+    expect(getActionMenuIconName(view, "link")).toBe("pin");
+    expect(getActionMenuIconName(view, "pdf")).toBe("doc");
     expect(findButtonByText(renderCalculationMenu(view), "Пересчитать")).toBeDefined();
   });
 
@@ -410,7 +490,7 @@ describe("NumerologyPageView", () => {
     expect(compatibilityButton.props["aria-pressed"]).toBe(true);
     expect(yearPicker.props.disabled).toBe(true);
     expect(yearPicker.props.isOpen).toBe(false);
-    expect(findButtonByText(view, "Презентация")).toBeDefined();
+    expect(getActionMenuItem(view, "presentation")).toBeDefined();
   });
 
   it("animates workspace changes with the shared motion primitive keyed by result checksum", () => {
@@ -637,6 +717,27 @@ function getButtonIconName(root: ReactElement, text: string): string | null {
   return (icon?.props as { iconName?: string } | undefined)?.iconName ?? null;
 }
 
+function getToolbarActionMenu(
+  root: ReactElement
+): ReactElement<Parameters<typeof ActionMenu>[0]> {
+  return findRequiredElementByType<Parameters<typeof ActionMenu>[0]>(root, ActionMenu);
+}
+
+function getActionMenuItem(root: ReactElement, id: string): ActionMenuItem {
+  const item = getToolbarActionMenu(root).props.items.find((candidate) => candidate.id === id);
+  if (!item) throw new Error(`Action menu item not found: ${id}`);
+
+  return item;
+}
+
+function getActionMenuIconName(root: ReactElement, id: string): string | null {
+  const icon = getActionMenuItem(root, id).icon;
+
+  return isValidElement(icon) && icon.type === Icon
+    ? ((icon.props as { iconName?: string }).iconName ?? null)
+    : null;
+}
+
 function findRequiredElementByType<TProps>(
   root: ReactElement,
   type: unknown
@@ -645,6 +746,20 @@ function findRequiredElementByType<TProps>(
   if (!result) throw new Error("Element not found");
 
   return result as ReactElement<TProps>;
+}
+
+function findRequiredElementByClassName(
+  root: ReactElement,
+  className: string | undefined
+): ReactElement {
+  if (!className) throw new Error("CSS module class not found");
+
+  const result = findElements(root).find(
+    (element) => (element.props as { className?: string }).className === className
+  );
+  if (!result) throw new Error(`Element not found for class: ${className}`);
+
+  return result;
 }
 
 function renderCalculationMenu(root: ReactElement): ReactElement {
