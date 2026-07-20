@@ -43,7 +43,7 @@ export function createChartCalculationWorker(
 }
 
 export function buildChartCalculationBullMqJobId(jobId: string): string {
-  return `chart-calculation:${jobId}`;
+  return `chart-calculation-${jobId}`;
 }
 
 export function toChartCalculationJobOptions(

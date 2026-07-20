@@ -34,7 +34,7 @@ describe("relayPendingChartCalculationEvents", () => {
       chartCalculationJobName,
       { jobId: "00000000-0000-4000-8000-000000000001" },
       expect.objectContaining({
-        jobId: "chart-calculation:00000000-0000-4000-8000-000000000001"
+        jobId: "chart-calculation-00000000-0000-4000-8000-000000000001"
       })
     );
     expect(store.markPublished).toHaveBeenCalledWith({ eventId: "event-1", publishedAt: now });

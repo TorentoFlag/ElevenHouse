@@ -13,7 +13,7 @@ describe("chart jobs queue contract", () => {
     expect(chartCalculationQueueName).toBe("chart.calculation");
     expect(chartCalculationJobName).toBe("calculate-natal-chart");
     expect(buildChartCalculationBullMqJobId(jobId)).toBe(
-      "chart-calculation:00000000-0000-4000-8000-000000000001"
+      "chart-calculation-00000000-0000-4000-8000-000000000001"
     );
   });
 
@@ -26,7 +26,7 @@ describe("chart jobs queue contract", () => {
         jitter: 0.5
       })
     ).toMatchObject({
-      jobId: "chart-calculation:00000000-0000-4000-8000-000000000001",
+      jobId: "chart-calculation-00000000-0000-4000-8000-000000000001",
       attempts: 3
     });
   });
