@@ -84,6 +84,11 @@ export type AstrologerCopy = {
     loadingLabel: string;
     errorLabel: string;
     retryLabel: string;
+    profileRequired: {
+      title: string;
+      description: string;
+      settingsLabel: string;
+    };
     emptyLabel: string;
     conflictMessage: string;
     mobileAgenda: {
@@ -537,6 +542,12 @@ export const astrologerCopyByLocale = {
       loadingLabel: "Загружаем календарь",
       errorLabel: "Не удалось загрузить календарь",
       retryLabel: "Повторить",
+      profileRequired: {
+        title: "Заполните профиль астролога",
+        description:
+          "Календарю нужен часовой пояс, чтобы корректно показывать записи и доступность.",
+        settingsLabel: "Перейти в настройки"
+      },
       emptyLabel: "На этот период записей нет",
       conflictMessage: "Это время уже занято. Календарь обновлён — выберите другой слот.",
       mobileAgenda: {
@@ -948,6 +959,12 @@ export const astrologerCopyByLocale = {
       loadingLabel: "Loading calendar",
       errorLabel: "Could not load calendar",
       retryLabel: "Retry",
+      profileRequired: {
+        title: "Complete your astrologer profile",
+        description:
+          "Calendar needs your time zone to show bookings and availability correctly.",
+        settingsLabel: "Go to settings"
+      },
       emptyLabel: "No bookings in this period",
       conflictMessage: "This time is no longer available. Choose another slot from the refreshed calendar.",
       mobileAgenda: {
