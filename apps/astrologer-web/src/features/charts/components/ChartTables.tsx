@@ -1,7 +1,13 @@
 import type { ChartPoint, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import {
+  formatAspectTypeDisplay,
+  formatChartPointPosition,
+  formatDegree,
+  formatHouseSignDisplay,
+  getChartPointDisplayLabel,
+  romanHouses
+} from "../model/chartDisplay";
 import styles from "./ChartEnginePage.module.css";
-
-const romanHouses = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 
 export type ChartTablesProps = {
   readonly result: StoredChartCalculationPayload | null;
@@ -23,7 +29,7 @@ export function ChartTables({ result }: ChartTablesProps) {
         <div className={styles.dataList}>
           {result.result.points.map((point) => (
             <div className={styles.dataRow} key={point.id}>
-              <span>{point.label}</span>
+              <span>{getChartPointDisplayLabel(point.id, point.label)}</span>
               <span>{formatPointPosition(point)}</span>
               <span>{point.house ? `${romanHouses[point.house]} дом` : "—"}</span>
             </div>
@@ -36,7 +42,7 @@ export function ChartTables({ result }: ChartTablesProps) {
           {result.result.houses.map((house) => (
             <div className={styles.dataRow} key={house.number}>
               <span>{romanHouses[house.number]} дом</span>
-              <span>{house.sign}</span>
+              <span>{formatHouseSignDisplay(house.sign)}</span>
               <span>{formatDegree(house.signDegree)}</span>
             </div>
           ))}
@@ -48,9 +54,9 @@ export function ChartTables({ result }: ChartTablesProps) {
           {result.result.aspects.length > 0 ? (
             result.result.aspects.map((aspect, index) => (
               <div className={styles.dataRow} key={`${aspect.pointA}-${aspect.pointB}-${index}`}>
-                <span>{aspect.type}</span>
+                <span>{formatAspectTypeDisplay(aspect.type)}</span>
                 <span>
-                  {aspect.pointA} — {aspect.pointB}
+                  {getPointLabel(result, aspect.pointA)} — {getPointLabel(result, aspect.pointB)}
                 </span>
                 <span>{aspect.orb.toFixed(2)}°</span>
               </div>
@@ -65,12 +71,11 @@ export function ChartTables({ result }: ChartTablesProps) {
 }
 
 function formatPointPosition(point: ChartPoint): string {
-  return `${point.sign} ${formatDegree(point.signDegree)}${point.retrograde ? " R" : ""}`;
+  return formatChartPointPosition(point);
 }
 
-function formatDegree(value: number): string {
-  const degrees = Math.floor(value);
-  const minutes = Math.round((value - degrees) * 60);
+function getPointLabel(result: StoredChartCalculationPayload, pointId: string): string {
+  const point = result.result.points.find((candidate) => candidate.id === pointId);
 
-  return `${degrees}°${String(minutes).padStart(2, "0")}'`;
+  return getChartPointDisplayLabel(pointId, point?.label ?? pointId);
 }

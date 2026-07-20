@@ -1,21 +1,8 @@
 import type { StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import { getChartPointSymbol } from "../model/chartDisplay";
 import styles from "./ChartEnginePage.module.css";
 
 const zodiacSymbols = ["♈︎", "♉︎", "♊︎", "♋︎", "♌︎", "♍︎", "♎︎", "♏︎", "♐︎", "♑︎", "♒︎", "♓︎"];
-const planetSymbols: Record<string, string> = {
-  sun: "☉︎",
-  moon: "☽︎",
-  mercury: "☿︎",
-  venus: "♀︎",
-  mars: "♂︎",
-  jupiter: "♃︎",
-  saturn: "♄︎",
-  uranus: "♅︎",
-  neptune: "♆︎",
-  pluto: "♇︎",
-  true_node: "☊︎",
-  mean_node: "☊︎"
-};
 
 export type ChartWheelProps = {
   readonly result: StoredChartCalculationPayload | null;
@@ -83,7 +70,7 @@ export function ChartWheel({ result }: ChartWheelProps) {
             <g key={point.id}>
               <circle className={styles.pointDot} cx={marker.x} cy={marker.y} r="15" />
               <text className={styles.pointLabel} x={marker.x} y={marker.y}>
-                {planetSymbols[point.id] ?? point.label.slice(0, 1)}
+                {getChartPointSymbol(point.id, point.label)}
               </text>
               {point.retrograde ? (
                 <text className={styles.retroLabel} x={marker.x + 14} y={marker.y - 12}>

@@ -78,6 +78,8 @@ describe("ChartEnginePage", () => {
     expect(screen.getByText(/рассчитываем карту/i)).toBeInTheDocument();
     expect(screen.queryByText(/очеред/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("Солнце").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Sun")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Рак/).length).toBeGreaterThan(0);
     expect(screen.getByText("I дом")).toBeInTheDocument();
   });
 
@@ -176,9 +178,9 @@ function chartResult(): StoredChartCalculationPayload {
       points: [
         {
           id: "sun",
-          label: "Солнце",
+          label: "Sun",
           longitude: 113.1,
-          sign: "Рак",
+          sign: "cancer",
           signDegree: 23.1,
           house: 10,
           retrograde: false

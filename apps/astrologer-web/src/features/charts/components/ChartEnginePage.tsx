@@ -7,6 +7,11 @@ import type {
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
 import { ClientSearchCombobox } from "../../clients/components/ClientSearchCombobox";
 import { getChartBirthDataReadiness } from "../model/chartEngineState";
+import {
+  formatChartPointPosition,
+  formatHouseSignDisplay,
+  getChartPointDisplayLabel
+} from "../model/chartDisplay";
 import { ChartSettingsPanel } from "./ChartSettingsPanel";
 import { ChartTables } from "./ChartTables";
 import { ChartWheel } from "./ChartWheel";
@@ -154,7 +159,7 @@ export function ChartEnginePage({
                 .filter((point) => point.retrograde)
                 .map((point) => (
                   <div className={styles.retroPill} key={point.id}>
-                    {point.label} R
+                    {getChartPointDisplayLabel(point.id, point.label)} R
                   </div>
                 ))
             ) : (
@@ -393,8 +398,11 @@ function getBigThree(result: StoredChartCalculationPayload): readonly { readonly
   const ascendant = result.result.houses.find((house) => house.number === 1);
 
   return [
-    { label: "Солнце", value: sun ? `${sun.sign} ${Math.round(sun.signDegree)}°` : "—" },
-    { label: "Луна", value: moon ? `${moon.sign} ${Math.round(moon.signDegree)}°` : "—" },
-    { label: "Asc", value: ascendant ? `${ascendant.sign} ${Math.round(ascendant.signDegree)}°` : "—" }
+    { label: "Солнце", value: sun ? formatChartPointPosition(sun) : "—" },
+    { label: "Луна", value: moon ? formatChartPointPosition(moon) : "—" },
+    {
+      label: "Asc",
+      value: ascendant ? `${formatHouseSignDisplay(ascendant.sign)} ${Math.round(ascendant.signDegree)}°` : "—"
+    }
   ];
 }

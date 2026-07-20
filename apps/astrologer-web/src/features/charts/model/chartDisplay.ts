@@ -1,0 +1,109 @@
+export const romanHouses = [
+  "",
+  "I",
+  "II",
+  "III",
+  "IV",
+  "V",
+  "VI",
+  "VII",
+  "VIII",
+  "IX",
+  "X",
+  "XI",
+  "XII"
+] as const;
+
+const pointLabels: Record<string, string> = {
+  sun: "Солнце",
+  moon: "Луна",
+  mercury: "Меркурий",
+  venus: "Венера",
+  mars: "Марс",
+  jupiter: "Юпитер",
+  saturn: "Сатурн",
+  uranus: "Уран",
+  neptune: "Нептун",
+  pluto: "Плутон",
+  ascendant: "Асцендент",
+  midheaven: "Середина неба",
+  north_node: "Северный узел",
+  true_node: "Северный узел",
+  mean_node: "Северный узел",
+  south_node: "Южный узел"
+};
+
+const pointSymbols: Record<string, string> = {
+  sun: "☉︎",
+  moon: "☽︎",
+  mercury: "☿︎",
+  venus: "♀︎",
+  mars: "♂︎",
+  jupiter: "♃︎",
+  saturn: "♄︎",
+  uranus: "♅︎",
+  neptune: "♆︎",
+  pluto: "♇︎",
+  ascendant: "A",
+  midheaven: "M",
+  north_node: "☊︎",
+  true_node: "☊︎",
+  mean_node: "☊︎",
+  south_node: "☋︎"
+};
+
+const signLabels: Record<string, string> = {
+  aries: "Овен",
+  taurus: "Телец",
+  gemini: "Близнецы",
+  cancer: "Рак",
+  leo: "Лев",
+  virgo: "Дева",
+  libra: "Весы",
+  scorpio: "Скорпион",
+  sagittarius: "Стрелец",
+  capricorn: "Козерог",
+  aquarius: "Водолей",
+  pisces: "Рыбы"
+};
+
+const aspectLabels: Record<string, string> = {
+  conjunction: "Соединение",
+  sextile: "Секстиль",
+  square: "Квадрат",
+  trine: "Тригон",
+  opposition: "Оппозиция"
+};
+
+export function getChartPointDisplayLabel(pointId: string, fallback: string): string {
+  return pointLabels[pointId] ?? fallback;
+}
+
+export function getChartPointSymbol(pointId: string, fallback: string): string {
+  return pointSymbols[pointId] ?? fallback.slice(0, 1);
+}
+
+export function formatHouseSignDisplay(sign: string): string {
+  return signLabels[sign.toLowerCase()] ?? sign;
+}
+
+export function formatAspectTypeDisplay(type: string): string {
+  return aspectLabels[type] ?? type;
+}
+
+export function formatChartPointPosition(point: {
+  readonly sign: string;
+  readonly signDegree: number;
+  readonly retrograde?: boolean | null;
+}): string {
+  return `${formatHouseSignDisplay(point.sign)} ${formatDegree(point.signDegree)}${
+    point.retrograde ? " R" : ""
+  }`;
+}
+
+export function formatDegree(value: number): string {
+  const degrees = Math.floor(value);
+  const minutes = Math.round((value - degrees) * 60);
+
+  return `${degrees}°${String(minutes).padStart(2, "0")}'`;
+}
