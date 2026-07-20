@@ -1,0 +1,464 @@
+.page {
+  --chart-panel: rgb(13 12 32 / 0.88);
+  --chart-surface: rgb(25 22 54 / 0.78);
+  --chart-line: rgb(216 212 236 / 0.09);
+  --chart-line-strong: rgb(216 212 236 / 0.16);
+  --chart-gold: #f6d266;
+  --chart-gold-soft: rgb(246 210 102 / 0.13);
+  --chart-violet: #b69aff;
+  --chart-blue: #62a7ff;
+  display: flex;
+  min-height: calc(100dvh - var(--astrologer-app-header-height, 68px));
+  margin: -32px;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--eh-color-moon-120);
+  background: #0b0a20;
+}
+
+.toolbar {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 60px;
+  height: 60px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--chart-line);
+  background: rgb(13 12 32 / 0.94);
+}
+
+.titleGroup {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.titleGroup p {
+  margin: 0 0 2px;
+  color: rgb(186 178 218 / 0.62);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.titleGroup h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 780;
+}
+.iconBox {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--chart-gold-soft);
+  color: var(--chart-gold);
+}
+.clientStrip {
+  width: min(320px, 28vw);
+  min-width: 220px;
+}
+.clientButton {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 4px 12px 4px 5px;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 14px;
+  background: rgb(30 27 62);
+  color: inherit;
+}
+.clientButton span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 9px;
+  background: rgb(107 83 191 / 0.32);
+  color: var(--chart-violet);
+  font-weight: 800;
+}
+.clientButton strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clientButton small {
+  color: rgb(186 178 218 / 0.72);
+  font-size: 11px;
+}
+.modeTabs {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 14px;
+  background: rgb(30 27 62);
+}
+.modeActive,
+.modeDisabled {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-right: 1px solid var(--chart-line);
+  background: transparent;
+  color: rgb(229 225 244 / 0.72);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.modeActive {
+  background: var(--chart-gold);
+  color: #2e2342;
+}
+.modeDisabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+.toolbarSpacer {
+  min-width: 8px;
+  flex: 1;
+}
+.calculateButton,
+.toolButton {
+  display: inline-flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1;
+  white-space: nowrap;
+}
+.calculateButton {
+  background: var(--chart-gold);
+  color: #2e2342;
+  box-shadow: 0 10px 28px rgb(246 210 102 / 0.18);
+}
+.toolButton {
+  border-color: var(--chart-line-strong);
+  background: rgb(30 27 62);
+  color: var(--eh-color-moon-120);
+}
+.calculateButton:disabled,
+.toolButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+.body {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: 218px minmax(420px, 1fr) minmax(320px, 360px);
+}
+.rail,
+.panel {
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--chart-panel);
+  scrollbar-width: thin;
+}
+.rail {
+  padding: 18px 14px 30px;
+  border-right: 1px solid var(--chart-line);
+}
+.panel {
+  border-left: 1px solid var(--chart-line);
+}
+.railGroup {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.railGroup h2,
+.settingsCard h2,
+.tableSection h2 {
+  margin: 0 0 5px;
+  color: rgb(186 178 218 / 0.62);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.helpText,
+.muted,
+.panelEmpty,
+.warningText {
+  margin: 0;
+  color: rgb(186 178 218 / 0.74);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.warningText {
+  color: #ffcf8b;
+}
+.summaryCard {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--chart-line);
+  border-radius: 11px;
+  background: rgb(30 27 62 / 0.72);
+}
+.summaryCard strong {
+  font-size: 12px;
+}
+.summaryCard span {
+  color: rgb(229 225 244 / 0.7);
+  font-size: 12px;
+}
+.retroPill {
+  display: inline-flex;
+  width: fit-content;
+  padding: 5px 9px;
+  border: 1px solid rgb(246 210 102 / 0.22);
+  border-radius: 999px;
+  background: var(--chart-gold-soft);
+  color: var(--chart-gold);
+  font-size: 12px;
+  font-weight: 700;
+}
+.settingsCard {
+  display: grid;
+  gap: 10px;
+}
+.settingsCard label {
+  display: grid;
+  gap: 6px;
+  color: rgb(186 178 218 / 0.74);
+  font-size: 12px;
+}
+.settingsCard select,
+.settingsCard input {
+  width: 100%;
+}
+.settingsCard select {
+  min-height: 36px;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 10px;
+  background: rgb(30 27 62);
+  color: var(--eh-color-moon-120);
+}
+.workspace {
+  position: relative;
+  min-width: 0;
+  overflow: auto;
+  background:
+    radial-gradient(560px 380px at 50% 22%, rgb(70 52 145 / 0.16), transparent 72%),
+    radial-gradient(1px 1px at 18% 22%, rgb(255 255 255 / 0.36), transparent 100%),
+    radial-gradient(1px 1px at 76% 62%, rgb(255 255 255 / 0.28), transparent 100%),
+    #0b0a20;
+}
+.wheelStage {
+  display: grid;
+  min-height: 560px;
+  place-items: center;
+  padding: 22px;
+}
+.wheelSvg {
+  width: min(100%, 560px);
+  max-height: 540px;
+  overflow: visible;
+}
+.wheelOuter,
+.wheelMiddle,
+.wheelInner {
+  fill: rgb(25 22 54 / 0.32);
+  stroke: rgb(180 168 220 / 0.18);
+  stroke-width: 1.2;
+}
+.wheelMiddle {
+  fill: rgb(12 10 33 / 0.3);
+}
+.wheelInner {
+  fill: rgb(13 12 32 / 0.72);
+}
+.wheelTick,
+.houseLine {
+  stroke: rgb(180 168 220 / 0.13);
+  stroke-width: 1;
+}
+.houseLine {
+  stroke-dasharray: 2 6;
+}
+.aspectLine {
+  stroke: rgb(98 167 255 / 0.35);
+  stroke-width: 1.1;
+}
+.zodiacLabel,
+.houseLabel,
+.pointLabel,
+.retroLabel {
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-weight: 760;
+}
+.zodiacLabel {
+  fill: var(--chart-gold);
+  font-size: 17px;
+}
+.houseLabel {
+  fill: rgb(186 178 218 / 0.62);
+  font-size: 10px;
+}
+.pointDot {
+  fill: rgb(30 27 62 / 0.95);
+  stroke: rgb(182 154 255 / 0.52);
+}
+.pointLabel {
+  fill: var(--eh-color-moon-120);
+  font-size: 15px;
+}
+.retroLabel {
+  fill: var(--chart-gold);
+  font-size: 8px;
+}
+.wheelHint {
+  margin: -16px 0 0;
+  color: rgb(186 178 218 / 0.62);
+  font-size: 12px;
+}
+.statusCard,
+.statusCardError {
+  position: sticky;
+  bottom: 18px;
+  display: grid;
+  width: min(520px, calc(100% - 40px));
+  gap: 5px;
+  margin: 0 auto 18px;
+  padding: 16px 18px;
+  border: 1px solid rgb(246 210 102 / 0.22);
+  border-radius: 18px;
+  background: rgb(30 27 62 / 0.92);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.28);
+}
+.statusCard strong,
+.statusCardError strong {
+  color: var(--chart-gold);
+  font-size: 13px;
+}
+.statusCard span,
+.statusCardError span {
+  color: rgb(229 225 244 / 0.76);
+  font-size: 13px;
+}
+.statusCardError {
+  border-color: rgb(255 120 120 / 0.35);
+}
+.statusCardError strong {
+  color: #ff8f8f;
+}
+.panelTabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 12px;
+  padding: 18px 22px 10px;
+  border-bottom: 1px solid var(--chart-line);
+  background: rgb(13 12 32 / 0.94);
+}
+.panelTab,
+.panelTabActive {
+  padding: 0 0 9px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: rgb(186 178 218 / 0.68);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 760;
+}
+.panelTabActive {
+  border-color: var(--chart-gold);
+  color: var(--eh-color-moon-120);
+}
+.tableStack {
+  display: grid;
+  gap: 18px;
+  padding: 18px 22px 32px;
+}
+.tableSection {
+  display: grid;
+  gap: 8px;
+}
+.dataList {
+  display: grid;
+  gap: 2px;
+}
+.dataRow,
+.emptyRow {
+  display: grid;
+  grid-template-columns: minmax(86px, 1fr) minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  color: rgb(229 225 244 / 0.78);
+  font-size: 12px;
+}
+.dataRow span:last-child {
+  color: rgb(186 178 218 / 0.66);
+  text-align: right;
+}
+.emptyRow {
+  display: block;
+  color: rgb(186 178 218 / 0.62);
+}
+.panelEmpty {
+  padding: 18px 22px;
+}
+
+@media (max-width: 1180px) {
+  .toolbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 60px;
+    padding-block: 10px;
+  }
+  .body {
+    grid-template-columns: 210px minmax(360px, 1fr);
+  }
+  .panel {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--chart-line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .page {
+    margin: -20px;
+  }
+  .clientStrip {
+    width: 100%;
+  }
+  .modeTabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .body {
+    grid-template-columns: 1fr;
+  }
+  .rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--chart-line);
+  }
+  .wheelStage {
+    min-height: 420px;
+  }
+}

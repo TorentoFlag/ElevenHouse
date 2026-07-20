@@ -8,6 +8,7 @@ import { calculationInterpretations } from "./calculation-interpretations.schema
 import { calculationParticipants } from "./calculation-participants.schema";
 import { calculationPdfJobs } from "./calculation-pdf-jobs.schema";
 import { calculationRecords } from "./calculation-records.schema";
+import { chartCalculationJobs } from "./chart-calculation-jobs.schema";
 
 export const calculationRecordsRelations = relations(calculationRecords, ({ many, one }) => ({
   owner: one(users, {
@@ -19,6 +20,7 @@ export const calculationRecordsRelations = relations(calculationRecords, ({ many
   interpretations: many(calculationInterpretations),
   artifacts: many(calculationArtifacts),
   pdfJobs: many(calculationPdfJobs),
+  chartJobs: many(chartCalculationJobs),
   matrixNotes: many(matrixNotes)
 }));
 
@@ -69,5 +71,20 @@ export const calculationPdfJobsRelations = relations(calculationPdfJobs, ({ one 
   media: one(mediaAssets, {
     fields: [calculationPdfJobs.mediaAssetId],
     references: [mediaAssets.id]
+  })
+}));
+
+export const chartCalculationJobsRelations = relations(chartCalculationJobs, ({ one }) => ({
+  owner: one(users, {
+    fields: [chartCalculationJobs.ownerUserId],
+    references: [users.id]
+  }),
+  client: one(users, {
+    fields: [chartCalculationJobs.clientId],
+    references: [users.id]
+  }),
+  resultCalculation: one(calculationRecords, {
+    fields: [chartCalculationJobs.resultCalculationId],
+    references: [calculationRecords.id]
   })
 }));

@@ -61,6 +61,7 @@ describe("createDrizzleClientStore", () => {
         birthCity: "Москва",
         birthRegion: "Москва",
         birthTimezone: "Europe/Moscow",
+        birthTimeDstOccurrence: null,
         birthLatitude: "55.7558",
         birthLongitude: "37.6173",
         source: "client_profile",
@@ -89,6 +90,7 @@ describe("createDrizzleClientStore", () => {
         birthCity: "Москва",
         birthRegion: "Москва",
         birthTimezone: "Europe/Moscow",
+        birthTimeDstOccurrence: null,
         birthLatitude: 55.7558,
         birthLongitude: 37.6173,
         source: "client_profile"

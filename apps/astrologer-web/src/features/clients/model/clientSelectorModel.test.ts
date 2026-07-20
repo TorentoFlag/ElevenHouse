@@ -30,6 +30,7 @@ describe("clientSelectorModel", () => {
           birthCity: "Калининск",
           birthRegion: "Саратовская область",
           birthTimezone: "Europe/Saratov",
+          birthTimeDstOccurrence: null,
           birthLatitude: 51.4996,
           birthLongitude: 44.4758,
           source: "manual",

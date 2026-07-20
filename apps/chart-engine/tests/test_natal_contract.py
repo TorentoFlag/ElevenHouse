@@ -1,0 +1,50 @@
+from fastapi.testclient import TestClient
+
+from chart_engine.main import app
+
+
+def _natal_payload():
+    return {
+        "schemaVersion": "chart-request.v1",
+        "method": "natal",
+        "settings": {
+            "zodiac": "tropical",
+            "houseSystem": "placidus",
+            "nodeType": "true",
+            "aspectPreset": "major",
+            "orbMultiplier": 1.0,
+        },
+        "inputSnapshot": {
+            "birthDate": "1990-07-15",
+            "birthTime": "10:30",
+            "timezone": "Europe/Rome",
+            "latitude": 41.9028,
+            "longitude": 12.4964,
+            "birthTimePrecision": "exact",
+        },
+    }
+
+
+def test_natal_returns_canonical_shape():
+    client = TestClient(app)
+    payload = _natal_payload()
+
+    response = client.post("/v1/natal", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schemaVersion"] == "chart-result.v1"
+    assert data["method"] == "natal"
+    assert data["provider"]["name"] == "kerykeion"
+    assert data["settings"] == payload["settings"]
+    assert data["inputSnapshot"] == payload["inputSnapshot"]
+    point_ids = {point["id"] for point in data["result"]["points"]}
+    assert {
+        "sun",
+        "moon",
+        "ascendant",
+        "midheaven",
+        "north_node",
+        "south_node",
+    }.issubset(point_ids)
+    assert len(data["result"]["houses"]) == 12

@@ -113,6 +113,7 @@ function clientOption(value: string, label: string, birthDate: string | null): C
           birthCity: null,
           birthRegion: null,
           birthTimezone: null,
+          birthTimeDstOccurrence: null,
           birthLatitude: null,
           birthLongitude: null,
           source: "manual",

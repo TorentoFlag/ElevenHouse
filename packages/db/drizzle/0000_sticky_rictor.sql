@@ -654,6 +654,39 @@ CREATE TABLE "calculation_pdf_jobs" (
 	CONSTRAINT "calculation_pdf_jobs_page_count_check" CHECK ("calculation_pdf_jobs"."page_count" is null or "calculation_pdf_jobs"."page_count" > 0)
 );
 --> statement-breakpoint
+CREATE TABLE "chart_calculation_jobs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"client_id" uuid NOT NULL,
+	"result_calculation_id" uuid,
+	"method" text DEFAULT 'natal' NOT NULL,
+	"status" text DEFAULT 'queued' NOT NULL,
+	"input_fingerprint" text NOT NULL,
+	"input_snapshot" jsonb NOT NULL,
+	"settings_snapshot" jsonb NOT NULL,
+	"provider" text DEFAULT 'kerykeion' NOT NULL,
+	"schema_version" text DEFAULT 'chart-result.v1' NOT NULL,
+	"attempts" integer DEFAULT 0 NOT NULL,
+	"max_attempts" integer DEFAULT 3 NOT NULL,
+	"locked_by" text,
+	"locked_until" timestamp with time zone,
+	"last_error_code" text,
+	"last_error_message" text,
+	"started_at" timestamp with time zone,
+	"finished_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "chart_calculation_jobs_method_check" CHECK ("chart_calculation_jobs"."method" in ('natal')),
+	CONSTRAINT "chart_calculation_jobs_status_check" CHECK ("chart_calculation_jobs"."status" in ('queued', 'processing', 'succeeded', 'failed')),
+	CONSTRAINT "chart_calculation_jobs_provider_check" CHECK ("chart_calculation_jobs"."provider" in ('kerykeion')),
+	CONSTRAINT "chart_calculation_jobs_schema_version_check" CHECK ("chart_calculation_jobs"."schema_version" in ('chart-result.v1')),
+	CONSTRAINT "chart_calculation_jobs_input_fingerprint_check" CHECK ("chart_calculation_jobs"."input_fingerprint" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "chart_calculation_jobs_input_snapshot_object_check" CHECK (jsonb_typeof("chart_calculation_jobs"."input_snapshot") = 'object'),
+	CONSTRAINT "chart_calculation_jobs_settings_snapshot_object_check" CHECK (jsonb_typeof("chart_calculation_jobs"."settings_snapshot") = 'object'),
+	CONSTRAINT "chart_calculation_jobs_attempts_check" CHECK ("chart_calculation_jobs"."attempts" >= 0),
+	CONSTRAINT "chart_calculation_jobs_max_attempts_check" CHECK ("chart_calculation_jobs"."max_attempts" > 0)
+);
+--> statement-breakpoint
 CREATE TABLE "client_profiles" (
 	"user_id" uuid PRIMARY KEY NOT NULL,
 	"display_name_snapshot" text,
@@ -678,6 +711,7 @@ CREATE TABLE "client_birth_data" (
 	"birth_city" text,
 	"birth_region" text,
 	"birth_timezone" text,
+	"birth_time_dst_occurrence" text,
 	"birth_latitude" double precision,
 	"birth_longitude" double precision,
 	"source" text DEFAULT 'client_profile' NOT NULL,
@@ -685,6 +719,7 @@ CREATE TABLE "client_birth_data" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "client_birth_data_time_precision_check" CHECK ("client_birth_data"."birth_time_precision" in ('exact', 'approximate', 'unknown')),
 	CONSTRAINT "client_birth_data_source_check" CHECK ("client_birth_data"."source" in ('client_profile', 'booking', 'import', 'manual')),
+	CONSTRAINT "client_birth_data_time_dst_occurrence_check" CHECK ("client_birth_data"."birth_time_dst_occurrence" is null or "client_birth_data"."birth_time_dst_occurrence" in ('first', 'second')),
 	CONSTRAINT "client_birth_data_birth_date_check" CHECK ("client_birth_data"."birth_date" is null or "client_birth_data"."birth_date" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
 	CONSTRAINT "client_birth_data_birth_time_check" CHECK ("client_birth_data"."birth_time" is null or "client_birth_data"."birth_time" ~ '^[0-9]{2}:[0-9]{2}$'),
 	CONSTRAINT "client_birth_data_unknown_time_check" CHECK ("client_birth_data"."birth_time_precision" <> 'unknown' or "client_birth_data"."birth_time" is null),
@@ -963,6 +998,9 @@ ALTER TABLE "calculation_artifacts" ADD CONSTRAINT "calculation_artifacts_media_
 ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_artifact_id_fk" FOREIGN KEY ("artifact_id","calculation_id") REFERENCES "public"."calculation_artifacts"("id","calculation_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_media_asset_id_fk" FOREIGN KEY ("media_asset_id","owner_user_id") REFERENCES "public"."media_assets"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_client_id_client_profiles_user_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."client_profiles"("user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_result_calculation_id_calculation_records_id_fk" FOREIGN KEY ("result_calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_profiles" ADD CONSTRAINT "client_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_birth_data" ADD CONSTRAINT "client_birth_data_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1064,6 +1102,11 @@ CREATE INDEX "calculation_artifacts_media_idx" ON "calculation_artifacts" USING 
 CREATE UNIQUE INDEX "calculation_pdf_jobs_idempotency_unique" ON "calculation_pdf_jobs" USING btree ("owner_user_id","calculation_id","result_checksum","locale","document_fingerprint") WHERE "calculation_pdf_jobs"."status" <> 'failed';--> statement-breakpoint
 CREATE INDEX "calculation_pdf_jobs_owner_calculation_locale_created_idx" ON "calculation_pdf_jobs" USING btree ("owner_user_id","calculation_id","locale","created_at","id");--> statement-breakpoint
 CREATE INDEX "calculation_pdf_jobs_status_updated_idx" ON "calculation_pdf_jobs" USING btree ("status","updated_at");--> statement-breakpoint
+CREATE INDEX "chart_calculation_jobs_owner_idx" ON "chart_calculation_jobs" USING btree ("owner_user_id");--> statement-breakpoint
+CREATE INDEX "chart_calculation_jobs_client_idx" ON "chart_calculation_jobs" USING btree ("client_id");--> statement-breakpoint
+CREATE INDEX "chart_calculation_jobs_status_updated_idx" ON "chart_calculation_jobs" USING btree ("status","updated_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "chart_calculation_jobs_active_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" in ('queued', 'processing');--> statement-breakpoint
+CREATE UNIQUE INDEX "chart_calculation_jobs_success_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" = 'succeeded';--> statement-breakpoint
 CREATE UNIQUE INDEX "client_birth_data_client_unique" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
 CREATE INDEX "client_birth_data_client_idx" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "client_astrologer_relationships_unique" ON "client_astrologer_relationships" USING btree ("client_user_id","astrologer_user_id");--> statement-breakpoint

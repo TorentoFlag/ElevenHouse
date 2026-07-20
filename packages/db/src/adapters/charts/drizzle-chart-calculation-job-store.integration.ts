@@ -1,0 +1,205 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { CHART_CALCULATION_REQUESTED_EVENT } from "@elevenhouse/domain";
+import { assertDevelopmentDatabaseUrl } from "../../connection";
+import { createPostgresRuntime } from "../../runtime";
+import { chartCalculationJobs, outboxEvents } from "../../schema";
+import {
+  createDrizzleChartCalculationCommandStore,
+  createDrizzleChartCalculationJobStore,
+  createDrizzleChartWorkerJobStore
+} from "./drizzle-chart-calculation-job-store";
+
+const databaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
+const digest = (character: string) => `sha256:${character.repeat(64)}`;
+
+describe("chart calculation job Drizzle/PostgreSQL integration", () => {
+  const runtime = createPostgresRuntime({ DATABASE_URL: databaseUrl });
+  const ownerUserIds: string[] = [];
+
+  beforeAll(async () => {
+    await runtime.pool.query("select 1");
+  });
+
+  afterAll(async () => {
+    try {
+      if (ownerUserIds.length > 0) {
+        await runtime.pool.query(
+          `delete from outbox_events
+           where event_type = $1
+             and aggregate_id in (
+               select id from chart_calculation_jobs where owner_user_id = any($2)
+             )`,
+          [CHART_CALCULATION_REQUESTED_EVENT, ownerUserIds]
+        );
+        await runtime.pool.query("delete from chart_calculation_jobs where owner_user_id = any($1)", [
+          ownerUserIds
+        ]);
+        await runtime.pool.query("delete from client_profiles where user_id = any($1)", [
+          ownerUserIds
+        ]);
+        await runtime.pool.query("delete from users where id = any($1)", [ownerUserIds]);
+      }
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("reuses an active job for the same owner and fingerprint", async () => {
+    const store = createDrizzleChartCalculationJobStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+    const input = createInput(ownerUserId);
+
+    const first = await store.createOrReuseNatalJob(input);
+    const second = await store.createOrReuseNatalJob(input);
+
+    expect(first.kind).toBe("active_job");
+    expect(second).toEqual(first);
+  });
+
+  it("does not require calculation record before success", async () => {
+    const store = createDrizzleChartCalculationJobStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+
+    const created = await store.createOrReuseNatalJob(createInput(ownerUserId));
+    if (created.kind !== "active_job") throw new Error("Expected active job");
+    const row = await runtime.database.query.chartCalculationJobs.findFirst({
+      where: eq(chartCalculationJobs.id, created.jobId)
+    });
+
+    expect(row?.resultCalculationId).toBeNull();
+  });
+
+  it("creates the calculation request outbox event with only job id payload", async () => {
+    const commandStore = createDrizzleChartCalculationCommandStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+
+    const created = await commandStore.createOrReuseNatalJobAndRequestCalculation({
+      ...createInput(ownerUserId),
+      now: "2026-07-20T12:00:00.000Z"
+    });
+    if (created.kind !== "active_job") throw new Error("Expected active job");
+    const row = await runtime.database.query.outboxEvents.findFirst({
+      where: eq(outboxEvents.aggregateId, created.jobId)
+    });
+
+    expect(row).toMatchObject({
+      eventType: CHART_CALCULATION_REQUESTED_EVENT,
+      aggregateId: created.jobId,
+      payload: { jobId: created.jobId },
+      status: "pending"
+    });
+  });
+
+  it("persists the current calculation record only after successful processing", async () => {
+    const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
+    const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+    const created = await jobStore.createOrReuseNatalJob(createInput(ownerUserId));
+    if (created.kind !== "active_job") throw new Error("Expected active job");
+    const claim = await workerStore.claimForProcessing({
+      jobId: created.jobId,
+      now: "2026-07-20T12:00:00.000Z"
+    });
+
+    expect(claim?.id).toBe(created.jobId);
+    await expect(
+      workerStore.complete({
+        jobId: created.jobId,
+        result: chartResult(),
+        resultChecksum: digest("b"),
+        now: "2026-07-20T12:00:05.000Z"
+      })
+    ).resolves.toBe(true);
+
+    const row = await runtime.database.query.chartCalculationJobs.findFirst({
+      where: eq(chartCalculationJobs.id, created.jobId)
+    });
+    expect(row?.status).toBe("succeeded");
+    expect(row?.resultCalculationId).toEqual(expect.any(String));
+    await expect(
+      jobStore.getOwnerScopedResult({
+        ownerUserId,
+        calculationId: row?.resultCalculationId ?? raise("Expected result calculation id")
+      })
+    ).resolves.toMatchObject({ schemaVersion: "chart-result.v1" });
+  });
+
+  async function createClientUser(): Promise<string> {
+    const result = await runtime.pool.query<{ id: string }>(
+      "insert into users (status) values ('active') returning id"
+    );
+    const userId = result.rows[0]?.id ?? raise("Expected user insert to return id");
+    await runtime.pool.query(
+      "insert into client_profiles (user_id, created_at, updated_at) values ($1, now(), now())",
+      [userId]
+    );
+    return userId;
+  }
+});
+
+function createInput(ownerUserId: string) {
+  return {
+    ownerUserId,
+    clientId: ownerUserId,
+    inputFingerprint: digest("a"),
+    inputSnapshot: {
+      birthDate: "1990-07-15",
+      birthTime: "10:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964,
+      birthTimePrecision: "exact"
+    },
+    settingsSnapshot: {
+      zodiac: "tropical",
+      houseSystem: "placidus",
+      nodeType: "true",
+      aspectPreset: "major",
+      orbMultiplier: 1
+    }
+  };
+}
+
+function chartResult() {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "natal",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: {
+      zodiac: "tropical",
+      houseSystem: "placidus",
+      nodeType: "true",
+      aspectPreset: "major",
+      orbMultiplier: 1
+    },
+    inputSnapshot: {
+      birthDate: "1990-07-15",
+      birthTime: "10:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964,
+      birthTimePrecision: "exact"
+    },
+    result: {
+      points: [],
+      houses: [],
+      aspects: [],
+      distributions: { elements: {}, modalities: {}, polarity: {} },
+      warnings: []
+    }
+  };
+}
+
+function getIntegrationDatabaseUrl(value: string | undefined): string {
+  if (!value) throw new Error("INTEGRATION_DATABASE_URL is required for integration tests");
+  return assertDevelopmentDatabaseUrl(value, process.env.NODE_ENV, "run integration tests against");
+}
+
+function raise(message: string): never {
+  throw new Error(message);
+}

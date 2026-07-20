@@ -1,4 +1,4 @@
-import { nonEmptyStringSchema, z } from "@elevenhouse/validation";
+import { ianaTimeZoneSchema, nonEmptyStringSchema, z } from "@elevenhouse/validation";
 import { astrologerPublicHandleSchema } from "./astrologer-profile";
 
 const uuidSchema = z.string().uuid();
@@ -60,6 +60,16 @@ const nullableCountryCodeRequestSchema = z
   .optional()
   .transform((value) => value ?? null);
 
+const nullableIanaTimeZoneRequestSchema = z
+  .union([ianaTimeZoneSchema, z.literal("").transform(() => null), z.null(), z.undefined()])
+  .transform((value) => value ?? null);
+
+const nullableBirthTimeDstOccurrenceRequestSchema = z
+  .enum(["first", "second"])
+  .nullable()
+  .optional()
+  .transform((value) => value ?? null);
+
 export const clientBirthTimePrecisionSchema = z.enum(["exact", "approximate", "unknown"]);
 export type ClientBirthTimePrecision = z.infer<typeof clientBirthTimePrecisionSchema>;
 
@@ -109,7 +119,8 @@ export const clientBirthDataUpsertRequestSchema = z
     birthCountryCode: nullableCountryCodeRequestSchema,
     birthCity: nullableTrimmedStringRequestSchema,
     birthRegion: nullableTrimmedStringRequestSchema,
-    birthTimezone: nullableTrimmedStringRequestSchema,
+    birthTimezone: nullableIanaTimeZoneRequestSchema,
+    birthTimeDstOccurrence: nullableBirthTimeDstOccurrenceRequestSchema,
     birthLatitude: z
       .number()
       .min(-90)
@@ -152,7 +163,12 @@ export const clientBirthDataResponseSchema = z
       .nullable(),
     birthCity: nullableResponseStringSchema,
     birthRegion: nullableResponseStringSchema,
-    birthTimezone: nullableResponseStringSchema,
+    birthTimezone: ianaTimeZoneSchema.nullable(),
+    birthTimeDstOccurrence: z
+      .enum(["first", "second"])
+      .nullable()
+      .optional()
+      .transform((value) => value ?? null),
     birthLatitude: z.number().min(-90).max(90).nullable(),
     birthLongitude: z.number().min(-180).max(180).nullable(),
     source: clientBirthDataSourceSchema,

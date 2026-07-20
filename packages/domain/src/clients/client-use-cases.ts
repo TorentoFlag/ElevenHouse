@@ -9,6 +9,7 @@ import type {
   ClientBirthData,
   ClientBirthDataInput,
   ClientBirthDataSource,
+  ClientBirthTimeDstOccurrence,
   ClientBirthTimePrecision,
   ClientJoinIntentCreated,
   NormalizedClientBirthDataInput
@@ -28,6 +29,7 @@ const birthTimePrecisions: readonly ClientBirthTimePrecision[] = [
   "approximate",
   "unknown"
 ];
+const birthTimeDstOccurrences: readonly ClientBirthTimeDstOccurrence[] = ["first", "second"];
 
 export function normalizeClientBirthDataInput(
   input: ClientBirthDataInput
@@ -48,6 +50,7 @@ export function normalizeClientBirthDataInput(
     birthCity: normalizeOptionalToNull(input.birthCity),
     birthRegion: normalizeOptionalToNull(input.birthRegion),
     birthTimezone: normalizeOptionalToNull(input.birthTimezone),
+    birthTimeDstOccurrence: normalizeBirthTimeDstOccurrence(input.birthTimeDstOccurrence),
     birthLatitude: normalizeCoordinate(input.birthLatitude, -90, 90, "Birth latitude is invalid"),
     birthLongitude: normalizeCoordinate(
       input.birthLongitude,
@@ -57,6 +60,19 @@ export function normalizeClientBirthDataInput(
     ),
     source: normalizeBirthDataSource(input.source)
   };
+}
+
+function normalizeBirthTimeDstOccurrence(
+  value: ClientBirthDataInput["birthTimeDstOccurrence"]
+): ClientBirthTimeDstOccurrence | null {
+  const normalized = normalizeOptionalToNull(value);
+  if (normalized === null) {
+    return null;
+  }
+  if (!birthTimeDstOccurrences.includes(normalized as ClientBirthTimeDstOccurrence)) {
+    throw new BirthDataValidationError("Birth time DST occurrence is invalid");
+  }
+  return normalized as ClientBirthTimeDstOccurrence;
 }
 
 export async function createClientJoinIntent(input: {

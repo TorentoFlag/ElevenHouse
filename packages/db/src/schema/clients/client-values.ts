@@ -1,4 +1,6 @@
 export const clientBirthTimePrecisionValues = ["exact", "approximate", "unknown"] as const;
+export const clientBirthTimeDstOccurrenceValues = ["first", "second"] as const;
+export type ClientBirthTimeDstOccurrence = (typeof clientBirthTimeDstOccurrenceValues)[number];
 export const clientBirthDataSourceValues = ["client_profile", "booking", "import", "manual"] as const;
 export const clientRelationshipSourceValues = [
   "direct_link",

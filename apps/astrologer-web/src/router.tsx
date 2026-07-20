@@ -10,6 +10,7 @@ import { ProductsPage } from "./pages/products/ProductsPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { CalendarPage } from "./pages/calendar/CalendarPage";
+import { ChartEngineRoute } from "./pages/chart-engine/ChartEngineRoute";
 
 export const astrologerRoutes = [
   {
@@ -49,6 +50,10 @@ export const astrologerRoutes = [
           {
             path: "/matrix",
             element: <MatrixPage />
+          },
+          {
+            path: "/chart-engine",
+            element: <ChartEngineRoute />
           },
           {
             path: "/settings",

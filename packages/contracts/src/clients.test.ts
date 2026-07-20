@@ -37,10 +37,19 @@ describe("client contracts", () => {
         birthCity: "Москва",
         birthRegion: "Москва",
         birthTimezone: "Europe/Moscow",
+        birthTimeDstOccurrence: "first",
         birthLatitude: 55.7558,
         birthLongitude: 37.6173
       })
-    ).toMatchObject({ birthTimePrecision: "exact" });
+    ).toMatchObject({ birthTimePrecision: "exact", birthTimeDstOccurrence: "first" });
+  });
+
+  it("rejects non-IANA birth timezone values", () => {
+    expect(() =>
+      clientBirthDataUpsertRequestSchema.parse({
+        birthTimezone: "Moscow"
+      })
+    ).toThrow();
   });
 
   it("rejects invalid client list items", () => {

@@ -1,0 +1,2 @@
+export const CHART_COMMAND_STORE = Symbol("CHART_COMMAND_STORE");
+export const CHART_JOB_STORE = Symbol("CHART_JOB_STORE");

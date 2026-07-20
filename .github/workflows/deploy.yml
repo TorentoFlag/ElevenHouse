@@ -103,6 +103,11 @@ jobs:
             app_filter: "@elevenhouse/chart-worker"
             app_dir: chart-worker
             build_args: ""
+          - image: elevenhouse-chart-engine
+            dockerfile: deployment/docker/chart-engine.Dockerfile
+            app_filter: ""
+            app_dir: chart-engine
+            build_args: ""
           - image: elevenhouse-notification-worker
             dockerfile: deployment/docker/backend.Dockerfile
             app_filter: "@elevenhouse/notification-worker"

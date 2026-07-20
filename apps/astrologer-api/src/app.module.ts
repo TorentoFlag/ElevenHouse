@@ -7,6 +7,7 @@ import { AstrologerProfileModule } from "./modules/astrologer-profile/astrologer
 import { BookingsModule } from "./modules/bookings/bookings.module";
 import { CalculationsModule } from "./modules/calculations/calculations.module";
 import { CalendarModule } from "./modules/calendar/calendar.module";
+import { ChartsModule } from "./modules/charts/charts.module";
 import { ClientsModule } from "./modules/clients/clients.module";
 import { DatabaseModule } from "./modules/database/database.module";
 import { DictionaryAiModule } from "./modules/dictionary-ai/dictionary-ai.module";
@@ -45,6 +46,7 @@ import { VerificationModule } from "./modules/verification/verification.module";
     BookingsModule,
     VerificationModule,
     CalculationsModule,
+    ChartsModule,
     ClientsModule,
     NumerologyModule,
     MatrixModule,

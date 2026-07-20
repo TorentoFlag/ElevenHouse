@@ -1,4 +1,5 @@
 export type ClientBirthTimePrecision = "exact" | "approximate" | "unknown";
+export type ClientBirthTimeDstOccurrence = "first" | "second";
 
 export type ClientBirthDataSource = "client_profile" | "booking" | "import" | "manual";
 
@@ -23,6 +24,7 @@ export type ClientBirthDataInput = {
   readonly birthCity?: string | null;
   readonly birthRegion?: string | null;
   readonly birthTimezone?: string | null;
+  readonly birthTimeDstOccurrence?: ClientBirthTimeDstOccurrence | null;
   readonly birthLatitude?: number | null;
   readonly birthLongitude?: number | null;
   readonly source: ClientBirthDataSource;
@@ -38,6 +40,7 @@ export type NormalizedClientBirthDataInput = {
   readonly birthCity: string | null;
   readonly birthRegion: string | null;
   readonly birthTimezone: string | null;
+  readonly birthTimeDstOccurrence: ClientBirthTimeDstOccurrence | null;
   readonly birthLatitude: number | null;
   readonly birthLongitude: number | null;
   readonly source: ClientBirthDataSource;

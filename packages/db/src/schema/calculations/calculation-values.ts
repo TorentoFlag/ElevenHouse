@@ -25,6 +25,19 @@ export const calculationPdfLocaleValues = ["ru", "en"] as const;
 
 export const calculationPdfJobStatusValues = ["queued", "processing", "ready", "failed"] as const;
 
+export const chartCalculationJobMethodValues = ["natal"] as const;
+
+export const chartCalculationJobStatusValues = [
+  "queued",
+  "processing",
+  "succeeded",
+  "failed"
+] as const;
+
+export const chartCalculationJobProviderValues = ["kerykeion"] as const;
+
+export const chartCalculationJobSchemaVersionValues = ["chart-result.v1"] as const;
+
 export function formatCalculationSqlValues(values: readonly string[]): string {
   return `(${values.map((value) => `'${value}'`).join(", ")})`;
 }

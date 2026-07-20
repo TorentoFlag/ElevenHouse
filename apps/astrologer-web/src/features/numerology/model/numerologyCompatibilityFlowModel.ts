@@ -111,6 +111,7 @@ export function toClientOptionFromNumerologyParticipant(
       birthCity: participant.birthCity || null,
       birthRegion: participant.birthRegion || null,
       birthTimezone: participant.birthTimezone || null,
+      birthTimeDstOccurrence: null,
       birthLatitude: participant.birthLatitude,
       birthLongitude: participant.birthLongitude,
       source: "manual",

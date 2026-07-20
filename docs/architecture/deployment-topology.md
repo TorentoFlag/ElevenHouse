@@ -14,7 +14,7 @@ admin-web -> admin-api -> PostgreSQL / Redis / Queue   (scaffolded; internal mod
 
 Queue -> payment-worker
 Queue -> notification-worker
-Queue -> chart-worker
+Queue -> chart-worker -> chart-engine
 Queue -> workers
 ```
 
@@ -36,7 +36,12 @@ auth/permissions и audit boundaries.
 
 - `payment-worker`: payment webhooks, reconciliation, refunds, payout jobs.
 - `notification-worker`: delivery, reminders, retries, provider failover.
-- `chart-worker`: тяжёлые chart calculations.
+- `chart-worker`: BullMQ delivery, leases, retries, persistence of chart
+  calculation results and internal calls to `chart-engine`.
+- `chart-engine`: private Python/FastAPI runtime for Kerykeion-backed
+  calculation. It is not routed by Caddy and is reachable only on the private
+  deployment network. It exposes `/live` for process liveness and `/ready` for
+  readiness; production healthchecks gate on `/ready`.
 - `workers`: scheduled jobs, analytics ingestion, cleanup tasks.
 
 Workers должны быть idempotent. Повтор job не должен создавать дубли payments, notifications, bookings или ledger entries.

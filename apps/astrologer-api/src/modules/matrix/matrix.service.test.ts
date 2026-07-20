@@ -371,6 +371,7 @@ function client(displayName: string, id: string, birthDate: string): AstrologerC
       birthCity: null,
       birthRegion: null,
       birthTimezone: null,
+      birthTimeDstOccurrence: null,
       birthLatitude: null,
       birthLongitude: null,
       source: "manual",

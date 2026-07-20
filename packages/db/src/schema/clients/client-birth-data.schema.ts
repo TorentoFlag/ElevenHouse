@@ -12,6 +12,7 @@ import {
 import { users } from "../identity/accounts.schema";
 import {
   clientBirthDataSourceValues,
+  clientBirthTimeDstOccurrenceValues,
   clientBirthTimePrecisionValues,
   formatClientSqlValues
 } from "./client-values";
@@ -32,6 +33,7 @@ export const clientBirthData = pgTable(
     birthCity: text("birth_city"),
     birthRegion: text("birth_region"),
     birthTimezone: text("birth_timezone"),
+    birthTimeDstOccurrence: text("birth_time_dst_occurrence"),
     birthLatitude: doublePrecision("birth_latitude"),
     birthLongitude: doublePrecision("birth_longitude"),
     source: text("source").notNull().default("client_profile"),
@@ -48,6 +50,10 @@ export const clientBirthData = pgTable(
     check(
       "client_birth_data_source_check",
       sql`${table.source} in ${sql.raw(formatClientSqlValues(clientBirthDataSourceValues))}`
+    ),
+    check(
+      "client_birth_data_time_dst_occurrence_check",
+      sql`${table.birthTimeDstOccurrence} is null or ${table.birthTimeDstOccurrence} in ${sql.raw(formatClientSqlValues(clientBirthTimeDstOccurrenceValues))}`
     ),
     check(
       "client_birth_data_birth_date_check",

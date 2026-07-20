@@ -92,6 +92,8 @@ function toClientBirthData(row: ClientBirthDataRow): ClientBirthData {
     birthCity: row.birthCity,
     birthRegion: row.birthRegion,
     birthTimezone: row.birthTimezone,
+    birthTimeDstOccurrence:
+      row.birthTimeDstOccurrence as ClientBirthData["birthTimeDstOccurrence"],
     birthLatitude: row.birthLatitude,
     birthLongitude: row.birthLongitude,
     source: row.source as ClientBirthData["source"],

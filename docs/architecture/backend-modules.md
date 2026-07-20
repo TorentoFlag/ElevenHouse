@@ -166,6 +166,10 @@ Client starts booking
 
 Controllers должны только оркестрировать use cases. В них не должна жить бизнес-логика workflow.
 
+### Chart Engine
+
+`astrologer-api` owns chart request authorization, CSRF route metadata, CRM birth-data hydration, calculation-ready validation and job creation. `chart-worker` owns BullMQ delivery, leases, retries and result persistence. `apps/chart-engine` is a private Python/FastAPI runtime that wraps Kerykeion, returns ElevenHouse canonical chart JSON and exposes `/live` and `/ready` probes. Controllers do not enqueue BullMQ jobs directly; API transactions write an outbox event and the relay publishes `{ jobId }`.
+
 `apps/workers` owns the `calculation.pdf` BullMQ queue and the outbox relay for
 render/delete jobs. Queue payloads contain identifiers only. The worker reloads
 the authoritative calculation/report source, rejects stale checksums, renders a

@@ -1,0 +1,301 @@
+from importlib.metadata import version
+from typing import Any
+
+from kerykeion import AspectsFactory, AstrologicalSubjectFactory
+
+from chart_engine.schemas import (
+    ChartAspect,
+    ChartDistributions,
+    ChartHouse,
+    ChartPoint,
+    ChartRenderResult,
+    ChartWarning,
+    NatalRequest,
+    ProviderMetadata,
+    StoredChartCalculationPayload,
+)
+
+HOUSE_SYSTEMS = {
+    "placidus": "P",
+    "koch": "K",
+    "whole_sign": "W",
+    "equal": "A",
+    "regiomontanus": "R",
+}
+
+PLANET_ATTRIBUTES = {
+    "sun": ("Sun", "sun"),
+    "moon": ("Moon", "moon"),
+    "mercury": ("Mercury", "mercury"),
+    "venus": ("Venus", "venus"),
+    "mars": ("Mars", "mars"),
+    "jupiter": ("Jupiter", "jupiter"),
+    "saturn": ("Saturn", "saturn"),
+    "uranus": ("Uranus", "uranus"),
+    "neptune": ("Neptune", "neptune"),
+    "pluto": ("Pluto", "pluto"),
+}
+
+ANGLE_ATTRIBUTES = {
+    "ascendant": ("Ascendant", "ascendant"),
+    "midheaven": ("Midheaven", "medium_coeli"),
+}
+
+NODE_ATTRIBUTES = {
+    "true": {
+        "north_node": ("True North Node", "true_north_lunar_node"),
+        "south_node": ("True South Node", "true_south_lunar_node"),
+    },
+    "mean": {
+        "north_node": ("Mean North Node", "mean_north_lunar_node"),
+        "south_node": ("Mean South Node", "mean_south_lunar_node"),
+    },
+}
+
+KERYKEION_ACTIVE_POINTS = [
+    "Sun",
+    "Moon",
+    "Mercury",
+    "Venus",
+    "Mars",
+    "Jupiter",
+    "Saturn",
+    "Uranus",
+    "Neptune",
+    "Pluto",
+    "Ascendant",
+    "Medium_Coeli",
+    "True_North_Lunar_Node",
+    "True_South_Lunar_Node",
+    "Mean_North_Lunar_Node",
+    "Mean_South_Lunar_Node",
+]
+
+HOUSE_ATTRIBUTES = [
+    "first_house",
+    "second_house",
+    "third_house",
+    "fourth_house",
+    "fifth_house",
+    "sixth_house",
+    "seventh_house",
+    "eighth_house",
+    "ninth_house",
+    "tenth_house",
+    "eleventh_house",
+    "twelfth_house",
+]
+
+HOUSE_NAMES = {
+    "First_House": 1,
+    "Second_House": 2,
+    "Third_House": 3,
+    "Fourth_House": 4,
+    "Fifth_House": 5,
+    "Sixth_House": 6,
+    "Seventh_House": 7,
+    "Eighth_House": 8,
+    "Ninth_House": 9,
+    "Tenth_House": 10,
+    "Eleventh_House": 11,
+    "Twelfth_House": 12,
+}
+
+SIGN_NAMES = {
+    "Ari": "aries",
+    "Tau": "taurus",
+    "Gem": "gemini",
+    "Can": "cancer",
+    "Leo": "leo",
+    "Vir": "virgo",
+    "Lib": "libra",
+    "Sco": "scorpio",
+    "Sag": "sagittarius",
+    "Cap": "capricorn",
+    "Aqu": "aquarius",
+    "Pis": "pisces",
+}
+
+ELEMENT_NAMES = {
+    "Fire": "fire",
+    "Earth": "earth",
+    "Air": "air",
+    "Water": "water",
+}
+
+MODALITY_NAMES = {
+    "Cardinal": "cardinal",
+    "Fixed": "fixed",
+    "Mutable": "mutable",
+}
+
+POLARITY_BY_ELEMENT = {
+    "fire": "masculine",
+    "air": "masculine",
+    "earth": "feminine",
+    "water": "feminine",
+}
+
+POINT_NAME_TO_ID = {
+    "Sun": "sun",
+    "Moon": "moon",
+    "Mercury": "mercury",
+    "Venus": "venus",
+    "Mars": "mars",
+    "Jupiter": "jupiter",
+    "Saturn": "saturn",
+    "Uranus": "uranus",
+    "Neptune": "neptune",
+    "Pluto": "pluto",
+    "Ascendant": "ascendant",
+    "Medium_Coeli": "midheaven",
+    "True_North_Lunar_Node": "north_node",
+    "Mean_North_Lunar_Node": "north_node",
+    "True_South_Lunar_Node": "south_node",
+    "Mean_South_Lunar_Node": "south_node",
+}
+
+MAJOR_ASPECTS = {"conjunction", "opposition", "square", "trine", "sextile"}
+MINOR_ASPECTS = {"semi-sextile", "semi-square", "quincunx", "quintile"}
+
+
+def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
+    year, month, day = [int(part) for part in request.inputSnapshot.birthDate.split("-")]
+    hour, minute = [int(part) for part in request.inputSnapshot.birthTime.split(":")]
+    house_system = HOUSE_SYSTEMS[request.settings.houseSystem]
+
+    subject = AstrologicalSubjectFactory.from_birth_data(
+        name="subject",
+        year=year,
+        month=month,
+        day=day,
+        hour=hour,
+        minute=minute,
+        lng=request.inputSnapshot.longitude,
+        lat=request.inputSnapshot.latitude,
+        tz_str=request.inputSnapshot.timezone,
+        online=False,
+        zodiac_type="Tropical",
+        houses_system_identifier=house_system,
+        active_points=KERYKEION_ACTIVE_POINTS,
+        suppress_geonames_warning=True,
+    )
+
+    point_fields = PLANET_ATTRIBUTES | ANGLE_ATTRIBUTES | NODE_ATTRIBUTES[request.settings.nodeType]
+    points = [_map_point(point_id, label, getattr(subject, attr)) for point_id, (label, attr) in point_fields.items()]
+    houses = [_map_house(index + 1, getattr(subject, attr)) for index, attr in enumerate(HOUSE_ATTRIBUTES)]
+
+    return StoredChartCalculationPayload(
+        schemaVersion="chart-result.v1",
+        method="natal",
+        provider=ProviderMetadata(
+            name="kerykeion",
+            version=version("kerykeion"),
+            ephemeris="swiss-ephemeris",
+        ),
+        settings=request.settings,
+        inputSnapshot=request.inputSnapshot,
+        result=ChartRenderResult(
+            points=points,
+            houses=houses,
+            aspects=_map_aspects(subject, request.settings.aspectPreset),
+            distributions=_map_distributions(subject),
+            warnings=_map_warnings(request),
+        ),
+    )
+
+
+def _map_point(point_id: str, label: str, model: Any) -> ChartPoint:
+    return ChartPoint(
+        id=point_id,
+        label=label,
+        longitude=float(model.abs_pos),
+        sign=_map_sign(model.sign),
+        signDegree=float(model.position),
+        house=_house_number(model.house),
+        retrograde=model.retrograde,
+    )
+
+
+def _map_house(number: int, model: Any) -> ChartHouse:
+    return ChartHouse(
+        number=number,
+        longitude=float(model.abs_pos),
+        sign=_map_sign(model.sign),
+        signDegree=float(model.position),
+    )
+
+
+def _map_aspects(subject: Any, aspect_preset: str) -> list[ChartAspect]:
+    allowed_aspects = MAJOR_ASPECTS if aspect_preset == "major" else MAJOR_ASPECTS | MINOR_ASPECTS
+    aspect_model = AspectsFactory.natal_aspects(subject, active_points=KERYKEION_ACTIVE_POINTS)
+    aspects = []
+
+    for aspect in aspect_model.aspects:
+        point_a = POINT_NAME_TO_ID.get(aspect.p1_name)
+        point_b = POINT_NAME_TO_ID.get(aspect.p2_name)
+        if point_a is None or point_b is None or aspect.aspect not in allowed_aspects:
+            continue
+        aspects.append(
+            ChartAspect(
+                pointA=point_a,
+                pointB=point_b,
+                type=aspect.aspect,
+                angle=float(aspect.aspect_degrees),
+                orb=float(aspect.orbit),
+                applying=_is_applying(aspect.aspect_movement),
+                strength=_aspect_strength(float(aspect.orbit)),
+            )
+        )
+
+    return aspects
+
+
+def _map_distributions(subject: Any) -> ChartDistributions:
+    elements = {"fire": 0, "earth": 0, "air": 0, "water": 0}
+    modalities = {"cardinal": 0, "fixed": 0, "mutable": 0}
+    polarity = {"masculine": 0, "feminine": 0}
+
+    for _, attr in PLANET_ATTRIBUTES.values():
+        point = getattr(subject, attr)
+        element = ELEMENT_NAMES[str(point.element)]
+        modality = MODALITY_NAMES[str(point.quality)]
+        elements[element] += 1
+        modalities[modality] += 1
+        polarity[POLARITY_BY_ELEMENT[element]] += 1
+
+    return ChartDistributions(elements=elements, modalities=modalities, polarity=polarity)
+
+
+def _map_warnings(request: NatalRequest) -> list[ChartWarning]:
+    warnings = []
+    if request.inputSnapshot.birthTimePrecision == "approximate":
+        warnings.append(
+            ChartWarning(
+                code="BIRTH_TIME_APPROXIMATE",
+                message="Chart calculated with approximate birth time.",
+            )
+        )
+    return warnings
+
+
+def _map_sign(value: str) -> str:
+    return SIGN_NAMES.get(str(value), str(value).lower())
+
+
+def _house_number(value: object) -> int | None:
+    if value is None:
+        return None
+    return HOUSE_NAMES.get(str(value))
+
+
+def _is_applying(value: str) -> bool | None:
+    if value == "Applying":
+        return True
+    if value == "Separating":
+        return False
+    return None
+
+
+def _aspect_strength(orb: float) -> float:
+    return max(0.0, min(1.0, 1.0 - (orb / 10.0)))

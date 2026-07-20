@@ -15,7 +15,7 @@ export type BaselineHistoryKind =
   | "unknown";
 
 export const currentBaseline = {
-  hash: "6f57cc8ca0c825a1f6da1911970a0d202d34c4177886d6d08f38a6edf2eb0860",
+  hash: "ab1e22a3e02a0c428dfa01e90e48b5f037e66509ecf51fa5674e5e3ab2889b57",
   createdAt: "1784275401007"
 } as const satisfies MigrationIdentity;
 

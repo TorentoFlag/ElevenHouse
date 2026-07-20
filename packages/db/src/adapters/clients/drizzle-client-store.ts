@@ -317,6 +317,8 @@ function toClientBirthData(row: ClientBirthDataRow): ClientBirthData {
     birthCity: row.birthCity,
     birthRegion: row.birthRegion,
     birthTimezone: row.birthTimezone,
+    birthTimeDstOccurrence:
+      row.birthTimeDstOccurrence as ClientBirthData["birthTimeDstOccurrence"],
     birthLatitude: row.birthLatitude === null ? null : Number(row.birthLatitude),
     birthLongitude: row.birthLongitude === null ? null : Number(row.birthLongitude),
     source: row.source as ClientBirthData["source"],

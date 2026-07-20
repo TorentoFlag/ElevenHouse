@@ -14,6 +14,7 @@ import type {
   AuthCodeDeliveryRequestedPayload,
   CalculationPdfDeleteRequestedPayload,
   CalculationPdfRequestedPayload,
+  ChartCalculationRequestedPayload,
   RedactedAuthCodeDeliveryRequestedPayload
 } from "@elevenhouse/domain";
 
@@ -23,7 +24,8 @@ export type OutboxEventPayload =
   | AuthCodeDeliveryRequestedPayload
   | RedactedAuthCodeDeliveryRequestedPayload
   | CalculationPdfRequestedPayload
-  | CalculationPdfDeleteRequestedPayload;
+  | CalculationPdfDeleteRequestedPayload
+  | ChartCalculationRequestedPayload;
 
 export const outboxEvents = pgTable(
   "outbox_events",

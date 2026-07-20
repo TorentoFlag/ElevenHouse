@@ -24,6 +24,8 @@ Backend apps/processes:
 - `payment-worker`
 - `notification-worker`
 - `chart-worker`
+- `chart-engine` as a private Python calculation runtime, not a business
+  microservice
 
 ## Rationale
 
@@ -33,6 +35,10 @@ Backend apps/processes:
 client direct-link flows или authenticated astrologer CRM.
 
 При этом домен глубоко связан: booking, orders, payments, wallet, notifications и admin support участвуют в одном business workflow. Если слишком рано разнести всё по независимым microservices, это добавит лишнюю distributed-system complexity.
+
+`chart-engine` остаётся private runtime boundary для provider-backed
+calculation code: business orchestration, authorization, persistence and job
+ownership stay in the TypeScript API/domain/worker contour.
 
 ## Consequences
 

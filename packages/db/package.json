@@ -145,6 +145,16 @@
       "import": "./dist/adapters/clients/index.js",
       "require": "./dist/adapters/clients/index.js"
     },
+    "./charts": {
+      "types": "./dist/adapters/charts/index.d.ts",
+      "import": "./dist/adapters/charts/index.js",
+      "require": "./dist/adapters/charts/index.js"
+    },
+    "./adapters/charts": {
+      "types": "./dist/adapters/charts/index.d.ts",
+      "import": "./dist/adapters/charts/index.js",
+      "require": "./dist/adapters/charts/index.js"
+    },
     "./matrix": {
       "types": "./dist/adapters/matrix/index.d.ts",
       "import": "./dist/adapters/matrix/index.js",

@@ -59,6 +59,7 @@ export function MePage() {
         birthCity: null,
         birthRegion: null,
         birthTimezone: null,
+        birthTimeDstOccurrence: null,
         birthLatitude: null,
         birthLongitude: null
       });

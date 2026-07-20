@@ -495,6 +495,7 @@ function createClientStore(): ClientStore {
               birthCity: null,
               birthRegion: null,
               birthTimezone: null,
+              birthTimeDstOccurrence: null,
               birthLatitude: null,
               birthLongitude: null,
               source: "manual" as const,

@@ -13,6 +13,7 @@ import {
   astrologerProfiles,
   clientAstrologerRelationships,
   clientBirthData,
+  clientBirthTimeDstOccurrenceValues,
   clientJoinIntents,
   clientProfiles,
   databasePlatformRoleValues,
@@ -114,6 +115,7 @@ describe("database account schema constants", () => {
   it("exports client relationship schema tables", () => {
     expect(clientProfiles).toBeDefined();
     expect(clientBirthData).toBeDefined();
+    expect(clientBirthTimeDstOccurrenceValues).toEqual(["first", "second"]);
     expect(clientAstrologerRelationships).toBeDefined();
     expect(clientJoinIntents).toBeDefined();
   });
@@ -123,6 +125,8 @@ describe("database account schema constants", () => {
 
     expect(migration).toContain('CREATE TABLE "client_profiles"');
     expect(migration).toContain('CREATE TABLE "client_birth_data"');
+    expect(migration).toContain('"birth_time_dst_occurrence" text');
+    expect(migration).toContain("client_birth_data_time_dst_occurrence_check");
     expect(migration).toContain('CREATE TABLE "client_astrologer_relationships"');
     expect(migration).toContain('CREATE TABLE "client_join_intents"');
     expect(migration).toContain(

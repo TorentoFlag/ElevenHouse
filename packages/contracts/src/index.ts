@@ -15,3 +15,4 @@ export * from "./matrix-notes";
 export * from "./matrix-report";
 export * from "./clients";
 export * from "./calendar";
+export * from "./charts";

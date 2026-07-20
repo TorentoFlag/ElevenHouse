@@ -186,6 +186,7 @@ function clientOption(label: string, birthDate: string) {
       birthCity: null,
       birthRegion: null,
       birthTimezone: null,
+      birthTimeDstOccurrence: null,
       birthLatitude: null,
       birthLongitude: null,
       source: "client_profile" as const,

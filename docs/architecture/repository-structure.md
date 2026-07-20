@@ -16,6 +16,7 @@ ElevenHouse/
     payment-worker/
     notification-worker/
     chart-worker/
+    chart-engine/
 
   packages/
     ai/
@@ -53,6 +54,9 @@ auth/permissions и audit-contour ещё не реализованы.
   клиентские direct-link booking flows и не является каталогом/discovery.
 - Backend apps — Nest.js. Внутри Nest apps feature modules должны жить в `src/modules/<module-name>/`; root `app.module.ts` импортирует module classes, а не напрямую собирает controllers/providers всех features.
 - Worker apps запускают queue processors и scheduled jobs.
+- `apps/chart-engine` — private Python/FastAPI calculation runtime for
+  provider-backed chart calculations; it is called by workers on the internal
+  network and does not own business workflows.
 
 ## Packages
 

@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { getTableColumns } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { calculationParticipants, calculationPdfJobs, calculationRecords } from "./index";
+import {
+  calculationParticipants,
+  calculationPdfJobs,
+  calculationRecords,
+  chartCalculationJobs
+} from "./index";
 
 const migrationFile = "packages/db/drizzle/0000_sticky_rictor.sql";
 
@@ -68,6 +73,13 @@ describe("current calculation persistence schema", () => {
     expect(columns).not.toHaveProperty("reportRevision");
   });
 
+  it("defines chart calculation jobs with nullable result calculation id", () => {
+    const columns = getTableColumns(chartCalculationJobs);
+
+    expect(columns.resultCalculationId).toBeDefined();
+    expect(columns).not.toHaveProperty("calculationId");
+  });
+
   it("defines the generic PDF table directly in the baseline migration", () => {
     const migration = readFileSync(migrationFile, "utf8");
 
@@ -76,5 +88,19 @@ describe("current calculation persistence schema", () => {
     expect(migration).toContain('"document_fingerprint" text NOT NULL');
     expect(migration).toContain("calculation_pdf_jobs_idempotency_unique");
     expect(migration).toContain('WHERE "calculation_pdf_jobs"."status" <> \'failed\'');
+  });
+
+  it("defines chart calculation jobs directly in the baseline migration", () => {
+    const migration = readFileSync(migrationFile, "utf8");
+    const chartJobsTable = migration.slice(
+      migration.indexOf('CREATE TABLE "chart_calculation_jobs"'),
+      migration.indexOf('CREATE TABLE "client_profiles"')
+    );
+
+    expect(migration).toContain('CREATE TABLE "chart_calculation_jobs"');
+    expect(migration).toContain('"result_calculation_id" uuid');
+    expect(migration).toContain("chart_calculation_jobs_active_fingerprint_unique");
+    expect(migration).toContain("chart_calculation_jobs_success_fingerprint_unique");
+    expect(chartJobsTable).not.toContain('"calculation_id" uuid NOT NULL');
   });
 });
