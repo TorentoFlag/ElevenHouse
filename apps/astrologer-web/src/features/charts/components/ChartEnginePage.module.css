@@ -206,6 +206,69 @@
 .warningText {
   color: #ffcf8b;
 }
+.birthDataCard {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgb(246 210 102 / 0.22);
+  border-radius: 14px;
+  background: rgb(30 27 62 / 0.72);
+}
+.birthDataCard strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--chart-gold);
+  font-size: 13px;
+}
+.birthDataCard span {
+  color: rgb(186 178 218 / 0.74);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.birthDataCard label {
+  display: grid;
+  gap: 5px;
+}
+.birthDataCard input,
+.birthDataCard select {
+  min-height: 34px;
+  min-width: 0;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 10px;
+  background: rgb(13 12 32 / 0.74);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 12px;
+}
+.birthDataCard input {
+  padding: 0 9px;
+}
+.birthDataGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.birthDataError {
+  margin: 0;
+  color: #ff8f8f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.birthDataSaveButton {
+  min-height: 34px;
+  border: 1px solid rgb(246 210 102 / 0.28);
+  border-radius: 11px;
+  background: var(--chart-gold);
+  color: #2e2342;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 780;
+}
+.birthDataSaveButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
 .summaryCard {
   display: grid;
   gap: 3px;

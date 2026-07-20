@@ -5,22 +5,32 @@ import {
   NotFoundException,
   UnauthorizedException
 } from "@nestjs/common";
-import { getAstrologerClient, listAstrologerClients, type ClientStore } from "@elevenhouse/domain";
+import {
+  getAstrologerClient,
+  listAstrologerClients,
+  upsertClientBirthData,
+  type ClientStore
+} from "@elevenhouse/domain";
 import {
   astrologerClientListQuerySchema,
   astrologerClientListResponseSchema,
   astrologerClientParamsSchema,
   astrologerClientResponseSchema,
+  clientBirthDataUpsertRequestSchema,
   type AstrologerClientListResponse,
   type AstrologerClientResponse
 } from "@elevenhouse/contracts";
 import type { ZodType } from "@elevenhouse/validation";
+import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { CLIENT_STORE } from "./clients.tokens";
 
 @Injectable()
 export class ClientsService {
-  constructor(@Inject(CLIENT_STORE) private readonly store: ClientStore) {}
+  constructor(
+    @Inject(CLIENT_STORE) private readonly store: ClientStore,
+    private readonly clock: SystemClock
+  ) {}
 
   async listClients(
     query: unknown,
@@ -56,6 +66,39 @@ export class ClientsService {
     }
 
     return astrologerClientResponseSchema.parse({ client });
+  }
+
+  async updateBirthData(
+    clientUserId: string,
+    body: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<AstrologerClientResponse> {
+    const params = parseContract(astrologerClientParamsSchema, { clientUserId });
+    const data = parseContract(clientBirthDataUpsertRequestSchema, body);
+    const astrologerUserId = requireAstrologerUserId(request);
+    const client = await getAstrologerClient({
+      store: this.store,
+      astrologerUserId,
+      clientUserId: params.clientUserId
+    });
+
+    if (!client) {
+      throw new NotFoundException("Client was not found");
+    }
+
+    const birthData = await upsertClientBirthData({
+      store: this.store,
+      clientUserId: params.clientUserId,
+      data: { ...data, source: "manual" },
+      now: this.clock.now()
+    });
+
+    return astrologerClientResponseSchema.parse({
+      client: {
+        ...client,
+        birthData
+      }
+    });
   }
 }
 

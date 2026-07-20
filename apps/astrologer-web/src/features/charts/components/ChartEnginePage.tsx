@@ -1,4 +1,9 @@
-import type { ChartSettings, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import { useState } from "react";
+import type {
+  ChartSettings,
+  ClientBirthDataUpsertRequest,
+  StoredChartCalculationPayload
+} from "@elevenhouse/contracts";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
 import { ClientSearchCombobox } from "../../clients/components/ClientSearchCombobox";
 import { getChartBirthDataReadiness } from "../model/chartEngineState";
@@ -19,6 +24,9 @@ export type ChartEnginePageProps = {
   readonly onSettingsChange: (settings: ChartSettings) => void;
   readonly onCreateNatalJob: () => void | Promise<void>;
   readonly onSelectClient?: (client: ClientSelectOption) => void;
+  readonly onSaveBirthData?: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
+  readonly isSavingBirthData?: boolean;
+  readonly birthDataError?: string | null;
 };
 
 export function ChartEnginePage({
@@ -30,7 +38,10 @@ export function ChartEnginePage({
   settings,
   onSettingsChange,
   onCreateNatalJob,
-  onSelectClient
+  onSelectClient,
+  onSaveBirthData,
+  isSavingBirthData = false,
+  birthDataError = null
 }: ChartEnginePageProps) {
   const readiness = getChartBirthDataReadiness(selectedClient?.birthData);
   const canCalculate = Boolean(selectedClient && readiness.ready && !isBusy);
@@ -113,6 +124,15 @@ export function ChartEnginePage({
             {selectedClient && !readiness.ready ? (
               <p className={styles.warningText}>Не хватает: {readiness.missing.join(", ")}.</p>
             ) : null}
+            {selectedClient && !readiness.ready && onSaveBirthData ? (
+              <BirthDataEditor
+                client={selectedClient}
+                disabled={isBusy || isSavingBirthData}
+                errorMessage={birthDataError}
+                isSaving={isSavingBirthData}
+                onSave={onSaveBirthData}
+              />
+            ) : null}
           </section>
           <section className={styles.railGroup}>
             <h2>Большая тройка</h2>
@@ -169,6 +189,157 @@ export function ChartEnginePage({
       </section>
     </main>
   );
+}
+
+function BirthDataEditor({
+  client,
+  disabled,
+  errorMessage,
+  isSaving,
+  onSave
+}: {
+  readonly client: ClientSelectOption;
+  readonly disabled: boolean;
+  readonly errorMessage: string | null;
+  readonly isSaving: boolean;
+  readonly onSave: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
+}) {
+  const birthData = client.birthData;
+  const [birthDate, setBirthDate] = useState(birthData?.birthDate ?? "");
+  const [birthTime, setBirthTime] = useState(birthData?.birthTime ?? "");
+  const [birthTimePrecision, setBirthTimePrecision] = useState<
+    ClientBirthDataUpsertRequest["birthTimePrecision"]
+  >(birthData?.birthTimePrecision ?? "unknown");
+  const [birthPlaceText, setBirthPlaceText] = useState(birthData?.birthPlaceText ?? "");
+  const [birthTimezone, setBirthTimezone] = useState(birthData?.birthTimezone ?? "");
+  const [birthLatitude, setBirthLatitude] = useState(
+    birthData?.birthLatitude == null ? "" : String(birthData.birthLatitude)
+  );
+  const [birthLongitude, setBirthLongitude] = useState(
+    birthData?.birthLongitude == null ? "" : String(birthData.birthLongitude)
+  );
+
+  const timeDisabled = disabled || birthTimePrecision === "unknown";
+
+  return (
+    <form
+      className={styles.birthDataCard}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void onSave({
+          label: birthData?.label ?? "Основные данные",
+          birthDate: normalizeTextField(birthDate),
+          birthTime: birthTimePrecision === "unknown" ? null : normalizeTextField(birthTime),
+          birthTimePrecision,
+          birthPlaceText: normalizeTextField(birthPlaceText),
+          birthCountryCode: birthData?.birthCountryCode ?? null,
+          birthCity: birthData?.birthCity ?? null,
+          birthRegion: birthData?.birthRegion ?? null,
+          birthTimezone: normalizeTextField(birthTimezone),
+          birthTimeDstOccurrence: birthData?.birthTimeDstOccurrence ?? null,
+          birthLatitude: normalizeNumberField(birthLatitude),
+          birthLongitude: normalizeNumberField(birthLongitude)
+        });
+      }}
+    >
+      <div>
+        <strong>Заполните данные рождения</strong>
+        <span>Сохраним в карточку клиента и сразу разблокируем расчёт натала.</span>
+      </div>
+      <label>
+        <span>Дата рождения</span>
+        <input
+          type="date"
+          value={birthDate}
+          disabled={disabled}
+          onChange={(event) => setBirthDate(event.target.value)}
+        />
+      </label>
+      <label>
+        <span>Точность времени</span>
+        <select
+          value={birthTimePrecision}
+          disabled={disabled}
+          onChange={(event) =>
+            setBirthTimePrecision(
+              event.target.value as ClientBirthDataUpsertRequest["birthTimePrecision"]
+            )
+          }
+        >
+          <option value="unknown">Неизвестно</option>
+          <option value="approximate">Примерно</option>
+          <option value="exact">Точно</option>
+        </select>
+      </label>
+      <label>
+        <span>Время рождения</span>
+        <input
+          type="time"
+          value={birthTime}
+          disabled={timeDisabled}
+          onChange={(event) => setBirthTime(event.target.value)}
+        />
+      </label>
+      <label>
+        <span>Место рождения</span>
+        <input
+          type="text"
+          value={birthPlaceText}
+          disabled={disabled}
+          placeholder="Москва, Россия"
+          onChange={(event) => setBirthPlaceText(event.target.value)}
+        />
+      </label>
+      <label>
+        <span>Часовой пояс</span>
+        <input
+          type="text"
+          value={birthTimezone}
+          disabled={disabled}
+          placeholder="Europe/Moscow"
+          onChange={(event) => setBirthTimezone(event.target.value)}
+        />
+      </label>
+      <div className={styles.birthDataGrid}>
+        <label>
+          <span>Широта</span>
+          <input
+            type="number"
+            step="0.0001"
+            value={birthLatitude}
+            disabled={disabled}
+            onChange={(event) => setBirthLatitude(event.target.value)}
+          />
+        </label>
+        <label>
+          <span>Долгота</span>
+          <input
+            type="number"
+            step="0.0001"
+            value={birthLongitude}
+            disabled={disabled}
+            onChange={(event) => setBirthLongitude(event.target.value)}
+          />
+        </label>
+      </div>
+      {errorMessage ? <p className={styles.birthDataError}>{errorMessage}</p> : null}
+      <button className={styles.birthDataSaveButton} type="submit" disabled={disabled}>
+        {isSaving ? "Сохраняем…" : "Сохранить данные рождения"}
+      </button>
+    </form>
+  );
+}
+
+function normalizeTextField(value: string): string | null {
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
+
+function normalizeNumberField(value: string): number | null {
+  const normalized = value.trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function StatusCard({

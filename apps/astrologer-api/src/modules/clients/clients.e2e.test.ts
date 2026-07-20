@@ -4,7 +4,8 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
 import {
   astrologerClientListResponseSchema,
-  astrologerClientResponseSchema
+  astrologerClientResponseSchema,
+  clientBirthDataUpsertRequestSchema
 } from "@elevenhouse/contracts";
 import type {
   AstrologerClientList,
@@ -35,6 +36,7 @@ import { ASTROLOGER_REGISTRATION_SESSION_UNIT_OF_WORK } from "../identity/regist
 import { createIdentityConfigServiceStub } from "../identity/testing/identity-config-service.stub";
 import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordless-rate-limiter";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
+import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { ClientsModule } from "./clients.module";
 import { CLIENT_STORE } from "./clients.tokens";
 
@@ -43,6 +45,7 @@ const sessionCookieName = "elevenhouse_astrologer_session";
 const csrfCookieName = "elevenhouse_astrologer_csrf";
 const csrfHeaderName = "x-csrf-token";
 const sessionToken = "raw-session-token";
+let currentCsrfToken = "";
 const astrologerUserId = "22222222-2222-4222-8222-222222222222";
 const secondAstrologerUserId = "33333333-3333-4333-8333-333333333333";
 const clientUserId = "11111111-1111-4111-8111-111111111111";
@@ -112,6 +115,12 @@ describe("clients HTTP routes", () => {
       .useValue(createClientStore())
       .compile();
 
+    currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
+      response: { cookie: vi.fn() },
+      sessionToken,
+      sessionExpiresAt: "2026-07-09T00:00:00.000Z",
+      now
+    });
     app = moduleRef.createNestApplication();
     await app.listen(0);
     baseUrl = await app.getUrl();
@@ -163,11 +172,66 @@ describe("clients HTTP routes", () => {
     expect(unrelatedResponse.status).toBe(404);
   });
 
+  it("requires CSRF for birth data updates", async () => {
+    const response = await putJson(`/clients/${clientUserId}/birth-data`, validBirthDataBody(), {
+      cookie: `${sessionCookieName}=${sessionToken}`
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("updates related client birth data and returns the refreshed client card", async () => {
+    const response = await putJson(
+      `/clients/${clientUserId}/birth-data`,
+      validBirthDataBody(),
+      csrfHeaders()
+    );
+    const unrelatedResponse = await putJson(
+      `/clients/${unrelatedClientUserId}/birth-data`,
+      validBirthDataBody(),
+      csrfHeaders()
+    );
+
+    expect(response.status).toBe(200);
+    astrologerClientResponseSchema.parse(response.body);
+    expect(response.body).toMatchObject({
+      client: {
+        clientUserId,
+        birthData: {
+          birthDate: "1990-07-15",
+          birthTime: "10:30",
+          birthTimezone: "Europe/Rome",
+          birthLatitude: 41.9028,
+          birthLongitude: 12.4964,
+          source: "manual"
+        }
+      }
+    });
+    expect(unrelatedResponse.status).toBe(404);
+  });
+
   async function getJson(path: string): Promise<HttpJsonResponse> {
     const response = await fetch(`${baseUrl}${path}`, {
       headers: {
         cookie: `${sessionCookieName}=${sessionToken}`
       }
+    });
+
+    return readJsonResponse(response);
+  }
+
+  async function putJson(
+    path: string,
+    body: unknown,
+    headers: Record<string, string> = {}
+  ): Promise<HttpJsonResponse> {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        ...headers
+      },
+      body: JSON.stringify(body)
     });
 
     return readJsonResponse(response);
@@ -224,37 +288,39 @@ function createAuthStore(userId: string): AuthSessionAuthenticationStore {
 }
 
 function createClientStore(): ClientStore {
-  const visibleClient: AstrologerClientListItem = {
+  let birthData: ClientBirthData = {
+    id: "55555555-5555-4555-8555-555555555555",
+    clientUserId,
+    label: "Основные данные",
+    birthDate: "1990-03-14",
+    birthTime: "08:25",
+    birthTimePrecision: "exact",
+    birthPlaceText: "Москва, Россия",
+    birthCountryCode: "RU",
+    birthCity: "Москва",
+    birthRegion: "Москва",
+    birthTimezone: "Europe/Moscow",
+    birthTimeDstOccurrence: null,
+    birthLatitude: 55.7558,
+    birthLongitude: 37.6173,
+    source: "client_profile",
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString()
+  };
+  const visibleClientBase: Omit<AstrologerClientListItem, "birthData"> = {
     clientUserId,
     displayName: "Марина Краснова",
     relationshipStatus: "active",
     firstLinkedAt: now.toISOString(),
-    lastLinkedAt: now.toISOString(),
-    birthData: {
-      id: "55555555-5555-4555-8555-555555555555",
-      clientUserId,
-      label: "Основные данные",
-      birthDate: "1990-03-14",
-      birthTime: "08:25",
-      birthTimePrecision: "exact",
-      birthPlaceText: "Москва, Россия",
-      birthCountryCode: "RU",
-      birthCity: "Москва",
-      birthRegion: "Москва",
-      birthTimezone: "Europe/Moscow",
-      birthTimeDstOccurrence: null,
-      birthLatitude: 55.7558,
-      birthLongitude: 37.6173,
-      source: "client_profile",
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString()
-    }
+    lastLinkedAt: now.toISOString()
   };
-  const unrelatedClient: AstrologerClientListItem = {
-    ...visibleClient,
+  const visibleClient = (): AstrologerClientListItem => ({ ...visibleClientBase, birthData });
+  const unrelatedClient = (): AstrologerClientListItem => ({
+    ...visibleClientBase,
     clientUserId: unrelatedClientUserId,
-    displayName: "Чужой клиент"
-  };
+    displayName: "Чужой клиент",
+    birthData: { ...birthData, clientUserId: unrelatedClientUserId }
+  });
 
   return {
     createJoinIntent: vi.fn(
@@ -267,21 +333,53 @@ function createClientStore(): ClientStore {
         raise("Unexpected ensure relationship call")
     ),
     upsertClientProfile: vi.fn(async (): Promise<void> => {}),
-    upsertClientBirthData: vi.fn(
-      async (): Promise<ClientBirthData> => raise("Unexpected upsert birth data call")
-    ),
+    upsertClientBirthData: vi.fn(async (input): Promise<ClientBirthData> => {
+      birthData = {
+        id: "66666666-6666-4666-8666-666666666666",
+        clientUserId: input.clientUserId,
+        ...input.data,
+        createdAt: now.toISOString(),
+        updatedAt: input.now
+      };
+      return birthData;
+    }),
     listAstrologerClients: vi.fn(async (input): Promise<AstrologerClientList> => {
       const clients =
-        input.astrologerUserId === astrologerUserId ? [visibleClient] : [unrelatedClient];
+        input.astrologerUserId === astrologerUserId ? [visibleClient()] : [unrelatedClient()];
       return { clients, total: clients.length };
     }),
     getAstrologerClient: vi.fn(async (input) => {
       if (input.astrologerUserId === secondAstrologerUserId) {
-        return unrelatedClient;
+        return unrelatedClient();
       }
 
-      return input.clientUserId === clientUserId ? visibleClient : null;
+      return input.clientUserId === clientUserId ? visibleClient() : null;
     })
+  };
+}
+
+function validBirthDataBody(): Record<string, unknown> {
+  return clientBirthDataUpsertRequestSchema.parse({
+    label: "Основные данные",
+    birthDate: "1990-07-15",
+    birthTime: "10:30",
+    birthTimePrecision: "exact",
+    birthPlaceText: "Рим, Италия",
+    birthCountryCode: "IT",
+    birthCity: "Рим",
+    birthRegion: "Лацио",
+    birthTimezone: "Europe/Rome",
+    birthTimeDstOccurrence: null,
+    birthLatitude: 41.9028,
+    birthLongitude: 12.4964
+  });
+}
+
+function csrfHeaders(): Record<string, string> {
+  return {
+    cookie: `${sessionCookieName}=${sessionToken}; ${csrfCookieName}=${currentCsrfToken}`,
+    origin: "http://localhost:3000",
+    [csrfHeaderName]: currentCsrfToken
   };
 }
 

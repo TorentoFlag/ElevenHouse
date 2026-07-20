@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChartSettings, StoredChartCalculationPayload } from "@elevenhouse/contracts";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
 import { ChartEnginePage } from "./ChartEnginePage";
@@ -36,6 +36,8 @@ const client = {
 } satisfies ClientSelectOption;
 
 describe("ChartEnginePage", () => {
+  afterEach(() => cleanup());
+
   it("keeps non-natal modes disabled and starts only a CRM-backed natal calculation", async () => {
     const user = userEvent.setup();
     const onCreateNatalJob = vi.fn(async () => undefined);
@@ -77,6 +79,72 @@ describe("ChartEnginePage", () => {
     expect(screen.queryByText(/очеред/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("Солнце").length).toBeGreaterThan(0);
     expect(screen.getByText("I дом")).toBeInTheDocument();
+  });
+
+  it("saves missing birth data from the chart engine rail before calculation", async () => {
+    const user = userEvent.setup();
+    const onSaveBirthData = vi.fn(async () => undefined);
+    render(
+      <ChartEnginePage
+        selectedClient={{
+          ...client,
+          birthDateDisplay: "—",
+          hasBirthDate: false,
+          birthData: {
+            ...client.birthData,
+            birthDate: null,
+            birthTime: null,
+            birthTimePrecision: "unknown",
+            birthTimezone: null,
+            birthLatitude: null,
+            birthLongitude: null
+          }
+        }}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onSaveBirthData={onSaveBirthData}
+        isSavingBirthData={false}
+        birthDataError={null}
+      />
+    );
+
+    expect(screen.getByText(/заполните данные рождения/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /рассчитать/i })).toBeDisabled();
+
+    await user.clear(screen.getByLabelText(/дата рождения/i));
+    await user.type(screen.getByLabelText(/дата рождения/i), "1990-07-15");
+    await user.selectOptions(screen.getByLabelText(/точность времени/i), "exact");
+    await user.clear(screen.getByLabelText(/^время рождения/i));
+    await user.type(screen.getByLabelText(/^время рождения/i), "10:30");
+    await user.clear(screen.getByLabelText(/место рождения/i));
+    await user.type(screen.getByLabelText(/место рождения/i), "Рим, Италия");
+    await user.clear(screen.getByLabelText(/часовой пояс/i));
+    await user.type(screen.getByLabelText(/часовой пояс/i), "Europe/Rome");
+    await user.clear(screen.getByLabelText(/широта/i));
+    await user.type(screen.getByLabelText(/широта/i), "41.9028");
+    await user.clear(screen.getByLabelText(/долгота/i));
+    await user.type(screen.getByLabelText(/долгота/i), "12.4964");
+    await user.click(screen.getByRole("button", { name: /сохранить данные рождения/i }));
+
+    expect(onSaveBirthData).toHaveBeenCalledWith({
+      label: "Основные данные",
+      birthDate: "1990-07-15",
+      birthTime: "10:30",
+      birthTimePrecision: "exact",
+      birthPlaceText: "Рим, Италия",
+      birthCountryCode: "IT",
+      birthCity: "Рим",
+      birthRegion: null,
+      birthTimezone: "Europe/Rome",
+      birthTimeDstOccurrence: null,
+      birthLatitude: 41.9028,
+      birthLongitude: 12.4964
+    });
   });
 });
 

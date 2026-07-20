@@ -1,8 +1,13 @@
 import {
   astrologerClientListQuerySchema,
   astrologerClientListResponseSchema,
+  astrologerClientResponseSchema,
+  astrologerClientParamsSchema,
+  clientBirthDataUpsertRequestSchema,
   type AstrologerClientListQuery,
-  type AstrologerClientListResponse
+  type AstrologerClientListResponse,
+  type AstrologerClientResponse,
+  type ClientBirthDataUpsertRequest
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 
@@ -18,5 +23,19 @@ export async function listAstrologerClients(
 
   return astrologerClientListResponseSchema.parse(
     await application.http.get(`/clients?${searchParams.toString()}`)
+  );
+}
+
+export async function updateClientBirthData(
+  clientUserId: string,
+  input: ClientBirthDataUpsertRequest
+): Promise<AstrologerClientResponse> {
+  const params = astrologerClientParamsSchema.parse({ clientUserId });
+  const body = clientBirthDataUpsertRequestSchema.parse(input);
+
+  return astrologerClientResponseSchema.parse(
+    await application.http.put(`/clients/${params.clientUserId}/birth-data`, body, {
+      csrf: true
+    })
   );
 }

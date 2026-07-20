@@ -21,7 +21,7 @@ const now = "2026-07-06T10:00:00.000Z";
 describe("ClientsService", () => {
   it("lists only clients related to the current astrologer", async () => {
     const store = createStore();
-    const service = new ClientsService(store);
+    const service = createService(store);
 
     await expect(service.listClients({}, createAuthenticatedRequest())).resolves.toMatchObject({
       total: 1,
@@ -46,7 +46,7 @@ describe("ClientsService", () => {
 
   it("supports search and pagination query normalization", async () => {
     const store = createStore();
-    const service = new ClientsService(store);
+    const service = createService(store);
 
     await service.listClients(
       { query: "  марина  ", limit: "10", offset: "5" },
@@ -63,7 +63,7 @@ describe("ClientsService", () => {
 
   it("gets one client only inside the current astrologer relationship", async () => {
     const store = createStore();
-    const service = new ClientsService(store);
+    const service = createService(store);
 
     await expect(
       service.getClient(clientUserId, createAuthenticatedRequest())
@@ -78,8 +78,62 @@ describe("ClientsService", () => {
     ).rejects.toThrow(NotFoundException);
   });
 
+  it("updates birth data only for a client related to the current astrologer", async () => {
+    const store = createStore();
+    const service = createService(store);
+
+    await expect(
+      service.updateBirthData(clientUserId, birthDataInput(), createAuthenticatedRequest())
+    ).resolves.toMatchObject({
+      client: {
+        clientUserId,
+        birthData: {
+          birthDate: "1990-07-15",
+          birthTime: "10:30",
+          birthTimePrecision: "exact",
+          birthTimezone: "Europe/Rome",
+          birthLatitude: 41.9028,
+          birthLongitude: 12.4964,
+          source: "manual"
+        }
+      }
+    });
+
+    expect(store.getAstrologerClient).toHaveBeenCalledWith({ astrologerUserId, clientUserId });
+    expect(store.upsertClientBirthData).toHaveBeenCalledWith({
+      clientUserId,
+      data: {
+        label: "Основные данные",
+        birthDate: "1990-07-15",
+        birthTime: "10:30",
+        birthTimePrecision: "exact",
+        birthPlaceText: "Рим, Италия",
+        birthCountryCode: "IT",
+        birthCity: "Рим",
+        birthRegion: "Лацио",
+        birthTimezone: "Europe/Rome",
+        birthTimeDstOccurrence: null,
+        birthLatitude: 41.9028,
+        birthLongitude: 12.4964,
+        source: "manual"
+      },
+      now
+    });
+  });
+
+  it("does not upsert birth data for unrelated clients", async () => {
+    const store = createStore();
+    const service = createService(store);
+
+    await expect(
+      service.updateBirthData(unrelatedClientUserId, birthDataInput(), createAuthenticatedRequest())
+    ).rejects.toThrow(NotFoundException);
+
+    expect(store.upsertClientBirthData).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid input and missing sessions", async () => {
-    const service = new ClientsService(createStore());
+    const service = createService(createStore());
 
     await expect(
       service.listClients({ limit: "999" }, createAuthenticatedRequest())
@@ -87,9 +141,16 @@ describe("ClientsService", () => {
     await expect(service.getClient("not-a-uuid", createAuthenticatedRequest())).rejects.toThrow(
       BadRequestException
     );
+    await expect(
+      service.updateBirthData(clientUserId, { birthTime: "10:30" }, createAuthenticatedRequest())
+    ).rejects.toThrow(BadRequestException);
     await expect(service.listClients({}, {})).rejects.toThrow(UnauthorizedException);
   });
 });
+
+function createService(store: ClientStore): ClientsService {
+  return new ClientsService(store, { now: () => new Date(now) });
+}
 
 function createStore(): ClientStore {
   const client: AstrologerClientListItem = {
@@ -130,9 +191,15 @@ function createStore(): ClientStore {
         raise("Unexpected ensure relationship call")
     ),
     upsertClientProfile: vi.fn(async (): Promise<void> => {}),
-    upsertClientBirthData: vi.fn(
-      async (): Promise<ClientBirthData> => raise("Unexpected upsert birth data call")
-    ),
+    upsertClientBirthData: vi.fn(async (input): Promise<ClientBirthData> => {
+      return {
+        id: "66666666-6666-4666-8666-666666666666",
+        clientUserId: input.clientUserId,
+        ...input.data,
+        createdAt: now,
+        updatedAt: input.now
+      };
+    }),
     listAstrologerClients: vi.fn(
       async (input: ClientStoreListAstrologerClientsInput): Promise<AstrologerClientList> => {
         const clients =
@@ -150,6 +217,23 @@ function createStore(): ClientStore {
           ? client
           : null
     )
+  };
+}
+
+function birthDataInput(): Record<string, unknown> {
+  return {
+    label: "Основные данные",
+    birthDate: "1990-07-15",
+    birthTime: "10:30",
+    birthTimePrecision: "exact",
+    birthPlaceText: "Рим, Италия",
+    birthCountryCode: "IT",
+    birthCity: "Рим",
+    birthRegion: "Лацио",
+    birthTimezone: "Europe/Rome",
+    birthTimeDstOccurrence: null,
+    birthLatitude: 41.9028,
+    birthLongitude: 12.4964
   };
 }
 

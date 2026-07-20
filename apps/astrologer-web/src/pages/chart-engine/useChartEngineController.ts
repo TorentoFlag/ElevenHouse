@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChartSettings, StoredChartCalculationPayload } from "@elevenhouse/contracts";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
+import { updateClientBirthData } from "../../features/clients/api/clientsApi";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
+import {
+  astrologerClientsQueryKeys,
+  toClientSelectOptions
+} from "../../features/clients/model/clientSelectorModel";
 import {
   createNatalChartJob,
   getChartCalculation,
@@ -21,6 +26,7 @@ const defaultSettings: ChartSettings = {
 
 export function useChartEngineController() {
   useDocumentTitle("ElevenHouse | Движок карт");
+  const queryClient = useQueryClient();
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
   const [settings, setSettings] = useState<ChartSettings>(defaultSettings);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -44,6 +50,29 @@ export function useChartEngineController() {
     },
     onError: (error) => {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить расчёт карты");
+    }
+  });
+
+  const birthDataMutation = useMutation({
+    mutationFn: async (data: Parameters<typeof updateClientBirthData>[1]) => {
+      if (!selectedClient) {
+        throw new Error("Выберите клиента из CRM");
+      }
+
+      return updateClientBirthData(selectedClient.value, data);
+    },
+    onSuccess: async (response) => {
+      const [updatedClient] = toClientSelectOptions([response.client]);
+      if (updatedClient) {
+        setSelectedClient(updatedClient);
+      }
+      setErrorMessage(null);
+      await queryClient.invalidateQueries({ queryKey: astrologerClientsQueryKeys.all() });
+    },
+    onError: (error) => {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Не удалось сохранить данные рождения"
+      );
     }
   });
 
@@ -100,11 +129,18 @@ export function useChartEngineController() {
       (jobQuery.error instanceof Error ? jobQuery.error.message : null),
     isBusy:
       createMutation.isPending ||
+      birthDataMutation.isPending ||
       Boolean(jobId) ||
       jobQuery.isFetching ||
       calculationQuery.isFetching,
     settings,
     onSettingsChange: setSettings,
+    isSavingBirthData: birthDataMutation.isPending,
+    birthDataError:
+      birthDataMutation.error instanceof Error ? birthDataMutation.error.message : null,
+    onSaveBirthData: async (data: Parameters<typeof updateClientBirthData>[1]) => {
+      await birthDataMutation.mutateAsync(data);
+    },
     onSelectClient: (client: ClientSelectOption) => {
       setSelectedClient(client);
       setJobId(null);
