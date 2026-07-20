@@ -92,6 +92,7 @@ export function CalendarToolbar({
 
       <button
         className={styles.ghostButton}
+        data-summary-toggle="true"
         type="button"
         onClick={() => onSetSummaryPanelOpen(!isSummaryPanelOpen)}
       >
@@ -103,6 +104,24 @@ export function CalendarToolbar({
         <Icon iconName="plus" width={15} height={15} aria-hidden="true" />
         {copy.createBookingLabel}
       </button>
+
+      <div
+        className={styles.mobileNavigation}
+        data-mobile-calendar-navigation="true"
+        aria-label={copy.title}
+        role="group"
+      >
+        <button type="button" aria-label={copy.previousLabel} onClick={onPrevious}>
+          <Icon iconName="chevronLeft" width={18} height={18} aria-hidden="true" />
+        </button>
+        <button type="button" onClick={onToday}>
+          {copy.todayLabel}
+        </button>
+        <strong>{rangeLabel}</strong>
+        <button type="button" aria-label={copy.nextLabel} onClick={onNext}>
+          <Icon iconName="chevronRight" width={18} height={18} aria-hidden="true" />
+        </button>
+      </div>
     </header>
   );
 }

@@ -10,11 +10,11 @@ describe("astrologer web shell", () => {
     expect(ASTROLOGER_WEB_APP_TITLE).toBe("ElevenHouse Astrologer Web");
   });
 
-  it("starts the astrologer workspace in Russian regardless of browser locale", () => {
+  it("lets the i18n provider resolve the initial workspace locale", () => {
     const appShell = App();
     const i18nProvider = getElementProps(appShell).children;
 
-    expect(getElementProps(i18nProvider)).toEqual(expect.objectContaining({ initialLocale: "ru" }));
+    expect(getElementProps(i18nProvider)).not.toHaveProperty("initialLocale");
   });
 });
 

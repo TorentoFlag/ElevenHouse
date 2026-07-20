@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Children, type ReactElement } from "react";
+import { Children, isValidElement, type ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { CalendarRendererProps } from "../model/calendarRenderer";
 import { FullCalendarRenderer } from "./FullCalendarRenderer";
@@ -153,6 +153,7 @@ describe("FullCalendarRenderer", () => {
     const calendar = FullCalendarRenderer(createProps()) as ReactElement<{
       eventContent(info: unknown): ReactElement<{
         "aria-label": string;
+        className?: string;
         children: ReactElement[];
       }>;
     }>;
@@ -179,6 +180,69 @@ describe("FullCalendarRenderer", () => {
       "11:00, Марина К., Натальный разбор, Подтверждена"
     );
     expect(Children.toArray(content.props.children)).toHaveLength(3);
+    expect(content.props.className).toBe("eh-calendar-event-content");
+    expect(
+      Children.toArray(content.props.children).map((child) =>
+        isValidElement<{ className?: string }>(child) ? child.props.className : undefined
+      )
+    ).toEqual([
+      "eh-calendar-event-time",
+      "eh-calendar-event-title",
+      "eh-calendar-event-subtitle"
+    ]);
+  });
+
+  it("adds an app-owned class to foreground events without styling availability backgrounds", () => {
+    const calendar = FullCalendarRenderer(createProps()) as ReactElement<{
+      eventClass(info: unknown): string | undefined;
+    }>;
+
+    expect(calendar.props.eventClass({ event: { extendedProps: { rendererEntry: {} } } })).toBe(
+      "eh-calendar-event"
+    );
+    expect(
+      calendar.props.eventClass({ event: { extendedProps: { calendarAvailability: true } } })
+    ).toBeUndefined();
+  });
+
+  it("makes rendered booking events keyboard-activatable through public mount hooks", () => {
+    const props = createProps();
+    const calendar = FullCalendarRenderer(props) as ReactElement<{
+      eventDidMount(info: unknown): void;
+      eventWillUnmount(info: unknown): void;
+    }>;
+    const setAttribute = vi.fn();
+    const addEventListener = vi.fn();
+    const removeEventListener = vi.fn();
+    const element = { setAttribute, addEventListener, removeEventListener };
+    const event = {
+      extendedProps: {
+        calendarEntryId: entryId,
+        rendererEntry: {
+          accessibilityLabel: "11:00, Марина К., Натальный разбор, Подтверждена"
+        }
+      }
+    };
+
+    calendar.props.eventDidMount({ el: element, event });
+
+    expect(setAttribute).toHaveBeenCalledWith("role", "button");
+    expect(setAttribute).toHaveBeenCalledWith("tabindex", "0");
+    expect(setAttribute).toHaveBeenCalledWith(
+      "aria-label",
+      "11:00, Марина К., Натальный разбор, Подтверждена"
+    );
+    const keydown = addEventListener.mock.calls.find(([name]) => name === "keydown")?.[1] as
+      | ((event: { key: string; preventDefault(): void }) => void)
+      | undefined;
+    const preventDefault = vi.fn();
+    keydown?.({ key: "Enter", preventDefault });
+
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(props.onEntryActivate).toHaveBeenCalledWith(entryId);
+
+    calendar.props.eventWillUnmount({ el: element, event });
+    expect(removeEventListener).toHaveBeenCalledWith("keydown", keydown);
   });
 
   it("keeps FullCalendar imports inside the adapter component", () => {

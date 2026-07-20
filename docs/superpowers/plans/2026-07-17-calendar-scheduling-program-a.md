@@ -20,7 +20,8 @@ isolated behind an app-local renderer adapter.
 Drizzle ORM, PostgreSQL, Zod-backed ElevenHouse contracts, FullCalendar 7,
 Temporal polyfills, Vitest and the ElevenHouse design system.
 
-**Status:** Approved; implementation in progress on shared `main`.
+**Status:** Approved; implementation and authenticated browser acceptance are
+complete on shared `main` with local DB fixtures authorized by the user.
 
 ## Global Constraints
 
@@ -69,24 +70,36 @@ an app-owned agenda rather than a compressed seven-column grid.
   owner-scope, validation, idempotency and conflict evidence.
 - [x] Task 7: Booking API module and astrologer-local idempotency security policy.
 - [x] Task 8: frontend queries, state model and route integration.
-- [ ] Task 9 partial: desktop shell, interactive empty grid, day/week/month
-  navigation, summary-panel toggle and the production availability editor render
-  in the authenticated browser. Recurring periods, date overrides, schedule
-  policies and product assignments save through the real API. The manual-booking
-  dialog, owner-scoped slot query, real product assignment and authenticated
-  create/reload flow are implemented and browser-proved. The reference-shaped
-  booking-detail panel now loads an authoritative booking snapshot and has
-  authenticated open/close/focus-return browser evidence. Desktop day/week time
-  grids now use the measured reference contract: 08:00–21:00, 56 px per hour,
-  52 px day header and 60 px time gutter through public FullCalendar v7 class
-  hooks. Whole-hour grid clicks now produce a one-hour booking intent, while the
-  manual-booking form resolves that preference only against server-returned
-  product slots. Automated evidence is green; fresh browser interaction evidence
-  is pending because Computer Use could not start its system service while both
-  frontend and API remained healthy. Mobile agenda, conflict-browser evidence
-  and exact whole-calendar reference parity remain open.
-- [ ] Task 9: reference-parity desktop and mobile UI.
-- [ ] Task 10: runtime, visual, accessibility and repository verification.
+- [x] 2026-07-20: Task 9 automated UI implementation now includes the app-owned
+  mobile agenda, reference-shaped app-owned month grid, mobile booking-detail
+  sheet, keyboard event activation, assertive conflict announcement and 44 px
+  mobile controls. RED/GREEN component evidence, 79 focused frontend tests and
+  539 whole-astrologer-web tests are green; typecheck, build and targeted lint
+  pass.
+- [x] 2026-07-20: primary Task 9 browser acceptance now covers the desktop
+  week/month surfaces, mobile agenda and booking-detail bottom sheet at
+  390x844, real calendar range HTTP 200, loading/error/retry recovery, manual
+  dialog first Escape, event Enter activation, dialog focus containment and
+  focus restoration, month arrow-key navigation, and month-date-to-week
+  anchoring. Browser QA also found and fixed two production-only defects: the
+  FullCalendar v7 foreground event needed an app-owned `eventClass` because v7
+  hashes internal classes, and the app layout needed an explicit minmax column
+  track to prevent the mobile calendar from clipping beyond the 318 px
+  workspace.
+- [x] 2026-07-20: remaining browser acceptance closed with local DB fixtures
+  authorized by the user. DevTools browser evidence proved an actual
+  network-backed stale-slot `409 slot_no_longer_available`, second-owner data
+  hidden from the primary owner range, a true server-returned empty range, EN
+  locale rendering, desktop hourly-cell prefill into the manual-booking dialog
+  and Lighthouse accessibility 100 on the dialog state.
+- [x] 2026-07-20: Task 10 calendar acceptance passed, while the current
+  repository-wide `pnpm verify` gate is blocked by a separate chart/db contour in
+  the dirty shared checkout. Fresh lint starts clean, but typecheck stops on
+  missing `chartCalculationJobs` export from
+  `packages/db/src/schema/calculations/calculations.schema.test.ts`.
+- [x] Task 9: reference-parity desktop and mobile UI.
+- [x] Task 10: runtime, visual and accessibility verification; repository gate
+  executed and separated from the unrelated current chart/db blocker.
 
 ## Surprises & Discoveries
 
@@ -101,6 +114,13 @@ an app-owned agenda rather than a compressed seven-column grid.
 - FullCalendar v7 moved standard React plugins into `@fullcalendar/react/*`
   subpath exports. The legacy standalone plugin packages have no final 7.0.0
   release and must not be mixed with the v7 React package.
+- FullCalendar v7 also renamed the public event class hook to `eventClass` and
+  hashes theme internals; styling `.fc-event` or using the v6
+  `eventClassNames` option does not affect the rendered v7 event root.
+- The mobile app workspace is a two-dimensional CSS grid. `min-width: 0` on the
+  child alone does not contain intrinsic calendar width when the workspace's
+  implicit column remains `auto`; `grid-template-columns: minmax(0, 1fr)` is
+  required to keep the 72 px rail plus 318 px workspace inside a 390 px viewport.
 - Drizzle can define the scheduling columns and indexes but does not provide a
   first-class schema DSL for the required multi-column partial exclusion
   constraint. The checked-in baseline must therefore receive a deterministic,
@@ -175,7 +195,22 @@ an app-owned agenda rather than a compressed seven-column grid.
 - The authenticated manual-booking flow created and activated a real local
   product, assigned it to the persisted schedule, created a confirmed booking
   for an existing CRM client, survived a full reload and removed the occupied
-  `09:00` start from the next slot response. No direct SQL fixture was used.
+  `09:00` start from the next slot response. A later acceptance pass used an
+  explicitly authorized direct local DB fixture to create deterministic owner,
+  client, product, schedule and cross-owner booking data for stale-slot,
+  owner-isolation, empty-range and EN browser checks.
+- FullCalendar's public event mount/unmount hooks are sufficient to make the
+  day/week event shell a labelled keyboard target without relying on hashed
+  internal DOM classes. Enter and Space now activate the same app-owned entry
+  callback as pointer selection, and the listener is removed on unmount.
+- The public DayGrid table cannot reproduce the reference month composition's
+  separated 12 px day cards and 6 px gutters without private DOM coupling. The
+  app-owned month view now consumes the same validated entries/availability,
+  uses Monday-first timezone-safe local dates and caps visible rows at three.
+- Earlier on 2026-07-20 the design server returned `200` on `:8000` while the
+  production frontend `:5174` and API `:3002` were absent. After the user
+  launched the project, all three endpoints returned `200` and the authenticated
+  browser matrix resumed without the agent changing process lifecycle.
 
 ## Decision Log
 
@@ -230,6 +265,18 @@ an app-owned agenda rather than a compressed seven-column grid.
 - **2026-07-17, agent:** represent the click as a one-hour preferred range and
   resolve it by instant only against current product slots. If no returned start
   belongs to that hour, keep time unselected rather than silently moving hours.
+- **2026-07-20, agent:** use an app-owned month renderer because the measured
+  reference requires separated day cards and overflow behavior that public
+  DayGrid styling cannot reach without private DOM coupling. Keep FullCalendar
+  as the day/week engine.
+- **2026-07-20, agent:** mobile uses an app-owned agenda over the same validated
+  range response and passes only server-returned availability ranges into the
+  existing booking intent. Booking detail is a modal bottom sheet with Escape,
+  focus trap and focus restoration; unsupported first-slice states stay absent.
+- **2026-07-20, agent:** a desktop month date activates the reference transition
+  into the anchored week, not a synthetic day-only route. Month date controls
+  expose grid row/column semantics and arrow-key navigation without private
+  engine DOM access.
 
 ## Outcomes & Retrospective
 
@@ -322,11 +369,15 @@ formatting, loading and retry states, and focus restoration. Authenticated
   the booking range. The desktop grid-geometry follow-up replaces FullCalendar's
   compressed 00:00–24:00 default with the reference's fixed 08:00–21:00 range,
   56 px hourly cadence and public v7 styling hooks. Same-viewport reference,
-  week and day evidence is stored in `.design-qa/calendar-program-a/`. Mobile
-  agenda, conflict-browser evidence and exact
-  whole-calendar parity remain unfinished, so Task 9 remains open.
-Program A is not complete until database, network-backed browser, visual and
-accessibility acceptance are also recorded here with exact evidence and risk.
+  week and day evidence is stored in `.design-qa/calendar-program-a/`. The
+  mobile agenda, mobile detail sheet and app-owned month grid are now
+  implemented with automated focus, keyboard, status, timezone and RU/EN
+  evidence. After the user launched the runtimes and authorized local DB
+  fixtures, the remaining conflict, owner-isolation, empty-range, EN,
+  Lighthouse and hourly-cell browser acceptance also passed.
+Program A completion is recorded only with database, network-backed browser,
+visual and accessibility acceptance evidence and the remaining out-of-scope
+dev-server SEO/agentic audit notes.
 
 ## Context and Orientation
 
@@ -756,10 +807,10 @@ ALTER TABLE "schedule_reservations"
 - Modify `packages/design-system` only if measured reuse proves a primitive is
   stable beyond calendar; otherwise keep components app-local.
 
-- [ ] With an authorized browser target, capture every reference state in the
+- [x] With an authorized browser target, capture every reference state in the
   spec's Visual Evidence Matrix before styling. Measure DOM/computed dimensions,
   gaps, typography, colors, radii, overflow, z-index and focus states.
-- [ ] Write component tests for toolbar, panel toggle, accessible event
+- [x] Write component tests for toolbar, panel toggle, accessible event
   activation, keyboard availability forms, dialog focus restoration, conflict
   live announcement, mobile agenda and RU/EN copy; record RED.
 - [x] Add the production manual-booking dialog with CRM client selection,
@@ -770,11 +821,10 @@ ALTER TABLE "schedule_reservations"
   including authoritative client/product/time/price/delivery data, loading and
   retry states, initial close focus and focus restoration. Prototype-only AI,
   session, client-card and lifecycle actions remain intentionally absent.
-- [ ] Implement desktop day/week and conditionally DayGrid month. If measured
+- [x] Implement desktop day/week and conditionally DayGrid month. If measured
   parity needs private FullCalendar DOM coupling, use app-owned
   `CalendarMonthView` over the same view model.
-- [ ] Implement hourly booking intent without availability bypass; automated
-  work is complete and Runtime E2E remains blocked:
+- [x] Implement hourly booking intent without availability bypass:
   1. [x] RED in `FullCalendarRenderer.test.tsx`: require `slotDuration` and
      `snapDuration` `01:00:00`, `slotMinHeight` `56`, and a select callback that
      forwards the exclusive one-hour range.
@@ -792,13 +842,13 @@ ALTER TABLE "schedule_reservations"
      lint and docs checks pass. The remaining app suite passes after excluding
      three concurrently changed numerology test files whose new hook/menu failures
      are unrelated to calendar.
-  6. [ ] Run the authenticated browser click on `/calendar`; Computer Use service
-     startup failure currently blocks proving that the modal defaults inside the
-     clicked hour.
-- [ ] Implement mobile agenda/sheets with shared queries and mutations.
-- [ ] Render only server-backed first-slice statuses. Omit revenue, payment,
+  6. [x] Run the authenticated browser click on `/calendar`; DevTools pointer
+     events on the desktop Tue 21 / 14:00 grid cell opened the dialog with Day
+     `Tue, July 21` and Time `14:00`.
+- [x] Implement mobile agenda/sheets with shared queries and mutations.
+- [x] Render only server-backed first-slice statuses. Omit revenue, payment,
   completion, no-show, Google and Astro controls.
-- [ ] Run focused tests, typecheck and build; record GREEN.
+- [x] Run focused tests, typecheck and build; record GREEN.
 
 ### Task 10: Verify the full production contour
 
@@ -810,18 +860,18 @@ ALTER TABLE "schedule_reservations"
 - Store approved screenshot evidence in the repository's established evidence
   location discovered from current docs; do not invent a parallel convention.
 
-- [ ] Run targeted contract, domain, DB, API and frontend tests from Tasks 1-9.
-- [ ] Run affected package/app typechecks and builds.
-- [ ] Run `pnpm verify` only after targeted checks pass.
-- [ ] Diagnose ports read-only. If required services are already running, use
+- [x] Run targeted contract, domain, DB, API and frontend tests from Tasks 1-9.
+- [x] Run affected package/app typechecks and builds.
+- [x] Run `pnpm verify` only after targeted checks pass.
+- [x] Diagnose ports read-only. If required services are already running, use
   them; if a standard port is absent, stop and report rather than starting it.
-- [ ] In the authorized existing browser, execute authenticated network-backed
+- [x] In the authorized existing browser, execute authenticated network-backed
   availability save, booking create, conflict and reload flows. Availability,
-  create and reload are proved; conflict, explicit network inspection and
-  owner-isolation browser evidence remain.
-- [ ] Capture all reference/production viewport pairs and compare metrics,
+  create, reload, explicit calendar-range HTTP 200 inspection, actual stale
+  conflict and owner-isolation browser evidence are proved.
+- [x] Capture all reference/production viewport pairs and compare metrics,
   loading, empty, error, retry, keyboard, focus, contrast and touch targets.
-- [ ] Review `git status --short`, `git diff --cached`, every owned path diff,
+- [x] Review `git status --short`, `git diff --cached`, every owned path diff,
   untracked files and `git diff --check`. Separate unowned changes in the final
   report and do not commit without user authority.
 
@@ -929,7 +979,57 @@ owned patch, and never reset, stash or overwrite the other work.
   `.design-qa/calendar-program-a/reference-booking-detail.jpg` and
   `.design-qa/calendar-program-a/production-booking-detail.jpg`. The browser
   pass proved initial close-button focus and event focus restoration on close.
-- No direct SQL fixture was inserted. Whole-calendar exact reference metrics,
-  mobile states, browser conflict and a conclusive first-Escape result remain
-  outside the recorded pass; Computer Use keyboard delivery was inconsistent
-  after the user switched Chrome windows.
+- Automated UI verification on 2026-07-20 passed 79 focused tests and 539 tests
+  across `astrologer-web`. A later fresh `pnpm verify` after additional shared
+  chart/db changes passed root lint and then stopped in `pnpm typecheck` on
+  `packages/db/src/schema/calculations/calculations.schema.test.ts` because
+  `chartCalculationJobs` is not exported from `./index`; this is outside
+  Program A calendar scope and remains separated as a repository-wide blocker.
+- Authenticated browser acceptance on 2026-07-20 used the existing Chrome
+  session for `E2E Astrologer` on `http://localhost:5174/calendar`. It proved
+  the 1440x900 desktop week/month surfaces, 390x844 mobile agenda and bottom
+  sheet, loading/error/retry, manual-dialog first Escape, event Enter,
+  month-arrow navigation, and focus containment/restoration. The calendar range
+  request returned HTTP 200 after retry restoration.
+- Reference artifacts are
+  `.design-qa/calendar-program-a/reference-week-desktop-2026-07-20.png`,
+  `.design-qa/calendar-program-a/reference-month-desktop-2026-07-20.png` and
+  `.design-qa/calendar-program-a/reference-mobile-agenda-2026-07-20.png`.
+  Production artifacts are
+  `.design-qa/calendar-program-a/production-week-desktop-2026-07-20.png`,
+  `.design-qa/calendar-program-a/production-month-desktop-2026-07-20.png`,
+  `.design-qa/calendar-program-a/production-mobile-agenda-2026-07-20.png` and
+  `.design-qa/calendar-program-a/production-mobile-detail-sheet-2026-07-20.png`.
+  Month comparison measured the shared 12 px radius, 8x10 px cell padding and
+  6 px grid gap; production week measured 52 px headers, 60 px gutter and 56 px
+  hourly lanes. At 390 px, the final shell/workspace/main/calendar/agenda right
+  edges all equal 390 px with no internal horizontal overflow.
+- On 2026-07-20, after the user authorized local direct DB fixtures, the
+  DevTools browser session created `Codex Calendar Primary` fixtures in the
+  local `elevenhouse` database for owner
+  `f179b8d4-0eb7-4d1e-8062-20b73702a732`, product
+  `ecf7d59b-8630-4f09-86d9-e525f14bcd2e` and client
+  `4d49ea62-5c4c-4ef2-9225-9ba307a36808`. Browser fetch evidence proved
+  `/identity/me` as that owner, `/calendar/range` with availability and no
+  foreign owner booking, `/bookings/available-slots` returning two slots, and
+  `2026-07-27T00:00:00.000Z` to `2026-07-28T00:00:00.000Z` returning empty
+  `entries` and empty `availability`.
+- The same browser session created a real manual booking for
+  `2026-07-21T10:00:00.000Z` and then posted the same manual-booking body with
+  a new idempotency key; the second request returned HTTP 409 with
+  `code: "slot_no_longer_available"`, and the refreshed range showed one
+  confirmed booking for `Марина Codex QA`.
+- EN browser evidence passed after removing the app-shell hard-coded
+  `initialLocale="ru"`: with `localStorage["elevenhouse.locale"]="en"`, the
+  rendered calendar showed `ElevenHouse | Calendar`, English navigation,
+  `July 20 – 26, 2026`, `Week`, `Availability`, `Booking`, `Confirmed` and
+  `Book from 13:00`.
+- Desktop hourly-cell prefill browser evidence passed at 1440 px: pointer
+  events on the Tue 21 / 14:00 time-grid cell opened `Book a client` with Day
+  `Tue, July 21` and Time `14:00`.
+- Lighthouse snapshot on the booking-dialog state initially found an unnamed
+  client combobox button. After adding `aria-label={label}` to
+  `ClientSearchComboboxView`, the repeated Lighthouse snapshot reported
+  Accessibility 100 and Best Practices 100. Remaining Lighthouse failures are
+  unrelated dev-server SEO/agentic checks: missing meta description, invalid
+  dev `robots.txt` response and missing/recommended `llms.txt` content.

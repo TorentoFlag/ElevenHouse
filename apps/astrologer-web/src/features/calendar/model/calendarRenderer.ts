@@ -3,7 +3,7 @@ import type {
   CalendarDisplayStatus,
   CalendarEntry,
   CalendarView
-} from "@elevenhouse/contracts/calendar";
+} from "@elevenhouse/contracts";
 
 export type CalendarLocale = "ru" | "en";
 

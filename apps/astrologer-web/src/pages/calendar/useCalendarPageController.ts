@@ -48,6 +48,7 @@ export type CalendarPageAction =
   | { readonly type: "set_view"; readonly view: CalendarView }
   | { readonly type: "navigate"; readonly direction: "previous" | "next" }
   | { readonly type: "go_today"; readonly today: string }
+  | { readonly type: "open_date"; readonly date: string }
   | { readonly type: "select_entry"; readonly entryId: string | null }
   | { readonly type: "set_availability_mode"; readonly enabled: boolean }
   | { readonly type: "set_summary_panel"; readonly open: boolean }
@@ -90,6 +91,8 @@ export function calendarPageStateReducer(
       });
     case "go_today":
       return closeBookingDetail({ ...state, anchorDate: action.today });
+    case "open_date":
+      return closeBookingDetail({ ...state, view: "week", anchorDate: action.date });
     case "select_entry":
       return { ...state, selectedEntryId: action.entryId };
     case "set_availability_mode":
@@ -163,6 +166,7 @@ export function useCalendarPageController(input: CalendarPageControllerInput) {
   return {
     ...state,
     timeZone: input.timeZone,
+    today,
     range,
     rangeLabel: formatCalendarRangeLabel({
       view: state.view,
@@ -203,6 +207,7 @@ export function useCalendarPageController(input: CalendarPageControllerInput) {
     },
     onRetryBookingDetail: () => bookingQuery.refetch(),
     onSetView: (view: CalendarView) => dispatch({ type: "set_view", view }),
+    onOpenDate: (date: string) => dispatch({ type: "open_date", date }),
     onPrevious: () => dispatch({ type: "navigate", direction: "previous" }),
     onNext: () => dispatch({ type: "navigate", direction: "next" }),
     onToday: () => dispatch({ type: "go_today", today }),

@@ -10,7 +10,7 @@ import { router } from "./router";
 export function App() {
   return (
     <QueryClientProvider client={application.queryClient}>
-      <I18nProvider dictionaries={astrologerCopyByLocale} initialLocale="ru">
+      <I18nProvider dictionaries={astrologerCopyByLocale}>
         <RouterProvider router={router} />
       </I18nProvider>
     </QueryClientProvider>

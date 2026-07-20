@@ -203,6 +203,57 @@ describe("BookingDetailPanel", () => {
     act(() => root.unmount());
   });
 
+  it("closes with Escape and traps focus inside the mobile detail sheet", () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn()
+      })
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const onClose = vi.fn();
+
+    act(() => {
+      root.render(
+        <BookingDetailPanel
+          copy={astrologerCopyByLocale.ru.calendar.bookingDetail}
+          locale="ru"
+          timeZone="Europe/Moscow"
+          entry={entry}
+          booking={booking}
+          isLoading={false}
+          isError={false}
+          onRetry={vi.fn()}
+          onClose={onClose}
+        />
+      );
+    });
+
+    const panel = container.querySelector<HTMLElement>('[data-mobile-sheet="true"]');
+    const closeButton = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Закрыть детали записи"]'
+    );
+    expect(panel?.getAttribute("role")).toBe("dialog");
+    expect(panel?.getAttribute("aria-modal")).toBe("true");
+    expect(document.activeElement).toBe(closeButton);
+
+    act(() => {
+      closeButton?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+    expect(document.activeElement).toBe(closeButton);
+
+    act(() => {
+      panel?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(onClose).toHaveBeenCalledOnce();
+
+    act(() => root.unmount());
+  });
+
   it("uses the measured reference geometry and preserves the price and mobile touch target", () => {
     const css = readFileSync(
       resolve("apps/astrologer-web/src/pages/calendar/CalendarPage.module.css"),
@@ -214,5 +265,14 @@ describe("BookingDetailPanel", () => {
     expect(css).toMatch(/\.bookingDetailContent\s*\{[^}]*padding:\s*20px/s);
     expect(css).toMatch(/\.bookingDetailCloseButton\s*\{[^}]*width:\s*44px/s);
     expect(css).toMatch(/\.bookingDetailPrice\s*\{[^}]*flex:\s*0 0 auto/s);
+    expect(css).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*\.bookingDetailPanel\s*\{[^}]*inset:\s*auto 0 0/s
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*\.bookingDetailPanel\s*\{[^}]*max-height:\s*82dvh/s
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*\.bookingDetailPanel\s*\{[^}]*border-radius:\s*20px 20px 0 0/s
+    );
   });
 });

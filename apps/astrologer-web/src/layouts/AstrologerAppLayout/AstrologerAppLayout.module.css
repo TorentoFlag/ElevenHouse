@@ -15,6 +15,7 @@
 
 .workspace {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--astrologer-app-header-height) minmax(0, 1fr);
   min-width: 0;
   height: 100dvh;
@@ -23,6 +24,7 @@
 
 .main {
   min-height: 0;
+  min-width: 0;
   box-sizing: border-box;
   overflow: auto;
   padding: 32px;

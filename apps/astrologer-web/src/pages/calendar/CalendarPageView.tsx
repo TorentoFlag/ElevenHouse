@@ -42,7 +42,9 @@ export function CalendarPageView({ copy, locale, calendar }: CalendarPageViewPro
           copy={copy}
           locale={locale}
           timeZone={calendar.timeZone}
+          today={calendar.today}
           view={calendar.view}
+          rangeLabel={calendar.rangeLabel}
           range={calendar.range}
           entries={calendar.entries}
           availability={calendar.availability}
@@ -50,6 +52,7 @@ export function CalendarPageView({ copy, locale, calendar }: CalendarPageViewPro
           isFetching={calendar.isFetching}
           isError={calendar.isError}
           onRetry={calendar.onRetry}
+          onOpenDate={calendar.onOpenDate}
           onSelectEntry={calendar.onSelectEntry}
           onOpenManualBooking={calendar.onOpenManualBooking}
         />
@@ -69,17 +72,24 @@ export function CalendarPageView({ copy, locale, calendar }: CalendarPageViewPro
             onSave={calendar.onSaveSchedule}
           />
         ) : calendar.dialog === "booking_detail" && calendar.selectedEntry?.kind === "booking" ? (
-          <BookingDetailPanel
-            copy={copy.bookingDetail}
-            locale={locale}
-            timeZone={calendar.timeZone}
-            entry={calendar.selectedEntry}
-            booking={calendar.selectedBooking}
-            isLoading={calendar.isBookingDetailLoading}
-            isError={calendar.isBookingDetailError}
-            onRetry={calendar.onRetryBookingDetail}
-            onClose={calendar.onCloseDialog}
-          />
+          <>
+            <div
+              className={styles.mobileSheetBackdrop}
+              data-mobile-sheet-backdrop="true"
+              aria-hidden="true"
+            />
+            <BookingDetailPanel
+              copy={copy.bookingDetail}
+              locale={locale}
+              timeZone={calendar.timeZone}
+              entry={calendar.selectedEntry}
+              booking={calendar.selectedBooking}
+              isLoading={calendar.isBookingDetailLoading}
+              isError={calendar.isBookingDetailError}
+              onRetry={calendar.onRetryBookingDetail}
+              onClose={calendar.onCloseDialog}
+            />
+          </>
         ) : calendar.isSummaryPanelOpen ? (
           <CalendarSummaryPanel locale={locale} summary={calendar.summary} />
         ) : null}

@@ -28,6 +28,8 @@ describe("AstrologerHeaderView", () => {
     expect(searchWrap.props.className).toBe(styles.searchWrap);
     expect(searchWrap.props.children[0].type).toBe(Icon);
     expect(searchWrap.props.children[0].props.iconName).toBe("search");
+    expect(searchInput.props.id).toBe("astrologer-global-search");
+    expect(searchInput.props.name).toBe("astrologer-global-search");
     expect(searchInput.props.placeholder).toBe("Поиск клиентов, заказов, карт…");
     expect(actions.props.className).toBe(styles.actions);
     expect(createButton.type).toBe(Button);

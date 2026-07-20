@@ -20,6 +20,7 @@ describe("ClientSearchComboboxView", () => {
     );
 
     expect((trigger.props as { "aria-expanded"?: unknown })["aria-expanded"]).toBe(false);
+    expect((trigger.props as { "aria-label"?: unknown })["aria-label"]).toBe("Клиент");
     expect(includesText(trigger.props, "Марина Краснова")).toBe(true);
     expect(includesText(trigger.props, "14.03.1990")).toBe(true);
     expect(
@@ -66,6 +67,8 @@ describe("ClientSearchComboboxView", () => {
     expect(onSearchChange).toHaveBeenCalledWith("гол");
     expect(onSelect).toHaveBeenCalledWith(option);
     expect((antonButton.props as { "aria-selected"?: unknown })["aria-selected"]).toBe(false);
+    expect((searchInput.props as { id?: unknown }).id).toBe("test-client-picker-search");
+    expect((searchInput.props as { name?: unknown }).name).toBe("test-client-picker-search");
     expect((searchInput.props as { "aria-activedescendant"?: unknown })[
       "aria-activedescendant"
     ]).toContain(option.value);

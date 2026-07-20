@@ -40,6 +40,7 @@ type ManualBookingDialogProps = {
 
 export function ManualBookingDialog(props: ManualBookingDialogProps) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const idempotencyKey = useRef(`manual-booking:${crypto.randomUUID()}`);
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
   const [selectedProductId, setSelectedProductId] = useState("");
@@ -53,6 +54,7 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
     const returnFocusElement =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (dialog && !dialog.open) dialog.showModal();
+    closeButtonRef.current?.focus();
 
     return () => {
       if (dialog?.open) dialog.close();
@@ -149,6 +151,7 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
             <h2 id="manual-booking-title">{props.copy.title}</h2>
           </div>
           <button
+            ref={closeButtonRef}
             className={styles.closeButton}
             type="button"
             aria-label={props.copy.closeLabel}
@@ -242,6 +245,8 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
                 <label>
                   <span>{props.copy.dateLabel}</span>
                   <select
+                    id="manual-booking-date"
+                    name="manual-booking-date"
                     value={selectedSlot?.dateKey ?? ""}
                     disabled={props.isCreating}
                     onChange={(event) =>
@@ -257,6 +262,8 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
                 <label>
                   <span>{props.copy.timeLabel}</span>
                   <select
+                    id="manual-booking-time"
+                    name="manual-booking-time"
                     value={effectiveStartAt}
                     disabled={props.isCreating}
                     onChange={(event) => setSelectedStartAt(event.target.value)}

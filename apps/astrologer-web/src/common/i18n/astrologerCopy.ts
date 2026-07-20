@@ -86,6 +86,22 @@ export type AstrologerCopy = {
     retryLabel: string;
     emptyLabel: string;
     conflictMessage: string;
+    mobileAgenda: {
+      agendaLabel: string;
+      confirmedLabel: string;
+      blockedLabel: string;
+      availabilityLabel: string;
+      emptyLabel: string;
+      bookFromLabel: (time: string) => string;
+    };
+    monthGrid: {
+      gridLabel: string;
+      confirmedLabel: string;
+      blockedLabel: string;
+      availabilityLabel: string;
+      openDateLabel: (date: string) => string;
+      moreLabel: (count: number) => string;
+    };
     bookingDetail: {
       panelLabel: string;
       closeLabel: string;
@@ -523,6 +539,22 @@ export const astrologerCopyByLocale = {
       retryLabel: "Повторить",
       emptyLabel: "На этот период записей нет",
       conflictMessage: "Это время уже занято. Календарь обновлён — выберите другой слот.",
+      mobileAgenda: {
+        agendaLabel: "Расписание",
+        confirmedLabel: "Подтверждена",
+        blockedLabel: "Недоступно",
+        availabilityLabel: "Доступно",
+        emptyLabel: "На этот период записей и доступных часов нет",
+        bookFromLabel: (time) => `Записать с ${time}`
+      },
+      monthGrid: {
+        gridLabel: "Календарь на месяц",
+        confirmedLabel: "Подтверждена",
+        blockedLabel: "Недоступно",
+        availabilityLabel: "Есть доступное время",
+        openDateLabel: (date) => `Открыть ${date}`,
+        moreLabel: (count) => `+${count} ещё`
+      },
       bookingDetail: {
         panelLabel: "Детали записи",
         closeLabel: "Закрыть детали записи",
@@ -918,6 +950,22 @@ export const astrologerCopyByLocale = {
       retryLabel: "Retry",
       emptyLabel: "No bookings in this period",
       conflictMessage: "This time is no longer available. Choose another slot from the refreshed calendar.",
+      mobileAgenda: {
+        agendaLabel: "Schedule",
+        confirmedLabel: "Confirmed",
+        blockedLabel: "Unavailable",
+        availabilityLabel: "Available",
+        emptyLabel: "There are no bookings or available hours in this period",
+        bookFromLabel: (time) => `Book from ${time}`
+      },
+      monthGrid: {
+        gridLabel: "Monthly calendar",
+        confirmedLabel: "Confirmed",
+        blockedLabel: "Unavailable",
+        availabilityLabel: "Available time",
+        openDateLabel: (date) => `Open ${date}`,
+        moreLabel: (count) => `+${count} more`
+      },
       bookingDetail: {
         panelLabel: "Booking details",
         closeLabel: "Close booking details",

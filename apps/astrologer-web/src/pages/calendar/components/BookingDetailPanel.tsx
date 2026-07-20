@@ -10,7 +10,7 @@ import {
   Video
 } from "@elevenhouse/design-system/icons";
 import type { SupportedLocale } from "@elevenhouse/i18n";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { AstrologerCopy } from "../../../common/i18n/astrologerCopy";
 import {
   createBookingDetailViewModel,
@@ -31,8 +31,10 @@ type BookingDetailPanelProps = {
 };
 
 export function BookingDetailPanel(props: BookingDetailPanelProps) {
+  const panelRef = useRef<HTMLElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const isMobileSheet = useIsMobileCalendarViewport();
 
   useEffect(() => {
     const activeElement =
@@ -57,9 +59,20 @@ export function BookingDetailPanel(props: BookingDetailPanelProps) {
 
   return (
     <aside
+      ref={panelRef}
       className={styles.bookingDetailPanel}
+      data-mobile-sheet="true"
+      role={isMobileSheet ? "dialog" : undefined}
+      aria-modal={isMobileSheet ? true : undefined}
       aria-label={props.copy.panelLabel}
       aria-busy={props.isLoading}
+      onKeyDown={(event) =>
+        handlePanelKeyDown(event, {
+          isMobileSheet,
+          panel: panelRef.current,
+          onClose: props.onClose
+        })
+      }
     >
       <header className={styles.bookingDetailHeader}>
         <span className={styles.bookingStatusBadge}>
@@ -134,6 +147,62 @@ export function BookingDetailPanel(props: BookingDetailPanelProps) {
       </div>
     </aside>
   );
+}
+
+function useIsMobileCalendarViewport(): boolean {
+  const mediaQuery = "(max-width: 760px)";
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia?.(mediaQuery).matches === true
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia(mediaQuery);
+    const onChange = (event: MediaQueryListEvent) => setMatches(event.matches);
+    setMatches(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  return matches;
+}
+
+function handlePanelKeyDown(
+  event: KeyboardEvent<HTMLElement>,
+  input: {
+    readonly isMobileSheet: boolean;
+    readonly panel: HTMLElement | null;
+    readonly onClose: () => void;
+  }
+): void {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    input.onClose();
+    return;
+  }
+  if (!input.isMobileSheet || event.key !== "Tab" || !input.panel) return;
+
+  const focusable = Array.from(
+    input.panel.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+  );
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (!first || !last) return;
+
+  if (focusable.length === 1) {
+    event.preventDefault();
+    first.focus();
+    return;
+  }
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function BookingDetailRow(props: {

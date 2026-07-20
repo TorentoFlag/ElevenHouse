@@ -2,13 +2,17 @@ import type { AvailabilityBackground, CalendarEntry, CalendarView } from "@eleve
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import { FullCalendarRenderer } from "../../../features/calendar/components/FullCalendarRenderer";
 import type { AstrologerCopy } from "../../../common/i18n/astrologerCopy";
+import { CalendarMonthView } from "./CalendarMonthView";
+import { CalendarMobileAgenda } from "./CalendarMobileAgenda";
 import styles from "../CalendarPage.module.css";
 
 type CalendarWorkspaceProps = {
   readonly copy: AstrologerCopy["calendar"];
   readonly locale: SupportedLocale;
   readonly timeZone: string;
+  readonly today: string;
   readonly view: CalendarView;
+  readonly rangeLabel: string;
   readonly range: { readonly start: string; readonly end: string };
   readonly entries: readonly CalendarEntry[];
   readonly availability: readonly AvailabilityBackground[];
@@ -16,6 +20,7 @@ type CalendarWorkspaceProps = {
   readonly isFetching: boolean;
   readonly isError: boolean;
   readonly onRetry: () => unknown;
+  readonly onOpenDate: (date: string) => void;
   readonly onSelectEntry: (entry: CalendarEntry) => void;
   readonly onOpenManualBooking: (selection?: { readonly start: string; readonly end: string }) => void;
 };
@@ -24,7 +29,9 @@ export function CalendarWorkspace({
   copy,
   locale,
   timeZone,
+  today,
   view,
+  rangeLabel,
   range,
   entries,
   availability,
@@ -32,27 +39,53 @@ export function CalendarWorkspace({
   isFetching,
   isError,
   onRetry,
+  onOpenDate,
   onSelectEntry,
   onOpenManualBooking
 }: CalendarWorkspaceProps) {
   return (
     <main className={styles.workspace} aria-busy={isLoading || isFetching}>
-      <div className={styles.calendarCanvas}>
-        <FullCalendarRenderer
-          view={view}
+      {view === "month" ? (
+        <CalendarMonthView
+          copy={copy.monthGrid}
           locale={locale}
           timeZone={timeZone}
-          visibleRange={range}
+          today={today}
+          range={range}
           entries={entries}
           availability={availability}
-          onRangeChange={() => undefined}
-          onEntryActivate={(entryId) => {
-            const entry = entries.find((candidate) => candidate.id === entryId);
-            if (entry) onSelectEntry(entry);
-          }}
-          onEmptyRangeSelect={onOpenManualBooking}
+          onOpenDate={onOpenDate}
+          onSelectEntry={onSelectEntry}
         />
-      </div>
+      ) : (
+        <div className={styles.calendarCanvas}>
+          <FullCalendarRenderer
+            view={view}
+            locale={locale}
+            timeZone={timeZone}
+            visibleRange={range}
+            entries={entries}
+            availability={availability}
+            onRangeChange={() => undefined}
+            onEntryActivate={(entryId) => {
+              const entry = entries.find((candidate) => candidate.id === entryId);
+              if (entry) onSelectEntry(entry);
+            }}
+            onEmptyRangeSelect={onOpenManualBooking}
+          />
+        </div>
+      )}
+
+      <CalendarMobileAgenda
+        copy={copy.mobileAgenda}
+        locale={locale}
+        timeZone={timeZone}
+        rangeLabel={rangeLabel}
+        entries={entries}
+        availability={availability}
+        onSelectEntry={onSelectEntry}
+        onOpenManualBooking={onOpenManualBooking}
+      />
 
       {isLoading ? <div className={styles.stateOverlay}>{copy.loadingLabel}</div> : null}
       {isError ? (

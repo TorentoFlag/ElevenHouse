@@ -29,6 +29,82 @@ describe("CalendarPageView", () => {
     expect(markup).toContain("Скрыть панель");
   });
 
+  it("mounts an app-owned mobile agenda over the same validated range data", () => {
+    const markup = renderToStaticMarkup(<CalendarPageView {...baseProps()} />);
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+
+    expect(markup).toContain('data-mobile-calendar-agenda="true"');
+    expect(markup).toContain("13–19 июля 2026 г.");
+    expect(markup).toContain("Марина К.");
+    expect(css).toMatch(/\.mobileAgenda\s*\{[^}]*display:\s*none/s);
+    expect(css).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*\.mobileAgenda\s*\{[^}]*display:\s*block/s
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*\.calendarCanvas\s*\{[^}]*display:\s*none/s
+    );
+  });
+
+  it("keeps previous, today and next period navigation available at the mobile viewport", () => {
+    const markup = renderToStaticMarkup(<CalendarPageView {...baseProps()} />);
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+
+    expect(markup).toContain('data-mobile-calendar-navigation="true"');
+    expect(css).toMatch(/\.mobileNavigation\s*\{[^}]*display:\s*none/s);
+    expect(css).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*\.mobileNavigation\s*\{[^}]*display:\s*flex/s
+    );
+  });
+
+  it("keeps the mobile toolbar inside the app workspace without horizontal clipping", () => {
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+    const mobileCss = css.slice(css.indexOf("@media (max-width: 760px)"));
+
+    expect(mobileCss).toMatch(/\.calendarPage\s*\{[^}]*margin:\s*-16px/s);
+    expect(mobileCss).toMatch(/\.toolbar\s*\{[^}]*gap:\s*4px[^}]*padding:\s*10px/s);
+  });
+
+  it("keeps mobile calendar and availability controls at least 44px tall", () => {
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+    const mobileCss = css.slice(css.indexOf("@media (max-width: 760px)"));
+
+    expect(mobileCss).toMatch(/\.viewButton\s*\{[^}]*min-height:\s*44px/s);
+    expect(mobileCss).toMatch(/\.ghostButton[\s\S]*\.brandButton\s*\{[^}]*min-height:\s*44px/s);
+    expect(mobileCss).toMatch(/\.editorField select[\s\S]*height:\s*44px/s);
+    expect(mobileCss).toMatch(/\.removeButton\s*\{[^}]*width:\s*44px[^}]*height:\s*44px/s);
+    expect(mobileCss).toMatch(
+      /\.inlineButton[\s\S]*\.saveAvailabilityButton\s*\{[^}]*min-height:\s*44px/s
+    );
+  });
+
+  it("uses the app-owned reference month grid on desktop and the agenda on mobile", () => {
+    const props = baseProps();
+    const markup = renderToStaticMarkup(
+      <CalendarPageView
+        {...props}
+        calendar={{
+          ...props.calendar,
+          view: "month",
+          anchorDate: "2026-05-29",
+          rangeLabel: "май 2026 г.",
+          range: {
+            start: "2026-04-30T21:00:00.000Z",
+            end: "2026-05-31T21:00:00.000Z",
+            timeZone: "Europe/Moscow"
+          }
+        }}
+      />
+    );
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+
+    expect(markup).toContain('data-calendar-month-view="true"');
+    expect(markup).toContain('data-mobile-calendar-agenda="true"');
+    expect(markup).not.toContain('data-full-calendar-renderer="true"');
+    expect(css).toMatch(/\.monthGrid\s*\{[^}]*gap:\s*6px/s);
+    expect(css).toMatch(/\.monthDateCell[\s\S]*min-height:\s*84px/s);
+    expect(css).toMatch(/\.monthDateCell[\s\S]*border-radius:\s*12px/s);
+  });
+
   it("keeps the grid mounted while a range refetch is in progress", () => {
     const markup = renderToStaticMarkup(
       <CalendarPageView {...baseProps()} calendar={{ ...baseProps().calendar, isFetching: true }} />
@@ -64,6 +140,21 @@ describe("CalendarPageView", () => {
     expect(markup).toContain("Повторить");
   });
 
+  it("announces stale-slot conflicts assertively without replacing the current calendar", () => {
+    const props = baseProps();
+    const markup = renderToStaticMarkup(
+      <CalendarPageView
+        {...props}
+        calendar={{ ...props.calendar, conflictMessage: props.copy.conflictMessage }}
+      />
+    );
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain('aria-live="assertive"');
+    expect(markup).toContain(props.copy.conflictMessage);
+    expect(markup).toContain('data-testid="calendar-grid"');
+  });
+
   it("defines the FullCalendar v7 theme palette instead of browser-default grid colors", () => {
     const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
 
@@ -80,6 +171,18 @@ describe("CalendarPageView", () => {
     expect(css).toMatch(/\.eh-calendar-slot-lane\)\s*\{[^}]*height:\s*56px/s);
     expect(css).toMatch(
       /\.eh-calendar-slot-lane--minor\)\s*\{[^}]*border-top-color:\s*transparent/s
+    );
+  });
+
+  it("clips desktop event content inside its day column like the reference", () => {
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+
+    expect(css).toMatch(
+      /\.calendarCanvas :global\(\.eh-calendar-event\)\s*\{[^}]*overflow:\s*hidden/s
+    );
+    expect(css).toMatch(/\.calendarCanvas :global\(\.eh-calendar-event-content\)\s*\{[^}]*overflow:\s*hidden/s);
+    expect(css).toMatch(
+      /\.calendarCanvas :global\(\.eh-calendar-event-subtitle\)\s*\{[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap/s
     );
   });
 
@@ -121,6 +224,7 @@ describe("CalendarPageView", () => {
     );
 
     expect(markup).toContain('aria-label="Детали записи"');
+    expect(markup).toContain('data-mobile-sheet-backdrop="true"');
     expect(markup).toContain("Марина К.");
     expect(markup).not.toContain("2 сессии");
   });
@@ -163,6 +267,7 @@ function baseProps(): CalendarPageViewProps {
       manualBookingStartAt: null,
       conflictMessage: null,
       timeZone: "Europe/Moscow",
+      today: "2026-07-20",
       range: {
         start: "2026-07-12T21:00:00.000Z",
         end: "2026-07-19T21:00:00.000Z",
@@ -207,6 +312,7 @@ function baseProps(): CalendarPageViewProps {
       onRetryManualBookingResources: vi.fn(),
       onRetryBookingDetail: vi.fn(),
       onSetView: vi.fn(),
+      onOpenDate: vi.fn(),
       onPrevious: vi.fn(),
       onNext: vi.fn(),
       onToday: vi.fn(),

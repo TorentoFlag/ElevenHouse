@@ -64,6 +64,7 @@ export function ClientSearchComboboxView({
         type="button"
         role="combobox"
         className={styles.trigger}
+        aria-label={label}
         aria-controls={listboxId}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
@@ -99,6 +100,8 @@ export function ClientSearchComboboxView({
                 <Icon iconName="search" width={14} height={14} />
               </span>
               <input
+                id={`${id}-search`}
+                name={`${id}-search`}
                 role="combobox"
                 className={styles.searchInput}
                 aria-controls={listboxId}

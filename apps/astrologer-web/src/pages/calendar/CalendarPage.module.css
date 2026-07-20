@@ -60,6 +60,10 @@
   white-space: nowrap;
 }
 
+.mobileNavigation {
+  display: none;
+}
+
 .iconButton,
 .ghostButton,
 .brandButton,
@@ -75,7 +79,10 @@
   font-size: 13px;
   font-weight: 650;
   cursor: pointer;
-  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease;
 }
 
 .iconButton {
@@ -233,7 +240,8 @@
   border-bottom-color: transparent;
 }
 
-.calendarCanvas :global(.fc-event) {
+.calendarCanvas :global(.eh-calendar-event) {
+  overflow: hidden;
   border: 1px solid rgb(169 140 255 / 0.55);
   border-left: 4px solid var(--calendar-purple);
   border-radius: 11px;
@@ -243,16 +251,44 @@
   box-shadow: none;
 }
 
-.calendarCanvas :global(.fc-event-main) {
+.calendarCanvas :global(.eh-calendar-event > div) {
+  min-width: 0;
   padding: 5px 8px;
+  overflow: hidden;
   color: inherit;
 }
 
-.calendarCanvas :global(.fc-event-main > div) {
+.calendarCanvas :global(.eh-calendar-event-content) {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 2px;
+  overflow: hidden;
+}
+
+.calendarCanvas :global(.eh-calendar-event-time) {
+  color: var(--calendar-purple);
+  font-family: var(--eh-font-mono, monospace);
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.calendarCanvas :global(.eh-calendar-event-title) {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.15;
+}
+
+.calendarCanvas :global(.eh-calendar-event-subtitle) {
+  overflow: hidden;
+  color: var(--calendar-muted);
+  font-size: 11.5px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .calendarCanvas :global(.fc-bg-event) {
@@ -269,6 +305,365 @@
   padding: 8px;
   color: var(--eh-color-moon-120);
   text-decoration: none;
+}
+
+.monthView {
+  display: flex;
+  min-width: 760px;
+  min-height: 620px;
+  height: 100%;
+  padding: 14px 18px 18px;
+  flex-direction: column;
+  background: rgb(7 6 20 / 0.78);
+}
+
+.monthWeekdays,
+.monthGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(96px, 1fr));
+}
+
+.monthWeekdays {
+  margin-bottom: 8px;
+}
+
+.monthWeekdays span {
+  padding: 4px 0;
+  color: var(--calendar-muted);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.monthGrid {
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-auto-rows: minmax(84px, 1fr);
+  gap: 6px;
+}
+
+.monthWeek {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.monthDateCell,
+.monthBlankCell {
+  min-width: 0;
+  min-height: 84px;
+  border-radius: 12px;
+}
+
+.monthBlankCell {
+  background: rgb(7 6 15 / 0.35);
+}
+
+.monthDateCell {
+  display: flex;
+  padding: 8px 10px;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px solid var(--calendar-line);
+  background: rgb(18 16 43 / 0.72);
+}
+
+.monthDateCell[data-today="true"] {
+  border-color: rgb(244 202 76 / 0.52);
+  background: rgb(244 202 76 / 0.08);
+}
+
+.monthDateHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.monthDateButton {
+  display: inline-grid;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.monthDateCell[data-today="true"] .monthDateButton {
+  background: rgb(244 202 76 / 0.14);
+  color: #f6d266;
+}
+
+.monthAvailabilityDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--calendar-green);
+  box-shadow: 0 0 0 3px rgb(116 214 180 / 0.12);
+}
+
+.monthEntryList {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.monthEntry {
+  display: grid;
+  min-width: 0;
+  min-height: 19px;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 2px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  grid-template-columns: 6px auto minmax(0, 1fr);
+}
+
+button.monthEntry {
+  cursor: pointer;
+}
+
+.monthEntry:hover,
+.monthDateButton:hover {
+  background: rgb(169 140 255 / 0.1);
+}
+
+.monthEntry:focus-visible,
+.monthDateButton:focus-visible {
+  outline: 2px solid var(--calendar-purple);
+  outline-offset: 1px;
+}
+
+.monthEntryDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--calendar-purple);
+}
+
+.monthEntryDot[data-kind="manual_block"] {
+  background: var(--calendar-muted);
+}
+
+.monthEntry time {
+  color: var(--calendar-muted);
+  font-family: var(--eh-font-mono, monospace);
+  white-space: nowrap;
+}
+
+.monthEntry > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monthOverflow {
+  padding-left: 2px;
+  color: var(--calendar-muted);
+  font-size: 11px;
+}
+
+.mobileAgenda {
+  display: none;
+}
+
+.mobileAgendaHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--calendar-line);
+  background: rgb(13 12 32 / 0.96);
+}
+
+.mobileAgendaHeader strong {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 14px;
+}
+
+.mobileAgendaHeader span {
+  color: var(--calendar-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.mobileAgendaDays {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 28px;
+}
+
+.mobileAgendaDay {
+  min-width: 0;
+}
+
+.mobileAgendaDay h2 {
+  margin: 0 0 8px;
+  color: var(--calendar-muted);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mobileAgendaItems {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobileBookingItem,
+.mobileAvailabilityItem {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--calendar-line-strong);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mobileBookingItem {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-left: 3px solid var(--calendar-purple);
+  border-radius: 14px;
+  background: rgb(86 57 164 / 0.24);
+  color: var(--eh-color-moon-120);
+  grid-template-columns: 78px 38px minmax(0, 1fr) 8px;
+}
+
+.mobileAgendaTime {
+  color: #b99cff;
+  font-family: var(--eh-font-mono, monospace);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.mobileAgendaAvatar {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgb(169 140 255 / 0.42);
+  border-radius: 50%;
+  background: rgb(169 140 255 / 0.16);
+  color: #c5b0ff;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.mobileAgendaIdentity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mobileAgendaIdentity strong,
+.mobileAgendaIdentity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobileAgendaIdentity strong {
+  font-size: 14px;
+}
+
+.mobileAgendaIdentity span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--calendar-muted);
+  font-size: 12px;
+}
+
+.mobileAgendaStatus {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--calendar-purple);
+}
+
+.mobileBlockItem {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px dashed var(--calendar-line-strong);
+  border-radius: 13px;
+  background: repeating-linear-gradient(
+    135deg,
+    rgb(167 162 200 / 0.07) 0 7px,
+    transparent 7px 14px
+  );
+  color: var(--calendar-muted);
+}
+
+.mobileBlockItem > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mobileBlockItem strong {
+  color: var(--eh-color-moon-120);
+  font-size: 13px;
+}
+
+.mobileBlockItem span span {
+  font-family: var(--eh-font-mono, monospace);
+  font-size: 11px;
+}
+
+.mobileAvailabilityItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 13px;
+  border-color: rgb(116 214 180 / 0.28);
+  border-radius: 12px;
+  background: rgb(116 214 180 / 0.08);
+  color: #8ee0c5;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.mobileBookingItem:focus-visible,
+.mobileAvailabilityItem:focus-visible {
+  outline: 2px solid var(--calendar-purple);
+  outline-offset: 2px;
+}
+
+.mobileAgendaEmpty {
+  margin: 0;
+  padding: 36px 20px;
+  color: var(--calendar-muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 .stateOverlay,
@@ -305,6 +700,10 @@
   flex-direction: column;
   border-left: 1px solid var(--calendar-line);
   background: rgb(10 9 29 / 0.96);
+}
+
+.mobileSheetBackdrop {
+  display: none;
 }
 
 .bookingDetailHeader {
@@ -913,13 +1312,13 @@
 @media (max-width: 760px) {
   .calendarPage {
     min-height: calc(100dvh - var(--astrologer-app-header-height, 60px));
-    margin: -20px;
+    margin: -16px;
   }
 
   .toolbar {
     display: grid;
-    gap: 8px;
-    padding: 10px 14px;
+    gap: 4px;
+    padding: 10px;
     grid-template-columns: 1fr auto auto;
   }
 
@@ -933,19 +1332,84 @@
   }
 
   .viewButton {
+    min-height: 44px;
     padding-inline: 12px;
   }
 
-  .ghostButton {
-    width: 38px;
+  .ghostButton,
+  .brandButton {
+    width: 44px;
+    min-height: 44px;
     padding: 0;
     font-size: 0;
   }
 
-  .brandButton {
-    width: 38px;
-    padding: 0;
-    font-size: 0;
+  .editorField select,
+  .editorField input,
+  .periodRow input,
+  .periodRow select,
+  .overrideCard > select {
+    height: 44px;
+  }
+
+  .periodRow {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 44px;
+  }
+
+  .removeButton {
+    width: 44px;
+    height: 44px;
+  }
+
+  .inlineButton,
+  .saveAvailabilityButton {
+    min-height: 44px;
+  }
+
+  .productOption {
+    min-height: 44px;
+  }
+
+  .ghostButton[data-summary-toggle="true"] {
+    display: none;
+  }
+
+  .mobileNavigation {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+    grid-column: 1 / -1;
+  }
+
+  .mobileNavigation button {
+    display: inline-grid;
+    min-width: 44px;
+    min-height: 44px;
+    place-items: center;
+    padding: 0 10px;
+    border: 1px solid var(--calendar-line-strong);
+    border-radius: 11px;
+    background: var(--calendar-surface-raised);
+    color: var(--eh-color-moon-120);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .mobileNavigation strong {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    font-size: 13px;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileNavigation button:focus-visible {
+    outline: 2px solid var(--calendar-purple);
+    outline-offset: 2px;
   }
 
   .summaryPanel {
@@ -955,9 +1419,25 @@
   .bookingDetailPanel {
     position: absolute;
     z-index: 8;
-    inset: 0;
+    inset: auto 0 0;
     width: 100%;
+    max-height: 82dvh;
+    height: auto;
+    flex-basis: auto;
+    overflow: hidden;
+    border-top: 1px solid var(--calendar-line-strong);
     border-left: 0;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -18px 50px rgb(0 0 0 / 0.34);
+  }
+
+  .mobileSheetBackdrop {
+    position: absolute;
+    z-index: 7;
+    inset: 0;
+    display: block;
+    background: rgb(4 3 15 / 0.68);
+    backdrop-filter: blur(2px);
   }
 
   .availabilityPanel {
@@ -978,6 +1458,15 @@
   }
 
   .calendarCanvas {
-    min-width: 680px;
+    display: none;
+  }
+
+  .monthView {
+    display: none;
+  }
+
+  .mobileAgenda {
+    display: block;
+    min-height: 100%;
   }
 }

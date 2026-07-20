@@ -31,6 +31,8 @@ const viewNames = {
   month: "dayGridMonth"
 } as const;
 
+const eventKeyboardHandlers = new WeakMap<HTMLElement, (event: KeyboardEvent) => void>();
+
 export function FullCalendarRenderer(props: CalendarRendererProps): ReactElement {
   const model = createCalendarRendererModel(props);
   const events: EventInput[] = [
@@ -88,6 +90,11 @@ export function FullCalendarRenderer(props: CalendarRendererProps): ReactElement
       timeZone={props.timeZone}
       events={events}
       eventContent={renderEventContent}
+      eventClass={(info) =>
+        info.event.extendedProps.rendererEntry ? "eh-calendar-event" : undefined
+      }
+      eventDidMount={(info) => mountAccessibleEvent(info, props)}
+      eventWillUnmount={unmountAccessibleEvent}
       eventClick={(info) => handleEventClick(info, props)}
       datesSet={(info) => handleDatesSet(info, props)}
       select={(info) => handleSelect(info, props)}
@@ -95,15 +102,48 @@ export function FullCalendarRenderer(props: CalendarRendererProps): ReactElement
   );
 }
 
+function mountAccessibleEvent(
+  info: EventDisplayInfo & { readonly el: HTMLElement },
+  props: CalendarRendererProps
+): void {
+  const entryId = info.event.extendedProps.calendarEntryId;
+  const entry = info.event.extendedProps.rendererEntry as CalendarRendererEntry | undefined;
+  if (typeof entryId !== "string" || !entry) return;
+
+  info.el.setAttribute("role", "button");
+  info.el.setAttribute("tabindex", "0");
+  info.el.setAttribute("aria-label", entry.accessibilityLabel);
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    props.onEntryActivate(entryId);
+  };
+  eventKeyboardHandlers.set(info.el, onKeyDown);
+  info.el.addEventListener("keydown", onKeyDown);
+}
+
+function unmountAccessibleEvent(info: EventDisplayInfo & { readonly el: HTMLElement }): void {
+  const onKeyDown = eventKeyboardHandlers.get(info.el);
+  if (!onKeyDown) return;
+  info.el.removeEventListener("keydown", onKeyDown);
+  eventKeyboardHandlers.delete(info.el);
+}
+
 function renderEventContent(info: EventDisplayInfo): ReactElement | null {
   const entry = info.event.extendedProps.rendererEntry as CalendarRendererEntry | undefined;
   if (!entry) return null;
 
   return (
-    <div aria-label={entry.accessibilityLabel} data-calendar-entry-id={entry.id}>
-      <span>{info.timeText}</span>
-      <span>{entry.title}</span>
-      {entry.subtitle ? <span>{entry.subtitle}</span> : null}
+    <div
+      className="eh-calendar-event-content"
+      aria-label={entry.accessibilityLabel}
+      data-calendar-entry-id={entry.id}
+    >
+      <span className="eh-calendar-event-time">{info.timeText}</span>
+      <span className="eh-calendar-event-title">{entry.title}</span>
+      {entry.subtitle ? (
+        <span className="eh-calendar-event-subtitle">{entry.subtitle}</span>
+      ) : null}
     </div>
   );
 }

@@ -45,6 +45,8 @@ export function AstrologerHeaderView({ copy, profile }: AstrologerHeaderViewProp
           aria-hidden="true"
         />
         <input
+          id="astrologer-global-search"
+          name="astrologer-global-search"
           className={styles.searchInput}
           type="search"
           placeholder={copy.searchPlaceholder}

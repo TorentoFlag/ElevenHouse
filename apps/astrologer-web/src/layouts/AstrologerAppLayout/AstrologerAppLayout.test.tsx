@@ -56,11 +56,13 @@ describe("AstrologerAppLayout", () => {
     expect(appLayoutCss).toContain("height: 100dvh;");
     expect(appLayoutCss).toContain(".shell {\n  display: grid;");
     expect(appLayoutCss).toContain(".workspace {\n  display: grid;");
+    expect(appLayoutCss).toContain("grid-template-columns: minmax(0, 1fr);");
     expect(appLayoutCss).toContain(
       "grid-template-rows: var(--astrologer-app-header-height) minmax(0, 1fr);"
     );
     expect(appLayoutCss).toContain("overflow: hidden;");
     expect(appLayoutCss).toContain(".main {\n  min-height: 0;");
+    expect(appLayoutCss).toMatch(/\.main\s*\{[^}]*min-width:\s*0/s);
     expect(appLayoutCss).toContain("overflow: auto;");
     expect(appLayoutCss).toContain('@import "@elevenhouse/design-system/motion.css";');
     expect(appLayoutCss).not.toContain("min-height: 100dvh;");

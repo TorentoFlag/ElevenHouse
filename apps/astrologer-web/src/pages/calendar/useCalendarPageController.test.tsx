@@ -39,6 +39,24 @@ describe("calendar page controller state", () => {
     expect(next.selectedEntryId).toBeNull();
   });
 
+  it("opens the selected month date in week view and closes stale booking details", () => {
+    const initial = {
+      ...createInitialCalendarPageState({ today: "2026-05-29" }),
+      view: "month" as const,
+      dialog: "booking_detail" as const,
+      selectedEntryId: "booking-1"
+    };
+
+    expect(
+      calendarPageStateReducer(initial, { type: "open_date", date: "2026-05-12" })
+    ).toMatchObject({
+      view: "week",
+      anchorDate: "2026-05-12",
+      dialog: null,
+      selectedEntryId: null
+    });
+  });
+
   it("closes stale booking details before entering availability mode", () => {
     const initial = {
       ...createInitialCalendarPageState({ today: "2026-05-29" }),
