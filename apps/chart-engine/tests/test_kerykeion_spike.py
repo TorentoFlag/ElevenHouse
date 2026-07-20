@@ -33,3 +33,6 @@ def test_kerykeion_spike_maps_real_subject_points_and_houses():
     assert point_by_id["sun"].longitude != 0
     assert point_by_id["north_node"].label == "Mean North Node"
     assert point_by_id["south_node"].label == "Mean South Node"
+    assert all(aspect.pointA != aspect.pointB for aspect in result.result.aspects)
+    aspect_keys = {(aspect.pointA, aspect.pointB, aspect.type) for aspect in result.result.aspects}
+    assert len(aspect_keys) == len(result.result.aspects)

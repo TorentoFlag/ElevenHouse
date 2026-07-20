@@ -52,7 +52,7 @@ NODE_ATTRIBUTES = {
     },
 }
 
-KERYKEION_ACTIVE_POINTS = [
+BASE_ACTIVE_POINTS = [
     "Sun",
     "Moon",
     "Mercury",
@@ -65,11 +65,12 @@ KERYKEION_ACTIVE_POINTS = [
     "Pluto",
     "Ascendant",
     "Medium_Coeli",
-    "True_North_Lunar_Node",
-    "True_South_Lunar_Node",
-    "Mean_North_Lunar_Node",
-    "Mean_South_Lunar_Node",
 ]
+
+NODE_ACTIVE_POINTS = {
+    "true": ["True_North_Lunar_Node", "True_South_Lunar_Node"],
+    "mean": ["Mean_North_Lunar_Node", "Mean_South_Lunar_Node"],
+}
 
 HOUSE_ATTRIBUTES = [
     "first_house",
@@ -164,6 +165,8 @@ def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
     hour, minute = [int(part) for part in request.inputSnapshot.birthTime.split(":")]
     house_system = HOUSE_SYSTEMS[request.settings.houseSystem]
 
+    active_points = _active_points(request.settings.nodeType)
+
     subject = AstrologicalSubjectFactory.from_birth_data(
         name="subject",
         year=year,
@@ -177,7 +180,7 @@ def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
         online=False,
         zodiac_type="Tropical",
         houses_system_identifier=house_system,
-        active_points=KERYKEION_ACTIVE_POINTS,
+        active_points=active_points,
         suppress_geonames_warning=True,
     )
 
@@ -198,7 +201,7 @@ def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
         result=ChartRenderResult(
             points=points,
             houses=houses,
-            aspects=_map_aspects(subject, request.settings.aspectPreset),
+            aspects=_map_aspects(subject, request.settings.aspectPreset, active_points),
             distributions=_map_distributions(subject),
             warnings=_map_warnings(request),
         ),
@@ -226,16 +229,27 @@ def _map_house(number: int, model: Any) -> ChartHouse:
     )
 
 
-def _map_aspects(subject: Any, aspect_preset: str) -> list[ChartAspect]:
+def _active_points(node_type: str) -> list[str]:
+    return [*BASE_ACTIVE_POINTS, *NODE_ACTIVE_POINTS[node_type]]
+
+
+def _map_aspects(subject: Any, aspect_preset: str, active_points: list[str]) -> list[ChartAspect]:
     allowed_aspects = MAJOR_ASPECTS if aspect_preset == "major" else MAJOR_ASPECTS | MINOR_ASPECTS
-    aspect_model = AspectsFactory.natal_aspects(subject, active_points=KERYKEION_ACTIVE_POINTS)
+    aspect_model = AspectsFactory.natal_aspects(subject, active_points=active_points)
     aspects = []
+    seen_aspects = set()
 
     for aspect in aspect_model.aspects:
         point_a = POINT_NAME_TO_ID.get(aspect.p1_name)
         point_b = POINT_NAME_TO_ID.get(aspect.p2_name)
         if point_a is None or point_b is None or aspect.aspect not in allowed_aspects:
             continue
+        if point_a == point_b:
+            continue
+        aspect_key = (*sorted([point_a, point_b]), aspect.aspect)
+        if aspect_key in seen_aspects:
+            continue
+        seen_aspects.add(aspect_key)
         aspects.append(
             ChartAspect(
                 pointA=point_a,
