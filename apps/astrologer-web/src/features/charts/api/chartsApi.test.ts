@@ -83,12 +83,52 @@ function chartPayload() {
         birthTimePrecision: "exact"
       },
       result: {
-        points: [],
-        houses: [],
+        points: completePoints(),
+        houses: completeHouses(),
         aspects: [],
-        distributions: { elements: {}, modalities: {}, polarity: {} },
+        distributions: {
+          elements: { fire: 3, earth: 2, air: 3, water: 2 },
+          modalities: { cardinal: 4, fixed: 3, mutable: 3 },
+          polarity: { masculine: 6, feminine: 4 }
+        },
         warnings: []
       }
     }
   };
+}
+
+function completePoints() {
+  return [
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto",
+    "ascendant",
+    "midheaven",
+    "north_node",
+    "south_node"
+  ].map((id, index) => ({
+    id,
+    label: id,
+    longitude: index * 20,
+    sign: "aries",
+    signDegree: index % 29,
+    house: index < 12 ? index + 1 : null,
+    retrograde: false
+  }));
+}
+
+function completeHouses() {
+  return Array.from({ length: 12 }, (_, index) => ({
+    number: index + 1,
+    longitude: index * 30,
+    sign: "aries",
+    signDegree: 0
+  }));
 }

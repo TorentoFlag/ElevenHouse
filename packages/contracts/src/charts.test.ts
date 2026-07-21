@@ -64,15 +64,83 @@ describe("chart contracts", () => {
         longitude: 12.4964,
         birthTimePrecision: "exact"
       },
-      result: {
-        points: [],
-        houses: [],
-        aspects: [],
-        distributions: { elements: {}, modalities: {}, polarity: {} },
-        warnings: []
-      }
+      result: completeRenderResult()
     });
 
     expect(payload.result).not.toHaveProperty("birthDate");
   });
+
+  it("requires complete render data for the natal chart screen", () => {
+    expect(() =>
+      storedChartCalculationPayloadSchema.parse({
+        schemaVersion: "chart-result.v1",
+        method: "natal",
+        provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        inputSnapshot: {
+          birthDate: "1990-07-15",
+          birthTime: "10:30",
+          timezone: "Europe/Rome",
+          latitude: 41.9028,
+          longitude: 12.4964,
+          birthTimePrecision: "exact"
+        },
+        result: {
+          points: [],
+          houses: [],
+          aspects: [],
+          distributions: { elements: {}, modalities: {}, polarity: {} },
+          warnings: []
+        }
+      })
+    ).toThrow();
+  });
 });
+
+function completeRenderResult() {
+  return {
+    points: [
+      "sun",
+      "moon",
+      "mercury",
+      "venus",
+      "mars",
+      "jupiter",
+      "saturn",
+      "uranus",
+      "neptune",
+      "pluto",
+      "ascendant",
+      "midheaven",
+      "north_node",
+      "south_node"
+    ].map((id, index) => ({
+      id,
+      label: id,
+      longitude: index * 20,
+      sign: "aries",
+      signDegree: index % 29,
+      house: index < 12 ? index + 1 : null,
+      retrograde: false
+    })),
+    houses: Array.from({ length: 12 }, (_, index) => ({
+      number: index + 1,
+      longitude: index * 30,
+      sign: "aries",
+      signDegree: 0
+    })),
+    aspects: [],
+    distributions: {
+      elements: { fire: 3, earth: 2, air: 3, water: 2 },
+      modalities: { cardinal: 4, fixed: 3, mutable: 3 },
+      polarity: { masculine: 6, feminine: 4 }
+    },
+    warnings: []
+  };
+}

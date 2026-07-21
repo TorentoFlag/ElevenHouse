@@ -206,6 +206,19 @@
 .warningText {
   color: #ffcf8b;
 }
+.warningStack {
+  display: grid;
+  gap: 8px;
+}
+.chartWarning {
+  padding: 9px 11px;
+  border: 1px solid rgb(246 210 102 / 0.22);
+  border-radius: 11px;
+  background: var(--chart-gold-soft);
+  color: #ffdf9b;
+  font-size: 12px;
+  line-height: 1.42;
+}
 .birthDataCard {
   display: grid;
   gap: 10px;
@@ -295,6 +308,36 @@
   font-size: 12px;
   font-weight: 700;
 }
+.distributionStack {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+.distributionRow {
+  display: grid;
+  grid-template-columns: minmax(76px, 1fr) minmax(52px, 0.8fr) 18px;
+  align-items: center;
+  gap: 8px;
+  color: rgb(229 225 244 / 0.76);
+  font-size: 12px;
+}
+.distributionTrack {
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(216 212 236 / 0.1);
+}
+.distributionTrack i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--chart-violet), var(--chart-gold));
+}
+.distributionRow strong {
+  color: var(--chart-gold);
+  font-size: 11px;
+  text-align: right;
+}
 .settingsCard {
   display: grid;
   gap: 10px;
@@ -339,7 +382,8 @@
 }
 .wheelOuter,
 .wheelMiddle,
-.wheelInner {
+.wheelInner,
+.aspectHub {
   fill: rgb(25 22 54 / 0.32);
   stroke: rgb(180 168 220 / 0.18);
   stroke-width: 1.2;
@@ -350,6 +394,23 @@
 .wheelInner {
   fill: rgb(13 12 32 / 0.72);
 }
+.aspectHub {
+  fill: rgb(139 92 246 / 0.05);
+  stroke: rgb(139 92 246 / 0.16);
+  stroke-width: 1;
+}
+.wheelDegreeTick {
+  stroke: rgb(216 212 236 / 0.14);
+  stroke-width: 0.65;
+}
+.wheelDegreeTickMedium {
+  stroke: rgb(216 212 236 / 0.22);
+  stroke-width: 0.85;
+}
+.wheelDegreeTickStrong {
+  stroke: rgb(216 212 236 / 0.4);
+  stroke-width: 1.15;
+}
 .wheelTick,
 .houseLine {
   stroke: rgb(180 168 220 / 0.13);
@@ -358,14 +419,30 @@
 .houseLine {
   stroke-dasharray: 2 6;
 }
+.houseLineMajor {
+  stroke: rgb(246 210 102 / 0.54);
+  stroke-dasharray: none;
+  stroke-width: 1.65;
+}
 .aspectLine {
   stroke: rgb(98 167 255 / 0.35);
   stroke-width: 1.1;
 }
+.aspectLineHard {
+  stroke: rgb(255 119 119 / 0.58);
+}
+.aspectLineNeutral {
+  stroke: rgb(246 210 102 / 0.5);
+}
+.aspectLineSoft {
+  stroke: rgb(98 167 255 / 0.48);
+  stroke-dasharray: 4 3;
+}
 .zodiacLabel,
 .houseLabel,
 .pointLabel,
-.retroLabel {
+.retroLabel,
+.axisLabel {
   text-anchor: middle;
   dominant-baseline: central;
   font-weight: 760;
@@ -374,9 +451,29 @@
   fill: var(--chart-gold);
   font-size: 17px;
 }
+.zodiacFire {
+  fill: #ff9b6f;
+}
+.zodiacEarth {
+  fill: #82d2a0;
+}
+.zodiacAir {
+  fill: #8dc3ff;
+}
+.zodiacWater {
+  fill: #b69aff;
+}
 .houseLabel {
   fill: rgb(186 178 218 / 0.62);
   font-size: 10px;
+}
+.axisLabel {
+  fill: var(--chart-gold);
+  font-size: 13px;
+}
+.planetGuide {
+  stroke: rgb(216 212 236 / 0.28);
+  stroke-width: 0.8;
 }
 .pointDot {
   fill: rgb(30 27 62 / 0.95);
@@ -482,6 +579,19 @@
   display: block;
   color: rgb(186 178 218 / 0.62);
 }
+.interpretationStack {
+  display: grid;
+  gap: 12px;
+}
+.interpretationNote {
+  padding: 11px 12px;
+  border: 1px solid rgb(216 212 236 / 0.1);
+  border-radius: 11px;
+  background: rgb(30 27 62 / 0.72);
+  color: rgb(229 225 244 / 0.72);
+  font-size: 12px;
+  line-height: 1.45;
+}
 .panelEmpty {
   padding: 18px 22px;
 }
@@ -507,12 +617,36 @@
   .page {
     margin: -20px;
   }
+  .toolbar {
+    display: grid;
+    flex-basis: auto;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 20px;
+  }
+  .titleGroup {
+    min-width: 0;
+  }
   .clientStrip {
     width: 100%;
+    min-width: 0;
   }
   .modeTabs {
     width: 100%;
     overflow-x: auto;
+  }
+  .modeActive,
+  .modeDisabled {
+    flex: 1 0 auto;
+  }
+  .toolbarSpacer {
+    display: none;
+  }
+  .calculateButton,
+  .toolButton {
+    width: 100%;
+    justify-content: center;
   }
   .body {
     grid-template-columns: 1fr;

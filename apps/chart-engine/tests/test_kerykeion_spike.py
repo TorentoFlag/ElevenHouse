@@ -36,3 +36,51 @@ def test_kerykeion_spike_maps_real_subject_points_and_houses():
     assert all(aspect.pointA != aspect.pointB for aspect in result.result.aspects)
     aspect_keys = {(aspect.pointA, aspect.pointB, aspect.type) for aspect in result.result.aspects}
     assert len(aspect_keys) == len(result.result.aspects)
+
+
+def test_orb_multiplier_changes_natal_aspect_inclusion():
+    narrow = calculate_natal(
+        NatalRequest(
+            schemaVersion="chart-request.v1",
+            method="natal",
+            settings=NatalSettings(
+                houseSystem="placidus",
+                nodeType="true",
+                aspectPreset="major",
+                orbMultiplier=0.5,
+            ),
+            inputSnapshot=NatalInputSnapshot(
+                birthDate="1990-07-15",
+                birthTime="10:30",
+                timezone="Europe/Rome",
+                latitude=41.9028,
+                longitude=12.4964,
+                birthTimePrecision="exact",
+            ),
+        )
+    )
+    wide = calculate_natal(
+        NatalRequest(
+            schemaVersion="chart-request.v1",
+            method="natal",
+            settings=NatalSettings(
+                houseSystem="placidus",
+                nodeType="true",
+                aspectPreset="major",
+                orbMultiplier=1.5,
+            ),
+            inputSnapshot=NatalInputSnapshot(
+                birthDate="1990-07-15",
+                birthTime="10:30",
+                timezone="Europe/Rome",
+                latitude=41.9028,
+                longitude=12.4964,
+                birthTimePrecision="exact",
+            ),
+        )
+    )
+
+    narrow_keys = {(aspect.pointA, aspect.pointB, aspect.type) for aspect in narrow.result.aspects}
+    wide_keys = {(aspect.pointA, aspect.pointB, aspect.type) for aspect in wide.result.aspects}
+
+    assert narrow_keys < wide_keys

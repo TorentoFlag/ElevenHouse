@@ -135,9 +135,27 @@ export type ChartAspect = z.infer<typeof chartAspectSchema>;
 
 export const chartDistributionsSchema = z
   .object({
-    elements: z.record(z.string(), z.number().int().min(0)),
-    modalities: z.record(z.string(), z.number().int().min(0)),
-    polarity: z.record(z.string(), z.number().int().min(0))
+    elements: z
+      .object({
+        fire: z.number().int().min(0),
+        earth: z.number().int().min(0),
+        air: z.number().int().min(0),
+        water: z.number().int().min(0)
+      })
+      .strict(),
+    modalities: z
+      .object({
+        cardinal: z.number().int().min(0),
+        fixed: z.number().int().min(0),
+        mutable: z.number().int().min(0)
+      })
+      .strict(),
+    polarity: z
+      .object({
+        masculine: z.number().int().min(0),
+        feminine: z.number().int().min(0)
+      })
+      .strict()
   })
   .strict();
 export type ChartDistributions = z.infer<typeof chartDistributionsSchema>;
@@ -158,7 +176,46 @@ export const chartRenderResultSchema = z
     distributions: chartDistributionsSchema,
     warnings: z.array(chartWarningSchema)
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const requiredPoints = [
+      "sun",
+      "moon",
+      "mercury",
+      "venus",
+      "mars",
+      "jupiter",
+      "saturn",
+      "uranus",
+      "neptune",
+      "pluto",
+      "ascendant",
+      "midheaven",
+      "north_node",
+      "south_node"
+    ];
+    const pointIds = new Set(value.points.map((point) => point.id));
+    for (const pointId of requiredPoints) {
+      if (!pointIds.has(pointId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["points"],
+          message: `Missing required chart point ${pointId}`
+        });
+      }
+    }
+
+    const houseNumbers = new Set(value.houses.map((house) => house.number));
+    for (let houseNumber = 1; houseNumber <= 12; houseNumber += 1) {
+      if (!houseNumbers.has(houseNumber)) {
+        context.addIssue({
+          code: "custom",
+          path: ["houses"],
+          message: `Missing house ${houseNumber}`
+        });
+      }
+    }
+  });
 export type ChartRenderResult = z.infer<typeof chartRenderResultSchema>;
 
 export const storedChartCalculationPayloadSchema = z

@@ -475,6 +475,12 @@ type ChartRenderResult = {
 };
 ```
 
+`ChartRenderResult` is not allowed to be an empty render shell. A persisted
+`chart-result.v1` payload must contain the required point set, all 12 houses,
+fixed distribution keys and warning array before it can be rendered or saved.
+The frontend must treat missing required render data as invalid canonical
+result data, not fill it from private input.
+
 Required first-slice points:
 
 - Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto;
@@ -511,6 +517,11 @@ Each aspect includes:
 - applying/separating when provider data is reliable;
 - strength/weight for sorting UI and later interpretation.
 
+Aspects must not contain self-pairs after provider name normalization, and must
+not contain duplicate normalized point/type pairs. This is especially important
+for lunar node aliases, because provider-level true/mean node names can map to
+the same ElevenHouse point ids.
+
 Default aspects are major/Ptolemaic aspects:
 
 - conjunction;
@@ -519,8 +530,12 @@ Default aspects are major/Ptolemaic aspects:
 - trine;
 - sextile.
 
-The contract supports minor aspects through `aspectPreset = major_minor`, but
-minor aspects are not default first-slice output.
+The contract supports minor aspects through `aspectPreset = major_minor`. They
+are not the default first-slice output, but the adapter and RU UI labels support
+semi-sextile, semi-square, quincunx and quintile when the setting is enabled.
+
+`orbMultiplier` affects aspect inclusion and returned `strength`; it must not
+be stored as an inert setting.
 
 Distributions include at least:
 
@@ -823,6 +838,12 @@ For visible scope, complete real browser verification:
 - console and network clean;
 - visual parity for wheel, toolbar, settings, tables, tabs, and responsive
   presentation.
+
+Implementation note, 2026-07-21: the first parity pass now covers Asc-oriented
+wheel geometry, Asc/MC labels, degree ticks, zodiac/aspect visual tones,
+right-panel tabs, distribution and warning rendering, RU labels for major and
+minor aspects, and mobile toolbar stacking. The remaining acceptance work is
+the full state matrix and production-like reload/retry/stale coverage.
 
 ## 19. Rollout Sequence
 

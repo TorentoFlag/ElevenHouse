@@ -13,7 +13,7 @@ import {
   getChartPointDisplayLabel
 } from "../model/chartDisplay";
 import { ChartSettingsPanel } from "./ChartSettingsPanel";
-import { ChartTables } from "./ChartTables";
+import { ChartTables, type ChartPanelTab } from "./ChartTables";
 import { ChartWheel } from "./ChartWheel";
 import styles from "./ChartEnginePage.module.css";
 
@@ -50,6 +50,7 @@ export function ChartEnginePage({
 }: ChartEnginePageProps) {
   const readiness = getChartBirthDataReadiness(selectedClient?.birthData);
   const canCalculate = Boolean(selectedClient && readiness.ready && !isBusy);
+  const [activePanelTab, setActivePanelTab] = useState<ChartPanelTab>("planets");
 
   return (
     <main className={styles.page}>
@@ -139,6 +140,18 @@ export function ChartEnginePage({
               />
             ) : null}
           </section>
+          {result?.result.warnings.length ? (
+            <section className={styles.railGroup}>
+              <h2>Предупреждения</h2>
+              <div className={styles.warningStack}>
+                {result.result.warnings.map((warning) => (
+                  <div className={styles.chartWarning} key={warning.code}>
+                    {formatChartWarning(warning)}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
           <section className={styles.railGroup}>
             <h2>Большая тройка</h2>
             {result ? (
@@ -166,6 +179,7 @@ export function ChartEnginePage({
               <p className={styles.muted}>Нет в текущем результате.</p>
             )}
           </section>
+          {result ? <DistributionSummary result={result} /> : null}
           <ChartSettingsPanel settings={settings} disabled={isBusy} onChange={onSettingsChange} />
         </aside>
 
@@ -176,23 +190,84 @@ export function ChartEnginePage({
 
         <aside className={styles.panel} aria-label="Данные карты">
           <div className={styles.panelTabs}>
-            <button className={styles.panelTabActive} type="button">
-              Планеты
-            </button>
-            <button className={styles.panelTab} type="button">
-              Аспекты
-            </button>
-            <button className={styles.panelTab} type="button">
-              Дома
-            </button>
-            <button className={styles.panelTab} type="button">
-              Трактовки
-            </button>
+            {panelTabs.map((tab) => (
+              <button
+                aria-pressed={activePanelTab === tab.id}
+                className={activePanelTab === tab.id ? styles.panelTabActive : styles.panelTab}
+                key={tab.id}
+                type="button"
+                onClick={() => setActivePanelTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
-          <ChartTables result={result} />
+          <ChartTables activeTab={activePanelTab} result={result} />
         </aside>
       </section>
     </main>
+  );
+}
+
+function DistributionSummary({ result }: { readonly result: StoredChartCalculationPayload }) {
+  return (
+    <section className={styles.railGroup}>
+      <h2>Стихии</h2>
+      <div className={styles.distributionStack}>
+        {elementItems.map((item) => (
+          <DistributionBar
+            key={item.key}
+            label={item.label}
+            value={result.result.distributions.elements[item.key]}
+            max={10}
+          />
+        ))}
+      </div>
+      <h2>Кресты</h2>
+      <div className={styles.distributionStack}>
+        {modalityItems.map((item) => (
+          <DistributionBar
+            key={item.key}
+            label={item.label}
+            value={result.result.distributions.modalities[item.key]}
+            max={10}
+          />
+        ))}
+      </div>
+      <h2>Полярность</h2>
+      <div className={styles.distributionStack}>
+        {polarityItems.map((item) => (
+          <DistributionBar
+            key={item.key}
+            label={item.label}
+            value={result.result.distributions.polarity[item.key]}
+            max={10}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DistributionBar({
+  label,
+  value,
+  max
+}: {
+  readonly label: string;
+  readonly value: number;
+  readonly max: number;
+}) {
+  const width = `${Math.min(100, Math.round((value / max) * 100))}%`;
+
+  return (
+    <div className={styles.distributionRow}>
+      <span>{label}</span>
+      <div className={styles.distributionTrack} aria-hidden="true">
+        <i style={{ width }} />
+      </div>
+      <strong>{value}</strong>
+    </div>
   );
 }
 
@@ -406,3 +481,36 @@ function getBigThree(result: StoredChartCalculationPayload): readonly { readonly
     }
   ];
 }
+
+function formatChartWarning(warning: StoredChartCalculationPayload["result"]["warnings"][number]): string {
+  if (warning.code === "BIRTH_TIME_APPROXIMATE") {
+    return "Время рождения указано примерно: дома и углы могут смещаться.";
+  }
+
+  return warning.message;
+}
+
+const elementItems = [
+  { key: "fire", label: "Огонь" },
+  { key: "earth", label: "Земля" },
+  { key: "air", label: "Воздух" },
+  { key: "water", label: "Вода" }
+] as const;
+
+const modalityItems = [
+  { key: "cardinal", label: "Кардинальный" },
+  { key: "fixed", label: "Фиксированный" },
+  { key: "mutable", label: "Мутабельный" }
+] as const;
+
+const polarityItems = [
+  { key: "masculine", label: "Мужская" },
+  { key: "feminine", label: "Женская" }
+] as const;
+
+const panelTabs: readonly { readonly id: ChartPanelTab; readonly label: string }[] = [
+  { id: "planets", label: "Планеты" },
+  { id: "aspects", label: "Аспекты" },
+  { id: "houses", label: "Дома" },
+  { id: "interpretations", label: "Трактовки" }
+];

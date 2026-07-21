@@ -14,6 +14,8 @@ export function ChartSettingsPanel({ settings, disabled = false, onChange }: Cha
       <label>
         <span>Система домов</span>
         <select
+          id="chart-house-system"
+          name="chartHouseSystem"
           value={settings.houseSystem}
           disabled={disabled}
           onChange={(event) => onChange({ ...settings, houseSystem: event.target.value as ChartSettings["houseSystem"] })}
@@ -28,6 +30,8 @@ export function ChartSettingsPanel({ settings, disabled = false, onChange }: Cha
       <label>
         <span>Лунные узлы</span>
         <select
+          id="chart-node-type"
+          name="chartNodeType"
           value={settings.nodeType}
           disabled={disabled}
           onChange={(event) => onChange({ ...settings, nodeType: event.target.value as ChartSettings["nodeType"] })}
@@ -39,6 +43,8 @@ export function ChartSettingsPanel({ settings, disabled = false, onChange }: Cha
       <label>
         <span>Аспекты</span>
         <select
+          id="chart-aspect-preset"
+          name="chartAspectPreset"
           value={settings.aspectPreset}
           disabled={disabled}
           onChange={(event) =>
@@ -52,6 +58,8 @@ export function ChartSettingsPanel({ settings, disabled = false, onChange }: Cha
       <label>
         <span>Орбис × {settings.orbMultiplier.toFixed(1)}</span>
         <input
+          id="chart-orb-multiplier"
+          name="chartOrbMultiplier"
           type="range"
           min="0.5"
           max="1.5"

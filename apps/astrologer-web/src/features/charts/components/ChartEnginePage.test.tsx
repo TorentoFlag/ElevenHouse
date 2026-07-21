@@ -61,7 +61,8 @@ describe("ChartEnginePage", () => {
     expect(onCreateNatalJob).toHaveBeenCalledOnce();
   });
 
-  it("shows calculating without queue wording and renders canonical result tables", () => {
+  it("shows calculating without queue wording and renders canonical result tables", async () => {
+    const user = userEvent.setup();
     render(
       <ChartEnginePage
         selectedClient={client}
@@ -80,7 +81,55 @@ describe("ChartEnginePage", () => {
     expect(screen.getAllByText("Солнце").length).toBeGreaterThan(0);
     expect(screen.queryByText("Sun")).not.toBeInTheDocument();
     expect(screen.getAllByText(/Рак/).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Дома" }));
     expect(screen.getByText("I дом")).toBeInTheDocument();
+  });
+
+  it("renders canonical warnings and distribution summaries", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={chartResult({
+          warnings: [{ code: "BIRTH_TIME_APPROXIMATE", message: "Chart calculated with approximate birth time." }]
+        })}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/время рождения указано примерно/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /стихии/i })).toBeInTheDocument();
+    expect(screen.getByText(/огонь/i)).toBeInTheDocument();
+    expect(screen.getByText(/кардинальный/i)).toBeInTheDocument();
+    expect(screen.getByText(/мужская/i)).toBeInTheDocument();
+  });
+
+  it("switches the right panel tabs without mixing table sections", async () => {
+    const user = userEvent.setup();
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: "Планеты" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Дома" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Аспекты" }));
+
+    expect(screen.getByRole("heading", { name: "Аспекты" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Планеты" })).not.toBeInTheDocument();
   });
 
   it("saves missing birth data from the chart engine rail before calculation", async () => {
@@ -160,7 +209,9 @@ function settings(): ChartSettings {
   };
 }
 
-function chartResult(): StoredChartCalculationPayload {
+function chartResult(
+  overrides: Partial<StoredChartCalculationPayload["result"]> = {}
+): StoredChartCalculationPayload {
   return {
     schemaVersion: "chart-result.v1",
     method: "natal",
@@ -188,8 +239,13 @@ function chartResult(): StoredChartCalculationPayload {
       ],
       houses: [{ number: 1, longitude: 180, sign: "Весы", signDegree: 0 }],
       aspects: [],
-      distributions: { elements: { water: 1 }, modalities: {}, polarity: {} },
-      warnings: []
+      distributions: {
+        elements: { fire: 3, earth: 2, air: 1, water: 4 },
+        modalities: { cardinal: 4, fixed: 3, mutable: 3 },
+        polarity: { masculine: 4, feminine: 6 }
+      },
+      warnings: [],
+      ...overrides
     }
   };
 }

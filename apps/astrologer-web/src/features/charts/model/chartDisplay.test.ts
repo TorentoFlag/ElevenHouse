@@ -26,6 +26,9 @@ describe("chartDisplay", () => {
     );
     expect(formatHouseSignDisplay("virgo")).toBe("Дева");
     expect(formatAspectTypeDisplay("square")).toBe("Квадрат");
+    expect(formatAspectTypeDisplay("semi-sextile")).toBe("Полусекстиль");
+    expect(formatAspectTypeDisplay("semi-square")).toBe("Полуквадрат");
+    expect(formatAspectTypeDisplay("quincunx")).toBe("Квинконс");
     expect(getChartPointSymbol("south_node", "True South Node")).toBe("☋︎");
   });
 });

@@ -1,4 +1,5 @@
 from importlib.metadata import version
+from math import ceil
 from typing import Any
 
 from kerykeion import AspectsFactory, AstrologicalSubjectFactory
@@ -158,6 +159,17 @@ POINT_NAME_TO_ID = {
 
 MAJOR_ASPECTS = {"conjunction", "opposition", "square", "trine", "sextile"}
 MINOR_ASPECTS = {"semi-sextile", "semi-square", "quincunx", "quintile"}
+ASPECT_ORBS = {
+    "conjunction": 10.0,
+    "opposition": 10.0,
+    "trine": 8.0,
+    "sextile": 6.0,
+    "square": 5.0,
+    "semi-sextile": 2.0,
+    "semi-square": 2.0,
+    "quincunx": 3.0,
+    "quintile": 1.0,
+}
 
 
 def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
@@ -201,7 +213,12 @@ def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
         result=ChartRenderResult(
             points=points,
             houses=houses,
-            aspects=_map_aspects(subject, request.settings.aspectPreset, active_points),
+            aspects=_map_aspects(
+                subject,
+                request.settings.aspectPreset,
+                request.settings.orbMultiplier,
+                active_points,
+            ),
             distributions=_map_distributions(subject),
             warnings=_map_warnings(request),
         ),
@@ -233,9 +250,18 @@ def _active_points(node_type: str) -> list[str]:
     return [*BASE_ACTIVE_POINTS, *NODE_ACTIVE_POINTS[node_type]]
 
 
-def _map_aspects(subject: Any, aspect_preset: str, active_points: list[str]) -> list[ChartAspect]:
+def _map_aspects(
+    subject: Any,
+    aspect_preset: str,
+    orb_multiplier: float,
+    active_points: list[str],
+) -> list[ChartAspect]:
     allowed_aspects = MAJOR_ASPECTS if aspect_preset == "major" else MAJOR_ASPECTS | MINOR_ASPECTS
-    aspect_model = AspectsFactory.natal_aspects(subject, active_points=active_points)
+    aspect_model = AspectsFactory.single_chart_aspects(
+        subject,
+        active_points=active_points,
+        active_aspects=_active_aspects(allowed_aspects, orb_multiplier),
+    )
     aspects = []
     seen_aspects = set()
 
@@ -243,6 +269,9 @@ def _map_aspects(subject: Any, aspect_preset: str, active_points: list[str]) -> 
         point_a = POINT_NAME_TO_ID.get(aspect.p1_name)
         point_b = POINT_NAME_TO_ID.get(aspect.p2_name)
         if point_a is None or point_b is None or aspect.aspect not in allowed_aspects:
+            continue
+        orb_limit = _orb_limit(aspect.aspect, orb_multiplier)
+        if float(aspect.orbit) > orb_limit:
             continue
         if point_a == point_b:
             continue
@@ -258,11 +287,19 @@ def _map_aspects(subject: Any, aspect_preset: str, active_points: list[str]) -> 
                 angle=float(aspect.aspect_degrees),
                 orb=float(aspect.orbit),
                 applying=_is_applying(aspect.aspect_movement),
-                strength=_aspect_strength(float(aspect.orbit)),
+                strength=_aspect_strength(float(aspect.orbit), orb_limit),
             )
         )
 
     return aspects
+
+
+def _active_aspects(allowed_aspects: set[str], orb_multiplier: float) -> list[dict[str, float | str]]:
+    return [
+        {"name": name, "orb": ceil(_orb_limit(name, orb_multiplier))}
+        for name in sorted(allowed_aspects)
+        if name in ASPECT_ORBS
+    ]
 
 
 def _map_distributions(subject: Any) -> ChartDistributions:
@@ -311,5 +348,11 @@ def _is_applying(value: str) -> bool | None:
     return None
 
 
-def _aspect_strength(orb: float) -> float:
-    return max(0.0, min(1.0, 1.0 - (orb / 10.0)))
+def _orb_limit(aspect_name: str, orb_multiplier: float) -> float:
+    return ASPECT_ORBS[aspect_name] * orb_multiplier
+
+
+def _aspect_strength(orb: float, orb_limit: float) -> float:
+    if orb_limit <= 0:
+        return 0.0
+    return max(0.0, min(1.0, 1.0 - (orb / orb_limit)))

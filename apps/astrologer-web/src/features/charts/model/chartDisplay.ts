@@ -72,7 +72,11 @@ const aspectLabels: Record<string, string> = {
   sextile: "Секстиль",
   square: "Квадрат",
   trine: "Тригон",
-  opposition: "Оппозиция"
+  opposition: "Оппозиция",
+  "semi-sextile": "Полусекстиль",
+  "semi-square": "Полуквадрат",
+  quincunx: "Квинконс",
+  quintile: "Квинтиль"
 };
 
 export function getChartPointDisplayLabel(pointId: string, fallback: string): string {
