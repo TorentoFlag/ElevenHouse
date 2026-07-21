@@ -121,6 +121,13 @@ services:
     restart: unless-stopped
     env_file:
       - ../env/.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chart-engine:
+        condition: service_healthy
     environment:
       CHART_ENGINE_BASE_URL: http://chart-engine:8012
       CHART_WORKER_OUTBOX_RELAY_INTERVAL_MS: ${CHART_WORKER_OUTBOX_RELAY_INTERVAL_MS:-1000}
