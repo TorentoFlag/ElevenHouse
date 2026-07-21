@@ -63,13 +63,15 @@ export function ChartEnginePage({
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
   const calculateButtonLabel =
-    jobState === "failed"
-      ? "Повторить"
-      : displayResult && isResultStale
-        ? "Пересчитать"
-        : displayResult
-          ? "Рассчитано"
-          : "Рассчитать";
+    jobState === "calculating"
+      ? "Рассчитываем"
+      : jobState === "failed"
+        ? "Повторить"
+        : displayResult && isResultStale
+          ? "Пересчитать"
+          : displayResult
+            ? "Рассчитано"
+            : "Рассчитать";
 
   return (
     <main className={styles.page}>

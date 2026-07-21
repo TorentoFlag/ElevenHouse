@@ -77,6 +77,8 @@ describe("ChartEnginePage", () => {
     );
 
     expect(screen.getByText(/рассчитываем карту/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /рассчитываем/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /пересчитать/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/очеред/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("Солнце").length).toBeGreaterThan(0);
     expect(screen.queryByText("Sun")).not.toBeInTheDocument();
@@ -462,7 +464,9 @@ describe("ChartEnginePage", () => {
     expect(screen.getByRole("button", { name: /рассчитать/i })).toBeEnabled();
   });
 
-  it("turns a failed calculation into an explicit retry action", () => {
+  it("turns a failed calculation into an explicit retry action", async () => {
+    const user = userEvent.setup();
+    const onCreateNatalJob = vi.fn(async () => undefined);
     render(
       <ChartEnginePage
         selectedClient={client}
@@ -472,12 +476,14 @@ describe("ChartEnginePage", () => {
         isBusy={false}
         settings={settings()}
         onSettingsChange={vi.fn()}
-        onCreateNatalJob={vi.fn()}
+        onCreateNatalJob={onCreateNatalJob}
       />
     );
 
     expect(screen.getByText("Provider timeout")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /повторить/i })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: /повторить/i }));
+
+    expect(onCreateNatalJob).toHaveBeenCalledOnce();
   });
 
   it("saves missing birth data from the chart engine rail before calculation", async () => {
