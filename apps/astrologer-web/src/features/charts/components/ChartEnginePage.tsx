@@ -54,6 +54,7 @@ export function ChartEnginePage({
   const isCurrentResultCalculated = Boolean(result && !isResultStale && jobState === "succeeded");
   const canCalculate = Boolean(selectedClient && readiness.ready && !isBusy && !isCurrentResultCalculated);
   const [activePanelTab, setActivePanelTab] = useState<ChartPanelTab>("planets");
+  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const calculateButtonLabel =
     jobState === "failed"
       ? "Повторить"
@@ -123,10 +124,19 @@ export function ChartEnginePage({
           ↗
         </button>
         <button className={styles.toolButton} type="button" disabled>
-          Привязать клиенту
+          {result && selectedClient ? "✓ Привязана" : "Привязать"}
         </button>
         <button className={styles.toolButton} type="button" disabled>
           PDF
+        </button>
+        <button
+          aria-pressed={isSettingsPanelOpen}
+          className={isSettingsPanelOpen ? styles.toolButtonActive : styles.toolButton}
+          type="button"
+          onClick={() => setIsSettingsPanelOpen((isOpen) => !isOpen)}
+        >
+          <span aria-hidden="true">☼</span>
+          Настройки
         </button>
       </header>
 
@@ -191,7 +201,6 @@ export function ChartEnginePage({
             )}
           </section>
           {result ? <DistributionSummary result={result} /> : null}
-          <ChartSettingsPanel settings={settings} disabled={isBusy} onChange={onSettingsChange} />
         </aside>
 
         <section className={styles.workspace}>
@@ -205,20 +214,28 @@ export function ChartEnginePage({
         </section>
 
         <aside className={styles.panel} aria-label="Данные карты">
-          <div className={styles.panelTabs}>
-            {panelTabs.map((tab) => (
-              <button
-                aria-pressed={activePanelTab === tab.id}
-                className={activePanelTab === tab.id ? styles.panelTabActive : styles.panelTab}
-                key={tab.id}
-                type="button"
-                onClick={() => setActivePanelTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <ChartTables activeTab={activePanelTab} result={result} />
+          {isSettingsPanelOpen ? (
+            <div className={styles.panelSettings}>
+              <ChartSettingsPanel settings={settings} disabled={isBusy} onChange={onSettingsChange} />
+            </div>
+          ) : (
+            <>
+              <div className={styles.panelTabs}>
+                {panelTabs.map((tab) => (
+                  <button
+                    aria-pressed={activePanelTab === tab.id}
+                    className={activePanelTab === tab.id ? styles.panelTabActive : styles.panelTab}
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActivePanelTab(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <ChartTables activeTab={activePanelTab} result={result} />
+            </>
+          )}
         </aside>
       </section>
     </main>

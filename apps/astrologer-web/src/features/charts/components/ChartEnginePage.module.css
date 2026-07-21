@@ -8,7 +8,8 @@
   --chart-violet: #b69aff;
   --chart-blue: #62a7ff;
   display: flex;
-  min-height: calc(100dvh - var(--astrologer-app-header-height, 68px));
+  height: calc(100dvh - var(--astrologer-app-header-height, 68px));
+  min-height: 0;
   margin: -32px;
   flex-direction: column;
   overflow: hidden;
@@ -22,7 +23,7 @@
   flex: 0 0 60px;
   height: 60px;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
   padding: 0 20px;
   border-bottom: 1px solid var(--chart-line);
@@ -30,10 +31,11 @@
 }
 
 .titleGroup {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 10px;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
   white-space: nowrap;
 }
 .titleGroup p {
@@ -59,8 +61,8 @@
   color: var(--chart-gold);
 }
 .clientStrip {
-  width: min(320px, 28vw);
-  min-width: 220px;
+  width: min(300px, 28vw);
+  min-width: 204px;
 }
 .clientButton {
   display: grid;
@@ -98,17 +100,21 @@
 }
 .modeTabs {
   display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
   overflow: hidden;
+  padding: 3px;
   border: 1px solid var(--chart-line-strong);
-  border-radius: 14px;
+  border-radius: 999px;
   background: rgb(30 27 62);
 }
 .modeActive,
 .modeDisabled {
-  min-height: 36px;
-  padding: 0 14px;
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 16px;
   border: 0;
-  border-right: 1px solid var(--chart-line);
+  border-radius: 999px;
   background: transparent;
   color: rgb(229 225 244 / 0.72);
   font: inherit;
@@ -136,7 +142,7 @@
   gap: 8px;
   padding: 10px 16px;
   border: 1px solid transparent;
-  border-radius: 14px;
+  border-radius: 999px;
   cursor: pointer;
   font: inherit;
   font-size: 13px;
@@ -154,6 +160,24 @@
   background: rgb(30 27 62);
   color: var(--eh-color-moon-120);
 }
+.toolButtonActive {
+  display: inline-flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid rgb(246 210 102 / 0.36);
+  border-radius: 999px;
+  background: rgb(47 41 86);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1;
+  white-space: nowrap;
+}
 .calculateButton:disabled,
 .toolButton:disabled {
   cursor: not-allowed;
@@ -163,7 +187,7 @@
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: 218px minmax(420px, 1fr) minmax(320px, 360px);
+  grid-template-columns: 218px minmax(420px, 1fr) 340px;
 }
 .rail,
 .panel {
@@ -173,7 +197,7 @@
   scrollbar-width: thin;
 }
 .rail {
-  padding: 18px 14px 30px;
+  padding: 16px 14px 30px;
   border-right: 1px solid var(--chart-line);
 }
 .panel {
@@ -376,8 +400,8 @@
   padding: 22px;
 }
 .wheelSvg {
-  width: min(100%, 560px);
-  max-height: 540px;
+  width: min(100%, 460px);
+  max-height: 460px;
   overflow: visible;
 }
 .wheelOuter,
@@ -527,21 +551,23 @@
   top: 0;
   z-index: 1;
   display: flex;
-  gap: 12px;
-  padding: 18px 22px 10px;
+  gap: 2px;
+  padding: 10px 12px 0;
   border-bottom: 1px solid var(--chart-line);
   background: rgb(13 12 32 / 0.94);
 }
 .panelTab,
 .panelTabActive {
-  padding: 0 0 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 4px 11px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
   color: rgb(186 178 218 / 0.68);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 760;
 }
 .panelTabActive {
@@ -551,17 +577,25 @@
 .tableStack {
   display: grid;
   gap: 18px;
-  padding: 18px 22px 32px;
+  padding: 18px 20px 32px;
 }
 .tableSection {
   display: grid;
   gap: 8px;
 }
-.dataList {
+.matrixHeading {
+  margin: 0;
+  color: rgb(229 225 244 / 0.84);
+  font-size: 13px;
+  font-weight: 760;
+}
+.dataList,
+.aspectList {
   display: grid;
   gap: 2px;
 }
 .dataRow,
+.aspectRow,
 .emptyRow {
   display: grid;
   grid-template-columns: minmax(86px, 1fr) minmax(90px, 1fr) auto;
@@ -574,6 +608,125 @@
 .dataRow span:last-child {
   color: rgb(186 178 218 / 0.66);
   text-align: right;
+}
+.planetList {
+  display: grid;
+  gap: 1px;
+}
+.planetRow {
+  display: grid;
+  grid-template-columns: 26px minmax(88px, 1fr) 22px minmax(66px, 0.7fr) minmax(52px, 0.55fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 35px;
+  color: rgb(229 225 244 / 0.82);
+  font-size: 13px;
+}
+.pointGlyph {
+  color: rgb(229 225 244 / 0.92);
+  font-size: 18px;
+  text-align: center;
+}
+.pointName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.signGlyph {
+  color: var(--chart-gold);
+  font-size: 15px;
+  text-align: center;
+}
+.pointDegree {
+  color: rgb(186 178 218 / 0.82);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pointDegree b {
+  margin-left: 7px;
+  color: var(--chart-gold);
+  font-size: 11px;
+}
+.pointHouse {
+  color: rgb(186 178 218 / 0.66);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+.houseGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.houseCard {
+  display: grid;
+  gap: 3px;
+  min-height: 70px;
+  padding: 10px 11px;
+  border: 1px solid var(--chart-line);
+  border-radius: 9px;
+  background: rgb(30 27 62 / 0.72);
+}
+.houseCard span {
+  color: var(--chart-gold);
+  font-size: 11px;
+  font-weight: 820;
+}
+.houseCard strong {
+  color: rgb(229 225 244 / 0.9);
+  font-size: 13px;
+  font-weight: 760;
+}
+.houseCard small {
+  color: rgb(186 178 218 / 0.62);
+  font-size: 11px;
+}
+.aspectMatrix {
+  display: grid;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.aspectMatrixHead,
+.aspectMatrixCell,
+.aspectMatrixEmpty {
+  display: grid;
+  min-width: 22px;
+  height: 24px;
+  place-items: center;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1;
+}
+.aspectMatrixHead {
+  color: rgb(229 225 244 / 0.82);
+  font-weight: 760;
+}
+.aspectMatrixCell {
+  border: 1px solid rgb(246 210 102 / 0.22);
+  background: rgb(246 210 102 / 0.12);
+  color: var(--chart-gold);
+  font-weight: 850;
+}
+.aspectMatrixEmpty {
+  background: rgb(216 212 236 / 0.035);
+}
+.aspectLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: rgb(186 178 218 / 0.68);
+  font-size: 11px;
+}
+.aspectLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.aspectLegend b {
+  color: var(--chart-gold);
+  font-size: 12px;
 }
 .emptyRow {
   display: block;
@@ -595,6 +748,9 @@
 .panelEmpty {
   padding: 18px 22px;
 }
+.panelSettings {
+  padding: 18px 20px 32px;
+}
 
 @media (max-width: 1180px) {
   .toolbar {
@@ -615,7 +771,10 @@
 
 @media (max-width: 760px) {
   .page {
+    height: auto;
+    min-height: calc(100dvh - var(--astrologer-app-header-height, 64px));
     margin: -20px;
+    overflow: visible;
   }
   .toolbar {
     display: grid;
@@ -649,13 +808,24 @@
     justify-content: center;
   }
   .body {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
   }
   .rail {
     border-right: 0;
     border-bottom: 1px solid var(--chart-line);
   }
+  .rail,
+  .panel,
+  .workspace {
+    overflow: visible;
+  }
   .wheelStage {
     min-height: 420px;
+  }
+  .wheelSvg {
+    width: min(100%, 300px);
+    max-height: 300px;
   }
 }

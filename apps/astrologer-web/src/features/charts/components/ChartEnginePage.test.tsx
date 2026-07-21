@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChartSettings, StoredChartCalculationPayload } from "@elevenhouse/contracts";
@@ -130,6 +130,77 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByRole("heading", { name: "Аспекты" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Планеты" })).not.toBeInTheDocument();
+  });
+
+  it("opens calculation settings from the toolbar in the right panel", async () => {
+    const user = userEvent.setup();
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole("region", { name: "Настройки расчёта" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Настройки" }));
+
+    expect(screen.getByRole("region", { name: "Настройки расчёта" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Планеты" })).not.toBeInTheDocument();
+  });
+
+  it("renders reference-style planet rows and an aspect matrix in the right panel", async () => {
+    const user = userEvent.setup();
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={chartResult({
+          points: [
+            {
+              id: "sun",
+              label: "Sun",
+              longitude: 113.1,
+              sign: "cancer",
+              signDegree: 23.1,
+              house: 10,
+              retrograde: false
+            },
+            {
+              id: "moon",
+              label: "Moon",
+              longitude: 21.2,
+              sign: "aries",
+              signDegree: 21.2,
+              house: 8,
+              retrograde: false
+            }
+          ],
+          aspects: [{ pointA: "sun", pointB: "moon", type: "square", angle: 90, orb: 1.4, applying: true }]
+        })}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    const planetsPanel = screen.getByRole("region", { name: "Планеты" });
+    expect(within(planetsPanel).getByText("☉︎")).toBeInTheDocument();
+    expect(within(planetsPanel).getByText("♋︎")).toBeInTheDocument();
+    expect(within(planetsPanel).getByText("23°06'")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Аспекты" }));
+
+    expect(screen.getByRole("heading", { name: "Матрица аспектов" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Луна Квадрат Солнце, орбис 1\.40°/)).toHaveTextContent("□");
   });
 
   it("marks an existing result as stale when birth data or settings changed", () => {
