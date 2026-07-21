@@ -1,6 +1,15 @@
-import type { ClientBirthDataResponse } from "@elevenhouse/contracts";
+import type {
+  ChartSettings,
+  ClientBirthDataResponse,
+  StoredChartCalculationPayload
+} from "@elevenhouse/contracts";
 
-export type BackendChartJobStatus = "queued" | "processing" | "calculating" | "succeeded" | "failed";
+export type BackendChartJobStatus =
+  | "queued"
+  | "processing"
+  | "calculating"
+  | "succeeded"
+  | "failed";
 export type VisibleChartJobState = "calculating" | "succeeded" | "failed";
 
 export type ChartBirthDataReadiness =
@@ -15,7 +24,8 @@ type NatalBirthData = Pick<
   | "birthTimezone"
   | "birthLatitude"
   | "birthLongitude"
->;
+> &
+  Partial<Pick<ClientBirthDataResponse, "birthTimeDstOccurrence">>;
 
 export function toVisibleChartJobState(status: BackendChartJobStatus): VisibleChartJobState {
   if (status === "queued" || status === "processing" || status === "calculating") {
@@ -44,4 +54,38 @@ export function getChartBirthDataReadiness(
   }
 
   return missing.length > 0 ? { ready: false, missing } : { ready: true };
+}
+
+export function isChartResultStale(
+  result: StoredChartCalculationPayload,
+  birthData: NatalBirthData | null | undefined,
+  settings: ChartSettings
+): boolean {
+  if (birthData === undefined) {
+    return false;
+  }
+  if (!birthData || getChartBirthDataReadiness(birthData).ready === false) {
+    return true;
+  }
+
+  const snapshot = result.inputSnapshot;
+
+  return (
+    result.settings.zodiac !== settings.zodiac ||
+    result.settings.houseSystem !== settings.houseSystem ||
+    result.settings.nodeType !== settings.nodeType ||
+    result.settings.aspectPreset !== settings.aspectPreset ||
+    result.settings.orbMultiplier !== settings.orbMultiplier ||
+    snapshot.birthDate !== birthData.birthDate ||
+    snapshot.birthTime !== birthData.birthTime ||
+    snapshot.birthTimePrecision !== birthData.birthTimePrecision ||
+    snapshot.timezone !== birthData.birthTimezone ||
+    !areNumbersEquivalent(snapshot.latitude, birthData.birthLatitude) ||
+    !areNumbersEquivalent(snapshot.longitude, birthData.birthLongitude) ||
+    (snapshot.dstOccurrence ?? null) !== (birthData.birthTimeDstOccurrence ?? null)
+  );
+}
+
+function areNumbersEquivalent(left: number, right: number | null | undefined): boolean {
+  return right != null && Math.abs(left - right) < 0.000001;
 }

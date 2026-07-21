@@ -14,7 +14,10 @@ import {
   getChartJob,
   recalculateChart
 } from "../../features/charts/api/chartsApi";
-import { getChartBirthDataReadiness } from "../../features/charts/model/chartEngineState";
+import {
+  getChartBirthDataReadiness,
+  isChartResultStale
+} from "../../features/charts/model/chartEngineState";
 import type { ChartEnginePageJobState } from "../../features/charts/components/ChartEnginePage";
 
 const defaultSettings: ChartSettings = {
@@ -32,12 +35,12 @@ export function useChartEngineController() {
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
   const [settings, setSettings] = useState<ChartSettings>(defaultSettings);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [calculationId, setCalculationId] = useState<string | null>(
-    initialUrlState.calculationId
+  const [calculationId, setCalculationId] = useState<string | null>(initialUrlState.calculationId);
+  const [immediateResult, setImmediateResult] = useState<StoredChartCalculationPayload | null>(
+    null
   );
-  const [immediateResult, setImmediateResult] = useState<StoredChartCalculationPayload | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isResultStale, setIsResultStale] = useState(false);
+  const [hasResultStaleIntent, setHasResultStaleIntent] = useState(false);
 
   const restoredClientQuery = useQuery({
     queryKey: ["clients", "detail", initialUrlState.clientId],
@@ -46,7 +49,15 @@ export function useChartEngineController() {
   });
 
   const calculationMutation = useMutation({
-    mutationFn: ({ clientId, settings }: { readonly clientId: string; readonly settings: ChartSettings }) =>
+    mutationFn: ({
+      clientId,
+      isResultStale,
+      settings
+    }: {
+      readonly clientId: string;
+      readonly isResultStale: boolean;
+      readonly settings: ChartSettings;
+    }) =>
       submitChartCalculation({
         clientId,
         calculationId,
@@ -57,7 +68,7 @@ export function useChartEngineController() {
       }),
     onSuccess: (response, variables) => {
       setErrorMessage(null);
-      setIsResultStale(false);
+      setHasResultStaleIntent(false);
       if (response.status === "succeeded") {
         setJobId(null);
         setCalculationId(response.calculationId);
@@ -93,7 +104,7 @@ export function useChartEngineController() {
       }
       setErrorMessage(null);
       if (result) {
-        setIsResultStale(true);
+        setHasResultStaleIntent(true);
       }
       await queryClient.invalidateQueries({ queryKey: astrologerClientsQueryKeys.all() });
     },
@@ -119,7 +130,7 @@ export function useChartEngineController() {
       setCalculationId(job.calculationId);
       setJobId(null);
       setErrorMessage(null);
-      setIsResultStale(false);
+      setHasResultStaleIntent(false);
       writeChartEngineUrlState({
         clientId: selectedClient?.value ?? initialUrlState.clientId,
         calculationId: job.calculationId
@@ -149,10 +160,14 @@ export function useChartEngineController() {
   useEffect(() => {
     if (!calculationQuery.data) return;
     setSettings(calculationQuery.data.settings);
-    setIsResultStale(false);
+    setHasResultStaleIntent(false);
   }, [calculationQuery.data]);
 
   const result = immediateResult ?? calculationQuery.data ?? null;
+  const isResultStale = Boolean(
+    result &&
+    (hasResultStaleIntent || isChartResultStale(result, selectedClient?.birthData, settings))
+  );
   const jobState: ChartEnginePageJobState = useMemo(() => {
     if (calculationMutation.isPending || jobId || jobQuery.data?.status === "calculating") {
       return "calculating";
@@ -186,7 +201,7 @@ export function useChartEngineController() {
     onSettingsChange: (nextSettings: ChartSettings) => {
       setSettings(nextSettings);
       if (result) {
-        setIsResultStale(true);
+        setHasResultStaleIntent(true);
       }
     },
     isSavingBirthData: birthDataMutation.isPending,
@@ -201,7 +216,7 @@ export function useChartEngineController() {
       setCalculationId(null);
       setImmediateResult(null);
       setErrorMessage(null);
-      setIsResultStale(false);
+      setHasResultStaleIntent(false);
       writeChartEngineUrlState({ clientId: client.value, calculationId: null });
     },
     onCreateNatalJob: async () => {
@@ -214,7 +229,11 @@ export function useChartEngineController() {
         setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
         return;
       }
-      await calculationMutation.mutateAsync({ clientId: selectedClient.value, settings });
+      await calculationMutation.mutateAsync({
+        clientId: selectedClient.value,
+        isResultStale,
+        settings
+      });
     }
   };
 }
@@ -257,10 +276,7 @@ export function readChartEngineUrlState(
   };
 }
 
-export function buildChartEngineSearch(
-  search: string,
-  state: ChartEngineUrlState
-): string {
+export function buildChartEngineSearch(search: string, state: ChartEngineUrlState): string {
   const params = new URLSearchParams(search);
   if (state.clientId) {
     params.set("clientId", state.clientId);

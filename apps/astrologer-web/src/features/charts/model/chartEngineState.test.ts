@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { ChartSettings, StoredChartCalculationPayload } from "@elevenhouse/contracts";
 import {
   getChartBirthDataReadiness,
+  isChartResultStale,
   toVisibleChartJobState,
   type BackendChartJobStatus
 } from "./chartEngineState";
@@ -56,4 +58,84 @@ describe("chartEngineState", () => {
       })
     ).toEqual({ ready: true });
   });
+
+  it("keeps a restored calculation current when settings and birth snapshot still match", () => {
+    expect(isChartResultStale(chartResult(), readyBirthData(), chartSettings())).toBe(false);
+  });
+
+  it("marks a restored calculation stale when current birth data no longer matches the snapshot", () => {
+    expect(
+      isChartResultStale(
+        chartResult(),
+        {
+          ...readyBirthData(),
+          birthTime: "11:45",
+          birthTimePrecision: "approximate"
+        },
+        chartSettings()
+      )
+    ).toBe(true);
+  });
+
+  it("marks a restored calculation stale when current calculation settings differ", () => {
+    expect(
+      isChartResultStale(chartResult(), readyBirthData(), {
+        ...chartSettings(),
+        houseSystem: "koch"
+      })
+    ).toBe(true);
+  });
 });
+
+function chartSettings(): ChartSettings {
+  return {
+    zodiac: "tropical",
+    houseSystem: "placidus",
+    nodeType: "true",
+    aspectPreset: "major",
+    orbMultiplier: 1
+  };
+}
+
+function readyBirthData() {
+  return {
+    birthDate: "1990-07-15",
+    birthTime: "10:30",
+    birthTimePrecision: "exact" as const,
+    birthTimezone: "Europe/Rome",
+    birthLatitude: 41.9028,
+    birthLongitude: 12.4964,
+    birthTimeDstOccurrence: null
+  };
+}
+
+function chartResult(
+  overrides: Partial<StoredChartCalculationPayload> = {}
+): StoredChartCalculationPayload {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "natal",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: chartSettings(),
+    inputSnapshot: {
+      birthDate: "1990-07-15",
+      birthTime: "10:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964,
+      birthTimePrecision: "exact"
+    },
+    result: {
+      points: [],
+      houses: [],
+      aspects: [],
+      distributions: {
+        elements: { fire: 0, earth: 0, air: 0, water: 0 },
+        modalities: { cardinal: 0, fixed: 0, mutable: 0 },
+        polarity: { masculine: 0, feminine: 0 }
+      },
+      warnings: []
+    },
+    ...overrides
+  };
+}
