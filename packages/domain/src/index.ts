@@ -19,3 +19,4 @@ export * from "./availability";
 export * from "./bookings";
 export * from "./calendar";
 export * from "./charts";
+export * from "./human-design";
