@@ -63,6 +63,7 @@ async function main(): Promise<void> {
         throw new Error("Refusing to reconcile an unknown migration history");
       }
       if (history === "current") {
+        await reconcileClientBirthDataDstOccurrenceIfPresent();
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
         console.log("Current production baseline is already recorded");
@@ -74,6 +75,7 @@ async function main(): Promise<void> {
         }
         await assertPreSchedulingSchemaShape();
         await client.query(schedulingBaselineDdl);
+        await reconcileClientBirthDataDstOccurrenceIfPresent();
         await recordCurrentBaseline();
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
@@ -421,6 +423,9 @@ function assertCanonicalObject(
 
 async function assertCurrentSchemaShape(): Promise<void> {
   await assertPreSchedulingSchemaShape();
+  if (await relationExists("public.client_birth_data")) {
+    await assertClientBirthDataDstOccurrence();
+  }
   for (const relation of [
     "public.availability_schedules",
     "public.availability_weekly_periods",
@@ -461,6 +466,55 @@ async function assertCurrentSchemaShape(): Promise<void> {
     schedulingInvariants.rows[0]?.product_owner_unique_count !== "1"
   ) {
     throw new Error("Current production schema is missing scheduling invariants");
+  }
+}
+
+async function reconcileClientBirthDataDstOccurrenceIfPresent(): Promise<void> {
+  if (!(await relationExists("public.client_birth_data"))) return;
+
+  await client.query(`
+    ALTER TABLE client_birth_data
+      ADD COLUMN IF NOT EXISTS birth_time_dst_occurrence text;
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+          FROM pg_constraint
+         WHERE conrelid = 'client_birth_data'::regclass
+           AND conname = 'client_birth_data_time_dst_occurrence_check'
+      ) THEN
+        ALTER TABLE client_birth_data
+          ADD CONSTRAINT client_birth_data_time_dst_occurrence_check
+          CHECK (
+            birth_time_dst_occurrence IS NULL
+            OR birth_time_dst_occurrence IN ('first', 'second')
+          );
+      END IF;
+    END
+    $$;
+  `);
+}
+
+async function assertClientBirthDataDstOccurrence(): Promise<void> {
+  const result = await client.query<{
+    column_count: string;
+    constraint_count: string;
+  }>(`
+    SELECT
+      (SELECT count(*)::text
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'client_birth_data'
+          AND column_name = 'birth_time_dst_occurrence') AS column_count,
+      (SELECT count(*)::text
+         FROM pg_constraint
+        WHERE conrelid = 'client_birth_data'::regclass
+          AND conname = 'client_birth_data_time_dst_occurrence_check'
+          AND contype = 'c') AS constraint_count
+  `);
+  if (result.rows[0]?.column_count !== "1" || result.rows[0]?.constraint_count !== "1") {
+    throw new Error("Current production schema is missing client birth-data DST occurrence");
   }
 }
 
