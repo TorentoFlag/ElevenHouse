@@ -146,8 +146,8 @@ function toJobResponse(job: ChartCalculationJob): ChartJobResponse {
     id: job.id,
     status: job.status === "queued" || job.status === "processing" ? "calculating" : job.status,
     calculationId: job.resultCalculationId,
-    failureCode: null,
-    failureMessage: null
+    failureCode: job.lastErrorCode,
+    failureMessage: job.lastErrorMessage
   });
 }
 

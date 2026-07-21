@@ -53,6 +53,31 @@ describe("ChartsService", () => {
       response: expect.objectContaining({ code: "CHART_BIRTH_TIME_REQUIRED" })
     });
   });
+
+  it("returns persisted failure details for a failed chart job", async () => {
+    const jobStore = createJobStore({
+      job: {
+        id: jobId,
+        ownerUserId,
+        clientId,
+        resultCalculationId: null,
+        method: "natal",
+        status: "failed",
+        inputFingerprint: "sha256:test",
+        lastErrorCode: "retry_exhausted",
+        lastErrorMessage: "CHART_ENGINE_HTTP_503"
+      }
+    });
+    const service = createService({ jobStore });
+
+    await expect(service.getJob(jobId, request())).resolves.toMatchObject({
+      id: jobId,
+      status: "failed",
+      calculationId: null,
+      failureCode: "retry_exhausted",
+      failureMessage: "CHART_ENGINE_HTTP_503"
+    });
+  });
 });
 
 function createService(input: {
@@ -74,10 +99,12 @@ function createCommandStore(): ChartCalculationCommandStore {
   };
 }
 
-function createJobStore(): ChartCalculationJobStore {
+function createJobStore(input: {
+  readonly job?: Awaited<ReturnType<ChartCalculationJobStore["getOwnerScopedJob"]>>;
+} = {}): ChartCalculationJobStore {
   return {
     createOrReuseNatalJob: vi.fn(async () => ({ kind: "active_job", jobId }) as const),
-    getOwnerScopedJob: vi.fn(async () => null),
+    getOwnerScopedJob: vi.fn(async () => input.job ?? null),
     getOwnerScopedResult: vi.fn(async () => null)
   };
 }

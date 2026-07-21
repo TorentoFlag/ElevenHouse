@@ -10,6 +10,8 @@ export type ChartCalculationJob = {
   readonly method: ChartCalculationMethod;
   readonly status: ChartJobStatus;
   readonly inputFingerprint: string;
+  readonly lastErrorCode: string | null;
+  readonly lastErrorMessage: string | null;
 };
 
 export type CreateOrReuseNatalJobInput = {

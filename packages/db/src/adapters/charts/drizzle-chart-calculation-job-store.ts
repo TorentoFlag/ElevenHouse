@@ -184,7 +184,9 @@ function toChartCalculationJob(row: ChartCalculationJobRow): ChartCalculationJob
     resultCalculationId: row.resultCalculationId,
     method: row.method as ChartCalculationJob["method"],
     status: row.status as ChartCalculationJob["status"],
-    inputFingerprint: row.inputFingerprint
+    inputFingerprint: row.inputFingerprint,
+    lastErrorCode: row.lastErrorCode,
+    lastErrorMessage: row.lastErrorMessage
   };
 }
 
