@@ -31,7 +31,16 @@ describe("Human Design individual base result", () => {
       engineRevision: 1,
       schemaVersion: "human-design-result.v1",
       mode: "individual",
-      profile: { personalityLine: 1, designLine: 1, code: "1/1" }
+      type: "manifesting_generator",
+      strategy: "wait_to_respond",
+      signature: "satisfaction",
+      notSelfTheme: "frustration",
+      profile: { personalityLine: 1, designLine: 1, code: "1/1" },
+      typeBasis: {
+        sacralDefined: true,
+        throatDefined: true,
+        throatConnectedMotorCenters: ["sacral"]
+      }
     });
     expect(result.activations).toHaveLength(26);
     expect(result.definedChannels).toContainEqual({

@@ -18,6 +18,14 @@ import {
   type HumanDesignGateNumber,
   type HumanDesignLineNumber
 } from "./human-design-types";
+import {
+  deriveHumanDesignType,
+  type HumanDesignNotSelfThemeCode,
+  type HumanDesignSignatureCode,
+  type HumanDesignStrategyCode,
+  type HumanDesignTypeBasis,
+  type HumanDesignTypeCode
+} from "./type";
 
 export type HumanDesignProfile = {
   readonly personalityLine: HumanDesignLineNumber;
@@ -43,6 +51,11 @@ export type HumanDesignIndividualBaseResult = {
   readonly definedGates: readonly HumanDesignDefinedGate[];
   readonly definedChannels: readonly HumanDesignDefinedChannel[];
   readonly definedCenters: readonly HumanDesignDefinedCenter[];
+  readonly type: HumanDesignTypeCode;
+  readonly strategy: HumanDesignStrategyCode;
+  readonly signature: HumanDesignSignatureCode;
+  readonly notSelfTheme: HumanDesignNotSelfThemeCode;
+  readonly typeBasis: HumanDesignTypeBasis;
   readonly profile: HumanDesignProfile;
 };
 
@@ -51,6 +64,7 @@ export function buildHumanDesignIndividualBaseResult(
 ): HumanDesignIndividualBaseResult {
   const activations = buildHumanDesignActivations(input);
   const definedChannels = deriveDefinedChannels(activations);
+  const typeMechanics = deriveHumanDesignType(definedChannels);
   return {
     methodCode: HUMAN_DESIGN_METHOD_CODE,
     engineRevision: HUMAN_DESIGN_ENGINE_REVISION,
@@ -60,6 +74,11 @@ export function buildHumanDesignIndividualBaseResult(
     definedGates: buildDefinedGates(activations),
     definedChannels,
     definedCenters: deriveDefinedCenters(definedChannels),
+    type: typeMechanics.type,
+    strategy: typeMechanics.strategy,
+    signature: typeMechanics.signature,
+    notSelfTheme: typeMechanics.notSelfTheme,
+    typeBasis: typeMechanics.basis,
     profile: buildProfile(activations)
   };
 }
