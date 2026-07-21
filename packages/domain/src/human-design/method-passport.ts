@@ -1,5 +1,12 @@
 import { HUMAN_DESIGN_CENTERS, HUMAN_DESIGN_CHANNELS } from "./catalog";
 import {
+  HUMAN_DESIGN_GATE_41_START_LONGITUDE,
+  HUMAN_DESIGN_GATE_SPAN_DEGREES,
+  HUMAN_DESIGN_GATE_WHEEL_SEQUENCE,
+  HUMAN_DESIGN_GATE_WHEEL_VERSION,
+  HUMAN_DESIGN_LINE_SPAN_DEGREES
+} from "./gate-wheel";
+import {
   HUMAN_DESIGN_ACTIVE_BODIES,
   HUMAN_DESIGN_ENGINE_REVISION,
   HUMAN_DESIGN_METHOD_CODE,
@@ -21,6 +28,13 @@ export type HumanDesignMethodPassport = {
   readonly activeBodies: readonly HumanDesignCelestialBody[];
   readonly centers: typeof HUMAN_DESIGN_CENTERS;
   readonly channels: typeof HUMAN_DESIGN_CHANNELS;
+  readonly gateWheel: {
+    readonly version: typeof HUMAN_DESIGN_GATE_WHEEL_VERSION;
+    readonly gate41StartLongitude: typeof HUMAN_DESIGN_GATE_41_START_LONGITUDE;
+    readonly gateSpanDegrees: typeof HUMAN_DESIGN_GATE_SPAN_DEGREES;
+    readonly lineSpanDegrees: typeof HUMAN_DESIGN_LINE_SPAN_DEGREES;
+    readonly sequence: typeof HUMAN_DESIGN_GATE_WHEEL_SEQUENCE;
+  };
 };
 
 export const HUMAN_DESIGN_METHOD_PASSPORT: HumanDesignMethodPassport = {
@@ -34,7 +48,14 @@ export const HUMAN_DESIGN_METHOD_PASSPORT: HumanDesignMethodPassport = {
   supportedDepth: "gate_line",
   activeBodies: HUMAN_DESIGN_ACTIVE_BODIES,
   centers: HUMAN_DESIGN_CENTERS,
-  channels: HUMAN_DESIGN_CHANNELS
+  channels: HUMAN_DESIGN_CHANNELS,
+  gateWheel: {
+    version: HUMAN_DESIGN_GATE_WHEEL_VERSION,
+    gate41StartLongitude: HUMAN_DESIGN_GATE_41_START_LONGITUDE,
+    gateSpanDegrees: HUMAN_DESIGN_GATE_SPAN_DEGREES,
+    lineSpanDegrees: HUMAN_DESIGN_LINE_SPAN_DEGREES,
+    sequence: HUMAN_DESIGN_GATE_WHEEL_SEQUENCE
+  }
 };
 
 export function resolveHumanDesignMethod(code: string): HumanDesignMethodPassport {

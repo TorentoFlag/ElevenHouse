@@ -16,6 +16,14 @@ describe("Human Design method passport", () => {
     expect(HUMAN_DESIGN_METHOD_PASSPORT.activeBodies).toHaveLength(13);
     expect(HUMAN_DESIGN_METHOD_PASSPORT.centers).toHaveLength(9);
     expect(HUMAN_DESIGN_METHOD_PASSPORT.channels).toHaveLength(36);
+    expect(HUMAN_DESIGN_METHOD_PASSPORT.gateWheel).toMatchObject({
+      version: "rave-mandala-gate-wheel.v1",
+      gate41StartLongitude: 302,
+      gateSpanDegrees: 5.625,
+      lineSpanDegrees: 0.9375
+    });
+    expect(HUMAN_DESIGN_METHOD_PASSPORT.gateWheel.sequence).toHaveLength(64);
+    expect(HUMAN_DESIGN_METHOD_PASSPORT.gateWheel.sequence[0]).toBe(41);
   });
 
   it("resolves only the supported method", () => {
