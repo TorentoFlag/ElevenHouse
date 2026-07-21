@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChartHouse, ChartPoint, StoredChartCalculationPayload } from "@elevenhouse/contracts";
 import { ChartWheel } from "./ChartWheel";
 
@@ -9,7 +9,7 @@ describe("ChartWheel", () => {
   afterEach(() => cleanup());
 
   it("orients the chart by Asc, labels the main axes, and tones aspect lines", () => {
-    render(<ChartWheel result={wheelResult()} />);
+    render(<ChartWheel hoveredPointId={null} onHoverPoint={vi.fn()} result={wheelResult()} />);
 
     const sunMarker = screen.getByTestId("chart-point-sun");
     const sunDot = sunMarker.querySelector("circle");

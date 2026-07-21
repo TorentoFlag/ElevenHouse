@@ -203,6 +203,72 @@ describe("ChartEnginePage", () => {
     expect(screen.getByLabelText(/Луна Квадрат Солнце, орбис 1\.40°/)).toHaveTextContent("□");
   });
 
+  it("syncs planet hover between the wheel, detail card and right panel", async () => {
+    const user = userEvent.setup();
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={chartResult({
+          points: [
+            {
+              id: "sun",
+              label: "Sun",
+              longitude: 113.1,
+              sign: "cancer",
+              signDegree: 23.1,
+              house: 10,
+              retrograde: false
+            },
+            {
+              id: "pluto",
+              label: "Pluto",
+              longitude: 227.33,
+              sign: "scorpio",
+              signDegree: 17.33,
+              house: 7,
+              retrograde: true
+            }
+          ],
+          aspects: [
+            {
+              pointA: "sun",
+              pointB: "pluto",
+              type: "trine",
+              angle: 120,
+              orb: 2.1,
+              applying: true
+            }
+          ]
+        })}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/наведите на планету/i)).toBeInTheDocument();
+    const detailSlot = screen.getByTestId("chart-hover-detail-slot");
+    expect(detailSlot).toHaveTextContent(/наведите на планету/i);
+
+    const planetsPanel = screen.getByRole("region", { name: "Планеты" });
+    const plutoRow = within(planetsPanel).getByTestId("chart-planet-row-pluto");
+    await user.hover(plutoRow);
+
+    expect(detailSlot).toHaveTextContent(/Плутон R ретроград/i);
+    expect(plutoRow).toHaveAttribute("data-hovered", "true");
+    expect(screen.getByRole("button", { name: /Плутон на карте/i })).toHaveAttribute(
+      "data-hovered",
+      "true"
+    );
+    expect(screen.getAllByText("Плутон").length).toBeGreaterThan(0);
+    expect(screen.getByText(/R ретроград/i)).toBeInTheDocument();
+    expect(screen.getByText(/17°20' Скорпион · VII дом/i)).toBeInTheDocument();
+    expect(screen.getByText("△")).toBeInTheDocument();
+  });
+
   it("marks an existing result as stale when birth data or settings changed", () => {
     render(
       <ChartEnginePage

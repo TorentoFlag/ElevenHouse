@@ -15,9 +15,11 @@ export type ChartPanelTab = "planets" | "aspects" | "houses" | "interpretations"
 export type ChartTablesProps = {
   readonly result: StoredChartCalculationPayload | null;
   readonly activeTab: ChartPanelTab;
+  readonly hoveredPointId: string | null;
+  readonly onHoverPoint: (pointId: string | null) => void;
 };
 
-export function ChartTables({ activeTab, result }: ChartTablesProps) {
+export function ChartTables({ activeTab, hoveredPointId, onHoverPoint, result }: ChartTablesProps) {
   if (!result) {
     return (
       <div className={styles.panelEmpty}>
@@ -28,7 +30,13 @@ export function ChartTables({ activeTab, result }: ChartTablesProps) {
 
   return (
     <div className={styles.tableStack}>
-      {activeTab === "planets" ? <PlanetsTable result={result} /> : null}
+      {activeTab === "planets" ? (
+        <PlanetsTable
+          hoveredPointId={hoveredPointId}
+          onHoverPoint={onHoverPoint}
+          result={result}
+        />
+      ) : null}
       {activeTab === "aspects" ? <AspectsTable result={result} /> : null}
       {activeTab === "houses" ? <HousesTable result={result} /> : null}
       {activeTab === "interpretations" ? <InterpretationSummary result={result} /> : null}
@@ -36,27 +44,49 @@ export function ChartTables({ activeTab, result }: ChartTablesProps) {
   );
 }
 
-function PlanetsTable({ result }: { readonly result: StoredChartCalculationPayload }) {
+function PlanetsTable({
+  hoveredPointId,
+  onHoverPoint,
+  result
+}: {
+  readonly hoveredPointId: string | null;
+  readonly onHoverPoint: (pointId: string | null) => void;
+  readonly result: StoredChartCalculationPayload;
+}) {
   return (
     <section className={styles.tableSection} aria-labelledby="chart-planets-heading">
       <h2 id="chart-planets-heading">Планеты</h2>
       <div className={styles.planetList}>
-        {result.result.points.map((point) => (
-          <div className={styles.planetRow} key={point.id}>
-            <span className={styles.pointGlyph} aria-hidden="true">
-              {getChartPointSymbol(point.id, point.label)}
-            </span>
-            <span className={styles.pointName}>{getChartPointDisplayLabel(point.id, point.label)}</span>
-            <span className={styles.signGlyph} aria-hidden="true">
-              {getZodiacSymbol(point.sign)}
-            </span>
-            <span className={styles.pointDegree}>
-              {formatDegree(point.signDegree)}
-              {point.retrograde ? <b>R</b> : null}
-            </span>
-            <span className={styles.pointHouse}>{point.house ? `${romanHouses[point.house]} дом` : "—"}</span>
-          </div>
-        ))}
+        {result.result.points.map((point) => {
+          const hovered = hoveredPointId === point.id;
+
+          return (
+            <div
+              className={hovered ? styles.planetRowHovered : styles.planetRow}
+              data-hovered={hovered ? "true" : "false"}
+              data-testid={`chart-planet-row-${point.id}`}
+              key={point.id}
+              onBlur={() => onHoverPoint(null)}
+              onFocus={() => onHoverPoint(point.id)}
+              onMouseEnter={() => onHoverPoint(point.id)}
+              onMouseLeave={() => onHoverPoint(null)}
+              tabIndex={0}
+            >
+              <span className={styles.pointGlyph} aria-hidden="true">
+                {getChartPointSymbol(point.id, point.label)}
+              </span>
+              <span className={styles.pointName}>{getChartPointDisplayLabel(point.id, point.label)}</span>
+              <span className={styles.signGlyph} aria-hidden="true">
+                {getZodiacSymbol(point.sign)}
+              </span>
+              <span className={styles.pointDegree}>
+                {formatDegree(point.signDegree)}
+                {point.retrograde ? <b>R</b> : null}
+              </span>
+              <span className={styles.pointHouse}>{point.house ? `${romanHouses[point.house]} дом` : "—"}</span>
+            </div>
+          );
+        })}
       </div>
     </section>
   );

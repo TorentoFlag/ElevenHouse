@@ -55,6 +55,7 @@ export function ChartEnginePage({
   const canCalculate = Boolean(selectedClient && readiness.ready && !isBusy && !isCurrentResultCalculated);
   const [activePanelTab, setActivePanelTab] = useState<ChartPanelTab>("planets");
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
   const calculateButtonLabel =
     jobState === "failed"
       ? "Повторить"
@@ -204,7 +205,11 @@ export function ChartEnginePage({
         </aside>
 
         <section className={styles.workspace}>
-          <ChartWheel result={result} />
+          <ChartWheel
+            result={result}
+            hoveredPointId={hoveredPointId}
+            onHoverPoint={setHoveredPointId}
+          />
           <StatusCard
             jobState={jobState}
             errorMessage={errorMessage}
@@ -233,7 +238,12 @@ export function ChartEnginePage({
                   </button>
                 ))}
               </div>
-              <ChartTables activeTab={activePanelTab} result={result} />
+              <ChartTables
+                activeTab={activePanelTab}
+                hoveredPointId={hoveredPointId}
+                onHoverPoint={setHoveredPointId}
+                result={result}
+              />
             </>
           )}
         </aside>

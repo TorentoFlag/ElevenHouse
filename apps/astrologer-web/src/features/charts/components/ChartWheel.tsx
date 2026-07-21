@@ -1,5 +1,12 @@
 import type { ChartAspect, ChartPoint, StoredChartCalculationPayload } from "@elevenhouse/contracts";
-import { getChartPointSymbol } from "../model/chartDisplay";
+import {
+  formatAspectTypeDisplay,
+  formatDegree,
+  formatHouseSignDisplay,
+  getChartPointDisplayLabel,
+  getChartPointSymbol,
+  romanHouses
+} from "../model/chartDisplay";
 import styles from "./ChartEnginePage.module.css";
 
 const zodiacSymbols = ["♈︎", "♉︎", "♊︎", "♋︎", "♌︎", "♍︎", "♎︎", "♏︎", "♐︎", "♑︎", "♒︎", "♓︎"];
@@ -21,13 +28,16 @@ const axisPointIds = new Set(["ascendant", "midheaven"]);
 
 export type ChartWheelProps = {
   readonly result: StoredChartCalculationPayload | null;
+  readonly hoveredPointId: string | null;
+  readonly onHoverPoint: (pointId: string | null) => void;
 };
 
-export function ChartWheel({ result }: ChartWheelProps) {
+export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelProps) {
   const houses = result?.result.houses ?? [];
   const points = result?.result.points ?? [];
   const ascLongitude = houses.find((house) => house.number === 1)?.longitude ?? 0;
   const markerLongitudes = spreadPointLongitudes(points.filter((point) => !axisPointIds.has(point.id)));
+  const hoveredPoint = points.find((point) => point.id === hoveredPointId) ?? null;
 
   return (
     <div className={styles.wheelStage} aria-label="Натальная карта">
@@ -114,12 +124,24 @@ export function ChartWheel({ result }: ChartWheelProps) {
           const start = polar(a.longitude, 132, ascLongitude);
           const end = polar(b.longitude, 132, ascLongitude);
           const tone = getAspectTone(aspect);
+          const involved = Boolean(
+            hoveredPointId && (aspect.pointA === hoveredPointId || aspect.pointB === hoveredPointId)
+          );
+          const dimmed = Boolean(hoveredPointId && !involved);
 
           return (
             <line
               key={`${aspect.pointA}-${aspect.pointB}-${index}`}
-              className={[styles.aspectLine, aspectToneClasses[tone]].join(" ")}
+              className={[
+                styles.aspectLine,
+                aspectToneClasses[tone],
+                involved ? styles.aspectLineHovered : "",
+                dimmed ? styles.aspectLineDimmed : ""
+              ]
+                .filter(Boolean)
+                .join(" ")}
               data-aspect-tone={tone}
+              data-hovered={involved ? "true" : "false"}
               data-testid={`chart-aspect-${aspect.type}`}
               x1={start.x}
               y1={start.y}
@@ -132,12 +154,24 @@ export function ChartWheel({ result }: ChartWheelProps) {
           if (axisPointIds.has(point.id)) return null;
           const exact = polar(point.longitude, 166, ascLongitude);
           const marker = polar(markerLongitudes[point.id] ?? point.longitude, 142, ascLongitude);
+          const hovered = hoveredPointId === point.id;
 
           return (
-            <g data-testid={`chart-point-${point.id}`} key={point.id}>
+            <g
+              aria-label={`${getChartPointDisplayLabel(point.id, point.label)} на карте`}
+              data-hovered={hovered ? "true" : "false"}
+              data-testid={`chart-point-${point.id}`}
+              key={point.id}
+              onBlur={() => onHoverPoint(null)}
+              onFocus={() => onHoverPoint(point.id)}
+              onMouseEnter={() => onHoverPoint(point.id)}
+              onMouseLeave={() => onHoverPoint(null)}
+              role="button"
+              tabIndex={0}
+            >
               <line className={styles.planetGuide} x1={exact.x} y1={exact.y} x2={marker.x} y2={marker.y} />
-              <circle className={styles.pointDot} cx={marker.x} cy={marker.y} r="15" />
-              <text className={styles.pointLabel} x={marker.x} y={marker.y}>
+              <circle className={hovered ? styles.pointDotHovered : styles.pointDot} cx={marker.x} cy={marker.y} r={hovered ? "18" : "15"} />
+              <text className={hovered ? styles.pointLabelHovered : styles.pointLabel} x={marker.x} y={marker.y}>
                 {getChartPointSymbol(point.id, point.label)}
               </text>
               {point.retrograde ? (
@@ -149,7 +183,57 @@ export function ChartWheel({ result }: ChartWheelProps) {
           );
         })}
       </svg>
-      <p className={styles.wheelHint}>Наведите на планету — детали, дом и аспекты</p>
+      <div className={styles.hoverDetailSlot} data-testid="chart-hover-detail-slot">
+        <HoverPointDetail point={hoveredPoint} result={result} />
+      </div>
+    </div>
+  );
+}
+
+function HoverPointDetail({
+  point,
+  result
+}: {
+  readonly point: ChartPoint | null;
+  readonly result: StoredChartCalculationPayload | null;
+}) {
+  if (!point || !result) {
+    return <p className={styles.wheelHint}>Наведите на планету — детали, дом и аспекты</p>;
+  }
+
+  const aspects = result.result.aspects
+    .filter((aspect) => aspect.pointA === point.id || aspect.pointB === point.id)
+    .slice(0, 6);
+
+  return (
+    <div className={styles.hoverDetailCard}>
+      <span className={styles.hoverDetailGlyph} aria-hidden="true">
+        {getChartPointSymbol(point.id, point.label)}
+      </span>
+      <div className={styles.hoverDetailText}>
+        <strong>
+          {getChartPointDisplayLabel(point.id, point.label)}
+          {point.retrograde ? <b> R ретроград</b> : null}
+        </strong>
+        <span>
+          {formatDegree(point.signDegree)} {formatHouseSignDisplay(point.sign)}
+          {point.house ? ` · ${romanHouses[point.house]} дом` : ""}
+        </span>
+      </div>
+      <div className={styles.hoverDetailAspects} aria-label="Аспекты выбранной планеты">
+        {aspects.length ? (
+          aspects.map((aspect, index) => (
+            <span
+              key={`${aspect.pointA}-${aspect.pointB}-${aspect.type}-${index}`}
+              title={formatAspectTypeDisplay(aspect.type)}
+            >
+              {getAspectSymbol(aspect.type)}
+            </span>
+          ))
+        ) : (
+          <small>нет аспектов</small>
+        )}
+      </div>
     </div>
   );
 }
@@ -233,3 +317,19 @@ const aspectToneClasses = {
   neutral: styles.aspectLineNeutral,
   soft: styles.aspectLineSoft
 } as const;
+
+const aspectSymbols: Record<string, string> = {
+  conjunction: "☌",
+  sextile: "✶",
+  square: "□",
+  trine: "△",
+  opposition: "☍",
+  "semi-sextile": "⚺",
+  "semi-square": "∠",
+  quincunx: "⚻",
+  quintile: "Q"
+};
+
+function getAspectSymbol(type: string): string {
+  return aspectSymbols[type] ?? "•";
+}
