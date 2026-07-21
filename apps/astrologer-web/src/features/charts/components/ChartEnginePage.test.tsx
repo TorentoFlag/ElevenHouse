@@ -361,6 +361,66 @@ describe("ChartEnginePage", () => {
     expect(screen.getByRole("button", { name: /пересчитать/i })).toBeEnabled();
   });
 
+  it("blocks calculation and hides a saved full chart when birth time is unknown", async () => {
+    const user = userEvent.setup();
+    const onSaveBirthData = vi.fn(async () => undefined);
+    render(
+      <ChartEnginePage
+        selectedClient={{
+          ...client,
+          birthData: {
+            ...client.birthData,
+            birthTime: null,
+            birthTimePrecision: "unknown"
+          }
+        }}
+        jobState="succeeded"
+        result={chartResult({
+          points: [
+            {
+              id: "sun",
+              label: "Sun",
+              longitude: 113.1,
+              sign: "cancer",
+              signDegree: 23.1,
+              house: 10,
+              retrograde: false
+            }
+          ]
+        })}
+        errorMessage={null}
+        isBusy={false}
+        isResultStale
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onSaveBirthData={onSaveBirthData}
+      />
+    );
+
+    expect(screen.getByText(/не хватает: время рождения/i)).toBeInTheDocument();
+    expect(screen.getByText(/нужны данные рождения/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /рассчитать/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /солнце на карте/i })).not.toBeInTheDocument();
+
+    const chartDataPanel = screen.getByRole("complementary", { name: "Данные карты" });
+    expect(within(chartDataPanel).queryByText("Солнце")).not.toBeInTheDocument();
+    expect(screen.getByText(/появится после расчёта/i)).toBeInTheDocument();
+
+    expect(screen.getByLabelText(/^время рождения/i)).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText(/точность времени/i), "approximate");
+    expect(screen.getByLabelText(/^время рождения/i)).toBeEnabled();
+    await user.type(screen.getByLabelText(/^время рождения/i), "10:30");
+    await user.click(screen.getByRole("button", { name: /сохранить данные рождения/i }));
+
+    expect(onSaveBirthData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        birthTime: "10:30",
+        birthTimePrecision: "approximate"
+      })
+    );
+  });
+
   it("keeps an already calculated current result as a disabled terminal action", () => {
     render(
       <ChartEnginePage

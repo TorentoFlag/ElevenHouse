@@ -51,7 +51,11 @@ export function ChartEnginePage({
   birthDataError = null
 }: ChartEnginePageProps) {
   const readiness = getChartBirthDataReadiness(selectedClient?.birthData);
-  const isCurrentResultCalculated = Boolean(result && !isResultStale && jobState === "succeeded");
+  const isBirthDataBlocked = Boolean(selectedClient && !readiness.ready);
+  const displayResult = isBirthDataBlocked ? null : result;
+  const isCurrentResultCalculated = Boolean(
+    displayResult && !isResultStale && jobState === "succeeded"
+  );
   const canCalculate = Boolean(
     selectedClient && readiness.ready && !isBusy && !isCurrentResultCalculated
   );
@@ -61,9 +65,9 @@ export function ChartEnginePage({
   const calculateButtonLabel =
     jobState === "failed"
       ? "Повторить"
-      : result && isResultStale
+      : displayResult && isResultStale
         ? "Пересчитать"
-        : result
+        : displayResult
           ? "Рассчитано"
           : "Рассчитать";
 
@@ -142,7 +146,7 @@ export function ChartEnginePage({
           ↗
         </button>
         <button className={styles.toolButton} type="button" disabled>
-          {result && selectedClient ? "✓ Привязана" : "Привязать"}
+          {displayResult && selectedClient ? "✓ Привязана" : "Привязать"}
         </button>
         <button className={styles.toolButton} type="button" disabled>
           PDF
@@ -181,11 +185,11 @@ export function ChartEnginePage({
               />
             ) : null}
           </section>
-          {result?.result.warnings.length ? (
+          {displayResult?.result.warnings.length ? (
             <section className={styles.railGroup}>
               <h2>Предупреждения</h2>
               <div className={styles.warningStack}>
-                {result.result.warnings.map((warning) => (
+                {displayResult.result.warnings.map((warning) => (
                   <div className={styles.chartWarning} key={warning.code}>
                     {formatChartWarning(warning)}
                   </div>
@@ -195,8 +199,8 @@ export function ChartEnginePage({
           ) : null}
           <section className={styles.railGroup}>
             <h2>Большая тройка</h2>
-            {result ? (
-              getBigThree(result).map((item) => (
+            {displayResult ? (
+              getBigThree(displayResult).map((item) => (
                 <div className={styles.summaryCard} key={item.label}>
                   <strong>{item.label}</strong>
                   <span>{item.value}</span>
@@ -208,8 +212,8 @@ export function ChartEnginePage({
           </section>
           <section className={styles.railGroup}>
             <h2>Ретроградные</h2>
-            {result?.result.points.filter((point) => point.retrograde).length ? (
-              result.result.points
+            {displayResult?.result.points.filter((point) => point.retrograde).length ? (
+              displayResult.result.points
                 .filter((point) => point.retrograde)
                 .map((point) => (
                   <div className={styles.retroPill} key={point.id}>
@@ -220,20 +224,21 @@ export function ChartEnginePage({
               <p className={styles.muted}>Нет в текущем результате.</p>
             )}
           </section>
-          {result ? <DistributionSummary result={result} /> : null}
+          {displayResult ? <DistributionSummary result={displayResult} /> : null}
         </aside>
 
         <section className={styles.workspace}>
           <ChartWheel
-            result={result}
+            result={displayResult}
             hoveredPointId={hoveredPointId}
             onHoverPoint={setHoveredPointId}
           />
           <StatusCard
             jobState={jobState}
             errorMessage={errorMessage}
-            result={result}
+            result={displayResult}
             isResultStale={isResultStale}
+            missingBirthData={isBirthDataBlocked && !readiness.ready ? readiness.missing : []}
           />
         </section>
 
@@ -278,7 +283,7 @@ export function ChartEnginePage({
                 activeTab={activePanelTab}
                 hoveredPointId={hoveredPointId}
                 onHoverPoint={setHoveredPointId}
-                result={result}
+                result={displayResult}
               />
             </>
           )}
@@ -504,11 +509,13 @@ function normalizeNumberField(value: string): number | null {
 function StatusCard({
   jobState,
   errorMessage,
+  missingBirthData,
   result,
   isResultStale
 }: {
   readonly jobState: ChartEnginePageJobState;
   readonly errorMessage: string | null;
+  readonly missingBirthData: readonly string[];
   readonly result: StoredChartCalculationPayload | null;
   readonly isResultStale: boolean;
 }) {
@@ -525,6 +532,16 @@ function StatusCard({
       <div className={styles.statusCardError} role="alert">
         <strong>Расчёт не выполнен</strong>
         <span>{errorMessage ?? "Проверьте данные рождения клиента и повторите расчёт."}</span>
+      </div>
+    );
+  }
+  if (missingBirthData.length > 0) {
+    return (
+      <div className={styles.statusCard} role="status">
+        <strong>Нужны данные рождения</strong>
+        <span>
+          Добавьте {missingBirthData.join(", ")}, чтобы рассчитать натал без имитации домов и углов.
+        </span>
       </div>
     );
   }
