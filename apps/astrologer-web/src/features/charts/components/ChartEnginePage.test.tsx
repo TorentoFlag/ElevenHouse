@@ -115,6 +115,78 @@ describe("ChartEnginePage", () => {
     expect(screen.getByText(/мужская/i)).toBeInTheDocument();
   });
 
+  it("renders reference-style dominant points in the left rail after distributions", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={chartResult({
+          points: [
+            {
+              id: "sun",
+              label: "Sun",
+              longitude: 113.1,
+              sign: "cancer",
+              signDegree: 23.1,
+              house: 10,
+              retrograde: false
+            },
+            {
+              id: "moon",
+              label: "Moon",
+              longitude: 21.2,
+              sign: "aries",
+              signDegree: 21.2,
+              house: 8,
+              retrograde: false
+            },
+            {
+              id: "pluto",
+              label: "Pluto",
+              longitude: 227.33,
+              sign: "scorpio",
+              signDegree: 17.33,
+              house: 7,
+              retrograde: true
+            },
+            {
+              id: "venus",
+              label: "Venus",
+              longitude: 84.2,
+              sign: "gemini",
+              signDegree: 24.2,
+              house: 10,
+              retrograde: false
+            }
+          ],
+          aspects: [
+            { pointA: "moon", pointB: "sun", type: "square", angle: 90, orb: 1.4, applying: true },
+            { pointA: "moon", pointB: "pluto", type: "trine", angle: 120, orb: 2.1, applying: true },
+            { pointA: "moon", pointB: "venus", type: "sextile", angle: 60, orb: 0.9, applying: false },
+            { pointA: "pluto", pointB: "venus", type: "sextile", angle: 60, orb: 1.1, applying: false }
+          ]
+        })}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    const rail = screen.getByRole("complementary", { name: "Сводка карты" });
+    const railText = rail.textContent ?? "";
+
+    const dominantsSection = within(rail)
+      .getByRole("heading", { name: "Доминанты" })
+      .closest("section");
+    expect(dominantsSection).not.toBeNull();
+    expect(dominantsSection).toHaveTextContent(/Луна\s*3 асп\./);
+    expect(dominantsSection).toHaveTextContent(/Плутон\s*2 асп\./);
+    expect(railText.indexOf("Кресты")).toBeLessThan(railText.indexOf("Доминанты"));
+    expect(railText.indexOf("Доминанты")).toBeLessThan(railText.indexOf("Ретроградные"));
+  });
+
   it("switches the right panel tabs without mixing table sections", async () => {
     const user = userEvent.setup();
     render(

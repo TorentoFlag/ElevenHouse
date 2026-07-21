@@ -10,7 +10,8 @@ import { getChartBirthDataReadiness } from "../model/chartEngineState";
 import {
   formatChartPointPosition,
   formatHouseSignDisplay,
-  getChartPointDisplayLabel
+  getChartPointDisplayLabel,
+  getChartPointSymbol
 } from "../model/chartDisplay";
 import { ChartSettingsPanel } from "./ChartSettingsPanel";
 import { ChartTables, type ChartPanelTab } from "./ChartTables";
@@ -204,14 +205,21 @@ export function ChartEnginePage({
             {displayResult ? (
               getBigThree(displayResult).map((item) => (
                 <div className={styles.summaryCard} key={item.label}>
-                  <strong>{item.label}</strong>
-                  <span>{item.value}</span>
+                  <span className={styles.summaryGlyph} aria-hidden="true">
+                    {item.symbol}
+                  </span>
+                  <div>
+                    <strong>{item.label}</strong>
+                    <span>{item.value}</span>
+                  </div>
                 </div>
               ))
             ) : (
               <p className={styles.muted}>Появится после расчёта.</p>
             )}
           </section>
+          {displayResult ? <DistributionSummary result={displayResult} /> : null}
+          {displayResult ? <DominantsSummary result={displayResult} /> : null}
           <section className={styles.railGroup}>
             <h2>Ретроградные</h2>
             {displayResult?.result.points.filter((point) => point.retrograde).length ? (
@@ -226,7 +234,6 @@ export function ChartEnginePage({
               <p className={styles.muted}>Нет в текущем результате.</p>
             )}
           </section>
-          {displayResult ? <DistributionSummary result={displayResult} /> : null}
         </aside>
 
         <section className={styles.workspace}>
@@ -331,6 +338,31 @@ function DistributionSummary({ result }: { readonly result: StoredChartCalculati
           />
         ))}
       </div>
+    </section>
+  );
+}
+
+function DominantsSummary({ result }: { readonly result: StoredChartCalculationPayload }) {
+  const dominantPoints = getDominantPoints(result);
+
+  return (
+    <section className={styles.railGroup}>
+      <h2>Доминанты</h2>
+      {dominantPoints.length ? (
+        <div className={styles.dominantStack}>
+          {dominantPoints.map((item) => (
+            <div className={styles.dominantRow} key={item.id}>
+              <span className={styles.dominantGlyph} aria-hidden="true">
+                {item.symbol}
+              </span>
+              <strong>{item.label}</strong>
+              <span>{item.count} асп.</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className={styles.muted}>Недостаточно аспектов.</p>
+      )}
     </section>
   );
 }
@@ -581,22 +613,66 @@ function StatusCard({
 
 function getBigThree(
   result: StoredChartCalculationPayload
-): readonly { readonly label: string; readonly value: string }[] {
+): readonly {
+  readonly label: string;
+  readonly symbol: string;
+  readonly value: string;
+}[] {
   const points = result.result.points;
   const sun = points.find((point) => point.id === "sun");
   const moon = points.find((point) => point.id === "moon");
   const ascendant = result.result.houses.find((house) => house.number === 1);
 
   return [
-    { label: "Солнце", value: sun ? formatChartPointPosition(sun) : "—" },
-    { label: "Луна", value: moon ? formatChartPointPosition(moon) : "—" },
+    { label: "Солнце", symbol: "☉︎", value: sun ? formatChartPointPosition(sun) : "—" },
+    { label: "Луна", symbol: "☽︎", value: moon ? formatChartPointPosition(moon) : "—" },
     {
       label: "Asc",
+      symbol: "A",
       value: ascendant
         ? `${formatHouseSignDisplay(ascendant.sign)} ${Math.round(ascendant.signDegree)}°`
         : "—"
     }
   ];
+}
+
+function getDominantPoints(
+  result: StoredChartCalculationPayload
+): readonly {
+  readonly id: string;
+  readonly label: string;
+  readonly symbol: string;
+  readonly count: number;
+}[] {
+  const pointOrder = new Map(result.result.points.map((point, index) => [point.id, index]));
+  const pointById = new Map(result.result.points.map((point) => [point.id, point]));
+  const counts = new Map<string, number>();
+
+  for (const aspect of result.result.aspects) {
+    if (dominantPointIds.has(aspect.pointA)) {
+      counts.set(aspect.pointA, (counts.get(aspect.pointA) ?? 0) + 1);
+    }
+    if (dominantPointIds.has(aspect.pointB)) {
+      counts.set(aspect.pointB, (counts.get(aspect.pointB) ?? 0) + 1);
+    }
+  }
+
+  return [...counts.entries()]
+    .map(([id, count]) => {
+      const point = pointById.get(id);
+
+      return point
+        ? {
+            id,
+            label: getChartPointDisplayLabel(point.id, point.label),
+            symbol: getChartPointSymbol(point.id, point.label),
+            count
+          }
+        : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((a, b) => b.count - a.count || (pointOrder.get(a.id) ?? 0) - (pointOrder.get(b.id) ?? 0))
+    .slice(0, 3);
 }
 
 function formatChartWarning(
@@ -621,6 +697,19 @@ const modalityItems = [
   { key: "fixed", label: "Фиксированный" },
   { key: "mutable", label: "Мутабельный" }
 ] as const;
+
+const dominantPointIds = new Set([
+  "sun",
+  "moon",
+  "mercury",
+  "venus",
+  "mars",
+  "jupiter",
+  "saturn",
+  "uranus",
+  "neptune",
+  "pluto"
+]);
 
 const polarityItems = [
   { key: "masculine", label: "Мужская" },

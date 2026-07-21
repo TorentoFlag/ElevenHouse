@@ -307,11 +307,23 @@
 }
 .summaryCard {
   display: grid;
-  gap: 3px;
-  padding: 10px 12px;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
   border: 1px solid var(--chart-line);
   border-radius: 11px;
   background: rgb(30 27 62 / 0.72);
+}
+.summaryGlyph {
+  color: #8dc3ff;
+  font-size: 18px;
+  text-align: center;
+}
+.summaryCard div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
 }
 .summaryCard strong {
   font-size: 12px;
@@ -360,6 +372,38 @@
   color: var(--chart-gold);
   font-size: 11px;
   text-align: right;
+}
+.dominantStack {
+  display: grid;
+  gap: 7px;
+}
+.dominantRow {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: rgb(229 225 244 / 0.78);
+  font-size: 12px;
+}
+.dominantGlyph {
+  color: rgb(229 225 244 / 0.9);
+  font-size: 17px;
+  text-align: center;
+}
+.dominantRow strong {
+  overflow: hidden;
+  color: rgb(229 225 244 / 0.84);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dominantRow span:last-child {
+  color: rgb(186 178 218 / 0.66);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .settingsCard {
   display: grid;
