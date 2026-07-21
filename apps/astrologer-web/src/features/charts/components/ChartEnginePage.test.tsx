@@ -132,6 +132,84 @@ describe("ChartEnginePage", () => {
     expect(screen.queryByRole("heading", { name: "Планеты" })).not.toBeInTheDocument();
   });
 
+  it("marks an existing result as stale when birth data or settings changed", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        isResultStale
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/карта устарела/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /пересчитать/i })).toBeEnabled();
+  });
+
+  it("keeps an already calculated current result as a disabled terminal action", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/натальная карта рассчитана/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /рассчитано/i })).toBeDisabled();
+  });
+
+  it("allows calculation with approximate birth time", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={{
+          ...client,
+          birthData: {
+            ...client.birthData,
+            birthTimePrecision: "approximate"
+          }
+        }}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /рассчитать/i })).toBeEnabled();
+  });
+
+  it("turns a failed calculation into an explicit retry action", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="failed"
+        result={null}
+        errorMessage="Provider timeout"
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Provider timeout")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /повторить/i })).toBeEnabled();
+  });
+
   it("saves missing birth data from the chart engine rail before calculation", async () => {
     const user = userEvent.setup();
     const onSaveBirthData = vi.fn(async () => undefined);

@@ -25,6 +25,7 @@ export type ChartEnginePageProps = {
   readonly result: StoredChartCalculationPayload | null;
   readonly errorMessage: string | null;
   readonly isBusy: boolean;
+  readonly isResultStale?: boolean;
   readonly settings: ChartSettings;
   readonly onSettingsChange: (settings: ChartSettings) => void;
   readonly onCreateNatalJob: () => void | Promise<void>;
@@ -40,6 +41,7 @@ export function ChartEnginePage({
   result,
   errorMessage,
   isBusy,
+  isResultStale = false,
   settings,
   onSettingsChange,
   onCreateNatalJob,
@@ -49,8 +51,17 @@ export function ChartEnginePage({
   birthDataError = null
 }: ChartEnginePageProps) {
   const readiness = getChartBirthDataReadiness(selectedClient?.birthData);
-  const canCalculate = Boolean(selectedClient && readiness.ready && !isBusy);
+  const isCurrentResultCalculated = Boolean(result && !isResultStale && jobState === "succeeded");
+  const canCalculate = Boolean(selectedClient && readiness.ready && !isBusy && !isCurrentResultCalculated);
   const [activePanelTab, setActivePanelTab] = useState<ChartPanelTab>("planets");
+  const calculateButtonLabel =
+    jobState === "failed"
+      ? "Повторить"
+      : result && isResultStale
+        ? "Пересчитать"
+        : result
+          ? "Рассчитано"
+          : "Рассчитать";
 
   return (
     <main className={styles.page}>
@@ -106,7 +117,7 @@ export function ChartEnginePage({
           onClick={() => void onCreateNatalJob()}
         >
           <span aria-hidden="true">⚡</span>
-          Рассчитать
+          {calculateButtonLabel}
         </button>
         <button className={styles.toolButton} type="button" disabled>
           ↗
@@ -185,7 +196,12 @@ export function ChartEnginePage({
 
         <section className={styles.workspace}>
           <ChartWheel result={result} />
-          <StatusCard jobState={jobState} errorMessage={errorMessage} result={result} />
+          <StatusCard
+            jobState={jobState}
+            errorMessage={errorMessage}
+            result={result}
+            isResultStale={isResultStale}
+          />
         </section>
 
         <aside className={styles.panel} aria-label="Данные карты">
@@ -425,11 +441,13 @@ function normalizeNumberField(value: string): number | null {
 function StatusCard({
   jobState,
   errorMessage,
-  result
+  result,
+  isResultStale
 }: {
   readonly jobState: ChartEnginePageJobState;
   readonly errorMessage: string | null;
   readonly result: StoredChartCalculationPayload | null;
+  readonly isResultStale: boolean;
 }) {
   if (jobState === "calculating") {
     return (
@@ -452,6 +470,14 @@ function StatusCard({
       <div className={styles.statusCard}>
         <strong>Готово к расчёту натала</strong>
         <span>Выберите клиента с полной датой, временем, часовым поясом и координатами рождения.</span>
+      </div>
+    );
+  }
+  if (isResultStale) {
+    return (
+      <div className={styles.statusCard} role="status">
+        <strong>Карта устарела</strong>
+        <span>Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы.</span>
       </div>
     );
   }

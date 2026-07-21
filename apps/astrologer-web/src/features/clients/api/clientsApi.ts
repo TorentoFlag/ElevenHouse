@@ -26,6 +26,14 @@ export async function listAstrologerClients(
   );
 }
 
+export async function getAstrologerClient(clientUserId: string): Promise<AstrologerClientResponse> {
+  const params = astrologerClientParamsSchema.parse({ clientUserId });
+
+  return astrologerClientResponseSchema.parse(
+    await application.http.get(`/clients/${params.clientUserId}`)
+  );
+}
+
 export async function updateClientBirthData(
   clientUserId: string,
   input: ClientBirthDataUpsertRequest

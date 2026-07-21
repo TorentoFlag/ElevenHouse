@@ -845,6 +845,14 @@ right-panel tabs, distribution and warning rendering, RU labels for major and
 minor aspects, and mobile toolbar stacking. The remaining acceptance work is
 the full state matrix and production-like reload/retry/stale coverage.
 
+Implementation note, 2026-07-21: the frontend state matrix now distinguishes
+empty/no-client, incomplete or unknown birth time, approximate birth time,
+calculating, failed retry, stale result after birth-data/settings changes,
+current already-calculated result, recalculation, and reload from a persisted
+`clientId` plus `calculationId` URL. The URL persists only identifiers and the
+renderable saved result is reloaded through owner-scoped API routes; private
+birth input remains inside the backend result payload.
+
 ## 19. Rollout Sequence
 
 1. ADR/deployment/repository docs update for `apps/chart-engine` as a new

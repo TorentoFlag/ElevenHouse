@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChartNatalJobCreateResponse } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
-import { createNatalChartJob, getChartCalculation, getChartJob } from "./chartsApi";
+import {
+  createNatalChartJob,
+  getChartCalculation,
+  getChartJob,
+  recalculateChart
+} from "./chartsApi";
 
 const clientId = "22222222-2222-4222-8222-222222222222";
 const jobId = "33333333-3333-4333-8333-333333333333";
@@ -57,6 +62,39 @@ describe("chartsApi", () => {
     await expect(getChartCalculation(calculationId)).resolves.toMatchObject({
       schemaVersion: "chart-result.v1"
     });
+  });
+
+  it("recalculates an existing chart through the calculation-scoped CSRF route", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(createResponse);
+
+    await expect(
+      recalculateChart({
+        calculationId,
+        clientId,
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major_minor",
+          orbMultiplier: 1
+        }
+      })
+    ).resolves.toEqual(createResponse);
+
+    expect(post).toHaveBeenCalledWith(
+      `/charts/calculations/${calculationId}/recalculate`,
+      {
+        clientId,
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major_minor",
+          orbMultiplier: 1
+        }
+      },
+      { csrf: true }
+    );
   });
 });
 

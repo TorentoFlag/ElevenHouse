@@ -43,4 +43,17 @@ describe("chartEngineState", () => {
       missing: ["время рождения"]
     });
   });
+
+  it("allows approximate birth time while still requiring an actual time value", () => {
+    expect(
+      getChartBirthDataReadiness({
+        birthDate: "1990-07-15",
+        birthTime: "10:30",
+        birthTimePrecision: "approximate",
+        birthTimezone: "Europe/Rome",
+        birthLatitude: 41.9028,
+        birthLongitude: 12.4964
+      })
+    ).toEqual({ ready: true });
+  });
 });

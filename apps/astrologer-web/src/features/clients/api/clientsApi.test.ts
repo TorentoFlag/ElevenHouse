@@ -1,12 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AstrologerClientResponse } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
-import { updateClientBirthData } from "./clientsApi";
+import { getAstrologerClient, updateClientBirthData } from "./clientsApi";
 
 const clientUserId = "22222222-2222-4222-8222-222222222222";
 
 describe("clientsApi", () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it("loads a related client by owner-scoped client id", async () => {
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(response());
+
+    await expect(getAstrologerClient(clientUserId)).resolves.toMatchObject({
+      client: {
+        clientUserId,
+        displayName: "Марина Краснова"
+      }
+    });
+
+    expect(get).toHaveBeenCalledWith(`/clients/${clientUserId}`);
+  });
 
   it("updates related client birth data through a CSRF-protected route", async () => {
     const put = vi.spyOn(application.http, "put").mockResolvedValue(response());
