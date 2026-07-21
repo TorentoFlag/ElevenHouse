@@ -52,7 +52,9 @@ export function ChartEnginePage({
 }: ChartEnginePageProps) {
   const readiness = getChartBirthDataReadiness(selectedClient?.birthData);
   const isCurrentResultCalculated = Boolean(result && !isResultStale && jobState === "succeeded");
-  const canCalculate = Boolean(selectedClient && readiness.ready && !isBusy && !isCurrentResultCalculated);
+  const canCalculate = Boolean(
+    selectedClient && readiness.ready && !isBusy && !isCurrentResultCalculated
+  );
   const [activePanelTab, setActivePanelTab] = useState<ChartPanelTab>("planets");
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
@@ -101,13 +103,28 @@ export function ChartEnginePage({
           <button className={styles.modeActive} type="button">
             Натал
           </button>
-          <button className={styles.modeDisabled} type="button" disabled title="Будет подключено после транзитного движка">
+          <button
+            className={styles.modeDisabled}
+            type="button"
+            disabled
+            title="Будет подключено после транзитного движка"
+          >
             Транзиты
           </button>
-          <button className={styles.modeDisabled} type="button" disabled title="Будет подключено после прогностического контура">
+          <button
+            className={styles.modeDisabled}
+            type="button"
+            disabled
+            title="Будет подключено после прогностического контура"
+          >
             Прогрессии
           </button>
-          <button className={styles.modeDisabled} type="button" disabled title="Синастрия будет отдельным методом расчёта">
+          <button
+            className={styles.modeDisabled}
+            type="button"
+            disabled
+            title="Синастрия будет отдельным методом расчёта"
+          >
             Ещё
           </button>
         </nav>
@@ -148,7 +165,9 @@ export function ChartEnginePage({
             <p className={styles.helpText}>
               Вводить дату рождения вручную не нужно: расчёт берёт birth data из карточки клиента.
             </p>
-            {!selectedClient ? <p className={styles.warningText}>Выберите клиента из CRM.</p> : null}
+            {!selectedClient ? (
+              <p className={styles.warningText}>Выберите клиента из CRM.</p>
+            ) : null}
             {selectedClient && !readiness.ready ? (
               <p className={styles.warningText}>Не хватает: {readiness.missing.join(", ")}.</p>
             ) : null}
@@ -220,9 +239,26 @@ export function ChartEnginePage({
 
         <aside className={styles.panel} aria-label="Данные карты">
           {isSettingsPanelOpen ? (
-            <div className={styles.panelSettings}>
-              <ChartSettingsPanel settings={settings} disabled={isBusy} onChange={onSettingsChange} />
-            </div>
+            <>
+              <div className={styles.panelSettingsHeader}>
+                <strong>Настройки расчёта</strong>
+                <button
+                  aria-label="Закрыть настройки расчёта"
+                  className={styles.panelCloseButton}
+                  type="button"
+                  onClick={() => setIsSettingsPanelOpen(false)}
+                >
+                  +
+                </button>
+              </div>
+              <div className={styles.panelSettings}>
+                <ChartSettingsPanel
+                  settings={settings}
+                  disabled={isBusy}
+                  onChange={onSettingsChange}
+                />
+              </div>
+            </>
           ) : (
             <>
               <div className={styles.panelTabs}>
@@ -496,7 +532,9 @@ function StatusCard({
     return (
       <div className={styles.statusCard}>
         <strong>Готово к расчёту натала</strong>
-        <span>Выберите клиента с полной датой, временем, часовым поясом и координатами рождения.</span>
+        <span>
+          Выберите клиента с полной датой, временем, часовым поясом и координатами рождения.
+        </span>
       </div>
     );
   }
@@ -504,7 +542,10 @@ function StatusCard({
     return (
       <div className={styles.statusCard} role="status">
         <strong>Карта устарела</strong>
-        <span>Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы.</span>
+        <span>
+          Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и
+          таблицы.
+        </span>
       </div>
     );
   }
@@ -519,7 +560,9 @@ function StatusCard({
   );
 }
 
-function getBigThree(result: StoredChartCalculationPayload): readonly { readonly label: string; readonly value: string }[] {
+function getBigThree(
+  result: StoredChartCalculationPayload
+): readonly { readonly label: string; readonly value: string }[] {
   const points = result.result.points;
   const sun = points.find((point) => point.id === "sun");
   const moon = points.find((point) => point.id === "moon");
@@ -530,12 +573,16 @@ function getBigThree(result: StoredChartCalculationPayload): readonly { readonly
     { label: "Луна", value: moon ? formatChartPointPosition(moon) : "—" },
     {
       label: "Asc",
-      value: ascendant ? `${formatHouseSignDisplay(ascendant.sign)} ${Math.round(ascendant.signDegree)}°` : "—"
+      value: ascendant
+        ? `${formatHouseSignDisplay(ascendant.sign)} ${Math.round(ascendant.signDegree)}°`
+        : "—"
     }
   ];
 }
 
-function formatChartWarning(warning: StoredChartCalculationPayload["result"]["warnings"][number]): string {
+function formatChartWarning(
+  warning: StoredChartCalculationPayload["result"]["warnings"][number]
+): string {
   if (warning.code === "BIRTH_TIME_APPROXIMATE") {
     return "Время рождения указано примерно: дома и углы могут смещаться.";
   }

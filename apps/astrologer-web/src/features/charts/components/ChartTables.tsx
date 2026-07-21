@@ -1,4 +1,8 @@
-import type { ChartAspect, ChartPoint, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import type {
+  ChartAspect,
+  ChartPoint,
+  StoredChartCalculationPayload
+} from "@elevenhouse/contracts";
 import {
   formatAspectTypeDisplay,
   formatChartPointPosition,
@@ -31,11 +35,7 @@ export function ChartTables({ activeTab, hoveredPointId, onHoverPoint, result }:
   return (
     <div className={styles.tableStack}>
       {activeTab === "planets" ? (
-        <PlanetsTable
-          hoveredPointId={hoveredPointId}
-          onHoverPoint={onHoverPoint}
-          result={result}
-        />
+        <PlanetsTable hoveredPointId={hoveredPointId} onHoverPoint={onHoverPoint} result={result} />
       ) : null}
       {activeTab === "aspects" ? <AspectsTable result={result} /> : null}
       {activeTab === "houses" ? <HousesTable result={result} /> : null}
@@ -75,7 +75,9 @@ function PlanetsTable({
               <span className={styles.pointGlyph} aria-hidden="true">
                 {getChartPointSymbol(point.id, point.label)}
               </span>
-              <span className={styles.pointName}>{getChartPointDisplayLabel(point.id, point.label)}</span>
+              <span className={styles.pointName}>
+                {getChartPointDisplayLabel(point.id, point.label)}
+              </span>
               <span className={styles.signGlyph} aria-hidden="true">
                 {getZodiacSymbol(point.sign)}
               </span>
@@ -83,7 +85,9 @@ function PlanetsTable({
                 {formatDegree(point.signDegree)}
                 {point.retrograde ? <b>R</b> : null}
               </span>
-              <span className={styles.pointHouse}>{point.house ? `${romanHouses[point.house]} дом` : "—"}</span>
+              <span className={styles.pointHouse}>
+                {point.house ? `${romanHouses[point.house]} дом` : "—"}
+              </span>
             </div>
           );
         })}
@@ -186,7 +190,9 @@ function AspectMatrixRow({
 }) {
   return (
     <>
-      <span className={styles.aspectMatrixHead}>{getChartPointSymbol(rowPoint.id, rowPoint.label)}</span>
+      <span className={styles.aspectMatrixHead}>
+        {getChartPointSymbol(rowPoint.id, rowPoint.label)}
+      </span>
       {points.map((columnPoint, columnIndex) => {
         const aspect = aspectsByPair.get(getAspectPairKey(rowPoint.id, columnPoint.id));
         const isEmpty = columnIndex >= rowIndex || !aspect;
@@ -215,30 +221,68 @@ function InterpretationSummary({ result }: { readonly result: StoredChartCalcula
   const sun = result.result.points.find((point) => point.id === "sun");
   const moon = result.result.points.find((point) => point.id === "moon");
   const ascendant = result.result.houses.find((house) => house.number === 1);
+  const anchors = [
+    {
+      label: "Солнце",
+      meta: "Ядро карты",
+      position: sun ? formatPointPosition(sun) : "—",
+      house: sun?.house ? `${romanHouses[sun.house]} дом` : "—"
+    },
+    {
+      label: "Луна",
+      meta: "Эмоциональный ритм",
+      position: moon ? formatPointPosition(moon) : "—",
+      house: moon?.house ? `${romanHouses[moon.house]} дом` : "—"
+    },
+    {
+      label: "Asc",
+      meta: "Точка входа",
+      position: ascendant
+        ? `${formatHouseSignDisplay(ascendant.sign)} ${formatDegree(ascendant.signDegree)}`
+        : "—",
+      house: "I дом"
+    }
+  ];
 
   return (
     <section className={styles.tableSection} aria-labelledby="chart-interpretations-heading">
       <h2 id="chart-interpretations-heading">Трактовки</h2>
       <div className={styles.interpretationStack}>
-        <div className={styles.interpretationNote}>
-          Интерпретационный контур не подключён. Ниже только опорные положения из canonical result.
+        <div>
+          <div className={styles.interpretationKicker}>Опорные положения · canonical result</div>
+          <div className={styles.interpretationAnchorStack}>
+            {anchors.map((anchor) => (
+              <div className={styles.interpretationAnchorCard} key={anchor.label}>
+                <div>
+                  <strong>{anchor.label}</strong>
+                  <small>{anchor.meta}</small>
+                </div>
+                <span>{anchor.position}</span>
+                <b>{anchor.house}</b>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className={styles.dataList}>
-          <div className={styles.dataRow}>
-            <span>Солнце</span>
-            <span>{sun ? formatPointPosition(sun) : "—"}</span>
-            <span>{sun?.house ? `${romanHouses[sun.house]} дом` : "—"}</span>
+
+        <div className={styles.interpretationAiPanel}>
+          <div className={styles.interpretationAiHeader}>
+            <div>
+              <span>AI-трактовка · натальная карта</span>
+              <strong>Черновик появится после подключения production-контура</strong>
+            </div>
+            <b>позже</b>
           </div>
-          <div className={styles.dataRow}>
-            <span>Луна</span>
-            <span>{moon ? formatPointPosition(moon) : "—"}</span>
-            <span>{moon?.house ? `${romanHouses[moon.house]} дом` : "—"}</span>
-          </div>
-          <div className={styles.dataRow}>
-            <span>Asc</span>
-            <span>{ascendant ? formatHouseSignDisplay(ascendant.sign) : "—"}</span>
-            <span>{ascendant ? formatDegree(ascendant.signDegree) : "—"}</span>
-          </div>
+          <p>
+            AI-контур для карт ещё не подключён. Пока показываем только детерминированные опорные
+            положения из canonical result.
+          </p>
+          <button type="button" disabled>
+            AI-черновик недоступен
+          </button>
+          <small>
+            Будущая трактовка будет черновиком поверх детерминированного расчёта; астролог проверит
+            текст перед отправкой клиенту.
+          </small>
         </div>
       </div>
     </section>

@@ -91,7 +91,12 @@ describe("ChartEnginePage", () => {
         selectedClient={client}
         jobState="succeeded"
         result={chartResult({
-          warnings: [{ code: "BIRTH_TIME_APPROXIMATE", message: "Chart calculated with approximate birth time." }]
+          warnings: [
+            {
+              code: "BIRTH_TIME_APPROXIMATE",
+              message: "Chart calculated with approximate birth time."
+            }
+          ]
         })}
         errorMessage={null}
         isBusy={false}
@@ -153,6 +158,15 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByRole("region", { name: "Настройки расчёта" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Планеты" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Закрыть настройки расчёта" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Цельнознаковая" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Равнодомная" })).toBeInTheDocument();
+    expect(screen.getByText(/пресет применяется ко всем новым картам/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Закрыть настройки расчёта" }));
+
+    expect(screen.queryByRole("region", { name: "Настройки расчёта" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Планеты" })).toBeInTheDocument();
   });
 
   it("renders reference-style planet rows and an aspect matrix in the right panel", async () => {
@@ -182,7 +196,9 @@ describe("ChartEnginePage", () => {
               retrograde: false
             }
           ],
-          aspects: [{ pointA: "sun", pointB: "moon", type: "square", angle: 90, orb: 1.4, applying: true }]
+          aspects: [
+            { pointA: "sun", pointB: "moon", type: "square", angle: 90, orb: 1.4, applying: true }
+          ]
         })}
         errorMessage={null}
         isBusy={false}
@@ -201,6 +217,63 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByRole("heading", { name: "Матрица аспектов" })).toBeInTheDocument();
     expect(screen.getByLabelText(/Луна Квадрат Солнце, орбис 1\.40°/)).toHaveTextContent("□");
+  });
+
+  it("renders deterministic interpretation anchors without fake AI output", async () => {
+    const user = userEvent.setup();
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={chartResult({
+          points: [
+            {
+              id: "sun",
+              label: "Sun",
+              longitude: 113.1,
+              sign: "cancer",
+              signDegree: 22.6,
+              house: 11,
+              retrograde: false
+            },
+            {
+              id: "moon",
+              label: "Moon",
+              longitude: 21.2,
+              sign: "aries",
+              signDegree: 21.22,
+              house: 8,
+              retrograde: false
+            }
+          ],
+          houses: [{ number: 1, longitude: 166.61, sign: "virgo", signDegree: 16.61 }]
+        })}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Трактовки" }));
+
+    const interpretationsPanel = screen.getByRole("region", { name: "Трактовки" });
+    expect(
+      within(interpretationsPanel).getByText("Опорные положения · canonical result")
+    ).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText("Солнце")).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText(/Рак 22°36'/)).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText("Луна")).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText(/Овен 21°13'/)).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText("Asc")).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText(/Дева 16°37'/)).toBeInTheDocument();
+    expect(
+      within(interpretationsPanel).getByRole("button", { name: /AI-черновик недоступен/i })
+    ).toBeDisabled();
+    expect(
+      within(interpretationsPanel).queryByText(/интерпретационный контур не подключён/i)
+    ).not.toBeInTheDocument();
   });
 
   it("syncs planet hover between the wheel, detail card and right panel", async () => {
