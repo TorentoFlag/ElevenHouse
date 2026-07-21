@@ -64,6 +64,7 @@ async function main(): Promise<void> {
       }
       if (history === "current") {
         await reconcileClientBirthDataDstOccurrenceIfPresent();
+        await reconcileChartCalculationJobsIfPrerequisitesExist();
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
         console.log("Current production baseline is already recorded");
@@ -76,6 +77,7 @@ async function main(): Promise<void> {
         await assertPreSchedulingSchemaShape();
         await client.query(schedulingBaselineDdl);
         await reconcileClientBirthDataDstOccurrenceIfPresent();
+        await reconcileChartCalculationJobsIfPrerequisitesExist();
         await recordCurrentBaseline();
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
@@ -426,6 +428,9 @@ async function assertCurrentSchemaShape(): Promise<void> {
   if (await relationExists("public.client_birth_data")) {
     await assertClientBirthDataDstOccurrence();
   }
+  if (await relationExists("public.chart_calculation_jobs")) {
+    await assertChartCalculationJobs();
+  }
   for (const relation of [
     "public.availability_schedules",
     "public.availability_weekly_periods",
@@ -466,6 +471,117 @@ async function assertCurrentSchemaShape(): Promise<void> {
     schedulingInvariants.rows[0]?.product_owner_unique_count !== "1"
   ) {
     throw new Error("Current production schema is missing scheduling invariants");
+  }
+}
+
+async function reconcileChartCalculationJobsIfPrerequisitesExist(): Promise<void> {
+  for (const relation of ["public.users", "public.client_profiles", "public.calculation_records"]) {
+    if (!(await relationExists(relation))) return;
+  }
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS chart_calculation_jobs (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      owner_user_id uuid NOT NULL,
+      client_id uuid NOT NULL,
+      result_calculation_id uuid,
+      method text DEFAULT 'natal' NOT NULL,
+      status text DEFAULT 'queued' NOT NULL,
+      input_fingerprint text NOT NULL,
+      input_snapshot jsonb NOT NULL,
+      settings_snapshot jsonb NOT NULL,
+      provider text DEFAULT 'kerykeion' NOT NULL,
+      schema_version text DEFAULT 'chart-result.v1' NOT NULL,
+      attempts integer DEFAULT 0 NOT NULL,
+      max_attempts integer DEFAULT 3 NOT NULL,
+      locked_by text,
+      locked_until timestamp with time zone,
+      last_error_code text,
+      last_error_message text,
+      started_at timestamp with time zone,
+      finished_at timestamp with time zone,
+      created_at timestamp with time zone DEFAULT now() NOT NULL,
+      updated_at timestamp with time zone DEFAULT now() NOT NULL,
+      CONSTRAINT chart_calculation_jobs_owner_user_id_users_id_fk
+        FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE cascade,
+      CONSTRAINT chart_calculation_jobs_client_id_client_profiles_user_id_fk
+        FOREIGN KEY (client_id) REFERENCES client_profiles(user_id) ON DELETE cascade,
+      CONSTRAINT chart_calculation_jobs_result_calculation_id_calculation_records_id_fk
+        FOREIGN KEY (result_calculation_id) REFERENCES calculation_records(id) ON DELETE set null,
+      CONSTRAINT chart_calculation_jobs_method_check CHECK (method in ('natal')),
+      CONSTRAINT chart_calculation_jobs_status_check CHECK (
+        status in ('queued', 'processing', 'succeeded', 'failed')
+      ),
+      CONSTRAINT chart_calculation_jobs_provider_check CHECK (provider in ('kerykeion')),
+      CONSTRAINT chart_calculation_jobs_schema_version_check CHECK (
+        schema_version in ('chart-result.v1')
+      ),
+      CONSTRAINT chart_calculation_jobs_input_fingerprint_check CHECK (
+        input_fingerprint ~ '^sha256:[a-f0-9]{64}$'
+      ),
+      CONSTRAINT chart_calculation_jobs_input_snapshot_object_check CHECK (
+        jsonb_typeof(input_snapshot) = 'object'
+      ),
+      CONSTRAINT chart_calculation_jobs_settings_snapshot_object_check CHECK (
+        jsonb_typeof(settings_snapshot) = 'object'
+      ),
+      CONSTRAINT chart_calculation_jobs_attempts_check CHECK (attempts >= 0),
+      CONSTRAINT chart_calculation_jobs_max_attempts_check CHECK (max_attempts > 0)
+    );
+
+    CREATE INDEX IF NOT EXISTS chart_calculation_jobs_owner_idx
+      ON chart_calculation_jobs USING btree (owner_user_id);
+    CREATE INDEX IF NOT EXISTS chart_calculation_jobs_client_idx
+      ON chart_calculation_jobs USING btree (client_id);
+    CREATE INDEX IF NOT EXISTS chart_calculation_jobs_status_updated_idx
+      ON chart_calculation_jobs USING btree (status, updated_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS chart_calculation_jobs_active_fingerprint_unique
+      ON chart_calculation_jobs USING btree (owner_user_id, input_fingerprint)
+      WHERE status in ('queued', 'processing');
+    CREATE UNIQUE INDEX IF NOT EXISTS chart_calculation_jobs_success_fingerprint_unique
+      ON chart_calculation_jobs USING btree (owner_user_id, input_fingerprint)
+      WHERE status = 'succeeded';
+  `);
+}
+
+async function assertChartCalculationJobs(): Promise<void> {
+  const result = await client.query<{
+    relation_count: string;
+    active_unique_count: string;
+    success_unique_count: string;
+  }>(`
+    SELECT
+      (SELECT count(*)::text
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'chart_calculation_jobs'
+          AND column_name in (
+            'id',
+            'owner_user_id',
+            'client_id',
+            'result_calculation_id',
+            'input_fingerprint',
+            'input_snapshot',
+            'settings_snapshot',
+            'status'
+          )) AS relation_count,
+      (SELECT count(*)::text
+         FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND tablename = 'chart_calculation_jobs'
+          AND indexname = 'chart_calculation_jobs_active_fingerprint_unique') AS active_unique_count,
+      (SELECT count(*)::text
+         FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND tablename = 'chart_calculation_jobs'
+          AND indexname = 'chart_calculation_jobs_success_fingerprint_unique') AS success_unique_count
+  `);
+  if (
+    result.rows[0]?.relation_count !== "8" ||
+    result.rows[0]?.active_unique_count !== "1" ||
+    result.rows[0]?.success_unique_count !== "1"
+  ) {
+    throw new Error("Current production schema is missing chart calculation jobs shape");
   }
 }
 

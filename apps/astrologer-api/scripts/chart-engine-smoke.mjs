@@ -7,7 +7,10 @@ const chartEngineBaseUrl = readUrl("CHART_ENGINE_BASE_URL", "http://127.0.0.1:80
 const chartWorkerBaseUrl = readUrl("CHART_WORKER_BASE_URL", "http://127.0.0.1:3012");
 const origin = readUrl("CHART_SMOKE_ORIGIN", "http://localhost:5174").origin;
 const sessionCookieName =
-  process.env.ASTROLOGER_API_SESSION_COOKIE_NAME ?? "elevenhouse_astrologer_session";
+  process.env.ASTROLOGER_API_SESSION_COOKIE_NAME ??
+  (process.env.ASTROLOGER_API_SESSION_COOKIE_SECURE === "true"
+    ? "__Host-elevenhouse_astrologer_session"
+    : "elevenhouse_astrologer_session");
 const csrfCookieName =
   process.env.ASTROLOGER_API_CSRF_COOKIE_NAME ?? "elevenhouse_astrologer_csrf";
 const csrfHeaderName =
