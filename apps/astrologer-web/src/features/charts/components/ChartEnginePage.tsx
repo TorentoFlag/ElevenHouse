@@ -25,7 +25,7 @@ import { ChartWheel } from "./ChartWheel";
 import styles from "./ChartEnginePage.module.css";
 
 export type ChartEnginePageJobState = "idle" | "calculating" | "succeeded" | "failed";
-export type ChartEngineMode = "natal" | "transit";
+export type ChartEngineMode = "natal" | "transit" | "synastry";
 export type ChartTransitMomentInput = {
   readonly date: string;
   readonly time: string;
@@ -33,6 +33,7 @@ export type ChartTransitMomentInput = {
 
 export type ChartEnginePageProps = {
   readonly selectedClient: ClientSelectOption | null;
+  readonly selectedPartnerClient?: ClientSelectOption | null;
   readonly jobState: ChartEnginePageJobState;
   readonly result: StoredChartCalculationPayload | null;
   readonly errorMessage: string | null;
@@ -45,9 +46,11 @@ export type ChartEnginePageProps = {
   readonly onSettingsChange: (settings: ChartSettings) => void;
   readonly onCreateNatalJob: () => void | Promise<void>;
   readonly onCreateTransitJob?: () => void | Promise<void>;
+  readonly onCreateSynastryJob?: () => void | Promise<void>;
   readonly onTransitMomentChange?: (moment: ChartTransitMomentInput) => void;
   readonly onModeChange?: (mode: ChartEngineMode) => void;
   readonly onSelectClient?: (client: ClientSelectOption) => void;
+  readonly onSelectPartnerClient?: (client: ClientSelectOption) => void;
   readonly onSaveBirthData?: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
   readonly isSavingBirthData?: boolean;
   readonly birthDataError?: string | null;
@@ -60,6 +63,7 @@ export type ChartEnginePageProps = {
 
 export function ChartEnginePage({
   selectedClient,
+  selectedPartnerClient = null,
   jobState,
   result,
   errorMessage,
@@ -72,9 +76,11 @@ export function ChartEnginePage({
   onSettingsChange,
   onCreateNatalJob,
   onCreateTransitJob,
+  onCreateSynastryJob,
   onTransitMomentChange,
   onModeChange,
   onSelectClient,
+  onSelectPartnerClient,
   onSaveBirthData,
   isSavingBirthData = false,
   birthDataError = null,
@@ -85,6 +91,7 @@ export function ChartEnginePage({
   onPdf
 }: ChartEnginePageProps) {
   const readiness = getChartBirthDataReadiness(selectedClient?.birthData);
+  const partnerReadiness = getChartBirthDataReadiness(selectedPartnerClient?.birthData);
   const isBirthDataBlocked = Boolean(selectedClient && !readiness.ready);
   const [localMode, setLocalMode] = useState<ChartEngineMode>(mode);
   const [localTransitMoment, setLocalTransitMoment] = useState<ChartTransitMomentInput>(
@@ -92,7 +99,11 @@ export function ChartEnginePage({
   );
   const activeMode = onModeChange ? mode : localMode;
   const activeTransitMoment = transitMoment ?? localTransitMoment;
-  const displayResult = isBirthDataBlocked || result?.method !== activeMode ? null : result;
+  const isSynastryPartnerBlocked = Boolean(
+    activeMode === "synastry" && selectedPartnerClient && !partnerReadiness.ready
+  );
+  const displayResult =
+    isBirthDataBlocked || isSynastryPartnerBlocked || result?.method !== activeMode ? null : result;
   const isCurrentResultCalculated = Boolean(
     displayResult && !isResultStale && jobState === "succeeded"
   );
@@ -105,7 +116,9 @@ export function ChartEnginePage({
     isBusy,
     isCurrentResultCalculated,
     isResultStale,
-    mode: activeMode
+    mode: activeMode,
+    selectedPartnerClient,
+    partnerReadiness
   });
   const [activePanelTab, setActivePanelTab] = useState<ChartPanelTab>("planets");
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
@@ -119,7 +132,7 @@ export function ChartEnginePage({
             ☉
           </span>
           <div>
-            <p>{activeMode === "transit" ? "Транзитная карта" : "Натальная карта"}</p>
+            <p>{getModeTitle(activeMode)}</p>
             <h1>Движок карт</h1>
           </div>
         </div>
@@ -143,6 +156,28 @@ export function ChartEnginePage({
             </button>
           )}
         </div>
+        {activeMode === "synastry" ? (
+          <div className={styles.clientStrip}>
+            {onSelectPartnerClient ? (
+              <ClientSearchCombobox
+                label="Партнёр"
+                value={selectedPartnerClient?.value ?? ""}
+                placeholder="Выберите партнёра"
+                selectedClient={selectedPartnerClient}
+                requireBirthDate={false}
+                fullWidth
+                disabled={isBusy}
+                onSelect={onSelectPartnerClient}
+              />
+            ) : (
+              <button className={styles.clientButton} type="button">
+                <span>{selectedPartnerClient?.initials ?? "П"}</span>
+                <strong>{selectedPartnerClient?.label ?? "Выберите партнёра"}</strong>
+                <small>Партнёр · {selectedPartnerClient?.birthDateDisplay ?? "из CRM"}</small>
+              </button>
+            )}
+          </div>
+        ) : null}
         <nav className={styles.modeTabs} aria-label="Тип карты">
           <button
             className={activeMode === "natal" ? styles.modeActive : styles.modeButton}
@@ -179,12 +214,17 @@ export function ChartEnginePage({
             Прогрессии
           </button>
           <button
-            className={styles.modeDisabled}
+            className={activeMode === "synastry" ? styles.modeActive : styles.modeButton}
             type="button"
-            disabled
-            title="Синастрия будет отдельным методом расчёта"
+            onClick={() =>
+              setChartMode({
+                mode: "synastry",
+                onModeChange,
+                setLocalMode
+              })
+            }
           >
-            Ещё
+            Синастрия
           </button>
         </nav>
         <div
@@ -213,7 +253,14 @@ export function ChartEnginePage({
           className={styles.calculateButton}
           type="button"
           disabled={!chartViewState.canCalculate}
-          onClick={() => void (activeMode === "transit" ? onCreateTransitJob?.() : onCreateNatalJob())}
+          onClick={() =>
+            void runChartCalculationAction({
+              activeMode,
+              onCreateNatalJob,
+              onCreateTransitJob,
+              onCreateSynastryJob
+            })
+          }
         >
           <span aria-hidden="true">⚡</span>
           {chartViewState.actionLabel}
@@ -227,8 +274,10 @@ export function ChartEnginePage({
         <button
           className={styles.toolButton}
           type="button"
-          disabled={activeMode === "transit" || pdfDisabled}
-          title={activeMode === "transit" ? "PDF для транзитов будет отдельным контуром" : pdfTitle}
+          disabled={activeMode !== "natal" || pdfDisabled}
+          title={
+            activeMode !== "natal" ? "PDF для этого метода будет отдельным контуром" : pdfTitle
+          }
           onClick={() => void onPdf?.()}
         >
           {pdfLabel}
@@ -304,8 +353,8 @@ export function ChartEnginePage({
             {displayResult &&
             getPrimaryChartRenderResult(displayResult).points.filter((point) => point.retrograde)
               .length ? (
-              getPrimaryChartRenderResult(displayResult).points
-                .filter((point) => point.retrograde)
+              getPrimaryChartRenderResult(displayResult)
+                .points.filter((point) => point.retrograde)
                 .map((point) => (
                   <div className={styles.retroPill} key={point.id}>
                     {getChartPointDisplayLabel(point.id, point.label)} R
@@ -329,7 +378,11 @@ export function ChartEnginePage({
             result={displayResult}
             isResultStale={isResultStale}
             mode={activeMode}
+            selectedPartnerClient={selectedPartnerClient}
             missingBirthData={isBirthDataBlocked && !readiness.ready ? readiness.missing : []}
+            missingPartnerBirthData={
+              isSynastryPartnerBlocked && !partnerReadiness.ready ? partnerReadiness.missing : []
+            }
             pdfErrorMessage={pdfErrorMessage}
           />
         </section>
@@ -403,10 +456,14 @@ function getChartViewState({
   isBusy,
   isCurrentResultCalculated,
   isResultStale,
-  mode
+  mode,
+  selectedPartnerClient,
+  partnerReadiness
 }: {
   readonly selectedClient: ClientSelectOption | null;
+  readonly selectedPartnerClient: ClientSelectOption | null;
   readonly readiness: ChartBirthDataReadiness;
+  readonly partnerReadiness: ChartBirthDataReadiness;
   readonly jobState: ChartEnginePageJobState;
   readonly displayResult: StoredChartCalculationPayload | null;
   readonly errorMessage: string | null;
@@ -475,6 +532,38 @@ function getChartViewState({
     };
   }
 
+  if (mode === "synastry") {
+    if (!selectedPartnerClient) {
+      return {
+        status: "Выберите партнёра",
+        detail: "Синастрия требует второго клиента из CRM.",
+        actionLabel: "Выберите партнёра",
+        canCalculate: false,
+        tone: "idle"
+      };
+    }
+    if (selectedPartnerClient.value === selectedClient.value) {
+      return {
+        status: "Нужен другой партнёр",
+        detail: "Для синстрии выберите второго клиента, не текущую карту.",
+        actionLabel: "Выберите другого",
+        canCalculate: false,
+        tone: "warning"
+      };
+    }
+    if (!partnerReadiness.ready) {
+      return {
+        status: partnerReadiness.missing.includes("время рождения")
+          ? "Нужно время партнёра"
+          : "Нужны данные партнёра",
+        detail: `У партнёра не заполнены: ${partnerReadiness.missing.join(", ")}.`,
+        actionLabel: "Заполните партнёра",
+        canCalculate: false,
+        tone: "warning"
+      };
+    }
+  }
+
   if (displayResult && isResultStale) {
     return {
       status: "Требуется пересчёт",
@@ -491,7 +580,9 @@ function getChartViewState({
       detail:
         mode === "transit"
           ? "Транзиты рассчитаны по наталу клиента и выбранному моменту."
-          : "Натальная карта рассчитана и привязана к клиенту.",
+          : mode === "synastry"
+            ? "Синастрия рассчитана для выбранной пары клиентов."
+            : "Натальная карта рассчитана и привязана к клиенту.",
       actionLabel: "Актуальна",
       canCalculate: false,
       tone: "success"
@@ -513,8 +604,15 @@ function getChartViewState({
     detail:
       mode === "transit"
         ? "Натал клиента и момент транзита готовы для расчёта."
-        : "Данные рождения и настройки готовы для натальной карты.",
-    actionLabel: mode === "transit" ? "Рассчитать транзиты" : "Рассчитать",
+        : mode === "synastry"
+          ? "Оба клиента готовы для расчёта совместимости."
+          : "Данные рождения и настройки готовы для натальной карты.",
+    actionLabel:
+      mode === "transit"
+        ? "Рассчитать транзиты"
+        : mode === "synastry"
+          ? "Рассчитать синстрию"
+          : "Рассчитать",
     canCalculate: !isBusy,
     tone: "ready"
   };
@@ -764,7 +862,9 @@ function StatusCard({
   jobState,
   errorMessage,
   missingBirthData,
+  missingPartnerBirthData,
   mode,
+  selectedPartnerClient,
   result,
   isResultStale,
   pdfErrorMessage
@@ -772,7 +872,9 @@ function StatusCard({
   readonly jobState: ChartEnginePageJobState;
   readonly errorMessage: string | null;
   readonly missingBirthData: readonly string[];
+  readonly missingPartnerBirthData: readonly string[];
   readonly mode: ChartEngineMode;
+  readonly selectedPartnerClient: ClientSelectOption | null;
   readonly result: StoredChartCalculationPayload | null;
   readonly isResultStale: boolean;
   readonly pdfErrorMessage: string | null;
@@ -780,7 +882,7 @@ function StatusCard({
   if (jobState === "calculating") {
     return (
       <div className={styles.statusCard} role="status">
-        <strong>{mode === "transit" ? "Рассчитываем транзиты" : "Рассчитываем карту"}</strong>
+        <strong>{getCalculatingLabel(mode)}</strong>
         <span>Берём данные рождения из CRM и строим canonical natal result.</span>
       </div>
     );
@@ -803,14 +905,32 @@ function StatusCard({
       </div>
     );
   }
+  if (mode === "synastry" && !selectedPartnerClient) {
+    return (
+      <div className={styles.statusCard} role="status">
+        <strong>Выберите партнёра</strong>
+        <span>Второй участник берётся из связанного CRM-клиента.</span>
+      </div>
+    );
+  }
+  if (missingPartnerBirthData.length > 0) {
+    return (
+      <div className={styles.statusCard} role="status">
+        <strong>Нужны данные партнёра</strong>
+        <span>Добавьте {missingPartnerBirthData.join(", ")}, чтобы рассчитать синастрию.</span>
+      </div>
+    );
+  }
   if (!result) {
     return (
       <div className={styles.statusCard}>
-        <strong>{mode === "transit" ? "Готово к расчёту транзитов" : "Готово к расчёту натала"}</strong>
+        <strong>{getEmptyResultLabel(mode)}</strong>
         <span>
           {mode === "transit"
             ? "Выберите клиента и момент транзита: дата, время и место будут отправлены в backend-контур."
-            : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
+            : mode === "synastry"
+              ? "Выберите второго клиента: в backend уйдут только id пары и настройки расчёта."
+              : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
         </span>
       </div>
     );
@@ -822,7 +942,9 @@ function StatusCard({
         <span>
           {mode === "transit"
             ? "Данные рождения, настройки или момент транзита изменились. Пересчитайте карту."
-            : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
+            : mode === "synastry"
+              ? "Данные одного из участников или настройки изменились. Пересчитайте синастрию."
+              : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
         </span>
       </div>
     );
@@ -830,7 +952,7 @@ function StatusCard({
 
   return (
     <div className={styles.statusCard}>
-      <strong>{mode === "transit" ? "Транзитная карта рассчитана" : "Натальная карта рассчитана"}</strong>
+      <strong>{getSucceededLabel(mode)}</strong>
       <span>
         Провайдер: {result.provider.name} · {result.provider.ephemeris}
       </span>
@@ -839,9 +961,7 @@ function StatusCard({
   );
 }
 
-function getBigThree(
-  result: StoredChartCalculationPayload
-): readonly {
+function getBigThree(result: StoredChartCalculationPayload): readonly {
   readonly label: string;
   readonly symbol: string;
   readonly value: string;
@@ -865,9 +985,7 @@ function getBigThree(
   ];
 }
 
-function getDominantPoints(
-  result: StoredChartCalculationPayload
-): readonly {
+function getDominantPoints(result: StoredChartCalculationPayload): readonly {
   readonly id: string;
   readonly label: string;
   readonly symbol: string;
@@ -905,9 +1023,7 @@ function getDominantPoints(
     .slice(0, 3);
 }
 
-function formatChartWarning(
-  warning: ReturnType<typeof getChartWarnings>[number]
-): string {
+function formatChartWarning(warning: ReturnType<typeof getChartWarnings>[number]): string {
   if (warning.code === "BIRTH_TIME_APPROXIMATE") {
     return "Время рождения указано примерно: дома и углы могут смещаться.";
   }
@@ -952,6 +1068,51 @@ const panelTabs: readonly { readonly id: ChartPanelTab; readonly label: string }
   { id: "houses", label: "Дома" },
   { id: "interpretations", label: "Трактовки" }
 ];
+
+function getModeTitle(mode: ChartEngineMode): string {
+  if (mode === "transit") return "Транзитная карта";
+  if (mode === "synastry") return "Синастрия";
+  return "Натальная карта";
+}
+
+function getCalculatingLabel(mode: ChartEngineMode): string {
+  if (mode === "transit") return "Рассчитываем транзиты";
+  if (mode === "synastry") return "Рассчитываем синстрию";
+  return "Рассчитываем карту";
+}
+
+function getEmptyResultLabel(mode: ChartEngineMode): string {
+  if (mode === "transit") return "Готово к расчёту транзитов";
+  if (mode === "synastry") return "Готово к расчёту синстрии";
+  return "Готово к расчёту натала";
+}
+
+function getSucceededLabel(mode: ChartEngineMode): string {
+  if (mode === "transit") return "Транзитная карта рассчитана";
+  if (mode === "synastry") return "Синастрия рассчитана";
+  return "Натальная карта рассчитана";
+}
+
+function runChartCalculationAction({
+  activeMode,
+  onCreateNatalJob,
+  onCreateTransitJob,
+  onCreateSynastryJob
+}: {
+  readonly activeMode: ChartEngineMode;
+  readonly onCreateNatalJob: () => void | Promise<void>;
+  readonly onCreateTransitJob?: () => void | Promise<void>;
+  readonly onCreateSynastryJob?: () => void | Promise<void>;
+}) {
+  if (activeMode === "transit") {
+    return onCreateTransitJob?.();
+  }
+  if (activeMode === "synastry") {
+    return onCreateSynastryJob?.();
+  }
+
+  return onCreateNatalJob();
+}
 
 function setChartMode({
   mode,

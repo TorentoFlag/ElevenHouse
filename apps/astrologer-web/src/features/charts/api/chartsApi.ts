@@ -8,6 +8,7 @@ import {
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalJobCreateResponseSchema,
+  chartSynastryJobCreateRequestSchema,
   chartTransitJobCreateRequestSchema,
   requestCalculationPdfSchema,
   storedChartCalculationPayloadSchema,
@@ -58,6 +59,26 @@ export async function createTransitChartJob(
 
   return chartNatalJobCreateResponseSchema.parse(
     await application.http.post("/charts/transits/jobs", body, { csrf: true })
+  );
+}
+
+export type CreateSynastryChartJobInput = {
+  readonly clientId: string;
+  readonly partnerClientId: string;
+  readonly settings: ChartSettings;
+} & Record<string, unknown>;
+
+export async function createSynastryChartJob(
+  input: CreateSynastryChartJobInput
+): Promise<ChartNatalJobCreateResponse> {
+  const body = chartSynastryJobCreateRequestSchema.parse({
+    clientId: input.clientId,
+    partnerClientId: input.partnerClientId,
+    settings: input.settings
+  });
+
+  return chartNatalJobCreateResponseSchema.parse(
+    await application.http.post("/charts/synastry/jobs", body, { csrf: true })
   );
 }
 

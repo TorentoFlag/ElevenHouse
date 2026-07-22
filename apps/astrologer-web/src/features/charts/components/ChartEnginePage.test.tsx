@@ -8,7 +8,8 @@ import type {
   ChartSettings,
   DictionaryEntriesResponse,
   StoredChartCalculationPayload,
-  StoredChartNatalCalculationPayload
+  StoredChartNatalCalculationPayload,
+  StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
@@ -42,13 +43,35 @@ const client = {
   }
 } satisfies ClientSelectOption;
 
+const partnerClient = {
+  ...client,
+  value: "55555555-5555-4555-8555-555555555555",
+  label: "Алексей Петров",
+  initials: "АП",
+  subtitle: "11.08.1992 · Москва",
+  birthDateDisplay: "11.08.1992",
+  birthData: {
+    ...client.birthData,
+    id: "66666666-6666-4666-8666-666666666666",
+    clientUserId: "55555555-5555-4555-8555-555555555555",
+    birthDate: "1992-08-11",
+    birthTime: "08:15",
+    birthPlaceText: "Москва, Россия",
+    birthCountryCode: "RU",
+    birthCity: "Москва",
+    birthTimezone: "Europe/Moscow",
+    birthLatitude: 55.7558,
+    birthLongitude: 37.6173
+  }
+} satisfies ClientSelectOption;
+
 describe("ChartEnginePage", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
   });
 
-  it("keeps future modes disabled and starts a CRM-backed natal calculation", async () => {
+  it("keeps unsupported future modes disabled and starts a CRM-backed natal calculation", async () => {
     const user = userEvent.setup();
     const onCreateNatalJob = vi.fn(async () => undefined);
     render(
@@ -66,7 +89,7 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByRole("button", { name: /транзиты/i })).toBeEnabled();
     expect(screen.getByRole("button", { name: /прогрессии/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /ещё/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /синастрия/i })).toBeEnabled();
     expect(screen.getByText(/вводить дату рождения вручную не нужно/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /рассчитать/i }));
 
@@ -102,6 +125,63 @@ describe("ChartEnginePage", () => {
     expect(onCreateTransitJob).toHaveBeenCalledOnce();
   });
 
+  it("switches to synastry mode and submits the partner calculation", async () => {
+    const user = userEvent.setup();
+    const onCreateSynastryJob = vi.fn(async () => undefined);
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        selectedPartnerClient={partnerClient}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        mode="natal"
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onCreateSynastryJob={onCreateSynastryJob}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: /синастрия/i }));
+
+    expect(screen.getByText(/Партнёр · 11\.08\.1992/)).toBeInTheDocument();
+    expect(screen.getByText("Алексей Петров")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /рассчитать синстрию/i })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: /рассчитать синстрию/i }));
+
+    expect(onCreateSynastryJob).toHaveBeenCalledOnce();
+  });
+
+  it("blocks synastry calculation until a different partner client is selected", async () => {
+    const user = userEvent.setup();
+    const onCreateSynastryJob = vi.fn(async () => undefined);
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        selectedPartnerClient={null}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        mode="synastry"
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onCreateSynastryJob={onCreateSynastryJob}
+      />
+    );
+
+    expect(screen.getAllByText("Выберите партнёра").length).toBeGreaterThan(0);
+    const actionButton = screen.getAllByRole("button", { name: /выберите партнёра/i }).at(-1);
+    expect(actionButton).toBeDefined();
+    expect(actionButton).toBeDisabled();
+    await user.click(actionButton!);
+
+    expect(onCreateSynastryJob).not.toHaveBeenCalled();
+  });
+
   it("renders transit points and aspects as a dual-wheel result", async () => {
     const user = userEvent.setup();
     render(
@@ -127,6 +207,33 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByText("Транзитные аспекты к наталу")).toBeInTheDocument();
     expect(screen.getByText(/Марс — Солнце/i)).toBeInTheDocument();
+  });
+
+  it("renders synastry partner points and aspects as a dual-wheel result", async () => {
+    const user = userEvent.setup();
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        selectedPartnerClient={partnerClient}
+        jobState="succeeded"
+        result={synastryResult()}
+        errorMessage={null}
+        isBusy={false}
+        mode="synastry"
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("chart-partner-point-mars")).toBeInTheDocument();
+    expect(screen.getByTestId("chart-synastry-aspect-opposition")).toBeInTheDocument();
+    expect(screen.getAllByText(/Синастрия рассчитана/i).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: "Аспекты" }));
+
+    expect(screen.getByText("Аспекты между картами")).toBeInTheDocument();
+    expect(screen.getByText(/Солнце — Марс/i)).toBeInTheDocument();
   });
 
   it.each([
@@ -403,9 +510,30 @@ describe("ChartEnginePage", () => {
           ],
           aspects: [
             { pointA: "moon", pointB: "sun", type: "square", angle: 90, orb: 1.4, applying: true },
-            { pointA: "moon", pointB: "pluto", type: "trine", angle: 120, orb: 2.1, applying: true },
-            { pointA: "moon", pointB: "venus", type: "sextile", angle: 60, orb: 0.9, applying: false },
-            { pointA: "pluto", pointB: "venus", type: "sextile", angle: 60, orb: 1.1, applying: false }
+            {
+              pointA: "moon",
+              pointB: "pluto",
+              type: "trine",
+              angle: 120,
+              orb: 2.1,
+              applying: true
+            },
+            {
+              pointA: "moon",
+              pointB: "venus",
+              type: "sextile",
+              angle: 60,
+              orb: 0.9,
+              applying: false
+            },
+            {
+              pointA: "pluto",
+              pointB: "venus",
+              type: "sextile",
+              angle: 60,
+              orb: 1.1,
+              applying: false
+            }
           ]
         })}
         errorMessage={null}
@@ -598,7 +726,9 @@ describe("ChartEnginePage", () => {
     expect(await within(interpretationsPanel).findByText(/Солнце · XI дом/i)).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText("Аспекты")).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText("Дома")).toBeInTheDocument();
-    expect(within(interpretationsPanel).getAllByText(/Справочник · platform/i).length).toBeGreaterThanOrEqual(5);
+    expect(
+      within(interpretationsPanel).getAllByText(/Справочник · platform/i).length
+    ).toBeGreaterThanOrEqual(5);
     expect(
       within(interpretationsPanel).getByText(/Справочная трактовка Солнца в Раке/i)
     ).toBeInTheDocument();
@@ -1013,12 +1143,7 @@ function renderChartEnginePage(
   overrides: Partial<
     Pick<
       ChartEnginePageProps,
-      | "selectedClient"
-      | "jobState"
-      | "result"
-      | "errorMessage"
-      | "isBusy"
-      | "isResultStale"
+      "selectedClient" | "jobState" | "result" | "errorMessage" | "isBusy" | "isResultStale"
     >
   >
 ) {
@@ -1156,6 +1281,75 @@ function transitResult(): StoredChartCalculationPayload {
           applying: true
         }
       ],
+      warnings: []
+    }
+  };
+}
+
+function synastryResult(): StoredChartSynastryCalculationPayload {
+  const primary = chartResult({
+    points: [
+      {
+        id: "sun",
+        label: "Sun",
+        longitude: 113.1,
+        sign: "cancer",
+        signDegree: 23.1,
+        house: 10,
+        retrograde: false
+      }
+    ],
+    houses: [{ number: 1, longitude: 180, sign: "libra", signDegree: 0 }],
+    aspects: []
+  }).result;
+  const partner = chartResult({
+    points: [
+      {
+        id: "mars",
+        label: "Mars",
+        longitude: 293.4,
+        sign: "capricorn",
+        signDegree: 23.4,
+        house: 4,
+        retrograde: false
+      }
+    ],
+    houses: [{ number: 1, longitude: 166, sign: "virgo", signDegree: 16 }],
+    aspects: []
+  }).result;
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "synastry",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    inputSnapshot: transitResult().inputSnapshot,
+    partnerInputSnapshot: {
+      birthDate: "1992-08-11",
+      birthTime: "08:15",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173,
+      birthTimePrecision: "exact"
+    },
+    relationshipSnapshot: {
+      primaryClientId: client.value,
+      partnerClientId: partnerClient.value
+    },
+    result: {
+      primary,
+      partner,
+      aspectsBetween: [
+        {
+          primaryPoint: "sun",
+          partnerPoint: "mars",
+          type: "opposition",
+          angle: 180,
+          orb: 1.2,
+          applying: true
+        }
+      ],
+      houseOverlays: [],
       warnings: []
     }
   };

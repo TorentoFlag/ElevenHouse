@@ -15,6 +15,7 @@ import {
 } from "../../features/clients/model/clientSelectorModel";
 import {
   createNatalChartJob,
+  createSynastryChartJob,
   createTransitChartJob,
   downloadChartPdf,
   enqueueChartPdf,
@@ -52,6 +53,12 @@ export function useChartEngineController() {
   const queryClient = useQueryClient();
   const initialUrlState = useMemo(() => readChartEngineUrlState(), []);
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
+  const [selectedPartnerClient, setSelectedPartnerClient] = useState<ClientSelectOption | null>(
+    null
+  );
+  const [restoredPartnerClientId, setRestoredPartnerClientId] = useState<string | null>(
+    initialUrlState.partnerClientId
+  );
   const [settings, setSettings] = useState<ChartSettings>(defaultSettings);
   const [mode, setMode] = useState<ChartEngineMode>("natal");
   const [transitMoment, setTransitMoment] = useState<ChartTransitMomentInput>(() =>
@@ -69,6 +76,12 @@ export function useChartEngineController() {
     queryKey: ["clients", "detail", initialUrlState.clientId],
     queryFn: () => getAstrologerClient(initialUrlState.clientId ?? ""),
     enabled: Boolean(initialUrlState.clientId && !selectedClient)
+  });
+  const partnerClientIdToRestore = restoredPartnerClientId;
+  const restoredPartnerClientQuery = useQuery({
+    queryKey: ["clients", "detail", partnerClientIdToRestore],
+    queryFn: () => getAstrologerClient(partnerClientIdToRestore ?? ""),
+    enabled: Boolean(partnerClientIdToRestore && !selectedPartnerClient)
   });
 
   const calculationMutation = useMutation({
@@ -149,6 +162,49 @@ export function useChartEngineController() {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить транзиты");
     }
   });
+  const synastryCalculationMutation = useMutation({
+    mutationFn: ({
+      clientId,
+      partnerClientId,
+      settings
+    }: {
+      readonly clientId: string;
+      readonly partnerClientId: string;
+      readonly settings: ChartSettings;
+    }) =>
+      submitSynastryCalculation({
+        clientId,
+        partnerClientId,
+        settings,
+        create: createSynastryChartJob
+      }),
+    onSuccess: (response, variables) => {
+      setErrorMessage(null);
+      setHasResultStaleIntent(false);
+      if (response.status === "succeeded") {
+        setJobId(null);
+        setCalculationId(response.calculationId);
+        setImmediateResult(response.result as StoredChartCalculationPayload);
+        writeChartEngineUrlState({
+          clientId: variables.clientId,
+          partnerClientId: variables.partnerClientId,
+          calculationId: response.calculationId
+        });
+        return;
+      }
+      setImmediateResult(null);
+      setCalculationId(null);
+      setJobId(response.jobId);
+      writeChartEngineUrlState({
+        clientId: variables.clientId,
+        partnerClientId: variables.partnerClientId,
+        calculationId: null
+      });
+    },
+    onError: (error) => {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить синстрию");
+    }
+  });
 
   const birthDataMutation = useMutation({
     mutationFn: async (data: Parameters<typeof updateClientBirthData>[1]) => {
@@ -194,6 +250,7 @@ export function useChartEngineController() {
       setHasResultStaleIntent(false);
       writeChartEngineUrlState({
         clientId: selectedClient?.value ?? initialUrlState.clientId,
+        partnerClientId: selectedPartnerClient?.value ?? initialUrlState.partnerClientId,
         calculationId: job.calculationId
       });
     }
@@ -201,7 +258,13 @@ export function useChartEngineController() {
       setJobId(null);
       setErrorMessage(job.failureMessage ?? "Не удалось рассчитать карту");
     }
-  }, [initialUrlState.clientId, jobQuery.data, selectedClient?.value]);
+  }, [
+    initialUrlState.clientId,
+    initialUrlState.partnerClientId,
+    jobQuery.data,
+    selectedClient?.value,
+    selectedPartnerClient?.value
+  ]);
 
   const calculationQuery = useQuery({
     queryKey: ["charts", "calculations", calculationId],
@@ -219,12 +282,24 @@ export function useChartEngineController() {
   }, [restoredClientQuery.data, selectedClient]);
 
   useEffect(() => {
+    const response = restoredPartnerClientQuery.data;
+    if (!response || selectedPartnerClient) return;
+    const [client] = toClientSelectOptions([response.client]);
+    if (client) {
+      setSelectedPartnerClient(client);
+    }
+  }, [restoredPartnerClientQuery.data, selectedPartnerClient]);
+
+  useEffect(() => {
     if (!calculationQuery.data) return;
     const restoredState = restoreChartEngineViewState(calculationQuery.data);
     setSettings(restoredState.settings);
     setMode(restoredState.mode);
     if (restoredState.transitMoment) {
       setTransitMoment(restoredState.transitMoment);
+    }
+    if (restoredState.partnerClientId) {
+      setRestoredPartnerClientId(restoredState.partnerClientId);
     }
     setHasResultStaleIntent(false);
   }, [calculationQuery.data]);
@@ -233,7 +308,14 @@ export function useChartEngineController() {
   const isResultStale = Boolean(
     result &&
     (hasResultStaleIntent ||
-      isChartResultStale(result, selectedClient?.birthData, settings, mode, transitMoment))
+      isChartResultStale(
+        result,
+        selectedClient?.birthData,
+        settings,
+        mode,
+        transitMoment,
+        selectedPartnerClient?.birthData
+      ))
   );
   const pdfQuery = useQuery({
     queryKey: ["charts", "pdf", calculationId, pdfLocale],
@@ -257,6 +339,7 @@ export function useChartEngineController() {
     if (
       calculationMutation.isPending ||
       transitCalculationMutation.isPending ||
+      synastryCalculationMutation.isPending ||
       jobId ||
       jobQuery.data?.status === "calculating"
     ) {
@@ -276,11 +359,13 @@ export function useChartEngineController() {
     jobId,
     jobQuery.data?.status,
     result,
-    transitCalculationMutation.isPending
+    transitCalculationMutation.isPending,
+    synastryCalculationMutation.isPending
   ]);
   const isBusy =
     calculationMutation.isPending ||
     transitCalculationMutation.isPending ||
+    synastryCalculationMutation.isPending ||
     birthDataMutation.isPending ||
     enqueuePdfMutation.isPending ||
     downloadPdfMutation.isPending ||
@@ -292,11 +377,12 @@ export function useChartEngineController() {
     currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
     job: pdfQuery.data?.job ?? null,
     isBusy,
-    isResultStale: isResultStale || result?.method === "transit"
+    isResultStale: isResultStale || (result != null && result.method !== "natal")
   });
 
   return {
     selectedClient,
+    selectedPartnerClient,
     jobState,
     result,
     isResultStale,
@@ -338,7 +424,25 @@ export function useChartEngineController() {
       setImmediateResult(null);
       setErrorMessage(null);
       setHasResultStaleIntent(false);
-      writeChartEngineUrlState({ clientId: client.value, calculationId: null });
+      writeChartEngineUrlState({
+        clientId: client.value,
+        partnerClientId: selectedPartnerClient?.value ?? null,
+        calculationId: null
+      });
+    },
+    onSelectPartnerClient: (client: ClientSelectOption) => {
+      setSelectedPartnerClient(client);
+      setRestoredPartnerClientId(client.value);
+      setJobId(null);
+      setCalculationId(null);
+      setImmediateResult(null);
+      setErrorMessage(null);
+      setHasResultStaleIntent(false);
+      writeChartEngineUrlState({
+        clientId: selectedClient?.value ?? null,
+        partnerClientId: client.value,
+        calculationId: null
+      });
     },
     onCreateNatalJob: async () => {
       if (!selectedClient) {
@@ -376,6 +480,37 @@ export function useChartEngineController() {
         transit: transitMoment
       });
     },
+    onCreateSynastryJob: async () => {
+      if (!selectedClient) {
+        setErrorMessage("Выберите клиента из CRM");
+        return;
+      }
+      if (!selectedPartnerClient) {
+        setErrorMessage("Выберите партнёра из CRM");
+        return;
+      }
+      if (selectedClient.value === selectedPartnerClient.value) {
+        setErrorMessage("Для синстрии выберите другого клиента");
+        return;
+      }
+      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
+      if (!readiness.ready) {
+        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
+        return;
+      }
+      const partnerReadiness = getChartBirthDataReadiness(selectedPartnerClient.birthData);
+      if (!partnerReadiness.ready) {
+        setErrorMessage(
+          `Не хватает данных рождения партнёра: ${partnerReadiness.missing.join(", ")}`
+        );
+        return;
+      }
+      await synastryCalculationMutation.mutateAsync({
+        clientId: selectedClient.value,
+        partnerClientId: selectedPartnerClient.value,
+        settings
+      });
+    },
     onPdf: async () => {
       try {
         setErrorMessage(null);
@@ -390,7 +525,9 @@ export function useChartEngineController() {
           openUrl: (url) => window.open(url, "_blank", "noopener,noreferrer")
         });
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Не удалось выполнить PDF-действие");
+        setErrorMessage(
+          error instanceof Error ? error.message : "Не удалось выполнить PDF-действие"
+        );
       }
     }
   };
@@ -432,11 +569,34 @@ export async function submitTransitCalculation({
   return create({ clientId, settings, transit });
 }
 
+export async function submitSynastryCalculation({
+  clientId,
+  create,
+  partnerClientId,
+  settings
+}: {
+  readonly clientId: string;
+  readonly partnerClientId: string;
+  readonly settings: ChartSettings;
+  readonly create: typeof createSynastryChartJob;
+}) {
+  return create({ clientId, partnerClientId, settings });
+}
+
 export function restoreChartEngineViewState(result: StoredChartCalculationPayload): {
   readonly mode: ChartEngineMode;
   readonly settings: ChartSettings;
   readonly transitMoment?: ChartTransitMomentInput;
+  readonly partnerClientId?: string;
 } {
+  if (result.method === "synastry") {
+    return {
+      mode: "synastry",
+      settings: result.settings,
+      partnerClientId: result.relationshipSnapshot.partnerClientId
+    };
+  }
+
   if (result.method !== "transit") {
     return {
       mode: "natal",
@@ -456,6 +616,7 @@ export function restoreChartEngineViewState(result: StoredChartCalculationPayloa
 
 export type ChartEngineUrlState = {
   readonly clientId: string | null;
+  readonly partnerClientId?: string | null;
   readonly calculationId: string | null;
 };
 
@@ -466,6 +627,7 @@ export function readChartEngineUrlState(
 
   return {
     clientId: normalizeUrlParam(params.get("clientId")),
+    partnerClientId: normalizeUrlParam(params.get("partnerClientId")),
     calculationId: normalizeUrlParam(params.get("calculationId"))
   };
 }
@@ -476,6 +638,11 @@ export function buildChartEngineSearch(search: string, state: ChartEngineUrlStat
     params.set("clientId", state.clientId);
   } else {
     params.delete("clientId");
+  }
+  if (state.partnerClientId) {
+    params.set("partnerClientId", state.partnerClientId);
+  } else {
+    params.delete("partnerClientId");
   }
   if (state.calculationId) {
     params.set("calculationId", state.calculationId);

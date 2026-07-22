@@ -3,13 +3,15 @@ import type {
   ChartNatalJobCreateResponse,
   ChartSettings,
   ChartTransitMoment,
-  StoredChartCalculationPayload
+  StoredChartCalculationPayload,
+  StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
 import {
   buildChartEngineSearch,
   readChartEngineUrlState,
   restoreChartEngineViewState,
   submitChartCalculation,
+  submitSynastryCalculation,
   submitTransitCalculation
 } from "./useChartEngineController";
 
@@ -104,15 +106,33 @@ describe("chart engine controller submission", () => {
       transit
     });
   });
+
+  it("creates synastry jobs with the selected partner client", async () => {
+    const create = vi.fn(async () => calculatingResponse);
+    const partnerClientId = "55555555-5555-4555-8555-555555555555";
+
+    await expect(
+      submitSynastryCalculation({
+        clientId,
+        partnerClientId,
+        settings: settings(),
+        create
+      })
+    ).resolves.toEqual(calculatingResponse);
+
+    expect(create).toHaveBeenCalledWith({
+      clientId,
+      partnerClientId,
+      settings: settings()
+    });
+  });
 });
 
 describe("chart engine URL state", () => {
   it("reads persisted client and calculation ids from the route query", () => {
     expect(
-      readChartEngineUrlState(
-        `?clientId=${clientId}&calculationId=${calculationId}&ignored=value`
-      )
-    ).toEqual({ clientId, calculationId });
+      readChartEngineUrlState(`?clientId=${clientId}&calculationId=${calculationId}&ignored=value`)
+    ).toEqual({ clientId, partnerClientId: null, calculationId });
   });
 
   it("updates only chart-engine state params", () => {
@@ -141,6 +161,14 @@ describe("chart engine persisted result state", () => {
         date: "2026-07-22",
         time: "21:35"
       }
+    });
+  });
+
+  it("restores synastry mode and partner client id from a loaded calculation", () => {
+    expect(restoreChartEngineViewState(synastryResult())).toEqual({
+      mode: "synastry",
+      settings: settings(),
+      partnerClientId: "55555555-5555-4555-8555-555555555555"
     });
   });
 });
@@ -180,6 +208,44 @@ function transitResult(): StoredChartCalculationPayload {
       natal: emptyRenderResult(),
       transit: emptyRenderResult(),
       aspectsToNatal: [],
+      warnings: []
+    }
+  };
+}
+
+function synastryResult(): StoredChartSynastryCalculationPayload {
+  const natal = emptyRenderResult();
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "synastry",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    inputSnapshot: {
+      birthDate: "1990-07-15",
+      birthTime: "10:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964,
+      birthTimePrecision: "exact"
+    },
+    partnerInputSnapshot: {
+      birthDate: "1992-08-11",
+      birthTime: "08:15",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173,
+      birthTimePrecision: "exact"
+    },
+    relationshipSnapshot: {
+      primaryClientId: clientId,
+      partnerClientId: "55555555-5555-4555-8555-555555555555"
+    },
+    result: {
+      primary: natal,
+      partner: natal,
+      aspectsBetween: [],
+      houseOverlays: [],
       warnings: []
     }
   };

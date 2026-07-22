@@ -1,6 +1,7 @@
 import type {
   ChartRenderResult,
   StoredChartCalculationPayload,
+  StoredChartSynastryCalculationPayload,
   StoredChartTransitCalculationPayload
 } from "@elevenhouse/contracts";
 
@@ -121,7 +122,14 @@ export function formatDegree(value: number): string {
 export function getPrimaryChartRenderResult(
   result: StoredChartCalculationPayload
 ): ChartRenderResult {
-  return result.method === "transit" ? result.result.natal : result.result;
+  if (result.method === "transit") {
+    return result.result.natal;
+  }
+  if (result.method === "synastry") {
+    return result.result.primary;
+  }
+
+  return result.result;
 }
 
 export function getTransitChartRenderResult(
@@ -136,6 +144,22 @@ export function getTransitChartResult(
   return result.method === "transit" ? result : null;
 }
 
+export function getPartnerChartRenderResult(
+  result: StoredChartCalculationPayload
+): ChartRenderResult | null {
+  return result.method === "synastry" ? result.result.partner : null;
+}
+
+export function getSynastryChartResult(
+  result: StoredChartCalculationPayload
+): StoredChartSynastryCalculationPayload | null {
+  return result.method === "synastry" ? result : null;
+}
+
 export function getChartWarnings(result: StoredChartCalculationPayload) {
-  return result.method === "transit" ? result.result.warnings : result.result.warnings;
+  if (result.method === "transit" || result.method === "synastry") {
+    return result.result.warnings;
+  }
+
+  return result.result.warnings;
 }

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type {
   ChartSettings,
   StoredChartCalculationPayload,
-  StoredChartNatalCalculationPayload
+  StoredChartNatalCalculationPayload,
+  StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
 import {
   getChartBirthDataReadiness,
@@ -104,6 +105,22 @@ describe("chartEngineState", () => {
       })
     ).toBe(true);
   });
+
+  it("marks a synastry result stale when the partner birth data changed", () => {
+    expect(
+      isChartResultStale(
+        synastryResult(),
+        readyBirthData(),
+        chartSettings(),
+        "synastry",
+        undefined,
+        {
+          ...readyBirthData(),
+          birthDate: "1992-08-12"
+        }
+      )
+    ).toBe(true);
+  });
 });
 
 function chartSettings(): ChartSettings {
@@ -179,6 +196,30 @@ function transitResult(): StoredChartCalculationPayload {
       natal,
       transit: natal,
       aspectsToNatal: [],
+      warnings: []
+    }
+  };
+}
+
+function synastryResult(): StoredChartSynastryCalculationPayload {
+  const natal = chartResult().result;
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "synastry",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: chartSettings(),
+    inputSnapshot: chartResult().inputSnapshot,
+    partnerInputSnapshot: chartResult().inputSnapshot,
+    relationshipSnapshot: {
+      primaryClientId: "22222222-2222-4222-8222-222222222222",
+      partnerClientId: "55555555-5555-4555-8555-555555555555"
+    },
+    result: {
+      primary: natal,
+      partner: natal,
+      aspectsBetween: [],
+      houseOverlays: [],
       warnings: []
     }
   };

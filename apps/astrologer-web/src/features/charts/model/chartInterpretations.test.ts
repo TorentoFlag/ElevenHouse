@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type {
   StoredChartCalculationPayload,
-  StoredChartNatalCalculationPayload
+  StoredChartNatalCalculationPayload,
+  StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
 import {
   buildChartInterpretationAnchors,
@@ -68,6 +69,29 @@ describe("chartInterpretations", () => {
       meta: "Транзит к наталу",
       position: "Оппозиция · орбис 1.20°"
     });
+  });
+
+  it("derives deterministic dictionary anchors for synastry result-only interpretations", () => {
+    const anchors = buildChartInterpretationAnchors(synastryResult());
+
+    expect(getChartInterpretationLookupCodes(anchors)).toEqual(
+      expect.arrayContaining([
+        "synastry.aspect.sun.opposition.mars",
+        "synastry.overlay.primary.venus.partner_house.7",
+        "synastry.overlay.partner.mars.primary_house.4",
+        "synastry.score.very_important"
+      ])
+    );
+    expect(
+      anchors.map((anchor) => `${anchor.code}:${anchor.categoryCode}:${anchor.label}`)
+    ).toEqual(
+      expect.arrayContaining([
+        "synastry.aspect.sun.opposition.mars:planet_aspects:Солнце — Марс партнёра",
+        "synastry.overlay.primary.venus.partner_house.7:planets_in_houses:Венера клиента · VII дом партнёра",
+        "synastry.overlay.partner.mars.primary_house.4:planets_in_houses:Марс партнёра · IV дом клиента",
+        "synastry.score.very_important:aspects:Оценка совместимости"
+      ])
+    );
   });
 });
 
@@ -183,6 +207,79 @@ function transitResult(): StoredChartCalculationPayload {
           applying: true
         }
       ],
+      warnings: []
+    }
+  };
+}
+
+function synastryResult(): StoredChartSynastryCalculationPayload {
+  const primary = chartResult().result;
+  const partner = {
+    ...chartResult().result,
+    points: [
+      {
+        id: "mars",
+        label: "Mars",
+        longitude: 293.4,
+        sign: "capricorn",
+        signDegree: 23.4,
+        house: 4,
+        retrograde: false
+      }
+    ],
+    aspects: []
+  };
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "synastry",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: chartResult().settings,
+    inputSnapshot: chartResult().inputSnapshot,
+    partnerInputSnapshot: {
+      birthDate: "1992-08-11",
+      birthTime: "08:15",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173,
+      birthTimePrecision: "exact"
+    },
+    relationshipSnapshot: {
+      primaryClientId: "11111111-1111-4111-8111-111111111111",
+      partnerClientId: "22222222-2222-4222-8222-222222222222"
+    },
+    result: {
+      primary,
+      partner,
+      aspectsBetween: [
+        {
+          primaryPoint: "sun",
+          partnerPoint: "mars",
+          type: "opposition",
+          angle: 180,
+          orb: 1.2,
+          applying: true
+        }
+      ],
+      houseOverlays: [
+        {
+          owner: "primary",
+          point: "venus",
+          projectedHouseOwner: "partner",
+          projectedHouse: 7
+        },
+        {
+          owner: "partner",
+          point: "mars",
+          projectedHouseOwner: "primary",
+          projectedHouse: 4
+        }
+      ],
+      relationshipScore: {
+        value: 18,
+        label: "very_important",
+        breakdown: [{ code: "venus_mars_trine", points: 4 }]
+      },
       warnings: []
     }
   };

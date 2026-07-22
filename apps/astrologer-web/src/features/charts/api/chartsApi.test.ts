@@ -3,6 +3,7 @@ import type { ChartNatalJobCreateResponse } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import {
   createNatalChartJob,
+  createSynastryChartJob,
   createTransitChartJob,
   downloadChartPdf,
   enqueueChartPdf,
@@ -13,6 +14,7 @@ import {
 } from "./chartsApi";
 
 const clientId = "22222222-2222-4222-8222-222222222222";
+const partnerClientId = "55555555-5555-4555-8555-555555555555";
 const jobId = "33333333-3333-4333-8333-333333333333";
 const calculationId = "44444444-4444-4444-8444-444444444444";
 const createResponse = {
@@ -101,6 +103,43 @@ describe("chartsApi", () => {
     expect(JSON.stringify(post.mock.calls[0]?.[1])).not.toContain("birthDate");
   });
 
+  it("creates synastry jobs with two client ids and settings only", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(createResponse);
+
+    await expect(
+      createSynastryChartJob({
+        clientId,
+        partnerClientId,
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        birthDate: "1990-07-15",
+        partnerBirthDate: "1992-08-11"
+      })
+    ).resolves.toEqual(createResponse);
+
+    expect(post).toHaveBeenCalledWith(
+      "/charts/synastry/jobs",
+      {
+        clientId,
+        partnerClientId,
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      },
+      { csrf: true }
+    );
+    expect(JSON.stringify(post.mock.calls[0]?.[1])).not.toContain("birthDate");
+  });
+
   it("loads chart job and calculation through shared response contracts", async () => {
     vi.spyOn(application.http, "get")
       .mockResolvedValueOnce({ id: jobId, status: "calculating" })
@@ -151,7 +190,8 @@ describe("chartsApi", () => {
       url: "https://objects.example.test/private/chart.pdf?signature=signed",
       expiresAt: now
     };
-    const get = vi.spyOn(application.http, "get")
+    const get = vi
+      .spyOn(application.http, "get")
       .mockResolvedValueOnce(pdf)
       .mockResolvedValueOnce(download);
     const post = vi.spyOn(application.http, "post").mockResolvedValue(pdf);

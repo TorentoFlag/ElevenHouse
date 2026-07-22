@@ -67,7 +67,8 @@ export function isChartResultStale(
     readonly timezone?: string;
     readonly latitude?: number;
     readonly longitude?: number;
-  }
+  },
+  partnerBirthData?: NatalBirthData | null | undefined
 ): boolean {
   if (birthData === undefined) {
     return false;
@@ -87,16 +88,21 @@ export function isChartResultStale(
     result.settings.nodeType !== settings.nodeType ||
     result.settings.aspectPreset !== settings.aspectPreset ||
     result.settings.orbMultiplier !== settings.orbMultiplier ||
-    snapshot.birthDate !== birthData.birthDate ||
-    snapshot.birthTime !== birthData.birthTime ||
-    snapshot.birthTimePrecision !== birthData.birthTimePrecision ||
-    snapshot.timezone !== birthData.birthTimezone ||
-    !areNumbersEquivalent(snapshot.latitude, birthData.birthLatitude) ||
-    !areNumbersEquivalent(snapshot.longitude, birthData.birthLongitude) ||
-    (snapshot.dstOccurrence ?? null) !== (birthData.birthTimeDstOccurrence ?? null);
+    isInputSnapshotStale(snapshot, birthData);
 
   if (baseSnapshotStale) {
     return true;
+  }
+
+  if (result.method === "synastry") {
+    if (partnerBirthData === undefined) {
+      return false;
+    }
+    if (!partnerBirthData || getChartBirthDataReadiness(partnerBirthData).ready === false) {
+      return true;
+    }
+
+    return isInputSnapshotStale(result.partnerInputSnapshot, partnerBirthData);
   }
 
   if (result.method !== "transit") {
@@ -110,11 +116,27 @@ export function isChartResultStale(
   return (
     result.transitSnapshot.date !== transitMoment.date ||
     result.transitSnapshot.time !== transitMoment.time ||
-    (transitMoment.timezone != null && result.transitSnapshot.timezone !== transitMoment.timezone) ||
+    (transitMoment.timezone != null &&
+      result.transitSnapshot.timezone !== transitMoment.timezone) ||
     (transitMoment.latitude != null &&
       !areNumbersEquivalent(result.transitSnapshot.latitude, transitMoment.latitude)) ||
     (transitMoment.longitude != null &&
       !areNumbersEquivalent(result.transitSnapshot.longitude, transitMoment.longitude))
+  );
+}
+
+function isInputSnapshotStale(
+  snapshot: StoredChartCalculationPayload["inputSnapshot"],
+  birthData: NatalBirthData
+): boolean {
+  return (
+    snapshot.birthDate !== birthData.birthDate ||
+    snapshot.birthTime !== birthData.birthTime ||
+    snapshot.birthTimePrecision !== birthData.birthTimePrecision ||
+    snapshot.timezone !== birthData.birthTimezone ||
+    !areNumbersEquivalent(snapshot.latitude, birthData.birthLatitude) ||
+    !areNumbersEquivalent(snapshot.longitude, birthData.birthLongitude) ||
+    (snapshot.dstOccurrence ?? null) !== (birthData.birthTimeDstOccurrence ?? null)
   );
 }
 
