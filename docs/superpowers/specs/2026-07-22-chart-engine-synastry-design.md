@@ -1,13 +1,21 @@
 # Chart Engine Synastry Design
 
 Date: 2026-07-22
-Status: design for next implementation slice
+Status: first production slice implemented
 Scope: first production synastry slice for `/chart-engine`, after the natal and
 single-moment transit slices
 
 > This document is an implementation design artifact. Durable decisions must be
 > reflected in canonical product, architecture, API and testing docs as the
 > implementation lands.
+
+Implementation note, 2026-07-22: the first production slice is implemented
+across contracts, private Python chart-engine, chart-engine client,
+chart-worker, DB method values, astrologer API and `/chart-engine` frontend.
+Runtime browser proof covered a real `POST /api/charts/synastry/jobs`, job
+polling, result read, URL restore, aspects-between rendering and Dictionary
+lookup by `synastry.*` codes. Deferred contours remain PDF/export, public
+sharing, AI relationship text, composite and non-CRM subjects.
 
 ## 1. Purpose
 

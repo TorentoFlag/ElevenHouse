@@ -96,9 +96,16 @@
       payload, worker/provider integration, `/chart-engine` transit mode and
       real browser reload proof. Transit PDF/export and range AstroCalendar
       remain separate future contours.
-- [ ] Chart Engine method expansion after transits: synastry next, then solar
-      return, progressions, composite, child-chart interpretation mode, horary
-      and astrocartography. Each method requires its own contracts, domain/API
+- [x] Chart Engine synastry first slice: two owner-scoped CRM clients, canonical
+      relationship result, private primary/partner input snapshots, worker and
+      provider integration, `/chart-engine` partner selector, dual-wheel
+      rendering, aspects-between tables and Dictionary-backed `synastry.*`
+      interpretation lookup with honest missing-entry creation affordances.
+      Synastry PDF/export, public sharing and AI relationship text remain
+      separate future contours.
+- [ ] Chart Engine method expansion after synastry: solar return next, then
+      progressions, composite, child-chart interpretation mode, horary and
+      astrocartography. Each method requires its own contracts, domain/API
       workflow, worker/provider adapter, UI state matrix, PDF/report decision
       and Dictionary interpretation-code coverage before enabling its mode.
 
