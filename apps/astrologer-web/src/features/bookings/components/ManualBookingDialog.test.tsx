@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -16,6 +16,11 @@ import { ManualBookingDialog } from "./ManualBookingDialog";
 afterEach(() => {
   document.body.replaceChildren();
 });
+
+const dialogSourcePath = resolveFixturePath("src/features/bookings/components/ManualBookingDialog.tsx");
+const dialogStylesPath = resolveFixturePath(
+  "src/features/bookings/components/ManualBookingDialog.module.css"
+);
 
 describe("ManualBookingDialog", () => {
   it("renders an accessible production empty state without prototype-only payment controls", () => {
@@ -50,12 +55,7 @@ describe("ManualBookingDialog", () => {
   });
 
   it("keeps the measured desktop card and a responsive single-column fallback", () => {
-    const css = readFileSync(
-      resolve(
-        "apps/astrologer-web/src/features/bookings/components/ManualBookingDialog.module.css"
-      ),
-      "utf8"
-    );
+    const css = readFileSync(dialogStylesPath, "utf8");
 
     expect(css).toContain("width: min(740px, calc(100vw - 32px));");
     expect(css).toContain("border-radius: 28px;");
@@ -64,10 +64,7 @@ describe("ManualBookingDialog", () => {
   });
 
   it("restores focus to the control that opened the modal", () => {
-    const source = readFileSync(
-      resolve("apps/astrologer-web/src/features/bookings/components/ManualBookingDialog.tsx"),
-      "utf8"
-    );
+    const source = readFileSync(dialogSourcePath, "utf8");
 
     expect(source).toContain("returnFocusElement?.focus()");
   });
@@ -131,17 +128,20 @@ describe("ManualBookingDialog", () => {
   });
 
   it("keeps an unavailable clicked hour unselected until a server slot is chosen", () => {
-    const source = readFileSync(
-      resolve("apps/astrologer-web/src/features/bookings/components/ManualBookingDialog.tsx"),
-      "utf8"
-    );
+    const source = readFileSync(dialogSourcePath, "utf8");
 
     expect(source).toContain("resolveManualBookingStart({");
-    expect(source).toContain('id="manual-booking-date"');
-    expect(source).toContain('name="manual-booking-date"');
-    expect(source).toContain('id="manual-booking-time"');
-    expect(source).toContain('name="manual-booking-time"');
-    expect(source).toMatch(/<option value="" disabled>\s*\{props\.copy\.dateLabel\}\s*<\/option>/);
-    expect(source).toMatch(/<option value="" disabled>\s*\{props\.copy\.timeLabel\}\s*<\/option>/);
+    expect(source).toContain("<BookingSlotPicker");
+    expect(source).toContain("createManualBookingSlotQueryRange({");
+    expect(source).not.toContain('id="manual-booking-date"');
+    expect(source).not.toContain('name="manual-booking-date"');
+    expect(source).not.toContain('id="manual-booking-time"');
+    expect(source).not.toContain('name="manual-booking-time"');
   });
 });
+
+function resolveFixturePath(pathFromAppRoot: string): string {
+  return process.cwd().endsWith("apps/astrologer-web")
+    ? join(process.cwd(), pathFromAppRoot)
+    : join(process.cwd(), "apps/astrologer-web", pathFromAppRoot);
+}

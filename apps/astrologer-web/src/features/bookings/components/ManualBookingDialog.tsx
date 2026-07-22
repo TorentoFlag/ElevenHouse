@@ -11,6 +11,7 @@ import type { ClientSelectOption } from "../../clients/model/clientSelectorModel
 import { productCopyByLocale } from "../../products/model/productCopy";
 import type { CreateManualBookingInput } from "../api/createManualBooking";
 import {
+  createManualBookingSlotQueryRange,
   createManualBookingCommand,
   getBookableManualBookingProducts,
   toManualBookingSlotOptions
@@ -20,6 +21,7 @@ import {
   resolveManualBookingStart
 } from "../model/manualBookingPrefill";
 import { useAvailableBookingSlotsQuery } from "../model/useAvailableBookingSlotsQuery";
+import { BookingSlotPicker } from "./BookingSlotPicker";
 import styles from "./ManualBookingDialog.module.css";
 
 type ManualBookingDialogProps = {
@@ -73,11 +75,22 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
     selectedProduct?.deliveryFormats.includes(selectedDeliveryFormat)
       ? selectedDeliveryFormat
       : (selectedProduct?.deliveryFormats[0] ?? "");
+  const slotRange = useMemo(
+    () =>
+      props.schedule
+        ? createManualBookingSlotQueryRange({
+            now: new Date().toISOString(),
+            timeZone: props.schedule.timeZone,
+            bookingHorizonDays: props.schedule.bookingHorizonDays
+          })
+        : props.range,
+    [props.range, props.schedule]
+  );
   const slotsQuery = useAvailableBookingSlotsQuery(
     {
       productId: selectedProduct?.id ?? "",
-      start: props.range.start,
-      end: props.range.end
+      start: slotRange.start,
+      end: slotRange.end
     },
     Boolean(selectedProduct)
   );
@@ -101,12 +114,6 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
     selectedStartAt,
     preferredStartAt: props.prefillStartAt
   });
-  const selectedSlot = slotOptions.find((slot) => slot.value === effectiveStartAt) ?? null;
-  const dateOptions = uniqueBy(
-    slotOptions.map((slot) => ({ value: slot.dateKey, label: slot.dateLabel })),
-    (option) => option.value
-  );
-  const slotsForDate = slotOptions.filter((slot) => slot.dateKey === selectedSlot?.dateKey);
   const canSubmit = Boolean(
     selectedClient && selectedProduct && deliveryFormat && effectiveStartAt && !props.isCreating
   );
@@ -241,38 +248,15 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
               <p className={styles.state}>{props.copy.noSlotsLabel}</p>
             ) : null}
             {slotOptions.length > 0 ? (
-              <div className={styles.selectRow}>
-                <label>
-                  <span>{props.copy.dateLabel}</span>
-                  <select
-                    id="manual-booking-date"
-                    name="manual-booking-date"
-                    value={selectedSlot?.dateKey ?? ""}
-                    disabled={props.isCreating}
-                    onChange={(event) =>
-                      setSelectedStartAt(
-                        slotOptions.find((slot) => slot.dateKey === event.target.value)?.value ?? ""
-                      )
-                    }
-                  >
-                    <option value="" disabled>{props.copy.dateLabel}</option>
-                    {dateOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
-                  </select>
-                </label>
-                <label>
-                  <span>{props.copy.timeLabel}</span>
-                  <select
-                    id="manual-booking-time"
-                    name="manual-booking-time"
-                    value={effectiveStartAt}
-                    disabled={props.isCreating}
-                    onChange={(event) => setSelectedStartAt(event.target.value)}
-                  >
-                    <option value="" disabled>{props.copy.timeLabel}</option>
-                    {slotsForDate.map((slot) => <option value={slot.value} key={slot.value}>{slot.timeLabel}</option>)}
-                  </select>
-                </label>
-              </div>
+              <BookingSlotPicker
+                copy={props.copy.slotPicker}
+                locale={props.locale}
+                timeZone={slotsQuery.data?.timeZone ?? props.schedule?.timeZone ?? "UTC"}
+                slots={slotOptions}
+                value={effectiveStartAt}
+                disabled={props.isCreating}
+                onChange={setSelectedStartAt}
+              />
             ) : null}
           </section>
         ) : null}
@@ -297,16 +281,6 @@ export function ManualBookingDialog(props: ManualBookingDialogProps) {
       </form>
     </dialog>
   );
-}
-
-function uniqueBy<T>(values: readonly T[], key: (value: T) => string): readonly T[] {
-  const seen = new Set<string>();
-  return values.filter((value) => {
-    const candidate = key(value);
-    if (seen.has(candidate)) return false;
-    seen.add(candidate);
-    return true;
-  });
 }
 
 function formatMoney(amountMinor: number, currency: string, locale: SupportedLocale): string {

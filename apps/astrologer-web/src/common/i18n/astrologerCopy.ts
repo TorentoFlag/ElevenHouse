@@ -146,6 +146,17 @@ export type AstrologerCopy = {
       creatingLabel: string;
       genericErrorLabel: string;
       durationLabel: (minutes: number) => string;
+      slotPicker: {
+        pickerLabel: string;
+        previousMonthLabel: string;
+        nextMonthLabel: string;
+        timeSlotsLabel: (date: string) => string;
+        availableDateLabel: (date: string, count: number) => string;
+        unavailableDateLabel: (date: string) => string;
+        selectedDateLabel: string;
+        slotCountLabel: (count: number) => string;
+        noSlotsForDateLabel: string;
+      };
     };
     availabilityEditor: {
       instruction: string;
@@ -613,7 +624,19 @@ export const astrologerCopyByLocale = {
         createLabel: "Создать запись",
         creatingLabel: "Создаём…",
         genericErrorLabel: "Не удалось создать запись. Проверьте данные и повторите.",
-        durationLabel: (minutes) => `${minutes} мин · онлайн`
+        durationLabel: (minutes) => `${minutes} мин · онлайн`,
+        slotPicker: {
+          pickerLabel: "Календарь доступных дат",
+          previousMonthLabel: "Предыдущий месяц",
+          nextMonthLabel: "Следующий месяц",
+          timeSlotsLabel: (date) => `Доступное время${date ? ` · ${date}` : ""}`,
+          availableDateLabel: (date, count) =>
+            `${date}, ${formatRussianSlotCount(count)}`,
+          unavailableDateLabel: (date) => `${date}, нет доступного времени`,
+          selectedDateLabel: "Выбранный день",
+          slotCountLabel: formatRussianSlotCount,
+          noSlotsForDateLabel: "На выбранный день нет доступного времени."
+        }
       },
       availabilityEditor: {
         instruction: "Настройте рабочие часы и правила записи. Изменения применятся после сохранения.",
@@ -1032,7 +1055,19 @@ export const astrologerCopyByLocale = {
         createLabel: "Create booking",
         creatingLabel: "Creating…",
         genericErrorLabel: "Could not create the booking. Check the details and try again.",
-        durationLabel: (minutes) => `${minutes} min · online`
+        durationLabel: (minutes) => `${minutes} min · online`,
+        slotPicker: {
+          pickerLabel: "Available date calendar",
+          previousMonthLabel: "Previous month",
+          nextMonthLabel: "Next month",
+          timeSlotsLabel: (date) => `Available times${date ? ` · ${date}` : ""}`,
+          availableDateLabel: (date, count) =>
+            `${date}, ${count} ${count === 1 ? "slot" : "slots"}`,
+          unavailableDateLabel: (date) => `${date}, no available time`,
+          selectedDateLabel: "Selected day",
+          slotCountLabel: (count) => `${count} ${count === 1 ? "slot" : "slots"}`,
+          noSlotsForDateLabel: "There are no available times for the selected day."
+        }
       },
       availabilityEditor: {
         instruction: "Set working hours and booking rules. Changes apply after you save.",
@@ -1243,3 +1278,18 @@ export const astrologerCopyByLocale = {
     }
   }
 } satisfies Record<SupportedLocale, AstrologerCopy>;
+
+function formatRussianSlotCount(count: number): string {
+  const lastTwoDigits = Math.abs(count) % 100;
+  const lastDigit = Math.abs(count) % 10;
+  const noun =
+    lastTwoDigits >= 11 && lastTwoDigits <= 14
+      ? "слотов"
+      : lastDigit === 1
+        ? "слот"
+        : lastDigit >= 2 && lastDigit <= 4
+          ? "слота"
+          : "слотов";
+
+  return `${count} ${noun}`;
+}

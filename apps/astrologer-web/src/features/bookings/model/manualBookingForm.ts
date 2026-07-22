@@ -5,6 +5,7 @@ import type {
   ProductResponse
 } from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
+import { Temporal } from "temporal-polyfill";
 import type { CreateManualBookingInput } from "../api/createManualBooking";
 
 export type ManualBookingProduct = Omit<
@@ -31,6 +32,19 @@ export type ManualBookingSlotOption = {
   readonly timeLabel: string;
 };
 
+export type ManualBookingSlotDateGroup = {
+  readonly dateKey: string;
+  readonly dateLabel: string;
+  readonly slots: readonly ManualBookingSlotOption[];
+};
+
+export type ManualBookingSlotQueryRange = {
+  readonly start: string;
+  readonly end: string;
+};
+
+const maximumManualBookingSlotRangeDays = 93;
+
 export function getBookableManualBookingProducts(
   products: readonly ManualBookingProduct[],
   schedule: Pick<AvailabilitySchedule, "productIds"> | null
@@ -47,6 +61,26 @@ export function getBookableManualBookingProducts(
       product.durationMinutes !== null &&
       product.durationMinutes > 0
   );
+}
+
+export function createManualBookingSlotQueryRange(input: {
+  readonly now: string;
+  readonly timeZone: string;
+  readonly bookingHorizonDays: number;
+}): ManualBookingSlotQueryRange {
+  const startDate = Temporal.Instant.from(input.now)
+    .toZonedDateTimeISO(input.timeZone)
+    .toPlainDate();
+  const cappedHorizonDays = Math.min(
+    Math.max(Math.trunc(input.bookingHorizonDays), 1),
+    maximumManualBookingSlotRangeDays
+  );
+  const endDate = startDate.add({ days: cappedHorizonDays });
+
+  return {
+    start: toOffsetDateTime(startDate, input.timeZone),
+    end: toOffsetDateTime(endDate, input.timeZone)
+  };
 }
 
 export function toManualBookingSlotOptions(
@@ -84,6 +118,24 @@ export function toManualBookingSlotOptions(
   });
 }
 
+export function groupManualBookingSlotsByDate(
+  slots: readonly ManualBookingSlotOption[]
+): readonly ManualBookingSlotDateGroup[] {
+  const groups = new Map<string, ManualBookingSlotOption[]>();
+  const labels = new Map<string, string>();
+
+  slots.forEach((slot) => {
+    labels.set(slot.dateKey, slot.dateLabel);
+    groups.set(slot.dateKey, [...(groups.get(slot.dateKey) ?? []), slot]);
+  });
+
+  return [...groups.entries()].map(([dateKey, dateSlots]) => ({
+    dateKey,
+    dateLabel: labels.get(dateKey) ?? dateKey,
+    slots: dateSlots
+  }));
+}
+
 export function createManualBookingCommand(input: {
   readonly clientUserId: string;
   readonly product: ManualBookingProduct | null;
@@ -110,4 +162,10 @@ export function createManualBookingCommand(input: {
     },
     idempotencyKey: input.idempotencyKey
   };
+}
+
+function toOffsetDateTime(date: Temporal.PlainDate, timeZone: string): string {
+  return date
+    .toZonedDateTime({ timeZone, plainTime: "00:00" })
+    .toString({ timeZoneName: "never" });
 }

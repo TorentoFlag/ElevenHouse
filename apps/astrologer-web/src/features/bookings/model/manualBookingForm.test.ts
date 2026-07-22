@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  createManualBookingSlotQueryRange,
   createManualBookingCommand,
   getBookableManualBookingProducts,
+  groupManualBookingSlotsByDate,
   toManualBookingSlotOptions
 } from "./manualBookingForm";
 
@@ -38,6 +40,89 @@ describe("manualBookingForm", () => {
     expect(options).toMatchObject([
       { value: "2026-07-20T07:00:00Z", dateKey: "2026-07-20", timeLabel: "10:00" },
       { value: "2026-07-20T07:30:00Z", dateKey: "2026-07-20", timeLabel: "10:30" }
+    ]);
+  });
+
+  it("builds the manual booking slot range from the booking horizon, not the visible calendar range", () => {
+    expect(
+      createManualBookingSlotQueryRange({
+        now: "2026-07-22T19:00:00+03:00",
+        timeZone: "Europe/Moscow",
+        bookingHorizonDays: 90
+      })
+    ).toEqual({
+      start: "2026-07-22T00:00:00+03:00",
+      end: "2026-10-20T00:00:00+03:00"
+    });
+
+    expect(
+      createManualBookingSlotQueryRange({
+        now: "2026-07-22T19:00:00+03:00",
+        timeZone: "Europe/Moscow",
+        bookingHorizonDays: 120
+      }).end
+    ).toBe("2026-10-23T00:00:00+03:00");
+  });
+
+  it("groups slot options into local date sections for the custom picker", () => {
+    expect(
+      groupManualBookingSlotsByDate([
+        {
+          value: "2026-07-20T07:00:00Z",
+          endAt: "2026-07-20T08:00:00Z",
+          dateKey: "2026-07-20",
+          dateLabel: "пн, 20 июля",
+          timeLabel: "10:00"
+        },
+        {
+          value: "2026-07-20T07:30:00Z",
+          endAt: "2026-07-20T08:30:00Z",
+          dateKey: "2026-07-20",
+          dateLabel: "пн, 20 июля",
+          timeLabel: "10:30"
+        },
+        {
+          value: "2026-07-21T08:00:00Z",
+          endAt: "2026-07-21T09:00:00Z",
+          dateKey: "2026-07-21",
+          dateLabel: "вт, 21 июля",
+          timeLabel: "11:00"
+        }
+      ])
+    ).toEqual([
+      {
+        dateKey: "2026-07-20",
+        dateLabel: "пн, 20 июля",
+        slots: [
+          {
+            value: "2026-07-20T07:00:00Z",
+            endAt: "2026-07-20T08:00:00Z",
+            dateKey: "2026-07-20",
+            dateLabel: "пн, 20 июля",
+            timeLabel: "10:00"
+          },
+          {
+            value: "2026-07-20T07:30:00Z",
+            endAt: "2026-07-20T08:30:00Z",
+            dateKey: "2026-07-20",
+            dateLabel: "пн, 20 июля",
+            timeLabel: "10:30"
+          }
+        ]
+      },
+      {
+        dateKey: "2026-07-21",
+        dateLabel: "вт, 21 июля",
+        slots: [
+          {
+            value: "2026-07-21T08:00:00Z",
+            endAt: "2026-07-21T09:00:00Z",
+            dateKey: "2026-07-21",
+            dateLabel: "вт, 21 июля",
+            timeLabel: "11:00"
+          }
+        ]
+      }
     ]);
   });
 
