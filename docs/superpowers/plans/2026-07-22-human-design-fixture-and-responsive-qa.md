@@ -127,12 +127,15 @@ none
 - [x] 2026-07-22: External source research completed for fixture strategy.
 - [x] 2026-07-22: Roxy public-tool extraction spike attempted and blocked by
   Turnstile.
+- [x] 2026-07-22: Authenticated mobile QA found Human Design page right-edge
+  overflow; fixed mobile gutters and verified `scrollWidth = clientWidth` in
+  Chrome DevTools.
 - [ ] Add static approved fixture format and first fixture values from a
   human-approved external source.
 - [ ] Add fixture comparison tests.
-- [ ] Capture authenticated desktop and mobile production screenshots for the
-  same fixture after the screenshot workspace issue is resolved or another
-  approved browser surface is used.
+- [ ] Capture file-based authenticated desktop and mobile production screenshots
+  after the screenshot workspace issue is resolved or another approved browser
+  surface is used.
 
 ## Context and Orientation
 
@@ -313,6 +316,9 @@ responsive QA independently.
 
 ## Artifacts and Notes
 
-The next executable step is not more UI polish; it is obtaining one approved
-external output for the Rome fixture or another synthetic fixture and turning
-that output into a failing/passing fixture comparison test.
+- `.design-qa/human-design-method-fixtures/evidence.md` records the local E2E,
+  responsive overflow fix and external fixture extraction blocker.
+
+The next executable step is obtaining one approved external output for the Rome
+fixture or another synthetic fixture and turning that output into a
+failing/passing fixture comparison test.

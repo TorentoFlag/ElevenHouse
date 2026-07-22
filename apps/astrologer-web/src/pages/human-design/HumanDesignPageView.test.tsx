@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import type { HumanDesignIndividualResult } from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
@@ -7,6 +8,16 @@ import { createHumanDesignViewModel } from "../../features/human-design/model/hu
 import { HumanDesignPageView, type HumanDesignPageViewProps } from "./HumanDesignPageView";
 
 describe("HumanDesignPageView", () => {
+  it("caps mobile page gutters so the workspace does not overflow the viewport", () => {
+    const css = readFileSync(
+      new URL("./HumanDesignPage.module.css", import.meta.url),
+      "utf8"
+    );
+    const mobileBlock = css.match(/@media \(max-width: 820px\) \{[\s\S]*?\n\}/)?.[0] ?? "";
+
+    expect(mobileBlock).toContain("margin: -32px -16px;");
+  });
+
   it("uses CRM client selection and does not expose manual birth-data or longitude input", () => {
     const view = HumanDesignPageView(baseProps());
     const pickers = walk(view).filter((element) => element.type === ClientSearchCombobox);

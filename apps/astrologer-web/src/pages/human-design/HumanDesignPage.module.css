@@ -597,6 +597,7 @@
   .page {
     height: auto;
     min-height: calc(100dvh - var(--astrologer-app-header-height, 68px));
+    margin: -32px -16px;
     overflow: visible;
   }
 
