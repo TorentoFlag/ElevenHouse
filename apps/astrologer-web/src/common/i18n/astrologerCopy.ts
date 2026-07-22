@@ -518,6 +518,7 @@ export const astrologerCopyByLocale = {
           { id: "chartEngine", title: "Движок карт", href: "/chart-engine" },
           { id: "numerology", title: "Нумерология", href: "/numerology" },
           { id: "destinyMatrix", title: "Матрица судьбы", href: "/matrix" },
+          { id: "humanDesign", title: "Дизайн человека", href: "/human-design" },
           { id: "reference", title: "Справочники", href: "/reference" }
         ],
         footerItems: [{ id: "settings", title: "Настройки", href: "/settings" }]
@@ -936,6 +937,7 @@ export const astrologerCopyByLocale = {
           { id: "chartEngine", title: "Chart engine", href: "/chart-engine" },
           { id: "numerology", title: "Numerology", href: "/numerology" },
           { id: "destinyMatrix", title: "Destiny Matrix", href: "/matrix" },
+          { id: "humanDesign", title: "Human Design", href: "/human-design" },
           { id: "reference", title: "References", href: "/reference" }
         ],
         footerItems: [{ id: "settings", title: "Settings", href: "/settings" }]

@@ -11,6 +11,7 @@ import { ReferencePage } from "./pages/reference/ReferencePage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { CalendarPage } from "./pages/calendar/CalendarPage";
 import { ChartEngineRoute } from "./pages/chart-engine/ChartEngineRoute";
+import { HumanDesignPage } from "./pages/human-design/HumanDesignPage";
 
 export const astrologerRoutes = [
   {
@@ -50,6 +51,10 @@ export const astrologerRoutes = [
           {
             path: "/matrix",
             element: <MatrixPage />
+          },
+          {
+            path: "/human-design",
+            element: <HumanDesignPage />
           },
           {
             path: "/chart-engine",

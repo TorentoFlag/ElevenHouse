@@ -11,6 +11,7 @@ import { ReferencePage } from "./pages/reference/ReferencePage";
 import { ProductsPage } from "./pages/products/ProductsPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { CalendarPage } from "./pages/calendar/CalendarPage";
+import { HumanDesignPage } from "./pages/human-design/HumanDesignPage";
 import { astrologerRoutes } from "./router";
 
 vi.mock("react-router", async (importOriginal) => {
@@ -37,6 +38,7 @@ describe("astrologerRoutes", () => {
     const calendarRoute = shellRoute?.children?.find((route) => route.path === "/calendar");
     const numerologyRoute = shellRoute?.children?.find((route) => route.path === "/numerology");
     const matrixRoute = shellRoute?.children?.find((route) => route.path === "/matrix");
+    const humanDesignRoute = shellRoute?.children?.find((route) => route.path === "/human-design");
     const referenceRoute = shellRoute?.children?.find((route) => route.path === "/reference");
     const settingsRoute = shellRoute?.children?.find((route) => route.path === "/settings");
 
@@ -57,6 +59,9 @@ describe("astrologerRoutes", () => {
       NumerologyPage
     );
     expect(isValidElement(matrixRoute?.element) && matrixRoute.element.type).toBe(MatrixPage);
+    expect(isValidElement(humanDesignRoute?.element) && humanDesignRoute.element.type).toBe(
+      HumanDesignPage
+    );
     expect(isValidElement(referenceRoute?.element) && referenceRoute.element.type).toBe(
       ReferencePage
     );
