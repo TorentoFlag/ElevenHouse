@@ -6,6 +6,7 @@ import {
   dictionaryCategoriesResponseSchema,
   dictionaryEntriesResponseSchema,
   healthResponseSchema,
+  humanDesignPreviewRequestSchema,
   createProductRequestSchema,
   requestPasswordlessCodeRequestSchema,
   requestPasswordlessCodeResponseSchema,
@@ -41,5 +42,9 @@ describe("contracts public barrel", () => {
 
   it("exports calculation PDF contracts", () => {
     expect(calculationPdfJobResponseSchema.parse).toBeTypeOf("function");
+  });
+
+  it("exports Human Design contracts", () => {
+    expect(humanDesignPreviewRequestSchema.parse).toBeTypeOf("function");
   });
 });

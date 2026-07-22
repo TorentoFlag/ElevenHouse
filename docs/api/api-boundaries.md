@@ -73,7 +73,8 @@ a separate consent-bound workflow and is not implied by profile storage.
 products, media uploads, profile/settings billing overview, verification
 application submission, CRM clients, calculations, canonical Pythagorean
 numerology, canonical Ladini 22 Matrix calculations with private notes and a
-versioned interpretation catalog, и provider-neutral AI generation через
+versioned interpretation catalog, Human Design resolved-longitude preview, и
+provider-neutral AI generation через
 OpenAI.
 
 Ответственности:
@@ -154,6 +155,7 @@ GET  /matrix/interpretations?locale=ru&arcana=9&context=portrait
 GET  /matrix/calculations/:calculationId/report/pdf
 POST /matrix/calculations/:calculationId/report/pdf
 GET  /matrix/calculations/:calculationId/report/pdf/:jobId/download
+POST /human-design/preview
 POST /calculations/:calculationId/interpretations
 POST /calculations/:calculationId/interpretations/:interpretationId/approve
 POST /calculations/:calculationId/publish
@@ -248,6 +250,17 @@ be downloaded, and object deletion is performed asynchronously by `workers`.
 API responses expose public job state and the presigned URL only: storage keys,
 buckets, source locators, document fingerprints, provider/model and prompt
 metadata are never frontend contracts.
+
+`POST /human-design/preview` is authenticated and read-only, so it does not
+require CSRF and must not create calculation, participant-link, interpretation,
+artifact, outbox or DB rows. The current first contract accepts only
+provider-resolved personality/design longitudes for
+`human_design_classic`; browser-supplied birth date, birth time, timezone or
+place fields are rejected. The server/domain is the only Human Design
+mechanics authority and returns a deterministic individual result with
+input fingerprint and SHA-256 result checksum. CRM birth-data hydration,
+ephemeris resolution, persistence, compatibility, transits, AI interpretation,
+PDF export and frontend rendering remain separate future contours.
 
 `GET /products/templates` returns active platform-owned starter templates in the
 requested locale. `POST /products/templates/:templateCode/drafts` requires an

@@ -72,6 +72,7 @@ client cabinet, не discovery API. Booking, orders, payments и полный ca
 - `dictionary`
 - `dictionary-ai`
 - `health`
+- `human-design`
 - `identity`
 - `media`
 - `matrix`
@@ -135,6 +136,13 @@ feature-module boundaries, explicit auth/permissions и audit logging.
   runtime AI or translation calls. Matrix PDF export requires the current saved
   report to be explicitly ready and renders that checksum-bound report through
   the same generic calculation-PDF contour.
+- `HumanDesign`: typed resolved-longitude preview orchestration for the
+  `human_design_classic` individual base engine. The current route is
+  authenticated and read-only, rejects browser birth-data fields, performs no
+  persistence or provider calls, and delegates all mechanics to
+  `packages/domain/src/human-design`. CRM birth-data hydration, ephemeris
+  resolution, persisted calculations, compatibility, transits, AI
+  interpretation and PDF export remain future Human Design contours.
 - `Charts`: расчёты астрологических карт и generated chart artifacts.
 - `Sessions`: lifecycle консультации, recordings, materials.
 - `Messaging`: threads и messages там, где используется platform messaging.
