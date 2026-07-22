@@ -4,6 +4,7 @@ import type {
   ChartSettings,
   ChartTransitMoment,
   StoredChartCalculationPayload,
+  StoredChartSolarReturnCalculationPayload,
   StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
 import {
@@ -11,6 +12,7 @@ import {
   readChartEngineUrlState,
   restoreChartEngineViewState,
   submitChartCalculation,
+  submitSolarReturnCalculation,
   submitSynastryCalculation,
   submitTransitCalculation
 } from "./useChartEngineController";
@@ -126,6 +128,25 @@ describe("chart engine controller submission", () => {
       settings: settings()
     });
   });
+
+  it("creates solar return jobs with the selected target year", async () => {
+    const create = vi.fn(async () => calculatingResponse);
+
+    await expect(
+      submitSolarReturnCalculation({
+        clientId,
+        year: 2026,
+        settings: settings(),
+        create
+      })
+    ).resolves.toEqual(calculatingResponse);
+
+    expect(create).toHaveBeenCalledWith({
+      clientId,
+      year: 2026,
+      settings: settings()
+    });
+  });
 });
 
 describe("chart engine URL state", () => {
@@ -169,6 +190,14 @@ describe("chart engine persisted result state", () => {
       mode: "synastry",
       settings: settings(),
       partnerClientId: "55555555-5555-4555-8555-555555555555"
+    });
+  });
+
+  it("restores solar return mode and selected year from a loaded calculation", () => {
+    expect(restoreChartEngineViewState(solarReturnResult())).toEqual({
+      mode: "solar_return",
+      settings: settings(),
+      solarReturnYear: 2026
     });
   });
 });
@@ -246,6 +275,34 @@ function synastryResult(): StoredChartSynastryCalculationPayload {
       partner: natal,
       aspectsBetween: [],
       houseOverlays: [],
+      warnings: []
+    }
+  };
+}
+
+function solarReturnResult(): StoredChartSolarReturnCalculationPayload {
+  const natal = emptyRenderResult();
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "solar_return",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    inputSnapshot: transitResult().inputSnapshot,
+    solarReturnSnapshot: {
+      year: 2026,
+      returnType: "solar",
+      location: {
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964
+      },
+      resolvedAt: "2026-07-15T01:20:01.000Z"
+    },
+    result: {
+      natal,
+      solarReturn: natal,
+      aspectsToNatal: [],
       warnings: []
     }
   };

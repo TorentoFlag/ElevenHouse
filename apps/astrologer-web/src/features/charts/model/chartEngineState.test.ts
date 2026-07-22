@@ -3,6 +3,7 @@ import type {
   ChartSettings,
   StoredChartCalculationPayload,
   StoredChartNatalCalculationPayload,
+  StoredChartSolarReturnCalculationPayload,
   StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
 import {
@@ -121,6 +122,20 @@ describe("chartEngineState", () => {
       )
     ).toBe(true);
   });
+
+  it("marks a solar return result stale when the selected year changed", () => {
+    expect(
+      isChartResultStale(
+        solarReturnResult(),
+        readyBirthData(),
+        chartSettings(),
+        "solar_return",
+        undefined,
+        undefined,
+        2027
+      )
+    ).toBe(true);
+  });
 });
 
 function chartSettings(): ChartSettings {
@@ -220,6 +235,34 @@ function synastryResult(): StoredChartSynastryCalculationPayload {
       partner: natal,
       aspectsBetween: [],
       houseOverlays: [],
+      warnings: []
+    }
+  };
+}
+
+function solarReturnResult(): StoredChartSolarReturnCalculationPayload {
+  const natal = chartResult().result;
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "solar_return",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: chartSettings(),
+    inputSnapshot: chartResult().inputSnapshot,
+    solarReturnSnapshot: {
+      year: 2026,
+      returnType: "solar",
+      location: {
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964
+      },
+      resolvedAt: "2026-07-15T01:20:01.000Z"
+    },
+    result: {
+      natal,
+      solarReturn: natal,
+      aspectsToNatal: [],
       warnings: []
     }
   };

@@ -8,6 +8,7 @@ import {
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalJobCreateResponseSchema,
+  chartSolarReturnJobCreateRequestSchema,
   chartSynastryJobCreateRequestSchema,
   chartTransitJobCreateRequestSchema,
   requestCalculationPdfSchema,
@@ -79,6 +80,26 @@ export async function createSynastryChartJob(
 
   return chartNatalJobCreateResponseSchema.parse(
     await application.http.post("/charts/synastry/jobs", body, { csrf: true })
+  );
+}
+
+export type CreateSolarReturnChartJobInput = {
+  readonly clientId: string;
+  readonly year: number;
+  readonly settings: ChartSettings;
+} & Record<string, unknown>;
+
+export async function createSolarReturnChartJob(
+  input: CreateSolarReturnChartJobInput
+): Promise<ChartNatalJobCreateResponse> {
+  const body = chartSolarReturnJobCreateRequestSchema.parse({
+    clientId: input.clientId,
+    year: input.year,
+    settings: input.settings
+  });
+
+  return chartNatalJobCreateResponseSchema.parse(
+    await application.http.post("/charts/solar-return/jobs", body, { csrf: true })
   );
 }
 

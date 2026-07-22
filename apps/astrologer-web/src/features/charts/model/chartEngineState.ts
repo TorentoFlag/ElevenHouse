@@ -68,7 +68,8 @@ export function isChartResultStale(
     readonly latitude?: number;
     readonly longitude?: number;
   },
-  partnerBirthData?: NatalBirthData | null | undefined
+  partnerBirthData?: NatalBirthData | null | undefined,
+  solarReturnYear?: number
 ): boolean {
   if (birthData === undefined) {
     return false;
@@ -103,6 +104,10 @@ export function isChartResultStale(
     }
 
     return isInputSnapshotStale(result.partnerInputSnapshot, partnerBirthData);
+  }
+
+  if (result.method === "solar_return") {
+    return solarReturnYear != null && result.solarReturnSnapshot.year !== solarReturnYear;
   }
 
   if (result.method !== "transit") {

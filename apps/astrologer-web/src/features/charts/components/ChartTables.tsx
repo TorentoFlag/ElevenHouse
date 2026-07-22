@@ -13,6 +13,8 @@ import {
   formatHouseSignDisplay,
   getPrimaryChartRenderResult,
   getPartnerChartRenderResult,
+  getSolarReturnChartRenderResult,
+  getSolarReturnChartResult,
   getSynastryChartResult,
   getTransitChartRenderResult,
   getTransitChartResult,
@@ -78,6 +80,7 @@ function PlanetsTable({
 }) {
   const renderResult = getPrimaryChartRenderResult(result);
   const transitRenderResult = getTransitChartRenderResult(result);
+  const solarReturnRenderResult = getSolarReturnChartRenderResult(result);
   const partnerRenderResult = getPartnerChartRenderResult(result);
 
   return (
@@ -133,6 +136,48 @@ function PlanetsTable({
                   data-hovered={hovered ? "true" : "false"}
                   data-testid={`chart-transit-planet-row-${point.id}`}
                   key={`transit-${point.id}`}
+                  onBlur={() => onHoverPoint(null)}
+                  onFocus={() => onHoverPoint(hoverId)}
+                  onMouseEnter={() => onHoverPoint(hoverId)}
+                  onMouseLeave={() => onHoverPoint(null)}
+                  tabIndex={0}
+                >
+                  <span className={styles.pointGlyph} aria-hidden="true">
+                    {getChartPointSymbol(point.id, point.label)}
+                  </span>
+                  <span className={styles.pointName}>
+                    {getChartPointDisplayLabel(point.id, point.label)}
+                  </span>
+                  <span className={styles.signGlyph} aria-hidden="true">
+                    {getZodiacSymbol(point.sign)}
+                  </span>
+                  <span className={styles.pointDegree}>
+                    {formatDegree(point.signDegree)}
+                    {point.retrograde ? <b>R</b> : null}
+                  </span>
+                  <span className={styles.pointHouse}>
+                    {point.house ? `${romanHouses[point.house]} дом` : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
+      {solarReturnRenderResult ? (
+        <>
+          <h3 className={styles.matrixHeading}>Планеты соляра</h3>
+          <div className={styles.planetList}>
+            {solarReturnRenderResult.points.map((point) => {
+              const hoverId = `solar_return:${point.id}`;
+              const hovered = hoveredPointId === hoverId;
+
+              return (
+                <div
+                  className={hovered ? styles.planetRowHovered : styles.planetRow}
+                  data-hovered={hovered ? "true" : "false"}
+                  data-testid={`chart-solar-return-planet-row-${point.id}`}
+                  key={`solar-return-${point.id}`}
                   onBlur={() => onHoverPoint(null)}
                   onFocus={() => onHoverPoint(hoverId)}
                   onMouseEnter={() => onHoverPoint(hoverId)}
@@ -231,8 +276,10 @@ function HousesTable({ result }: { readonly result: StoredChartCalculationPayloa
 function AspectsTable({ result }: { readonly result: StoredChartCalculationPayload }) {
   const renderResult = getPrimaryChartRenderResult(result);
   const transitResult = getTransitChartResult(result);
+  const solarReturnResult = getSolarReturnChartResult(result);
   const synastryResult = getSynastryChartResult(result);
   const transitRenderResult = getTransitChartRenderResult(result);
+  const solarReturnRenderResult = getSolarReturnChartRenderResult(result);
   const partnerRenderResult = getPartnerChartRenderResult(result);
   const matrixPoints = getAspectMatrixPoints(renderResult.points);
   const aspectsByPair = new Map(
@@ -314,6 +361,33 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
               ))
             ) : (
               <div className={styles.emptyRow}>Транзитные аспекты к наталу не найдены</div>
+            )}
+          </div>
+        </>
+      ) : null}
+      {solarReturnResult ? (
+        <>
+          <h2>Солярные аспекты к наталу</h2>
+          <div className={styles.aspectList}>
+            {solarReturnResult.result.aspectsToNatal.length > 0 ? (
+              solarReturnResult.result.aspectsToNatal.map((aspect, index) => (
+                <div
+                  className={styles.aspectRow}
+                  key={`solar-return-${aspect.solarReturnPoint}-${aspect.natalPoint}-${index}`}
+                >
+                  <span>{formatAspectTypeDisplay(aspect.type)}</span>
+                  <span>
+                    {getPointLabelFromCollection(
+                      solarReturnRenderResult?.points ?? [],
+                      aspect.solarReturnPoint
+                    )}{" "}
+                    — {getPointLabelFromCollection(renderResult.points, aspect.natalPoint)}
+                  </span>
+                  <span>{aspect.orb.toFixed(2)}°</span>
+                </div>
+              ))
+            ) : (
+              <div className={styles.emptyRow}>Солярные аспекты к наталу не найдены</div>
             )}
           </div>
         </>

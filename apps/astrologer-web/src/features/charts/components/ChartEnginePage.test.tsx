@@ -9,6 +9,7 @@ import type {
   DictionaryEntriesResponse,
   StoredChartCalculationPayload,
   StoredChartNatalCalculationPayload,
+  StoredChartSolarReturnCalculationPayload,
   StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
@@ -206,6 +207,33 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: "Аспекты" }));
 
     expect(screen.getByText("Транзитные аспекты к наталу")).toBeInTheDocument();
+    expect(screen.getByText(/Марс — Солнце/i)).toBeInTheDocument();
+  });
+
+  it("renders solar return points and aspects as a dual-wheel result", async () => {
+    const user = userEvent.setup();
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={solarReturnResult()}
+        errorMessage={null}
+        isBusy={false}
+        mode="solar_return"
+        solarReturnYear={2026}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("chart-solar-return-point-mars")).toBeInTheDocument();
+    expect(screen.getByTestId("chart-solar-return-aspect-opposition")).toBeInTheDocument();
+    expect(screen.getByText("Соляр рассчитан")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Аспекты" }));
+
+    expect(screen.getByText("Солярные аспекты к наталу")).toBeInTheDocument();
     expect(screen.getByText(/Марс — Солнце/i)).toBeInTheDocument();
   });
 
@@ -1274,6 +1302,81 @@ function transitResult(): StoredChartCalculationPayload {
       aspectsToNatal: [
         {
           transitPoint: "mars",
+          natalPoint: "sun",
+          type: "opposition",
+          angle: 180,
+          orb: 1.2,
+          applying: true
+        }
+      ],
+      warnings: []
+    }
+  };
+}
+
+function solarReturnResult(): StoredChartSolarReturnCalculationPayload {
+  const natal = chartResult({
+    points: [
+      {
+        id: "sun",
+        label: "Sun",
+        longitude: 113.1,
+        sign: "cancer",
+        signDegree: 23.1,
+        house: 10,
+        retrograde: false
+      },
+      {
+        id: "mars",
+        label: "Mars",
+        longitude: 31.8,
+        sign: "taurus",
+        signDegree: 1.8,
+        house: 8,
+        retrograde: false
+      }
+    ],
+    houses: [{ number: 1, longitude: 180, sign: "libra", signDegree: 0 }],
+    aspects: []
+  }).result;
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "solar_return",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    inputSnapshot: transitResult().inputSnapshot,
+    solarReturnSnapshot: {
+      year: 2026,
+      returnType: "solar",
+      location: {
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964
+      },
+      resolvedAt: "2026-07-15T01:20:01.000Z"
+    },
+    result: {
+      natal,
+      solarReturn: {
+        ...natal,
+        points: [
+          {
+            id: "mars",
+            label: "Mars",
+            longitude: 293.4,
+            sign: "capricorn",
+            signDegree: 23.4,
+            house: 4,
+            retrograde: false
+          }
+        ],
+        aspects: [],
+        warnings: []
+      },
+      aspectsToNatal: [
+        {
+          solarReturnPoint: "mars",
           natalPoint: "sun",
           type: "opposition",
           angle: 180,

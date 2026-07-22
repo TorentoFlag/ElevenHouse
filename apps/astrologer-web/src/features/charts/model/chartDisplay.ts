@@ -1,6 +1,7 @@
 import type {
   ChartRenderResult,
   StoredChartCalculationPayload,
+  StoredChartSolarReturnCalculationPayload,
   StoredChartSynastryCalculationPayload,
   StoredChartTransitCalculationPayload
 } from "@elevenhouse/contracts";
@@ -128,6 +129,9 @@ export function getPrimaryChartRenderResult(
   if (result.method === "synastry") {
     return result.result.primary;
   }
+  if (result.method === "solar_return") {
+    return result.result.natal;
+  }
 
   return result.result;
 }
@@ -144,6 +148,18 @@ export function getTransitChartResult(
   return result.method === "transit" ? result : null;
 }
 
+export function getSolarReturnChartRenderResult(
+  result: StoredChartCalculationPayload
+): ChartRenderResult | null {
+  return result.method === "solar_return" ? result.result.solarReturn : null;
+}
+
+export function getSolarReturnChartResult(
+  result: StoredChartCalculationPayload
+): StoredChartSolarReturnCalculationPayload | null {
+  return result.method === "solar_return" ? result : null;
+}
+
 export function getPartnerChartRenderResult(
   result: StoredChartCalculationPayload
 ): ChartRenderResult | null {
@@ -157,7 +173,11 @@ export function getSynastryChartResult(
 }
 
 export function getChartWarnings(result: StoredChartCalculationPayload) {
-  if (result.method === "transit" || result.method === "synastry") {
+  if (
+    result.method === "transit" ||
+    result.method === "synastry" ||
+    result.method === "solar_return"
+  ) {
     return result.result.warnings;
   }
 

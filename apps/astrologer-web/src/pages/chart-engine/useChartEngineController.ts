@@ -15,6 +15,7 @@ import {
 } from "../../features/clients/model/clientSelectorModel";
 import {
   createNatalChartJob,
+  createSolarReturnChartJob,
   createSynastryChartJob,
   createTransitChartJob,
   downloadChartPdf,
@@ -64,6 +65,7 @@ export function useChartEngineController() {
   const [transitMoment, setTransitMoment] = useState<ChartTransitMomentInput>(() =>
     getDefaultTransitMoment()
   );
+  const [solarReturnYear, setSolarReturnYear] = useState(() => new Date().getFullYear());
   const [jobId, setJobId] = useState<string | null>(null);
   const [calculationId, setCalculationId] = useState<string | null>(initialUrlState.calculationId);
   const [immediateResult, setImmediateResult] = useState<StoredChartCalculationPayload | null>(
@@ -205,6 +207,44 @@ export function useChartEngineController() {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить синстрию");
     }
   });
+  const solarReturnCalculationMutation = useMutation({
+    mutationFn: ({
+      clientId,
+      settings,
+      year
+    }: {
+      readonly clientId: string;
+      readonly settings: ChartSettings;
+      readonly year: number;
+    }) =>
+      submitSolarReturnCalculation({
+        clientId,
+        settings,
+        year,
+        create: createSolarReturnChartJob
+      }),
+    onSuccess: (response, variables) => {
+      setErrorMessage(null);
+      setHasResultStaleIntent(false);
+      if (response.status === "succeeded") {
+        setJobId(null);
+        setCalculationId(response.calculationId);
+        setImmediateResult(response.result as StoredChartCalculationPayload);
+        writeChartEngineUrlState({
+          clientId: variables.clientId,
+          calculationId: response.calculationId
+        });
+        return;
+      }
+      setImmediateResult(null);
+      setCalculationId(null);
+      setJobId(response.jobId);
+      writeChartEngineUrlState({ clientId: variables.clientId, calculationId: null });
+    },
+    onError: (error) => {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить соляр");
+    }
+  });
 
   const birthDataMutation = useMutation({
     mutationFn: async (data: Parameters<typeof updateClientBirthData>[1]) => {
@@ -301,6 +341,9 @@ export function useChartEngineController() {
     if (restoredState.partnerClientId) {
       setRestoredPartnerClientId(restoredState.partnerClientId);
     }
+    if (restoredState.solarReturnYear) {
+      setSolarReturnYear(restoredState.solarReturnYear);
+    }
     setHasResultStaleIntent(false);
   }, [calculationQuery.data]);
 
@@ -314,7 +357,8 @@ export function useChartEngineController() {
         settings,
         mode,
         transitMoment,
-        selectedPartnerClient?.birthData
+        selectedPartnerClient?.birthData,
+        solarReturnYear
       ))
   );
   const pdfQuery = useQuery({
@@ -340,6 +384,7 @@ export function useChartEngineController() {
       calculationMutation.isPending ||
       transitCalculationMutation.isPending ||
       synastryCalculationMutation.isPending ||
+      solarReturnCalculationMutation.isPending ||
       jobId ||
       jobQuery.data?.status === "calculating"
     ) {
@@ -360,12 +405,14 @@ export function useChartEngineController() {
     jobQuery.data?.status,
     result,
     transitCalculationMutation.isPending,
-    synastryCalculationMutation.isPending
+    synastryCalculationMutation.isPending,
+    solarReturnCalculationMutation.isPending
   ]);
   const isBusy =
     calculationMutation.isPending ||
     transitCalculationMutation.isPending ||
     synastryCalculationMutation.isPending ||
+    solarReturnCalculationMutation.isPending ||
     birthDataMutation.isPending ||
     enqueuePdfMutation.isPending ||
     downloadPdfMutation.isPending ||
@@ -398,10 +445,17 @@ export function useChartEngineController() {
     settings,
     mode,
     transitMoment,
+    solarReturnYear,
     onModeChange: (nextMode: ChartEngineMode) => setMode(nextMode),
     onTransitMomentChange: (nextMoment: ChartTransitMomentInput) => {
       setTransitMoment(nextMoment);
       if (result?.method === "transit") {
+        setHasResultStaleIntent(true);
+      }
+    },
+    onSolarReturnYearChange: (year: number) => {
+      setSolarReturnYear(year);
+      if (result?.method === "solar_return") {
         setHasResultStaleIntent(true);
       }
     },
@@ -511,6 +565,22 @@ export function useChartEngineController() {
         settings
       });
     },
+    onCreateSolarReturnJob: async () => {
+      if (!selectedClient) {
+        setErrorMessage("Выберите клиента из CRM");
+        return;
+      }
+      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
+      if (!readiness.ready) {
+        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
+        return;
+      }
+      await solarReturnCalculationMutation.mutateAsync({
+        clientId: selectedClient.value,
+        settings,
+        year: solarReturnYear
+      });
+    },
     onPdf: async () => {
       try {
         setErrorMessage(null);
@@ -583,11 +653,26 @@ export async function submitSynastryCalculation({
   return create({ clientId, partnerClientId, settings });
 }
 
+export async function submitSolarReturnCalculation({
+  clientId,
+  create,
+  settings,
+  year
+}: {
+  readonly clientId: string;
+  readonly settings: ChartSettings;
+  readonly year: number;
+  readonly create: typeof createSolarReturnChartJob;
+}) {
+  return create({ clientId, settings, year });
+}
+
 export function restoreChartEngineViewState(result: StoredChartCalculationPayload): {
   readonly mode: ChartEngineMode;
   readonly settings: ChartSettings;
   readonly transitMoment?: ChartTransitMomentInput;
   readonly partnerClientId?: string;
+  readonly solarReturnYear?: number;
 } {
   if (result.method === "synastry") {
     return {
@@ -598,6 +683,13 @@ export function restoreChartEngineViewState(result: StoredChartCalculationPayloa
   }
 
   if (result.method !== "transit") {
+    if (result.method === "solar_return") {
+      return {
+        mode: "solar_return",
+        settings: result.settings,
+        solarReturnYear: result.solarReturnSnapshot.year
+      };
+    }
     return {
       mode: "natal",
       settings: result.settings

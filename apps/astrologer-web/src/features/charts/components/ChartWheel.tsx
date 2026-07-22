@@ -11,6 +11,8 @@ import {
   formatHouseSignDisplay,
   getPrimaryChartRenderResult,
   getPartnerChartRenderResult,
+  getSolarReturnChartRenderResult,
+  getSolarReturnChartResult,
   getSynastryChartResult,
   getTransitChartRenderResult,
   getTransitChartResult,
@@ -46,12 +48,15 @@ export type ChartWheelProps = {
 export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelProps) {
   const renderResult = result ? getPrimaryChartRenderResult(result) : null;
   const transitResult = result ? getTransitChartResult(result) : null;
+  const solarReturnResult = result ? getSolarReturnChartResult(result) : null;
   const synastryResult = result ? getSynastryChartResult(result) : null;
   const transitRenderResult = result ? getTransitChartRenderResult(result) : null;
+  const solarReturnRenderResult = result ? getSolarReturnChartRenderResult(result) : null;
   const partnerRenderResult = result ? getPartnerChartRenderResult(result) : null;
   const houses = renderResult?.houses ?? [];
   const points = renderResult?.points ?? [];
   const transitPoints = transitRenderResult?.points ?? [];
+  const solarReturnPoints = solarReturnRenderResult?.points ?? [];
   const partnerPoints = partnerRenderResult?.points ?? [];
   const ascLongitude = houses.find((house) => house.number === 1)?.longitude ?? 0;
   const markerLongitudes = spreadPointLongitudes(
@@ -61,11 +66,21 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
     transitPoints.filter((point) => !axisPointIds.has(point.id)),
     9
   );
+  const solarReturnMarkerLongitudes = spreadPointLongitudes(
+    solarReturnPoints.filter((point) => !axisPointIds.has(point.id)),
+    9
+  );
   const partnerMarkerLongitudes = spreadPointLongitudes(
     partnerPoints.filter((point) => !axisPointIds.has(point.id)),
     9
   );
-  const hoveredPoint = getHoveredPoint({ hoveredPointId, points, transitPoints, partnerPoints });
+  const hoveredPoint = getHoveredPoint({
+    hoveredPointId,
+    points,
+    transitPoints,
+    solarReturnPoints,
+    partnerPoints
+  });
 
   return (
     <div className={styles.wheelStage} aria-label="Натальная карта">
@@ -230,6 +245,48 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
             />
           );
         })}
+        {solarReturnResult?.result.aspectsToNatal.map((aspect, index) => {
+          const solarReturnPoint = solarReturnPoints.find(
+            (point) => point.id === aspect.solarReturnPoint
+          );
+          const natalPoint = points.find((point) => point.id === aspect.natalPoint);
+          if (!solarReturnPoint || !natalPoint) return null;
+          const start = polar(
+            solarReturnMarkerLongitudes[solarReturnPoint.id] ?? solarReturnPoint.longitude,
+            178,
+            ascLongitude
+          );
+          const end = polar(natalPoint.longitude, 132, ascLongitude);
+          const tone = getAspectTone(aspect);
+          const solarReturnHoverId = getSolarReturnHoverPointId(solarReturnPoint.id);
+          const involved = Boolean(
+            hoveredPointId &&
+              (hoveredPointId === solarReturnHoverId || hoveredPointId === aspect.natalPoint)
+          );
+          const dimmed = Boolean(hoveredPointId && !involved);
+
+          return (
+            <line
+              key={`solar-return-${aspect.solarReturnPoint}-${aspect.natalPoint}-${index}`}
+              className={[
+                styles.aspectLine,
+                aspectToneClasses[tone],
+                styles.transitAspectLine,
+                involved ? styles.aspectLineHovered : "",
+                dimmed ? styles.aspectLineDimmed : ""
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              data-aspect-tone={tone}
+              data-hovered={involved ? "true" : "false"}
+              data-testid={`chart-solar-return-aspect-${aspect.type}`}
+              x1={start.x}
+              y1={start.y}
+              x2={end.x}
+              y2={end.y}
+            />
+          );
+        })}
         {synastryResult?.result.aspectsBetween.map((aspect, index) => {
           const primaryPoint = points.find((point) => point.id === aspect.primaryPoint);
           const partnerPoint = partnerPoints.find((point) => point.id === aspect.partnerPoint);
@@ -371,6 +428,59 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
             </g>
           );
         })}
+        {solarReturnPoints.map((point) => {
+          if (axisPointIds.has(point.id)) return null;
+          const exact = polar(point.longitude, 166, ascLongitude);
+          const marker = polar(
+            solarReturnMarkerLongitudes[point.id] ?? point.longitude,
+            178,
+            ascLongitude
+          );
+          const hoverId = getSolarReturnHoverPointId(point.id);
+          const hovered = hoveredPointId === hoverId;
+
+          return (
+            <g
+              aria-label={`Солярный ${getChartPointDisplayLabel(point.id, point.label)} на карте`}
+              className={styles.pointMarker}
+              data-hovered={hovered ? "true" : "false"}
+              data-testid={`chart-solar-return-point-${point.id}`}
+              key={`solar-return-${point.id}`}
+              onBlur={() => onHoverPoint(null)}
+              onFocus={() => onHoverPoint(hoverId)}
+              onMouseEnter={() => onHoverPoint(hoverId)}
+              onMouseLeave={() => onHoverPoint(null)}
+              role="button"
+              tabIndex={0}
+            >
+              <line
+                className={styles.transitPlanetGuide}
+                x1={exact.x}
+                y1={exact.y}
+                x2={marker.x}
+                y2={marker.y}
+              />
+              <circle
+                className={hovered ? styles.transitPointDotHovered : styles.transitPointDot}
+                cx={marker.x}
+                cy={marker.y}
+                r={hovered ? "17" : "14"}
+              />
+              <text
+                className={hovered ? styles.pointLabelHovered : styles.pointLabel}
+                x={marker.x}
+                y={marker.y}
+              >
+                {getChartPointSymbol(point.id, point.label)}
+              </text>
+              {point.retrograde ? (
+                <text className={styles.retroLabel} x={marker.x + 13} y={marker.y - 11}>
+                  R
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
         {partnerPoints.map((point) => {
           if (axisPointIds.has(point.id)) return null;
           const exact = polar(point.longitude, 166, ascLongitude);
@@ -445,14 +555,18 @@ function HoverPointDetail({
 
   const renderResult = getPrimaryChartRenderResult(result);
   const transitResult = getTransitChartResult(result);
+  const solarReturnResult = getSolarReturnChartResult(result);
   const synastryResult = getSynastryChartResult(result);
   const isTransitPoint = point.id.startsWith("transit:");
+  const isSolarReturnPoint = point.id.startsWith("solar_return:");
   const isPartnerPoint = point.id.startsWith("partner:");
   const pointId = isTransitPoint
     ? point.id.slice("transit:".length)
-    : isPartnerPoint
-      ? point.id.slice("partner:".length)
-      : point.id;
+    : isSolarReturnPoint
+      ? point.id.slice("solar_return:".length)
+      : isPartnerPoint
+        ? point.id.slice("partner:".length)
+        : point.id;
   const aspects =
     isTransitPoint && transitResult
       ? transitResult.result.aspectsToNatal
@@ -466,6 +580,18 @@ function HoverPointDetail({
             applying: aspect.applying,
             strength: aspect.strength
           }))
+      : isSolarReturnPoint && solarReturnResult
+        ? solarReturnResult.result.aspectsToNatal
+            .filter((aspect) => aspect.solarReturnPoint === pointId)
+            .map((aspect) => ({
+              pointA: aspect.solarReturnPoint,
+              pointB: aspect.natalPoint,
+              type: aspect.type,
+              angle: aspect.angle,
+              orb: aspect.orb,
+              applying: aspect.applying,
+              strength: aspect.strength
+            }))
       : isPartnerPoint && synastryResult
         ? synastryResult.result.aspectsBetween
             .filter((aspect) => aspect.partnerPoint === pointId)
@@ -490,6 +616,7 @@ function HoverPointDetail({
       <div className={styles.hoverDetailText}>
         <strong>
           {isTransitPoint ? "Транзитный " : ""}
+          {isSolarReturnPoint ? "Солярный " : ""}
           {isPartnerPoint ? "Партнёрский " : ""}
           {getChartPointDisplayLabel(pointId, point.label)}
           {point.retrograde ? <b> R ретроград</b> : null}
@@ -520,11 +647,14 @@ function HoverPointDetail({
 function getHoveredPoint({
   hoveredPointId,
   points,
-  transitPoints
+  transitPoints,
+  solarReturnPoints,
+  partnerPoints
 }: {
   readonly hoveredPointId: string | null;
   readonly points: readonly ChartPoint[];
   readonly transitPoints: readonly ChartPoint[];
+  readonly solarReturnPoints: readonly ChartPoint[];
   readonly partnerPoints: readonly ChartPoint[];
 }): ChartPoint | null {
   if (!hoveredPointId) {
@@ -533,6 +663,12 @@ function getHoveredPoint({
   if (hoveredPointId.startsWith("transit:")) {
     const pointId = hoveredPointId.slice("transit:".length);
     const point = transitPoints.find((candidate) => candidate.id === pointId);
+
+    return point ? { ...point, id: hoveredPointId } : null;
+  }
+  if (hoveredPointId.startsWith("solar_return:")) {
+    const pointId = hoveredPointId.slice("solar_return:".length);
+    const point = solarReturnPoints.find((candidate) => candidate.id === pointId);
 
     return point ? { ...point, id: hoveredPointId } : null;
   }
@@ -552,6 +688,10 @@ function getTransitHoverPointId(pointId: string): string {
 
 function getPartnerHoverPointId(pointId: string): string {
   return `partner:${pointId}`;
+}
+
+function getSolarReturnHoverPointId(pointId: string): string {
+  return `solar_return:${pointId}`;
 }
 
 function polar(

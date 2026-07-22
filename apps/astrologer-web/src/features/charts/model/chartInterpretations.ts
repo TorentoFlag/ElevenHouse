@@ -1,6 +1,7 @@
 import type {
   ChartAspect,
   ChartPoint,
+  ChartSolarReturnAspect,
   ChartSynastryHouseOverlay,
   ChartTransitAspect,
   StoredChartCalculationPayload
@@ -13,6 +14,8 @@ import {
   getChartPointDisplayLabel,
   getPartnerChartRenderResult,
   getPrimaryChartRenderResult,
+  getSolarReturnChartRenderResult,
+  getSolarReturnChartResult,
   getSynastryChartResult,
   getTransitChartRenderResult,
   getTransitChartResult,
@@ -73,6 +76,10 @@ export function buildChartInterpretationAnchors(
   const transitPointsById = new Map(
     (getTransitChartRenderResult(result)?.points ?? []).map((point) => [point.id, point])
   );
+  const solarReturnResult = getSolarReturnChartResult(result);
+  const solarReturnPointsById = new Map(
+    (getSolarReturnChartRenderResult(result)?.points ?? []).map((point) => [point.id, point])
+  );
 
   return [
     ...buildPointAnchors(renderResult.points),
@@ -82,6 +89,13 @@ export function buildChartInterpretationAnchors(
       ? buildTransitAspectAnchors(
           transitResult.result.aspectsToNatal,
           transitPointsById,
+          pointsById
+        )
+      : []),
+    ...(solarReturnResult
+      ? buildSolarReturnAspectAnchors(
+          solarReturnResult.result.aspectsToNatal,
+          solarReturnPointsById,
           pointsById
         )
       : [])
@@ -179,6 +193,41 @@ function buildTransitAspectAnchors(
         group: "aspects" as const,
         label: `Транзитный ${transitPoint} — ${natalPoint}`,
         meta: "Транзит к наталу",
+        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+      };
+    });
+}
+
+function buildSolarReturnAspectAnchors(
+  aspects: readonly ChartSolarReturnAspect[],
+  solarReturnPointsById: ReadonlyMap<string, ChartPoint>,
+  natalPointsById: ReadonlyMap<string, ChartPoint>
+): readonly ChartInterpretationAnchor[] {
+  return [...aspects]
+    .filter(
+      (aspect) =>
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.solarReturnPoint) as (typeof pointOrder)[number]
+        ) &&
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.natalPoint) as (typeof pointOrder)[number]
+        )
+    )
+    .sort((left, right) => left.orb - right.orb)
+    .slice(0, maxPlanetAspectAnchors)
+    .map((aspect) => {
+      const solarReturnPoint = getPointLabel(solarReturnPointsById, aspect.solarReturnPoint);
+      const natalPoint = getPointLabel(natalPointsById, aspect.natalPoint);
+
+      return {
+        id: `solar-return-aspect-${aspect.solarReturnPoint}-${aspect.natalPoint}-${aspect.type}`,
+        code: `solar_return.${formatDictionaryCodePart(
+          aspect.solarReturnPoint
+        )}.${normalizeAspectTypeCode(aspect.type)}.${formatDictionaryCodePart(aspect.natalPoint)}`,
+        categoryCode: "planet_aspects" as const,
+        group: "aspects" as const,
+        label: `Солярный ${solarReturnPoint} — ${natalPoint}`,
+        meta: "Соляр к наталу",
         position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
       };
     });

@@ -25,7 +25,7 @@ import { ChartWheel } from "./ChartWheel";
 import styles from "./ChartEnginePage.module.css";
 
 export type ChartEnginePageJobState = "idle" | "calculating" | "succeeded" | "failed";
-export type ChartEngineMode = "natal" | "transit" | "synastry";
+export type ChartEngineMode = "natal" | "transit" | "synastry" | "solar_return";
 export type ChartTransitMomentInput = {
   readonly date: string;
   readonly time: string;
@@ -43,11 +43,14 @@ export type ChartEnginePageProps = {
   readonly settings: ChartSettings;
   readonly mode?: ChartEngineMode;
   readonly transitMoment?: ChartTransitMomentInput;
+  readonly solarReturnYear?: number;
   readonly onSettingsChange: (settings: ChartSettings) => void;
   readonly onCreateNatalJob: () => void | Promise<void>;
   readonly onCreateTransitJob?: () => void | Promise<void>;
   readonly onCreateSynastryJob?: () => void | Promise<void>;
+  readonly onCreateSolarReturnJob?: () => void | Promise<void>;
   readonly onTransitMomentChange?: (moment: ChartTransitMomentInput) => void;
+  readonly onSolarReturnYearChange?: (year: number) => void;
   readonly onModeChange?: (mode: ChartEngineMode) => void;
   readonly onSelectClient?: (client: ClientSelectOption) => void;
   readonly onSelectPartnerClient?: (client: ClientSelectOption) => void;
@@ -73,11 +76,14 @@ export function ChartEnginePage({
   settings,
   mode = "natal",
   transitMoment,
+  solarReturnYear,
   onSettingsChange,
   onCreateNatalJob,
   onCreateTransitJob,
   onCreateSynastryJob,
+  onCreateSolarReturnJob,
   onTransitMomentChange,
+  onSolarReturnYearChange,
   onModeChange,
   onSelectClient,
   onSelectPartnerClient,
@@ -99,6 +105,7 @@ export function ChartEnginePage({
   );
   const activeMode = onModeChange ? mode : localMode;
   const activeTransitMoment = transitMoment ?? localTransitMoment;
+  const activeSolarReturnYear = solarReturnYear ?? new Date().getFullYear();
   const isSynastryPartnerBlocked = Boolean(
     activeMode === "synastry" && selectedPartnerClient && !partnerReadiness.ready
   );
@@ -226,6 +233,19 @@ export function ChartEnginePage({
           >
             Синастрия
           </button>
+          <button
+            className={activeMode === "solar_return" ? styles.modeActive : styles.modeButton}
+            type="button"
+            onClick={() =>
+              setChartMode({
+                mode: "solar_return",
+                onModeChange,
+                setLocalMode
+              })
+            }
+          >
+            Соляр
+          </button>
         </nav>
         <div
           aria-label="Состояние карты"
@@ -249,6 +269,13 @@ export function ChartEnginePage({
             }
           />
         ) : null}
+        {activeMode === "solar_return" ? (
+          <SolarReturnYearField
+            disabled={isBusy}
+            value={activeSolarReturnYear}
+            onChange={onSolarReturnYearChange}
+          />
+        ) : null}
         <button
           className={styles.calculateButton}
           type="button"
@@ -258,7 +285,8 @@ export function ChartEnginePage({
               activeMode,
               onCreateNatalJob,
               onCreateTransitJob,
-              onCreateSynastryJob
+              onCreateSynastryJob,
+              onCreateSolarReturnJob
             })
           }
         >
@@ -582,7 +610,9 @@ function getChartViewState({
           ? "Транзиты рассчитаны по наталу клиента и выбранному моменту."
           : mode === "synastry"
             ? "Синастрия рассчитана для выбранной пары клиентов."
-            : "Натальная карта рассчитана и привязана к клиенту.",
+            : mode === "solar_return"
+              ? "Соляр рассчитан по наталу клиента и выбранному году."
+              : "Натальная карта рассчитана и привязана к клиенту.",
       actionLabel: "Актуальна",
       canCalculate: false,
       tone: "success"
@@ -606,13 +636,17 @@ function getChartViewState({
         ? "Натал клиента и момент транзита готовы для расчёта."
         : mode === "synastry"
           ? "Оба клиента готовы для расчёта совместимости."
-          : "Данные рождения и настройки готовы для натальной карты.",
+          : mode === "solar_return"
+            ? "Натал клиента и год соляра готовы для расчёта."
+            : "Данные рождения и настройки готовы для натальной карты.",
     actionLabel:
       mode === "transit"
         ? "Рассчитать транзиты"
         : mode === "synastry"
           ? "Рассчитать синастрию"
-          : "Рассчитать",
+          : mode === "solar_return"
+            ? "Рассчитать соляр"
+            : "Рассчитать",
     canCalculate: !isBusy,
     tone: "ready"
   };
@@ -886,7 +920,9 @@ function StatusCard({
         <span>
           {mode === "synastry"
             ? "Берём данные рождения обоих клиентов из CRM и строим canonical result."
-            : "Берём данные рождения из CRM и строим canonical natal result."}
+            : mode === "solar_return"
+              ? "Берём натал из CRM, считаем соляр на выбранный год и строим dual-wheel result."
+              : "Берём данные рождения из CRM и строим canonical natal result."}
         </span>
       </div>
     );
@@ -934,7 +970,9 @@ function StatusCard({
             ? "Выберите клиента и момент транзита: дата, время и место будут отправлены в backend-контур."
             : mode === "synastry"
               ? "Выберите второго клиента: в backend уйдут только id пары и настройки расчёта."
-              : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
+              : mode === "solar_return"
+                ? "Выберите клиента и год соляра: backend сам возьмёт birth data из CRM."
+                : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
         </span>
       </div>
     );
@@ -948,7 +986,9 @@ function StatusCard({
             ? "Данные рождения, настройки или момент транзита изменились. Пересчитайте карту."
             : mode === "synastry"
               ? "Данные одного из участников или настройки изменились. Пересчитайте синастрию."
-              : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
+              : mode === "solar_return"
+                ? "Данные рождения, настройки или год соляра изменились. Пересчитайте соляр."
+                : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
         </span>
       </div>
     );
@@ -1076,24 +1116,28 @@ const panelTabs: readonly { readonly id: ChartPanelTab; readonly label: string }
 function getModeTitle(mode: ChartEngineMode): string {
   if (mode === "transit") return "Транзитная карта";
   if (mode === "synastry") return "Синастрия";
+  if (mode === "solar_return") return "Соляр";
   return "Натальная карта";
 }
 
 function getCalculatingLabel(mode: ChartEngineMode): string {
   if (mode === "transit") return "Рассчитываем транзиты";
   if (mode === "synastry") return "Рассчитываем синастрию";
+  if (mode === "solar_return") return "Рассчитываем соляр";
   return "Рассчитываем карту";
 }
 
 function getEmptyResultLabel(mode: ChartEngineMode): string {
   if (mode === "transit") return "Готово к расчёту транзитов";
   if (mode === "synastry") return "Готово к расчёту синастрии";
+  if (mode === "solar_return") return "Готово к расчёту соляра";
   return "Готово к расчёту натала";
 }
 
 function getSucceededLabel(mode: ChartEngineMode): string {
   if (mode === "transit") return "Транзитная карта рассчитана";
   if (mode === "synastry") return "Синастрия рассчитана";
+  if (mode === "solar_return") return "Соляр рассчитан";
   return "Натальная карта рассчитана";
 }
 
@@ -1101,18 +1145,23 @@ function runChartCalculationAction({
   activeMode,
   onCreateNatalJob,
   onCreateTransitJob,
-  onCreateSynastryJob
+  onCreateSynastryJob,
+  onCreateSolarReturnJob
 }: {
   readonly activeMode: ChartEngineMode;
   readonly onCreateNatalJob: () => void | Promise<void>;
   readonly onCreateTransitJob?: () => void | Promise<void>;
   readonly onCreateSynastryJob?: () => void | Promise<void>;
+  readonly onCreateSolarReturnJob?: () => void | Promise<void>;
 }) {
   if (activeMode === "transit") {
     return onCreateTransitJob?.();
   }
   if (activeMode === "synastry") {
     return onCreateSynastryJob?.();
+  }
+  if (activeMode === "solar_return") {
+    return onCreateSolarReturnJob?.();
   }
 
   return onCreateNatalJob();
@@ -1163,6 +1212,38 @@ function TransitMomentFields({
           type="time"
           value={value.time}
           onChange={(event) => onChange({ ...value, time: event.target.value })}
+        />
+      </label>
+    </div>
+  );
+}
+
+function SolarReturnYearField({
+  disabled,
+  onChange,
+  value
+}: {
+  readonly disabled: boolean;
+  readonly value: number;
+  readonly onChange?: (year: number) => void;
+}) {
+  return (
+    <div className={styles.transitMomentFields}>
+      <label>
+        <span>Год соляра</span>
+        <input
+          aria-label="Год соляра"
+          disabled={disabled}
+          max={2100}
+          min={1900}
+          type="number"
+          value={value}
+          onChange={(event) => {
+            const nextYear = Number(event.target.value);
+            if (Number.isFinite(nextYear)) {
+              onChange?.(nextYear);
+            }
+          }}
         />
       </label>
     </div>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   StoredChartCalculationPayload,
   StoredChartNatalCalculationPayload,
+  StoredChartSolarReturnCalculationPayload,
   StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
 import {
@@ -67,6 +68,22 @@ describe("chartInterpretations", () => {
     expect(anchors.find((anchor) => anchor.code === "transit_mars_sun_opposition")).toMatchObject({
       categoryCode: "planet_aspects",
       meta: "Транзит к наталу",
+      position: "Оппозиция · орбис 1.20°"
+    });
+  });
+
+  it("derives deterministic dictionary anchors for solar return aspects to natal points", () => {
+    const anchors = buildChartInterpretationAnchors(solarReturnResult());
+
+    expect(getChartInterpretationLookupCodes(anchors)).toContain(
+      "solar_return.mars.opposition.sun"
+    );
+    expect(anchors.map((anchor) => `${anchor.group}:${anchor.label}`)).toContain(
+      "aspects:Солярный Марс — Солнце"
+    );
+    expect(anchors.find((anchor) => anchor.code === "solar_return.mars.opposition.sun")).toMatchObject({
+      categoryCode: "planet_aspects",
+      meta: "Соляр к наталу",
       position: "Оппозиция · орбис 1.20°"
     });
   });
@@ -280,6 +297,58 @@ function synastryResult(): StoredChartSynastryCalculationPayload {
         label: "very_important",
         breakdown: [{ code: "venus_mars_trine", points: 4 }]
       },
+      warnings: []
+    }
+  };
+}
+
+function solarReturnResult(): StoredChartSolarReturnCalculationPayload {
+  const natal = chartResult().result;
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "solar_return",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: chartResult().settings,
+    inputSnapshot: chartResult().inputSnapshot,
+    solarReturnSnapshot: {
+      year: 2026,
+      returnType: "solar",
+      location: {
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964
+      },
+      resolvedAt: "2026-07-15T01:20:01.000Z"
+    },
+    result: {
+      natal,
+      solarReturn: {
+        ...natal,
+        points: [
+          {
+            id: "mars",
+            label: "Mars",
+            longitude: 293.4,
+            sign: "capricorn",
+            signDegree: 23.4,
+            house: 4,
+            retrograde: false
+          }
+        ],
+        aspects: [],
+        warnings: []
+      },
+      aspectsToNatal: [
+        {
+          solarReturnPoint: "mars",
+          natalPoint: "sun",
+          type: "opposition",
+          angle: 180,
+          orb: 1.2,
+          applying: true
+        }
+      ],
       warnings: []
     }
   };
