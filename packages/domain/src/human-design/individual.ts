@@ -34,6 +34,10 @@ import {
   type HumanDesignIncarnationCross
 } from "./incarnation-cross";
 import {
+  createHumanDesignResultChecksum,
+  type HumanDesignResultChecksum
+} from "./result-checksum";
+import {
   deriveHumanDesignType,
   type HumanDesignNotSelfThemeCode,
   type HumanDesignSignatureCode,
@@ -62,6 +66,7 @@ export type HumanDesignIndividualBaseResult = {
   readonly engineRevision: typeof HUMAN_DESIGN_ENGINE_REVISION;
   readonly schemaVersion: typeof HUMAN_DESIGN_SCHEMA_VERSION;
   readonly mode: "individual";
+  readonly resultChecksum: HumanDesignResultChecksum;
   readonly activations: readonly HumanDesignActivation[];
   readonly definedGates: readonly HumanDesignDefinedGate[];
   readonly definedChannels: readonly HumanDesignDefinedChannel[];
@@ -80,6 +85,11 @@ export type HumanDesignIndividualBaseResult = {
   readonly profile: HumanDesignProfile;
 };
 
+type HumanDesignIndividualBaseResultWithoutChecksum = Omit<
+  HumanDesignIndividualBaseResult,
+  "resultChecksum"
+>;
+
 export function buildHumanDesignIndividualBaseResult(
   input: BuildHumanDesignActivationsInput
 ): HumanDesignIndividualBaseResult {
@@ -89,7 +99,7 @@ export function buildHumanDesignIndividualBaseResult(
   const authorityMechanics = deriveHumanDesignAuthority(definedChannels);
   const definitionMechanics = deriveHumanDesignDefinitionKind(definedChannels);
   const incarnationCross = deriveHumanDesignIncarnationCross(activations);
-  return {
+  const resultWithoutChecksum: HumanDesignIndividualBaseResultWithoutChecksum = {
     methodCode: HUMAN_DESIGN_METHOD_CODE,
     engineRevision: HUMAN_DESIGN_ENGINE_REVISION,
     schemaVersion: HUMAN_DESIGN_SCHEMA_VERSION,
@@ -110,6 +120,10 @@ export function buildHumanDesignIndividualBaseResult(
     definitionBasis: definitionMechanics.basis,
     incarnationCross,
     profile: buildProfile(activations)
+  };
+  return {
+    ...resultWithoutChecksum,
+    resultChecksum: createHumanDesignResultChecksum(resultWithoutChecksum)
   };
 }
 

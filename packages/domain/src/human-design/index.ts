@@ -8,4 +8,5 @@ export * from "./type";
 export * from "./authority";
 export * from "./definition-kind";
 export * from "./incarnation-cross";
+export * from "./result-checksum";
 export * from "./individual";

@@ -31,6 +31,10 @@ describe("Human Design individual base result", () => {
       engineRevision: 1,
       schemaVersion: "human-design-result.v1",
       mode: "individual",
+      resultChecksum: {
+        algorithm: "sha256",
+        canonicalization: "json-stable-v1"
+      },
       type: "manifesting_generator",
       strategy: "wait_to_respond",
       signature: "satisfaction",
@@ -58,6 +62,7 @@ describe("Human Design individual base result", () => {
         throatConnectedMotorCenters: ["sacral"]
       }
     });
+    expect(result.resultChecksum.value).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(result.activations).toHaveLength(26);
     expect(result.definedChannels).toContainEqual({
       code: "20-34",
