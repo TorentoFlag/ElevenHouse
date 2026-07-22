@@ -149,6 +149,9 @@ none
   internally inconsistent with the published reference wheel.
 - [x] 2026-07-22: Added HumanDesignAPI live public trial fixture for Amsterdam
   1990-09-05 21:17, including external authority label `Sounding Board`.
+- [x] 2026-07-22: Added local PostgreSQL integration test that persists approved
+  fixtures as `human_design` calculation records and compares hydrated
+  `result_data`/summary/checksum with the deterministic domain result.
 - [ ] Capture file-based authenticated desktop and mobile production screenshots
   after the screenshot workspace issue is resolved or another approved browser
   surface is used.
@@ -317,6 +320,7 @@ business state to match prototype demo data.
 ## Validation and Acceptance
 
 - `pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design/fixture-comparison.test.ts`
+- `set -a && source .env && set +a && INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/adapters/calculations/drizzle-human-design-approved-fixtures.integration.ts`
 - Existing Human Design targeted suite remains green.
 - Authenticated browser network shows preview `200`, persist `201` and
   recalculate `200` for the selected fixture.

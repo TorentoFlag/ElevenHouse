@@ -122,6 +122,28 @@ Mobile viewport:
   `pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design/fixture-comparison.test.ts`
   passed with two approved typed fixtures.
 
+## Local DB Persistence Test
+
+- Added:
+  `packages/db/src/adapters/calculations/drizzle-human-design-approved-fixtures.integration.ts`
+- Scope: local PostgreSQL only, guarded by `assertDevelopmentDatabaseUrl`.
+- Red proof 1: running without `INTEGRATION_DATABASE_URL` failed with
+  `INTEGRATION_DATABASE_URL is required for integration tests`.
+- Red proof 2: running with `.env` initially failed because the test tried to
+  import fixtures through the built `@elevenhouse/domain` package export.
+- Fix: keep production domain imports through `@elevenhouse/domain`, but import
+  approved fixture rows as source-level test assets from `packages/domain/src`.
+- Green proof:
+  `set -a && source .env && set +a && INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/adapters/calculations/drizzle-human-design-approved-fixtures.integration.ts`
+  passed with one integration test.
+- Persistence behavior: for every approved fixture, the test creates a synthetic
+  owner, inserts a linked `human_design`/`individual` calculation through
+  `createCalculation` + `createDrizzleCalculationStore`, reads it back with
+  `findByOwnerAndId`, and compares `result_data`, `result_summary`,
+  `request_fingerprint`, `result_checksum`, participant and private client link.
+- Cleanup: `afterAll` deletes calculation rows by synthetic `owner_user_id` and
+  then deletes the synthetic user.
+
 ## Screenshot Note
 
 Chrome DevTools MCP captured inline desktop and mobile screenshots during the
