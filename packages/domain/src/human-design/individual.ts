@@ -3,6 +3,11 @@ import {
   type BuildHumanDesignActivationsInput
 } from "./activations";
 import {
+  deriveHumanDesignAuthority,
+  type HumanDesignAuthorityBasis,
+  type HumanDesignAuthorityCode
+} from "./authority";
+import {
   deriveDefinedCenters,
   deriveDefinedChannels,
   type HumanDesignDefinedCenter,
@@ -56,6 +61,8 @@ export type HumanDesignIndividualBaseResult = {
   readonly signature: HumanDesignSignatureCode;
   readonly notSelfTheme: HumanDesignNotSelfThemeCode;
   readonly typeBasis: HumanDesignTypeBasis;
+  readonly authority: HumanDesignAuthorityCode;
+  readonly authorityBasis: HumanDesignAuthorityBasis;
   readonly profile: HumanDesignProfile;
 };
 
@@ -65,6 +72,7 @@ export function buildHumanDesignIndividualBaseResult(
   const activations = buildHumanDesignActivations(input);
   const definedChannels = deriveDefinedChannels(activations);
   const typeMechanics = deriveHumanDesignType(definedChannels);
+  const authorityMechanics = deriveHumanDesignAuthority(definedChannels);
   return {
     methodCode: HUMAN_DESIGN_METHOD_CODE,
     engineRevision: HUMAN_DESIGN_ENGINE_REVISION,
@@ -79,6 +87,8 @@ export function buildHumanDesignIndividualBaseResult(
     signature: typeMechanics.signature,
     notSelfTheme: typeMechanics.notSelfTheme,
     typeBasis: typeMechanics.basis,
+    authority: authorityMechanics.authority,
+    authorityBasis: authorityMechanics.basis,
     profile: buildProfile(activations)
   };
 }

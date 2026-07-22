@@ -35,7 +35,11 @@ describe("Human Design individual base result", () => {
       strategy: "wait_to_respond",
       signature: "satisfaction",
       notSelfTheme: "frustration",
+      authority: "sacral",
       profile: { personalityLine: 1, designLine: 1, code: "1/1" },
+      authorityBasis: {
+        selectedBy: "sacral_defined"
+      },
       typeBasis: {
         sacralDefined: true,
         throatDefined: true,
