@@ -48,6 +48,24 @@ describe("humanDesignSavedCalculationModel", () => {
     ).toThrow();
   });
 
+  it("rejects stale Human Design envelopes with mismatched checksums", () => {
+    expect(() =>
+      toHumanDesignCalculationResponse(
+        calculation({
+          resultChecksum: `sha256:${"f".repeat(64)}`
+        })
+      )
+    ).toThrow("Human Design calculation result checksum mismatch");
+
+    expect(() =>
+      toHumanDesignCalculationResponse(
+        calculation({
+          requestFingerprint: `sha256:${"e".repeat(64)}`
+        })
+      )
+    ).toThrow("Human Design calculation request fingerprint mismatch");
+  });
+
   it("builds a selected-client option from the persisted CRM subject", () => {
     expect(toClientOptionFromHumanDesignCalculation(calculation({}))).toMatchObject({
       value: clientId,

@@ -28,9 +28,17 @@ export function getActiveHumanDesignCalculations(
 export function toHumanDesignCalculationResponse(
   calculation: CalculationRecordResponse
 ): HumanDesignCalculationResponse {
+  const result = humanDesignIndividualResultSchema.parse(calculation.resultData);
+  if (calculation.resultChecksum !== result.resultChecksum.value) {
+    throw new Error("Human Design calculation result checksum mismatch");
+  }
+  if (calculation.requestFingerprint !== result.inputFingerprint.value) {
+    throw new Error("Human Design calculation request fingerprint mismatch");
+  }
+
   return humanDesignCalculationResponseSchema.parse({
     calculation,
-    result: humanDesignIndividualResultSchema.parse(calculation.resultData)
+    result
   });
 }
 
