@@ -86,6 +86,16 @@
       guard, transactional outbox, BullMQ worker, RU/EN renderer, presigned
       download и cleanup после перерасчёта. Полный production rollout всё ещё
       требует deployment с актуальными API/worker images и operational smoke test.
+- [x] Chart Engine natal foundation: private Python/FastAPI chart-engine,
+      `chart-worker`, CRM-backed birth-data readiness, canonical
+      `chart-result.v1`, astrologer API jobs/results/recalculation routes,
+      `/chart-engine` natal UI, Dictionary-backed interpretations and
+      checksum-safe private chart PDF export.
+- [ ] Chart Engine method expansion: transits first, then synastry, solar
+      return, progressions, composite, child-chart interpretation mode, horary
+      and astrocartography. Each method requires its own contracts, domain/API
+      workflow, worker/provider adapter, UI state matrix, PDF/report decision
+      and Dictionary interpretation-code coverage before enabling its mode.
 
 ## Этап 6: Контент, подписки, автоматизация
 

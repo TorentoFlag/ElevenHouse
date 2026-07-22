@@ -42,6 +42,32 @@
 - Existing API security pattern: `apps/astrologer-api/src/modules/bookings/bookings.controller.ts`
 - Current chart worker scaffold: `apps/chart-worker/src/main.ts`
 
+## Implementation Status Update (2026-07-22)
+
+This ExecPlan is historical and should not be read as the current checkbox
+tracker. The natal production slice has since landed in the repository:
+
+- private `apps/chart-engine` FastAPI/Kerykeion runtime and `chart-worker`;
+- shared chart contracts, domain flow, persistence and authenticated
+  `astrologer-api` jobs/results/recalculation routes;
+- `/chart-engine` natal surface with CRM client selection, real result state,
+  vector wheel, tables, settings, hover details, Dictionary-backed
+  interpretations, disabled future modes and explicit state matrix;
+- private chart PDF export through the generic calculation-PDF lifecycle,
+  including deterministic wheel/tables/settings/warnings and owner-scoped
+  Dictionary interpretation lookup by exact chart codes.
+
+The original constraint that chart PDF export was out of scope is stale. PDF
+became an approved follow-up and is now documented in
+`docs/decisions/0008-private-calculation-pdf-contour.md`,
+`docs/api/api-boundaries.md` and `docs/architecture/backend-modules.md`.
+
+Remaining chart-engine product work should now be tracked as follow-up specs:
+first transits, then synastry, solar return, progressions, composite, child
+chart interpretation mode, horary and astrocartography. New methods must not be
+enabled in the UI until their backend contracts, provider adapter, state matrix,
+Dictionary codes and browser evidence exist.
+
 ## File Structure
 
 ### Documentation and Deployment
