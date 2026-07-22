@@ -220,7 +220,12 @@ export function useChartEngineController() {
 
   useEffect(() => {
     if (!calculationQuery.data) return;
-    setSettings(calculationQuery.data.settings);
+    const restoredState = restoreChartEngineViewState(calculationQuery.data);
+    setSettings(restoredState.settings);
+    setMode(restoredState.mode);
+    if (restoredState.transitMoment) {
+      setTransitMoment(restoredState.transitMoment);
+    }
     setHasResultStaleIntent(false);
   }, [calculationQuery.data]);
 
@@ -425,6 +430,28 @@ export async function submitTransitCalculation({
   readonly create: typeof createTransitChartJob;
 }) {
   return create({ clientId, settings, transit });
+}
+
+export function restoreChartEngineViewState(result: StoredChartCalculationPayload): {
+  readonly mode: ChartEngineMode;
+  readonly settings: ChartSettings;
+  readonly transitMoment?: ChartTransitMomentInput;
+} {
+  if (result.method !== "transit") {
+    return {
+      mode: "natal",
+      settings: result.settings
+    };
+  }
+
+  return {
+    mode: "transit",
+    settings: result.settings,
+    transitMoment: {
+      date: result.transitSnapshot.date,
+      time: result.transitSnapshot.time
+    }
+  };
 }
 
 export type ChartEngineUrlState = {

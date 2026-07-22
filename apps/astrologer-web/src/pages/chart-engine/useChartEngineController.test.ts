@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   ChartNatalJobCreateResponse,
   ChartSettings,
-  ChartTransitMoment
+  ChartTransitMoment,
+  StoredChartCalculationPayload
 } from "@elevenhouse/contracts";
 import {
   buildChartEngineSearch,
   readChartEngineUrlState,
+  restoreChartEngineViewState,
   submitChartCalculation,
   submitTransitCalculation
 } from "./useChartEngineController";
@@ -130,6 +132,19 @@ describe("chart engine URL state", () => {
   });
 });
 
+describe("chart engine persisted result state", () => {
+  it("restores transit mode and selected moment from a loaded calculation", () => {
+    expect(restoreChartEngineViewState(transitResult())).toEqual({
+      mode: "transit",
+      settings: settings(),
+      transitMoment: {
+        date: "2026-07-22",
+        time: "21:35"
+      }
+    });
+  });
+});
+
 function settings(): ChartSettings {
   return {
     zodiac: "tropical",
@@ -137,5 +152,53 @@ function settings(): ChartSettings {
     nodeType: "true",
     aspectPreset: "major",
     orbMultiplier: 1
+  };
+}
+
+function transitResult(): StoredChartCalculationPayload {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "transit",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    inputSnapshot: {
+      birthDate: "1990-07-15",
+      birthTime: "10:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964,
+      birthTimePrecision: "exact"
+    },
+    transitSnapshot: {
+      date: "2026-07-22",
+      time: "21:35",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964
+    },
+    result: {
+      natal: emptyRenderResult(),
+      transit: emptyRenderResult(),
+      aspectsToNatal: [],
+      warnings: []
+    }
+  };
+}
+
+function emptyRenderResult(): StoredChartCalculationPayload["result"] extends infer Result
+  ? Result extends { readonly natal: infer Render }
+    ? Render
+    : never
+  : never {
+  return {
+    points: [],
+    houses: [],
+    aspects: [],
+    distributions: {
+      elements: { fire: 0, earth: 0, air: 0, water: 0 },
+      modalities: { cardinal: 0, fixed: 0, mutable: 0 },
+      polarity: { masculine: 0, feminine: 0 }
+    },
+    warnings: []
   };
 }
