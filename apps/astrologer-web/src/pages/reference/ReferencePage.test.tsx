@@ -397,6 +397,7 @@ describe("ReferencePage", () => {
     });
     expect(mocks.referenceEntryModal).toHaveBeenCalledWith({
       mode: "create",
+      codeSeed: "sun_house_11",
       copy: entryModalCopy,
       categories,
       locale: "ru",

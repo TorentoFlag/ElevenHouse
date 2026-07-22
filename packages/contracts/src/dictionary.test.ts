@@ -117,12 +117,14 @@ describe("dictionary contracts", () => {
       createDictionaryCustomEntryRequestSchema.parse({
         categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
         locale: "ru",
+        code: " sun_house_11 ",
         title: "  Авторская трактовка  ",
         content: "  Текст трактовки  "
       })
     ).toEqual({
       categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
       locale: "ru",
+      code: "sun_house_11",
       title: "Авторская трактовка",
       content: "Текст трактовки"
     });

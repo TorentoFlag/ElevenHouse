@@ -354,6 +354,7 @@ function renderCreateViewProps(
       locale: "ru",
       mode: "create",
       selectedCategoryId: categoryId,
+      codeSeed: null,
       titleSeed: "Солнце в Овне",
       onClose: vi.fn(),
       ...overrides

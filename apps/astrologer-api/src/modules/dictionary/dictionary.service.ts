@@ -118,7 +118,7 @@ export class DictionaryService {
           store: this.store,
           ownerUserId: requireOwnerUserId(request),
           categoryId: parsedBody.categoryId,
-          code: `custom_${randomUUID()}`,
+          code: parsedBody.code ?? `custom_${randomUUID()}`,
           locale: parsedBody.locale,
           title: parsedBody.title,
           content: parsedBody.content,

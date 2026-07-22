@@ -170,6 +170,7 @@ export const createDictionaryCustomEntryRequestSchema = z
   .object({
     categoryId: uuidSchema,
     locale: dictionaryLocaleSchema,
+    code: dictionaryEntryCodeSchema.optional(),
     title: dictionaryTitleRequestSchema,
     content: dictionaryContentRequestSchema
   })

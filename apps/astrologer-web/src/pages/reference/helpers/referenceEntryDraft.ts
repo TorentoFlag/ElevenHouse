@@ -2,6 +2,7 @@ import {
   createDictionaryCustomEntryRequestSchema,
   dictionaryContentMaxLength,
   dictionaryTitleMaxLength,
+  type CreateDictionaryCustomEntryRequest,
   type DictionaryCategoryResponse,
   type DictionaryEffectiveEntryResponse,
   type DictionaryLocale
@@ -152,6 +153,19 @@ export function createReferenceEntryDraftFromEntry(
     categoryId: entry.categoryId,
     title: entry.title,
     content: entry.content
+  };
+}
+
+export function createReferenceEntryCreatePayload(
+  draft: ReferenceEntryDraft,
+  options: { readonly codeSeed: string | null }
+): Omit<CreateDictionaryCustomEntryRequest, "locale"> {
+  const normalizedDraft = normalizeReferenceEntryDraft(draft);
+  const code = options.codeSeed?.trim();
+
+  return {
+    ...normalizedDraft,
+    ...(code ? { code } : {})
   };
 }
 

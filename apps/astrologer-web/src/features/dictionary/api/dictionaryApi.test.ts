@@ -157,6 +157,7 @@ describe("dictionary API", () => {
       createDictionaryCustomEntry({
         categoryId,
         locale: "ru",
+        code: " sun_house_11 ",
         title: " Венера в Близнецах ",
         content: " Любовь становится легкой, живой и связанной с общением. "
       })
@@ -167,6 +168,7 @@ describe("dictionary API", () => {
       {
         categoryId,
         locale: "ru",
+        code: "sun_house_11",
         title: "Венера в Близнецах",
         content: "Любовь становится легкой, живой и связанной с общением."
       },

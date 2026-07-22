@@ -11,9 +11,9 @@ import { useUpdateDictionaryPlatformEntryOverrideMutation } from "../../../../fe
 import {
   createReferenceEntryDraft,
   createReferenceEntryDraftFromEntry,
+  createReferenceEntryCreatePayload,
   createReferenceEntryUpdatePayload,
   createReferencePlatformEntryOverridePayload,
-  normalizeReferenceEntryDraft,
   resolveReferenceEntryVisibleFieldErrors,
   shouldApplyReferenceAiDraftResponse,
   type ReferenceEntryDraftTouchedFields,
@@ -27,6 +27,7 @@ import {
 type ReferenceEntryModalCreateMode = {
   readonly mode: "create";
   readonly selectedCategoryId: string | null;
+  readonly codeSeed: string | null;
   readonly titleSeed: string;
 };
 
@@ -170,7 +171,7 @@ export function ReferenceEntryModal(props: ReferenceEntryModalProps) {
         if (props.mode === "create") {
           createEntryMutation
             .mutateAsync({
-              ...normalizeReferenceEntryDraft(draft),
+              ...createReferenceEntryCreatePayload(draft, { codeSeed: props.codeSeed }),
               locale
             })
             .then(onClose)

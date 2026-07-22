@@ -20,6 +20,7 @@ import type { ReferenceAddEntryOptions } from "./types";
 type ReferenceEntryModalState =
   | {
       readonly mode: "create";
+      readonly codeSeed: string | null;
       readonly titleSeed: string;
     }
   | {
@@ -37,6 +38,7 @@ export function ReferencePage() {
     referenceCreateIntent
       ? {
           mode: "create",
+          codeSeed: referenceCreateIntent.codeSeed,
           titleSeed: referenceCreateIntent.titleSeed
         }
       : null
@@ -87,6 +89,7 @@ export function ReferencePage() {
   const openEntryModal = (options: ReferenceAddEntryOptions = {}) => {
     setEntryModal({
       mode: "create",
+      codeSeed: options.codeSeed ?? null,
       titleSeed: options.titleSeed ?? ""
     });
   };
@@ -185,6 +188,7 @@ export function ReferencePage() {
           categories={summary.categories}
           locale={locale}
           selectedCategoryId={createSelectedCategoryId}
+          codeSeed={entryModal.codeSeed}
           titleSeed={entryModal.titleSeed}
           onClose={() => setEntryModal(null)}
         />
@@ -206,6 +210,7 @@ export function ReferencePage() {
 
 function getReferenceCreateIntent(): {
   readonly categoryCode: string | null;
+  readonly codeSeed: string | null;
   readonly searchSeed: string;
   readonly titleSeed: string;
 } | null {
@@ -221,6 +226,7 @@ function getReferenceCreateIntent(): {
 
   return {
     categoryCode: searchParams.get("category")?.trim() || null,
+    codeSeed: createCode,
     searchSeed,
     titleSeed
   };

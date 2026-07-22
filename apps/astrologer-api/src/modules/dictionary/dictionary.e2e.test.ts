@@ -210,6 +210,7 @@ describe("dictionary HTTP routes", () => {
       {
         categoryId,
         locale: "ru",
+        code: " sun_house_11 ",
         title: "Custom note",
         content: "Custom content"
       },
@@ -250,7 +251,19 @@ describe("dictionary HTTP routes", () => {
       ownerUserId,
       categoryId,
       locale: "ru",
+      code: "sun_house_11",
       entryType: "custom"
+    });
+    expect(dictionaryStore.createCustomEntry).toHaveBeenCalledWith({
+      ownerUserId,
+      categoryId,
+      code: "sun_house_11",
+      locale: "ru",
+      entryType: "custom",
+      title: "Custom note",
+      content: "Custom content",
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String)
     });
     expect(overrideResponse.status).toBe(200);
     dictionaryAstrologerEntryResponseSchema.parse(overrideResponse.body);

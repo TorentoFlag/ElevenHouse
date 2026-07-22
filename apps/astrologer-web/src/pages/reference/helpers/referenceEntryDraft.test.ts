@@ -7,6 +7,7 @@ import {
 import {
   createReferenceEntryDraft,
   createReferenceEntryDraftFromEntry,
+  createReferenceEntryCreatePayload,
   createReferenceEntryUpdatePayload,
   createReferencePlatformEntryOverridePayload,
   isReferenceEntryDraftSubmittable,
@@ -98,6 +99,26 @@ describe("reference entry draft helpers", () => {
     expect(createReferencePlatformEntryOverridePayload(draft)).toEqual({
       title: "Венера в Близнецах",
       content: "Новая редакция"
+    });
+  });
+
+  it("creates normalized create payloads with an optional chart interpretation code", () => {
+    const draft = {
+      categoryId: categories[1]?.id ?? "",
+      title: " Солнце · XI дом ",
+      content: " Текст трактовки "
+    };
+
+    expect(createReferenceEntryCreatePayload(draft, { codeSeed: " sun_house_11 " })).toEqual({
+      categoryId: categories[1]?.id,
+      code: "sun_house_11",
+      title: "Солнце · XI дом",
+      content: "Текст трактовки"
+    });
+    expect(createReferenceEntryCreatePayload(draft, { codeSeed: null })).toEqual({
+      categoryId: categories[1]?.id,
+      title: "Солнце · XI дом",
+      content: "Текст трактовки"
     });
   });
 

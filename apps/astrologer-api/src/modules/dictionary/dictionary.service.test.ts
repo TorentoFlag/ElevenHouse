@@ -129,6 +129,36 @@ describe("DictionaryService", () => {
     });
   });
 
+  it("creates a custom chart interpretation under the requested dictionary code", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const store = createStore();
+    const service = createService(store);
+
+    await service.createCustomEntry(
+      {
+        categoryId,
+        locale: "ru",
+        code: " sun_house_11 ",
+        title: "  Солнце · XI дом  ",
+        content: "  Текст трактовки  "
+      },
+      createAuthenticatedRequest()
+    );
+
+    expect(store.createCustomEntry).toHaveBeenCalledWith({
+      ownerUserId,
+      categoryId,
+      code: "sun_house_11",
+      locale: "ru",
+      entryType: "custom",
+      title: "Солнце · XI дом",
+      content: "Текст трактовки",
+      createdAt: "2026-06-30T10:00:00.000Z",
+      updatedAt: "2026-06-30T10:00:00.000Z"
+    });
+  });
+
   it("updates a custom entry for the authenticated astrologer", async () => {
     const store = createStore();
     const service = createService(store);
