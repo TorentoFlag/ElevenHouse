@@ -1234,8 +1234,10 @@ function SolarReturnYearField({
         <input
           aria-label="Год соляра"
           disabled={disabled}
+          id="chart-solar-return-year"
           max={2100}
           min={1900}
+          name="solarReturnYear"
           type="number"
           value={value}
           onChange={(event) => {
