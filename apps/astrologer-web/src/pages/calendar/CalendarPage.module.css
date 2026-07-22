@@ -249,13 +249,43 @@
   vertical-align: middle;
 }
 
+.calendarCanvas :global(.eh-calendar-day-header--today) {
+  background: rgb(244 202 76 / 0.12);
+}
+
 .calendarCanvas :global(.eh-calendar-day-header-inner) {
-  padding: 15px 8px;
+  padding: 0 8px;
   color: var(--calendar-muted);
   font-size: 12px;
   font-weight: 700;
   text-decoration: none;
   text-transform: uppercase;
+}
+
+.calendarCanvas :global(.eh-calendar-day-header-content) {
+  display: inline-flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.calendarCanvas :global(.eh-calendar-day-header-weekday) {
+  color: var(--calendar-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.calendarCanvas :global(.eh-calendar-day-header-date) {
+  color: var(--eh-color-moon-120);
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.calendarCanvas :global(.eh-calendar-day-header--today .eh-calendar-day-header-weekday),
+.calendarCanvas :global(.eh-calendar-day-header--today .eh-calendar-day-header-date) {
+  color: var(--calendar-accent);
 }
 
 .calendarCanvas :global(.eh-calendar-slot-lane) {

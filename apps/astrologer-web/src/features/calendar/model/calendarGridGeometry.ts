@@ -27,12 +27,16 @@ type CalendarViewClassInfo = {
   readonly view: {
     readonly type: string;
   };
+  readonly isToday?: boolean;
 };
 
 export function getCalendarDayHeaderClassName(
   info: CalendarViewClassInfo
 ): string | false {
-  return isTimeGridView(info.view.type) ? calendarGridClassNames.dayHeader : false;
+  if (!isTimeGridView(info.view.type)) return false;
+  return info.isToday
+    ? `${calendarGridClassNames.dayHeader} ${calendarGridClassNames.dayHeader}--today`
+    : calendarGridClassNames.dayHeader;
 }
 
 export function getCalendarDayHeaderInnerClassName(

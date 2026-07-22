@@ -47,7 +47,7 @@ describe("FullCalendarRenderer", () => {
     const calendar = FullCalendarRenderer(props) as ReactElement<Record<string, unknown>>;
 
     expect(calendar.props.initialView).toBe("timeGridWeek");
-    expect(calendar.props.initialDate).toBe(props.visibleRange.start);
+    expect(calendar.props.initialDate).toBe("2026-05-25");
     expect(calendar.props.headerToolbar).toBe(false);
     expect(calendar.props.editable).toBe(false);
     expect(calendar.props.selectable).toBe(true);
@@ -62,7 +62,7 @@ describe("FullCalendarRenderer", () => {
 
   it("uses the design-reference time range and 56px hourly geometry", () => {
     const calendar = FullCalendarRenderer(createProps()) as ReactElement<{
-      dayHeaderClass(info: { view: { type: string } }): string | false;
+      dayHeaderClass(info: { view: { type: string }; isToday?: boolean }): string | false;
       dayHeaderInnerClass(info: { view: { type: string } }): string | false;
       slotLaneClass(info: { isMinor: boolean }): string;
       [key: string]: unknown;
@@ -83,8 +83,12 @@ describe("FullCalendarRenderer", () => {
     expect(calendar.props.scrollTime).toBe("08:00:00");
     expect(calendar.props.scrollTimeReset).toBe(false);
     expect(calendar.props.expandRows).toBe(false);
+    expect(calendar.props.firstDay).toBe(1);
     expect(calendar.props.dayHeaderClass({ view: { type: "timeGridWeek" } })).toBe(
       "eh-calendar-day-header"
+    );
+    expect(calendar.props.dayHeaderClass({ view: { type: "timeGridWeek" }, isToday: true })).toBe(
+      "eh-calendar-day-header eh-calendar-day-header--today"
     );
     expect(
       calendar.props.dayHeaderInnerClass({ view: { type: "timeGridDay" } })
@@ -101,6 +105,45 @@ describe("FullCalendarRenderer", () => {
     expect(calendar.props.slotLaneClass({ isMinor: true })).toBe(
       "eh-calendar-slot-lane eh-calendar-slot-lane--minor"
     );
+  });
+
+  it("starts the weekly grid from the local range date instead of the previous UTC day", () => {
+    const calendar = FullCalendarRenderer({
+      ...createProps(),
+      visibleRange: {
+        start: "2026-07-19T21:00:00.000Z",
+        end: "2026-07-26T21:00:00.000Z"
+      }
+    }) as ReactElement<Record<string, unknown>>;
+
+    expect(calendar.props.initialDate).toBe("2026-07-20");
+  });
+
+  it("renders reference-like time-grid day headers with separated weekday and date", () => {
+    const calendar = FullCalendarRenderer(createProps()) as ReactElement<{
+      dayHeaderContent(info: unknown): ReactElement<{
+        className?: string;
+        children: ReactElement[];
+      }> | true;
+    }>;
+
+    const content = calendar.props.dayHeaderContent({
+      date: new Date("2026-05-25T00:00:00.000Z"),
+      view: { type: "timeGridWeek" }
+    });
+
+    if (content === true) throw new Error("Expected a custom day header element");
+    expect(content.props.className).toBe("eh-calendar-day-header-content");
+    expect(
+      Children.toArray(content.props.children).map((child) =>
+        isValidElement<{ children?: string; className?: string }>(child)
+          ? { className: child.props.className, text: child.props.children }
+          : null
+      )
+    ).toEqual([
+      { className: "eh-calendar-day-header-weekday", text: "ПН" },
+      { className: "eh-calendar-day-header-date", text: "25" }
+    ]);
   });
 
   it("reinitializes the calendar engine when navigation changes the visible range", () => {

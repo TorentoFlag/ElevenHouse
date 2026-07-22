@@ -62,8 +62,9 @@ export function FullCalendarRenderer(props: CalendarRendererProps): ReactElement
       key={`${props.view}:${props.visibleRange.start}`}
       plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, classicThemePlugin]}
       initialView={viewNames[props.view]}
-      initialDate={props.visibleRange.start}
+      initialDate={formatLocalDate(props.visibleRange.start, props.timeZone)}
       headerToolbar={false}
+      firstDay={1}
       allDaySlot={false}
       slotMinTime={calendarGridGeometry.slotMinTime}
       slotMaxTime={calendarGridGeometry.slotMaxTime}
@@ -77,6 +78,7 @@ export function FullCalendarRenderer(props: CalendarRendererProps): ReactElement
       expandRows={false}
       dayHeaderClass={getCalendarDayHeaderClassName}
       dayHeaderInnerClass={getCalendarDayHeaderInnerClassName}
+      dayHeaderContent={(info) => renderDayHeaderContent(info, props)}
       slotHeaderClass={calendarGridClassNames.slotHeader}
       slotHeaderInnerClass={calendarGridClassNames.slotHeaderInner}
       slotLaneClass={getCalendarSlotLaneClassName}
@@ -100,6 +102,66 @@ export function FullCalendarRenderer(props: CalendarRendererProps): ReactElement
       select={(info) => handleSelect(info, props)}
     />
   );
+}
+
+type CalendarDayHeaderContentInfo = {
+  readonly date: Date;
+  readonly text?: string;
+  readonly view: {
+    readonly type: string;
+  };
+};
+
+function renderDayHeaderContent(
+  info: CalendarDayHeaderContentInfo,
+  props: CalendarRendererProps
+): ReactElement | true {
+  if (info.view.type !== "timeGridDay" && info.view.type !== "timeGridWeek") return true;
+  const parts = getLocalDateParts(info.date.toISOString(), props.timeZone, props.locale);
+
+  return (
+    <span className="eh-calendar-day-header-content">
+      <span className="eh-calendar-day-header-weekday">{parts.weekday}</span>
+      <span className="eh-calendar-day-header-date">{parts.day}</span>
+    </span>
+  );
+}
+
+function formatLocalDate(instant: string, timeZone: string): string {
+  const parts = getLocalDateParts(instant, timeZone, "en");
+  return `${parts.year}-${parts.month}-${parts.dayPadded}`;
+}
+
+function getLocalDateParts(
+  instant: string,
+  timeZone: string,
+  locale: CalendarRendererProps["locale"]
+): {
+  readonly day: string;
+  readonly dayPadded: string;
+  readonly month: string;
+  readonly weekday: string;
+  readonly year: string;
+} {
+  const formatter = new Intl.DateTimeFormat(locale === "ru" ? "ru-RU" : "en-US", {
+    timeZone,
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(new Date(instant)).map((part) => [part.type, part.value])
+  );
+  const dayPadded = parts.day ?? "01";
+
+  return {
+    day: String(Number.parseInt(dayPadded, 10)),
+    dayPadded,
+    month: parts.month ?? "01",
+    weekday: (parts.weekday ?? "").replace(".", "").toUpperCase(),
+    year: parts.year ?? "1970"
+  };
 }
 
 function mountAccessibleEvent(
