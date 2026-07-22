@@ -10,7 +10,7 @@ import type {
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
-import { ChartEnginePage } from "./ChartEnginePage";
+import { ChartEnginePage, type ChartEnginePageProps } from "./ChartEnginePage";
 
 const client = {
   value: "22222222-2222-4222-8222-222222222222",
@@ -68,6 +68,151 @@ describe("ChartEnginePage", () => {
 
     expect(onCreateNatalJob).toHaveBeenCalledOnce();
   });
+
+  it.each([
+    {
+      name: "no selected client",
+      props: {
+        selectedClient: null,
+        jobState: "idle" as const,
+        result: null,
+        isBusy: false
+      },
+      status: "Выберите клиента",
+      detail: "Карта рассчитывается только для клиента из CRM.",
+      action: "Выберите клиента",
+      enabled: false
+    },
+    {
+      name: "missing birth date",
+      props: {
+        selectedClient: {
+          ...client,
+          birthDateDisplay: "—",
+          hasBirthDate: false,
+          birthData: {
+            ...client.birthData,
+            birthDate: null
+          }
+        },
+        jobState: "idle" as const,
+        result: null,
+        isBusy: false
+      },
+      status: "Нужна дата рождения",
+      detail: "Заполните дату рождения в карточке клиента.",
+      action: "Добавьте дату",
+      enabled: false
+    },
+    {
+      name: "missing birth time",
+      props: {
+        selectedClient: {
+          ...client,
+          birthData: {
+            ...client.birthData,
+            birthTime: null,
+            birthTimePrecision: "unknown" as const
+          }
+        },
+        jobState: "idle" as const,
+        result: null,
+        isBusy: false
+      },
+      status: "Нужно время рождения",
+      detail: "Без времени рождения не строим дома и углы.",
+      action: "Добавьте время",
+      enabled: false
+    },
+    {
+      name: "approximate birth time",
+      props: {
+        selectedClient: {
+          ...client,
+          birthData: {
+            ...client.birthData,
+            birthTimePrecision: "approximate" as const
+          }
+        },
+        jobState: "idle" as const,
+        result: null,
+        isBusy: false
+      },
+      status: "Время примерно",
+      detail: "Расчёт доступен, но карта получит предупреждение о точности времени.",
+      action: "Рассчитать с пометкой",
+      enabled: true
+    },
+    {
+      name: "calculating",
+      props: {
+        selectedClient: client,
+        jobState: "calculating" as const,
+        result: chartResult(),
+        isBusy: true
+      },
+      status: "Расчёт выполняется",
+      detail: "Ждём результат от расчётного контура.",
+      action: "Рассчитываем",
+      enabled: false
+    },
+    {
+      name: "failed",
+      props: {
+        selectedClient: client,
+        jobState: "failed" as const,
+        result: null,
+        isBusy: false,
+        errorMessage: "Provider timeout"
+      },
+      status: "Ошибка расчёта",
+      detail: "Provider timeout",
+      action: "Повторить расчёт",
+      enabled: true
+    },
+    {
+      name: "stale result",
+      props: {
+        selectedClient: client,
+        jobState: "succeeded" as const,
+        result: chartResult(),
+        isBusy: false,
+        isResultStale: true
+      },
+      status: "Требуется пересчёт",
+      detail: "Данные рождения или настройки изменились.",
+      action: "Пересчитать карту",
+      enabled: true
+    },
+    {
+      name: "current calculated result",
+      props: {
+        selectedClient: client,
+        jobState: "succeeded" as const,
+        result: chartResult(),
+        isBusy: false
+      },
+      status: "Актуальная карта",
+      detail: "Натальная карта рассчитана и привязана к клиенту.",
+      action: "Актуальна",
+      enabled: false
+    }
+  ])(
+    "renders explicit chart state matrix for $name",
+    ({ action, detail, enabled, props, status }) => {
+      renderChartEnginePage(props);
+
+      const stateSummary = screen.getByLabelText("Состояние карты");
+      expect(within(stateSummary).getByText(status)).toBeInTheDocument();
+      expect(within(stateSummary).getByText(detail)).toBeInTheDocument();
+      const actionButton = screen.getByRole("button", { name: action });
+      if (enabled) {
+        expect(actionButton).toBeEnabled();
+      } else {
+        expect(actionButton).toBeDisabled();
+      }
+    }
+  );
 
   it("shows calculating without queue wording and renders canonical result tables", async () => {
     const user = userEvent.setup();
@@ -494,7 +639,7 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByText(/не хватает: время рождения/i)).toBeInTheDocument();
     expect(screen.getByText(/нужны данные рождения/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /рассчитать/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /добавьте время/i })).toBeDisabled();
     expect(screen.queryByRole("button", { name: /солнце на карте/i })).not.toBeInTheDocument();
 
     const chartDataPanel = screen.getByRole("complementary", { name: "Данные карты" });
@@ -529,8 +674,8 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    expect(screen.getByText(/натальная карта рассчитана/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /рассчитано/i })).toBeDisabled();
+    expect(screen.getAllByText(/натальная карта рассчитана/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /актуальна/i })).toBeDisabled();
   });
 
   it("allows calculation with approximate birth time", () => {
@@ -572,8 +717,8 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    expect(screen.getByText("Provider timeout")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /повторить/i }));
+    expect(screen.getAllByText("Provider timeout").length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: /повторить расчёт/i }));
 
     expect(onCreateNatalJob).toHaveBeenCalledOnce();
   });
@@ -611,7 +756,7 @@ describe("ChartEnginePage", () => {
     );
 
     expect(screen.getByText(/заполните данные рождения/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /рассчитать/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /добавьте дату/i })).toBeDisabled();
 
     await user.clear(screen.getByLabelText(/дата рождения/i));
     await user.type(screen.getByLabelText(/дата рождения/i), "1990-07-15");
@@ -695,6 +840,38 @@ function settings(): ChartSettings {
     aspectPreset: "major",
     orbMultiplier: 1
   };
+}
+
+function renderChartEnginePage(
+  overrides: Partial<
+    Pick<
+      ChartEnginePageProps,
+      | "selectedClient"
+      | "jobState"
+      | "result"
+      | "errorMessage"
+      | "isBusy"
+      | "isResultStale"
+    >
+  >
+) {
+  const selectedClient = Object.prototype.hasOwnProperty.call(overrides, "selectedClient")
+    ? (overrides.selectedClient ?? null)
+    : client;
+
+  return render(
+    <ChartEnginePage
+      selectedClient={selectedClient}
+      jobState={overrides.jobState ?? "idle"}
+      result={overrides.result ?? null}
+      errorMessage={overrides.errorMessage ?? null}
+      isBusy={overrides.isBusy ?? false}
+      isResultStale={overrides.isResultStale ?? false}
+      settings={settings()}
+      onSettingsChange={vi.fn()}
+      onCreateNatalJob={vi.fn()}
+    />
+  );
 }
 
 function chartResult(

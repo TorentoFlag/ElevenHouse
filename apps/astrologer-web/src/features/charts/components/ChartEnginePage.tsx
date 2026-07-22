@@ -7,7 +7,10 @@ import type {
 } from "@elevenhouse/contracts";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
 import { ClientSearchCombobox } from "../../clients/components/ClientSearchCombobox";
-import { getChartBirthDataReadiness } from "../model/chartEngineState";
+import {
+  getChartBirthDataReadiness,
+  type ChartBirthDataReadiness
+} from "../model/chartEngineState";
 import {
   formatChartPointPosition,
   formatHouseSignDisplay,
@@ -60,22 +63,19 @@ export function ChartEnginePage({
   const isCurrentResultCalculated = Boolean(
     displayResult && !isResultStale && jobState === "succeeded"
   );
-  const canCalculate = Boolean(
-    selectedClient && readiness.ready && !isBusy && !isCurrentResultCalculated
-  );
+  const chartViewState = getChartViewState({
+    selectedClient,
+    readiness,
+    jobState,
+    displayResult,
+    errorMessage,
+    isBusy,
+    isCurrentResultCalculated,
+    isResultStale
+  });
   const [activePanelTab, setActivePanelTab] = useState<ChartPanelTab>("planets");
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
-  const calculateButtonLabel =
-    jobState === "calculating"
-      ? "Рассчитываем"
-      : jobState === "failed"
-        ? "Повторить"
-        : displayResult && isResultStale
-          ? "Пересчитать"
-          : displayResult
-            ? "Рассчитано"
-            : "Рассчитать";
 
   return (
     <main className={styles.page}>
@@ -138,15 +138,23 @@ export function ChartEnginePage({
             Ещё
           </button>
         </nav>
+        <div
+          aria-label="Состояние карты"
+          className={styles.stateSummary}
+          data-tone={chartViewState.tone}
+        >
+          <strong>{chartViewState.status}</strong>
+          <span>{chartViewState.detail}</span>
+        </div>
         <div className={styles.toolbarSpacer} />
         <button
           className={styles.calculateButton}
           type="button"
-          disabled={!canCalculate}
+          disabled={!chartViewState.canCalculate}
           onClick={() => void onCreateNatalJob()}
         >
           <span aria-hidden="true">⚡</span>
-          {calculateButtonLabel}
+          {chartViewState.actionLabel}
         </button>
         <button className={styles.toolButton} type="button" disabled>
           ↗
@@ -304,6 +312,132 @@ export function ChartEnginePage({
       </section>
     </main>
   );
+}
+
+type ChartViewState = {
+  readonly status: string;
+  readonly detail: string;
+  readonly actionLabel: string;
+  readonly canCalculate: boolean;
+  readonly tone: "idle" | "ready" | "warning" | "busy" | "error" | "success";
+};
+
+function getChartViewState({
+  selectedClient,
+  readiness,
+  jobState,
+  displayResult,
+  errorMessage,
+  isBusy,
+  isCurrentResultCalculated,
+  isResultStale
+}: {
+  readonly selectedClient: ClientSelectOption | null;
+  readonly readiness: ChartBirthDataReadiness;
+  readonly jobState: ChartEnginePageJobState;
+  readonly displayResult: StoredChartCalculationPayload | null;
+  readonly errorMessage: string | null;
+  readonly isBusy: boolean;
+  readonly isCurrentResultCalculated: boolean;
+  readonly isResultStale: boolean;
+}): ChartViewState {
+  if (!selectedClient) {
+    return {
+      status: "Выберите клиента",
+      detail: "Карта рассчитывается только для клиента из CRM.",
+      actionLabel: "Выберите клиента",
+      canCalculate: false,
+      tone: "idle"
+    };
+  }
+
+  if (jobState === "calculating") {
+    return {
+      status: "Расчёт выполняется",
+      detail: "Ждём результат от расчётного контура.",
+      actionLabel: "Рассчитываем",
+      canCalculate: false,
+      tone: "busy"
+    };
+  }
+
+  if (jobState === "failed") {
+    return {
+      status: "Ошибка расчёта",
+      detail: errorMessage ?? "Проверьте данные рождения клиента и повторите расчёт.",
+      actionLabel: "Повторить расчёт",
+      canCalculate: readiness.ready && !isBusy,
+      tone: "error"
+    };
+  }
+
+  if (!readiness.ready) {
+    if (readiness.missing.includes("дата рождения")) {
+      return {
+        status: "Нужна дата рождения",
+        detail: "Заполните дату рождения в карточке клиента.",
+        actionLabel: "Добавьте дату",
+        canCalculate: false,
+        tone: "warning"
+      };
+    }
+
+    if (readiness.missing.includes("время рождения")) {
+      return {
+        status: "Нужно время рождения",
+        detail: "Без времени рождения не строим дома и углы.",
+        actionLabel: "Добавьте время",
+        canCalculate: false,
+        tone: "warning"
+      };
+    }
+
+    return {
+      status: "Нужно место рождения",
+      detail: `Заполните ${readiness.missing.join(", ")} в карточке клиента.`,
+      actionLabel: "Заполните данные",
+      canCalculate: false,
+      tone: "warning"
+    };
+  }
+
+  if (displayResult && isResultStale) {
+    return {
+      status: "Требуется пересчёт",
+      detail: "Данные рождения или настройки изменились.",
+      actionLabel: "Пересчитать карту",
+      canCalculate: !isBusy,
+      tone: "warning"
+    };
+  }
+
+  if (isCurrentResultCalculated) {
+    return {
+      status: "Актуальная карта",
+      detail: "Натальная карта рассчитана и привязана к клиенту.",
+      actionLabel: "Актуальна",
+      canCalculate: false,
+      tone: "success"
+    };
+  }
+
+  if (selectedClient.birthData?.birthTimePrecision === "approximate") {
+    return {
+      status: "Время примерно",
+      detail: "Расчёт доступен, но карта получит предупреждение о точности времени.",
+      actionLabel: "Рассчитать с пометкой",
+      canCalculate: !isBusy,
+      tone: "warning"
+    };
+  }
+
+  return {
+    status: "Готово к расчёту",
+    detail: "Данные рождения и настройки готовы для натальной карты.",
+    actionLabel: "Рассчитать",
+    canCalculate: !isBusy,
+    tone: "ready"
+  };
 }
 
 function DistributionSummary({ result }: { readonly result: StoredChartCalculationPayload }) {
