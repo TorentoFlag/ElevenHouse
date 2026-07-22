@@ -521,6 +521,22 @@ describe("ChartEnginePage", () => {
     expect(within(interpretationsPanel).getAllByText(/Овен 21°13'/).length).toBeGreaterThan(0);
     expect(within(interpretationsPanel).getByText("Плутон · VII дом")).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText(/Плутон в VII доме/i)).toBeInTheDocument();
+    expect(
+      within(interpretationsPanel).getByText("В справочнике пока нет записи sun_house_11.")
+    ).toBeInTheDocument();
+    const createMissingInterpretationLink = within(interpretationsPanel).getByRole("link", {
+      name: "Создать трактовку sun_house_11 в справочнике"
+    });
+    const createMissingInterpretationHref =
+      createMissingInterpretationLink.getAttribute("href") ?? "";
+    const createMissingInterpretationParams = new URLSearchParams(
+      createMissingInterpretationHref.split("?")[1] ?? ""
+    );
+    expect(createMissingInterpretationHref).toContain("/reference?");
+    expect(createMissingInterpretationParams.get("category")).toBe("planets_in_houses");
+    expect(createMissingInterpretationParams.get("create")).toBe("sun_house_11");
+    expect(createMissingInterpretationParams.get("search")).toBe("sun_house_11");
+    expect(createMissingInterpretationParams.get("title")).toBe("Солнце · XI дом");
     expect(within(interpretationsPanel).getByText("I дом")).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText(/Дева 16°37'/)).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText("Квадрат")).toBeInTheDocument();

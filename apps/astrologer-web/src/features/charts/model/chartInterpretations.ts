@@ -9,10 +9,17 @@ import {
 } from "./chartDisplay";
 
 export type ChartInterpretationAnchorGroup = "points" | "houses" | "aspects";
+export type ChartInterpretationDictionaryCategoryCode =
+  | "planets_in_signs"
+  | "planets_in_houses"
+  | "house_meanings"
+  | "aspects"
+  | "planet_aspects";
 
 export type ChartInterpretationAnchor = {
   readonly id: string;
   readonly code: string;
+  readonly categoryCode: ChartInterpretationDictionaryCategoryCode;
   readonly group: ChartInterpretationAnchorGroup;
   readonly label: string;
   readonly meta: string;
@@ -79,6 +86,7 @@ function buildPointAnchors(points: readonly ChartPoint[]): readonly ChartInterpr
       anchors.push({
         id: `point-sign-${point.id}`,
         code: `${pointId}_${formatDictionaryCodePart(point.sign)}`,
+        categoryCode: "planets_in_signs",
         group: "points",
         label: `${pointLabel} в ${formatSignPrepositional(point.sign)}`,
         meta: "Планета в знаке",
@@ -90,6 +98,7 @@ function buildPointAnchors(points: readonly ChartPoint[]): readonly ChartInterpr
       anchors.push({
         id: `point-house-${point.id}`,
         code: `${pointId}_house_${point.house}`,
+        categoryCode: "planets_in_houses",
         group: "points",
         label: `${pointLabel} · ${romanHouses[point.house]} дом`,
         meta: "Планета в доме",
@@ -107,6 +116,7 @@ function buildHouseAnchors(result: StoredChartCalculationPayload): readonly Char
     .map((house) => ({
       id: `house-${house.number}`,
       code: `house_${house.number}`,
+      categoryCode: "house_meanings" as const,
       group: "houses" as const,
       label: `${romanHouses[house.number]} дом`,
       meta: "Значение дома",
@@ -122,6 +132,7 @@ function buildAspectAnchors(
     (type) => ({
       id: `aspect-type-${type}`,
       code: normalizeAspectTypeCode(type),
+      categoryCode: "aspects" as const,
       group: "aspects" as const,
       label: formatAspectTypeDisplay(type),
       meta: "Тип аспекта",
@@ -144,6 +155,7 @@ function buildAspectAnchors(
       return {
         id: `aspect-pair-${pointA}-${pointB}`,
         code: `${formatDictionaryCodePart(pointA)}_${formatDictionaryCodePart(pointB)}`,
+        categoryCode: "planet_aspects" as const,
         group: "aspects" as const,
         label: `${pointALabel} — ${pointBLabel}`,
         meta: "Связь планет",

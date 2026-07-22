@@ -37,6 +37,20 @@ describe("chartInterpretations", () => {
       "aspects:Солнце — Луна",
       "aspects:Луна — Плутон"
     ]);
+    expect(anchors.map((anchor) => `${anchor.code}:${anchor.categoryCode}`)).toEqual([
+      "sun_cancer:planets_in_signs",
+      "sun_house_11:planets_in_houses",
+      "moon_aries:planets_in_signs",
+      "moon_house_8:planets_in_houses",
+      "pluto_scorpio:planets_in_signs",
+      "pluto_house_7:planets_in_houses",
+      "house_1:house_meanings",
+      "house_7:house_meanings",
+      "square:aspects",
+      "trine:aspects",
+      "sun_moon:planet_aspects",
+      "moon_pluto:planet_aspects"
+    ]);
   });
 });
 

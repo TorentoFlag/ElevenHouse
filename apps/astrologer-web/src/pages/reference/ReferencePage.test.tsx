@@ -190,6 +190,15 @@ const categories = [
     count: 4,
     createdAt: "2026-07-01T10:00:00.000Z",
     updatedAt: "2026-07-01T10:00:00.000Z"
+  },
+  {
+    id: "3a62b4aa-6048-4f79-a380-4010cadfd3be",
+    code: "planets_in_houses",
+    name: "Планеты в домах",
+    order: 40,
+    count: 4,
+    createdAt: "2026-07-01T10:00:00.000Z",
+    updatedAt: "2026-07-01T10:00:00.000Z"
   }
 ] satisfies DictionaryCategoryResponse[];
 
@@ -218,6 +227,7 @@ const sourceCounts = {
 describe("ReferencePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("location", { search: "" });
     mocks.hookState.cursor = 0;
     mocks.hookState.values = [];
     mocks.referencePageView.mockImplementation(() => null);
@@ -370,6 +380,30 @@ describe("ReferencePage", () => {
     });
     expect(viewProps.search).toBe("луна");
     expect(viewProps.resultsMotionKey).toBe("all:all:лу:1000");
+  });
+
+  it("opens a create modal from a chart interpretation URL intent", () => {
+    vi.stubGlobal("location", {
+      search: "?category=planets_in_houses&create=sun_house_11&search=sun_house_11&title=%D0%A1%D0%BE%D0%BB%D0%BD%D1%86%D0%B5+%C2%B7+XI+%D0%B4%D0%BE%D0%BC"
+    });
+
+    renderPage();
+
+    expect(mocks.createReferenceEntriesQuery).toHaveBeenLastCalledWith({
+      locale: "ru",
+      selectedCategoryId: null,
+      selectedSource: "all",
+      search: "sun_house_11"
+    });
+    expect(mocks.referenceEntryModal).toHaveBeenCalledWith({
+      mode: "create",
+      copy: entryModalCopy,
+      categories,
+      locale: "ru",
+      selectedCategoryId: getArrayItem(categories, 1).id,
+      titleSeed: "Солнце · XI дом",
+      onClose: expect.any(Function)
+    } satisfies ReferenceEntryModalProps);
   });
 
   it("uses ten-entry infinite pages and exposes fetch-more state to the view", () => {

@@ -319,6 +319,10 @@ function InterpretationSummary({
                 <div className={styles.interpretationAnchorStack}>
                   {group.anchors.map((anchor) => {
                     const entry = dictionaryEntriesByCode.get(anchor.code);
+                    const isMissingEntry = isDictionaryInterpretationMissing({
+                      entry,
+                      state: dictionaryState
+                    });
 
                     return (
                       <div className={styles.interpretationAnchorCard} key={anchor.id}>
@@ -327,6 +331,15 @@ function InterpretationSummary({
                         <span>{anchor.position}</span>
                         <p>{getDictionaryInterpretationText({ anchor, entry }, dictionaryState)}</p>
                         {entry ? <em>Справочник · {entry.source}</em> : null}
+                        {isMissingEntry ? (
+                          <a
+                            aria-label={`Создать трактовку ${anchor.code} в справочнике`}
+                            className={styles.interpretationMissingAction}
+                            href={getReferenceCreateInterpretationHref(anchor)}
+                          >
+                            Создать трактовку
+                          </a>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -384,6 +397,27 @@ function getDictionaryInterpretationText(
   }
 
   return `В справочнике пока нет записи ${input.anchor.code}.`;
+}
+
+function isDictionaryInterpretationMissing(input: {
+  readonly entry?: DictionaryEffectiveEntryResponse;
+  readonly state: {
+    readonly isLoading: boolean;
+    readonly errorMessage: string | null;
+  };
+}): boolean {
+  return !input.entry && !input.state.isLoading && !input.state.errorMessage;
+}
+
+function getReferenceCreateInterpretationHref(anchor: ChartInterpretationAnchor): string {
+  const searchParams = new URLSearchParams({
+    category: anchor.categoryCode,
+    create: anchor.code,
+    search: anchor.code,
+    title: anchor.label
+  });
+
+  return `/reference?${searchParams.toString()}`;
 }
 
 function getInterpretationAnchorGroups(anchors: readonly ChartInterpretationAnchor[]) {

@@ -29,10 +29,18 @@ type ReferenceEntryModalState =
 
 export function ReferencePage() {
   const { dictionary, locale } = useI18n<AstrologerCopy>();
+  const referenceCreateIntent = getReferenceCreateIntent();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedSource, setSelectedSource] = useState<DictionaryEntrySourceFilter>("all");
-  const [search, setSearch] = useState("");
-  const [entryModal, setEntryModal] = useState<ReferenceEntryModalState | null>(null);
+  const [search, setSearch] = useState(referenceCreateIntent?.searchSeed ?? "");
+  const [entryModal, setEntryModal] = useState<ReferenceEntryModalState | null>(() =>
+    referenceCreateIntent
+      ? {
+          mode: "create",
+          titleSeed: referenceCreateIntent.titleSeed
+        }
+      : null
+  );
   const [deleteConfirmationEntry, setDeleteConfirmationEntry] =
     useState<DictionaryEffectiveEntryResponse | null>(null);
   const [isResetConfirmationOpen, setIsResetConfirmationOpen] = useState(false);
@@ -60,6 +68,10 @@ export function ReferencePage() {
     categoriesResponse: categoriesQuery.data,
     entriesResponse
   });
+  const referenceCreateCategoryId = referenceCreateIntent?.categoryCode
+    ? getReferenceCategoryIdByCode(summary.categories, referenceCreateIntent.categoryCode)
+    : null;
+  const createSelectedCategoryId = referenceCreateCategoryId ?? selectedCategoryId;
   const isResultsUpdating =
     entriesQuery.isPlaceholderData && entriesQuery.isFetching && !entriesQuery.isFetchingNextPage;
   const previousResultsMotionKeyRef = useRef("initial");
@@ -167,12 +179,12 @@ export function ReferencePage() {
       />
       {entryModal && entryModal.mode === "create" && (
         <ReferenceEntryModal
-          key={`create:${selectedCategoryId ?? "all"}:${entryModal.titleSeed}`}
+          key={`create:${createSelectedCategoryId ?? "all"}:${entryModal.titleSeed}`}
           mode="create"
           copy={dictionary.reference.entryModal}
           categories={summary.categories}
           locale={locale}
-          selectedCategoryId={selectedCategoryId}
+          selectedCategoryId={createSelectedCategoryId}
           titleSeed={entryModal.titleSeed}
           onClose={() => setEntryModal(null)}
         />
@@ -190,4 +202,37 @@ export function ReferencePage() {
       )}
     </>
   );
+}
+
+function getReferenceCreateIntent(): {
+  readonly categoryCode: string | null;
+  readonly searchSeed: string;
+  readonly titleSeed: string;
+} | null {
+  const searchParams = new URLSearchParams(getCurrentLocationSearch());
+  const createCode = searchParams.get("create")?.trim();
+
+  if (!createCode) {
+    return null;
+  }
+
+  const searchSeed = searchParams.get("search")?.trim() || createCode;
+  const titleSeed = searchParams.get("title")?.trim() || searchSeed;
+
+  return {
+    categoryCode: searchParams.get("category")?.trim() || null,
+    searchSeed,
+    titleSeed
+  };
+}
+
+function getReferenceCategoryIdByCode(
+  categories: readonly { readonly code: string; readonly id: string }[],
+  categoryCode: string
+): string | null {
+  return categories.find((category) => category.code === categoryCode)?.id ?? null;
+}
+
+function getCurrentLocationSearch(): string {
+  return typeof globalThis.location?.search === "string" ? globalThis.location.search : "";
 }
