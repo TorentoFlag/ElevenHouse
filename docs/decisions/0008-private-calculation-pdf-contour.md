@@ -24,6 +24,10 @@ Module-owned API adapters validate eligibility and select that source:
 - Pythagorean Numerology always exports the full deterministic individual or
   compatibility result; it includes the current approved interpretation when
   one exists, while absence of approval does not block export.
+- Natal Chart exports the full deterministic current calculation result,
+  including a vector chart wheel and owner-scoped dictionary entries looked up
+  by exact chart codes. Missing dictionary entries are visible in the document
+  and do not block export.
 
 The API transaction creates the job/artifact and an outbox event. `workers`
 relays identifiers to the `calculation.pdf` BullMQ queue, reloads the

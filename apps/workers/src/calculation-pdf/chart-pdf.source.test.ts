@@ -1,4 +1,5 @@
 import type { CalculationPdfJob, CalculationRecord } from "@elevenhouse/domain";
+import type { DictionaryStore } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import { CalculationPdfPermanentError } from "./calculation-pdf.registry";
 import { createChartPdfSource } from "./chart-pdf.source";
@@ -8,7 +9,7 @@ describe("Chart PDF source", () => {
     const current = calculation();
     const source = createChartPdfSource({
       findByOwnerAndId: vi.fn(async () => current)
-    } as never);
+    } as never, dictionaryStore());
 
     await expect(source.load(pdfJob())).resolves.toMatchObject({
       kind: "chart",
@@ -23,6 +24,60 @@ describe("Chart PDF source", () => {
     });
   });
 
+  it("loads only current-chart dictionary interpretations by deterministic codes", async () => {
+    const dictionaryStore = {
+      listEntriesByCodes: vi.fn(async () => ({
+        entries: [
+          {
+            id: "00000000-0000-4000-8000-000000000010",
+            categoryId: "00000000-0000-4000-8000-000000000011",
+            categoryCode: "planets_in_signs",
+            code: "sun_cancer",
+            locale: "ru",
+            source: "platform",
+            title: "Солнце в Раке",
+            content: "Трактовка из справочника.",
+            createdAt: "2026-07-22T10:00:00.000Z",
+            updatedAt: "2026-07-22T10:00:00.000Z"
+          }
+        ],
+        total: 1,
+        counts: { sources: { all: 1, platform: 1, modified: 0, custom: 0 } }
+      }))
+    } as Partial<DictionaryStore> as DictionaryStore;
+    const source = createChartPdfSource(
+      {
+        findByOwnerAndId: vi.fn(async () => calculation())
+      } as never,
+      dictionaryStore
+    );
+
+    const document = await source.load(pdfJob());
+
+    expect(dictionaryStore.listEntriesByCodes).toHaveBeenCalledWith({
+      ownerUserId: pdfJob().ownerUserId,
+      locale: "ru",
+      codes: expect.arrayContaining(["sun_cancer", "moon_aries", "square", "sun_moon"])
+    });
+    expect(document).toMatchObject({
+      interpretations: expect.arrayContaining([
+        expect.objectContaining({
+          code: "sun_cancer",
+          label: "Солнце в Раке",
+          entry: expect.objectContaining({
+            title: "Солнце в Раке",
+            content: "Трактовка из справочника.",
+            source: "platform"
+          })
+        }),
+        expect.objectContaining({
+          code: "moon_aries",
+          entry: null
+        })
+      ])
+    });
+  });
+
   it.each([
     { sourceLocator: { kind: "approved_interpretation" as const, interpretationId: null } },
     { module: "numerology" as const },
@@ -31,7 +86,7 @@ describe("Chart PDF source", () => {
   ])("rejects stale job identity %#", async (override) => {
     const source = createChartPdfSource({
       findByOwnerAndId: vi.fn(async () => calculation())
-    } as never);
+    } as never, dictionaryStore());
 
     await expect(source.load(pdfJob(override as never))).rejects.toBeInstanceOf(
       CalculationPdfPermanentError
@@ -41,17 +96,17 @@ describe("Chart PDF source", () => {
   it("rejects archived, missing or invalid chart records", async () => {
     const archived = createChartPdfSource({
       findByOwnerAndId: vi.fn(async () => calculation({ status: "archived" }))
-    } as never);
+    } as never, dictionaryStore());
     await expect(archived.load(pdfJob())).rejects.toMatchObject({ code: "stale_source" });
 
     const missing = createChartPdfSource({
       findByOwnerAndId: vi.fn(async () => null)
-    } as never);
+    } as never, dictionaryStore());
     await expect(missing.load(pdfJob())).rejects.toMatchObject({ code: "stale_source" });
 
     const invalid = createChartPdfSource({
       findByOwnerAndId: vi.fn(async () => calculation({ resultData: { method: "natal" } }))
-    } as never);
+    } as never, dictionaryStore());
     await expect(invalid.load(pdfJob())).rejects.toMatchObject({ code: "invalid_source" });
   });
 });
@@ -76,6 +131,32 @@ function pdfJob(overrides: Partial<CalculationPdfJob> = {}): CalculationPdfJob {
     createdAt: "2026-07-22T12:00:00.000Z",
     updatedAt: "2026-07-22T12:00:00.000Z",
     ...overrides
+  };
+}
+
+function dictionaryStore(overrides: Partial<DictionaryStore> = {}): DictionaryStore {
+  return {
+    listCategories: vi.fn(async () => ({
+      categories: [],
+      total: 0
+    })),
+    listEntries: vi.fn(async () => emptyDictionaryEntries()),
+    listEntriesByCodes: vi.fn(async () => emptyDictionaryEntries()),
+    createCustomEntry: vi.fn(),
+    updateCustomEntry: vi.fn(),
+    upsertPlatformEntryOverride: vi.fn(),
+    deleteAstrologerEntry: vi.fn(),
+    resetAstrologerEntries: vi.fn(),
+    resetPlatformEntryOverride: vi.fn(),
+    ...overrides
+  } as DictionaryStore;
+}
+
+function emptyDictionaryEntries() {
+  return {
+    entries: [],
+    total: 0,
+    counts: { sources: { all: 0, platform: 0, modified: 0, custom: 0 } }
   };
 }
 

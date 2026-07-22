@@ -1,5 +1,9 @@
 import type { MatrixReportContent } from "@elevenhouse/domain";
-import type { NumerologyResult, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import type {
+  DictionaryEntrySource,
+  NumerologyResult,
+  StoredChartCalculationPayload
+} from "@elevenhouse/contracts";
 
 export type MatrixPdfDocument = {
   readonly kind: "matrix";
@@ -23,4 +27,20 @@ export type ChartPdfDocument = {
   readonly createdAt: string;
   readonly calculationTitle: string;
   readonly result: StoredChartCalculationPayload;
+  readonly interpretations: readonly ChartPdfInterpretation[];
+};
+
+export type ChartPdfInterpretation = {
+  readonly code: string;
+  readonly group: "points" | "houses" | "aspects";
+  readonly label: string;
+  readonly meta: string;
+  readonly position: string;
+  readonly entry: ChartPdfInterpretationEntry | null;
+};
+
+export type ChartPdfInterpretationEntry = {
+  readonly title: string;
+  readonly content: string;
+  readonly source: DictionaryEntrySource;
 };

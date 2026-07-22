@@ -224,9 +224,11 @@ Chart PDF routes are owner-scoped to a current, non-archived `module = chart`,
 `method_code = natal` saved calculation. Latest state is read per `locale`;
 enqueue requires CSRF and the strict body
 `{ "expectedResultChecksum": "sha256:...", "locale": "ru" | "en" }`.
-Documents render deterministic calculation settings, provider metadata,
-birth-data snapshot, points, houses, aspects, distributions and warnings from
-the current saved result. Download succeeds only for a ready current job and
+Documents render a deterministic chart wheel, calculation settings, provider
+metadata, birth-data snapshot, points, houses, aspects, distributions, warnings
+and dictionary interpretations looked up by deterministic chart codes from the
+current saved result. Missing dictionary entries are explicit in the export
+rather than silently omitted. Download succeeds only for a ready current job and
 returns a short-lived private presigned URL.
 
 `POST /matrix/preview` is authenticated and read-only. Matrix persistence
@@ -257,10 +259,12 @@ catalog is authored in code and has no storage, AI or translation side effect.
 
 Matrix, Numerology and Chart PDF endpoints delegate to one calculation-PDF
 lifecycle. Matrix enqueue additionally requires its current checksum-bound
-report to be `ready`; its locale comes from that report. Numerology and Chart
-PDFs render deterministic current calculation data without requiring an
-approved interpretation. Enqueue is idempotent for the same authoritative
-document fingerprint. Recalculation atomically invalidates current PDF
+report to be `ready`; its locale comes from that report. Numerology PDFs render
+deterministic current calculation data without requiring an approved
+interpretation. Chart PDFs render deterministic current calculation data plus
+owner-scoped dictionary entries by exact chart codes. Enqueue is idempotent for
+the same authoritative document fingerprint. Recalculation atomically
+invalidates current PDF
 jobs/artifact references and writes cleanup events; old jobs cannot be
 downloaded, and object deletion is performed asynchronously by `workers`. API
 responses expose public job state and the presigned URL only: storage keys,

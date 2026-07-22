@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, type PDFFont, type PDFPage, rgb } from "pdf-lib";
+import { PDFDocument, type PDFFont, type PDFPage, rgb, type RGB } from "pdf-lib";
 
 const pageWidth = 595.28;
 const pageHeight = 841.89;
@@ -26,6 +26,11 @@ export type PdfLayout = {
     rows: readonly (readonly string[])[],
     options?: PdfTableOptions
   ) => void;
+  readonly drawGraphic: (
+    heading: string,
+    height: number,
+    draw: (context: PdfGraphicContext) => void
+  ) => void;
   readonly save: () => Promise<{ readonly bytes: Buffer; readonly pageCount: number }>;
 };
 
@@ -33,6 +38,24 @@ export type PdfTableOptions = {
   readonly columnWeights?: readonly number[];
   readonly fontSize?: number;
   readonly lineHeight?: number;
+};
+
+export type PdfGraphicContext = {
+  readonly page: PDFPage;
+  readonly regular: PDFFont;
+  readonly semibold: PDFFont;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly rgb: typeof rgb;
+  readonly colors: {
+    readonly ink: RGB;
+    readonly muted: RGB;
+    readonly border: RGB;
+    readonly surface: RGB;
+    readonly accent: RGB;
+  };
 };
 
 export async function createPdfLayout(input: {
@@ -229,6 +252,34 @@ class DefaultPdfLayout implements PdfLayout {
     drawRow(headers, true);
     rows.forEach((row) => drawRow(row, false));
     this.y -= 15;
+  }
+
+  drawGraphic(
+    heading: string,
+    height: number,
+    draw: (context: PdfGraphicContext) => void
+  ): void {
+    this.drawHeading(heading);
+    this.ensureSpace(height);
+    const top = this.y;
+    draw({
+      page: this.page,
+      regular: this.regular,
+      semibold: this.semibold,
+      x: marginX,
+      y: top - height,
+      width: contentWidth,
+      height,
+      rgb,
+      colors: {
+        ink: rgb(0.16, 0.14, 0.21),
+        muted: rgb(0.42, 0.39, 0.51),
+        border: rgb(0.86, 0.84, 0.9),
+        surface: rgb(0.98, 0.97, 1),
+        accent: rgb(0.48, 0.33, 0.85)
+      }
+    });
+    this.y -= height + 18;
   }
 
   async save(): Promise<{ bytes: Buffer; pageCount: number }> {

@@ -190,7 +190,8 @@ extension point for future methods such as a separate Vedic numerology engine;
 adding a method does not branch Pythagorean formulas or duplicate queue/storage
 infrastructure. Natal chart PDF export uses the same lifecycle and reloads the
 current `module = chart`, `method_code = natal` calculation result before
-rendering deterministic chart tables and calculation settings.
+rendering a deterministic vector wheel, chart tables, calculation settings and
+owner-scoped dictionary interpretations by exact chart codes.
 
 ## Кандидаты на будущее выделение
 

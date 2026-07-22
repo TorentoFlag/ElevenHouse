@@ -8,6 +8,10 @@ describe("Chart PDF renderer", () => {
   it("composes natal chart metadata, points, houses, aspects and distributions", () => {
     const content = buildChartPdfContent(document());
 
+    expect(content[0]).toMatchObject({
+      kind: "wheel",
+      heading: "Колесо карты"
+    });
     expect(keyValues(content, "Расчёт").map((item) => item.label)).toEqual([
       "Название",
       "Провайдер",
@@ -35,6 +39,52 @@ describe("Chart PDF renderer", () => {
     ]);
   });
 
+  it("renders dictionary interpretations and honest missing-entry actions", () => {
+    const content = buildChartPdfContent(
+      document("ru", {
+        interpretations: [
+          {
+            code: "sun_cancer",
+            group: "points",
+            label: "Солнце в Раке",
+            meta: "Планета в знаке",
+            position: "Рак 22°36' · XI дом",
+            entry: {
+              title: "Солнце в Раке",
+              content: "Трактовка из справочника.",
+              source: "platform"
+            }
+          },
+          {
+            code: "moon_house_8",
+            group: "points",
+            label: "Луна · VIII дом",
+            meta: "Планета в доме",
+            position: "Овен 21°13' · VIII дом",
+            entry: null
+          }
+        ]
+      })
+    );
+
+    const interpretations = table(content, "Трактовки из справочника");
+
+    expect(interpretations.rows).toEqual([
+      [
+        "Солнце в Раке",
+        "Планета в знаке · Рак 22°36' · XI дом",
+        "Трактовка из справочника.",
+        "Справочник · platform"
+      ],
+      [
+        "Луна · VIII дом",
+        "Планета в доме · Овен 21°13' · VIII дом",
+        "Трактовка отсутствует. Создайте её в справочнике: moon_house_8",
+        "Нет записи"
+      ]
+    ]);
+  });
+
   it("renders deterministic RU and EN PDFs", async () => {
     const renderer = createChartPdfRenderer();
     const first = await renderer.render(document());
@@ -54,13 +104,18 @@ describe("Chart PDF renderer", () => {
   });
 });
 
-function document(locale: "ru" | "en" = "ru"): ChartPdfDocument {
+function document(
+  locale: "ru" | "en" = "ru",
+  overrides: Partial<ChartPdfDocument> = {}
+): ChartPdfDocument {
   return {
     kind: "chart",
     locale,
     createdAt: "2026-07-22T12:00:00.000Z",
     calculationTitle: "Natal chart",
-    result: storedChartCalculationPayloadSchema.parse(chartResult())
+    result: storedChartCalculationPayloadSchema.parse(chartResult()),
+    interpretations: [],
+    ...overrides
   };
 }
 

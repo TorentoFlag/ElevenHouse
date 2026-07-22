@@ -4,6 +4,7 @@ import {
   createDrizzleCalculationPdfJobStore,
   createDrizzleCalculationStore
 } from "@elevenhouse/db/calculations";
+import { createDrizzleDictionaryStore } from "@elevenhouse/db/dictionary";
 import { createDrizzleMediaAssetStore } from "@elevenhouse/db/media";
 import { createDrizzleMatrixReportStore } from "@elevenhouse/db/matrix";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
@@ -39,6 +40,7 @@ const config = createWorkersRuntimeConfig();
 const postgres = createPostgresRuntime();
 const outboxStore = createDrizzleOutboxRelayStore(postgres.database);
 const calculationStore = createDrizzleCalculationStore(postgres.database);
+const dictionaryStore = createDrizzleDictionaryStore(postgres.database);
 const pdfJobStore = createDrizzleCalculationPdfJobStore(postgres.database);
 const pdfCleanupStore = createDrizzleCalculationPdfCleanupStore(postgres.database);
 const mediaStore = createDrizzleMediaAssetStore(postgres.database);
@@ -47,7 +49,7 @@ const matrixSource = createMatrixPdfSource(calculationStore, matrixReportStore);
 const matrixRenderer = createMatrixPdfRenderer();
 const numerologySource = createNumerologyPdfSource(calculationStore);
 const numerologyRenderer = createNumerologyPdfRenderer();
-const chartSource = createChartPdfSource(calculationStore);
+const chartSource = createChartPdfSource(calculationStore, dictionaryStore);
 const chartRenderer = createChartPdfRenderer();
 const registry = createCalculationPdfRegistry([
   {
