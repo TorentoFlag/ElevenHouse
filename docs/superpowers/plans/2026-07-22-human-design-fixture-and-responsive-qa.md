@@ -154,6 +154,10 @@ none
   `result_data`/summary/checksum with the deterministic domain result.
 - [x] 2026-07-22: Added a third approved reference boundary fixture for gate 41
   to gate 19 and line 1 to line 2 transition behavior.
+- [x] 2026-07-22: Re-ran authenticated Chrome DevTools browser flow against
+  chart-engine on `localhost:8012`: preview `200`, persist `201`, saved-list
+  refresh `200`, recalculate `200`, clean console and desktop/mobile
+  `scrollWidth = clientWidth`.
 - [ ] Capture file-based authenticated desktop and mobile production screenshots
   after the screenshot workspace issue is resolved or another approved browser
   surface is used.
@@ -347,7 +351,7 @@ and record the external refresh blocker separately.
   mismatch analysis.
 
 The method-confidence matrix now includes two external-source fixtures and one
-internal reference boundary fixture. The next executable step is resolving the
-remaining authenticated screenshot artifact blocker or adding another
-independent keyed/manual external fixture if stricter method confidence is
-required before commercial activation.
+internal reference boundary fixture. Authenticated runtime/browser acceptance is
+covered by inline Chrome DevTools evidence; the remaining blocker is storing
+authenticated screenshot PNG files because Chrome DevTools MCP rejects
+`.design-qa/...` file writes under its configured workspace roots.

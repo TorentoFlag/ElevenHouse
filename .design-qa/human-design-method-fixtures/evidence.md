@@ -193,3 +193,43 @@ browser metrics available from the same session.
   `bodyScrollWidth=390`; no document-level horizontal overflow. Detected
   right-edge entries were inside clipped/scrollable UI controls: the global
   brand logo, disabled mode tabs and saved-card date text.
+
+## Runtime Browser Recheck
+
+- Date: 2026-07-22.
+- Correction: current `astrologer-api` default and running chart-engine target
+  use `http://localhost:8012`, not `8011`.
+- Existing services checked read-only: `localhost:5174` frontend was available;
+  `localhost:3002/health` returned
+  `{"service":"astrologer-api","status":"ok"}`;
+  `localhost:8012/ready` returned
+  `{"service":"chart-engine","status":"ready"}`.
+- Browser surface: Chrome DevTools MCP, production route
+  `http://localhost:5174/human-design`, authenticated astrologer workspace,
+  saved linked calculation for `Мария Иванова`.
+- Runtime flow:
+  - reopened saved linked calculation from the saved-list card;
+  - clicked `Рассчитать`, received preview state `Бодиграф рассчитан`;
+  - clicked `Привязать`, received linked state `Расчёт привязан`;
+  - clicked `Обновить`, received linked state again.
+- Network evidence:
+  - `POST /api/human-design/preview` -> `200`;
+  - `POST /api/human-design/calculations` -> `201`;
+  - `GET /api/calculations?module=human_design&status=all&limit=50&offset=0`
+    -> `200` after persistence;
+  - `POST /api/human-design/calculations/d114b7d4-f221-4173-be4c-5f26e72a5161/recalculate`
+    -> `200`;
+  - saved-list refresh after recalculation -> `200`.
+- Console evidence: Chrome DevTools reported no `error`, `warn` or `issue`
+  console messages.
+- Desktop metrics after recheck: viewport `1440x900 @2x`,
+  `clientWidth=1440`, `scrollWidth=1440`, `bodyScrollWidth=1440`,
+  no overflowing elements, linked state visible with `Мария Иванова`,
+  `Проектор` and checksum `10bbb2f53839`.
+- Mobile metrics after recheck: emulated viewport `390x844 @2x`,
+  `clientWidth=390`, `scrollWidth=390`, `bodyScrollWidth=390`,
+  no document-level horizontal overflow, linked state visible with
+  `Мария Иванова`, `Проектор` and checksum `10bbb2f53839`.
+- Remaining screenshot artifact blocker: Chrome DevTools MCP still rejects
+  file writes under `.design-qa/...` with the configured workspace-root error,
+  so screenshots are inline DevTools evidence rather than stored PNG files.
