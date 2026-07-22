@@ -153,6 +153,28 @@ export type ChartTransitCalculationRequestInput = z.input<
 >;
 export type ChartTransitCalculationRequest = z.infer<typeof chartTransitCalculationRequestSchema>;
 
+export const chartSynastryCalculationRequestSchema = z
+  .object({
+    schemaVersion: z.literal("chart-request.v1"),
+    method: z.literal("synastry"),
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    partnerInputSnapshot: chartInputSnapshotSchema,
+    relationshipSnapshot: z
+      .object({
+        primaryClientId: uuidSchema,
+        partnerClientId: uuidSchema
+      })
+      .strict()
+  })
+  .strict();
+export type ChartSynastryCalculationRequestInput = z.input<
+  typeof chartSynastryCalculationRequestSchema
+>;
+export type ChartSynastryCalculationRequest = z.infer<
+  typeof chartSynastryCalculationRequestSchema
+>;
+
 export const chartPointSchema = z
   .object({
     id: z.string().trim().min(1).max(80),

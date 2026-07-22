@@ -3,8 +3,11 @@ import {
   chartInputSnapshotSchema,
   chartSettingsSchema,
   type ChartNatalCalculationRequest,
+  chartSynastryCalculationRequestSchema,
+  type ChartSynastryCalculationRequest,
   chartTransitSnapshotSchema,
   type ChartTransitCalculationRequest,
+  type StoredChartSynastryCalculationPayload,
   type StoredChartTransitCalculationPayload,
   type StoredChartCalculationPayload
 } from "@elevenhouse/contracts";
@@ -20,12 +23,23 @@ export type ChartEngineClient = {
   readonly calculateTransit: (
     payload: ChartTransitCalculationRequest
   ) => Promise<StoredChartTransitCalculationPayload>;
+  readonly calculateSynastry: (
+    payload: ChartSynastryCalculationRequest
+  ) => Promise<StoredChartSynastryCalculationPayload>;
 };
 
 const transitJobInputSnapshotSchema = z
   .object({
     inputSnapshot: chartInputSnapshotSchema,
     transitSnapshot: chartTransitSnapshotSchema
+  })
+  .strict();
+
+const synastryJobInputSnapshotSchema = chartSynastryCalculationRequestSchema
+  .pick({
+    inputSnapshot: true,
+    partnerInputSnapshot: true,
+    relationshipSnapshot: true
   })
   .strict();
 
@@ -107,6 +121,18 @@ async function calculateChartResult(input: {
       transitSnapshot: snapshots.transitSnapshot
     };
     return input.engine.calculateTransit(request);
+  }
+  if (claim.method === "synastry") {
+    const snapshots = synastryJobInputSnapshotSchema.parse(claim.inputSnapshot);
+    const request: ChartSynastryCalculationRequest = {
+      schemaVersion: "chart-request.v1",
+      method: "synastry",
+      settings,
+      inputSnapshot: snapshots.inputSnapshot,
+      partnerInputSnapshot: snapshots.partnerInputSnapshot,
+      relationshipSnapshot: snapshots.relationshipSnapshot
+    };
+    return input.engine.calculateSynastry(request);
   }
   throw new UnrecoverableError("Unsupported chart calculation method");
 }

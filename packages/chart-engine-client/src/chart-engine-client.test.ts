@@ -110,6 +110,43 @@ describe("ChartEngineHttpClient", () => {
     );
   });
 
+  it("posts synastry input to the private chart engine", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => synastryResult
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012/",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateSynastry(synastryRequest)).resolves.toMatchObject({
+      schemaVersion: "chart-result.v1",
+      method: "synastry",
+      result: { aspectsBetween: [expect.objectContaining({ primaryPoint: "sun" })] }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://chart-engine:8012/v1/synastry",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("treats invalid synastry provider JSON as permanent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaVersion: "wrong" })
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateSynastry(synastryRequest)).rejects.toBeInstanceOf(
+      ChartEnginePermanentError
+    );
+  });
+
   it("posts planetary positions input to the private chart engine", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -187,6 +224,59 @@ const transitResult = {
         orb: 1.25,
         applying: true,
         strength: 0.79
+      }
+    ],
+    warnings: []
+  }
+} as const;
+
+const synastryRequest = {
+  schemaVersion: "chart-request.v1",
+  method: "synastry",
+  settings: request.settings,
+  inputSnapshot: request.inputSnapshot,
+  partnerInputSnapshot: {
+    birthDate: "1992-08-11",
+    birthTime: "22:15",
+    timezone: "Europe/Moscow",
+    latitude: 55.7558,
+    longitude: 37.6173,
+    birthTimePrecision: "exact"
+  },
+  relationshipSnapshot: {
+    primaryClientId: "00000000-0000-4000-8000-000000000001",
+    partnerClientId: "00000000-0000-4000-8000-000000000002"
+  }
+} as const;
+
+const synastryResult = {
+  schemaVersion: "chart-result.v1",
+  method: "synastry",
+  provider: result.provider,
+  settings: { zodiac: "tropical", ...request.settings },
+  inputSnapshot: request.inputSnapshot,
+  partnerInputSnapshot: synastryRequest.partnerInputSnapshot,
+  relationshipSnapshot: synastryRequest.relationshipSnapshot,
+  result: {
+    primary: result.result,
+    partner: result.result,
+    aspectsBetween: [
+      {
+        primaryPoint: "sun",
+        partnerPoint: "moon",
+        type: "trine",
+        angle: 120,
+        orb: 1.25,
+        applying: null,
+        strength: 0.79
+      }
+    ],
+    houseOverlays: [
+      {
+        owner: "primary",
+        point: "venus",
+        projectedHouseOwner: "partner",
+        projectedHouse: 7
       }
     ],
     warnings: []

@@ -42,6 +42,27 @@ const transitJob = {
   }
 } as const;
 
+const synastryJob = {
+  ...job,
+  method: "synastry",
+  settingsSnapshot: job.settingsSnapshot,
+  inputSnapshot: {
+    inputSnapshot: job.inputSnapshot,
+    partnerInputSnapshot: {
+      birthDate: "1992-08-11",
+      birthTime: "22:15",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173,
+      birthTimePrecision: "exact"
+    },
+    relationshipSnapshot: {
+      primaryClientId: job.clientId,
+      partnerClientId: "44444444-4444-4444-8444-444444444444"
+    }
+  }
+} as const;
+
 const result = {
   schemaVersion: "chart-result.v1",
   method: "natal",
@@ -82,6 +103,40 @@ const transitResult = {
   }
 } as const;
 
+const synastryResult = {
+  schemaVersion: "chart-result.v1",
+  method: "synastry",
+  provider: result.provider,
+  settings: job.settingsSnapshot,
+  inputSnapshot: job.inputSnapshot,
+  partnerInputSnapshot: synastryJob.inputSnapshot.partnerInputSnapshot,
+  relationshipSnapshot: synastryJob.inputSnapshot.relationshipSnapshot,
+  result: {
+    primary: result.result,
+    partner: result.result,
+    aspectsBetween: [
+      {
+        primaryPoint: "sun",
+        partnerPoint: "moon",
+        type: "trine",
+        angle: 120,
+        orb: 1,
+        applying: null,
+        strength: 0.8
+      }
+    ],
+    houseOverlays: [
+      {
+        owner: "primary",
+        point: "venus",
+        projectedHouseOwner: "partner",
+        projectedHouse: 7
+      }
+    ],
+    warnings: []
+  }
+} as const;
+
 describe("processChartCalculationJob", () => {
   it("loads input snapshot from DB and persists canonical result", async () => {
     const store = {
@@ -92,7 +147,8 @@ describe("processChartCalculationJob", () => {
     };
     const engine = {
       calculateNatal: vi.fn().mockResolvedValue(result),
-      calculateTransit: vi.fn()
+      calculateTransit: vi.fn(),
+      calculateSynastry: vi.fn()
     };
 
     await processChartCalculationJob({
@@ -123,7 +179,8 @@ describe("processChartCalculationJob", () => {
     };
     const engine = {
       calculateNatal: vi.fn(),
-      calculateTransit: vi.fn().mockResolvedValue(transitResult)
+      calculateTransit: vi.fn().mockResolvedValue(transitResult),
+      calculateSynastry: vi.fn()
     };
 
     await processChartCalculationJob({
@@ -144,6 +201,42 @@ describe("processChartCalculationJob", () => {
     });
     expect(store.complete).toHaveBeenCalledWith(
       expect.objectContaining({ jobId: transitJob.id, result: transitResult })
+    );
+  });
+
+  it("dispatches synastry jobs to the synastry provider endpoint", async () => {
+    const store = {
+      findByJobId: vi.fn().mockResolvedValue(synastryJob),
+      claimForProcessing: vi.fn().mockResolvedValue(synastryJob),
+      complete: vi.fn().mockResolvedValue(true),
+      fail: vi.fn()
+    };
+    const engine = {
+      calculateNatal: vi.fn(),
+      calculateTransit: vi.fn(),
+      calculateSynastry: vi.fn().mockResolvedValue(synastryResult)
+    };
+
+    await processChartCalculationJob({
+      jobId: synastryJob.id,
+      finalAttempt: false,
+      store,
+      engine,
+      now: new Date("2026-07-22T12:00:00.000Z")
+    });
+
+    expect(engine.calculateNatal).not.toHaveBeenCalled();
+    expect(engine.calculateTransit).not.toHaveBeenCalled();
+    expect(engine.calculateSynastry).toHaveBeenCalledWith({
+      schemaVersion: "chart-request.v1",
+      method: "synastry",
+      settings: synastryJob.settingsSnapshot,
+      inputSnapshot: job.inputSnapshot,
+      partnerInputSnapshot: synastryJob.inputSnapshot.partnerInputSnapshot,
+      relationshipSnapshot: synastryJob.inputSnapshot.relationshipSnapshot
+    });
+    expect(store.complete).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: synastryJob.id, result: synastryResult })
     );
   });
 
