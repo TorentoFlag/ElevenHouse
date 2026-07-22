@@ -7,7 +7,9 @@
   --calendar-accent: #f4ca4c;
   --calendar-accent-ink: #211805;
   --calendar-purple: #a98cff;
-  --calendar-green: #74d6b4;
+  --calendar-green: #4ec8a0;
+  --calendar-green-soft: rgb(78 200 160 / 0.1);
+  --calendar-green-line: rgb(78 200 160 / 0.32);
 
   position: relative;
   z-index: 1;
@@ -332,9 +334,9 @@
 }
 
 .calendarCanvas :global(.eh-calendar-event--confirmed) {
-  border-color: rgb(169 140 255 / 0.55);
-  border-left-color: var(--calendar-purple);
-  background: rgb(86 57 164 / 0.34);
+  border-color: var(--calendar-green-line);
+  border-left-color: var(--calendar-green);
+  background: var(--calendar-green-soft);
 }
 
 .calendarCanvas :global(.eh-calendar-event--blocked) {
@@ -834,10 +836,10 @@ button.monthEntry {
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  border: 1px solid rgb(169 140 255 / 0.46);
+  border: 1px solid var(--calendar-green-line);
   border-radius: 999px;
-  background: rgb(86 57 164 / 0.26);
-  color: #b99cff;
+  background: var(--calendar-green-soft);
+  color: var(--calendar-green);
   font-size: 13px;
   font-weight: 650;
 }
