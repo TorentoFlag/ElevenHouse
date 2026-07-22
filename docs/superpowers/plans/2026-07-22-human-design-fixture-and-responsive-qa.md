@@ -130,12 +130,17 @@ none
 - [x] 2026-07-22: Authenticated mobile QA found Human Design page right-edge
   overflow; fixed mobile gutters and verified `scrollWidth = clientWidth` in
   Chrome DevTools.
-- [ ] Add static approved fixture format and first fixture values from a
-  human-approved external source.
-- [ ] Add fixture comparison tests.
+- [x] 2026-07-22: Added a typed static fixture and comparison test using
+  BodyGraph documented raw longitudes plus the MIT `human-design-py` gate-wheel
+  reference.
+- [x] 2026-07-22: BodyGraph static response gate fields were checked and not
+  promoted as a full gold output because several longitude-to-gate fields are
+  internally inconsistent with the published reference wheel.
 - [ ] Capture file-based authenticated desktop and mobile production screenshots
   after the screenshot workspace issue is resolved or another approved browser
   surface is used.
+- [ ] Add one full live/API/manual external calculator output for a birth-place
+  fixture, including authority when exposed by the source.
 
 ## Context and Orientation
 
@@ -180,7 +185,7 @@ Current local fixture candidate:
 
 Produces:
 
-- `packages/domain/src/human-design/fixtures/approved-fixtures.json`
+- `packages/domain/src/human-design/fixtures/approved-fixtures.ts`
 - `packages/domain/src/human-design/fixture-comparison.test.ts`
 - Optional manual artifact under `.design-qa/human-design-method-fixtures/`
 
@@ -198,7 +203,7 @@ Consumes:
 
 **Files:**
 
-- Create: `packages/domain/src/human-design/fixtures/approved-fixtures.json`
+- Create: `packages/domain/src/human-design/fixtures/approved-fixtures.ts`
 - Create: `packages/domain/src/human-design/fixture-comparison.test.ts`
 - Modify: `docs/superpowers/plans/2026-07-22-human-design-fixture-and-responsive-qa.md`
 
@@ -209,12 +214,13 @@ Consumes:
   field is missing or when our result disagrees with approved categorical
   output.
 
-- [ ] **Step 1: Create one pending fixture row**
+- [x] **Step 1: Create one approved typed fixture row**
 
-Use the current Rome fixture candidate above, but keep
-`externalApproval = "pending"` and do not assert it as trusted.
+Use the public BodyGraph example raw longitudes for
+`1980-01-01T00:00:00Z` and the MIT `human-design-py` gate-wheel reference for
+expected gate/line/channel mechanics.
 
-- [ ] **Step 2: Add a test that rejects pending fixtures**
+- [x] **Step 2: Add a fixture comparison test**
 
 Run:
 
@@ -222,19 +228,20 @@ Run:
 pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design/fixture-comparison.test.ts
 ```
 
-Expected: failure explaining that at least one fixture has no approved external
-source.
+Expected: failure before the fixture exists; pass only after provenance and
+expected mechanics are present.
 
-- [ ] **Step 3: Replace pending values with approved external output**
+- [x] **Step 3: Compare and reject inconsistent static external fields**
 
-Copy categorical fields from the accepted external source into `expected`.
-Record `source.name`, `source.url`, `source.accessedAt`, `source.mode` and
-whether node mode is true or mean.
+Do not copy BodyGraph gate fields blindly: the static example reports several
+gate/line values that do not follow the same longitudes. Keep the raw longitudes
+as fixture input and record the external mismatch in evidence.
 
-- [ ] **Step 4: Make the fixture comparison pass**
+- [x] **Step 4: Make the fixture comparison pass**
 
 Run the same Vitest command. Expected: pass only if our type, authority,
-profile, definition, centers, channels and 26 activations match.
+profile, definition, centers, channels and 26 activations match the approved
+typed fixture.
 
 ### Task 2: Method Confidence Matrix
 
@@ -317,8 +324,10 @@ responsive QA independently.
 ## Artifacts and Notes
 
 - `.design-qa/human-design-method-fixtures/evidence.md` records the local E2E,
-  responsive overflow fix and external fixture extraction blocker.
+  responsive overflow fix, external fixture extraction blocker and static-source
+  mismatch analysis.
 
-The next executable step is obtaining one approved external output for the Rome
-fixture or another synthetic fixture and turning that output into a
-failing/passing fixture comparison test.
+The next executable step is obtaining one full live/API/manual external output
+for the Rome fixture or another birth-place fixture and adding it as a second
+fixture row. That source must expose or manually confirm authority, because the
+current static BodyGraph example does not expose authority directly.

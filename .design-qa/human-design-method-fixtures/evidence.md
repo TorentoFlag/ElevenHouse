@@ -74,6 +74,30 @@ Mobile viewport:
 - Consequence: external fixture approval needs either an API key, a manual
   human-approved output copied into static fixture JSON, or another accepted
   calculator source.
+- Source tested: `https://www.bodygraph.info/`
+- Observation: public docs expose a structured example for
+  `1980-01-01T00:00:00Z` with personality/design longitudes, gates, lines,
+  centers, channels, type, profile and incarnation cross.
+- Comparison result: the raw longitudes are useful as stable fixture input, but
+  several published gate/line fields do not match the MIT `human-design-py`
+  gate-wheel reference for the same longitudes. Example mismatches found during
+  the spike include `personality.mercury`, `personality.jupiter`,
+  `personality.saturn`, `design.north_node`, `design.south_node`,
+  `design.mars` and `design.saturn`.
+- Consequence: BodyGraph static docs were not promoted as a complete gold
+  output. The first approved fixture uses BodyGraph raw longitudes plus the
+  `human-design-py` gate-wheel reference; a second fixture still needs live API
+  or manual external output that exposes authority directly.
+
+## Static Fixture Test
+
+- Added: `packages/domain/src/human-design/fixtures/approved-fixtures.ts`
+- Added: `packages/domain/src/human-design/fixture-comparison.test.ts`
+- Red proof: fixture comparison initially failed because the fixture module did
+  not exist.
+- Green proof:
+  `pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design/fixture-comparison.test.ts`
+  passed with one approved typed fixture.
 
 ## Screenshot Note
 
