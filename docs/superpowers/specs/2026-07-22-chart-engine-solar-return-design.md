@@ -1,9 +1,14 @@
 # Chart Engine Solar Return Design
 
 Date: 2026-07-22
-Status: design approved for implementation
+Status: first slice implemented and browser-verified
 Scope: first production solar-return slice for `/chart-engine`, after natal,
 single-moment transits and two-client synastry.
+
+Verified scenario used authenticated `/chart-engine`, client
+`22222222-2222-4222-8222-222222222222`, year `2026`,
+`POST /api/charts/solar-return/jobs`, job polling, result read
+`791a324e-8977-4915-a1a3-089f01258bcc`, reload restore and Dictionary lookup.
 
 > This document is an implementation design artifact. Durable decisions must be
 > reflected in canonical product, architecture, API and testing docs as the
@@ -170,10 +175,12 @@ frontend geometry and provider SVG.
 
 First slice lookup codes:
 
-- `solar_return.point.<point>.<sign>`
-- `solar_return.house.<point>.<houseNumber>`
-- `solar_return.aspect.<solarReturnPoint>.<aspect>.<natalPoint>`
-- `solar_return.year.<year>` only as a low-priority summary anchor
+- existing natal position anchors from the natal side of the stored result,
+  such as `sun_cancer`, `sun_house_11`, `house_1` and base aspect codes;
+- solar-to-natal aspect anchors as
+  `solar_return.<solarReturnPoint>.<aspect>.<natalPoint>`, for example
+  `solar_return.sun.conjunction.sun`;
+- no year-level interpretation entry in the first slice.
 
 Missing entries use the existing honest missing-entry pattern with a
 create-interpretation affordance.
@@ -208,3 +215,19 @@ Design parity:
   `engine-modes.jsx`, `engine-tables.jsx` and `wheel.jsx` for wheel, rails,
   toolbar, tables and disabled/active state language;
 - capture reference and production screenshots before claiming visible parity.
+
+Verified evidence on 2026-07-22:
+
+- Automated checks passed: contracts/db schema, chart-engine provider pytest,
+  chart-engine-client/worker, astrologer-api service/e2e, frontend model/page
+  tests and affected builds during the implementation sequence.
+- Browser proof passed on `http://localhost:5174/chart-engine` after restarting
+  the local worker with `CHART_ENGINE_BASE_URL=http://127.0.0.1:8011`.
+- Network evidence included `POST /api/charts/solar-return/jobs` -> `201`, job
+  polling -> `200`, `GET /api/charts/calculations/791a324e-8977-4915-a1a3-089f01258bcc`
+  -> `200`, and Dictionary `entries/by-codes` containing `solar_return.*`.
+- UI evidence after reload: mode `СОЛЯР`, year `2026`, status
+  `Соляр рассчитан`, `Планеты соляра`, `Солярные аспекты к наталу`, and missing
+  solar-return Dictionary entries with `Создать трактовку` links.
+- Console after the final reload had only Vite/React development messages and
+  no errors or DevTools issues.

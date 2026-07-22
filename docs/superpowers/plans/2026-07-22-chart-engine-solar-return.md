@@ -26,6 +26,19 @@
 ## Progress
 
 - 2026-07-22: User approved first slice as `натал внутри + соляр снаружи`, target year explicit, natal location/timezone, PDF/AI disabled.
+- 2026-07-22: Tasks 1-5 landed in commits `38a937a`, `bc9449e`,
+  `752a74f`, `845d56b`, `c9c0383`, `10358ef` and `22773b8`.
+- 2026-07-22: Runtime proof passed on authenticated
+  `http://localhost:5174/chart-engine` after restarting the local worker with
+  `CHART_ENGINE_BASE_URL=http://127.0.0.1:8011`. Verified client
+  `22222222-2222-4222-8222-222222222222`, year `2026`,
+  `POST /api/charts/solar-return/jobs` -> `201`, job polling -> `200`, result
+  read `791a324e-8977-4915-a1a3-089f01258bcc` -> `200`, reload restore and
+  Dictionary lookup containing `solar_return.*` codes.
+- 2026-07-22: First browser attempt failed with `CHART_ENGINE_HTTP_404`
+  because the local worker defaulted to `http://localhost:8012` while the
+  provider was running on `http://127.0.0.1:8011`; this is runtime wiring, not
+  a product fallback.
 
 ## Task 1: Contracts And DB Method Value
 
@@ -41,12 +54,12 @@
 - Consumes: existing `chartTransitSnapshotSchema`, `chartTransitAspectSchema`, `chartRenderResultSchema`, `storedChartCalculationPayloadSchema`.
 - Produces: `chartSolarReturnJobCreateRequestSchema`, `chartSolarReturnCalculationRequestSchema`, `storedChartSolarReturnCalculationPayloadSchema`, method value `solar_return`.
 
-- [ ] Write failing Zod tests that `solar_return` validates `year`, stores `solarReturnSnapshot.resolvedAt`, and remains a discriminated union member.
-- [ ] Run `pnpm test packages/contracts/src/charts.test.ts packages/db/src/schema/calculations/calculations.schema.test.ts`; expected failure because schemas and DB method value are missing.
-- [ ] Add `solar_return` schemas and method constraints.
-- [ ] Re-run the same tests; expected pass.
-- [ ] Run `git diff --check`.
-- [ ] Commit exact owned files with `feat: add solar return chart contracts`.
+- [x] Write failing Zod tests that `solar_return` validates `year`, stores `solarReturnSnapshot.resolvedAt`, and remains a discriminated union member.
+- [x] Run `pnpm test packages/contracts/src/charts.test.ts packages/db/src/schema/calculations/calculations.schema.test.ts`; expected failure because schemas and DB method value are missing.
+- [x] Add `solar_return` schemas and method constraints.
+- [x] Re-run the same tests; expected pass.
+- [x] Run `git diff --check`.
+- [x] Commit exact owned files with `feat: add solar return chart contracts`.
 
 ## Task 2: Python Provider Endpoint
 
@@ -60,12 +73,12 @@
 - Consumes: request shape from Task 1.
 - Produces: `POST /v1/solar-return` returning `StoredChartSolarReturnCalculationPayload`.
 
-- [ ] Write failing pytest for `/v1/solar-return` with natal input and `year = 2026`.
-- [ ] Run `cd apps/chart-engine && .venv/bin/python -m pytest tests/test_solar_return_contract.py`; expected 404 or schema failure.
-- [ ] Implement provider mapping through `PlanetaryReturnFactory(..., online=False)` and `ChartDataFactory.create_return_chart_data(natal_subject, return_subject)`.
-- [ ] Reuse existing point/house/aspect/distribution mappers; return `solarReturnSnapshot.resolvedAt` from provider local datetime.
-- [ ] Re-run solar-return, natal, transit and synastry provider tests; expected pass.
-- [ ] Commit exact owned files with `feat: add solar return provider`.
+- [x] Write failing pytest for `/v1/solar-return` with natal input and `year = 2026`.
+- [x] Run `cd apps/chart-engine && .venv/bin/python -m pytest tests/test_solar_return_contract.py`; expected 404 or schema failure.
+- [x] Implement provider mapping through `PlanetaryReturnFactory(..., online=False)` and `ChartDataFactory.create_return_chart_data(natal_subject, return_subject)`.
+- [x] Reuse existing point/house/aspect/distribution mappers; return `solarReturnSnapshot.resolvedAt` from provider local datetime.
+- [x] Re-run solar-return, natal, transit and synastry provider tests; expected pass.
+- [x] Commit exact owned files with `feat: add solar return provider`.
 
 ## Task 3: Client And Worker Dispatch
 
@@ -79,11 +92,11 @@
 - Consumes: `ChartSolarReturnCalculationRequest`, `StoredChartSolarReturnCalculationPayload`.
 - Produces: `calculateSolarReturn(payload)` and worker dispatch for method `solar_return`.
 
-- [ ] Write failing client and worker tests for `/v1/solar-return` dispatch.
-- [ ] Run `pnpm test packages/chart-engine-client/src/chart-engine-client.test.ts apps/chart-worker/src/chart-jobs.processor.test.ts`; expected failure.
-- [ ] Implement typed client method and worker branch.
-- [ ] Re-run tests; expected pass.
-- [ ] Commit exact owned files with `feat: dispatch solar return chart jobs`.
+- [x] Write failing client and worker tests for `/v1/solar-return` dispatch.
+- [x] Run `pnpm test packages/chart-engine-client/src/chart-engine-client.test.ts apps/chart-worker/src/chart-jobs.processor.test.ts`; expected failure.
+- [x] Implement typed client method and worker branch.
+- [x] Re-run tests; expected pass.
+- [x] Commit exact owned files with `feat: dispatch solar return chart jobs`.
 
 ## Task 4: Astrologer API Job Creation
 
@@ -98,12 +111,12 @@
 - Consumes: `chartSolarReturnJobCreateRequestSchema`.
 - Produces: `POST /charts/solar-return/jobs`.
 
-- [ ] Write failing service/e2e tests for owner-scoped client, `year` validation, missing birth data, CSRF and idempotent existing result reuse.
-- [ ] Run `pnpm test apps/astrologer-api/src/modules/charts/charts.service.test.ts apps/astrologer-api/src/modules/charts/charts.e2e.test.ts`; expected failure.
-- [ ] Add controller route, service request parsing, fingerprint, snapshots and stable errors.
-- [ ] Re-run tests; expected pass.
-- [ ] Run `pnpm --filter @elevenhouse/astrologer-api build`.
-- [ ] Commit exact owned files with `feat: expose solar return chart jobs`.
+- [x] Write failing service/e2e tests for owner-scoped client, `year` validation, missing birth data, CSRF and idempotent existing result reuse.
+- [x] Run `pnpm test apps/astrologer-api/src/modules/charts/charts.service.test.ts apps/astrologer-api/src/modules/charts/charts.e2e.test.ts`; expected failure.
+- [x] Add controller route, service request parsing, fingerprint, snapshots and stable errors.
+- [x] Re-run tests; expected pass.
+- [x] Run `pnpm --filter @elevenhouse/astrologer-api build`.
+- [x] Commit exact owned files with `feat: expose solar return chart jobs`.
 
 ## Task 5: Frontend Mode, State And Dictionary
 
@@ -126,12 +139,12 @@
 - Consumes: API route from Task 4 and `StoredChartSolarReturnCalculationPayload`.
 - Produces: `/chart-engine` `Соляр` mode with year control, stale detection, dual-wheel render and Dictionary `solar_return.*` anchors.
 
-- [ ] Write failing API/model/component/controller tests for solar-return mode, invalid year, stale after year change, reload restore and Dictionary codes.
-- [ ] Run targeted frontend tests; expected failure.
-- [ ] Implement API helper, controller mode, year state, UI labels, result display, wheel/table reuse and Dictionary anchors.
-- [ ] Re-run targeted frontend tests; expected pass.
-- [ ] Run `pnpm --filter @elevenhouse/astrologer-web build`.
-- [ ] Commit exact owned files with `feat: wire chart solar return frontend`.
+- [x] Write failing API/model/component/controller tests for solar-return mode, invalid year, stale after year change, reload restore and Dictionary codes.
+- [x] Run targeted frontend tests; expected failure.
+- [x] Implement API helper, controller mode, year state, UI labels, result display, wheel/table reuse and Dictionary anchors.
+- [x] Re-run targeted frontend tests; expected pass.
+- [x] Run `pnpm --filter @elevenhouse/astrologer-web build`.
+- [x] Commit exact owned files with `feat: wire chart solar return frontend`.
 
 ## Task 6: Runtime Browser Proof And Docs Sync
 
@@ -145,12 +158,12 @@
 - Consumes: completed Tasks 1-5.
 - Produces: evidence that a real solar-return calculation works through browser/network.
 
-- [ ] Verify local DB method constraint includes `solar_return`; if local DB drift exists, update local-only constraint after confirming host/database.
-- [ ] Rebuild/restart only services that are stale, under the user's process authority.
-- [ ] In browser, open `/chart-engine`, select CRM client, switch to `Соляр`, choose year, calculate, verify job/result/dictionary network calls, reload URL and check console.
-- [ ] Run affected automated checks plus docs checks.
-- [ ] Update roadmap/inventory/spec progress with exact evidence and deferred contours.
-- [ ] Commit docs/evidence sync with `docs: sync chart solar return status`.
+- [x] Verify local DB method constraint includes `solar_return`; if local DB drift exists, update local-only constraint after confirming host/database.
+- [x] Rebuild/restart only services that are stale, under the user's process authority.
+- [x] In browser, open `/chart-engine`, select CRM client, switch to `Соляр`, choose year, calculate, verify job/result/dictionary network calls, reload URL and check console.
+- [x] Run affected automated checks plus docs checks.
+- [x] Update roadmap/inventory/spec progress with exact evidence and deferred contours.
+- [x] Commit docs/evidence sync with `docs: sync chart solar return status`.
 
 ## Final Verification
 

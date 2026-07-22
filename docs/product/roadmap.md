@@ -103,11 +103,18 @@
       interpretation lookup with honest missing-entry creation affordances.
       Synastry PDF/export, public sharing and AI relationship text remain
       separate future contours.
-- [ ] Chart Engine method expansion after synastry: solar return next, then
-      progressions, composite, child-chart interpretation mode, horary and
-      astrocartography. Each method requires its own contracts, domain/API
-      workflow, worker/provider adapter, UI state matrix, PDF/report decision
-      and Dictionary interpretation-code coverage before enabling its mode.
+- [x] Chart Engine solar return first slice: owner-scoped CRM client, explicit
+      target year, natal location/timezone, canonical `solar_return` result
+      with private input snapshot, Kerykeion provider/worker/API integration,
+      `/chart-engine` `Соляр` mode, dual natal + solar-return wheel, solar
+      point/aspect tables and Dictionary-backed `solar_return.*` missing-entry
+      creation affordances. Solar PDF/export, relocated return, public sharing
+      and AI solar text remain separate future contours.
+- [ ] Chart Engine method expansion after solar return: progressions,
+      composite, child-chart interpretation mode, horary and astrocartography.
+      Each method requires its own contracts, domain/API workflow,
+      worker/provider adapter, UI state matrix, PDF/report decision and
+      Dictionary interpretation-code coverage before enabling its mode.
 
 ## Этап 6: Контент, подписки, автоматизация
 
