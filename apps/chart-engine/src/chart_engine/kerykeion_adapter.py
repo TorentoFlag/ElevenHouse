@@ -4,12 +4,15 @@ from typing import Any
 
 from kerykeion import AspectsFactory, AstrologicalSubjectFactory
 from kerykeion.chart_data_factory import ChartDataFactory
+from kerykeion.planetary_return_factory import PlanetaryReturnFactory
 
 from chart_engine.schemas import (
     ChartAspect,
     ChartDistributions,
     ChartHouse,
     ChartPoint,
+    ChartSolarReturnAspect,
+    ChartSolarReturnRenderResult,
     ChartRenderResult,
     ChartSynastryAspect,
     ChartSynastryHouseOverlay,
@@ -24,7 +27,10 @@ from chart_engine.schemas import (
     PlanetaryPositionsPayload,
     PlanetaryPositionsRequest,
     ProviderMetadata,
+    SolarReturnRequest,
+    SolarReturnSnapshot,
     StoredChartCalculationPayload,
+    StoredChartSolarReturnCalculationPayload,
     StoredChartSynastryCalculationPayload,
     StoredChartTransitCalculationPayload,
     SynastryRequest,
@@ -376,6 +382,90 @@ def calculate_synastry(request: SynastryRequest) -> StoredChartSynastryCalculati
     )
 
 
+def calculate_solar_return(
+    request: SolarReturnRequest,
+) -> StoredChartSolarReturnCalculationPayload:
+    active_points = _active_points(request.settings.nodeType)
+    natal_subject = _create_subject(
+        name="natal",
+        date=request.inputSnapshot.birthDate,
+        time=request.inputSnapshot.birthTime,
+        timezone=request.inputSnapshot.timezone,
+        latitude=request.inputSnapshot.latitude,
+        longitude=request.inputSnapshot.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+    return_factory = PlanetaryReturnFactory(
+        natal_subject,
+        lng=request.solarReturnSnapshot.location.longitude,
+        lat=request.solarReturnSnapshot.location.latitude,
+        tz_str=request.solarReturnSnapshot.location.timezone,
+        online=False,
+    )
+    solar_return_subject = return_factory.next_return_from_date(
+        request.solarReturnSnapshot.year,
+        1,
+        1,
+        return_type="Solar",
+    )
+    allowed_aspects = (
+        MAJOR_ASPECTS
+        if request.settings.aspectPreset == "major"
+        else MAJOR_ASPECTS | MINOR_ASPECTS
+    )
+    active_aspects = _active_aspects(allowed_aspects, request.settings.orbMultiplier)
+    return_data = ChartDataFactory.create_return_chart_data(
+        natal_subject,
+        solar_return_subject,
+        active_points=active_points,
+        active_aspects=active_aspects,
+    )
+    warnings = _map_warnings(request)
+
+    return StoredChartSolarReturnCalculationPayload(
+        schemaVersion="chart-result.v1",
+        method="solar_return",
+        provider=ProviderMetadata(
+            name="kerykeion",
+            version=version("kerykeion"),
+            ephemeris="swiss-ephemeris",
+        ),
+        settings=request.settings,
+        inputSnapshot=request.inputSnapshot,
+        solarReturnSnapshot=SolarReturnSnapshot(
+            year=request.solarReturnSnapshot.year,
+            returnType="solar",
+            location=request.solarReturnSnapshot.location,
+            resolvedAt=_utc_datetime_string(solar_return_subject.iso_formatted_utc_datetime),
+        ),
+        result=ChartSolarReturnRenderResult(
+            natal=_map_render_result(
+                natal_subject,
+                request.settings.nodeType,
+                request.settings.aspectPreset,
+                request.settings.orbMultiplier,
+                active_points,
+                warnings,
+            ),
+            solarReturn=_map_render_result(
+                solar_return_subject,
+                request.settings.nodeType,
+                request.settings.aspectPreset,
+                request.settings.orbMultiplier,
+                active_points,
+                [],
+            ),
+            aspectsToNatal=_map_solar_return_aspects(
+                return_data.aspects,
+                allowed_aspects,
+                request.settings.orbMultiplier,
+            ),
+            warnings=warnings,
+        ),
+    )
+
+
 def calculate_planetary_positions(request: PlanetaryPositionsRequest) -> PlanetaryPositionsPayload:
     year, month, day = [int(part) for part in request.inputSnapshot.birthDate.split("-")]
     hour, minute = [int(part) for part in request.inputSnapshot.birthTime.split(":")]
@@ -637,6 +727,49 @@ def _map_synastry_aspects(
     return aspects
 
 
+def _map_solar_return_aspects(
+    source_aspects: list[Any],
+    allowed_aspects: set[str],
+    orb_multiplier: float,
+) -> list[ChartSolarReturnAspect]:
+    aspects = []
+    seen_aspects = set()
+
+    for aspect in source_aspects:
+        if aspect.aspect not in allowed_aspects:
+            continue
+        point_a = POINT_NAME_TO_ID.get(aspect.p1_name)
+        point_b = POINT_NAME_TO_ID.get(aspect.p2_name)
+        if point_a is None or point_b is None:
+            continue
+        if aspect.p1_owner == "natal" and aspect.p2_owner != "natal":
+            solar_return_point, natal_point = point_b, point_a
+        elif aspect.p2_owner == "natal" and aspect.p1_owner != "natal":
+            solar_return_point, natal_point = point_a, point_b
+        else:
+            continue
+        orb_limit = _orb_limit(aspect.aspect, orb_multiplier)
+        if float(aspect.orbit) > orb_limit:
+            continue
+        aspect_key = (solar_return_point, natal_point, aspect.aspect)
+        if aspect_key in seen_aspects:
+            continue
+        seen_aspects.add(aspect_key)
+        aspects.append(
+            ChartSolarReturnAspect(
+                solarReturnPoint=solar_return_point,
+                natalPoint=natal_point,
+                type=aspect.aspect,
+                angle=float(aspect.aspect_degrees),
+                orb=float(aspect.orbit),
+                applying=_is_applying(aspect.aspect_movement),
+                strength=_aspect_strength(float(aspect.orbit), orb_limit),
+            )
+        )
+
+    return aspects
+
+
 def _map_house_overlays(comparison: Any) -> list[ChartSynastryHouseOverlay]:
     overlays = []
     for item in comparison.first_points_in_second_houses:
@@ -716,7 +849,9 @@ def _map_distributions(subject: Any) -> ChartDistributions:
     return ChartDistributions(elements=elements, modalities=modalities, polarity=polarity)
 
 
-def _map_warnings(request: NatalRequest | TransitRequest | SynastryRequest) -> list[ChartWarning]:
+def _map_warnings(
+    request: NatalRequest | TransitRequest | SynastryRequest | SolarReturnRequest,
+) -> list[ChartWarning]:
     warnings = []
     if request.inputSnapshot.birthTimePrecision == "approximate":
         warnings.append(
@@ -778,3 +913,9 @@ def _aspect_strength(orb: float, orb_limit: float) -> float:
     if orb_limit <= 0:
         return 0.0
     return max(0.0, min(1.0, 1.0 - (orb / orb_limit)))
+
+
+def _utc_datetime_string(value: str) -> str:
+    if value.endswith("+00:00"):
+        return f"{value[:-6]}Z"
+    return value

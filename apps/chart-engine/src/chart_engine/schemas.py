@@ -63,6 +63,30 @@ class SynastryRequest(BaseModel):
     relationshipSnapshot: RelationshipSnapshot
 
 
+class SolarReturnLocation(BaseModel):
+    timezone: str
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
+class SolarReturnRequestSnapshot(BaseModel):
+    year: int = Field(ge=1900, le=2100)
+    returnType: Literal["solar"]
+    location: SolarReturnLocation
+
+
+class SolarReturnSnapshot(SolarReturnRequestSnapshot):
+    resolvedAt: str
+
+
+class SolarReturnRequest(BaseModel):
+    schemaVersion: Literal["chart-request.v1"]
+    method: Literal["solar_return"]
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+    solarReturnSnapshot: SolarReturnRequestSnapshot
+
+
 class PlanetaryPositionsSettings(BaseModel):
     zodiac: Literal["tropical"] = "tropical"
     nodeType: Literal["true", "mean"]
@@ -129,6 +153,16 @@ class ChartTransitAspect(BaseModel):
     strength: float | None = None
 
 
+class ChartSolarReturnAspect(BaseModel):
+    solarReturnPoint: str
+    natalPoint: str
+    type: str
+    angle: float
+    orb: float
+    applying: bool | None = None
+    strength: float | None = None
+
+
 class PlanetaryPosition(BaseModel):
     id: Literal[
         "sun",
@@ -159,6 +193,13 @@ class ChartTransitRenderResult(BaseModel):
     natal: ChartRenderResult
     transit: ChartRenderResult
     aspectsToNatal: list[ChartTransitAspect]
+    warnings: list[ChartWarning]
+
+
+class ChartSolarReturnRenderResult(BaseModel):
+    natal: ChartRenderResult
+    solarReturn: ChartRenderResult
+    aspectsToNatal: list[ChartSolarReturnAspect]
     warnings: list[ChartWarning]
 
 
@@ -227,6 +268,16 @@ class StoredChartSynastryCalculationPayload(BaseModel):
     partnerInputSnapshot: NatalInputSnapshot
     relationshipSnapshot: RelationshipSnapshot
     result: ChartSynastryRenderResult
+
+
+class StoredChartSolarReturnCalculationPayload(BaseModel):
+    schemaVersion: Literal["chart-result.v1"]
+    method: Literal["solar_return"]
+    provider: ProviderMetadata
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+    solarReturnSnapshot: SolarReturnSnapshot
+    result: ChartSolarReturnRenderResult
 
 
 class PlanetaryPositionsPayload(BaseModel):
