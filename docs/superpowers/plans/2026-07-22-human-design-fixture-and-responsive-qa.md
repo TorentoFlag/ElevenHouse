@@ -306,19 +306,19 @@ Do not mark `human_design_classic` product-complete until all required rows are
 - Produces: desktop and mobile evidence for selected-client success, saved
   list, reopen, recalculation, empty, loading and provider-error states.
 
-- [ ] **Step 1: Capture desktop and mobile screenshots**
+- [x] **Step 1: Capture desktop and mobile screenshots**
 
 Use Chrome DevTools, Computer Use or another approved browser surface. If file
 write is blocked again, record that blocker and switch to the approved surface
 before claiming visual acceptance.
 
-- [ ] **Step 2: Compare against reference**
+- [x] **Step 2: Compare against reference**
 
 Use `ElevenHouseDesign/app/hd.jsx`, `hd-data.jsx`, `hd-graph.jsx` and
 `hd-modes.jsx` only for visual state evidence. Production data and mechanics
 remain server-owned.
 
-- [ ] **Step 3: Fix visible regressions with tests**
+- [x] **Step 3: Fix visible regressions with tests**
 
 Add focused component/model tests only for changed behavior. Do not alter
 business state to match prototype demo data.
