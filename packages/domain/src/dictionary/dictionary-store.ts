@@ -21,6 +21,12 @@ export type DictionaryEntryListQuery = {
   readonly offset?: number;
 };
 
+export type DictionaryEntriesByCodesQuery = {
+  readonly ownerUserId: string;
+  readonly locale: DictionaryLocale;
+  readonly codes: readonly string[];
+};
+
 export type DictionaryCustomEntryInput = {
   readonly ownerUserId: string;
   readonly categoryId: string;
@@ -69,6 +75,9 @@ export type DictionaryStore = {
     query: DictionaryCategoryListQuery
   ) => Promise<DictionaryCategoryListResult>;
   readonly listEntries: (query: DictionaryEntryListQuery) => Promise<DictionaryEntryListResult>;
+  readonly listEntriesByCodes: (
+    query: DictionaryEntriesByCodesQuery
+  ) => Promise<DictionaryEntryListResult>;
   readonly createCustomEntry: (
     input: DictionaryCustomEntryInput
   ) => Promise<DictionaryAstrologerEntry>;

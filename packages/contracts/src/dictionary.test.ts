@@ -3,6 +3,7 @@ import {
   createDictionaryCustomEntryRequestSchema,
   dictionaryContentMaxLength,
   dictionaryAstrologerEntryIdParamSchema,
+  dictionaryEntriesByCodesQuerySchema,
   dictionaryEntriesQuerySchema,
   dictionaryEntrySourceSchema,
   dictionaryLocaleSchema,
@@ -52,6 +53,18 @@ describe("dictionary contracts", () => {
       source: "all",
       limit: 50,
       offset: 0
+    });
+  });
+
+  it("parses exact entry lookup queries for chart interpretations", () => {
+    expect(
+      dictionaryEntriesByCodesQuerySchema.parse({
+        locale: " ru ",
+        codes: " sun_cancer, sun_house_11,moon_aries "
+      })
+    ).toEqual({
+      locale: "ru",
+      codes: ["sun_cancer", "sun_house_11", "moon_aries"]
     });
   });
 

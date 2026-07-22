@@ -44,6 +44,27 @@ export function listDictionaryEntries(input: {
   return input.store.listEntries(query);
 }
 
+export function listDictionaryEntriesByCodes(input: {
+  readonly store: DictionaryStore;
+  readonly ownerUserId: string;
+  readonly locale: string;
+  readonly codes: readonly string[];
+}): Promise<DictionaryEntryListResult> {
+  const query = {
+    ownerUserId: normalizeRequiredString(input.ownerUserId, "Dictionary owner user id is required"),
+    locale: normalizeDictionaryLocale(input.locale),
+    codes: Array.from(
+      new Set(
+        input.codes
+          .map((code) => normalizeOptionalString(code))
+          .filter((code): code is string => code !== undefined)
+      )
+    )
+  };
+
+  return input.store.listEntriesByCodes(query);
+}
+
 export function createDictionaryCustomEntry(input: {
   readonly store: DictionaryStore;
   readonly ownerUserId: string;

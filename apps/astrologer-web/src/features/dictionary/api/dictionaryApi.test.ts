@@ -10,6 +10,7 @@ import { createDictionaryAiDraft } from "./createDictionaryAiDraft";
 import { createDictionaryCustomEntry } from "./createDictionaryCustomEntry";
 import { deleteDictionaryEntry } from "./deleteDictionaryEntry";
 import { listDictionaryCategories } from "./listDictionaryCategories";
+import { listDictionaryEntriesByCodes } from "./listDictionaryEntriesByCodes";
 import { listDictionaryEntries } from "./listDictionaryEntries";
 import { resetDictionaryEntries } from "./resetDictionaryEntries";
 import { updateDictionaryCustomEntry } from "./updateDictionaryCustomEntry";
@@ -126,6 +127,21 @@ describe("dictionary API", () => {
       categoryId,
       search: "солнце"
     });
+  });
+
+  it("loads dictionary entries by exact codes for chart interpretations", async () => {
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(entriesResponse);
+
+    await expect(
+      listDictionaryEntriesByCodes({
+        locale: "ru",
+        codes: [" sun_cancer ", "sun_house_11", "moon_aries"]
+      })
+    ).resolves.toEqual(entriesResponse);
+
+    expect(get).toHaveBeenCalledWith(
+      "/dictionary/entries/by-codes?locale=ru&codes=sun_cancer%2Csun_house_11%2Cmoon_aries"
+    );
   });
 
   it("rejects dictionary responses that do not match the shared contract", async () => {

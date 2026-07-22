@@ -3,7 +3,12 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ChartSettings, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import type {
+  ChartSettings,
+  DictionaryEntriesResponse,
+  StoredChartCalculationPayload
+} from "@elevenhouse/contracts";
+import { application } from "../../../Application";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
 import { ChartEnginePage } from "./ChartEnginePage";
 
@@ -36,7 +41,10 @@ const client = {
 } satisfies ClientSelectOption;
 
 describe("ChartEnginePage", () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   it("keeps non-natal modes disabled and starts only a CRM-backed natal calculation", async () => {
     const user = userEvent.setup();
@@ -295,6 +303,7 @@ describe("ChartEnginePage", () => {
 
   it("renders deterministic interpretation anchors without fake AI output", async () => {
     const user = userEvent.setup();
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(dictionaryEntriesResponse());
     render(
       <ChartEnginePage
         selectedClient={client}
@@ -334,14 +343,25 @@ describe("ChartEnginePage", () => {
 
     const interpretationsPanel = screen.getByRole("region", { name: "Трактовки" });
     expect(
-      within(interpretationsPanel).getByText("Опорные положения · canonical result")
+      within(interpretationsPanel).getByText("Опорные положения · библиотека")
     ).toBeInTheDocument();
-    expect(within(interpretationsPanel).getByText("Солнце")).toBeInTheDocument();
+    expect(await within(interpretationsPanel).findByText(/Солнце · XI дом/i)).toBeInTheDocument();
+    expect(within(interpretationsPanel).getAllByText("Библиотека")).toHaveLength(2);
+    expect(within(interpretationsPanel).getAllByText(/Справочник · platform/i)).toHaveLength(2);
+    expect(
+      within(interpretationsPanel).getByText(/Справочная трактовка Солнца в Раке/i)
+    ).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText(/Рак 22°36'/)).toBeInTheDocument();
-    expect(within(interpretationsPanel).getByText("Луна")).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText("Луна в Овне")).toBeInTheDocument();
+    expect(
+      within(interpretationsPanel).getByText(/Справочная трактовка Луны в Овне/i)
+    ).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText(/Овен 21°13'/)).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText("Asc")).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText(/Дева 16°37'/)).toBeInTheDocument();
+    expect(get).toHaveBeenCalledWith(
+      "/dictionary/entries/by-codes?locale=ru&codes=sun_cancer%2Csun_house_11%2Cmoon_aries%2Cmoon_house_8%2Chouse_1"
+    );
     expect(
       within(interpretationsPanel).getByRole("button", { name: /AI-черновик недоступен/i })
     ).toBeDisabled();
@@ -624,6 +644,48 @@ describe("ChartEnginePage", () => {
     });
   });
 });
+
+function dictionaryEntriesResponse(): DictionaryEntriesResponse {
+  return {
+    entries: [
+      {
+        id: "a138f7d0-6b2c-4f6d-89a9-6be4f756d133",
+        categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        categoryCode: "planets_in_signs",
+        code: "sun_cancer",
+        locale: "ru",
+        source: "platform",
+        title: "Солнце в Раке",
+        content: "Справочная трактовка Солнца в Раке.",
+        platformEntryId: "a138f7d0-6b2c-4f6d-89a9-6be4f756d133",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        updatedAt: "2026-07-01T10:00:00.000Z"
+      },
+      {
+        id: "b238f7d0-6b2c-4f6d-89a9-6be4f756d133",
+        categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        categoryCode: "planets_in_signs",
+        code: "moon_aries",
+        locale: "ru",
+        source: "platform",
+        title: "Луна в Овне",
+        content: "Справочная трактовка Луны в Овне.",
+        platformEntryId: "b238f7d0-6b2c-4f6d-89a9-6be4f756d133",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        updatedAt: "2026-07-01T10:00:00.000Z"
+      }
+    ],
+    total: 2,
+    counts: {
+      sources: {
+        all: 2,
+        platform: 2,
+        modified: 0,
+        custom: 0
+      }
+    }
+  };
+}
 
 function settings(): ChartSettings {
   return {

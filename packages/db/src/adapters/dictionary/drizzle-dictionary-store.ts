@@ -4,6 +4,7 @@ import type {
   DictionaryCategoryListQuery,
   DictionaryCategoryListResult,
   DictionaryCategoryWithCount,
+  DictionaryEntriesByCodesQuery,
   DictionaryEffectiveEntry,
   DictionaryEntryListQuery,
   DictionaryEntryListResult,
@@ -62,6 +63,7 @@ export function createDrizzleDictionaryStore(database: ElevenHouseDatabase): Dic
   return {
     listCategories: (query) => listCategories(database, query),
     listEntries: (query) => listEntries(database, query),
+    listEntriesByCodes: (query) => listEntriesByCodes(database, query),
     createCustomEntry: async (input) => {
       const category = await database.query.dictionaryCategories.findFirst({
         where: eq(dictionaryCategories.id, input.categoryId)
@@ -368,6 +370,131 @@ async function listEntries(
   return {
     entries: rows.map(toDictionaryEffectiveEntry),
     total: Number(totalResult.rows[0]?.total ?? 0),
+    counts: {
+      sources: toDictionarySourceCounts(sourceCountRows)
+    }
+  };
+}
+
+async function listEntriesByCodes(
+  database: ElevenHouseDatabase,
+  query: DictionaryEntriesByCodesQuery
+): Promise<DictionaryEntryListResult> {
+  if (query.codes.length === 0) {
+    return {
+      entries: [],
+      total: 0,
+      counts: {
+        sources: {
+          all: 0,
+          platform: 0,
+          modified: 0,
+          custom: 0
+        }
+      }
+    };
+  }
+
+  const requestedCodes = sql.join(
+    query.codes.map((code, index) => sql`(${code}, ${index})`),
+    sql`, `
+  );
+  const effectiveEntriesCte = sql`
+    requested_codes(code, sort_order) as (
+      values ${requestedCodes}
+    ),
+    platform_entries as (
+      select
+        coalesce(overrides.id, platform_entries.id) as "id",
+        platform_entries.category_id as "categoryId",
+        categories.code as "categoryCode",
+        platform_entries.code as "code",
+        platform_entries.locale as "locale",
+        case
+          when overrides.id is null then 'platform'
+          else 'modified'
+        end as "source",
+        coalesce(overrides.title, platform_entries.title) as "title",
+        coalesce(overrides.content, platform_entries.content) as "content",
+        platform_entries.id as "platformEntryId",
+        overrides.id as "astrologerEntryId",
+        coalesce(overrides.created_at, platform_entries.created_at) as "createdAt",
+        coalesce(overrides.updated_at, platform_entries.updated_at) as "updatedAt",
+        requested_codes.sort_order as "sortOrder"
+      from ${dictionaryPlatformEntries} as platform_entries
+      inner join requested_codes
+        on requested_codes.code = platform_entries.code
+      inner join ${dictionaryCategories} as categories
+        on categories.id = platform_entries.category_id
+      left join ${dictionaryAstrologerEntries} as overrides
+        on overrides.owner_user_id = ${query.ownerUserId}
+        and overrides.platform_entry_id = platform_entries.id
+        and overrides.locale = platform_entries.locale
+        and overrides.entry_type = 'override'
+      where platform_entries.locale = ${query.locale}
+        and platform_entries.status = 'published'
+    ),
+    custom_entries as (
+      select
+        custom_entries.id as "id",
+        custom_entries.category_id as "categoryId",
+        categories.code as "categoryCode",
+        custom_entries.code as "code",
+        custom_entries.locale as "locale",
+        'custom' as "source",
+        custom_entries.title as "title",
+        custom_entries.content as "content",
+        null::uuid as "platformEntryId",
+        custom_entries.id as "astrologerEntryId",
+        custom_entries.created_at as "createdAt",
+        custom_entries.updated_at as "updatedAt",
+        requested_codes.sort_order as "sortOrder"
+      from ${dictionaryAstrologerEntries} as custom_entries
+      inner join requested_codes
+        on requested_codes.code = custom_entries.code
+      inner join ${dictionaryCategories} as categories
+        on categories.id = custom_entries.category_id
+      where custom_entries.owner_user_id = ${query.ownerUserId}
+        and custom_entries.locale = ${query.locale}
+        and custom_entries.entry_type = 'custom'
+    ),
+    effective_entries as (
+      select * from platform_entries
+      union all
+      select * from custom_entries
+    )
+  `;
+
+  const result = await database.execute(sql<DictionaryEffectiveEntryRow>`
+    with ${effectiveEntriesCte}
+    select
+      id,
+      "categoryId",
+      "categoryCode",
+      code,
+      locale,
+      source,
+      title,
+      content,
+      "platformEntryId",
+      "astrologerEntryId",
+      "createdAt",
+      "updatedAt"
+    from effective_entries
+    order by "sortOrder", title, id
+  `);
+  const rows = result.rows as unknown as readonly DictionaryEffectiveEntryRow[];
+  const countsResult = await database.execute(sql<DictionarySourceCountRow>`
+    with ${effectiveEntriesCte}
+    select source, count(*)::int as count
+    from effective_entries
+    group by source
+  `);
+  const sourceCountRows = countsResult.rows as unknown as readonly DictionarySourceCountRow[];
+
+  return {
+    entries: rows.map(toDictionaryEffectiveEntry),
+    total: rows.length,
     counts: {
       sources: toDictionarySourceCounts(sourceCountRows)
     }

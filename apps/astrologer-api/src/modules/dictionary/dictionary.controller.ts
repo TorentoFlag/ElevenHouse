@@ -37,6 +37,14 @@ export class DictionaryController {
     return this.dictionaryService.listEntries(query, request);
   }
 
+  @Get("entries/by-codes")
+  listEntriesByCodes(
+    @Query() query: unknown,
+    @Req() request: AstrologerSessionRequest
+  ): ReturnType<DictionaryService["listEntriesByCodes"]> {
+    return this.dictionaryService.listEntriesByCodes(query, request);
+  }
+
   @Post("custom-entries")
   @RequireCsrf()
   createCustomEntry(

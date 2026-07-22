@@ -77,6 +77,29 @@ describe("DictionaryService", () => {
     });
   });
 
+  it("lists exact entries by codes for chart interpretations", async () => {
+    const store = createStore();
+    const service = createService(store);
+
+    await expect(
+      service.listEntriesByCodes(
+        {
+          locale: "ru",
+          codes: " sun_cancer, sun_house_11,moon_aries "
+        },
+        createAuthenticatedRequest()
+      )
+    ).resolves.toMatchObject({
+      total: 2
+    });
+
+    expect(store.listEntriesByCodes).toHaveBeenCalledWith({
+      ownerUserId,
+      locale: "ru",
+      codes: ["sun_cancer", "sun_house_11", "moon_aries"]
+    });
+  });
+
   it("creates a custom entry for the authenticated astrologer", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -277,6 +300,32 @@ function createStore(overrides: Partial<DictionaryStore> = {}): DictionaryStore 
           platform: 2,
           modified: 1,
           custom: 1
+        }
+      }
+    })),
+    listEntriesByCodes: vi.fn(async () => ({
+      entries: [
+        {
+          id: platformEntryId,
+          categoryId,
+          categoryCode: "planets_in_signs",
+          code: "sun_cancer",
+          locale: "ru" as const,
+          source: "platform" as const,
+          title: "Солнце в Раке",
+          content: "Справочная трактовка Солнца в Раке.",
+          platformEntryId,
+          createdAt: "2026-06-30T09:00:00.000Z",
+          updatedAt: "2026-06-30T09:00:00.000Z"
+        }
+      ],
+      total: 2,
+      counts: {
+        sources: {
+          all: 2,
+          platform: 2,
+          modified: 0,
+          custom: 0
         }
       }
     })),

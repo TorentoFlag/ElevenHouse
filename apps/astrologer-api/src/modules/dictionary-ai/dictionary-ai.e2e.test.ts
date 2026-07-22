@@ -332,6 +332,18 @@ function createDictionaryStore(): DictionaryStore {
         }
       }
     })),
+    listEntriesByCodes: vi.fn(async () => ({
+      entries: [],
+      total: 0,
+      counts: {
+        sources: {
+          all: 0,
+          platform: 0,
+          modified: 0,
+          custom: 0
+        }
+      }
+    })),
     createCustomEntry: vi.fn(async () => raise("Unexpected create custom entry call")),
     updateCustomEntry: vi.fn(async () => raise("Unexpected update custom entry call")),
     upsertPlatformEntryOverride: vi.fn(async () => raise("Unexpected override call")),

@@ -11,6 +11,7 @@ import {
   createDictionaryCustomEntry,
   deleteDictionaryAstrologerEntry,
   listDictionaryCategories,
+  listDictionaryEntriesByCodes,
   listDictionaryEntries,
   overrideDictionaryPlatformEntry,
   resetDictionaryAstrologerEntries,
@@ -25,6 +26,7 @@ import {
   createDictionaryCustomEntryRequestSchema,
   dictionaryAstrologerEntryIdParamSchema,
   dictionaryAstrologerEntryResponseSchema,
+  dictionaryEntriesByCodesQuerySchema,
   dictionaryEntriesQuerySchema,
   dictionaryEntriesResponseSchema,
   dictionaryPlatformEntryIdParamSchema,
@@ -81,6 +83,24 @@ export class DictionaryService {
           search: parsedQuery.search,
           limit: parsedQuery.limit,
           offset: parsedQuery.offset
+        })
+      )
+    );
+  }
+
+  listEntriesByCodes(
+    query: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<DictionaryEntriesResponse> {
+    const parsedQuery = parseContract(dictionaryEntriesByCodesQuerySchema, query);
+
+    return mapDictionaryStoreErrors(async () =>
+      dictionaryEntriesResponseSchema.parse(
+        await listDictionaryEntriesByCodes({
+          store: this.store,
+          ownerUserId: requireOwnerUserId(request),
+          locale: parsedQuery.locale,
+          codes: parsedQuery.codes
         })
       )
     );

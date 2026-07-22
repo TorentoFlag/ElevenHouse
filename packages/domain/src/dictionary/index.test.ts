@@ -5,6 +5,7 @@ import {
   dictionaryEntrySourceValues,
   dictionaryLocaleValues,
   listDictionaryCategories,
+  listDictionaryEntriesByCodes,
   listDictionaryEntries,
   overrideDictionaryPlatformEntry,
   resetDictionaryAstrologerEntries,
@@ -38,6 +39,18 @@ function createStore(overrides: Partial<DictionaryStore> = {}): DictionaryStore 
         sources: {
           all: 14,
           platform: 14,
+          modified: 0,
+          custom: 0
+        }
+      }
+    })),
+    listEntriesByCodes: vi.fn(async () => ({
+      entries: [],
+      total: 0,
+      counts: {
+        sources: {
+          all: 0,
+          platform: 0,
           modified: 0,
           custom: 0
         }
@@ -141,6 +154,23 @@ describe("dictionary domain module", () => {
       search: "Солнце",
       limit: 20,
       offset: 40
+    });
+  });
+
+  it("normalizes exact entry code lookups before calling the store", async () => {
+    const store = createStore();
+
+    await listDictionaryEntriesByCodes({
+      store,
+      ownerUserId: " user_astrologer ",
+      locale: " ru ",
+      codes: [" sun_cancer ", "sun_house_11", " sun_cancer "]
+    });
+
+    expect(store.listEntriesByCodes).toHaveBeenCalledWith({
+      ownerUserId: "user_astrologer",
+      locale: "ru",
+      codes: ["sun_cancer", "sun_house_11"]
     });
   });
 

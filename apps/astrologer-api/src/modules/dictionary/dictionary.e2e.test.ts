@@ -134,6 +134,9 @@ describe("dictionary HTTP routes", () => {
   it("serves dictionary reads for authenticated astrologers", async () => {
     const categoriesResponse = await getJson("/dictionary/categories?locale=ru");
     const entriesResponse = await getJson("/dictionary/entries?locale=ru&source=custom");
+    const entriesByCodesResponse = await getJson(
+      "/dictionary/entries/by-codes?locale=ru&codes=sun_cancer,sun_house_11"
+    );
 
     expect(categoriesResponse.status).toBe(200);
     dictionaryCategoriesResponseSchema.parse(categoriesResponse.body);
@@ -154,6 +157,17 @@ describe("dictionary HTTP routes", () => {
         }
       }
     });
+    expect(entriesByCodesResponse.status).toBe(200);
+    dictionaryEntriesResponseSchema.parse(entriesByCodesResponse.body);
+    expect(entriesByCodesResponse.body).toMatchObject({
+      total: 2,
+      entries: [
+        expect.objectContaining({
+          code: "sun_cancer",
+          title: "Солнце в Раке"
+        })
+      ]
+    });
     expect(dictionaryStore.listCategories).toHaveBeenCalledWith({
       ownerUserId,
       locale: "ru"
@@ -165,6 +179,11 @@ describe("dictionary HTTP routes", () => {
         source: "custom"
       })
     );
+    expect(dictionaryStore.listEntriesByCodes).toHaveBeenCalledWith({
+      ownerUserId,
+      locale: "ru",
+      codes: ["sun_cancer", "sun_house_11"]
+    });
   });
 
   it("requires authentication and CSRF for dictionary writes", async () => {
@@ -433,6 +452,32 @@ function createDictionaryStore(): DictionaryStore {
           platform: 2,
           modified: 1,
           custom: 1
+        }
+      }
+    })),
+    listEntriesByCodes: vi.fn(async () => ({
+      entries: [
+        {
+          id: platformEntryId,
+          categoryId,
+          categoryCode: "planets_in_signs",
+          code: "sun_cancer",
+          locale: "ru" as const,
+          source: "platform" as const,
+          title: "Солнце в Раке",
+          content: "Справочная трактовка Солнца в Раке.",
+          platformEntryId,
+          createdAt: "2026-06-30T09:00:00.000Z",
+          updatedAt: "2026-06-30T09:00:00.000Z"
+        }
+      ],
+      total: 2,
+      counts: {
+        sources: {
+          all: 2,
+          platform: 2,
+          modified: 0,
+          custom: 0
         }
       }
     })),

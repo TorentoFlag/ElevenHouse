@@ -14,6 +14,7 @@ const uuidSchema = z.string().uuid();
 export const dictionarySearchMaxLength = 200;
 export const dictionaryTitleMaxLength = 200;
 export const dictionaryContentMaxLength = 10_000;
+export const dictionaryEntriesByCodesMaxCount = 100;
 const optionalNonEmptyStringSchema = z
   .string()
   .trim()
@@ -62,6 +63,37 @@ export const dictionaryEntriesQuerySchema = z
   })
   .strict();
 export type DictionaryEntriesQuery = z.infer<typeof dictionaryEntriesQuerySchema>;
+
+const dictionaryEntryCodeSchema = nonEmptyStringSchema.max(200);
+const dictionaryEntryCodesQueryValueSchema = z.preprocess((value) => {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) =>
+      typeof entry === "string" ? entry.split(",") : []
+    );
+  }
+
+  if (typeof value === "string") {
+    return value.split(",");
+  }
+
+  return value;
+}, z.array(dictionaryEntryCodeSchema).min(1).max(dictionaryEntriesByCodesMaxCount));
+
+export const dictionaryEntriesByCodesQuerySchema = z
+  .object({
+    locale: dictionaryLocaleSchema,
+    codes: dictionaryEntryCodesQueryValueSchema.transform((codes) =>
+      Array.from(new Set(codes.map((code) => code.trim()).filter(Boolean)))
+    )
+  })
+  .strict()
+  .refine((query) => query.codes.length > 0, {
+    message: "Dictionary entry codes are required",
+    path: ["codes"]
+  });
+export type DictionaryEntriesByCodesQuery = z.infer<
+  typeof dictionaryEntriesByCodesQuerySchema
+>;
 
 export const dictionarySourceCountsSchema = z.object({
   all: z.number().int().min(0),

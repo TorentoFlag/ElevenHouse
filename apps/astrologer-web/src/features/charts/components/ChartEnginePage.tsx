@@ -2,6 +2,7 @@ import { useState } from "react";
 import type {
   ChartSettings,
   ClientBirthDataUpsertRequest,
+  DictionaryLocale,
   StoredChartCalculationPayload
 } from "@elevenhouse/contracts";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
@@ -27,6 +28,7 @@ export type ChartEnginePageProps = {
   readonly errorMessage: string | null;
   readonly isBusy: boolean;
   readonly isResultStale?: boolean;
+  readonly locale?: DictionaryLocale;
   readonly settings: ChartSettings;
   readonly onSettingsChange: (settings: ChartSettings) => void;
   readonly onCreateNatalJob: () => void | Promise<void>;
@@ -43,6 +45,7 @@ export function ChartEnginePage({
   errorMessage,
   isBusy,
   isResultStale = false,
+  locale = "ru",
   settings,
   onSettingsChange,
   onCreateNatalJob,
@@ -291,6 +294,7 @@ export function ChartEnginePage({
               <ChartTables
                 activeTab={activePanelTab}
                 hoveredPointId={hoveredPointId}
+                locale={locale}
                 onHoverPoint={setHoveredPointId}
                 result={displayResult}
               />

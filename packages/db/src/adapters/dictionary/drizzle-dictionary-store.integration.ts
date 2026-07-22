@@ -6,6 +6,7 @@ import {
   DictionaryCategoryNotFoundError,
   DictionaryPlatformEntryNotFoundError,
   listDictionaryCategories,
+  listDictionaryEntriesByCodes,
   listDictionaryEntries,
   overrideDictionaryPlatformEntry,
   resetDictionaryAstrologerEntries,
@@ -90,10 +91,14 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
     });
     platformEntryIds.push(platformSun.id, platformMoon.id, archived.id);
 
-    await expect(
-      listDictionaryCategories({ store, ownerUserId, locale: "ru" })
-    ).resolves.toMatchObject({
-      total: 2,
+    const categoriesAfterPlatformEntries = await listDictionaryCategories({
+      store,
+      ownerUserId,
+      locale: "ru"
+    });
+
+    expect(categoriesAfterPlatformEntries.total).toBeGreaterThanOrEqual(2);
+    expect(categoriesAfterPlatformEntries).toMatchObject({
       categories: expect.arrayContaining([
         expect.objectContaining({
           id: category.id,
@@ -163,6 +168,43 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
       title: "Custom note",
       content: "Custom content",
       now: new Date("2026-06-30T10:05:00.000Z")
+    });
+
+    await expect(
+      listDictionaryEntriesByCodes({
+        store,
+        ownerUserId,
+        locale: "ru",
+        codes: [platformMoon.code, platformSun.code, custom.code, `missing_${suffix}`]
+      })
+    ).resolves.toMatchObject({
+      total: 3,
+      counts: {
+        sources: {
+          all: 3,
+          platform: 1,
+          modified: 1,
+          custom: 1
+        }
+      },
+      entries: [
+        expect.objectContaining({
+          id: platformMoon.id,
+          code: platformMoon.code,
+          source: "platform"
+        }),
+        expect.objectContaining({
+          id: override.id,
+          code: platformSun.code,
+          source: "modified",
+          title: "Custom Sun in Aries"
+        }),
+        expect.objectContaining({
+          id: custom.id,
+          code: custom.code,
+          source: "custom"
+        })
+      ]
     });
 
     await expect(

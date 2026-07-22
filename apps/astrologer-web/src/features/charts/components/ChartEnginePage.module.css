@@ -927,43 +927,69 @@
 }
 .interpretationAnchorCard {
   display: grid;
-  grid-template-columns: minmax(92px, 1fr) minmax(94px, auto) auto;
-  align-items: center;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 5px 12px;
   min-height: 58px;
-  padding: 11px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--chart-line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: rgb(30 27 62 / 0.72);
   color: rgb(229 225 244 / 0.84);
 }
-.interpretationAnchorCard div {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
 .interpretationAnchorCard strong {
-  color: rgb(229 225 244 / 0.94);
-  font-size: 13px;
-}
-.interpretationAnchorCard small {
+  min-width: 0;
   overflow: hidden;
-  color: rgb(186 178 218 / 0.56);
-  font-size: 10px;
+  color: rgb(229 225 244 / 0.94);
+  font-size: 13.5px;
+  font-weight: 780;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.interpretationAnchorCard small {
+  color: rgb(186 178 218 / 0.56);
+  font-size: 11px;
+  white-space: nowrap;
+}
 .interpretationAnchorCard span {
+  grid-column: 1 / -1;
   color: var(--chart-gold);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.interpretationAnchorCard b {
-  color: rgb(186 178 218 / 0.66);
-  font-size: 11px;
-  font-weight: 760;
-  white-space: nowrap;
+.interpretationAnchorCard p,
+.interpretationAxisCard p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: rgb(229 225 244 / 0.66);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.interpretationAnchorCard em {
+  grid-column: 1 / -1;
+  color: rgb(186 178 218 / 0.5);
+  font-size: 10.5px;
+  font-style: normal;
+  letter-spacing: 0;
+}
+.interpretationAxisCard {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  padding: 10px 12px;
+  border: 1px solid rgb(216 212 236 / 0.08);
+  border-radius: 10px;
+  background: rgb(216 212 236 / 0.035);
+}
+.interpretationAxisCard strong {
+  color: rgb(229 225 244 / 0.9);
+  font-size: 13px;
+}
+.interpretationAxisCard span {
+  color: var(--chart-gold);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .interpretationAiPanel {
   display: grid;
