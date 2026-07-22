@@ -5,6 +5,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@elevenhouse/ai": fileURLToPath(new URL("./packages/ai/src/index.ts", import.meta.url)),
+      "@elevenhouse/chart-engine-client": fileURLToPath(
+        new URL("./packages/chart-engine-client/src/index.ts", import.meta.url)
+      ),
       "@elevenhouse/contracts/products": fileURLToPath(
         new URL("./packages/contracts/src/products.ts", import.meta.url)
       ),

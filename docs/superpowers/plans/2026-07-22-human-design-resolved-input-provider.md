@@ -9,12 +9,13 @@
 birth snapshot into the `personality` and `design` longitude input consumed by
 the Human Design domain engine.
 
-**Architecture:** `apps/chart-worker` binds provider I/O to domain math. It
-calls chart-engine `/v1/positions` for the birth moment, injects chart-engine
-Sun longitudes into `resolveHumanDesignDesignMoment`, then calls
+**Architecture:** `packages/chart-engine-client` binds provider I/O to domain
+math. It calls chart-engine `/v1/positions` for the birth moment, injects
+chart-engine Sun longitudes into `resolveHumanDesignDesignMoment`, then calls
 `/v1/positions` again for the resolved Design moment. `packages/domain` remains
 the Human Design mechanics authority; `apps/chart-engine` remains the ephemeris
-provider runtime.
+provider runtime; deployable apps consume the shared package instead of
+importing each other.
 
 **Tech Stack:** TypeScript, Vitest, `Intl.DateTimeFormat`, existing contracts and
 domain package.
@@ -116,13 +117,28 @@ none
 - [x] 2026-07-22: Preserve birth timezone when converting a resolved Design
   instant back into a chart-engine input snapshot.
 - [x] 2026-07-22: Run targeted checks and commit only owned paths.
+- [x] 2026-07-22: Extract chart-engine HTTP client and Human Design resolver
+  into `packages/chart-engine-client` so API and worker can share the provider
+  boundary without app-to-app imports.
 
 ## Context and Orientation
 
 Owned files for this slice:
 
-- `apps/chart-worker/src/human-design-resolved-input.ts`
-- `apps/chart-worker/src/human-design-resolved-input.test.ts`
+- `packages/chart-engine-client/src/chart-engine-client.ts`
+- `packages/chart-engine-client/src/chart-engine-client.test.ts`
+- `packages/chart-engine-client/src/human-design-resolved-input.ts`
+- `packages/chart-engine-client/src/human-design-resolved-input.test.ts`
+- `packages/chart-engine-client/src/index.ts`
+- `packages/chart-engine-client/package.json`
+- `packages/chart-engine-client/tsconfig.json`
+- `packages/chart-engine-client/tsconfig.build.json`
+- `apps/chart-worker/src/main.ts`
+- `apps/chart-worker/src/chart-jobs.processor.ts`
+- `apps/chart-worker/src/chart-jobs.processor.test.ts`
+- `apps/chart-worker/package.json`
+- `pnpm-lock.yaml`
+- `vitest.config.ts`
 - `docs/superpowers/plans/2026-07-22-human-design-resolved-input-provider.md`
 
 Existing unowned dirty files in docs/contracts/db/domain/frontend must remain
@@ -132,6 +148,8 @@ unstaged unless this slice explicitly touches them.
 
 Produces:
 
+- `@elevenhouse/chart-engine-client`
+- `ChartEngineHttpClient`
 - `resolveHumanDesignResolvedInput(input)`
 - `HumanDesignPositionsChartEngine`
 - `HumanDesignResolvedInput`
@@ -179,9 +197,11 @@ resolved longitudes.
 
 Implemented in this slice:
 
-- `apps/chart-worker/src/human-design-resolved-input.ts` now composes the
-  chart-engine positions provider with the Human Design 88-degree solar-arc
-  solver.
+- `packages/chart-engine-client/src/human-design-resolved-input.ts` now
+  composes the chart-engine positions provider with the Human Design 88-degree
+  solar-arc solver.
+- `apps/chart-worker` now imports `ChartEngineHttpClient` and
+  `ChartEnginePermanentError` from `@elevenhouse/chart-engine-client`.
 - The resolver returns the exact `BuildHumanDesignActivationsInput` shape used
   by the domain engine plus provider evidence for the personality and design
   calls.

@@ -2,8 +2,8 @@ import { createLogger, serializeError } from "@elevenhouse/observability";
 import { createDrizzleChartWorkerJobStore } from "@elevenhouse/db/charts";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
+import { ChartEngineHttpClient } from "@elevenhouse/chart-engine-client";
 import { UnrecoverableError } from "bullmq";
-import { ChartEngineHttpClient } from "./chart-engine-client";
 import {
   createChartCalculationOutboxRelay,
   relayPendingChartCalculationEvents

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { UnrecoverableError } from "bullmq";
-import { ChartEnginePermanentError } from "./chart-engine-client";
+import { ChartEnginePermanentError } from "@elevenhouse/chart-engine-client";
 import { processChartCalculationJob } from "./chart-jobs.processor";
 
 const job = {

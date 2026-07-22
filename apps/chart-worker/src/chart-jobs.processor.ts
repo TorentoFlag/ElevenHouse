@@ -5,9 +5,9 @@ import {
   type ChartNatalCalculationRequest,
   type StoredChartCalculationPayload
 } from "@elevenhouse/contracts";
+import { ChartEnginePermanentError } from "@elevenhouse/chart-engine-client";
 import type { ChartJobProcessingStore } from "@elevenhouse/domain";
 import { UnrecoverableError } from "bullmq";
-import { ChartEnginePermanentError } from "./chart-engine-client";
 
 export type ChartEngineClient = {
   readonly calculateNatal: (
