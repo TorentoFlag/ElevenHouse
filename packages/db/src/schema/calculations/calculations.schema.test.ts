@@ -101,8 +101,9 @@ describe("current calculation persistence schema", () => {
     expect(migration).toContain('CREATE TABLE "chart_calculation_jobs"');
     expect(migration).toContain('"result_calculation_id" uuid');
     expect(chartCalculationJobMethodValues).toContain("transit");
+    expect(chartCalculationJobMethodValues).toContain("synastry");
     expect(chartJobsTable).toContain(
-      '"chart_calculation_jobs"."method" in (\'natal\', \'transit\')'
+      '"chart_calculation_jobs"."method" in (\'natal\', \'transit\', \'synastry\')'
     );
     expect(migration).toContain("chart_calculation_jobs_active_fingerprint_unique");
     expect(migration).toContain("chart_calculation_jobs_success_fingerprint_unique");

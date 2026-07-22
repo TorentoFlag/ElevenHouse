@@ -57,6 +57,44 @@ describe("createNatalChartJob", () => {
     });
   });
 
+  it("delegates method-aware synastry snapshots to the job store", async () => {
+    const synastryInput = {
+      ...input,
+      method: "synastry" as const,
+      inputSnapshot: {
+        inputSnapshot: input.inputSnapshot,
+        partnerInputSnapshot: {
+          birthDate: "1992-08-11",
+          birthTime: "22:15",
+          timezone: "Europe/Moscow",
+          latitude: 55.7558,
+          longitude: 37.6173,
+          birthTimePrecision: "exact"
+        },
+        relationshipSnapshot: {
+          primaryClientId: input.clientId,
+          partnerClientId: "44444444-4444-4444-8444-444444444444"
+        }
+      }
+    };
+    const store: ChartCalculationJobStore = {
+      createOrReuseChartJob: async (received) => {
+        expect(received).toEqual(synastryInput);
+        return { kind: "active_job", jobId: "33333333-3333-4333-8333-333333333333" };
+      },
+      createOrReuseNatalJob: async () => {
+        throw new Error("natal-specific store should not be called");
+      },
+      getOwnerScopedJob: async () => null,
+      getOwnerScopedResult: async () => null
+    };
+
+    await expect(createChartJob({ store, ...synastryInput })).resolves.toEqual({
+      kind: "active_job",
+      jobId: "33333333-3333-4333-8333-333333333333"
+    });
+  });
+
   it("delegates validated snapshots to the job store", async () => {
     const store: ChartCalculationJobStore = {
       createOrReuseChartJob: async () => {

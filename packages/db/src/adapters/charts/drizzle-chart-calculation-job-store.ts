@@ -328,6 +328,16 @@ function buildChartResultSummary(result: StoredChartCalculationPayload) {
       transitAspectCount: result.result.aspectsToNatal.length
     };
   }
+  if (result.method === "synastry") {
+    return {
+      provider: result.provider.name,
+      primaryPointCount: result.result.primary.points.length,
+      partnerPointCount: result.result.partner.points.length,
+      synastryAspectCount: result.result.aspectsBetween.length,
+      houseOverlayCount: result.result.houseOverlays.length,
+      relationshipScore: result.result.relationshipScore?.value ?? null
+    };
+  }
   return {
     provider: result.provider.name,
     pointCount: result.result.points.length,
