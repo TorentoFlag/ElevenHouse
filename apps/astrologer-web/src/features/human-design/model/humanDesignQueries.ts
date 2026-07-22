@@ -4,7 +4,11 @@ import type {
   PersistHumanDesignCalculationRequest
 } from "@elevenhouse/contracts";
 import { listCalculations } from "../../calculations/api/calculationsApi";
-import { createHumanDesignCalculation, previewHumanDesign } from "../api/humanDesignApi";
+import {
+  createHumanDesignCalculation,
+  previewHumanDesign,
+  recalculateHumanDesignCalculation
+} from "../api/humanDesignApi";
 
 export const humanDesignQueryKeys = {
   all: () => ["human-design"] as const,
@@ -29,5 +33,13 @@ export const createHumanDesignCalculationMutationOptions = (
   queryClient: Pick<QueryClient, "invalidateQueries">
 ) => ({
   mutationFn: (body: PersistHumanDesignCalculationRequest) => createHumanDesignCalculation(body),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calculations"] })
+});
+
+export const recalculateHumanDesignCalculationMutationOptions = (
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) => ({
+  mutationFn: (input: { readonly calculationId: string }) =>
+    recalculateHumanDesignCalculation(input),
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calculations"] })
 });

@@ -1,12 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { listCalculations } from "../../calculations/api/calculationsApi";
+import { recalculateHumanDesignCalculation } from "../api/humanDesignApi";
 import {
   humanDesignCalculationListQueryOptions,
-  humanDesignQueryKeys
+  humanDesignQueryKeys,
+  recalculateHumanDesignCalculationMutationOptions
 } from "./humanDesignQueries";
 
 vi.mock("../../calculations/api/calculationsApi", () => ({
   listCalculations: vi.fn(async () => ({ calculations: [], total: 0 }))
+}));
+
+vi.mock("../api/humanDesignApi", () => ({
+  createHumanDesignCalculation: vi.fn(),
+  previewHumanDesign: vi.fn(),
+  recalculateHumanDesignCalculation: vi.fn(async () => ({ calculation: { id: "calculation-id" } }))
 }));
 
 describe("humanDesignQueries", () => {
@@ -21,5 +29,20 @@ describe("humanDesignQueries", () => {
       limit: 50,
       offset: 0
     });
+  });
+
+  it("recalculates saved Human Design calculations and refreshes the shared list", async () => {
+    const queryClient = { invalidateQueries: vi.fn(async () => undefined) };
+    const options = recalculateHumanDesignCalculationMutationOptions(queryClient);
+
+    await expect(
+      options.mutationFn({ calculationId: "11111111-1111-4111-8111-111111111111" })
+    ).resolves.toEqual({ calculation: { id: "calculation-id" } });
+    await options.onSuccess();
+
+    expect(recalculateHumanDesignCalculation).toHaveBeenCalledWith({
+      calculationId: "11111111-1111-4111-8111-111111111111"
+    });
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["calculations"] });
   });
 });

@@ -33,6 +33,7 @@ export type HumanDesignPageViewProps = {
   readonly onSelectSaved: (calculation: CalculationRecordResponse) => void;
   readonly onPreview: () => void | Promise<void>;
   readonly onPersist: () => void | Promise<void>;
+  readonly onRecalculate: () => void | Promise<void>;
 };
 
 export function HumanDesignPageView({
@@ -49,7 +50,8 @@ export function HumanDesignPageView({
   onSelectDetail,
   onSelectSaved,
   onPreview,
-  onPersist
+  onPersist,
+  onRecalculate
 }: HumanDesignPageViewProps) {
   const detail = model ? getHumanDesignDetail(model, selectedDetailKey) : null;
 
@@ -117,6 +119,15 @@ export function HumanDesignPageView({
         >
           <Icon iconName="pin" width={15} height={15} aria-hidden="true" />
           {isLinked ? "Привязан" : "Привязать"}
+        </button>
+        <button
+          className={styles.toolButton}
+          type="button"
+          disabled={isBusy || !selectedCalculationId}
+          onClick={() => void onRecalculate()}
+        >
+          <Icon iconName="refresh" width={15} height={15} aria-hidden="true" />
+          Обновить
         </button>
         <button className={styles.toolButton} type="button" disabled>
           <Icon iconName="doc" width={15} height={15} aria-hidden="true" />

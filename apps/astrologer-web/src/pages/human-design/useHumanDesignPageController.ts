@@ -8,7 +8,8 @@ import {
 import {
   useCreateHumanDesignCalculationMutation,
   useHumanDesignCalculationListQuery,
-  usePreviewHumanDesignMutation
+  usePreviewHumanDesignMutation,
+  useRecalculateHumanDesignCalculationMutation
 } from "../../features/human-design/model/humanDesignHooks";
 import {
   getActiveHumanDesignCalculations,
@@ -22,6 +23,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
   const listQuery = useHumanDesignCalculationListQuery();
   const previewMutation = usePreviewHumanDesignMutation();
   const createMutation = useCreateHumanDesignCalculationMutation();
+  const recalculateMutation = useRecalculateHumanDesignCalculationMutation();
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
   const [savedResponse, setSavedResponse] = useState<
     ReturnType<typeof toHumanDesignCalculationResponse> | null
@@ -45,9 +47,11 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     selectedClient,
     hasResult: Boolean(model),
     isLinked: Boolean(savedResponse),
-    isBusy: previewMutation.isPending || createMutation.isPending,
+    isBusy: previewMutation.isPending || createMutation.isPending || recalculateMutation.isPending,
     errorMessage
   });
+  const isBusy =
+    previewMutation.isPending || createMutation.isPending || recalculateMutation.isPending;
 
   return {
     selectedClient,
@@ -57,7 +61,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     selectedCalculationId: savedResponse?.calculation.id ?? null,
     status,
     errorMessage,
-    isBusy: previewMutation.isPending || createMutation.isPending,
+    isBusy,
     isLinked: Boolean(savedResponse),
     onSelectClient: (client) => {
       setSelectedClient(client);
@@ -66,6 +70,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setErrorMessage(null);
       previewMutation.reset();
       createMutation.reset();
+      recalculateMutation.reset();
       if (client.hasBirthDate) void preview(client);
     },
     onSelectDetail: setSelectedDetailKey,
@@ -78,6 +83,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
         setErrorMessage(null);
         previewMutation.reset();
         createMutation.reset();
+        recalculateMutation.reset();
       } catch {
         setErrorMessage("Сохранённый расчёт Human Design повреждён или устарел.");
       }
@@ -87,6 +93,9 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     },
     onPersist: () => {
       if (selectedClient && model) void persist(selectedClient);
+    },
+    onRecalculate: () => {
+      if (savedResponse) void recalculate(savedResponse.calculation.id);
     }
   };
 
@@ -105,6 +114,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       });
       setSavedResponse(null);
       createMutation.reset();
+      recalculateMutation.reset();
       setSelectedDetailKey("type");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -123,6 +133,21 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       });
       setSavedResponse(response);
       previewMutation.reset();
+      recalculateMutation.reset();
+      setSelectedDetailKey("type");
+    } catch (error) {
+      setErrorMessage(getHumanDesignErrorMessage(error));
+    }
+  }
+
+  async function recalculate(calculationId: string) {
+    setErrorMessage(null);
+    try {
+      const response = await recalculateMutation.mutateAsync({ calculationId });
+      setSavedResponse(response);
+      setSelectedClient(toClientOptionFromHumanDesignCalculation(response.calculation));
+      previewMutation.reset();
+      createMutation.reset();
       setSelectedDetailKey("type");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));

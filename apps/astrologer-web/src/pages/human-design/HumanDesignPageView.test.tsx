@@ -71,6 +71,36 @@ describe("HumanDesignPageView", () => {
     picker?.props.onSelect(saved);
     expect(onSelectSaved).toHaveBeenCalledWith(saved);
   });
+
+  it("enables recalculation only for an opened saved calculation", () => {
+    const onRecalculate = vi.fn();
+    const saved = savedCalculation();
+    const view = HumanDesignPageView({
+      ...baseProps(),
+      selectedClient: {
+        value: "22222222-2222-4222-8222-222222222222",
+        label: "Марина Краснова",
+        initials: "МК",
+        subtitle: "15.07.1990 · Рим",
+        birthDateDisplay: "15.07.1990",
+        hasBirthDate: true,
+        birthData: null
+      },
+      model: createHumanDesignViewModel(sampleResult()),
+      calculations: [saved],
+      selectedCalculationId: saved.id,
+      isLinked: true,
+      onRecalculate
+    });
+    const refreshButton = walk(view).find(
+      (element): element is ReactElement<{ disabled?: boolean; onClick: () => void }> =>
+        element.type === "button" && textOf(element).includes("Обновить")
+    );
+
+    expect(refreshButton?.props.disabled).toBe(false);
+    refreshButton?.props.onClick();
+    expect(onRecalculate).toHaveBeenCalledOnce();
+  });
 });
 
 function baseProps(): HumanDesignPageViewProps {
@@ -92,7 +122,8 @@ function baseProps(): HumanDesignPageViewProps {
     onSelectDetail: vi.fn(),
     onPreview: vi.fn(),
     onPersist: vi.fn(),
-    onSelectSaved: vi.fn()
+    onSelectSaved: vi.fn(),
+    onRecalculate: vi.fn()
   };
 }
 
