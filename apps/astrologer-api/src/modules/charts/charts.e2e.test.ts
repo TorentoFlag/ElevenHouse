@@ -48,6 +48,7 @@ const csrfHeaderName = "x-csrf-token";
 const sessionToken = "chart-session-token";
 const ownerUserId = "11111111-1111-4111-8111-111111111111";
 const clientId = "22222222-2222-4222-8222-222222222222";
+const partnerClientId = "44444444-4444-4444-8444-444444444444";
 const calculationId = "77777777-7777-4777-8777-777777777777";
 const checksum = `sha256:${"a".repeat(64)}`;
 let currentCsrfToken = "";
@@ -134,6 +135,9 @@ describe("charts HTTP routes", () => {
     const transitResponse = await postJson("/charts/transits/jobs", validTransitBody(), {
       cookie: `${sessionCookieName}=${sessionToken}`
     });
+    const synastryResponse = await postJson("/charts/synastry/jobs", validSynastryBody(), {
+      cookie: `${sessionCookieName}=${sessionToken}`
+    });
     const pdfResponse = await postJson(
       "/charts/calculations/77777777-7777-4777-8777-777777777777/report/pdf",
       { expectedResultChecksum: `sha256:${"a".repeat(64)}`, locale: "ru" },
@@ -142,11 +146,22 @@ describe("charts HTTP routes", () => {
 
     expect(createResponse.status).toBe(403);
     expect(transitResponse.status).toBe(403);
+    expect(synastryResponse.status).toBe(403);
     expect(pdfResponse.status).toBe(403);
   });
 
   it("creates authenticated transit jobs through the CSRF-protected route", async () => {
     const response = await postJson("/charts/transits/jobs", validTransitBody(), csrfHeaders());
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      status: "calculating",
+      jobId: "66666666-6666-4666-8666-666666666666"
+    });
+  });
+
+  it("creates authenticated synastry jobs through the CSRF-protected route", async () => {
+    const response = await postJson("/charts/synastry/jobs", validSynastryBody(), csrfHeaders());
 
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({
@@ -330,58 +345,72 @@ function createClientStore(): ClientStore {
     upsertClientProfile: vi.fn(async () => undefined),
     upsertClientBirthData: vi.fn(async () => raise()),
     listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
-    getAstrologerClient: vi.fn(async (): Promise<AstrologerClientListItem> => ({
-      clientUserId: clientId,
-      displayName: "Мария Иванова",
-      relationshipStatus: "active" as const,
-      firstLinkedAt: now.toISOString(),
-      lastLinkedAt: now.toISOString(),
-      birthData: {
-        id: "55555555-5555-4555-8555-555555555555",
+    getAstrologerClient: vi.fn(
+      async (): Promise<AstrologerClientListItem> => ({
         clientUserId: clientId,
-        label: null,
-        birthDate: "1990-07-15",
-        birthTime: "10:30",
-        birthTimePrecision: "exact",
-        birthPlaceText: null,
-        birthCountryCode: null,
-        birthCity: null,
-        birthRegion: null,
-        birthTimezone: "Europe/Rome",
-        birthTimeDstOccurrence: null,
-        birthLatitude: 41.9028,
-        birthLongitude: 12.4964,
-        source: "manual",
-        createdAt: now.toISOString(),
-        updatedAt: now.toISOString()
-      } satisfies ClientBirthData
-    }))
+        displayName: "Мария Иванова",
+        relationshipStatus: "active" as const,
+        firstLinkedAt: now.toISOString(),
+        lastLinkedAt: now.toISOString(),
+        birthData: {
+          id: "55555555-5555-4555-8555-555555555555",
+          clientUserId: clientId,
+          label: null,
+          birthDate: "1990-07-15",
+          birthTime: "10:30",
+          birthTimePrecision: "exact",
+          birthPlaceText: null,
+          birthCountryCode: null,
+          birthCity: null,
+          birthRegion: null,
+          birthTimezone: "Europe/Rome",
+          birthTimeDstOccurrence: null,
+          birthLatitude: 41.9028,
+          birthLongitude: 12.4964,
+          source: "manual",
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString()
+        } satisfies ClientBirthData
+      })
+    )
   };
 }
 
 function createCommandStore(): ChartCalculationCommandStore {
   return {
-    createOrReuseChartJobAndRequestCalculation: vi.fn(async () => ({
-      kind: "active_job",
-      jobId: "66666666-6666-4666-8666-666666666666"
-    } as const)),
-    createOrReuseNatalJobAndRequestCalculation: vi.fn(async () => ({
-      kind: "active_job",
-      jobId: "66666666-6666-4666-8666-666666666666"
-    } as const))
+    createOrReuseChartJobAndRequestCalculation: vi.fn(
+      async () =>
+        ({
+          kind: "active_job",
+          jobId: "66666666-6666-4666-8666-666666666666"
+        }) as const
+    ),
+    createOrReuseNatalJobAndRequestCalculation: vi.fn(
+      async () =>
+        ({
+          kind: "active_job",
+          jobId: "66666666-6666-4666-8666-666666666666"
+        }) as const
+    )
   };
 }
 
 function createJobStore(): ChartCalculationJobStore {
   return {
-    createOrReuseChartJob: vi.fn(async () => ({
-      kind: "active_job",
-      jobId: "66666666-6666-4666-8666-666666666666"
-    } as const)),
-    createOrReuseNatalJob: vi.fn(async () => ({
-      kind: "active_job",
-      jobId: "66666666-6666-4666-8666-666666666666"
-    } as const)),
+    createOrReuseChartJob: vi.fn(
+      async () =>
+        ({
+          kind: "active_job",
+          jobId: "66666666-6666-4666-8666-666666666666"
+        }) as const
+    ),
+    createOrReuseNatalJob: vi.fn(
+      async () =>
+        ({
+          kind: "active_job",
+          jobId: "66666666-6666-4666-8666-666666666666"
+        }) as const
+    ),
     getOwnerScopedJob: vi.fn(async () => null),
     getOwnerScopedResult: vi.fn(async () => null)
   };
@@ -429,6 +458,13 @@ function validTransitBody(): Record<string, unknown> {
       date: "2026-07-22",
       time: "14:30"
     }
+  };
+}
+
+function validSynastryBody(): Record<string, unknown> {
+  return {
+    ...validBody(),
+    partnerClientId
   };
 }
 

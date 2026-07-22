@@ -16,12 +16,14 @@ import {
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalJobCreateResponseSchema,
+  chartSynastryJobCreateRequestSchema,
   chartTransitJobCreateRequestSchema,
   storedChartCalculationPayloadSchema,
   type ChartNatalJobCreateRequest,
   type ChartCalculationResponse,
   type ChartJobResponse,
   type ChartNatalJobCreateResponse,
+  type ChartSynastryJobCreateRequest,
   type ChartTransitJobCreateRequest
 } from "@elevenhouse/contracts";
 import { z } from "@elevenhouse/validation";
@@ -143,6 +145,93 @@ export class ChartsService {
       const outcome = await createChartJobAndRequestCalculation({
         store: this.commandStore,
         method: "transit",
+        ownerUserId,
+        clientId: parsedBody.clientId,
+        inputFingerprint: requestFingerprint,
+        inputSnapshot: requestSnapshot,
+        settingsSnapshot: parsedBody.settings,
+        now: this.clock.now()
+      });
+      if (outcome.kind === "existing_result") {
+        const result = await this.jobStore.getOwnerScopedResult({
+          ownerUserId,
+          calculationId: outcome.calculationId
+        });
+        if (!result) {
+          throw chartHttpError(
+            404,
+            "CHART_CALCULATION_NOT_FOUND",
+            "Chart calculation was not found"
+          );
+        }
+        return chartNatalJobCreateResponseSchema.parse({
+          status: "succeeded",
+          calculationId: outcome.calculationId,
+          result: storedChartCalculationPayloadSchema.parse(result)
+        });
+      }
+      return chartNatalJobCreateResponseSchema.parse({
+        status: "calculating",
+        jobId: outcome.jobId
+      });
+    });
+  }
+
+  async createSynastryJob(
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<ChartNatalJobCreateResponse> {
+    const parsedBody = parseChartContract<ChartSynastryJobCreateRequest>(
+      chartSynastryJobCreateRequestSchema,
+      body
+    );
+    const ownerUserId = requireOwnerUserId(request);
+    return mapChartError(async () => {
+      if (parsedBody.clientId === parsedBody.partnerClientId) {
+        throw chartHttpError(
+          400,
+          "CHART_SYNASTRY_PARTNER_REQUIRED",
+          "Synastry requires a different partner client"
+        );
+      }
+      const client = await this.clientStore.getAstrologerClient({
+        astrologerUserId: ownerUserId,
+        clientUserId: parsedBody.clientId
+      });
+      if (!client?.birthData) {
+        throw chartHttpError(404, "CHART_CLIENT_NOT_FOUND", "Client was not found");
+      }
+      const partnerClient = await this.clientStore.getAstrologerClient({
+        astrologerUserId: ownerUserId,
+        clientUserId: parsedBody.partnerClientId
+      });
+      if (!partnerClient?.birthData) {
+        throw chartHttpError(404, "CHART_PARTNER_CLIENT_NOT_FOUND", "Partner client was not found");
+      }
+      const inputSnapshot = toChartInputSnapshot(assertChartBirthDataReady(client.birthData));
+      const partnerInputSnapshot = toChartInputSnapshot(
+        assertChartBirthDataReady(partnerClient.birthData)
+      );
+      const requestSnapshot = {
+        inputSnapshot,
+        partnerInputSnapshot,
+        relationshipSnapshot: {
+          primaryClientId: parsedBody.clientId,
+          partnerClientId: parsedBody.partnerClientId
+        }
+      };
+      const requestFingerprint = sha256CanonicalJson({
+        schemaVersion: "chart-request.v1",
+        providerVersion,
+        method: "synastry",
+        clientId: parsedBody.clientId,
+        partnerClientId: parsedBody.partnerClientId,
+        inputSnapshot: requestSnapshot as CanonicalJson,
+        settings: parsedBody.settings as CanonicalJson
+      });
+      const outcome = await createChartJobAndRequestCalculation({
+        store: this.commandStore,
+        method: "synastry",
         ownerUserId,
         clientId: parsedBody.clientId,
         inputFingerprint: requestFingerprint,

@@ -4,6 +4,8 @@ import { ChartBirthDataReadinessError } from "@elevenhouse/domain";
 export type ChartErrorCode =
   | "CHART_VALIDATION_FAILED"
   | "CHART_CLIENT_NOT_FOUND"
+  | "CHART_PARTNER_CLIENT_NOT_FOUND"
+  | "CHART_SYNASTRY_PARTNER_REQUIRED"
   | "CHART_BIRTH_DATE_REQUIRED"
   | "CHART_BIRTH_TIME_REQUIRED"
   | "CHART_BIRTH_TIMEZONE_REQUIRED"

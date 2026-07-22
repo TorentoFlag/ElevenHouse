@@ -21,6 +21,12 @@ export class ChartsController {
     return this.service.createTransitJob(body, request);
   }
 
+  @Post("synastry/jobs")
+  @RequireCsrf()
+  createSynastryJob(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.service.createSynastryJob(body, request);
+  }
+
   @Get("jobs/:jobId")
   getJob(@Param("jobId") jobId: string, @Req() request: AstrologerSessionRequest) {
     return this.service.getJob(jobId, request);
