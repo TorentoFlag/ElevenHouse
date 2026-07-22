@@ -91,7 +91,12 @@
       `chart-result.v1`, astrologer API jobs/results/recalculation routes,
       `/chart-engine` natal UI, Dictionary-backed interpretations and
       checksum-safe private chart PDF export.
-- [ ] Chart Engine method expansion: transits first, then synastry, solar
+- [x] Chart Engine transits first slice: single-moment dual-wheel transit
+      calculations for owner-scoped CRM clients, canonical transit result
+      payload, worker/provider integration, `/chart-engine` transit mode and
+      real browser reload proof. Transit PDF/export and range AstroCalendar
+      remain separate future contours.
+- [ ] Chart Engine method expansion after transits: synastry next, then solar
       return, progressions, composite, child-chart interpretation mode, horary
       and astrocartography. Each method requires its own contracts, domain/API
       workflow, worker/provider adapter, UI state matrix, PDF/report decision
