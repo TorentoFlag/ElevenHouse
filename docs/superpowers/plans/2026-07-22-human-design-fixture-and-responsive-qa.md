@@ -158,7 +158,7 @@ none
   chart-engine on `localhost:8012`: preview `200`, persist `201`, saved-list
   refresh `200`, recalculate `200`, clean console and desktop/mobile
   `scrollWidth = clientWidth`.
-- [ ] Capture file-based authenticated desktop and mobile production screenshots
+- [x] Capture file-based authenticated desktop and mobile production screenshots
   after the screenshot workspace issue is resolved or another approved browser
   surface is used.
 - [x] Add a third source or boundary-case fixture before marking the full method
@@ -352,6 +352,6 @@ and record the external refresh blocker separately.
 
 The method-confidence matrix now includes two external-source fixtures and one
 internal reference boundary fixture. Authenticated runtime/browser acceptance is
-covered by inline Chrome DevTools evidence; the remaining blocker is storing
-authenticated screenshot PNG files because Chrome DevTools MCP rejects
-`.design-qa/...` file writes under its configured workspace roots.
+covered by Chrome DevTools network/DOM evidence and file-based desktop/mobile
+PNG artifacts captured through macOS `screencapture` because Chrome DevTools
+MCP rejects `.design-qa/...` file writes under its configured workspace roots.

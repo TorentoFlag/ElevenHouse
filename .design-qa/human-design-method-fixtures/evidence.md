@@ -233,3 +233,20 @@ browser metrics available from the same session.
 - Remaining screenshot artifact blocker: Chrome DevTools MCP still rejects
   file writes under `.design-qa/...` with the configured workspace-root error,
   so screenshots are inline DevTools evidence rather than stored PNG files.
+
+## File Screenshot Artifacts
+
+- Date: 2026-07-22.
+- Chrome DevTools MCP file writes still failed with the configured
+  workspace-root error, so final PNG artifacts were captured through macOS
+  `screencapture` against the active authenticated Chrome window.
+- Desktop artifact:
+  `.design-qa/human-design-method-fixtures/production-desktop-window-1440x900-2026-07-22.png`.
+  Visual check confirmed authenticated `/human-design` linked state for
+  `Мария Иванова`, saved calculation, bodygraph, property rail, detail area,
+  action states and checksum surface. The capture includes browser chrome.
+- Mobile artifact:
+  `.design-qa/human-design-method-fixtures/production-mobile-window-390x844-2026-07-22.png`.
+  Visual check confirmed emulated mobile linked state for `Мария Иванова`,
+  selected individual mode, linked status, action buttons, saved calculation
+  and property cards. The capture includes browser chrome.
