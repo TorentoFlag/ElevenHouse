@@ -49,6 +49,20 @@ class TransitRequest(BaseModel):
     transitSnapshot: TransitSnapshot
 
 
+class RelationshipSnapshot(BaseModel):
+    primaryClientId: str
+    partnerClientId: str
+
+
+class SynastryRequest(BaseModel):
+    schemaVersion: Literal["chart-request.v1"]
+    method: Literal["synastry"]
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+    partnerInputSnapshot: NatalInputSnapshot
+    relationshipSnapshot: RelationshipSnapshot
+
+
 class PlanetaryPositionsSettings(BaseModel):
     zodiac: Literal["tropical"] = "tropical"
     nodeType: Literal["true", "mean"]
@@ -148,6 +162,43 @@ class ChartTransitRenderResult(BaseModel):
     warnings: list[ChartWarning]
 
 
+class ChartSynastryAspect(BaseModel):
+    primaryPoint: str
+    partnerPoint: str
+    type: str
+    angle: float
+    orb: float
+    applying: bool | None = None
+    strength: float | None = None
+
+
+class ChartSynastryHouseOverlay(BaseModel):
+    owner: Literal["primary", "partner"]
+    point: str
+    projectedHouseOwner: Literal["primary", "partner"]
+    projectedHouse: int = Field(ge=1, le=12)
+
+
+class ChartSynastryRelationshipScoreBreakdown(BaseModel):
+    code: str
+    points: float
+
+
+class ChartSynastryRelationshipScore(BaseModel):
+    value: float
+    label: str
+    breakdown: list[ChartSynastryRelationshipScoreBreakdown]
+
+
+class ChartSynastryRenderResult(BaseModel):
+    primary: ChartRenderResult
+    partner: ChartRenderResult
+    aspectsBetween: list[ChartSynastryAspect]
+    houseOverlays: list[ChartSynastryHouseOverlay]
+    relationshipScore: ChartSynastryRelationshipScore | None = None
+    warnings: list[ChartWarning]
+
+
 class StoredChartCalculationPayload(BaseModel):
     schemaVersion: Literal["chart-result.v1"]
     method: Literal["natal"]
@@ -165,6 +216,17 @@ class StoredChartTransitCalculationPayload(BaseModel):
     inputSnapshot: NatalInputSnapshot
     transitSnapshot: TransitSnapshot
     result: ChartTransitRenderResult
+
+
+class StoredChartSynastryCalculationPayload(BaseModel):
+    schemaVersion: Literal["chart-result.v1"]
+    method: Literal["synastry"]
+    provider: ProviderMetadata
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+    partnerInputSnapshot: NatalInputSnapshot
+    relationshipSnapshot: RelationshipSnapshot
+    result: ChartSynastryRenderResult
 
 
 class PlanetaryPositionsPayload(BaseModel):

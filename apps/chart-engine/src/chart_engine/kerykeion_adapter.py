@@ -11,6 +11,11 @@ from chart_engine.schemas import (
     ChartHouse,
     ChartPoint,
     ChartRenderResult,
+    ChartSynastryAspect,
+    ChartSynastryHouseOverlay,
+    ChartSynastryRelationshipScore,
+    ChartSynastryRelationshipScoreBreakdown,
+    ChartSynastryRenderResult,
     ChartTransitAspect,
     ChartTransitRenderResult,
     ChartWarning,
@@ -20,7 +25,9 @@ from chart_engine.schemas import (
     PlanetaryPositionsRequest,
     ProviderMetadata,
     StoredChartCalculationPayload,
+    StoredChartSynastryCalculationPayload,
     StoredChartTransitCalculationPayload,
+    SynastryRequest,
     TransitRequest,
 )
 
@@ -290,6 +297,85 @@ def calculate_transit(request: TransitRequest) -> StoredChartTransitCalculationP
     )
 
 
+def calculate_synastry(request: SynastryRequest) -> StoredChartSynastryCalculationPayload:
+    active_points = _active_points(request.settings.nodeType)
+    primary_subject = _create_subject(
+        name="primary",
+        date=request.inputSnapshot.birthDate,
+        time=request.inputSnapshot.birthTime,
+        timezone=request.inputSnapshot.timezone,
+        latitude=request.inputSnapshot.latitude,
+        longitude=request.inputSnapshot.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+    partner_subject = _create_subject(
+        name="partner",
+        date=request.partnerInputSnapshot.birthDate,
+        time=request.partnerInputSnapshot.birthTime,
+        timezone=request.partnerInputSnapshot.timezone,
+        latitude=request.partnerInputSnapshot.latitude,
+        longitude=request.partnerInputSnapshot.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+    allowed_aspects = (
+        MAJOR_ASPECTS
+        if request.settings.aspectPreset == "major"
+        else MAJOR_ASPECTS | MINOR_ASPECTS
+    )
+    active_aspects = _active_aspects(allowed_aspects, request.settings.orbMultiplier)
+    synastry_data = ChartDataFactory.create_synastry_chart_data(
+        primary_subject,
+        partner_subject,
+        active_points=active_points,
+        active_aspects=active_aspects,
+        include_house_comparison=True,
+        include_relationship_score=True,
+    )
+    warnings = _map_warnings(request)
+
+    return StoredChartSynastryCalculationPayload(
+        schemaVersion="chart-result.v1",
+        method="synastry",
+        provider=ProviderMetadata(
+            name="kerykeion",
+            version=version("kerykeion"),
+            ephemeris="swiss-ephemeris",
+        ),
+        settings=request.settings,
+        inputSnapshot=request.inputSnapshot,
+        partnerInputSnapshot=request.partnerInputSnapshot,
+        relationshipSnapshot=request.relationshipSnapshot,
+        result=ChartSynastryRenderResult(
+            primary=_map_render_result(
+                primary_subject,
+                request.settings.nodeType,
+                request.settings.aspectPreset,
+                request.settings.orbMultiplier,
+                active_points,
+                warnings,
+            ),
+            partner=_map_render_result(
+                partner_subject,
+                request.settings.nodeType,
+                request.settings.aspectPreset,
+                request.settings.orbMultiplier,
+                active_points,
+                [],
+            ),
+            aspectsBetween=_map_synastry_aspects(
+                synastry_data.aspects,
+                allowed_aspects,
+                request.settings.orbMultiplier,
+            ),
+            houseOverlays=_map_house_overlays(synastry_data.house_comparison),
+            relationshipScore=_map_relationship_score(synastry_data.relationship_score),
+            warnings=warnings,
+        ),
+    )
+
+
 def calculate_planetary_positions(request: PlanetaryPositionsRequest) -> PlanetaryPositionsPayload:
     year, month, day = [int(part) for part in request.inputSnapshot.birthDate.split("-")]
     hour, minute = [int(part) for part in request.inputSnapshot.birthTime.split(":")]
@@ -508,6 +594,104 @@ def _map_transit_aspects(
     return aspects
 
 
+def _map_synastry_aspects(
+    source_aspects: list[Any],
+    allowed_aspects: set[str],
+    orb_multiplier: float,
+) -> list[ChartSynastryAspect]:
+    aspects = []
+    seen_aspects = set()
+
+    for aspect in source_aspects:
+        if aspect.aspect not in allowed_aspects:
+            continue
+        point_a = POINT_NAME_TO_ID.get(aspect.p1_name)
+        point_b = POINT_NAME_TO_ID.get(aspect.p2_name)
+        if point_a is None or point_b is None:
+            continue
+        if aspect.p1_owner == "primary" and aspect.p2_owner == "partner":
+            primary_point, partner_point = point_a, point_b
+        elif aspect.p1_owner == "partner" and aspect.p2_owner == "primary":
+            primary_point, partner_point = point_b, point_a
+        else:
+            continue
+        orb_limit = _orb_limit(aspect.aspect, orb_multiplier)
+        if float(aspect.orbit) > orb_limit:
+            continue
+        aspect_key = (primary_point, partner_point, aspect.aspect)
+        if aspect_key in seen_aspects:
+            continue
+        seen_aspects.add(aspect_key)
+        aspects.append(
+            ChartSynastryAspect(
+                primaryPoint=primary_point,
+                partnerPoint=partner_point,
+                type=aspect.aspect,
+                angle=float(aspect.aspect_degrees),
+                orb=float(aspect.orbit),
+                applying=_is_applying(aspect.aspect_movement),
+                strength=_aspect_strength(float(aspect.orbit), orb_limit),
+            )
+        )
+
+    return aspects
+
+
+def _map_house_overlays(comparison: Any) -> list[ChartSynastryHouseOverlay]:
+    overlays = []
+    for item in comparison.first_points_in_second_houses:
+        overlay = _map_house_overlay(item)
+        if overlay is not None:
+            overlays.append(overlay)
+    for item in comparison.second_points_in_first_houses:
+        overlay = _map_house_overlay(item)
+        if overlay is not None:
+            overlays.append(overlay)
+    for item in comparison.first_cusps_in_second_houses:
+        overlay = _map_house_overlay(item)
+        if overlay is not None:
+            overlays.append(overlay)
+    for item in comparison.second_cusps_in_first_houses:
+        overlay = _map_house_overlay(item)
+        if overlay is not None:
+            overlays.append(overlay)
+    return overlays
+
+
+def _map_house_overlay(item: Any) -> ChartSynastryHouseOverlay | None:
+    owner = str(item.point_owner_name)
+    projected_owner = str(item.projected_house_owner_name)
+    if owner not in {"primary", "partner"} or projected_owner not in {"primary", "partner"}:
+        return None
+    if owner == projected_owner:
+        return None
+    point_id = _point_or_house_id(str(item.point_name))
+    if point_id is None:
+        return None
+    return ChartSynastryHouseOverlay(
+        owner=owner,
+        point=point_id,
+        projectedHouseOwner=projected_owner,
+        projectedHouse=int(item.projected_house_number),
+    )
+
+
+def _map_relationship_score(score: Any) -> ChartSynastryRelationshipScore | None:
+    if score is None:
+        return None
+    return ChartSynastryRelationshipScore(
+        value=float(score.score_value),
+        label=_score_label(str(score.score_description)),
+        breakdown=[
+            ChartSynastryRelationshipScoreBreakdown(
+                code=str(item.rule),
+                points=float(item.points),
+            )
+            for item in score.score_breakdown
+        ],
+    )
+
+
 def _active_aspects(allowed_aspects: set[str], orb_multiplier: float) -> list[dict[str, float | str]]:
     return [
         {"name": name, "orb": ceil(_orb_limit(name, orb_multiplier))}
@@ -532,13 +716,23 @@ def _map_distributions(subject: Any) -> ChartDistributions:
     return ChartDistributions(elements=elements, modalities=modalities, polarity=polarity)
 
 
-def _map_warnings(request: NatalRequest | TransitRequest) -> list[ChartWarning]:
+def _map_warnings(request: NatalRequest | TransitRequest | SynastryRequest) -> list[ChartWarning]:
     warnings = []
     if request.inputSnapshot.birthTimePrecision == "approximate":
         warnings.append(
             ChartWarning(
                 code="BIRTH_TIME_APPROXIMATE",
                 message="Chart calculated with approximate birth time.",
+            )
+        )
+    if (
+        isinstance(request, SynastryRequest)
+        and request.partnerInputSnapshot.birthTimePrecision == "approximate"
+    ):
+        warnings.append(
+            ChartWarning(
+                code="PARTNER_BIRTH_TIME_APPROXIMATE",
+                message="Partner chart calculated with approximate birth time.",
             )
         )
     return warnings
@@ -552,6 +746,20 @@ def _house_number(value: object) -> int | None:
     if value is None:
         return None
     return HOUSE_NAMES.get(str(value))
+
+
+def _point_or_house_id(value: str) -> str | None:
+    point_id = POINT_NAME_TO_ID.get(value)
+    if point_id is not None:
+        return point_id
+    house_number = HOUSE_NAMES.get(value)
+    if house_number is not None:
+        return f"house_{house_number}"
+    return None
+
+
+def _score_label(value: str) -> str:
+    return value.strip().lower().replace(" ", "_")
 
 
 def _is_applying(value: str) -> bool | None:

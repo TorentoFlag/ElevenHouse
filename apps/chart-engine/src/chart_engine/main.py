@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from chart_engine.kerykeion_adapter import (
     calculate_natal,
     calculate_planetary_positions,
+    calculate_synastry,
     calculate_transit,
 )
 from chart_engine.schemas import (
@@ -11,7 +12,9 @@ from chart_engine.schemas import (
     PlanetaryPositionsPayload,
     PlanetaryPositionsRequest,
     StoredChartCalculationPayload,
+    StoredChartSynastryCalculationPayload,
     StoredChartTransitCalculationPayload,
+    SynastryRequest,
     TransitRequest,
 )
 
@@ -36,6 +39,15 @@ def natal(request: NatalRequest) -> StoredChartCalculationPayload:
 @app.post("/v1/transits", response_model=StoredChartTransitCalculationPayload, response_model_exclude_none=True)
 def transits(request: TransitRequest) -> StoredChartTransitCalculationPayload:
     return calculate_transit(request)
+
+
+@app.post(
+    "/v1/synastry",
+    response_model=StoredChartSynastryCalculationPayload,
+    response_model_exclude_none=True,
+)
+def synastry(request: SynastryRequest) -> StoredChartSynastryCalculationPayload:
+    return calculate_synastry(request)
 
 
 @app.post("/v1/positions", response_model=PlanetaryPositionsPayload, response_model_exclude_none=True)
