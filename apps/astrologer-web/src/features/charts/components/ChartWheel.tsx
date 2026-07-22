@@ -159,6 +159,7 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
           return (
             <g
               aria-label={`${getChartPointDisplayLabel(point.id, point.label)} на карте`}
+              className={styles.pointMarker}
               data-hovered={hovered ? "true" : "false"}
               data-testid={`chart-point-${point.id}`}
               key={point.id}

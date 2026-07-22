@@ -4,6 +4,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChartHouse, ChartPoint, StoredChartCalculationPayload } from "@elevenhouse/contracts";
 import { ChartWheel } from "./ChartWheel";
+import styles from "./ChartEnginePage.module.css";
 
 describe("ChartWheel", () => {
   afterEach(() => cleanup());
@@ -20,6 +21,17 @@ describe("ChartWheel", () => {
     expect(screen.getByText("MC")).toBeInTheDocument();
     expect(screen.getByTestId("chart-aspect-square")).toHaveAttribute("data-aspect-tone", "hard");
     expect(screen.getByTestId("chart-aspect-trine")).toHaveAttribute("data-aspect-tone", "soft");
+  });
+
+  it("marks focusable planet glyphs so native SVG focus outlines can be suppressed", () => {
+    render(<ChartWheel hoveredPointId={null} onHoverPoint={vi.fn()} result={wheelResult()} />);
+
+    const pointMarkerClass = styles.pointMarker;
+    expect(pointMarkerClass).toBeDefined();
+    if (!pointMarkerClass) {
+      throw new Error("Expected point marker class to be exported from chart CSS module.");
+    }
+    expect(screen.getByTestId("chart-point-sun")).toHaveClass(pointMarkerClass);
   });
 });
 
