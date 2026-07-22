@@ -43,6 +43,17 @@ export const chartTransitJobCreateRequestSchema = z
   .strict();
 export type ChartTransitJobCreateRequest = z.infer<typeof chartTransitJobCreateRequestSchema>;
 
+export const chartSynastryJobCreateRequestSchema = z
+  .object({
+    clientId: uuidSchema,
+    partnerClientId: uuidSchema,
+    settings: chartSettingsSchema
+  })
+  .strict();
+export type ChartSynastryJobCreateRequest = z.infer<
+  typeof chartSynastryJobCreateRequestSchema
+>;
+
 export const chartPublicJobStatusSchema = z.enum(["calculating", "succeeded", "failed"]);
 export type ChartPublicJobStatus = z.infer<typeof chartPublicJobStatusSchema>;
 
@@ -286,6 +297,68 @@ export const chartTransitRenderResultSchema = z
   .strict();
 export type ChartTransitRenderResult = z.infer<typeof chartTransitRenderResultSchema>;
 
+export const chartSynastryAspectSchema = z
+  .object({
+    primaryPoint: z.string().trim().min(1).max(80),
+    partnerPoint: z.string().trim().min(1).max(80),
+    type: z.string().trim().min(1).max(80),
+    angle: z.number().min(0).max(180),
+    orb: z.number().min(0),
+    applying: z.boolean().nullable().optional(),
+    strength: z.number().min(0).max(1).nullable().optional()
+  })
+  .strict();
+export type ChartSynastryAspect = z.infer<typeof chartSynastryAspectSchema>;
+
+export const chartSynastryHouseOverlaySchema = z
+  .object({
+    owner: z.enum(["primary", "partner"]),
+    point: z.string().trim().min(1).max(80),
+    projectedHouseOwner: z.enum(["primary", "partner"]),
+    projectedHouse: z.number().int().min(1).max(12)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.owner === value.projectedHouseOwner) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["projectedHouseOwner"],
+        message: "Synastry house overlay must project into the other participant's houses"
+      });
+    }
+  });
+export type ChartSynastryHouseOverlay = z.infer<typeof chartSynastryHouseOverlaySchema>;
+
+export const chartSynastryRelationshipScoreSchema = z
+  .object({
+    value: z.number().min(0),
+    label: z.string().trim().min(1).max(80),
+    breakdown: z.array(
+      z
+        .object({
+          code: z.string().trim().min(1).max(120),
+          points: z.number()
+        })
+        .strict()
+    )
+  })
+  .strict();
+export type ChartSynastryRelationshipScore = z.infer<
+  typeof chartSynastryRelationshipScoreSchema
+>;
+
+export const chartSynastryRenderResultSchema = z
+  .object({
+    primary: chartRenderResultSchema,
+    partner: chartRenderResultSchema,
+    aspectsBetween: z.array(chartSynastryAspectSchema),
+    houseOverlays: z.array(chartSynastryHouseOverlaySchema),
+    relationshipScore: chartSynastryRelationshipScoreSchema.optional(),
+    warnings: z.array(chartWarningSchema)
+  })
+  .strict();
+export type ChartSynastryRenderResult = z.infer<typeof chartSynastryRenderResultSchema>;
+
 export const storedChartNatalCalculationPayloadSchema = z
   .object({
     schemaVersion: z.literal("chart-result.v1"),
@@ -315,9 +388,31 @@ export type StoredChartTransitCalculationPayload = z.infer<
   typeof storedChartTransitCalculationPayloadSchema
 >;
 
+export const storedChartSynastryCalculationPayloadSchema = z
+  .object({
+    schemaVersion: z.literal("chart-result.v1"),
+    method: z.literal("synastry"),
+    provider: chartProviderMetadataSchema,
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    partnerInputSnapshot: chartInputSnapshotSchema,
+    relationshipSnapshot: z
+      .object({
+        primaryClientId: uuidSchema,
+        partnerClientId: uuidSchema
+      })
+      .strict(),
+    result: chartSynastryRenderResultSchema
+  })
+  .strict();
+export type StoredChartSynastryCalculationPayload = z.infer<
+  typeof storedChartSynastryCalculationPayloadSchema
+>;
+
 export const storedChartCalculationPayloadSchema = z.discriminatedUnion("method", [
   storedChartNatalCalculationPayloadSchema,
-  storedChartTransitCalculationPayloadSchema
+  storedChartTransitCalculationPayloadSchema,
+  storedChartSynastryCalculationPayloadSchema
 ]);
 export type StoredChartCalculationPayload = z.infer<typeof storedChartCalculationPayloadSchema>;
 

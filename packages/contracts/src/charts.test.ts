@@ -4,6 +4,7 @@ import {
   chartPlanetaryPositionsResponseSchema,
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
+  chartSynastryJobCreateRequestSchema,
   chartTransitJobCreateRequestSchema,
   storedChartCalculationPayloadSchema
 } from "./charts";
@@ -73,6 +74,40 @@ describe("chart contracts", () => {
         transit: {
           date: "2026-07-22",
           time: "14:30"
+        }
+      })
+    ).toThrow();
+  });
+
+  it("accepts a synastry job request by two CRM client ids and settings", () => {
+    expect(
+      chartSynastryJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        partnerClientId: "00000000-0000-4000-8000-000000000002",
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).toMatchObject({
+      clientId: "00000000-0000-4000-8000-000000000001",
+      partnerClientId: "00000000-0000-4000-8000-000000000002"
+    });
+  });
+
+  it("rejects browser-supplied birth data in synastry job requests", () => {
+    expect(() =>
+      chartSynastryJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        partnerClientId: "00000000-0000-4000-8000-000000000002",
+        partnerBirthDate: "1992-08-11",
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
         }
       })
     ).toThrow();
@@ -232,6 +267,138 @@ describe("chart contracts", () => {
           natal: completeRenderResult(),
           transit: { ...completeRenderResult(), points: [] },
           aspectsToNatal: [],
+          warnings: []
+        }
+      })
+    ).toThrow();
+  });
+
+  it("accepts complete render data for a synastry dual-wheel screen", () => {
+    const payload = storedChartCalculationPayloadSchema.parse({
+      schemaVersion: "chart-result.v1",
+      method: "synastry",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: {
+        zodiac: "tropical",
+        houseSystem: "placidus",
+        nodeType: "true",
+        aspectPreset: "major",
+        orbMultiplier: 1
+      },
+      inputSnapshot: {
+        birthDate: "1990-07-15",
+        birthTime: "10:30",
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964,
+        birthTimePrecision: "exact"
+      },
+      partnerInputSnapshot: {
+        birthDate: "1992-08-11",
+        birthTime: "22:15",
+        timezone: "Europe/Moscow",
+        latitude: 55.7558,
+        longitude: 37.6173,
+        birthTimePrecision: "approximate"
+      },
+      relationshipSnapshot: {
+        primaryClientId: "00000000-0000-4000-8000-000000000001",
+        partnerClientId: "00000000-0000-4000-8000-000000000002"
+      },
+      result: {
+        primary: completeRenderResult(),
+        partner: completeRenderResult(),
+        aspectsBetween: [
+          {
+            primaryPoint: "sun",
+            partnerPoint: "moon",
+            type: "trine",
+            angle: 120,
+            orb: 1.25,
+            applying: null,
+            strength: 0.79
+          }
+        ],
+        houseOverlays: [
+          {
+            owner: "primary",
+            point: "venus",
+            projectedHouseOwner: "partner",
+            projectedHouse: 7
+          }
+        ],
+        relationshipScore: {
+          value: 18,
+          label: "very_important",
+          breakdown: [
+            {
+              code: "venus_mars_trine",
+              points: 4
+            }
+          ]
+        },
+        warnings: [
+          {
+            code: "PARTNER_BIRTH_TIME_APPROXIMATE",
+            message: "Partner chart calculated with approximate birth time."
+          }
+        ]
+      }
+    });
+
+    expect(payload.method).toBe("synastry");
+    if (payload.method !== "synastry") {
+      throw new Error("Expected synastry chart payload");
+    }
+    expect(payload.result.aspectsBetween[0]).toMatchObject({
+      primaryPoint: "sun",
+      partnerPoint: "moon"
+    });
+    expect(payload.result.houseOverlays[0]).toMatchObject({
+      owner: "primary",
+      projectedHouseOwner: "partner",
+      projectedHouse: 7
+    });
+  });
+
+  it("rejects synastry results without partner render points", () => {
+    expect(() =>
+      storedChartCalculationPayloadSchema.parse({
+        schemaVersion: "chart-result.v1",
+        method: "synastry",
+        provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        inputSnapshot: {
+          birthDate: "1990-07-15",
+          birthTime: "10:30",
+          timezone: "Europe/Rome",
+          latitude: 41.9028,
+          longitude: 12.4964,
+          birthTimePrecision: "exact"
+        },
+        partnerInputSnapshot: {
+          birthDate: "1992-08-11",
+          birthTime: "22:15",
+          timezone: "Europe/Moscow",
+          latitude: 55.7558,
+          longitude: 37.6173,
+          birthTimePrecision: "exact"
+        },
+        relationshipSnapshot: {
+          primaryClientId: "00000000-0000-4000-8000-000000000001",
+          partnerClientId: "00000000-0000-4000-8000-000000000002"
+        },
+        result: {
+          primary: completeRenderResult(),
+          partner: { ...completeRenderResult(), points: [] },
+          aspectsBetween: [],
+          houseOverlays: [],
           warnings: []
         }
       })
