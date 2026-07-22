@@ -4,7 +4,12 @@ import { buildHumanDesignIndividualBaseResult } from "./individual";
 
 describe("Human Design approved external fixtures", () => {
   it("matches approved external calculator output for gates, channels and core mechanics", () => {
-    expect(HUMAN_DESIGN_APPROVED_FIXTURES.length).toBeGreaterThanOrEqual(2);
+    expect(HUMAN_DESIGN_APPROVED_FIXTURES.length).toBeGreaterThanOrEqual(3);
+    expect(
+      HUMAN_DESIGN_APPROVED_FIXTURES.some(
+        (fixture) => fixture.source.mode === "reference_boundary_case"
+      )
+    ).toBe(true);
 
     for (const fixture of HUMAN_DESIGN_APPROVED_FIXTURES) {
       expect(fixture.source.approval).toBe("approved");

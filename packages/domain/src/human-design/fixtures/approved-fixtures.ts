@@ -13,7 +13,7 @@ type ApprovedHumanDesignFixture = {
     readonly name: string;
     readonly url: string;
     readonly accessedAt: string;
-    readonly mode: "public_documented_example" | "live_public_trial";
+    readonly mode: "public_documented_example" | "live_public_trial" | "reference_boundary_case";
     readonly approval: "approved";
     readonly notes: string;
   };
@@ -209,6 +209,93 @@ export const HUMAN_DESIGN_APPROVED_FIXTURES = [
         { side: "design", body: "uranus", gate: 58, line: 5 },
         { side: "design", body: "neptune", gate: 38, line: 5 },
         { side: "design", body: "pluto", gate: 1, line: 3 }
+      ]
+    }
+  },
+  {
+    id: "reference-gate-line-boundaries-41-19-transition",
+    source: {
+      name: "Reference gate and line boundary case",
+      url: "internal:human-design-classic-gate-wheel.v1",
+      accessedAt: "2026-07-22",
+      mode: "reference_boundary_case",
+      approval: "approved",
+      notes:
+        "Deterministic boundary fixture for start-inclusive and end-exclusive gate/line mapping: gate 41 start, just before line 2, exact line 2 boundary, just before gate 19 and exact gate 19 start. Expected mechanics are derived from the approved classic gate wheel and stored to prevent accidental boundary regressions."
+    },
+    input: {
+      personality: {
+        sun: 302,
+        moon: 302.937499999,
+        north_node: 302.9375,
+        mercury: 307.624999999,
+        venus: 307.625,
+        mars: 324.5,
+        jupiter: 60.125,
+        saturn: 10,
+        uranus: 20,
+        neptune: 30,
+        pluto: 40
+      },
+      design: {
+        sun: 242,
+        moon: 240.125,
+        north_node: 60.125,
+        mercury: 240.125,
+        venus: 50,
+        mars: 70,
+        jupiter: 80,
+        saturn: 90,
+        uranus: 100,
+        neptune: 110,
+        pluto: 120
+      }
+    },
+    expected: {
+      type: "manifesting_generator",
+      profile: "1/3",
+      derivedAuthority: "emotional",
+      derivedDefinition: "split",
+      definedChannels: ["45-21", "20-34", "30-41"],
+      definedCenters: ["throat", "heart", "sacral", "solar_plexus", "root"],
+      incarnationCross: {
+        angle: "right_angle",
+        profileCode: "1/3",
+        gateSequence: [41, 31, 34, 20],
+        gates: {
+          personalitySun: { gate: 41, line: 1 },
+          personalityEarth: { gate: 31, line: 1 },
+          designSun: { gate: 34, line: 3 },
+          designEarth: { gate: 20, line: 3 }
+        }
+      },
+      activations: [
+        { side: "personality", body: "sun", gate: 41, line: 1 },
+        { side: "personality", body: "earth", gate: 31, line: 1 },
+        { side: "personality", body: "moon", gate: 41, line: 1 },
+        { side: "personality", body: "north_node", gate: 41, line: 2 },
+        { side: "personality", body: "south_node", gate: 31, line: 2 },
+        { side: "personality", body: "mercury", gate: 41, line: 6 },
+        { side: "personality", body: "venus", gate: 19, line: 1 },
+        { side: "personality", body: "mars", gate: 30, line: 1 },
+        { side: "personality", body: "jupiter", gate: 20, line: 1 },
+        { side: "personality", body: "saturn", gate: 21, line: 1 },
+        { side: "personality", body: "uranus", gate: 51, line: 6 },
+        { side: "personality", body: "neptune", gate: 3, line: 4 },
+        { side: "personality", body: "pluto", gate: 24, line: 3 },
+        { side: "design", body: "sun", gate: 34, line: 3 },
+        { side: "design", body: "earth", gate: 20, line: 3 },
+        { side: "design", body: "moon", gate: 34, line: 1 },
+        { side: "design", body: "north_node", gate: 20, line: 1 },
+        { side: "design", body: "south_node", gate: 34, line: 1 },
+        { side: "design", body: "mercury", gate: 34, line: 1 },
+        { side: "design", body: "venus", gate: 23, line: 2 },
+        { side: "design", body: "mars", gate: 16, line: 5 },
+        { side: "design", body: "jupiter", gate: 45, line: 4 },
+        { side: "design", body: "saturn", gate: 15, line: 2 },
+        { side: "design", body: "uranus", gate: 39, line: 1 },
+        { side: "design", body: "neptune", gate: 53, line: 6 },
+        { side: "design", body: "pluto", gate: 56, line: 4 }
       ]
     }
   }

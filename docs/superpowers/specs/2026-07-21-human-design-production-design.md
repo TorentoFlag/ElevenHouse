@@ -644,9 +644,12 @@ Current fixture confidence, accessed 2026-07-22:
 | --- | --- | --- | --- | --- |
 | BodyGraph documented example + `human-design-py` MIT reference | `1980-01-01T00:00:00Z` raw longitudes | gate/line mapping, channels, centers, type, authority code, profile, definition, incarnation cross | passed with caveat | BodyGraph static gate fields had internal longitude/gate inconsistencies, so only raw longitudes were promoted; gate-wheel expectations follow the reference implementation. |
 | HumanDesignAPI live public trial | `1990-09-05 21:17 Amsterdam` | type, profile, external authority label, definition, centers, channel and all 26 activations | passed | External `Sounding Board` authority maps to ElevenHouse `mental` authority code. Source does not expose raw longitudes, so fixture stores local chart-engine resolved longitudes for the same birth data. |
+| Internal reference boundary case | `reference-gate-line-boundaries-41-19-transition` | exact gate 41 start, just before line 2, exact line 2 boundary, just before gate 19 and exact gate 19 start; channels, centers, type, authority, profile, definition and all 26 activations | passed | Locks the v1 start-inclusive/end-exclusive boundary policy for gate and line transitions. This is a method boundary regression fixture, not an external calculator endorsement. |
 
-Do not mark the method passport final until at least one more independent
-source or boundary-case fixture confirms gate/line behavior near transitions.
+The method passport can now treat gate/line boundary policy as explicitly
+covered for v1. Commercial activation still depends on the broader production
+requirements in this document, including licensing, privacy, consent,
+authenticated browser evidence and client-delivery boundaries.
 
 ### Advanced Variables
 

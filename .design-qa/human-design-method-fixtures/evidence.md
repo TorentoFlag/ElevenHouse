@@ -121,6 +121,16 @@ Mobile viewport:
 - Green proof:
   `pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design/fixture-comparison.test.ts`
   passed with two approved typed fixtures.
+- Red proof for boundary fixture requirement: comparison test failed with
+  `expected 2 to be greater than or equal to 3` after the suite was tightened to
+  require a `reference_boundary_case` fixture.
+- Boundary fixture added:
+  `reference-gate-line-boundaries-41-19-transition`, covering exact gate 41
+  start, just before line 2, exact line 2 boundary, just before gate 19 and
+  exact gate 19 start.
+- Green proof:
+  `pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design/fixture-comparison.test.ts`
+  passed with three approved typed fixtures.
 
 ## Local DB Persistence Test
 
@@ -136,6 +146,9 @@ Mobile viewport:
 - Green proof:
   `set -a && source .env && set +a && INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/adapters/calculations/drizzle-human-design-approved-fixtures.integration.ts`
   passed with one integration test.
+- Green proof after adding the boundary fixture:
+  `set -a && source .env && set +a && INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/adapters/calculations/drizzle-human-design-approved-fixtures.integration.ts`
+  passed with one integration test over the three approved fixture rows.
 - Persistence behavior: for every approved fixture, the test creates a synthetic
   owner, inserts a linked `human_design`/`individual` calculation through
   `createCalculation` + `createDrizzleCalculationStore`, reads it back with

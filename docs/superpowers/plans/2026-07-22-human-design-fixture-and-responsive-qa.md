@@ -152,10 +152,12 @@ none
 - [x] 2026-07-22: Added local PostgreSQL integration test that persists approved
   fixtures as `human_design` calculation records and compares hydrated
   `result_data`/summary/checksum with the deterministic domain result.
+- [x] 2026-07-22: Added a third approved reference boundary fixture for gate 41
+  to gate 19 and line 1 to line 2 transition behavior.
 - [ ] Capture file-based authenticated desktop and mobile production screenshots
   after the screenshot workspace issue is resolved or another approved browser
   surface is used.
-- [ ] Add a third source or boundary-case fixture before marking the full method
+- [x] Add a third source or boundary-case fixture before marking the full method
   passport as final.
 
 ## Context and Orientation
@@ -272,7 +274,7 @@ typed fixture.
 - Produces: a documented method-confidence matrix: passed, mismatch,
   unresolved and out-of-scope fields.
 
-- [ ] **Step 1: Add fixture matrix rows**
+- [x] **Step 1: Add fixture matrix rows**
 
 Track at least:
 
@@ -280,7 +282,7 @@ Track at least:
 source | fixture | birth input | node mode | fields checked | result | notes
 ```
 
-- [ ] **Step 2: Mark method authority**
+- [x] **Step 2: Mark method authority**
 
 Do not mark `human_design_classic` product-complete until all required rows are
 `passed` or mismatches are explained by an approved method difference.
@@ -344,7 +346,8 @@ and record the external refresh blocker separately.
   responsive overflow fix, external fixture extraction blocker and static-source
   mismatch analysis.
 
-The next executable step is adding a method-confidence matrix row to the
-production spec and then either obtaining a third independent source or adding a
-near-boundary fixture to stress gate/line transitions before method-passport
-finalization.
+The method-confidence matrix now includes two external-source fixtures and one
+internal reference boundary fixture. The next executable step is resolving the
+remaining authenticated screenshot artifact blocker or adding another
+independent keyed/manual external fixture if stricter method confidence is
+required before commercial activation.
