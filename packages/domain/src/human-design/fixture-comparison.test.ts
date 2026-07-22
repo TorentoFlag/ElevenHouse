@@ -4,7 +4,7 @@ import { buildHumanDesignIndividualBaseResult } from "./individual";
 
 describe("Human Design approved external fixtures", () => {
   it("matches approved external calculator output for gates, channels and core mechanics", () => {
-    expect(HUMAN_DESIGN_APPROVED_FIXTURES.length).toBeGreaterThan(0);
+    expect(HUMAN_DESIGN_APPROVED_FIXTURES.length).toBeGreaterThanOrEqual(2);
 
     for (const fixture of HUMAN_DESIGN_APPROVED_FIXTURES) {
       expect(fixture.source.approval).toBe("approved");
@@ -14,6 +14,9 @@ describe("Human Design approved external fixtures", () => {
       expect(result.type).toBe(fixture.expected.type);
       expect(result.profile.code).toBe(fixture.expected.profile);
       expect(result.authority).toBe(fixture.expected.derivedAuthority);
+      if (fixture.expected.externalAuthorityLabel) {
+        expect(fixture.expected.externalAuthorityLabel).not.toHaveLength(0);
+      }
       expect(result.definition).toBe(fixture.expected.derivedDefinition);
       expect(result.definedChannels.map((channel) => channel.code)).toEqual(
         fixture.expected.definedChannels

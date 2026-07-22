@@ -88,6 +88,25 @@ Mobile viewport:
   output. The first approved fixture uses BodyGraph raw longitudes plus the
   `human-design-py` gate-wheel reference; a second fixture still needs live API
   or manual external output that exposes authority directly.
+- Source tested: `https://humandesignapi.nl/` and
+  `https://api.humandesignapi.nl/v2/sample/visual-trial`
+- Live request:
+  `POST /v2/sample/visual-trial` with
+  `{"birthdate":"1990-09-05","birthtime":"21:17","location":"Amsterdam"}` and
+  `Origin: https://humandesignapi.nl`.
+- Live response: `success=true`, `type=ChartResult`, `birthDateUtc=1990-09-05T19:17:00.000Z`.
+- External categorical output: Projector, `2/4`, strategy
+  `Wait for the Invitation`, authority `Sounding Board`, definition
+  `Single Definition`, centers `Ajna` and `Head`, channel `47-64`.
+- Local comparison: running the same birth data through local chart-engine
+  (`Europe/Amsterdam`, `52.3676`, `4.9041`) and
+  `buildHumanDesignIndividualBaseResult` matched the external type, profile,
+  definition, centers, channel and all 26 activations. The external authority
+  label `Sounding Board` maps to ElevenHouse authority code `mental`.
+- Consequence: HumanDesignAPI live public trial is approved as the second static
+  fixture row. The source still does not expose raw planetary longitudes, so
+  fixture input longitudes are stored as local chart-engine resolved evidence
+  for the same birth data.
 
 ## Static Fixture Test
 
@@ -97,7 +116,11 @@ Mobile viewport:
   not exist.
 - Green proof:
   `pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design/fixture-comparison.test.ts`
-  passed with one approved typed fixture.
+- Red proof for second fixture: comparison test failed with
+  `expected 1 to be greater than or equal to 2`.
+- Green proof:
+  `pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design/fixture-comparison.test.ts`
+  passed with two approved typed fixtures.
 
 ## Screenshot Note
 

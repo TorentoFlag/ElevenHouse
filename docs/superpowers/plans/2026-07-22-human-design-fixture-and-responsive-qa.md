@@ -65,6 +65,9 @@ Accessed: 2026-07-22
   endpoints for basic/full Human Design chart data, including energy types,
   profiles, gates, channels, centers, strategy, authority, incarnation cross,
   definition and activations.
+- https://api.humandesignapi.nl/v2/sample/visual-trial - HumanDesignAPI public
+  trial endpoint returned live full JSON for a synthetic Amsterdam fixture when
+  called with the product origin.
 - https://roxyapi.com/tools/human-design/bodygraph - bounded browser spike:
   public generator exposes date/time/city inputs, but automated extraction is
   blocked by Cloudflare Turnstile in Chrome DevTools.
@@ -81,9 +84,17 @@ Accessed: 2026-07-22
   channels and all 26 activations.
 - Sourced fact: HumanDesignAPI returns REST JSON and offers simple/basic/full
   chart data, but there is no free tier and API access requires a key.
+- Sourced fact: HumanDesignAPI public trial returned type, profile, strategy,
+  authority, definition, centers, channels and all 26 activations for
+  `1990-09-05 21:17 Amsterdam`.
 - Sourced fact: RoxyAPI public docs include a free bodygraph generator, but the
   browser spike hit Turnstile human verification, so Codex cannot reliably
   automate extraction from that UI.
+- Repository evidence: running the same Amsterdam birth data through local
+  chart-engine and `packages/domain/src/human-design` matched the HumanDesignAPI
+  public trial on type, profile, definition, centers, channels and all 26
+  activations. The external label `Sounding Board` maps to our `mental`
+  authority code.
 - Inference: CI should compare against checked-in approved fixture outputs, not
   live external APIs. Live external calls belong to a manual fixture-refresh
   runbook or a keyed local-only script.
@@ -136,11 +147,13 @@ none
 - [x] 2026-07-22: BodyGraph static response gate fields were checked and not
   promoted as a full gold output because several longitude-to-gate fields are
   internally inconsistent with the published reference wheel.
+- [x] 2026-07-22: Added HumanDesignAPI live public trial fixture for Amsterdam
+  1990-09-05 21:17, including external authority label `Sounding Board`.
 - [ ] Capture file-based authenticated desktop and mobile production screenshots
   after the screenshot workspace issue is resolved or another approved browser
   surface is used.
-- [ ] Add one full live/API/manual external calculator output for a birth-place
-  fixture, including authority when exposed by the source.
+- [ ] Add a third source or boundary-case fixture before marking the full method
+  passport as final.
 
 ## Context and Orientation
 
@@ -318,8 +331,8 @@ business state to match prototype demo data.
 
 Static fixtures are additive. If an external source later changes, add a new
 fixture revision instead of rewriting old provenance silently. If RoxyAPI or
-HumanDesignAPI access is unavailable, leave fixture approval pending and run
-responsive QA independently.
+HumanDesignAPI live access is unavailable, use the checked-in reviewed fixture
+and record the external refresh blocker separately.
 
 ## Artifacts and Notes
 
@@ -327,7 +340,7 @@ responsive QA independently.
   responsive overflow fix, external fixture extraction blocker and static-source
   mismatch analysis.
 
-The next executable step is obtaining one full live/API/manual external output
-for the Rome fixture or another birth-place fixture and adding it as a second
-fixture row. That source must expose or manually confirm authority, because the
-current static BodyGraph example does not expose authority directly.
+The next executable step is adding a method-confidence matrix row to the
+production spec and then either obtaining a third independent source or adding a
+near-boundary fixture to stress gate/line transitions before method-passport
+finalization.

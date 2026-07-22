@@ -638,6 +638,16 @@ Human Design has multiple calculators and potential small disagreements near
 boundaries. ElevenHouse needs one accepted method passport. External mismatch
 is treated as evidence to investigate, not as runtime branching.
 
+Current fixture confidence, accessed 2026-07-22:
+
+| Source | Fixture | Fields Checked | Result | Notes |
+| --- | --- | --- | --- | --- |
+| BodyGraph documented example + `human-design-py` MIT reference | `1980-01-01T00:00:00Z` raw longitudes | gate/line mapping, channels, centers, type, authority code, profile, definition, incarnation cross | passed with caveat | BodyGraph static gate fields had internal longitude/gate inconsistencies, so only raw longitudes were promoted; gate-wheel expectations follow the reference implementation. |
+| HumanDesignAPI live public trial | `1990-09-05 21:17 Amsterdam` | type, profile, external authority label, definition, centers, channel and all 26 activations | passed | External `Sounding Board` authority maps to ElevenHouse `mental` authority code. Source does not expose raw longitudes, so fixture stores local chart-engine resolved longitudes for the same birth data. |
+
+Do not mark the method passport final until at least one more independent
+source or boundary-case fixture confirms gate/line behavior near transitions.
+
 ### Advanced Variables
 
 Variables, color, tone and base are more sensitive to birth-time and ephemeris

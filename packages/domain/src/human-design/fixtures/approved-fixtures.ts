@@ -13,7 +13,7 @@ type ApprovedHumanDesignFixture = {
     readonly name: string;
     readonly url: string;
     readonly accessedAt: string;
-    readonly mode: "public_documented_example";
+    readonly mode: "public_documented_example" | "live_public_trial";
     readonly approval: "approved";
     readonly notes: string;
   };
@@ -22,6 +22,7 @@ type ApprovedHumanDesignFixture = {
     readonly type: HumanDesignIndividualBaseResult["type"];
     readonly profile: HumanDesignIndividualBaseResult["profile"]["code"];
     readonly derivedAuthority: HumanDesignIndividualBaseResult["authority"];
+    readonly externalAuthorityLabel?: string;
     readonly derivedDefinition: HumanDesignIndividualBaseResult["definition"];
     readonly definedChannels: readonly HumanDesignIndividualBaseResult["definedChannels"][number]["code"][];
     readonly definedCenters: readonly HumanDesignIndividualBaseResult["definedCenters"][number]["code"][];
@@ -120,6 +121,94 @@ export const HUMAN_DESIGN_APPROVED_FIXTURES = [
         { side: "design", body: "uranus", gate: 43, line: 1 },
         { side: "design", body: "neptune", gate: 26, line: 2 },
         { side: "design", body: "pluto", gate: 57, line: 5 }
+      ]
+    }
+  },
+  {
+    id: "humandesignapi-live-trial-amsterdam-1990-09-05-2117",
+    source: {
+      name: "HumanDesignAPI live public trial",
+      url: "https://humandesignapi.nl/; https://api.humandesignapi.nl/v2/sample/visual-trial",
+      accessedAt: "2026-07-22",
+      mode: "live_public_trial",
+      approval: "approved",
+      notes:
+        "Live trial response for birthdate 1990-09-05, birthtime 21:17, location Amsterdam. The external response exposes type, profile, strategy, authority, definition, centers, channels and all 26 activations, but not raw planetary longitudes; fixture input longitudes were captured from local chart-engine for the same birth data."
+    },
+    input: {
+      personality: {
+        sun: 162.96571331320797,
+        moon: 352.3567170463005,
+        north_node: 306.8964004982856,
+        mercury: 167.58012900828666,
+        venus: 148.09295982556213,
+        mars: 62.567412282634706,
+        jupiter: 123.78794557147471,
+        saturn: 288.9509768246774,
+        uranus: 275.634388774691,
+        neptune: 281.8849395402568,
+        pluto: 225.4573245894658
+      },
+      design: {
+        sun: 74.96592371057716,
+        moon: 227.10104832113268,
+        north_node: 308.76706522624244,
+        mercury: 51.40261272489362,
+        venus: 37.54724950483911,
+        mars: 4.101847957710002,
+        jupiter: 103.8406867534296,
+        saturn: 294.5435037095621,
+        uranus: 278.52489404364763,
+        neptune: 283.94609938897344,
+        pluto: 225.61099467776478
+      }
+    },
+    expected: {
+      type: "projector",
+      profile: "2/4",
+      derivedAuthority: "mental",
+      externalAuthorityLabel: "Sounding Board",
+      derivedDefinition: "single",
+      definedChannels: ["64-47"],
+      definedCenters: ["head", "ajna"],
+      incarnationCross: {
+        angle: "right_angle",
+        profileCode: "2/4",
+        gateSequence: [64, 63, 35, 5],
+        gates: {
+          personalitySun: { gate: 64, line: 2 },
+          personalityEarth: { gate: 63, line: 2 },
+          designSun: { gate: 35, line: 4 },
+          designEarth: { gate: 5, line: 4 }
+        }
+      },
+      activations: [
+        { side: "personality", body: "sun", gate: 64, line: 2 },
+        { side: "personality", body: "earth", gate: 63, line: 2 },
+        { side: "personality", body: "moon", gate: 22, line: 6 },
+        { side: "personality", body: "north_node", gate: 41, line: 6 },
+        { side: "personality", body: "south_node", gate: 31, line: 6 },
+        { side: "personality", body: "mercury", gate: 47, line: 1 },
+        { side: "personality", body: "venus", gate: 29, line: 4 },
+        { side: "personality", body: "mars", gate: 20, line: 3 },
+        { side: "personality", body: "jupiter", gate: 31, line: 2 },
+        { side: "personality", body: "saturn", gate: 54, line: 5 },
+        { side: "personality", body: "uranus", gate: 58, line: 2 },
+        { side: "personality", body: "neptune", gate: 38, line: 3 },
+        { side: "personality", body: "pluto", gate: 1, line: 3 },
+        { side: "design", body: "sun", gate: 35, line: 4 },
+        { side: "design", body: "earth", gate: 5, line: 4 },
+        { side: "design", body: "moon", gate: 1, line: 5 },
+        { side: "design", body: "north_node", gate: 19, line: 2 },
+        { side: "design", body: "south_node", gate: 33, line: 2 },
+        { side: "design", body: "mercury", gate: 23, line: 3 },
+        { side: "design", body: "venus", gate: 27, line: 6 },
+        { side: "design", body: "mars", gate: 17, line: 1 },
+        { side: "design", body: "jupiter", gate: 39, line: 5 },
+        { side: "design", body: "saturn", gate: 61, line: 5 },
+        { side: "design", body: "uranus", gate: 58, line: 5 },
+        { side: "design", body: "neptune", gate: 38, line: 5 },
+        { side: "design", body: "pluto", gate: 1, line: 3 }
       ]
     }
   }
