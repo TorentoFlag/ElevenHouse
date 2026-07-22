@@ -36,9 +36,13 @@ describe("Human Design individual base result", () => {
       signature: "satisfaction",
       notSelfTheme: "frustration",
       authority: "sacral",
+      definition: "single",
       profile: { personalityLine: 1, designLine: 1, code: "1/1" },
       authorityBasis: {
         selectedBy: "sacral_defined"
+      },
+      definitionBasis: {
+        componentCount: 1
       },
       typeBasis: {
         sacralDefined: true,

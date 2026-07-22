@@ -14,6 +14,12 @@ import {
   type HumanDesignDefinedChannel
 } from "./definition";
 import {
+  deriveHumanDesignDefinitionKind,
+  type HumanDesignDefinitionKindBasis,
+  type HumanDesignDefinitionKindCode,
+  type HumanDesignDefinitionComponent
+} from "./definition-kind";
+import {
   HUMAN_DESIGN_ENGINE_REVISION,
   HUMAN_DESIGN_METHOD_CODE,
   HUMAN_DESIGN_SCHEMA_VERSION,
@@ -63,6 +69,9 @@ export type HumanDesignIndividualBaseResult = {
   readonly typeBasis: HumanDesignTypeBasis;
   readonly authority: HumanDesignAuthorityCode;
   readonly authorityBasis: HumanDesignAuthorityBasis;
+  readonly definition: HumanDesignDefinitionKindCode;
+  readonly definitionComponents: readonly HumanDesignDefinitionComponent[];
+  readonly definitionBasis: HumanDesignDefinitionKindBasis;
   readonly profile: HumanDesignProfile;
 };
 
@@ -73,6 +82,7 @@ export function buildHumanDesignIndividualBaseResult(
   const definedChannels = deriveDefinedChannels(activations);
   const typeMechanics = deriveHumanDesignType(definedChannels);
   const authorityMechanics = deriveHumanDesignAuthority(definedChannels);
+  const definitionMechanics = deriveHumanDesignDefinitionKind(definedChannels);
   return {
     methodCode: HUMAN_DESIGN_METHOD_CODE,
     engineRevision: HUMAN_DESIGN_ENGINE_REVISION,
@@ -89,6 +99,9 @@ export function buildHumanDesignIndividualBaseResult(
     typeBasis: typeMechanics.basis,
     authority: authorityMechanics.authority,
     authorityBasis: authorityMechanics.basis,
+    definition: definitionMechanics.definition,
+    definitionComponents: definitionMechanics.components,
+    definitionBasis: definitionMechanics.basis,
     profile: buildProfile(activations)
   };
 }
