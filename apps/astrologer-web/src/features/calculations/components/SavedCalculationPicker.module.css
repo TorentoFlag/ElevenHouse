@@ -1,5 +1,6 @@
 .savedRail {
-  width: 240px;
+  box-sizing: border-box;
+  width: min(240px, 100%);
   min-width: 0;
   padding: 16px 14px;
   border-right: 1px solid rgb(216 212 236 / 0.08);

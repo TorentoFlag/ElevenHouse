@@ -1,7 +1,8 @@
-import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import { Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import type { HumanDesignIndividualResult } from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
+import { SavedCalculationPicker } from "../../features/calculations/components/SavedCalculationPicker";
 import { createHumanDesignViewModel } from "../../features/human-design/model/humanDesignViewModel";
 import { HumanDesignPageView, type HumanDesignPageViewProps } from "./HumanDesignPageView";
 
@@ -50,6 +51,26 @@ describe("HumanDesignPageView", () => {
     expect(disabledFutureButtons).toHaveLength(4);
     expect(linkButton?.props.disabled).toBe(false);
   });
+
+  it("renders saved calculations rail and opens selected records", () => {
+    const onSelectSaved = vi.fn();
+    const saved = savedCalculation();
+    const view = HumanDesignPageView({
+      ...baseProps(),
+      calculations: [saved],
+      selectedCalculationId: saved.id,
+      onSelectSaved
+    });
+    const picker = walk(view).find(
+      (element): element is ReactElement<ComponentProps<typeof SavedCalculationPicker>> =>
+        element.type === SavedCalculationPicker
+    );
+
+    expect(picker?.props.calculations).toEqual([saved]);
+    expect(picker?.props.selectedCalculationId).toBe(saved.id);
+    picker?.props.onSelect(saved);
+    expect(onSelectSaved).toHaveBeenCalledWith(saved);
+  });
 });
 
 function baseProps(): HumanDesignPageViewProps {
@@ -63,12 +84,46 @@ function baseProps(): HumanDesignPageViewProps {
       detail: "Birth data берутся из карточки клиента."
     },
     errorMessage: null,
+    calculations: [],
+    selectedCalculationId: null,
     isBusy: false,
     isLinked: false,
     onSelectClient: vi.fn(),
     onSelectDetail: vi.fn(),
     onPreview: vi.fn(),
-    onPersist: vi.fn()
+    onPersist: vi.fn(),
+    onSelectSaved: vi.fn()
+  };
+}
+
+function savedCalculation() {
+  const result = sampleResult();
+  return {
+    id: "11111111-1111-4111-8111-111111111111",
+    ownerUserId: "22222222-2222-4222-8222-222222222222",
+    module: "human_design" as const,
+    mode: "individual" as const,
+    methodCode: "human_design_classic",
+    title: "Марина Краснова — Дизайн человека",
+    status: "linked" as const,
+    requestFingerprint: result.inputFingerprint.value,
+    inputData: { mode: "individual" },
+    resultData: result,
+    resultSummary: { type: result.type },
+    resultChecksum: result.resultChecksum.value,
+    participants: [
+      {
+        role: "subject" as const,
+        source: "crm_client" as const,
+        clientId: "33333333-3333-4333-8333-333333333333",
+        displayName: "Марина Краснова"
+      }
+    ],
+    links: [],
+    interpretations: [],
+    artifacts: [],
+    createdAt: "2026-07-22T10:00:00.000Z",
+    updatedAt: "2026-07-22T10:00:00.000Z"
   };
 }
 

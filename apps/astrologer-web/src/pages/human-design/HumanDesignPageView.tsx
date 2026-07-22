@@ -1,5 +1,7 @@
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type { CSSProperties } from "react";
+import type { CalculationRecordResponse } from "@elevenhouse/contracts";
+import { SavedCalculationPicker } from "../../features/calculations/components/SavedCalculationPicker";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import { HumanDesignBodygraph } from "../../features/human-design/components/HumanDesignBodygraph";
@@ -20,12 +22,15 @@ export type HumanDesignPageViewProps = {
   readonly selectedClient: ClientSelectOption | null;
   readonly model: HumanDesignViewModel | null;
   readonly selectedDetailKey: HumanDesignDetailKey;
+  readonly calculations: readonly CalculationRecordResponse[];
+  readonly selectedCalculationId: string | null;
   readonly status: HumanDesignPageStatus;
   readonly errorMessage: string | null;
   readonly isBusy: boolean;
   readonly isLinked: boolean;
   readonly onSelectClient: (client: ClientSelectOption) => void;
   readonly onSelectDetail: (key: HumanDesignDetailKey) => void;
+  readonly onSelectSaved: (calculation: CalculationRecordResponse) => void;
   readonly onPreview: () => void | Promise<void>;
   readonly onPersist: () => void | Promise<void>;
 };
@@ -34,12 +39,15 @@ export function HumanDesignPageView({
   selectedClient,
   model,
   selectedDetailKey,
+  calculations,
+  selectedCalculationId,
   status,
   errorMessage,
   isBusy,
   isLinked,
   onSelectClient,
   onSelectDetail,
+  onSelectSaved,
   onPreview,
   onPersist
 }: HumanDesignPageViewProps) {
@@ -121,6 +129,13 @@ export function HumanDesignPageView({
       </header>
 
       <section className={styles.body}>
+        <div className={styles.savedSlot}>
+          <SavedCalculationPicker
+            calculations={calculations}
+            selectedCalculationId={selectedCalculationId}
+            onSelect={onSelectSaved}
+          />
+        </div>
         <aside className={styles.rail} aria-label="Свойства Human Design">
           <section className={styles.railGroup}>
             <h2>Клиент</h2>

@@ -7,30 +7,44 @@ import {
 } from "../../features/human-design/model/humanDesignViewModel";
 import {
   useCreateHumanDesignCalculationMutation,
+  useHumanDesignCalculationListQuery,
   usePreviewHumanDesignMutation
 } from "../../features/human-design/model/humanDesignHooks";
+import {
+  getActiveHumanDesignCalculations,
+  toClientOptionFromHumanDesignCalculation,
+  toHumanDesignCalculationResponse
+} from "../../features/human-design/model/humanDesignSavedCalculationModel";
 import type { HumanDesignPageStatus, HumanDesignPageViewProps } from "./HumanDesignPageView";
 
 export function useHumanDesignPageController(): HumanDesignPageViewProps {
   useDocumentTitle("ElevenHouse | Дизайн человека");
+  const listQuery = useHumanDesignCalculationListQuery();
   const previewMutation = usePreviewHumanDesignMutation();
   const createMutation = useCreateHumanDesignCalculationMutation();
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
+  const [savedResponse, setSavedResponse] = useState<
+    ReturnType<typeof toHumanDesignCalculationResponse> | null
+  >(null);
   const [selectedDetailKey, setSelectedDetailKey] = useState<HumanDesignDetailKey>("type");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const calculations = useMemo(
+    () => getActiveHumanDesignCalculations(listQuery.data?.calculations ?? []),
+    [listQuery.data?.calculations]
+  );
   const model = useMemo(
     () =>
-      createMutation.data
-        ? createHumanDesignViewModel(createMutation.data.result)
+      savedResponse
+        ? createHumanDesignViewModel(savedResponse.result)
         : previewMutation.data
           ? createHumanDesignViewModel(previewMutation.data.result)
           : null,
-    [createMutation.data, previewMutation.data]
+    [previewMutation.data, savedResponse]
   );
   const status = getHumanDesignStatus({
     selectedClient,
     hasResult: Boolean(model),
-    isLinked: Boolean(createMutation.data),
+    isLinked: Boolean(savedResponse),
     isBusy: previewMutation.isPending || createMutation.isPending,
     errorMessage
   });
@@ -39,12 +53,15 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     selectedClient,
     model,
     selectedDetailKey,
+    calculations,
+    selectedCalculationId: savedResponse?.calculation.id ?? null,
     status,
     errorMessage,
     isBusy: previewMutation.isPending || createMutation.isPending,
-    isLinked: Boolean(createMutation.data),
+    isLinked: Boolean(savedResponse),
     onSelectClient: (client) => {
       setSelectedClient(client);
+      setSavedResponse(null);
       setSelectedDetailKey("type");
       setErrorMessage(null);
       previewMutation.reset();
@@ -52,6 +69,19 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       if (client.hasBirthDate) void preview(client);
     },
     onSelectDetail: setSelectedDetailKey,
+    onSelectSaved: (calculation) => {
+      try {
+        const response = toHumanDesignCalculationResponse(calculation);
+        setSavedResponse(response);
+        setSelectedClient(toClientOptionFromHumanDesignCalculation(calculation));
+        setSelectedDetailKey("type");
+        setErrorMessage(null);
+        previewMutation.reset();
+        createMutation.reset();
+      } catch {
+        setErrorMessage("Сохранённый расчёт Human Design повреждён или устарел.");
+      }
+    },
     onPreview: () => {
       if (selectedClient) void preview(selectedClient);
     },
@@ -73,6 +103,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
         source: "client",
         clientId: client.value
       });
+      setSavedResponse(null);
       createMutation.reset();
       setSelectedDetailKey("type");
     } catch (error) {
@@ -84,12 +115,14 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     if (!model) return;
     setErrorMessage(null);
     try {
-      await createMutation.mutateAsync({
+      const response = await createMutation.mutateAsync({
         mode: "individual",
         methodCode: "human_design_classic",
         source: "client",
         clientId: client.value
       });
+      setSavedResponse(response);
+      previewMutation.reset();
       setSelectedDetailKey("type");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
