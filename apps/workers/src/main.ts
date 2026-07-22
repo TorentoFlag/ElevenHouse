@@ -24,6 +24,8 @@ import {
 } from "./calculation-pdf/calculation-pdf.queue";
 import { createCalculationPdfRegistry } from "./calculation-pdf/calculation-pdf.registry";
 import { createS3CalculationPdfObjectStorage } from "./calculation-pdf/calculation-pdf.storage";
+import { createChartPdfRenderer } from "./calculation-pdf/chart-pdf.renderer";
+import { createChartPdfSource } from "./calculation-pdf/chart-pdf.source";
 import { createMatrixPdfRenderer } from "./calculation-pdf/matrix-pdf.renderer";
 import { createMatrixPdfSource } from "./calculation-pdf/matrix-pdf.source";
 import { createNumerologyPdfRenderer } from "./calculation-pdf/numerology-pdf.renderer";
@@ -45,6 +47,8 @@ const matrixSource = createMatrixPdfSource(calculationStore, matrixReportStore);
 const matrixRenderer = createMatrixPdfRenderer();
 const numerologySource = createNumerologyPdfSource(calculationStore);
 const numerologyRenderer = createNumerologyPdfRenderer();
+const chartSource = createChartPdfSource(calculationStore);
+const chartRenderer = createChartPdfRenderer();
 const registry = createCalculationPdfRegistry([
   {
     module: "matrix",
@@ -55,6 +59,11 @@ const registry = createCalculationPdfRegistry([
     module: "numerology",
     methodCode: "pythagorean",
     render: async (job) => numerologyRenderer.render(await numerologySource.load(job))
+  },
+  {
+    module: "chart",
+    methodCode: "natal",
+    render: async (job) => chartRenderer.render(await chartSource.load(job))
   }
 ]);
 const storage = createS3CalculationPdfObjectStorage(config.storage);

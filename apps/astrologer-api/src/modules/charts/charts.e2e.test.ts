@@ -106,11 +106,17 @@ describe("charts HTTP routes", () => {
   });
 
   it("rejects authenticated cookie chart mutations without CSRF", async () => {
-    const response = await postJson("/charts/natal/jobs", validBody(), {
+    const createResponse = await postJson("/charts/natal/jobs", validBody(), {
       cookie: `${sessionCookieName}=${sessionToken}`
     });
+    const pdfResponse = await postJson(
+      "/charts/calculations/77777777-7777-4777-8777-777777777777/report/pdf",
+      { expectedResultChecksum: `sha256:${"a".repeat(64)}`, locale: "ru" },
+      { cookie: `${sessionCookieName}=${sessionToken}` }
+    );
 
-    expect(response.status).toBe(403);
+    expect(createResponse.status).toBe(403);
+    expect(pdfResponse.status).toBe(403);
   });
 
   async function postJson(

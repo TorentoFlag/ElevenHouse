@@ -34,6 +34,11 @@ describe("calculation PDF use cases", () => {
         interpretationId: null
       })
     ).toEqual({ kind: "approved_interpretation", interpretationId: null });
+    expect(
+      normalizeCalculationPdfSourceLocator({
+        kind: "calculation_result"
+      })
+    ).toEqual({ kind: "calculation_result" });
     expect(() =>
       normalizeCalculationPdfSourceLocator({
         kind: "matrix_report",
@@ -47,6 +52,12 @@ describe("calculation PDF use cases", () => {
         kind: "approved_interpretation",
         interpretationId: null,
         promptVersion: "secret"
+      })
+    ).toThrow(CalculationValidationError);
+    expect(() =>
+      normalizeCalculationPdfSourceLocator({
+        kind: "calculation_result",
+        interpretationId: "must-not-leak"
       })
     ).toThrow(CalculationValidationError);
   });

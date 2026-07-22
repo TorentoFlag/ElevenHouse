@@ -19,9 +19,14 @@ export type ApprovedInterpretationPdfSourceLocator = {
   readonly interpretationId: string | null;
 };
 
+export type CalculationResultPdfSourceLocator = {
+  readonly kind: "calculation_result";
+};
+
 export type CalculationPdfSourceLocator =
   | MatrixReportPdfSourceLocator
-  | ApprovedInterpretationPdfSourceLocator;
+  | ApprovedInterpretationPdfSourceLocator
+  | CalculationResultPdfSourceLocator;
 
 export type CalculationPdfJob = {
   readonly id: string;

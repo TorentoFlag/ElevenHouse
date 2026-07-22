@@ -39,6 +39,11 @@ export type ChartEnginePageProps = {
   readonly onSaveBirthData?: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
   readonly isSavingBirthData?: boolean;
   readonly birthDataError?: string | null;
+  readonly pdfLabel?: string;
+  readonly pdfDisabled?: boolean;
+  readonly pdfTitle?: string;
+  readonly pdfErrorMessage?: string | null;
+  readonly onPdf?: () => void | Promise<void>;
 };
 
 export function ChartEnginePage({
@@ -55,7 +60,12 @@ export function ChartEnginePage({
   onSelectClient,
   onSaveBirthData,
   isSavingBirthData = false,
-  birthDataError = null
+  birthDataError = null,
+  pdfLabel = "PDF",
+  pdfDisabled = true,
+  pdfTitle = "PDF доступен после расчёта карты",
+  pdfErrorMessage = null,
+  onPdf
 }: ChartEnginePageProps) {
   const readiness = getChartBirthDataReadiness(selectedClient?.birthData);
   const isBirthDataBlocked = Boolean(selectedClient && !readiness.ready);
@@ -162,8 +172,14 @@ export function ChartEnginePage({
         <button className={styles.toolButton} type="button" disabled>
           {displayResult && selectedClient ? "✓ Привязана" : "Привязать"}
         </button>
-        <button className={styles.toolButton} type="button" disabled>
-          PDF
+        <button
+          className={styles.toolButton}
+          type="button"
+          disabled={pdfDisabled}
+          title={pdfTitle}
+          onClick={() => void onPdf?.()}
+        >
+          {pdfLabel}
         </button>
         <button
           aria-pressed={isSettingsPanelOpen}
@@ -259,6 +275,7 @@ export function ChartEnginePage({
             result={displayResult}
             isResultStale={isResultStale}
             missingBirthData={isBirthDataBlocked && !readiness.ready ? readiness.missing : []}
+            pdfErrorMessage={pdfErrorMessage}
           />
         </section>
 
@@ -683,13 +700,15 @@ function StatusCard({
   errorMessage,
   missingBirthData,
   result,
-  isResultStale
+  isResultStale,
+  pdfErrorMessage
 }: {
   readonly jobState: ChartEnginePageJobState;
   readonly errorMessage: string | null;
   readonly missingBirthData: readonly string[];
   readonly result: StoredChartCalculationPayload | null;
   readonly isResultStale: boolean;
+  readonly pdfErrorMessage: string | null;
 }) {
   if (jobState === "calculating") {
     return (
@@ -745,6 +764,7 @@ function StatusCard({
       <span>
         Провайдер: {result.provider.name} · {result.provider.ephemeris}
       </span>
+      {pdfErrorMessage ? <span className={styles.warningText}>{pdfErrorMessage}</span> : null}
     </div>
   );
 }

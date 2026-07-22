@@ -155,6 +155,9 @@ GET  /matrix/interpretations?locale=ru&arcana=9&context=portrait
 GET  /matrix/calculations/:calculationId/report/pdf
 POST /matrix/calculations/:calculationId/report/pdf
 GET  /matrix/calculations/:calculationId/report/pdf/:jobId/download
+GET  /charts/calculations/:calculationId/report/pdf?locale=ru|en
+POST /charts/calculations/:calculationId/report/pdf
+GET  /charts/calculations/:calculationId/report/pdf/:jobId/download
 POST /human-design/preview
 POST /human-design/calculations
 POST /human-design/calculations/:calculationId/recalculate
@@ -217,6 +220,15 @@ absence of approved text does not block export, and draft/dirty text is never
 accepted from the browser. Download succeeds only for a ready current job and
 returns a short-lived private presigned URL.
 
+Chart PDF routes are owner-scoped to a current, non-archived `module = chart`,
+`method_code = natal` saved calculation. Latest state is read per `locale`;
+enqueue requires CSRF and the strict body
+`{ "expectedResultChecksum": "sha256:...", "locale": "ru" | "en" }`.
+Documents render deterministic calculation settings, provider metadata,
+birth-data snapshot, points, houses, aspects, distributions and warnings from
+the current saved result. Download succeeds only for a ready current job and
+returns a short-lived private presigned URL.
+
 `POST /matrix/preview` is authenticated and read-only. Matrix persistence
 accepts only existing owner-scoped active CRM client IDs: one for an individual
 calculation and two distinct clients for compatibility. The API hydrates names
@@ -243,13 +255,15 @@ both current and stale notes. GET note and catalog routes are authenticated and
 CSRF-exempt; note POST, PUT and DELETE routes require CSRF. The revisioned RU/EN
 catalog is authored in code and has no storage, AI or translation side effect.
 
-Matrix and Numerology PDF endpoints delegate to one calculation-PDF lifecycle.
-Matrix enqueue additionally requires its current checksum-bound report to be
-`ready`; its locale comes from that report. Enqueue is idempotent for the same
-authoritative document fingerprint. Recalculation atomically invalidates
-current PDF jobs/artifact references and writes cleanup events; old jobs cannot
-be downloaded, and object deletion is performed asynchronously by `workers`.
-API responses expose public job state and the presigned URL only: storage keys,
+Matrix, Numerology and Chart PDF endpoints delegate to one calculation-PDF
+lifecycle. Matrix enqueue additionally requires its current checksum-bound
+report to be `ready`; its locale comes from that report. Numerology and Chart
+PDFs render deterministic current calculation data without requiring an
+approved interpretation. Enqueue is idempotent for the same authoritative
+document fingerprint. Recalculation atomically invalidates current PDF
+jobs/artifact references and writes cleanup events; old jobs cannot be
+downloaded, and object deletion is performed asynchronously by `workers`. API
+responses expose public job state and the presigned URL only: storage keys,
 buckets, source locators, document fingerprints, provider/model and prompt
 metadata are never frontend contracts.
 

@@ -54,6 +54,10 @@ export function normalizeCalculationPdfSourceLocator(input: unknown): Calculatio
         typeof input.interpretationId === "string" ? input.interpretationId.trim() : null
     };
   }
+  if (input.kind === "calculation_result") {
+    assertExactKeys(input, ["kind"]);
+    return { kind: "calculation_result" };
+  }
   throw new CalculationValidationError("Calculation PDF source locator kind is unsupported");
 }
 

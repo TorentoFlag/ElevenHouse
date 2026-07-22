@@ -1,13 +1,22 @@
 import {
   calculationIdParamSchema,
+  calculationPdfDownloadResponseSchema,
+  calculationPdfJobIdParamSchema,
+  calculationPdfJobResponseSchema,
+  calculationPdfLatestQuerySchema,
   chartCalculationResponseSchema,
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalJobCreateResponseSchema,
+  requestCalculationPdfSchema,
   storedChartCalculationPayloadSchema,
+  type CalculationPdfDownloadResponse,
+  type CalculationPdfJobResponse,
+  type CalculationPdfLocale,
   type ChartJobResponse,
   type ChartNatalJobCreateResponse,
   type ChartSettings,
+  type RequestCalculationPdf,
   type StoredChartCalculationPayload
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
@@ -60,5 +69,46 @@ export async function recalculateChart(input: {
     await application.http.post(`/charts/calculations/${params.calculationId}/recalculate`, body, {
       csrf: true
     })
+  );
+}
+
+export async function getLatestChartPdf(input: {
+  readonly calculationId: string;
+  readonly locale: CalculationPdfLocale;
+}): Promise<CalculationPdfJobResponse> {
+  const params = calculationIdParamSchema.parse({ calculationId: input.calculationId });
+  const query = calculationPdfLatestQuerySchema.parse({ locale: input.locale });
+
+  return calculationPdfJobResponseSchema.parse(
+    await application.http.get(
+      `/charts/calculations/${params.calculationId}/report/pdf?locale=${query.locale}`
+    )
+  );
+}
+
+export async function enqueueChartPdf(input: {
+  readonly calculationId: string;
+  readonly body: RequestCalculationPdf;
+}): Promise<CalculationPdfJobResponse> {
+  const params = calculationIdParamSchema.parse({ calculationId: input.calculationId });
+  const body = requestCalculationPdfSchema.parse(input.body);
+
+  return calculationPdfJobResponseSchema.parse(
+    await application.http.post(`/charts/calculations/${params.calculationId}/report/pdf`, body, {
+      csrf: true
+    })
+  );
+}
+
+export async function downloadChartPdf(input: {
+  readonly calculationId: string;
+  readonly jobId: string;
+}): Promise<CalculationPdfDownloadResponse> {
+  const params = calculationPdfJobIdParamSchema.parse(input);
+
+  return calculationPdfDownloadResponseSchema.parse(
+    await application.http.get(
+      `/charts/calculations/${params.calculationId}/report/pdf/${params.jobId}/download`
+    )
   );
 }

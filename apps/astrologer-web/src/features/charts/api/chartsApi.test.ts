@@ -3,8 +3,11 @@ import type { ChartNatalJobCreateResponse } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import {
   createNatalChartJob,
+  downloadChartPdf,
+  enqueueChartPdf,
   getChartCalculation,
   getChartJob,
+  getLatestChartPdf,
   recalculateChart
 } from "./chartsApi";
 
@@ -15,6 +18,8 @@ const createResponse = {
   status: "calculating",
   jobId
 } satisfies ChartNatalJobCreateResponse;
+const checksum = `sha256:${"a".repeat(64)}`;
+const now = "2026-07-22T00:00:00.000Z";
 
 describe("chartsApi", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -96,6 +101,41 @@ describe("chartsApi", () => {
       { csrf: true }
     );
   });
+
+  it("loads, enqueues and downloads chart PDFs through calculation-scoped routes", async () => {
+    const pdf = pdfResponse("queued");
+    const download = {
+      url: "https://objects.example.test/private/chart.pdf?signature=signed",
+      expiresAt: now
+    };
+    const get = vi.spyOn(application.http, "get")
+      .mockResolvedValueOnce(pdf)
+      .mockResolvedValueOnce(download);
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(pdf);
+
+    await expect(getLatestChartPdf({ calculationId, locale: "en" })).resolves.toEqual(pdf);
+    await expect(
+      enqueueChartPdf({
+        calculationId,
+        body: { expectedResultChecksum: checksum, locale: "ru" }
+      })
+    ).resolves.toEqual(pdf);
+    await expect(downloadChartPdf({ calculationId, jobId })).resolves.toEqual(download);
+
+    expect(get).toHaveBeenNthCalledWith(
+      1,
+      `/charts/calculations/${calculationId}/report/pdf?locale=en`
+    );
+    expect(post).toHaveBeenCalledWith(
+      `/charts/calculations/${calculationId}/report/pdf`,
+      { expectedResultChecksum: checksum, locale: "ru" },
+      { csrf: true }
+    );
+    expect(get).toHaveBeenNthCalledWith(
+      2,
+      `/charts/calculations/${calculationId}/report/pdf/${jobId}/download`
+    );
+  });
 });
 
 function chartPayload() {
@@ -169,4 +209,22 @@ function completeHouses() {
     sign: "aries",
     signDegree: 0
   }));
+}
+
+function pdfResponse(status: "queued" | "processing" | "ready" | "failed") {
+  return {
+    job: {
+      id: jobId,
+      calculationId,
+      resultChecksum: checksum,
+      locale: "en",
+      status,
+      artifactId: null,
+      mediaAssetId: null,
+      failureReason: null,
+      createdAt: now,
+      updatedAt: now
+    },
+    currentResultChecksum: checksum
+  };
 }

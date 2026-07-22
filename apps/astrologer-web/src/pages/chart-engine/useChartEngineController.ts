@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChartSettings, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import { useI18n } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { getAstrologerClient, updateClientBirthData } from "../../features/clients/api/clientsApi";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
@@ -10,14 +11,21 @@ import {
 } from "../../features/clients/model/clientSelectorModel";
 import {
   createNatalChartJob,
+  downloadChartPdf,
+  enqueueChartPdf,
   getChartCalculation,
   getChartJob,
+  getLatestChartPdf,
   recalculateChart
 } from "../../features/charts/api/chartsApi";
 import {
   getChartBirthDataReadiness,
   isChartResultStale
 } from "../../features/charts/model/chartEngineState";
+import {
+  buildChartPdfAction,
+  executeChartPdfAction
+} from "../../features/charts/model/chartPdfModel";
 import type { ChartEnginePageJobState } from "../../features/charts/components/ChartEnginePage";
 
 const defaultSettings: ChartSettings = {
@@ -30,6 +38,8 @@ const defaultSettings: ChartSettings = {
 
 export function useChartEngineController() {
   useDocumentTitle("ElevenHouse | Движок карт");
+  const { locale } = useI18n();
+  const pdfLocale = locale === "en" ? "en" : "ru";
   const queryClient = useQueryClient();
   const initialUrlState = useMemo(() => readChartEngineUrlState(), []);
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
@@ -168,6 +178,24 @@ export function useChartEngineController() {
     result &&
     (hasResultStaleIntent || isChartResultStale(result, selectedClient?.birthData, settings))
   );
+  const pdfQuery = useQuery({
+    queryKey: ["charts", "pdf", calculationId, pdfLocale],
+    queryFn: () => getLatestChartPdf({ calculationId: calculationId ?? "", locale: pdfLocale }),
+    enabled: Boolean(calculationId && result && !isResultStale),
+    refetchInterval: (query: { state: { data?: { job: { status: string } | null } } }) => {
+      const status = query.state.data?.job?.status;
+      return status === "queued" || status === "processing" ? 1500 : false;
+    }
+  });
+  const enqueuePdfMutation = useMutation({
+    mutationFn: enqueueChartPdf,
+    onSuccess: async (_data, input) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["charts", "pdf", input.calculationId, input.body.locale]
+      });
+    }
+  });
+  const downloadPdfMutation = useMutation({ mutationFn: downloadChartPdf });
   const jobState: ChartEnginePageJobState = useMemo(() => {
     if (calculationMutation.isPending || jobId || jobQuery.data?.status === "calculating") {
       return "calculating";
@@ -181,6 +209,21 @@ export function useChartEngineController() {
 
     return "idle";
   }, [calculationMutation.isPending, errorMessage, jobId, jobQuery.data?.status, result]);
+  const isBusy =
+    calculationMutation.isPending ||
+    birthDataMutation.isPending ||
+    enqueuePdfMutation.isPending ||
+    downloadPdfMutation.isPending ||
+    Boolean(jobId) ||
+    jobQuery.isFetching ||
+    calculationQuery.isFetching;
+  const pdfAction = buildChartPdfAction({
+    calculationId,
+    currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
+    job: pdfQuery.data?.job ?? null,
+    isBusy,
+    isResultStale
+  });
 
   return {
     selectedClient,
@@ -191,12 +234,11 @@ export function useChartEngineController() {
       errorMessage ??
       (calculationQuery.error instanceof Error ? calculationQuery.error.message : null) ??
       (jobQuery.error instanceof Error ? jobQuery.error.message : null),
-    isBusy:
-      calculationMutation.isPending ||
-      birthDataMutation.isPending ||
-      Boolean(jobId) ||
-      jobQuery.isFetching ||
-      calculationQuery.isFetching,
+    isBusy,
+    pdfLabel: pdfAction.label,
+    pdfDisabled: pdfAction.disabled,
+    pdfTitle: pdfAction.title,
+    pdfErrorMessage: pdfAction.errorMessage,
     settings,
     onSettingsChange: (nextSettings: ChartSettings) => {
       setSettings(nextSettings);
@@ -234,6 +276,23 @@ export function useChartEngineController() {
         isResultStale,
         settings
       });
+    },
+    onPdf: async () => {
+      try {
+        setErrorMessage(null);
+        await executeChartPdfAction({
+          calculationId,
+          locale: pdfLocale,
+          currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
+          kind: pdfAction.kind,
+          job: pdfQuery.data?.job ?? null,
+          enqueue: (input) => enqueuePdfMutation.mutateAsync(input),
+          download: (input) => downloadPdfMutation.mutateAsync(input),
+          openUrl: (url) => window.open(url, "_blank", "noopener,noreferrer")
+        });
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Не удалось выполнить PDF-действие");
+      }
     }
   };
 }

@@ -268,6 +268,35 @@ describe("ChartEnginePage", () => {
     expect(screen.getByText(/мужская/i)).toBeInTheDocument();
   });
 
+  it("exposes the current-result PDF action without changing the toolbar command", async () => {
+    const user = userEvent.setup();
+    const onPdf = vi.fn();
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        pdfLabel="PDF"
+        pdfDisabled={false}
+        pdfTitle="Сформировать PDF"
+        onPdf={onPdf}
+      />
+    );
+
+    const pdfButton = screen.getByRole("button", { name: "PDF" });
+    expect(pdfButton).toBeEnabled();
+    expect(pdfButton).toHaveAttribute("title", "Сформировать PDF");
+    await user.click(pdfButton);
+
+    expect(onPdf).toHaveBeenCalledOnce();
+  });
+
   it("renders reference-style dominant points in the left rail after distributions", () => {
     render(
       <ChartEnginePage

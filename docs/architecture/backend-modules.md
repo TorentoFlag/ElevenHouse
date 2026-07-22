@@ -188,7 +188,9 @@ deterministic document, writes it to private object storage and marks the job
 ready. A renderer registry keyed by calculation module and method is the
 extension point for future methods such as a separate Vedic numerology engine;
 adding a method does not branch Pythagorean formulas or duplicate queue/storage
-infrastructure.
+infrastructure. Natal chart PDF export uses the same lifecycle and reloads the
+current `module = chart`, `method_code = natal` calculation result before
+rendering deterministic chart tables and calculation settings.
 
 ## Кандидаты на будущее выделение
 
