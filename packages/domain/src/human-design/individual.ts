@@ -30,6 +30,10 @@ import {
   type HumanDesignLineNumber
 } from "./human-design-types";
 import {
+  createHumanDesignResolvedInputFingerprint,
+  type HumanDesignResolvedInputFingerprint
+} from "./input-fingerprint";
+import {
   deriveHumanDesignIncarnationCross,
   type HumanDesignIncarnationCross
 } from "./incarnation-cross";
@@ -66,6 +70,7 @@ export type HumanDesignIndividualBaseResult = {
   readonly engineRevision: typeof HUMAN_DESIGN_ENGINE_REVISION;
   readonly schemaVersion: typeof HUMAN_DESIGN_SCHEMA_VERSION;
   readonly mode: "individual";
+  readonly inputFingerprint: HumanDesignResolvedInputFingerprint;
   readonly resultChecksum: HumanDesignResultChecksum;
   readonly activations: readonly HumanDesignActivation[];
   readonly definedGates: readonly HumanDesignDefinedGate[];
@@ -99,11 +104,13 @@ export function buildHumanDesignIndividualBaseResult(
   const authorityMechanics = deriveHumanDesignAuthority(definedChannels);
   const definitionMechanics = deriveHumanDesignDefinitionKind(definedChannels);
   const incarnationCross = deriveHumanDesignIncarnationCross(activations);
+  const inputFingerprint = createHumanDesignResolvedInputFingerprint(input);
   const resultWithoutChecksum: HumanDesignIndividualBaseResultWithoutChecksum = {
     methodCode: HUMAN_DESIGN_METHOD_CODE,
     engineRevision: HUMAN_DESIGN_ENGINE_REVISION,
     schemaVersion: HUMAN_DESIGN_SCHEMA_VERSION,
     mode: "individual",
+    inputFingerprint,
     activations,
     definedGates: buildDefinedGates(activations),
     definedChannels,

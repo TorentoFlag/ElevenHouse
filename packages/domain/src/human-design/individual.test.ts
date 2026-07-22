@@ -31,6 +31,11 @@ describe("Human Design individual base result", () => {
       engineRevision: 1,
       schemaVersion: "human-design-result.v1",
       mode: "individual",
+      inputFingerprint: {
+        algorithm: "sha256",
+        canonicalization: "json-stable-v1",
+        scope: "human-design-individual-resolved-input.v1"
+      },
       resultChecksum: {
         algorithm: "sha256",
         canonicalization: "json-stable-v1"
@@ -62,6 +67,7 @@ describe("Human Design individual base result", () => {
         throatConnectedMotorCenters: ["sacral"]
       }
     });
+    expect(result.inputFingerprint.value).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(result.resultChecksum.value).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(result.activations).toHaveLength(26);
     expect(result.definedChannels).toContainEqual({
