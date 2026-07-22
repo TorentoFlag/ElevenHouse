@@ -545,7 +545,7 @@ function getChartViewState({
     if (selectedPartnerClient.value === selectedClient.value) {
       return {
         status: "Нужен другой партнёр",
-        detail: "Для синстрии выберите второго клиента, не текущую карту.",
+        detail: "Для синастрии выберите второго клиента, не текущую карту.",
         actionLabel: "Выберите другого",
         canCalculate: false,
         tone: "warning"
@@ -611,7 +611,7 @@ function getChartViewState({
       mode === "transit"
         ? "Рассчитать транзиты"
         : mode === "synastry"
-          ? "Рассчитать синстрию"
+          ? "Рассчитать синастрию"
           : "Рассчитать",
     canCalculate: !isBusy,
     tone: "ready"
@@ -883,7 +883,11 @@ function StatusCard({
     return (
       <div className={styles.statusCard} role="status">
         <strong>{getCalculatingLabel(mode)}</strong>
-        <span>Берём данные рождения из CRM и строим canonical natal result.</span>
+        <span>
+          {mode === "synastry"
+            ? "Берём данные рождения обоих клиентов из CRM и строим canonical result."
+            : "Берём данные рождения из CRM и строим canonical natal result."}
+        </span>
       </div>
     );
   }
@@ -1077,13 +1081,13 @@ function getModeTitle(mode: ChartEngineMode): string {
 
 function getCalculatingLabel(mode: ChartEngineMode): string {
   if (mode === "transit") return "Рассчитываем транзиты";
-  if (mode === "synastry") return "Рассчитываем синстрию";
+  if (mode === "synastry") return "Рассчитываем синастрию";
   return "Рассчитываем карту";
 }
 
 function getEmptyResultLabel(mode: ChartEngineMode): string {
   if (mode === "transit") return "Готово к расчёту транзитов";
-  if (mode === "synastry") return "Готово к расчёту синстрии";
+  if (mode === "synastry") return "Готово к расчёту синастрии";
   return "Готово к расчёту натала";
 }
 

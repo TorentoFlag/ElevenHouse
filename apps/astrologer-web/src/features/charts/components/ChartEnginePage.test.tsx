@@ -148,8 +148,8 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByText(/Партнёр · 11\.08\.1992/)).toBeInTheDocument();
     expect(screen.getByText("Алексей Петров")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /рассчитать синстрию/i })).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: /рассчитать синстрию/i }));
+    expect(screen.getByRole("button", { name: /рассчитать синастрию/i })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: /рассчитать синастрию/i }));
 
     expect(onCreateSynastryJob).toHaveBeenCalledOnce();
   });
