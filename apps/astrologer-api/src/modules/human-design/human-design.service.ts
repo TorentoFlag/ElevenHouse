@@ -5,6 +5,8 @@ import {
   buildHumanDesignIndividualBaseResult,
   ChartBirthDataReadinessError,
   createCalculation,
+  getCalculation,
+  recalculateCalculation,
   type CalculationParticipant,
   type CalculationRecord,
   type CalculationStore,
@@ -18,13 +20,20 @@ import {
   humanDesignPreviewRequestSchema,
   humanDesignPreviewResponseSchema,
   persistHumanDesignCalculationRequestSchema,
+  recalculateHumanDesignCalculationRequestSchema,
+  calculationIdParamSchema,
   type HumanDesignCalculationResponse,
   type HumanDesignIndividualResult,
   type HumanDesignPreviewRequest,
   type HumanDesignPreviewResponse,
-  type PersistHumanDesignCalculationRequest
+  type PersistHumanDesignCalculationRequest,
+  type RecalculateHumanDesignCalculationRequest
 } from "@elevenhouse/contracts";
-import { requireOwnerUserId, toCalculationResponse } from "../calculations/calculations.service";
+import {
+  mapCalculationErrors,
+  requireOwnerUserId,
+  toCalculationResponse
+} from "../calculations/calculations.service";
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import { SystemClock } from "../clock/system-clock.service";
 import { CLIENT_STORE } from "../clients/clients.tokens";
@@ -111,6 +120,70 @@ export class HumanDesignService {
       });
       return toHumanDesignResponse(record);
     });
+  }
+
+  async recalculate(
+    calculationId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<HumanDesignCalculationResponse> {
+    const params = parseHumanDesignContract<{ calculationId: string }>(calculationIdParamSchema, {
+      calculationId
+    });
+    parseHumanDesignContract<RecalculateHumanDesignCalculationRequest>(
+      recalculateHumanDesignCalculationRequestSchema,
+      body ?? {}
+    );
+    const ownerUserId = requireOwnerUserId(request);
+    return mapHumanDesignError(async () =>
+      mapCalculationErrors(async () => {
+        const current = await getCalculation({
+          store: this.store,
+          ownerUserId,
+          calculationId: params.calculationId
+        });
+        assertHumanDesignCalculation(current);
+        const clientId = subjectClientId(current);
+        const prepared = await this.resolveClientInput({
+          ownerUserId,
+          request: {
+            mode: "individual",
+            methodCode: "human_design_classic",
+            source: "client",
+            clientId
+          }
+        });
+        const result = humanDesignIndividualResultSchema.parse(
+          buildHumanDesignIndividualBaseResult(prepared.resolvedLongitudes)
+        );
+        const updated = await recalculateCalculation({
+          store: this.store,
+          ownerUserId,
+          calculationId: current.id,
+          title: current.title,
+          participants: [toCalculationParticipant(prepared)],
+          requestFingerprint: result.inputFingerprint.value,
+          inputData: toJsonObject({
+            methodCode: "human_design_classic",
+            engineRevision: result.engineRevision,
+            schemaVersion: result.schemaVersion,
+            mode: "individual",
+            source: "client",
+            client: {
+              clientId: prepared.clientId,
+              displayName: prepared.displayName
+            },
+            birthData: toChartInputSnapshot(prepared.birthData),
+            resolvedLongitudes: prepared.resolvedLongitudes
+          }),
+          resultData: toJsonObject(result),
+          resultSummary: resultSummary(result),
+          resultChecksum: result.resultChecksum.value,
+          now: this.clock.now()
+        });
+        return toHumanDesignResponse(updated);
+      })
+    );
   }
 
   private async resolveClientInput(input: {
@@ -234,6 +307,34 @@ function validatedSavedResult(record: CalculationRecord): HumanDesignIndividualR
     );
   }
   return parsed.data;
+}
+
+function assertHumanDesignCalculation(record: CalculationRecord): void {
+  if (
+    record.module !== "human_design" ||
+    record.mode !== "individual" ||
+    record.methodCode !== "human_design_classic"
+  ) {
+    throw humanDesignHttpError(
+      409,
+      "HUMAN_DESIGN_RESULT_INTEGRITY_FAILED",
+      "Calculation is not a supported Human Design record"
+    );
+  }
+}
+
+function subjectClientId(record: CalculationRecord): string {
+  const subject = record.participants.find(
+    (participant) => participant.role === "subject" && participant.source === "crm_client"
+  );
+  if (!subject?.clientId) {
+    throw humanDesignHttpError(
+      409,
+      "HUMAN_DESIGN_RESULT_INTEGRITY_FAILED",
+      "Human Design calculation subject is missing"
+    );
+  }
+  return subject.clientId;
 }
 
 function toJsonObject(value: unknown): Record<string, CanonicalJson> {

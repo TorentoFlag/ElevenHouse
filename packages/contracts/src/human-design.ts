@@ -338,6 +338,11 @@ export type PersistHumanDesignCalculationRequest = z.infer<
   typeof persistHumanDesignCalculationRequestSchema
 >;
 
+export const recalculateHumanDesignCalculationRequestSchema = z.object({}).strict();
+export type RecalculateHumanDesignCalculationRequest = z.infer<
+  typeof recalculateHumanDesignCalculationRequestSchema
+>;
+
 export const humanDesignCalculationResponseSchema = z
   .object({
     calculation: calculationRecordResponseSchema,

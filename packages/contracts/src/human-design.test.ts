@@ -3,7 +3,8 @@ import {
   humanDesignCalculationResponseSchema,
   humanDesignPreviewRequestSchema,
   humanDesignPreviewResponseSchema,
-  persistHumanDesignCalculationRequestSchema
+  persistHumanDesignCalculationRequestSchema,
+  recalculateHumanDesignCalculationRequestSchema
 } from "./human-design";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -87,6 +88,11 @@ describe("Human Design contracts", () => {
         }
       })
     ).toThrow();
+  });
+
+  it("accepts only an empty recalculation command body", () => {
+    expect(recalculateHumanDesignCalculationRequestSchema.parse({})).toEqual({});
+    expect(() => recalculateHumanDesignCalculationRequestSchema.parse({ clientId: "x" })).toThrow();
   });
 
   it("rejects browser-supplied birth data in the resolved-longitudes preview request", () => {

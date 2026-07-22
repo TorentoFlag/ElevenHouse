@@ -1,4 +1,13 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Req,
+  UseGuards
+} from "@nestjs/common";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { RequireCsrf } from "../security/route-policy/route-security-policy";
@@ -19,5 +28,16 @@ export class HumanDesignController {
   @RequireCsrf()
   createCalculation(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
     return this.humanDesignService.createCalculation(body, request);
+  }
+
+  @Post("calculations/:calculationId/recalculate")
+  @HttpCode(HttpStatus.OK)
+  @RequireCsrf()
+  recalculate(
+    @Param("calculationId") calculationId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.humanDesignService.recalculate(calculationId, body, request);
   }
 }

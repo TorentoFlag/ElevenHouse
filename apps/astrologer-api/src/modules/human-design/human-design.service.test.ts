@@ -161,6 +161,32 @@ describe("HumanDesignService", () => {
     expect(calculationStore.ensureClientLinks).toHaveBeenCalledOnce();
   });
 
+  it("recalculates an existing Human Design record from current CRM birth data", async () => {
+    const { service, calculationStore, resolvedInputProvider } = createService();
+    const saved = await service.createCalculation(
+      {
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId: clientUserId
+      },
+      request()
+    );
+    vi.mocked(resolvedInputProvider.resolve).mockResolvedValueOnce({
+      personality: { ...longitudes, sun: 12 },
+      design: { ...longitudes, sun: 222 }
+    });
+
+    const recalculated = await service.recalculate(saved.calculation.id, {}, request());
+
+    expect(recalculated.calculation.id).toBe(saved.calculation.id);
+    expect(recalculated.calculation.resultChecksum).not.toBe(saved.calculation.resultChecksum);
+    expect(recalculated.result.activations).toContainEqual(
+      expect.objectContaining({ side: "personality", body: "sun", longitude: 12 })
+    );
+    expect(calculationStore.replaceResult).toHaveBeenCalledOnce();
+  });
+
   it("returns a stable not-found code when the CRM client has no birth data", async () => {
     const { service } = createService({ birthData: null });
 
@@ -301,7 +327,12 @@ function createCalculationStore(): CalculationStore {
   const records: CalculationRecord[] = [];
   const store: CalculationStore = {
     listByOwner: vi.fn(async () => ({ calculations: records, total: records.length })),
-    findByOwnerAndId: vi.fn(async () => null),
+    findByOwnerAndId: vi.fn(
+      async (input) =>
+        records.find(
+          (record) => record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+        ) ?? null
+    ),
     findExact: vi.fn(
       async (input) =>
         records.find(
@@ -342,7 +373,26 @@ function createCalculationStore(): CalculationStore {
       records.push(record);
       return record;
     }),
-    replaceResult: vi.fn(async () => ({ status: "not_found" as const })),
+    replaceResult: vi.fn(async (input) => {
+      const index = records.findIndex(
+        (record) => record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+      );
+      if (index < 0) return { status: "not_found" as const };
+      const current = records[index]!;
+      const updated: CalculationRecord = {
+        ...current,
+        ...(input.title === undefined ? {} : { title: input.title }),
+        participants: input.participants,
+        requestFingerprint: input.requestFingerprint,
+        inputData: input.inputData,
+        resultData: input.resultData,
+        resultSummary: input.resultSummary,
+        resultChecksum: input.resultChecksum,
+        updatedAt: input.now
+      };
+      records[index] = updated;
+      return { status: "updated" as const, calculation: updated };
+    }),
     ensureClientLinks: vi.fn(
       async (input) =>
         records.find(

@@ -4,7 +4,11 @@ import type {
   HumanDesignPreviewResponse
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
-import { createHumanDesignCalculation, previewHumanDesign } from "./humanDesignApi";
+import {
+  createHumanDesignCalculation,
+  previewHumanDesign,
+  recalculateHumanDesignCalculation
+} from "./humanDesignApi";
 
 const clientId = "22222222-2222-4222-8222-222222222222";
 
@@ -53,6 +57,23 @@ describe("humanDesignApi", () => {
         source: "client",
         clientId
       },
+      { csrf: true }
+    );
+  });
+
+  it("recalculates a Human Design calculation with CSRF protection", async () => {
+    const response = humanDesignCalculationResponse();
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(response);
+
+    await expect(
+      recalculateHumanDesignCalculation({
+        calculationId: response.calculation.id
+      })
+    ).resolves.toEqual(response);
+
+    expect(post).toHaveBeenCalledWith(
+      `/human-design/calculations/${response.calculation.id}/recalculate`,
+      {},
       { csrf: true }
     );
   });
