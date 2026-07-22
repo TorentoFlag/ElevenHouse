@@ -23,9 +23,11 @@ export type HumanDesignPageViewProps = {
   readonly status: HumanDesignPageStatus;
   readonly errorMessage: string | null;
   readonly isBusy: boolean;
+  readonly isLinked: boolean;
   readonly onSelectClient: (client: ClientSelectOption) => void;
   readonly onSelectDetail: (key: HumanDesignDetailKey) => void;
   readonly onPreview: () => void | Promise<void>;
+  readonly onPersist: () => void | Promise<void>;
 };
 
 export function HumanDesignPageView({
@@ -35,9 +37,11 @@ export function HumanDesignPageView({
   status,
   errorMessage,
   isBusy,
+  isLinked,
   onSelectClient,
   onSelectDetail,
-  onPreview
+  onPreview,
+  onPersist
 }: HumanDesignPageViewProps) {
   const detail = model ? getHumanDesignDetail(model, selectedDetailKey) : null;
 
@@ -97,9 +101,14 @@ export function HumanDesignPageView({
           <Icon iconName="lightning" width={15} height={15} aria-hidden="true" />
           {isBusy ? "Расчёт" : "Рассчитать"}
         </button>
-        <button className={styles.toolButton} type="button" disabled>
+        <button
+          className={styles.toolButton}
+          type="button"
+          disabled={isBusy || !selectedClient || !model || isLinked}
+          onClick={() => void onPersist()}
+        >
           <Icon iconName="pin" width={15} height={15} aria-hidden="true" />
-          Привязать
+          {isLinked ? "Привязан" : "Привязать"}
         </button>
         <button className={styles.toolButton} type="button" disabled>
           <Icon iconName="doc" width={15} height={15} aria-hidden="true" />

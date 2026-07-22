@@ -1,5 +1,5 @@
 import { z } from "@elevenhouse/validation";
-import { sha256DigestSchema } from "./calculations";
+import { calculationRecordResponseSchema, sha256DigestSchema } from "./calculations";
 
 const uuidSchema = z.string().uuid();
 const longitudeSchema = z.number().min(0).lt(360);
@@ -324,3 +324,26 @@ export const humanDesignPreviewResponseSchema = z
   })
   .strict();
 export type HumanDesignPreviewResponse = z.infer<typeof humanDesignPreviewResponseSchema>;
+
+export const persistHumanDesignCalculationRequestSchema = z
+  .object({
+    mode: humanDesignModeSchema,
+    methodCode: humanDesignMethodCodeSchema,
+    source: z.literal("client"),
+    clientId: uuidSchema,
+    title: z.string().trim().min(1).max(200).optional()
+  })
+  .strict();
+export type PersistHumanDesignCalculationRequest = z.infer<
+  typeof persistHumanDesignCalculationRequestSchema
+>;
+
+export const humanDesignCalculationResponseSchema = z
+  .object({
+    calculation: calculationRecordResponseSchema,
+    result: humanDesignIndividualResultSchema
+  })
+  .strict();
+export type HumanDesignCalculationResponse = z.infer<
+  typeof humanDesignCalculationResponseSchema
+>;

@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { HumanDesignPreviewResponse } from "@elevenhouse/contracts";
+import type {
+  HumanDesignCalculationResponse,
+  HumanDesignPreviewResponse
+} from "@elevenhouse/contracts";
 import { application } from "../../../Application";
-import { previewHumanDesign } from "./humanDesignApi";
+import { createHumanDesignCalculation, previewHumanDesign } from "./humanDesignApi";
 
 const clientId = "22222222-2222-4222-8222-222222222222";
 
@@ -28,7 +31,73 @@ describe("humanDesignApi", () => {
       clientId
     });
   });
+
+  it("creates a linked Human Design calculation with CSRF protection", async () => {
+    const response = humanDesignCalculationResponse();
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(response);
+
+    await expect(
+      createHumanDesignCalculation({
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId
+      })
+    ).resolves.toEqual(response);
+
+    expect(post).toHaveBeenCalledWith(
+      "/human-design/calculations",
+      {
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId
+      },
+      { csrf: true }
+    );
+  });
 });
+
+function humanDesignCalculationResponse(): HumanDesignCalculationResponse {
+  const preview = humanDesignResponse();
+  return {
+    calculation: {
+      id: "11111111-1111-4111-8111-111111111111",
+      ownerUserId: "33333333-3333-4333-8333-333333333333",
+      module: "human_design",
+      mode: "individual",
+      methodCode: "human_design_classic",
+      title: "Client — Дизайн человека",
+      status: "linked",
+      requestFingerprint: preview.result.inputFingerprint.value,
+      inputData: { mode: "individual" },
+      resultData: preview.result,
+      resultSummary: { type: preview.result.type },
+      resultChecksum: preview.result.resultChecksum.value,
+      participants: [
+        {
+          role: "subject",
+          source: "crm_client",
+          clientId,
+          displayName: "Client"
+        }
+      ],
+      links: [
+        {
+          clientId,
+          visibility: "private_to_astrologer",
+          linkedAt: "2026-07-22T10:00:00.000Z",
+          publishedAt: null
+        }
+      ],
+      interpretations: [],
+      artifacts: [],
+      createdAt: "2026-07-22T10:00:00.000Z",
+      updatedAt: "2026-07-22T10:00:00.000Z"
+    },
+    result: preview.result
+  };
+}
 
 function humanDesignResponse(): HumanDesignPreviewResponse {
   const checksum = `sha256:${"a".repeat(64)}`;

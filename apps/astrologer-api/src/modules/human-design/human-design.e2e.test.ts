@@ -2,10 +2,15 @@ import type { INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
-import { humanDesignPreviewResponseSchema } from "@elevenhouse/contracts";
+import {
+  humanDesignCalculationResponseSchema,
+  humanDesignPreviewResponseSchema
+} from "@elevenhouse/contracts";
 import type {
   AuthSessionAuthenticationStore,
   AuthSessionRevocationUnitOfWork,
+  CalculationRecord,
+  CalculationStore,
   ClientBirthData,
   ClientStore,
   PasswordlessAuthUnitOfWork,
@@ -25,10 +30,12 @@ import {
   PASSWORDLESS_RATE_LIMITER
 } from "../identity/passwordless/identity-passwordless.tokens";
 import { CLIENT_STORE } from "../clients/clients.tokens";
+import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import { ASTROLOGER_REGISTRATION_SESSION_UNIT_OF_WORK } from "../identity/registration/identity-registration.tokens";
 import { createIdentityConfigServiceStub } from "../identity/testing/identity-config-service.stub";
 import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordless-rate-limiter";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
+import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { HumanDesignModule } from "./human-design.module";
 import { HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER } from "./human-design.tokens";
 
@@ -39,6 +46,7 @@ const csrfHeaderName = "x-csrf-token";
 const sessionToken = "human-design-session-token";
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
 const clientUserId = "df3192f4-3d67-4b70-8c1a-6a14bd9a51af";
+let currentCsrfToken = "";
 const passwordlessRateLimits = {
   requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
   requestCodeIp: { limit: 30, windowSeconds: 3600 },
@@ -65,10 +73,12 @@ describe("Human Design HTTP routes", () => {
   let app: INestApplication;
   let moduleRef: TestingModule;
   let baseUrl: string;
+  let calculationStore: CalculationStore;
   let clientStore: ClientStore;
   let resolvedInputProvider: { resolve: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
+    calculationStore = createCalculationStore();
     clientStore = createClientStore();
     resolvedInputProvider = {
       resolve: vi.fn(async () => ({
@@ -108,12 +118,20 @@ describe("Human Design HTTP routes", () => {
       .useValue({ generateCode: vi.fn(() => "123456") })
       .overrideProvider(SystemClock)
       .useValue({ now: vi.fn(() => now) })
+      .overrideProvider(CALCULATION_STORE)
+      .useValue(calculationStore)
       .overrideProvider(CLIENT_STORE)
       .useValue(clientStore)
       .overrideProvider(HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER)
       .useValue(resolvedInputProvider)
       .compile();
 
+    currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
+      response: { cookie: vi.fn() },
+      sessionToken,
+      sessionExpiresAt: "2026-07-29T10:00:00.000Z",
+      now
+    });
     app = moduleRef.createNestApplication();
     await app.listen(0);
     baseUrl = await app.getUrl();
@@ -171,6 +189,37 @@ describe("Human Design HTTP routes", () => {
     });
   });
 
+  it("creates a linked CRM-backed calculation only with CSRF", async () => {
+    const withoutCsrf = await postJson(
+      "/human-design/calculations",
+      persistBody(),
+      {
+        cookie: `${sessionCookieName}=${sessionToken}`
+      }
+    );
+    const withCsrf = await postJson("/human-design/calculations", persistBody(), csrfHeaders());
+
+    expect(withoutCsrf.status).toBe(403);
+    expect(withCsrf.status).toBe(201);
+    const body = humanDesignCalculationResponseSchema.parse(withCsrf.body);
+    expect(body.calculation).toMatchObject({
+      ownerUserId,
+      module: "human_design",
+      mode: "individual",
+      methodCode: "human_design_classic",
+      status: "linked",
+      links: [
+        {
+          clientId: clientUserId,
+          visibility: "private_to_astrologer",
+          linkedAt: now.toISOString(),
+          publishedAt: null
+        }
+      ]
+    });
+    expect(calculationStore.create).toHaveBeenCalledOnce();
+  });
+
   async function postJson(
     path: string,
     body: unknown,
@@ -184,6 +233,23 @@ describe("Human Design HTTP routes", () => {
     return { status: response.status, body: await response.json() };
   }
 });
+
+function persistBody() {
+  return {
+    mode: "individual",
+    methodCode: "human_design_classic",
+    source: "client",
+    clientId: clientUserId
+  };
+}
+
+function csrfHeaders() {
+  return {
+    cookie: `${sessionCookieName}=${sessionToken}; ${csrfCookieName}=${currentCsrfToken}`,
+    origin: "http://localhost:3000",
+    [csrfHeaderName]: currentCsrfToken
+  };
+}
 
 function previewBody() {
   return {
@@ -247,6 +313,66 @@ function createClientStore(): ClientStore {
       lastLinkedAt: now.toISOString(),
       birthData: readyBirthData()
     }))
+  };
+}
+
+function createCalculationStore(): CalculationStore {
+  const records: CalculationRecord[] = [];
+  return {
+    listByOwner: vi.fn(async () => ({ calculations: records, total: records.length })),
+    findByOwnerAndId: vi.fn(async () => null),
+    findExact: vi.fn(
+      async (input) =>
+        records.find(
+          (record) =>
+            record.ownerUserId === input.ownerUserId &&
+            record.module === input.module &&
+            record.mode === input.mode &&
+            record.methodCode === input.methodCode &&
+            record.requestFingerprint === input.requestFingerprint
+        ) ?? null
+    ),
+    create: vi.fn(async (input) => {
+      const record: CalculationRecord = {
+        id: input.idGenerator(),
+        ownerUserId: input.ownerUserId,
+        module: input.module,
+        mode: input.mode,
+        methodCode: input.methodCode,
+        title: input.title,
+        status: input.linkClientIds.length ? "linked" : "calculated",
+        participants: input.participants,
+        links: input.linkClientIds.map((linkedClientId: string) => ({
+          clientId: linkedClientId,
+          visibility: "private_to_astrologer" as const,
+          linkedAt: input.now,
+          publishedAt: null
+        })),
+        interpretations: [],
+        artifacts: [],
+        requestFingerprint: input.requestFingerprint,
+        inputData: input.inputData,
+        resultData: input.resultData,
+        resultSummary: input.resultSummary,
+        resultChecksum: input.resultChecksum,
+        createdAt: input.now,
+        updatedAt: input.now
+      };
+      records.push(record);
+      return record;
+    }),
+    replaceResult: vi.fn(async () => ({ status: "not_found" as const })),
+    ensureClientLinks: vi.fn(
+      async (input) =>
+        records.find(
+          (record) => record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+        ) ?? null
+    ),
+    linkClient: vi.fn(async () => null),
+    publishClientLink: vi.fn(async () => null),
+    saveInterpretation: vi.fn(async () => null),
+    approveInterpretation: vi.fn(async () => null),
+    archive: vi.fn(async () => null)
   };
 }
 

@@ -1,5 +1,8 @@
-import type { HumanDesignPreviewRequest } from "@elevenhouse/contracts";
-import { previewHumanDesign } from "../api/humanDesignApi";
+import type {
+  HumanDesignPreviewRequest,
+  PersistHumanDesignCalculationRequest
+} from "@elevenhouse/contracts";
+import { createHumanDesignCalculation, previewHumanDesign } from "../api/humanDesignApi";
 
 export const humanDesignQueryKeys = {
   all: () => ["human-design"] as const,
@@ -8,4 +11,8 @@ export const humanDesignQueryKeys = {
 
 export const previewHumanDesignMutationOptions = () => ({
   mutationFn: (body: HumanDesignPreviewRequest) => previewHumanDesign(body)
+});
+
+export const createHumanDesignCalculationMutationOptions = () => ({
+  mutationFn: (body: PersistHumanDesignCalculationRequest) => createHumanDesignCalculation(body)
 });

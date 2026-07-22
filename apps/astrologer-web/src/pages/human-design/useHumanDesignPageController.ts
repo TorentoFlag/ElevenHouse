@@ -5,23 +5,33 @@ import {
   createHumanDesignViewModel,
   type HumanDesignDetailKey
 } from "../../features/human-design/model/humanDesignViewModel";
-import { usePreviewHumanDesignMutation } from "../../features/human-design/model/humanDesignHooks";
+import {
+  useCreateHumanDesignCalculationMutation,
+  usePreviewHumanDesignMutation
+} from "../../features/human-design/model/humanDesignHooks";
 import type { HumanDesignPageStatus, HumanDesignPageViewProps } from "./HumanDesignPageView";
 
 export function useHumanDesignPageController(): HumanDesignPageViewProps {
   useDocumentTitle("ElevenHouse | Дизайн человека");
   const previewMutation = usePreviewHumanDesignMutation();
+  const createMutation = useCreateHumanDesignCalculationMutation();
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
   const [selectedDetailKey, setSelectedDetailKey] = useState<HumanDesignDetailKey>("type");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const model = useMemo(
-    () => (previewMutation.data ? createHumanDesignViewModel(previewMutation.data.result) : null),
-    [previewMutation.data]
+    () =>
+      createMutation.data
+        ? createHumanDesignViewModel(createMutation.data.result)
+        : previewMutation.data
+          ? createHumanDesignViewModel(previewMutation.data.result)
+          : null,
+    [createMutation.data, previewMutation.data]
   );
   const status = getHumanDesignStatus({
     selectedClient,
     hasResult: Boolean(model),
-    isBusy: previewMutation.isPending,
+    isLinked: Boolean(createMutation.data),
+    isBusy: previewMutation.isPending || createMutation.isPending,
     errorMessage
   });
 
@@ -31,17 +41,22 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     selectedDetailKey,
     status,
     errorMessage,
-    isBusy: previewMutation.isPending,
+    isBusy: previewMutation.isPending || createMutation.isPending,
+    isLinked: Boolean(createMutation.data),
     onSelectClient: (client) => {
       setSelectedClient(client);
       setSelectedDetailKey("type");
       setErrorMessage(null);
       previewMutation.reset();
+      createMutation.reset();
       if (client.hasBirthDate) void preview(client);
     },
     onSelectDetail: setSelectedDetailKey,
     onPreview: () => {
       if (selectedClient) void preview(selectedClient);
+    },
+    onPersist: () => {
+      if (selectedClient && model) void persist(selectedClient);
     }
   };
 
@@ -58,6 +73,23 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
         source: "client",
         clientId: client.value
       });
+      createMutation.reset();
+      setSelectedDetailKey("type");
+    } catch (error) {
+      setErrorMessage(getHumanDesignErrorMessage(error));
+    }
+  }
+
+  async function persist(client: ClientSelectOption) {
+    if (!model) return;
+    setErrorMessage(null);
+    try {
+      await createMutation.mutateAsync({
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId: client.value
+      });
       setSelectedDetailKey("type");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -68,6 +100,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
 function getHumanDesignStatus(input: {
   readonly selectedClient: ClientSelectOption | null;
   readonly hasResult: boolean;
+  readonly isLinked: boolean;
   readonly isBusy: boolean;
   readonly errorMessage: string | null;
 }): HumanDesignPageStatus {
@@ -83,6 +116,13 @@ function getHumanDesignStatus(input: {
       tone: "busy",
       title: "Расчёт Human Design",
       detail: "Запрашиваем chart-engine через backend."
+    };
+  }
+  if (input.isLinked) {
+    return {
+      tone: "success",
+      title: "Расчёт привязан",
+      detail: "Human Design сохранён в расчётах клиента."
     };
   }
   if (input.hasResult) {

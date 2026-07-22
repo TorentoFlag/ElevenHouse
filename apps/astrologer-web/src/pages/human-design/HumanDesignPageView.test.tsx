@@ -16,7 +16,7 @@ describe("HumanDesignPageView", () => {
     expect(textOf(view)).toContain("Birth data берутся из карточки клиента");
   });
 
-  it("renders supported individual mechanics and honest disabled future actions", () => {
+  it("renders supported individual mechanics with link action and honest disabled future actions", () => {
     const view = HumanDesignPageView({
       ...baseProps(),
       selectedClient: {
@@ -39,12 +39,16 @@ describe("HumanDesignPageView", () => {
           textOf(element).includes(label)
         )
     );
+    const linkButton = walk(view).find(
+      (element) => element.type === "button" && textOf(element).includes("Привязать")
+    );
 
     expect(text).toContain("Генератор");
     expect(text).toContain("Канал 20–34");
     expect(text).toContain("Личность");
     expect(text).toContain("Дизайн");
     expect(disabledFutureButtons).toHaveLength(4);
+    expect(linkButton?.props.disabled).toBe(false);
   });
 });
 
@@ -60,9 +64,11 @@ function baseProps(): HumanDesignPageViewProps {
     },
     errorMessage: null,
     isBusy: false,
+    isLinked: false,
     onSelectClient: vi.fn(),
     onSelectDetail: vi.fn(),
-    onPreview: vi.fn()
+    onPreview: vi.fn(),
+    onPersist: vi.fn()
   };
 }
 

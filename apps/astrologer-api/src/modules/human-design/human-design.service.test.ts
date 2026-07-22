@@ -1,12 +1,22 @@
 import { HttpException, UnauthorizedException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
-import { humanDesignPreviewResponseSchema } from "@elevenhouse/contracts";
-import type { ClientBirthData, ClientStore } from "@elevenhouse/domain";
+import {
+  humanDesignCalculationResponseSchema,
+  humanDesignPreviewResponseSchema
+} from "@elevenhouse/contracts";
+import type {
+  CalculationRecord,
+  CalculationStore,
+  ClientBirthData,
+  ClientStore
+} from "@elevenhouse/domain";
+import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { HumanDesignService } from "./human-design.service";
 import type { HumanDesignResolvedInputProvider } from "./human-design.tokens";
 
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
+const now = new Date("2026-07-22T10:00:00.000Z");
 
 const longitudes = {
   sun: 302,
@@ -79,6 +89,76 @@ describe("HumanDesignService", () => {
       type: "manifesting_generator",
       authority: "sacral"
     });
+  });
+
+  it("creates a linked owner-scoped CRM calculation", async () => {
+    const { service, calculationStore } = createService();
+
+    const response = await service.createCalculation(
+      {
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId: clientUserId
+      },
+      request()
+    );
+
+    humanDesignCalculationResponseSchema.parse(response);
+    expect(response.calculation).toMatchObject({
+      ownerUserId,
+      module: "human_design",
+      mode: "individual",
+      methodCode: "human_design_classic",
+      title: "Client — Дизайн человека",
+      status: "linked",
+      participants: [
+        {
+          role: "subject",
+          source: "crm_client",
+          clientId: clientUserId,
+          displayName: "Client"
+        }
+      ],
+      links: [
+        {
+          clientId: clientUserId,
+          visibility: "private_to_astrologer",
+          linkedAt: now.toISOString(),
+          publishedAt: null
+        }
+      ]
+    });
+    expect(response.calculation.requestFingerprint).toBe(response.result.inputFingerprint.value);
+    expect(response.calculation.resultChecksum).toBe(response.result.resultChecksum.value);
+    expect(calculationStore.create).toHaveBeenCalledOnce();
+  });
+
+  it("dedupes repeated persisted Human Design requests by exact fingerprint", async () => {
+    const { service, calculationStore } = createService();
+
+    const first = await service.createCalculation(
+      {
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId: clientUserId
+      },
+      request()
+    );
+    const replay = await service.createCalculation(
+      {
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId: clientUserId
+      },
+      request()
+    );
+
+    expect(replay.calculation.id).toBe(first.calculation.id);
+    expect(calculationStore.create).toHaveBeenCalledOnce();
+    expect(calculationStore.ensureClientLinks).toHaveBeenCalledOnce();
   });
 
   it("returns a stable not-found code when the CRM client has no birth data", async () => {
@@ -194,6 +274,7 @@ function createService(
     readonly resolve?: HumanDesignResolvedInputProvider["resolve"];
   } = {}
 ) {
+  const calculationStore = createCalculationStore();
   const clientStore = createClientStore(input.birthData);
   const resolvedInputProvider: HumanDesignResolvedInputProvider = {
     resolve:
@@ -204,10 +285,77 @@ function createService(
       }))
   };
   return {
-    service: new HumanDesignService(clientStore, resolvedInputProvider),
+    service: new HumanDesignService(
+      calculationStore,
+      clientStore,
+      resolvedInputProvider,
+      { now: vi.fn(() => now) } as unknown as SystemClock
+    ),
+    calculationStore,
     clientStore,
     resolvedInputProvider
   };
+}
+
+function createCalculationStore(): CalculationStore {
+  const records: CalculationRecord[] = [];
+  const store: CalculationStore = {
+    listByOwner: vi.fn(async () => ({ calculations: records, total: records.length })),
+    findByOwnerAndId: vi.fn(async () => null),
+    findExact: vi.fn(
+      async (input) =>
+        records.find(
+          (record) =>
+            record.ownerUserId === input.ownerUserId &&
+            record.module === input.module &&
+            record.mode === input.mode &&
+            record.methodCode === input.methodCode &&
+            record.requestFingerprint === input.requestFingerprint
+        ) ?? null
+    ),
+    create: vi.fn(async (input) => {
+      const record: CalculationRecord = {
+        id: input.idGenerator(),
+        ownerUserId: input.ownerUserId,
+        module: input.module,
+        mode: input.mode,
+        methodCode: input.methodCode,
+        title: input.title,
+        status: input.linkClientIds.length ? "linked" : "calculated",
+        participants: input.participants,
+        links: input.linkClientIds.map((linkedClientId: string) => ({
+          clientId: linkedClientId,
+          visibility: "private_to_astrologer" as const,
+          linkedAt: input.now,
+          publishedAt: null
+        })),
+        interpretations: [],
+        artifacts: [],
+        requestFingerprint: input.requestFingerprint,
+        inputData: input.inputData,
+        resultData: input.resultData,
+        resultSummary: input.resultSummary,
+        resultChecksum: input.resultChecksum,
+        createdAt: input.now,
+        updatedAt: input.now
+      };
+      records.push(record);
+      return record;
+    }),
+    replaceResult: vi.fn(async () => ({ status: "not_found" as const })),
+    ensureClientLinks: vi.fn(
+      async (input) =>
+        records.find(
+          (record) => record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+        ) ?? null
+    ),
+    linkClient: vi.fn(async () => null),
+    publishClientLink: vi.fn(async () => null),
+    saveInterpretation: vi.fn(async () => null),
+    approveInterpretation: vi.fn(async () => null),
+    archive: vi.fn(async () => null)
+  };
+  return store;
 }
 
 function createClientStore(birthData: ClientBirthData | null = readyBirthData()): ClientStore {
