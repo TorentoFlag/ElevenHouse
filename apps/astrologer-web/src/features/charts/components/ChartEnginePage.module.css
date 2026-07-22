@@ -109,6 +109,7 @@
   background: rgb(30 27 62);
 }
 .modeActive,
+.modeButton,
 .modeDisabled {
   flex: 0 0 auto;
   min-height: 32px;
@@ -120,6 +121,9 @@
   font: inherit;
   font-size: 13px;
   font-weight: 700;
+}
+.modeButton {
+  cursor: pointer;
 }
 .modeActive {
   background: var(--chart-gold);
@@ -186,6 +190,43 @@
 .toolbarSpacer {
   min-width: 8px;
   flex: 1;
+}
+.transitMomentFields {
+  display: inline-grid;
+  flex: 0 0 auto;
+  grid-template-columns: 118px 92px;
+  align-items: center;
+  gap: 8px;
+}
+.transitMomentFields label {
+  display: grid;
+  gap: 3px;
+}
+.transitMomentFields span {
+  overflow: hidden;
+  color: rgb(186 178 218 / 0.62);
+  font-size: 9px;
+  font-weight: 780;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.transitMomentFields input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 10px;
+  background: rgb(13 12 32 / 0.78);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 12px;
+}
+.transitMomentFields input:disabled {
+  opacity: 0.52;
 }
 .calculateButton,
 .toolButton {
@@ -602,6 +643,10 @@
   stroke: rgb(98 167 255 / 0.48);
   stroke-dasharray: 4 3;
 }
+.transitAspectLine {
+  stroke-width: 1.25;
+  stroke-dasharray: 5 4;
+}
 .aspectLineHovered {
   opacity: 0.92;
   stroke-width: 2;
@@ -646,6 +691,10 @@
   stroke: rgb(216 212 236 / 0.28);
   stroke-width: 0.8;
 }
+.transitPlanetGuide {
+  stroke: rgb(246 210 102 / 0.24);
+  stroke-width: 0.8;
+}
 .pointMarker {
   cursor: pointer;
   outline: none;
@@ -663,6 +712,17 @@
   filter: drop-shadow(0 0 11px rgb(246 210 102 / 0.35));
   stroke: var(--chart-gold);
   stroke-width: 1.8;
+}
+.transitPointDot {
+  fill: rgb(30 27 62 / 0.95);
+  stroke: rgb(246 210 102 / 0.58);
+  stroke-width: 1.2;
+}
+.transitPointDotHovered {
+  fill: rgb(246 210 102 / 0.18);
+  filter: drop-shadow(0 0 11px rgb(246 210 102 / 0.34));
+  stroke: var(--chart-gold);
+  stroke-width: 1.9;
 }
 .pointLabel {
   fill: var(--eh-color-moon-120);

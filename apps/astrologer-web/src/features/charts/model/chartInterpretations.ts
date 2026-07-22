@@ -1,10 +1,18 @@
-import type { ChartAspect, ChartPoint, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import type {
+  ChartAspect,
+  ChartPoint,
+  ChartTransitAspect,
+  StoredChartCalculationPayload
+} from "@elevenhouse/contracts";
 import {
   formatAspectTypeDisplay,
   formatChartPointPosition,
   formatDegree,
   formatHouseSignDisplay,
   getChartPointDisplayLabel,
+  getPrimaryChartRenderResult,
+  getTransitChartRenderResult,
+  getTransitChartResult,
   romanHouses
 } from "./chartDisplay";
 
@@ -55,12 +63,24 @@ const maxPlanetAspectAnchors = 12;
 export function buildChartInterpretationAnchors(
   result: StoredChartCalculationPayload
 ): readonly ChartInterpretationAnchor[] {
-  const pointsById = new Map(result.result.points.map((point) => [point.id, point]));
+  const renderResult = getPrimaryChartRenderResult(result);
+  const pointsById = new Map(renderResult.points.map((point) => [point.id, point]));
+  const transitResult = getTransitChartResult(result);
+  const transitPointsById = new Map(
+    (getTransitChartRenderResult(result)?.points ?? []).map((point) => [point.id, point])
+  );
 
   return [
-    ...buildPointAnchors(result.result.points),
+    ...buildPointAnchors(renderResult.points),
     ...buildHouseAnchors(result),
-    ...buildAspectAnchors(result.result.aspects, pointsById)
+    ...buildAspectAnchors(renderResult.aspects, pointsById),
+    ...(transitResult
+      ? buildTransitAspectAnchors(
+          transitResult.result.aspectsToNatal,
+          transitPointsById,
+          pointsById
+        )
+      : [])
   ];
 }
 
@@ -111,7 +131,7 @@ function buildPointAnchors(points: readonly ChartPoint[]): readonly ChartInterpr
 }
 
 function buildHouseAnchors(result: StoredChartCalculationPayload): readonly ChartInterpretationAnchor[] {
-  return [...result.result.houses]
+  return [...getPrimaryChartRenderResult(result).houses]
     .sort((left, right) => left.number - right.number)
     .map((house) => ({
       id: `house-${house.number}`,
@@ -122,6 +142,41 @@ function buildHouseAnchors(result: StoredChartCalculationPayload): readonly Char
       meta: "Значение дома",
       position: `${formatHouseSignDisplay(house.sign)} ${formatDegree(house.signDegree)}`
     }));
+}
+
+function buildTransitAspectAnchors(
+  aspects: readonly ChartTransitAspect[],
+  transitPointsById: ReadonlyMap<string, ChartPoint>,
+  natalPointsById: ReadonlyMap<string, ChartPoint>
+): readonly ChartInterpretationAnchor[] {
+  return [...aspects]
+    .filter(
+      (aspect) =>
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.transitPoint) as (typeof pointOrder)[number]
+        ) &&
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.natalPoint) as (typeof pointOrder)[number]
+        )
+    )
+    .sort((left, right) => left.orb - right.orb)
+    .slice(0, maxPlanetAspectAnchors)
+    .map((aspect) => {
+      const transitPoint = getPointLabel(transitPointsById, aspect.transitPoint);
+      const natalPoint = getPointLabel(natalPointsById, aspect.natalPoint);
+
+      return {
+        id: `transit-aspect-${aspect.transitPoint}-${aspect.natalPoint}-${aspect.type}`,
+        code: `transit_${formatDictionaryCodePart(aspect.transitPoint)}_${formatDictionaryCodePart(
+          aspect.natalPoint
+        )}_${normalizeAspectTypeCode(aspect.type)}`,
+        categoryCode: "planet_aspects" as const,
+        group: "aspects" as const,
+        label: `Транзитный ${transitPoint} — ${natalPoint}`,
+        meta: "Транзит к наталу",
+        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+      };
+    });
 }
 
 function buildAspectAnchors(

@@ -1,4 +1,4 @@
-import { storedChartCalculationPayloadSchema } from "@elevenhouse/contracts";
+import { storedChartNatalCalculationPayloadSchema } from "@elevenhouse/contracts";
 import type { CalculationPdfJob, CalculationStore, DictionaryStore } from "@elevenhouse/domain";
 import type { ChartPdfDocument } from "./calculation-pdf.documents";
 import {
@@ -37,8 +37,8 @@ export function createChartPdfSource(
       ) {
         throw staleSource();
       }
-      const result = storedChartCalculationPayloadSchema.safeParse(calculation.resultData);
-      if (!result.success || result.data.method !== "natal") {
+      const result = storedChartNatalCalculationPayloadSchema.safeParse(calculation.resultData);
+      if (!result.success) {
         throw new CalculationPdfPermanentError("invalid_source", "Chart PDF source result is invalid");
       }
       const codes = buildChartPdfInterpretationCodes(result.data);

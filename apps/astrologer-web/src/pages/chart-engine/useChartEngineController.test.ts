@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ChartNatalJobCreateResponse, ChartSettings } from "@elevenhouse/contracts";
+import type {
+  ChartNatalJobCreateResponse,
+  ChartSettings,
+  ChartTransitMoment
+} from "@elevenhouse/contracts";
 import {
   buildChartEngineSearch,
   readChartEngineUrlState,
-  submitChartCalculation
+  submitChartCalculation,
+  submitTransitCalculation
 } from "./useChartEngineController";
 
 const clientId = "22222222-2222-4222-8222-222222222222";
@@ -73,6 +78,29 @@ describe("chart engine controller submission", () => {
 
     expect(create).toHaveBeenCalledWith({ clientId, settings: settings() });
     expect(recalculate).not.toHaveBeenCalled();
+  });
+
+  it("creates transit jobs with the selected moment without using natal recalculation", async () => {
+    const create = vi.fn(async () => calculatingResponse);
+    const transit = {
+      date: "2026-07-22",
+      time: "14:30"
+    } satisfies ChartTransitMoment;
+
+    await expect(
+      submitTransitCalculation({
+        clientId,
+        settings: settings(),
+        transit,
+        create
+      })
+    ).resolves.toEqual(calculatingResponse);
+
+    expect(create).toHaveBeenCalledWith({
+      clientId,
+      settings: settings(),
+      transit
+    });
   });
 });
 

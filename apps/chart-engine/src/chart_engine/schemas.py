@@ -33,6 +33,22 @@ class NatalRequest(BaseModel):
     inputSnapshot: NatalInputSnapshot
 
 
+class TransitSnapshot(BaseModel):
+    date: str
+    time: str
+    timezone: str
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
+class TransitRequest(BaseModel):
+    schemaVersion: Literal["chart-request.v1"]
+    method: Literal["transit"]
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+    transitSnapshot: TransitSnapshot
+
+
 class PlanetaryPositionsSettings(BaseModel):
     zodiac: Literal["tropical"] = "tropical"
     nodeType: Literal["true", "mean"]
@@ -89,6 +105,16 @@ class ChartWarning(BaseModel):
     message: str
 
 
+class ChartTransitAspect(BaseModel):
+    transitPoint: str
+    natalPoint: str
+    type: str
+    angle: float
+    orb: float
+    applying: bool | None = None
+    strength: float | None = None
+
+
 class PlanetaryPosition(BaseModel):
     id: Literal[
         "sun",
@@ -115,6 +141,13 @@ class ChartRenderResult(BaseModel):
     warnings: list[ChartWarning]
 
 
+class ChartTransitRenderResult(BaseModel):
+    natal: ChartRenderResult
+    transit: ChartRenderResult
+    aspectsToNatal: list[ChartTransitAspect]
+    warnings: list[ChartWarning]
+
+
 class StoredChartCalculationPayload(BaseModel):
     schemaVersion: Literal["chart-result.v1"]
     method: Literal["natal"]
@@ -122,6 +155,16 @@ class StoredChartCalculationPayload(BaseModel):
     settings: NatalSettings
     inputSnapshot: NatalInputSnapshot
     result: ChartRenderResult
+
+
+class StoredChartTransitCalculationPayload(BaseModel):
+    schemaVersion: Literal["chart-result.v1"]
+    method: Literal["transit"]
+    provider: ProviderMetadata
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+    transitSnapshot: TransitSnapshot
+    result: ChartTransitRenderResult
 
 
 class PlanetaryPositionsPayload(BaseModel):

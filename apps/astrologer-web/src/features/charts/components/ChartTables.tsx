@@ -11,6 +11,9 @@ import {
   formatAspectTypeDisplay,
   formatDegree,
   formatHouseSignDisplay,
+  getPrimaryChartRenderResult,
+  getTransitChartRenderResult,
+  getTransitChartResult,
   getChartPointDisplayLabel,
   getChartPointSymbol,
   romanHouses
@@ -71,11 +74,14 @@ function PlanetsTable({
   readonly onHoverPoint: (pointId: string | null) => void;
   readonly result: StoredChartCalculationPayload;
 }) {
+  const renderResult = getPrimaryChartRenderResult(result);
+  const transitRenderResult = getTransitChartRenderResult(result);
+
   return (
     <section className={styles.tableSection} aria-labelledby="chart-planets-heading">
       <h2 id="chart-planets-heading">Планеты</h2>
       <div className={styles.planetList}>
-        {result.result.points.map((point) => {
+        {renderResult.points.map((point) => {
           const hovered = hoveredPointId === point.id;
 
           return (
@@ -110,16 +116,60 @@ function PlanetsTable({
           );
         })}
       </div>
+      {transitRenderResult ? (
+        <>
+          <h3 className={styles.matrixHeading}>Транзитные планеты</h3>
+          <div className={styles.planetList}>
+            {transitRenderResult.points.map((point) => {
+              const hoverId = `transit:${point.id}`;
+              const hovered = hoveredPointId === hoverId;
+
+              return (
+                <div
+                  className={hovered ? styles.planetRowHovered : styles.planetRow}
+                  data-hovered={hovered ? "true" : "false"}
+                  data-testid={`chart-transit-planet-row-${point.id}`}
+                  key={`transit-${point.id}`}
+                  onBlur={() => onHoverPoint(null)}
+                  onFocus={() => onHoverPoint(hoverId)}
+                  onMouseEnter={() => onHoverPoint(hoverId)}
+                  onMouseLeave={() => onHoverPoint(null)}
+                  tabIndex={0}
+                >
+                  <span className={styles.pointGlyph} aria-hidden="true">
+                    {getChartPointSymbol(point.id, point.label)}
+                  </span>
+                  <span className={styles.pointName}>
+                    {getChartPointDisplayLabel(point.id, point.label)}
+                  </span>
+                  <span className={styles.signGlyph} aria-hidden="true">
+                    {getZodiacSymbol(point.sign)}
+                  </span>
+                  <span className={styles.pointDegree}>
+                    {formatDegree(point.signDegree)}
+                    {point.retrograde ? <b>R</b> : null}
+                  </span>
+                  <span className={styles.pointHouse}>
+                    {point.house ? `${romanHouses[point.house]} дом` : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }
 
 function HousesTable({ result }: { readonly result: StoredChartCalculationPayload }) {
+  const renderResult = getPrimaryChartRenderResult(result);
+
   return (
     <section className={styles.tableSection} aria-labelledby="chart-houses-heading">
       <h2 id="chart-houses-heading">Дома</h2>
       <div className={styles.houseGrid}>
-        {result.result.houses.map((house) => (
+        {renderResult.houses.map((house) => (
           <div className={styles.houseCard} key={house.number}>
             <span>{romanHouses[house.number]} дом</span>
             <strong>
@@ -134,9 +184,12 @@ function HousesTable({ result }: { readonly result: StoredChartCalculationPayloa
 }
 
 function AspectsTable({ result }: { readonly result: StoredChartCalculationPayload }) {
-  const matrixPoints = getAspectMatrixPoints(result.result.points);
+  const renderResult = getPrimaryChartRenderResult(result);
+  const transitResult = getTransitChartResult(result);
+  const transitRenderResult = getTransitChartRenderResult(result);
+  const matrixPoints = getAspectMatrixPoints(renderResult.points);
   const aspectsByPair = new Map(
-    result.result.aspects.map((aspect) => [getAspectPairKey(aspect.pointA, aspect.pointB), aspect])
+    renderResult.aspects.map((aspect) => [getAspectPairKey(aspect.pointA, aspect.pointB), aspect])
   );
 
   return (
@@ -177,8 +230,8 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
       </div>
       <h2>Список аспектов</h2>
       <div className={styles.aspectList}>
-        {result.result.aspects.length > 0 ? (
-          result.result.aspects.map((aspect, index) => (
+        {renderResult.aspects.length > 0 ? (
+          renderResult.aspects.map((aspect, index) => (
             <div className={styles.aspectRow} key={`${aspect.pointA}-${aspect.pointB}-${index}`}>
               <span>{formatAspectTypeDisplay(aspect.type)}</span>
               <span>
@@ -191,6 +244,30 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
           <div className={styles.emptyRow}>Мажорные аспекты не найдены</div>
         )}
       </div>
+      {transitResult ? (
+        <>
+          <h2>Транзитные аспекты к наталу</h2>
+          <div className={styles.aspectList}>
+            {transitResult.result.aspectsToNatal.length > 0 ? (
+              transitResult.result.aspectsToNatal.map((aspect, index) => (
+                <div
+                  className={styles.aspectRow}
+                  key={`transit-${aspect.transitPoint}-${aspect.natalPoint}-${index}`}
+                >
+                  <span>{formatAspectTypeDisplay(aspect.type)}</span>
+                  <span>
+                    {getPointLabelFromCollection(transitRenderResult?.points ?? [], aspect.transitPoint)} —{" "}
+                    {getPointLabelFromCollection(renderResult.points, aspect.natalPoint)}
+                  </span>
+                  <span>{aspect.orb.toFixed(2)}°</span>
+                </div>
+              ))
+            ) : (
+              <div className={styles.emptyRow}>Транзитные аспекты к наталу не найдены</div>
+            )}
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -443,7 +520,13 @@ const interpretationGroupTitles: Record<ChartInterpretationAnchorGroup, string> 
 };
 
 function getPointLabel(result: StoredChartCalculationPayload, pointId: string): string {
-  const point = result.result.points.find((candidate) => candidate.id === pointId);
+  const point = getPrimaryChartRenderResult(result).points.find((candidate) => candidate.id === pointId);
+
+  return getChartPointDisplayLabel(pointId, point?.label ?? pointId);
+}
+
+function getPointLabelFromCollection(points: readonly ChartPoint[], pointId: string): string {
+  const point = points.find((candidate) => candidate.id === pointId);
 
   return getChartPointDisplayLabel(pointId, point?.label ?? pointId);
 }

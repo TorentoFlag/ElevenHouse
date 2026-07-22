@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ChartSettings, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import type {
+  ChartSettings,
+  ChartTransitMoment,
+  StoredChartCalculationPayload
+} from "@elevenhouse/contracts";
 import { useI18n } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { getAstrologerClient, updateClientBirthData } from "../../features/clients/api/clientsApi";
@@ -11,6 +15,7 @@ import {
 } from "../../features/clients/model/clientSelectorModel";
 import {
   createNatalChartJob,
+  createTransitChartJob,
   downloadChartPdf,
   enqueueChartPdf,
   getChartCalculation,
@@ -26,7 +31,11 @@ import {
   buildChartPdfAction,
   executeChartPdfAction
 } from "../../features/charts/model/chartPdfModel";
-import type { ChartEnginePageJobState } from "../../features/charts/components/ChartEnginePage";
+import type {
+  ChartEngineMode,
+  ChartEnginePageJobState,
+  ChartTransitMomentInput
+} from "../../features/charts/components/ChartEnginePage";
 
 const defaultSettings: ChartSettings = {
   zodiac: "tropical",
@@ -44,6 +53,10 @@ export function useChartEngineController() {
   const initialUrlState = useMemo(() => readChartEngineUrlState(), []);
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
   const [settings, setSettings] = useState<ChartSettings>(defaultSettings);
+  const [mode, setMode] = useState<ChartEngineMode>("natal");
+  const [transitMoment, setTransitMoment] = useState<ChartTransitMomentInput>(() =>
+    getDefaultTransitMoment()
+  );
   const [jobId, setJobId] = useState<string | null>(null);
   const [calculationId, setCalculationId] = useState<string | null>(initialUrlState.calculationId);
   const [immediateResult, setImmediateResult] = useState<StoredChartCalculationPayload | null>(
@@ -96,6 +109,44 @@ export function useChartEngineController() {
     },
     onError: (error) => {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить расчёт карты");
+    }
+  });
+  const transitCalculationMutation = useMutation({
+    mutationFn: ({
+      clientId,
+      settings,
+      transit
+    }: {
+      readonly clientId: string;
+      readonly settings: ChartSettings;
+      readonly transit: ChartTransitMoment;
+    }) =>
+      submitTransitCalculation({
+        clientId,
+        settings,
+        transit,
+        create: createTransitChartJob
+      }),
+    onSuccess: (response, variables) => {
+      setErrorMessage(null);
+      setHasResultStaleIntent(false);
+      if (response.status === "succeeded") {
+        setJobId(null);
+        setCalculationId(response.calculationId);
+        setImmediateResult(response.result as StoredChartCalculationPayload);
+        writeChartEngineUrlState({
+          clientId: variables.clientId,
+          calculationId: response.calculationId
+        });
+        return;
+      }
+      setImmediateResult(null);
+      setCalculationId(null);
+      setJobId(response.jobId);
+      writeChartEngineUrlState({ clientId: variables.clientId, calculationId: null });
+    },
+    onError: (error) => {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить транзиты");
     }
   });
 
@@ -176,12 +227,13 @@ export function useChartEngineController() {
   const result = immediateResult ?? calculationQuery.data ?? null;
   const isResultStale = Boolean(
     result &&
-    (hasResultStaleIntent || isChartResultStale(result, selectedClient?.birthData, settings))
+    (hasResultStaleIntent ||
+      isChartResultStale(result, selectedClient?.birthData, settings, mode, transitMoment))
   );
   const pdfQuery = useQuery({
     queryKey: ["charts", "pdf", calculationId, pdfLocale],
     queryFn: () => getLatestChartPdf({ calculationId: calculationId ?? "", locale: pdfLocale }),
-    enabled: Boolean(calculationId && result && !isResultStale),
+    enabled: Boolean(calculationId && result?.method === "natal" && !isResultStale),
     refetchInterval: (query: { state: { data?: { job: { status: string } | null } } }) => {
       const status = query.state.data?.job?.status;
       return status === "queued" || status === "processing" ? 1500 : false;
@@ -197,7 +249,12 @@ export function useChartEngineController() {
   });
   const downloadPdfMutation = useMutation({ mutationFn: downloadChartPdf });
   const jobState: ChartEnginePageJobState = useMemo(() => {
-    if (calculationMutation.isPending || jobId || jobQuery.data?.status === "calculating") {
+    if (
+      calculationMutation.isPending ||
+      transitCalculationMutation.isPending ||
+      jobId ||
+      jobQuery.data?.status === "calculating"
+    ) {
       return "calculating";
     }
     if (errorMessage || jobQuery.data?.status === "failed") {
@@ -208,9 +265,17 @@ export function useChartEngineController() {
     }
 
     return "idle";
-  }, [calculationMutation.isPending, errorMessage, jobId, jobQuery.data?.status, result]);
+  }, [
+    calculationMutation.isPending,
+    errorMessage,
+    jobId,
+    jobQuery.data?.status,
+    result,
+    transitCalculationMutation.isPending
+  ]);
   const isBusy =
     calculationMutation.isPending ||
+    transitCalculationMutation.isPending ||
     birthDataMutation.isPending ||
     enqueuePdfMutation.isPending ||
     downloadPdfMutation.isPending ||
@@ -222,7 +287,7 @@ export function useChartEngineController() {
     currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
     job: pdfQuery.data?.job ?? null,
     isBusy,
-    isResultStale
+    isResultStale: isResultStale || result?.method === "transit"
   });
 
   return {
@@ -240,6 +305,15 @@ export function useChartEngineController() {
     pdfTitle: pdfAction.title,
     pdfErrorMessage: pdfAction.errorMessage,
     settings,
+    mode,
+    transitMoment,
+    onModeChange: (nextMode: ChartEngineMode) => setMode(nextMode),
+    onTransitMomentChange: (nextMoment: ChartTransitMomentInput) => {
+      setTransitMoment(nextMoment);
+      if (result?.method === "transit") {
+        setHasResultStaleIntent(true);
+      }
+    },
     onSettingsChange: (nextSettings: ChartSettings) => {
       setSettings(nextSettings);
       if (result) {
@@ -275,6 +349,26 @@ export function useChartEngineController() {
         clientId: selectedClient.value,
         isResultStale,
         settings
+      });
+    },
+    onCreateTransitJob: async () => {
+      if (!selectedClient) {
+        setErrorMessage("Выберите клиента из CRM");
+        return;
+      }
+      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
+      if (!readiness.ready) {
+        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
+        return;
+      }
+      if (!transitMoment.date || !transitMoment.time) {
+        setErrorMessage("Укажите дату и время транзита");
+        return;
+      }
+      await transitCalculationMutation.mutateAsync({
+        clientId: selectedClient.value,
+        settings,
+        transit: transitMoment
       });
     },
     onPdf: async () => {
@@ -317,6 +411,20 @@ export async function submitChartCalculation({
   }
 
   return create({ clientId, settings });
+}
+
+export async function submitTransitCalculation({
+  clientId,
+  create,
+  settings,
+  transit
+}: {
+  readonly clientId: string;
+  readonly settings: ChartSettings;
+  readonly transit: ChartTransitMoment;
+  readonly create: typeof createTransitChartJob;
+}) {
+  return create({ clientId, settings, transit });
 }
 
 export type ChartEngineUrlState = {
@@ -366,4 +474,16 @@ function getCurrentChartEngineSearch() {
 function normalizeUrlParam(value: string | null): string | null {
   const normalized = value?.trim() ?? "";
   return normalized ? normalized : null;
+}
+
+function getDefaultTransitMoment(): ChartTransitMomentInput {
+  const now = new Date();
+  const date = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0")
+  ].join("-");
+  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+  return { date, time };
 }

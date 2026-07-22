@@ -7,6 +7,7 @@ const job = {
   id: "00000000-0000-4000-8000-000000000001",
   ownerUserId: "11111111-1111-4111-8111-111111111111",
   clientId: "22222222-2222-4222-8222-222222222222",
+  method: "natal",
   status: "queued",
   inputSnapshot: {
     birthDate: "1990-07-15",
@@ -25,6 +26,22 @@ const job = {
   }
 } as const;
 
+const transitJob = {
+  ...job,
+  method: "transit",
+  settingsSnapshot: job.settingsSnapshot,
+  inputSnapshot: {
+    inputSnapshot: job.inputSnapshot,
+    transitSnapshot: {
+      date: "2026-07-22",
+      time: "14:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9,
+      longitude: 12.49
+    }
+  }
+} as const;
+
 const result = {
   schemaVersion: "chart-result.v1",
   method: "natal",
@@ -40,6 +57,31 @@ const result = {
   }
 } as const;
 
+const transitResult = {
+  schemaVersion: "chart-result.v1",
+  method: "transit",
+  provider: result.provider,
+  settings: job.settingsSnapshot,
+  inputSnapshot: job.inputSnapshot,
+  transitSnapshot: transitJob.inputSnapshot.transitSnapshot,
+  result: {
+    natal: result.result,
+    transit: result.result,
+    aspectsToNatal: [
+      {
+        transitPoint: "jupiter",
+        natalPoint: "sun",
+        type: "trine",
+        angle: 120,
+        orb: 1,
+        applying: true,
+        strength: 0.8
+      }
+    ],
+    warnings: []
+  }
+} as const;
+
 describe("processChartCalculationJob", () => {
   it("loads input snapshot from DB and persists canonical result", async () => {
     const store = {
@@ -48,7 +90,10 @@ describe("processChartCalculationJob", () => {
       complete: vi.fn().mockResolvedValue(true),
       fail: vi.fn()
     };
-    const engine = { calculateNatal: vi.fn().mockResolvedValue(result) };
+    const engine = {
+      calculateNatal: vi.fn().mockResolvedValue(result),
+      calculateTransit: vi.fn()
+    };
 
     await processChartCalculationJob({
       jobId: job.id,
@@ -69,6 +114,39 @@ describe("processChartCalculationJob", () => {
     );
   });
 
+  it("dispatches transit jobs to the transit provider endpoint", async () => {
+    const store = {
+      findByJobId: vi.fn().mockResolvedValue(transitJob),
+      claimForProcessing: vi.fn().mockResolvedValue(transitJob),
+      complete: vi.fn().mockResolvedValue(true),
+      fail: vi.fn()
+    };
+    const engine = {
+      calculateNatal: vi.fn(),
+      calculateTransit: vi.fn().mockResolvedValue(transitResult)
+    };
+
+    await processChartCalculationJob({
+      jobId: transitJob.id,
+      finalAttempt: false,
+      store,
+      engine,
+      now: new Date("2026-07-22T12:00:00.000Z")
+    });
+
+    expect(engine.calculateNatal).not.toHaveBeenCalled();
+    expect(engine.calculateTransit).toHaveBeenCalledWith({
+      schemaVersion: "chart-request.v1",
+      method: "transit",
+      settings: transitJob.settingsSnapshot,
+      inputSnapshot: job.inputSnapshot,
+      transitSnapshot: transitJob.inputSnapshot.transitSnapshot
+    });
+    expect(store.complete).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: transitJob.id, result: transitResult })
+    );
+  });
+
   it("treats already succeeded jobs as no-op", async () => {
     const store = {
       findByJobId: vi.fn().mockResolvedValue({ ...job, status: "succeeded" }),
@@ -81,7 +159,7 @@ describe("processChartCalculationJob", () => {
       jobId: job.id,
       finalAttempt: false,
       store,
-      engine: { calculateNatal: vi.fn() },
+      engine: { calculateNatal: vi.fn(), calculateTransit: vi.fn() },
       now: new Date()
     });
 
@@ -102,7 +180,7 @@ describe("processChartCalculationJob", () => {
         jobId: job.id,
         finalAttempt: false,
         store,
-        engine: { calculateNatal: vi.fn().mockRejectedValue(error) },
+        engine: { calculateNatal: vi.fn().mockRejectedValue(error), calculateTransit: vi.fn() },
         now: new Date()
       })
     ).rejects.toBe(error);
@@ -125,7 +203,8 @@ describe("processChartCalculationJob", () => {
         engine: {
           calculateNatal: vi
             .fn()
-            .mockRejectedValue(new ChartEnginePermanentError("Invalid chart result"))
+            .mockRejectedValue(new ChartEnginePermanentError("Invalid chart result")),
+          calculateTransit: vi.fn()
         },
         now: new Date("2026-07-20T12:00:00.000Z")
       })

@@ -11,7 +11,8 @@ import {
   ChartCalculationJobStore,
   ChartJobForProcessing,
   ChartJobProcessingStore,
-  CreateOrReuseNatalJobInput,
+  CreateOrReuseChartJobInput,
+  CreateOrReuseChartJobResult,
   CreateOrReuseNatalJobResult
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
@@ -25,7 +26,9 @@ export function createDrizzleChartCalculationJobStore(
   database: ChartDrizzleDatabase
 ): ChartCalculationJobStore {
   return {
-    createOrReuseNatalJob: (input) => createOrReuseNatalJob(database, input),
+    createOrReuseChartJob: (input) => createOrReuseChartJob(database, input),
+    createOrReuseNatalJob: (input) =>
+      createOrReuseChartJob(database, { ...input, method: "natal" }),
     getOwnerScopedJob: (input) => getOwnerScopedJob(database, input),
     getOwnerScopedResult: (input) => getOwnerScopedResult(database, input)
   };
@@ -35,29 +38,10 @@ export function createDrizzleChartCalculationCommandStore(
   database: ElevenHouseDatabase
 ): ChartCalculationCommandStore {
   return {
+    createOrReuseChartJobAndRequestCalculation: (input) =>
+      createChartJobAndOutboxEvent(database, input),
     createOrReuseNatalJobAndRequestCalculation: (input) =>
-      database.transaction(async (transaction) => {
-        const result = await createOrReuseNatalJob(transaction, input);
-        if (result.kind === "active_job") {
-          const occurredAt = new Date(input.now);
-          await transaction
-            .insert(outboxEvents)
-            .values({
-              eventType: CHART_CALCULATION_REQUESTED_EVENT,
-              aggregateId: result.jobId,
-              payload: { jobId: result.jobId },
-              status: "pending",
-              attempts: 0,
-              availableAt: occurredAt,
-              createdAt: occurredAt,
-              updatedAt: occurredAt
-            })
-            .onConflictDoNothing({
-              target: [outboxEvents.eventType, outboxEvents.aggregateId]
-            });
-        }
-        return result;
-      })
+      createChartJobAndOutboxEvent(database, { ...input, method: "natal" })
   };
 }
 
@@ -76,10 +60,38 @@ export function createDrizzleChartWorkerJobStore(
   };
 }
 
-async function createOrReuseNatalJob(
+async function createChartJobAndOutboxEvent(
+  database: ElevenHouseDatabase,
+  input: CreateOrReuseChartJobInput & { readonly now: string }
+): Promise<CreateOrReuseChartJobResult> {
+  return database.transaction(async (transaction) => {
+    const result = await createOrReuseChartJob(transaction, input);
+    if (result.kind === "active_job") {
+      const occurredAt = new Date(input.now);
+      await transaction
+        .insert(outboxEvents)
+        .values({
+          eventType: CHART_CALCULATION_REQUESTED_EVENT,
+          aggregateId: result.jobId,
+          payload: { jobId: result.jobId },
+          status: "pending",
+          attempts: 0,
+          availableAt: occurredAt,
+          createdAt: occurredAt,
+          updatedAt: occurredAt
+        })
+        .onConflictDoNothing({
+          target: [outboxEvents.eventType, outboxEvents.aggregateId]
+        });
+    }
+    return result;
+  });
+}
+
+async function createOrReuseChartJob(
   database: ChartDrizzleDatabase,
-  input: CreateOrReuseNatalJobInput
-): Promise<CreateOrReuseNatalJobResult> {
+  input: CreateOrReuseChartJobInput
+): Promise<CreateOrReuseChartJobResult> {
   const existing = await findExistingOrActive(database, input.ownerUserId, input.inputFingerprint);
   if (existing) return existing;
 
@@ -88,7 +100,7 @@ async function createOrReuseNatalJob(
     .values({
       ownerUserId: input.ownerUserId,
       clientId: input.clientId,
-      method: "natal",
+      method: input.method,
       status: "queued",
       inputFingerprint: input.inputFingerprint,
       inputSnapshot: input.inputSnapshot,
@@ -195,6 +207,7 @@ function toChartJobForProcessing(row: ChartCalculationJobRow): ChartJobForProces
     id: row.id,
     ownerUserId: row.ownerUserId,
     clientId: row.clientId,
+    method: row.method as ChartJobForProcessing["method"],
     status: row.status as ChartJobForProcessing["status"],
     inputSnapshot: row.inputSnapshot,
     settingsSnapshot: row.settingsSnapshot
@@ -260,18 +273,13 @@ async function completeChartJob(
         ownerUserId: job.ownerUserId,
         module: "chart",
         mode: "individual",
-        methodCode: "natal",
-        title: "Natal chart",
+        methodCode: job.method,
+        title: job.method === "transit" ? "Transit chart" : "Natal chart",
         status: "calculated",
         requestFingerprint: job.inputFingerprint,
         inputData: { inputSnapshot: job.inputSnapshot, settings: job.settingsSnapshot },
         resultData: input.result,
-        resultSummary: {
-          provider: input.result.provider.name,
-          pointCount: input.result.result.points.length,
-          houseCount: input.result.result.houses.length,
-          aspectCount: input.result.result.aspects.length
-        },
+        resultSummary: buildChartResultSummary(input.result),
         resultChecksum: normalizeChecksum(input.resultChecksum),
         createdAt: new Date(input.now),
         updatedAt: new Date(input.now)
@@ -286,12 +294,7 @@ async function completeChartJob(
         ],
         set: {
           resultData: input.result,
-          resultSummary: {
-            provider: input.result.provider.name,
-            pointCount: input.result.result.points.length,
-            houseCount: input.result.result.houses.length,
-            aspectCount: input.result.result.aspects.length
-          },
+          resultSummary: buildChartResultSummary(input.result),
           resultChecksum: normalizeChecksum(input.resultChecksum),
           updatedAt: new Date(input.now)
         }
@@ -314,6 +317,23 @@ async function completeChartJob(
 
     return Boolean(updated);
   });
+}
+
+function buildChartResultSummary(result: StoredChartCalculationPayload) {
+  if (result.method === "transit") {
+    return {
+      provider: result.provider.name,
+      natalPointCount: result.result.natal.points.length,
+      transitPointCount: result.result.transit.points.length,
+      transitAspectCount: result.result.aspectsToNatal.length
+    };
+  }
+  return {
+    provider: result.provider.name,
+    pointCount: result.result.points.length,
+    houseCount: result.result.houses.length,
+    aspectCount: result.result.aspects.length
+  };
 }
 
 async function failChartJob(

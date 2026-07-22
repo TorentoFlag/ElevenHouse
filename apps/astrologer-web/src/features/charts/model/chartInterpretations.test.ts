@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import type {
+  StoredChartCalculationPayload,
+  StoredChartNatalCalculationPayload
+} from "@elevenhouse/contracts";
 import {
   buildChartInterpretationAnchors,
   getChartInterpretationLookupCodes
@@ -52,9 +55,23 @@ describe("chartInterpretations", () => {
       "moon_pluto:planet_aspects"
     ]);
   });
+
+  it("derives deterministic dictionary anchors for transit aspects to natal points", () => {
+    const anchors = buildChartInterpretationAnchors(transitResult());
+
+    expect(getChartInterpretationLookupCodes(anchors)).toContain("transit_mars_sun_opposition");
+    expect(anchors.map((anchor) => `${anchor.group}:${anchor.label}`)).toContain(
+      "aspects:Транзитный Марс — Солнце"
+    );
+    expect(anchors.find((anchor) => anchor.code === "transit_mars_sun_opposition")).toMatchObject({
+      categoryCode: "planet_aspects",
+      meta: "Транзит к наталу",
+      position: "Оппозиция · орбис 1.20°"
+    });
+  });
 });
 
-function chartResult(): StoredChartCalculationPayload {
+function chartResult(): StoredChartNatalCalculationPayload {
   return {
     schemaVersion: "chart-result.v1",
     method: "natal",
@@ -117,6 +134,55 @@ function chartResult(): StoredChartCalculationPayload {
         modalities: { cardinal: 6, fixed: 3, mutable: 1 },
         polarity: { masculine: 3, feminine: 7 }
       },
+      warnings: []
+    }
+  };
+}
+
+function transitResult(): StoredChartCalculationPayload {
+  const natal = chartResult().result;
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "transit",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: chartResult().settings,
+    inputSnapshot: chartResult().inputSnapshot,
+    transitSnapshot: {
+      date: "2026-07-22",
+      time: "14:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964
+    },
+    result: {
+      natal,
+      transit: {
+        ...natal,
+        points: [
+          {
+            id: "mars",
+            label: "Mars",
+            longitude: 293.4,
+            sign: "capricorn",
+            signDegree: 23.4,
+            house: 4,
+            retrograde: false
+          }
+        ],
+        aspects: [],
+        warnings: []
+      },
+      aspectsToNatal: [
+        {
+          transitPoint: "mars",
+          natalPoint: "sun",
+          type: "opposition",
+          angle: 180,
+          orb: 1.2,
+          applying: true
+        }
+      ],
       warnings: []
     }
   };

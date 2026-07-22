@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { getTableColumns } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import {
+  chartCalculationJobMethodValues,
   calculationParticipants,
   calculationPdfJobs,
   calculationRecords,
@@ -99,6 +100,10 @@ describe("current calculation persistence schema", () => {
 
     expect(migration).toContain('CREATE TABLE "chart_calculation_jobs"');
     expect(migration).toContain('"result_calculation_id" uuid');
+    expect(chartCalculationJobMethodValues).toContain("transit");
+    expect(chartJobsTable).toContain(
+      '"chart_calculation_jobs"."method" in (\'natal\', \'transit\')'
+    );
     expect(migration).toContain("chart_calculation_jobs_active_fingerprint_unique");
     expect(migration).toContain("chart_calculation_jobs_success_fingerprint_unique");
     expect(chartJobsTable).not.toContain('"calculation_id" uuid NOT NULL');

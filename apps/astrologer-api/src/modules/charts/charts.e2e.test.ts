@@ -131,6 +131,9 @@ describe("charts HTTP routes", () => {
     const createResponse = await postJson("/charts/natal/jobs", validBody(), {
       cookie: `${sessionCookieName}=${sessionToken}`
     });
+    const transitResponse = await postJson("/charts/transits/jobs", validTransitBody(), {
+      cookie: `${sessionCookieName}=${sessionToken}`
+    });
     const pdfResponse = await postJson(
       "/charts/calculations/77777777-7777-4777-8777-777777777777/report/pdf",
       { expectedResultChecksum: `sha256:${"a".repeat(64)}`, locale: "ru" },
@@ -138,7 +141,18 @@ describe("charts HTTP routes", () => {
     );
 
     expect(createResponse.status).toBe(403);
+    expect(transitResponse.status).toBe(403);
     expect(pdfResponse.status).toBe(403);
+  });
+
+  it("creates authenticated transit jobs through the CSRF-protected route", async () => {
+    const response = await postJson("/charts/transits/jobs", validTransitBody(), csrfHeaders());
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      status: "calculating",
+      jobId: "66666666-6666-4666-8666-666666666666"
+    });
   });
 
   it("rejects stale chart PDF requests and downloads against the current checksum", async () => {
@@ -347,6 +361,10 @@ function createClientStore(): ClientStore {
 
 function createCommandStore(): ChartCalculationCommandStore {
   return {
+    createOrReuseChartJobAndRequestCalculation: vi.fn(async () => ({
+      kind: "active_job",
+      jobId: "66666666-6666-4666-8666-666666666666"
+    } as const)),
     createOrReuseNatalJobAndRequestCalculation: vi.fn(async () => ({
       kind: "active_job",
       jobId: "66666666-6666-4666-8666-666666666666"
@@ -356,6 +374,10 @@ function createCommandStore(): ChartCalculationCommandStore {
 
 function createJobStore(): ChartCalculationJobStore {
   return {
+    createOrReuseChartJob: vi.fn(async () => ({
+      kind: "active_job",
+      jobId: "66666666-6666-4666-8666-666666666666"
+    } as const)),
     createOrReuseNatalJob: vi.fn(async () => ({
       kind: "active_job",
       jobId: "66666666-6666-4666-8666-666666666666"
@@ -396,6 +418,16 @@ function validBody(): Record<string, unknown> {
       nodeType: "true",
       aspectPreset: "major",
       orbMultiplier: 1
+    }
+  };
+}
+
+function validTransitBody(): Record<string, unknown> {
+  return {
+    ...validBody(),
+    transit: {
+      date: "2026-07-22",
+      time: "14:30"
     }
   };
 }

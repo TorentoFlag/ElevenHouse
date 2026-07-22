@@ -1,4 +1,4 @@
-export type ChartCalculationMethod = "natal";
+export type ChartCalculationMethod = "natal" | "transit";
 export type ChartJobStatus = "queued" | "processing" | "succeeded" | "failed";
 export const CHART_CALCULATION_REQUESTED_EVENT = "chart.calculation.requested.v1";
 
@@ -14,23 +14,29 @@ export type ChartCalculationJob = {
   readonly lastErrorMessage: string | null;
 };
 
-export type CreateOrReuseNatalJobInput = {
+export type CreateOrReuseChartJobInput = {
+  readonly method: ChartCalculationMethod;
   readonly ownerUserId: string;
   readonly clientId: string;
   readonly inputFingerprint: string;
   readonly inputSnapshot: unknown;
   readonly settingsSnapshot: unknown;
 };
+export type CreateOrReuseNatalJobInput = Omit<CreateOrReuseChartJobInput, "method">;
 
-export type CreateOrReuseNatalJobResult =
+export type CreateOrReuseChartJobResult =
   | { readonly kind: "existing_result"; readonly calculationId: string }
   | { readonly kind: "active_job"; readonly jobId: string };
+export type CreateOrReuseNatalJobResult = CreateOrReuseChartJobResult;
 
 export type ChartCalculationRequestedPayload = {
   readonly jobId: string;
 };
 
 export type ChartCalculationJobStore = {
+  readonly createOrReuseChartJob: (
+    input: CreateOrReuseChartJobInput
+  ) => Promise<CreateOrReuseChartJobResult>;
   readonly createOrReuseNatalJob: (
     input: CreateOrReuseNatalJobInput
   ) => Promise<CreateOrReuseNatalJobResult>;
@@ -45,6 +51,9 @@ export type ChartCalculationJobStore = {
 };
 
 export type ChartCalculationCommandStore = {
+  readonly createOrReuseChartJobAndRequestCalculation: (
+    input: CreateOrReuseChartJobInput & { readonly now: string }
+  ) => Promise<CreateOrReuseChartJobResult>;
   readonly createOrReuseNatalJobAndRequestCalculation: (
     input: CreateOrReuseNatalJobInput & { readonly now: string }
   ) => Promise<CreateOrReuseNatalJobResult>;
@@ -54,6 +63,7 @@ export type ChartJobForProcessing = {
   readonly id: string;
   readonly ownerUserId: string;
   readonly clientId: string;
+  readonly method: ChartCalculationMethod;
   readonly status: ChartJobStatus;
   readonly inputSnapshot: unknown;
   readonly settingsSnapshot: unknown;

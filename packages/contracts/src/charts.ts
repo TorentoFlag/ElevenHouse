@@ -23,6 +23,26 @@ export const chartNatalJobCreateRequestSchema = z
   .strict();
 export type ChartNatalJobCreateRequest = z.infer<typeof chartNatalJobCreateRequestSchema>;
 
+export const chartTransitMomentSchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    time: z.string().regex(/^\d{2}:\d{2}$/),
+    timezone: z.string().trim().min(1).max(100).optional(),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional()
+  })
+  .strict();
+export type ChartTransitMoment = z.infer<typeof chartTransitMomentSchema>;
+
+export const chartTransitJobCreateRequestSchema = z
+  .object({
+    clientId: uuidSchema,
+    settings: chartSettingsSchema,
+    transit: chartTransitMomentSchema
+  })
+  .strict();
+export type ChartTransitJobCreateRequest = z.infer<typeof chartTransitJobCreateRequestSchema>;
+
 export const chartPublicJobStatusSchema = z.enum(["calculating", "succeeded", "failed"]);
 export type ChartPublicJobStatus = z.infer<typeof chartPublicJobStatusSchema>;
 
@@ -84,6 +104,17 @@ export const chartInputSnapshotSchema = z
   .strict();
 export type ChartInputSnapshot = z.infer<typeof chartInputSnapshotSchema>;
 
+export const chartTransitSnapshotSchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    time: z.string().regex(/^\d{2}:\d{2}$/),
+    timezone: z.string().trim().min(1).max(100),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180)
+  })
+  .strict();
+export type ChartTransitSnapshot = z.infer<typeof chartTransitSnapshotSchema>;
+
 export const chartNatalCalculationRequestSchema = z
   .object({
     schemaVersion: z.literal("chart-request.v1"),
@@ -96,6 +127,20 @@ export type ChartNatalCalculationRequestInput = z.input<
   typeof chartNatalCalculationRequestSchema
 >;
 export type ChartNatalCalculationRequest = z.infer<typeof chartNatalCalculationRequestSchema>;
+
+export const chartTransitCalculationRequestSchema = z
+  .object({
+    schemaVersion: z.literal("chart-request.v1"),
+    method: z.literal("transit"),
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    transitSnapshot: chartTransitSnapshotSchema
+  })
+  .strict();
+export type ChartTransitCalculationRequestInput = z.input<
+  typeof chartTransitCalculationRequestSchema
+>;
+export type ChartTransitCalculationRequest = z.infer<typeof chartTransitCalculationRequestSchema>;
 
 export const chartPointSchema = z
   .object({
@@ -218,7 +263,30 @@ export const chartRenderResultSchema = z
   });
 export type ChartRenderResult = z.infer<typeof chartRenderResultSchema>;
 
-export const storedChartCalculationPayloadSchema = z
+export const chartTransitAspectSchema = z
+  .object({
+    transitPoint: z.string().trim().min(1).max(80),
+    natalPoint: z.string().trim().min(1).max(80),
+    type: z.string().trim().min(1).max(80),
+    angle: z.number().min(0).max(180),
+    orb: z.number().min(0),
+    applying: z.boolean().nullable().optional(),
+    strength: z.number().min(0).max(1).nullable().optional()
+  })
+  .strict();
+export type ChartTransitAspect = z.infer<typeof chartTransitAspectSchema>;
+
+export const chartTransitRenderResultSchema = z
+  .object({
+    natal: chartRenderResultSchema,
+    transit: chartRenderResultSchema,
+    aspectsToNatal: z.array(chartTransitAspectSchema),
+    warnings: z.array(chartWarningSchema)
+  })
+  .strict();
+export type ChartTransitRenderResult = z.infer<typeof chartTransitRenderResultSchema>;
+
+export const storedChartNatalCalculationPayloadSchema = z
   .object({
     schemaVersion: z.literal("chart-result.v1"),
     method: z.literal("natal"),
@@ -228,6 +296,29 @@ export const storedChartCalculationPayloadSchema = z
     result: chartRenderResultSchema
   })
   .strict();
+export type StoredChartNatalCalculationPayload = z.infer<
+  typeof storedChartNatalCalculationPayloadSchema
+>;
+
+export const storedChartTransitCalculationPayloadSchema = z
+  .object({
+    schemaVersion: z.literal("chart-result.v1"),
+    method: z.literal("transit"),
+    provider: chartProviderMetadataSchema,
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    transitSnapshot: chartTransitSnapshotSchema,
+    result: chartTransitRenderResultSchema
+  })
+  .strict();
+export type StoredChartTransitCalculationPayload = z.infer<
+  typeof storedChartTransitCalculationPayloadSchema
+>;
+
+export const storedChartCalculationPayloadSchema = z.discriminatedUnion("method", [
+  storedChartNatalCalculationPayloadSchema,
+  storedChartTransitCalculationPayloadSchema
+]);
 export type StoredChartCalculationPayload = z.infer<typeof storedChartCalculationPayloadSchema>;
 
 export const chartCalculationResultRecordSchema = chartJsonRecordSchema;

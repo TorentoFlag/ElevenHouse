@@ -1,5 +1,5 @@
 import { PDFDocument } from "pdf-lib";
-import { storedChartCalculationPayloadSchema } from "@elevenhouse/contracts";
+import { storedChartNatalCalculationPayloadSchema } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
 import type { ChartPdfDocument } from "./calculation-pdf.documents";
 import { buildChartPdfContent, createChartPdfRenderer } from "./chart-pdf.renderer";
@@ -113,7 +113,7 @@ function document(
     locale,
     createdAt: "2026-07-22T12:00:00.000Z",
     calculationTitle: "Natal chart",
-    result: storedChartCalculationPayloadSchema.parse(chartResult()),
+    result: storedChartNatalCalculationPayloadSchema.parse(chartResult()),
     interpretations: [],
     ...overrides
   };

@@ -8,6 +8,7 @@ import {
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalJobCreateResponseSchema,
+  chartTransitJobCreateRequestSchema,
   requestCalculationPdfSchema,
   storedChartCalculationPayloadSchema,
   type CalculationPdfDownloadResponse,
@@ -16,6 +17,7 @@ import {
   type ChartJobResponse,
   type ChartNatalJobCreateResponse,
   type ChartSettings,
+  type ChartTransitMoment,
   type RequestCalculationPdf,
   type StoredChartCalculationPayload
 } from "@elevenhouse/contracts";
@@ -36,6 +38,26 @@ export async function createNatalChartJob(
 
   return chartNatalJobCreateResponseSchema.parse(
     await application.http.post("/charts/natal/jobs", body, { csrf: true })
+  );
+}
+
+export type CreateTransitChartJobInput = {
+  readonly clientId: string;
+  readonly settings: ChartSettings;
+  readonly transit: ChartTransitMoment;
+} & Record<string, unknown>;
+
+export async function createTransitChartJob(
+  input: CreateTransitChartJobInput
+): Promise<ChartNatalJobCreateResponse> {
+  const body = chartTransitJobCreateRequestSchema.parse({
+    clientId: input.clientId,
+    settings: input.settings,
+    transit: input.transit
+  });
+
+  return chartNatalJobCreateResponseSchema.parse(
+    await application.http.post("/charts/transits/jobs", body, { csrf: true })
   );
 }
 

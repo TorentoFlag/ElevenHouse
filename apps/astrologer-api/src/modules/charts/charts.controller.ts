@@ -15,6 +15,12 @@ export class ChartsController {
     return this.service.createNatalJob(body, request);
   }
 
+  @Post("transits/jobs")
+  @RequireCsrf()
+  createTransitJob(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.service.createTransitJob(body, request);
+  }
+
   @Get("jobs/:jobId")
   getJob(@Param("jobId") jobId: string, @Req() request: AstrologerSessionRequest) {
     return this.service.getJob(jobId, request);

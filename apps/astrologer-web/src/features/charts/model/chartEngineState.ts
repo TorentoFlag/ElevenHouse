@@ -59,10 +59,21 @@ export function getChartBirthDataReadiness(
 export function isChartResultStale(
   result: StoredChartCalculationPayload,
   birthData: NatalBirthData | null | undefined,
-  settings: ChartSettings
+  settings: ChartSettings,
+  currentMethod?: StoredChartCalculationPayload["method"],
+  transitMoment?: {
+    readonly date: string;
+    readonly time: string;
+    readonly timezone?: string;
+    readonly latitude?: number;
+    readonly longitude?: number;
+  }
 ): boolean {
   if (birthData === undefined) {
     return false;
+  }
+  if (currentMethod && result.method !== currentMethod) {
+    return true;
   }
   if (!birthData || getChartBirthDataReadiness(birthData).ready === false) {
     return true;
@@ -70,7 +81,7 @@ export function isChartResultStale(
 
   const snapshot = result.inputSnapshot;
 
-  return (
+  const baseSnapshotStale =
     result.settings.zodiac !== settings.zodiac ||
     result.settings.houseSystem !== settings.houseSystem ||
     result.settings.nodeType !== settings.nodeType ||
@@ -82,7 +93,28 @@ export function isChartResultStale(
     snapshot.timezone !== birthData.birthTimezone ||
     !areNumbersEquivalent(snapshot.latitude, birthData.birthLatitude) ||
     !areNumbersEquivalent(snapshot.longitude, birthData.birthLongitude) ||
-    (snapshot.dstOccurrence ?? null) !== (birthData.birthTimeDstOccurrence ?? null)
+    (snapshot.dstOccurrence ?? null) !== (birthData.birthTimeDstOccurrence ?? null);
+
+  if (baseSnapshotStale) {
+    return true;
+  }
+
+  if (result.method !== "transit") {
+    return false;
+  }
+
+  if (!transitMoment) {
+    return false;
+  }
+
+  return (
+    result.transitSnapshot.date !== transitMoment.date ||
+    result.transitSnapshot.time !== transitMoment.time ||
+    (transitMoment.timezone != null && result.transitSnapshot.timezone !== transitMoment.timezone) ||
+    (transitMoment.latitude != null &&
+      !areNumbersEquivalent(result.transitSnapshot.latitude, transitMoment.latitude)) ||
+    (transitMoment.longitude != null &&
+      !areNumbersEquivalent(result.transitSnapshot.longitude, transitMoment.longitude))
   );
 }
 

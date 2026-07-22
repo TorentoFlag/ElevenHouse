@@ -73,6 +73,43 @@ describe("ChartEngineHttpClient", () => {
     await expect(client.calculateNatal(request)).rejects.toBeInstanceOf(ChartEnginePermanentError);
   });
 
+  it("posts transit input to the private chart engine", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => transitResult
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012/",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateTransit(transitRequest)).resolves.toMatchObject({
+      schemaVersion: "chart-result.v1",
+      method: "transit",
+      result: { aspectsToNatal: [expect.objectContaining({ transitPoint: "jupiter" })] }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://chart-engine:8012/v1/transits",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("treats invalid transit provider JSON as permanent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaVersion: "wrong" })
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateTransit(transitRequest)).rejects.toBeInstanceOf(
+      ChartEnginePermanentError
+    );
+  });
+
   it("posts planetary positions input to the private chart engine", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -115,6 +152,45 @@ const positionsRequest = {
   method: "planetary_positions",
   settings: { zodiac: "tropical", nodeType: "true" },
   inputSnapshot: request.inputSnapshot
+} as const;
+
+const transitRequest = {
+  schemaVersion: "chart-request.v1",
+  method: "transit",
+  settings: request.settings,
+  inputSnapshot: request.inputSnapshot,
+  transitSnapshot: {
+    date: "2026-07-22",
+    time: "14:30",
+    timezone: "Europe/Rome",
+    latitude: 41.9,
+    longitude: 12.49
+  }
+} as const;
+
+const transitResult = {
+  schemaVersion: "chart-result.v1",
+  method: "transit",
+  provider: result.provider,
+  settings: { zodiac: "tropical", ...request.settings },
+  inputSnapshot: request.inputSnapshot,
+  transitSnapshot: transitRequest.transitSnapshot,
+  result: {
+    natal: result.result,
+    transit: result.result,
+    aspectsToNatal: [
+      {
+        transitPoint: "jupiter",
+        natalPoint: "sun",
+        type: "trine",
+        angle: 120,
+        orb: 1.25,
+        applying: true,
+        strength: 0.79
+      }
+    ],
+    warnings: []
+  }
 } as const;
 
 const positionsResult = {

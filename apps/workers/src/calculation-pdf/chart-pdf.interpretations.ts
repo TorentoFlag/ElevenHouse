@@ -1,4 +1,4 @@
-import type { ChartAspect, ChartPoint, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import type { ChartAspect, ChartPoint, StoredChartNatalCalculationPayload } from "@elevenhouse/contracts";
 import type { DictionaryEffectiveEntry } from "@elevenhouse/domain";
 import type { ChartPdfInterpretation } from "./calculation-pdf.documents";
 
@@ -43,13 +43,13 @@ const planetAspectPointIds = new Set(pointOrder.slice(0, 10));
 const maxPlanetAspectAnchors = 12;
 
 export function buildChartPdfInterpretationCodes(
-  result: StoredChartCalculationPayload
+  result: StoredChartNatalCalculationPayload
 ): readonly string[] {
   return Array.from(new Set(buildChartInterpretationAnchors(result).map((anchor) => anchor.code)));
 }
 
 export function buildChartPdfInterpretations(input: {
-  readonly result: StoredChartCalculationPayload;
+  readonly result: StoredChartNatalCalculationPayload;
   readonly entries: readonly DictionaryEffectiveEntry[];
 }): readonly ChartPdfInterpretation[] {
   const entriesByCode = new Map(input.entries.map((entry) => [entry.code, entry]));
@@ -75,7 +75,7 @@ export function buildChartPdfInterpretations(input: {
 }
 
 function buildChartInterpretationAnchors(
-  result: StoredChartCalculationPayload
+  result: StoredChartNatalCalculationPayload
 ): readonly ChartInterpretationAnchor[] {
   const pointsById = new Map(result.result.points.map((point) => [point.id, point]));
 
@@ -124,7 +124,9 @@ function buildPointAnchors(points: readonly ChartPoint[]): readonly ChartInterpr
   });
 }
 
-function buildHouseAnchors(result: StoredChartCalculationPayload): readonly ChartInterpretationAnchor[] {
+function buildHouseAnchors(
+  result: StoredChartNatalCalculationPayload
+): readonly ChartInterpretationAnchor[] {
   return [...result.result.houses]
     .sort((left, right) => left.number - right.number)
     .map((house) => ({

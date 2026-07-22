@@ -41,6 +41,78 @@ describe("ChartsService", () => {
     );
   });
 
+  it("creates transit jobs with resolved natal-backed transit snapshot", async () => {
+    const commandStore = createCommandStore();
+    const service = createService({ commandStore });
+
+    await service.createTransitJob(
+      {
+        clientId,
+        settings: settings(),
+        transit: {
+          date: "2026-07-22",
+          time: "14:30"
+        }
+      },
+      request()
+    );
+
+    expect(commandStore.createOrReuseChartJobAndRequestCalculation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "transit",
+        ownerUserId,
+        clientId,
+        inputSnapshot: {
+          inputSnapshot: expect.objectContaining({
+            birthDate: "1990-07-15",
+            timezone: "Europe/Rome"
+          }),
+          transitSnapshot: {
+            date: "2026-07-22",
+            time: "14:30",
+            timezone: "Europe/Rome",
+            latitude: 41.9028,
+            longitude: 12.4964
+          }
+        }
+      })
+    );
+  });
+
+  it("allows an explicit transit timezone and coordinates", async () => {
+    const commandStore = createCommandStore();
+    const service = createService({ commandStore });
+
+    await service.createTransitJob(
+      {
+        clientId,
+        settings: settings(),
+        transit: {
+          date: "2026-07-22",
+          time: "14:30",
+          timezone: "Europe/Moscow",
+          latitude: 55.7558,
+          longitude: 37.6173
+        }
+      },
+      request()
+    );
+
+    expect(commandStore.createOrReuseChartJobAndRequestCalculation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputSnapshot: expect.objectContaining({
+          transitSnapshot: {
+            date: "2026-07-22",
+            time: "14:30",
+            timezone: "Europe/Moscow",
+            latitude: 55.7558,
+            longitude: 37.6173
+          }
+        })
+      })
+    );
+  });
+
   it("maps unknown birth time to an actionable validation error", async () => {
     const clientStore = createClientStore({
       birthData: { ...readyBirthData(), birthTime: null, birthTimePrecision: "unknown" }
@@ -95,7 +167,12 @@ function createService(input: {
 
 function createCommandStore(): ChartCalculationCommandStore {
   return {
-    createOrReuseNatalJobAndRequestCalculation: vi.fn(async () => ({ kind: "active_job", jobId }) as const)
+    createOrReuseChartJobAndRequestCalculation: vi.fn(
+      async () => ({ kind: "active_job", jobId }) as const
+    ),
+    createOrReuseNatalJobAndRequestCalculation: vi.fn(
+      async () => ({ kind: "active_job", jobId }) as const
+    )
   };
 }
 
@@ -103,6 +180,7 @@ function createJobStore(input: {
   readonly job?: Awaited<ReturnType<ChartCalculationJobStore["getOwnerScopedJob"]>>;
 } = {}): ChartCalculationJobStore {
   return {
+    createOrReuseChartJob: vi.fn(async () => ({ kind: "active_job", jobId }) as const),
     createOrReuseNatalJob: vi.fn(async () => ({ kind: "active_job", jobId }) as const),
     getOwnerScopedJob: vi.fn(async () => input.job ?? null),
     getOwnerScopedResult: vi.fn(async () => null)

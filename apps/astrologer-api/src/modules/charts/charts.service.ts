@@ -1,6 +1,7 @@
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import {
   assertChartBirthDataReady,
+  createChartJobAndRequestCalculation,
   createNatalChartJobAndRequestCalculation,
   sha256CanonicalJson,
   type CanonicalJson,
@@ -15,11 +16,13 @@ import {
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalJobCreateResponseSchema,
+  chartTransitJobCreateRequestSchema,
   storedChartCalculationPayloadSchema,
   type ChartNatalJobCreateRequest,
   type ChartCalculationResponse,
   type ChartJobResponse,
-  type ChartNatalJobCreateResponse
+  type ChartNatalJobCreateResponse,
+  type ChartTransitJobCreateRequest
 } from "@elevenhouse/contracts";
 import { z } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
@@ -74,6 +77,76 @@ export class ChartsService {
         clientId: parsedBody.clientId,
         inputFingerprint: requestFingerprint,
         inputSnapshot,
+        settingsSnapshot: parsedBody.settings,
+        now: this.clock.now()
+      });
+      if (outcome.kind === "existing_result") {
+        const result = await this.jobStore.getOwnerScopedResult({
+          ownerUserId,
+          calculationId: outcome.calculationId
+        });
+        if (!result) {
+          throw chartHttpError(
+            404,
+            "CHART_CALCULATION_NOT_FOUND",
+            "Chart calculation was not found"
+          );
+        }
+        return chartNatalJobCreateResponseSchema.parse({
+          status: "succeeded",
+          calculationId: outcome.calculationId,
+          result: storedChartCalculationPayloadSchema.parse(result)
+        });
+      }
+      return chartNatalJobCreateResponseSchema.parse({
+        status: "calculating",
+        jobId: outcome.jobId
+      });
+    });
+  }
+
+  async createTransitJob(
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<ChartNatalJobCreateResponse> {
+    const parsedBody = parseChartContract<ChartTransitJobCreateRequest>(
+      chartTransitJobCreateRequestSchema,
+      body
+    );
+    const ownerUserId = requireOwnerUserId(request);
+    return mapChartError(async () => {
+      const client = await this.clientStore.getAstrologerClient({
+        astrologerUserId: ownerUserId,
+        clientUserId: parsedBody.clientId
+      });
+      if (!client?.birthData) {
+        throw chartHttpError(404, "CHART_CLIENT_NOT_FOUND", "Client was not found");
+      }
+      const readyBirthData = assertChartBirthDataReady(client.birthData);
+      const inputSnapshot = toChartInputSnapshot(readyBirthData);
+      const transitSnapshot = {
+        date: parsedBody.transit.date,
+        time: parsedBody.transit.time,
+        timezone: parsedBody.transit.timezone ?? inputSnapshot.timezone,
+        latitude: parsedBody.transit.latitude ?? inputSnapshot.latitude,
+        longitude: parsedBody.transit.longitude ?? inputSnapshot.longitude
+      };
+      const requestSnapshot = { inputSnapshot, transitSnapshot };
+      const requestFingerprint = sha256CanonicalJson({
+        schemaVersion: "chart-request.v1",
+        providerVersion,
+        method: "transit",
+        clientId: parsedBody.clientId,
+        inputSnapshot: requestSnapshot as CanonicalJson,
+        settings: parsedBody.settings as CanonicalJson
+      });
+      const outcome = await createChartJobAndRequestCalculation({
+        store: this.commandStore,
+        method: "transit",
+        ownerUserId,
+        clientId: parsedBody.clientId,
+        inputFingerprint: requestFingerprint,
+        inputSnapshot: requestSnapshot,
         settingsSnapshot: parsedBody.settings,
         now: this.clock.now()
       });

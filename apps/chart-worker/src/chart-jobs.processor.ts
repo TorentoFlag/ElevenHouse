@@ -3,8 +3,12 @@ import {
   chartInputSnapshotSchema,
   chartSettingsSchema,
   type ChartNatalCalculationRequest,
+  chartTransitSnapshotSchema,
+  type ChartTransitCalculationRequest,
+  type StoredChartTransitCalculationPayload,
   type StoredChartCalculationPayload
 } from "@elevenhouse/contracts";
+import { z } from "@elevenhouse/validation";
 import { ChartEnginePermanentError } from "@elevenhouse/chart-engine-client";
 import type { ChartJobProcessingStore } from "@elevenhouse/domain";
 import { UnrecoverableError } from "bullmq";
@@ -13,7 +17,17 @@ export type ChartEngineClient = {
   readonly calculateNatal: (
     payload: ChartNatalCalculationRequest
   ) => Promise<StoredChartCalculationPayload>;
+  readonly calculateTransit: (
+    payload: ChartTransitCalculationRequest
+  ) => Promise<StoredChartTransitCalculationPayload>;
 };
+
+const transitJobInputSnapshotSchema = z
+  .object({
+    inputSnapshot: chartInputSnapshotSchema,
+    transitSnapshot: chartTransitSnapshotSchema
+  })
+  .strict();
 
 export async function processChartCalculationJob(input: {
   readonly jobId: string;
@@ -35,13 +49,7 @@ export async function processChartCalculationJob(input: {
       now: input.now.toISOString()
     });
     if (!claim) throw new UnrecoverableError("Chart calculation job is stale");
-    const request: ChartNatalCalculationRequest = {
-      schemaVersion: "chart-request.v1",
-      method: "natal",
-      settings: chartSettingsSchema.parse(claim.settingsSnapshot),
-      inputSnapshot: chartInputSnapshotSchema.parse(claim.inputSnapshot)
-    };
-    const result = await input.engine.calculateNatal(request);
+    const result = await calculateChartResult({ claim, engine: input.engine });
     const completed = await input.store.complete({
       jobId: input.jobId,
       result,
@@ -71,6 +79,36 @@ export async function processChartCalculationJob(input: {
     }
     throw error;
   }
+}
+
+async function calculateChartResult(input: {
+  readonly claim: Awaited<ReturnType<ChartJobProcessingStore["claimForProcessing"]>>;
+  readonly engine: ChartEngineClient;
+}): Promise<StoredChartCalculationPayload> {
+  const claim = input.claim;
+  if (!claim) throw new UnrecoverableError("Chart calculation job is stale");
+  const settings = chartSettingsSchema.parse(claim.settingsSnapshot);
+  if (claim.method === "natal") {
+    const request: ChartNatalCalculationRequest = {
+      schemaVersion: "chart-request.v1",
+      method: "natal",
+      settings,
+      inputSnapshot: chartInputSnapshotSchema.parse(claim.inputSnapshot)
+    };
+    return input.engine.calculateNatal(request);
+  }
+  if (claim.method === "transit") {
+    const snapshots = transitJobInputSnapshotSchema.parse(claim.inputSnapshot);
+    const request: ChartTransitCalculationRequest = {
+      schemaVersion: "chart-request.v1",
+      method: "transit",
+      settings,
+      inputSnapshot: snapshots.inputSnapshot,
+      transitSnapshot: snapshots.transitSnapshot
+    };
+    return input.engine.calculateTransit(request);
+  }
+  throw new UnrecoverableError("Unsupported chart calculation method");
 }
 
 function createUnrecoverableError(error: Error): UnrecoverableError {

@@ -1,8 +1,16 @@
-import type { ChartAspect, ChartPoint, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import type {
+  ChartAspect,
+  ChartPoint,
+  ChartTransitAspect,
+  StoredChartCalculationPayload
+} from "@elevenhouse/contracts";
 import {
   formatAspectTypeDisplay,
   formatDegree,
   formatHouseSignDisplay,
+  getPrimaryChartRenderResult,
+  getTransitChartRenderResult,
+  getTransitChartResult,
   getChartPointDisplayLabel,
   getChartPointSymbol,
   romanHouses
@@ -33,11 +41,19 @@ export type ChartWheelProps = {
 };
 
 export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelProps) {
-  const houses = result?.result.houses ?? [];
-  const points = result?.result.points ?? [];
+  const renderResult = result ? getPrimaryChartRenderResult(result) : null;
+  const transitResult = result ? getTransitChartResult(result) : null;
+  const transitRenderResult = result ? getTransitChartRenderResult(result) : null;
+  const houses = renderResult?.houses ?? [];
+  const points = renderResult?.points ?? [];
+  const transitPoints = transitRenderResult?.points ?? [];
   const ascLongitude = houses.find((house) => house.number === 1)?.longitude ?? 0;
   const markerLongitudes = spreadPointLongitudes(points.filter((point) => !axisPointIds.has(point.id)));
-  const hoveredPoint = points.find((point) => point.id === hoveredPointId) ?? null;
+  const transitMarkerLongitudes = spreadPointLongitudes(
+    transitPoints.filter((point) => !axisPointIds.has(point.id)),
+    9
+  );
+  const hoveredPoint = getHoveredPoint({ hoveredPointId, points, transitPoints });
 
   return (
     <div className={styles.wheelStage} aria-label="Натальная карта">
@@ -117,7 +133,7 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
             </g>
           );
         })}
-        {result?.result.aspects.map((aspect, index) => {
+        {renderResult?.aspects.map((aspect, index) => {
           const a = points.find((point) => point.id === aspect.pointA);
           const b = points.find((point) => point.id === aspect.pointB);
           if (!a || !b) return null;
@@ -143,6 +159,46 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
               data-aspect-tone={tone}
               data-hovered={involved ? "true" : "false"}
               data-testid={`chart-aspect-${aspect.type}`}
+              x1={start.x}
+              y1={start.y}
+              x2={end.x}
+              y2={end.y}
+            />
+          );
+        })}
+        {transitResult?.result.aspectsToNatal.map((aspect, index) => {
+          const transitPoint = transitPoints.find((point) => point.id === aspect.transitPoint);
+          const natalPoint = points.find((point) => point.id === aspect.natalPoint);
+          if (!transitPoint || !natalPoint) return null;
+          const start = polar(
+            transitMarkerLongitudes[transitPoint.id] ?? transitPoint.longitude,
+            178,
+            ascLongitude
+          );
+          const end = polar(natalPoint.longitude, 132, ascLongitude);
+          const tone = getAspectTone(aspect);
+          const transitHoverId = getTransitHoverPointId(transitPoint.id);
+          const involved = Boolean(
+            hoveredPointId &&
+              (hoveredPointId === transitHoverId || hoveredPointId === aspect.natalPoint)
+          );
+          const dimmed = Boolean(hoveredPointId && !involved);
+
+          return (
+            <line
+              key={`transit-${aspect.transitPoint}-${aspect.natalPoint}-${index}`}
+              className={[
+                styles.aspectLine,
+                aspectToneClasses[tone],
+                styles.transitAspectLine,
+                involved ? styles.aspectLineHovered : "",
+                dimmed ? styles.aspectLineDimmed : ""
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              data-aspect-tone={tone}
+              data-hovered={involved ? "true" : "false"}
+              data-testid={`chart-transit-aspect-${aspect.type}`}
               x1={start.x}
               y1={start.y}
               x2={end.x}
@@ -183,6 +239,40 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
             </g>
           );
         })}
+        {transitPoints.map((point) => {
+          if (axisPointIds.has(point.id)) return null;
+          const exact = polar(point.longitude, 166, ascLongitude);
+          const marker = polar(transitMarkerLongitudes[point.id] ?? point.longitude, 178, ascLongitude);
+          const hoverId = getTransitHoverPointId(point.id);
+          const hovered = hoveredPointId === hoverId;
+
+          return (
+            <g
+              aria-label={`Транзитный ${getChartPointDisplayLabel(point.id, point.label)} на карте`}
+              className={styles.pointMarker}
+              data-hovered={hovered ? "true" : "false"}
+              data-testid={`chart-transit-point-${point.id}`}
+              key={`transit-${point.id}`}
+              onBlur={() => onHoverPoint(null)}
+              onFocus={() => onHoverPoint(hoverId)}
+              onMouseEnter={() => onHoverPoint(hoverId)}
+              onMouseLeave={() => onHoverPoint(null)}
+              role="button"
+              tabIndex={0}
+            >
+              <line className={styles.transitPlanetGuide} x1={exact.x} y1={exact.y} x2={marker.x} y2={marker.y} />
+              <circle className={hovered ? styles.transitPointDotHovered : styles.transitPointDot} cx={marker.x} cy={marker.y} r={hovered ? "17" : "14"} />
+              <text className={hovered ? styles.pointLabelHovered : styles.pointLabel} x={marker.x} y={marker.y}>
+                {getChartPointSymbol(point.id, point.label)}
+              </text>
+              {point.retrograde ? (
+                <text className={styles.retroLabel} x={marker.x + 13} y={marker.y - 11}>
+                  R
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
       </svg>
       <div className={styles.hoverDetailSlot} data-testid="chart-hover-detail-slot">
         <HoverPointDetail point={hoveredPoint} result={result} />
@@ -202,8 +292,24 @@ function HoverPointDetail({
     return <p className={styles.wheelHint}>Наведите на планету — детали, дом и аспекты</p>;
   }
 
-  const aspects = result.result.aspects
-    .filter((aspect) => aspect.pointA === point.id || aspect.pointB === point.id)
+  const renderResult = getPrimaryChartRenderResult(result);
+  const transitResult = getTransitChartResult(result);
+  const isTransitPoint = point.id.startsWith("transit:");
+  const pointId = isTransitPoint ? point.id.slice("transit:".length) : point.id;
+  const aspects = isTransitPoint && transitResult
+    ? transitResult.result.aspectsToNatal
+        .filter((aspect) => aspect.transitPoint === pointId)
+        .map((aspect) => ({
+          pointA: aspect.transitPoint,
+          pointB: aspect.natalPoint,
+          type: aspect.type,
+          angle: aspect.angle,
+          orb: aspect.orb,
+          applying: aspect.applying,
+          strength: aspect.strength
+        }))
+    : renderResult.aspects
+        .filter((aspect) => aspect.pointA === point.id || aspect.pointB === point.id)
     .slice(0, 6);
 
   return (
@@ -213,7 +319,8 @@ function HoverPointDetail({
       </span>
       <div className={styles.hoverDetailText}>
         <strong>
-          {getChartPointDisplayLabel(point.id, point.label)}
+          {isTransitPoint ? "Транзитный " : ""}
+          {getChartPointDisplayLabel(pointId, point.label)}
           {point.retrograde ? <b> R ретроград</b> : null}
         </strong>
         <span>
@@ -237,6 +344,32 @@ function HoverPointDetail({
       </div>
     </div>
   );
+}
+
+function getHoveredPoint({
+  hoveredPointId,
+  points,
+  transitPoints
+}: {
+  readonly hoveredPointId: string | null;
+  readonly points: readonly ChartPoint[];
+  readonly transitPoints: readonly ChartPoint[];
+}): ChartPoint | null {
+  if (!hoveredPointId) {
+    return null;
+  }
+  if (hoveredPointId.startsWith("transit:")) {
+    const pointId = hoveredPointId.slice("transit:".length);
+    const point = transitPoints.find((candidate) => candidate.id === pointId);
+
+    return point ? { ...point, id: hoveredPointId } : null;
+  }
+
+  return points.find((point) => point.id === hoveredPointId) ?? null;
+}
+
+function getTransitHoverPointId(pointId: string): string {
+  return `transit:${pointId}`;
 }
 
 function polar(
@@ -302,7 +435,7 @@ function arcDistance(from: number, to: number): number {
   return normalizeLongitude(to - from);
 }
 
-function getAspectTone(aspect: ChartAspect): "hard" | "neutral" | "soft" {
+function getAspectTone(aspect: ChartAspect | ChartTransitAspect): "hard" | "neutral" | "soft" {
   if (aspect.type === "square" || aspect.type === "opposition" || aspect.type === "semi-square") {
     return "hard";
   }

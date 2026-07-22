@@ -2,7 +2,7 @@ import type { MatrixReportContent } from "@elevenhouse/domain";
 import type {
   DictionaryEntrySource,
   NumerologyResult,
-  StoredChartCalculationPayload
+  StoredChartNatalCalculationPayload
 } from "@elevenhouse/contracts";
 
 export type MatrixPdfDocument = {
@@ -26,7 +26,7 @@ export type ChartPdfDocument = {
   readonly locale: "ru" | "en";
   readonly createdAt: string;
   readonly calculationTitle: string;
-  readonly result: StoredChartCalculationPayload;
+  readonly result: StoredChartNatalCalculationPayload;
   readonly interpretations: readonly ChartPdfInterpretation[];
 };
 

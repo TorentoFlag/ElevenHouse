@@ -3,6 +3,7 @@ from math import ceil
 from typing import Any
 
 from kerykeion import AspectsFactory, AstrologicalSubjectFactory
+from kerykeion.chart_data_factory import ChartDataFactory
 
 from chart_engine.schemas import (
     ChartAspect,
@@ -10,6 +11,8 @@ from chart_engine.schemas import (
     ChartHouse,
     ChartPoint,
     ChartRenderResult,
+    ChartTransitAspect,
+    ChartTransitRenderResult,
     ChartWarning,
     NatalRequest,
     PlanetaryPosition,
@@ -17,6 +20,8 @@ from chart_engine.schemas import (
     PlanetaryPositionsRequest,
     ProviderMetadata,
     StoredChartCalculationPayload,
+    StoredChartTransitCalculationPayload,
+    TransitRequest,
 )
 
 HOUSE_SYSTEMS = {
@@ -176,32 +181,26 @@ ASPECT_ORBS = {
 
 
 def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
-    year, month, day = [int(part) for part in request.inputSnapshot.birthDate.split("-")]
-    hour, minute = [int(part) for part in request.inputSnapshot.birthTime.split(":")]
-    house_system = HOUSE_SYSTEMS[request.settings.houseSystem]
-
     active_points = _active_points(request.settings.nodeType)
-
-    subject = AstrologicalSubjectFactory.from_birth_data(
+    subject = _create_subject(
         name="subject",
-        year=year,
-        month=month,
-        day=day,
-        hour=hour,
-        minute=minute,
-        lng=request.inputSnapshot.longitude,
-        lat=request.inputSnapshot.latitude,
-        tz_str=request.inputSnapshot.timezone,
-        online=False,
-        zodiac_type="Tropical",
-        houses_system_identifier=house_system,
+        date=request.inputSnapshot.birthDate,
+        time=request.inputSnapshot.birthTime,
+        timezone=request.inputSnapshot.timezone,
+        latitude=request.inputSnapshot.latitude,
+        longitude=request.inputSnapshot.longitude,
+        house_system=request.settings.houseSystem,
         active_points=active_points,
-        suppress_geonames_warning=True,
     )
 
-    point_fields = PLANET_ATTRIBUTES | ANGLE_ATTRIBUTES | NODE_ATTRIBUTES[request.settings.nodeType]
-    points = [_map_point(point_id, label, getattr(subject, attr)) for point_id, (label, attr) in point_fields.items()]
-    houses = [_map_house(index + 1, getattr(subject, attr)) for index, attr in enumerate(HOUSE_ATTRIBUTES)]
+    result = _map_render_result(
+        subject,
+        request.settings.nodeType,
+        request.settings.aspectPreset,
+        request.settings.orbMultiplier,
+        active_points,
+        _map_warnings(request),
+    )
 
     return StoredChartCalculationPayload(
         schemaVersion="chart-result.v1",
@@ -213,17 +212,80 @@ def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
         ),
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
-        result=ChartRenderResult(
-            points=points,
-            houses=houses,
-            aspects=_map_aspects(
-                subject,
+        result=result,
+    )
+
+
+def calculate_transit(request: TransitRequest) -> StoredChartTransitCalculationPayload:
+    active_points = _active_points(request.settings.nodeType)
+    natal_subject = _create_subject(
+        name="natal",
+        date=request.inputSnapshot.birthDate,
+        time=request.inputSnapshot.birthTime,
+        timezone=request.inputSnapshot.timezone,
+        latitude=request.inputSnapshot.latitude,
+        longitude=request.inputSnapshot.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+    transit_subject = _create_subject(
+        name="transit",
+        date=request.transitSnapshot.date,
+        time=request.transitSnapshot.time,
+        timezone=request.transitSnapshot.timezone,
+        latitude=request.transitSnapshot.latitude,
+        longitude=request.transitSnapshot.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+    allowed_aspects = (
+        MAJOR_ASPECTS
+        if request.settings.aspectPreset == "major"
+        else MAJOR_ASPECTS | MINOR_ASPECTS
+    )
+    active_aspects = _active_aspects(allowed_aspects, request.settings.orbMultiplier)
+    transit_data = ChartDataFactory.create_transit_chart_data(
+        natal_subject,
+        transit_subject,
+        active_points=active_points,
+        active_aspects=active_aspects,
+    )
+    warnings = _map_warnings(request)
+
+    return StoredChartTransitCalculationPayload(
+        schemaVersion="chart-result.v1",
+        method="transit",
+        provider=ProviderMetadata(
+            name="kerykeion",
+            version=version("kerykeion"),
+            ephemeris="swiss-ephemeris",
+        ),
+        settings=request.settings,
+        inputSnapshot=request.inputSnapshot,
+        transitSnapshot=request.transitSnapshot,
+        result=ChartTransitRenderResult(
+            natal=_map_render_result(
+                natal_subject,
+                request.settings.nodeType,
                 request.settings.aspectPreset,
                 request.settings.orbMultiplier,
                 active_points,
+                warnings,
             ),
-            distributions=_map_distributions(subject),
-            warnings=_map_warnings(request),
+            transit=_map_render_result(
+                transit_subject,
+                request.settings.nodeType,
+                request.settings.aspectPreset,
+                request.settings.orbMultiplier,
+                active_points,
+                [],
+            ),
+            aspectsToNatal=_map_transit_aspects(
+                transit_data.aspects,
+                allowed_aspects,
+                request.settings.orbMultiplier,
+            ),
+            warnings=warnings,
         ),
     )
 
@@ -280,6 +342,61 @@ def _map_point(point_id: str, label: str, model: Any) -> ChartPoint:
         signDegree=float(model.position),
         house=_house_number(model.house),
         retrograde=model.retrograde,
+    )
+
+
+def _create_subject(
+    *,
+    name: str,
+    date: str,
+    time: str,
+    timezone: str,
+    latitude: float,
+    longitude: float,
+    house_system: str,
+    active_points: list[str],
+) -> Any:
+    year, month, day = [int(part) for part in date.split("-")]
+    hour, minute = [int(part) for part in time.split(":")]
+    return AstrologicalSubjectFactory.from_birth_data(
+        name=name,
+        year=year,
+        month=month,
+        day=day,
+        hour=hour,
+        minute=minute,
+        lng=longitude,
+        lat=latitude,
+        tz_str=timezone,
+        online=False,
+        zodiac_type="Tropical",
+        houses_system_identifier=HOUSE_SYSTEMS[house_system],
+        active_points=active_points,
+        suppress_geonames_warning=True,
+    )
+
+
+def _map_render_result(
+    subject: Any,
+    node_type: str,
+    aspect_preset: str,
+    orb_multiplier: float,
+    active_points: list[str],
+    warnings: list[ChartWarning],
+) -> ChartRenderResult:
+    point_fields = PLANET_ATTRIBUTES | ANGLE_ATTRIBUTES | NODE_ATTRIBUTES[node_type]
+    points = [
+        _map_point(point_id, label, getattr(subject, attr))
+        for point_id, (label, attr) in point_fields.items()
+    ]
+    houses = [_map_house(index + 1, getattr(subject, attr)) for index, attr in enumerate(HOUSE_ATTRIBUTES)]
+
+    return ChartRenderResult(
+        points=points,
+        houses=houses,
+        aspects=_map_aspects(subject, aspect_preset, orb_multiplier, active_points),
+        distributions=_map_distributions(subject),
+        warnings=warnings,
     )
 
 
@@ -348,6 +465,49 @@ def _map_aspects(
     return aspects
 
 
+def _map_transit_aspects(
+    source_aspects: list[Any],
+    allowed_aspects: set[str],
+    orb_multiplier: float,
+) -> list[ChartTransitAspect]:
+    aspects = []
+    seen_aspects = set()
+
+    for aspect in source_aspects:
+        if aspect.aspect not in allowed_aspects:
+            continue
+        point_a = POINT_NAME_TO_ID.get(aspect.p1_name)
+        point_b = POINT_NAME_TO_ID.get(aspect.p2_name)
+        if point_a is None or point_b is None:
+            continue
+        if aspect.p1_owner == "transit" and aspect.p2_owner == "natal":
+            transit_point, natal_point = point_a, point_b
+        elif aspect.p1_owner == "natal" and aspect.p2_owner == "transit":
+            transit_point, natal_point = point_b, point_a
+        else:
+            continue
+        orb_limit = _orb_limit(aspect.aspect, orb_multiplier)
+        if float(aspect.orbit) > orb_limit:
+            continue
+        aspect_key = (transit_point, natal_point, aspect.aspect)
+        if aspect_key in seen_aspects:
+            continue
+        seen_aspects.add(aspect_key)
+        aspects.append(
+            ChartTransitAspect(
+                transitPoint=transit_point,
+                natalPoint=natal_point,
+                type=aspect.aspect,
+                angle=float(aspect.aspect_degrees),
+                orb=float(aspect.orbit),
+                applying=_is_applying(aspect.aspect_movement),
+                strength=_aspect_strength(float(aspect.orbit), orb_limit),
+            )
+        )
+
+    return aspects
+
+
 def _active_aspects(allowed_aspects: set[str], orb_multiplier: float) -> list[dict[str, float | str]]:
     return [
         {"name": name, "orb": ceil(_orb_limit(name, orb_multiplier))}
@@ -372,7 +532,7 @@ def _map_distributions(subject: Any) -> ChartDistributions:
     return ChartDistributions(elements=elements, modalities=modalities, polarity=polarity)
 
 
-def _map_warnings(request: NatalRequest) -> list[ChartWarning]:
+def _map_warnings(request: NatalRequest | TransitRequest) -> list[ChartWarning]:
     warnings = []
     if request.inputSnapshot.birthTimePrecision == "approximate":
         warnings.append(

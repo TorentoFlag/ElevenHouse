@@ -14,8 +14,10 @@ import {
 import {
   formatChartPointPosition,
   formatHouseSignDisplay,
+  getChartWarnings,
   getChartPointDisplayLabel,
-  getChartPointSymbol
+  getChartPointSymbol,
+  getPrimaryChartRenderResult
 } from "../model/chartDisplay";
 import { ChartSettingsPanel } from "./ChartSettingsPanel";
 import { ChartTables, type ChartPanelTab } from "./ChartTables";
@@ -23,6 +25,11 @@ import { ChartWheel } from "./ChartWheel";
 import styles from "./ChartEnginePage.module.css";
 
 export type ChartEnginePageJobState = "idle" | "calculating" | "succeeded" | "failed";
+export type ChartEngineMode = "natal" | "transit";
+export type ChartTransitMomentInput = {
+  readonly date: string;
+  readonly time: string;
+};
 
 export type ChartEnginePageProps = {
   readonly selectedClient: ClientSelectOption | null;
@@ -33,8 +40,13 @@ export type ChartEnginePageProps = {
   readonly isResultStale?: boolean;
   readonly locale?: DictionaryLocale;
   readonly settings: ChartSettings;
+  readonly mode?: ChartEngineMode;
+  readonly transitMoment?: ChartTransitMomentInput;
   readonly onSettingsChange: (settings: ChartSettings) => void;
   readonly onCreateNatalJob: () => void | Promise<void>;
+  readonly onCreateTransitJob?: () => void | Promise<void>;
+  readonly onTransitMomentChange?: (moment: ChartTransitMomentInput) => void;
+  readonly onModeChange?: (mode: ChartEngineMode) => void;
   readonly onSelectClient?: (client: ClientSelectOption) => void;
   readonly onSaveBirthData?: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
   readonly isSavingBirthData?: boolean;
@@ -55,8 +67,13 @@ export function ChartEnginePage({
   isResultStale = false,
   locale = "ru",
   settings,
+  mode = "natal",
+  transitMoment,
   onSettingsChange,
   onCreateNatalJob,
+  onCreateTransitJob,
+  onTransitMomentChange,
+  onModeChange,
   onSelectClient,
   onSaveBirthData,
   isSavingBirthData = false,
@@ -69,7 +86,13 @@ export function ChartEnginePage({
 }: ChartEnginePageProps) {
   const readiness = getChartBirthDataReadiness(selectedClient?.birthData);
   const isBirthDataBlocked = Boolean(selectedClient && !readiness.ready);
-  const displayResult = isBirthDataBlocked ? null : result;
+  const [localMode, setLocalMode] = useState<ChartEngineMode>(mode);
+  const [localTransitMoment, setLocalTransitMoment] = useState<ChartTransitMomentInput>(
+    transitMoment ?? { date: "", time: "" }
+  );
+  const activeMode = onModeChange ? mode : localMode;
+  const activeTransitMoment = transitMoment ?? localTransitMoment;
+  const displayResult = isBirthDataBlocked || result?.method !== activeMode ? null : result;
   const isCurrentResultCalculated = Boolean(
     displayResult && !isResultStale && jobState === "succeeded"
   );
@@ -81,7 +104,8 @@ export function ChartEnginePage({
     errorMessage,
     isBusy,
     isCurrentResultCalculated,
-    isResultStale
+    isResultStale,
+    mode: activeMode
   });
   const [activePanelTab, setActivePanelTab] = useState<ChartPanelTab>("planets");
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
@@ -95,7 +119,7 @@ export function ChartEnginePage({
             ☉
           </span>
           <div>
-            <p>Натальная карта</p>
+            <p>{activeMode === "transit" ? "Транзитная карта" : "Натальная карта"}</p>
             <h1>Движок карт</h1>
           </div>
         </div>
@@ -120,14 +144,29 @@ export function ChartEnginePage({
           )}
         </div>
         <nav className={styles.modeTabs} aria-label="Тип карты">
-          <button className={styles.modeActive} type="button">
+          <button
+            className={activeMode === "natal" ? styles.modeActive : styles.modeButton}
+            type="button"
+            onClick={() =>
+              setChartMode({
+                mode: "natal",
+                onModeChange,
+                setLocalMode
+              })
+            }
+          >
             Натал
           </button>
           <button
-            className={styles.modeDisabled}
+            className={activeMode === "transit" ? styles.modeActive : styles.modeButton}
             type="button"
-            disabled
-            title="Будет подключено после транзитного движка"
+            onClick={() =>
+              setChartMode({
+                mode: "transit",
+                onModeChange,
+                setLocalMode
+              })
+            }
           >
             Транзиты
           </button>
@@ -157,11 +196,24 @@ export function ChartEnginePage({
           <span>{chartViewState.detail}</span>
         </div>
         <div className={styles.toolbarSpacer} />
+        {activeMode === "transit" ? (
+          <TransitMomentFields
+            disabled={isBusy}
+            value={activeTransitMoment}
+            onChange={(nextMoment) =>
+              updateTransitMoment({
+                nextMoment,
+                onTransitMomentChange,
+                setLocalTransitMoment
+              })
+            }
+          />
+        ) : null}
         <button
           className={styles.calculateButton}
           type="button"
           disabled={!chartViewState.canCalculate}
-          onClick={() => void onCreateNatalJob()}
+          onClick={() => void (activeMode === "transit" ? onCreateTransitJob?.() : onCreateNatalJob())}
         >
           <span aria-hidden="true">⚡</span>
           {chartViewState.actionLabel}
@@ -175,8 +227,8 @@ export function ChartEnginePage({
         <button
           className={styles.toolButton}
           type="button"
-          disabled={pdfDisabled}
-          title={pdfTitle}
+          disabled={activeMode === "transit" || pdfDisabled}
+          title={activeMode === "transit" ? "PDF для транзитов будет отдельным контуром" : pdfTitle}
           onClick={() => void onPdf?.()}
         >
           {pdfLabel}
@@ -215,11 +267,11 @@ export function ChartEnginePage({
               />
             ) : null}
           </section>
-          {displayResult?.result.warnings.length ? (
+          {displayResult && getChartWarnings(displayResult).length ? (
             <section className={styles.railGroup}>
               <h2>Предупреждения</h2>
               <div className={styles.warningStack}>
-                {displayResult.result.warnings.map((warning) => (
+                {getChartWarnings(displayResult).map((warning) => (
                   <div className={styles.chartWarning} key={warning.code}>
                     {formatChartWarning(warning)}
                   </div>
@@ -249,8 +301,10 @@ export function ChartEnginePage({
           {displayResult ? <DominantsSummary result={displayResult} /> : null}
           <section className={styles.railGroup}>
             <h2>Ретроградные</h2>
-            {displayResult?.result.points.filter((point) => point.retrograde).length ? (
-              displayResult.result.points
+            {displayResult &&
+            getPrimaryChartRenderResult(displayResult).points.filter((point) => point.retrograde)
+              .length ? (
+              getPrimaryChartRenderResult(displayResult).points
                 .filter((point) => point.retrograde)
                 .map((point) => (
                   <div className={styles.retroPill} key={point.id}>
@@ -274,6 +328,7 @@ export function ChartEnginePage({
             errorMessage={errorMessage}
             result={displayResult}
             isResultStale={isResultStale}
+            mode={activeMode}
             missingBirthData={isBirthDataBlocked && !readiness.ready ? readiness.missing : []}
             pdfErrorMessage={pdfErrorMessage}
           />
@@ -347,7 +402,8 @@ function getChartViewState({
   errorMessage,
   isBusy,
   isCurrentResultCalculated,
-  isResultStale
+  isResultStale,
+  mode
 }: {
   readonly selectedClient: ClientSelectOption | null;
   readonly readiness: ChartBirthDataReadiness;
@@ -357,6 +413,7 @@ function getChartViewState({
   readonly isBusy: boolean;
   readonly isCurrentResultCalculated: boolean;
   readonly isResultStale: boolean;
+  readonly mode: ChartEngineMode;
 }): ChartViewState {
   if (!selectedClient) {
     return {
@@ -431,7 +488,10 @@ function getChartViewState({
   if (isCurrentResultCalculated) {
     return {
       status: "Актуальная карта",
-      detail: "Натальная карта рассчитана и привязана к клиенту.",
+      detail:
+        mode === "transit"
+          ? "Транзиты рассчитаны по наталу клиента и выбранному моменту."
+          : "Натальная карта рассчитана и привязана к клиенту.",
       actionLabel: "Актуальна",
       canCalculate: false,
       tone: "success"
@@ -450,14 +510,19 @@ function getChartViewState({
 
   return {
     status: "Готово к расчёту",
-    detail: "Данные рождения и настройки готовы для натальной карты.",
-    actionLabel: "Рассчитать",
+    detail:
+      mode === "transit"
+        ? "Натал клиента и момент транзита готовы для расчёта."
+        : "Данные рождения и настройки готовы для натальной карты.",
+    actionLabel: mode === "transit" ? "Рассчитать транзиты" : "Рассчитать",
     canCalculate: !isBusy,
     tone: "ready"
   };
 }
 
 function DistributionSummary({ result }: { readonly result: StoredChartCalculationPayload }) {
+  const renderResult = getPrimaryChartRenderResult(result);
+
   return (
     <section className={styles.railGroup}>
       <h2>Стихии</h2>
@@ -466,7 +531,7 @@ function DistributionSummary({ result }: { readonly result: StoredChartCalculati
           <DistributionBar
             key={item.key}
             label={item.label}
-            value={result.result.distributions.elements[item.key]}
+            value={renderResult.distributions.elements[item.key]}
             max={10}
           />
         ))}
@@ -477,7 +542,7 @@ function DistributionSummary({ result }: { readonly result: StoredChartCalculati
           <DistributionBar
             key={item.key}
             label={item.label}
-            value={result.result.distributions.modalities[item.key]}
+            value={renderResult.distributions.modalities[item.key]}
             max={10}
           />
         ))}
@@ -488,7 +553,7 @@ function DistributionSummary({ result }: { readonly result: StoredChartCalculati
           <DistributionBar
             key={item.key}
             label={item.label}
-            value={result.result.distributions.polarity[item.key]}
+            value={renderResult.distributions.polarity[item.key]}
             max={10}
           />
         ))}
@@ -699,6 +764,7 @@ function StatusCard({
   jobState,
   errorMessage,
   missingBirthData,
+  mode,
   result,
   isResultStale,
   pdfErrorMessage
@@ -706,6 +772,7 @@ function StatusCard({
   readonly jobState: ChartEnginePageJobState;
   readonly errorMessage: string | null;
   readonly missingBirthData: readonly string[];
+  readonly mode: ChartEngineMode;
   readonly result: StoredChartCalculationPayload | null;
   readonly isResultStale: boolean;
   readonly pdfErrorMessage: string | null;
@@ -713,7 +780,7 @@ function StatusCard({
   if (jobState === "calculating") {
     return (
       <div className={styles.statusCard} role="status">
-        <strong>Рассчитываем карту</strong>
+        <strong>{mode === "transit" ? "Рассчитываем транзиты" : "Рассчитываем карту"}</strong>
         <span>Берём данные рождения из CRM и строим canonical natal result.</span>
       </div>
     );
@@ -739,9 +806,11 @@ function StatusCard({
   if (!result) {
     return (
       <div className={styles.statusCard}>
-        <strong>Готово к расчёту натала</strong>
+        <strong>{mode === "transit" ? "Готово к расчёту транзитов" : "Готово к расчёту натала"}</strong>
         <span>
-          Выберите клиента с полной датой, временем, часовым поясом и координатами рождения.
+          {mode === "transit"
+            ? "Выберите клиента и момент транзита: дата, время и место будут отправлены в backend-контур."
+            : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
         </span>
       </div>
     );
@@ -751,8 +820,9 @@ function StatusCard({
       <div className={styles.statusCard} role="status">
         <strong>Карта устарела</strong>
         <span>
-          Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и
-          таблицы.
+          {mode === "transit"
+            ? "Данные рождения, настройки или момент транзита изменились. Пересчитайте карту."
+            : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
         </span>
       </div>
     );
@@ -760,7 +830,7 @@ function StatusCard({
 
   return (
     <div className={styles.statusCard}>
-      <strong>Натальная карта рассчитана</strong>
+      <strong>{mode === "transit" ? "Транзитная карта рассчитана" : "Натальная карта рассчитана"}</strong>
       <span>
         Провайдер: {result.provider.name} · {result.provider.ephemeris}
       </span>
@@ -776,10 +846,11 @@ function getBigThree(
   readonly symbol: string;
   readonly value: string;
 }[] {
-  const points = result.result.points;
+  const renderResult = getPrimaryChartRenderResult(result);
+  const points = renderResult.points;
   const sun = points.find((point) => point.id === "sun");
   const moon = points.find((point) => point.id === "moon");
-  const ascendant = result.result.houses.find((house) => house.number === 1);
+  const ascendant = renderResult.houses.find((house) => house.number === 1);
 
   return [
     { label: "Солнце", symbol: "☉︎", value: sun ? formatChartPointPosition(sun) : "—" },
@@ -802,11 +873,12 @@ function getDominantPoints(
   readonly symbol: string;
   readonly count: number;
 }[] {
-  const pointOrder = new Map(result.result.points.map((point, index) => [point.id, index]));
-  const pointById = new Map(result.result.points.map((point) => [point.id, point]));
+  const renderResult = getPrimaryChartRenderResult(result);
+  const pointOrder = new Map(renderResult.points.map((point, index) => [point.id, index]));
+  const pointById = new Map(renderResult.points.map((point) => [point.id, point]));
   const counts = new Map<string, number>();
 
-  for (const aspect of result.result.aspects) {
+  for (const aspect of renderResult.aspects) {
     if (dominantPointIds.has(aspect.pointA)) {
       counts.set(aspect.pointA, (counts.get(aspect.pointA) ?? 0) + 1);
     }
@@ -834,7 +906,7 @@ function getDominantPoints(
 }
 
 function formatChartWarning(
-  warning: StoredChartCalculationPayload["result"]["warnings"][number]
+  warning: ReturnType<typeof getChartWarnings>[number]
 ): string {
   if (warning.code === "BIRTH_TIME_APPROXIMATE") {
     return "Время рождения указано примерно: дома и углы могут смещаться.";
@@ -880,3 +952,70 @@ const panelTabs: readonly { readonly id: ChartPanelTab; readonly label: string }
   { id: "houses", label: "Дома" },
   { id: "interpretations", label: "Трактовки" }
 ];
+
+function setChartMode({
+  mode,
+  onModeChange,
+  setLocalMode
+}: {
+  readonly mode: ChartEngineMode;
+  readonly onModeChange?: (mode: ChartEngineMode) => void;
+  readonly setLocalMode: (mode: ChartEngineMode) => void;
+}) {
+  if (onModeChange) {
+    onModeChange(mode);
+    return;
+  }
+  setLocalMode(mode);
+}
+
+function TransitMomentFields({
+  disabled,
+  onChange,
+  value
+}: {
+  readonly disabled: boolean;
+  readonly value: ChartTransitMomentInput;
+  readonly onChange: (moment: ChartTransitMomentInput) => void;
+}) {
+  return (
+    <div className={styles.transitMomentFields}>
+      <label>
+        <span>Дата транзита</span>
+        <input
+          aria-label="Дата транзита"
+          disabled={disabled}
+          type="date"
+          value={value.date}
+          onChange={(event) => onChange({ ...value, date: event.target.value })}
+        />
+      </label>
+      <label>
+        <span>Время транзита</span>
+        <input
+          aria-label="Время транзита"
+          disabled={disabled}
+          type="time"
+          value={value.time}
+          onChange={(event) => onChange({ ...value, time: event.target.value })}
+        />
+      </label>
+    </div>
+  );
+}
+
+function updateTransitMoment({
+  nextMoment,
+  onTransitMomentChange,
+  setLocalTransitMoment
+}: {
+  readonly nextMoment: ChartTransitMomentInput;
+  readonly onTransitMomentChange?: (moment: ChartTransitMomentInput) => void;
+  readonly setLocalTransitMoment: (moment: ChartTransitMomentInput) => void;
+}) {
+  if (onTransitMomentChange) {
+    onTransitMomentChange(nextMoment);
+    return;
+  }
+  setLocalTransitMoment(nextMoment);
+}

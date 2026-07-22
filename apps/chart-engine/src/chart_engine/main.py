@@ -1,12 +1,18 @@
 from fastapi import FastAPI
 
-from chart_engine.kerykeion_adapter import calculate_natal, calculate_planetary_positions
+from chart_engine.kerykeion_adapter import (
+    calculate_natal,
+    calculate_planetary_positions,
+    calculate_transit,
+)
 from chart_engine.schemas import (
     HealthResponse,
     NatalRequest,
     PlanetaryPositionsPayload,
     PlanetaryPositionsRequest,
     StoredChartCalculationPayload,
+    StoredChartTransitCalculationPayload,
+    TransitRequest,
 )
 
 app = FastAPI(title="ElevenHouse Chart Engine", version="0.1.0")
@@ -25,6 +31,11 @@ def ready() -> HealthResponse:
 @app.post("/v1/natal", response_model=StoredChartCalculationPayload, response_model_exclude_none=True)
 def natal(request: NatalRequest) -> StoredChartCalculationPayload:
     return calculate_natal(request)
+
+
+@app.post("/v1/transits", response_model=StoredChartTransitCalculationPayload, response_model_exclude_none=True)
+def transits(request: TransitRequest) -> StoredChartTransitCalculationPayload:
+    return calculate_transit(request)
 
 
 @app.post("/v1/positions", response_model=PlanetaryPositionsPayload, response_model_exclude_none=True)

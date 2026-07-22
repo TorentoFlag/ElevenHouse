@@ -1,3 +1,9 @@
+import type {
+  ChartRenderResult,
+  StoredChartCalculationPayload,
+  StoredChartTransitCalculationPayload
+} from "@elevenhouse/contracts";
+
 export const romanHouses = [
   "",
   "I",
@@ -110,4 +116,26 @@ export function formatDegree(value: number): string {
   const minutes = Math.round((value - degrees) * 60);
 
   return `${degrees}°${String(minutes).padStart(2, "0")}'`;
+}
+
+export function getPrimaryChartRenderResult(
+  result: StoredChartCalculationPayload
+): ChartRenderResult {
+  return result.method === "transit" ? result.result.natal : result.result;
+}
+
+export function getTransitChartRenderResult(
+  result: StoredChartCalculationPayload
+): ChartRenderResult | null {
+  return result.method === "transit" ? result.result.transit : null;
+}
+
+export function getTransitChartResult(
+  result: StoredChartCalculationPayload
+): StoredChartTransitCalculationPayload | null {
+  return result.method === "transit" ? result : null;
+}
+
+export function getChartWarnings(result: StoredChartCalculationPayload) {
+  return result.method === "transit" ? result.result.warnings : result.result.warnings;
 }

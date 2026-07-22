@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ChartSettings, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import type {
+  ChartSettings,
+  StoredChartCalculationPayload,
+  StoredChartNatalCalculationPayload
+} from "@elevenhouse/contracts";
 import {
   getChartBirthDataReadiness,
   isChartResultStale,
@@ -85,6 +89,21 @@ describe("chartEngineState", () => {
       })
     ).toBe(true);
   });
+
+  it("marks a result stale when the visible chart mode differs from the stored method", () => {
+    expect(isChartResultStale(chartResult(), readyBirthData(), chartSettings(), "transit")).toBe(
+      true
+    );
+  });
+
+  it("marks a transit result stale when the selected transit moment changed", () => {
+    expect(
+      isChartResultStale(transitResult(), readyBirthData(), chartSettings(), "transit", {
+        date: "2026-07-23",
+        time: "14:30"
+      })
+    ).toBe(true);
+  });
 });
 
 function chartSettings(): ChartSettings {
@@ -110,8 +129,8 @@ function readyBirthData() {
 }
 
 function chartResult(
-  overrides: Partial<StoredChartCalculationPayload> = {}
-): StoredChartCalculationPayload {
+  overrides: Partial<StoredChartNatalCalculationPayload> = {}
+): StoredChartNatalCalculationPayload {
   return {
     schemaVersion: "chart-result.v1",
     method: "natal",
@@ -137,5 +156,30 @@ function chartResult(
       warnings: []
     },
     ...overrides
+  };
+}
+
+function transitResult(): StoredChartCalculationPayload {
+  const natal = chartResult().result;
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "transit",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: chartSettings(),
+    inputSnapshot: chartResult().inputSnapshot,
+    transitSnapshot: {
+      date: "2026-07-22",
+      time: "14:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964
+    },
+    result: {
+      natal,
+      transit: natal,
+      aspectsToNatal: [],
+      warnings: []
+    }
   };
 }

@@ -2,10 +2,14 @@ import {
   chartNatalCalculationRequestSchema,
   chartPlanetaryPositionsRequestSchema,
   chartPlanetaryPositionsResponseSchema,
+  chartTransitCalculationRequestSchema,
+  storedChartTransitCalculationPayloadSchema,
   storedChartCalculationPayloadSchema,
   type ChartNatalCalculationRequestInput,
   type ChartPlanetaryPositionsRequestInput,
   type ChartPlanetaryPositionsResponse,
+  type ChartTransitCalculationRequestInput,
+  type StoredChartTransitCalculationPayload,
   type StoredChartCalculationPayload
 } from "@elevenhouse/contracts";
 
@@ -46,6 +50,28 @@ export class ChartEngineHttpClient {
     const parsed = storedChartCalculationPayloadSchema.safeParse(data);
     if (!parsed.success) {
       throw new ChartEnginePermanentError("Chart engine returned invalid result", {
+        cause: parsed.error
+      });
+    }
+    return parsed.data;
+  }
+
+  async calculateTransit(
+    payload: ChartTransitCalculationRequestInput
+  ): Promise<StoredChartTransitCalculationPayload> {
+    const parsedPayload = chartTransitCalculationRequestSchema.parse(payload);
+    const response = await this.fetchFn(`${this.baseUrl}/v1/transits`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(parsedPayload)
+    });
+    if (!response.ok) {
+      throw new Error(`CHART_ENGINE_HTTP_${response.status}`);
+    }
+    const data: unknown = await response.json();
+    const parsed = storedChartTransitCalculationPayloadSchema.safeParse(data);
+    if (!parsed.success) {
+      throw new ChartEnginePermanentError("Chart engine returned invalid transit result", {
         cause: parsed.error
       });
     }

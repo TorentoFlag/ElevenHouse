@@ -4,6 +4,7 @@ import {
   chartPlanetaryPositionsResponseSchema,
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
+  chartTransitJobCreateRequestSchema,
   storedChartCalculationPayloadSchema
 } from "./charts";
 
@@ -32,6 +33,46 @@ describe("chart contracts", () => {
           nodeType: "true",
           aspectPreset: "major",
           orbMultiplier: 1
+        }
+      })
+    ).toThrow();
+  });
+
+  it("accepts a transit job request by client id, settings and transit moment", () => {
+    expect(
+      chartTransitJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        transit: {
+          date: "2026-07-22",
+          time: "14:30"
+        }
+      })
+    ).toMatchObject({
+      clientId: "00000000-0000-4000-8000-000000000001",
+      transit: { date: "2026-07-22", time: "14:30" }
+    });
+  });
+
+  it("rejects browser-supplied birth data in transit job requests", () => {
+    expect(() =>
+      chartTransitJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        birthDate: "1990-07-15",
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        transit: {
+          date: "2026-07-22",
+          time: "14:30"
         }
       })
     ).toThrow();
@@ -98,6 +139,99 @@ describe("chart contracts", () => {
           houses: [],
           aspects: [],
           distributions: { elements: {}, modalities: {}, polarity: {} },
+          warnings: []
+        }
+      })
+    ).toThrow();
+  });
+
+  it("accepts complete render data for a transit dual-wheel screen", () => {
+    const payload = storedChartCalculationPayloadSchema.parse({
+      schemaVersion: "chart-result.v1",
+      method: "transit",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: {
+        zodiac: "tropical",
+        houseSystem: "placidus",
+        nodeType: "true",
+        aspectPreset: "major",
+        orbMultiplier: 1
+      },
+      inputSnapshot: {
+        birthDate: "1990-07-15",
+        birthTime: "10:30",
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964,
+        birthTimePrecision: "exact"
+      },
+      transitSnapshot: {
+        date: "2026-07-22",
+        time: "14:30",
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964
+      },
+      result: {
+        natal: completeRenderResult(),
+        transit: completeRenderResult(),
+        aspectsToNatal: [
+          {
+            transitPoint: "jupiter",
+            natalPoint: "sun",
+            type: "trine",
+            angle: 120,
+            orb: 1.25,
+            applying: true,
+            strength: 0.79
+          }
+        ],
+        warnings: []
+      }
+    });
+
+    expect(payload.method).toBe("transit");
+    if (payload.method !== "transit") {
+      throw new Error("Expected transit chart payload");
+    }
+    expect(payload.result.aspectsToNatal[0]).toMatchObject({
+      transitPoint: "jupiter",
+      natalPoint: "sun"
+    });
+  });
+
+  it("rejects transit results without transit points", () => {
+    expect(() =>
+      storedChartCalculationPayloadSchema.parse({
+        schemaVersion: "chart-result.v1",
+        method: "transit",
+        provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        inputSnapshot: {
+          birthDate: "1990-07-15",
+          birthTime: "10:30",
+          timezone: "Europe/Rome",
+          latitude: 41.9028,
+          longitude: 12.4964,
+          birthTimePrecision: "exact"
+        },
+        transitSnapshot: {
+          date: "2026-07-22",
+          time: "14:30",
+          timezone: "Europe/Rome",
+          latitude: 41.9028,
+          longitude: 12.4964
+        },
+        result: {
+          natal: completeRenderResult(),
+          transit: { ...completeRenderResult(), points: [] },
+          aspectsToNatal: [],
           warnings: []
         }
       })

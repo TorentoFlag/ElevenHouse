@@ -4,9 +4,11 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
+  ChartRenderResult,
   ChartSettings,
   DictionaryEntriesResponse,
-  StoredChartCalculationPayload
+  StoredChartCalculationPayload,
+  StoredChartNatalCalculationPayload
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
@@ -46,7 +48,7 @@ describe("ChartEnginePage", () => {
     vi.restoreAllMocks();
   });
 
-  it("keeps non-natal modes disabled and starts only a CRM-backed natal calculation", async () => {
+  it("keeps future modes disabled and starts a CRM-backed natal calculation", async () => {
     const user = userEvent.setup();
     const onCreateNatalJob = vi.fn(async () => undefined);
     render(
@@ -62,11 +64,69 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: /транзиты/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /транзиты/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /прогрессии/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /ещё/i })).toBeDisabled();
     expect(screen.getByText(/вводить дату рождения вручную не нужно/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /рассчитать/i }));
 
     expect(onCreateNatalJob).toHaveBeenCalledOnce();
+  });
+
+  it("switches to transit mode and submits the transit calculation", async () => {
+    const user = userEvent.setup();
+    const onCreateTransitJob = vi.fn(async () => undefined);
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        mode="natal"
+        transitMoment={{ date: "2026-07-22", time: "14:30" }}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onCreateTransitJob={onCreateTransitJob}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: /транзиты/i }));
+
+    expect(screen.getByRole("button", { name: /рассчитать транзиты/i })).toBeEnabled();
+    expect(screen.getByLabelText("Дата транзита")).toHaveValue("2026-07-22");
+    expect(screen.getByLabelText("Время транзита")).toHaveValue("14:30");
+    await user.click(screen.getByRole("button", { name: /рассчитать транзиты/i }));
+
+    expect(onCreateTransitJob).toHaveBeenCalledOnce();
+  });
+
+  it("renders transit points and aspects as a dual-wheel result", async () => {
+    const user = userEvent.setup();
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={transitResult()}
+        errorMessage={null}
+        isBusy={false}
+        mode="transit"
+        transitMoment={{ date: "2026-07-22", time: "14:30" }}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("chart-transit-point-mars")).toBeInTheDocument();
+    expect(screen.getByTestId("chart-transit-aspect-opposition")).toBeInTheDocument();
+    expect(screen.getByText(/Транзитная карта рассчитана/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Аспекты" }));
+
+    expect(screen.getByText("Транзитные аспекты к наталу")).toBeInTheDocument();
+    expect(screen.getByText(/Марс — Солнце/i)).toBeInTheDocument();
   });
 
   it.each([
@@ -982,8 +1042,8 @@ function renderChartEnginePage(
 }
 
 function chartResult(
-  overrides: Partial<StoredChartCalculationPayload["result"]> = {}
-): StoredChartCalculationPayload {
+  overrides: Partial<ChartRenderResult> = {}
+): StoredChartNatalCalculationPayload {
   return {
     schemaVersion: "chart-result.v1",
     method: "natal",
@@ -1018,6 +1078,85 @@ function chartResult(
       },
       warnings: [],
       ...overrides
+    }
+  };
+}
+
+function transitResult(): StoredChartCalculationPayload {
+  const natal = chartResult({
+    points: [
+      {
+        id: "sun",
+        label: "Sun",
+        longitude: 113.1,
+        sign: "cancer",
+        signDegree: 23.1,
+        house: 10,
+        retrograde: false
+      },
+      {
+        id: "mars",
+        label: "Mars",
+        longitude: 31.8,
+        sign: "taurus",
+        signDegree: 1.8,
+        house: 8,
+        retrograde: false
+      }
+    ],
+    houses: [{ number: 1, longitude: 180, sign: "libra", signDegree: 0 }],
+    aspects: []
+  }).result;
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "transit",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    inputSnapshot: {
+      birthDate: "1990-07-15",
+      birthTime: "10:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964,
+      birthTimePrecision: "exact"
+    },
+    transitSnapshot: {
+      date: "2026-07-22",
+      time: "14:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964
+    },
+    result: {
+      natal,
+      transit: {
+        ...natal,
+        points: [
+          {
+            id: "mars",
+            label: "Mars",
+            longitude: 293.4,
+            sign: "capricorn",
+            signDegree: 23.4,
+            house: 4,
+            retrograde: false
+          }
+        ],
+        aspects: [],
+        warnings: []
+      },
+      aspectsToNatal: [
+        {
+          transitPoint: "mars",
+          natalPoint: "sun",
+          type: "opposition",
+          angle: 180,
+          orb: 1.2,
+          applying: true
+        }
+      ],
+      warnings: []
     }
   };
 }
