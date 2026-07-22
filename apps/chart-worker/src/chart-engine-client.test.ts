@@ -72,7 +72,59 @@ describe("ChartEngineHttpClient", () => {
 
     await expect(client.calculateNatal(request)).rejects.toBeInstanceOf(ChartEnginePermanentError);
   });
+
+  it("posts planetary positions input to the private chart engine", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => positionsResult
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012/",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculatePlanetaryPositions(positionsRequest)).resolves.toMatchObject({
+      schemaVersion: "chart-positions-result.v1",
+      positions: expect.arrayContaining([expect.objectContaining({ id: "sun" })])
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://chart-engine:8012/v1/positions",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("treats invalid planetary positions JSON as permanent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaVersion: "wrong" })
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculatePlanetaryPositions(positionsRequest)).rejects.toBeInstanceOf(
+      ChartEnginePermanentError
+    );
+  });
 });
+
+const positionsRequest = {
+  schemaVersion: "chart-positions-request.v1",
+  method: "planetary_positions",
+  settings: { zodiac: "tropical", nodeType: "true" },
+  inputSnapshot: request.inputSnapshot
+} as const;
+
+const positionsResult = {
+  schemaVersion: "chart-positions-result.v1",
+  method: "planetary_positions",
+  provider: result.provider,
+  settings: positionsRequest.settings,
+  inputSnapshot: request.inputSnapshot,
+  positions: completePlanetaryPositions()
+} as const;
 
 function completePoints() {
   return [
@@ -107,5 +159,25 @@ function completeHouses() {
     longitude: index * 30,
     sign: "aries",
     signDegree: 0
+  }));
+}
+
+function completePlanetaryPositions() {
+  return [
+    "sun",
+    "moon",
+    "north_node",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ].map((id, index) => ({
+    id,
+    longitude: index * 20,
+    retrograde: false
   }));
 }

@@ -48,3 +48,37 @@ def test_natal_returns_canonical_shape():
         "south_node",
     }.issubset(point_ids)
     assert len(data["result"]["houses"]) == 12
+
+
+def test_positions_returns_human_design_base_bodies():
+    client = TestClient(app)
+    payload = {
+        "schemaVersion": "chart-positions-request.v1",
+        "method": "planetary_positions",
+        "settings": {"zodiac": "tropical", "nodeType": "true"},
+        "inputSnapshot": _natal_payload()["inputSnapshot"],
+    }
+
+    response = client.post("/v1/positions", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schemaVersion"] == "chart-positions-result.v1"
+    assert data["method"] == "planetary_positions"
+    assert data["provider"]["name"] == "kerykeion"
+    assert data["settings"] == payload["settings"]
+    assert data["inputSnapshot"] == payload["inputSnapshot"]
+    assert {position["id"] for position in data["positions"]} == {
+        "sun",
+        "moon",
+        "north_node",
+        "mercury",
+        "venus",
+        "mars",
+        "jupiter",
+        "saturn",
+        "uranus",
+        "neptune",
+        "pluto",
+    }
+    assert all(0 <= position["longitude"] < 360 for position in data["positions"])

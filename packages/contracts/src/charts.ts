@@ -231,3 +231,77 @@ export const storedChartCalculationPayloadSchema = z
 export type StoredChartCalculationPayload = z.infer<typeof storedChartCalculationPayloadSchema>;
 
 export const chartCalculationResultRecordSchema = chartJsonRecordSchema;
+
+export const chartPlanetaryPositionsSettingsSchema = z
+  .object({
+    zodiac: z.literal("tropical").optional().default("tropical"),
+    nodeType: z.enum(["true", "mean"])
+  })
+  .strict();
+export type ChartPlanetaryPositionsSettings = z.infer<
+  typeof chartPlanetaryPositionsSettingsSchema
+>;
+
+export const chartPlanetaryPositionsRequestSchema = z
+  .object({
+    schemaVersion: z.literal("chart-positions-request.v1"),
+    method: z.literal("planetary_positions"),
+    settings: chartPlanetaryPositionsSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema
+  })
+  .strict();
+export type ChartPlanetaryPositionsRequestInput = z.input<
+  typeof chartPlanetaryPositionsRequestSchema
+>;
+export type ChartPlanetaryPositionsRequest = z.infer<
+  typeof chartPlanetaryPositionsRequestSchema
+>;
+
+const chartPlanetaryPositionBodySchema = z.enum([
+  "sun",
+  "moon",
+  "north_node",
+  "mercury",
+  "venus",
+  "mars",
+  "jupiter",
+  "saturn",
+  "uranus",
+  "neptune",
+  "pluto"
+]);
+
+export const chartPlanetaryPositionSchema = z
+  .object({
+    id: chartPlanetaryPositionBodySchema,
+    longitude: z.number().min(0).lt(360),
+    retrograde: z.boolean().nullable().optional()
+  })
+  .strict();
+export type ChartPlanetaryPosition = z.infer<typeof chartPlanetaryPositionSchema>;
+
+export const chartPlanetaryPositionsResponseSchema = z
+  .object({
+    schemaVersion: z.literal("chart-positions-result.v1"),
+    method: z.literal("planetary_positions"),
+    provider: chartProviderMetadataSchema,
+    settings: chartPlanetaryPositionsSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    positions: z.array(chartPlanetaryPositionSchema)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const positionIds = new Set(value.positions.map((position) => position.id));
+    for (const body of chartPlanetaryPositionBodySchema.options) {
+      if (!positionIds.has(body)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["positions"],
+          message: `Missing required planetary position ${body}`
+        });
+      }
+    }
+  });
+export type ChartPlanetaryPositionsResponse = z.infer<
+  typeof chartPlanetaryPositionsResponseSchema
+>;

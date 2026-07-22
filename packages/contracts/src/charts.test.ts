@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  chartPlanetaryPositionsRequestSchema,
+  chartPlanetaryPositionsResponseSchema,
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   storedChartCalculationPayloadSchema
@@ -101,7 +103,89 @@ describe("chart contracts", () => {
       })
     ).toThrow();
   });
+
+  it("accepts an arbitrary-moment planetary positions request for Human Design", () => {
+    expect(
+      chartPlanetaryPositionsRequestSchema.parse({
+        schemaVersion: "chart-positions-request.v1",
+        method: "planetary_positions",
+        inputSnapshot: {
+          birthDate: "1990-07-15",
+          birthTime: "10:30",
+          timezone: "Europe/Rome",
+          latitude: 41.9028,
+          longitude: 12.4964,
+          birthTimePrecision: "exact"
+        },
+        settings: { zodiac: "tropical", nodeType: "true" }
+      })
+    ).toMatchObject({
+      method: "planetary_positions",
+      settings: { zodiac: "tropical", nodeType: "true" }
+    });
+  });
+
+  it("requires the Human Design base bodies in planetary positions responses", () => {
+    const response = chartPlanetaryPositionsResponseSchema.parse({
+      schemaVersion: "chart-positions-result.v1",
+      method: "planetary_positions",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: { zodiac: "tropical", nodeType: "true" },
+      inputSnapshot: {
+        birthDate: "1990-07-15",
+        birthTime: "10:30",
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964,
+        birthTimePrecision: "exact"
+      },
+      positions: completePlanetaryPositions()
+    });
+
+    expect(response.positions).toHaveLength(11);
+    expect(response.positions.find((position) => position.id === "sun")?.longitude).toBe(10);
+  });
+
+  it("rejects positions responses without a north node", () => {
+    expect(() =>
+      chartPlanetaryPositionsResponseSchema.parse({
+        schemaVersion: "chart-positions-result.v1",
+        method: "planetary_positions",
+        provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+        settings: { zodiac: "tropical", nodeType: "true" },
+        inputSnapshot: {
+          birthDate: "1990-07-15",
+          birthTime: "10:30",
+          timezone: "Europe/Rome",
+          latitude: 41.9028,
+          longitude: 12.4964,
+          birthTimePrecision: "exact"
+        },
+        positions: completePlanetaryPositions().filter((position) => position.id !== "north_node")
+      })
+    ).toThrow();
+  });
 });
+
+function completePlanetaryPositions() {
+  return [
+    "sun",
+    "moon",
+    "north_node",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ].map((id, index) => ({
+    id,
+    longitude: 10 + index,
+    retrograde: false
+  }));
+}
 
 function completeRenderResult() {
   return {

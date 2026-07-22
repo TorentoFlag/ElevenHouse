@@ -12,6 +12,9 @@ from chart_engine.schemas import (
     ChartRenderResult,
     ChartWarning,
     NatalRequest,
+    PlanetaryPosition,
+    PlanetaryPositionsPayload,
+    PlanetaryPositionsRequest,
     ProviderMetadata,
     StoredChartCalculationPayload,
 )
@@ -225,6 +228,49 @@ def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
     )
 
 
+def calculate_planetary_positions(request: PlanetaryPositionsRequest) -> PlanetaryPositionsPayload:
+    year, month, day = [int(part) for part in request.inputSnapshot.birthDate.split("-")]
+    hour, minute = [int(part) for part in request.inputSnapshot.birthTime.split(":")]
+    active_points = _active_points(request.settings.nodeType)
+
+    subject = AstrologicalSubjectFactory.from_birth_data(
+        name="subject",
+        year=year,
+        month=month,
+        day=day,
+        hour=hour,
+        minute=minute,
+        lng=request.inputSnapshot.longitude,
+        lat=request.inputSnapshot.latitude,
+        tz_str=request.inputSnapshot.timezone,
+        online=False,
+        zodiac_type="Tropical",
+        houses_system_identifier="P",
+        active_points=active_points,
+        suppress_geonames_warning=True,
+    )
+
+    node_fields = {"north_node": NODE_ATTRIBUTES[request.settings.nodeType]["north_node"]}
+    point_fields = PLANET_ATTRIBUTES | node_fields
+    positions = [
+        _map_planetary_position(point_id, getattr(subject, attr))
+        for point_id, (_, attr) in point_fields.items()
+    ]
+
+    return PlanetaryPositionsPayload(
+        schemaVersion="chart-positions-result.v1",
+        method="planetary_positions",
+        provider=ProviderMetadata(
+            name="kerykeion",
+            version=version("kerykeion"),
+            ephemeris="swiss-ephemeris",
+        ),
+        settings=request.settings,
+        inputSnapshot=request.inputSnapshot,
+        positions=positions,
+    )
+
+
 def _map_point(point_id: str, label: str, model: Any) -> ChartPoint:
     return ChartPoint(
         id=point_id,
@@ -233,6 +279,14 @@ def _map_point(point_id: str, label: str, model: Any) -> ChartPoint:
         sign=_map_sign(model.sign),
         signDegree=float(model.position),
         house=_house_number(model.house),
+        retrograde=model.retrograde,
+    )
+
+
+def _map_planetary_position(point_id: str, model: Any) -> PlanetaryPosition:
+    return PlanetaryPosition(
+        id=point_id,
+        longitude=float(model.abs_pos),
         retrograde=model.retrograde,
     )
 

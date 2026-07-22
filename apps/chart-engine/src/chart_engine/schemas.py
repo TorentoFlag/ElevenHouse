@@ -33,6 +33,18 @@ class NatalRequest(BaseModel):
     inputSnapshot: NatalInputSnapshot
 
 
+class PlanetaryPositionsSettings(BaseModel):
+    zodiac: Literal["tropical"] = "tropical"
+    nodeType: Literal["true", "mean"]
+
+
+class PlanetaryPositionsRequest(BaseModel):
+    schemaVersion: Literal["chart-positions-request.v1"]
+    method: Literal["planetary_positions"]
+    settings: PlanetaryPositionsSettings
+    inputSnapshot: NatalInputSnapshot
+
+
 class ProviderMetadata(BaseModel):
     name: Literal["kerykeion"]
     version: str
@@ -77,6 +89,24 @@ class ChartWarning(BaseModel):
     message: str
 
 
+class PlanetaryPosition(BaseModel):
+    id: Literal[
+        "sun",
+        "moon",
+        "north_node",
+        "mercury",
+        "venus",
+        "mars",
+        "jupiter",
+        "saturn",
+        "uranus",
+        "neptune",
+        "pluto",
+    ]
+    longitude: float = Field(ge=0, lt=360)
+    retrograde: bool | None = None
+
+
 class ChartRenderResult(BaseModel):
     points: list[ChartPoint]
     houses: list[ChartHouse]
@@ -92,3 +122,12 @@ class StoredChartCalculationPayload(BaseModel):
     settings: NatalSettings
     inputSnapshot: NatalInputSnapshot
     result: ChartRenderResult
+
+
+class PlanetaryPositionsPayload(BaseModel):
+    schemaVersion: Literal["chart-positions-result.v1"]
+    method: Literal["planetary_positions"]
+    provider: ProviderMetadata
+    settings: PlanetaryPositionsSettings
+    inputSnapshot: NatalInputSnapshot
+    positions: list[PlanetaryPosition]
