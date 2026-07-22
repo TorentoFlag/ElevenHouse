@@ -23,7 +23,7 @@ describe("Human Design individual base result", () => {
   it("assembles deterministic mechanics from personality and design longitudes", () => {
     const result = buildHumanDesignIndividualBaseResult({
       personality: longitudes({ sun: 302, moon: 60.125, north_node: 10, mercury: 240.125 }),
-      design: longitudes({ sun: 240.125, north_node: 10, mercury: 10 })
+      design: longitudes({ sun: 242, north_node: 10, mercury: 10 })
     });
 
     expect(result).toMatchObject({
@@ -37,7 +37,15 @@ describe("Human Design individual base result", () => {
       notSelfTheme: "frustration",
       authority: "sacral",
       definition: "single",
-      profile: { personalityLine: 1, designLine: 1, code: "1/1" },
+      profile: { personalityLine: 1, designLine: 3, code: "1/3" },
+      incarnationCross: {
+        angle: "right_angle",
+        profileCode: "1/3",
+        gates: {
+          personalitySun: { gate: 41, line: 1 },
+          designSun: { gate: 34, line: 3 }
+        }
+      },
       authorityBasis: {
         selectedBy: "sacral_defined"
       },
@@ -67,7 +75,7 @@ describe("Human Design individual base result", () => {
       gate: 34,
       activatedBy: [
         { side: "personality", body: "mercury", line: 1 },
-        { side: "design", body: "sun", line: 1 }
+        { side: "design", body: "sun", line: 3 }
       ]
     });
   });

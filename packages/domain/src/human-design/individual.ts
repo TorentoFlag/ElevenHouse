@@ -30,6 +30,10 @@ import {
   type HumanDesignLineNumber
 } from "./human-design-types";
 import {
+  deriveHumanDesignIncarnationCross,
+  type HumanDesignIncarnationCross
+} from "./incarnation-cross";
+import {
   deriveHumanDesignType,
   type HumanDesignNotSelfThemeCode,
   type HumanDesignSignatureCode,
@@ -72,6 +76,7 @@ export type HumanDesignIndividualBaseResult = {
   readonly definition: HumanDesignDefinitionKindCode;
   readonly definitionComponents: readonly HumanDesignDefinitionComponent[];
   readonly definitionBasis: HumanDesignDefinitionKindBasis;
+  readonly incarnationCross: HumanDesignIncarnationCross;
   readonly profile: HumanDesignProfile;
 };
 
@@ -83,6 +88,7 @@ export function buildHumanDesignIndividualBaseResult(
   const typeMechanics = deriveHumanDesignType(definedChannels);
   const authorityMechanics = deriveHumanDesignAuthority(definedChannels);
   const definitionMechanics = deriveHumanDesignDefinitionKind(definedChannels);
+  const incarnationCross = deriveHumanDesignIncarnationCross(activations);
   return {
     methodCode: HUMAN_DESIGN_METHOD_CODE,
     engineRevision: HUMAN_DESIGN_ENGINE_REVISION,
@@ -102,6 +108,7 @@ export function buildHumanDesignIndividualBaseResult(
     definition: definitionMechanics.definition,
     definitionComponents: definitionMechanics.components,
     definitionBasis: definitionMechanics.basis,
+    incarnationCross,
     profile: buildProfile(activations)
   };
 }
