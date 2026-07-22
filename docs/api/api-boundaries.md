@@ -253,14 +253,16 @@ metadata are never frontend contracts.
 
 `POST /human-design/preview` is authenticated and read-only, so it does not
 require CSRF and must not create calculation, participant-link, interpretation,
-artifact, outbox or DB rows. The current first contract accepts only
-provider-resolved personality/design longitudes for
-`human_design_classic`; browser-supplied birth date, birth time, timezone or
-place fields are rejected. The server/domain is the only Human Design
-mechanics authority and returns a deterministic individual result with
-input fingerprint and SHA-256 result checksum. CRM birth-data hydration,
-ephemeris resolution, persistence, compatibility, transits, AI interpretation,
-PDF export and frontend rendering remain separate future contours.
+artifact, outbox or DB rows. The preview contract accepts either internal
+provider-resolved personality/design longitudes or an owner-scoped CRM
+`clientId` for `human_design_classic`; browser-supplied birth date, birth time,
+timezone or place fields are rejected. For CRM input, `astrologer-api` hydrates
+the related client birth data, validates calculation readiness and resolves
+birth/design positions through the private chart-engine provider boundary. The
+server/domain is the only Human Design mechanics authority and returns a
+deterministic individual result with input fingerprint and SHA-256 result
+checksum. Persistence, compatibility, transits, AI interpretation, PDF export
+and frontend rendering remain separate future contours.
 
 `GET /products/templates` returns active platform-owned starter templates in the
 requested locale. `POST /products/templates/:templateCode/drafts` requires an

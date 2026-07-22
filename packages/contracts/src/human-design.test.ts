@@ -21,7 +21,7 @@ const longitudes = {
 } as const;
 
 describe("Human Design contracts", () => {
-  it("accepts an individual preview request with provider-resolved longitudes only", () => {
+  it("accepts an individual preview request with provider-resolved longitudes", () => {
     expect(
       humanDesignPreviewRequestSchema.parse({
         mode: "individual",
@@ -37,6 +37,22 @@ describe("Human Design contracts", () => {
         personality: { sun: 302 },
         design: { sun: 242 }
       }
+    });
+  });
+
+  it("accepts an individual preview request from an owner-scoped CRM client", () => {
+    expect(
+      humanDesignPreviewRequestSchema.parse({
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId: "8e14390f-3db1-4d1c-9344-55679c778427"
+      })
+    ).toEqual({
+      mode: "individual",
+      methodCode: "human_design_classic",
+      source: "client",
+      clientId: "8e14390f-3db1-4d1c-9344-55679c778427"
     });
   });
 

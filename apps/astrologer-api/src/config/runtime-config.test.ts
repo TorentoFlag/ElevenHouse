@@ -36,6 +36,7 @@ const defaultSecurityConfig = {
   csrfHeaderName: "x-csrf-token",
   csrfTokenTtlSeconds: 604800,
   allowedOrigins: ["http://localhost:5174"],
+  chartEngineBaseUrl: "http://localhost:8012",
   authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
   passwordlessCodeSecret: "elevenhouse-dev-astrologer-passwordless-code-secret",
   passwordlessCodeTtlSeconds: 600,
@@ -87,6 +88,17 @@ describe("createAstrologerApiRuntimeConfig", () => {
       port: 4012,
       redisUrl: "redis://localhost:6379",
       ...defaultSecurityConfig
+    });
+  });
+
+  it("parses and normalizes the private chart engine base URL", () => {
+    expect(
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        CHART_ENGINE_BASE_URL: "http://chart-engine:8012/"
+      })
+    ).toMatchObject({
+      chartEngineBaseUrl: "http://chart-engine:8012"
     });
   });
 
@@ -268,7 +280,8 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
         ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
-        ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com"
+        ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
+        CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
       })
     ).toMatchObject({
       sessionCookieSecure: true,
@@ -277,6 +290,20 @@ describe("createAstrologerApiRuntimeConfig", () => {
       passwordlessCodeSecret: "configured-secret",
       allowedOrigins: ["https://astrologer.elevenhouse.com"]
     });
+  });
+
+  it("rejects loopback chart engine URLs in production", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
+        ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+        ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
+        CHART_ENGINE_BASE_URL: "http://localhost:8012"
+      })
+    ).toThrow("CHART_ENGINE_BASE_URL must not use a loopback host in production");
   });
 
   it("parses astrologer passwordless auth settings from env", () => {
@@ -368,7 +395,8 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
         ASTROLOGER_AI_ENABLED: "true",
         ASTROLOGER_OPENAI_API_KEY: "openai-secret",
-        ASTROLOGER_OPENAI_BASE_URL: "http://openai.internal"
+        ASTROLOGER_OPENAI_BASE_URL: "http://openai.internal",
+        CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
       })
     ).toThrow(
       "ASTROLOGER_OPENAI_BASE_URL must use https in production when ASTROLOGER_AI_ENABLED=true"

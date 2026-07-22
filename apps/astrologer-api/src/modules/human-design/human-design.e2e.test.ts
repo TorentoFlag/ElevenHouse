@@ -6,6 +6,8 @@ import { humanDesignPreviewResponseSchema } from "@elevenhouse/contracts";
 import type {
   AuthSessionAuthenticationStore,
   AuthSessionRevocationUnitOfWork,
+  ClientBirthData,
+  ClientStore,
   PasswordlessAuthUnitOfWork,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
@@ -22,11 +24,13 @@ import {
   PASSWORDLESS_AUTH_UNIT_OF_WORK,
   PASSWORDLESS_RATE_LIMITER
 } from "../identity/passwordless/identity-passwordless.tokens";
+import { CLIENT_STORE } from "../clients/clients.tokens";
 import { ASTROLOGER_REGISTRATION_SESSION_UNIT_OF_WORK } from "../identity/registration/identity-registration.tokens";
 import { createIdentityConfigServiceStub } from "../identity/testing/identity-config-service.stub";
 import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordless-rate-limiter";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { HumanDesignModule } from "./human-design.module";
+import { HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER } from "./human-design.tokens";
 
 const now = new Date("2026-07-22T10:00:00.000Z");
 const sessionCookieName = "elevenhouse_astrologer_session";
@@ -34,6 +38,7 @@ const csrfCookieName = "elevenhouse_astrologer_csrf";
 const csrfHeaderName = "x-csrf-token";
 const sessionToken = "human-design-session-token";
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
+const clientUserId = "df3192f4-3d67-4b70-8c1a-6a14bd9a51af";
 const passwordlessRateLimits = {
   requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
   requestCodeIp: { limit: 30, windowSeconds: 3600 },
@@ -60,8 +65,17 @@ describe("Human Design HTTP routes", () => {
   let app: INestApplication;
   let moduleRef: TestingModule;
   let baseUrl: string;
+  let clientStore: ClientStore;
+  let resolvedInputProvider: { resolve: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
+    clientStore = createClientStore();
+    resolvedInputProvider = {
+      resolve: vi.fn(async () => ({
+        personality: longitudes,
+        design: { ...longitudes, sun: 242 }
+      }))
+    };
     moduleRef = await Test.createTestingModule({
       imports: [IdentityModule, HumanDesignModule]
     })
@@ -94,6 +108,10 @@ describe("Human Design HTTP routes", () => {
       .useValue({ generateCode: vi.fn(() => "123456") })
       .overrideProvider(SystemClock)
       .useValue({ now: vi.fn(() => now) })
+      .overrideProvider(CLIENT_STORE)
+      .useValue(clientStore)
+      .overrideProvider(HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER)
+      .useValue(resolvedInputProvider)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -118,6 +136,38 @@ describe("Human Design HTTP routes", () => {
       type: "manifesting_generator",
       authority: "sacral",
       profile: { code: "1/3" }
+    });
+  });
+
+  it("previews from owner-scoped CRM birth data", async () => {
+    const response = await postJson(
+      "/human-design/preview",
+      {
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId: clientUserId
+      },
+      {
+        cookie: `${sessionCookieName}=${sessionToken}`
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(clientStore.getAstrologerClient).toHaveBeenCalledWith({
+      astrologerUserId: ownerUserId,
+      clientUserId
+    });
+    expect(resolvedInputProvider.resolve).toHaveBeenCalledWith({
+      inputSnapshot: expect.objectContaining({
+        birthDate: "1990-07-15",
+        birthTime: "10:30",
+        timezone: "Europe/Rome"
+      })
+    });
+    expect(humanDesignPreviewResponseSchema.parse(response.body).result).toMatchObject({
+      type: "manifesting_generator",
+      authority: "sacral"
     });
   });
 
@@ -177,6 +227,48 @@ function createAuthStore(): AuthSessionAuthenticationStore {
           }
         : null
     )
+  };
+}
+
+function createClientStore(): ClientStore {
+  return {
+    createJoinIntent: vi.fn(async () => raise()),
+    findJoinIntentByTokenHash: vi.fn(async () => null),
+    markJoinIntentClaimed: vi.fn(async () => null),
+    ensureRelationship: vi.fn(async () => raise()),
+    upsertClientProfile: vi.fn(async () => undefined),
+    upsertClientBirthData: vi.fn(async () => raise()),
+    listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
+    getAstrologerClient: vi.fn(async () => ({
+      clientUserId,
+      displayName: "Client",
+      relationshipStatus: "active" as const,
+      firstLinkedAt: now.toISOString(),
+      lastLinkedAt: now.toISOString(),
+      birthData: readyBirthData()
+    }))
+  };
+}
+
+function readyBirthData(): ClientBirthData {
+  return {
+    id: "55555555-5555-4555-8555-555555555555",
+    clientUserId,
+    label: "Natal",
+    birthDate: "1990-07-15",
+    birthTime: "10:30",
+    birthTimePrecision: "exact",
+    birthPlaceText: "Rome, Italy",
+    birthCountryCode: "IT",
+    birthCity: "Rome",
+    birthRegion: null,
+    birthTimezone: "Europe/Rome",
+    birthTimeDstOccurrence: null,
+    birthLatitude: 41.9,
+    birthLongitude: 12.49,
+    source: "manual",
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString()
   };
 }
 

@@ -142,6 +142,9 @@ importers:
       '@elevenhouse/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@elevenhouse/chart-engine-client':
+        specifier: workspace:*
+        version: link:../../packages/chart-engine-client
       '@elevenhouse/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

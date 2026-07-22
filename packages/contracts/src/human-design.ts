@@ -1,6 +1,7 @@
 import { z } from "@elevenhouse/validation";
 import { sha256DigestSchema } from "./calculations";
 
+const uuidSchema = z.string().uuid();
 const longitudeSchema = z.number().min(0).lt(360);
 const gateSchema = z.number().int().min(1).max(64);
 const lineSchema = z.number().int().min(1).max(6);
@@ -143,7 +144,7 @@ export type HumanDesignResolvedLongitudesSide = z.infer<
   typeof resolvedLongitudesSideSchema
 >;
 
-export const humanDesignPreviewRequestSchema = z
+const humanDesignResolvedLongitudesPreviewRequestSchema = z
   .object({
     mode: humanDesignModeSchema,
     methodCode: humanDesignMethodCodeSchema,
@@ -155,6 +156,20 @@ export const humanDesignPreviewRequestSchema = z
       .strict()
   })
   .strict();
+
+const humanDesignClientPreviewRequestSchema = z
+  .object({
+    mode: humanDesignModeSchema,
+    methodCode: humanDesignMethodCodeSchema,
+    source: z.literal("client"),
+    clientId: uuidSchema
+  })
+  .strict();
+
+export const humanDesignPreviewRequestSchema = z.union([
+  humanDesignResolvedLongitudesPreviewRequestSchema,
+  humanDesignClientPreviewRequestSchema
+]);
 export type HumanDesignPreviewRequest = z.infer<typeof humanDesignPreviewRequestSchema>;
 
 const checksumMetadataSchema = z

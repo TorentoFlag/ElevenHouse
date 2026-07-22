@@ -13,6 +13,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1079.0",
     "@elevenhouse/ai": "workspace:*",
     "@elevenhouse/auth": "workspace:*",
+    "@elevenhouse/chart-engine-client": "workspace:*",
     "@elevenhouse/contracts": "workspace:*",
     "@elevenhouse/db": "workspace:*",
     "@elevenhouse/domain": "workspace:*",

@@ -1,6 +1,10 @@
 import { HttpException } from "@nestjs/common";
 
-export type HumanDesignErrorCode = "HUMAN_DESIGN_VALIDATION_FAILED";
+export type HumanDesignErrorCode =
+  | "HUMAN_DESIGN_VALIDATION_FAILED"
+  | "HUMAN_DESIGN_CLIENT_NOT_FOUND"
+  | "HUMAN_DESIGN_BIRTH_DATA_NOT_READY"
+  | "HUMAN_DESIGN_PROVIDER_FAILED";
 
 export function humanDesignHttpError(
   status: number,

@@ -120,6 +120,9 @@ none
 - [x] 2026-07-22: Extract chart-engine HTTP client and Human Design resolver
   into `packages/chart-engine-client` so API and worker can share the provider
   boundary without app-to-app imports.
+- [x] 2026-07-22: Wire `POST /human-design/preview` to accept owner-scoped CRM
+  `clientId`, hydrate ready birth data and resolve positions through the shared
+  chart-engine provider package.
 
 ## Context and Orientation
 
@@ -133,6 +136,17 @@ Owned files for this slice:
 - `packages/chart-engine-client/package.json`
 - `packages/chart-engine-client/tsconfig.json`
 - `packages/chart-engine-client/tsconfig.build.json`
+- `apps/astrologer-api/src/modules/human-design/human-design.service.ts`
+- `apps/astrologer-api/src/modules/human-design/human-design.service.test.ts`
+- `apps/astrologer-api/src/modules/human-design/human-design.e2e.test.ts`
+- `apps/astrologer-api/src/modules/human-design/human-design.module.ts`
+- `apps/astrologer-api/src/modules/human-design/human-design.tokens.ts`
+- `apps/astrologer-api/src/modules/human-design/human-design-resolved-input.provider.ts`
+- `apps/astrologer-api/src/config/runtime-config.ts`
+- `apps/astrologer-api/src/config/runtime-config.test.ts`
+- `apps/astrologer-api/package.json`
+- `packages/contracts/src/human-design.ts`
+- `packages/contracts/src/human-design.test.ts`
 - `apps/chart-worker/src/main.ts`
 - `apps/chart-worker/src/chart-jobs.processor.ts`
 - `apps/chart-worker/src/chart-jobs.processor.test.ts`
@@ -153,6 +167,8 @@ Produces:
 - `resolveHumanDesignResolvedInput(input)`
 - `HumanDesignPositionsChartEngine`
 - `HumanDesignResolvedInput`
+- `POST /human-design/preview` CRM request shape:
+  `{ mode, methodCode, source: "client", clientId }`
 
 Consumes:
 
@@ -202,6 +218,11 @@ Implemented in this slice:
   solar-arc solver.
 - `apps/chart-worker` now imports `ChartEngineHttpClient` and
   `ChartEnginePermanentError` from `@elevenhouse/chart-engine-client`.
+- `apps/astrologer-api` now wires `POST /human-design/preview` to owner-scoped
+  CRM birth data via `ClientStore`, validates readiness with the chart birth
+  data readiness guard and calls the shared chart-engine provider package.
+- The preview route remains authenticated, read-only and CSRF-exempt; raw
+  browser birth date/time/timezone/place fields remain rejected by the contract.
 - The resolver returns the exact `BuildHumanDesignActivationsInput` shape used
   by the domain engine plus provider evidence for the personality and design
   calls.
@@ -213,4 +234,5 @@ Remaining future contours:
 
 - Add an instant/seconds-capable positions contract before implementing
   variables, tone, color or base.
-- Wire the resolver into API/job orchestration and CRM birth-data hydration.
+- Persisted Human Design calculation jobs, recalculation, AI interpretation and
+  PDF export.
