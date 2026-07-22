@@ -1,4 +1,4 @@
-import type { CalendarEntry, CalendarRangeResponse } from "@elevenhouse/contracts";
+import type { CalendarEntry, CalendarRangeResponse, CalendarView } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import styles from "../CalendarPage.module.css";
@@ -10,6 +10,7 @@ type CalendarSummaryPanelProps = {
   readonly summary: CalendarRangeResponse["summary"] | null;
   readonly timeZone: string;
   readonly today: string;
+  readonly view: CalendarView;
 };
 
 export function CalendarSummaryPanel({
@@ -18,7 +19,8 @@ export function CalendarSummaryPanel({
   range,
   summary,
   timeZone,
-  today
+  today,
+  view
 }: CalendarSummaryPanelProps) {
   const bookingCount = summary?.bookingCount ?? 0;
   const bookedMinutes = summary?.bookedMinutes ?? 0;
@@ -28,11 +30,12 @@ export function CalendarSummaryPanel({
   const sessionLabel = locale === "ru" ? pluralizeSessions(bookingCount) : pluralizeSessionsEn(bookingCount);
   const durationLabel = locale === "ru" ? `${formatNumber(hours, locale)} ч` : `${formatNumber(hours, locale)} h`;
   const workloadDays = createWorkloadDays({ entries, locale, range, timeZone, today });
+  const viewLabel = getSummaryViewLabel(view, locale);
 
   return (
-    <aside className={styles.summaryPanel} aria-label={locale === "ru" ? "Сводка недели" : "Week summary"}>
+    <aside className={styles.summaryPanel} aria-label={viewLabel.ariaLabel}>
       <div className={styles.summaryHeader}>
-        <span className={styles.kicker}>{locale === "ru" ? "Неделя" : "Week"}</span>
+        <span className={styles.kicker}>{viewLabel.kicker}</span>
         <strong className={styles.summaryHeadline}>
           {bookingCount} {sessionLabel} · {durationLabel}
         </strong>
@@ -74,6 +77,18 @@ export function CalendarSummaryPanel({
       </p>
     </aside>
   );
+}
+
+function getSummaryViewLabel(view: CalendarView, locale: SupportedLocale) {
+  if (locale === "ru") {
+    if (view === "day") return { ariaLabel: "Сводка дня", kicker: "День" };
+    if (view === "month") return { ariaLabel: "Сводка месяца", kicker: "Месяц" };
+    return { ariaLabel: "Сводка недели", kicker: "Неделя" };
+  }
+
+  if (view === "day") return { ariaLabel: "Day summary", kicker: "Day" };
+  if (view === "month") return { ariaLabel: "Month summary", kicker: "Month" };
+  return { ariaLabel: "Week summary", kicker: "Week" };
 }
 
 function SummaryRow({

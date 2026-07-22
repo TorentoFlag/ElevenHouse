@@ -98,6 +98,7 @@ export function CalendarPageView({ copy, locale, calendar }: CalendarPageViewPro
             summary={calendar.summary}
             timeZone={calendar.timeZone}
             today={calendar.today}
+            view={calendar.view}
           />
         ) : null}
       </div>

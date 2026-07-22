@@ -8,6 +8,15 @@ describe("TimeSelect", () => {
       <TimeSelect ariaLabel="До" value={1_440} onChange={vi.fn()} />
     );
 
-    expect(markup).toContain('<option value="1440" selected="">24:00</option>');
+    expect(markup).toContain('value="24:00"');
+  });
+
+  it("uses a compact editable input instead of rendering every quarter-hour option", () => {
+    const markup = renderToStaticMarkup(
+      <TimeSelect ariaLabel="С" value={540} onChange={vi.fn()} />
+    );
+
+    expect(markup).toContain('inputMode="numeric"');
+    expect(markup).not.toContain("<option");
   });
 });

@@ -1,3 +1,4 @@
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { minuteToTime } from "../../../features/availability/model/availabilityEditorForm";
 
 type TimeSelectProps = {
@@ -15,22 +16,54 @@ export function TimeSelect({
   maxMinute = 1_440,
   onChange
 }: TimeSelectProps) {
-  const options = createTimeOptions(value, maxMinute);
+  const [draft, setDraft] = useState(() => minuteToTime(value));
+
+  useEffect(() => {
+    setDraft(minuteToTime(value));
+  }, [value]);
+
+  function commitDraft() {
+    const minute = parseTimeInput(draft, maxMinute);
+    if (minute === null) {
+      setDraft(minuteToTime(value));
+      return;
+    }
+
+    onChange(minute);
+    setDraft(minuteToTime(minute));
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.currentTarget.blur();
+    }
+  }
+
   return (
-    <select
+    <input
       aria-label={ariaLabel}
+      autoComplete="off"
+      inputMode="numeric"
       name={name}
-      value={value}
-      onChange={(event) => onChange(Number(event.target.value))}
-    >
-      {options.map((minute) => <option key={minute} value={minute}>{minuteToTime(minute)}</option>)}
-    </select>
+      pattern="[0-2]?[0-9]:[0-5][0-9]"
+      value={draft}
+      onBlur={commitDraft}
+      onChange={(event) => setDraft(event.target.value)}
+      onKeyDown={handleKeyDown}
+    />
   );
 }
 
-function createTimeOptions(value: number, maxMinute: number): number[] {
-  const options: number[] = [];
-  for (let minute = 0; minute <= maxMinute; minute += 15) options.push(minute);
-  if (value >= 0 && value <= maxMinute && !options.includes(value)) options.push(value);
-  return options.sort((left, right) => left - right);
+function parseTimeInput(value: string, maxMinute: number): number | null {
+  const match = /^([0-2]?\d):([0-5]\d)$/.exec(value.trim());
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours === 24 && minutes !== 0) return null;
+  if (hours > 24) return null;
+
+  const total = hours * 60 + minutes;
+  if (total > maxMinute) return null;
+  return total;
 }

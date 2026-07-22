@@ -42,6 +42,21 @@ describe("CalendarPageView", () => {
     expect(css).toMatch(/\.summaryPanel\s*\{[^}]*width:\s*340px[^}]*flex:\s*0 0 340px/s);
   });
 
+  it("labels the summary panel by the active calendar view", () => {
+    const props = baseProps();
+    const dayMarkup = renderToStaticMarkup(
+      <CalendarPageView {...props} calendar={{ ...props.calendar, view: "day" }} />
+    );
+    const monthMarkup = renderToStaticMarkup(
+      <CalendarPageView {...props} calendar={{ ...props.calendar, view: "month" }} />
+    );
+
+    expect(dayMarkup).toContain('aria-label="Сводка дня"');
+    expect(dayMarkup).toContain("День");
+    expect(monthMarkup).toContain('aria-label="Сводка месяца"');
+    expect(monthMarkup).toContain("Месяц");
+  });
+
   it("keeps the mobile agenda as a data fallback while showing the reference grid on mobile", () => {
     const markup = renderToStaticMarkup(<CalendarPageView {...baseProps()} />);
     const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
@@ -223,7 +238,11 @@ describe("CalendarPageView", () => {
     const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
 
     expect(css).toMatch(
-      /\.calendarCanvas :global\(\.eh-calendar-event--confirmed\)\s*\{[^}]*background:\s*rgb\(86 57 164 \/ 0\.34\)/s
+      /\.calendarCanvas :global\(\.eh-calendar-event--confirmed\)\s*\{[^}]*background:\s*var\(--calendar-green-soft\)/s
+    );
+    expect(css).toContain("--calendar-green: #4ec8a0");
+    expect(css).toMatch(
+      /\.bookingStatusBadge\s*\{[^}]*background:\s*var\(--calendar-green-soft\)/s
     );
     expect(css).toMatch(
       /\.calendarCanvas :global\(\.eh-calendar-event--blocked\)\s*\{[^}]*repeating-linear-gradient/s
