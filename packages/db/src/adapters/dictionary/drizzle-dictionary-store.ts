@@ -251,9 +251,9 @@ async function listEntries(
   const searchFilter =
     query.search === undefined
       ? sql``
-      : sql`and (lower(title) like ${formatSearch(query.search)} or lower(content) like ${formatSearch(
+      : sql`and (lower(code) like ${formatSearch(query.search)} or lower(title) like ${formatSearch(
           query.search
-        )})`;
+        )} or lower(content) like ${formatSearch(query.search)})`;
   const limit = query.limit ?? 50;
   const offset = query.offset ?? 0;
   const effectiveEntriesCte = sql`

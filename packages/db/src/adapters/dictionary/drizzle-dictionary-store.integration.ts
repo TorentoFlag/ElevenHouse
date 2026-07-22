@@ -295,6 +295,46 @@ describe("dictionary Drizzle/PostgreSQL integration", () => {
     });
 
     await expect(
+      listDictionaryEntries({
+        store,
+        ownerUserId,
+        locale: "ru",
+        categoryId: category.id,
+        source: "all",
+        search: platformSun.code
+      })
+    ).resolves.toMatchObject({
+      total: 1,
+      entries: [
+        expect.objectContaining({
+          id: override.id,
+          code: platformSun.code,
+          source: "modified"
+        })
+      ]
+    });
+
+    await expect(
+      listDictionaryEntries({
+        store,
+        ownerUserId,
+        locale: "ru",
+        categoryId: category.id,
+        source: "all",
+        search: custom.code
+      })
+    ).resolves.toMatchObject({
+      total: 1,
+      entries: [
+        expect.objectContaining({
+          id: custom.id,
+          code: custom.code,
+          source: "custom"
+        })
+      ]
+    });
+
+    await expect(
       overrideDictionaryPlatformEntry({
         store,
         ownerUserId,
