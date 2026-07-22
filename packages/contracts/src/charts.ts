@@ -54,6 +54,17 @@ export type ChartSynastryJobCreateRequest = z.infer<
   typeof chartSynastryJobCreateRequestSchema
 >;
 
+export const chartSolarReturnJobCreateRequestSchema = z
+  .object({
+    clientId: uuidSchema,
+    year: z.number().int().min(1900).max(2100),
+    settings: chartSettingsSchema
+  })
+  .strict();
+export type ChartSolarReturnJobCreateRequest = z.infer<
+  typeof chartSolarReturnJobCreateRequestSchema
+>;
+
 export const chartPublicJobStatusSchema = z.enum(["calculating", "succeeded", "failed"]);
 export type ChartPublicJobStatus = z.infer<typeof chartPublicJobStatusSchema>;
 
@@ -126,6 +137,22 @@ export const chartTransitSnapshotSchema = z
   .strict();
 export type ChartTransitSnapshot = z.infer<typeof chartTransitSnapshotSchema>;
 
+export const chartSolarReturnSnapshotSchema = z
+  .object({
+    year: z.number().int().min(1900).max(2100),
+    returnType: z.literal("solar"),
+    location: z
+      .object({
+        timezone: z.string().trim().min(1).max(100),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180)
+      })
+      .strict(),
+    resolvedAt: z.string().datetime()
+  })
+  .strict();
+export type ChartSolarReturnSnapshot = z.infer<typeof chartSolarReturnSnapshotSchema>;
+
 export const chartNatalCalculationRequestSchema = z
   .object({
     schemaVersion: z.literal("chart-request.v1"),
@@ -173,6 +200,34 @@ export type ChartSynastryCalculationRequestInput = z.input<
 >;
 export type ChartSynastryCalculationRequest = z.infer<
   typeof chartSynastryCalculationRequestSchema
+>;
+
+export const chartSolarReturnCalculationRequestSchema = z
+  .object({
+    schemaVersion: z.literal("chart-request.v1"),
+    method: z.literal("solar_return"),
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    solarReturnSnapshot: z
+      .object({
+        year: z.number().int().min(1900).max(2100),
+        returnType: z.literal("solar"),
+        location: z
+          .object({
+            timezone: z.string().trim().min(1).max(100),
+            latitude: z.number().min(-90).max(90),
+            longitude: z.number().min(-180).max(180)
+          })
+          .strict()
+      })
+      .strict()
+  })
+  .strict();
+export type ChartSolarReturnCalculationRequestInput = z.input<
+  typeof chartSolarReturnCalculationRequestSchema
+>;
+export type ChartSolarReturnCalculationRequest = z.infer<
+  typeof chartSolarReturnCalculationRequestSchema
 >;
 
 export const chartPointSchema = z
@@ -319,6 +374,29 @@ export const chartTransitRenderResultSchema = z
   .strict();
 export type ChartTransitRenderResult = z.infer<typeof chartTransitRenderResultSchema>;
 
+export const chartSolarReturnAspectSchema = z
+  .object({
+    solarReturnPoint: z.string().trim().min(1).max(80),
+    natalPoint: z.string().trim().min(1).max(80),
+    type: z.string().trim().min(1).max(80),
+    angle: z.number().min(0).max(180),
+    orb: z.number().min(0),
+    applying: z.boolean().nullable().optional(),
+    strength: z.number().min(0).max(1).nullable().optional()
+  })
+  .strict();
+export type ChartSolarReturnAspect = z.infer<typeof chartSolarReturnAspectSchema>;
+
+export const chartSolarReturnRenderResultSchema = z
+  .object({
+    natal: chartRenderResultSchema,
+    solarReturn: chartRenderResultSchema,
+    aspectsToNatal: z.array(chartSolarReturnAspectSchema),
+    warnings: z.array(chartWarningSchema)
+  })
+  .strict();
+export type ChartSolarReturnRenderResult = z.infer<typeof chartSolarReturnRenderResultSchema>;
+
 export const chartSynastryAspectSchema = z
   .object({
     primaryPoint: z.string().trim().min(1).max(80),
@@ -431,10 +509,26 @@ export type StoredChartSynastryCalculationPayload = z.infer<
   typeof storedChartSynastryCalculationPayloadSchema
 >;
 
+export const storedChartSolarReturnCalculationPayloadSchema = z
+  .object({
+    schemaVersion: z.literal("chart-result.v1"),
+    method: z.literal("solar_return"),
+    provider: chartProviderMetadataSchema,
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    solarReturnSnapshot: chartSolarReturnSnapshotSchema,
+    result: chartSolarReturnRenderResultSchema
+  })
+  .strict();
+export type StoredChartSolarReturnCalculationPayload = z.infer<
+  typeof storedChartSolarReturnCalculationPayloadSchema
+>;
+
 export const storedChartCalculationPayloadSchema = z.discriminatedUnion("method", [
   storedChartNatalCalculationPayloadSchema,
   storedChartTransitCalculationPayloadSchema,
-  storedChartSynastryCalculationPayloadSchema
+  storedChartSynastryCalculationPayloadSchema,
+  storedChartSolarReturnCalculationPayloadSchema
 ]);
 export type StoredChartCalculationPayload = z.infer<typeof storedChartCalculationPayloadSchema>;
 

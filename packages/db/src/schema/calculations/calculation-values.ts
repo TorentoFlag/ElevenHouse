@@ -25,7 +25,12 @@ export const calculationPdfLocaleValues = ["ru", "en"] as const;
 
 export const calculationPdfJobStatusValues = ["queued", "processing", "ready", "failed"] as const;
 
-export const chartCalculationJobMethodValues = ["natal", "transit", "synastry"] as const;
+export const chartCalculationJobMethodValues = [
+  "natal",
+  "transit",
+  "synastry",
+  "solar_return"
+] as const;
 
 export const chartCalculationJobStatusValues = [
   "queued",

@@ -4,6 +4,7 @@ import {
   chartPlanetaryPositionsResponseSchema,
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
+  chartSolarReturnJobCreateRequestSchema,
   chartSynastryJobCreateRequestSchema,
   chartTransitJobCreateRequestSchema,
   storedChartCalculationPayloadSchema
@@ -103,6 +104,39 @@ describe("chart contracts", () => {
         clientId: "00000000-0000-4000-8000-000000000001",
         partnerClientId: "00000000-0000-4000-8000-000000000002",
         partnerBirthDate: "1992-08-11",
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).toThrow();
+  });
+
+  it("accepts a solar return job request by client id, target year and settings", () => {
+    expect(
+      chartSolarReturnJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        year: 2026,
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).toMatchObject({
+      clientId: "00000000-0000-4000-8000-000000000001",
+      year: 2026
+    });
+  });
+
+  it("rejects impossible solar return target years", () => {
+    expect(() =>
+      chartSolarReturnJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        year: 2201,
         settings: {
           houseSystem: "placidus",
           nodeType: "true",
@@ -403,6 +437,69 @@ describe("chart contracts", () => {
         }
       })
     ).toThrow();
+  });
+
+  it("accepts complete render data for a solar return dual-wheel screen", () => {
+    const payload = storedChartCalculationPayloadSchema.parse({
+      schemaVersion: "chart-result.v1",
+      method: "solar_return",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: {
+        zodiac: "tropical",
+        houseSystem: "placidus",
+        nodeType: "true",
+        aspectPreset: "major",
+        orbMultiplier: 1
+      },
+      inputSnapshot: {
+        birthDate: "1990-07-15",
+        birthTime: "10:30",
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964,
+        birthTimePrecision: "exact"
+      },
+      solarReturnSnapshot: {
+        year: 2026,
+        returnType: "solar",
+        location: {
+          timezone: "Europe/Rome",
+          latitude: 41.9028,
+          longitude: 12.4964
+        },
+        resolvedAt: "2026-07-15T08:42:11Z"
+      },
+      result: {
+        natal: completeRenderResult(),
+        solarReturn: completeRenderResult(),
+        aspectsToNatal: [
+          {
+            solarReturnPoint: "sun",
+            natalPoint: "sun",
+            type: "conjunction",
+            angle: 0,
+            orb: 0.01,
+            applying: null,
+            strength: 1
+          }
+        ],
+        warnings: []
+      }
+    });
+
+    expect(payload.method).toBe("solar_return");
+    if (payload.method !== "solar_return") {
+      throw new Error("Expected solar return chart payload");
+    }
+    expect(payload.solarReturnSnapshot).toMatchObject({
+      year: 2026,
+      returnType: "solar",
+      location: { timezone: "Europe/Rome" }
+    });
+    expect(payload.result.aspectsToNatal[0]).toMatchObject({
+      solarReturnPoint: "sun",
+      natalPoint: "sun"
+    });
   });
 
   it("accepts an arbitrary-moment planetary positions request for Human Design", () => {
