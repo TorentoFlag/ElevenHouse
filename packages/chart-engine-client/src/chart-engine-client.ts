@@ -2,16 +2,20 @@ import {
   chartNatalCalculationRequestSchema,
   chartPlanetaryPositionsRequestSchema,
   chartPlanetaryPositionsResponseSchema,
+  chartSolarReturnCalculationRequestSchema,
   chartSynastryCalculationRequestSchema,
   chartTransitCalculationRequestSchema,
+  storedChartSolarReturnCalculationPayloadSchema,
   storedChartSynastryCalculationPayloadSchema,
   storedChartTransitCalculationPayloadSchema,
   storedChartCalculationPayloadSchema,
   type ChartNatalCalculationRequestInput,
   type ChartPlanetaryPositionsRequestInput,
   type ChartPlanetaryPositionsResponse,
+  type ChartSolarReturnCalculationRequestInput,
   type ChartSynastryCalculationRequestInput,
   type ChartTransitCalculationRequestInput,
+  type StoredChartSolarReturnCalculationPayload,
   type StoredChartSynastryCalculationPayload,
   type StoredChartTransitCalculationPayload,
   type StoredChartCalculationPayload
@@ -98,6 +102,28 @@ export class ChartEngineHttpClient {
     const parsed = storedChartSynastryCalculationPayloadSchema.safeParse(data);
     if (!parsed.success) {
       throw new ChartEnginePermanentError("Chart engine returned invalid synastry result", {
+        cause: parsed.error
+      });
+    }
+    return parsed.data;
+  }
+
+  async calculateSolarReturn(
+    payload: ChartSolarReturnCalculationRequestInput
+  ): Promise<StoredChartSolarReturnCalculationPayload> {
+    const parsedPayload = chartSolarReturnCalculationRequestSchema.parse(payload);
+    const response = await this.fetchFn(`${this.baseUrl}/v1/solar-return`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(parsedPayload)
+    });
+    if (!response.ok) {
+      throw new Error(`CHART_ENGINE_HTTP_${response.status}`);
+    }
+    const data: unknown = await response.json();
+    const parsed = storedChartSolarReturnCalculationPayloadSchema.safeParse(data);
+    if (!parsed.success) {
+      throw new ChartEnginePermanentError("Chart engine returned invalid solar return result", {
         cause: parsed.error
       });
     }

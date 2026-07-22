@@ -63,6 +63,24 @@ const synastryJob = {
   }
 } as const;
 
+const solarReturnJob = {
+  ...job,
+  method: "solar_return",
+  settingsSnapshot: job.settingsSnapshot,
+  inputSnapshot: {
+    inputSnapshot: job.inputSnapshot,
+    solarReturnSnapshot: {
+      year: 2026,
+      returnType: "solar",
+      location: {
+        timezone: "Europe/Rome",
+        latitude: 41.9,
+        longitude: 12.49
+      }
+    }
+  }
+} as const;
+
 const result = {
   schemaVersion: "chart-result.v1",
   method: "natal",
@@ -131,6 +149,34 @@ const synastryResult = {
         point: "venus",
         projectedHouseOwner: "partner",
         projectedHouse: 7
+      }
+    ],
+    warnings: []
+  }
+} as const;
+
+const solarReturnResult = {
+  schemaVersion: "chart-result.v1",
+  method: "solar_return",
+  provider: result.provider,
+  settings: job.settingsSnapshot,
+  inputSnapshot: job.inputSnapshot,
+  solarReturnSnapshot: {
+    ...solarReturnJob.inputSnapshot.solarReturnSnapshot,
+    resolvedAt: "2026-07-15T01:20:01.000Z"
+  },
+  result: {
+    natal: result.result,
+    solarReturn: result.result,
+    aspectsToNatal: [
+      {
+        solarReturnPoint: "sun",
+        natalPoint: "sun",
+        type: "conjunction",
+        angle: 0,
+        orb: 0.01,
+        applying: true,
+        strength: 0.99
       }
     ],
     warnings: []
@@ -237,6 +283,43 @@ describe("processChartCalculationJob", () => {
     });
     expect(store.complete).toHaveBeenCalledWith(
       expect.objectContaining({ jobId: synastryJob.id, result: synastryResult })
+    );
+  });
+
+  it("dispatches solar return jobs to the solar return provider endpoint", async () => {
+    const store = {
+      findByJobId: vi.fn().mockResolvedValue(solarReturnJob),
+      claimForProcessing: vi.fn().mockResolvedValue(solarReturnJob),
+      complete: vi.fn().mockResolvedValue(true),
+      fail: vi.fn()
+    };
+    const engine = {
+      calculateNatal: vi.fn(),
+      calculateTransit: vi.fn(),
+      calculateSynastry: vi.fn(),
+      calculateSolarReturn: vi.fn().mockResolvedValue(solarReturnResult)
+    };
+
+    await processChartCalculationJob({
+      jobId: solarReturnJob.id,
+      finalAttempt: false,
+      store,
+      engine,
+      now: new Date("2026-07-22T12:00:00.000Z")
+    });
+
+    expect(engine.calculateNatal).not.toHaveBeenCalled();
+    expect(engine.calculateTransit).not.toHaveBeenCalled();
+    expect(engine.calculateSynastry).not.toHaveBeenCalled();
+    expect(engine.calculateSolarReturn).toHaveBeenCalledWith({
+      schemaVersion: "chart-request.v1",
+      method: "solar_return",
+      settings: solarReturnJob.settingsSnapshot,
+      inputSnapshot: job.inputSnapshot,
+      solarReturnSnapshot: solarReturnJob.inputSnapshot.solarReturnSnapshot
+    });
+    expect(store.complete).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: solarReturnJob.id, result: solarReturnResult })
     );
   });
 

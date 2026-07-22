@@ -147,6 +147,43 @@ describe("ChartEngineHttpClient", () => {
     );
   });
 
+  it("posts solar return input to the private chart engine", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => solarReturnResult
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012/",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateSolarReturn(solarReturnRequest)).resolves.toMatchObject({
+      schemaVersion: "chart-result.v1",
+      method: "solar_return",
+      result: { aspectsToNatal: [expect.objectContaining({ solarReturnPoint: "sun" })] }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://chart-engine:8012/v1/solar-return",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("treats invalid solar return provider JSON as permanent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaVersion: "wrong" })
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateSolarReturn(solarReturnRequest)).rejects.toBeInstanceOf(
+      ChartEnginePermanentError
+    );
+  });
+
   it("posts planetary positions input to the private chart engine", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -277,6 +314,50 @@ const synastryResult = {
         point: "venus",
         projectedHouseOwner: "partner",
         projectedHouse: 7
+      }
+    ],
+    warnings: []
+  }
+} as const;
+
+const solarReturnRequest = {
+  schemaVersion: "chart-request.v1",
+  method: "solar_return",
+  settings: request.settings,
+  inputSnapshot: request.inputSnapshot,
+  solarReturnSnapshot: {
+    year: 2026,
+    returnType: "solar",
+    location: {
+      timezone: "Europe/Rome",
+      latitude: 41.9,
+      longitude: 12.49
+    }
+  }
+} as const;
+
+const solarReturnResult = {
+  schemaVersion: "chart-result.v1",
+  method: "solar_return",
+  provider: result.provider,
+  settings: { zodiac: "tropical", ...request.settings },
+  inputSnapshot: request.inputSnapshot,
+  solarReturnSnapshot: {
+    ...solarReturnRequest.solarReturnSnapshot,
+    resolvedAt: "2026-07-15T01:20:01.000Z"
+  },
+  result: {
+    natal: result.result,
+    solarReturn: result.result,
+    aspectsToNatal: [
+      {
+        solarReturnPoint: "sun",
+        natalPoint: "sun",
+        type: "conjunction",
+        angle: 0,
+        orb: 0.01,
+        applying: true,
+        strength: 0.99
       }
     ],
     warnings: []

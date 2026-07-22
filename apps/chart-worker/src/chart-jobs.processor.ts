@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
 import {
   chartInputSnapshotSchema,
+  chartSolarReturnCalculationRequestSchema,
   chartSettingsSchema,
   type ChartNatalCalculationRequest,
+  type ChartSolarReturnCalculationRequest,
   chartSynastryCalculationRequestSchema,
   type ChartSynastryCalculationRequest,
   chartTransitSnapshotSchema,
   type ChartTransitCalculationRequest,
+  type StoredChartSolarReturnCalculationPayload,
   type StoredChartSynastryCalculationPayload,
   type StoredChartTransitCalculationPayload,
   type StoredChartCalculationPayload
@@ -26,6 +29,9 @@ export type ChartEngineClient = {
   readonly calculateSynastry: (
     payload: ChartSynastryCalculationRequest
   ) => Promise<StoredChartSynastryCalculationPayload>;
+  readonly calculateSolarReturn: (
+    payload: ChartSolarReturnCalculationRequest
+  ) => Promise<StoredChartSolarReturnCalculationPayload>;
 };
 
 const transitJobInputSnapshotSchema = z
@@ -40,6 +46,13 @@ const synastryJobInputSnapshotSchema = chartSynastryCalculationRequestSchema
     inputSnapshot: true,
     partnerInputSnapshot: true,
     relationshipSnapshot: true
+  })
+  .strict();
+
+const solarReturnJobInputSnapshotSchema = chartSolarReturnCalculationRequestSchema
+  .pick({
+    inputSnapshot: true,
+    solarReturnSnapshot: true
   })
   .strict();
 
@@ -133,6 +146,17 @@ async function calculateChartResult(input: {
       relationshipSnapshot: snapshots.relationshipSnapshot
     };
     return input.engine.calculateSynastry(request);
+  }
+  if (claim.method === "solar_return") {
+    const snapshots = solarReturnJobInputSnapshotSchema.parse(claim.inputSnapshot);
+    const request: ChartSolarReturnCalculationRequest = {
+      schemaVersion: "chart-request.v1",
+      method: "solar_return",
+      settings,
+      inputSnapshot: snapshots.inputSnapshot,
+      solarReturnSnapshot: snapshots.solarReturnSnapshot
+    };
+    return input.engine.calculateSolarReturn(request);
   }
   throw new UnrecoverableError("Unsupported chart calculation method");
 }
