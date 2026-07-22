@@ -9,13 +9,18 @@ import type {
 import { listDictionaryEntriesByCodes } from "../../dictionary/api/listDictionaryEntriesByCodes";
 import {
   formatAspectTypeDisplay,
-  formatChartPointPosition,
   formatDegree,
   formatHouseSignDisplay,
   getChartPointDisplayLabel,
   getChartPointSymbol,
   romanHouses
 } from "../model/chartDisplay";
+import {
+  buildChartInterpretationAnchors,
+  getChartInterpretationLookupCodes,
+  type ChartInterpretationAnchor,
+  type ChartInterpretationAnchorGroup
+} from "../model/chartInterpretations";
 import styles from "./ChartEnginePage.module.css";
 
 export type ChartPanelTab = "planets" | "aspects" | "houses" | "interpretations";
@@ -237,18 +242,8 @@ function InterpretationSummary({
   readonly locale: DictionaryLocale;
   readonly result: StoredChartCalculationPayload;
 }) {
-  const sun = result.result.points.find((point) => point.id === "sun");
-  const moon = result.result.points.find((point) => point.id === "moon");
-  const ascendant = result.result.houses.find((house) => house.number === 1);
-  const lookupCodes = useMemo(
-    () =>
-      [
-        ...(sun ? [getPointSignDictionaryCode(sun), getPointHouseDictionaryCode(sun)] : []),
-        ...(moon ? [getPointSignDictionaryCode(moon), getPointHouseDictionaryCode(moon)] : []),
-        "house_1"
-      ].filter((code): code is string => Boolean(code)),
-    [moon, sun]
-  );
+  const anchors = useMemo(() => buildChartInterpretationAnchors(result), [result]);
+  const lookupCodes = useMemo(() => getChartInterpretationLookupCodes(anchors), [anchors]);
   const [dictionaryState, setDictionaryState] = useState<{
     readonly entries: readonly DictionaryEffectiveEntryResponse[];
     readonly isLoading: boolean;
@@ -276,7 +271,7 @@ function InterpretationSummary({
 
     listDictionaryEntriesByCodes({
       locale,
-      codes: lookupCodes
+      codes: [...lookupCodes]
     })
       .then((response) => {
         if (!isMounted) {
@@ -309,38 +304,7 @@ function InterpretationSummary({
   const dictionaryEntriesByCode = new Map(
     dictionaryState.entries.map((entry) => [entry.code, entry])
   );
-  const anchors = [
-    {
-      label: sun ? `Солнце · ${sun.house ? romanHouses[sun.house] : "—"} дом` : "Солнце",
-      meta: "Библиотека",
-      position: sun ? formatPointPosition(sun) : "—",
-      entry: sun ? dictionaryEntriesByCode.get(getPointSignDictionaryCode(sun)) : undefined,
-      missingCode: sun ? getPointSignDictionaryCode(sun) : undefined
-    },
-    {
-      label: moon ? `Луна в ${formatSignPrepositional(moon.sign)}` : "Луна",
-      meta: "Библиотека",
-      position: moon ? formatPointPosition(moon) : "—",
-      entry: moon ? dictionaryEntriesByCode.get(getPointSignDictionaryCode(moon)) : undefined,
-      missingCode: moon ? getPointSignDictionaryCode(moon) : undefined
-    },
-    {
-      label: "Asc",
-      meta: "Точка входа",
-      position: ascendant
-        ? `${formatHouseSignDisplay(ascendant.sign)} ${formatDegree(ascendant.signDegree)}`
-        : "—",
-      entry: dictionaryEntriesByCode.get("house_1"),
-      missingCode: "house_1"
-    }
-  ];
-  const ascendantAnchor = anchors[2] ?? {
-    label: "Asc",
-    meta: "Точка входа",
-    position: "—",
-    entry: undefined,
-    missingCode: "house_1"
-  };
+  const anchorGroups = getInterpretationAnchorGroups(anchors);
 
   return (
     <section className={styles.tableSection} aria-labelledby="chart-interpretations-heading">
@@ -348,23 +312,28 @@ function InterpretationSummary({
       <div className={styles.interpretationStack}>
         <div>
           <div className={styles.interpretationKicker}>Опорные положения · библиотека</div>
-          <div className={styles.interpretationAnchorStack}>
-            {anchors.slice(0, 2).map((anchor) => (
-              <div className={styles.interpretationAnchorCard} key={anchor.label}>
-                <strong>{anchor.label}</strong>
-                <small>{anchor.meta}</small>
-                <span>{anchor.position}</span>
-                <p>{getDictionaryInterpretationText(anchor, dictionaryState)}</p>
-                {anchor.entry ? <em>Справочник · {anchor.entry.source}</em> : null}
-              </div>
+          <div className={styles.interpretationGroupStack}>
+            {anchorGroups.map((group) => (
+              <section className={styles.interpretationGroup} key={group.id}>
+                <h3 className={styles.interpretationGroupTitle}>{group.title}</h3>
+                <div className={styles.interpretationAnchorStack}>
+                  {group.anchors.map((anchor) => {
+                    const entry = dictionaryEntriesByCode.get(anchor.code);
+
+                    return (
+                      <div className={styles.interpretationAnchorCard} key={anchor.id}>
+                        <strong>{anchor.label}</strong>
+                        <small>{anchor.meta}</small>
+                        <span>{anchor.position}</span>
+                        <p>{getDictionaryInterpretationText({ anchor, entry }, dictionaryState)}</p>
+                        {entry ? <em>Справочник · {entry.source}</em> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
             ))}
           </div>
-        </div>
-
-        <div className={styles.interpretationAxisCard}>
-          <strong>Asc</strong>
-          <span>{ascendantAnchor.position}</span>
-          <p>{getDictionaryInterpretationText(ascendantAnchor, dictionaryState)}</p>
         </div>
 
         <div className={styles.interpretationAiPanel}>
@@ -393,9 +362,9 @@ function InterpretationSummary({
 }
 
 function getDictionaryInterpretationText(
-  anchor: {
+  input: {
+    readonly anchor: ChartInterpretationAnchor;
     readonly entry?: DictionaryEffectiveEntryResponse;
-    readonly missingCode?: string;
   },
   state: {
     readonly isLoading: boolean;
@@ -410,39 +379,39 @@ function getDictionaryInterpretationText(
     return state.errorMessage;
   }
 
-  if (anchor.entry) {
-    return anchor.entry.content;
+  if (input.entry) {
+    return input.entry.content;
   }
 
-  return anchor.missingCode
-    ? `В справочнике пока нет записи ${anchor.missingCode}.`
-    : "Опорная запись появится после расчёта.";
+  return `В справочнике пока нет записи ${input.anchor.code}.`;
 }
 
-function getPointSignDictionaryCode(point: ChartPoint): string {
-  return `${formatDictionaryCodePart(point.id)}_${formatDictionaryCodePart(point.sign)}`;
+function getInterpretationAnchorGroups(anchors: readonly ChartInterpretationAnchor[]) {
+  return interpretationGroupOrder
+    .map((groupId) => ({
+      id: groupId,
+      title: interpretationGroupTitles[groupId],
+      anchors: anchors.filter((anchor) => anchor.group === groupId)
+    }))
+    .filter((group) => group.anchors.length > 0);
 }
 
-function getPointHouseDictionaryCode(point: ChartPoint): string | null {
-  if (!point.house) {
-    return null;
-  }
+const interpretationGroupOrder: readonly ChartInterpretationAnchorGroup[] = [
+  "points",
+  "houses",
+  "aspects"
+];
 
-  return `${formatDictionaryCodePart(point.id)}_house_${point.house}`;
-}
-
-function formatDictionaryCodePart(value: string): string {
-  return value.trim().toLowerCase().replaceAll("-", "_");
-}
+const interpretationGroupTitles: Record<ChartInterpretationAnchorGroup, string> = {
+  points: "Положения",
+  houses: "Дома",
+  aspects: "Аспекты"
+};
 
 function getPointLabel(result: StoredChartCalculationPayload, pointId: string): string {
   const point = result.result.points.find((candidate) => candidate.id === pointId);
 
   return getChartPointDisplayLabel(pointId, point?.label ?? pointId);
-}
-
-function formatPointPosition(point: ChartPoint): string {
-  return formatChartPointPosition(point);
 }
 
 function getPointLabelFromPoint(point: ChartPoint): string {
@@ -465,10 +434,6 @@ function getAspectSymbol(type: string): string {
 
 function getZodiacSymbol(sign: string): string {
   return zodiacSymbols[sign.toLowerCase()] ?? "♈︎";
-}
-
-function formatSignPrepositional(sign: string): string {
-  return zodiacPrepositionalNames[sign.toLowerCase()] ?? formatHouseSignDisplay(sign);
 }
 
 const mainPointOrder = [
@@ -497,21 +462,6 @@ const zodiacSymbols: Record<string, string> = {
   capricorn: "♑︎",
   aquarius: "♒︎",
   pisces: "♓︎"
-};
-
-const zodiacPrepositionalNames: Record<string, string> = {
-  aries: "Овне",
-  taurus: "Тельце",
-  gemini: "Близнецах",
-  cancer: "Раке",
-  leo: "Льве",
-  virgo: "Деве",
-  libra: "Весах",
-  scorpio: "Скорпионе",
-  sagittarius: "Стрельце",
-  capricorn: "Козероге",
-  aquarius: "Водолее",
-  pisces: "Рыбах"
 };
 
 const aspectSymbols: Record<string, string> = {

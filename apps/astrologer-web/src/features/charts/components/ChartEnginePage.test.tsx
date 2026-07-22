@@ -472,9 +472,25 @@ describe("ChartEnginePage", () => {
               signDegree: 21.22,
               house: 8,
               retrograde: false
+            },
+            {
+              id: "pluto",
+              label: "Pluto",
+              longitude: 225,
+              sign: "scorpio",
+              signDegree: 15,
+              house: 7,
+              retrograde: true
             }
           ],
-          houses: [{ number: 1, longitude: 166.61, sign: "virgo", signDegree: 16.61 }]
+          houses: [
+            { number: 1, longitude: 166.61, sign: "virgo", signDegree: 16.61 },
+            { number: 7, longitude: 346.61, sign: "pisces", signDegree: 16.61 }
+          ],
+          aspects: [
+            { pointA: "moon", pointB: "sun", type: "square", angle: 90, orb: 1.4, applying: true },
+            { pointA: "moon", pointB: "pluto", type: "trine", angle: 120, orb: 2.1, applying: true }
+          ]
         })}
         errorMessage={null}
         isBusy={false}
@@ -491,21 +507,28 @@ describe("ChartEnginePage", () => {
       within(interpretationsPanel).getByText("Опорные положения · библиотека")
     ).toBeInTheDocument();
     expect(await within(interpretationsPanel).findByText(/Солнце · XI дом/i)).toBeInTheDocument();
-    expect(within(interpretationsPanel).getAllByText("Библиотека")).toHaveLength(2);
-    expect(within(interpretationsPanel).getAllByText(/Справочник · platform/i)).toHaveLength(2);
+    expect(within(interpretationsPanel).getByText("Аспекты")).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText("Дома")).toBeInTheDocument();
+    expect(within(interpretationsPanel).getAllByText(/Справочник · platform/i).length).toBeGreaterThanOrEqual(5);
     expect(
       within(interpretationsPanel).getByText(/Справочная трактовка Солнца в Раке/i)
     ).toBeInTheDocument();
-    expect(within(interpretationsPanel).getByText(/Рак 22°36'/)).toBeInTheDocument();
+    expect(within(interpretationsPanel).getAllByText(/Рак 22°36'/).length).toBeGreaterThan(0);
     expect(within(interpretationsPanel).getByText("Луна в Овне")).toBeInTheDocument();
     expect(
       within(interpretationsPanel).getByText(/Справочная трактовка Луны в Овне/i)
     ).toBeInTheDocument();
-    expect(within(interpretationsPanel).getByText(/Овен 21°13'/)).toBeInTheDocument();
-    expect(within(interpretationsPanel).getByText("Asc")).toBeInTheDocument();
+    expect(within(interpretationsPanel).getAllByText(/Овен 21°13'/).length).toBeGreaterThan(0);
+    expect(within(interpretationsPanel).getByText("Плутон · VII дом")).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText(/Плутон в VII доме/i)).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText("I дом")).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText(/Дева 16°37'/)).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText("Квадрат")).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText(/Квадрат как аспект/i)).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText("Солнце — Луна")).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText(/Связь Солнца и Луны/i)).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith(
-      "/dictionary/entries/by-codes?locale=ru&codes=sun_cancer%2Csun_house_11%2Cmoon_aries%2Cmoon_house_8%2Chouse_1"
+      "/dictionary/entries/by-codes?locale=ru&codes=sun_cancer%2Csun_house_11%2Cmoon_aries%2Cmoon_house_8%2Cpluto_scorpio%2Cpluto_house_7%2Chouse_1%2Chouse_7%2Csquare%2Ctrine%2Csun_moon%2Cmoon_pluto"
     );
     expect(
       within(interpretationsPanel).getByRole("button", { name: /AI-черновик недоступен/i })
@@ -818,13 +841,52 @@ function dictionaryEntriesResponse(): DictionaryEntriesResponse {
         platformEntryId: "b238f7d0-6b2c-4f6d-89a9-6be4f756d133",
         createdAt: "2026-07-01T10:00:00.000Z",
         updatedAt: "2026-07-01T10:00:00.000Z"
+      },
+      {
+        id: "c338f7d0-6b2c-4f6d-89a9-6be4f756d133",
+        categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        categoryCode: "planets_in_houses",
+        code: "pluto_house_7",
+        locale: "ru",
+        source: "platform",
+        title: "Плутон в VII доме",
+        content: "Плутон в VII доме показывает интенсивные темы партнерства.",
+        platformEntryId: "c338f7d0-6b2c-4f6d-89a9-6be4f756d133",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        updatedAt: "2026-07-01T10:00:00.000Z"
+      },
+      {
+        id: "d438f7d0-6b2c-4f6d-89a9-6be4f756d133",
+        categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        categoryCode: "aspects",
+        code: "square",
+        locale: "ru",
+        source: "platform",
+        title: "Квадрат",
+        content: "Квадрат как аспект показывает напряжение и задачу развития.",
+        platformEntryId: "d438f7d0-6b2c-4f6d-89a9-6be4f756d133",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        updatedAt: "2026-07-01T10:00:00.000Z"
+      },
+      {
+        id: "e538f7d0-6b2c-4f6d-89a9-6be4f756d133",
+        categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        categoryCode: "planet_aspects",
+        code: "sun_moon",
+        locale: "ru",
+        source: "platform",
+        title: "Солнце — Луна",
+        content: "Связь Солнца и Луны показывает контакт воли и эмоциональных потребностей.",
+        platformEntryId: "e538f7d0-6b2c-4f6d-89a9-6be4f756d133",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        updatedAt: "2026-07-01T10:00:00.000Z"
       }
     ],
-    total: 2,
+    total: 5,
     counts: {
       sources: {
-        all: 2,
-        platform: 2,
+        all: 5,
+        platform: 5,
         modified: 0,
         custom: 0
       }
