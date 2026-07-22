@@ -91,7 +91,12 @@ export function CalendarPageView({ copy, locale, calendar }: CalendarPageViewPro
             />
           </>
         ) : calendar.isSummaryPanelOpen ? (
-          <CalendarSummaryPanel locale={locale} summary={calendar.summary} />
+          <CalendarSummaryPanel
+            entries={calendar.entries}
+            locale={locale}
+            summary={calendar.summary}
+            timeZone={calendar.timeZone}
+          />
         ) : null}
       </div>
 

@@ -29,6 +29,19 @@ describe("CalendarPageView", () => {
     expect(markup).toContain("Скрыть панель");
   });
 
+  it("adds the reference weekly workload block without prototype finance totals", () => {
+    const markup = renderToStaticMarkup(<CalendarPageView {...baseProps()} />);
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+
+    expect(markup).toContain("Загрузка по дням");
+    expect(markup).toContain('data-calendar-summary-day="Пт"');
+    expect(markup).toContain('aria-label="Пт · 2 ч"');
+    expect(markup).toContain("Всё время — в вашем часовом поясе: Europe/Moscow.");
+    expect(markup).not.toContain("получено");
+    expect(markup).not.toContain("ожидается");
+    expect(css).toMatch(/\.summaryPanel\s*\{[^}]*width:\s*340px[^}]*flex:\s*0 0 340px/s);
+  });
+
   it("mounts an app-owned mobile agenda over the same validated range data", () => {
     const markup = renderToStaticMarkup(<CalendarPageView {...baseProps()} />);
     const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
@@ -282,6 +295,16 @@ function baseProps(): CalendarPageViewProps {
           endAt: "2026-07-17T09:00:00.000Z",
           title: "Марина К.",
           subtitle: "Натальный разбор",
+          deliveryFormat: "video",
+          displayStatus: "confirmed"
+        },
+        {
+          id: "24489ad8-758a-43a0-94d2-52f512f808dc",
+          kind: "booking",
+          startAt: "2026-07-17T10:30:00.000Z",
+          endAt: "2026-07-17T11:30:00.000Z",
+          title: "Дмитрий Л.",
+          subtitle: "Синастрия",
           deliveryFormat: "video",
           displayStatus: "confirmed"
         }
