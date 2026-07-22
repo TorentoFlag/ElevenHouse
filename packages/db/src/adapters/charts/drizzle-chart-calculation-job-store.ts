@@ -274,7 +274,7 @@ async function completeChartJob(
         module: "chart",
         mode: "individual",
         methodCode: job.method,
-        title: job.method === "transit" ? "Transit chart" : "Natal chart",
+        title: buildChartCalculationTitle(job.method),
         status: "calculated",
         requestFingerprint: job.inputFingerprint,
         inputData: { inputSnapshot: job.inputSnapshot, settings: job.settingsSnapshot },
@@ -338,12 +338,28 @@ function buildChartResultSummary(result: StoredChartCalculationPayload) {
       relationshipScore: result.result.relationshipScore?.value ?? null
     };
   }
+  if (result.method === "solar_return") {
+    return {
+      provider: result.provider.name,
+      natalPointCount: result.result.natal.points.length,
+      solarReturnPointCount: result.result.solarReturn.points.length,
+      solarReturnAspectCount: result.result.aspectsToNatal.length,
+      resolvedAt: result.solarReturnSnapshot.resolvedAt
+    };
+  }
   return {
     provider: result.provider.name,
     pointCount: result.result.points.length,
     houseCount: result.result.houses.length,
     aspectCount: result.result.aspects.length
   };
+}
+
+function buildChartCalculationTitle(method: ChartCalculationJobRow["method"]): string {
+  if (method === "transit") return "Transit chart";
+  if (method === "synastry") return "Synastry chart";
+  if (method === "solar_return") return "Solar return chart";
+  return "Natal chart";
 }
 
 async function failChartJob(

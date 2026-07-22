@@ -138,6 +138,13 @@ describe("charts HTTP routes", () => {
     const synastryResponse = await postJson("/charts/synastry/jobs", validSynastryBody(), {
       cookie: `${sessionCookieName}=${sessionToken}`
     });
+    const solarReturnResponse = await postJson(
+      "/charts/solar-return/jobs",
+      validSolarReturnBody(),
+      {
+        cookie: `${sessionCookieName}=${sessionToken}`
+      }
+    );
     const pdfResponse = await postJson(
       "/charts/calculations/77777777-7777-4777-8777-777777777777/report/pdf",
       { expectedResultChecksum: `sha256:${"a".repeat(64)}`, locale: "ru" },
@@ -147,6 +154,7 @@ describe("charts HTTP routes", () => {
     expect(createResponse.status).toBe(403);
     expect(transitResponse.status).toBe(403);
     expect(synastryResponse.status).toBe(403);
+    expect(solarReturnResponse.status).toBe(403);
     expect(pdfResponse.status).toBe(403);
   });
 
@@ -162,6 +170,20 @@ describe("charts HTTP routes", () => {
 
   it("creates authenticated synastry jobs through the CSRF-protected route", async () => {
     const response = await postJson("/charts/synastry/jobs", validSynastryBody(), csrfHeaders());
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      status: "calculating",
+      jobId: "66666666-6666-4666-8666-666666666666"
+    });
+  });
+
+  it("creates authenticated solar return jobs through the CSRF-protected route", async () => {
+    const response = await postJson(
+      "/charts/solar-return/jobs",
+      validSolarReturnBody(),
+      csrfHeaders()
+    );
 
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({
@@ -465,6 +487,13 @@ function validSynastryBody(): Record<string, unknown> {
   return {
     ...validBody(),
     partnerClientId
+  };
+}
+
+function validSolarReturnBody(): Record<string, unknown> {
+  return {
+    ...validBody(),
+    year: 2026
   };
 }
 

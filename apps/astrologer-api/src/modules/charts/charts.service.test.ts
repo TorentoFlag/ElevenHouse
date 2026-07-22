@@ -171,6 +171,69 @@ describe("ChartsService", () => {
     );
   });
 
+  it("creates solar return jobs with natal-backed return location", async () => {
+    const commandStore = createCommandStore();
+    const service = createService({ commandStore });
+
+    await service.createSolarReturnJob(
+      {
+        clientId,
+        year: 2026,
+        settings: settings()
+      },
+      request()
+    );
+
+    expect(commandStore.createOrReuseChartJobAndRequestCalculation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "solar_return",
+        ownerUserId,
+        clientId,
+        inputSnapshot: {
+          inputSnapshot: expect.objectContaining({
+            birthDate: "1990-07-15",
+            timezone: "Europe/Rome"
+          }),
+          solarReturnSnapshot: {
+            year: 2026,
+            returnType: "solar",
+            location: {
+              timezone: "Europe/Rome",
+              latitude: 41.9028,
+              longitude: 12.4964
+            }
+          }
+        }
+      })
+    );
+  });
+
+  it("reuses an existing solar return calculation result for an identical request", async () => {
+    const calculationId = "77777777-7777-4777-8777-777777777777";
+    const commandStore = createCommandStore({
+      outcome: { kind: "existing_result", calculationId }
+    });
+    const jobStore = createJobStore({
+      result: solarReturnResult()
+    });
+    const service = createService({ commandStore, jobStore });
+
+    await expect(
+      service.createSolarReturnJob(
+        {
+          clientId,
+          year: 2026,
+          settings: settings()
+        },
+        request()
+      )
+    ).resolves.toMatchObject({
+      status: "succeeded",
+      calculationId,
+      result: { method: "solar_return" }
+    });
+  });
+
   it("rejects synastry jobs for the same client", async () => {
     const commandStore = createCommandStore();
     const service = createService({ commandStore });
@@ -258,10 +321,16 @@ function createService(
   );
 }
 
-function createCommandStore(): ChartCalculationCommandStore {
+function createCommandStore(
+  input: {
+    readonly outcome?: Awaited<
+      ReturnType<ChartCalculationCommandStore["createOrReuseChartJobAndRequestCalculation"]>
+    >;
+  } = {}
+): ChartCalculationCommandStore {
   return {
     createOrReuseChartJobAndRequestCalculation: vi.fn(
-      async () => ({ kind: "active_job", jobId }) as const
+      async () => input.outcome ?? ({ kind: "active_job", jobId } as const)
     ),
     createOrReuseNatalJobAndRequestCalculation: vi.fn(
       async () => ({ kind: "active_job", jobId }) as const
@@ -272,13 +341,14 @@ function createCommandStore(): ChartCalculationCommandStore {
 function createJobStore(
   input: {
     readonly job?: Awaited<ReturnType<ChartCalculationJobStore["getOwnerScopedJob"]>>;
+    readonly result?: Awaited<ReturnType<ChartCalculationJobStore["getOwnerScopedResult"]>>;
   } = {}
 ): ChartCalculationJobStore {
   return {
     createOrReuseChartJob: vi.fn(async () => ({ kind: "active_job", jobId }) as const),
     createOrReuseNatalJob: vi.fn(async () => ({ kind: "active_job", jobId }) as const),
     getOwnerScopedJob: vi.fn(async () => input.job ?? null),
-    getOwnerScopedResult: vi.fn(async () => null)
+    getOwnerScopedResult: vi.fn(async () => input.result ?? null)
   };
 }
 
@@ -341,6 +411,87 @@ function settings() {
     aspectPreset: "major",
     orbMultiplier: 1
   };
+}
+
+function solarReturnResult() {
+  const inputSnapshot = {
+    birthDate: "1990-07-15",
+    birthTime: "10:30",
+    timezone: "Europe/Rome",
+    latitude: 41.9028,
+    longitude: 12.4964,
+    birthTimePrecision: "exact" as const
+  };
+  const chart = {
+    points: completePoints(),
+    houses: completeHouses(),
+    aspects: [],
+    distributions: {
+      elements: { fire: 0, earth: 0, air: 0, water: 0 },
+      modalities: { cardinal: 0, fixed: 0, mutable: 0 },
+      polarity: { masculine: 0, feminine: 0 }
+    },
+    warnings: []
+  };
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "solar_return",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: { zodiac: "tropical" as const, ...settings() },
+    inputSnapshot,
+    solarReturnSnapshot: {
+      year: 2026,
+      returnType: "solar" as const,
+      location: {
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964
+      },
+      resolvedAt: "2026-07-15T01:20:01.000Z"
+    },
+    result: {
+      natal: chart,
+      solarReturn: chart,
+      aspectsToNatal: [],
+      warnings: []
+    }
+  };
+}
+
+function completePoints() {
+  return [
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto",
+    "ascendant",
+    "midheaven",
+    "north_node",
+    "south_node"
+  ].map((id, index) => ({
+    id,
+    label: id,
+    longitude: index * 20,
+    sign: "aries",
+    signDegree: index % 29,
+    house: index < 12 ? index + 1 : null,
+    retrograde: false
+  }));
+}
+
+function completeHouses() {
+  return Array.from({ length: 12 }, (_, index) => ({
+    number: index + 1,
+    longitude: index * 30,
+    sign: "aries",
+    signDegree: 0
+  }));
 }
 
 function request(): AstrologerSessionRequest {

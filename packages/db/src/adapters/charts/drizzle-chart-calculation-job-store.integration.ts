@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { CHART_CALCULATION_REQUESTED_EVENT } from "@elevenhouse/domain";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import { createPostgresRuntime } from "../../runtime";
-import { chartCalculationJobs, outboxEvents } from "../../schema";
+import { calculationRecords, chartCalculationJobs, outboxEvents } from "../../schema";
 import {
   createDrizzleChartCalculationCommandStore,
   createDrizzleChartCalculationJobStore,
@@ -33,6 +33,9 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
           [CHART_CALCULATION_REQUESTED_EVENT, ownerUserIds]
         );
         await runtime.pool.query("delete from chart_calculation_jobs where owner_user_id = any($1)", [
+          ownerUserIds
+        ]);
+        await runtime.pool.query("delete from calculation_records where owner_user_id = any($1)", [
           ownerUserIds
         ]);
         await runtime.pool.query("delete from client_profiles where user_id = any($1)", [
@@ -129,6 +132,46 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
     ).resolves.toMatchObject({ schemaVersion: "chart-result.v1" });
   });
 
+  it("persists solar return calculation records with dual-wheel summary", async () => {
+    const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
+    const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+    const created = await jobStore.createOrReuseChartJob(createSolarReturnInput(ownerUserId));
+    if (created.kind !== "active_job") throw new Error("Expected active job");
+
+    await expect(
+      workerStore.complete({
+        jobId: created.jobId,
+        result: solarReturnChartResult(),
+        resultChecksum: digest("c"),
+        now: "2026-07-20T12:00:05.000Z"
+      })
+    ).resolves.toBe(true);
+
+    const job = await runtime.database.query.chartCalculationJobs.findFirst({
+      where: eq(chartCalculationJobs.id, created.jobId)
+    });
+    const calculation = await runtime.database.query.calculationRecords.findFirst({
+      where: eq(
+        calculationRecords.id,
+        job?.resultCalculationId ?? raise("Expected result calculation id")
+      )
+    });
+
+    expect(calculation).toMatchObject({
+      methodCode: "solar_return",
+      title: "Solar return chart",
+      resultSummary: {
+        provider: "kerykeion",
+        natalPointCount: 14,
+        solarReturnPointCount: 14,
+        solarReturnAspectCount: 0,
+        resolvedAt: "2026-07-15T01:20:01.000Z"
+      }
+    });
+  });
+
   async function createClientUser(): Promise<string> {
     const result = await runtime.pool.query<{ id: string }>(
       "insert into users (status) values ('active') returning id"
@@ -165,6 +208,27 @@ function createInput(ownerUserId: string) {
   };
 }
 
+function createSolarReturnInput(ownerUserId: string) {
+  const input = createInput(ownerUserId);
+  return {
+    ...input,
+    method: "solar_return" as const,
+    inputFingerprint: digest("d"),
+    inputSnapshot: {
+      inputSnapshot: input.inputSnapshot,
+      solarReturnSnapshot: {
+        year: 2026,
+        returnType: "solar",
+        location: {
+          timezone: "Europe/Rome",
+          latitude: 41.9028,
+          longitude: 12.4964
+        }
+      }
+    }
+  };
+}
+
 function chartResult() {
   return {
     schemaVersion: "chart-result.v1",
@@ -186,13 +250,80 @@ function chartResult() {
       birthTimePrecision: "exact"
     },
     result: {
-      points: [],
-      houses: [],
+      points: completePoints(),
+      houses: completeHouses(),
       aspects: [],
-      distributions: { elements: {}, modalities: {}, polarity: {} },
+      distributions: {
+        elements: { fire: 0, earth: 0, air: 0, water: 0 },
+        modalities: { cardinal: 0, fixed: 0, mutable: 0 },
+        polarity: { masculine: 0, feminine: 0 }
+      },
       warnings: []
     }
   };
+}
+
+function solarReturnChartResult() {
+  const natal = chartResult();
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "solar_return",
+    provider: natal.provider,
+    settings: natal.settings,
+    inputSnapshot: natal.inputSnapshot,
+    solarReturnSnapshot: {
+      year: 2026,
+      returnType: "solar",
+      location: {
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964
+      },
+      resolvedAt: "2026-07-15T01:20:01.000Z"
+    },
+    result: {
+      natal: natal.result,
+      solarReturn: natal.result,
+      aspectsToNatal: [],
+      warnings: []
+    }
+  };
+}
+
+function completePoints() {
+  return [
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto",
+    "ascendant",
+    "midheaven",
+    "north_node",
+    "south_node"
+  ].map((id, index) => ({
+    id,
+    label: id,
+    longitude: index * 20,
+    sign: "aries",
+    signDegree: index % 29,
+    house: index < 12 ? index + 1 : null,
+    retrograde: false
+  }));
+}
+
+function completeHouses() {
+  return Array.from({ length: 12 }, (_, index) => ({
+    number: index + 1,
+    longitude: index * 30,
+    sign: "aries",
+    signDegree: 0
+  }));
 }
 
 function getIntegrationDatabaseUrl(value: string | undefined): string {

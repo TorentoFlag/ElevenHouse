@@ -95,6 +95,41 @@ describe("createNatalChartJob", () => {
     });
   });
 
+  it("delegates method-aware solar return snapshots to the job store", async () => {
+    const solarReturnInput = {
+      ...input,
+      method: "solar_return" as const,
+      inputSnapshot: {
+        inputSnapshot: input.inputSnapshot,
+        solarReturnSnapshot: {
+          year: 2026,
+          returnType: "solar",
+          location: {
+            timezone: "Europe/Rome",
+            latitude: 41.9028,
+            longitude: 12.4964
+          }
+        }
+      }
+    };
+    const store: ChartCalculationJobStore = {
+      createOrReuseChartJob: async (received) => {
+        expect(received).toEqual(solarReturnInput);
+        return { kind: "active_job", jobId: "33333333-3333-4333-8333-333333333333" };
+      },
+      createOrReuseNatalJob: async () => {
+        throw new Error("natal-specific store should not be called");
+      },
+      getOwnerScopedJob: async () => null,
+      getOwnerScopedResult: async () => null
+    };
+
+    await expect(createChartJob({ store, ...solarReturnInput })).resolves.toEqual({
+      kind: "active_job",
+      jobId: "33333333-3333-4333-8333-333333333333"
+    });
+  });
+
   it("delegates validated snapshots to the job store", async () => {
     const store: ChartCalculationJobStore = {
       createOrReuseChartJob: async () => {
