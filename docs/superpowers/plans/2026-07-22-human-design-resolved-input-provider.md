@@ -123,6 +123,9 @@ none
 - [x] 2026-07-22: Wire `POST /human-design/preview` to accept owner-scoped CRM
   `clientId`, hydrate ready birth data and resolve positions through the shared
   chart-engine provider package.
+- [x] 2026-07-22: Complete local browser E2E for the individual CRM-client
+  flow after restarting the stale chart-engine process: preview, persist,
+  saved-list reopen and recalculation all returned successful network responses.
 
 ## Context and Orientation
 
@@ -229,10 +232,25 @@ Implemented in this slice:
 - UTC and Europe/Moscow tests prove that the Design moment request preserves the
   original birth timezone and remains minute-granular under the current chart
   snapshot contract.
+- Local browser E2E on `/human-design` with astrologer
+  `c6b1c066-c65d-41f1-918f-e5149519729d` and CRM client
+  `22222222-2222-4222-8222-222222222222` produced persisted calculation
+  `d114b7d4-f221-4173-be4c-5f26e72a5161`. Network evidence showed
+  `POST /api/human-design/preview` -> `200`,
+  `POST /api/human-design/calculations` -> `201` and
+  `POST /api/human-design/calculations/:id/recalculate` -> `200`. The saved DB
+  record is `module = human_design`, `mode = individual`,
+  `method_code = human_design_classic`, `status = linked`, with result summary
+  `projector`, `2/5`, `emotional`, `split`.
 
 Remaining future contours:
 
 - Add an instant/seconds-capable positions contract before implementing
   variables, tone, color or base.
-- Persisted Human Design calculation jobs, recalculation, AI interpretation and
-  PDF export.
+- External fixture comparison against trusted Human Design calculators before
+  treating method accuracy as product-complete across edge dates.
+- Mobile/responsive visual QA and screenshot evidence for the authenticated
+  production route. The 2026-07-22 Chrome DevTools MCP attempt could inspect
+  network/DOM/console, but file screenshot writes were blocked by the MCP
+  workspace-root configuration.
+- AI interpretation, PDF export, compatibility and transit contours.
