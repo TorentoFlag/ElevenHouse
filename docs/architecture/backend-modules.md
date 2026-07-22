@@ -136,14 +136,16 @@ feature-module boundaries, explicit auth/permissions и audit logging.
   runtime AI or translation calls. Matrix PDF export requires the current saved
   report to be explicitly ready and renders that checksum-bound report through
   the same generic calculation-PDF contour.
-- `HumanDesign`: typed individual preview orchestration for the
-  `human_design_classic` base engine. The current route is authenticated and
-  read-only, rejects browser birth-data fields, supports owner-scoped CRM
-  `clientId` hydration, resolves birth/design longitudes through the private
-  chart-engine provider boundary and delegates mechanics to
-  `packages/domain/src/human-design`. Persisted calculations, compatibility,
-  transits, AI interpretation and PDF export remain future Human Design
-  contours.
+- `HumanDesign`: typed individual preview, persistence and recalculation
+  orchestration for the `human_design_classic` base engine. Preview is
+  authenticated/read-only and rejects browser birth-data fields. Persist and
+  recalculate are CSRF-protected state-changing routes that hydrate an
+  owner-scoped CRM `clientId`, resolve birth/design longitudes through the
+  private chart-engine provider boundary, delegate mechanics to
+  `packages/domain/src/human-design`, store records via the shared
+  `Calculations` module and keep the linked CRM subject identity stable.
+  Compatibility, transits, AI interpretation and PDF export remain future
+  Human Design contours.
 - `Charts`: расчёты астрологических карт и generated chart artifacts.
 - `Sessions`: lifecycle консультации, recordings, materials.
 - `Messaging`: threads и messages там, где используется platform messaging.

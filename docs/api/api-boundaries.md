@@ -73,7 +73,7 @@ a separate consent-bound workflow and is not implied by profile storage.
 products, media uploads, profile/settings billing overview, verification
 application submission, CRM clients, calculations, canonical Pythagorean
 numerology, canonical Ladini 22 Matrix calculations with private notes and a
-versioned interpretation catalog, Human Design resolved-longitude preview, и
+versioned interpretation catalog, Human Design preview/persist/recalculate, и
 provider-neutral AI generation через
 OpenAI.
 
@@ -156,6 +156,8 @@ GET  /matrix/calculations/:calculationId/report/pdf
 POST /matrix/calculations/:calculationId/report/pdf
 GET  /matrix/calculations/:calculationId/report/pdf/:jobId/download
 POST /human-design/preview
+POST /human-design/calculations
+POST /human-design/calculations/:calculationId/recalculate
 POST /calculations/:calculationId/interpretations
 POST /calculations/:calculationId/interpretations/:interpretationId/approve
 POST /calculations/:calculationId/publish
@@ -261,8 +263,15 @@ the related client birth data, validates calculation readiness and resolves
 birth/design positions through the private chart-engine provider boundary. The
 server/domain is the only Human Design mechanics authority and returns a
 deterministic individual result with input fingerprint and SHA-256 result
-checksum. Persistence, compatibility, transits, AI interpretation, PDF export
-and frontend rendering remain separate future contours.
+checksum. `POST /human-design/calculations` persists an owner-scoped
+`human_design` calculation through the shared calculations store and immediately
+links the CRM subject privately to the astrologer. `POST
+/human-design/calculations/:calculationId/recalculate` reloads the saved
+Human Design record, keeps the same CRM subject identity and replaces the
+result from current CRM birth data through the same chart-engine/domain
+pipeline. State-changing Human Design routes require CSRF. Compatibility,
+transits, AI interpretation, PDF export and saved-calculation frontend
+rendering remain separate future contours.
 
 `GET /products/templates` returns active platform-owned starter templates in the
 requested locale. `POST /products/templates/:templateCode/drafts` requires an
