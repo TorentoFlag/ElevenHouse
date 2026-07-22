@@ -26,7 +26,12 @@ export function DateOverridesEditor({ copy, form, onChange }: DateOverridesEdito
       <div className={styles.overrideCreator}>
         <label className={styles.editorField}>
           <span>{copy.overrideDateLabel}</span>
-          <input type="date" value={newDate} onChange={(event) => setNewDate(event.target.value)} />
+          <input
+            name="dateOverrideDate"
+            type="date"
+            value={newDate}
+            onChange={(event) => setNewDate(event.target.value)}
+          />
         </label>
         <button
           className={styles.inlineButton}
@@ -52,6 +57,7 @@ export function DateOverridesEditor({ copy, form, onChange }: DateOverridesEdito
             </div>
             <select
               aria-label={`${copy.overrideDateLabel}: ${override.date}`}
+              name={`dateOverrides.${index}.mode`}
               value={override.mode}
               onChange={(event) => {
                 const mode = event.target.value as "available" | "unavailable";
@@ -71,6 +77,7 @@ export function DateOverridesEditor({ copy, form, onChange }: DateOverridesEdito
                   <div className={styles.periodRow} key={periodIndex}>
                     <TimeSelect
                       ariaLabel={`${override.date}: ${copy.fromLabel}`}
+                      name={`dateOverrides.${index}.periods.${periodIndex}.startMinute`}
                       value={period.startMinute}
                       maxMinute={1_425}
                       onChange={(value) => onChange(updateDateOverride(form, index, {
@@ -83,6 +90,7 @@ export function DateOverridesEditor({ copy, form, onChange }: DateOverridesEdito
                     <span aria-hidden="true">—</span>
                     <TimeSelect
                       ariaLabel={`${override.date}: ${copy.toLabel}`}
+                      name={`dateOverrides.${index}.periods.${periodIndex}.endMinute`}
                       value={period.endMinute}
                       onChange={(value) => onChange(updateDateOverride(form, index, {
                         ...override,

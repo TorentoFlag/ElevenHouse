@@ -42,7 +42,7 @@ describe("CalendarPageView", () => {
     expect(css).toMatch(/\.summaryPanel\s*\{[^}]*width:\s*340px[^}]*flex:\s*0 0 340px/s);
   });
 
-  it("mounts an app-owned mobile agenda over the same validated range data", () => {
+  it("keeps the mobile agenda as a data fallback while showing the reference grid on mobile", () => {
     const markup = renderToStaticMarkup(<CalendarPageView {...baseProps()} />);
     const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
 
@@ -51,11 +51,20 @@ describe("CalendarPageView", () => {
     expect(markup).toContain("Марина К.");
     expect(css).toMatch(/\.mobileAgenda\s*\{[^}]*display:\s*none/s);
     expect(css).toMatch(
-      /@media \(max-width: 760px\)[\s\S]*\.mobileAgenda\s*\{[^}]*display:\s*block/s
+      /@media \(max-width: 760px\)[\s\S]*\.mobileAgenda\s*\{[^}]*display:\s*none/s
     );
     expect(css).toMatch(
-      /@media \(max-width: 760px\)[\s\S]*\.calendarCanvas\s*\{[^}]*display:\s*none/s
+      /@media \(max-width: 760px\)[\s\S]*\.calendarCanvas\s*\{[^}]*display:\s*block/s
     );
+  });
+
+  it("stacks the mobile summary below the scrollable reference calendar grid", () => {
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+    const mobileCss = css.slice(css.indexOf("@media (max-width: 760px)"));
+
+    expect(mobileCss).toMatch(/\.body\s*\{[^}]*flex-direction:\s*column[^}]*overflow-y:\s*auto/s);
+    expect(mobileCss).toMatch(/\.summaryPanel\s*\{[^}]*display:\s*flex[^}]*width:\s*100%/s);
+    expect(mobileCss).toMatch(/\.workspace\s*\{[^}]*flex:\s*0 0 620px[^}]*overflow:\s*auto/s);
   });
 
   it("keeps previous, today and next period navigation available at the mobile viewport", () => {
@@ -187,6 +196,17 @@ describe("CalendarPageView", () => {
     );
   });
 
+  it("keeps right-side calendar panels viewport-contained with internal scrolling", () => {
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+
+    expect(css).toMatch(
+      /\.calendarPage\s*\{[^}]*height:\s*calc\(100dvh - var\(--astrologer-app-header-height, 68px\)\)/s
+    );
+    expect(css).toMatch(/\.summaryPanel\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden/s);
+    expect(css).toMatch(/\.availabilityPanel\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden/s);
+    expect(css).toMatch(/\.summaryPanel\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column/s);
+  });
+
   it("clips desktop event content inside its day column like the reference", () => {
     const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
 
@@ -196,6 +216,72 @@ describe("CalendarPageView", () => {
     expect(css).toMatch(/\.calendarCanvas :global\(\.eh-calendar-event-content\)\s*\{[^}]*overflow:\s*hidden/s);
     expect(css).toMatch(
       /\.calendarCanvas :global\(\.eh-calendar-event-subtitle\)\s*\{[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap/s
+    );
+  });
+
+  it("uses reference-like status treatments for booking and blocked calendar cards", () => {
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+
+    expect(css).toMatch(
+      /\.calendarCanvas :global\(\.eh-calendar-event--confirmed\)\s*\{[^}]*background:\s*rgb\(86 57 164 \/ 0\.34\)/s
+    );
+    expect(css).toMatch(
+      /\.calendarCanvas :global\(\.eh-calendar-event--blocked\)\s*\{[^}]*repeating-linear-gradient/s
+    );
+    expect(css).toMatch(
+      /\.calendarCanvas :global\(\.eh-calendar-event--blocked\)\s*\{[^}]*border-style:\s*dashed/s
+    );
+  });
+
+  it("keeps empty summary workload bars muted while highlighting the current day", () => {
+    const props = baseProps();
+    const markup = renderToStaticMarkup(
+      <CalendarPageView
+        {...props}
+        calendar={{
+          ...props.calendar,
+          today: "2026-07-15",
+          entries: [],
+          summary: { bookingCount: 0, bookedMinutes: 0, byDisplayStatus: {} }
+        }}
+      />
+    );
+
+    expect(markup).toContain('data-calendar-summary-tone="today"');
+    expect(markup).toContain('data-calendar-summary-tone="empty"');
+    expect(markup).not.toContain('data-calendar-summary-tone="active"');
+    expect(markup).toContain('aria-hidden="true"');
+  });
+
+  it("hides the summary toggle whenever the reference state has no week summary panel", () => {
+    const props = baseProps();
+    const availabilityMarkup = renderToStaticMarkup(
+      <CalendarPageView
+        {...props}
+        calendar={{ ...props.calendar, isAvailabilityMode: true }}
+      />
+    );
+    const monthMarkup = renderToStaticMarkup(
+      <CalendarPageView {...props} calendar={{ ...props.calendar, view: "month" }} />
+    );
+
+    expect(availabilityMarkup).not.toContain('data-summary-toggle="true"');
+    expect(monthMarkup).not.toContain('data-summary-toggle="true"');
+  });
+
+  it("compresses secondary toolbar actions before they overflow narrow desktop", () => {
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+
+    expect(css).toMatch(
+      /@media \(max-width: 1250px\)\s*\{[^}]*\.ghostButton\[data-summary-toggle="true"\],[^}]*\.brandButton\s*\{[^}]*width:\s*44px[^}]*font-size:\s*0/s
+    );
+  });
+
+  it("keeps the mobile availability sheet opaque over the agenda", () => {
+    const css = readFileSync(new URL("./CalendarPage.module.css", import.meta.url), "utf8");
+
+    expect(css).toMatch(
+      /@media \(max-width: 760px\)\s*\{[\s\S]*\.availabilityPanel\s*\{[^}]*background:\s*rgb\(10 9 29\)/s
     );
   });
 
@@ -216,6 +302,24 @@ describe("CalendarPageView", () => {
     expect(markup).not.toContain("2 сессии");
     expect(markup).not.toContain("Правила переноса");
     expect(markup).not.toContain("На этот период записей нет");
+  });
+
+  it("names availability form fields so Chrome does not flag anonymous controls", () => {
+    const props = baseProps();
+    const markup = renderToStaticMarkup(
+      <CalendarPageView
+        {...props}
+        calendar={{ ...props.calendar, isAvailabilityMode: true }}
+      />
+    );
+
+    expect(markup).toContain('name="startIntervalMinutes"');
+    expect(markup).toContain('name="minimumNoticeMinutes"');
+    expect(markup).toContain('name="bufferBeforeMinutes"');
+    expect(markup).toContain('name="bufferAfterMinutes"');
+    expect(markup).toContain('name="bookingHorizonDays"');
+    expect(markup).toContain('name="maximumBookingsPerDay"');
+    expect(markup).toContain('name="dateOverrideDate"');
   });
 
   it("replaces the summary with server-backed booking details for the selected entry", () => {

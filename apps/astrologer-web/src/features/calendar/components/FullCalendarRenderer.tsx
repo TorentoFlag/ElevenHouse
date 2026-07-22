@@ -92,9 +92,7 @@ export function FullCalendarRenderer(props: CalendarRendererProps): ReactElement
       timeZone={props.timeZone}
       events={events}
       eventContent={renderEventContent}
-      eventClass={(info) =>
-        info.event.extendedProps.rendererEntry ? "eh-calendar-event" : undefined
-      }
+      eventClass={getCalendarEventClassName}
       eventDidMount={(info) => mountAccessibleEvent(info, props)}
       eventWillUnmount={unmountAccessibleEvent}
       eventClick={(info) => handleEventClick(info, props)}
@@ -208,6 +206,13 @@ function renderEventContent(info: EventDisplayInfo): ReactElement | null {
       ) : null}
     </div>
   );
+}
+
+function getCalendarEventClassName(info: EventDisplayInfo): string | undefined {
+  const entry = info.event.extendedProps.rendererEntry as CalendarRendererEntry | undefined;
+  if (!entry) return undefined;
+
+  return `eh-calendar-event eh-calendar-event--${entry.displayStatus}`;
 }
 
 function handleEventClick(info: EventClickInfo, props: CalendarRendererProps): void {

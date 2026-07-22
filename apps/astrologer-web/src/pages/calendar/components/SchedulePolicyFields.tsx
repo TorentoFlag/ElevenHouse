@@ -18,6 +18,7 @@ export function SchedulePolicyFields({ copy, form, onChange }: SchedulePolicyFie
     <section className={styles.editorSection}>
       <div className={styles.policyGrid}>
         <PolicySelect
+          name="startIntervalMinutes"
           label={copy.startIntervalLabel}
           value={form.startIntervalMinutes}
           options={intervalOptions}
@@ -25,6 +26,7 @@ export function SchedulePolicyFields({ copy, form, onChange }: SchedulePolicyFie
           onChange={(value) => onChange({ ...form, startIntervalMinutes: value })}
         />
         <PolicySelect
+          name="minimumNoticeMinutes"
           label={copy.minimumNoticeLabel}
           value={form.minimumNoticeMinutes}
           options={noticeOptions}
@@ -32,6 +34,7 @@ export function SchedulePolicyFields({ copy, form, onChange }: SchedulePolicyFie
           onChange={(value) => onChange({ ...form, minimumNoticeMinutes: value })}
         />
         <PolicySelect
+          name="bufferBeforeMinutes"
           label={copy.bufferBeforeLabel}
           value={form.bufferBeforeMinutes}
           options={bufferOptions}
@@ -39,6 +42,7 @@ export function SchedulePolicyFields({ copy, form, onChange }: SchedulePolicyFie
           onChange={(value) => onChange({ ...form, bufferBeforeMinutes: value })}
         />
         <PolicySelect
+          name="bufferAfterMinutes"
           label={copy.bufferAfterLabel}
           value={form.bufferAfterMinutes}
           options={bufferOptions}
@@ -46,6 +50,7 @@ export function SchedulePolicyFields({ copy, form, onChange }: SchedulePolicyFie
           onChange={(value) => onChange({ ...form, bufferAfterMinutes: value })}
         />
         <PolicySelect
+          name="bookingHorizonDays"
           label={copy.bookingHorizonLabel}
           value={form.bookingHorizonDays}
           options={horizonOptions}
@@ -55,6 +60,7 @@ export function SchedulePolicyFields({ copy, form, onChange }: SchedulePolicyFie
         <label className={styles.editorField}>
           <span>{copy.maximumBookingsLabel}</span>
           <select
+            name="maximumBookingsPerDay"
             value={form.maximumBookingsPerDay ?? ""}
             onChange={(event) =>
               onChange({
@@ -76,6 +82,7 @@ export function SchedulePolicyFields({ copy, form, onChange }: SchedulePolicyFie
 }
 
 type PolicySelectProps = {
+  readonly name: string;
   readonly label: string;
   readonly value: number;
   readonly options: readonly number[];
@@ -83,12 +90,12 @@ type PolicySelectProps = {
   readonly onChange: (value: number) => void;
 };
 
-function PolicySelect({ label, value, options, format, onChange }: PolicySelectProps) {
+function PolicySelect({ name, label, value, options, format, onChange }: PolicySelectProps) {
   const normalizedOptions = options.includes(value) ? options : [...options, value].sort((a, b) => a - b);
   return (
     <label className={styles.editorField}>
       <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(Number(event.target.value))}>
+      <select name={name} value={value} onChange={(event) => onChange(Number(event.target.value))}>
         {normalizedOptions.map((option) => (
           <option key={option} value={option}>{format(option)}</option>
         ))}

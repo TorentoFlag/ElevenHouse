@@ -39,6 +39,7 @@ export function WeeklyAvailabilityEditor({ copy, form, onChange }: WeeklyAvailab
                       <span className={styles.visuallyHidden}>{copy.fromLabel}</span>
                       <TimeSelect
                         ariaLabel={`${label}: ${copy.fromLabel}`}
+                        name={`weeklyPeriods.${weekday}.${periodIndex}.startMinute`}
                         value={period.startMinute}
                         maxMinute={1_425}
                         onChange={(value) => onChange(updateWeeklyPeriod(form, weekday, periodIndex, {
@@ -52,6 +53,7 @@ export function WeeklyAvailabilityEditor({ copy, form, onChange }: WeeklyAvailab
                       <span className={styles.visuallyHidden}>{copy.toLabel}</span>
                       <TimeSelect
                         ariaLabel={`${label}: ${copy.toLabel}`}
+                        name={`weeklyPeriods.${weekday}.${periodIndex}.endMinute`}
                         value={period.endMinute}
                         onChange={(value) => onChange(updateWeeklyPeriod(form, weekday, periodIndex, {
                           startMinute: period.startMinute,

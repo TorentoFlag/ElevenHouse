@@ -2,6 +2,7 @@ import { minuteToTime } from "../../../features/availability/model/availabilityE
 
 type TimeSelectProps = {
   readonly ariaLabel: string;
+  readonly name?: string;
   readonly value: number;
   readonly maxMinute?: number;
   readonly onChange: (value: number) => void;
@@ -9,13 +10,19 @@ type TimeSelectProps = {
 
 export function TimeSelect({
   ariaLabel,
+  name,
   value,
   maxMinute = 1_440,
   onChange
 }: TimeSelectProps) {
   const options = createTimeOptions(value, maxMinute);
   return (
-    <select aria-label={ariaLabel} value={value} onChange={(event) => onChange(Number(event.target.value))}>
+    <select
+      aria-label={ariaLabel}
+      name={name}
+      value={value}
+      onChange={(event) => onChange(Number(event.target.value))}
+    >
       {options.map((minute) => <option key={minute} value={minute}>{minuteToTime(minute)}</option>)}
     </select>
   );

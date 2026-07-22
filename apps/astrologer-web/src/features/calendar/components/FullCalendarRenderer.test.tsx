@@ -235,14 +235,21 @@ describe("FullCalendarRenderer", () => {
     ]);
   });
 
-  it("adds an app-owned class to foreground events without styling availability backgrounds", () => {
+  it("adds app-owned status classes to foreground events without styling availability backgrounds", () => {
     const calendar = FullCalendarRenderer(createProps()) as ReactElement<{
       eventClass(info: unknown): string | undefined;
     }>;
 
-    expect(calendar.props.eventClass({ event: { extendedProps: { rendererEntry: {} } } })).toBe(
-      "eh-calendar-event"
-    );
+    expect(
+      calendar.props.eventClass({
+        event: { extendedProps: { rendererEntry: { displayStatus: "confirmed" } } }
+      })
+    ).toBe("eh-calendar-event eh-calendar-event--confirmed");
+    expect(
+      calendar.props.eventClass({
+        event: { extendedProps: { rendererEntry: { displayStatus: "blocked" } } }
+      })
+    ).toBe("eh-calendar-event eh-calendar-event--blocked");
     expect(
       calendar.props.eventClass({ event: { extendedProps: { calendarAvailability: true } } })
     ).toBeUndefined();

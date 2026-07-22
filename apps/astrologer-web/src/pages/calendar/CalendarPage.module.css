@@ -12,6 +12,7 @@
   position: relative;
   z-index: 1;
   display: flex;
+  height: calc(100dvh - var(--astrologer-app-header-height, 68px));
   min-height: calc(100dvh - var(--astrologer-app-header-height, 68px));
   margin: -32px;
   flex-direction: column;
@@ -78,6 +79,7 @@
   font: inherit;
   font-size: 13px;
   font-weight: 650;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     border-color 150ms ease,
@@ -321,13 +323,42 @@
 
 .calendarCanvas :global(.eh-calendar-event) {
   overflow: hidden;
-  border: 1px solid rgb(169 140 255 / 0.55);
-  border-left: 4px solid var(--calendar-purple);
+  border: 1px solid var(--calendar-line-strong);
+  border-left-width: 4px;
   border-radius: 11px;
-  background: rgb(86 57 164 / 0.34);
   color: var(--eh-color-moon-120);
   cursor: pointer;
-  box-shadow: none;
+  box-shadow: 0 12px 26px -20px rgb(0 0 0 / 0.9);
+}
+
+.calendarCanvas :global(.eh-calendar-event--confirmed) {
+  border-color: rgb(169 140 255 / 0.55);
+  border-left-color: var(--calendar-purple);
+  background: rgb(86 57 164 / 0.34);
+}
+
+.calendarCanvas :global(.eh-calendar-event--blocked) {
+  border-color: var(--calendar-line-strong);
+  border-left-color: var(--calendar-muted);
+  border-style: dashed;
+  background: repeating-linear-gradient(
+    135deg,
+    rgb(167 162 200 / 0.1) 0 7px,
+    rgb(7 6 15 / 0.12) 7px 14px
+  );
+  color: var(--calendar-muted);
+}
+
+.calendarCanvas :global(.eh-calendar-event:hover),
+.calendarCanvas :global(.eh-calendar-event:focus-visible) {
+  filter: brightness(1.08);
+  outline: none;
+}
+
+.calendarCanvas :global(.eh-calendar-event:focus-visible) {
+  box-shadow:
+    0 0 0 2px rgb(169 140 255 / 0.28),
+    0 12px 26px -20px rgb(0 0 0 / 0.9);
 }
 
 .calendarCanvas :global(.eh-calendar-event > div) {
@@ -764,8 +795,12 @@ button.monthEntry {
 }
 
 .summaryPanel {
+  display: flex;
   width: 340px;
+  height: 100%;
   flex: 0 0 340px;
+  flex-direction: column;
+  overflow: hidden;
   border-left: 1px solid var(--calendar-line);
   background: rgb(10 9 29 / 0.96);
 }
@@ -970,7 +1005,9 @@ button.monthEntry {
 .availabilityPanel {
   width: 390px;
   min-width: 0;
+  height: 100%;
   flex: 0 0 390px;
+  overflow: hidden;
   border-left: 1px solid var(--calendar-line);
   background: rgb(10 9 29 / 0.98);
 }
@@ -1298,7 +1335,7 @@ button.monthEntry {
 
 .summaryHeader,
 .summarySection {
-  padding: 22px 20px;
+  padding: 18px 20px;
   border-bottom: 1px solid var(--calendar-line);
 }
 
@@ -1387,8 +1424,22 @@ button.monthEntry {
   background: linear-gradient(180deg, var(--calendar-accent), rgb(244 202 76 / 0.44));
 }
 
+.summaryBarItem[data-calendar-summary-tone="empty"] .summaryBarFill {
+  background: rgb(36 33 70 / 0.92);
+}
+
+.summaryBarItem[data-calendar-summary-tone="today"] .summaryBarFill {
+  background: var(--calendar-accent);
+}
+
+.summaryBarItem[data-calendar-summary-tone="today"] > span:last-child {
+  color: var(--calendar-accent);
+  font-weight: 750;
+}
+
 .summaryTimezoneNote {
   display: flex;
+  align-items: flex-start;
   gap: 10px;
   margin: auto 20px 20px;
   padding: 13px 14px;
@@ -1398,6 +1449,12 @@ button.monthEntry {
   color: var(--calendar-muted);
   font-size: 12.5px;
   line-height: 1.5;
+}
+
+.summaryTimezoneNote svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--calendar-muted);
 }
 
 .liveAlert {
@@ -1439,8 +1496,19 @@ button.monthEntry {
   }
 }
 
+@media (max-width: 1250px) {
+  .ghostButton[data-summary-toggle="true"],
+  .brandButton {
+    width: 44px;
+    min-height: 36px;
+    padding: 0;
+    font-size: 0;
+  }
+}
+
 @media (max-width: 760px) {
   .calendarPage {
+    height: calc(100dvh - var(--astrologer-app-header-height, 60px));
     min-height: calc(100dvh - var(--astrologer-app-header-height, 60px));
     margin: -16px;
   }
@@ -1543,7 +1611,13 @@ button.monthEntry {
   }
 
   .summaryPanel {
-    display: none;
+    display: flex;
+    width: 100%;
+    height: auto;
+    min-height: 430px;
+    flex: 0 0 auto;
+    border-top: 1px solid var(--calendar-line);
+    border-left: 0;
   }
 
   .bookingDetailPanel {
@@ -1577,10 +1651,19 @@ button.monthEntry {
     display: block;
     width: 100%;
     border-left: 0;
+    background: rgb(10 9 29);
   }
 
   .body {
     position: relative;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .workspace {
+    min-height: 0;
+    flex: 0 0 620px;
+    overflow: auto;
   }
 
   .availabilityInstruction {
@@ -1588,15 +1671,14 @@ button.monthEntry {
   }
 
   .calendarCanvas {
-    display: none;
+    display: block;
   }
 
   .monthView {
-    display: none;
+    display: flex;
   }
 
   .mobileAgenda {
-    display: block;
-    min-height: 100%;
+    display: none;
   }
 }

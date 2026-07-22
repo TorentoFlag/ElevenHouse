@@ -90,15 +90,17 @@ export function CalendarToolbar({
         {isAvailabilityMode ? copy.availabilityDoneLabel : copy.availabilityLabel}
       </button>
 
-      <button
-        className={styles.ghostButton}
-        data-summary-toggle="true"
-        type="button"
-        onClick={() => onSetSummaryPanelOpen(!isSummaryPanelOpen)}
-      >
-        <Icon iconName="layoutGrid" width={15} height={15} aria-hidden="true" />
-        {isSummaryPanelOpen ? copy.hidePanelLabel : copy.showPanelLabel}
-      </button>
+      {!isAvailabilityMode && view !== "month" ? (
+        <button
+          className={styles.ghostButton}
+          data-summary-toggle="true"
+          type="button"
+          onClick={() => onSetSummaryPanelOpen(!isSummaryPanelOpen)}
+        >
+          <Icon iconName="layoutGrid" width={15} height={15} aria-hidden="true" />
+          {isSummaryPanelOpen ? copy.hidePanelLabel : copy.showPanelLabel}
+        </button>
+      ) : null}
 
       <button className={styles.brandButton} type="button" onClick={onOpenManualBooking}>
         <Icon iconName="plus" width={15} height={15} aria-hidden="true" />

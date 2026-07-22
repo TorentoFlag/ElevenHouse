@@ -94,8 +94,10 @@ export function CalendarPageView({ copy, locale, calendar }: CalendarPageViewPro
           <CalendarSummaryPanel
             entries={calendar.entries}
             locale={locale}
+            range={calendar.range}
             summary={calendar.summary}
             timeZone={calendar.timeZone}
+            today={calendar.today}
           />
         ) : null}
       </div>

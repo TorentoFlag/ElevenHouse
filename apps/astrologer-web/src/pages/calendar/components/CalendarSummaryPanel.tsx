@@ -1,15 +1,25 @@
 import type { CalendarEntry, CalendarRangeResponse } from "@elevenhouse/contracts";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import styles from "../CalendarPage.module.css";
 
 type CalendarSummaryPanelProps = {
   readonly entries: readonly CalendarEntry[];
   readonly locale: SupportedLocale;
+  readonly range: { readonly start: string; readonly end: string };
   readonly summary: CalendarRangeResponse["summary"] | null;
   readonly timeZone: string;
+  readonly today: string;
 };
 
-export function CalendarSummaryPanel({ entries, locale, summary, timeZone }: CalendarSummaryPanelProps) {
+export function CalendarSummaryPanel({
+  entries,
+  locale,
+  range,
+  summary,
+  timeZone,
+  today
+}: CalendarSummaryPanelProps) {
   const bookingCount = summary?.bookingCount ?? 0;
   const bookedMinutes = summary?.bookedMinutes ?? 0;
   const hours = bookedMinutes / 60;
@@ -17,7 +27,7 @@ export function CalendarSummaryPanel({ entries, locale, summary, timeZone }: Cal
   const blocked = summary?.byDisplayStatus.blocked ?? 0;
   const sessionLabel = locale === "ru" ? pluralizeSessions(bookingCount) : pluralizeSessionsEn(bookingCount);
   const durationLabel = locale === "ru" ? `${formatNumber(hours, locale)} ч` : `${formatNumber(hours, locale)} h`;
-  const workloadDays = createWorkloadDays({ entries, locale, timeZone });
+  const workloadDays = createWorkloadDays({ entries, locale, range, timeZone, today });
 
   return (
     <aside className={styles.summaryPanel} aria-label={locale === "ru" ? "Сводка недели" : "Week summary"}>
@@ -36,6 +46,7 @@ export function CalendarSummaryPanel({ entries, locale, summary, timeZone }: Cal
               aria-label={day.accessibleLabel}
               className={styles.summaryBarItem}
               data-calendar-summary-day={day.shortLabel}
+              data-calendar-summary-tone={day.tone}
               key={day.key}
               role="listitem"
               title={day.accessibleLabel}
@@ -56,6 +67,7 @@ export function CalendarSummaryPanel({ entries, locale, summary, timeZone }: Cal
       </div>
 
       <p className={styles.summaryTimezoneNote}>
+        <Icon iconName="globe" width={16} height={16} aria-hidden="true" />
         {locale === "ru"
           ? `Всё время — в вашем часовом поясе: ${timeZone}.`
           : `All times are shown in your time zone: ${timeZone}.`}
@@ -108,18 +120,24 @@ type WorkloadDay = {
   readonly heightPercent: number;
   readonly key: string;
   readonly shortLabel: string;
+  readonly tone: "active" | "empty" | "today";
 };
 
 function createWorkloadDays({
   entries,
   locale,
+  range,
+  today,
   timeZone
 }: {
   readonly entries: readonly CalendarEntry[];
   readonly locale: SupportedLocale;
+  readonly range: { readonly start: string; readonly end: string };
+  readonly today: string;
   readonly timeZone: string;
 }): WorkloadDay[] {
   const minutesByDay = [0, 0, 0, 0, 0, 0, 0];
+  const todayIndex = getTodayIndexInRange(today, range, timeZone);
 
   for (const entry of entries) {
     if (entry.kind !== "booking") continue;
@@ -141,9 +159,41 @@ function createWorkloadDays({
       accessibleLabel: `${shortLabel} · ${hoursLabel}`,
       heightPercent: minutes === 0 ? 7 : Math.max(7, Math.round((minutes / maxMinutes) * 100)),
       key: String(index),
-      shortLabel
+      shortLabel,
+      tone: index === todayIndex ? "today" : minutes > 0 ? "active" : "empty"
     };
   });
+}
+
+function getTodayIndexInRange(
+  today: string,
+  range: { readonly start: string; readonly end: string },
+  timeZone: string
+): number | null {
+  if (
+    today < formatLocalDate(range.start, timeZone) ||
+    today >= formatLocalDate(range.end, timeZone)
+  ) {
+    return null;
+  }
+
+  const weekday = new Date(`${today}T12:00:00.000Z`).getUTCDay();
+  return weekday === 0 ? 6 : weekday - 1;
+}
+
+function formatLocalDate(instant: string, timeZone: string): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    })
+      .formatToParts(new Date(instant))
+      .map((part) => [part.type, part.value])
+  );
+
+  return `${parts.year ?? "1970"}-${parts.month ?? "01"}-${parts.day ?? "01"}`;
 }
 
 function getLocalWeekdayIndex(instant: string, timeZone: string): number | null {

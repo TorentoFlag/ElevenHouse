@@ -45,6 +45,7 @@ export function AvailabilityProductsEditor({
           <label className={styles.productOption} key={product.id}>
             <input
               type="checkbox"
+              name="availabilityProductIds"
               checked={form.productIds.includes(product.id)}
               onChange={() => onChange(toggleAvailabilityProduct(form, product.id))}
             />
