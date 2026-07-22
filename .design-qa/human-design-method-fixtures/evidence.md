@@ -163,3 +163,33 @@ Chrome DevTools MCP captured inline desktop and mobile screenshots during the
 session, but file writes to `.design-qa/.../*.png` were rejected by the MCP
 workspace-root configuration. This file records the textual evidence and
 browser metrics available from the same session.
+
+## Authenticated Screenshot Retry
+
+- Date: 2026-07-22.
+- Existing services checked read-only: `localhost:5174` frontend was available;
+  `localhost:3002/health` returned `{"service":"astrologer-api","status":"ok"}`;
+  `localhost:8011/ready` was unavailable, so preview/recalculate were not
+  re-claimed in this retry.
+- Chrome DevTools MCP page state recovered:
+  `http://localhost:5174/human-design`, authenticated astrologer workspace,
+  saved linked calculation reopened from the saved-list card for `Мария
+  Иванова`.
+- MCP file screenshot retry result: still blocked with
+  `Access denied ... is not within any of the configured workspace roots` for
+  both absolute and relative `.design-qa/.../*.png` paths.
+- Headless Chrome fallback result: invalid for production evidence because a
+  clean/copied profile opened the public registration page instead of the
+  authenticated astrologer workspace; generated PNGs were removed.
+- Desktop inline DevTools screenshot captured for viewport
+  `1440x733 @2x`: linked state, saved calculation, bodygraph, property rail,
+  detail panel and checksum `10bbb2f53839` were visible.
+- Desktop metrics: `clientWidth=1440`, `scrollWidth=1440`,
+  `bodyScrollWidth=1440`; overflow list was empty.
+- Mobile inline DevTools screenshot captured for emulated viewport
+  `390x844 @2x`: linked state, selected client, saved calculation, property
+  cards and disabled future actions were visible.
+- Mobile metrics: `clientWidth=390`, `scrollWidth=390`,
+  `bodyScrollWidth=390`; no document-level horizontal overflow. Detected
+  right-edge entries were inside clipped/scrollable UI controls: the global
+  brand logo, disabled mode tabs and saved-card date text.
