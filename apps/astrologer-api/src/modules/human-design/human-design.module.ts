@@ -8,6 +8,8 @@ import { ClientsModule } from "../clients/clients.module";
 import { IdentityModule } from "../identity/identity.module";
 import { SecurityModule } from "../security/security.module";
 import { HumanDesignController } from "./human-design.controller";
+import { HumanDesignPdfController } from "./human-design-pdf.controller";
+import { HumanDesignPdfService } from "./human-design-pdf.service";
 import { createChartEngineHumanDesignResolvedInputProvider } from "./human-design-resolved-input.provider";
 import { HumanDesignService } from "./human-design.service";
 import { HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER } from "./human-design.tokens";
@@ -23,9 +25,10 @@ import { HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER } from "./human-design.tokens";
     IdentityModule,
     SecurityModule
   ],
-  controllers: [HumanDesignController],
+  controllers: [HumanDesignController, HumanDesignPdfController],
   providers: [
     HumanDesignService,
+    HumanDesignPdfService,
     {
       provide: HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER,
       useFactory: createChartEngineHumanDesignResolvedInputProvider,

@@ -27,6 +27,8 @@ import { createCalculationPdfRegistry } from "./calculation-pdf/calculation-pdf.
 import { createS3CalculationPdfObjectStorage } from "./calculation-pdf/calculation-pdf.storage";
 import { createChartPdfRenderer } from "./calculation-pdf/chart-pdf.renderer";
 import { createChartPdfSource } from "./calculation-pdf/chart-pdf.source";
+import { createHumanDesignPdfRenderer } from "./calculation-pdf/human-design-pdf.renderer";
+import { createHumanDesignPdfSource } from "./calculation-pdf/human-design-pdf.source";
 import { createMatrixPdfRenderer } from "./calculation-pdf/matrix-pdf.renderer";
 import { createMatrixPdfSource } from "./calculation-pdf/matrix-pdf.source";
 import { createNumerologyPdfRenderer } from "./calculation-pdf/numerology-pdf.renderer";
@@ -51,6 +53,8 @@ const numerologySource = createNumerologyPdfSource(calculationStore);
 const numerologyRenderer = createNumerologyPdfRenderer();
 const chartSource = createChartPdfSource(calculationStore, dictionaryStore);
 const chartRenderer = createChartPdfRenderer();
+const humanDesignSource = createHumanDesignPdfSource(calculationStore);
+const humanDesignRenderer = createHumanDesignPdfRenderer();
 const registry = createCalculationPdfRegistry([
   {
     module: "matrix",
@@ -66,6 +70,11 @@ const registry = createCalculationPdfRegistry([
     module: "chart",
     methodCode: "natal",
     render: async (job) => chartRenderer.render(await chartSource.load(job))
+  },
+  {
+    module: "human_design",
+    methodCode: "human_design_classic",
+    render: async (job) => humanDesignRenderer.render(await humanDesignSource.load(job))
   }
 ]);
 const storage = createS3CalculationPdfObjectStorage(config.storage);

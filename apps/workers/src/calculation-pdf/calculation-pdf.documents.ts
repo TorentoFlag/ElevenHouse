@@ -1,6 +1,7 @@
 import type { MatrixReportContent } from "@elevenhouse/domain";
 import type {
   DictionaryEntrySource,
+  HumanDesignResult,
   NumerologyResult,
   StoredChartNatalCalculationPayload
 } from "@elevenhouse/contracts";
@@ -28,6 +29,15 @@ export type ChartPdfDocument = {
   readonly calculationTitle: string;
   readonly result: StoredChartNatalCalculationPayload;
   readonly interpretations: readonly ChartPdfInterpretation[];
+};
+
+export type HumanDesignPdfDocument = {
+  readonly kind: "human_design";
+  readonly locale: "ru" | "en";
+  readonly createdAt: string;
+  readonly calculationTitle: string;
+  readonly approvedInterpretation: string | null;
+  readonly result: HumanDesignResult;
 };
 
 export type ChartPdfInterpretation = {

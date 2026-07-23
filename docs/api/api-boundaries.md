@@ -164,6 +164,11 @@ GET  /charts/calculations/:calculationId/report/pdf/:jobId/download
 POST /human-design/preview
 POST /human-design/calculations
 POST /human-design/calculations/:calculationId/recalculate
+POST /human-design/calculations/:calculationId/ai-draft
+GET  /human-design/calculations/:calculationId/transits?instant=...
+GET  /human-design/calculations/:calculationId/report/pdf?locale=ru|en
+POST /human-design/calculations/:calculationId/report/pdf
+GET  /human-design/calculations/:calculationId/report/pdf/:jobId/download
 POST /calculations/:calculationId/interpretations
 POST /calculations/:calculationId/interpretations/:interpretationId/approve
 POST /calculations/:calculationId/publish

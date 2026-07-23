@@ -149,8 +149,10 @@ feature-module boundaries, explicit auth/permissions и audit logging.
   Numerology-style shared calculation interpretation contour: only owned saved
   results with the current checksum can generate editable drafts, AI receives a
   minimized deterministic Human Design context, and frontend/public responses
-  expose no model or prompt metadata. PDF export remains a future Human Design
-  contour.
+  expose no model or prompt metadata. Human Design PDF backend routes and
+  worker renderer use the shared private calculation-PDF contour, current
+  checksum and optional approved interpretation source locator; frontend PDF
+  controls remain a follow-up slice.
 - `Charts`: расчёты астрологических карт и generated chart artifacts.
 - `Sessions`: lifecycle консультации, recordings, materials.
 - `Messaging`: provider-neutral channel connections, external identities,
