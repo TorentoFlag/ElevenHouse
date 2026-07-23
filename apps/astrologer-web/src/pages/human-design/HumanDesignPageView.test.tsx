@@ -32,6 +32,10 @@ describe("HumanDesignPageView", () => {
     expect(pickers).toHaveLength(1);
     expect(pickers[0]?.props.label).toBe("Клиент");
     expect(walk(view).some((element) => element.type === "input")).toBe(false);
+    expect(textOf(view)).toContain("Выберите клиента из CRM.");
+    expect(
+      walk(view).some((element) => element.type === "h2" && textOf(element) === "Клиент")
+    ).toBe(false);
     expect(textOf(view)).toContain("Birth data берутся из карточки клиента");
   });
 

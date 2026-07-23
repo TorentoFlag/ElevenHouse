@@ -110,6 +110,13 @@ export function HumanDesignPageView({
   const canRunPrimaryAction = isTransitMode
     ? Boolean(selectedCalculationId)
     : Boolean(selectedClient) && (mode !== "compatibility" || Boolean(selectedPartnerClient));
+  const clientRailMessage = !selectedClient
+    ? "Выберите клиента из CRM."
+    : !selectedClient.hasBirthDate
+      ? "В карточке клиента не заполнена дата рождения."
+      : isTransitMode && !selectedCalculationId
+        ? "Откройте сохранённый individual расчёт."
+        : null;
 
   return (
     <main className={styles.page}>
@@ -240,21 +247,11 @@ export function HumanDesignPageView({
 
       <section className={styles.body}>
         <aside className={styles.rail} aria-label="Свойства Human Design">
-          <section className={styles.railGroup}>
-            <h2>Клиент</h2>
-            <p className={styles.helpText}>
-              Birth data берутся из карточки клиента; браузер не принимает дату рождения или
-              долготы планет.
-            </p>
-            {!selectedClient ? (
-              <p className={styles.warningText}>Выберите клиента из CRM.</p>
-            ) : !selectedClient.hasBirthDate ? (
-              <p className={styles.warningText}>В карточке клиента не заполнена дата рождения.</p>
-            ) : null}
-            {isTransitMode && !selectedCalculationId ? (
-              <p className={styles.warningText}>Откройте сохранённый individual расчёт.</p>
-            ) : null}
-          </section>
+          {clientRailMessage ? (
+            <section className={styles.railGroup}>
+              <p className={styles.warningText}>{clientRailMessage}</p>
+            </section>
+          ) : null}
           {isTransitMode ? (
             <section className={styles.railGroup}>
               <h2>Транзит</h2>
