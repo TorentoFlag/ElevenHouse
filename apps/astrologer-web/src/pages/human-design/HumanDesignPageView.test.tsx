@@ -5,6 +5,7 @@ import type {
   HumanDesignIndividualResult,
   HumanDesignTransitResult
 } from "@elevenhouse/contracts";
+import { ActionMenu, type ActionMenuItem } from "@elevenhouse/design-system/components/ActionMenu";
 import { describe, expect, it, vi } from "vitest";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import {
@@ -89,7 +90,8 @@ describe("HumanDesignPageView", () => {
     expect(text).toContain("Канал 20–34");
     expect(text).toContain("Личность");
     expect(text).toContain("Дизайн");
-    expect(linkButton?.props.disabled).toBe(false);
+    expect(linkButton).toBeUndefined();
+    expect(getActionMenuItem(view, "link").disabled).toBe(false);
   });
 
   it("uses the PDF toolbar action for saved Human Design calculations", () => {
@@ -106,13 +108,10 @@ describe("HumanDesignPageView", () => {
       isLinked: true,
       onPdf
     });
-    const pdfButton = walk(view).find(
-      (element): element is ReactElement<{ disabled?: boolean; onClick: () => void }> =>
-        element.type === "button" && textOf(element).includes("Скачать PDF")
-    );
+    const pdfItem = getActionMenuItem(view, "pdf");
 
-    expect(pdfButton?.props.disabled).toBe(false);
-    pdfButton?.props.onClick();
+    expect(pdfItem.disabled).toBe(false);
+    pdfItem.onSelect();
     expect(onPdf).toHaveBeenCalledOnce();
   });
 
@@ -148,10 +147,7 @@ describe("HumanDesignPageView", () => {
       onApproveAiDraft
     });
     const text = textOf(view);
-    const aiButton = walk(view).find(
-      (element): element is ReactElement<{ disabled?: boolean; onClick: () => void }> =>
-        element.type === "button" && textOf(element).includes("Обновить AI")
-    );
+    const aiItem = getActionMenuItem(view, "ai");
     const textarea = walk(view).find(
       (element): element is ReactElement<{
         value: string;
@@ -170,8 +166,8 @@ describe("HumanDesignPageView", () => {
     expect(text).toContain("AI-разбор");
     expect(text).toContain("Черновик");
     expect(textarea?.props.value).toBe("AI draft text");
-    expect(aiButton?.props.disabled).toBe(false);
-    aiButton?.props.onClick();
+    expect(aiItem.disabled).toBe(false);
+    aiItem.onSelect();
     expect(onCreateAiDraft).toHaveBeenCalledOnce();
     textarea?.props.onChange({ currentTarget: { value: "Edited draft" } });
     expect(onChangeAiDraftText).toHaveBeenCalledWith("Edited draft");
@@ -202,13 +198,8 @@ describe("HumanDesignPageView", () => {
       (element): element is ReactElement<{ value: string; onChange: (event: never) => void }> =>
         element.type === "input" && element.props.type === "datetime-local"
     );
-    const primaryButton = walk(view).find(
-      (element): element is ReactElement<{ disabled?: boolean; onClick: () => void }> =>
-        element.type === "button" && textOf(element).includes("Показать")
-    );
-    const persistButton = walk(view).find(
-      (element) => element.type === "button" && textOf(element).includes("Привязать")
-    );
+    const primaryItem = getActionMenuItem(view, "calculate");
+    const persistItem = getActionMenuItem(view, "link");
 
     expect(text).toContain("Транзитные каналы");
     expect(text).toContain("Дозамкнутые 1");
@@ -216,9 +207,9 @@ describe("HumanDesignPageView", () => {
     expect(text).toContain("свои 20 + транзит 10");
     expect(text).toContain("Транзитный checksum");
     expect(instantInput?.props.value).toBe("2026-07-23T12:15");
-    primaryButton?.props.onClick();
+    primaryItem.onSelect();
     expect(onFetchTransit).toHaveBeenCalledOnce();
-    expect(persistButton?.props.disabled).toBe(true);
+    expect(persistItem.disabled).toBe(true);
   });
 
   it("renders partner mode with two CRM selectors and connection dynamics", () => {
@@ -277,6 +268,30 @@ describe("HumanDesignPageView", () => {
     expect(onSelectSaved).toHaveBeenCalledWith(saved);
   });
 
+  it("groups toolbar calculation actions into a single actions menu", () => {
+    const view = HumanDesignPageView(baseProps());
+    const menu = getToolbarActionMenu(view);
+
+    expect(menu.props.label).toBe("Действия");
+    expect(menu.props.triggerAriaLabel).toBe("Действия Human Design");
+    expect(menu.props.items.map((item) => item.id)).toEqual([
+      "calculate",
+      "link",
+      "refresh",
+      "pdf",
+      "ai"
+    ]);
+    expect(walk(view).some((element) => element.type === "button" && textOf(element) === "Рассчитать")).toBe(
+      false
+    );
+    expect(walk(view).some((element) => element.type === "button" && textOf(element) === "Привязать")).toBe(
+      false
+    );
+    expect(walk(view).some((element) => element.type === "button" && textOf(element) === "Обновить")).toBe(
+      false
+    );
+  });
+
   it("enables recalculation only for an opened saved calculation", () => {
     const onRecalculate = vi.fn();
     const saved = savedCalculation();
@@ -297,16 +312,35 @@ describe("HumanDesignPageView", () => {
       isLinked: true,
       onRecalculate
     });
-    const refreshButton = walk(view).find(
-      (element): element is ReactElement<{ disabled?: boolean; onClick: () => void }> =>
-        element.type === "button" && textOf(element).includes("Обновить")
-    );
+    const refreshItem = getActionMenuItem(view, "refresh");
 
-    expect(refreshButton?.props.disabled).toBe(false);
-    refreshButton?.props.onClick();
+    expect(refreshItem.disabled).toBe(false);
+    refreshItem.onSelect();
     expect(onRecalculate).toHaveBeenCalledOnce();
   });
 });
+
+function getToolbarActionMenu(root: ReactElement): ReactElement<ComponentProps<typeof ActionMenu>> {
+  const menu = walk(root).find(
+    (element): element is ReactElement<ComponentProps<typeof ActionMenu>> => element.type === ActionMenu
+  );
+
+  if (!menu) {
+    throw new Error("Expected Human Design toolbar action menu to be rendered");
+  }
+
+  return menu;
+}
+
+function getActionMenuItem(root: ReactElement, id: string): ActionMenuItem {
+  const item = getToolbarActionMenu(root).props.items.find((candidate) => candidate.id === id);
+
+  if (!item) {
+    throw new Error(`Expected Human Design action menu item ${id} to be rendered`);
+  }
+
+  return item;
+}
 
 function baseProps(): HumanDesignPageViewProps {
   return {

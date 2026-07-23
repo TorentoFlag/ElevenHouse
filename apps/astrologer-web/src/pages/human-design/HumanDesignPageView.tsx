@@ -1,6 +1,8 @@
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type { CSSProperties } from "react";
 import type { CalculationRecordResponse } from "@elevenhouse/contracts";
+import { ActionMenu, type ActionMenuItem } from "@elevenhouse/design-system/components/ActionMenu";
+import "@elevenhouse/design-system/components/ActionMenu.css";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import { HumanDesignBodygraph } from "../../features/human-design/components/HumanDesignBodygraph";
@@ -115,6 +117,49 @@ export function HumanDesignPageView({
       : isTransitMode && !selectedCalculationId
         ? "Откройте сохранённый individual расчёт."
         : null;
+  const toolbarActionItems: readonly ActionMenuItem[] = [
+    {
+      id: "calculate",
+      label: isBusy ? "Расчёт" : isTransitMode ? "Показать" : "Рассчитать",
+      icon: <Icon iconName={isTransitMode ? "orbit" : "lightning"} width={15} height={15} aria-hidden="true" />,
+      disabled: isBusy || !canRunPrimaryAction,
+      onSelect: () => void (isTransitMode ? onFetchTransit() : onPreview())
+    },
+    {
+      id: "link",
+      label: isLinked ? "Привязан" : "Привязать",
+      icon: <Icon iconName="pin" width={15} height={15} aria-hidden="true" />,
+      disabled:
+        isBusy ||
+        isTransitMode ||
+        !selectedClient ||
+        (mode === "compatibility" && !selectedPartnerClient) ||
+        !model ||
+        isLinked,
+      onSelect: () => void onPersist()
+    },
+    {
+      id: "refresh",
+      label: "Обновить",
+      icon: <Icon iconName="refresh" width={15} height={15} aria-hidden="true" />,
+      disabled: isBusy || !selectedCalculationId,
+      onSelect: () => void (isTransitMode ? onFetchTransit() : onRecalculate())
+    },
+    {
+      id: "pdf",
+      label: renderToolbarActionLabel(pdfLabel, pdfDisabled ? pdfTitle : null),
+      icon: <Icon iconName="doc" width={15} height={15} aria-hidden="true" />,
+      disabled: pdfDisabled,
+      onSelect: () => void onPdf()
+    },
+    {
+      id: "ai",
+      label: renderToolbarActionLabel(aiDraftText ? "Обновить AI" : "AI-разбор", aiDraftDisabledReason),
+      icon: <Icon iconName="sparkle" width={15} height={15} aria-hidden="true" />,
+      disabled: isAiDraftDisabled,
+      onSelect: () => void onCreateAiDraft()
+    }
+  ];
 
   return (
     <main className={styles.page}>
@@ -183,60 +228,13 @@ export function HumanDesignPageView({
           </button>
         </nav>
         <div className={styles.toolbarSpacer} />
-        <button
-          className={styles.calculateButton}
-          type="button"
-          disabled={isBusy || !canRunPrimaryAction}
-          onClick={() => void (isTransitMode ? onFetchTransit() : onPreview())}
-        >
-          <Icon iconName={isTransitMode ? "orbit" : "lightning"} width={15} height={15} aria-hidden="true" />
-          {isBusy ? "Расчёт" : isTransitMode ? "Показать" : "Рассчитать"}
-        </button>
-        <button
-          className={styles.toolButton}
-          type="button"
-          disabled={
-            isBusy ||
-            isTransitMode ||
-            !selectedClient ||
-            (mode === "compatibility" && !selectedPartnerClient) ||
-            !model ||
-            isLinked
-          }
-          onClick={() => void onPersist()}
-        >
-          <Icon iconName="pin" width={15} height={15} aria-hidden="true" />
-          {isLinked ? "Привязан" : "Привязать"}
-        </button>
-        <button
-          className={styles.toolButton}
-          type="button"
-          disabled={isBusy || !selectedCalculationId}
-          onClick={() => void (isTransitMode ? onFetchTransit() : onRecalculate())}
-        >
-          <Icon iconName="refresh" width={15} height={15} aria-hidden="true" />
-          Обновить
-        </button>
-        <button
-          className={styles.toolButton}
-          type="button"
-          disabled={pdfDisabled}
-          title={pdfTitle}
-          onClick={() => void onPdf()}
-        >
-          <Icon iconName="doc" width={15} height={15} aria-hidden="true" />
-          {pdfLabel}
-        </button>
-        <button
-          className={styles.toolButton}
-          type="button"
-          disabled={isAiDraftDisabled}
-          title={aiDraftDisabledReason ?? undefined}
-          onClick={() => void onCreateAiDraft()}
-        >
-          <Icon iconName="sparkle" width={15} height={15} aria-hidden="true" />
-          {aiDraftText ? "Обновить AI" : "AI-разбор"}
-        </button>
+        <ActionMenu
+          className={styles.toolbarActionsMenu}
+          label="Действия"
+          triggerAriaLabel="Действия Human Design"
+          align="end"
+          items={toolbarActionItems}
+        />
       </header>
 
       <section className={styles.body} data-empty-client={!isClientSelected ? "true" : undefined}>
@@ -537,6 +535,15 @@ export function HumanDesignPageView({
 
 function centerColorStyle(color: string): CSSProperties {
   return { "--center-color": color } as CSSProperties;
+}
+
+function renderToolbarActionLabel(label: string, description: string | null) {
+  return (
+    <span className={styles.toolbarActionLabel}>
+      <span>{label}</span>
+      {description ? <small className={styles.toolbarActionDescription}>{description}</small> : null}
+    </span>
+  );
 }
 
 function ActivationColumn({
