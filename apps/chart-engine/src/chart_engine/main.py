@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from chart_engine.kerykeion_adapter import (
     calculate_natal,
     calculate_planetary_positions,
+    calculate_progression,
     calculate_solar_return,
     calculate_synastry,
     calculate_transit,
@@ -12,8 +13,10 @@ from chart_engine.schemas import (
     NatalRequest,
     PlanetaryPositionsPayload,
     PlanetaryPositionsRequest,
+    ProgressionRequest,
     SolarReturnRequest,
     StoredChartCalculationPayload,
+    StoredChartProgressionCalculationPayload,
     StoredChartSolarReturnCalculationPayload,
     StoredChartSynastryCalculationPayload,
     StoredChartTransitCalculationPayload,
@@ -60,6 +63,15 @@ def synastry(request: SynastryRequest) -> StoredChartSynastryCalculationPayload:
 )
 def solar_return(request: SolarReturnRequest) -> StoredChartSolarReturnCalculationPayload:
     return calculate_solar_return(request)
+
+
+@app.post(
+    "/v1/progressions",
+    response_model=StoredChartProgressionCalculationPayload,
+    response_model_exclude_none=True,
+)
+def progressions(request: ProgressionRequest) -> StoredChartProgressionCalculationPayload:
+    return calculate_progression(request)
 
 
 @app.post("/v1/positions", response_model=PlanetaryPositionsPayload, response_model_exclude_none=True)

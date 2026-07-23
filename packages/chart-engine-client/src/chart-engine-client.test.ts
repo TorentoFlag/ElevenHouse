@@ -184,6 +184,43 @@ describe("ChartEngineHttpClient", () => {
     );
   });
 
+  it("posts progression input to the private chart engine", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => progressionResult
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012/",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateProgression(progressionRequest)).resolves.toMatchObject({
+      schemaVersion: "chart-result.v1",
+      method: "progression",
+      result: { aspectsToNatal: [expect.objectContaining({ progressedPoint: "moon" })] }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://chart-engine:8012/v1/progressions",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("treats invalid progression provider JSON as permanent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaVersion: "wrong" })
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateProgression(progressionRequest)).rejects.toBeInstanceOf(
+      ChartEnginePermanentError
+    );
+  });
+
   it("posts planetary positions input to the private chart engine", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -358,6 +395,49 @@ const solarReturnResult = {
         orb: 0.01,
         applying: true,
         strength: 0.99
+      }
+    ],
+    warnings: []
+  }
+} as const;
+
+const progressionRequest = {
+  schemaVersion: "chart-request.v1",
+  method: "progression",
+  settings: request.settings,
+  inputSnapshot: request.inputSnapshot,
+  progressionSnapshot: {
+    targetDate: "2026-07-23",
+    progressionType: "secondary"
+  }
+} as const;
+
+const progressionResult = {
+  schemaVersion: "chart-result.v1",
+  method: "progression",
+  provider: result.provider,
+  settings: { zodiac: "tropical", ...request.settings },
+  inputSnapshot: request.inputSnapshot,
+  progressionSnapshot: {
+    ...progressionRequest.progressionSnapshot,
+    calculationBasis: {
+      symbolicDate: "1990-08-20",
+      ageDays: 36,
+      dayForYearRatio: 1
+    }
+  },
+  result: {
+    natal: result.result,
+    progressed: result.result,
+    aspectsToNatal: [
+      {
+        progressedPoint: "moon",
+        natalPoint: "sun",
+        type: "trine",
+        angle: 120,
+        orb: 1.25,
+        applying: true,
+        strength: 0.79
       }
     ],
     warnings: []

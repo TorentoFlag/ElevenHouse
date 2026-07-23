@@ -87,6 +87,29 @@ class SolarReturnRequest(BaseModel):
     solarReturnSnapshot: SolarReturnRequestSnapshot
 
 
+class ProgressionRequestSnapshot(BaseModel):
+    targetDate: str
+    progressionType: Literal["secondary"]
+
+
+class ProgressionCalculationBasis(BaseModel):
+    symbolicDate: str
+    ageDays: int = Field(ge=0)
+    dayForYearRatio: Literal[1]
+
+
+class ProgressionSnapshot(ProgressionRequestSnapshot):
+    calculationBasis: ProgressionCalculationBasis
+
+
+class ProgressionRequest(BaseModel):
+    schemaVersion: Literal["chart-request.v1"]
+    method: Literal["progression"]
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+    progressionSnapshot: ProgressionRequestSnapshot
+
+
 class PlanetaryPositionsSettings(BaseModel):
     zodiac: Literal["tropical"] = "tropical"
     nodeType: Literal["true", "mean"]
@@ -163,6 +186,16 @@ class ChartSolarReturnAspect(BaseModel):
     strength: float | None = None
 
 
+class ChartProgressionAspect(BaseModel):
+    progressedPoint: str
+    natalPoint: str
+    type: str
+    angle: float
+    orb: float
+    applying: bool | None = None
+    strength: float | None = None
+
+
 class PlanetaryPosition(BaseModel):
     id: Literal[
         "sun",
@@ -200,6 +233,13 @@ class ChartSolarReturnRenderResult(BaseModel):
     natal: ChartRenderResult
     solarReturn: ChartRenderResult
     aspectsToNatal: list[ChartSolarReturnAspect]
+    warnings: list[ChartWarning]
+
+
+class ChartProgressionRenderResult(BaseModel):
+    natal: ChartRenderResult
+    progressed: ChartRenderResult
+    aspectsToNatal: list[ChartProgressionAspect]
     warnings: list[ChartWarning]
 
 
@@ -278,6 +318,16 @@ class StoredChartSolarReturnCalculationPayload(BaseModel):
     inputSnapshot: NatalInputSnapshot
     solarReturnSnapshot: SolarReturnSnapshot
     result: ChartSolarReturnRenderResult
+
+
+class StoredChartProgressionCalculationPayload(BaseModel):
+    schemaVersion: Literal["chart-result.v1"]
+    method: Literal["progression"]
+    provider: ProviderMetadata
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+    progressionSnapshot: ProgressionSnapshot
+    result: ChartProgressionRenderResult
 
 
 class PlanetaryPositionsPayload(BaseModel):

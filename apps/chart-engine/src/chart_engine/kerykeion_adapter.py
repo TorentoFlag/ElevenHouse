@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from importlib.metadata import version
 from math import ceil
 from typing import Any
@@ -11,6 +12,8 @@ from chart_engine.schemas import (
     ChartDistributions,
     ChartHouse,
     ChartPoint,
+    ChartProgressionAspect,
+    ChartProgressionRenderResult,
     ChartSolarReturnAspect,
     ChartSolarReturnRenderResult,
     ChartRenderResult,
@@ -26,10 +29,14 @@ from chart_engine.schemas import (
     PlanetaryPosition,
     PlanetaryPositionsPayload,
     PlanetaryPositionsRequest,
+    ProgressionCalculationBasis,
+    ProgressionRequest,
+    ProgressionSnapshot,
     ProviderMetadata,
     SolarReturnRequest,
     SolarReturnSnapshot,
     StoredChartCalculationPayload,
+    StoredChartProgressionCalculationPayload,
     StoredChartSolarReturnCalculationPayload,
     StoredChartSynastryCalculationPayload,
     StoredChartTransitCalculationPayload,
@@ -466,6 +473,88 @@ def calculate_solar_return(
     )
 
 
+def calculate_progression(request: ProgressionRequest) -> StoredChartProgressionCalculationPayload:
+    active_points = _active_points(request.settings.nodeType)
+    natal_subject = _create_subject(
+        name="natal",
+        date=request.inputSnapshot.birthDate,
+        time=request.inputSnapshot.birthTime,
+        timezone=request.inputSnapshot.timezone,
+        latitude=request.inputSnapshot.latitude,
+        longitude=request.inputSnapshot.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+    calculation_basis = _progression_basis(
+        request.inputSnapshot.birthDate,
+        request.progressionSnapshot.targetDate,
+    )
+    progressed_subject = _create_subject(
+        name="progressed",
+        date=calculation_basis.symbolicDate,
+        time=request.inputSnapshot.birthTime,
+        timezone=request.inputSnapshot.timezone,
+        latitude=request.inputSnapshot.latitude,
+        longitude=request.inputSnapshot.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+    allowed_aspects = (
+        MAJOR_ASPECTS
+        if request.settings.aspectPreset == "major"
+        else MAJOR_ASPECTS | MINOR_ASPECTS
+    )
+    active_aspects = _active_aspects(allowed_aspects, request.settings.orbMultiplier)
+    progression_data = ChartDataFactory.create_transit_chart_data(
+        natal_subject,
+        progressed_subject,
+        active_points=active_points,
+        active_aspects=active_aspects,
+    )
+    warnings = _map_warnings(request)
+
+    return StoredChartProgressionCalculationPayload(
+        schemaVersion="chart-result.v1",
+        method="progression",
+        provider=ProviderMetadata(
+            name="kerykeion",
+            version=version("kerykeion"),
+            ephemeris="swiss-ephemeris",
+        ),
+        settings=request.settings,
+        inputSnapshot=request.inputSnapshot,
+        progressionSnapshot=ProgressionSnapshot(
+            targetDate=request.progressionSnapshot.targetDate,
+            progressionType="secondary",
+            calculationBasis=calculation_basis,
+        ),
+        result=ChartProgressionRenderResult(
+            natal=_map_render_result(
+                natal_subject,
+                request.settings.nodeType,
+                request.settings.aspectPreset,
+                request.settings.orbMultiplier,
+                active_points,
+                warnings,
+            ),
+            progressed=_map_render_result(
+                progressed_subject,
+                request.settings.nodeType,
+                request.settings.aspectPreset,
+                request.settings.orbMultiplier,
+                active_points,
+                [],
+            ),
+            aspectsToNatal=_map_progression_aspects(
+                progression_data.aspects,
+                allowed_aspects,
+                request.settings.orbMultiplier,
+            ),
+            warnings=warnings,
+        ),
+    )
+
+
 def calculate_planetary_positions(request: PlanetaryPositionsRequest) -> PlanetaryPositionsPayload:
     year, month, day = [int(part) for part in request.inputSnapshot.birthDate.split("-")]
     hour, minute = [int(part) for part in request.inputSnapshot.birthTime.split(":")]
@@ -770,6 +859,49 @@ def _map_solar_return_aspects(
     return aspects
 
 
+def _map_progression_aspects(
+    source_aspects: list[Any],
+    allowed_aspects: set[str],
+    orb_multiplier: float,
+) -> list[ChartProgressionAspect]:
+    aspects = []
+    seen_aspects = set()
+
+    for aspect in source_aspects:
+        if aspect.aspect not in allowed_aspects:
+            continue
+        point_a = POINT_NAME_TO_ID.get(aspect.p1_name)
+        point_b = POINT_NAME_TO_ID.get(aspect.p2_name)
+        if point_a is None or point_b is None:
+            continue
+        if aspect.p1_owner == "progressed" and aspect.p2_owner == "natal":
+            progressed_point, natal_point = point_a, point_b
+        elif aspect.p1_owner == "natal" and aspect.p2_owner == "progressed":
+            progressed_point, natal_point = point_b, point_a
+        else:
+            continue
+        orb_limit = _orb_limit(aspect.aspect, orb_multiplier)
+        if float(aspect.orbit) > orb_limit:
+            continue
+        aspect_key = (progressed_point, natal_point, aspect.aspect)
+        if aspect_key in seen_aspects:
+            continue
+        seen_aspects.add(aspect_key)
+        aspects.append(
+            ChartProgressionAspect(
+                progressedPoint=progressed_point,
+                natalPoint=natal_point,
+                type=aspect.aspect,
+                angle=float(aspect.aspect_degrees),
+                orb=float(aspect.orbit),
+                applying=_is_applying(aspect.aspect_movement),
+                strength=_aspect_strength(float(aspect.orbit), orb_limit),
+            )
+        )
+
+    return aspects
+
+
 def _map_house_overlays(comparison: Any) -> list[ChartSynastryHouseOverlay]:
     overlays = []
     for item in comparison.first_points_in_second_houses:
@@ -919,3 +1051,18 @@ def _utc_datetime_string(value: str) -> str:
     if value.endswith("+00:00"):
         return f"{value[:-6]}Z"
     return value
+
+
+def _progression_basis(birth_date: str, target_date: str) -> ProgressionCalculationBasis:
+    born = date.fromisoformat(birth_date)
+    target = date.fromisoformat(target_date)
+    years = target.year - born.year
+    if (target.month, target.day) < (born.month, born.day):
+        years -= 1
+    age_days = max(0, years)
+    symbolic_date = born + timedelta(days=age_days)
+    return ProgressionCalculationBasis(
+        symbolicDate=symbolic_date.isoformat(),
+        ageDays=age_days,
+        dayForYearRatio=1,
+    )
