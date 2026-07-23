@@ -137,6 +137,7 @@ export function HumanDesignPageView({
               value={selectedPartnerClient?.value ?? ""}
               placeholder="Выберите партнёра"
               selectedClient={selectedPartnerClient}
+              excludeClientIds={selectedClient ? [selectedClient.value] : []}
               requireBirthDate={false}
               fullWidth
               disabled={isBusy}

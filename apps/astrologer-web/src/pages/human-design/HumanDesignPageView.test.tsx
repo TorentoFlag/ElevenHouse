@@ -204,6 +204,7 @@ describe("HumanDesignPageView", () => {
 
     expect(pickers).toHaveLength(2);
     expect(pickers.map((picker) => picker.props.label)).toEqual(["Клиент", "Партнёр"]);
+    expect(pickers[1]?.props.excludeClientIds).toEqual(["22222222-2222-4222-8222-222222222222"]);
     expect(text).toContain("Партнёрский разбор");
     expect(text).toContain("Электромагнитика");
     expect(text).toContain("Канал 43–23");
