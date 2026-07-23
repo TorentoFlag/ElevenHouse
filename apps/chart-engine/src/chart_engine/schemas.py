@@ -119,6 +119,31 @@ class ProgressionRequest(BaseModel):
     progressionSnapshot: ProgressionRequestSnapshot
 
 
+class HoraryQuestionSnapshot(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    category: Literal[
+        "relationship",
+        "career",
+        "money",
+        "home",
+        "health",
+        "travel",
+        "other",
+    ] = "other"
+    date: str
+    time: str
+    timezone: str
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
+class HoraryRequest(BaseModel):
+    schemaVersion: Literal["chart-request.v1"]
+    method: Literal["horary"]
+    settings: NatalSettings
+    questionSnapshot: HoraryQuestionSnapshot
+
+
 class PlanetaryPositionsSettings(BaseModel):
     zodiac: Literal["tropical"] = "tropical"
     nodeType: Literal["true", "mean"]
@@ -348,6 +373,15 @@ class StoredChartProgressionCalculationPayload(BaseModel):
     inputSnapshot: NatalInputSnapshot
     progressionSnapshot: ProgressionSnapshot
     result: ChartProgressionRenderResult
+
+
+class StoredChartHoraryCalculationPayload(BaseModel):
+    schemaVersion: Literal["chart-result.v1"]
+    method: Literal["horary"]
+    provider: ProviderMetadata
+    settings: NatalSettings
+    questionSnapshot: HoraryQuestionSnapshot
+    result: ChartRenderResult
 
 
 class PlanetaryPositionsPayload(BaseModel):

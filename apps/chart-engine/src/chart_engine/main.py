@@ -5,6 +5,7 @@ from chart_engine.kerykeion_adapter import (
     calculate_natal,
     calculate_planetary_positions,
     calculate_progression,
+    calculate_horary,
     calculate_solar_return,
     calculate_synastry,
     calculate_transit,
@@ -12,6 +13,7 @@ from chart_engine.kerykeion_adapter import (
 from chart_engine.schemas import (
     CompositeRequest,
     HealthResponse,
+    HoraryRequest,
     NatalRequest,
     PlanetaryPositionsPayload,
     PlanetaryPositionsRequest,
@@ -19,6 +21,7 @@ from chart_engine.schemas import (
     SolarReturnRequest,
     StoredChartCalculationPayload,
     StoredChartCompositeCalculationPayload,
+    StoredChartHoraryCalculationPayload,
     StoredChartProgressionCalculationPayload,
     StoredChartSolarReturnCalculationPayload,
     StoredChartSynastryCalculationPayload,
@@ -84,6 +87,11 @@ def solar_return(request: SolarReturnRequest) -> StoredChartSolarReturnCalculati
 )
 def progressions(request: ProgressionRequest) -> StoredChartProgressionCalculationPayload:
     return calculate_progression(request)
+
+
+@app.post("/v1/horary", response_model=StoredChartHoraryCalculationPayload, response_model_exclude_none=True)
+def horary(request: HoraryRequest) -> StoredChartHoraryCalculationPayload:
+    return calculate_horary(request)
 
 
 @app.post("/v1/positions", response_model=PlanetaryPositionsPayload, response_model_exclude_none=True)

@@ -258,6 +258,44 @@ describe("ChartEngineHttpClient", () => {
     );
   });
 
+  it("posts horary input to the private chart engine", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => horaryResult
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012/",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateHorary(horaryRequest)).resolves.toMatchObject({
+      schemaVersion: "chart-result.v1",
+      method: "horary",
+      questionSnapshot: expect.objectContaining({ category: "career" }),
+      result: { points: expect.arrayContaining([expect.objectContaining({ id: "sun" })]) }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://chart-engine:8012/v1/horary",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("treats invalid horary provider JSON as permanent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaVersion: "wrong" })
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateHorary(horaryRequest)).rejects.toBeInstanceOf(
+      ChartEnginePermanentError
+    );
+  });
+
   it("posts planetary positions input to the private chart engine", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -495,6 +533,30 @@ const progressionResult = {
     ],
     warnings: []
   }
+} as const;
+
+const horaryRequest = {
+  schemaVersion: "chart-request.v1",
+  method: "horary",
+  settings: request.settings,
+  questionSnapshot: {
+    question: "Стоит ли принимать предложение?",
+    category: "career",
+    date: "2026-07-23",
+    time: "14:30",
+    timezone: "Europe/Moscow",
+    latitude: 55.7558,
+    longitude: 37.6173
+  }
+} as const;
+
+const horaryResult = {
+  schemaVersion: "chart-result.v1",
+  method: "horary",
+  provider: result.provider,
+  settings: { zodiac: "tropical", ...request.settings },
+  questionSnapshot: horaryRequest.questionSnapshot,
+  result: result.result
 } as const;
 
 const positionsResult = {

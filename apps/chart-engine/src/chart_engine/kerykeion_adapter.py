@@ -26,6 +26,7 @@ from chart_engine.schemas import (
     ChartTransitRenderResult,
     ChartWarning,
     CompositeRequest,
+    HoraryRequest,
     NatalRequest,
     PlanetaryPosition,
     PlanetaryPositionsPayload,
@@ -38,6 +39,7 @@ from chart_engine.schemas import (
     SolarReturnSnapshot,
     StoredChartCalculationPayload,
     StoredChartCompositeCalculationPayload,
+    StoredChartHoraryCalculationPayload,
     StoredChartProgressionCalculationPayload,
     StoredChartSolarReturnCalculationPayload,
     StoredChartSynastryCalculationPayload,
@@ -605,6 +607,40 @@ def calculate_progression(request: ProgressionRequest) -> StoredChartProgression
                 request.settings.orbMultiplier,
             ),
             warnings=warnings,
+        ),
+    )
+
+
+def calculate_horary(request: HoraryRequest) -> StoredChartHoraryCalculationPayload:
+    active_points = _active_points(request.settings.nodeType)
+    subject = _create_subject(
+        name="horary",
+        date=request.questionSnapshot.date,
+        time=request.questionSnapshot.time,
+        timezone=request.questionSnapshot.timezone,
+        latitude=request.questionSnapshot.latitude,
+        longitude=request.questionSnapshot.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+
+    return StoredChartHoraryCalculationPayload(
+        schemaVersion="chart-result.v1",
+        method="horary",
+        provider=ProviderMetadata(
+            name="kerykeion",
+            version=version("kerykeion"),
+            ephemeris="swiss-ephemeris",
+        ),
+        settings=request.settings,
+        questionSnapshot=request.questionSnapshot,
+        result=_map_render_result(
+            subject,
+            request.settings.nodeType,
+            request.settings.aspectPreset,
+            request.settings.orbMultiplier,
+            active_points,
+            [],
         ),
     )
 

@@ -1,5 +1,6 @@
 import {
   chartCompositeCalculationRequestSchema,
+  chartHoraryCalculationRequestSchema,
   chartNatalCalculationRequestSchema,
   chartPlanetaryPositionsRequestSchema,
   chartPlanetaryPositionsResponseSchema,
@@ -9,11 +10,13 @@ import {
   chartTransitCalculationRequestSchema,
   storedChartProgressionCalculationPayloadSchema,
   storedChartSolarReturnCalculationPayloadSchema,
+  storedChartHoraryCalculationPayloadSchema,
   storedChartSynastryCalculationPayloadSchema,
   storedChartTransitCalculationPayloadSchema,
   storedChartCalculationPayloadSchema,
   storedChartCompositeCalculationPayloadSchema,
   type ChartCompositeCalculationRequestInput,
+  type ChartHoraryCalculationRequestInput,
   type ChartNatalCalculationRequestInput,
   type ChartPlanetaryPositionsRequestInput,
   type ChartPlanetaryPositionsResponse,
@@ -23,6 +26,7 @@ import {
   type ChartTransitCalculationRequestInput,
   type StoredChartProgressionCalculationPayload,
   type StoredChartSolarReturnCalculationPayload,
+  type StoredChartHoraryCalculationPayload,
   type StoredChartSynastryCalculationPayload,
   type StoredChartTransitCalculationPayload,
   type StoredChartCompositeCalculationPayload,
@@ -176,6 +180,28 @@ export class ChartEngineHttpClient {
     const parsed = storedChartProgressionCalculationPayloadSchema.safeParse(data);
     if (!parsed.success) {
       throw new ChartEnginePermanentError("Chart engine returned invalid progression result", {
+        cause: parsed.error
+      });
+    }
+    return parsed.data;
+  }
+
+  async calculateHorary(
+    payload: ChartHoraryCalculationRequestInput
+  ): Promise<StoredChartHoraryCalculationPayload> {
+    const parsedPayload = chartHoraryCalculationRequestSchema.parse(payload);
+    const response = await this.fetchFn(`${this.baseUrl}/v1/horary`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(parsedPayload)
+    });
+    if (!response.ok) {
+      throw new Error(`CHART_ENGINE_HTTP_${response.status}`);
+    }
+    const data: unknown = await response.json();
+    const parsed = storedChartHoraryCalculationPayloadSchema.safeParse(data);
+    if (!parsed.success) {
+      throw new ChartEnginePermanentError("Chart engine returned invalid horary result", {
         cause: parsed.error
       });
     }
