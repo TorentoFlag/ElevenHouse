@@ -4,6 +4,7 @@ import {
   chartPlanetaryPositionsResponseSchema,
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
+  chartProgressionJobCreateRequestSchema,
   chartSolarReturnJobCreateRequestSchema,
   chartSynastryJobCreateRequestSchema,
   chartTransitJobCreateRequestSchema,
@@ -137,6 +138,40 @@ describe("chart contracts", () => {
       chartSolarReturnJobCreateRequestSchema.parse({
         clientId: "00000000-0000-4000-8000-000000000001",
         year: 2201,
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).toThrow();
+  });
+
+  it("accepts a secondary progression job request by client id, target date and settings", () => {
+    expect(
+      chartProgressionJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        targetDate: "2026-07-23",
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).toMatchObject({
+      clientId: "00000000-0000-4000-8000-000000000001",
+      targetDate: "2026-07-23"
+    });
+  });
+
+  it("rejects browser-supplied birth data in progression job requests", () => {
+    expect(() =>
+      chartProgressionJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        targetDate: "2026-07-23",
+        birthDate: "1990-07-15",
         settings: {
           houseSystem: "placidus",
           nodeType: "true",
@@ -500,6 +535,108 @@ describe("chart contracts", () => {
       solarReturnPoint: "sun",
       natalPoint: "sun"
     });
+  });
+
+  it("accepts complete render data for a secondary progression dual-wheel screen", () => {
+    const payload = storedChartCalculationPayloadSchema.parse({
+      schemaVersion: "chart-result.v1",
+      method: "progression",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: {
+        zodiac: "tropical",
+        houseSystem: "placidus",
+        nodeType: "true",
+        aspectPreset: "major",
+        orbMultiplier: 1
+      },
+      inputSnapshot: {
+        birthDate: "1990-07-15",
+        birthTime: "10:30",
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964,
+        birthTimePrecision: "exact"
+      },
+      progressionSnapshot: {
+        targetDate: "2026-07-23",
+        progressionType: "secondary",
+        calculationBasis: {
+          symbolicDate: "1990-08-20",
+          ageDays: 36,
+          dayForYearRatio: 1
+        }
+      },
+      result: {
+        natal: completeRenderResult(),
+        progressed: completeRenderResult(),
+        aspectsToNatal: [
+          {
+            progressedPoint: "moon",
+            natalPoint: "sun",
+            type: "trine",
+            angle: 120,
+            orb: 1.2,
+            applying: true,
+            strength: 0.76
+          }
+        ],
+        warnings: []
+      }
+    });
+
+    expect(payload.method).toBe("progression");
+    if (payload.method !== "progression") {
+      throw new Error("Expected progression chart payload");
+    }
+    expect(payload.progressionSnapshot).toMatchObject({
+      targetDate: "2026-07-23",
+      progressionType: "secondary",
+      calculationBasis: { symbolicDate: "1990-08-20", dayForYearRatio: 1 }
+    });
+    expect(payload.result.aspectsToNatal[0]).toMatchObject({
+      progressedPoint: "moon",
+      natalPoint: "sun"
+    });
+  });
+
+  it("rejects progression results without progressed render points", () => {
+    expect(() =>
+      storedChartCalculationPayloadSchema.parse({
+        schemaVersion: "chart-result.v1",
+        method: "progression",
+        provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        inputSnapshot: {
+          birthDate: "1990-07-15",
+          birthTime: "10:30",
+          timezone: "Europe/Rome",
+          latitude: 41.9028,
+          longitude: 12.4964,
+          birthTimePrecision: "exact"
+        },
+        progressionSnapshot: {
+          targetDate: "2026-07-23",
+          progressionType: "secondary",
+          calculationBasis: {
+            symbolicDate: "1990-08-20",
+            ageDays: 36,
+            dayForYearRatio: 1
+          }
+        },
+        result: {
+          natal: completeRenderResult(),
+          progressed: { ...completeRenderResult(), points: [] },
+          aspectsToNatal: [],
+          warnings: []
+        }
+      })
+    ).toThrow();
   });
 
   it("accepts an arbitrary-moment planetary positions request for Human Design", () => {

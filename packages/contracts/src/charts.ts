@@ -65,6 +65,17 @@ export type ChartSolarReturnJobCreateRequest = z.infer<
   typeof chartSolarReturnJobCreateRequestSchema
 >;
 
+export const chartProgressionJobCreateRequestSchema = z
+  .object({
+    clientId: uuidSchema,
+    targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    settings: chartSettingsSchema
+  })
+  .strict();
+export type ChartProgressionJobCreateRequest = z.infer<
+  typeof chartProgressionJobCreateRequestSchema
+>;
+
 export const chartPublicJobStatusSchema = z.enum(["calculating", "succeeded", "failed"]);
 export type ChartPublicJobStatus = z.infer<typeof chartPublicJobStatusSchema>;
 
@@ -153,6 +164,29 @@ export const chartSolarReturnSnapshotSchema = z
   .strict();
 export type ChartSolarReturnSnapshot = z.infer<typeof chartSolarReturnSnapshotSchema>;
 
+export const chartProgressionRequestSnapshotSchema = z
+  .object({
+    targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    progressionType: z.literal("secondary")
+  })
+  .strict();
+export type ChartProgressionRequestSnapshot = z.infer<
+  typeof chartProgressionRequestSnapshotSchema
+>;
+
+export const chartProgressionSnapshotSchema = chartProgressionRequestSnapshotSchema
+  .extend({
+    calculationBasis: z
+      .object({
+        symbolicDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        ageDays: z.number().int().min(0),
+        dayForYearRatio: z.literal(1)
+      })
+      .strict()
+  })
+  .strict();
+export type ChartProgressionSnapshot = z.infer<typeof chartProgressionSnapshotSchema>;
+
 export const chartNatalCalculationRequestSchema = z
   .object({
     schemaVersion: z.literal("chart-request.v1"),
@@ -228,6 +262,22 @@ export type ChartSolarReturnCalculationRequestInput = z.input<
 >;
 export type ChartSolarReturnCalculationRequest = z.infer<
   typeof chartSolarReturnCalculationRequestSchema
+>;
+
+export const chartProgressionCalculationRequestSchema = z
+  .object({
+    schemaVersion: z.literal("chart-request.v1"),
+    method: z.literal("progression"),
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    progressionSnapshot: chartProgressionRequestSnapshotSchema
+  })
+  .strict();
+export type ChartProgressionCalculationRequestInput = z.input<
+  typeof chartProgressionCalculationRequestSchema
+>;
+export type ChartProgressionCalculationRequest = z.infer<
+  typeof chartProgressionCalculationRequestSchema
 >;
 
 export const chartPointSchema = z
@@ -397,6 +447,29 @@ export const chartSolarReturnRenderResultSchema = z
   .strict();
 export type ChartSolarReturnRenderResult = z.infer<typeof chartSolarReturnRenderResultSchema>;
 
+export const chartProgressionAspectSchema = z
+  .object({
+    progressedPoint: z.string().trim().min(1).max(80),
+    natalPoint: z.string().trim().min(1).max(80),
+    type: z.string().trim().min(1).max(80),
+    angle: z.number().min(0).max(180),
+    orb: z.number().min(0),
+    applying: z.boolean().nullable().optional(),
+    strength: z.number().min(0).max(1).nullable().optional()
+  })
+  .strict();
+export type ChartProgressionAspect = z.infer<typeof chartProgressionAspectSchema>;
+
+export const chartProgressionRenderResultSchema = z
+  .object({
+    natal: chartRenderResultSchema,
+    progressed: chartRenderResultSchema,
+    aspectsToNatal: z.array(chartProgressionAspectSchema),
+    warnings: z.array(chartWarningSchema)
+  })
+  .strict();
+export type ChartProgressionRenderResult = z.infer<typeof chartProgressionRenderResultSchema>;
+
 export const chartSynastryAspectSchema = z
   .object({
     primaryPoint: z.string().trim().min(1).max(80),
@@ -524,11 +597,27 @@ export type StoredChartSolarReturnCalculationPayload = z.infer<
   typeof storedChartSolarReturnCalculationPayloadSchema
 >;
 
+export const storedChartProgressionCalculationPayloadSchema = z
+  .object({
+    schemaVersion: z.literal("chart-result.v1"),
+    method: z.literal("progression"),
+    provider: chartProviderMetadataSchema,
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    progressionSnapshot: chartProgressionSnapshotSchema,
+    result: chartProgressionRenderResultSchema
+  })
+  .strict();
+export type StoredChartProgressionCalculationPayload = z.infer<
+  typeof storedChartProgressionCalculationPayloadSchema
+>;
+
 export const storedChartCalculationPayloadSchema = z.discriminatedUnion("method", [
   storedChartNatalCalculationPayloadSchema,
   storedChartTransitCalculationPayloadSchema,
   storedChartSynastryCalculationPayloadSchema,
-  storedChartSolarReturnCalculationPayloadSchema
+  storedChartSolarReturnCalculationPayloadSchema,
+  storedChartProgressionCalculationPayloadSchema
 ]);
 export type StoredChartCalculationPayload = z.infer<typeof storedChartCalculationPayloadSchema>;
 

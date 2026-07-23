@@ -29,7 +29,8 @@ export const chartCalculationJobMethodValues = [
   "natal",
   "transit",
   "synastry",
-  "solar_return"
+  "solar_return",
+  "progression"
 ] as const;
 
 export const chartCalculationJobStatusValues = [

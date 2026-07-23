@@ -1,4 +1,9 @@
-export type ChartCalculationMethod = "natal" | "transit" | "synastry" | "solar_return";
+export type ChartCalculationMethod =
+  | "natal"
+  | "transit"
+  | "synastry"
+  | "solar_return"
+  | "progression";
 export type ChartJobStatus = "queued" | "processing" | "succeeded" | "failed";
 export const CHART_CALCULATION_REQUESTED_EVENT = "chart.calculation.requested.v1";
 
