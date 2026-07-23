@@ -38,10 +38,15 @@ ElevenHouse — закрытая SaaS/CRM-платформа для астрол
 - Messaging или unified inbox там, где это входит в продуктовый scope.
 - Reviews, ratings, moderation.
 - Content, lead magnets, broadcasts, subscriptions.
-- Astrology engine: charts, транзиты, синастрия, настройки школ и расчётов.
+- Astrology engine: charts, транзиты, синастрия, Human Design, настройки школ
+  и расчётов.
 - Специализированные расчёты: каноническая пифагорейская нумерология и Матрица
   судьбы в individual/compatibility modes, сохранённые результаты, трактовки и
   private PDF materials на русском и английском.
+- Human Design: канонический `human_design_classic` individual bodygraph для
+  owner-scoped CRM clients, сохранённые результаты и будущие end-state modes
+  для партнёрского разбора, транзитов, presentation, AI draft, private PDF и
+  client delivery через явные consent/access boundaries.
 - Notifications: reminders, booking/payment/session events, templates, preferences.
 - Analytics: dashboards for astrologers and platform analytics.
 - Referral programs.

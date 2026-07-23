@@ -1,7 +1,8 @@
 # Human Design Production Design
 
 Date: 2026-07-21
-Status: draft for user review
+Status: approved living artifact; individual v1 implemented, end-state modes
+remain staged implementation work
 Scope: authenticated astrologer Human Design workspace, authoritative
 calculation method, CRM client linking, bodygraph visualization, interpretation
 workspace, presentation, transits, compatibility, AI draft support, PDF export
@@ -10,6 +11,34 @@ and client delivery boundaries.
 > This document is an implementation design artifact. After implementation,
 > durable decisions must also be reflected in canonical product, architecture,
 > API, testing and design-inventory documents.
+
+## 0. Current Implementation Status
+
+As of 2026-07-23, `Личная карта` individual v1 is implemented as a
+production-backed Human Design slice:
+
+- `/human-design` is an authenticated astrologer route using CRM client input
+  only.
+- `astrologer-api` accepts preview, persist and recalculate for
+  `human_design_classic` individual mode.
+- Human Design birth/design positions are resolved through the private
+  chart-engine positions boundary; browser birth fields and frontend mechanics
+  arithmetic are intentionally rejected.
+- `packages/domain/src/human-design` owns deterministic activations, gates,
+  channels, centers, type, strategy, authority, profile, definition,
+  incarnation cross, input fingerprint and result checksum.
+- Results are persisted as shared `human_design` calculation records, linked to
+  the CRM subject, reopened through the saved-calculation list and recalculated
+  from current CRM birth data on explicit action.
+- Method confidence is backed by static approved fixtures and local persistence
+  comparison tests; external APIs remain benchmark sources only.
+- Desktop and mobile browser evidence exists under
+  `.design-qa/human-design-method-fixtures/`.
+
+The next approved implementation target is `Партнёрский разбор`; `Транзиты`,
+`Презентация`, `PDF`, `AI-разбор` and `Клиенту` remain part of the end-state
+product but stay disabled until their own contracts, domain results, backend
+workflows, visual states and verification gates are implemented.
 
 ## 1. Purpose
 

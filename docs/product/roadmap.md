@@ -115,6 +115,18 @@
       Each method requires its own contracts, domain/API workflow,
       worker/provider adapter, UI state matrix, PDF/report decision and
       Dictionary interpretation-code coverage before enabling its mode.
+- [x] Human Design individual v1: owner-scoped CRM client input only, exact
+      chart-engine personality/design longitude resolution, deterministic
+      `human_design_classic` domain mechanics, generic calculation persistence,
+      linked saved-result reopen, recalculation, approved fixture comparison
+      coverage and authenticated desktop/mobile browser evidence for
+      `/human-design`.
+- [ ] Human Design end-state modes after individual v1: compatibility /
+      connection analysis for two CRM clients, single-moment transits against a
+      saved individual bodygraph, presentation mode, checksum-bound private PDF
+      export, reviewed AI draft support and explicit client delivery. Each mode
+      requires its own contract/domain/API/UI state matrix and cannot be
+      enabled from prototype-only buttons.
 
 ## Этап 6: Контент, подписки, автоматизация
 

@@ -313,8 +313,9 @@ links the CRM subject privately to the astrologer. `POST
 Human Design record, keeps the same CRM subject identity and replaces the
 result from current CRM birth data through the same chart-engine/domain
 pipeline. State-changing Human Design routes require CSRF. Compatibility,
-transits, AI interpretation, PDF export and saved-calculation frontend
-rendering remain separate future contours.
+transits, AI interpretation and PDF export remain separate future contours; the
+current individual frontend already supports owner-scoped saved-result reopen
+through the generic calculations list.
 
 `GET /products/templates` returns active platform-owned starter templates in the
 requested locale. `POST /products/templates/:templateCode/drafts` requires an
