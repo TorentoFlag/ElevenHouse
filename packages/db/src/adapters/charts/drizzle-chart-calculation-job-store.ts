@@ -361,6 +361,19 @@ function buildChartResultSummary(result: StoredChartCalculationPayload) {
       ageDays: result.progressionSnapshot.calculationBasis.ageDays
     };
   }
+  if (result.method === "horary") {
+    return {
+      provider: result.provider.name,
+      pointCount: result.result.points.length,
+      houseCount: result.result.houses.length,
+      aspectCount: result.result.aspects.length,
+      question: result.questionSnapshot.question,
+      category: result.questionSnapshot.category,
+      date: result.questionSnapshot.date,
+      time: result.questionSnapshot.time,
+      timezone: result.questionSnapshot.timezone
+    };
+  }
   return {
     provider: result.provider.name,
     pointCount: result.result.points.length,
@@ -375,6 +388,7 @@ function buildChartCalculationTitle(method: ChartCalculationJobRow["method"]): s
   if (method === "composite") return "Composite chart";
   if (method === "solar_return") return "Solar return chart";
   if (method === "progression") return "Progression chart";
+  if (method === "horary") return "Horary chart";
   return "Natal chart";
 }
 

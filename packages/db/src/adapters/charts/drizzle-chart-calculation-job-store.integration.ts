@@ -254,6 +254,50 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
     });
   });
 
+  it("persists horary calculation records with question summary", async () => {
+    const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
+    const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+    const created = await jobStore.createOrReuseChartJob(createHoraryInput(ownerUserId));
+    if (created.kind !== "active_job") throw new Error("Expected active job");
+
+    await expect(
+      workerStore.complete({
+        jobId: created.jobId,
+        result: horaryChartResult(),
+        resultChecksum: digest("7"),
+        now: "2026-07-20T12:00:05.000Z"
+      })
+    ).resolves.toBe(true);
+
+    const job = await runtime.database.query.chartCalculationJobs.findFirst({
+      where: eq(chartCalculationJobs.id, created.jobId)
+    });
+    const calculation = await runtime.database.query.calculationRecords.findFirst({
+      where: eq(
+        calculationRecords.id,
+        job?.resultCalculationId ?? raise("Expected result calculation id")
+      )
+    });
+
+    expect(calculation).toMatchObject({
+      methodCode: "horary",
+      title: "Horary chart",
+      resultSummary: {
+        provider: "kerykeion",
+        pointCount: 14,
+        houseCount: 12,
+        aspectCount: 0,
+        question: "Стоит ли принимать предложение?",
+        category: "career",
+        date: "2026-07-23",
+        time: "14:30",
+        timezone: "Europe/Moscow"
+      }
+    });
+  });
+
   async function createClientUser(): Promise<string> {
     const result = await runtime.pool.query<{ id: string }>(
       "insert into users (status) values ('active') returning id"
@@ -347,6 +391,18 @@ function createProgressionInput(ownerUserId: string) {
         targetDate: "2026-07-23",
         progressionType: "secondary"
       }
+    }
+  };
+}
+
+function createHoraryInput(ownerUserId: string) {
+  const input = createInput(ownerUserId);
+  return {
+    ...input,
+    method: "horary" as const,
+    inputFingerprint: digest("6"),
+    inputSnapshot: {
+      questionSnapshot: horaryQuestion()
     }
   };
 }
@@ -459,6 +515,30 @@ function progressionChartResult() {
       aspectsToNatal: [],
       warnings: []
     }
+  };
+}
+
+function horaryChartResult() {
+  const natal = chartResult();
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "horary",
+    provider: natal.provider,
+    settings: natal.settings,
+    questionSnapshot: horaryQuestion(),
+    result: natal.result
+  };
+}
+
+function horaryQuestion() {
+  return {
+    question: "Стоит ли принимать предложение?",
+    category: "career",
+    date: "2026-07-23",
+    time: "14:30",
+    timezone: "Europe/Moscow",
+    latitude: 55.7558,
+    longitude: 37.6173
   };
 }
 

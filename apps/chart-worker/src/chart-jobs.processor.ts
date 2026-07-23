@@ -2,11 +2,13 @@ import { createHash } from "node:crypto";
 import {
   chartInputSnapshotSchema,
   chartCompositeCalculationRequestSchema,
+  chartHoraryCalculationRequestSchema,
   chartProgressionCalculationRequestSchema,
   chartSolarReturnCalculationRequestSchema,
   chartSettingsSchema,
   type ChartNatalCalculationRequest,
   type ChartCompositeCalculationRequest,
+  type ChartHoraryCalculationRequest,
   type ChartProgressionCalculationRequest,
   type ChartSolarReturnCalculationRequest,
   chartSynastryCalculationRequestSchema,
@@ -15,6 +17,7 @@ import {
   type ChartTransitCalculationRequest,
   type StoredChartProgressionCalculationPayload,
   type StoredChartCompositeCalculationPayload,
+  type StoredChartHoraryCalculationPayload,
   type StoredChartSolarReturnCalculationPayload,
   type StoredChartSynastryCalculationPayload,
   type StoredChartTransitCalculationPayload,
@@ -44,6 +47,9 @@ export type ChartEngineClient = {
   readonly calculateProgression: (
     payload: ChartProgressionCalculationRequest
   ) => Promise<StoredChartProgressionCalculationPayload>;
+  readonly calculateHorary: (
+    payload: ChartHoraryCalculationRequest
+  ) => Promise<StoredChartHoraryCalculationPayload>;
 };
 
 const transitJobInputSnapshotSchema = z
@@ -80,6 +86,12 @@ const progressionJobInputSnapshotSchema = chartProgressionCalculationRequestSche
   .pick({
     inputSnapshot: true,
     progressionSnapshot: true
+  })
+  .strict();
+
+const horaryJobInputSnapshotSchema = chartHoraryCalculationRequestSchema
+  .pick({
+    questionSnapshot: true
   })
   .strict();
 
@@ -207,6 +219,16 @@ async function calculateChartResult(input: {
       progressionSnapshot: snapshots.progressionSnapshot
     };
     return input.engine.calculateProgression(request);
+  }
+  if (claim.method === "horary") {
+    const snapshots = horaryJobInputSnapshotSchema.parse(claim.inputSnapshot);
+    const request: ChartHoraryCalculationRequest = {
+      schemaVersion: "chart-request.v1",
+      method: "horary",
+      settings,
+      questionSnapshot: snapshots.questionSnapshot
+    };
+    return input.engine.calculateHorary(request);
   }
   throw new UnrecoverableError("Unsupported chart calculation method");
 }

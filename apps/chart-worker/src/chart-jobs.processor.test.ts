@@ -99,6 +99,23 @@ const progressionJob = {
   }
 } as const;
 
+const horaryJob = {
+  ...job,
+  method: "horary",
+  settingsSnapshot: job.settingsSnapshot,
+  inputSnapshot: {
+    questionSnapshot: {
+      question: "Стоит ли принимать предложение?",
+      category: "career",
+      date: "2026-07-23",
+      time: "14:30",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173
+    }
+  }
+} as const;
+
 const result = {
   schemaVersion: "chart-result.v1",
   method: "natal",
@@ -242,6 +259,15 @@ const progressionResult = {
     ],
     warnings: []
   }
+} as const;
+
+const horaryResult = {
+  schemaVersion: "chart-result.v1",
+  method: "horary",
+  provider: result.provider,
+  settings: job.settingsSnapshot,
+  questionSnapshot: horaryJob.inputSnapshot.questionSnapshot,
+  result: result.result
 } as const;
 
 describe("processChartCalculationJob", () => {
@@ -435,6 +461,41 @@ describe("processChartCalculationJob", () => {
     );
   });
 
+  it("dispatches horary jobs to the horary provider endpoint", async () => {
+    const store = {
+      findByJobId: vi.fn().mockResolvedValue(horaryJob),
+      claimForProcessing: vi.fn().mockResolvedValue(horaryJob),
+      complete: vi.fn().mockResolvedValue(true),
+      fail: vi.fn()
+    };
+    const engine = createEngine({
+      calculateHorary: vi.fn().mockResolvedValue(horaryResult)
+    });
+
+    await processChartCalculationJob({
+      jobId: horaryJob.id,
+      finalAttempt: false,
+      store,
+      engine,
+      now: new Date("2026-07-22T12:00:00.000Z")
+    });
+
+    expect(engine.calculateNatal).not.toHaveBeenCalled();
+    expect(engine.calculateTransit).not.toHaveBeenCalled();
+    expect(engine.calculateSynastry).not.toHaveBeenCalled();
+    expect(engine.calculateSolarReturn).not.toHaveBeenCalled();
+    expect(engine.calculateProgression).not.toHaveBeenCalled();
+    expect(engine.calculateHorary).toHaveBeenCalledWith({
+      schemaVersion: "chart-request.v1",
+      method: "horary",
+      settings: horaryJob.settingsSnapshot,
+      questionSnapshot: horaryJob.inputSnapshot.questionSnapshot
+    });
+    expect(store.complete).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: horaryJob.id, result: horaryResult })
+    );
+  });
+
   it("treats already succeeded jobs as no-op", async () => {
     const store = {
       findByJobId: vi.fn().mockResolvedValue({ ...job, status: "succeeded" }),
@@ -510,6 +571,7 @@ function createEngine(overrides: Partial<ChartEngineClient> = {}): ChartEngineCl
     calculateComposite: vi.fn(),
     calculateSolarReturn: vi.fn(),
     calculateProgression: vi.fn(),
+    calculateHorary: vi.fn(),
     ...overrides
   };
 }
