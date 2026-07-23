@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
-import type { HumanDesignIndividualResult } from "@elevenhouse/contracts";
+import type {
+  HumanDesignCompatibilityResult,
+  HumanDesignIndividualResult
+} from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import { SavedCalculationPicker } from "../../features/calculations/components/SavedCalculationPicker";
@@ -45,9 +48,9 @@ describe("HumanDesignPageView", () => {
     const text = textOf(view);
     const disabledFutureButtons = walk(view).filter(
       (element) =>
-        element.type === "button" &&
-        element.props.disabled === true &&
-        ["Транзиты", "Партнёрский", "PDF", "AI-разбор"].some((label) =>
+      element.type === "button" &&
+      element.props.disabled === true &&
+        ["Транзиты", "PDF", "AI-разбор"].some((label) =>
           textOf(element).includes(label)
         )
     );
@@ -59,8 +62,27 @@ describe("HumanDesignPageView", () => {
     expect(text).toContain("Канал 20–34");
     expect(text).toContain("Личность");
     expect(text).toContain("Дизайн");
-    expect(disabledFutureButtons).toHaveLength(4);
+    expect(disabledFutureButtons).toHaveLength(3);
     expect(linkButton?.props.disabled).toBe(false);
+  });
+
+  it("renders partner mode with two CRM selectors and connection dynamics", () => {
+    const view = HumanDesignPageView({
+      ...baseProps(),
+      mode: "compatibility",
+      selectedClient: clientOption("22222222-2222-4222-8222-222222222222", "Марина Краснова"),
+      selectedPartnerClient: clientOption("44444444-4444-4444-8444-444444444444", "Илья Орлов"),
+      selectedDetailKey: "compatibility:summary",
+      model: createHumanDesignViewModel(sampleCompatibilityResult())
+    });
+    const pickers = walk(view).filter((element) => element.type === ClientSearchCombobox);
+    const text = textOf(view);
+
+    expect(pickers).toHaveLength(2);
+    expect(pickers.map((picker) => picker.props.label)).toEqual(["Клиент", "Партнёр"]);
+    expect(text).toContain("Партнёрский разбор");
+    expect(text).toContain("Электромагнитика");
+    expect(text).toContain("Канал 43–23");
   });
 
   it("renders saved calculations rail and opens selected records", () => {
@@ -116,7 +138,9 @@ describe("HumanDesignPageView", () => {
 
 function baseProps(): HumanDesignPageViewProps {
   return {
+    mode: "individual",
     selectedClient: null,
+    selectedPartnerClient: null,
     model: null,
     selectedDetailKey: "type",
     status: {
@@ -129,12 +153,29 @@ function baseProps(): HumanDesignPageViewProps {
     selectedCalculationId: null,
     isBusy: false,
     isLinked: false,
+    onSelectMode: vi.fn(),
     onSelectClient: vi.fn(),
+    onSelectPartnerClient: vi.fn(),
     onSelectDetail: vi.fn(),
     onPreview: vi.fn(),
     onPersist: vi.fn(),
     onSelectSaved: vi.fn(),
     onRecalculate: vi.fn()
+  };
+}
+
+function clientOption(value: string, label: string) {
+  return {
+    value,
+    label,
+    initials: label
+      .split(" ")
+      .map((part) => part[0])
+      .join(""),
+    subtitle: "15.07.1990 · CRM",
+    birthDateDisplay: "15.07.1990",
+    hasBirthDate: true,
+    birthData: null
   };
 }
 
@@ -272,6 +313,61 @@ function sampleResult(): HumanDesignIndividualResult {
       personalityLine: 1,
       designLine: 3,
       code: "1/3"
+    }
+  };
+}
+
+function sampleCompatibilityResult(): HumanDesignCompatibilityResult {
+  const subject = sampleResult();
+  const partner = {
+    ...sampleResult(),
+    inputFingerprint: {
+      algorithm: "sha256" as const,
+      canonicalization: "json-stable-v1" as const,
+      scope: "human-design-individual-resolved-input.v1" as const,
+      value: `sha256:${"d".repeat(64)}`
+    },
+    resultChecksum: {
+      algorithm: "sha256" as const,
+      canonicalization: "json-stable-v1" as const,
+      value: `sha256:${"e".repeat(64)}`
+    }
+  };
+  return {
+    methodCode: "human_design_classic",
+    engineRevision: 1,
+    schemaVersion: "human-design-compatibility-result.v1",
+    mode: "compatibility",
+    participants: { subject, partner },
+    connectionChannels: [
+      {
+        code: "43-23",
+        gates: [43, 23],
+        centers: ["ajna", "throat"],
+        circuit: "individual",
+        dynamic: "electromagnetic",
+        subjectGateState: "hanging",
+        partnerGateState: "hanging"
+      }
+    ],
+    dynamicCounts: {
+      electromagnetic: 1,
+      companionship: 0,
+      dominance: 0,
+      compromise: 0
+    },
+    sharedDefinedCenters: ["throat"],
+    bridgedCenters: ["ajna"],
+    inputFingerprint: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      scope: "human-design-compatibility-input.v1",
+      value: `sha256:${"f".repeat(64)}`
+    },
+    resultChecksum: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      value: `sha256:${"f".repeat(64)}`
     }
   };
 }

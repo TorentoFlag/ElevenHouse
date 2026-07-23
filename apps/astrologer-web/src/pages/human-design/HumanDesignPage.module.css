@@ -56,8 +56,10 @@
 }
 
 .clientStrip {
-  width: min(356px, 30vw);
+  display: grid;
+  width: min(420px, 34vw);
   min-width: 252px;
+  gap: 8px;
 }
 
 .modeTabs {
@@ -72,6 +74,7 @@
 }
 
 .modeActive,
+.modeButton,
 .modeDisabled {
   min-height: 32px;
   padding: 0 15px;
@@ -88,6 +91,14 @@
 .modeActive {
   background: var(--hd-gold);
   color: #2e2342;
+}
+
+.modeButton {
+  cursor: pointer;
+}
+
+.modeButton:hover {
+  background: rgb(255 255 255 / 0.04);
 }
 
 .modeDisabled {
@@ -372,6 +383,26 @@
   font-weight: 640;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.connectionGroup {
+  display: grid;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.connectionGroupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 2px;
+  color: rgb(186 178 218 / 0.68);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.connectionGroupHead strong {
+  color: var(--hd-gold);
 }
 
 .workspace {

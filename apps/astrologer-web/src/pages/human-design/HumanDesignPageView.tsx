@@ -18,8 +18,12 @@ export type HumanDesignPageStatus = {
   readonly detail: string;
 };
 
+export type HumanDesignWorkspaceMode = "individual" | "compatibility";
+
 export type HumanDesignPageViewProps = {
+  readonly mode: HumanDesignWorkspaceMode;
   readonly selectedClient: ClientSelectOption | null;
+  readonly selectedPartnerClient: ClientSelectOption | null;
   readonly model: HumanDesignViewModel | null;
   readonly selectedDetailKey: HumanDesignDetailKey;
   readonly calculations: readonly CalculationRecordResponse[];
@@ -28,7 +32,9 @@ export type HumanDesignPageViewProps = {
   readonly errorMessage: string | null;
   readonly isBusy: boolean;
   readonly isLinked: boolean;
+  readonly onSelectMode: (mode: HumanDesignWorkspaceMode) => void;
   readonly onSelectClient: (client: ClientSelectOption) => void;
+  readonly onSelectPartnerClient: (client: ClientSelectOption) => void;
   readonly onSelectDetail: (key: HumanDesignDetailKey) => void;
   readonly onSelectSaved: (calculation: CalculationRecordResponse) => void;
   readonly onPreview: () => void | Promise<void>;
@@ -37,7 +43,9 @@ export type HumanDesignPageViewProps = {
 };
 
 export function HumanDesignPageView({
+  mode,
   selectedClient,
+  selectedPartnerClient,
   model,
   selectedDetailKey,
   calculations,
@@ -46,7 +54,9 @@ export function HumanDesignPageView({
   errorMessage,
   isBusy,
   isLinked,
+  onSelectMode,
   onSelectClient,
+  onSelectPartnerClient,
   onSelectDetail,
   onSelectSaved,
   onPreview,
@@ -66,7 +76,7 @@ export function HumanDesignPageView({
         </div>
         <div className={styles.clientStrip}>
           <ClientSearchCombobox
-            label="Клиент"
+            label={mode === "compatibility" ? "Клиент" : "Клиент"}
             value={selectedClient?.value ?? ""}
             placeholder="Выберите клиента"
             selectedClient={selectedClient}
@@ -75,24 +85,36 @@ export function HumanDesignPageView({
             disabled={isBusy}
             onSelect={onSelectClient}
           />
+          {mode === "compatibility" ? (
+            <ClientSearchCombobox
+              label="Партнёр"
+              value={selectedPartnerClient?.value ?? ""}
+              placeholder="Выберите партнёра"
+              selectedClient={selectedPartnerClient}
+              requireBirthDate={false}
+              fullWidth
+              disabled={isBusy}
+              onSelect={onSelectPartnerClient}
+            />
+          ) : null}
         </div>
         <nav className={styles.modeTabs} aria-label="Режим Human Design">
-          <button className={styles.modeActive} type="button">
+          <button
+            className={mode === "individual" ? styles.modeActive : styles.modeButton}
+            type="button"
+            disabled={isBusy}
+            onClick={() => onSelectMode("individual")}
+          >
             Индивидуальный
           </button>
-          <button
-            className={styles.modeDisabled}
-            type="button"
-            disabled
-            title="Будет подключено после транзитного backend-контура"
-          >
+          <button className={styles.modeDisabled} type="button" disabled>
             Транзиты
           </button>
           <button
-            className={styles.modeDisabled}
+            className={mode === "compatibility" ? styles.modeActive : styles.modeButton}
             type="button"
-            disabled
-            title="Будет подключено после compatibility contracts"
+            disabled={isBusy}
+            onClick={() => onSelectMode("compatibility")}
           >
             Партнёрский
           </button>
@@ -105,7 +127,7 @@ export function HumanDesignPageView({
         <button
           className={styles.calculateButton}
           type="button"
-          disabled={isBusy || !selectedClient}
+          disabled={isBusy || !selectedClient || (mode === "compatibility" && !selectedPartnerClient)}
           onClick={() => void onPreview()}
         >
           <Icon iconName="lightning" width={15} height={15} aria-hidden="true" />
@@ -114,7 +136,13 @@ export function HumanDesignPageView({
         <button
           className={styles.toolButton}
           type="button"
-          disabled={isBusy || !selectedClient || !model || isLinked}
+          disabled={
+            isBusy ||
+            !selectedClient ||
+            (mode === "compatibility" && !selectedPartnerClient) ||
+            !model ||
+            isLinked
+          }
           onClick={() => void onPersist()}
         >
           <Icon iconName="pin" width={15} height={15} aria-hidden="true" />
@@ -180,6 +208,46 @@ export function HumanDesignPageView({
                   </button>
                 ))}
               </section>
+              {model.compatibility ? (
+                <section className={styles.railGroup}>
+                  <h2>Связь</h2>
+                  <button
+                    className={
+                      selectedDetailKey === "compatibility:summary"
+                        ? styles.propertyActive
+                        : styles.property
+                    }
+                    type="button"
+                    onClick={() => onSelectDetail("compatibility:summary")}
+                  >
+                    <span>Партнёр</span>
+                    <strong>{`${model.compatibility.partner.type} · ${model.compatibility.partner.profile}`}</strong>
+                  </button>
+                  {model.compatibility.dynamicGroups.map((group) => (
+                    <div className={styles.connectionGroup} key={group.dynamic}>
+                      <div className={styles.connectionGroupHead}>
+                        <span>{group.label}</span>
+                        <strong>{group.count}</strong>
+                      </div>
+                      {group.channels.map((channel) => (
+                        <button
+                          className={
+                            selectedDetailKey === channel.key
+                              ? styles.channelActive
+                              : styles.channelItem
+                          }
+                          key={channel.key}
+                          type="button"
+                          onClick={() => onSelectDetail(channel.key)}
+                        >
+                          <span>{`Канал ${channel.label}`}</span>
+                          <strong>{channel.name}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </section>
+              ) : null}
               <section className={styles.railGroup}>
                 <h2>9 центров</h2>
                 {model.centers.map((center) => (
@@ -258,8 +326,16 @@ export function HumanDesignPageView({
           ) : (
             <div className={styles.emptyState}>
               <Icon iconName="flow" width={28} height={28} aria-hidden="true" />
-              <strong>Выберите клиента и рассчитайте бодиграф</strong>
-              <span>Поддержан только individual preview из CRM birth data.</span>
+              <strong>
+                {mode === "compatibility"
+                  ? "Выберите двух клиентов и рассчитайте связь"
+                  : "Выберите клиента и рассчитайте бодиграф"}
+              </strong>
+              <span>
+                {mode === "compatibility"
+                  ? "Партнёрский preview использует два CRM bodygraph результата."
+                  : "Поддержан individual preview из CRM birth data."}
+              </span>
             </div>
           )}
         </section>

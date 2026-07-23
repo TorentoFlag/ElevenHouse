@@ -81,6 +81,9 @@ describe("humanDesignApi", () => {
 
 function humanDesignCalculationResponse(): HumanDesignCalculationResponse {
   const preview = humanDesignResponse();
+  if (preview.result.mode !== "individual") {
+    throw new Error("Expected individual Human Design API fixture");
+  }
   return {
     calculation: {
       id: "11111111-1111-4111-8111-111111111111",

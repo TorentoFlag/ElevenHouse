@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { HumanDesignIndividualResult } from "@elevenhouse/contracts";
+import type {
+  HumanDesignCompatibilityResult,
+  HumanDesignIndividualResult
+} from "@elevenhouse/contracts";
 import {
   createHumanDesignViewModel,
   getHumanDesignDetail
@@ -49,6 +52,33 @@ describe("humanDesignViewModel", () => {
     expect(getHumanDesignDetail(model, "ch:64-47")).toMatchObject({
       title: "Канал 64–47 · Абстракции",
       subtitle: "Не активирован"
+    });
+  });
+
+  it("maps compatibility results to partner summary and connection groups", () => {
+    const model = createHumanDesignViewModel(compatibilityResult());
+
+    expect(model.mode).toBe("compatibility");
+    expect(model.compatibility?.partner).toMatchObject({
+      type: "Генератор",
+      authority: "Сакральный",
+      profile: "1/3"
+    });
+    expect(model.compatibility?.dynamicGroups.find((group) => group.dynamic === "electromagnetic"))
+      .toMatchObject({
+        label: "Электромагнитика",
+        count: 1,
+        channels: [
+          {
+            key: "conn:electromagnetic:43-23",
+            label: "43–23",
+            name: "Структурирования"
+          }
+        ]
+      });
+    expect(getHumanDesignDetail(model, "compatibility:summary")).toMatchObject({
+      title: "Партнёрский разбор",
+      subtitle: "Connection dynamics"
     });
   });
 });
@@ -156,6 +186,61 @@ function result(): HumanDesignIndividualResult {
       personalityLine: 1,
       designLine: 3,
       code: "1/3"
+    }
+  };
+}
+
+function compatibilityResult(): HumanDesignCompatibilityResult {
+  const subject = result();
+  const partner = {
+    ...result(),
+    inputFingerprint: {
+      algorithm: "sha256" as const,
+      canonicalization: "json-stable-v1" as const,
+      scope: "human-design-individual-resolved-input.v1" as const,
+      value: `sha256:${"d".repeat(64)}`
+    },
+    resultChecksum: {
+      algorithm: "sha256" as const,
+      canonicalization: "json-stable-v1" as const,
+      value: `sha256:${"e".repeat(64)}`
+    }
+  };
+  return {
+    methodCode: "human_design_classic",
+    engineRevision: 1,
+    schemaVersion: "human-design-compatibility-result.v1",
+    mode: "compatibility",
+    participants: { subject, partner },
+    connectionChannels: [
+      {
+        code: "43-23",
+        gates: [43, 23],
+        centers: ["ajna", "throat"],
+        circuit: "individual",
+        dynamic: "electromagnetic",
+        subjectGateState: "hanging",
+        partnerGateState: "hanging"
+      }
+    ],
+    dynamicCounts: {
+      electromagnetic: 1,
+      companionship: 0,
+      dominance: 0,
+      compromise: 0
+    },
+    sharedDefinedCenters: ["throat"],
+    bridgedCenters: ["ajna"],
+    inputFingerprint: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      scope: "human-design-compatibility-input.v1",
+      value: `sha256:${"f".repeat(64)}`
+    },
+    resultChecksum: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      value: `sha256:${"f".repeat(64)}`
     }
   };
 }

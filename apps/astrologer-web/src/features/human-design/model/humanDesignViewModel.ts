@@ -1,10 +1,25 @@
-import type { HumanDesignIndividualResult } from "@elevenhouse/contracts";
+import type {
+  HumanDesignCompatibilityResult,
+  HumanDesignIndividualResult,
+  HumanDesignResult
+} from "@elevenhouse/contracts";
 
 type HumanDesignActivation = HumanDesignIndividualResult["activations"][number];
 type HumanDesignCenterCode = HumanDesignIndividualResult["definedCenters"][number]["code"];
 type HumanDesignChannelCode = HumanDesignIndividualResult["definedChannels"][number]["code"];
+type HumanDesignConnectionDynamicCode =
+  HumanDesignCompatibilityResult["connectionChannels"][number]["dynamic"];
 
-export type HumanDesignDetailKey = "type" | "strategy" | "authority" | "profile" | "definition" | HumanDesignCenterCode | `ch:${HumanDesignChannelCode}`;
+export type HumanDesignDetailKey =
+  | "type"
+  | "strategy"
+  | "authority"
+  | "profile"
+  | "definition"
+  | "compatibility:summary"
+  | HumanDesignCenterCode
+  | `ch:${HumanDesignChannelCode}`
+  | `conn:${HumanDesignConnectionDynamicCode}:${HumanDesignChannelCode}`;
 
 export type HumanDesignPropertyView = {
   readonly key: HumanDesignDetailKey;
@@ -39,6 +54,8 @@ export type HumanDesignActivationView = {
 };
 
 export type HumanDesignViewModel = {
+  readonly mode: HumanDesignResult["mode"];
+  readonly sourceResult: HumanDesignResult;
   readonly result: HumanDesignIndividualResult;
   readonly properties: readonly HumanDesignPropertyView[];
   readonly centers: readonly HumanDesignCenterView[];
@@ -48,6 +65,32 @@ export type HumanDesignViewModel = {
   readonly activeGates: ReadonlyMap<number, ReadonlySet<HumanDesignActivation["side"]>>;
   readonly definedCenterCodes: readonly HumanDesignCenterCode[];
   readonly checksumShort: string;
+  readonly compatibility: HumanDesignCompatibilityView | null;
+};
+
+export type HumanDesignCompatibilityView = {
+  readonly partner: {
+    readonly type: string;
+    readonly authority: string;
+    readonly profile: string;
+    readonly definition: string;
+  };
+  readonly dynamicGroups: readonly HumanDesignConnectionDynamicGroupView[];
+  readonly sharedDefinedCenters: readonly HumanDesignCenterView[];
+  readonly bridgedCenters: readonly HumanDesignCenterView[];
+};
+
+export type HumanDesignConnectionDynamicGroupView = {
+  readonly dynamic: HumanDesignConnectionDynamicCode;
+  readonly label: string;
+  readonly count: number;
+  readonly channels: readonly {
+    readonly key: `conn:${HumanDesignConnectionDynamicCode}:${HumanDesignChannelCode}`;
+    readonly code: HumanDesignChannelCode;
+    readonly label: string;
+    readonly name: string;
+    readonly gates: readonly [number, number];
+  }[];
 };
 
 export type HumanDesignDetailView = {
@@ -280,6 +323,13 @@ const notSelfLabels = {
   disappointment: "Разочарование"
 } satisfies Record<HumanDesignIndividualResult["notSelfTheme"], string>;
 
+const connectionDynamicLabels = {
+  electromagnetic: "Электромагнитика",
+  companionship: "Дружба",
+  dominance: "Доминирование",
+  compromise: "Компромисс"
+} satisfies Record<HumanDesignConnectionDynamicCode, string>;
+
 const planetLabels = {
   sun: { label: "Солнце", glyph: "☉" },
   earth: { label: "Земля", glyph: "⊕" },
@@ -297,29 +347,42 @@ const planetLabels = {
 } satisfies Record<HumanDesignActivation["body"], { readonly label: string; readonly glyph: string }>;
 
 export function createHumanDesignViewModel(
-  result: HumanDesignIndividualResult
+  result: HumanDesignResult
 ): HumanDesignViewModel {
-  const responseDefinedCenterCodes = new Set(result.definedCenters.map((center) => center.code));
+  const individualResult = result.mode === "compatibility" ? result.participants.subject : result;
+  const responseDefinedCenterCodes = new Set(
+    individualResult.definedCenters.map((center) => center.code)
+  );
   const definedCenterCodes = humanDesignCenterGeometry
     .map((center) => center.code)
     .filter((code) => responseDefinedCenterCodes.has(code));
   const definedCenterSet = new Set(definedCenterCodes);
   const activeGates = new Map<number, Set<HumanDesignActivation["side"]>>();
 
-  for (const activation of result.activations) {
+  for (const activation of individualResult.activations) {
     const sides = activeGates.get(activation.gate) ?? new Set<HumanDesignActivation["side"]>();
     sides.add(activation.side);
     activeGates.set(activation.gate, sides);
   }
 
   return {
-    result,
+    mode: result.mode,
+    sourceResult: result,
+    result: individualResult,
     properties: [
-      { key: "type", label: "Тип", value: typeLabels[result.type] },
-      { key: "strategy", label: "Стратегия", value: strategyLabels[result.strategy], accent: true },
-      { key: "authority", label: "Авторитет", value: authorityLabels[result.authority] },
-      { key: "profile", label: "Профиль", value: result.profile.code },
-      { key: "definition", label: "Определение", value: definitionLabels[result.definition] }
+      { key: "type", label: "Тип", value: typeLabels[individualResult.type] },
+      {
+        key: "strategy",
+        label: "Стратегия",
+        value: strategyLabels[individualResult.strategy],
+        accent: true
+      },
+      { key: "authority", label: "Авторитет", value: authorityLabels[individualResult.authority] },
+      { key: "profile", label: "Профиль", value: individualResult.profile.code },
+      { key: "definition", label: "Определение", value: definitionLabels[individualResult.definition] },
+      ...(result.mode === "compatibility"
+        ? [{ key: "compatibility:summary" as const, label: "Связь", value: "Партнёрский разбор", accent: true }]
+        : [])
     ],
     centers: humanDesignCenterGeometry.map(({ code }) => ({
       code,
@@ -329,17 +392,18 @@ export function createHumanDesignViewModel(
       stateLabel: definedCenterSet.has(code) ? "опр." : "откр.",
       color: centerMeta[code].color
     })),
-    channels: result.definedChannels.map((channel) => ({
+    channels: individualResult.definedChannels.map((channel) => ({
       code: channel.code,
       label: channel.code.replace("-", "–"),
       name: channelNames[channel.code],
       gates: channel.gates
     })),
-    personalityActivations: toActivationViews(result.activations, "personality"),
-    designActivations: toActivationViews(result.activations, "design"),
+    personalityActivations: toActivationViews(individualResult.activations, "personality"),
+    designActivations: toActivationViews(individualResult.activations, "design"),
     activeGates,
     definedCenterCodes,
-    checksumShort: result.resultChecksum.value.slice(7, 19)
+    checksumShort: result.resultChecksum.value.slice(7, 19),
+    compatibility: result.mode === "compatibility" ? toCompatibilityView(result) : null
   };
 }
 
@@ -387,6 +451,34 @@ export function getHumanDesignDetail(
       text: `Компонентов определённости: ${model.result.definitionBasis.componentCount}. Это описывает связность определённых центров, рассчитанную в доменном слое.`
     };
   }
+  if (key === "compatibility:summary" && model.compatibility) {
+    const counts = model.compatibility.dynamicGroups
+      .map((group) => `${group.label.toLowerCase()}: ${group.count}`)
+      .join("; ");
+    return {
+      title: "Партнёрский разбор",
+      subtitle: "Connection dynamics",
+      tone: "accent",
+      text: `Связь рассчитана сервером из двух индивидуальных бодиграфов. ${counts}. Партнёр: ${model.compatibility.partner.type}, профиль ${model.compatibility.partner.profile}.`
+    };
+  }
+  if (key.startsWith("conn:") && model.compatibility) {
+    const [, dynamic, channelCode] = key.split(":") as [
+      "conn",
+      HumanDesignConnectionDynamicCode,
+      HumanDesignChannelCode
+    ];
+    const group = model.compatibility.dynamicGroups.find((item) => item.dynamic === dynamic);
+    const channel = group?.channels.find((item) => item.code === channelCode);
+    if (group && channel) {
+      return {
+        title: `Канал ${channel.label} · ${channel.name}`,
+        subtitle: group.label,
+        tone: "defined",
+        text: `Connection dynamic: ${group.label.toLowerCase()}. Канал построен из checksum-bound compatibility result, без frontend-расчётов.`
+      };
+    }
+  }
   if (key.startsWith("ch:")) {
     const code = key.slice(3) as HumanDesignChannelCode;
     const channel = model.channels.find((item) => item.code === code);
@@ -423,6 +515,59 @@ export function getHumanDesignDetail(
     subtitle: "Деталь",
     tone: "muted",
     text: "Кликните свойство, центр или канал, чтобы открыть деталь."
+  };
+}
+
+function toCompatibilityView(result: HumanDesignCompatibilityResult): HumanDesignCompatibilityView {
+  const subjectCenterViews = new Map(
+    humanDesignCenterGeometry.map(({ code }) => [
+      code,
+      {
+        code,
+        label: centerMeta[code].label,
+        theme: centerMeta[code].theme,
+        defined: true,
+        stateLabel: "опр.",
+        color: centerMeta[code].color
+      }
+    ])
+  );
+  const dynamicGroups = ([
+    "electromagnetic",
+    "companionship",
+    "dominance",
+    "compromise"
+  ] as const).map((dynamic) => {
+    const channels = result.connectionChannels
+      .filter((channel) => channel.dynamic === dynamic)
+      .map((channel) => ({
+        key: `conn:${dynamic}:${channel.code}` as const,
+        code: channel.code,
+        label: channel.code.replace("-", "–"),
+        name: channelNames[channel.code],
+        gates: channel.gates
+      }));
+    return {
+      dynamic,
+      label: connectionDynamicLabels[dynamic],
+      count: result.dynamicCounts[dynamic],
+      channels
+    };
+  });
+  return {
+    partner: {
+      type: typeLabels[result.participants.partner.type],
+      authority: authorityLabels[result.participants.partner.authority],
+      profile: result.participants.partner.profile.code,
+      definition: definitionLabels[result.participants.partner.definition]
+    },
+    dynamicGroups,
+    sharedDefinedCenters: result.sharedDefinedCenters.flatMap((code) =>
+      subjectCenterViews.get(code) ? [subjectCenterViews.get(code)!] : []
+    ),
+    bridgedCenters: result.bridgedCenters.flatMap((code) =>
+      subjectCenterViews.get(code) ? [subjectCenterViews.get(code)!] : []
+    )
   };
 }
 

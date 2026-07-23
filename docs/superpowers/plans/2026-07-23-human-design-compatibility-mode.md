@@ -128,6 +128,9 @@ none
 - [x] 2026-07-23: Task 2 shared contracts and `astrologer-api`
   preview/persist/recalculate support implemented with service and HTTP e2e
   coverage.
+- [x] 2026-07-23: Task 3 frontend partner mode implemented at component/model
+  level: enabled `Партнёрский` tab, second CRM selector, pair payloads, saved
+  compatibility reopen and connection dynamics display.
 
 ## Surprises & Discoveries
 
@@ -146,10 +149,10 @@ none
 
 ## Outcomes & Retrospective
 
-Partial implementation. The domain/API contour now produces and persists a
-checksum-bound `human-design-compatibility-result.v1` from two owner-scoped CRM
-clients. Frontend partner mode and browser evidence remain pending in Tasks
-3-4.
+Partial implementation. The domain/API/frontend code now previews, persists,
+reopens and recalculates a checksum-bound
+`human-design-compatibility-result.v1` from two owner-scoped CRM clients. Task
+4 runtime/browser visual evidence remains pending.
 
 ## Context and Orientation
 
@@ -515,7 +518,7 @@ declarations.
 - Produces: enabled `Партнёрский` mode with subject/partner client selectors,
   connection dynamics summary and saved compatibility reopen.
 
-- [ ] **Step 1: Add failing frontend model tests**
+- [x] **Step 1: Add failing frontend model tests**
 
 Assert that a compatibility result produces:
 
@@ -527,13 +530,16 @@ expect(model.connectionGroups.companionship).toHaveLength(1);
 expect(model.defaultDetailKey).toBe("compatibility:summary");
 ```
 
-- [ ] **Step 2: Add controller tests**
+- [x] **Step 2: Add controller tests**
 
 Prove partner mode requires two distinct selected clients, sends
 `source: "client_pair"`, persists the pair and filters saved calculations by
 `mode = compatibility` when partner mode is active.
 
-- [ ] **Step 3: Implement model/controller/UI**
+Observed 2026-07-23: covered through focused model/API/view tests and
+`astrologer-web` typecheck; no separate hook harness exists for this route.
+
+- [x] **Step 3: Implement model/controller/UI**
 
 Enable the partner tab, add a second `ClientSearchCombobox` labelled `Партнёр`,
 keep `Транзиты`, `PDF`, `AI-разбор` and `Клиенту` disabled, and render
@@ -541,7 +547,7 @@ connection cards grouped by dynamic code. Reuse the existing bodygraph for the
 subject and show partner mechanics as a compact second summary in this slice;
 dual bodygraph layout can be refined after browser parity measurements.
 
-- [ ] **Step 4: Run frontend tests**
+- [x] **Step 4: Run frontend tests**
 
 Run:
 
@@ -550,6 +556,9 @@ pnpm exec vitest run --config vitest.config.ts apps/astrologer-web/src/features/
 ```
 
 Expected observation: PASS.
+
+Observed 2026-07-23: PASS, 5 frontend Human Design test files and 19 tests;
+`@elevenhouse/astrologer-web typecheck` passed.
 
 ### Task 4: Runtime And Visual Evidence
 

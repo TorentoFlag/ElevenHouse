@@ -1,6 +1,6 @@
 import {
   humanDesignCalculationResponseSchema,
-  humanDesignIndividualResultSchema,
+  humanDesignResultSchema,
   type CalculationRecordResponse,
   type HumanDesignCalculationResponse
 } from "@elevenhouse/contracts";
@@ -11,14 +11,15 @@ import {
 } from "../../clients/model/clientSelectorModel";
 
 export function getActiveHumanDesignCalculations(
-  calculations: readonly CalculationRecordResponse[]
+  calculations: readonly CalculationRecordResponse[],
+  mode: "individual" | "compatibility" = "individual"
 ): readonly CalculationRecordResponse[] {
   return calculations
     .filter(
       (calculation) =>
         calculation.module === "human_design" &&
         calculation.methodCode === "human_design_classic" &&
-        calculation.mode === "individual" &&
+        calculation.mode === mode &&
         calculation.status !== "archived"
     )
     .slice()
@@ -28,7 +29,7 @@ export function getActiveHumanDesignCalculations(
 export function toHumanDesignCalculationResponse(
   calculation: CalculationRecordResponse
 ): HumanDesignCalculationResponse {
-  const result = humanDesignIndividualResultSchema.parse(calculation.resultData);
+  const result = humanDesignResultSchema.parse(calculation.resultData);
   if (calculation.resultChecksum !== result.resultChecksum.value) {
     throw new Error("Human Design calculation result checksum mismatch");
   }
@@ -43,10 +44,11 @@ export function toHumanDesignCalculationResponse(
 }
 
 export function toClientOptionFromHumanDesignCalculation(
-  calculation: CalculationRecordResponse
+  calculation: CalculationRecordResponse,
+  role: "subject" | "partner" = "subject"
 ): ClientSelectOption | null {
   const subject = calculation.participants.find(
-    (participant) => participant.role === "subject" && participant.source === "crm_client"
+    (participant) => participant.role === role && participant.source === "crm_client"
   );
   if (!subject?.clientId) return null;
 
