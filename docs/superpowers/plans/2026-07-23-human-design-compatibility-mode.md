@@ -122,6 +122,9 @@ none
 - [x] 2026-07-23: Compatibility selected as the next Human Design end-state
   mode because it reuses the proven individual pipeline and does not require
   PDF/publication/AI/transit overlay prerequisites.
+- [x] 2026-07-23: Task 1 domain connection mechanics implemented with
+  deterministic dynamic classification, compatibility input fingerprint,
+  result checksum and root domain export.
 
 ## Surprises & Discoveries
 
@@ -140,9 +143,10 @@ none
 
 ## Outcomes & Retrospective
 
-Pending implementation. The expected outcome is a saved, checksum-bound Human
-Design compatibility calculation for two CRM clients with browser evidence on
-desktop and mobile.
+Partial implementation. The pure domain compatibility layer now produces a
+checksum-bound `human-design-compatibility-result.v1` from two individual
+results. API contracts, persistence, frontend partner mode and browser evidence
+remain pending in Tasks 2-4.
 
 ## Context and Orientation
 
@@ -275,7 +279,7 @@ Generic calculation participants:
 - Produces: `buildHumanDesignCompatibilityResult(input)`,
   `HumanDesignCompatibilityResult`, dynamic counts and center summaries.
 
-- [ ] **Step 1: Write failing dynamic-classification tests**
+- [x] **Step 1: Write failing dynamic-classification tests**
 
 Create `packages/domain/src/human-design/compatibility.test.ts` with fixtures
 that cover all four channel dynamics:
@@ -315,7 +319,7 @@ Use a local `individualWithChannels()` helper that constructs the minimum valid
 `HumanDesignIndividualBaseResult` shape from an existing individual fixture in
 `individual.test.ts`.
 
-- [ ] **Step 2: Verify the test fails for missing implementation**
+- [x] **Step 2: Verify the test fails for missing implementation**
 
 Run:
 
@@ -325,7 +329,9 @@ pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design/
 
 Expected observation: FAIL because `./compatibility` does not exist.
 
-- [ ] **Step 3: Implement pure domain derivation**
+Observed 2026-07-23: FAIL with `Cannot find module './compatibility'`.
+
+- [x] **Step 3: Implement pure domain derivation**
 
 Create `packages/domain/src/human-design/compatibility.ts` with deterministic
 helpers. The compatibility input fingerprint hashes only the method/mode and
@@ -388,7 +394,7 @@ export function buildHumanDesignCompatibilityResult(input: {
 }
 ```
 
-- [ ] **Step 4: Export and run domain tests**
+- [x] **Step 4: Export and run domain tests**
 
 Append to `packages/domain/src/human-design/index.ts`:
 
@@ -403,6 +409,8 @@ pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design
 ```
 
 Expected observation: PASS for the existing individual suite plus compatibility.
+
+Observed 2026-07-23: PASS, 17 files and 54 tests.
 
 ### Task 2: Shared Contract And API Service
 

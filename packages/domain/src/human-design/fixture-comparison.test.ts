@@ -19,7 +19,7 @@ describe("Human Design approved external fixtures", () => {
       expect(result.type).toBe(fixture.expected.type);
       expect(result.profile.code).toBe(fixture.expected.profile);
       expect(result.authority).toBe(fixture.expected.derivedAuthority);
-      if (fixture.expected.externalAuthorityLabel) {
+      if ("externalAuthorityLabel" in fixture.expected && fixture.expected.externalAuthorityLabel) {
         expect(fixture.expected.externalAuthorityLabel).not.toHaveLength(0);
       }
       expect(result.definition).toBe(fixture.expected.derivedDefinition);

@@ -11,4 +11,5 @@ export * from "./incarnation-cross";
 export * from "./result-checksum";
 export * from "./input-fingerprint";
 export * from "./individual";
+export * from "./compatibility";
 export * from "./design-moment";
