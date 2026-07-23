@@ -58,6 +58,9 @@ Findings:
 - [x] 2026-07-23: Plan created after compatibility slice; runtime visual QA for
   compatibility is blocked by stopped local `astrologer-api`, but transit domain
   and contract work can proceed with tests.
+- [x] 2026-07-23: Task 1 domain transit overlay implemented with transit-only
+  activations, completed channels, temporary centers, stable input fingerprint
+  and result checksum.
 
 ## Decision Log
 
@@ -86,7 +89,7 @@ Findings:
   completed channels, temporarily defined centers, input fingerprint and result
   checksum.
 
-- [ ] **Step 1: Red tests for no-design-side overlay**
+- [x] **Step 1: Red tests for no-design-side overlay**
 
 Cover:
 
@@ -97,7 +100,10 @@ Cover:
 - checksum/fingerprint are stable for the same natal checksum and transit
   snapshot.
 
-- [ ] **Step 2: Implement pure domain builder**
+Observed 2026-07-23: focused transit test first failed with
+`Cannot find module './transit'`.
+
+- [x] **Step 2: Implement pure domain builder**
 
 Add:
 
@@ -112,7 +118,7 @@ buildHumanDesignTransitResult({
 where `transitSnapshot` is explicit server-side date/time/timezone/location
 metadata, not browser-local state.
 
-- [ ] **Step 3: Verify domain surface**
+- [x] **Step 3: Verify domain surface**
 
 Run:
 
@@ -121,6 +127,10 @@ pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design/
 pnpm exec vitest run --config vitest.config.ts packages/domain/src/human-design
 pnpm --filter @elevenhouse/domain typecheck
 ```
+
+Observed 2026-07-23: `packages/domain/src/human-design/transit.test.ts`
+passed with 2 tests; the full Human Design domain suite passed with 18 files
+and 56 tests; `@elevenhouse/domain typecheck` passed.
 
 ### Task 2: Contract And Read-Only API
 
