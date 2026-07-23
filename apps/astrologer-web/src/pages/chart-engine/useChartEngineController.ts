@@ -116,6 +116,7 @@ export function useChartEngineController() {
         setCalculationId(response.calculationId);
         setImmediateResult(response.result as StoredChartCalculationPayload);
         writeChartEngineUrlState({
+          mode: "natal",
           clientId: variables.clientId,
           calculationId: response.calculationId
         });
@@ -124,7 +125,11 @@ export function useChartEngineController() {
       setImmediateResult(null);
       setCalculationId(null);
       setJobId(response.jobId);
-      writeChartEngineUrlState({ clientId: variables.clientId, calculationId: null });
+      writeChartEngineUrlState({
+        mode: "natal",
+        clientId: variables.clientId,
+        calculationId: null
+      });
     },
     onError: (error) => {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить расчёт карты");
@@ -154,6 +159,7 @@ export function useChartEngineController() {
         setCalculationId(response.calculationId);
         setImmediateResult(response.result as StoredChartCalculationPayload);
         writeChartEngineUrlState({
+          mode: "transit",
           clientId: variables.clientId,
           calculationId: response.calculationId
         });
@@ -162,7 +168,11 @@ export function useChartEngineController() {
       setImmediateResult(null);
       setCalculationId(null);
       setJobId(response.jobId);
-      writeChartEngineUrlState({ clientId: variables.clientId, calculationId: null });
+      writeChartEngineUrlState({
+        mode: "transit",
+        clientId: variables.clientId,
+        calculationId: null
+      });
     },
     onError: (error) => {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить транзиты");
@@ -192,6 +202,7 @@ export function useChartEngineController() {
         setCalculationId(response.calculationId);
         setImmediateResult(response.result as StoredChartCalculationPayload);
         writeChartEngineUrlState({
+          mode: "synastry",
           clientId: variables.clientId,
           partnerClientId: variables.partnerClientId,
           calculationId: response.calculationId
@@ -202,6 +213,7 @@ export function useChartEngineController() {
       setCalculationId(null);
       setJobId(response.jobId);
       writeChartEngineUrlState({
+        mode: "synastry",
         clientId: variables.clientId,
         partnerClientId: variables.partnerClientId,
         calculationId: null
@@ -235,6 +247,7 @@ export function useChartEngineController() {
         setCalculationId(response.calculationId);
         setImmediateResult(response.result as StoredChartCalculationPayload);
         writeChartEngineUrlState({
+          mode: "solar_return",
           clientId: variables.clientId,
           calculationId: response.calculationId
         });
@@ -243,7 +256,11 @@ export function useChartEngineController() {
       setImmediateResult(null);
       setCalculationId(null);
       setJobId(response.jobId);
-      writeChartEngineUrlState({ clientId: variables.clientId, calculationId: null });
+      writeChartEngineUrlState({
+        mode: "solar_return",
+        clientId: variables.clientId,
+        calculationId: null
+      });
     },
     onError: (error) => {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить соляр");
@@ -273,6 +290,7 @@ export function useChartEngineController() {
         setCalculationId(response.calculationId);
         setImmediateResult(response.result as StoredChartCalculationPayload);
         writeChartEngineUrlState({
+          mode: "progression",
           clientId: variables.clientId,
           calculationId: response.calculationId
         });
@@ -281,7 +299,11 @@ export function useChartEngineController() {
       setImmediateResult(null);
       setCalculationId(null);
       setJobId(response.jobId);
-      writeChartEngineUrlState({ clientId: variables.clientId, calculationId: null });
+      writeChartEngineUrlState({
+        mode: "progression",
+        clientId: variables.clientId,
+        calculationId: null
+      });
     },
     onError: (error) => {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить прогрессии");
@@ -331,6 +353,7 @@ export function useChartEngineController() {
       setErrorMessage(null);
       setHasResultStaleIntent(false);
       writeChartEngineUrlState({
+        mode,
         clientId: selectedClient?.value ?? initialUrlState.clientId,
         partnerClientId: selectedPartnerClient?.value ?? initialUrlState.partnerClientId,
         calculationId: job.calculationId
@@ -344,6 +367,7 @@ export function useChartEngineController() {
     initialUrlState.clientId,
     initialUrlState.partnerClientId,
     jobQuery.data,
+    mode,
     selectedClient?.value,
     selectedPartnerClient?.value
   ]);
@@ -496,7 +520,22 @@ export function useChartEngineController() {
     transitMoment,
     solarReturnYear,
     progressionTargetDate,
-    onModeChange: (nextMode: ChartEngineMode) => setMode(nextMode),
+    onModeChange: (nextMode: ChartEngineMode) => {
+      setMode(nextMode);
+      setJobId(null);
+      setCalculationId(null);
+      setImmediateResult(null);
+      setErrorMessage(null);
+      setHasResultStaleIntent(false);
+      writeChartEngineUrlState(
+        buildChartEngineModeChangeUrlState({
+          nextMode,
+          clientId: selectedClient?.value ?? initialUrlState.clientId,
+          partnerClientId: selectedPartnerClient?.value ?? initialUrlState.partnerClientId,
+          calculationId
+        })
+      );
+    },
     onTransitMomentChange: (nextMoment: ChartTransitMomentInput) => {
       setTransitMoment(nextMoment);
       if (result?.method === "transit") {
@@ -535,6 +574,7 @@ export function useChartEngineController() {
       setErrorMessage(null);
       setHasResultStaleIntent(false);
       writeChartEngineUrlState({
+        mode,
         clientId: client.value,
         partnerClientId: selectedPartnerClient?.value ?? null,
         calculationId: null
@@ -549,6 +589,7 @@ export function useChartEngineController() {
       setErrorMessage(null);
       setHasResultStaleIntent(false);
       writeChartEngineUrlState({
+        mode: "synastry",
         clientId: selectedClient?.value ?? null,
         partnerClientId: client.value,
         calculationId: null
@@ -805,10 +846,29 @@ export function restoreChartEngineViewState(result: StoredChartCalculationPayloa
 }
 
 export type ChartEngineUrlState = {
+  readonly mode?: ChartEngineMode;
   readonly clientId: string | null;
   readonly partnerClientId?: string | null;
   readonly calculationId: string | null;
 };
+
+export function buildChartEngineModeChangeUrlState({
+  clientId,
+  nextMode,
+  partnerClientId
+}: {
+  readonly nextMode: ChartEngineMode;
+  readonly clientId: string | null;
+  readonly partnerClientId?: string | null;
+  readonly calculationId: string | null;
+}): ChartEngineUrlState {
+  return {
+    mode: nextMode,
+    clientId,
+    partnerClientId,
+    calculationId: null
+  };
+}
 
 export function readChartEngineUrlState(
   search = getCurrentChartEngineSearch()
@@ -824,12 +884,15 @@ export function readChartEngineUrlState(
 
 export function buildChartEngineSearch(search: string, state: ChartEngineUrlState): string {
   const params = new URLSearchParams(search);
+  const shouldKeepPartnerClientId =
+    Boolean(state.partnerClientId) && (state.mode == null || state.mode === "synastry");
+
   if (state.clientId) {
     params.set("clientId", state.clientId);
   } else {
     params.delete("clientId");
   }
-  if (state.partnerClientId) {
+  if (shouldKeepPartnerClientId && state.partnerClientId) {
     params.set("partnerClientId", state.partnerClientId);
   } else {
     params.delete("partnerClientId");

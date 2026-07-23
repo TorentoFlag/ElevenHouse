@@ -9,6 +9,7 @@ import type {
   StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
 import {
+  buildChartEngineModeChangeUrlState,
   buildChartEngineSearch,
   readChartEngineUrlState,
   restoreChartEngineViewState,
@@ -191,6 +192,48 @@ describe("chart engine URL state", () => {
         calculationId: null
       })
     ).toBe(`?panel=aspects&clientId=${clientId}`);
+  });
+
+  it("keeps partner client id only for synastry URL state", () => {
+    const partnerClientId = "55555555-5555-4555-8555-555555555555";
+
+    expect(
+      buildChartEngineSearch("?panel=aspects&partnerClientId=old", {
+        mode: "synastry",
+        clientId,
+        partnerClientId,
+        calculationId
+      })
+    ).toBe(
+      `?panel=aspects&partnerClientId=${partnerClientId}&clientId=${clientId}&calculationId=${calculationId}`
+    );
+
+    expect(
+      buildChartEngineSearch("?panel=aspects&partnerClientId=old", {
+        mode: "progression",
+        clientId,
+        partnerClientId,
+        calculationId
+      })
+    ).toBe(`?panel=aspects&clientId=${clientId}&calculationId=${calculationId}`);
+  });
+
+  it("clears calculation id when building URL state for a different chart mode", () => {
+    const partnerClientId = "55555555-5555-4555-8555-555555555555";
+
+    expect(
+      buildChartEngineModeChangeUrlState({
+        nextMode: "solar_return",
+        clientId,
+        partnerClientId,
+        calculationId
+      })
+    ).toEqual({
+      mode: "solar_return",
+      clientId,
+      partnerClientId,
+      calculationId: null
+    });
   });
 });
 

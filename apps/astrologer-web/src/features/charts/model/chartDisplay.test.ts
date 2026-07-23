@@ -31,4 +31,11 @@ describe("chartDisplay", () => {
     expect(formatAspectTypeDisplay("quincunx")).toBe("Квинконс");
     expect(getChartPointSymbol("south_node", "True South Node")).toBe("☋︎");
   });
+
+  it("normalizes rounded sign-boundary minutes instead of rendering 60 minutes", () => {
+    expect(formatChartPointPosition({ sign: "capricorn", signDegree: 29.999 })).toBe(
+      "Водолей 0°00'"
+    );
+    expect(formatChartPointPosition({ sign: "pisces", signDegree: 29.999 })).toBe("Овен 0°00'");
+  });
 });

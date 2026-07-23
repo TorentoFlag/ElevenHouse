@@ -9,7 +9,6 @@ import type {
 import { listDictionaryEntriesByCodes } from "../../dictionary/api/listDictionaryEntriesByCodes";
 import {
   formatAspectTypeDisplay,
-  formatDegree,
   formatHouseSignDisplay,
   getPrimaryChartRenderResult,
   getPartnerChartRenderResult,
@@ -22,6 +21,7 @@ import {
   getTransitChartResult,
   getChartPointDisplayLabel,
   getChartPointSymbol,
+  getRoundedChartPointPosition,
   romanHouses
 } from "../model/chartDisplay";
 import {
@@ -112,10 +112,10 @@ function PlanetsTable({
                 {getChartPointDisplayLabel(point.id, point.label)}
               </span>
               <span className={styles.signGlyph} aria-hidden="true">
-                {getZodiacSymbol(point.sign)}
+                {getZodiacSymbol(getRoundedChartPointPosition(point).sign)}
               </span>
               <span className={styles.pointDegree}>
-                {formatDegree(point.signDegree)}
+                {getRoundedChartPointPosition(point).degree}
                 {point.retrograde ? <b>R</b> : null}
               </span>
               <span className={styles.pointHouse}>
@@ -152,10 +152,10 @@ function PlanetsTable({
                     {getChartPointDisplayLabel(point.id, point.label)}
                   </span>
                   <span className={styles.signGlyph} aria-hidden="true">
-                    {getZodiacSymbol(point.sign)}
+                    {getZodiacSymbol(getRoundedChartPointPosition(point).sign)}
                   </span>
                   <span className={styles.pointDegree}>
-                    {formatDegree(point.signDegree)}
+                    {getRoundedChartPointPosition(point).degree}
                     {point.retrograde ? <b>R</b> : null}
                   </span>
                   <span className={styles.pointHouse}>
@@ -194,10 +194,10 @@ function PlanetsTable({
                     {getChartPointDisplayLabel(point.id, point.label)}
                   </span>
                   <span className={styles.signGlyph} aria-hidden="true">
-                    {getZodiacSymbol(point.sign)}
+                    {getZodiacSymbol(getRoundedChartPointPosition(point).sign)}
                   </span>
                   <span className={styles.pointDegree}>
-                    {formatDegree(point.signDegree)}
+                    {getRoundedChartPointPosition(point).degree}
                     {point.retrograde ? <b>R</b> : null}
                   </span>
                   <span className={styles.pointHouse}>
@@ -236,10 +236,10 @@ function PlanetsTable({
                     {getChartPointDisplayLabel(point.id, point.label)}
                   </span>
                   <span className={styles.signGlyph} aria-hidden="true">
-                    {getZodiacSymbol(point.sign)}
+                    {getZodiacSymbol(getRoundedChartPointPosition(point).sign)}
                   </span>
                   <span className={styles.pointDegree}>
-                    {formatDegree(point.signDegree)}
+                    {getRoundedChartPointPosition(point).degree}
                     {point.retrograde ? <b>R</b> : null}
                   </span>
                   <span className={styles.pointHouse}>
@@ -278,10 +278,10 @@ function PlanetsTable({
                     {getChartPointDisplayLabel(point.id, point.label)}
                   </span>
                   <span className={styles.signGlyph} aria-hidden="true">
-                    {getZodiacSymbol(point.sign)}
+                    {getZodiacSymbol(getRoundedChartPointPosition(point).sign)}
                   </span>
                   <span className={styles.pointDegree}>
-                    {formatDegree(point.signDegree)}
+                    {getRoundedChartPointPosition(point).degree}
                     {point.retrograde ? <b>R</b> : null}
                   </span>
                   <span className={styles.pointHouse}>
@@ -308,9 +308,10 @@ function HousesTable({ result }: { readonly result: StoredChartCalculationPayloa
           <div className={styles.houseCard} key={house.number}>
             <span>{romanHouses[house.number]} дом</span>
             <strong>
-              {getZodiacSymbol(house.sign)} {formatDegree(house.signDegree)}
+              {getZodiacSymbol(getRoundedChartPointPosition(house).sign)}{" "}
+              {getRoundedChartPointPosition(house).degree}
             </strong>
-            <small>{formatHouseSignDisplay(house.sign)}</small>
+            <small>{formatHouseSignDisplay(getRoundedChartPointPosition(house).sign)}</small>
           </div>
         ))}
       </div>

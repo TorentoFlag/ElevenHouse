@@ -10,13 +10,13 @@ import type {
 import {
   formatAspectTypeDisplay,
   formatChartPointPosition,
-  formatDegree,
   formatHouseSignDisplay,
   getChartPointDisplayLabel,
   getPartnerChartRenderResult,
   getPrimaryChartRenderResult,
   getProgressionChartRenderResult,
   getProgressionChartResult,
+  getRoundedChartPointPosition,
   getSolarReturnChartRenderResult,
   getSolarReturnChartResult,
   getSynastryChartResult,
@@ -166,15 +166,19 @@ function buildHouseAnchors(
 ): readonly ChartInterpretationAnchor[] {
   return [...getPrimaryChartRenderResult(result).houses]
     .sort((left, right) => left.number - right.number)
-    .map((house) => ({
-      id: `house-${house.number}`,
-      code: `house_${house.number}`,
-      categoryCode: "house_meanings" as const,
-      group: "houses" as const,
-      label: `${romanHouses[house.number]} дом`,
-      meta: "Значение дома",
-      position: `${formatHouseSignDisplay(house.sign)} ${formatDegree(house.signDegree)}`
-    }));
+    .map((house) => {
+      const position = getRoundedChartPointPosition(house);
+
+      return {
+        id: `house-${house.number}`,
+        code: `house_${house.number}`,
+        categoryCode: "house_meanings" as const,
+        group: "houses" as const,
+        label: `${romanHouses[house.number]} дом`,
+        meta: "Значение дома",
+        position: `${formatHouseSignDisplay(position.sign)} ${position.degree}`
+      };
+    });
 }
 
 function buildTransitAspectAnchors(

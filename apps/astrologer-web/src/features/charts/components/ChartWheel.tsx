@@ -9,7 +9,6 @@ import type {
 } from "@elevenhouse/contracts";
 import {
   formatAspectTypeDisplay,
-  formatDegree,
   formatHouseSignDisplay,
   getPrimaryChartRenderResult,
   getPartnerChartRenderResult,
@@ -22,6 +21,7 @@ import {
   getTransitChartResult,
   getChartPointDisplayLabel,
   getChartPointSymbol,
+  getRoundedChartPointPosition,
   romanHouses
 } from "../model/chartDisplay";
 import styles from "./ChartEnginePage.module.css";
@@ -678,6 +678,7 @@ function HoverPointDetail({
         : isPartnerPoint
           ? point.id.slice("partner:".length)
           : point.id;
+  const position = getRoundedChartPointPosition(point);
   const aspects =
     isTransitPoint && transitResult
       ? transitResult.result.aspectsToNatal
@@ -746,7 +747,7 @@ function HoverPointDetail({
           {point.retrograde ? <b> R ретроград</b> : null}
         </strong>
         <span>
-          {formatDegree(point.signDegree)} {formatHouseSignDisplay(point.sign)}
+          {position.degree} {formatHouseSignDisplay(position.sign)}
           {point.house ? ` · ${romanHouses[point.house]} дом` : ""}
         </span>
       </div>

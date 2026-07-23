@@ -61,6 +61,21 @@ const pointSymbols: Record<string, string> = {
   south_node: "☋︎"
 };
 
+const signOrder = [
+  "aries",
+  "taurus",
+  "gemini",
+  "cancer",
+  "leo",
+  "virgo",
+  "libra",
+  "scorpio",
+  "sagittarius",
+  "capricorn",
+  "aquarius",
+  "pisces"
+] as const;
+
 const signLabels: Record<string, string> = {
   aries: "Овен",
   taurus: "Телец",
@@ -109,16 +124,52 @@ export function formatChartPointPosition(point: {
   readonly signDegree: number;
   readonly retrograde?: boolean | null;
 }): string {
-  return `${formatHouseSignDisplay(point.sign)} ${formatDegree(point.signDegree)}${
+  const position = getRoundedChartPointPosition(point);
+
+  return `${formatHouseSignDisplay(position.sign)} ${position.degree}${
     point.retrograde ? " R" : ""
   }`;
 }
 
+export function getRoundedChartPointPosition(point: {
+  readonly sign: string;
+  readonly signDegree: number;
+}): { readonly sign: string; readonly degree: string } {
+  const roundedMinutes = Math.round(point.signDegree * 60);
+  const minutesPerSign = 30 * 60;
+  const signIndex = signOrder.findIndex((sign) => sign === point.sign.toLowerCase());
+  const signOffset = Math.floor(roundedMinutes / minutesPerSign);
+  const normalizedMinutes = modulo(roundedMinutes, minutesPerSign);
+
+  if (signIndex === -1) {
+    return { sign: point.sign, degree: formatDegreeFromMinutes(normalizedMinutes) };
+  }
+
+  const nextSignIndex = modulo(signIndex + signOffset, signOrder.length);
+  const normalizedSign = signOrder[nextSignIndex] ?? point.sign;
+
+  return {
+    sign: normalizedSign,
+    degree: formatDegreeFromMinutes(normalizedMinutes)
+  };
+}
+
 export function formatDegree(value: number): string {
-  const degrees = Math.floor(value);
-  const minutes = Math.round((value - degrees) * 60);
+  const minutesPerSign = 30 * 60;
+  const roundedMinutes = Math.round(value * 60);
+
+  return formatDegreeFromMinutes(modulo(roundedMinutes, minutesPerSign));
+}
+
+function formatDegreeFromMinutes(totalMinutes: number): string {
+  const degrees = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
 
   return `${degrees}°${String(minutes).padStart(2, "0")}'`;
+}
+
+function modulo(value: number, divisor: number): number {
+  return ((value % divisor) + divisor) % divisor;
 }
 
 export function getPrimaryChartRenderResult(
