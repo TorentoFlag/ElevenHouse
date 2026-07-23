@@ -1,6 +1,8 @@
 import type {
   ChartAspect,
   ChartPoint,
+  ChartProgressionAspect,
+  ChartSolarReturnAspect,
   ChartSynastryAspect,
   ChartTransitAspect,
   StoredChartCalculationPayload
@@ -11,6 +13,8 @@ import {
   formatHouseSignDisplay,
   getPrimaryChartRenderResult,
   getPartnerChartRenderResult,
+  getProgressionChartRenderResult,
+  getProgressionChartResult,
   getSolarReturnChartRenderResult,
   getSolarReturnChartResult,
   getSynastryChartResult,
@@ -49,14 +53,17 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
   const renderResult = result ? getPrimaryChartRenderResult(result) : null;
   const transitResult = result ? getTransitChartResult(result) : null;
   const solarReturnResult = result ? getSolarReturnChartResult(result) : null;
+  const progressionResult = result ? getProgressionChartResult(result) : null;
   const synastryResult = result ? getSynastryChartResult(result) : null;
   const transitRenderResult = result ? getTransitChartRenderResult(result) : null;
   const solarReturnRenderResult = result ? getSolarReturnChartRenderResult(result) : null;
+  const progressionRenderResult = result ? getProgressionChartRenderResult(result) : null;
   const partnerRenderResult = result ? getPartnerChartRenderResult(result) : null;
   const houses = renderResult?.houses ?? [];
   const points = renderResult?.points ?? [];
   const transitPoints = transitRenderResult?.points ?? [];
   const solarReturnPoints = solarReturnRenderResult?.points ?? [];
+  const progressionPoints = progressionRenderResult?.points ?? [];
   const partnerPoints = partnerRenderResult?.points ?? [];
   const ascLongitude = houses.find((house) => house.number === 1)?.longitude ?? 0;
   const markerLongitudes = spreadPointLongitudes(
@@ -70,6 +77,10 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
     solarReturnPoints.filter((point) => !axisPointIds.has(point.id)),
     9
   );
+  const progressionMarkerLongitudes = spreadPointLongitudes(
+    progressionPoints.filter((point) => !axisPointIds.has(point.id)),
+    9
+  );
   const partnerMarkerLongitudes = spreadPointLongitudes(
     partnerPoints.filter((point) => !axisPointIds.has(point.id)),
     9
@@ -79,6 +90,7 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
     points,
     transitPoints,
     solarReturnPoints,
+    progressionPoints,
     partnerPoints
   });
 
@@ -287,6 +299,48 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
             />
           );
         })}
+        {progressionResult?.result.aspectsToNatal.map((aspect, index) => {
+          const progressedPoint = progressionPoints.find(
+            (point) => point.id === aspect.progressedPoint
+          );
+          const natalPoint = points.find((point) => point.id === aspect.natalPoint);
+          if (!progressedPoint || !natalPoint) return null;
+          const start = polar(
+            progressionMarkerLongitudes[progressedPoint.id] ?? progressedPoint.longitude,
+            178,
+            ascLongitude
+          );
+          const end = polar(natalPoint.longitude, 132, ascLongitude);
+          const tone = getAspectTone(aspect);
+          const progressionHoverId = getProgressionHoverPointId(progressedPoint.id);
+          const involved = Boolean(
+            hoveredPointId &&
+              (hoveredPointId === progressionHoverId || hoveredPointId === aspect.natalPoint)
+          );
+          const dimmed = Boolean(hoveredPointId && !involved);
+
+          return (
+            <line
+              key={`progression-${aspect.progressedPoint}-${aspect.natalPoint}-${index}`}
+              className={[
+                styles.aspectLine,
+                aspectToneClasses[tone],
+                styles.transitAspectLine,
+                involved ? styles.aspectLineHovered : "",
+                dimmed ? styles.aspectLineDimmed : ""
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              data-aspect-tone={tone}
+              data-hovered={involved ? "true" : "false"}
+              data-testid={`chart-progression-aspect-${aspect.type}`}
+              x1={start.x}
+              y1={start.y}
+              x2={end.x}
+              y2={end.y}
+            />
+          );
+        })}
         {synastryResult?.result.aspectsBetween.map((aspect, index) => {
           const primaryPoint = points.find((point) => point.id === aspect.primaryPoint);
           const partnerPoint = partnerPoints.find((point) => point.id === aspect.partnerPoint);
@@ -481,6 +535,59 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
             </g>
           );
         })}
+        {progressionPoints.map((point) => {
+          if (axisPointIds.has(point.id)) return null;
+          const exact = polar(point.longitude, 166, ascLongitude);
+          const marker = polar(
+            progressionMarkerLongitudes[point.id] ?? point.longitude,
+            178,
+            ascLongitude
+          );
+          const hoverId = getProgressionHoverPointId(point.id);
+          const hovered = hoveredPointId === hoverId;
+
+          return (
+            <g
+              aria-label={`Прогрессивный ${getChartPointDisplayLabel(point.id, point.label)} на карте`}
+              className={styles.pointMarker}
+              data-hovered={hovered ? "true" : "false"}
+              data-testid={`chart-progression-point-${point.id}`}
+              key={`progression-${point.id}`}
+              onBlur={() => onHoverPoint(null)}
+              onFocus={() => onHoverPoint(hoverId)}
+              onMouseEnter={() => onHoverPoint(hoverId)}
+              onMouseLeave={() => onHoverPoint(null)}
+              role="button"
+              tabIndex={0}
+            >
+              <line
+                className={styles.transitPlanetGuide}
+                x1={exact.x}
+                y1={exact.y}
+                x2={marker.x}
+                y2={marker.y}
+              />
+              <circle
+                className={hovered ? styles.transitPointDotHovered : styles.transitPointDot}
+                cx={marker.x}
+                cy={marker.y}
+                r={hovered ? "17" : "14"}
+              />
+              <text
+                className={hovered ? styles.pointLabelHovered : styles.pointLabel}
+                x={marker.x}
+                y={marker.y}
+              >
+                {getChartPointSymbol(point.id, point.label)}
+              </text>
+              {point.retrograde ? (
+                <text className={styles.retroLabel} x={marker.x + 13} y={marker.y - 11}>
+                  R
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
         {partnerPoints.map((point) => {
           if (axisPointIds.has(point.id)) return null;
           const exact = polar(point.longitude, 166, ascLongitude);
@@ -556,17 +663,21 @@ function HoverPointDetail({
   const renderResult = getPrimaryChartRenderResult(result);
   const transitResult = getTransitChartResult(result);
   const solarReturnResult = getSolarReturnChartResult(result);
+  const progressionResult = getProgressionChartResult(result);
   const synastryResult = getSynastryChartResult(result);
   const isTransitPoint = point.id.startsWith("transit:");
   const isSolarReturnPoint = point.id.startsWith("solar_return:");
+  const isProgressionPoint = point.id.startsWith("progression:");
   const isPartnerPoint = point.id.startsWith("partner:");
   const pointId = isTransitPoint
     ? point.id.slice("transit:".length)
     : isSolarReturnPoint
       ? point.id.slice("solar_return:".length)
-      : isPartnerPoint
-        ? point.id.slice("partner:".length)
-        : point.id;
+      : isProgressionPoint
+        ? point.id.slice("progression:".length)
+        : isPartnerPoint
+          ? point.id.slice("partner:".length)
+          : point.id;
   const aspects =
     isTransitPoint && transitResult
       ? transitResult.result.aspectsToNatal
@@ -585,6 +696,18 @@ function HoverPointDetail({
             .filter((aspect) => aspect.solarReturnPoint === pointId)
             .map((aspect) => ({
               pointA: aspect.solarReturnPoint,
+              pointB: aspect.natalPoint,
+              type: aspect.type,
+              angle: aspect.angle,
+              orb: aspect.orb,
+              applying: aspect.applying,
+            strength: aspect.strength
+          }))
+      : isProgressionPoint && progressionResult
+        ? progressionResult.result.aspectsToNatal
+            .filter((aspect) => aspect.progressedPoint === pointId)
+            .map((aspect) => ({
+              pointA: aspect.progressedPoint,
               pointB: aspect.natalPoint,
               type: aspect.type,
               angle: aspect.angle,
@@ -617,6 +740,7 @@ function HoverPointDetail({
         <strong>
           {isTransitPoint ? "Транзитный " : ""}
           {isSolarReturnPoint ? "Солярный " : ""}
+          {isProgressionPoint ? "Прогрессивный " : ""}
           {isPartnerPoint ? "Партнёрский " : ""}
           {getChartPointDisplayLabel(pointId, point.label)}
           {point.retrograde ? <b> R ретроград</b> : null}
@@ -649,12 +773,14 @@ function getHoveredPoint({
   points,
   transitPoints,
   solarReturnPoints,
+  progressionPoints,
   partnerPoints
 }: {
   readonly hoveredPointId: string | null;
   readonly points: readonly ChartPoint[];
   readonly transitPoints: readonly ChartPoint[];
   readonly solarReturnPoints: readonly ChartPoint[];
+  readonly progressionPoints: readonly ChartPoint[];
   readonly partnerPoints: readonly ChartPoint[];
 }): ChartPoint | null {
   if (!hoveredPointId) {
@@ -669,6 +795,12 @@ function getHoveredPoint({
   if (hoveredPointId.startsWith("solar_return:")) {
     const pointId = hoveredPointId.slice("solar_return:".length);
     const point = solarReturnPoints.find((candidate) => candidate.id === pointId);
+
+    return point ? { ...point, id: hoveredPointId } : null;
+  }
+  if (hoveredPointId.startsWith("progression:")) {
+    const pointId = hoveredPointId.slice("progression:".length);
+    const point = progressionPoints.find((candidate) => candidate.id === pointId);
 
     return point ? { ...point, id: hoveredPointId } : null;
   }
@@ -692,6 +824,10 @@ function getPartnerHoverPointId(pointId: string): string {
 
 function getSolarReturnHoverPointId(pointId: string): string {
   return `solar_return:${pointId}`;
+}
+
+function getProgressionHoverPointId(pointId: string): string {
+  return `progression:${pointId}`;
 }
 
 function polar(
@@ -761,7 +897,12 @@ function arcDistance(from: number, to: number): number {
 }
 
 function getAspectTone(
-  aspect: ChartAspect | ChartTransitAspect | ChartSynastryAspect
+  aspect:
+    | ChartAspect
+    | ChartTransitAspect
+    | ChartSolarReturnAspect
+    | ChartProgressionAspect
+    | ChartSynastryAspect
 ): "hard" | "neutral" | "soft" {
   if (aspect.type === "square" || aspect.type === "opposition" || aspect.type === "semi-square") {
     return "hard";

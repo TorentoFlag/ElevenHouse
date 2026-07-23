@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -9,6 +9,7 @@ import type {
   DictionaryEntriesResponse,
   StoredChartCalculationPayload,
   StoredChartNatalCalculationPayload,
+  StoredChartProgressionCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
   StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
@@ -72,7 +73,7 @@ describe("ChartEnginePage", () => {
     vi.restoreAllMocks();
   });
 
-  it("keeps unsupported future modes disabled and starts a CRM-backed natal calculation", async () => {
+  it("keeps future modes honest and starts a CRM-backed natal calculation", async () => {
     const user = userEvent.setup();
     const onCreateNatalJob = vi.fn(async () => undefined);
     render(
@@ -89,7 +90,7 @@ describe("ChartEnginePage", () => {
     );
 
     expect(screen.getByRole("button", { name: /транзиты/i })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /прогрессии/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /прогрессии/i })).toBeEnabled();
     expect(screen.getByRole("button", { name: /синастрия/i })).toBeEnabled();
     expect(screen.getByText(/вводить дату рождения вручную не нужно/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /рассчитать/i }));
@@ -234,6 +235,65 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: "Аспекты" }));
 
     expect(screen.getByText("Солярные аспекты к наталу")).toBeInTheDocument();
+    expect(screen.getByText(/Марс — Солнце/i)).toBeInTheDocument();
+  });
+
+  it("switches to progression mode and renders progressed points and aspects", async () => {
+    const user = userEvent.setup();
+    const onCreateProgressionJob = vi.fn(async () => undefined);
+    const onProgressionTargetDateChange = vi.fn();
+    const { rerender } = render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        mode="natal"
+        progressionTargetDate="2026-07-23"
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onCreateProgressionJob={onCreateProgressionJob}
+        onProgressionTargetDateChange={onProgressionTargetDateChange}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: /прогрессии/i }));
+
+    expect(screen.getByRole("button", { name: /рассчитать прогрессии/i })).toBeEnabled();
+    expect(screen.getByLabelText("Дата прогрессии")).toHaveValue("2026-07-23");
+    fireEvent.change(screen.getByLabelText("Дата прогрессии"), {
+      target: { value: "2026-07-24" }
+    });
+
+    expect(onProgressionTargetDateChange).toHaveBeenLastCalledWith("2026-07-24");
+    await user.click(screen.getByRole("button", { name: /рассчитать прогрессии/i }));
+
+    expect(onCreateProgressionJob).toHaveBeenCalledOnce();
+
+    rerender(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={progressionResult()}
+        errorMessage={null}
+        isBusy={false}
+        mode="progression"
+        progressionTargetDate="2026-07-23"
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("chart-progression-point-mars")).toBeInTheDocument();
+    expect(screen.getByTestId("chart-progression-aspect-opposition")).toBeInTheDocument();
+    expect(screen.getByText("Прогрессии рассчитаны")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Аспекты" }));
+
+    expect(screen.getByText("Прогрессивные аспекты к наталу")).toBeInTheDocument();
     expect(screen.getByText(/Марс — Солнце/i)).toBeInTheDocument();
   });
 
@@ -1377,6 +1437,80 @@ function solarReturnResult(): StoredChartSolarReturnCalculationPayload {
       aspectsToNatal: [
         {
           solarReturnPoint: "mars",
+          natalPoint: "sun",
+          type: "opposition",
+          angle: 180,
+          orb: 1.2,
+          applying: true
+        }
+      ],
+      warnings: []
+    }
+  };
+}
+
+function progressionResult(): StoredChartProgressionCalculationPayload {
+  const natal = chartResult({
+    points: [
+      {
+        id: "sun",
+        label: "Sun",
+        longitude: 113.1,
+        sign: "cancer",
+        signDegree: 23.1,
+        house: 10,
+        retrograde: false
+      },
+      {
+        id: "mars",
+        label: "Mars",
+        longitude: 31.8,
+        sign: "taurus",
+        signDegree: 1.8,
+        house: 8,
+        retrograde: false
+      }
+    ],
+    houses: [{ number: 1, longitude: 180, sign: "libra", signDegree: 0 }],
+    aspects: []
+  }).result;
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "progression",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    inputSnapshot: transitResult().inputSnapshot,
+    progressionSnapshot: {
+      targetDate: "2026-07-23",
+      progressionType: "secondary",
+      calculationBasis: {
+        symbolicDate: "1990-08-20",
+        ageDays: 36,
+        dayForYearRatio: 1
+      }
+    },
+    result: {
+      natal,
+      progressed: {
+        ...natal,
+        points: [
+          {
+            id: "mars",
+            label: "Mars",
+            longitude: 293.4,
+            sign: "capricorn",
+            signDegree: 23.4,
+            house: 4,
+            retrograde: false
+          }
+        ],
+        aspects: [],
+        warnings: []
+      },
+      aspectsToNatal: [
+        {
+          progressedPoint: "mars",
           natalPoint: "sun",
           type: "opposition",
           angle: 180,

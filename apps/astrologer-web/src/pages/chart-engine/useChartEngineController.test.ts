@@ -5,6 +5,7 @@ import type {
   ChartTransitMoment,
   StoredChartCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
+  StoredChartProgressionCalculationPayload,
   StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
 import {
@@ -12,6 +13,7 @@ import {
   readChartEngineUrlState,
   restoreChartEngineViewState,
   submitChartCalculation,
+  submitProgressionCalculation,
   submitSolarReturnCalculation,
   submitSynastryCalculation,
   submitTransitCalculation
@@ -147,6 +149,25 @@ describe("chart engine controller submission", () => {
       settings: settings()
     });
   });
+
+  it("creates progression jobs with the selected target date", async () => {
+    const create = vi.fn(async () => calculatingResponse);
+
+    await expect(
+      submitProgressionCalculation({
+        clientId,
+        targetDate: "2026-07-23",
+        settings: settings(),
+        create
+      })
+    ).resolves.toEqual(calculatingResponse);
+
+    expect(create).toHaveBeenCalledWith({
+      clientId,
+      targetDate: "2026-07-23",
+      settings: settings()
+    });
+  });
 });
 
 describe("chart engine URL state", () => {
@@ -198,6 +219,14 @@ describe("chart engine persisted result state", () => {
       mode: "solar_return",
       settings: settings(),
       solarReturnYear: 2026
+    });
+  });
+
+  it("restores progression mode and selected target date from a loaded calculation", () => {
+    expect(restoreChartEngineViewState(progressionResult())).toEqual({
+      mode: "progression",
+      settings: settings(),
+      progressionTargetDate: "2026-07-23"
     });
   });
 });
@@ -302,6 +331,33 @@ function solarReturnResult(): StoredChartSolarReturnCalculationPayload {
     result: {
       natal,
       solarReturn: natal,
+      aspectsToNatal: [],
+      warnings: []
+    }
+  };
+}
+
+function progressionResult(): StoredChartProgressionCalculationPayload {
+  const natal = emptyRenderResult();
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "progression",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    inputSnapshot: transitResult().inputSnapshot,
+    progressionSnapshot: {
+      targetDate: "2026-07-23",
+      progressionType: "secondary",
+      calculationBasis: {
+        symbolicDate: "1990-08-20",
+        ageDays: 36,
+        dayForYearRatio: 1
+      }
+    },
+    result: {
+      natal,
+      progressed: natal,
       aspectsToNatal: [],
       warnings: []
     }

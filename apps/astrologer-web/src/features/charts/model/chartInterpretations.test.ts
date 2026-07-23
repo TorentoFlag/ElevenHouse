@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   StoredChartCalculationPayload,
   StoredChartNatalCalculationPayload,
+  StoredChartProgressionCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
   StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
@@ -84,6 +85,22 @@ describe("chartInterpretations", () => {
     expect(anchors.find((anchor) => anchor.code === "solar_return.mars.opposition.sun")).toMatchObject({
       categoryCode: "planet_aspects",
       meta: "Соляр к наталу",
+      position: "Оппозиция · орбис 1.20°"
+    });
+  });
+
+  it("derives deterministic dictionary anchors for progression aspects to natal points", () => {
+    const anchors = buildChartInterpretationAnchors(progressionResult());
+
+    expect(getChartInterpretationLookupCodes(anchors)).toContain(
+      "progression.mars.opposition.sun"
+    );
+    expect(anchors.map((anchor) => `${anchor.group}:${anchor.label}`)).toContain(
+      "aspects:Прогрессивный Марс — Солнце"
+    );
+    expect(anchors.find((anchor) => anchor.code === "progression.mars.opposition.sun")).toMatchObject({
+      categoryCode: "planet_aspects",
+      meta: "Прогрессия к наталу",
       position: "Оппозиция · орбис 1.20°"
     });
   });
@@ -342,6 +359,57 @@ function solarReturnResult(): StoredChartSolarReturnCalculationPayload {
       aspectsToNatal: [
         {
           solarReturnPoint: "mars",
+          natalPoint: "sun",
+          type: "opposition",
+          angle: 180,
+          orb: 1.2,
+          applying: true
+        }
+      ],
+      warnings: []
+    }
+  };
+}
+
+function progressionResult(): StoredChartProgressionCalculationPayload {
+  const natal = chartResult().result;
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "progression",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: chartResult().settings,
+    inputSnapshot: chartResult().inputSnapshot,
+    progressionSnapshot: {
+      targetDate: "2026-07-23",
+      progressionType: "secondary",
+      calculationBasis: {
+        symbolicDate: "1990-08-20",
+        ageDays: 36,
+        dayForYearRatio: 1
+      }
+    },
+    result: {
+      natal,
+      progressed: {
+        ...natal,
+        points: [
+          {
+            id: "mars",
+            label: "Mars",
+            longitude: 293.4,
+            sign: "capricorn",
+            signDegree: 23.4,
+            house: 4,
+            retrograde: false
+          }
+        ],
+        aspects: [],
+        warnings: []
+      },
+      aspectsToNatal: [
+        {
+          progressedPoint: "mars",
           natalPoint: "sun",
           type: "opposition",
           angle: 180,

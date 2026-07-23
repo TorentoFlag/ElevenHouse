@@ -8,6 +8,7 @@ import {
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalJobCreateResponseSchema,
+  chartProgressionJobCreateRequestSchema,
   chartSolarReturnJobCreateRequestSchema,
   chartSynastryJobCreateRequestSchema,
   chartTransitJobCreateRequestSchema,
@@ -100,6 +101,26 @@ export async function createSolarReturnChartJob(
 
   return chartNatalJobCreateResponseSchema.parse(
     await application.http.post("/charts/solar-return/jobs", body, { csrf: true })
+  );
+}
+
+export type CreateProgressionChartJobInput = {
+  readonly clientId: string;
+  readonly targetDate: string;
+  readonly settings: ChartSettings;
+} & Record<string, unknown>;
+
+export async function createProgressionChartJob(
+  input: CreateProgressionChartJobInput
+): Promise<ChartNatalJobCreateResponse> {
+  const body = chartProgressionJobCreateRequestSchema.parse({
+    clientId: input.clientId,
+    targetDate: input.targetDate,
+    settings: input.settings
+  });
+
+  return chartNatalJobCreateResponseSchema.parse(
+    await application.http.post("/charts/progressions/jobs", body, { csrf: true })
   );
 }
 

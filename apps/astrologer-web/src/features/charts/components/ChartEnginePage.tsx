@@ -25,7 +25,7 @@ import { ChartWheel } from "./ChartWheel";
 import styles from "./ChartEnginePage.module.css";
 
 export type ChartEnginePageJobState = "idle" | "calculating" | "succeeded" | "failed";
-export type ChartEngineMode = "natal" | "transit" | "synastry" | "solar_return";
+export type ChartEngineMode = "natal" | "transit" | "progression" | "synastry" | "solar_return";
 export type ChartTransitMomentInput = {
   readonly date: string;
   readonly time: string;
@@ -44,13 +44,16 @@ export type ChartEnginePageProps = {
   readonly mode?: ChartEngineMode;
   readonly transitMoment?: ChartTransitMomentInput;
   readonly solarReturnYear?: number;
+  readonly progressionTargetDate?: string;
   readonly onSettingsChange: (settings: ChartSettings) => void;
   readonly onCreateNatalJob: () => void | Promise<void>;
   readonly onCreateTransitJob?: () => void | Promise<void>;
   readonly onCreateSynastryJob?: () => void | Promise<void>;
   readonly onCreateSolarReturnJob?: () => void | Promise<void>;
+  readonly onCreateProgressionJob?: () => void | Promise<void>;
   readonly onTransitMomentChange?: (moment: ChartTransitMomentInput) => void;
   readonly onSolarReturnYearChange?: (year: number) => void;
+  readonly onProgressionTargetDateChange?: (targetDate: string) => void;
   readonly onModeChange?: (mode: ChartEngineMode) => void;
   readonly onSelectClient?: (client: ClientSelectOption) => void;
   readonly onSelectPartnerClient?: (client: ClientSelectOption) => void;
@@ -77,13 +80,16 @@ export function ChartEnginePage({
   mode = "natal",
   transitMoment,
   solarReturnYear,
+  progressionTargetDate,
   onSettingsChange,
   onCreateNatalJob,
   onCreateTransitJob,
   onCreateSynastryJob,
   onCreateSolarReturnJob,
+  onCreateProgressionJob,
   onTransitMomentChange,
   onSolarReturnYearChange,
+  onProgressionTargetDateChange,
   onModeChange,
   onSelectClient,
   onSelectPartnerClient,
@@ -103,9 +109,13 @@ export function ChartEnginePage({
   const [localTransitMoment, setLocalTransitMoment] = useState<ChartTransitMomentInput>(
     transitMoment ?? { date: "", time: "" }
   );
+  const [localProgressionTargetDate, setLocalProgressionTargetDate] = useState(
+    progressionTargetDate ?? new Date().toISOString().slice(0, 10)
+  );
   const activeMode = onModeChange ? mode : localMode;
   const activeTransitMoment = transitMoment ?? localTransitMoment;
   const activeSolarReturnYear = solarReturnYear ?? new Date().getFullYear();
+  const activeProgressionTargetDate = progressionTargetDate ?? localProgressionTargetDate;
   const isSynastryPartnerBlocked = Boolean(
     activeMode === "synastry" && selectedPartnerClient && !partnerReadiness.ready
   );
@@ -213,10 +223,15 @@ export function ChartEnginePage({
             Транзиты
           </button>
           <button
-            className={styles.modeDisabled}
+            className={activeMode === "progression" ? styles.modeActive : styles.modeButton}
             type="button"
-            disabled
-            title="Будет подключено после прогностического контура"
+            onClick={() =>
+              setChartMode({
+                mode: "progression",
+                onModeChange,
+                setLocalMode
+              })
+            }
           >
             Прогрессии
           </button>
@@ -276,6 +291,19 @@ export function ChartEnginePage({
             onChange={onSolarReturnYearChange}
           />
         ) : null}
+        {activeMode === "progression" ? (
+          <ProgressionTargetDateField
+            disabled={isBusy}
+            value={activeProgressionTargetDate}
+            onChange={(targetDate) =>
+              updateProgressionTargetDate({
+                targetDate,
+                onProgressionTargetDateChange,
+                setLocalProgressionTargetDate
+              })
+            }
+          />
+        ) : null}
         <button
           className={styles.calculateButton}
           type="button"
@@ -286,7 +314,8 @@ export function ChartEnginePage({
               onCreateNatalJob,
               onCreateTransitJob,
               onCreateSynastryJob,
-              onCreateSolarReturnJob
+              onCreateSolarReturnJob,
+              onCreateProgressionJob
             })
           }
         >
@@ -612,6 +641,8 @@ function getChartViewState({
             ? "Синастрия рассчитана для выбранной пары клиентов."
             : mode === "solar_return"
               ? "Соляр рассчитан по наталу клиента и выбранному году."
+              : mode === "progression"
+                ? "Прогрессии рассчитаны по наталу клиента и выбранной дате."
               : "Натальная карта рассчитана и привязана к клиенту.",
       actionLabel: "Актуальна",
       canCalculate: false,
@@ -638,6 +669,8 @@ function getChartViewState({
           ? "Оба клиента готовы для расчёта совместимости."
           : mode === "solar_return"
             ? "Натал клиента и год соляра готовы для расчёта."
+            : mode === "progression"
+              ? "Натал клиента и дата прогрессии готовы для расчёта."
             : "Данные рождения и настройки готовы для натальной карты.",
     actionLabel:
       mode === "transit"
@@ -646,6 +679,8 @@ function getChartViewState({
           ? "Рассчитать синастрию"
           : mode === "solar_return"
             ? "Рассчитать соляр"
+            : mode === "progression"
+              ? "Рассчитать прогрессии"
             : "Рассчитать",
     canCalculate: !isBusy,
     tone: "ready"
@@ -922,6 +957,8 @@ function StatusCard({
             ? "Берём данные рождения обоих клиентов из CRM и строим canonical result."
             : mode === "solar_return"
               ? "Берём натал из CRM, считаем соляр на выбранный год и строим dual-wheel result."
+              : mode === "progression"
+                ? "Берём натал из CRM, считаем вторичные прогрессии на выбранную дату и строим dual-wheel result."
               : "Берём данные рождения из CRM и строим canonical natal result."}
         </span>
       </div>
@@ -972,6 +1009,8 @@ function StatusCard({
               ? "Выберите второго клиента: в backend уйдут только id пары и настройки расчёта."
               : mode === "solar_return"
                 ? "Выберите клиента и год соляра: backend сам возьмёт birth data из CRM."
+                : mode === "progression"
+                  ? "Выберите клиента и дату прогрессии: backend сам возьмёт birth data из CRM."
                 : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
         </span>
       </div>
@@ -988,6 +1027,8 @@ function StatusCard({
               ? "Данные одного из участников или настройки изменились. Пересчитайте синастрию."
               : mode === "solar_return"
                 ? "Данные рождения, настройки или год соляра изменились. Пересчитайте соляр."
+                : mode === "progression"
+                  ? "Данные рождения, настройки или дата прогрессии изменились. Пересчитайте прогрессии."
                 : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
         </span>
       </div>
@@ -1115,6 +1156,7 @@ const panelTabs: readonly { readonly id: ChartPanelTab; readonly label: string }
 
 function getModeTitle(mode: ChartEngineMode): string {
   if (mode === "transit") return "Транзитная карта";
+  if (mode === "progression") return "Прогрессии";
   if (mode === "synastry") return "Синастрия";
   if (mode === "solar_return") return "Соляр";
   return "Натальная карта";
@@ -1122,6 +1164,7 @@ function getModeTitle(mode: ChartEngineMode): string {
 
 function getCalculatingLabel(mode: ChartEngineMode): string {
   if (mode === "transit") return "Рассчитываем транзиты";
+  if (mode === "progression") return "Рассчитываем прогрессии";
   if (mode === "synastry") return "Рассчитываем синастрию";
   if (mode === "solar_return") return "Рассчитываем соляр";
   return "Рассчитываем карту";
@@ -1129,6 +1172,7 @@ function getCalculatingLabel(mode: ChartEngineMode): string {
 
 function getEmptyResultLabel(mode: ChartEngineMode): string {
   if (mode === "transit") return "Готово к расчёту транзитов";
+  if (mode === "progression") return "Готово к расчёту прогрессий";
   if (mode === "synastry") return "Готово к расчёту синастрии";
   if (mode === "solar_return") return "Готово к расчёту соляра";
   return "Готово к расчёту натала";
@@ -1136,6 +1180,7 @@ function getEmptyResultLabel(mode: ChartEngineMode): string {
 
 function getSucceededLabel(mode: ChartEngineMode): string {
   if (mode === "transit") return "Транзитная карта рассчитана";
+  if (mode === "progression") return "Прогрессии рассчитаны";
   if (mode === "synastry") return "Синастрия рассчитана";
   if (mode === "solar_return") return "Соляр рассчитан";
   return "Натальная карта рассчитана";
@@ -1146,16 +1191,21 @@ function runChartCalculationAction({
   onCreateNatalJob,
   onCreateTransitJob,
   onCreateSynastryJob,
-  onCreateSolarReturnJob
+  onCreateSolarReturnJob,
+  onCreateProgressionJob
 }: {
   readonly activeMode: ChartEngineMode;
   readonly onCreateNatalJob: () => void | Promise<void>;
   readonly onCreateTransitJob?: () => void | Promise<void>;
   readonly onCreateSynastryJob?: () => void | Promise<void>;
   readonly onCreateSolarReturnJob?: () => void | Promise<void>;
+  readonly onCreateProgressionJob?: () => void | Promise<void>;
 }) {
   if (activeMode === "transit") {
     return onCreateTransitJob?.();
+  }
+  if (activeMode === "progression") {
+    return onCreateProgressionJob?.();
   }
   if (activeMode === "synastry") {
     return onCreateSynastryJob?.();
@@ -1256,6 +1306,33 @@ function SolarReturnYearField({
   );
 }
 
+function ProgressionTargetDateField({
+  disabled,
+  onChange,
+  value
+}: {
+  readonly disabled: boolean;
+  readonly value: string;
+  readonly onChange: (targetDate: string) => void;
+}) {
+  return (
+    <div className={`${styles.transitMomentFields} ${styles.solarReturnYearField}`}>
+      <label>
+        <span>Дата прогрессии</span>
+        <input
+          aria-label="Дата прогрессии"
+          disabled={disabled}
+          id="chart-progression-target-date"
+          name="progressionTargetDate"
+          type="date"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </label>
+    </div>
+  );
+}
+
 function updateTransitMoment({
   nextMoment,
   onTransitMomentChange,
@@ -1270,4 +1347,20 @@ function updateTransitMoment({
     return;
   }
   setLocalTransitMoment(nextMoment);
+}
+
+function updateProgressionTargetDate({
+  targetDate,
+  onProgressionTargetDateChange,
+  setLocalProgressionTargetDate
+}: {
+  readonly targetDate: string;
+  readonly onProgressionTargetDateChange?: (targetDate: string) => void;
+  readonly setLocalProgressionTargetDate: (targetDate: string) => void;
+}) {
+  if (onProgressionTargetDateChange) {
+    onProgressionTargetDateChange(targetDate);
+    return;
+  }
+  setLocalProgressionTargetDate(targetDate);
 }

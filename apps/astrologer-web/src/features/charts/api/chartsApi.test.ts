@@ -3,6 +3,7 @@ import type { ChartNatalJobCreateResponse } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import {
   createNatalChartJob,
+  createProgressionChartJob,
   createSolarReturnChartJob,
   createSynastryChartJob,
   createTransitChartJob,
@@ -164,6 +165,42 @@ describe("chartsApi", () => {
       {
         clientId,
         year: 2026,
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      },
+      { csrf: true }
+    );
+    expect(JSON.stringify(post.mock.calls[0]?.[1])).not.toContain("birthDate");
+  });
+
+  it("creates progression jobs with client id, target date and settings only", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(createResponse);
+
+    await expect(
+      createProgressionChartJob({
+        clientId,
+        targetDate: "2026-07-23",
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        birthDate: "1990-07-15"
+      })
+    ).resolves.toEqual(createResponse);
+
+    expect(post).toHaveBeenCalledWith(
+      "/charts/progressions/jobs",
+      {
+        clientId,
+        targetDate: "2026-07-23",
         settings: {
           zodiac: "tropical",
           houseSystem: "placidus",

@@ -69,7 +69,8 @@ export function isChartResultStale(
     readonly longitude?: number;
   },
   partnerBirthData?: NatalBirthData | null | undefined,
-  solarReturnYear?: number
+  solarReturnYear?: number,
+  progressionTargetDate?: string
 ): boolean {
   if (birthData === undefined) {
     return false;
@@ -108,6 +109,13 @@ export function isChartResultStale(
 
   if (result.method === "solar_return") {
     return solarReturnYear != null && result.solarReturnSnapshot.year !== solarReturnYear;
+  }
+
+  if (result.method === "progression") {
+    return (
+      progressionTargetDate != null &&
+      result.progressionSnapshot.targetDate !== progressionTargetDate
+    );
   }
 
   if (result.method !== "transit") {

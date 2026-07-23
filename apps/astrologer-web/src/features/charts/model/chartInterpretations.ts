@@ -1,6 +1,7 @@
 import type {
   ChartAspect,
   ChartPoint,
+  ChartProgressionAspect,
   ChartSolarReturnAspect,
   ChartSynastryHouseOverlay,
   ChartTransitAspect,
@@ -14,6 +15,8 @@ import {
   getChartPointDisplayLabel,
   getPartnerChartRenderResult,
   getPrimaryChartRenderResult,
+  getProgressionChartRenderResult,
+  getProgressionChartResult,
   getSolarReturnChartRenderResult,
   getSolarReturnChartResult,
   getSynastryChartResult,
@@ -80,6 +83,10 @@ export function buildChartInterpretationAnchors(
   const solarReturnPointsById = new Map(
     (getSolarReturnChartRenderResult(result)?.points ?? []).map((point) => [point.id, point])
   );
+  const progressionResult = getProgressionChartResult(result);
+  const progressionPointsById = new Map(
+    (getProgressionChartRenderResult(result)?.points ?? []).map((point) => [point.id, point])
+  );
 
   return [
     ...buildPointAnchors(renderResult.points),
@@ -96,6 +103,13 @@ export function buildChartInterpretationAnchors(
       ? buildSolarReturnAspectAnchors(
           solarReturnResult.result.aspectsToNatal,
           solarReturnPointsById,
+          pointsById
+        )
+      : []),
+    ...(progressionResult
+      ? buildProgressionAspectAnchors(
+          progressionResult.result.aspectsToNatal,
+          progressionPointsById,
           pointsById
         )
       : [])
@@ -228,6 +242,41 @@ function buildSolarReturnAspectAnchors(
         group: "aspects" as const,
         label: `Солярный ${solarReturnPoint} — ${natalPoint}`,
         meta: "Соляр к наталу",
+        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+      };
+    });
+}
+
+function buildProgressionAspectAnchors(
+  aspects: readonly ChartProgressionAspect[],
+  progressionPointsById: ReadonlyMap<string, ChartPoint>,
+  natalPointsById: ReadonlyMap<string, ChartPoint>
+): readonly ChartInterpretationAnchor[] {
+  return [...aspects]
+    .filter(
+      (aspect) =>
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.progressedPoint) as (typeof pointOrder)[number]
+        ) &&
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.natalPoint) as (typeof pointOrder)[number]
+        )
+    )
+    .sort((left, right) => left.orb - right.orb)
+    .slice(0, maxPlanetAspectAnchors)
+    .map((aspect) => {
+      const progressedPoint = getPointLabel(progressionPointsById, aspect.progressedPoint);
+      const natalPoint = getPointLabel(natalPointsById, aspect.natalPoint);
+
+      return {
+        id: `progression-aspect-${aspect.progressedPoint}-${aspect.natalPoint}-${aspect.type}`,
+        code: `progression.${formatDictionaryCodePart(
+          aspect.progressedPoint
+        )}.${normalizeAspectTypeCode(aspect.type)}.${formatDictionaryCodePart(aspect.natalPoint)}`,
+        categoryCode: "planet_aspects" as const,
+        group: "aspects" as const,
+        label: `Прогрессивный ${progressedPoint} — ${natalPoint}`,
+        meta: "Прогрессия к наталу",
         position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
       };
     });

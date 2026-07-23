@@ -15,6 +15,7 @@ import {
 } from "../../features/clients/model/clientSelectorModel";
 import {
   createNatalChartJob,
+  createProgressionChartJob,
   createSolarReturnChartJob,
   createSynastryChartJob,
   createTransitChartJob,
@@ -58,7 +59,7 @@ export function useChartEngineController() {
     null
   );
   const [restoredPartnerClientId, setRestoredPartnerClientId] = useState<string | null>(
-    initialUrlState.partnerClientId
+    initialUrlState.partnerClientId ?? null
   );
   const [settings, setSettings] = useState<ChartSettings>(defaultSettings);
   const [mode, setMode] = useState<ChartEngineMode>("natal");
@@ -66,6 +67,9 @@ export function useChartEngineController() {
     getDefaultTransitMoment()
   );
   const [solarReturnYear, setSolarReturnYear] = useState(() => new Date().getFullYear());
+  const [progressionTargetDate, setProgressionTargetDate] = useState(() =>
+    getDefaultProgressionTargetDate()
+  );
   const [jobId, setJobId] = useState<string | null>(null);
   const [calculationId, setCalculationId] = useState<string | null>(initialUrlState.calculationId);
   const [immediateResult, setImmediateResult] = useState<StoredChartCalculationPayload | null>(
@@ -245,6 +249,44 @@ export function useChartEngineController() {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить соляр");
     }
   });
+  const progressionCalculationMutation = useMutation({
+    mutationFn: ({
+      clientId,
+      settings,
+      targetDate
+    }: {
+      readonly clientId: string;
+      readonly settings: ChartSettings;
+      readonly targetDate: string;
+    }) =>
+      submitProgressionCalculation({
+        clientId,
+        settings,
+        targetDate,
+        create: createProgressionChartJob
+      }),
+    onSuccess: (response, variables) => {
+      setErrorMessage(null);
+      setHasResultStaleIntent(false);
+      if (response.status === "succeeded") {
+        setJobId(null);
+        setCalculationId(response.calculationId);
+        setImmediateResult(response.result as StoredChartCalculationPayload);
+        writeChartEngineUrlState({
+          clientId: variables.clientId,
+          calculationId: response.calculationId
+        });
+        return;
+      }
+      setImmediateResult(null);
+      setCalculationId(null);
+      setJobId(response.jobId);
+      writeChartEngineUrlState({ clientId: variables.clientId, calculationId: null });
+    },
+    onError: (error) => {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить прогрессии");
+    }
+  });
 
   const birthDataMutation = useMutation({
     mutationFn: async (data: Parameters<typeof updateClientBirthData>[1]) => {
@@ -344,6 +386,9 @@ export function useChartEngineController() {
     if (restoredState.solarReturnYear) {
       setSolarReturnYear(restoredState.solarReturnYear);
     }
+    if (restoredState.progressionTargetDate) {
+      setProgressionTargetDate(restoredState.progressionTargetDate);
+    }
     setHasResultStaleIntent(false);
   }, [calculationQuery.data]);
 
@@ -358,7 +403,8 @@ export function useChartEngineController() {
         mode,
         transitMoment,
         selectedPartnerClient?.birthData,
-        solarReturnYear
+        solarReturnYear,
+        progressionTargetDate
       ))
   );
   const pdfQuery = useQuery({
@@ -385,6 +431,7 @@ export function useChartEngineController() {
       transitCalculationMutation.isPending ||
       synastryCalculationMutation.isPending ||
       solarReturnCalculationMutation.isPending ||
+      progressionCalculationMutation.isPending ||
       jobId ||
       jobQuery.data?.status === "calculating"
     ) {
@@ -406,13 +453,15 @@ export function useChartEngineController() {
     result,
     transitCalculationMutation.isPending,
     synastryCalculationMutation.isPending,
-    solarReturnCalculationMutation.isPending
+    solarReturnCalculationMutation.isPending,
+    progressionCalculationMutation.isPending
   ]);
   const isBusy =
     calculationMutation.isPending ||
     transitCalculationMutation.isPending ||
     synastryCalculationMutation.isPending ||
     solarReturnCalculationMutation.isPending ||
+    progressionCalculationMutation.isPending ||
     birthDataMutation.isPending ||
     enqueuePdfMutation.isPending ||
     downloadPdfMutation.isPending ||
@@ -446,6 +495,7 @@ export function useChartEngineController() {
     mode,
     transitMoment,
     solarReturnYear,
+    progressionTargetDate,
     onModeChange: (nextMode: ChartEngineMode) => setMode(nextMode),
     onTransitMomentChange: (nextMoment: ChartTransitMomentInput) => {
       setTransitMoment(nextMoment);
@@ -456,6 +506,12 @@ export function useChartEngineController() {
     onSolarReturnYearChange: (year: number) => {
       setSolarReturnYear(year);
       if (result?.method === "solar_return") {
+        setHasResultStaleIntent(true);
+      }
+    },
+    onProgressionTargetDateChange: (targetDate: string) => {
+      setProgressionTargetDate(targetDate);
+      if (result?.method === "progression") {
         setHasResultStaleIntent(true);
       }
     },
@@ -581,6 +637,26 @@ export function useChartEngineController() {
         year: solarReturnYear
       });
     },
+    onCreateProgressionJob: async () => {
+      if (!selectedClient) {
+        setErrorMessage("Выберите клиента из CRM");
+        return;
+      }
+      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
+      if (!readiness.ready) {
+        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
+        return;
+      }
+      if (!progressionTargetDate) {
+        setErrorMessage("Укажите дату прогрессии");
+        return;
+      }
+      await progressionCalculationMutation.mutateAsync({
+        clientId: selectedClient.value,
+        settings,
+        targetDate: progressionTargetDate
+      });
+    },
     onPdf: async () => {
       try {
         setErrorMessage(null);
@@ -667,12 +743,27 @@ export async function submitSolarReturnCalculation({
   return create({ clientId, settings, year });
 }
 
+export async function submitProgressionCalculation({
+  clientId,
+  create,
+  settings,
+  targetDate
+}: {
+  readonly clientId: string;
+  readonly settings: ChartSettings;
+  readonly targetDate: string;
+  readonly create: typeof createProgressionChartJob;
+}) {
+  return create({ clientId, settings, targetDate });
+}
+
 export function restoreChartEngineViewState(result: StoredChartCalculationPayload): {
   readonly mode: ChartEngineMode;
   readonly settings: ChartSettings;
   readonly transitMoment?: ChartTransitMomentInput;
   readonly partnerClientId?: string;
   readonly solarReturnYear?: number;
+  readonly progressionTargetDate?: string;
 } {
   if (result.method === "synastry") {
     return {
@@ -688,6 +779,13 @@ export function restoreChartEngineViewState(result: StoredChartCalculationPayloa
         mode: "solar_return",
         settings: result.settings,
         solarReturnYear: result.solarReturnSnapshot.year
+      };
+    }
+    if (result.method === "progression") {
+      return {
+        mode: "progression",
+        settings: result.settings,
+        progressionTargetDate: result.progressionSnapshot.targetDate
       };
     }
     return {
@@ -772,4 +870,8 @@ function getDefaultTransitMoment(): ChartTransitMomentInput {
   const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   return { date, time };
+}
+
+function getDefaultProgressionTargetDate(): string {
+  return new Date().toISOString().slice(0, 10);
 }

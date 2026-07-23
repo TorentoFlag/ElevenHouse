@@ -1,6 +1,7 @@
 import type {
   ChartRenderResult,
   StoredChartCalculationPayload,
+  StoredChartProgressionCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
   StoredChartSynastryCalculationPayload,
   StoredChartTransitCalculationPayload
@@ -132,6 +133,9 @@ export function getPrimaryChartRenderResult(
   if (result.method === "solar_return") {
     return result.result.natal;
   }
+  if (result.method === "progression") {
+    return result.result.natal;
+  }
 
   return result.result;
 }
@@ -160,6 +164,18 @@ export function getSolarReturnChartResult(
   return result.method === "solar_return" ? result : null;
 }
 
+export function getProgressionChartRenderResult(
+  result: StoredChartCalculationPayload
+): ChartRenderResult | null {
+  return result.method === "progression" ? result.result.progressed : null;
+}
+
+export function getProgressionChartResult(
+  result: StoredChartCalculationPayload
+): StoredChartProgressionCalculationPayload | null {
+  return result.method === "progression" ? result : null;
+}
+
 export function getPartnerChartRenderResult(
   result: StoredChartCalculationPayload
 ): ChartRenderResult | null {
@@ -176,7 +192,8 @@ export function getChartWarnings(result: StoredChartCalculationPayload) {
   if (
     result.method === "transit" ||
     result.method === "synastry" ||
-    result.method === "solar_return"
+    result.method === "solar_return" ||
+    result.method === "progression"
   ) {
     return result.result.warnings;
   }

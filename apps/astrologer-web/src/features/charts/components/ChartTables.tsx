@@ -13,6 +13,8 @@ import {
   formatHouseSignDisplay,
   getPrimaryChartRenderResult,
   getPartnerChartRenderResult,
+  getProgressionChartRenderResult,
+  getProgressionChartResult,
   getSolarReturnChartRenderResult,
   getSolarReturnChartResult,
   getSynastryChartResult,
@@ -81,6 +83,7 @@ function PlanetsTable({
   const renderResult = getPrimaryChartRenderResult(result);
   const transitRenderResult = getTransitChartRenderResult(result);
   const solarReturnRenderResult = getSolarReturnChartRenderResult(result);
+  const progressionRenderResult = getProgressionChartRenderResult(result);
   const partnerRenderResult = getPartnerChartRenderResult(result);
 
   return (
@@ -206,6 +209,48 @@ function PlanetsTable({
           </div>
         </>
       ) : null}
+      {progressionRenderResult ? (
+        <>
+          <h3 className={styles.matrixHeading}>Прогрессивные планеты</h3>
+          <div className={styles.planetList}>
+            {progressionRenderResult.points.map((point) => {
+              const hoverId = `progression:${point.id}`;
+              const hovered = hoveredPointId === hoverId;
+
+              return (
+                <div
+                  className={hovered ? styles.planetRowHovered : styles.planetRow}
+                  data-hovered={hovered ? "true" : "false"}
+                  data-testid={`chart-progression-planet-row-${point.id}`}
+                  key={`progression-${point.id}`}
+                  onBlur={() => onHoverPoint(null)}
+                  onFocus={() => onHoverPoint(hoverId)}
+                  onMouseEnter={() => onHoverPoint(hoverId)}
+                  onMouseLeave={() => onHoverPoint(null)}
+                  tabIndex={0}
+                >
+                  <span className={styles.pointGlyph} aria-hidden="true">
+                    {getChartPointSymbol(point.id, point.label)}
+                  </span>
+                  <span className={styles.pointName}>
+                    {getChartPointDisplayLabel(point.id, point.label)}
+                  </span>
+                  <span className={styles.signGlyph} aria-hidden="true">
+                    {getZodiacSymbol(point.sign)}
+                  </span>
+                  <span className={styles.pointDegree}>
+                    {formatDegree(point.signDegree)}
+                    {point.retrograde ? <b>R</b> : null}
+                  </span>
+                  <span className={styles.pointHouse}>
+                    {point.house ? `${romanHouses[point.house]} дом` : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
       {partnerRenderResult ? (
         <>
           <h3 className={styles.matrixHeading}>Планеты партнёра</h3>
@@ -277,9 +322,11 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
   const renderResult = getPrimaryChartRenderResult(result);
   const transitResult = getTransitChartResult(result);
   const solarReturnResult = getSolarReturnChartResult(result);
+  const progressionResult = getProgressionChartResult(result);
   const synastryResult = getSynastryChartResult(result);
   const transitRenderResult = getTransitChartRenderResult(result);
   const solarReturnRenderResult = getSolarReturnChartRenderResult(result);
+  const progressionRenderResult = getProgressionChartRenderResult(result);
   const partnerRenderResult = getPartnerChartRenderResult(result);
   const matrixPoints = getAspectMatrixPoints(renderResult.points);
   const aspectsByPair = new Map(
@@ -388,6 +435,33 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
               ))
             ) : (
               <div className={styles.emptyRow}>Солярные аспекты к наталу не найдены</div>
+            )}
+          </div>
+        </>
+      ) : null}
+      {progressionResult ? (
+        <>
+          <h2>Прогрессивные аспекты к наталу</h2>
+          <div className={styles.aspectList}>
+            {progressionResult.result.aspectsToNatal.length > 0 ? (
+              progressionResult.result.aspectsToNatal.map((aspect, index) => (
+                <div
+                  className={styles.aspectRow}
+                  key={`progression-${aspect.progressedPoint}-${aspect.natalPoint}-${index}`}
+                >
+                  <span>{formatAspectTypeDisplay(aspect.type)}</span>
+                  <span>
+                    {getPointLabelFromCollection(
+                      progressionRenderResult?.points ?? [],
+                      aspect.progressedPoint
+                    )}{" "}
+                    — {getPointLabelFromCollection(renderResult.points, aspect.natalPoint)}
+                  </span>
+                  <span>{aspect.orb.toFixed(2)}°</span>
+                </div>
+              ))
+            ) : (
+              <div className={styles.emptyRow}>Прогрессивные аспекты к наталу не найдены</div>
             )}
           </div>
         </>

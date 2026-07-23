@@ -3,6 +3,7 @@ import type {
   ChartSettings,
   StoredChartCalculationPayload,
   StoredChartNatalCalculationPayload,
+  StoredChartProgressionCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
   StoredChartSynastryCalculationPayload
 } from "@elevenhouse/contracts";
@@ -136,6 +137,21 @@ describe("chartEngineState", () => {
       )
     ).toBe(true);
   });
+
+  it("marks a progression result stale when the selected target date changed", () => {
+    expect(
+      isChartResultStale(
+        progressionResult(),
+        readyBirthData(),
+        chartSettings(),
+        "progression",
+        undefined,
+        undefined,
+        undefined,
+        "2026-07-24"
+      )
+    ).toBe(true);
+  });
 });
 
 function chartSettings(): ChartSettings {
@@ -262,6 +278,33 @@ function solarReturnResult(): StoredChartSolarReturnCalculationPayload {
     result: {
       natal,
       solarReturn: natal,
+      aspectsToNatal: [],
+      warnings: []
+    }
+  };
+}
+
+function progressionResult(): StoredChartProgressionCalculationPayload {
+  const natal = chartResult().result;
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "progression",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: chartSettings(),
+    inputSnapshot: chartResult().inputSnapshot,
+    progressionSnapshot: {
+      targetDate: "2026-07-23",
+      progressionType: "secondary",
+      calculationBasis: {
+        symbolicDate: "1990-08-20",
+        ageDays: 36,
+        dayForYearRatio: 1
+      }
+    },
+    result: {
+      natal,
+      progressed: natal,
       aspectsToNatal: [],
       warnings: []
     }
