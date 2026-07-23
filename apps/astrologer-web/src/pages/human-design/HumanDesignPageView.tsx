@@ -40,6 +40,10 @@ export type HumanDesignPageViewProps = {
   readonly aiDraftDisabledReason: string | null;
   readonly aiDraftSaveDisabled: boolean;
   readonly aiDraftApproveDisabled: boolean;
+  readonly pdfLabel: string;
+  readonly pdfDisabled: boolean;
+  readonly pdfTitle: string;
+  readonly pdfErrorMessage: string | null;
   readonly isBusy: boolean;
   readonly isLinked: boolean;
   readonly onSelectMode: (mode: HumanDesignWorkspaceMode) => void;
@@ -51,6 +55,7 @@ export type HumanDesignPageViewProps = {
   readonly onSelectSaved: (calculation: CalculationRecordResponse) => void;
   readonly onFetchTransit: () => void | Promise<void>;
   readonly onCreateAiDraft: () => void | Promise<void>;
+  readonly onPdf: () => void | Promise<void>;
   readonly onSaveAiDraft: () => void | Promise<void>;
   readonly onApproveAiDraft: () => void | Promise<void>;
   readonly onPreview: () => void | Promise<void>;
@@ -77,6 +82,10 @@ export function HumanDesignPageView({
   aiDraftDisabledReason,
   aiDraftSaveDisabled,
   aiDraftApproveDisabled,
+  pdfLabel,
+  pdfDisabled,
+  pdfTitle,
+  pdfErrorMessage,
   isBusy,
   isLinked,
   onSelectMode,
@@ -88,6 +97,7 @@ export function HumanDesignPageView({
   onSelectSaved,
   onFetchTransit,
   onCreateAiDraft,
+  onPdf,
   onSaveAiDraft,
   onApproveAiDraft,
   onPreview,
@@ -199,9 +209,15 @@ export function HumanDesignPageView({
           <Icon iconName="refresh" width={15} height={15} aria-hidden="true" />
           Обновить
         </button>
-        <button className={styles.toolButton} type="button" disabled>
+        <button
+          className={styles.toolButton}
+          type="button"
+          disabled={pdfDisabled}
+          title={pdfTitle}
+          onClick={() => void onPdf()}
+        >
           <Icon iconName="doc" width={15} height={15} aria-hidden="true" />
-          PDF
+          {pdfLabel}
         </button>
         <button
           className={styles.toolButton}
@@ -514,6 +530,7 @@ export function HumanDesignPageView({
                 {aiDraftErrorMessage ? <p className={styles.errorText}>{aiDraftErrorMessage}</p> : null}
               </div>
             ) : null}
+            {pdfErrorMessage ? <p className={styles.errorText}>{pdfErrorMessage}</p> : null}
             {isTransitMode && transitModel ? (
               <div className={styles.transitPanel}>
                 <div>

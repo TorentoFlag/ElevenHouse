@@ -8,6 +8,9 @@ import { application } from "../../../Application";
 import {
   createHumanDesignAiDraft,
   createHumanDesignCalculation,
+  downloadHumanDesignPdf,
+  enqueueHumanDesignPdf,
+  getLatestHumanDesignPdf,
   getHumanDesignTransit,
   previewHumanDesign,
   recalculateHumanDesignCalculation
@@ -135,6 +138,50 @@ describe("humanDesignApi", () => {
       `/human-design/calculations/${response.calculation.id}/ai-draft`,
       { expectedResultChecksum: response.calculation.resultChecksum },
       { csrf: true }
+    );
+  });
+
+  it("reads, enqueues and downloads Human Design PDFs through private report routes", async () => {
+    const response = humanDesignCalculationResponse();
+    const pdfJob = {
+      job: null,
+      currentResultChecksum: response.calculation.resultChecksum
+    };
+    const downloadResponse = {
+      url: "https://storage.example.test/report.pdf",
+      expiresAt: "2026-07-23T13:00:00.000Z"
+    };
+    const get = vi.spyOn(application.http, "get").mockResolvedValueOnce(pdfJob).mockResolvedValueOnce(downloadResponse);
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(pdfJob);
+
+    await expect(
+      getLatestHumanDesignPdf({ calculationId: response.calculation.id, locale: "ru" })
+    ).resolves.toEqual(pdfJob);
+    await expect(
+      enqueueHumanDesignPdf({
+        calculationId: response.calculation.id,
+        body: { expectedResultChecksum: response.calculation.resultChecksum, locale: "ru" }
+      })
+    ).resolves.toEqual(pdfJob);
+    await expect(
+      downloadHumanDesignPdf({
+        calculationId: response.calculation.id,
+        jobId: "44444444-4444-4444-8444-444444444444"
+      })
+    ).resolves.toEqual(downloadResponse);
+
+    expect(get).toHaveBeenNthCalledWith(
+      1,
+      `/human-design/calculations/${response.calculation.id}/report/pdf?locale=ru`
+    );
+    expect(post).toHaveBeenCalledWith(
+      `/human-design/calculations/${response.calculation.id}/report/pdf`,
+      { expectedResultChecksum: response.calculation.resultChecksum, locale: "ru" },
+      { csrf: true }
+    );
+    expect(get).toHaveBeenNthCalledWith(
+      2,
+      `/human-design/calculations/${response.calculation.id}/report/pdf/44444444-4444-4444-8444-444444444444/download`
     );
   });
 });

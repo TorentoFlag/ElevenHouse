@@ -50,12 +50,6 @@ describe("HumanDesignPageView", () => {
       model: createHumanDesignViewModel(sampleResult())
     });
     const text = textOf(view);
-    const disabledFutureButtons = walk(view).filter(
-      (element) =>
-        element.type === "button" &&
-        element.props.disabled === true &&
-        ["PDF"].some((label) => textOf(element).includes(label))
-    );
     const linkButton = walk(view).find(
       (element) => element.type === "button" && textOf(element).includes("Привязать")
     );
@@ -64,8 +58,31 @@ describe("HumanDesignPageView", () => {
     expect(text).toContain("Канал 20–34");
     expect(text).toContain("Личность");
     expect(text).toContain("Дизайн");
-    expect(disabledFutureButtons).toHaveLength(1);
     expect(linkButton?.props.disabled).toBe(false);
+  });
+
+  it("uses the PDF toolbar action for saved Human Design calculations", () => {
+    const onPdf = vi.fn();
+    const saved = savedCalculation();
+    const view = HumanDesignPageView({
+      ...baseProps(),
+      selectedClient: clientOption("22222222-2222-4222-8222-222222222222", "Марина Краснова"),
+      model: createHumanDesignViewModel(sampleResult()),
+      selectedCalculationId: saved.id,
+      pdfLabel: "Скачать PDF",
+      pdfDisabled: false,
+      pdfTitle: "Скачать готовый PDF",
+      isLinked: true,
+      onPdf
+    });
+    const pdfButton = walk(view).find(
+      (element): element is ReactElement<{ disabled?: boolean; onClick: () => void }> =>
+        element.type === "button" && textOf(element).includes("Скачать PDF")
+    );
+
+    expect(pdfButton?.props.disabled).toBe(false);
+    pdfButton?.props.onClick();
+    expect(onPdf).toHaveBeenCalledOnce();
   });
 
   it("enables AI draft editing for an opened saved Human Design calculation", () => {
@@ -265,6 +282,10 @@ function baseProps(): HumanDesignPageViewProps {
     aiDraftDisabledReason: "Сначала сохраните расчёт",
     aiDraftSaveDisabled: true,
     aiDraftApproveDisabled: true,
+    pdfLabel: "PDF",
+    pdfDisabled: true,
+    pdfTitle: "Сначала сохраните расчёт",
+    pdfErrorMessage: null,
     calculations: [],
     selectedCalculationId: null,
     isBusy: false,
@@ -278,6 +299,7 @@ function baseProps(): HumanDesignPageViewProps {
     onPreview: vi.fn(),
     onFetchTransit: vi.fn(),
     onCreateAiDraft: vi.fn(),
+    onPdf: vi.fn(),
     onSaveAiDraft: vi.fn(),
     onApproveAiDraft: vi.fn(),
     onPersist: vi.fn(),

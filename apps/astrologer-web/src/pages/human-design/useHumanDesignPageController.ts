@@ -7,6 +7,10 @@ import {
   type HumanDesignDetailKey
 } from "../../features/human-design/model/humanDesignViewModel";
 import {
+  buildHumanDesignPdfAction,
+  executeHumanDesignPdfAction
+} from "../../features/human-design/model/humanDesignPdfModel";
+import {
   getCurrentHumanDesignInterpretation,
   getHumanDesignAiDraftErrorMessage,
   getHumanDesignInterpretationState
@@ -15,8 +19,11 @@ import {
   useApproveHumanDesignInterpretationMutation,
   useCreateHumanDesignAiDraftMutation,
   useCreateHumanDesignCalculationMutation,
+  useDownloadHumanDesignPdfMutation,
+  useEnqueueHumanDesignPdfMutation,
   useGetHumanDesignTransitMutation,
   useHumanDesignCalculationListQuery,
+  useHumanDesignPdfQuery,
   usePreviewHumanDesignMutation,
   useRecalculateHumanDesignCalculationMutation,
   useSaveHumanDesignInterpretationMutation
@@ -42,6 +49,8 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
   const aiDraftMutation = useCreateHumanDesignAiDraftMutation();
   const saveInterpretationMutation = useSaveHumanDesignInterpretationMutation();
   const approveInterpretationMutation = useApproveHumanDesignInterpretationMutation();
+  const enqueuePdfMutation = useEnqueueHumanDesignPdfMutation();
+  const downloadPdfMutation = useDownloadHumanDesignPdfMutation();
   const [mode, setMode] = useState<HumanDesignWorkspaceMode>("individual");
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
   const [selectedPartnerClient, setSelectedPartnerClient] =
@@ -55,7 +64,9 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
   const [selectedDetailKey, setSelectedDetailKey] = useState<HumanDesignDetailKey>("type");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [aiDraftErrorMessage, setAiDraftErrorMessage] = useState<string | null>(null);
+  const [pdfErrorMessage, setPdfErrorMessage] = useState<string | null>(null);
   const [interpretationText, setInterpretationText] = useState("");
+  const pdfLocale = "ru";
   const calculations = useMemo(
     () =>
       getActiveHumanDesignCalculations(
@@ -80,6 +91,11 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
         : null,
     [transitMutation.data]
   );
+  const pdfQuery = useHumanDesignPdfQuery({
+    calculationId: savedResponse?.calculation.id ?? "",
+    locale: pdfLocale,
+    resultChecksum: savedResponse?.calculation.resultChecksum ?? ""
+  });
   const isBusy =
     previewMutation.isPending ||
     createMutation.isPending ||
@@ -87,7 +103,9 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     transitMutation.isPending ||
     aiDraftMutation.isPending ||
     saveInterpretationMutation.isPending ||
-    approveInterpretationMutation.isPending;
+    approveInterpretationMutation.isPending ||
+    enqueuePdfMutation.isPending ||
+    downloadPdfMutation.isPending;
   const canOpenTransitMode = savedResponse?.result.mode === "individual";
   const interpretationState = getHumanDesignInterpretationState(
     savedResponse?.calculation ?? null,
@@ -95,6 +113,14 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     isBusy
   );
   const latestInterpretationText = savedResponse?.calculation.interpretations.at(-1)?.text ?? "";
+  const pdfAction = buildHumanDesignPdfAction({
+    calculationId: savedResponse?.calculation.id ?? null,
+    resultChecksum: savedResponse?.calculation.resultChecksum ?? null,
+    currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
+    job: pdfQuery.data?.job ?? null,
+    isBusy,
+    isTransitMode: mode === "transit"
+  });
   useEffect(() => {
     setInterpretationText(latestInterpretationText);
   }, [savedResponse?.calculation.id, latestInterpretationText]);
@@ -132,6 +158,10 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
         : interpretationState.aiDisabledReason,
     aiDraftSaveDisabled: interpretationState.saveDisabled,
     aiDraftApproveDisabled: interpretationState.approveDisabled,
+    pdfLabel: pdfAction.label,
+    pdfDisabled: pdfAction.disabled,
+    pdfTitle: pdfAction.title,
+    pdfErrorMessage: pdfErrorMessage ?? pdfAction.errorMessage,
     isBusy,
     isLinked: mode !== "transit" && Boolean(savedResponse),
     onSelectMode: (nextMode) => {
@@ -145,6 +175,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
         setSelectedDetailKey("type");
         setErrorMessage(null);
         setAiDraftErrorMessage(null);
+        setPdfErrorMessage(null);
         previewMutation.reset();
         createMutation.reset();
         recalculateMutation.reset();
@@ -181,6 +212,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       approveInterpretationMutation.reset();
       setErrorMessage(null);
       setAiDraftErrorMessage(null);
+      setPdfErrorMessage(null);
     },
     onSelectDetail: setSelectedDetailKey,
     onChangeAiDraftText: (value) => {
@@ -220,6 +252,9 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     onCreateAiDraft: () => {
       void createAiDraft();
     },
+    onPdf: () => {
+      void executePdf();
+    },
     onSaveAiDraft: () => {
       void saveAiDraft();
     },
@@ -249,6 +284,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     saveInterpretationMutation.reset();
     approveInterpretationMutation.reset();
     setAiDraftErrorMessage(null);
+    setPdfErrorMessage(null);
     setInterpretationText("");
   }
 
@@ -272,6 +308,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       aiDraftMutation.reset();
       saveInterpretationMutation.reset();
       approveInterpretationMutation.reset();
+      setPdfErrorMessage(null);
       setSelectedDetailKey("type");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -300,6 +337,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       aiDraftMutation.reset();
       saveInterpretationMutation.reset();
       approveInterpretationMutation.reset();
+      setPdfErrorMessage(null);
       setSelectedDetailKey("compatibility:summary");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -323,6 +361,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       aiDraftMutation.reset();
       saveInterpretationMutation.reset();
       approveInterpretationMutation.reset();
+      setPdfErrorMessage(null);
       setSelectedDetailKey("type");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -352,6 +391,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       aiDraftMutation.reset();
       saveInterpretationMutation.reset();
       approveInterpretationMutation.reset();
+      setPdfErrorMessage(null);
       setSelectedDetailKey("compatibility:summary");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -374,6 +414,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       aiDraftMutation.reset();
       saveInterpretationMutation.reset();
       approveInterpretationMutation.reset();
+      setPdfErrorMessage(null);
       setSelectedDetailKey(defaultDetailKey(response.calculation.mode));
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -469,6 +510,25 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setSavedResponse(toHumanDesignCalculationResponse(calculation));
     } catch (error) {
       setAiDraftErrorMessage(getHumanDesignAiDraftErrorMessage(error));
+    }
+  }
+
+  async function executePdf() {
+    setErrorMessage(null);
+    setPdfErrorMessage(null);
+    try {
+      await executeHumanDesignPdfAction({
+        calculationId: savedResponse?.calculation.id ?? null,
+        resultChecksum: savedResponse?.calculation.resultChecksum ?? null,
+        locale: pdfLocale,
+        kind: pdfAction.kind,
+        job: pdfQuery.data?.job ?? null,
+        enqueue: (input) => enqueuePdfMutation.mutateAsync(input),
+        download: (input) => downloadPdfMutation.mutateAsync(input),
+        openUrl: (url) => window.open(url, "_blank", "noopener,noreferrer")
+      });
+    } catch (error) {
+      setPdfErrorMessage(error instanceof Error ? error.message : "Не удалось выполнить PDF");
     }
   }
 }

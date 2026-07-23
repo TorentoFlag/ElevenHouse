@@ -7,7 +7,15 @@ import {
   persistHumanDesignCalculationRequestSchema,
   recalculateHumanDesignCalculationRequestSchema,
   calculationIdParamSchema,
+  calculationPdfDownloadResponseSchema,
+  calculationPdfJobIdParamSchema,
+  calculationPdfJobResponseSchema,
+  calculationPdfLatestQuerySchema,
   createHumanDesignAiDraftRequestSchema,
+  requestCalculationPdfSchema,
+  type CalculationPdfDownloadResponse,
+  type CalculationPdfJobResponse,
+  type CalculationPdfLocale,
   type CreateHumanDesignAiDraftRequest,
   type HumanDesignCalculationResponse,
   type HumanDesignPreviewRequest,
@@ -15,7 +23,8 @@ import {
   type HumanDesignTransitQuery,
   type HumanDesignTransitResponse,
   type PersistHumanDesignCalculationRequest,
-  type RecalculateHumanDesignCalculationRequest
+  type RecalculateHumanDesignCalculationRequest,
+  type RequestCalculationPdf
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 
@@ -88,6 +97,50 @@ export async function createHumanDesignAiDraft(input: {
       `/human-design/calculations/${params.calculationId}/ai-draft`,
       body,
       { csrf: true }
+    )
+  );
+}
+
+export async function getLatestHumanDesignPdf(input: {
+  readonly calculationId: string;
+  readonly locale: CalculationPdfLocale;
+}): Promise<CalculationPdfJobResponse> {
+  const params = calculationIdParamSchema.parse({ calculationId: input.calculationId });
+  const query = calculationPdfLatestQuerySchema.parse({ locale: input.locale });
+  const search = new URLSearchParams(query);
+
+  return calculationPdfJobResponseSchema.parse(
+    await application.http.get(
+      `/human-design/calculations/${params.calculationId}/report/pdf?${search.toString()}`
+    )
+  );
+}
+
+export async function enqueueHumanDesignPdf(input: {
+  readonly calculationId: string;
+  readonly body: RequestCalculationPdf;
+}): Promise<CalculationPdfJobResponse> {
+  const params = calculationIdParamSchema.parse({ calculationId: input.calculationId });
+  const body = requestCalculationPdfSchema.parse(input.body);
+
+  return calculationPdfJobResponseSchema.parse(
+    await application.http.post(
+      `/human-design/calculations/${params.calculationId}/report/pdf`,
+      body,
+      { csrf: true }
+    )
+  );
+}
+
+export async function downloadHumanDesignPdf(input: {
+  readonly calculationId: string;
+  readonly jobId: string;
+}): Promise<CalculationPdfDownloadResponse> {
+  const params = calculationPdfJobIdParamSchema.parse(input);
+
+  return calculationPdfDownloadResponseSchema.parse(
+    await application.http.get(
+      `/human-design/calculations/${params.calculationId}/report/pdf/${params.jobId}/download`
     )
   );
 }
