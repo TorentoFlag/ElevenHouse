@@ -114,9 +114,9 @@
       composite, child-chart interpretation mode, horary and astrocartography.
       Progressions now have the first production slice across contracts,
       persistence, worker/provider, frontend controls/rendering and Dictionary
-      anchors; live browser acceptance still needs an authenticated/API-backed
-      `/chart-engine` session after the current-account 502 is cleared. The
-      remaining methods require their own contracts, domain/API workflow,
+      anchors plus authenticated `/chart-engine` browser evidence for mode
+      availability and date-control rendering. The remaining methods require
+      their own contracts, domain/API workflow,
       worker/provider adapter, UI state matrix, PDF/report decision and
       Dictionary interpretation-code coverage before enabling their modes.
 - [x] Human Design individual v1: owner-scoped CRM client input only, exact
