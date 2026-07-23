@@ -125,6 +125,9 @@ none
 - [x] 2026-07-23: Task 1 domain connection mechanics implemented with
   deterministic dynamic classification, compatibility input fingerprint,
   result checksum and root domain export.
+- [x] 2026-07-23: Task 2 shared contracts and `astrologer-api`
+  preview/persist/recalculate support implemented with service and HTTP e2e
+  coverage.
 
 ## Surprises & Discoveries
 
@@ -143,10 +146,10 @@ none
 
 ## Outcomes & Retrospective
 
-Partial implementation. The pure domain compatibility layer now produces a
-checksum-bound `human-design-compatibility-result.v1` from two individual
-results. API contracts, persistence, frontend partner mode and browser evidence
-remain pending in Tasks 2-4.
+Partial implementation. The domain/API contour now produces and persists a
+checksum-bound `human-design-compatibility-result.v1` from two owner-scoped CRM
+clients. Frontend partner mode and browser evidence remain pending in Tasks
+3-4.
 
 ## Context and Orientation
 
@@ -428,7 +431,7 @@ Observed 2026-07-23: PASS, 17 files and 54 tests.
 - Produces: preview/persist/recalculate support for
   `mode = "compatibility"` and `source = "client_pair"`.
 
-- [ ] **Step 1: Add failing contract tests**
+- [x] **Step 1: Add failing contract tests**
 
 Add tests that prove:
 
@@ -444,20 +447,20 @@ humanDesignPreviewRequestSchema.parse({
 
 passes, while equal subject/partner client ids fail.
 
-- [ ] **Step 2: Extend contract schemas**
+- [x] **Step 2: Extend contract schemas**
 
 Update `humanDesignModeSchema`, add compatibility preview/persist request
 schemas, add `humanDesignCompatibilityResultSchema`, and change
 `humanDesignPreviewResponseSchema` / `humanDesignCalculationResponseSchema` to
 accept `individual | compatibility` result unions.
 
-- [ ] **Step 3: Add failing service tests**
+- [x] **Step 3: Add failing service tests**
 
 Prove that preview resolves both clients, rejects same-client pairs with
 `400 HUMAN_DESIGN_VALIDATION_FAILED`, rejects unowned/missing partners with
 `404 HUMAN_DESIGN_CLIENT_NOT_FOUND`, and creates no calculation rows on preview.
 
-- [ ] **Step 4: Implement service branching**
+- [x] **Step 4: Implement service branching**
 
 In `HumanDesignService`, branch by parsed mode:
 
@@ -479,7 +482,7 @@ partner.clientId]`, stable title
 `${subject.displayName} + ${partner.displayName} - Партнёрский Human Design`
 and `mode: "compatibility"`.
 
-- [ ] **Step 5: Run contract and API tests**
+- [x] **Step 5: Run contract and API tests**
 
 Run:
 
@@ -488,6 +491,10 @@ pnpm exec vitest run --config vitest.config.ts packages/contracts/src/human-desi
 ```
 
 Expected observation: PASS.
+
+Observed 2026-07-23: PASS, 3 test files and 32 tests; contracts and
+`astrologer-api` typecheck passed after rebuilding affected package
+declarations.
 
 ### Task 3: Frontend Partner Mode
 

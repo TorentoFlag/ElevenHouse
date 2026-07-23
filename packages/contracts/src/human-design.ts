@@ -7,8 +7,13 @@ const gateSchema = z.number().int().min(1).max(64);
 const lineSchema = z.number().int().min(1).max(6);
 
 const humanDesignMethodCodeSchema = z.literal("human_design_classic");
-const humanDesignModeSchema = z.literal("individual");
+const humanDesignModeSchema = z.enum(["individual", "compatibility"]);
+const humanDesignIndividualModeSchema = z.literal("individual");
+const humanDesignCompatibilityModeSchema = z.literal("compatibility");
 const humanDesignSchemaVersionSchema = z.literal("human-design-result.v1");
+const humanDesignCompatibilitySchemaVersionSchema = z.literal(
+  "human-design-compatibility-result.v1"
+);
 const humanDesignSideSchema = z.enum(["personality", "design"]);
 const humanDesignBaseBodySchema = z.enum([
   "sun",
@@ -146,7 +151,7 @@ export type HumanDesignResolvedLongitudesSide = z.infer<
 
 const humanDesignResolvedLongitudesPreviewRequestSchema = z
   .object({
-    mode: humanDesignModeSchema,
+    mode: humanDesignIndividualModeSchema,
     methodCode: humanDesignMethodCodeSchema,
     resolvedLongitudes: z
       .object({
@@ -159,16 +164,31 @@ const humanDesignResolvedLongitudesPreviewRequestSchema = z
 
 const humanDesignClientPreviewRequestSchema = z
   .object({
-    mode: humanDesignModeSchema,
+    mode: humanDesignIndividualModeSchema,
     methodCode: humanDesignMethodCodeSchema,
     source: z.literal("client"),
     clientId: uuidSchema
   })
   .strict();
 
+const humanDesignClientPairRequestBaseSchema = z
+  .object({
+    mode: humanDesignCompatibilityModeSchema,
+    methodCode: humanDesignMethodCodeSchema,
+    source: z.literal("client_pair"),
+    subjectClientId: uuidSchema,
+    partnerClientId: uuidSchema
+  })
+  .strict()
+  .refine((value) => value.subjectClientId !== value.partnerClientId, {
+    path: ["partnerClientId"],
+    message: "Human Design compatibility clients must be distinct"
+  });
+
 export const humanDesignPreviewRequestSchema = z.union([
   humanDesignResolvedLongitudesPreviewRequestSchema,
-  humanDesignClientPreviewRequestSchema
+  humanDesignClientPreviewRequestSchema,
+  humanDesignClientPairRequestBaseSchema
 ]);
 export type HumanDesignPreviewRequest = z.infer<typeof humanDesignPreviewRequestSchema>;
 
@@ -183,6 +203,12 @@ const checksumMetadataSchema = z
 const inputFingerprintSchema = checksumMetadataSchema
   .extend({
     scope: z.literal("human-design-individual-resolved-input.v1")
+  })
+  .strict();
+
+const compatibilityInputFingerprintSchema = checksumMetadataSchema
+  .extend({
+    scope: z.literal("human-design-compatibility-input.v1")
   })
   .strict();
 
@@ -295,7 +321,7 @@ export const humanDesignIndividualResultSchema = z
     methodCode: humanDesignMethodCodeSchema,
     engineRevision: z.literal(1),
     schemaVersion: humanDesignSchemaVersionSchema,
-    mode: humanDesignModeSchema,
+    mode: humanDesignIndividualModeSchema,
     inputFingerprint: inputFingerprintSchema,
     resultChecksum: checksumMetadataSchema,
     activations: z.array(activationSchema).length(26),
@@ -318,22 +344,91 @@ export const humanDesignIndividualResultSchema = z
   .strict();
 export type HumanDesignIndividualResult = z.infer<typeof humanDesignIndividualResultSchema>;
 
+const connectionDynamicSchema = z.enum([
+  "electromagnetic",
+  "companionship",
+  "dominance",
+  "compromise"
+]);
+const connectionGateStateSchema = z.enum(["none", "hanging", "full"]);
+
+const connectionChannelSchema = z
+  .object({
+    code: humanDesignChannelSchema,
+    gates: z.tuple([gateSchema, gateSchema]),
+    centers: z.tuple([humanDesignCenterSchema, humanDesignCenterSchema]),
+    circuit: humanDesignCircuitSchema,
+    dynamic: connectionDynamicSchema,
+    subjectGateState: connectionGateStateSchema,
+    partnerGateState: connectionGateStateSchema
+  })
+  .strict();
+
+const dynamicCountsSchema = z
+  .object({
+    electromagnetic: z.number().int().min(0),
+    companionship: z.number().int().min(0),
+    dominance: z.number().int().min(0),
+    compromise: z.number().int().min(0)
+  })
+  .strict();
+
+export const humanDesignCompatibilityResultSchema = z
+  .object({
+    methodCode: humanDesignMethodCodeSchema,
+    engineRevision: z.literal(1),
+    schemaVersion: humanDesignCompatibilitySchemaVersionSchema,
+    mode: humanDesignCompatibilityModeSchema,
+    participants: z
+      .object({
+        subject: humanDesignIndividualResultSchema,
+        partner: humanDesignIndividualResultSchema
+      })
+      .strict(),
+    connectionChannels: z.array(connectionChannelSchema),
+    dynamicCounts: dynamicCountsSchema,
+    sharedDefinedCenters: z.array(humanDesignCenterSchema),
+    bridgedCenters: z.array(humanDesignCenterSchema),
+    inputFingerprint: compatibilityInputFingerprintSchema,
+    resultChecksum: checksumMetadataSchema
+  })
+  .strict();
+export type HumanDesignCompatibilityResult = z.infer<
+  typeof humanDesignCompatibilityResultSchema
+>;
+
+export const humanDesignResultSchema = z.union([
+  humanDesignIndividualResultSchema,
+  humanDesignCompatibilityResultSchema
+]);
+export type HumanDesignResult = z.infer<typeof humanDesignResultSchema>;
+
 export const humanDesignPreviewResponseSchema = z
   .object({
-    result: humanDesignIndividualResultSchema
+    result: humanDesignResultSchema
   })
   .strict();
 export type HumanDesignPreviewResponse = z.infer<typeof humanDesignPreviewResponseSchema>;
 
-export const persistHumanDesignCalculationRequestSchema = z
+const persistIndividualHumanDesignCalculationRequestSchema = z
   .object({
-    mode: humanDesignModeSchema,
+    mode: humanDesignIndividualModeSchema,
     methodCode: humanDesignMethodCodeSchema,
     source: z.literal("client"),
     clientId: uuidSchema,
     title: z.string().trim().min(1).max(200).optional()
   })
   .strict();
+
+const persistCompatibilityHumanDesignCalculationRequestSchema =
+  humanDesignClientPairRequestBaseSchema.extend({
+    title: z.string().trim().min(1).max(200).optional()
+  });
+
+export const persistHumanDesignCalculationRequestSchema = z.union([
+  persistIndividualHumanDesignCalculationRequestSchema,
+  persistCompatibilityHumanDesignCalculationRequestSchema
+]);
 export type PersistHumanDesignCalculationRequest = z.infer<
   typeof persistHumanDesignCalculationRequestSchema
 >;
@@ -346,7 +441,7 @@ export type RecalculateHumanDesignCalculationRequest = z.infer<
 export const humanDesignCalculationResponseSchema = z
   .object({
     calculation: calculationRecordResponseSchema,
-    result: humanDesignIndividualResultSchema
+    result: humanDesignResultSchema
   })
   .strict();
 export type HumanDesignCalculationResponse = z.infer<

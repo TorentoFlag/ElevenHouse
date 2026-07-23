@@ -46,6 +46,7 @@ const csrfHeaderName = "x-csrf-token";
 const sessionToken = "human-design-session-token";
 const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
 const clientUserId = "df3192f4-3d67-4b70-8c1a-6a14bd9a51af";
+const partnerClientId = "4cbe9eea-6722-4a7f-8cc8-b403c04d1a8a";
 let currentCsrfToken = "";
 const passwordlessRateLimits = {
   requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
@@ -189,6 +190,44 @@ describe("Human Design HTTP routes", () => {
     });
   });
 
+  it("previews compatibility from two owner-scoped CRM clients without CSRF writes", async () => {
+    const response = await postJson(
+      "/human-design/preview",
+      {
+        mode: "compatibility",
+        methodCode: "human_design_classic",
+        source: "client_pair",
+        subjectClientId: clientUserId,
+        partnerClientId
+      },
+      {
+        cookie: `${sessionCookieName}=${sessionToken}`
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(clientStore.getAstrologerClient).toHaveBeenCalledWith({
+      astrologerUserId: ownerUserId,
+      clientUserId
+    });
+    expect(clientStore.getAstrologerClient).toHaveBeenCalledWith({
+      astrologerUserId: ownerUserId,
+      clientUserId: partnerClientId
+    });
+    const result = humanDesignPreviewResponseSchema.parse(response.body).result;
+    expect(result).toMatchObject({
+      schemaVersion: "human-design-compatibility-result.v1",
+      mode: "compatibility",
+      dynamicCounts: expect.objectContaining({
+        electromagnetic: expect.any(Number),
+        companionship: expect.any(Number),
+        dominance: expect.any(Number),
+        compromise: expect.any(Number)
+      })
+    });
+    expect(calculationStore.create).not.toHaveBeenCalled();
+  });
+
   it("creates a linked CRM-backed calculation only with CSRF", async () => {
     const withoutCsrf = await postJson(
       "/human-design/calculations",
@@ -218,6 +257,57 @@ describe("Human Design HTTP routes", () => {
       ]
     });
     expect(calculationStore.create).toHaveBeenCalledOnce();
+  });
+
+  it("creates a linked CRM-backed compatibility calculation only with CSRF", async () => {
+    const withoutCsrf = await postJson("/human-design/calculations", persistPairBody(), {
+      cookie: `${sessionCookieName}=${sessionToken}`
+    });
+    const withCsrf = await postJson(
+      "/human-design/calculations",
+      persistPairBody(),
+      csrfHeaders()
+    );
+
+    expect(withoutCsrf.status).toBe(403);
+    expect(withCsrf.status).toBe(201);
+    const body = humanDesignCalculationResponseSchema.parse(withCsrf.body);
+    expect(body.result.mode).toBe("compatibility");
+    expect(body.calculation).toMatchObject({
+      ownerUserId,
+      module: "human_design",
+      mode: "compatibility",
+      methodCode: "human_design_classic",
+      status: "linked",
+      participants: [
+        {
+          role: "subject",
+          source: "crm_client",
+          clientId: clientUserId,
+          displayName: "Client"
+        },
+        {
+          role: "partner",
+          source: "crm_client",
+          clientId: partnerClientId,
+          displayName: "Partner"
+        }
+      ],
+      links: [
+        {
+          clientId: clientUserId,
+          visibility: "private_to_astrologer",
+          linkedAt: now.toISOString(),
+          publishedAt: null
+        },
+        {
+          clientId: partnerClientId,
+          visibility: "private_to_astrologer",
+          linkedAt: now.toISOString(),
+          publishedAt: null
+        }
+      ]
+    });
   });
 
   it("recalculates a saved Human Design calculation with CSRF", async () => {
@@ -261,6 +351,16 @@ function persistBody() {
     methodCode: "human_design_classic",
     source: "client",
     clientId: clientUserId
+  };
+}
+
+function persistPairBody() {
+  return {
+    mode: "compatibility",
+    methodCode: "human_design_classic",
+    source: "client_pair",
+    subjectClientId: clientUserId,
+    partnerClientId
   };
 }
 
@@ -326,9 +426,9 @@ function createClientStore(): ClientStore {
     upsertClientProfile: vi.fn(async () => undefined),
     upsertClientBirthData: vi.fn(async () => raise()),
     listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
-    getAstrologerClient: vi.fn(async () => ({
-      clientUserId,
-      displayName: "Client",
+    getAstrologerClient: vi.fn(async (input) => ({
+      clientUserId: input.clientUserId,
+      displayName: input.clientUserId === partnerClientId ? "Partner" : "Client",
       relationshipStatus: "active" as const,
       firstLinkedAt: now.toISOString(),
       lastLinkedAt: now.toISOString(),

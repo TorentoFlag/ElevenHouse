@@ -59,6 +59,36 @@ describe("Human Design contracts", () => {
     });
   });
 
+  it("accepts a compatibility preview request for two distinct owner-scoped CRM clients", () => {
+    expect(
+      humanDesignPreviewRequestSchema.parse({
+        mode: "compatibility",
+        methodCode: "human_design_classic",
+        source: "client_pair",
+        subjectClientId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        partnerClientId: "df3192f4-3d67-4b70-8c1a-6a14bd9a51af"
+      })
+    ).toEqual({
+      mode: "compatibility",
+      methodCode: "human_design_classic",
+      source: "client_pair",
+      subjectClientId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      partnerClientId: "df3192f4-3d67-4b70-8c1a-6a14bd9a51af"
+    });
+  });
+
+  it("rejects a compatibility request for the same CRM client twice", () => {
+    expect(() =>
+      humanDesignPreviewRequestSchema.parse({
+        mode: "compatibility",
+        methodCode: "human_design_classic",
+        source: "client_pair",
+        subjectClientId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        partnerClientId: "8e14390f-3db1-4d1c-9344-55679c778427"
+      })
+    ).toThrow();
+  });
+
   it("accepts a persisted individual request from an owner-scoped CRM client", () => {
     expect(
       persistHumanDesignCalculationRequestSchema.parse({
@@ -74,6 +104,26 @@ describe("Human Design contracts", () => {
       source: "client",
       clientId: "8e14390f-3db1-4d1c-9344-55679c778427",
       title: "HD карта"
+    });
+  });
+
+  it("accepts a persisted compatibility request for two CRM clients", () => {
+    expect(
+      persistHumanDesignCalculationRequestSchema.parse({
+        mode: "compatibility",
+        methodCode: "human_design_classic",
+        source: "client_pair",
+        subjectClientId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        partnerClientId: "df3192f4-3d67-4b70-8c1a-6a14bd9a51af",
+        title: "Партнёрский Human Design"
+      })
+    ).toEqual({
+      mode: "compatibility",
+      methodCode: "human_design_classic",
+      source: "client_pair",
+      subjectClientId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      partnerClientId: "df3192f4-3d67-4b70-8c1a-6a14bd9a51af",
+      title: "Партнёрский Human Design"
     });
   });
 
@@ -206,6 +256,8 @@ describe("Human Design contracts", () => {
 
   it("requires a calculation envelope for persisted Human Design responses", () => {
     const result = humanDesignPreviewResponseSchema.parse({ result: validResult() }).result;
+    expect(result.mode).toBe("individual");
+    if (result.mode !== "individual") throw new Error("Expected individual Human Design result");
     const response = humanDesignCalculationResponseSchema.parse({
       calculation: {
         id: "11111111-1111-4111-8111-111111111111",
@@ -246,6 +298,23 @@ describe("Human Design contracts", () => {
 
     expect(response.calculation.module).toBe("human_design");
     expect(response.result.resultChecksum.value).toBe(result.resultChecksum.value);
+  });
+
+  it("requires a complete deterministic compatibility preview response", () => {
+    const response = humanDesignPreviewResponseSchema.parse({
+      result: validCompatibilityResult()
+    });
+
+    expect(response.result).toMatchObject({
+      schemaVersion: "human-design-compatibility-result.v1",
+      mode: "compatibility",
+      dynamicCounts: {
+        electromagnetic: 1,
+        companionship: 1,
+        dominance: 0,
+        compromise: 0
+      }
+    });
   });
 
   it("rejects incomplete bodygraph response data", () => {
@@ -362,6 +431,70 @@ function validResult() {
       personalityLine: 1,
       designLine: 3,
       code: "1/3"
+    }
+  };
+}
+
+function validCompatibilityResult() {
+  const subject = validResult();
+  const partner = {
+    ...validResult(),
+    inputFingerprint: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      scope: "human-design-individual-resolved-input.v1",
+      value: digest("c")
+    },
+    resultChecksum: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      value: digest("d")
+    }
+  };
+  return {
+    methodCode: "human_design_classic",
+    engineRevision: 1,
+    schemaVersion: "human-design-compatibility-result.v1",
+    mode: "compatibility",
+    participants: { subject, partner },
+    connectionChannels: [
+      {
+        code: "43-23",
+        gates: [43, 23],
+        centers: ["ajna", "throat"],
+        circuit: "individual",
+        dynamic: "electromagnetic",
+        subjectGateState: "hanging",
+        partnerGateState: "hanging"
+      },
+      {
+        code: "31-7",
+        gates: [31, 7],
+        centers: ["throat", "g"],
+        circuit: "collective",
+        dynamic: "companionship",
+        subjectGateState: "full",
+        partnerGateState: "full"
+      }
+    ],
+    dynamicCounts: {
+      electromagnetic: 1,
+      companionship: 1,
+      dominance: 0,
+      compromise: 0
+    },
+    sharedDefinedCenters: ["throat"],
+    bridgedCenters: ["ajna"],
+    inputFingerprint: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      scope: "human-design-compatibility-input.v1",
+      value: digest("e")
+    },
+    resultChecksum: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      value: digest("f")
     }
   };
 }

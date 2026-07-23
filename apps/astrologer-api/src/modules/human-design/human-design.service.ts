@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import {
   assertChartBirthDataReady,
+  buildHumanDesignCompatibilityResult,
   buildHumanDesignIndividualBaseResult,
   ChartBirthDataReadinessError,
   createCalculation,
@@ -19,6 +20,7 @@ import {
   humanDesignIndividualResultSchema,
   humanDesignPreviewRequestSchema,
   humanDesignPreviewResponseSchema,
+  humanDesignResultSchema,
   persistHumanDesignCalculationRequestSchema,
   recalculateHumanDesignCalculationRequestSchema,
   calculationIdParamSchema,
@@ -26,6 +28,7 @@ import {
   type HumanDesignIndividualResult,
   type HumanDesignPreviewRequest,
   type HumanDesignPreviewResponse,
+  type HumanDesignResult,
   type PersistHumanDesignCalculationRequest,
   type RecalculateHumanDesignCalculationRequest
 } from "@elevenhouse/contracts";
@@ -43,6 +46,13 @@ import {
   HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER,
   type HumanDesignResolvedInputProvider
 } from "./human-design.tokens";
+
+type ResolvedHumanDesignClientInput = {
+  readonly clientId: string;
+  readonly displayName: string;
+  readonly birthData: ChartReadyBirthData;
+  readonly resolvedLongitudes: Awaited<ReturnType<HumanDesignResolvedInputProvider["resolve"]>>;
+};
 
 @Injectable()
 export class HumanDesignService {
@@ -64,10 +74,23 @@ export class HumanDesignService {
     );
     const ownerUserId = requireOwnerUserId(request);
     return mapHumanDesignError(async () => {
+      if (parsedBody.mode === "compatibility") {
+        const prepared = await this.resolveClientPair({
+          ownerUserId,
+          subjectClientId: parsedBody.subjectClientId,
+          partnerClientId: parsedBody.partnerClientId
+        });
+        return humanDesignPreviewResponseSchema.parse({
+          result: buildHumanDesignCompatibilityResult({
+            subject: buildHumanDesignIndividualBaseResult(prepared.subject.resolvedLongitudes),
+            partner: buildHumanDesignIndividualBaseResult(prepared.partner.resolvedLongitudes)
+          })
+        });
+      }
       const resolvedLongitudes =
         "resolvedLongitudes" in parsedBody
           ? parsedBody.resolvedLongitudes
-          : (await this.resolveClientInput({ ownerUserId, request: parsedBody }))
+          : (await this.resolveClientInput({ ownerUserId, clientId: parsedBody.clientId }))
               .resolvedLongitudes;
       return humanDesignPreviewResponseSchema.parse({
         result: buildHumanDesignIndividualBaseResult(resolvedLongitudes)
@@ -85,7 +108,47 @@ export class HumanDesignService {
     );
     const ownerUserId = requireOwnerUserId(request);
     return mapHumanDesignError(async () => {
-      const prepared = await this.resolveClientInput({ ownerUserId, request: parsedBody });
+      if (parsedBody.mode === "compatibility") {
+        const prepared = await this.resolveClientPair({
+          ownerUserId,
+          subjectClientId: parsedBody.subjectClientId,
+          partnerClientId: parsedBody.partnerClientId
+        });
+        const result = humanDesignResultSchema.parse(
+          buildHumanDesignCompatibilityResult({
+            subject: buildHumanDesignIndividualBaseResult(prepared.subject.resolvedLongitudes),
+            partner: buildHumanDesignIndividualBaseResult(prepared.partner.resolvedLongitudes)
+          })
+        );
+        const record = await createCalculation({
+          store: this.store,
+          ownerUserId,
+          module: "human_design",
+          mode: "compatibility",
+          methodCode: "human_design_classic",
+          title:
+            parsedBody.title ??
+            `${prepared.subject.displayName} + ${prepared.partner.displayName} — Партнёрский Human Design`,
+          participants: [
+            toCalculationParticipant(prepared.subject, "subject"),
+            toCalculationParticipant(prepared.partner, "partner")
+          ],
+          linkClientIds: [prepared.subject.clientId, prepared.partner.clientId],
+          requestFingerprint: result.inputFingerprint.value,
+          inputData: compatibilityInputData(prepared, result),
+          resultData: toJsonObject(result),
+          resultSummary: resultSummary(result),
+          resultChecksum: result.resultChecksum.value,
+          idGenerator: randomUUID,
+          now: this.clock.now()
+        });
+        return toHumanDesignResponse(record);
+      }
+
+      const prepared = await this.resolveClientInput({
+        ownerUserId,
+        clientId: parsedBody.clientId
+      });
       const result = humanDesignIndividualResultSchema.parse(
         buildHumanDesignIndividualBaseResult(prepared.resolvedLongitudes)
       );
@@ -96,7 +159,7 @@ export class HumanDesignService {
         mode: "individual",
         methodCode: "human_design_classic",
         title: parsedBody.title ?? `${prepared.displayName} — Дизайн человека`,
-        participants: [toCalculationParticipant(prepared)],
+        participants: [toCalculationParticipant(prepared, "subject")],
         linkClientIds: [prepared.clientId],
         requestFingerprint: result.inputFingerprint.value,
         inputData: toJsonObject({
@@ -143,15 +206,40 @@ export class HumanDesignService {
           calculationId: params.calculationId
         });
         assertHumanDesignCalculation(current);
-        const clientId = subjectClientId(current);
+        if (current.mode === "compatibility") {
+          const prepared = await this.resolveClientPair({
+            ownerUserId,
+            subjectClientId: participantClientId(current, "subject"),
+            partnerClientId: participantClientId(current, "partner")
+          });
+          const result = humanDesignResultSchema.parse(
+            buildHumanDesignCompatibilityResult({
+              subject: buildHumanDesignIndividualBaseResult(prepared.subject.resolvedLongitudes),
+              partner: buildHumanDesignIndividualBaseResult(prepared.partner.resolvedLongitudes)
+            })
+          );
+          const updated = await recalculateCalculation({
+            store: this.store,
+            ownerUserId,
+            calculationId: current.id,
+            title: current.title,
+            participants: [
+              toCalculationParticipant(prepared.subject, "subject"),
+              toCalculationParticipant(prepared.partner, "partner")
+            ],
+            requestFingerprint: result.inputFingerprint.value,
+            inputData: compatibilityInputData(prepared, result),
+            resultData: toJsonObject(result),
+            resultSummary: resultSummary(result),
+            resultChecksum: result.resultChecksum.value,
+            now: this.clock.now()
+          });
+          return toHumanDesignResponse(updated);
+        }
+
         const prepared = await this.resolveClientInput({
           ownerUserId,
-          request: {
-            mode: "individual",
-            methodCode: "human_design_classic",
-            source: "client",
-            clientId
-          }
+          clientId: participantClientId(current, "subject")
         });
         const result = humanDesignIndividualResultSchema.parse(
           buildHumanDesignIndividualBaseResult(prepared.resolvedLongitudes)
@@ -161,7 +249,7 @@ export class HumanDesignService {
           ownerUserId,
           calculationId: current.id,
           title: current.title,
-          participants: [toCalculationParticipant(prepared)],
+          participants: [toCalculationParticipant(prepared, "subject")],
           requestFingerprint: result.inputFingerprint.value,
           inputData: toJsonObject({
             methodCode: "human_design_classic",
@@ -188,16 +276,11 @@ export class HumanDesignService {
 
   private async resolveClientInput(input: {
     readonly ownerUserId: string;
-    readonly request: Extract<HumanDesignPreviewRequest, { source: "client" }>;
-  }): Promise<{
     readonly clientId: string;
-    readonly displayName: string;
-    readonly birthData: ChartReadyBirthData;
-    readonly resolvedLongitudes: Awaited<ReturnType<HumanDesignResolvedInputProvider["resolve"]>>;
-  }> {
+  }): Promise<ResolvedHumanDesignClientInput> {
     const client = await this.clientStore.getAstrologerClient({
       astrologerUserId: input.ownerUserId,
-      clientUserId: input.request.clientId
+      clientUserId: input.clientId
     });
     if (!client?.birthData || !client.displayName) {
       throw humanDesignHttpError(404, "HUMAN_DESIGN_CLIENT_NOT_FOUND", "Client was not found");
@@ -209,7 +292,7 @@ export class HumanDesignService {
         inputSnapshot: toChartInputSnapshot(readyBirthData)
       });
       return {
-        clientId: input.request.clientId,
+        clientId: input.clientId,
         displayName: client.displayName,
         birthData: readyBirthData,
         resolvedLongitudes: resolved
@@ -228,6 +311,27 @@ export class HumanDesignService {
         "Human Design positions provider failed"
       );
     }
+  }
+
+  private async resolveClientPair(input: {
+    readonly ownerUserId: string;
+    readonly subjectClientId: string;
+    readonly partnerClientId: string;
+  }): Promise<{
+    readonly subject: ResolvedHumanDesignClientInput;
+    readonly partner: ResolvedHumanDesignClientInput;
+  }> {
+    const [subject, partner] = await Promise.all([
+      this.resolveClientInput({
+        ownerUserId: input.ownerUserId,
+        clientId: input.subjectClientId
+      }),
+      this.resolveClientInput({
+        ownerUserId: input.ownerUserId,
+        clientId: input.partnerClientId
+      })
+    ]);
+    return { subject, partner };
   }
 }
 
@@ -258,19 +362,36 @@ function parseHumanDesignContract<T>(
   return result.data as T;
 }
 
-function toCalculationParticipant(input: {
-  readonly clientId: string;
-  readonly displayName: string;
-}): CalculationParticipant {
+function toCalculationParticipant(
+  input: {
+    readonly clientId: string;
+    readonly displayName: string;
+  },
+  role: CalculationParticipant["role"]
+): CalculationParticipant {
   return {
-    role: "subject",
+    role,
     source: "crm_client",
     clientId: input.clientId,
     displayName: input.displayName
   };
 }
 
-function resultSummary(result: HumanDesignIndividualResult): Record<string, CanonicalJson> {
+function resultSummary(result: HumanDesignResult): Record<string, CanonicalJson> {
+  if (result.mode === "compatibility") {
+    return toJsonObject({
+      dynamicCounts: result.dynamicCounts,
+      connectionChannelCount: result.connectionChannels.length,
+      sharedDefinedCenters: result.sharedDefinedCenters,
+      bridgedCenters: result.bridgedCenters,
+      subject: individualSummary(result.participants.subject),
+      partner: individualSummary(result.participants.partner)
+    });
+  }
+  return toJsonObject(individualSummary(result));
+}
+
+function individualSummary(result: HumanDesignIndividualResult): Record<string, CanonicalJson> {
   return toJsonObject({
     type: result.type,
     strategy: result.strategy,
@@ -282,6 +403,38 @@ function resultSummary(result: HumanDesignIndividualResult): Record<string, Cano
   });
 }
 
+function compatibilityInputData(
+  prepared: {
+    readonly subject: ResolvedHumanDesignClientInput;
+    readonly partner: ResolvedHumanDesignClientInput;
+  },
+  result: HumanDesignResult
+): Record<string, CanonicalJson> {
+  return toJsonObject({
+    methodCode: "human_design_classic",
+    engineRevision: result.engineRevision,
+    schemaVersion: result.schemaVersion,
+    mode: "compatibility",
+    source: "client_pair",
+    subject: clientInputSnapshot(prepared.subject),
+    partner: clientInputSnapshot(prepared.partner)
+  });
+}
+
+function clientInputSnapshot(input: {
+  readonly clientId: string;
+  readonly displayName: string;
+  readonly birthData: ChartReadyBirthData;
+  readonly resolvedLongitudes: Awaited<ReturnType<HumanDesignResolvedInputProvider["resolve"]>>;
+}) {
+  return {
+    clientId: input.clientId,
+    displayName: input.displayName,
+    birthData: toChartInputSnapshot(input.birthData),
+    resolvedLongitudes: input.resolvedLongitudes
+  };
+}
+
 function toHumanDesignResponse(record: CalculationRecord): HumanDesignCalculationResponse {
   const result = validatedSavedResult(record);
   return humanDesignCalculationResponseSchema.parse({
@@ -290,12 +443,12 @@ function toHumanDesignResponse(record: CalculationRecord): HumanDesignCalculatio
   });
 }
 
-function validatedSavedResult(record: CalculationRecord): HumanDesignIndividualResult {
-  const parsed = humanDesignIndividualResultSchema.safeParse(record.resultData);
+function validatedSavedResult(record: CalculationRecord): HumanDesignResult {
+  const parsed = humanDesignResultSchema.safeParse(record.resultData);
   if (
     !parsed.success ||
     record.module !== "human_design" ||
-    record.mode !== "individual" ||
+    record.mode !== parsed.data.mode ||
     record.methodCode !== "human_design_classic" ||
     parsed.data.resultChecksum.value !== record.resultChecksum ||
     parsed.data.inputFingerprint.value !== record.requestFingerprint
@@ -312,7 +465,7 @@ function validatedSavedResult(record: CalculationRecord): HumanDesignIndividualR
 function assertHumanDesignCalculation(record: CalculationRecord): void {
   if (
     record.module !== "human_design" ||
-    record.mode !== "individual" ||
+    (record.mode !== "individual" && record.mode !== "compatibility") ||
     record.methodCode !== "human_design_classic"
   ) {
     throw humanDesignHttpError(
@@ -323,15 +476,18 @@ function assertHumanDesignCalculation(record: CalculationRecord): void {
   }
 }
 
-function subjectClientId(record: CalculationRecord): string {
+function participantClientId(
+  record: CalculationRecord,
+  role: CalculationParticipant["role"]
+): string {
   const subject = record.participants.find(
-    (participant) => participant.role === "subject" && participant.source === "crm_client"
+    (participant) => participant.role === role && participant.source === "crm_client"
   );
   if (!subject?.clientId) {
     throw humanDesignHttpError(
       409,
       "HUMAN_DESIGN_RESULT_INTEGRITY_FAILED",
-      "Human Design calculation subject is missing"
+      `Human Design calculation ${role} is missing`
     );
   }
   return subject.clientId;

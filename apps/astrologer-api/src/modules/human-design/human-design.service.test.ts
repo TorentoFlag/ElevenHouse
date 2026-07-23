@@ -91,6 +91,44 @@ describe("HumanDesignService", () => {
     });
   });
 
+  it("previews deterministic compatibility mechanics for two owner-scoped CRM clients", async () => {
+    const { service, calculationStore, clientStore, resolvedInputProvider } = createService();
+
+    const response = await service.preview(
+      {
+        mode: "compatibility",
+        methodCode: "human_design_classic",
+        source: "client_pair",
+        subjectClientId: clientUserId,
+        partnerClientId
+      },
+      request()
+    );
+
+    humanDesignPreviewResponseSchema.parse(response);
+    expect(response.result).toMatchObject({
+      methodCode: "human_design_classic",
+      schemaVersion: "human-design-compatibility-result.v1",
+      mode: "compatibility",
+      dynamicCounts: expect.objectContaining({
+        electromagnetic: expect.any(Number),
+        companionship: expect.any(Number),
+        dominance: expect.any(Number),
+        compromise: expect.any(Number)
+      })
+    });
+    expect(clientStore.getAstrologerClient).toHaveBeenCalledWith({
+      astrologerUserId: ownerUserId,
+      clientUserId
+    });
+    expect(clientStore.getAstrologerClient).toHaveBeenCalledWith({
+      astrologerUserId: ownerUserId,
+      clientUserId: partnerClientId
+    });
+    expect(resolvedInputProvider.resolve).toHaveBeenCalledTimes(2);
+    expect(calculationStore.create).not.toHaveBeenCalled();
+  });
+
   it("creates a linked owner-scoped CRM calculation", async () => {
     const { service, calculationStore } = createService();
 
@@ -123,6 +161,63 @@ describe("HumanDesignService", () => {
       links: [
         {
           clientId: clientUserId,
+          visibility: "private_to_astrologer",
+          linkedAt: now.toISOString(),
+          publishedAt: null
+        }
+      ]
+    });
+    expect(response.calculation.requestFingerprint).toBe(response.result.inputFingerprint.value);
+    expect(response.calculation.resultChecksum).toBe(response.result.resultChecksum.value);
+    expect(calculationStore.create).toHaveBeenCalledOnce();
+  });
+
+  it("creates a linked owner-scoped compatibility calculation for two CRM clients", async () => {
+    const { service, calculationStore } = createService();
+
+    const response = await service.createCalculation(
+      {
+        mode: "compatibility",
+        methodCode: "human_design_classic",
+        source: "client_pair",
+        subjectClientId: clientUserId,
+        partnerClientId
+      },
+      request()
+    );
+
+    humanDesignCalculationResponseSchema.parse(response);
+    expect(response.result.mode).toBe("compatibility");
+    expect(response.calculation).toMatchObject({
+      ownerUserId,
+      module: "human_design",
+      mode: "compatibility",
+      methodCode: "human_design_classic",
+      title: "Client + Partner — Партнёрский Human Design",
+      status: "linked",
+      participants: [
+        {
+          role: "subject",
+          source: "crm_client",
+          clientId: clientUserId,
+          displayName: "Client"
+        },
+        {
+          role: "partner",
+          source: "crm_client",
+          clientId: partnerClientId,
+          displayName: "Partner"
+        }
+      ],
+      links: [
+        {
+          clientId: clientUserId,
+          visibility: "private_to_astrologer",
+          linkedAt: now.toISOString(),
+          publishedAt: null
+        },
+        {
+          clientId: partnerClientId,
           visibility: "private_to_astrologer",
           linkedAt: now.toISOString(),
           publishedAt: null
@@ -181,9 +276,44 @@ describe("HumanDesignService", () => {
 
     expect(recalculated.calculation.id).toBe(saved.calculation.id);
     expect(recalculated.calculation.resultChecksum).not.toBe(saved.calculation.resultChecksum);
+    expect(recalculated.result.mode).toBe("individual");
+    if (recalculated.result.mode !== "individual") {
+      throw new Error("Expected individual Human Design recalculation result");
+    }
     expect(recalculated.result.activations).toContainEqual(
       expect.objectContaining({ side: "personality", body: "sun", longitude: 12 })
     );
+    expect(calculationStore.replaceResult).toHaveBeenCalledOnce();
+  });
+
+  it("recalculates a compatibility record from the original CRM pair", async () => {
+    const { service, calculationStore, resolvedInputProvider } = createService();
+    const saved = await service.createCalculation(
+      {
+        mode: "compatibility",
+        methodCode: "human_design_classic",
+        source: "client_pair",
+        subjectClientId: clientUserId,
+        partnerClientId
+      },
+      request()
+    );
+    vi.mocked(resolvedInputProvider.resolve)
+      .mockResolvedValueOnce({
+        personality: { ...longitudes, sun: 12 },
+        design: { ...longitudes, sun: 222 }
+      })
+      .mockResolvedValueOnce({
+        personality: { ...longitudes, sun: 42 },
+        design: { ...longitudes, sun: 202 }
+      });
+
+    const recalculated = await service.recalculate(saved.calculation.id, {}, request());
+
+    expect(recalculated.calculation.id).toBe(saved.calculation.id);
+    expect(recalculated.calculation.mode).toBe("compatibility");
+    expect(recalculated.calculation.resultChecksum).not.toBe(saved.calculation.resultChecksum);
+    expect(recalculated.result.mode).toBe("compatibility");
     expect(calculationStore.replaceResult).toHaveBeenCalledOnce();
   });
 
@@ -269,6 +399,7 @@ describe("HumanDesignService", () => {
 });
 
 const clientUserId = "df3192f4-3d67-4b70-8c1a-6a14bd9a51af";
+const partnerClientId = "4cbe9eea-6722-4a7f-8cc8-b403c04d1a8a";
 
 function previewBody() {
   return {
@@ -417,9 +548,9 @@ function createClientStore(birthData: ClientBirthData | null = readyBirthData())
     upsertClientProfile: vi.fn(async () => raise()),
     upsertClientBirthData: vi.fn(async () => raise()),
     listAstrologerClients: vi.fn(async () => raise()),
-    getAstrologerClient: vi.fn(async () => ({
-      clientUserId,
-      displayName: "Client",
+    getAstrologerClient: vi.fn(async (input) => ({
+      clientUserId: input.clientUserId,
+      displayName: input.clientUserId === partnerClientId ? "Partner" : "Client",
       relationshipStatus: "active" as const,
       firstLinkedAt: "2026-01-01T00:00:00.000Z",
       lastLinkedAt: "2026-01-01T00:00:00.000Z",
