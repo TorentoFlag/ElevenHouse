@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chartCompositeJobCreateRequestSchema,
+  chartHoraryJobCreateRequestSchema,
   chartPlanetaryPositionsRequestSchema,
   chartPlanetaryPositionsResponseSchema,
   chartJobResponseSchema,
@@ -209,6 +210,58 @@ describe("chart contracts", () => {
         birthDate: "1990-07-15",
         settings: {
           houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).toThrow();
+  });
+
+  it("accepts a horary job request by client id, question snapshot and settings", () => {
+    expect(
+      chartHoraryJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        question: {
+          question: "Стоит ли принимать предложение?",
+          category: "career",
+          date: "2026-07-23",
+          time: "14:30",
+          timezone: "Europe/Moscow",
+          latitude: 55.7558,
+          longitude: 37.6173
+        },
+        settings: {
+          houseSystem: "regiomontanus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).toMatchObject({
+      clientId: "00000000-0000-4000-8000-000000000001",
+      question: {
+        question: "Стоит ли принимать предложение?",
+        category: "career"
+      }
+    });
+  });
+
+  it("rejects horary job requests without question text", () => {
+    expect(() =>
+      chartHoraryJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        question: {
+          question: "",
+          category: "career",
+          date: "2026-07-23",
+          time: "14:30",
+          timezone: "Europe/Moscow",
+          latitude: 55.7558,
+          longitude: 37.6173
+        },
+        settings: {
+          houseSystem: "regiomontanus",
           nodeType: "true",
           aspectPreset: "major",
           orbMultiplier: 1
@@ -726,6 +779,41 @@ describe("chart contracts", () => {
         }
       })
     ).toThrow();
+  });
+
+  it("accepts complete render data for a horary single-wheel question chart", () => {
+    const payload = storedChartCalculationPayloadSchema.parse({
+      schemaVersion: "chart-result.v1",
+      method: "horary",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: {
+        zodiac: "tropical",
+        houseSystem: "regiomontanus",
+        nodeType: "true",
+        aspectPreset: "major",
+        orbMultiplier: 1
+      },
+      questionSnapshot: {
+        question: "Стоит ли принимать предложение?",
+        category: "career",
+        date: "2026-07-23",
+        time: "14:30",
+        timezone: "Europe/Moscow",
+        latitude: 55.7558,
+        longitude: 37.6173
+      },
+      result: completeRenderResult()
+    });
+
+    expect(payload.method).toBe("horary");
+    if (payload.method !== "horary") {
+      throw new Error("Expected horary chart payload");
+    }
+    expect(payload.questionSnapshot).toMatchObject({
+      question: "Стоит ли принимать предложение?",
+      category: "career"
+    });
+    expect(payload).not.toHaveProperty("inputSnapshot");
   });
 
   it("accepts an arbitrary-moment planetary positions request for Human Design", () => {

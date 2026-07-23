@@ -83,6 +83,39 @@ export type ChartProgressionJobCreateRequest = z.infer<
   typeof chartProgressionJobCreateRequestSchema
 >;
 
+export const chartHoraryQuestionCategorySchema = z.enum([
+  "relationship",
+  "career",
+  "money",
+  "home",
+  "health",
+  "travel",
+  "other"
+]);
+export type ChartHoraryQuestionCategory = z.infer<typeof chartHoraryQuestionCategorySchema>;
+
+export const chartHoraryQuestionSnapshotSchema = z
+  .object({
+    question: z.string().trim().min(1).max(500),
+    category: chartHoraryQuestionCategorySchema.optional().default("other"),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    time: z.string().regex(/^\d{2}:\d{2}$/),
+    timezone: z.string().trim().min(1).max(100),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180)
+  })
+  .strict();
+export type ChartHoraryQuestionSnapshot = z.infer<typeof chartHoraryQuestionSnapshotSchema>;
+
+export const chartHoraryJobCreateRequestSchema = z
+  .object({
+    clientId: uuidSchema,
+    question: chartHoraryQuestionSnapshotSchema,
+    settings: chartSettingsSchema
+  })
+  .strict();
+export type ChartHoraryJobCreateRequest = z.infer<typeof chartHoraryJobCreateRequestSchema>;
+
 export const chartPublicJobStatusSchema = z.enum(["calculating", "succeeded", "failed"]);
 export type ChartPublicJobStatus = z.infer<typeof chartPublicJobStatusSchema>;
 
@@ -302,6 +335,19 @@ export type ChartProgressionCalculationRequestInput = z.input<
 export type ChartProgressionCalculationRequest = z.infer<
   typeof chartProgressionCalculationRequestSchema
 >;
+
+export const chartHoraryCalculationRequestSchema = z
+  .object({
+    schemaVersion: z.literal("chart-request.v1"),
+    method: z.literal("horary"),
+    settings: chartSettingsSchema,
+    questionSnapshot: chartHoraryQuestionSnapshotSchema
+  })
+  .strict();
+export type ChartHoraryCalculationRequestInput = z.input<
+  typeof chartHoraryCalculationRequestSchema
+>;
+export type ChartHoraryCalculationRequest = z.infer<typeof chartHoraryCalculationRequestSchema>;
 
 export const chartPointSchema = z
   .object({
@@ -654,13 +700,28 @@ export type StoredChartProgressionCalculationPayload = z.infer<
   typeof storedChartProgressionCalculationPayloadSchema
 >;
 
+export const storedChartHoraryCalculationPayloadSchema = z
+  .object({
+    schemaVersion: z.literal("chart-result.v1"),
+    method: z.literal("horary"),
+    provider: chartProviderMetadataSchema,
+    settings: chartSettingsSchema,
+    questionSnapshot: chartHoraryQuestionSnapshotSchema,
+    result: chartRenderResultSchema
+  })
+  .strict();
+export type StoredChartHoraryCalculationPayload = z.infer<
+  typeof storedChartHoraryCalculationPayloadSchema
+>;
+
 export const storedChartCalculationPayloadSchema = z.discriminatedUnion("method", [
   storedChartNatalCalculationPayloadSchema,
   storedChartTransitCalculationPayloadSchema,
   storedChartSynastryCalculationPayloadSchema,
   storedChartCompositeCalculationPayloadSchema,
   storedChartSolarReturnCalculationPayloadSchema,
-  storedChartProgressionCalculationPayloadSchema
+  storedChartProgressionCalculationPayloadSchema,
+  storedChartHoraryCalculationPayloadSchema
 ]);
 export type StoredChartCalculationPayload = z.infer<typeof storedChartCalculationPayloadSchema>;
 

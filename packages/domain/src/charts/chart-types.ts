@@ -4,7 +4,8 @@ export type ChartCalculationMethod =
   | "synastry"
   | "composite"
   | "solar_return"
-  | "progression";
+  | "progression"
+  | "horary";
 export type ChartJobStatus = "queued" | "processing" | "succeeded" | "failed";
 export const CHART_CALCULATION_REQUESTED_EVENT = "chart.calculation.requested.v1";
 

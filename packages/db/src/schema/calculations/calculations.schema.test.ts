@@ -104,8 +104,9 @@ describe("current calculation persistence schema", () => {
     expect(chartCalculationJobMethodValues).toContain("synastry");
     expect(chartCalculationJobMethodValues).toContain("composite");
     expect(chartCalculationJobMethodValues).toContain("solar_return");
+    expect(chartCalculationJobMethodValues).toContain("horary");
     expect(chartJobsTable).toContain(
-      "\"chart_calculation_jobs\".\"method\" in ('natal', 'transit', 'synastry', 'composite', 'solar_return', 'progression')"
+      "\"chart_calculation_jobs\".\"method\" in ('natal', 'transit', 'synastry', 'composite', 'solar_return', 'progression', 'horary')"
     );
     expect(migration).toContain("chart_calculation_jobs_active_fingerprint_unique");
     expect(migration).toContain("chart_calculation_jobs_success_fingerprint_unique");

@@ -31,7 +31,8 @@ export const chartCalculationJobMethodValues = [
   "synastry",
   "composite",
   "solar_return",
-  "progression"
+  "progression",
+  "horary"
 ] as const;
 
 export const chartCalculationJobStatusValues = [
