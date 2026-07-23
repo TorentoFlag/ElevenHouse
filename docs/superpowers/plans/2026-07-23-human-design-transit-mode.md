@@ -63,6 +63,8 @@ Findings:
   and result checksum.
 - [x] 2026-07-23: Task 2 shared contracts and read-only `astrologer-api`
   transit route implemented with focused service and HTTP e2e coverage.
+- [x] 2026-07-23: Task 3 frontend API/query foundation added for read-only
+  transit overlay fetch; visual controller/view mode is next.
 
 ## Decision Log
 
@@ -179,6 +181,12 @@ The first UI state enables the `Транзиты` tab only after an individual r
 loaded or saved, exposes selected instant controls, fetches read-only transit
 data and renders completed channels/temporary centers without browser
 calculation.
+
+Observed 2026-07-23: `getHumanDesignTransit` validates `calculationId` and
+optional `instant`, calls `GET
+/human-design/calculations/:calculationId/transits`, parses
+`humanDesignTransitResponseSchema`, and is exposed through a React Query
+mutation for on-demand read-only fetches. Focused frontend API/query tests pass.
 
 ### Task 4: Runtime And Visual Evidence
 

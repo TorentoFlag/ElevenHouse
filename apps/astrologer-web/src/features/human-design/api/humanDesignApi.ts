@@ -2,12 +2,16 @@ import {
   humanDesignCalculationResponseSchema,
   humanDesignPreviewRequestSchema,
   humanDesignPreviewResponseSchema,
+  humanDesignTransitQuerySchema,
+  humanDesignTransitResponseSchema,
   persistHumanDesignCalculationRequestSchema,
   recalculateHumanDesignCalculationRequestSchema,
   calculationIdParamSchema,
   type HumanDesignCalculationResponse,
   type HumanDesignPreviewRequest,
   type HumanDesignPreviewResponse,
+  type HumanDesignTransitQuery,
+  type HumanDesignTransitResponse,
   type PersistHumanDesignCalculationRequest,
   type RecalculateHumanDesignCalculationRequest
 } from "@elevenhouse/contracts";
@@ -45,6 +49,27 @@ export async function recalculateHumanDesignCalculation(input: {
       `/human-design/calculations/${params.calculationId}/recalculate`,
       body,
       { csrf: true }
+    )
+  );
+}
+
+export async function getHumanDesignTransit(input: {
+  readonly calculationId: string;
+  readonly query?: HumanDesignTransitQuery;
+}): Promise<HumanDesignTransitResponse> {
+  const params = calculationIdParamSchema.parse({ calculationId: input.calculationId });
+  const query = humanDesignTransitQuerySchema.parse(input.query ?? {});
+  const search = new URLSearchParams();
+
+  if (query.instant) {
+    search.set("instant", query.instant);
+  }
+
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+
+  return humanDesignTransitResponseSchema.parse(
+    await application.http.get(
+      `/human-design/calculations/${params.calculationId}/transits${suffix}`
     )
   );
 }

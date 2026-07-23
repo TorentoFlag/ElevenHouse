@@ -1,11 +1,13 @@
 import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import type {
   HumanDesignPreviewRequest,
+  HumanDesignTransitQuery,
   PersistHumanDesignCalculationRequest
 } from "@elevenhouse/contracts";
 import { listCalculations } from "../../calculations/api/calculationsApi";
 import {
   createHumanDesignCalculation,
+  getHumanDesignTransit,
   previewHumanDesign,
   recalculateHumanDesignCalculation
 } from "../api/humanDesignApi";
@@ -13,6 +15,8 @@ import {
 export const humanDesignQueryKeys = {
   all: () => ["human-design"] as const,
   preview: () => ["human-design", "preview"] as const,
+  transit: (calculationId: string, instant: string | null) =>
+    ["human-design", "transit", calculationId, instant] as const,
   calculationList: () => ["calculations", "list", "human_design"] as const
 };
 
@@ -42,4 +46,11 @@ export const recalculateHumanDesignCalculationMutationOptions = (
   mutationFn: (input: { readonly calculationId: string }) =>
     recalculateHumanDesignCalculation(input),
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calculations"] })
+});
+
+export const getHumanDesignTransitMutationOptions = () => ({
+  mutationFn: (input: {
+    readonly calculationId: string;
+    readonly query?: HumanDesignTransitQuery;
+  }) => getHumanDesignTransit(input)
 });

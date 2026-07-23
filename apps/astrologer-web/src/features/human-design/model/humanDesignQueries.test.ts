@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { listCalculations } from "../../calculations/api/calculationsApi";
-import { recalculateHumanDesignCalculation } from "../api/humanDesignApi";
 import {
+  getHumanDesignTransit,
+  recalculateHumanDesignCalculation
+} from "../api/humanDesignApi";
+import {
+  getHumanDesignTransitMutationOptions,
   humanDesignCalculationListQueryOptions,
   humanDesignQueryKeys,
   recalculateHumanDesignCalculationMutationOptions
@@ -13,6 +17,7 @@ vi.mock("../../calculations/api/calculationsApi", () => ({
 
 vi.mock("../api/humanDesignApi", () => ({
   createHumanDesignCalculation: vi.fn(),
+  getHumanDesignTransit: vi.fn(async () => ({ result: { mode: "transit" } })),
   previewHumanDesign: vi.fn(),
   recalculateHumanDesignCalculation: vi.fn(async () => ({ calculation: { id: "calculation-id" } }))
 }));
@@ -44,5 +49,27 @@ describe("humanDesignQueries", () => {
       calculationId: "11111111-1111-4111-8111-111111111111"
     });
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["calculations"] });
+  });
+
+  it("fetches a Human Design transit overlay through a side-effect-free mutation", async () => {
+    const options = getHumanDesignTransitMutationOptions();
+
+    await expect(
+      options.mutationFn({
+        calculationId: "11111111-1111-4111-8111-111111111111",
+        query: { instant: "2026-07-23T09:15:00.000Z" }
+      })
+    ).resolves.toEqual({ result: { mode: "transit" } });
+
+    expect(humanDesignQueryKeys.transit("calculation-id", null)).toEqual([
+      "human-design",
+      "transit",
+      "calculation-id",
+      null
+    ]);
+    expect(getHumanDesignTransit).toHaveBeenCalledWith({
+      calculationId: "11111111-1111-4111-8111-111111111111",
+      query: { instant: "2026-07-23T09:15:00.000Z" }
+    });
   });
 });

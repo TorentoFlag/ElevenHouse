@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   HumanDesignCalculationResponse,
-  HumanDesignPreviewResponse
+  HumanDesignPreviewResponse,
+  HumanDesignTransitResponse
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import {
   createHumanDesignCalculation,
+  getHumanDesignTransit,
   previewHumanDesign,
   recalculateHumanDesignCalculation
 } from "./humanDesignApi";
@@ -75,6 +77,37 @@ describe("humanDesignApi", () => {
       `/human-design/calculations/${response.calculation.id}/recalculate`,
       {},
       { csrf: true }
+    );
+  });
+
+  it("fetches a read-only Human Design transit overlay for a saved calculation", async () => {
+    const response = humanDesignTransitResponse();
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(response);
+
+    await expect(
+      getHumanDesignTransit({
+        calculationId: "11111111-1111-4111-8111-111111111111",
+        query: { instant: "2026-07-23T09:15:00.000Z" }
+      })
+    ).resolves.toEqual(response);
+
+    expect(get).toHaveBeenCalledWith(
+      "/human-design/calculations/11111111-1111-4111-8111-111111111111/transits?instant=2026-07-23T09%3A15%3A00.000Z"
+    );
+  });
+
+  it("omits the Human Design transit query string when instant is not specified", async () => {
+    const response = humanDesignTransitResponse();
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(response);
+
+    await expect(
+      getHumanDesignTransit({
+        calculationId: "11111111-1111-4111-8111-111111111111"
+      })
+    ).resolves.toEqual(response);
+
+    expect(get).toHaveBeenCalledWith(
+      "/human-design/calculations/11111111-1111-4111-8111-111111111111/transits"
     );
   });
 });
@@ -213,6 +246,72 @@ function humanDesignResponse(): HumanDesignPreviewResponse {
         personalityLine: 1,
         designLine: 3,
         code: "1/3"
+      }
+    }
+  };
+}
+
+function humanDesignTransitResponse(): HumanDesignTransitResponse {
+  const natal = humanDesignResponse().result;
+  if (natal.mode !== "individual") {
+    throw new Error("Expected individual Human Design transit fixture");
+  }
+  const checksum = `sha256:${"b".repeat(64)}`;
+
+  return {
+    result: {
+      methodCode: "human_design_classic",
+      engineRevision: 1,
+      schemaVersion: "human-design-transit-result.v1",
+      mode: "transit",
+      natal,
+      transitSnapshot: {
+        instant: "2026-07-23T09:15:00.000Z",
+        date: "2026-07-23",
+        time: "09:15",
+        timezone: "Europe/Moscow",
+        latitude: 55.7558,
+        longitude: 37.6173
+      },
+      transitActivations: [
+        "sun",
+        "earth",
+        "moon",
+        "north_node",
+        "south_node",
+        "mercury",
+        "venus",
+        "mars",
+        "jupiter",
+        "saturn",
+        "uranus",
+        "neptune",
+        "pluto"
+      ].map((body, index) => ({
+        side: "transit" as const,
+        body: body as never,
+        longitude: index * 10,
+        gate: index + 1,
+        line: ((index % 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6
+      })),
+      transitDefinedGates: [],
+      completedChannels: [],
+      temporarilyDefinedCenters: [],
+      summary: {
+        transitActivationCount: 13,
+        completedChannelCount: 0,
+        temporarilyDefinedCenterCount: 0
+      },
+      inputFingerprint: {
+        algorithm: "sha256",
+        canonicalization: "json-stable-v1",
+        scope: "human-design-transit-input.v1",
+        value: checksum
+      },
+      resultChecksum: {
+        algorithm: "sha256",
+        canonicalization: "json-stable-v1",
+        value: checksum
       }
     }
   };
