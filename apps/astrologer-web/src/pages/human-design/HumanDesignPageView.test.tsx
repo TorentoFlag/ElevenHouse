@@ -36,7 +36,24 @@ describe("HumanDesignPageView", () => {
     expect(
       walk(view).some((element) => element.type === "h2" && textOf(element) === "Клиент")
     ).toBe(false);
-    expect(textOf(view)).toContain("Birth data берутся из карточки клиента");
+    expect(textOf(view)).not.toContain("Birth data берутся из карточки клиента");
+  });
+
+  it("does not render the toolbar status summary for missing client birth data", () => {
+    const view = HumanDesignPageView({
+      ...baseProps(),
+      selectedClient: {
+        ...clientOption("22222222-2222-4222-8222-222222222222", "Мария Иванова"),
+        hasBirthDate: false,
+        birthDateDisplay: "",
+        subtitle: "дата рождения"
+      }
+    });
+    const text = textOf(view);
+
+    expect(text).not.toContain("Нет даты рождения");
+    expect(text).not.toContain("Заполните birth data в карточке клиента.");
+    expect(text).toContain("В карточке клиента не заполнена дата рождения.");
   });
 
   it("renders supported individual mechanics with link action and honest disabled future actions", () => {
@@ -291,11 +308,6 @@ function baseProps(): HumanDesignPageViewProps {
     transitInstantValue: "2026-07-23T12:15",
     canOpenTransitMode: false,
     selectedDetailKey: "type",
-    status: {
-      tone: "empty",
-      title: "Выберите клиента",
-      detail: "Birth data берутся из карточки клиента."
-    },
     errorMessage: null,
     aiDraftText: "",
     aiDraftStatus: null,

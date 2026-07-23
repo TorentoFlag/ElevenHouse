@@ -33,11 +33,7 @@ import {
   toClientOptionFromHumanDesignCalculation,
   toHumanDesignCalculationResponse
 } from "../../features/human-design/model/humanDesignSavedCalculationModel";
-import type {
-  HumanDesignPageStatus,
-  HumanDesignPageViewProps,
-  HumanDesignWorkspaceMode
-} from "./HumanDesignPageView";
+import type { HumanDesignPageViewProps, HumanDesignWorkspaceMode } from "./HumanDesignPageView";
 
 export function useHumanDesignPageController(): HumanDesignPageViewProps {
   useDocumentTitle("ElevenHouse | Дизайн человека");
@@ -124,18 +120,6 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
   useEffect(() => {
     setInterpretationText(latestInterpretationText);
   }, [savedResponse?.calculation.id, latestInterpretationText]);
-  const status = getHumanDesignStatus({
-    mode,
-    selectedClient,
-    selectedPartnerClient,
-    hasResult: Boolean(model),
-    hasTransitResult: Boolean(transitModel),
-    isLinked: Boolean(savedResponse),
-    isBusy,
-    canOpenTransitMode,
-    errorMessage
-  });
-
   return {
     mode,
     selectedClient,
@@ -147,7 +131,6 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     selectedDetailKey,
     calculations,
     selectedCalculationId: savedResponse?.calculation.id ?? null,
-    status,
     errorMessage,
     aiDraftText: interpretationText,
     aiDraftStatus: interpretationState.latestStatus,
@@ -532,118 +515,6 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setPdfErrorMessage(error instanceof Error ? error.message : "Не удалось выполнить PDF");
     }
   }
-}
-
-function getHumanDesignStatus(input: {
-  readonly mode: HumanDesignWorkspaceMode;
-  readonly selectedClient: ClientSelectOption | null;
-  readonly selectedPartnerClient: ClientSelectOption | null;
-  readonly hasResult: boolean;
-  readonly hasTransitResult: boolean;
-  readonly isLinked: boolean;
-  readonly isBusy: boolean;
-  readonly canOpenTransitMode: boolean;
-  readonly errorMessage: string | null;
-}): HumanDesignPageStatus {
-  if (input.errorMessage) {
-    return {
-      tone: "error",
-      title: "Расчёт не выполнен",
-      detail: input.errorMessage
-    };
-  }
-  if (input.isBusy) {
-    return {
-      tone: "busy",
-      title: input.mode === "transit" ? "Расчёт транзита" : "Расчёт Human Design",
-      detail: "Запрашиваем chart-engine через backend."
-    };
-  }
-  if (input.mode === "transit") {
-    if (!input.canOpenTransitMode) {
-      return {
-        tone: "warning",
-        title: "Нет natal основы",
-        detail: "Откройте сохранённый individual расчёт."
-      };
-    }
-    if (input.hasTransitResult) {
-      return {
-        tone: "success",
-        title: "Транзит рассчитан",
-        detail: "Overlay пришёл из read-only backend route."
-      };
-    }
-    return {
-      tone: "ready",
-      title: "Момент транзита выбран",
-      detail: "Можно построить transit overlay."
-    };
-  }
-  if (input.isLinked) {
-    return {
-      tone: "success",
-      title: input.mode === "compatibility" ? "Партнёрский расчёт привязан" : "Расчёт привязан",
-      detail:
-        input.mode === "compatibility"
-          ? "Human Design сохранён для пары клиентов."
-          : "Human Design сохранён в расчётах клиента."
-    };
-  }
-  if (input.hasResult) {
-    return {
-      tone: "success",
-      title: input.mode === "compatibility" ? "Партнёрский разбор рассчитан" : "Бодиграф рассчитан",
-      detail: "Механика пришла из server/domain engine."
-    };
-  }
-  if (!input.selectedClient) {
-    return {
-      tone: "empty",
-      title: "Выберите клиента",
-      detail: "Birth data берутся из карточки клиента."
-    };
-  }
-  if (!input.selectedClient.hasBirthDate) {
-    return {
-      tone: "warning",
-      title: "Нет даты рождения",
-      detail: "Заполните birth data в карточке клиента."
-    };
-  }
-  if (input.mode === "compatibility") {
-    const partner = input.selectedPartnerClient;
-    if (!partner) {
-      return {
-        tone: "empty",
-        title: "Выберите партнёра",
-        detail: "Партнёрский режим требует второго CRM клиента."
-      };
-    }
-    if (!partner.hasBirthDate) {
-      return {
-        tone: "warning",
-        title: "У партнёра нет даты рождения",
-        detail: "Заполните birth data в карточке партнёра."
-      };
-    }
-    if (partner.value === input.selectedClient.value) {
-      return {
-        tone: "warning",
-        title: "Нужны два разных клиента",
-        detail: "Партнёрский разбор не рассчитывается для одного и того же клиента."
-      };
-    }
-  }
-
-  return {
-    tone: "ready",
-    title: input.mode === "compatibility" ? "Пара выбрана" : "Клиент выбран",
-    detail:
-      input.mode === "compatibility"
-        ? "Можно рассчитать партнёрский preview."
-        : "Можно рассчитать individual preview."
-  };
 }
 
 function validateCompatibilityClients(

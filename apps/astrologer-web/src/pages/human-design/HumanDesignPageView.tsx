@@ -13,12 +13,6 @@ import {
 import { HumanDesignCalculationMenu } from "./HumanDesignCalculationMenu";
 import styles from "./HumanDesignPage.module.css";
 
-export type HumanDesignPageStatus = {
-  readonly tone: "empty" | "ready" | "busy" | "success" | "warning" | "error";
-  readonly title: string;
-  readonly detail: string;
-};
-
 export type HumanDesignWorkspaceMode = "individual" | "compatibility" | "transit";
 
 export type HumanDesignPageViewProps = {
@@ -32,7 +26,6 @@ export type HumanDesignPageViewProps = {
   readonly selectedDetailKey: HumanDesignDetailKey;
   readonly calculations: readonly CalculationRecordResponse[];
   readonly selectedCalculationId: string | null;
-  readonly status: HumanDesignPageStatus;
   readonly errorMessage: string | null;
   readonly aiDraftText: string;
   readonly aiDraftStatus: "draft" | "approved" | null;
@@ -74,7 +67,6 @@ export function HumanDesignPageView({
   selectedDetailKey,
   calculations,
   selectedCalculationId,
-  status,
   errorMessage,
   aiDraftText,
   aiDraftStatus,
@@ -184,10 +176,6 @@ export function HumanDesignPageView({
             Партнёрский
           </button>
         </nav>
-        <div className={styles.stateSummary} data-tone={status.tone} aria-live="polite">
-          <strong>{status.title}</strong>
-          <span>{status.detail}</span>
-        </div>
         <div className={styles.toolbarSpacer} />
         <button
           className={styles.calculateButton}
