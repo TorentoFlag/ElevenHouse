@@ -4,6 +4,7 @@ import {
   assertChartBirthDataReady,
   buildHumanDesignCompatibilityResult,
   buildHumanDesignIndividualBaseResult,
+  buildHumanDesignTransitResult,
   ChartBirthDataReadinessError,
   createCalculation,
   getCalculation,
@@ -13,13 +14,16 @@ import {
   type CalculationStore,
   type CanonicalJson,
   type ChartReadyBirthData,
-  type ClientStore
+  type ClientStore,
+  type HumanDesignIndividualBaseResult
 } from "@elevenhouse/domain";
 import {
   humanDesignCalculationResponseSchema,
   humanDesignIndividualResultSchema,
   humanDesignPreviewRequestSchema,
   humanDesignPreviewResponseSchema,
+  humanDesignTransitQuerySchema,
+  humanDesignTransitResponseSchema,
   humanDesignResultSchema,
   persistHumanDesignCalculationRequestSchema,
   recalculateHumanDesignCalculationRequestSchema,
@@ -29,6 +33,8 @@ import {
   type HumanDesignPreviewRequest,
   type HumanDesignPreviewResponse,
   type HumanDesignResult,
+  type HumanDesignTransitQuery,
+  type HumanDesignTransitResponse,
   type PersistHumanDesignCalculationRequest,
   type RecalculateHumanDesignCalculationRequest
 } from "@elevenhouse/contracts";
@@ -53,6 +59,8 @@ type ResolvedHumanDesignClientInput = {
   readonly birthData: ChartReadyBirthData;
   readonly resolvedLongitudes: Awaited<ReturnType<HumanDesignResolvedInputProvider["resolve"]>>;
 };
+
+type ReadyHumanDesignClientInput = Omit<ResolvedHumanDesignClientInput, "resolvedLongitudes">;
 
 @Injectable()
 export class HumanDesignService {
@@ -274,10 +282,99 @@ export class HumanDesignService {
     );
   }
 
+  async transits(
+    calculationId: string,
+    query: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<HumanDesignTransitResponse> {
+    const params = parseHumanDesignContract<{ calculationId: string }>(calculationIdParamSchema, {
+      calculationId
+    });
+    const parsedQuery = parseHumanDesignContract<HumanDesignTransitQuery>(
+      humanDesignTransitQuerySchema,
+      query ?? {}
+    );
+    const ownerUserId = requireOwnerUserId(request);
+    return mapHumanDesignError(async () =>
+      mapCalculationErrors(async () => {
+        const current = await getCalculation({
+          store: this.store,
+          ownerUserId,
+          calculationId: params.calculationId
+        });
+        assertHumanDesignCalculation(current);
+        if (current.mode !== "individual") {
+          throw humanDesignHttpError(
+            409,
+            "HUMAN_DESIGN_RESULT_INTEGRITY_FAILED",
+            "Human Design transits require an individual calculation"
+          );
+        }
+        const natal = validatedSavedResult(current);
+        if (natal.mode !== "individual") {
+          throw humanDesignHttpError(
+            409,
+            "HUMAN_DESIGN_RESULT_INTEGRITY_FAILED",
+            "Saved Human Design result is not an individual calculation"
+          );
+        }
+        const natalBase = toDomainIndividualBaseResult(natal);
+        const prepared = await this.resolveClientBirthData({
+          ownerUserId,
+          clientId: participantClientId(current, "subject")
+        });
+        const transitSnapshot = buildTransitSnapshot({
+          instant: parsedQuery.instant ? new Date(parsedQuery.instant) : this.clock.now(),
+          birthData: prepared.birthData
+        });
+        try {
+          const transitLongitudes = await this.resolvedInputProvider.resolveTransit({
+            transitSnapshot
+          });
+          return humanDesignTransitResponseSchema.parse({
+            result: buildHumanDesignTransitResult({
+              natal: natalBase,
+              transit: transitLongitudes,
+              transitSnapshot
+            })
+          });
+        } catch (error) {
+          throw humanDesignHttpError(
+            502,
+            "HUMAN_DESIGN_PROVIDER_FAILED",
+            "Human Design positions provider failed"
+          );
+        }
+      })
+    );
+  }
+
   private async resolveClientInput(input: {
     readonly ownerUserId: string;
     readonly clientId: string;
   }): Promise<ResolvedHumanDesignClientInput> {
+    const prepared = await this.resolveClientBirthData(input);
+    try {
+      const resolved = await this.resolvedInputProvider.resolve({
+        inputSnapshot: toChartInputSnapshot(prepared.birthData)
+      });
+      return {
+        ...prepared,
+        resolvedLongitudes: resolved
+      };
+    } catch (error) {
+      throw humanDesignHttpError(
+        502,
+        "HUMAN_DESIGN_PROVIDER_FAILED",
+        "Human Design positions provider failed"
+      );
+    }
+  }
+
+  private async resolveClientBirthData(input: {
+    readonly ownerUserId: string;
+    readonly clientId: string;
+  }): Promise<ReadyHumanDesignClientInput> {
     const client = await this.clientStore.getAstrologerClient({
       astrologerUserId: input.ownerUserId,
       clientUserId: input.clientId
@@ -288,14 +385,10 @@ export class HumanDesignService {
 
     try {
       const readyBirthData = assertChartBirthDataReady(client.birthData);
-      const resolved = await this.resolvedInputProvider.resolve({
-        inputSnapshot: toChartInputSnapshot(readyBirthData)
-      });
       return {
         clientId: input.clientId,
         displayName: client.displayName,
-        birthData: readyBirthData,
-        resolvedLongitudes: resolved
+        birthData: readyBirthData
       };
     } catch (error) {
       if (error instanceof ChartBirthDataReadinessError) {
@@ -305,11 +398,7 @@ export class HumanDesignService {
           "Client birth data is not ready for Human Design calculation"
         );
       }
-      throw humanDesignHttpError(
-        502,
-        "HUMAN_DESIGN_PROVIDER_FAILED",
-        "Human Design positions provider failed"
-      );
+      throw error;
     }
   }
 
@@ -344,6 +433,55 @@ function toChartInputSnapshot(input: ChartReadyBirthData) {
     longitude: input.birthLongitude,
     birthTimePrecision: input.birthTimePrecision,
     ...(input.birthTimeDstOccurrence ? { dstOccurrence: input.birthTimeDstOccurrence } : {})
+  };
+}
+
+function buildTransitSnapshot(input: { readonly instant: Date; readonly birthData: ChartReadyBirthData }) {
+  const localParts = localMinuteParts(input.instant, input.birthData.birthTimezone);
+  return {
+    instant: input.instant.toISOString(),
+    date: [localParts.year, localParts.month, localParts.day]
+      .map((part, index) => part.toString().padStart(index === 0 ? 4 : 2, "0"))
+      .join("-"),
+    time: [localParts.hour, localParts.minute]
+      .map((part) => part.toString().padStart(2, "0"))
+      .join(":"),
+    timezone: input.birthData.birthTimezone,
+    latitude: input.birthData.birthLatitude,
+    longitude: input.birthData.birthLongitude
+  };
+}
+
+function localMinuteParts(
+  instant: Date,
+  timeZone: string
+): {
+  readonly year: number;
+  readonly month: number;
+  readonly day: number;
+  readonly hour: number;
+  readonly minute: number;
+} {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(instant);
+  const value = (type: string) => {
+    const part = parts.find((candidate) => candidate.type === type)?.value;
+    if (part === undefined) throw new Error(`Missing ${type} in formatted transit instant`);
+    return Number(part);
+  };
+  return {
+    year: value("year"),
+    month: value("month"),
+    day: value("day"),
+    hour: value("hour"),
+    minute: value("minute")
   };
 }
 
@@ -401,6 +539,12 @@ function individualSummary(result: HumanDesignIndividualResult): Record<string, 
     definedCenters: result.definedCenters.map((center) => center.code),
     definedChannels: result.definedChannels.map((channel) => channel.code)
   });
+}
+
+function toDomainIndividualBaseResult(
+  result: HumanDesignIndividualResult
+): HumanDesignIndividualBaseResult {
+  return result as HumanDesignIndividualBaseResult;
 }
 
 function compatibilityInputData(

@@ -2,6 +2,7 @@ import { z } from "@elevenhouse/validation";
 import { calculationRecordResponseSchema, sha256DigestSchema } from "./calculations";
 
 const uuidSchema = z.string().uuid();
+const timestampSchema = z.string().datetime();
 const longitudeSchema = z.number().min(0).lt(360);
 const gateSchema = z.number().int().min(1).max(64);
 const lineSchema = z.number().int().min(1).max(6);
@@ -10,10 +11,12 @@ const humanDesignMethodCodeSchema = z.literal("human_design_classic");
 const humanDesignModeSchema = z.enum(["individual", "compatibility"]);
 const humanDesignIndividualModeSchema = z.literal("individual");
 const humanDesignCompatibilityModeSchema = z.literal("compatibility");
+const humanDesignTransitModeSchema = z.literal("transit");
 const humanDesignSchemaVersionSchema = z.literal("human-design-result.v1");
 const humanDesignCompatibilitySchemaVersionSchema = z.literal(
   "human-design-compatibility-result.v1"
 );
+const humanDesignTransitSchemaVersionSchema = z.literal("human-design-transit-result.v1");
 const humanDesignSideSchema = z.enum(["personality", "design"]);
 const humanDesignBaseBodySchema = z.enum([
   "sun",
@@ -212,9 +215,25 @@ const compatibilityInputFingerprintSchema = checksumMetadataSchema
   })
   .strict();
 
+const transitInputFingerprintSchema = checksumMetadataSchema
+  .extend({
+    scope: z.literal("human-design-transit-input.v1")
+  })
+  .strict();
+
 const activationSchema = z
   .object({
     side: humanDesignSideSchema,
+    body: humanDesignActiveBodySchema,
+    longitude: longitudeSchema,
+    gate: gateSchema,
+    line: lineSchema
+  })
+  .strict();
+
+const transitActivationSchema = z
+  .object({
+    side: z.literal("transit"),
     body: humanDesignActiveBodySchema,
     longitude: longitudeSchema,
     gate: gateSchema,
@@ -397,6 +416,74 @@ export type HumanDesignCompatibilityResult = z.infer<
   typeof humanDesignCompatibilityResultSchema
 >;
 
+const transitSnapshotSchema = z
+  .object({
+    instant: timestampSchema,
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    time: z.string().regex(/^\d{2}:\d{2}$/),
+    timezone: z.string().trim().min(1),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180)
+  })
+  .strict();
+
+const transitDefinedGateSchema = z
+  .object({
+    gate: gateSchema,
+    activatedBy: z.array(
+      z
+        .object({
+          body: humanDesignActiveBodySchema,
+          line: lineSchema
+        })
+        .strict()
+    )
+  })
+  .strict();
+
+const transitCompletedChannelSchema = z
+  .object({
+    code: humanDesignChannelSchema,
+    gates: z.tuple([gateSchema, gateSchema]),
+    centers: z.tuple([humanDesignCenterSchema, humanDesignCenterSchema]),
+    circuit: humanDesignCircuitSchema,
+    natalGate: gateSchema,
+    transitGate: gateSchema
+  })
+  .strict();
+
+const transitTemporaryCenterSchema = z
+  .object({
+    code: humanDesignCenterSchema,
+    definedByCompletedChannels: z.array(humanDesignChannelSchema)
+  })
+  .strict();
+
+export const humanDesignTransitResultSchema = z
+  .object({
+    methodCode: humanDesignMethodCodeSchema,
+    engineRevision: z.literal(1),
+    schemaVersion: humanDesignTransitSchemaVersionSchema,
+    mode: humanDesignTransitModeSchema,
+    natal: humanDesignIndividualResultSchema,
+    transitSnapshot: transitSnapshotSchema,
+    transitActivations: z.array(transitActivationSchema).length(13),
+    transitDefinedGates: z.array(transitDefinedGateSchema),
+    completedChannels: z.array(transitCompletedChannelSchema),
+    temporarilyDefinedCenters: z.array(transitTemporaryCenterSchema),
+    summary: z
+      .object({
+        transitActivationCount: z.number().int().min(0),
+        completedChannelCount: z.number().int().min(0),
+        temporarilyDefinedCenterCount: z.number().int().min(0)
+      })
+      .strict(),
+    inputFingerprint: transitInputFingerprintSchema,
+    resultChecksum: checksumMetadataSchema
+  })
+  .strict();
+export type HumanDesignTransitResult = z.infer<typeof humanDesignTransitResultSchema>;
+
 export const humanDesignResultSchema = z.union([
   humanDesignIndividualResultSchema,
   humanDesignCompatibilityResultSchema
@@ -447,3 +534,17 @@ export const humanDesignCalculationResponseSchema = z
 export type HumanDesignCalculationResponse = z.infer<
   typeof humanDesignCalculationResponseSchema
 >;
+
+export const humanDesignTransitQuerySchema = z
+  .object({
+    instant: timestampSchema.optional()
+  })
+  .strict();
+export type HumanDesignTransitQuery = z.infer<typeof humanDesignTransitQuerySchema>;
+
+export const humanDesignTransitResponseSchema = z
+  .object({
+    result: humanDesignTransitResultSchema
+  })
+  .strict();
+export type HumanDesignTransitResponse = z.infer<typeof humanDesignTransitResponseSchema>;

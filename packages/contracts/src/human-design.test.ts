@@ -3,6 +3,8 @@ import {
   humanDesignCalculationResponseSchema,
   humanDesignPreviewRequestSchema,
   humanDesignPreviewResponseSchema,
+  humanDesignTransitQuerySchema,
+  humanDesignTransitResponseSchema,
   persistHumanDesignCalculationRequestSchema,
   recalculateHumanDesignCalculationRequestSchema
 } from "./human-design";
@@ -145,6 +147,16 @@ describe("Human Design contracts", () => {
     expect(() => recalculateHumanDesignCalculationRequestSchema.parse({ clientId: "x" })).toThrow();
   });
 
+  it("accepts an optional selected instant for read-only transit overlay", () => {
+    expect(
+      humanDesignTransitQuerySchema.parse({ instant: "2026-07-23T09:30:00.000Z" })
+    ).toEqual({
+      instant: "2026-07-23T09:30:00.000Z"
+    });
+    expect(humanDesignTransitQuerySchema.parse({})).toEqual({});
+    expect(() => humanDesignTransitQuerySchema.parse({ instant: "2026-07-23" })).toThrow();
+  });
+
   it("rejects browser-supplied birth data in the resolved-longitudes preview request", () => {
     expect(() =>
       humanDesignPreviewRequestSchema.parse({
@@ -252,6 +264,22 @@ describe("Human Design contracts", () => {
     });
 
     expect(response.result.resultChecksum.value).toBe(digest("b"));
+  });
+
+  it("requires a complete deterministic transit response", () => {
+    const response = humanDesignTransitResponseSchema.parse({
+      result: validTransitResult()
+    });
+
+    expect(response.result).toMatchObject({
+      schemaVersion: "human-design-transit-result.v1",
+      mode: "transit",
+      summary: {
+        transitActivationCount: 13,
+        completedChannelCount: 1,
+        temporarilyDefinedCenterCount: 1
+      }
+    });
   });
 
   it("requires a calculation envelope for persisted Human Design responses", () => {
@@ -499,6 +527,65 @@ function validCompatibilityResult() {
   };
 }
 
+function validTransitResult() {
+  return {
+    methodCode: "human_design_classic",
+    engineRevision: 1,
+    schemaVersion: "human-design-transit-result.v1",
+    mode: "transit",
+    natal: validResult(),
+    transitSnapshot: {
+      instant: "2026-07-23T09:30:00.000Z",
+      date: "2026-07-23",
+      time: "12:30",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173
+    },
+    transitActivations: completeTransitActivations([
+      { side: "transit", body: "sun", longitude: 57.25, gate: 23, line: 1 }
+    ]),
+    transitDefinedGates: [
+      {
+        gate: 23,
+        activatedBy: [{ body: "sun", line: 1 }]
+      }
+    ],
+    completedChannels: [
+      {
+        code: "43-23",
+        gates: [43, 23],
+        centers: ["ajna", "throat"],
+        circuit: "individual",
+        natalGate: 43,
+        transitGate: 23
+      }
+    ],
+    temporarilyDefinedCenters: [
+      {
+        code: "ajna",
+        definedByCompletedChannels: ["43-23"]
+      }
+    ],
+    summary: {
+      transitActivationCount: 13,
+      completedChannelCount: 1,
+      temporarilyDefinedCenterCount: 1
+    },
+    inputFingerprint: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      scope: "human-design-transit-input.v1",
+      value: digest("a")
+    },
+    resultChecksum: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      value: digest("b")
+    }
+  };
+}
+
 function completeActivations(
   overrides: readonly {
     readonly side: "personality" | "design";
@@ -553,4 +640,55 @@ function completeActivations(
       );
     })
   );
+}
+
+function completeTransitActivations(
+  overrides: readonly {
+    readonly side: "transit";
+    readonly body:
+      | "sun"
+      | "earth"
+      | "moon"
+      | "north_node"
+      | "south_node"
+      | "mercury"
+      | "venus"
+      | "mars"
+      | "jupiter"
+      | "saturn"
+      | "uranus"
+      | "neptune"
+      | "pluto";
+    readonly longitude: number;
+    readonly gate: number;
+    readonly line: number;
+  }[]
+) {
+  const bodies = [
+    "sun",
+    "earth",
+    "moon",
+    "north_node",
+    "south_node",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ] as const;
+  const activationMap = new Map(overrides.map((activation) => [activation.body, activation]));
+  return bodies.map((body, bodyIndex) => {
+    return (
+      activationMap.get(body) ?? {
+        side: "transit",
+        body,
+        longitude: (bodyIndex * 10) % 360,
+        gate: bodyIndex + 1,
+        line: (bodyIndex % 6) + 1
+      }
+    );
+  });
 }

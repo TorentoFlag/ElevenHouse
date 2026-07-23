@@ -4,7 +4,8 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
 import {
   humanDesignCalculationResponseSchema,
-  humanDesignPreviewResponseSchema
+  humanDesignPreviewResponseSchema,
+  humanDesignTransitResponseSchema
 } from "@elevenhouse/contracts";
 import type {
   AuthSessionAuthenticationStore,
@@ -76,7 +77,10 @@ describe("Human Design HTTP routes", () => {
   let baseUrl: string;
   let calculationStore: CalculationStore;
   let clientStore: ClientStore;
-  let resolvedInputProvider: { resolve: ReturnType<typeof vi.fn> };
+  let resolvedInputProvider: {
+    resolve: ReturnType<typeof vi.fn>;
+    resolveTransit: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     calculationStore = createCalculationStore();
@@ -85,7 +89,8 @@ describe("Human Design HTTP routes", () => {
       resolve: vi.fn(async () => ({
         personality: longitudes,
         design: { ...longitudes, sun: 242 }
-      }))
+      })),
+      resolveTransit: vi.fn(async () => longitudes)
     };
     moduleRef = await Test.createTestingModule({
       imports: [IdentityModule, HumanDesignModule]
@@ -331,6 +336,43 @@ describe("Human Design HTTP routes", () => {
     expect(calculationStore.replaceResult).toHaveBeenCalledOnce();
   });
 
+  it("returns a read-only transit overlay for a saved individual calculation", async () => {
+    const unauthenticated = await getJson(
+      `/human-design/calculations/11111111-1111-4111-8111-111111111111/transits?instant=2026-07-23T09%3A30%3A00.000Z`
+    );
+    const created = await postJson("/human-design/calculations", persistBody(), csrfHeaders());
+    const createdBody = humanDesignCalculationResponseSchema.parse(created.body);
+    vi.mocked(calculationStore.create).mockClear();
+
+    const response = await getJson(
+      `/human-design/calculations/${createdBody.calculation.id}/transits?instant=2026-07-23T09%3A30%3A00.000Z`,
+      {
+        cookie: `${sessionCookieName}=${sessionToken}`
+      }
+    );
+
+    expect(unauthenticated.status).toBe(401);
+    expect(response.status).toBe(200);
+    const body = humanDesignTransitResponseSchema.parse(response.body);
+    expect(body.result).toMatchObject({
+      schemaVersion: "human-design-transit-result.v1",
+      mode: "transit",
+      transitSnapshot: {
+        instant: "2026-07-23T09:30:00.000Z",
+        date: "2026-07-23",
+        time: "11:30",
+        timezone: "Europe/Rome",
+        latitude: 41.9,
+        longitude: 12.49
+      }
+    });
+    expect(resolvedInputProvider.resolveTransit).toHaveBeenCalledWith({
+      transitSnapshot: body.result.transitSnapshot
+    });
+    expect(calculationStore.create).not.toHaveBeenCalled();
+    expect(calculationStore.replaceResult).not.toHaveBeenCalled();
+  });
+
   async function postJson(
     path: string,
     body: unknown,
@@ -340,6 +382,17 @@ describe("Human Design HTTP routes", () => {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body)
+    });
+    return { status: response.status, body: await response.json() };
+  }
+
+  async function getJson(
+    path: string,
+    headers: Record<string, string> = {}
+  ): Promise<{ status: number; body: unknown }> {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: "GET",
+      headers
     });
     return { status: response.status, body: await response.json() };
   }

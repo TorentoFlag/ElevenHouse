@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
   Post,
+  Query,
   Req,
   UseGuards
 } from "@nestjs/common";
@@ -39,5 +41,14 @@ export class HumanDesignController {
     @Req() request: AstrologerSessionRequest
   ) {
     return this.humanDesignService.recalculate(calculationId, body, request);
+  }
+
+  @Get("calculations/:calculationId/transits")
+  transits(
+    @Param("calculationId") calculationId: string,
+    @Query() query: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.humanDesignService.transits(calculationId, query, request);
   }
 }

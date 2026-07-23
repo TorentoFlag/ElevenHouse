@@ -61,6 +61,8 @@ Findings:
 - [x] 2026-07-23: Task 1 domain transit overlay implemented with transit-only
   activations, completed channels, temporary centers, stable input fingerprint
   and result checksum.
+- [x] 2026-07-23: Task 2 shared contracts and read-only `astrologer-api`
+  transit route implemented with focused service and HTTP e2e coverage.
 
 ## Decision Log
 
@@ -151,6 +153,16 @@ GET /human-design/calculations/:calculationId/transits?instant=...
 
 The route is authenticated, owner-scoped, side-effect free and only accepts
 current non-archived saved `mode = individual` Human Design calculations.
+
+Observed 2026-07-23: `humanDesignTransitQuerySchema`,
+`humanDesignTransitResultSchema` and `humanDesignTransitResponseSchema` added
+without adding transit to persisted `humanDesignResultSchema`. `GET
+/human-design/calculations/:calculationId/transits?instant=...` is
+authenticated, CSRF-exempt, owner-scoped, uses saved individual result as natal
+authority, resolves only transit positions through chart-engine and does not
+create or replace calculation records. Focused contracts/service/e2e tests
+passed with 3 files and 36 tests; `@elevenhouse/contracts typecheck` and
+`@elevenhouse/astrologer-api typecheck` passed.
 
 ### Task 3: Frontend Transit Mode
 

@@ -2,7 +2,8 @@ import { HttpException, UnauthorizedException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import {
   humanDesignCalculationResponseSchema,
-  humanDesignPreviewResponseSchema
+  humanDesignPreviewResponseSchema,
+  humanDesignTransitResponseSchema
 } from "@elevenhouse/contracts";
 import type {
   CalculationRecord,
@@ -317,6 +318,45 @@ describe("HumanDesignService", () => {
     expect(calculationStore.replaceResult).toHaveBeenCalledOnce();
   });
 
+  it("returns a read-only transit overlay for a saved individual calculation", async () => {
+    const { service, calculationStore, resolvedInputProvider } = createService();
+    const saved = await service.createCalculation(
+      {
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId: clientUserId
+      },
+      request()
+    );
+    vi.mocked(calculationStore.create).mockClear();
+
+    const response = await service.transits(
+      saved.calculation.id,
+      { instant: "2026-07-23T09:30:00.000Z" },
+      request()
+    );
+
+    humanDesignTransitResponseSchema.parse(response);
+    expect(response.result.schemaVersion).toBe("human-design-transit-result.v1");
+    expect(response.result.mode).toBe("transit");
+    expect(response.result.natal.mode).toBe("individual");
+    expect(response.result.natal.resultChecksum.value).toBe(saved.result.resultChecksum.value);
+    expect(response.result.transitSnapshot).toEqual({
+      instant: "2026-07-23T09:30:00.000Z",
+      date: "2026-07-23",
+      time: "11:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9,
+      longitude: 12.49
+    });
+    expect(resolvedInputProvider.resolveTransit).toHaveBeenCalledWith({
+      transitSnapshot: response.result.transitSnapshot
+    });
+    expect(calculationStore.create).not.toHaveBeenCalled();
+    expect(calculationStore.replaceResult).not.toHaveBeenCalled();
+  });
+
   it("returns a stable not-found code when the CRM client has no birth data", async () => {
     const { service } = createService({ birthData: null });
 
@@ -429,6 +469,7 @@ function createService(
   input: {
     readonly birthData?: ClientBirthData | null;
     readonly resolve?: HumanDesignResolvedInputProvider["resolve"];
+    readonly resolveTransit?: HumanDesignResolvedInputProvider["resolveTransit"];
   } = {}
 ) {
   const calculationStore = createCalculationStore();
@@ -439,7 +480,8 @@ function createService(
       vi.fn(async () => ({
         personality: longitudes,
         design: { ...longitudes, sun: 242 }
-      }))
+      })),
+    resolveTransit: input.resolveTransit ?? vi.fn(async () => longitudes)
   };
   return {
     service: new HumanDesignService(
