@@ -638,6 +638,41 @@
   white-space: pre-wrap;
 }
 
+.aiTextArea {
+  width: 100%;
+  min-height: 168px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid var(--hd-line);
+  border-radius: 10px;
+  background: rgb(13 12 32 / 0.72);
+  color: rgb(229 225 244 / 0.92);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 10px 11px;
+}
+
+.aiTextArea::placeholder {
+  color: rgb(186 178 218 / 0.48);
+}
+
+.aiTextArea:disabled {
+  opacity: 0.58;
+}
+
+.aiActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.aiActions .toolButton,
+.aiActions .calculateButton {
+  min-height: 34px;
+  padding: 9px 12px;
+}
+
 .transitPanel div {
   display: flex;
   align-items: center;

@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  approveHumanDesignInterpretationMutationOptions,
   createHumanDesignAiDraftMutationOptions,
   createHumanDesignCalculationMutationOptions,
   getHumanDesignTransitMutationOptions,
   humanDesignCalculationListQueryOptions,
   previewHumanDesignMutationOptions,
-  recalculateHumanDesignCalculationMutationOptions
+  recalculateHumanDesignCalculationMutationOptions,
+  saveHumanDesignInterpretationMutationOptions
 } from "./humanDesignQueries";
 
 export function useHumanDesignCalculationListQuery() {
@@ -30,4 +32,12 @@ export function useGetHumanDesignTransitMutation() {
 
 export function useCreateHumanDesignAiDraftMutation() {
   return useMutation(createHumanDesignAiDraftMutationOptions(useQueryClient()));
+}
+
+export function useSaveHumanDesignInterpretationMutation() {
+  return useMutation(saveHumanDesignInterpretationMutationOptions(useQueryClient()));
+}
+
+export function useApproveHumanDesignInterpretationMutation() {
+  return useMutation(approveHumanDesignInterpretationMutationOptions(useQueryClient()));
 }

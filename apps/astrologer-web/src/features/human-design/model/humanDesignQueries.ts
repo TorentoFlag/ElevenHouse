@@ -3,9 +3,14 @@ import type {
   CreateHumanDesignAiDraftRequest,
   HumanDesignPreviewRequest,
   HumanDesignTransitQuery,
-  PersistHumanDesignCalculationRequest
+  PersistHumanDesignCalculationRequest,
+  SaveCalculationInterpretationRequest
 } from "@elevenhouse/contracts";
-import { listCalculations } from "../../calculations/api/calculationsApi";
+import {
+  approveCalculationInterpretation,
+  listCalculations,
+  saveCalculationInterpretation
+} from "../../calculations/api/calculationsApi";
 import {
   createHumanDesignAiDraft,
   createHumanDesignCalculation,
@@ -64,5 +69,25 @@ export const createHumanDesignAiDraftMutationOptions = (
     readonly calculationId: string;
     readonly body: CreateHumanDesignAiDraftRequest;
   }) => createHumanDesignAiDraft(input),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calculations"] })
+});
+
+export const saveHumanDesignInterpretationMutationOptions = (
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) => ({
+  mutationFn: (input: {
+    readonly calculationId: string;
+    readonly body: SaveCalculationInterpretationRequest;
+  }) => saveCalculationInterpretation(input),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calculations"] })
+});
+
+export const approveHumanDesignInterpretationMutationOptions = (
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) => ({
+  mutationFn: (input: {
+    readonly calculationId: string;
+    readonly interpretationId: string;
+  }) => approveCalculationInterpretation(input),
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calculations"] })
 });

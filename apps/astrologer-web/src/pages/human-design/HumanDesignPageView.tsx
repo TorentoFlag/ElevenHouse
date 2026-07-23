@@ -38,6 +38,8 @@ export type HumanDesignPageViewProps = {
   readonly aiDraftStatus: "draft" | "approved" | null;
   readonly aiDraftErrorMessage: string | null;
   readonly aiDraftDisabledReason: string | null;
+  readonly aiDraftSaveDisabled: boolean;
+  readonly aiDraftApproveDisabled: boolean;
   readonly isBusy: boolean;
   readonly isLinked: boolean;
   readonly onSelectMode: (mode: HumanDesignWorkspaceMode) => void;
@@ -45,9 +47,12 @@ export type HumanDesignPageViewProps = {
   readonly onSelectPartnerClient: (client: ClientSelectOption) => void;
   readonly onChangeTransitInstant: (value: string) => void;
   readonly onSelectDetail: (key: HumanDesignDetailKey) => void;
+  readonly onChangeAiDraftText: (value: string) => void;
   readonly onSelectSaved: (calculation: CalculationRecordResponse) => void;
   readonly onFetchTransit: () => void | Promise<void>;
   readonly onCreateAiDraft: () => void | Promise<void>;
+  readonly onSaveAiDraft: () => void | Promise<void>;
+  readonly onApproveAiDraft: () => void | Promise<void>;
   readonly onPreview: () => void | Promise<void>;
   readonly onPersist: () => void | Promise<void>;
   readonly onRecalculate: () => void | Promise<void>;
@@ -70,6 +75,8 @@ export function HumanDesignPageView({
   aiDraftStatus,
   aiDraftErrorMessage,
   aiDraftDisabledReason,
+  aiDraftSaveDisabled,
+  aiDraftApproveDisabled,
   isBusy,
   isLinked,
   onSelectMode,
@@ -77,9 +84,12 @@ export function HumanDesignPageView({
   onSelectPartnerClient,
   onChangeTransitInstant,
   onSelectDetail,
+  onChangeAiDraftText,
   onSelectSaved,
   onFetchTransit,
   onCreateAiDraft,
+  onSaveAiDraft,
+  onApproveAiDraft,
   onPreview,
   onPersist,
   onRecalculate
@@ -472,7 +482,32 @@ export function HumanDesignPageView({
                   <span>AI-разбор</span>
                   <strong>{aiDraftStatus === "approved" ? "Утверждён" : aiDraftText ? "Черновик" : "Нет черновика"}</strong>
                 </div>
-                {aiDraftText ? <p>{aiDraftText}</p> : <p>Сохранённый расчёт готов к AI-черновику.</p>}
+                <textarea
+                  className={styles.aiTextArea}
+                  value={aiDraftText}
+                  placeholder="Сохранённый расчёт готов к AI-черновику."
+                  disabled={isBusy}
+                  aria-label="Текст AI-разбора Human Design"
+                  onChange={(event) => onChangeAiDraftText(event.currentTarget.value)}
+                />
+                <div className={styles.aiActions}>
+                  <button
+                    className={styles.toolButton}
+                    type="button"
+                    disabled={aiDraftSaveDisabled}
+                    onClick={() => void onSaveAiDraft()}
+                  >
+                    Сохранить
+                  </button>
+                  <button
+                    className={styles.calculateButton}
+                    type="button"
+                    disabled={aiDraftApproveDisabled}
+                    onClick={() => void onApproveAiDraft()}
+                  >
+                    Утвердить
+                  </button>
+                </div>
                 {aiDraftDisabledReason ? (
                   <small>{aiDraftDisabledReason}</small>
                 ) : null}

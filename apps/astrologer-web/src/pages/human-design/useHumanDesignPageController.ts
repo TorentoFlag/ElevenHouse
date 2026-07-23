@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import {
@@ -7,16 +7,19 @@ import {
   type HumanDesignDetailKey
 } from "../../features/human-design/model/humanDesignViewModel";
 import {
+  getCurrentHumanDesignInterpretation,
   getHumanDesignAiDraftErrorMessage,
   getHumanDesignInterpretationState
 } from "../../features/human-design/model/humanDesignInterpretationModel";
 import {
+  useApproveHumanDesignInterpretationMutation,
   useCreateHumanDesignAiDraftMutation,
   useCreateHumanDesignCalculationMutation,
   useGetHumanDesignTransitMutation,
   useHumanDesignCalculationListQuery,
   usePreviewHumanDesignMutation,
-  useRecalculateHumanDesignCalculationMutation
+  useRecalculateHumanDesignCalculationMutation,
+  useSaveHumanDesignInterpretationMutation
 } from "../../features/human-design/model/humanDesignHooks";
 import {
   getActiveHumanDesignCalculations,
@@ -37,6 +40,8 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
   const recalculateMutation = useRecalculateHumanDesignCalculationMutation();
   const transitMutation = useGetHumanDesignTransitMutation();
   const aiDraftMutation = useCreateHumanDesignAiDraftMutation();
+  const saveInterpretationMutation = useSaveHumanDesignInterpretationMutation();
+  const approveInterpretationMutation = useApproveHumanDesignInterpretationMutation();
   const [mode, setMode] = useState<HumanDesignWorkspaceMode>("individual");
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
   const [selectedPartnerClient, setSelectedPartnerClient] =
@@ -50,6 +55,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
   const [selectedDetailKey, setSelectedDetailKey] = useState<HumanDesignDetailKey>("type");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [aiDraftErrorMessage, setAiDraftErrorMessage] = useState<string | null>(null);
+  const [interpretationText, setInterpretationText] = useState("");
   const calculations = useMemo(
     () =>
       getActiveHumanDesignCalculations(
@@ -79,12 +85,19 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     createMutation.isPending ||
     recalculateMutation.isPending ||
     transitMutation.isPending ||
-    aiDraftMutation.isPending;
+    aiDraftMutation.isPending ||
+    saveInterpretationMutation.isPending ||
+    approveInterpretationMutation.isPending;
   const canOpenTransitMode = savedResponse?.result.mode === "individual";
   const interpretationState = getHumanDesignInterpretationState(
     savedResponse?.calculation ?? null,
+    interpretationText,
     isBusy
   );
+  const latestInterpretationText = savedResponse?.calculation.interpretations.at(-1)?.text ?? "";
+  useEffect(() => {
+    setInterpretationText(latestInterpretationText);
+  }, [savedResponse?.calculation.id, latestInterpretationText]);
   const status = getHumanDesignStatus({
     mode,
     selectedClient,
@@ -110,13 +123,15 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     selectedCalculationId: savedResponse?.calculation.id ?? null,
     status,
     errorMessage,
-    aiDraftText: interpretationState.latestText,
+    aiDraftText: interpretationText,
     aiDraftStatus: interpretationState.latestStatus,
     aiDraftErrorMessage,
     aiDraftDisabledReason:
       mode === "transit"
         ? "AI-разбор транзитного overlay будет отдельным backend контуром"
         : interpretationState.aiDisabledReason,
+    aiDraftSaveDisabled: interpretationState.saveDisabled,
+    aiDraftApproveDisabled: interpretationState.approveDisabled,
     isBusy,
     isLinked: mode !== "transit" && Boolean(savedResponse),
     onSelectMode: (nextMode) => {
@@ -135,6 +150,8 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
         recalculateMutation.reset();
         transitMutation.reset();
         aiDraftMutation.reset();
+        saveInterpretationMutation.reset();
+        approveInterpretationMutation.reset();
         void fetchTransit();
         return;
       }
@@ -160,10 +177,16 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setTransitInstantValue(value);
       transitMutation.reset();
       aiDraftMutation.reset();
+      saveInterpretationMutation.reset();
+      approveInterpretationMutation.reset();
       setErrorMessage(null);
       setAiDraftErrorMessage(null);
     },
     onSelectDetail: setSelectedDetailKey,
+    onChangeAiDraftText: (value) => {
+      setInterpretationText(value);
+      setAiDraftErrorMessage(null);
+    },
     onSelectSaved: (calculation) => {
       try {
         const response = toHumanDesignCalculationResponse(calculation);
@@ -178,6 +201,8 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
         recalculateMutation.reset();
         transitMutation.reset();
         aiDraftMutation.reset();
+        saveInterpretationMutation.reset();
+        approveInterpretationMutation.reset();
         setAiDraftErrorMessage(null);
       } catch {
         setErrorMessage("Сохранённый расчёт Human Design повреждён или устарел.");
@@ -194,6 +219,12 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     },
     onCreateAiDraft: () => {
       void createAiDraft();
+    },
+    onSaveAiDraft: () => {
+      void saveAiDraft();
+    },
+    onApproveAiDraft: () => {
+      void approveAiDraft();
     },
     onPersist: () => {
       if (mode === "individual" && selectedClient && model) void persistIndividual(selectedClient);
@@ -215,7 +246,10 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     recalculateMutation.reset();
     transitMutation.reset();
     aiDraftMutation.reset();
+    saveInterpretationMutation.reset();
+    approveInterpretationMutation.reset();
     setAiDraftErrorMessage(null);
+    setInterpretationText("");
   }
 
   async function previewIndividual(client: ClientSelectOption) {
@@ -236,6 +270,8 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       recalculateMutation.reset();
       transitMutation.reset();
       aiDraftMutation.reset();
+      saveInterpretationMutation.reset();
+      approveInterpretationMutation.reset();
       setSelectedDetailKey("type");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -262,6 +298,8 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       recalculateMutation.reset();
       transitMutation.reset();
       aiDraftMutation.reset();
+      saveInterpretationMutation.reset();
+      approveInterpretationMutation.reset();
       setSelectedDetailKey("compatibility:summary");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -283,6 +321,8 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       recalculateMutation.reset();
       transitMutation.reset();
       aiDraftMutation.reset();
+      saveInterpretationMutation.reset();
+      approveInterpretationMutation.reset();
       setSelectedDetailKey("type");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -310,6 +350,8 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       recalculateMutation.reset();
       transitMutation.reset();
       aiDraftMutation.reset();
+      saveInterpretationMutation.reset();
+      approveInterpretationMutation.reset();
       setSelectedDetailKey("compatibility:summary");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -330,6 +372,8 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       createMutation.reset();
       transitMutation.reset();
       aiDraftMutation.reset();
+      saveInterpretationMutation.reset();
+      approveInterpretationMutation.reset();
       setSelectedDetailKey(defaultDetailKey(response.calculation.mode));
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -366,7 +410,11 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setAiDraftErrorMessage("AI-разбор транзитного overlay будет отдельным backend контуром.");
       return;
     }
-    const interpretationState = getHumanDesignInterpretationState(savedResponse.calculation, false);
+    const interpretationState = getHumanDesignInterpretationState(
+      savedResponse.calculation,
+      interpretationText,
+      false
+    );
     if (interpretationState.aiDisabled) {
       setAiDraftErrorMessage(interpretationState.aiDisabledReason);
       return;
@@ -383,6 +431,42 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       createMutation.reset();
       recalculateMutation.reset();
       transitMutation.reset();
+    } catch (error) {
+      setAiDraftErrorMessage(getHumanDesignAiDraftErrorMessage(error));
+    }
+  }
+
+  async function saveAiDraft() {
+    if (!savedResponse || interpretationState.saveDisabled) return;
+    setErrorMessage(null);
+    setAiDraftErrorMessage(null);
+    try {
+      const calculation = await saveInterpretationMutation.mutateAsync({
+        calculationId: savedResponse.calculation.id,
+        body: {
+          text: interpretationText,
+          expectedResultChecksum: savedResponse.calculation.resultChecksum
+        }
+      });
+      setSavedResponse(toHumanDesignCalculationResponse(calculation));
+    } catch (error) {
+      setAiDraftErrorMessage(getHumanDesignAiDraftErrorMessage(error));
+    }
+  }
+
+  async function approveAiDraft() {
+    const latestInterpretation = getCurrentHumanDesignInterpretation(
+      savedResponse?.calculation ?? null
+    );
+    if (!savedResponse || !latestInterpretation || interpretationState.approveDisabled) return;
+    setErrorMessage(null);
+    setAiDraftErrorMessage(null);
+    try {
+      const calculation = await approveInterpretationMutation.mutateAsync({
+        calculationId: savedResponse.calculation.id,
+        interpretationId: latestInterpretation.id
+      });
+      setSavedResponse(toHumanDesignCalculationResponse(calculation));
     } catch (error) {
       setAiDraftErrorMessage(getHumanDesignAiDraftErrorMessage(error));
     }

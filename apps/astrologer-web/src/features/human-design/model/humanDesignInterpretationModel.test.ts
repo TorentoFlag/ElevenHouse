@@ -1,32 +1,47 @@
 import { describe, expect, it } from "vitest";
 import { HttpError } from "../../../common/http/HttpError";
 import {
+  getCurrentHumanDesignInterpretation,
   getHumanDesignAiDraftErrorMessage,
   getHumanDesignInterpretationState
 } from "./humanDesignInterpretationModel";
 
 describe("Human Design interpretation state", () => {
   it("enables AI draft generation only for a saved active calculation", () => {
-    expect(getHumanDesignInterpretationState(null, false)).toMatchObject({
+    expect(getHumanDesignInterpretationState(null, "", false)).toMatchObject({
       aiDisabled: true,
       aiDisabledReason: "Сначала сохраните расчёт",
       latestText: "",
-      latestStatus: null
+      latestStatus: null,
+      saveDisabled: true,
+      approveDisabled: true
     });
-    expect(getHumanDesignInterpretationState({ ...calculation(), status: "archived" }, false))
+    expect(getHumanDesignInterpretationState({ ...calculation(), status: "archived" }, "", false))
       .toMatchObject({
         aiDisabled: true,
-        aiDisabledReason: "Архивный расчёт нельзя изменять"
+        aiDisabledReason: "Архивный расчёт нельзя изменять",
+        saveDisabled: true,
+        approveDisabled: true
       });
-    expect(getHumanDesignInterpretationState(calculation(), true)).toMatchObject({
+    expect(getHumanDesignInterpretationState(calculation(), "Сохранённый AI draft", true)).toMatchObject({
       aiDisabled: true,
-      aiDisabledReason: "Дождитесь завершения текущего действия"
+      aiDisabledReason: "Дождитесь завершения текущего действия",
+      saveDisabled: true,
+      approveDisabled: true
     });
-    expect(getHumanDesignInterpretationState(calculation(), false)).toMatchObject({
+    expect(getHumanDesignInterpretationState(calculation(), "Сохранённый AI draft", false)).toMatchObject({
       aiDisabled: false,
       aiDisabledReason: null,
       latestText: "Сохранённый AI draft",
-      latestStatus: "draft"
+      latestStatus: "draft",
+      isDirty: false,
+      saveDisabled: true,
+      approveDisabled: false
+    });
+    expect(getHumanDesignInterpretationState(calculation(), "Изменённый draft", false)).toMatchObject({
+      isDirty: true,
+      saveDisabled: false,
+      approveDisabled: true
     });
   });
 
@@ -39,6 +54,14 @@ describe("Human Design interpretation state", () => {
     expect(getHumanDesignAiDraftErrorMessage(new Error("boom"))).toBe(
       "Не удалось создать AI-черновик"
     );
+  });
+
+  it("returns the latest interpretation for approve actions", () => {
+    expect(getCurrentHumanDesignInterpretation(calculation())).toMatchObject({
+      id: "44444444-4444-4444-8444-444444444444",
+      status: "draft"
+    });
+    expect(getCurrentHumanDesignInterpretation(null)).toBeNull();
   });
 });
 

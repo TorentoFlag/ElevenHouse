@@ -68,8 +68,11 @@ describe("HumanDesignPageView", () => {
     expect(linkButton?.props.disabled).toBe(false);
   });
 
-  it("enables AI draft creation for an opened saved Human Design calculation", () => {
+  it("enables AI draft editing for an opened saved Human Design calculation", () => {
     const onCreateAiDraft = vi.fn();
+    const onChangeAiDraftText = vi.fn();
+    const onSaveAiDraft = vi.fn();
+    const onApproveAiDraft = vi.fn();
     const saved = {
       ...savedCalculation(),
       interpretations: [
@@ -88,21 +91,46 @@ describe("HumanDesignPageView", () => {
       aiDraftText: "AI draft text",
       aiDraftStatus: "draft",
       aiDraftDisabledReason: null,
+      aiDraftSaveDisabled: false,
+      aiDraftApproveDisabled: true,
       isLinked: true,
-      onCreateAiDraft
+      onCreateAiDraft,
+      onChangeAiDraftText,
+      onSaveAiDraft,
+      onApproveAiDraft
     });
     const text = textOf(view);
     const aiButton = walk(view).find(
       (element): element is ReactElement<{ disabled?: boolean; onClick: () => void }> =>
         element.type === "button" && textOf(element).includes("Обновить AI")
     );
+    const textarea = walk(view).find(
+      (element): element is ReactElement<{
+        value: string;
+        onChange: (event: { currentTarget: { value: string } }) => void;
+      }> => element.type === "textarea"
+    );
+    const saveButton = walk(view).find(
+      (element): element is ReactElement<{ disabled?: boolean; onClick: () => void }> =>
+        element.type === "button" && textOf(element).includes("Сохранить")
+    );
+    const approveButton = walk(view).find(
+      (element): element is ReactElement<{ disabled?: boolean; onClick: () => void }> =>
+        element.type === "button" && textOf(element).includes("Утвердить")
+    );
 
     expect(text).toContain("AI-разбор");
     expect(text).toContain("Черновик");
-    expect(text).toContain("AI draft text");
+    expect(textarea?.props.value).toBe("AI draft text");
     expect(aiButton?.props.disabled).toBe(false);
     aiButton?.props.onClick();
     expect(onCreateAiDraft).toHaveBeenCalledOnce();
+    textarea?.props.onChange({ currentTarget: { value: "Edited draft" } });
+    expect(onChangeAiDraftText).toHaveBeenCalledWith("Edited draft");
+    expect(saveButton?.props.disabled).toBe(false);
+    saveButton?.props.onClick();
+    expect(onSaveAiDraft).toHaveBeenCalledOnce();
+    expect(approveButton?.props.disabled).toBe(true);
   });
 
   it("renders transit mode as a saved-calculation overlay with read-only fetch action", () => {
@@ -235,6 +263,8 @@ function baseProps(): HumanDesignPageViewProps {
     aiDraftStatus: null,
     aiDraftErrorMessage: null,
     aiDraftDisabledReason: "Сначала сохраните расчёт",
+    aiDraftSaveDisabled: true,
+    aiDraftApproveDisabled: true,
     calculations: [],
     selectedCalculationId: null,
     isBusy: false,
@@ -244,9 +274,12 @@ function baseProps(): HumanDesignPageViewProps {
     onSelectPartnerClient: vi.fn(),
     onChangeTransitInstant: vi.fn(),
     onSelectDetail: vi.fn(),
+    onChangeAiDraftText: vi.fn(),
     onPreview: vi.fn(),
     onFetchTransit: vi.fn(),
     onCreateAiDraft: vi.fn(),
+    onSaveAiDraft: vi.fn(),
+    onApproveAiDraft: vi.fn(),
     onPersist: vi.fn(),
     onSelectSaved: vi.fn(),
     onRecalculate: vi.fn()

@@ -2,25 +2,49 @@ import type { CalculationRecordResponse } from "@elevenhouse/contracts";
 import { HttpError } from "../../../common/http/HttpError";
 
 export type HumanDesignInterpretationState = {
+  readonly isDirty: boolean;
   readonly latestText: string;
   readonly latestStatus: "draft" | "approved" | null;
   readonly aiDisabled: boolean;
   readonly aiDisabledReason: string | null;
+  readonly saveDisabled: boolean;
+  readonly approveDisabled: boolean;
 };
 
 export function getHumanDesignInterpretationState(
   calculation: CalculationRecordResponse | null,
+  editorText: string,
   isBusy: boolean
 ): HumanDesignInterpretationState {
   const latest = calculation?.interpretations.at(-1) ?? null;
+  const latestText = latest?.text ?? "";
+  const isDirty = editorText !== latestText;
   const aiDisabledReason = getAiDisabledReason(calculation, isBusy);
 
   return {
-    latestText: latest?.text ?? "",
+    isDirty,
+    latestText,
     latestStatus: latest?.status ?? null,
     aiDisabled: aiDisabledReason !== null,
-    aiDisabledReason
+    aiDisabledReason,
+    saveDisabled:
+      !calculation ||
+      calculation.status === "archived" ||
+      !isDirty ||
+      !editorText.trim() ||
+      isBusy,
+    approveDisabled:
+      !calculation ||
+      calculation.status === "archived" ||
+      !latest ||
+      latest.status === "approved" ||
+      isDirty ||
+      isBusy
   };
+}
+
+export function getCurrentHumanDesignInterpretation(calculation: CalculationRecordResponse | null) {
+  return calculation?.interpretations.at(-1) ?? null;
 }
 
 export function getHumanDesignAiDraftErrorMessage(error: unknown): string {

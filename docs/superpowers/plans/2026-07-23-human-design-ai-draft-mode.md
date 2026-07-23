@@ -53,6 +53,9 @@ Accessed: 2026-07-23.
 - [x] 2026-07-23: Task 3 first frontend slice implemented: saved-result AI
   draft button, checksum-bound API mutation, latest draft display and stable
   backend error messaging.
+- [x] 2026-07-23: Task 3 editable lifecycle implemented for saved
+  individual/compatibility results through shared calculation interpretation
+  save/approve mutations.
 
 ## Plan of Work
 
@@ -107,9 +110,10 @@ saved non-archived individual/compatibility results, posts the current
 `resultChecksum` to the CSRF-protected AI draft API, refreshes shared
 calculations and renders the latest draft/approved interpretation in the right
 panel. Backend stale/quota/provider failures map to stable Russian messages.
+The panel editor now supports local text edits, checksum-bound save and approve
+of the latest clean draft through the shared calculation interpretation API.
 Transit overlay AI remains disabled until the API accepts an explicit overlay
-context; editing/save/approve controls still need the shared interpretation
-lifecycle wiring.
+context.
 
 ### Task 4: Runtime Evidence
 
