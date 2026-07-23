@@ -77,6 +77,9 @@ export function buildChartInterpretationAnchors(
   if (result.method === "composite") {
     return buildCompositeAnchors(result);
   }
+  if (result.method === "horary") {
+    return buildHoraryAnchors(result);
+  }
   if (options.mode === "child" && result.method === "natal") {
     return buildChildAnchors(result);
   }
@@ -333,6 +336,126 @@ function buildCompositeAspectAnchors(
         group: "aspects" as const,
         label: `${pointALabel} — ${pointBLabel}`,
         meta: "Композит · аспект",
+        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+      };
+    });
+}
+
+function buildHoraryAnchors(
+  result: StoredChartCalculationPayload
+): readonly ChartInterpretationAnchor[] {
+  if (result.method !== "horary") {
+    return [];
+  }
+  const renderResult = getPrimaryChartRenderResult(result);
+  const pointsById = new Map(renderResult.points.map((point) => [point.id, point]));
+  const category = formatDictionaryCodePart(result.questionSnapshot.category);
+
+  return [
+    {
+      id: `horary-question-${category}`,
+      code: `horary.question.${category}`,
+      categoryCode: "aspects",
+      group: "aspects",
+      label: "Категория вопроса",
+      meta: "Хорар · категория вопроса",
+      position: formatHoraryQuestionCategoryDisplay(result.questionSnapshot.category)
+    },
+    ...buildHoraryPointAnchors(renderResult.points),
+    ...buildHoraryHouseAnchors(result),
+    ...buildHoraryAspectAnchors(renderResult.aspects, pointsById)
+  ];
+}
+
+function buildHoraryPointAnchors(
+  points: readonly ChartPoint[]
+): readonly ChartInterpretationAnchor[] {
+  return sortPoints(points).flatMap((point) => {
+    const anchors: ChartInterpretationAnchor[] = [];
+    const pointId = formatDictionaryCodePart(point.id);
+    const pointLabel = getChartPointDisplayLabel(point.id, point.label);
+    const position = `${formatChartPointPosition(point)}${
+      point.house ? ` · ${romanHouses[point.house]} дом` : ""
+    }`;
+
+    if (signDictionaryPointIds.has(pointId as (typeof pointOrder)[number])) {
+      anchors.push({
+        id: `horary-point-sign-${point.id}`,
+        code: `horary.${pointId}.${formatDictionaryCodePart(point.sign)}`,
+        categoryCode: "planets_in_signs",
+        group: "points",
+        label: `${pointLabel} в ${formatSignPrepositional(point.sign)}`,
+        meta: "Хорар · планета в знаке",
+        position
+      });
+    }
+
+    if (point.house && houseDictionaryPointIds.has(pointId as (typeof pointOrder)[number])) {
+      anchors.push({
+        id: `horary-point-house-${point.id}`,
+        code: `horary.${pointId}.house.${point.house}`,
+        categoryCode: "planets_in_houses",
+        group: "points",
+        label: `${pointLabel} · ${romanHouses[point.house]} дом`,
+        meta: "Хорар · планета в доме",
+        position
+      });
+    }
+
+    return anchors;
+  });
+}
+
+function buildHoraryHouseAnchors(
+  result: StoredChartCalculationPayload
+): readonly ChartInterpretationAnchor[] {
+  return [...getPrimaryChartRenderResult(result).houses]
+    .sort((left, right) => left.number - right.number)
+    .map((house) => {
+      const position = getRoundedChartPointPosition(house);
+
+      return {
+        id: `horary-house-${house.number}`,
+        code: `horary.house.${house.number}`,
+        categoryCode: "house_meanings" as const,
+        group: "houses" as const,
+        label: `${romanHouses[house.number]} дом`,
+        meta: "Хорар · значение дома",
+        position: `${formatHouseSignDisplay(position.sign)} ${position.degree}`
+      };
+    });
+}
+
+function buildHoraryAspectAnchors(
+  aspects: readonly ChartAspect[],
+  pointsById: ReadonlyMap<string, ChartPoint>
+): readonly ChartInterpretationAnchor[] {
+  return [...aspects]
+    .filter(
+      (aspect) =>
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.pointA) as (typeof pointOrder)[number]
+        ) &&
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.pointB) as (typeof pointOrder)[number]
+        )
+    )
+    .sort((left, right) => left.orb - right.orb)
+    .slice(0, maxPlanetAspectAnchors)
+    .map((aspect) => {
+      const [pointA, pointB] = orderAspectPair(aspect.pointA, aspect.pointB);
+      const pointALabel = getPointLabel(pointsById, pointA);
+      const pointBLabel = getPointLabel(pointsById, pointB);
+
+      return {
+        id: `horary-aspect-${pointA}-${pointB}-${aspect.type}`,
+        code: `horary.aspect.${formatDictionaryCodePart(
+          pointA
+        )}.${normalizeAspectTypeCode(aspect.type)}.${formatDictionaryCodePart(pointB)}`,
+        categoryCode: "planet_aspects" as const,
+        group: "aspects" as const,
+        label: `${pointALabel} — ${pointBLabel}`,
+        meta: "Хорар · аспект",
         position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
       };
     });
@@ -717,4 +840,18 @@ function formatSignPrepositional(sign: string): string {
   };
 
   return labels[normalized] ?? formatHouseSignDisplay(sign);
+}
+
+function formatHoraryQuestionCategoryDisplay(category: string): string {
+  const labels: Record<string, string> = {
+    relationship: "Отношения",
+    career: "Работа",
+    money: "Деньги",
+    home: "Дом",
+    health: "Здоровье",
+    travel: "Поездка",
+    other: "Другое"
+  };
+
+  return labels[category] ?? category;
 }

@@ -620,6 +620,7 @@ function InterpretationSummary({
     dictionaryState.entries.map((entry) => [entry.code, entry])
   );
   const anchorGroups = getInterpretationAnchorGroups(anchors);
+  const interpretationCopy = getInterpretationCopy({ interpretationMode, result });
 
   return (
     <section className={styles.tableSection} aria-labelledby="chart-interpretations-heading">
@@ -627,9 +628,7 @@ function InterpretationSummary({
       <div className={styles.interpretationStack}>
         <div>
           <div className={styles.interpretationKicker}>
-            {interpretationMode === "child"
-              ? "Детские трактовки · библиотека"
-              : "Опорные положения · библиотека"}
+            {interpretationCopy.kicker}
           </div>
           <div className={styles.interpretationGroupStack}>
             {anchorGroups.map((group) => (
@@ -671,19 +670,13 @@ function InterpretationSummary({
         <div className={styles.interpretationAiPanel}>
           <div className={styles.interpretationAiHeader}>
             <div>
-              <span>
-                {interpretationMode === "child"
-                  ? "AI-трактовка · детская карта"
-                  : "AI-трактовка · натальная карта"}
-              </span>
+              <span>{interpretationCopy.aiLabel}</span>
               <strong>Черновик появится после подключения production-контура</strong>
             </div>
             <b>позже</b>
           </div>
           <p>
-            {interpretationMode === "child"
-              ? "AI-контур для детской карты ещё не подключён. Пока показываем только детерминированные опорные положения из canonical result."
-              : "AI-контур для карт ещё не подключён. Пока показываем только детерминированные опорные положения из canonical result."}
+            {interpretationCopy.aiDescription}
           </p>
           <button type="button" disabled>
             AI-черновик недоступен
@@ -696,6 +689,39 @@ function InterpretationSummary({
       </div>
     </section>
   );
+}
+
+function getInterpretationCopy({
+  interpretationMode,
+  result
+}: {
+  readonly interpretationMode: ChartInterpretationMode;
+  readonly result: StoredChartCalculationPayload;
+}) {
+  if (interpretationMode === "child") {
+    return {
+      kicker: "Детские трактовки · библиотека",
+      aiLabel: "AI-трактовка · детская карта",
+      aiDescription:
+        "AI-контур для детской карты ещё не подключён. Пока показываем только детерминированные опорные положения из canonical result."
+    };
+  }
+
+  if (result.method === "horary") {
+    return {
+      kicker: "Хорар · библиотека",
+      aiLabel: "AI-трактовка · хорар",
+      aiDescription:
+        "AI-контур и автоматический ответ для хорара ещё не подключены. Пока показываем только детерминированные опорные положения из canonical result."
+    };
+  }
+
+  return {
+    kicker: "Опорные положения · библиотека",
+    aiLabel: "AI-трактовка · натальная карта",
+    aiDescription:
+      "AI-контур для карт ещё не подключён. Пока показываем только детерминированные опорные положения из canonical result."
+  };
 }
 
 function getDictionaryInterpretationText(

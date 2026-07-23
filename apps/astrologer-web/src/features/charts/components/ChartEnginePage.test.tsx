@@ -415,6 +415,50 @@ describe("ChartEnginePage", () => {
     expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
   });
 
+  it("loads horary-specific dictionary anchors without natal fallback", async () => {
+    const user = userEvent.setup();
+    const get = vi.spyOn(application.http, "get").mockResolvedValue({
+      entries: [],
+      total: 0,
+      counts: { sources: { all: 0, platform: 0, modified: 0, custom: 0 } }
+    } satisfies DictionaryEntriesResponse);
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={horaryResult()}
+        errorMessage={null}
+        isBusy={false}
+        mode="horary"
+        horaryQuestion={horaryResult().questionSnapshot}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Трактовки" }));
+
+    const interpretationsPanel = screen.getByRole("region", { name: "Трактовки" });
+    expect(within(interpretationsPanel).getByText("Хорар · библиотека")).toBeInTheDocument();
+    expect(
+      await within(interpretationsPanel).findByText(
+        "В справочнике пока нет записи horary.sun.cancer."
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(interpretationsPanel).getByRole("link", {
+        name: "Создать трактовку horary.sun.cancer в справочнике"
+      })
+    ).toHaveAttribute("href", expect.stringContaining("create=horary.sun.cancer"));
+    expect(within(interpretationsPanel).getByText("AI-трактовка · хорар")).toBeInTheDocument();
+    expect(get).toHaveBeenCalledWith(
+      "/dictionary/entries/by-codes?locale=ru&codes=horary.question.career%2Chorary.sun.cancer%2Chorary.sun.house.10%2Chorary.house.1"
+    );
+    expect(get.mock.calls[0]?.[0]).not.toContain("sun_cancer");
+  });
+
   it("renders synastry partner points and aspects as a dual-wheel result", async () => {
     const user = userEvent.setup();
     render(

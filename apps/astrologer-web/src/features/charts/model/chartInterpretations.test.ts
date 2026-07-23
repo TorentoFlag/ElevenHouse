@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   StoredChartCalculationPayload,
   StoredChartCompositeCalculationPayload,
+  StoredChartHoraryCalculationPayload,
   StoredChartNatalCalculationPayload,
   StoredChartProgressionCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
@@ -170,6 +171,31 @@ describe("chartInterpretations", () => {
         "child.sun.house.11:planets_in_houses:Детская карта · планета в доме",
         "child.house.1:house_meanings:Детская карта · значение дома",
         "child.aspect.sun.square.moon:planet_aspects:Детская карта · аспект"
+      ])
+    );
+  });
+
+  it("derives horary-specific dictionary anchors without natal fallback", () => {
+    const anchors = buildChartInterpretationAnchors(horaryResult());
+
+    expect(getChartInterpretationLookupCodes(anchors)).toEqual(
+      expect.arrayContaining([
+        "horary.sun.cancer",
+        "horary.sun.house.11",
+        "horary.house.1",
+        "horary.aspect.sun.square.moon",
+        "horary.question.career"
+      ])
+    );
+    expect(getChartInterpretationLookupCodes(anchors)).not.toContain("sun_cancer");
+    expect(getChartInterpretationLookupCodes(anchors)).not.toContain("sun_house_11");
+    expect(anchors.map((anchor) => `${anchor.code}:${anchor.categoryCode}:${anchor.meta}`)).toEqual(
+      expect.arrayContaining([
+        "horary.sun.cancer:planets_in_signs:Хорар · планета в знаке",
+        "horary.sun.house.11:planets_in_houses:Хорар · планета в доме",
+        "horary.house.1:house_meanings:Хорар · значение дома",
+        "horary.aspect.sun.square.moon:planet_aspects:Хорар · аспект",
+        "horary.question.career:aspects:Хорар · категория вопроса"
       ])
     );
   });
@@ -387,6 +413,25 @@ function compositeResult(): StoredChartCompositeCalculationPayload {
       partnerClientId: "55555555-5555-4555-8555-555555555555"
     },
     result: natal.result
+  };
+}
+
+function horaryResult(): StoredChartHoraryCalculationPayload {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "horary",
+    provider: chartResult().provider,
+    settings: chartResult().settings,
+    questionSnapshot: {
+      question: "Стоит ли принимать предложение?",
+      category: "career",
+      date: "2026-07-23",
+      time: "14:30",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173
+    },
+    result: chartResult().result
   };
 }
 
