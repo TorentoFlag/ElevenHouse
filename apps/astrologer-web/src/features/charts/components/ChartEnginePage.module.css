@@ -205,11 +205,13 @@
 .solarReturnYearField {
   grid-template-columns: 106px;
 }
-.transitMomentFields label {
+.transitMomentFields label,
+.horaryQuestionFields label {
   display: grid;
   gap: 3px;
 }
-.transitMomentFields span {
+.transitMomentFields span,
+.horaryQuestionFields span {
   overflow: hidden;
   color: rgb(186 178 218 / 0.62);
   font-size: 9px;
@@ -219,7 +221,9 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
-.transitMomentFields input {
+.transitMomentFields input,
+.horaryQuestionFields input,
+.horaryQuestionFields select {
   box-sizing: border-box;
   width: 100%;
   min-height: 32px;
@@ -232,8 +236,21 @@
   font: inherit;
   font-size: 12px;
 }
-.transitMomentFields input:disabled {
+.transitMomentFields input:disabled,
+.horaryQuestionFields input:disabled,
+.horaryQuestionFields select:disabled {
   opacity: 0.52;
+}
+.horaryQuestionFields {
+  display: inline-grid;
+  flex: 1 1 560px;
+  min-width: min(100%, 360px);
+  grid-template-columns: minmax(180px, 1.6fr) 108px 116px 88px 130px 90px 90px;
+  align-items: center;
+  gap: 8px;
+}
+.horaryQuestionText {
+  min-width: 0;
 }
 .calculateButton,
 .toolButton {

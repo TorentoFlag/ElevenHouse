@@ -8,6 +8,7 @@ import type {
   ChartSettings,
   DictionaryEntriesResponse,
   StoredChartCalculationPayload,
+  StoredChartHoraryCalculationPayload,
   StoredChartNatalCalculationPayload,
   StoredChartProgressionCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
@@ -320,6 +321,98 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByText("Прогрессивные аспекты к наталу")).toBeInTheDocument();
     expect(screen.getByText(/Марс — Солнце/i)).toBeInTheDocument();
+  });
+
+  it("switches to horary mode and submits a question snapshot without requiring birth data", async () => {
+    const user = userEvent.setup();
+    const onCreateHoraryJob = vi.fn(async () => undefined);
+    const onHoraryQuestionChange = vi.fn();
+    render(
+      <ChartEnginePage
+        selectedClient={{
+          ...client,
+          birthData: {
+            ...client.birthData,
+            birthTime: null,
+            birthTimePrecision: "unknown"
+          }
+        }}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        mode="natal"
+        horaryQuestion={{
+          question: "",
+          category: "other",
+          date: "2026-07-23",
+          time: "14:30",
+          timezone: "Europe/Moscow",
+          latitude: "",
+          longitude: ""
+        }}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onCreateHoraryJob={onCreateHoraryJob}
+        onHoraryQuestionChange={onHoraryQuestionChange}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Хорар" }));
+
+    expect(screen.getAllByText("Готово к хорару").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Вопрос хорара")).toHaveValue("");
+    expect(screen.getByLabelText("Дата вопроса")).toHaveValue("2026-07-23");
+    expect(screen.getByLabelText("Время вопроса")).toHaveValue("14:30");
+    expect(screen.getByRole("button", { name: "Заполните хорар" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Вопрос хорара"), {
+      target: { value: "Стоит ли принимать предложение?" }
+    });
+    fireEvent.change(screen.getByLabelText("Широта вопроса"), {
+      target: { value: "55.7558" }
+    });
+    fireEvent.change(screen.getByLabelText("Долгота вопроса"), {
+      target: { value: "37.6173" }
+    });
+
+    expect(onHoraryQuestionChange).toHaveBeenLastCalledWith({
+      question: "Стоит ли принимать предложение?",
+      category: "other",
+      date: "2026-07-23",
+      time: "14:30",
+      timezone: "Europe/Moscow",
+      latitude: "55.7558",
+      longitude: "37.6173"
+    });
+
+    await user.click(screen.getByRole("button", { name: "Рассчитать хорар" }));
+
+    expect(onCreateHoraryJob).toHaveBeenCalledOnce();
+  });
+
+  it("renders horary single-wheel result and keeps PDF disabled", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={horaryResult()}
+        errorMessage={null}
+        isBusy={false}
+        mode="horary"
+        horaryQuestion={horaryResult().questionSnapshot}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        pdfDisabled={false}
+      />
+    );
+
+    expect(screen.getAllByText("Хорар рассчитан").length).toBeGreaterThan(0);
+    expect(screen.getByText(/автоматический ответ не подключён/i)).toBeInTheDocument();
+    expect(screen.getByTestId("chart-point-sun")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
   });
 
   it("renders synastry partner points and aspects as a dual-wheel result", async () => {
@@ -1522,7 +1615,7 @@ function solarReturnResult(): StoredChartSolarReturnCalculationPayload {
     method: "solar_return",
     provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
     settings: settings(),
-    inputSnapshot: transitResult().inputSnapshot,
+    inputSnapshot: chartResult().inputSnapshot,
     solarReturnSnapshot: {
       year: 2026,
       returnType: "solar",
@@ -1597,7 +1690,7 @@ function progressionResult(): StoredChartProgressionCalculationPayload {
     method: "progression",
     provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
     settings: settings(),
-    inputSnapshot: transitResult().inputSnapshot,
+    inputSnapshot: chartResult().inputSnapshot,
     progressionSnapshot: {
       targetDate: "2026-07-23",
       progressionType: "secondary",
@@ -1640,6 +1733,39 @@ function progressionResult(): StoredChartProgressionCalculationPayload {
   };
 }
 
+function horaryResult(): StoredChartHoraryCalculationPayload {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "horary",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    questionSnapshot: {
+      question: "Стоит ли принимать предложение?",
+      category: "career",
+      date: "2026-07-23",
+      time: "14:30",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173
+    },
+    result: chartResult({
+      points: [
+        {
+          id: "sun",
+          label: "Sun",
+          longitude: 113.1,
+          sign: "cancer",
+          signDegree: 23.1,
+          house: 10,
+          retrograde: false
+        }
+      ],
+      houses: [{ number: 1, longitude: 180, sign: "libra", signDegree: 0 }],
+      aspects: []
+    }).result
+  };
+}
+
 function synastryResult(): StoredChartSynastryCalculationPayload {
   const primary = chartResult({
     points: [
@@ -1677,7 +1803,7 @@ function synastryResult(): StoredChartSynastryCalculationPayload {
     method: "synastry",
     provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
     settings: settings(),
-    inputSnapshot: transitResult().inputSnapshot,
+    inputSnapshot: chartResult().inputSnapshot,
     partnerInputSnapshot: {
       birthDate: "1992-08-11",
       birthTime: "08:15",

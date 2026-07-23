@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
   ChartNatalJobCreateResponse,
+  ChartHoraryQuestionSnapshot,
   ChartSettings,
   ChartTransitMoment,
   StoredChartCalculationPayload,
   StoredChartCompositeCalculationPayload,
+  StoredChartHoraryCalculationPayload,
+  StoredChartNatalCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
   StoredChartProgressionCalculationPayload,
   StoredChartSynastryCalculationPayload
@@ -16,6 +19,7 @@ import {
   restoreChartEngineViewState,
   submitChartCalculation,
   submitCompositeCalculation,
+  submitHoraryCalculation,
   submitProgressionCalculation,
   submitSolarReturnCalculation,
   submitSynastryCalculation,
@@ -191,6 +195,25 @@ describe("chart engine controller submission", () => {
       settings: settings()
     });
   });
+
+  it("creates horary jobs with the selected question snapshot", async () => {
+    const create = vi.fn(async () => calculatingResponse);
+
+    await expect(
+      submitHoraryCalculation({
+        clientId,
+        question: horaryQuestion(),
+        settings: settings(),
+        create
+      })
+    ).resolves.toEqual(calculatingResponse);
+
+    expect(create).toHaveBeenCalledWith({
+      clientId,
+      question: horaryQuestion(),
+      settings: settings()
+    });
+  });
 });
 
 describe("chart engine URL state", () => {
@@ -203,6 +226,15 @@ describe("chart engine URL state", () => {
   it("reads child chart mode from the route query", () => {
     expect(readChartEngineUrlState(`?clientId=${clientId}&mode=child_chart`)).toEqual({
       mode: "child_chart",
+      clientId,
+      partnerClientId: null,
+      calculationId: null
+    });
+  });
+
+  it("reads horary mode from the route query", () => {
+    expect(readChartEngineUrlState(`?clientId=${clientId}&mode=horary`)).toEqual({
+      mode: "horary",
       clientId,
       partnerClientId: null,
       calculationId: null
@@ -290,6 +322,17 @@ describe("chart engine URL state", () => {
       `?panel=interpretations&clientId=${clientId}&calculationId=${calculationId}&mode=child_chart`
     );
   });
+
+  it("persists horary mode without partner client id", () => {
+    expect(
+      buildChartEngineSearch("?panel=interpretations&partnerClientId=old", {
+        mode: "horary",
+        clientId,
+        partnerClientId: "55555555-5555-4555-8555-555555555555",
+        calculationId
+      })
+    ).toBe(`?panel=interpretations&clientId=${clientId}&calculationId=${calculationId}&mode=horary`);
+  });
 });
 
 describe("chart engine persisted result state", () => {
@@ -336,6 +379,14 @@ describe("chart engine persisted result state", () => {
     });
   });
 
+  it("restores horary mode and question snapshot from a loaded calculation", () => {
+    expect(restoreChartEngineViewState(horaryResult())).toEqual({
+      mode: "horary",
+      settings: settings(),
+      horaryQuestion: horaryQuestion()
+    });
+  });
+
   it("restores a natal calculation as child chart when the route requested child mode", () => {
     expect(restoreChartEngineViewState(natalResult(), { mode: "child_chart" })).toEqual({
       mode: "child_chart",
@@ -354,7 +405,7 @@ function settings(): ChartSettings {
   };
 }
 
-function natalResult(): StoredChartCalculationPayload {
+function natalResult(): StoredChartNatalCalculationPayload {
   return {
     schemaVersion: "chart-result.v1",
     method: "natal",
@@ -463,7 +514,7 @@ function solarReturnResult(): StoredChartSolarReturnCalculationPayload {
     method: "solar_return",
     provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
     settings: settings(),
-    inputSnapshot: transitResult().inputSnapshot,
+    inputSnapshot: natalResult().inputSnapshot,
     solarReturnSnapshot: {
       year: 2026,
       returnType: "solar",
@@ -491,7 +542,7 @@ function progressionResult(): StoredChartProgressionCalculationPayload {
     method: "progression",
     provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
     settings: settings(),
-    inputSnapshot: transitResult().inputSnapshot,
+    inputSnapshot: natalResult().inputSnapshot,
     progressionSnapshot: {
       targetDate: "2026-07-23",
       progressionType: "secondary",
@@ -507,6 +558,29 @@ function progressionResult(): StoredChartProgressionCalculationPayload {
       aspectsToNatal: [],
       warnings: []
     }
+  };
+}
+
+function horaryResult(): StoredChartHoraryCalculationPayload {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "horary",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    questionSnapshot: horaryQuestion(),
+    result: emptyRenderResult()
+  };
+}
+
+function horaryQuestion(): ChartHoraryQuestionSnapshot {
+  return {
+    question: "Стоит ли принимать предложение?",
+    category: "career",
+    date: "2026-07-23",
+    time: "14:30",
+    timezone: "Europe/Moscow",
+    latitude: 55.7558,
+    longitude: 37.6173
   };
 }
 

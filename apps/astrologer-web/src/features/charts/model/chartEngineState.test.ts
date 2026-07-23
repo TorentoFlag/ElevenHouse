@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type {
   ChartSettings,
+  ChartHoraryQuestionSnapshot,
   StoredChartCalculationPayload,
   StoredChartCompositeCalculationPayload,
+  StoredChartHoraryCalculationPayload,
   StoredChartNatalCalculationPayload,
   StoredChartProgressionCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
@@ -166,6 +168,41 @@ describe("chartEngineState", () => {
         undefined,
         undefined,
         "2026-07-24"
+      )
+    ).toBe(true);
+  });
+
+  it("keeps a horary result current without requiring client birth data when question matches", () => {
+    expect(
+      isChartResultStale(
+        horaryResult(),
+        null,
+        chartSettings(),
+        "horary",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        horaryQuestion()
+      )
+    ).toBe(false);
+  });
+
+  it("marks a horary result stale when the question snapshot changed", () => {
+    expect(
+      isChartResultStale(
+        horaryResult(),
+        null,
+        chartSettings(),
+        "horary",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          ...horaryQuestion(),
+          time: "15:05"
+        }
       )
     ).toBe(true);
   });
@@ -340,5 +377,28 @@ function progressionResult(): StoredChartProgressionCalculationPayload {
       aspectsToNatal: [],
       warnings: []
     }
+  };
+}
+
+function horaryResult(): StoredChartHoraryCalculationPayload {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "horary",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: chartSettings(),
+    questionSnapshot: horaryQuestion(),
+    result: chartResult().result
+  };
+}
+
+function horaryQuestion(): ChartHoraryQuestionSnapshot {
+  return {
+    question: "Стоит ли принимать предложение?",
+    category: "career",
+    date: "2026-07-23",
+    time: "14:30",
+    timezone: "Europe/Moscow",
+    latitude: 55.7558,
+    longitude: 37.6173
   };
 }

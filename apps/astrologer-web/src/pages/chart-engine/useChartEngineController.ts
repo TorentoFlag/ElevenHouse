@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  ChartHoraryQuestionSnapshot,
   ChartSettings,
   ChartTransitMoment,
   StoredChartCalculationPayload
@@ -14,6 +15,7 @@ import {
   toClientSelectOptions
 } from "../../features/clients/model/clientSelectorModel";
 import {
+  createHoraryChartJob,
   createCompositeChartJob,
   createNatalChartJob,
   createProgressionChartJob,
@@ -29,7 +31,8 @@ import {
 } from "../../features/charts/api/chartsApi";
 import {
   getChartBirthDataReadiness,
-  isChartResultStale
+  isChartResultStale,
+  toChartHoraryQuestionSnapshot
 } from "../../features/charts/model/chartEngineState";
 import {
   buildChartPdfAction,
@@ -38,6 +41,7 @@ import {
 import type {
   ChartEngineMode,
   ChartEnginePageJobState,
+  ChartHoraryQuestionInput,
   ChartTransitMomentInput
 } from "../../features/charts/components/ChartEnginePage";
 import { getChartResultMethodForMode } from "../../features/charts/components/ChartEnginePage";
@@ -71,6 +75,9 @@ export function useChartEngineController() {
   const [solarReturnYear, setSolarReturnYear] = useState(() => new Date().getFullYear());
   const [progressionTargetDate, setProgressionTargetDate] = useState(() =>
     getDefaultProgressionTargetDate()
+  );
+  const [horaryQuestion, setHoraryQuestion] = useState<ChartHoraryQuestionInput>(() =>
+    getDefaultHoraryQuestion()
   );
   const [jobId, setJobId] = useState<string | null>(null);
   const [calculationId, setCalculationId] = useState<string | null>(initialUrlState.calculationId);
@@ -356,6 +363,49 @@ export function useChartEngineController() {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить прогрессии");
     }
   });
+  const horaryCalculationMutation = useMutation({
+    mutationFn: ({
+      clientId,
+      question,
+      settings
+    }: {
+      readonly clientId: string;
+      readonly question: ChartHoraryQuestionSnapshot;
+      readonly settings: ChartSettings;
+    }) =>
+      submitHoraryCalculation({
+        clientId,
+        settings,
+        question,
+        create: createHoraryChartJob
+      }),
+    onSuccess: (response, variables) => {
+      setErrorMessage(null);
+      setHasResultStaleIntent(false);
+      if (response.status === "succeeded") {
+        setJobId(null);
+        setCalculationId(response.calculationId);
+        setImmediateResult(response.result as StoredChartCalculationPayload);
+        writeChartEngineUrlState({
+          mode: "horary",
+          clientId: variables.clientId,
+          calculationId: response.calculationId
+        });
+        return;
+      }
+      setImmediateResult(null);
+      setCalculationId(null);
+      setJobId(response.jobId);
+      writeChartEngineUrlState({
+        mode: "horary",
+        clientId: variables.clientId,
+        calculationId: null
+      });
+    },
+    onError: (error) => {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить хорар");
+    }
+  });
 
   const birthDataMutation = useMutation({
     mutationFn: async (data: Parameters<typeof updateClientBirthData>[1]) => {
@@ -460,6 +510,9 @@ export function useChartEngineController() {
     if (restoredState.progressionTargetDate) {
       setProgressionTargetDate(restoredState.progressionTargetDate);
     }
+    if (restoredState.horaryQuestion) {
+      setHoraryQuestion(restoredState.horaryQuestion);
+    }
     setHasResultStaleIntent(false);
   }, [calculationQuery.data, mode]);
 
@@ -475,7 +528,8 @@ export function useChartEngineController() {
         transitMoment,
         selectedPartnerClient?.birthData,
         solarReturnYear,
-        progressionTargetDate
+        progressionTargetDate,
+        horaryQuestion
       ))
   );
   const pdfQuery = useQuery({
@@ -504,6 +558,7 @@ export function useChartEngineController() {
       compositeCalculationMutation.isPending ||
       solarReturnCalculationMutation.isPending ||
       progressionCalculationMutation.isPending ||
+      horaryCalculationMutation.isPending ||
       jobId ||
       jobQuery.data?.status === "calculating"
     ) {
@@ -527,7 +582,8 @@ export function useChartEngineController() {
     synastryCalculationMutation.isPending,
     compositeCalculationMutation.isPending,
     solarReturnCalculationMutation.isPending,
-    progressionCalculationMutation.isPending
+    progressionCalculationMutation.isPending,
+    horaryCalculationMutation.isPending
   ]);
   const isBusy =
     calculationMutation.isPending ||
@@ -536,6 +592,7 @@ export function useChartEngineController() {
     compositeCalculationMutation.isPending ||
     solarReturnCalculationMutation.isPending ||
     progressionCalculationMutation.isPending ||
+    horaryCalculationMutation.isPending ||
     birthDataMutation.isPending ||
     enqueuePdfMutation.isPending ||
     downloadPdfMutation.isPending ||
@@ -570,6 +627,7 @@ export function useChartEngineController() {
     transitMoment,
     solarReturnYear,
     progressionTargetDate,
+    horaryQuestion,
     onModeChange: (nextMode: ChartEngineMode) => {
       setMode(nextMode);
       setJobId(null);
@@ -601,6 +659,12 @@ export function useChartEngineController() {
     onProgressionTargetDateChange: (targetDate: string) => {
       setProgressionTargetDate(targetDate);
       if (result?.method === "progression") {
+        setHasResultStaleIntent(true);
+      }
+    },
+    onHoraryQuestionChange: (nextQuestion: ChartHoraryQuestionInput) => {
+      setHoraryQuestion(nextQuestion);
+      if (result?.method === "horary") {
         setHasResultStaleIntent(true);
       }
     },
@@ -779,6 +843,24 @@ export function useChartEngineController() {
         targetDate: progressionTargetDate
       });
     },
+    onCreateHoraryJob: async () => {
+      if (!selectedClient) {
+        setErrorMessage("Выберите клиента из CRM");
+        return;
+      }
+      let questionSnapshot: ChartHoraryQuestionSnapshot;
+      try {
+        questionSnapshot = toChartHoraryQuestionSnapshot(horaryQuestion);
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Заполните хорар");
+        return;
+      }
+      await horaryCalculationMutation.mutateAsync({
+        clientId: selectedClient.value,
+        settings,
+        question: questionSnapshot
+      });
+    },
     onPdf: async () => {
       try {
         setErrorMessage(null);
@@ -893,6 +975,20 @@ export async function submitProgressionCalculation({
   return create({ clientId, settings, targetDate });
 }
 
+export async function submitHoraryCalculation({
+  clientId,
+  create,
+  question,
+  settings
+}: {
+  readonly clientId: string;
+  readonly question: ChartHoraryQuestionSnapshot;
+  readonly settings: ChartSettings;
+  readonly create: typeof createHoraryChartJob;
+}) {
+  return create({ clientId, settings, question });
+}
+
 export function restoreChartEngineViewState(
   result: StoredChartCalculationPayload,
   options: { readonly mode?: ChartEngineMode } = {}
@@ -903,7 +999,16 @@ export function restoreChartEngineViewState(
   readonly partnerClientId?: string;
   readonly solarReturnYear?: number;
   readonly progressionTargetDate?: string;
+  readonly horaryQuestion?: ChartHoraryQuestionInput;
 } {
+  if (result.method === "horary") {
+    return {
+      mode: "horary",
+      settings: result.settings,
+      horaryQuestion: result.questionSnapshot
+    };
+  }
+
   if (result.method === "synastry") {
     return {
       mode: "synastry",
@@ -1010,7 +1115,7 @@ export function buildChartEngineSearch(search: string, state: ChartEngineUrlStat
   } else {
     params.delete("calculationId");
   }
-  if (state.mode === "child_chart") {
+  if (state.mode === "child_chart" || state.mode === "horary") {
     params.set("mode", state.mode);
   } else {
     params.delete("mode");
@@ -1037,7 +1142,7 @@ function normalizeUrlParam(value: string | null): string | null {
 }
 
 function readChartEngineMode(value: string | null): ChartEngineMode | undefined {
-  return value === "child_chart" ? value : undefined;
+  return value === "child_chart" || value === "horary" ? value : undefined;
 }
 
 function getDefaultTransitMoment(): ChartTransitMomentInput {
@@ -1054,4 +1159,26 @@ function getDefaultTransitMoment(): ChartTransitMomentInput {
 
 function getDefaultProgressionTargetDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function getDefaultHoraryQuestion(): ChartHoraryQuestionInput {
+  const moment = getDefaultTransitMoment();
+
+  return {
+    question: "",
+    category: "other",
+    date: moment.date,
+    time: moment.time,
+    timezone: getBrowserTimezone(),
+    latitude: "",
+    longitude: ""
+  };
+}
+
+function getBrowserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
 }

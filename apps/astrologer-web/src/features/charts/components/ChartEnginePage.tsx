@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
+  ChartHoraryQuestionCategory,
+  ChartHoraryQuestionSnapshot,
   ChartSettings,
   ClientBirthDataUpsertRequest,
   DictionaryLocale,
@@ -9,6 +11,7 @@ import type { ClientSelectOption } from "../../clients/model/clientSelectorModel
 import { ClientSearchCombobox } from "../../clients/components/ClientSearchCombobox";
 import {
   getChartBirthDataReadiness,
+  getChartHoraryQuestionReadiness,
   type ChartBirthDataReadiness
 } from "../model/chartEngineState";
 import {
@@ -32,10 +35,19 @@ export type ChartEngineMode =
   | "progression"
   | "synastry"
   | "composite"
-  | "solar_return";
+  | "solar_return"
+  | "horary";
 export type ChartTransitMomentInput = {
   readonly date: string;
   readonly time: string;
+};
+export type ChartHoraryQuestionInput = Omit<
+  ChartHoraryQuestionSnapshot,
+  "category" | "latitude" | "longitude"
+> & {
+  readonly category: ChartHoraryQuestionCategory;
+  readonly latitude: string | number;
+  readonly longitude: string | number;
 };
 
 export type ChartEnginePageProps = {
@@ -52,6 +64,7 @@ export type ChartEnginePageProps = {
   readonly transitMoment?: ChartTransitMomentInput;
   readonly solarReturnYear?: number;
   readonly progressionTargetDate?: string;
+  readonly horaryQuestion?: ChartHoraryQuestionInput;
   readonly onSettingsChange: (settings: ChartSettings) => void;
   readonly onCreateNatalJob: () => void | Promise<void>;
   readonly onCreateTransitJob?: () => void | Promise<void>;
@@ -59,9 +72,11 @@ export type ChartEnginePageProps = {
   readonly onCreateCompositeJob?: () => void | Promise<void>;
   readonly onCreateSolarReturnJob?: () => void | Promise<void>;
   readonly onCreateProgressionJob?: () => void | Promise<void>;
+  readonly onCreateHoraryJob?: () => void | Promise<void>;
   readonly onTransitMomentChange?: (moment: ChartTransitMomentInput) => void;
   readonly onSolarReturnYearChange?: (year: number) => void;
   readonly onProgressionTargetDateChange?: (targetDate: string) => void;
+  readonly onHoraryQuestionChange?: (question: ChartHoraryQuestionInput) => void;
   readonly onModeChange?: (mode: ChartEngineMode) => void;
   readonly onSelectClient?: (client: ClientSelectOption) => void;
   readonly onSelectPartnerClient?: (client: ClientSelectOption) => void;
@@ -89,6 +104,7 @@ export function ChartEnginePage({
   transitMoment,
   solarReturnYear,
   progressionTargetDate,
+  horaryQuestion,
   onSettingsChange,
   onCreateNatalJob,
   onCreateTransitJob,
@@ -96,9 +112,11 @@ export function ChartEnginePage({
   onCreateCompositeJob,
   onCreateSolarReturnJob,
   onCreateProgressionJob,
+  onCreateHoraryJob,
   onTransitMomentChange,
   onSolarReturnYearChange,
   onProgressionTargetDateChange,
+  onHoraryQuestionChange,
   onModeChange,
   onSelectClient,
   onSelectPartnerClient,
@@ -113,7 +131,6 @@ export function ChartEnginePage({
 }: ChartEnginePageProps) {
   const readiness = getChartBirthDataReadiness(selectedClient?.birthData);
   const partnerReadiness = getChartBirthDataReadiness(selectedPartnerClient?.birthData);
-  const isBirthDataBlocked = Boolean(selectedClient && !readiness.ready);
   const [localMode, setLocalMode] = useState<ChartEngineMode>(mode);
   const [localTransitMoment, setLocalTransitMoment] = useState<ChartTransitMomentInput>(
     transitMoment ?? { date: "", time: "" }
@@ -121,14 +138,26 @@ export function ChartEnginePage({
   const [localProgressionTargetDate, setLocalProgressionTargetDate] = useState(
     progressionTargetDate ?? new Date().toISOString().slice(0, 10)
   );
+  const [localHoraryQuestion, setLocalHoraryQuestion] = useState<ChartHoraryQuestionInput>(
+    horaryQuestion ?? getEmptyHoraryQuestion()
+  );
   const activeMode = onModeChange ? mode : localMode;
   const activeTransitMoment = transitMoment ?? localTransitMoment;
   const activeSolarReturnYear = solarReturnYear ?? new Date().getFullYear();
   const activeProgressionTargetDate = progressionTargetDate ?? localProgressionTargetDate;
+  useEffect(() => {
+    if (horaryQuestion) {
+      setLocalHoraryQuestion(horaryQuestion);
+    }
+  }, [horaryQuestion]);
+  const activeHoraryQuestion = localHoraryQuestion;
   const isPartnerMode = activeMode === "synastry" || activeMode === "composite";
+  const needsBirthData = activeMode !== "horary";
   const expectedResultMethod = getChartResultMethodForMode(activeMode);
+  const horaryReadiness = getChartHoraryQuestionReadiness(activeHoraryQuestion);
+  const isBirthDataBlocked = Boolean(needsBirthData && selectedClient && !readiness.ready);
   const isPartnerBirthDataBlocked = Boolean(
-    isPartnerMode && selectedPartnerClient && !partnerReadiness.ready
+    needsBirthData && isPartnerMode && selectedPartnerClient && !partnerReadiness.ready
   );
   const displayResult =
     isBirthDataBlocked || isPartnerBirthDataBlocked || result?.method !== expectedResultMethod
@@ -148,7 +177,8 @@ export function ChartEnginePage({
     isResultStale,
     mode: activeMode,
     selectedPartnerClient,
-    partnerReadiness
+    partnerReadiness,
+    horaryReadiness
   });
   const [activePanelTab, setActivePanelTab] = useState<ChartPanelTab>("planets");
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
@@ -300,6 +330,19 @@ export function ChartEnginePage({
           >
             Соляр
           </button>
+          <button
+            className={activeMode === "horary" ? styles.modeActive : styles.modeButton}
+            type="button"
+            onClick={() =>
+              setChartMode({
+                mode: "horary",
+                onModeChange,
+                setLocalMode
+              })
+            }
+          >
+            Хорар
+          </button>
         </nav>
         <div
           aria-label="Состояние карты"
@@ -343,6 +386,19 @@ export function ChartEnginePage({
             }
           />
         ) : null}
+        {activeMode === "horary" ? (
+          <HoraryQuestionFields
+            disabled={isBusy}
+            value={activeHoraryQuestion}
+            onChange={(nextQuestion) =>
+              updateHoraryQuestion({
+                nextQuestion,
+                onHoraryQuestionChange,
+                setLocalHoraryQuestion
+              })
+            }
+          />
+        ) : null}
         <button
           className={styles.calculateButton}
           type="button"
@@ -355,7 +411,8 @@ export function ChartEnginePage({
               onCreateSynastryJob,
               onCreateCompositeJob,
               onCreateSolarReturnJob,
-              onCreateProgressionJob
+              onCreateProgressionJob,
+              onCreateHoraryJob
             })
           }
         >
@@ -375,6 +432,8 @@ export function ChartEnginePage({
           title={
             activeMode === "child_chart"
               ? "PDF для детской карты будет отдельным контуром"
+              : activeMode === "horary"
+                ? "PDF для хорара будет отдельным контуром"
               : activeMode !== "natal"
                 ? "PDF для этого метода будет отдельным контуром"
                 : pdfTitle
@@ -399,15 +458,17 @@ export function ChartEnginePage({
           <section className={styles.railGroup}>
             <h2>Клиент</h2>
             <p className={styles.helpText}>
-              Вводить дату рождения вручную не нужно: расчёт берёт birth data из карточки клиента.
+              {activeMode === "horary"
+                ? "Клиент нужен как CRM-контекст; расчёт берёт момент и место вопроса из формы хорара."
+                : "Вводить дату рождения вручную не нужно: расчёт берёт birth data из карточки клиента."}
             </p>
             {!selectedClient ? (
               <p className={styles.warningText}>Выберите клиента из CRM.</p>
             ) : null}
-            {selectedClient && !readiness.ready ? (
+            {needsBirthData && selectedClient && !readiness.ready ? (
               <p className={styles.warningText}>Не хватает: {readiness.missing.join(", ")}.</p>
             ) : null}
-            {selectedClient && !readiness.ready && onSaveBirthData ? (
+            {needsBirthData && selectedClient && !readiness.ready && onSaveBirthData ? (
               <BirthDataEditor
                 client={selectedClient}
                 disabled={isBusy || isSavingBirthData}
@@ -560,12 +621,14 @@ function getChartViewState({
   isResultStale,
   mode,
   selectedPartnerClient,
-  partnerReadiness
+  partnerReadiness,
+  horaryReadiness
 }: {
   readonly selectedClient: ClientSelectOption | null;
   readonly selectedPartnerClient: ClientSelectOption | null;
   readonly readiness: ChartBirthDataReadiness;
   readonly partnerReadiness: ChartBirthDataReadiness;
+  readonly horaryReadiness: ChartBirthDataReadiness;
   readonly jobState: ChartEnginePageJobState;
   readonly displayResult: StoredChartCalculationPayload | null;
   readonly errorMessage: string | null;
@@ -599,8 +662,48 @@ function getChartViewState({
       status: "Ошибка расчёта",
       detail: errorMessage ?? "Проверьте данные рождения клиента и повторите расчёт.",
       actionLabel: "Повторить расчёт",
-      canCalculate: readiness.ready && !isBusy,
+      canCalculate: mode === "horary" ? horaryReadiness.ready && !isBusy : readiness.ready && !isBusy,
       tone: "error"
+    };
+  }
+
+  if (mode === "horary") {
+    if (displayResult && isResultStale) {
+      return {
+        status: "Хорар изменён",
+        detail: "Вопрос, момент, место или настройки изменились. Пересчитайте карту.",
+        actionLabel: "Пересчитать хорар",
+        canCalculate: horaryReadiness.ready && !isBusy,
+        tone: "warning"
+      };
+    }
+
+    if (isCurrentResultCalculated) {
+      return {
+        status: "Хорар рассчитан",
+        detail: "Карта построена на момент вопроса; автоматический ответ не подключён.",
+        actionLabel: "Актуальна",
+        canCalculate: false,
+        tone: "success"
+      };
+    }
+
+    if (!horaryReadiness.ready) {
+      return {
+        status: "Готово к хорару",
+        detail: `Заполните: ${horaryReadiness.missing.join(", ")}.`,
+        actionLabel: "Заполните хорар",
+        canCalculate: false,
+        tone: "warning"
+      };
+    }
+
+    return {
+      status: "Готово к хорару",
+      detail: "Введите вопрос и момент, чтобы построить карту вопроса.",
+      actionLabel: "Рассчитать хорар",
+      canCalculate: !isBusy,
+      tone: "ready"
     };
   }
 
@@ -1025,6 +1128,8 @@ function StatusCard({
               ? "Берём натал из CRM, считаем соляр на выбранный год и строим dual-wheel result."
               : mode === "progression"
                 ? "Берём натал из CRM, считаем вторичные прогрессии на выбранную дату и строим dual-wheel result."
+                : mode === "horary"
+                  ? "Строим карту на момент вопроса; birth data клиента не используется."
                 : mode === "child_chart"
                   ? "Берём birth data из CRM, считаем натал и открываем мягкий детский режим трактовок."
                   : "Берём данные рождения из CRM и строим canonical natal result."}
@@ -1084,6 +1189,8 @@ function StatusCard({
                 ? "Выберите клиента и год соляра: backend сам возьмёт birth data из CRM."
                 : mode === "progression"
                   ? "Выберите клиента и дату прогрессии: backend сам возьмёт birth data из CRM."
+                  : mode === "horary"
+                    ? "Выберите клиента как CRM-контекст и заполните вопрос, момент и место вопроса."
                   : mode === "child_chart"
                     ? "Выберите клиента: backend рассчитает натал, а трактовки откроются в детском режиме."
                     : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
@@ -1106,6 +1213,8 @@ function StatusCard({
                   ? "Данные рождения, настройки или год соляра изменились. Пересчитайте соляр."
                   : mode === "progression"
                     ? "Данные рождения, настройки или дата прогрессии изменились. Пересчитайте прогрессии."
+                    : mode === "horary"
+                      ? "Вопрос, момент, место или настройки изменились. Пересчитайте хорар."
                     : mode === "child_chart"
                       ? "Данные рождения или настройки изменились. Пересчитайте детскую карту."
                       : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
@@ -1240,6 +1349,7 @@ function getModeTitle(mode: ChartEngineMode): string {
   if (mode === "synastry") return "Синастрия";
   if (mode === "composite") return "Композит";
   if (mode === "solar_return") return "Соляр";
+  if (mode === "horary") return "Хорар";
   return "Натальная карта";
 }
 
@@ -1250,6 +1360,7 @@ function getCalculatingLabel(mode: ChartEngineMode): string {
   if (mode === "synastry") return "Рассчитываем синастрию";
   if (mode === "composite") return "Рассчитываем композит";
   if (mode === "solar_return") return "Рассчитываем соляр";
+  if (mode === "horary") return "Рассчитываем хорар";
   return "Рассчитываем карту";
 }
 
@@ -1260,6 +1371,7 @@ function getEmptyResultLabel(mode: ChartEngineMode): string {
   if (mode === "synastry") return "Готово к расчёту синастрии";
   if (mode === "composite") return "Готово к расчёту композита";
   if (mode === "solar_return") return "Готово к расчёту соляра";
+  if (mode === "horary") return "Готово к хорару";
   return "Готово к расчёту натала";
 }
 
@@ -1270,6 +1382,7 @@ function getSucceededLabel(mode: ChartEngineMode): string {
   if (mode === "synastry") return "Синастрия рассчитана";
   if (mode === "composite") return "Композит рассчитан";
   if (mode === "solar_return") return "Соляр рассчитан";
+  if (mode === "horary") return "Хорар рассчитан";
   return "Натальная карта рассчитана";
 }
 
@@ -1280,7 +1393,8 @@ function runChartCalculationAction({
   onCreateSynastryJob,
   onCreateCompositeJob,
   onCreateSolarReturnJob,
-  onCreateProgressionJob
+  onCreateProgressionJob,
+  onCreateHoraryJob
 }: {
   readonly activeMode: ChartEngineMode;
   readonly onCreateNatalJob: () => void | Promise<void>;
@@ -1289,6 +1403,7 @@ function runChartCalculationAction({
   readonly onCreateCompositeJob?: () => void | Promise<void>;
   readonly onCreateSolarReturnJob?: () => void | Promise<void>;
   readonly onCreateProgressionJob?: () => void | Promise<void>;
+  readonly onCreateHoraryJob?: () => void | Promise<void>;
 }) {
   if (activeMode === "child_chart") {
     return onCreateNatalJob();
@@ -1307,6 +1422,9 @@ function runChartCalculationAction({
   }
   if (activeMode === "solar_return") {
     return onCreateSolarReturnJob?.();
+  }
+  if (activeMode === "horary") {
+    return onCreateHoraryJob?.();
   }
 
   return onCreateNatalJob();
@@ -1434,6 +1552,113 @@ function ProgressionTargetDateField({
   );
 }
 
+function HoraryQuestionFields({
+  disabled,
+  onChange,
+  value
+}: {
+  readonly disabled: boolean;
+  readonly value: ChartHoraryQuestionInput;
+  readonly onChange: (question: ChartHoraryQuestionInput) => void;
+}) {
+  return (
+    <div className={styles.horaryQuestionFields}>
+      <label className={styles.horaryQuestionText}>
+        <span>Вопрос</span>
+        <input
+          aria-label="Вопрос хорара"
+          disabled={disabled}
+          maxLength={500}
+          name="horaryQuestion"
+          placeholder="Что именно нужно решить?"
+          type="text"
+          value={value.question}
+          onChange={(event) => onChange({ ...value, question: event.target.value })}
+        />
+      </label>
+      <label>
+        <span>Категория</span>
+        <select
+          aria-label="Категория хорара"
+          disabled={disabled}
+          name="horaryCategory"
+          value={value.category}
+          onChange={(event) =>
+            onChange({
+              ...value,
+              category: event.target.value as ChartHoraryQuestionCategory
+            })
+          }
+        >
+          {horaryCategoryOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Дата</span>
+        <input
+          aria-label="Дата вопроса"
+          disabled={disabled}
+          name="horaryDate"
+          type="date"
+          value={value.date}
+          onChange={(event) => onChange({ ...value, date: event.target.value })}
+        />
+      </label>
+      <label>
+        <span>Время</span>
+        <input
+          aria-label="Время вопроса"
+          disabled={disabled}
+          name="horaryTime"
+          type="time"
+          value={value.time}
+          onChange={(event) => onChange({ ...value, time: event.target.value })}
+        />
+      </label>
+      <label>
+        <span>TZ</span>
+        <input
+          aria-label="Часовой пояс вопроса"
+          disabled={disabled}
+          name="horaryTimezone"
+          placeholder="Europe/Moscow"
+          type="text"
+          value={value.timezone}
+          onChange={(event) => onChange({ ...value, timezone: event.target.value })}
+        />
+      </label>
+      <label>
+        <span>Широта</span>
+        <input
+          aria-label="Широта вопроса"
+          disabled={disabled}
+          name="horaryLatitude"
+          step="0.0001"
+          type="number"
+          value={value.latitude}
+          onChange={(event) => onChange({ ...value, latitude: event.target.value })}
+        />
+      </label>
+      <label>
+        <span>Долгота</span>
+        <input
+          aria-label="Долгота вопроса"
+          disabled={disabled}
+          name="horaryLongitude"
+          step="0.0001"
+          type="number"
+          value={value.longitude}
+          onChange={(event) => onChange({ ...value, longitude: event.target.value })}
+        />
+      </label>
+    </div>
+  );
+}
+
 function updateTransitMoment({
   nextMoment,
   onTransitMomentChange,
@@ -1465,3 +1690,41 @@ function updateProgressionTargetDate({
   }
   setLocalProgressionTargetDate(targetDate);
 }
+
+function updateHoraryQuestion({
+  nextQuestion,
+  onHoraryQuestionChange,
+  setLocalHoraryQuestion
+}: {
+  readonly nextQuestion: ChartHoraryQuestionInput;
+  readonly onHoraryQuestionChange?: (question: ChartHoraryQuestionInput) => void;
+  readonly setLocalHoraryQuestion: (question: ChartHoraryQuestionInput) => void;
+}) {
+  setLocalHoraryQuestion(nextQuestion);
+  onHoraryQuestionChange?.(nextQuestion);
+}
+
+function getEmptyHoraryQuestion(): ChartHoraryQuestionInput {
+  return {
+    question: "",
+    category: "other",
+    date: "",
+    time: "",
+    timezone: "",
+    latitude: "",
+    longitude: ""
+  };
+}
+
+const horaryCategoryOptions: readonly {
+  readonly value: ChartHoraryQuestionCategory;
+  readonly label: string;
+}[] = [
+  { value: "relationship", label: "Отношения" },
+  { value: "career", label: "Работа" },
+  { value: "money", label: "Деньги" },
+  { value: "home", label: "Дом" },
+  { value: "health", label: "Здоровье" },
+  { value: "travel", label: "Поездка" },
+  { value: "other", label: "Другое" }
+];

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChartNatalJobCreateResponse } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import {
+  createHoraryChartJob,
   createCompositeChartJob,
   createNatalChartJob,
   createProgressionChartJob,
@@ -250,6 +251,58 @@ describe("chartsApi", () => {
           nodeType: "true",
           aspectPreset: "major",
           orbMultiplier: 1
+        }
+      },
+      { csrf: true }
+    );
+    expect(JSON.stringify(post.mock.calls[0]?.[1])).not.toContain("birthDate");
+  });
+
+  it("creates horary jobs with client id, private question snapshot and settings only", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(createResponse);
+
+    await expect(
+      createHoraryChartJob({
+        clientId,
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        question: {
+          question: "Стоит ли принимать предложение?",
+          category: "career",
+          date: "2026-07-23",
+          time: "14:30",
+          timezone: "Europe/Moscow",
+          latitude: 55.7558,
+          longitude: 37.6173
+        },
+        birthDate: "1990-07-15"
+      })
+    ).resolves.toEqual(createResponse);
+
+    expect(post).toHaveBeenCalledWith(
+      "/charts/horary/jobs",
+      {
+        clientId,
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        question: {
+          question: "Стоит ли принимать предложение?",
+          category: "career",
+          date: "2026-07-23",
+          time: "14:30",
+          timezone: "Europe/Moscow",
+          latitude: 55.7558,
+          longitude: 37.6173
         }
       },
       { csrf: true }

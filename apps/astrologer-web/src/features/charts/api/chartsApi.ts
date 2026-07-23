@@ -6,6 +6,7 @@ import {
   calculationPdfLatestQuerySchema,
   chartCalculationResponseSchema,
   chartCompositeJobCreateRequestSchema,
+  chartHoraryJobCreateRequestSchema,
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalJobCreateResponseSchema,
@@ -19,6 +20,7 @@ import {
   type CalculationPdfJobResponse,
   type CalculationPdfLocale,
   type ChartJobResponse,
+  type ChartHoraryQuestionSnapshot,
   type ChartNatalJobCreateResponse,
   type ChartSettings,
   type ChartTransitMoment,
@@ -142,6 +144,26 @@ export async function createProgressionChartJob(
 
   return chartNatalJobCreateResponseSchema.parse(
     await application.http.post("/charts/progressions/jobs", body, { csrf: true })
+  );
+}
+
+export type CreateHoraryChartJobInput = {
+  readonly clientId: string;
+  readonly settings: ChartSettings;
+  readonly question: ChartHoraryQuestionSnapshot;
+} & Record<string, unknown>;
+
+export async function createHoraryChartJob(
+  input: CreateHoraryChartJobInput
+): Promise<ChartNatalJobCreateResponse> {
+  const body = chartHoraryJobCreateRequestSchema.parse({
+    clientId: input.clientId,
+    settings: input.settings,
+    question: input.question
+  });
+
+  return chartNatalJobCreateResponseSchema.parse(
+    await application.http.post("/charts/horary/jobs", body, { csrf: true })
   );
 }
 
