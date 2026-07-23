@@ -131,12 +131,30 @@ none
 - [x] 2026-07-23: Task 3 frontend partner mode implemented at component/model
   level: enabled `Партнёрский` tab, second CRM selector, pair payloads, saved
   compatibility reopen and connection dynamics display.
+- [ ] 2026-07-23: Task 4 browser/runtime evidence started but blocked after
+  local `astrologer-api` on `3002` stopped listening during the authenticated
+  Chrome scenario. Component/API/domain checks remain green; live visual
+  acceptance is not complete.
 
 ## Surprises & Discoveries
 
 - `docs/api/api-boundaries.md` still described saved-calculation frontend
   rendering as future even though `/human-design` already reopens saved
   individual results through the generic calculations list.
+- The actual astrologer-web dev port is `5174`, not `5173`; Vite proxies
+  `/api` to `localhost:3002`.
+- Local trusted astrologer registration uses phone `+78005553535` with code
+  `777777`. Login failed for that phone before registration because no existing
+  identity was present in the fresh local DB.
+- The browser QA account created during this run has astrologer user id
+  `b4ee0bb4-9de0-4bda-bb30-5ba84d96fec5`. Two local CRM clients were seeded
+  for that account through the local ElevenHouse DB after confirming the
+  `DATABASE_URL` target was the local `elevenhouse` database:
+  `31000000-0000-4000-8000-000000000001` (`HD Алиса Роуз`) and
+  `31000000-0000-4000-8000-000000000002` (`HD Максим Лейн`).
+- After the seed and page reload, `/human-design` rendered React Router's
+  unexpected error screen because `/api/identity/me` returned a Vite proxy
+  `502`; read-only `lsof -nP -iTCP:3002 -sTCP:LISTEN` showed no listener.
 
 ## Decision Log
 
@@ -152,7 +170,9 @@ none
 Partial implementation. The domain/API/frontend code now previews, persists,
 reopens and recalculates a checksum-bound
 `human-design-compatibility-result.v1` from two owner-scoped CRM clients. Task
-4 runtime/browser visual evidence remains pending.
+4 runtime/browser visual evidence is blocked by the stopped local
+`astrologer-api` process on `3002`; do not call the visible scope complete until
+the authenticated Chrome scenario is rerun against a live API.
 
 ## Context and Orientation
 
@@ -572,19 +592,22 @@ Observed 2026-07-23: PASS, 5 frontend Human Design test files and 19 tests;
 - Consumes: implemented API/frontend from Tasks 1-3.
 - Produces: authenticated browser evidence and final plan outcomes.
 
-- [ ] **Step 1: Read-only service check**
+- [x] **Step 1: Read-only service check**
 
 Run:
 
 ```bash
-lsof -nP -iTCP:5173 -sTCP:LISTEN
-lsof -nP -iTCP:3010 -sTCP:LISTEN
+lsof -nP -iTCP:5174 -sTCP:LISTEN
+lsof -nP -iTCP:3002 -sTCP:LISTEN
 lsof -nP -iTCP:8012 -sTCP:LISTEN
 ```
 
 Expected observation: required frontend/API/chart-engine ports are already
 listening, or Runtime E2E is marked blocked without starting processes unless
 the user authorizes lifecycle changes.
+
+Observed 2026-07-23: `astrologer-web` listened on `5174`, chart-engine listened
+on `8012`, and `astrologer-api` initially listened on `3002`.
 
 - [ ] **Step 2: Browser scenario**
 
@@ -600,12 +623,26 @@ GET /api/calculations?module=human_design... -> 200
 POST /api/human-design/calculations/:id/recalculate -> 200
 ```
 
+Observed 2026-07-23: Chrome DevTools opened
+`http://localhost:5174/human-design` but redirected to `/auth`. Login with
+`+78005553535` and code `777777` returned `401 Invalid or expired passwordless
+code`; registration with the same phone and code succeeded and created an
+authenticated astrologer session. `/human-design` then loaded, but the CRM list
+was empty. Two local CRM clients with exact birth data were seeded for the
+authenticated astrologer. After reload, the frontend hit `HTTP request failed
+with status 502` for `/api/identity/me`; `lsof` then showed no listener on
+`3002`. The preview/save/reopen/recalculate browser scenario remains blocked
+until the local API is running again.
+
 - [ ] **Step 3: Responsive and accessibility checks**
 
 Capture desktop `1440x900` and mobile `390x844` screenshots, verify
 `document.documentElement.scrollWidth === document.documentElement.clientWidth`,
 exercise keyboard focus through mode tabs/client selectors/actions and inspect
 console for unexpected errors.
+
+Observed 2026-07-23: not executed because Step 2 was blocked by the stopped API
+process before the compatibility state could render with network data.
 
 - [ ] **Step 4: Final checks and commit**
 
