@@ -347,6 +347,17 @@ function buildChartResultSummary(result: StoredChartCalculationPayload) {
       resolvedAt: result.solarReturnSnapshot.resolvedAt
     };
   }
+  if (result.method === "progression") {
+    return {
+      provider: result.provider.name,
+      natalPointCount: result.result.natal.points.length,
+      progressedPointCount: result.result.progressed.points.length,
+      progressionAspectCount: result.result.aspectsToNatal.length,
+      targetDate: result.progressionSnapshot.targetDate,
+      symbolicDate: result.progressionSnapshot.calculationBasis.symbolicDate,
+      ageDays: result.progressionSnapshot.calculationBasis.ageDays
+    };
+  }
   return {
     provider: result.provider.name,
     pointCount: result.result.points.length,
@@ -359,6 +370,7 @@ function buildChartCalculationTitle(method: ChartCalculationJobRow["method"]): s
   if (method === "transit") return "Transit chart";
   if (method === "synastry") return "Synastry chart";
   if (method === "solar_return") return "Solar return chart";
+  if (method === "progression") return "Progression chart";
   return "Natal chart";
 }
 

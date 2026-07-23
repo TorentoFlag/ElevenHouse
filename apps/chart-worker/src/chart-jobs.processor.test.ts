@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { UnrecoverableError } from "bullmq";
 import { ChartEnginePermanentError } from "@elevenhouse/chart-engine-client";
-import { processChartCalculationJob } from "./chart-jobs.processor";
+import { processChartCalculationJob, type ChartEngineClient } from "./chart-jobs.processor";
 
 const job = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -77,6 +77,19 @@ const solarReturnJob = {
         latitude: 41.9,
         longitude: 12.49
       }
+    }
+  }
+} as const;
+
+const progressionJob = {
+  ...job,
+  method: "progression",
+  settingsSnapshot: job.settingsSnapshot,
+  inputSnapshot: {
+    inputSnapshot: job.inputSnapshot,
+    progressionSnapshot: {
+      targetDate: "2026-07-23",
+      progressionType: "secondary"
     }
   }
 } as const;
@@ -183,6 +196,38 @@ const solarReturnResult = {
   }
 } as const;
 
+const progressionResult = {
+  schemaVersion: "chart-result.v1",
+  method: "progression",
+  provider: result.provider,
+  settings: job.settingsSnapshot,
+  inputSnapshot: job.inputSnapshot,
+  progressionSnapshot: {
+    ...progressionJob.inputSnapshot.progressionSnapshot,
+    calculationBasis: {
+      symbolicDate: "1990-08-20",
+      ageDays: 36,
+      dayForYearRatio: 1
+    }
+  },
+  result: {
+    natal: result.result,
+    progressed: result.result,
+    aspectsToNatal: [
+      {
+        progressedPoint: "moon",
+        natalPoint: "sun",
+        type: "trine",
+        angle: 120,
+        orb: 1,
+        applying: true,
+        strength: 0.8
+      }
+    ],
+    warnings: []
+  }
+} as const;
+
 describe("processChartCalculationJob", () => {
   it("loads input snapshot from DB and persists canonical result", async () => {
     const store = {
@@ -191,11 +236,7 @@ describe("processChartCalculationJob", () => {
       complete: vi.fn().mockResolvedValue(true),
       fail: vi.fn()
     };
-    const engine = {
-      calculateNatal: vi.fn().mockResolvedValue(result),
-      calculateTransit: vi.fn(),
-      calculateSynastry: vi.fn()
-    };
+    const engine = createEngine({ calculateNatal: vi.fn().mockResolvedValue(result) });
 
     await processChartCalculationJob({
       jobId: job.id,
@@ -223,11 +264,7 @@ describe("processChartCalculationJob", () => {
       complete: vi.fn().mockResolvedValue(true),
       fail: vi.fn()
     };
-    const engine = {
-      calculateNatal: vi.fn(),
-      calculateTransit: vi.fn().mockResolvedValue(transitResult),
-      calculateSynastry: vi.fn()
-    };
+    const engine = createEngine({ calculateTransit: vi.fn().mockResolvedValue(transitResult) });
 
     await processChartCalculationJob({
       jobId: transitJob.id,
@@ -257,11 +294,7 @@ describe("processChartCalculationJob", () => {
       complete: vi.fn().mockResolvedValue(true),
       fail: vi.fn()
     };
-    const engine = {
-      calculateNatal: vi.fn(),
-      calculateTransit: vi.fn(),
-      calculateSynastry: vi.fn().mockResolvedValue(synastryResult)
-    };
+    const engine = createEngine({ calculateSynastry: vi.fn().mockResolvedValue(synastryResult) });
 
     await processChartCalculationJob({
       jobId: synastryJob.id,
@@ -293,12 +326,9 @@ describe("processChartCalculationJob", () => {
       complete: vi.fn().mockResolvedValue(true),
       fail: vi.fn()
     };
-    const engine = {
-      calculateNatal: vi.fn(),
-      calculateTransit: vi.fn(),
-      calculateSynastry: vi.fn(),
+    const engine = createEngine({
       calculateSolarReturn: vi.fn().mockResolvedValue(solarReturnResult)
-    };
+    });
 
     await processChartCalculationJob({
       jobId: solarReturnJob.id,
@@ -323,6 +353,41 @@ describe("processChartCalculationJob", () => {
     );
   });
 
+  it("dispatches progression jobs to the progression provider endpoint", async () => {
+    const store = {
+      findByJobId: vi.fn().mockResolvedValue(progressionJob),
+      claimForProcessing: vi.fn().mockResolvedValue(progressionJob),
+      complete: vi.fn().mockResolvedValue(true),
+      fail: vi.fn()
+    };
+    const engine = createEngine({
+      calculateProgression: vi.fn().mockResolvedValue(progressionResult)
+    });
+
+    await processChartCalculationJob({
+      jobId: progressionJob.id,
+      finalAttempt: false,
+      store,
+      engine,
+      now: new Date("2026-07-22T12:00:00.000Z")
+    });
+
+    expect(engine.calculateNatal).not.toHaveBeenCalled();
+    expect(engine.calculateTransit).not.toHaveBeenCalled();
+    expect(engine.calculateSynastry).not.toHaveBeenCalled();
+    expect(engine.calculateSolarReturn).not.toHaveBeenCalled();
+    expect(engine.calculateProgression).toHaveBeenCalledWith({
+      schemaVersion: "chart-request.v1",
+      method: "progression",
+      settings: progressionJob.settingsSnapshot,
+      inputSnapshot: job.inputSnapshot,
+      progressionSnapshot: progressionJob.inputSnapshot.progressionSnapshot
+    });
+    expect(store.complete).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: progressionJob.id, result: progressionResult })
+    );
+  });
+
   it("treats already succeeded jobs as no-op", async () => {
     const store = {
       findByJobId: vi.fn().mockResolvedValue({ ...job, status: "succeeded" }),
@@ -335,7 +400,7 @@ describe("processChartCalculationJob", () => {
       jobId: job.id,
       finalAttempt: false,
       store,
-      engine: { calculateNatal: vi.fn(), calculateTransit: vi.fn() },
+      engine: createEngine(),
       now: new Date()
     });
 
@@ -356,7 +421,7 @@ describe("processChartCalculationJob", () => {
         jobId: job.id,
         finalAttempt: false,
         store,
-        engine: { calculateNatal: vi.fn().mockRejectedValue(error), calculateTransit: vi.fn() },
+        engine: createEngine({ calculateNatal: vi.fn().mockRejectedValue(error) }),
         now: new Date()
       })
     ).rejects.toBe(error);
@@ -376,12 +441,11 @@ describe("processChartCalculationJob", () => {
         jobId: job.id,
         finalAttempt: false,
         store,
-        engine: {
+        engine: createEngine({
           calculateNatal: vi
             .fn()
-            .mockRejectedValue(new ChartEnginePermanentError("Invalid chart result")),
-          calculateTransit: vi.fn()
-        },
+            .mockRejectedValue(new ChartEnginePermanentError("Invalid chart result"))
+        }),
         now: new Date("2026-07-20T12:00:00.000Z")
       })
     ).rejects.toBeInstanceOf(UnrecoverableError);
@@ -390,3 +454,14 @@ describe("processChartCalculationJob", () => {
     );
   });
 });
+
+function createEngine(overrides: Partial<ChartEngineClient> = {}): ChartEngineClient {
+  return {
+    calculateNatal: vi.fn(),
+    calculateTransit: vi.fn(),
+    calculateSynastry: vi.fn(),
+    calculateSolarReturn: vi.fn(),
+    calculateProgression: vi.fn(),
+    ...overrides
+  };
+}

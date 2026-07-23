@@ -1,14 +1,17 @@
 import { createHash } from "node:crypto";
 import {
   chartInputSnapshotSchema,
+  chartProgressionCalculationRequestSchema,
   chartSolarReturnCalculationRequestSchema,
   chartSettingsSchema,
   type ChartNatalCalculationRequest,
+  type ChartProgressionCalculationRequest,
   type ChartSolarReturnCalculationRequest,
   chartSynastryCalculationRequestSchema,
   type ChartSynastryCalculationRequest,
   chartTransitSnapshotSchema,
   type ChartTransitCalculationRequest,
+  type StoredChartProgressionCalculationPayload,
   type StoredChartSolarReturnCalculationPayload,
   type StoredChartSynastryCalculationPayload,
   type StoredChartTransitCalculationPayload,
@@ -32,6 +35,9 @@ export type ChartEngineClient = {
   readonly calculateSolarReturn: (
     payload: ChartSolarReturnCalculationRequest
   ) => Promise<StoredChartSolarReturnCalculationPayload>;
+  readonly calculateProgression: (
+    payload: ChartProgressionCalculationRequest
+  ) => Promise<StoredChartProgressionCalculationPayload>;
 };
 
 const transitJobInputSnapshotSchema = z
@@ -53,6 +59,13 @@ const solarReturnJobInputSnapshotSchema = chartSolarReturnCalculationRequestSche
   .pick({
     inputSnapshot: true,
     solarReturnSnapshot: true
+  })
+  .strict();
+
+const progressionJobInputSnapshotSchema = chartProgressionCalculationRequestSchema
+  .pick({
+    inputSnapshot: true,
+    progressionSnapshot: true
   })
   .strict();
 
@@ -157,6 +170,17 @@ async function calculateChartResult(input: {
       solarReturnSnapshot: snapshots.solarReturnSnapshot
     };
     return input.engine.calculateSolarReturn(request);
+  }
+  if (claim.method === "progression") {
+    const snapshots = progressionJobInputSnapshotSchema.parse(claim.inputSnapshot);
+    const request: ChartProgressionCalculationRequest = {
+      schemaVersion: "chart-request.v1",
+      method: "progression",
+      settings,
+      inputSnapshot: snapshots.inputSnapshot,
+      progressionSnapshot: snapshots.progressionSnapshot
+    };
+    return input.engine.calculateProgression(request);
   }
   throw new UnrecoverableError("Unsupported chart calculation method");
 }

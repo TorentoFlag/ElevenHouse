@@ -172,6 +172,48 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
     });
   });
 
+  it("persists progression calculation records with dual-wheel summary", async () => {
+    const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
+    const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+    const created = await jobStore.createOrReuseChartJob(createProgressionInput(ownerUserId));
+    if (created.kind !== "active_job") throw new Error("Expected active job");
+
+    await expect(
+      workerStore.complete({
+        jobId: created.jobId,
+        result: progressionChartResult(),
+        resultChecksum: digest("e"),
+        now: "2026-07-20T12:00:05.000Z"
+      })
+    ).resolves.toBe(true);
+
+    const job = await runtime.database.query.chartCalculationJobs.findFirst({
+      where: eq(chartCalculationJobs.id, created.jobId)
+    });
+    const calculation = await runtime.database.query.calculationRecords.findFirst({
+      where: eq(
+        calculationRecords.id,
+        job?.resultCalculationId ?? raise("Expected result calculation id")
+      )
+    });
+
+    expect(calculation).toMatchObject({
+      methodCode: "progression",
+      title: "Progression chart",
+      resultSummary: {
+        provider: "kerykeion",
+        natalPointCount: 14,
+        progressedPointCount: 14,
+        progressionAspectCount: 0,
+        targetDate: "2026-07-23",
+        symbolicDate: "1990-08-20",
+        ageDays: 36
+      }
+    });
+  });
+
   async function createClientUser(): Promise<string> {
     const result = await runtime.pool.query<{ id: string }>(
       "insert into users (status) values ('active') returning id"
@@ -224,6 +266,22 @@ function createSolarReturnInput(ownerUserId: string) {
           latitude: 41.9028,
           longitude: 12.4964
         }
+      }
+    }
+  };
+}
+
+function createProgressionInput(ownerUserId: string) {
+  const input = createInput(ownerUserId);
+  return {
+    ...input,
+    method: "progression" as const,
+    inputFingerprint: digest("f"),
+    inputSnapshot: {
+      inputSnapshot: input.inputSnapshot,
+      progressionSnapshot: {
+        targetDate: "2026-07-23",
+        progressionType: "secondary"
       }
     }
   };
@@ -284,6 +342,32 @@ function solarReturnChartResult() {
     result: {
       natal: natal.result,
       solarReturn: natal.result,
+      aspectsToNatal: [],
+      warnings: []
+    }
+  };
+}
+
+function progressionChartResult() {
+  const natal = chartResult();
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "progression",
+    provider: natal.provider,
+    settings: natal.settings,
+    inputSnapshot: natal.inputSnapshot,
+    progressionSnapshot: {
+      targetDate: "2026-07-23",
+      progressionType: "secondary",
+      calculationBasis: {
+        symbolicDate: "1990-08-20",
+        ageDays: 36,
+        dayForYearRatio: 1
+      }
+    },
+    result: {
+      natal: natal.result,
+      progressed: natal.result,
       aspectsToNatal: [],
       warnings: []
     }
