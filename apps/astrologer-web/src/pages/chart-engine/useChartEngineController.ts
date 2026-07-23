@@ -40,6 +40,7 @@ import type {
   ChartEnginePageJobState,
   ChartTransitMomentInput
 } from "../../features/charts/components/ChartEnginePage";
+import { getChartResultMethodForMode } from "../../features/charts/components/ChartEnginePage";
 
 const defaultSettings: ChartSettings = {
   zodiac: "tropical",
@@ -63,7 +64,7 @@ export function useChartEngineController() {
     initialUrlState.partnerClientId ?? null
   );
   const [settings, setSettings] = useState<ChartSettings>(defaultSettings);
-  const [mode, setMode] = useState<ChartEngineMode>("natal");
+  const [mode, setMode] = useState<ChartEngineMode>(initialUrlState.mode ?? "natal");
   const [transitMoment, setTransitMoment] = useState<ChartTransitMomentInput>(() =>
     getDefaultTransitMoment()
   );
@@ -117,7 +118,7 @@ export function useChartEngineController() {
         setCalculationId(response.calculationId);
         setImmediateResult(response.result as StoredChartCalculationPayload);
         writeChartEngineUrlState({
-          mode: "natal",
+          mode: mode === "child_chart" ? "child_chart" : "natal",
           clientId: variables.clientId,
           calculationId: response.calculationId
         });
@@ -127,7 +128,7 @@ export function useChartEngineController() {
       setCalculationId(null);
       setJobId(response.jobId);
       writeChartEngineUrlState({
-        mode: "natal",
+        mode: mode === "child_chart" ? "child_chart" : "natal",
         clientId: variables.clientId,
         calculationId: null
       });
@@ -444,7 +445,7 @@ export function useChartEngineController() {
 
   useEffect(() => {
     if (!calculationQuery.data) return;
-    const restoredState = restoreChartEngineViewState(calculationQuery.data);
+    const restoredState = restoreChartEngineViewState(calculationQuery.data, { mode });
     setSettings(restoredState.settings);
     setMode(restoredState.mode);
     if (restoredState.transitMoment) {
@@ -460,7 +461,7 @@ export function useChartEngineController() {
       setProgressionTargetDate(restoredState.progressionTargetDate);
     }
     setHasResultStaleIntent(false);
-  }, [calculationQuery.data]);
+  }, [calculationQuery.data, mode]);
 
   const result = immediateResult ?? calculationQuery.data ?? null;
   const isResultStale = Boolean(
@@ -470,7 +471,7 @@ export function useChartEngineController() {
         result,
         selectedClient?.birthData,
         settings,
-        mode,
+        getChartResultMethodForMode(mode),
         transitMoment,
         selectedPartnerClient?.birthData,
         solarReturnYear,
@@ -480,7 +481,7 @@ export function useChartEngineController() {
   const pdfQuery = useQuery({
     queryKey: ["charts", "pdf", calculationId, pdfLocale],
     queryFn: () => getLatestChartPdf({ calculationId: calculationId ?? "", locale: pdfLocale }),
-    enabled: Boolean(calculationId && result?.method === "natal" && !isResultStale),
+    enabled: Boolean(calculationId && mode === "natal" && result?.method === "natal" && !isResultStale),
     refetchInterval: (query: { state: { data?: { job: { status: string } | null } } }) => {
       const status = query.state.data?.job?.status;
       return status === "queued" || status === "processing" ? 1500 : false;
@@ -546,7 +547,7 @@ export function useChartEngineController() {
     currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
     job: pdfQuery.data?.job ?? null,
     isBusy,
-    isResultStale: isResultStale || (result != null && result.method !== "natal")
+    isResultStale: isResultStale || mode !== "natal" || (result != null && result.method !== "natal")
   });
 
   return {
@@ -892,7 +893,10 @@ export async function submitProgressionCalculation({
   return create({ clientId, settings, targetDate });
 }
 
-export function restoreChartEngineViewState(result: StoredChartCalculationPayload): {
+export function restoreChartEngineViewState(
+  result: StoredChartCalculationPayload,
+  options: { readonly mode?: ChartEngineMode } = {}
+): {
   readonly mode: ChartEngineMode;
   readonly settings: ChartSettings;
   readonly transitMoment?: ChartTransitMomentInput;
@@ -932,7 +936,7 @@ export function restoreChartEngineViewState(result: StoredChartCalculationPayloa
       };
     }
     return {
-      mode: "natal",
+      mode: options.mode === "child_chart" ? "child_chart" : "natal",
       settings: result.settings
     };
   }
@@ -978,6 +982,7 @@ export function readChartEngineUrlState(
   const params = new URLSearchParams(search);
 
   return {
+    mode: readChartEngineMode(params.get("mode")),
     clientId: normalizeUrlParam(params.get("clientId")),
     partnerClientId: normalizeUrlParam(params.get("partnerClientId")),
     calculationId: normalizeUrlParam(params.get("calculationId"))
@@ -1005,6 +1010,11 @@ export function buildChartEngineSearch(search: string, state: ChartEngineUrlStat
   } else {
     params.delete("calculationId");
   }
+  if (state.mode === "child_chart") {
+    params.set("mode", state.mode);
+  } else {
+    params.delete("mode");
+  }
 
   const next = params.toString();
   return next ? `?${next}` : "";
@@ -1024,6 +1034,10 @@ function getCurrentChartEngineSearch() {
 function normalizeUrlParam(value: string | null): string | null {
   const normalized = value?.trim() ?? "";
   return normalized ? normalized : null;
+}
+
+function readChartEngineMode(value: string | null): ChartEngineMode | undefined {
+  return value === "child_chart" ? value : undefined;
 }
 
 function getDefaultTransitMoment(): ChartTransitMomentInput {

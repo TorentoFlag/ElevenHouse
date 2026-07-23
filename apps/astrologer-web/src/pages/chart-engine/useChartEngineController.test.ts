@@ -200,6 +200,15 @@ describe("chart engine URL state", () => {
     ).toEqual({ clientId, partnerClientId: null, calculationId });
   });
 
+  it("reads child chart mode from the route query", () => {
+    expect(readChartEngineUrlState(`?clientId=${clientId}&mode=child_chart`)).toEqual({
+      mode: "child_chart",
+      clientId,
+      partnerClientId: null,
+      calculationId: null
+    });
+  });
+
   it("updates only chart-engine state params", () => {
     expect(
       buildChartEngineSearch("?panel=aspects&calculationId=old", {
@@ -268,6 +277,19 @@ describe("chart engine URL state", () => {
       calculationId: null
     });
   });
+
+  it("persists child chart mode without partner client id", () => {
+    expect(
+      buildChartEngineSearch("?panel=interpretations&partnerClientId=old", {
+        mode: "child_chart",
+        clientId,
+        partnerClientId: "55555555-5555-4555-8555-555555555555",
+        calculationId
+      })
+    ).toBe(
+      `?panel=interpretations&clientId=${clientId}&calculationId=${calculationId}&mode=child_chart`
+    );
+  });
 });
 
 describe("chart engine persisted result state", () => {
@@ -313,6 +335,13 @@ describe("chart engine persisted result state", () => {
       progressionTargetDate: "2026-07-23"
     });
   });
+
+  it("restores a natal calculation as child chart when the route requested child mode", () => {
+    expect(restoreChartEngineViewState(natalResult(), { mode: "child_chart" })).toEqual({
+      mode: "child_chart",
+      settings: settings()
+    });
+  });
 });
 
 function settings(): ChartSettings {
@@ -322,6 +351,24 @@ function settings(): ChartSettings {
     nodeType: "true",
     aspectPreset: "major",
     orbMultiplier: 1
+  };
+}
+
+function natalResult(): StoredChartCalculationPayload {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "natal",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    inputSnapshot: {
+      birthDate: "1990-07-15",
+      birthTime: "10:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964,
+      birthTimePrecision: "exact"
+    },
+    result: emptyRenderResult()
   };
 }
 

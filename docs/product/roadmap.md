@@ -117,15 +117,21 @@
       single-wheel rendering and Dictionary-backed `composite.*` anchors with
       authenticated browser calculate/reload evidence. Composite PDF/export,
       public sharing and AI relationship text remain separate future contours.
-- [ ] Chart Engine method expansion after solar return: progressions,
-      child-chart interpretation mode, horary and astrocartography.
+- [x] Chart Engine child chart first slice: owner-scoped CRM client,
+      natal-backed calculation result, `/chart-engine` `Детская` view mode,
+      soft parent-facing copy, child-specific `child.*` Dictionary anchors,
+      honest missing-entry creation affordances and authenticated browser
+      calculate/reload evidence. Child-chart PDF/export, AI child text and
+      client delivery remain separate future contours.
+- [ ] Chart Engine remaining method expansion after first-slice progressions and
+      child chart: horary and astrocartography.
       Progressions now have the first production slice across contracts,
       persistence, worker/provider, frontend controls/rendering and Dictionary
       anchors plus authenticated `/chart-engine` browser evidence for mode
       availability and date-control rendering. The remaining methods require
-      their own contracts, domain/API workflow,
-      worker/provider adapter, UI state matrix, PDF/report decision and
-      Dictionary interpretation-code coverage before enabling their modes.
+      their own contracts, domain/API workflow, worker/provider adapter, UI
+      state matrix, PDF/report decision and Dictionary interpretation-code
+      coverage before enabling their modes.
 - [x] Human Design individual v1: owner-scoped CRM client input only, exact
       chart-engine personality/design longitude resolution, deterministic
       `human_design_classic` domain mechanics, generic calculation persistence,

@@ -98,6 +98,31 @@ describe("ChartEnginePage", () => {
     expect(onCreateNatalJob).toHaveBeenCalledOnce();
   });
 
+  it("renders child chart mode as natal-backed and calls natal calculation", async () => {
+    const user = userEvent.setup();
+    const onCreateNatalJob = vi.fn(async () => undefined);
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={onCreateNatalJob}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Детская" }));
+
+    expect(screen.getByText("Детская карта")).toBeInTheDocument();
+    expect(screen.getByText(/трактовки откроются в мягком детском режиме/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Рассчитать детскую/i }));
+
+    expect(onCreateNatalJob).toHaveBeenCalledOnce();
+  });
+
   it("switches to transit mode and submits the transit calculation", async () => {
     const user = userEvent.setup();
     const onCreateTransitJob = vi.fn(async () => undefined);
@@ -859,6 +884,98 @@ describe("ChartEnginePage", () => {
     expect(
       within(interpretationsPanel).queryByText(/интерпретационный контур не подключён/i)
     ).not.toBeInTheDocument();
+  });
+
+  it("shows natal result in child mode with child dictionary anchors and disabled PDF", async () => {
+    const user = userEvent.setup();
+    const get = vi.spyOn(application.http, "get").mockResolvedValue({
+      entries: [],
+      total: 0,
+      counts: { sources: { all: 0, platform: 0, modified: 0, custom: 0 } }
+    } satisfies DictionaryEntriesResponse);
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        mode="child_chart"
+        jobState="succeeded"
+        result={chartResult({
+          points: [
+            {
+              id: "sun",
+              label: "Sun",
+              longitude: 113.1,
+              sign: "cancer",
+              signDegree: 22.6,
+              house: 11,
+              retrograde: false
+            },
+            {
+              id: "moon",
+              label: "Moon",
+              longitude: 21.2,
+              sign: "aries",
+              signDegree: 21.22,
+              house: 8,
+              retrograde: false
+            },
+            {
+              id: "pluto",
+              label: "Pluto",
+              longitude: 225,
+              sign: "scorpio",
+              signDegree: 15,
+              house: 7,
+              retrograde: true
+            }
+          ],
+          houses: [
+            { number: 1, longitude: 166.61, sign: "virgo", signDegree: 16.61 },
+            { number: 7, longitude: 346.61, sign: "pisces", signDegree: 16.61 }
+          ],
+          aspects: [
+            { pointA: "moon", pointB: "sun", type: "square", angle: 90, orb: 1.4, applying: true },
+            { pointA: "moon", pointB: "pluto", type: "trine", angle: 120, orb: 2.1, applying: true }
+          ]
+        })}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        pdfDisabled={false}
+      />
+    );
+
+    expect(screen.getByText("Детская карта рассчитана")).toBeInTheDocument();
+    expect(screen.getByText(/трактовки адаптированы для родительского чтения/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Трактовки" }));
+
+    const interpretationsPanel = screen.getByRole("region", { name: "Трактовки" });
+    expect(
+      within(interpretationsPanel).getByText("Детские трактовки · библиотека")
+    ).toBeInTheDocument();
+    expect(
+      await within(interpretationsPanel).findAllByText("Детская карта · планета в знаке")
+    ).toHaveLength(3);
+    expect(
+      within(interpretationsPanel).getByText("В справочнике пока нет записи child.sun.house.11.")
+    ).toBeInTheDocument();
+    const createMissingInterpretationLink = within(interpretationsPanel).getByRole("link", {
+      name: "Создать трактовку child.sun.house.11 в справочнике"
+    });
+    const createMissingInterpretationHref =
+      createMissingInterpretationLink.getAttribute("href") ?? "";
+    const createMissingInterpretationParams = new URLSearchParams(
+      createMissingInterpretationHref.split("?")[1] ?? ""
+    );
+    expect(createMissingInterpretationParams.get("category")).toBe("planets_in_houses");
+    expect(createMissingInterpretationParams.get("create")).toBe("child.sun.house.11");
+    expect(createMissingInterpretationParams.get("search")).toBe("child.sun.house.11");
+    expect(get).toHaveBeenCalledWith(
+      "/dictionary/entries/by-codes?locale=ru&codes=child.sun.cancer%2Cchild.sun.house.11%2Cchild.moon.aries%2Cchild.moon.house.8%2Cchild.pluto.scorpio%2Cchild.pluto.house.7%2Cchild.house.1%2Cchild.house.7%2Cchild.aspect.sun.square.moon%2Cchild.aspect.moon.trine.pluto"
+    );
   });
 
   it("syncs planet hover between the wheel, detail card and right panel", async () => {

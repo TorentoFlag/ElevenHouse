@@ -64,6 +64,11 @@ describe("chartsApi", () => {
     expect(JSON.stringify(post.mock.calls[0]?.[1])).not.toContain("birthDate");
   });
 
+  it("does not expose a child chart job endpoint because child chart reuses natal calculations", () => {
+    expect(Object.keys({ createNatalChartJob })).toEqual(["createNatalChartJob"]);
+    expect(createNatalChartJob.name).toBe("createNatalChartJob");
+  });
+
   it("creates transit jobs with client id, settings and transit moment only", async () => {
     const post = vi.spyOn(application.http, "post").mockResolvedValue(createResponse);
 

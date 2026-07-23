@@ -27,6 +27,7 @@ import styles from "./ChartEnginePage.module.css";
 export type ChartEnginePageJobState = "idle" | "calculating" | "succeeded" | "failed";
 export type ChartEngineMode =
   | "natal"
+  | "child_chart"
   | "transit"
   | "progression"
   | "synastry"
@@ -125,11 +126,12 @@ export function ChartEnginePage({
   const activeSolarReturnYear = solarReturnYear ?? new Date().getFullYear();
   const activeProgressionTargetDate = progressionTargetDate ?? localProgressionTargetDate;
   const isPartnerMode = activeMode === "synastry" || activeMode === "composite";
+  const expectedResultMethod = getChartResultMethodForMode(activeMode);
   const isPartnerBirthDataBlocked = Boolean(
     isPartnerMode && selectedPartnerClient && !partnerReadiness.ready
   );
   const displayResult =
-    isBirthDataBlocked || isPartnerBirthDataBlocked || result?.method !== activeMode
+    isBirthDataBlocked || isPartnerBirthDataBlocked || result?.method !== expectedResultMethod
       ? null
       : result;
   const isCurrentResultCalculated = Boolean(
@@ -219,6 +221,19 @@ export function ChartEnginePage({
             }
           >
             Натал
+          </button>
+          <button
+            className={activeMode === "child_chart" ? styles.modeActive : styles.modeButton}
+            type="button"
+            onClick={() =>
+              setChartMode({
+                mode: "child_chart",
+                onModeChange,
+                setLocalMode
+              })
+            }
+          >
+            Детская
           </button>
           <button
             className={activeMode === "transit" ? styles.modeActive : styles.modeButton}
@@ -358,7 +373,11 @@ export function ChartEnginePage({
           type="button"
           disabled={activeMode !== "natal" || pdfDisabled}
           title={
-            activeMode !== "natal" ? "PDF для этого метода будет отдельным контуром" : pdfTitle
+            activeMode === "child_chart"
+              ? "PDF для детской карты будет отдельным контуром"
+              : activeMode !== "natal"
+                ? "PDF для этого метода будет отдельным контуром"
+                : pdfTitle
           }
           onClick={() => void onPdf?.()}
         >
@@ -509,6 +528,7 @@ export function ChartEnginePage({
               <ChartTables
                 activeTab={activePanelTab}
                 hoveredPointId={hoveredPointId}
+                interpretationMode={activeMode === "child_chart" ? "child" : "default"}
                 locale={locale}
                 onHoverPoint={setHoveredPointId}
                 result={displayResult}
@@ -653,8 +673,11 @@ function getChartViewState({
   if (displayResult && isResultStale) {
     return {
       status: "Требуется пересчёт",
-      detail: "Данные рождения или настройки изменились.",
-      actionLabel: "Пересчитать карту",
+      detail:
+        mode === "child_chart"
+          ? "Данные рождения или настройки изменились. Пересчитайте детскую карту."
+          : "Данные рождения или настройки изменились.",
+      actionLabel: mode === "child_chart" ? "Пересчитать детскую" : "Пересчитать карту",
       canCalculate: !isBusy,
       tone: "warning"
     };
@@ -674,7 +697,9 @@ function getChartViewState({
                 ? "Соляр рассчитан по наталу клиента и выбранному году."
                 : mode === "progression"
                   ? "Прогрессии рассчитаны по наталу клиента и выбранной дате."
-                  : "Натальная карта рассчитана и привязана к клиенту.",
+                  : mode === "child_chart"
+                    ? "Расчёт использует натальные положения; трактовки адаптированы для родительского чтения."
+                    : "Натальная карта рассчитана и привязана к клиенту.",
       actionLabel: "Актуальна",
       canCalculate: false,
       tone: "success"
@@ -704,7 +729,9 @@ function getChartViewState({
               ? "Натал клиента и год соляра готовы для расчёта."
               : mode === "progression"
                 ? "Натал клиента и дата прогрессии готовы для расчёта."
-                : "Данные рождения и настройки готовы для натальной карты.",
+                : mode === "child_chart"
+                  ? "Натал ребёнка будет рассчитан из CRM birth data, а трактовки откроются в мягком детском режиме."
+                  : "Данные рождения и настройки готовы для натальной карты.",
     actionLabel:
       mode === "transit"
         ? "Рассчитать транзиты"
@@ -713,9 +740,11 @@ function getChartViewState({
           : mode === "composite"
             ? "Рассчитать композит"
             : mode === "solar_return"
-              ? "Рассчитать соляр"
-              : mode === "progression"
-                ? "Рассчитать прогрессии"
+            ? "Рассчитать соляр"
+            : mode === "progression"
+              ? "Рассчитать прогрессии"
+              : mode === "child_chart"
+                ? "Рассчитать детскую"
                 : "Рассчитать",
     canCalculate: !isBusy,
     tone: "ready"
@@ -993,9 +1022,11 @@ function StatusCard({
             : mode === "composite"
               ? "Берём данные рождения обоих клиентов из CRM и строим single-wheel composite result."
               : mode === "solar_return"
-                ? "Берём натал из CRM, считаем соляр на выбранный год и строим dual-wheel result."
-                : mode === "progression"
-                  ? "Берём натал из CRM, считаем вторичные прогрессии на выбранную дату и строим dual-wheel result."
+              ? "Берём натал из CRM, считаем соляр на выбранный год и строим dual-wheel result."
+              : mode === "progression"
+                ? "Берём натал из CRM, считаем вторичные прогрессии на выбранную дату и строим dual-wheel result."
+                : mode === "child_chart"
+                  ? "Берём birth data из CRM, считаем натал и открываем мягкий детский режим трактовок."
                   : "Берём данные рождения из CRM и строим canonical natal result."}
         </span>
       </div>
@@ -1050,9 +1081,11 @@ function StatusCard({
               : mode === "composite"
                 ? "Выберите второго клиента: backend рассчитает одно колесо отношений по CRM birth data."
                 : mode === "solar_return"
-                  ? "Выберите клиента и год соляра: backend сам возьмёт birth data из CRM."
-                  : mode === "progression"
-                    ? "Выберите клиента и дату прогрессии: backend сам возьмёт birth data из CRM."
+                ? "Выберите клиента и год соляра: backend сам возьмёт birth data из CRM."
+                : mode === "progression"
+                  ? "Выберите клиента и дату прогрессии: backend сам возьмёт birth data из CRM."
+                  : mode === "child_chart"
+                    ? "Выберите клиента: backend рассчитает натал, а трактовки откроются в детском режиме."
                     : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
         </span>
       </div>
@@ -1073,7 +1106,9 @@ function StatusCard({
                   ? "Данные рождения, настройки или год соляра изменились. Пересчитайте соляр."
                   : mode === "progression"
                     ? "Данные рождения, настройки или дата прогрессии изменились. Пересчитайте прогрессии."
-                    : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
+                    : mode === "child_chart"
+                      ? "Данные рождения или настройки изменились. Пересчитайте детскую карту."
+                      : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
         </span>
       </div>
     );
@@ -1199,6 +1234,7 @@ const panelTabs: readonly { readonly id: ChartPanelTab; readonly label: string }
 ];
 
 function getModeTitle(mode: ChartEngineMode): string {
+  if (mode === "child_chart") return "Детская карта";
   if (mode === "transit") return "Транзитная карта";
   if (mode === "progression") return "Прогрессии";
   if (mode === "synastry") return "Синастрия";
@@ -1208,6 +1244,7 @@ function getModeTitle(mode: ChartEngineMode): string {
 }
 
 function getCalculatingLabel(mode: ChartEngineMode): string {
+  if (mode === "child_chart") return "Рассчитываем детскую карту";
   if (mode === "transit") return "Рассчитываем транзиты";
   if (mode === "progression") return "Рассчитываем прогрессии";
   if (mode === "synastry") return "Рассчитываем синастрию";
@@ -1217,6 +1254,7 @@ function getCalculatingLabel(mode: ChartEngineMode): string {
 }
 
 function getEmptyResultLabel(mode: ChartEngineMode): string {
+  if (mode === "child_chart") return "Готово к расчёту детской карты";
   if (mode === "transit") return "Готово к расчёту транзитов";
   if (mode === "progression") return "Готово к расчёту прогрессий";
   if (mode === "synastry") return "Готово к расчёту синастрии";
@@ -1226,6 +1264,7 @@ function getEmptyResultLabel(mode: ChartEngineMode): string {
 }
 
 function getSucceededLabel(mode: ChartEngineMode): string {
+  if (mode === "child_chart") return "Детская карта рассчитана";
   if (mode === "transit") return "Транзитная карта рассчитана";
   if (mode === "progression") return "Прогрессии рассчитаны";
   if (mode === "synastry") return "Синастрия рассчитана";
@@ -1251,6 +1290,9 @@ function runChartCalculationAction({
   readonly onCreateSolarReturnJob?: () => void | Promise<void>;
   readonly onCreateProgressionJob?: () => void | Promise<void>;
 }) {
+  if (activeMode === "child_chart") {
+    return onCreateNatalJob();
+  }
   if (activeMode === "transit") {
     return onCreateTransitJob?.();
   }
@@ -1284,6 +1326,12 @@ function setChartMode({
     return;
   }
   setLocalMode(mode);
+}
+
+export function getChartResultMethodForMode(
+  mode: ChartEngineMode
+): StoredChartCalculationPayload["method"] {
+  return mode === "child_chart" ? "natal" : mode;
 }
 
 function TransitMomentFields({

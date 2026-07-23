@@ -150,6 +150,29 @@ describe("chartInterpretations", () => {
       ])
     );
   });
+
+  it("derives child-specific dictionary anchors from natal result without natal fallback", () => {
+    const anchors = buildChartInterpretationAnchors(chartResult(), { mode: "child" });
+
+    expect(getChartInterpretationLookupCodes(anchors)).toEqual(
+      expect.arrayContaining([
+        "child.sun.cancer",
+        "child.sun.house.11",
+        "child.house.1",
+        "child.aspect.sun.square.moon"
+      ])
+    );
+    expect(getChartInterpretationLookupCodes(anchors)).not.toContain("sun_cancer");
+    expect(getChartInterpretationLookupCodes(anchors)).not.toContain("sun_house_11");
+    expect(anchors.map((anchor) => `${anchor.code}:${anchor.categoryCode}:${anchor.meta}`)).toEqual(
+      expect.arrayContaining([
+        "child.sun.cancer:planets_in_signs:Детская карта · планета в знаке",
+        "child.sun.house.11:planets_in_houses:Детская карта · планета в доме",
+        "child.house.1:house_meanings:Детская карта · значение дома",
+        "child.aspect.sun.square.moon:planet_aspects:Детская карта · аспект"
+      ])
+    );
+  });
 });
 
 function chartResult(): StoredChartNatalCalculationPayload {

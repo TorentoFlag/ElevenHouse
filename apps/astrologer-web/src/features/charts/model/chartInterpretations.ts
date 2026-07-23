@@ -26,6 +26,7 @@ import {
 } from "./chartDisplay";
 
 export type ChartInterpretationAnchorGroup = "points" | "houses" | "aspects";
+export type ChartInterpretationMode = "default" | "child";
 export type ChartInterpretationDictionaryCategoryCode =
   | "planets_in_signs"
   | "planets_in_houses"
@@ -66,7 +67,8 @@ const planetAspectPointIds = new Set(pointOrder.slice(0, 10));
 const maxPlanetAspectAnchors = 12;
 
 export function buildChartInterpretationAnchors(
-  result: StoredChartCalculationPayload
+  result: StoredChartCalculationPayload,
+  options: { readonly mode?: ChartInterpretationMode } = {}
 ): readonly ChartInterpretationAnchor[] {
   const synastryResult = getSynastryChartResult(result);
   if (synastryResult) {
@@ -74,6 +76,9 @@ export function buildChartInterpretationAnchors(
   }
   if (result.method === "composite") {
     return buildCompositeAnchors(result);
+  }
+  if (options.mode === "child" && result.method === "natal") {
+    return buildChildAnchors(result);
   }
 
   const renderResult = getPrimaryChartRenderResult(result);
@@ -117,6 +122,113 @@ export function buildChartInterpretationAnchors(
         )
       : [])
   ];
+}
+
+function buildChildAnchors(
+  result: StoredChartCalculationPayload
+): readonly ChartInterpretationAnchor[] {
+  const renderResult = getPrimaryChartRenderResult(result);
+  const pointsById = new Map(renderResult.points.map((point) => [point.id, point]));
+
+  return [
+    ...buildChildPointAnchors(renderResult.points),
+    ...buildChildHouseAnchors(result),
+    ...buildChildAspectAnchors(renderResult.aspects, pointsById)
+  ];
+}
+
+function buildChildPointAnchors(
+  points: readonly ChartPoint[]
+): readonly ChartInterpretationAnchor[] {
+  return sortPoints(points).flatMap((point) => {
+    const anchors: ChartInterpretationAnchor[] = [];
+    const pointId = formatDictionaryCodePart(point.id);
+    const pointLabel = getChartPointDisplayLabel(point.id, point.label);
+    const position = `${formatChartPointPosition(point)}${
+      point.house ? ` · ${romanHouses[point.house]} дом` : ""
+    }`;
+
+    if (signDictionaryPointIds.has(pointId as (typeof pointOrder)[number])) {
+      anchors.push({
+        id: `child-point-sign-${point.id}`,
+        code: `child.${pointId}.${formatDictionaryCodePart(point.sign)}`,
+        categoryCode: "planets_in_signs",
+        group: "points",
+        label: `${pointLabel} в ${formatSignPrepositional(point.sign)}`,
+        meta: "Детская карта · планета в знаке",
+        position
+      });
+    }
+
+    if (point.house && houseDictionaryPointIds.has(pointId as (typeof pointOrder)[number])) {
+      anchors.push({
+        id: `child-point-house-${point.id}`,
+        code: `child.${pointId}.house.${point.house}`,
+        categoryCode: "planets_in_houses",
+        group: "points",
+        label: `${pointLabel} · ${romanHouses[point.house]} дом`,
+        meta: "Детская карта · планета в доме",
+        position
+      });
+    }
+
+    return anchors;
+  });
+}
+
+function buildChildHouseAnchors(
+  result: StoredChartCalculationPayload
+): readonly ChartInterpretationAnchor[] {
+  return [...getPrimaryChartRenderResult(result).houses]
+    .sort((left, right) => left.number - right.number)
+    .map((house) => {
+      const position = getRoundedChartPointPosition(house);
+
+      return {
+        id: `child-house-${house.number}`,
+        code: `child.house.${house.number}`,
+        categoryCode: "house_meanings" as const,
+        group: "houses" as const,
+        label: `${romanHouses[house.number]} дом`,
+        meta: "Детская карта · значение дома",
+        position: `${formatHouseSignDisplay(position.sign)} ${position.degree}`
+      };
+    });
+}
+
+function buildChildAspectAnchors(
+  aspects: readonly ChartAspect[],
+  pointsById: ReadonlyMap<string, ChartPoint>
+): readonly ChartInterpretationAnchor[] {
+  return [...aspects]
+    .filter(
+      (aspect) =>
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.pointA) as (typeof pointOrder)[number]
+        ) &&
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.pointB) as (typeof pointOrder)[number]
+        )
+    )
+    .sort((left, right) => left.orb - right.orb)
+    .slice(0, maxPlanetAspectAnchors)
+    .map((aspect) => {
+      const [pointA, pointB] = orderAspectPair(aspect.pointA, aspect.pointB);
+      const pointALabel = getPointLabel(pointsById, pointA);
+      const pointBLabel = getPointLabel(pointsById, pointB);
+
+      return {
+        id: `child-aspect-${pointA}-${pointB}-${aspect.type}`,
+        code: `child.aspect.${formatDictionaryCodePart(
+          pointA
+        )}.${normalizeAspectTypeCode(aspect.type)}.${formatDictionaryCodePart(pointB)}`,
+        categoryCode: "planet_aspects" as const,
+        group: "aspects" as const,
+        label: `${pointALabel} — ${pointBLabel}`,
+        meta: "Детская карта · аспект",
+        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+      };
+    });
 }
 
 function buildCompositeAnchors(

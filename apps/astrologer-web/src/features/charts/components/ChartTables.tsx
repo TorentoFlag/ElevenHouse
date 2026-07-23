@@ -28,7 +28,8 @@ import {
   buildChartInterpretationAnchors,
   getChartInterpretationLookupCodes,
   type ChartInterpretationAnchor,
-  type ChartInterpretationAnchorGroup
+  type ChartInterpretationAnchorGroup,
+  type ChartInterpretationMode
 } from "../model/chartInterpretations";
 import styles from "./ChartEnginePage.module.css";
 
@@ -39,12 +40,14 @@ export type ChartTablesProps = {
   readonly activeTab: ChartPanelTab;
   readonly locale: DictionaryLocale;
   readonly hoveredPointId: string | null;
+  readonly interpretationMode?: ChartInterpretationMode;
   readonly onHoverPoint: (pointId: string | null) => void;
 };
 
 export function ChartTables({
   activeTab,
   hoveredPointId,
+  interpretationMode = "default",
   locale,
   onHoverPoint,
   result
@@ -65,7 +68,11 @@ export function ChartTables({
       {activeTab === "aspects" ? <AspectsTable result={result} /> : null}
       {activeTab === "houses" ? <HousesTable result={result} /> : null}
       {activeTab === "interpretations" ? (
-        <InterpretationSummary locale={locale} result={result} />
+        <InterpretationSummary
+          interpretationMode={interpretationMode}
+          locale={locale}
+          result={result}
+        />
       ) : null}
     </div>
   );
@@ -539,13 +546,18 @@ function AspectMatrixRow({
 }
 
 function InterpretationSummary({
+  interpretationMode,
   locale,
   result
 }: {
+  readonly interpretationMode: ChartInterpretationMode;
   readonly locale: DictionaryLocale;
   readonly result: StoredChartCalculationPayload;
 }) {
-  const anchors = useMemo(() => buildChartInterpretationAnchors(result), [result]);
+  const anchors = useMemo(
+    () => buildChartInterpretationAnchors(result, { mode: interpretationMode }),
+    [interpretationMode, result]
+  );
   const lookupCodes = useMemo(() => getChartInterpretationLookupCodes(anchors), [anchors]);
   const [dictionaryState, setDictionaryState] = useState<{
     readonly entries: readonly DictionaryEffectiveEntryResponse[];
@@ -614,7 +626,11 @@ function InterpretationSummary({
       <h2 id="chart-interpretations-heading">Трактовки</h2>
       <div className={styles.interpretationStack}>
         <div>
-          <div className={styles.interpretationKicker}>Опорные положения · библиотека</div>
+          <div className={styles.interpretationKicker}>
+            {interpretationMode === "child"
+              ? "Детские трактовки · библиотека"
+              : "Опорные положения · библиотека"}
+          </div>
           <div className={styles.interpretationGroupStack}>
             {anchorGroups.map((group) => (
               <section className={styles.interpretationGroup} key={group.id}>
@@ -655,14 +671,19 @@ function InterpretationSummary({
         <div className={styles.interpretationAiPanel}>
           <div className={styles.interpretationAiHeader}>
             <div>
-              <span>AI-трактовка · натальная карта</span>
+              <span>
+                {interpretationMode === "child"
+                  ? "AI-трактовка · детская карта"
+                  : "AI-трактовка · натальная карта"}
+              </span>
               <strong>Черновик появится после подключения production-контура</strong>
             </div>
             <b>позже</b>
           </div>
           <p>
-            AI-контур для карт ещё не подключён. Пока показываем только детерминированные опорные
-            положения из canonical result.
+            {interpretationMode === "child"
+              ? "AI-контур для детской карты ещё не подключён. Пока показываем только детерминированные опорные положения из canonical result."
+              : "AI-контур для карт ещё не подключён. Пока показываем только детерминированные опорные положения из canonical result."}
           </p>
           <button type="button" disabled>
             AI-черновик недоступен
