@@ -123,15 +123,25 @@
       honest missing-entry creation affordances and authenticated browser
       calculate/reload evidence. Child-chart PDF/export, AI child text and
       client delivery remain separate future contours.
-- [ ] Chart Engine remaining method expansion after first-slice progressions and
-      child chart: horary and astrocartography.
-      Progressions now have the first production slice across contracts,
-      persistence, worker/provider, frontend controls/rendering and Dictionary
-      anchors plus authenticated `/chart-engine` browser evidence for mode
-      availability and date-control rendering. The remaining methods require
-      their own contracts, domain/API workflow, worker/provider adapter, UI
-      state matrix, PDF/report decision and Dictionary interpretation-code
-      coverage before enabling their modes.
+- [x] Chart Engine progressions first slice: owner-scoped CRM client,
+      explicit progression date, canonical secondary-progression result,
+      worker/provider integration, `/chart-engine` `Прогрессии` controls,
+      rendering and Dictionary-backed `progression.*` anchors plus
+      authenticated browser evidence for mode availability and reload.
+      Progression PDF/export, public sharing and AI progression text remain
+      separate future contours.
+- [x] Chart Engine horary first slice: owner-scoped CRM client context,
+      explicit question/category/date/time/timezone/place input, private
+      question snapshot, canonical single-wheel `horary` result,
+      `POST /charts/horary/jobs`, worker/provider integration,
+      `/chart-engine` `Хорар` mode, RU state copy, disabled PDF and
+      Dictionary-backed `horary.*` anchors with honest missing-entry creation
+      affordances. Horary PDF/export, automated judgement/verdict and AI
+      horary answer remain separate future contours.
+- [ ] Chart Engine remaining method expansion: astrocartography. It still
+      requires its own contracts, domain/API workflow, worker/provider adapter,
+      map UI state matrix, PDF/report decision and Dictionary
+      interpretation-code coverage before enabling the mode.
 - [x] Human Design individual v1: owner-scoped CRM client input only, exact
       chart-engine personality/design longitude resolution, deterministic
       `human_design_classic` domain mechanics, generic calculation persistence,
