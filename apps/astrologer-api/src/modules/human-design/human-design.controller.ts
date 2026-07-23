@@ -51,4 +51,15 @@ export class HumanDesignController {
   ) {
     return this.humanDesignService.transits(calculationId, query, request);
   }
+
+  @Post("calculations/:calculationId/ai-draft")
+  @HttpCode(HttpStatus.OK)
+  @RequireCsrf()
+  createAiDraft(
+    @Param("calculationId") calculationId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.humanDesignService.createAiDraft(calculationId, body, request);
+  }
 }

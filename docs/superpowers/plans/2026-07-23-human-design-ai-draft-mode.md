@@ -48,6 +48,8 @@ Accessed: 2026-07-23.
 - [x] 2026-07-23: Plan created after transit mode frontend slice.
 - [x] 2026-07-23: Task 1 foundation implemented: minimized domain context,
   structured prompt, RU/EN render helper and focused tests.
+- [x] 2026-07-23: Task 2 contract and authenticated API route implemented
+  through shared calculation interpretations.
 
 ## Plan of Work
 
@@ -81,6 +83,15 @@ Add `POST /human-design/calculations/:calculationId/ai-draft` with
 `expectedResultChecksum`. The route must be authenticated, CSRF-protected,
 owner-scoped, reject archived/stale records and save the generated text as a
 draft interpretation through shared calculations.
+
+Observed 2026-07-23: `createHumanDesignAiDraftRequestSchema` accepts only the
+current expected checksum. `POST
+/human-design/calculations/:calculationId/ai-draft` is CSRF-protected,
+owner-scoped, validates saved Human Design result integrity, rejects stale
+checksums before calling AI, derives locale from astrologer profile, generates
+with `humanDesignInterpretationDraftPromptV1`, renders RU/EN draft text and
+saves it as a shared calculation interpretation. Public calculation responses
+expose only interpretation id/status/text.
 
 ### Task 3: Frontend AI Mode
 

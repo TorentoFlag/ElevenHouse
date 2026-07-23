@@ -8,9 +8,11 @@ import {
 import type {
   CalculationRecord,
   CalculationStore,
+  AstrologerProfileStore,
   ClientBirthData,
   ClientStore
 } from "@elevenhouse/domain";
+import type { AiGenerationService } from "../ai/ai-generation.service";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { HumanDesignService } from "./human-design.service";
@@ -357,6 +359,75 @@ describe("HumanDesignService", () => {
     expect(calculationStore.replaceResult).not.toHaveBeenCalled();
   });
 
+  it("creates a checksum-bound AI interpretation draft for a saved Human Design calculation", async () => {
+    const { service, aiGeneration } = createService();
+    const saved = await service.createCalculation(
+      {
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId: clientUserId
+      },
+      request()
+    );
+
+    const response = await service.createAiDraft(
+      saved.calculation.id,
+      { expectedResultChecksum: saved.calculation.resultChecksum },
+      request()
+    );
+    if (saved.result.mode !== "individual") {
+      throw new Error("Expected saved individual Human Design result");
+    }
+
+    expect(response.calculation.interpretations).toEqual([
+      expect.objectContaining({
+        status: "draft",
+        text: expect.stringContaining("ОБЗОР")
+      })
+    ]);
+    expect(aiGeneration.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerUserId,
+        feature: "humanDesign.interpretationDraft",
+        input: expect.objectContaining({
+          mode: "individual",
+          resultChecksum: saved.calculation.resultChecksum,
+          subject: expect.objectContaining({
+            type: saved.result.type
+          })
+        })
+      })
+    );
+    expect(JSON.stringify(vi.mocked(aiGeneration.generate).mock.calls[0]?.[0].input)).not.toContain(
+      "longitude"
+    );
+  });
+
+  it("rejects stale Human Design AI draft requests before calling AI", async () => {
+    const { service, aiGeneration } = createService();
+    const saved = await service.createCalculation(
+      {
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId: clientUserId
+      },
+      request()
+    );
+
+    await expectHttpCode(
+      service.createAiDraft(
+        saved.calculation.id,
+        { expectedResultChecksum: `sha256:${"f".repeat(64)}` },
+        request()
+      ),
+      409,
+      "HUMAN_DESIGN_RESULT_INTEGRITY_FAILED"
+    );
+    expect(aiGeneration.generate).not.toHaveBeenCalled();
+  });
+
   it("returns a stable not-found code when the CRM client has no birth data", async () => {
     const { service } = createService({ birthData: null });
 
@@ -474,6 +545,8 @@ function createService(
 ) {
   const calculationStore = createCalculationStore();
   const clientStore = createClientStore(input.birthData);
+  const profileStore = createProfileStore();
+  const aiGeneration = createAiGenerationService();
   const resolvedInputProvider: HumanDesignResolvedInputProvider = {
     resolve:
       input.resolve ??
@@ -487,12 +560,15 @@ function createService(
     service: new HumanDesignService(
       calculationStore,
       clientStore,
+      profileStore,
       resolvedInputProvider,
-      { now: vi.fn(() => now) } as unknown as SystemClock
+      { now: vi.fn(() => now) } as unknown as SystemClock,
+      aiGeneration
     ),
     calculationStore,
     clientStore,
-    resolvedInputProvider
+    resolvedInputProvider,
+    aiGeneration
   };
 }
 
@@ -574,11 +650,66 @@ function createCalculationStore(): CalculationStore {
     ),
     linkClient: vi.fn(async () => null),
     publishClientLink: vi.fn(async () => null),
-    saveInterpretation: vi.fn(async () => null),
+    saveInterpretation: vi.fn(async (input) => {
+      const index = records.findIndex(
+        (record) =>
+          record.ownerUserId === input.ownerUserId &&
+          record.id === input.calculationId &&
+          record.resultChecksum === input.expectedResultChecksum
+      );
+      if (index < 0) return null;
+      const current = records[index]!;
+      const updated: CalculationRecord = {
+        ...current,
+        interpretations: [
+          ...current.interpretations,
+          {
+            id: input.interpretationIdGenerator(),
+            source: input.source,
+            status: "draft",
+            text: input.text,
+            modelId: input.modelId,
+            promptVersion: input.promptVersion,
+            approvedAt: null,
+            updatedAt: input.now
+          }
+        ],
+        updatedAt: input.now
+      };
+      records[index] = updated;
+      return updated;
+    }),
     approveInterpretation: vi.fn(async () => null),
     archive: vi.fn(async () => null)
   };
   return store;
+}
+
+function createProfileStore(): AstrologerProfileStore {
+  return {
+    findByOwnerUserId: vi.fn(async () => ({ ownerUserId, locale: "ru" })),
+    upsert: vi.fn(async () => raise())
+  } as unknown as AstrologerProfileStore;
+}
+
+function createAiGenerationService(): AiGenerationService {
+  return {
+    generate: vi.fn(async () => ({
+      output: {
+        overview: "Обзор",
+        mechanics: "Механика",
+        sessionFocus: "Фокус",
+        conditioningRisks: "Риски",
+        relationshipFocus: null,
+        transitFocus: null,
+        reflectionQuestions: ["Первый?", "Второй?", "Третий?"],
+        disclaimer: "Не заменяет профессиональную помощь."
+      },
+      provider: "openai",
+      model: "gpt-5.5",
+      finishReason: "completed"
+    }))
+  } as unknown as AiGenerationService;
 }
 
 function createClientStore(birthData: ClientBirthData | null = readyBirthData()): ClientStore {

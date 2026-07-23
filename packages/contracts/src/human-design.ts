@@ -525,6 +525,15 @@ export type RecalculateHumanDesignCalculationRequest = z.infer<
   typeof recalculateHumanDesignCalculationRequestSchema
 >;
 
+export const createHumanDesignAiDraftRequestSchema = z
+  .object({
+    expectedResultChecksum: sha256DigestSchema
+  })
+  .strict();
+export type CreateHumanDesignAiDraftRequest = z.infer<
+  typeof createHumanDesignAiDraftRequestSchema
+>;
+
 export const humanDesignCalculationResponseSchema = z
   .object({
     calculation: calculationRecordResponseSchema,

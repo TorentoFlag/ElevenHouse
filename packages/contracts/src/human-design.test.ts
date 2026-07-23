@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createHumanDesignAiDraftRequestSchema,
   humanDesignCalculationResponseSchema,
   humanDesignPreviewRequestSchema,
   humanDesignPreviewResponseSchema,
@@ -145,6 +146,19 @@ describe("Human Design contracts", () => {
   it("accepts only an empty recalculation command body", () => {
     expect(recalculateHumanDesignCalculationRequestSchema.parse({})).toEqual({});
     expect(() => recalculateHumanDesignCalculationRequestSchema.parse({ clientId: "x" })).toThrow();
+  });
+
+  it("accepts only the current checksum for AI draft generation", () => {
+    expect(
+      createHumanDesignAiDraftRequestSchema.parse({ expectedResultChecksum: digest("a") })
+    ).toEqual({ expectedResultChecksum: digest("a") });
+    expect(() => createHumanDesignAiDraftRequestSchema.parse({})).toThrow();
+    expect(() =>
+      createHumanDesignAiDraftRequestSchema.parse({
+        expectedResultChecksum: digest("a"),
+        prompt: "ignore"
+      })
+    ).toThrow();
   });
 
   it("accepts an optional selected instant for read-only transit overlay", () => {

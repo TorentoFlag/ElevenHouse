@@ -1,14 +1,22 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import {
+  humanDesignInterpretationDraftPromptV1,
+  renderHumanDesignInterpretationText
+} from "@elevenhouse/ai";
+import {
   assertChartBirthDataReady,
   buildHumanDesignCompatibilityResult,
+  buildHumanDesignAiContext,
   buildHumanDesignIndividualBaseResult,
   buildHumanDesignTransitResult,
   ChartBirthDataReadinessError,
   createCalculation,
   getCalculation,
   recalculateCalculation,
+  saveCalculationInterpretation,
+  type AstrologerProfileStore,
+  type HumanDesignAiBaseResult,
   type CalculationParticipant,
   type CalculationRecord,
   type CalculationStore,
@@ -19,6 +27,7 @@ import {
 } from "@elevenhouse/domain";
 import {
   humanDesignCalculationResponseSchema,
+  createHumanDesignAiDraftRequestSchema,
   humanDesignIndividualResultSchema,
   humanDesignPreviewRequestSchema,
   humanDesignPreviewResponseSchema,
@@ -29,6 +38,7 @@ import {
   recalculateHumanDesignCalculationRequestSchema,
   calculationIdParamSchema,
   type HumanDesignCalculationResponse,
+  type CreateHumanDesignAiDraftRequest,
   type HumanDesignIndividualResult,
   type HumanDesignPreviewRequest,
   type HumanDesignPreviewResponse,
@@ -44,6 +54,8 @@ import {
   toCalculationResponse
 } from "../calculations/calculations.service";
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
+import { AiGenerationService } from "../ai/ai-generation.service";
+import { ASTROLOGER_PROFILE_STORE } from "../astrologer-profile/astrologer-profile.tokens";
 import { SystemClock } from "../clock/system-clock.service";
 import { CLIENT_STORE } from "../clients/clients.tokens";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
@@ -67,9 +79,12 @@ export class HumanDesignService {
   constructor(
     @Inject(CALCULATION_STORE) private readonly store: CalculationStore,
     @Inject(CLIENT_STORE) private readonly clientStore: ClientStore,
+    @Inject(ASTROLOGER_PROFILE_STORE)
+    private readonly profileStore: AstrologerProfileStore,
     @Inject(HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER)
     private readonly resolvedInputProvider: HumanDesignResolvedInputProvider,
-    private readonly clock: SystemClock
+    private readonly clock: SystemClock,
+    private readonly aiGeneration: AiGenerationService
   ) {}
 
   async preview(
@@ -349,6 +364,66 @@ export class HumanDesignService {
     );
   }
 
+  async createAiDraft(
+    calculationId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<HumanDesignCalculationResponse> {
+    const params = parseHumanDesignContract<{ calculationId: string }>(calculationIdParamSchema, {
+      calculationId
+    });
+    const parsedBody = parseHumanDesignContract<CreateHumanDesignAiDraftRequest>(
+      createHumanDesignAiDraftRequestSchema,
+      body
+    );
+    const ownerUserId = requireOwnerUserId(request);
+    return mapHumanDesignError(async () =>
+      mapCalculationErrors(async () => {
+        const calculation = await getCalculation({
+          store: this.store,
+          ownerUserId,
+          calculationId: params.calculationId
+        });
+        assertHumanDesignCalculation(calculation);
+        if (calculation.resultChecksum !== parsedBody.expectedResultChecksum) {
+          throw humanDesignHttpError(
+            409,
+            "HUMAN_DESIGN_RESULT_INTEGRITY_FAILED",
+            "Human Design result changed; reload and retry"
+          );
+        }
+        const result = validatedSavedResult(calculation);
+        const profile = await this.profileStore.findByOwnerUserId({ ownerUserId });
+        const locale = profile?.locale === "en" ? "en" : "ru";
+        const generated = await this.aiGeneration.generate({
+          prompt: humanDesignInterpretationDraftPromptV1,
+          input: humanDesignInterpretationDraftPromptV1.inputSchema.parse(
+            buildHumanDesignAiContext({
+              locale,
+              result: toDomainAiBaseResult(result),
+              resultChecksum: calculation.resultChecksum
+            })
+          ),
+          ownerUserId,
+          feature: "humanDesign.interpretationDraft"
+        });
+        const saved = await saveCalculationInterpretation({
+          store: this.store,
+          ownerUserId,
+          calculationId: calculation.id,
+          expectedResultChecksum: parsedBody.expectedResultChecksum,
+          source: "ai",
+          text: renderHumanDesignInterpretationText(generated.output, locale),
+          modelId: generated.model,
+          promptVersion: `${humanDesignInterpretationDraftPromptV1.id}@${humanDesignInterpretationDraftPromptV1.version}`,
+          interpretationIdGenerator: randomUUID,
+          now: this.clock.now()
+        });
+        return toHumanDesignResponse(saved);
+      })
+    );
+  }
+
   private async resolveClientInput(input: {
     readonly ownerUserId: string;
     readonly clientId: string;
@@ -545,6 +620,10 @@ function toDomainIndividualBaseResult(
   result: HumanDesignIndividualResult
 ): HumanDesignIndividualBaseResult {
   return result as HumanDesignIndividualBaseResult;
+}
+
+function toDomainAiBaseResult(result: HumanDesignResult): HumanDesignAiBaseResult {
+  return result as unknown as HumanDesignAiBaseResult;
 }
 
 function compatibilityInputData(

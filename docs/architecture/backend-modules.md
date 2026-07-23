@@ -144,8 +144,13 @@ feature-module boundaries, explicit auth/permissions и audit logging.
   private chart-engine provider boundary, delegate mechanics to
   `packages/domain/src/human-design`, store records via the shared
   `Calculations` module and keep the linked CRM subject identity stable.
-  Compatibility, transits, AI interpretation and PDF export remain future
-  Human Design contours.
+  Compatibility and read-only transits are implemented through the same
+  server/domain authority. Human Design AI interpretation now follows the
+  Numerology-style shared calculation interpretation contour: only owned saved
+  results with the current checksum can generate editable drafts, AI receives a
+  minimized deterministic Human Design context, and frontend/public responses
+  expose no model or prompt metadata. PDF export remains a future Human Design
+  contour.
 - `Charts`: расчёты астрологических карт и generated chart artifacts.
 - `Sessions`: lifecycle консультации, recordings, materials.
 - `Messaging`: provider-neutral channel connections, external identities,

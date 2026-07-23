@@ -1,5 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
+import { AiModule } from "../ai/ai.module";
+import { AstrologerProfileModule } from "../astrologer-profile/astrologer-profile.module";
 import { CalculationsModule } from "../calculations/calculations.module";
 import { ClockModule } from "../clock/clock.module";
 import { ClientsModule } from "../clients/clients.module";
@@ -12,6 +14,8 @@ import { HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER } from "./human-design.tokens";
 
 @Module({
   imports: [
+    AiModule,
+    AstrologerProfileModule,
     ConfigModule,
     CalculationsModule,
     ClockModule,

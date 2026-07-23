@@ -12,6 +12,7 @@ import type {
   AuthSessionRevocationUnitOfWork,
   CalculationRecord,
   CalculationStore,
+  AstrologerProfileStore,
   ClientBirthData,
   ClientStore,
   PasswordlessAuthUnitOfWork,
@@ -19,6 +20,8 @@ import type {
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SystemClock } from "../clock/system-clock.service";
+import { AiGenerationService } from "../ai/ai-generation.service";
+import { ASTROLOGER_PROFILE_STORE } from "../astrologer-profile/astrologer-profile.tokens";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import {
   AUTH_SESSION_AUTHENTICATION_STORE,
@@ -128,6 +131,10 @@ describe("Human Design HTTP routes", () => {
       .useValue(calculationStore)
       .overrideProvider(CLIENT_STORE)
       .useValue(clientStore)
+      .overrideProvider(ASTROLOGER_PROFILE_STORE)
+      .useValue(createProfileStore())
+      .overrideProvider(AiGenerationService)
+      .useValue(createAiGenerationService())
       .overrideProvider(HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER)
       .useValue(resolvedInputProvider)
       .compile();
@@ -373,6 +380,34 @@ describe("Human Design HTTP routes", () => {
     expect(calculationStore.replaceResult).not.toHaveBeenCalled();
   });
 
+  it("creates an AI draft for a saved Human Design calculation only with CSRF", async () => {
+    const created = await postJson("/human-design/calculations", persistBody(), csrfHeaders());
+    const createdBody = humanDesignCalculationResponseSchema.parse(created.body);
+    const withoutCsrf = await postJson(
+      `/human-design/calculations/${createdBody.calculation.id}/ai-draft`,
+      { expectedResultChecksum: createdBody.calculation.resultChecksum },
+      {
+        cookie: `${sessionCookieName}=${sessionToken}`
+      }
+    );
+
+    const response = await postJson(
+      `/human-design/calculations/${createdBody.calculation.id}/ai-draft`,
+      { expectedResultChecksum: createdBody.calculation.resultChecksum },
+      csrfHeaders()
+    );
+
+    expect(withoutCsrf.status).toBe(403);
+    expect(response.status).toBe(200);
+    const body = humanDesignCalculationResponseSchema.parse(response.body);
+    expect(body.calculation.interpretations).toEqual([
+      expect.objectContaining({
+        status: "draft",
+        text: expect.stringContaining("ОБЗОР")
+      })
+    ]);
+  });
+
   async function postJson(
     path: string,
     body: unknown,
@@ -568,10 +603,65 @@ function createCalculationStore(): CalculationStore {
     ),
     linkClient: vi.fn(async () => null),
     publishClientLink: vi.fn(async () => null),
-    saveInterpretation: vi.fn(async () => null),
+    saveInterpretation: vi.fn(async (input) => {
+      const index = records.findIndex(
+        (record) =>
+          record.ownerUserId === input.ownerUserId &&
+          record.id === input.calculationId &&
+          record.resultChecksum === input.expectedResultChecksum
+      );
+      if (index < 0) return null;
+      const current = records[index]!;
+      const updated: CalculationRecord = {
+        ...current,
+        interpretations: [
+          ...current.interpretations,
+          {
+            id: input.interpretationIdGenerator(),
+            source: input.source,
+            status: "draft",
+            text: input.text,
+            modelId: input.modelId,
+            promptVersion: input.promptVersion,
+            approvedAt: null,
+            updatedAt: input.now
+          }
+        ],
+        updatedAt: input.now
+      };
+      records[index] = updated;
+      return updated;
+    }),
     approveInterpretation: vi.fn(async () => null),
     archive: vi.fn(async () => null)
   };
+}
+
+function createProfileStore(): AstrologerProfileStore {
+  return {
+    findByOwnerUserId: vi.fn(async () => ({ ownerUserId, locale: "ru" })),
+    upsert: vi.fn(async () => raise())
+  } as unknown as AstrologerProfileStore;
+}
+
+function createAiGenerationService(): AiGenerationService {
+  return {
+    generate: vi.fn(async () => ({
+      output: {
+        overview: "Обзор",
+        mechanics: "Механика",
+        sessionFocus: "Фокус",
+        conditioningRisks: "Риски",
+        relationshipFocus: null,
+        transitFocus: null,
+        reflectionQuestions: ["Первый?", "Второй?", "Третий?"],
+        disclaimer: "Не заменяет профессиональную помощь."
+      },
+      provider: "openai",
+      model: "gpt-5.5",
+      finishReason: "completed"
+    }))
+  } as unknown as AiGenerationService;
 }
 
 function readyBirthData(): ClientBirthData {
