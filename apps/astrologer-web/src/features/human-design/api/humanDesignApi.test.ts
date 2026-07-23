@@ -6,6 +6,7 @@ import type {
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import {
+  createHumanDesignAiDraft,
   createHumanDesignCalculation,
   getHumanDesignTransit,
   previewHumanDesign,
@@ -110,9 +111,37 @@ describe("humanDesignApi", () => {
       "/human-design/calculations/11111111-1111-4111-8111-111111111111/transits"
     );
   });
+
+  it("creates a Human Design AI draft with CSRF and the expected checksum", async () => {
+    const response = humanDesignCalculationResponse({
+      interpretations: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          status: "draft",
+          text: "AI draft"
+        }
+      ]
+    });
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(response);
+
+    await expect(
+      createHumanDesignAiDraft({
+        calculationId: response.calculation.id,
+        body: { expectedResultChecksum: response.calculation.resultChecksum }
+      })
+    ).resolves.toEqual(response);
+
+    expect(post).toHaveBeenCalledWith(
+      `/human-design/calculations/${response.calculation.id}/ai-draft`,
+      { expectedResultChecksum: response.calculation.resultChecksum },
+      { csrf: true }
+    );
+  });
 });
 
-function humanDesignCalculationResponse(): HumanDesignCalculationResponse {
+function humanDesignCalculationResponse(
+  overrides: Partial<HumanDesignCalculationResponse["calculation"]> = {}
+): HumanDesignCalculationResponse {
   const preview = humanDesignResponse();
   if (preview.result.mode !== "individual") {
     throw new Error("Expected individual Human Design API fixture");
@@ -150,7 +179,8 @@ function humanDesignCalculationResponse(): HumanDesignCalculationResponse {
       interpretations: [],
       artifacts: [],
       createdAt: "2026-07-22T10:00:00.000Z",
-      updatedAt: "2026-07-22T10:00:00.000Z"
+      updatedAt: "2026-07-22T10:00:00.000Z",
+      ...overrides
     },
     result: preview.result
   };

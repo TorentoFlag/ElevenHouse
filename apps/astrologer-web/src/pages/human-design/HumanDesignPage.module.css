@@ -542,7 +542,8 @@
 
 .transitMetrics div,
 .transitItem,
-.transitPanel {
+.transitPanel,
+.aiPanel {
   border: 1px solid rgb(111 168 255 / 0.24);
   border-radius: 10px;
   background: rgb(111 168 255 / 0.08);
@@ -597,6 +598,44 @@
   display: grid;
   gap: 10px;
   padding: 11px 12px;
+}
+
+.aiPanel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-color: rgb(246 210 102 / 0.24);
+  background: rgb(246 210 102 / 0.08);
+}
+
+.aiPanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.aiPanelHead span,
+.aiPanel small {
+  color: rgb(186 178 218 / 0.66);
+  font-size: 10.5px;
+  font-weight: 760;
+}
+
+.aiPanelHead span {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.aiPanelHead strong {
+  color: var(--hd-gold);
+  font-size: 12.5px;
+}
+
+.aiPanel p {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
 }
 
 .transitPanel div {

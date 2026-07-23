@@ -7,6 +7,8 @@ import {
   persistHumanDesignCalculationRequestSchema,
   recalculateHumanDesignCalculationRequestSchema,
   calculationIdParamSchema,
+  createHumanDesignAiDraftRequestSchema,
+  type CreateHumanDesignAiDraftRequest,
   type HumanDesignCalculationResponse,
   type HumanDesignPreviewRequest,
   type HumanDesignPreviewResponse,
@@ -70,6 +72,22 @@ export async function getHumanDesignTransit(input: {
   return humanDesignTransitResponseSchema.parse(
     await application.http.get(
       `/human-design/calculations/${params.calculationId}/transits${suffix}`
+    )
+  );
+}
+
+export async function createHumanDesignAiDraft(input: {
+  readonly calculationId: string;
+  readonly body: CreateHumanDesignAiDraftRequest;
+}): Promise<HumanDesignCalculationResponse> {
+  const params = calculationIdParamSchema.parse({ calculationId: input.calculationId });
+  const body = createHumanDesignAiDraftRequestSchema.parse(input.body);
+
+  return humanDesignCalculationResponseSchema.parse(
+    await application.http.post(
+      `/human-design/calculations/${params.calculationId}/ai-draft`,
+      body,
+      { csrf: true }
     )
   );
 }

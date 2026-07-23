@@ -50,6 +50,9 @@ Accessed: 2026-07-23.
   structured prompt, RU/EN render helper and focused tests.
 - [x] 2026-07-23: Task 2 contract and authenticated API route implemented
   through shared calculation interpretations.
+- [x] 2026-07-23: Task 3 first frontend slice implemented: saved-result AI
+  draft button, checksum-bound API mutation, latest draft display and stable
+  backend error messaging.
 
 ## Plan of Work
 
@@ -98,6 +101,15 @@ expose only interpretation id/status/text.
 Enable `AI-разбор` only for saved non-archived Human Design results. Display
 current draft text from calculation interpretations, support AI generation,
 editing and stale-state messaging without browser-generated fallback text.
+
+Observed 2026-07-23: The Human Design toolbar enables `AI-разбор` for opened
+saved non-archived individual/compatibility results, posts the current
+`resultChecksum` to the CSRF-protected AI draft API, refreshes shared
+calculations and renders the latest draft/approved interpretation in the right
+panel. Backend stale/quota/provider failures map to stable Russian messages.
+Transit overlay AI remains disabled until the API accepts an explicit overlay
+context; editing/save/approve controls still need the shared interpretation
+lifecycle wiring.
 
 ### Task 4: Runtime Evidence
 

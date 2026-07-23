@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createHumanDesignAiDraftMutationOptions,
   createHumanDesignCalculationMutationOptions,
   getHumanDesignTransitMutationOptions,
   humanDesignCalculationListQueryOptions,
@@ -25,4 +26,8 @@ export function useRecalculateHumanDesignCalculationMutation() {
 
 export function useGetHumanDesignTransitMutation() {
   return useMutation(getHumanDesignTransitMutationOptions());
+}
+
+export function useCreateHumanDesignAiDraftMutation() {
+  return useMutation(createHumanDesignAiDraftMutationOptions(useQueryClient()));
 }

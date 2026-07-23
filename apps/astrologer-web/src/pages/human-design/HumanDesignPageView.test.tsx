@@ -52,11 +52,9 @@ describe("HumanDesignPageView", () => {
     const text = textOf(view);
     const disabledFutureButtons = walk(view).filter(
       (element) =>
-      element.type === "button" &&
-      element.props.disabled === true &&
-        ["PDF", "AI-разбор"].some((label) =>
-          textOf(element).includes(label)
-        )
+        element.type === "button" &&
+        element.props.disabled === true &&
+        ["PDF"].some((label) => textOf(element).includes(label))
     );
     const linkButton = walk(view).find(
       (element) => element.type === "button" && textOf(element).includes("Привязать")
@@ -66,8 +64,45 @@ describe("HumanDesignPageView", () => {
     expect(text).toContain("Канал 20–34");
     expect(text).toContain("Личность");
     expect(text).toContain("Дизайн");
-    expect(disabledFutureButtons).toHaveLength(2);
+    expect(disabledFutureButtons).toHaveLength(1);
     expect(linkButton?.props.disabled).toBe(false);
+  });
+
+  it("enables AI draft creation for an opened saved Human Design calculation", () => {
+    const onCreateAiDraft = vi.fn();
+    const saved = {
+      ...savedCalculation(),
+      interpretations: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          status: "draft" as const,
+          text: "AI draft text"
+        }
+      ]
+    };
+    const view = HumanDesignPageView({
+      ...baseProps(),
+      selectedClient: clientOption("22222222-2222-4222-8222-222222222222", "Марина Краснова"),
+      model: createHumanDesignViewModel(sampleResult()),
+      selectedCalculationId: saved.id,
+      aiDraftText: "AI draft text",
+      aiDraftStatus: "draft",
+      aiDraftDisabledReason: null,
+      isLinked: true,
+      onCreateAiDraft
+    });
+    const text = textOf(view);
+    const aiButton = walk(view).find(
+      (element): element is ReactElement<{ disabled?: boolean; onClick: () => void }> =>
+        element.type === "button" && textOf(element).includes("Обновить AI")
+    );
+
+    expect(text).toContain("AI-разбор");
+    expect(text).toContain("Черновик");
+    expect(text).toContain("AI draft text");
+    expect(aiButton?.props.disabled).toBe(false);
+    aiButton?.props.onClick();
+    expect(onCreateAiDraft).toHaveBeenCalledOnce();
   });
 
   it("renders transit mode as a saved-calculation overlay with read-only fetch action", () => {
@@ -196,6 +231,10 @@ function baseProps(): HumanDesignPageViewProps {
       detail: "Birth data берутся из карточки клиента."
     },
     errorMessage: null,
+    aiDraftText: "",
+    aiDraftStatus: null,
+    aiDraftErrorMessage: null,
+    aiDraftDisabledReason: "Сначала сохраните расчёт",
     calculations: [],
     selectedCalculationId: null,
     isBusy: false,
@@ -207,6 +246,7 @@ function baseProps(): HumanDesignPageViewProps {
     onSelectDetail: vi.fn(),
     onPreview: vi.fn(),
     onFetchTransit: vi.fn(),
+    onCreateAiDraft: vi.fn(),
     onPersist: vi.fn(),
     onSelectSaved: vi.fn(),
     onRecalculate: vi.fn()

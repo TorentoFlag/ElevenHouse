@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { listCalculations } from "../../calculations/api/calculationsApi";
 import {
+  createHumanDesignAiDraft,
   getHumanDesignTransit,
   recalculateHumanDesignCalculation
 } from "../api/humanDesignApi";
 import {
+  createHumanDesignAiDraftMutationOptions,
   getHumanDesignTransitMutationOptions,
   humanDesignCalculationListQueryOptions,
   humanDesignQueryKeys,
@@ -16,6 +18,7 @@ vi.mock("../../calculations/api/calculationsApi", () => ({
 }));
 
 vi.mock("../api/humanDesignApi", () => ({
+  createHumanDesignAiDraft: vi.fn(async () => ({ calculation: { id: "calculation-id" } })),
   createHumanDesignCalculation: vi.fn(),
   getHumanDesignTransit: vi.fn(async () => ({ result: { mode: "transit" } })),
   previewHumanDesign: vi.fn(),
@@ -71,5 +74,24 @@ describe("humanDesignQueries", () => {
       calculationId: "11111111-1111-4111-8111-111111111111",
       query: { instant: "2026-07-23T09:15:00.000Z" }
     });
+  });
+
+  it("creates Human Design AI drafts and refreshes the shared calculation list", async () => {
+    const queryClient = { invalidateQueries: vi.fn(async () => undefined) };
+    const options = createHumanDesignAiDraftMutationOptions(queryClient);
+
+    await expect(
+      options.mutationFn({
+        calculationId: "11111111-1111-4111-8111-111111111111",
+        body: { expectedResultChecksum: `sha256:${"a".repeat(64)}` }
+      })
+    ).resolves.toEqual({ calculation: { id: "calculation-id" } });
+    await options.onSuccess();
+
+    expect(createHumanDesignAiDraft).toHaveBeenCalledWith({
+      calculationId: "11111111-1111-4111-8111-111111111111",
+      body: { expectedResultChecksum: `sha256:${"a".repeat(64)}` }
+    });
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["calculations"] });
   });
 });

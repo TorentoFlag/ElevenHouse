@@ -34,6 +34,10 @@ export type HumanDesignPageViewProps = {
   readonly selectedCalculationId: string | null;
   readonly status: HumanDesignPageStatus;
   readonly errorMessage: string | null;
+  readonly aiDraftText: string;
+  readonly aiDraftStatus: "draft" | "approved" | null;
+  readonly aiDraftErrorMessage: string | null;
+  readonly aiDraftDisabledReason: string | null;
   readonly isBusy: boolean;
   readonly isLinked: boolean;
   readonly onSelectMode: (mode: HumanDesignWorkspaceMode) => void;
@@ -43,6 +47,7 @@ export type HumanDesignPageViewProps = {
   readonly onSelectDetail: (key: HumanDesignDetailKey) => void;
   readonly onSelectSaved: (calculation: CalculationRecordResponse) => void;
   readonly onFetchTransit: () => void | Promise<void>;
+  readonly onCreateAiDraft: () => void | Promise<void>;
   readonly onPreview: () => void | Promise<void>;
   readonly onPersist: () => void | Promise<void>;
   readonly onRecalculate: () => void | Promise<void>;
@@ -61,6 +66,10 @@ export function HumanDesignPageView({
   selectedCalculationId,
   status,
   errorMessage,
+  aiDraftText,
+  aiDraftStatus,
+  aiDraftErrorMessage,
+  aiDraftDisabledReason,
   isBusy,
   isLinked,
   onSelectMode,
@@ -70,12 +79,14 @@ export function HumanDesignPageView({
   onSelectDetail,
   onSelectSaved,
   onFetchTransit,
+  onCreateAiDraft,
   onPreview,
   onPersist,
   onRecalculate
 }: HumanDesignPageViewProps) {
   const detail = model ? getHumanDesignDetail(model, selectedDetailKey) : null;
   const isTransitMode = mode === "transit";
+  const isAiDraftDisabled = Boolean(aiDraftDisabledReason);
   const canRunPrimaryAction = isTransitMode
     ? Boolean(selectedCalculationId)
     : Boolean(selectedClient) && (mode !== "compatibility" || Boolean(selectedPartnerClient));
@@ -182,9 +193,15 @@ export function HumanDesignPageView({
           <Icon iconName="doc" width={15} height={15} aria-hidden="true" />
           PDF
         </button>
-        <button className={styles.toolButton} type="button" disabled>
+        <button
+          className={styles.toolButton}
+          type="button"
+          disabled={isAiDraftDisabled}
+          title={aiDraftDisabledReason ?? undefined}
+          onClick={() => void onCreateAiDraft()}
+        >
           <Icon iconName="sparkle" width={15} height={15} aria-hidden="true" />
-          AI-разбор
+          {aiDraftText ? "Обновить AI" : "AI-разбор"}
         </button>
       </header>
 
@@ -447,6 +464,19 @@ export function HumanDesignPageView({
               <div className={styles.checksum}>
                 <span>Checksum</span>
                 <code>{model.checksumShort}</code>
+              </div>
+            ) : null}
+            {selectedCalculationId ? (
+              <div className={styles.aiPanel}>
+                <div className={styles.aiPanelHead}>
+                  <span>AI-разбор</span>
+                  <strong>{aiDraftStatus === "approved" ? "Утверждён" : aiDraftText ? "Черновик" : "Нет черновика"}</strong>
+                </div>
+                {aiDraftText ? <p>{aiDraftText}</p> : <p>Сохранённый расчёт готов к AI-черновику.</p>}
+                {aiDraftDisabledReason ? (
+                  <small>{aiDraftDisabledReason}</small>
+                ) : null}
+                {aiDraftErrorMessage ? <p className={styles.errorText}>{aiDraftErrorMessage}</p> : null}
               </div>
             ) : null}
             {isTransitMode && transitModel ? (
