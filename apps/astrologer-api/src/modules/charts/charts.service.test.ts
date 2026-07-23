@@ -297,6 +297,37 @@ describe("ChartsService", () => {
     );
   });
 
+  it("creates horary jobs from a private question snapshot without requiring birth data", async () => {
+    const clientStore = createClientStore({ birthData: null });
+    const commandStore = createCommandStore();
+    const service = createService({ clientStore, commandStore });
+
+    await service.createHoraryJob(
+      {
+        clientId,
+        question: horaryQuestion(),
+        settings: settings()
+      },
+      request()
+    );
+
+    expect(clientStore.getAstrologerClient).toHaveBeenCalledWith({
+      astrologerUserId: ownerUserId,
+      clientUserId: clientId
+    });
+    expect(commandStore.createOrReuseChartJobAndRequestCalculation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "horary",
+        ownerUserId,
+        clientId,
+        inputSnapshot: {
+          questionSnapshot: horaryQuestion()
+        },
+        settingsSnapshot: expect.objectContaining(settings())
+      })
+    );
+  });
+
   it("reuses an existing solar return calculation result for an identical request", async () => {
     const calculationId = "77777777-7777-4777-8777-777777777777";
     const commandStore = createCommandStore({
@@ -458,7 +489,7 @@ function createJobStore(
 
 function createClientStore(
   input: {
-    readonly birthData?: ClientBirthData;
+    readonly birthData?: ClientBirthData | null;
     readonly clients?: Record<string, ClientBirthData | null>;
   } = {}
 ): ClientStore {
@@ -473,7 +504,9 @@ function createClientStore(
     getAstrologerClient: vi.fn(async ({ clientUserId }) => {
       const birthData = input.clients
         ? (input.clients[clientUserId] ?? null)
-        : (input.birthData ?? readyBirthData({ clientUserId }));
+        : input.birthData === undefined
+          ? readyBirthData({ clientUserId })
+          : input.birthData;
       return {
         clientUserId,
         displayName: clientUserId === partnerClientId ? "Партнер" : "Мария Иванова",
@@ -514,6 +547,18 @@ function settings() {
     nodeType: "true",
     aspectPreset: "major",
     orbMultiplier: 1
+  };
+}
+
+function horaryQuestion() {
+  return {
+    question: "Стоит ли принимать предложение?",
+    category: "career",
+    date: "2026-07-23",
+    time: "14:30",
+    timezone: "Europe/Moscow",
+    latitude: 55.7558,
+    longitude: 37.6173
   };
 }
 

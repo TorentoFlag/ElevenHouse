@@ -45,6 +45,12 @@ export class ChartsController {
     return this.service.createProgressionJob(body, request);
   }
 
+  @Post("horary/jobs")
+  @RequireCsrf()
+  createHoraryJob(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.service.createHoraryJob(body, request);
+  }
+
   @Get("jobs/:jobId")
   getJob(@Param("jobId") jobId: string, @Req() request: AstrologerSessionRequest) {
     return this.service.getJob(jobId, request);

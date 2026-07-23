@@ -155,6 +155,9 @@ describe("charts HTTP routes", () => {
         cookie: `${sessionCookieName}=${sessionToken}`
       }
     );
+    const horaryResponse = await postJson("/charts/horary/jobs", validHoraryBody(), {
+      cookie: `${sessionCookieName}=${sessionToken}`
+    });
     const pdfResponse = await postJson(
       "/charts/calculations/77777777-7777-4777-8777-777777777777/report/pdf",
       { expectedResultChecksum: `sha256:${"a".repeat(64)}`, locale: "ru" },
@@ -167,6 +170,7 @@ describe("charts HTTP routes", () => {
     expect(compositeResponse.status).toBe(403);
     expect(solarReturnResponse.status).toBe(403);
     expect(progressionResponse.status).toBe(403);
+    expect(horaryResponse.status).toBe(403);
     expect(pdfResponse.status).toBe(403);
   });
 
@@ -226,6 +230,33 @@ describe("charts HTTP routes", () => {
       status: "calculating",
       jobId: "66666666-6666-4666-8666-666666666666"
     });
+  });
+
+  it("creates authenticated horary jobs through the CSRF-protected route", async () => {
+    const response = await postJson("/charts/horary/jobs", validHoraryBody(), csrfHeaders());
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      status: "calculating",
+      jobId: "66666666-6666-4666-8666-666666666666"
+    });
+  });
+
+  it("rejects invalid horary question snapshots", async () => {
+    const response = await postJson(
+      "/charts/horary/jobs",
+      {
+        ...validHoraryBody(),
+        question: {
+          ...validHoraryQuestion(),
+          question: ""
+        }
+      },
+      csrfHeaders()
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({ code: "CHART_VALIDATION_FAILED" });
   });
 
   it("rejects stale chart PDF requests and downloads against the current checksum", async () => {
@@ -537,6 +568,25 @@ function validProgressionBody(): Record<string, unknown> {
   return {
     ...validBody(),
     targetDate: "2026-07-23"
+  };
+}
+
+function validHoraryBody(): Record<string, unknown> {
+  return {
+    ...validBody(),
+    question: validHoraryQuestion()
+  };
+}
+
+function validHoraryQuestion(): Record<string, unknown> {
+  return {
+    question: "Стоит ли принимать предложение?",
+    category: "career",
+    date: "2026-07-23",
+    time: "14:30",
+    timezone: "Europe/Moscow",
+    latitude: 55.7558,
+    longitude: 37.6173
   };
 }
 
