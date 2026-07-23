@@ -1,7 +1,6 @@
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type { CSSProperties } from "react";
 import type { CalculationRecordResponse } from "@elevenhouse/contracts";
-import { SavedCalculationPicker } from "../../features/calculations/components/SavedCalculationPicker";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import { HumanDesignBodygraph } from "../../features/human-design/components/HumanDesignBodygraph";
@@ -11,6 +10,7 @@ import {
   type HumanDesignTransitViewModel,
   type HumanDesignViewModel
 } from "../../features/human-design/model/humanDesignViewModel";
+import { HumanDesignCalculationMenu } from "./HumanDesignCalculationMenu";
 import styles from "./HumanDesignPage.module.css";
 
 export type HumanDesignPageStatus = {
@@ -120,6 +120,12 @@ export function HumanDesignPageView({
           </span>
           <h1>Дизайн человека</h1>
         </div>
+        <HumanDesignCalculationMenu
+          calculations={calculations}
+          selectedCalculationId={selectedCalculationId}
+          disabled={isBusy}
+          onSelect={onSelectSaved}
+        />
         <div className={styles.clientStrip}>
           <ClientSearchCombobox
             label="Клиент"
@@ -233,13 +239,6 @@ export function HumanDesignPageView({
       </header>
 
       <section className={styles.body}>
-        <div className={styles.savedSlot}>
-          <SavedCalculationPicker
-            calculations={calculations}
-            selectedCalculationId={selectedCalculationId}
-            onSelect={onSelectSaved}
-          />
-        </div>
         <aside className={styles.rail} aria-label="Свойства Human Design">
           <section className={styles.railGroup}>
             <h2>Клиент</h2>

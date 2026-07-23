@@ -7,11 +7,11 @@ import type {
 } from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
-import { SavedCalculationPicker } from "../../features/calculations/components/SavedCalculationPicker";
 import {
   createHumanDesignTransitViewModel,
   createHumanDesignViewModel
 } from "../../features/human-design/model/humanDesignViewModel";
+import { HumanDesignCalculationMenu, renderHumanDesignCalculationMenu } from "./HumanDesignCalculationMenu";
 import { HumanDesignPageView, type HumanDesignPageViewProps } from "./HumanDesignPageView";
 
 describe("HumanDesignPageView", () => {
@@ -210,7 +210,7 @@ describe("HumanDesignPageView", () => {
     expect(text).toContain("Канал 43–23");
   });
 
-  it("renders saved calculations rail and opens selected records", () => {
+  it("keeps saved calculations in the toolbar menu instead of a persistent rail", () => {
     const onSelectSaved = vi.fn();
     const saved = savedCalculation();
     const view = HumanDesignPageView({
@@ -219,14 +219,30 @@ describe("HumanDesignPageView", () => {
       selectedCalculationId: saved.id,
       onSelectSaved
     });
-    const picker = walk(view).find(
-      (element): element is ReactElement<ComponentProps<typeof SavedCalculationPicker>> =>
-        element.type === SavedCalculationPicker
+    const menu = walk(view).find(
+      (element): element is ReactElement<ComponentProps<typeof HumanDesignCalculationMenu>> =>
+        element.type === HumanDesignCalculationMenu
+    );
+    const renderedMenu = renderHumanDesignCalculationMenu({
+      calculations: [saved],
+      selectedCalculationId: saved.id,
+      disabled: false,
+      onSelect: onSelectSaved,
+      isOpen: true,
+      onOpenChange: vi.fn()
+    });
+    const savedButton = walk(renderedMenu).find(
+      (element): element is ReactElement<{ onClick: () => void; "aria-current"?: string }> =>
+        element.type === "button" && textOf(element).includes("Марина Краснова")
     );
 
-    expect(picker?.props.calculations).toEqual([saved]);
-    expect(picker?.props.selectedCalculationId).toBe(saved.id);
-    picker?.props.onSelect(saved);
+    expect(menu?.props.calculations).toEqual([saved]);
+    expect(menu?.props.selectedCalculationId).toBe(saved.id);
+    expect(textOf(renderedMenu)).toContain("Расчёты");
+    expect(textOf(renderedMenu)).toContain("Сохранённые расчёты");
+    expect(textOf(renderedMenu)).toContain("Индивидуальный");
+    expect(savedButton?.props["aria-current"]).toBe("true");
+    savedButton?.props.onClick();
     expect(onSelectSaved).toHaveBeenCalledWith(saved);
   });
 
