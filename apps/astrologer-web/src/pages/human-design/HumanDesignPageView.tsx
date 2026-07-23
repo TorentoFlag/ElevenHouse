@@ -8,6 +8,7 @@ import { HumanDesignBodygraph } from "../../features/human-design/components/Hum
 import {
   getHumanDesignDetail,
   type HumanDesignDetailKey,
+  type HumanDesignTransitViewModel,
   type HumanDesignViewModel
 } from "../../features/human-design/model/humanDesignViewModel";
 import styles from "./HumanDesignPage.module.css";
@@ -18,13 +19,16 @@ export type HumanDesignPageStatus = {
   readonly detail: string;
 };
 
-export type HumanDesignWorkspaceMode = "individual" | "compatibility";
+export type HumanDesignWorkspaceMode = "individual" | "compatibility" | "transit";
 
 export type HumanDesignPageViewProps = {
   readonly mode: HumanDesignWorkspaceMode;
   readonly selectedClient: ClientSelectOption | null;
   readonly selectedPartnerClient: ClientSelectOption | null;
   readonly model: HumanDesignViewModel | null;
+  readonly transitModel: HumanDesignTransitViewModel | null;
+  readonly transitInstantValue: string;
+  readonly canOpenTransitMode: boolean;
   readonly selectedDetailKey: HumanDesignDetailKey;
   readonly calculations: readonly CalculationRecordResponse[];
   readonly selectedCalculationId: string | null;
@@ -35,8 +39,10 @@ export type HumanDesignPageViewProps = {
   readonly onSelectMode: (mode: HumanDesignWorkspaceMode) => void;
   readonly onSelectClient: (client: ClientSelectOption) => void;
   readonly onSelectPartnerClient: (client: ClientSelectOption) => void;
+  readonly onChangeTransitInstant: (value: string) => void;
   readonly onSelectDetail: (key: HumanDesignDetailKey) => void;
   readonly onSelectSaved: (calculation: CalculationRecordResponse) => void;
+  readonly onFetchTransit: () => void | Promise<void>;
   readonly onPreview: () => void | Promise<void>;
   readonly onPersist: () => void | Promise<void>;
   readonly onRecalculate: () => void | Promise<void>;
@@ -47,6 +53,9 @@ export function HumanDesignPageView({
   selectedClient,
   selectedPartnerClient,
   model,
+  transitModel,
+  transitInstantValue,
+  canOpenTransitMode,
   selectedDetailKey,
   calculations,
   selectedCalculationId,
@@ -57,13 +66,19 @@ export function HumanDesignPageView({
   onSelectMode,
   onSelectClient,
   onSelectPartnerClient,
+  onChangeTransitInstant,
   onSelectDetail,
   onSelectSaved,
+  onFetchTransit,
   onPreview,
   onPersist,
   onRecalculate
 }: HumanDesignPageViewProps) {
   const detail = model ? getHumanDesignDetail(model, selectedDetailKey) : null;
+  const isTransitMode = mode === "transit";
+  const canRunPrimaryAction = isTransitMode
+    ? Boolean(selectedCalculationId)
+    : Boolean(selectedClient) && (mode !== "compatibility" || Boolean(selectedPartnerClient));
 
   return (
     <main className={styles.page}>
@@ -76,7 +91,7 @@ export function HumanDesignPageView({
         </div>
         <div className={styles.clientStrip}>
           <ClientSearchCombobox
-            label={mode === "compatibility" ? "Клиент" : "Клиент"}
+            label="Клиент"
             value={selectedClient?.value ?? ""}
             placeholder="Выберите клиента"
             selectedClient={selectedClient}
@@ -107,7 +122,12 @@ export function HumanDesignPageView({
           >
             Индивидуальный
           </button>
-          <button className={styles.modeDisabled} type="button" disabled>
+          <button
+            className={mode === "transit" ? styles.modeActive : canOpenTransitMode ? styles.modeButton : styles.modeDisabled}
+            type="button"
+            disabled={isBusy || !canOpenTransitMode}
+            onClick={() => onSelectMode("transit")}
+          >
             Транзиты
           </button>
           <button
@@ -127,17 +147,18 @@ export function HumanDesignPageView({
         <button
           className={styles.calculateButton}
           type="button"
-          disabled={isBusy || !selectedClient || (mode === "compatibility" && !selectedPartnerClient)}
-          onClick={() => void onPreview()}
+          disabled={isBusy || !canRunPrimaryAction}
+          onClick={() => void (isTransitMode ? onFetchTransit() : onPreview())}
         >
-          <Icon iconName="lightning" width={15} height={15} aria-hidden="true" />
-          {isBusy ? "Расчёт" : "Рассчитать"}
+          <Icon iconName={isTransitMode ? "orbit" : "lightning"} width={15} height={15} aria-hidden="true" />
+          {isBusy ? "Расчёт" : isTransitMode ? "Показать" : "Рассчитать"}
         </button>
         <button
           className={styles.toolButton}
           type="button"
           disabled={
             isBusy ||
+            isTransitMode ||
             !selectedClient ||
             (mode === "compatibility" && !selectedPartnerClient) ||
             !model ||
@@ -152,7 +173,7 @@ export function HumanDesignPageView({
           className={styles.toolButton}
           type="button"
           disabled={isBusy || !selectedCalculationId}
-          onClick={() => void onRecalculate()}
+          onClick={() => void (isTransitMode ? onFetchTransit() : onRecalculate())}
         >
           <Icon iconName="refresh" width={15} height={15} aria-hidden="true" />
           Обновить
@@ -187,7 +208,72 @@ export function HumanDesignPageView({
             ) : !selectedClient.hasBirthDate ? (
               <p className={styles.warningText}>В карточке клиента не заполнена дата рождения.</p>
             ) : null}
+            {isTransitMode && !selectedCalculationId ? (
+              <p className={styles.warningText}>Откройте сохранённый individual расчёт.</p>
+            ) : null}
           </section>
+          {isTransitMode ? (
+            <section className={styles.railGroup}>
+              <h2>Транзит</h2>
+              <label className={styles.transitField}>
+                <span>Момент</span>
+                <input
+                  type="datetime-local"
+                  value={transitInstantValue}
+                  disabled={isBusy || !selectedCalculationId}
+                  onChange={(event) => onChangeTransitInstant(event.currentTarget.value)}
+                />
+              </label>
+              {transitModel ? (
+                <div className={styles.transitMetrics}>
+                  <div>
+                    <span>Момент</span>
+                    <strong>{transitModel.snapshotLabel}</strong>
+                  </div>
+                  <div>
+                    <span>Дозамкнутые</span>
+                    <strong>{transitModel.summary.completedChannelCount}</strong>
+                  </div>
+                  <div>
+                    <span>Временные центры</span>
+                    <strong>{transitModel.summary.temporarilyDefinedCenterCount}</strong>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+          {isTransitMode && transitModel ? (
+            <section className={styles.railGroup}>
+              <h2>Транзитные каналы · {transitModel.completedChannels.length}</h2>
+              {transitModel.completedChannels.length ? (
+                transitModel.completedChannels.map((channel) => (
+                  <div className={styles.transitItem} key={channel.code}>
+                    <span>{`Канал ${channel.label}`}</span>
+                    <strong>{channel.name}</strong>
+                    <small>{`свои ${channel.natalGate} + транзит ${channel.transitGate}`}</small>
+                  </div>
+                ))
+              ) : (
+                <p className={styles.muted}>Новых каналов нет.</p>
+              )}
+            </section>
+          ) : null}
+          {isTransitMode && transitModel ? (
+            <section className={styles.railGroup}>
+              <h2>Транзитные планеты</h2>
+              <div className={styles.transitActivations}>
+                {transitModel.transitActivations.map((activation) => (
+                  <div className={styles.activation} key={`${activation.side}-${activation.body}`}>
+                    <span aria-hidden="true">{activation.glyph}</span>
+                    <strong>
+                      {activation.gate}
+                      <small>.{activation.line}</small>
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
           {model ? (
             <>
               <section className={styles.railGroup}>
@@ -302,6 +388,7 @@ export function HumanDesignPageView({
                 <ActivationColumn title="Дизайн" tone="design" activations={model.designActivations} />
                 <HumanDesignBodygraph
                   model={model}
+                  transitModel={isTransitMode ? transitModel : null}
                   selectedKey={selectedDetailKey}
                   onSelect={onSelectDetail}
                 />
@@ -321,18 +408,27 @@ export function HumanDesignPageView({
                 <span>
                   <i className={styles.bothDot} /> обе активации
                 </span>
+                {isTransitMode ? (
+                  <span>
+                    <i className={styles.transitDot} /> транзит
+                  </span>
+                ) : null}
               </div>
             </>
           ) : (
             <div className={styles.emptyState}>
               <Icon iconName="flow" width={28} height={28} aria-hidden="true" />
               <strong>
-                {mode === "compatibility"
+                {mode === "transit"
+                  ? "Откройте сохранённый individual расчёт"
+                  : mode === "compatibility"
                   ? "Выберите двух клиентов и рассчитайте связь"
                   : "Выберите клиента и рассчитайте бодиграф"}
               </strong>
               <span>
-                {mode === "compatibility"
+                {mode === "transit"
+                  ? "Transit overlay строится поверх сохранённого natal результата."
+                  : mode === "compatibility"
                   ? "Партнёрский preview использует два CRM bodygraph результата."
                   : "Поддержан individual preview из CRM birth data."}
               </span>
@@ -351,6 +447,17 @@ export function HumanDesignPageView({
               <div className={styles.checksum}>
                 <span>Checksum</span>
                 <code>{model.checksumShort}</code>
+              </div>
+            ) : null}
+            {isTransitMode && transitModel ? (
+              <div className={styles.transitPanel}>
+                <div>
+                  <span>Транзитный checksum</span>
+                  <code>{transitModel.checksumShort}</code>
+                </div>
+                <p>
+                  {`Активаций: ${transitModel.summary.transitActivationCount}. Дозамкнутых каналов: ${transitModel.summary.completedChannelCount}. Временных центров: ${transitModel.summary.temporarilyDefinedCenterCount}.`}
+                </p>
               </div>
             ) : null}
             {errorMessage ? <p className={styles.errorText}>{errorMessage}</p> : null}

@@ -2,12 +2,16 @@ import { readFileSync } from "node:fs";
 import { Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import type {
   HumanDesignCompatibilityResult,
-  HumanDesignIndividualResult
+  HumanDesignIndividualResult,
+  HumanDesignTransitResult
 } from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import { SavedCalculationPicker } from "../../features/calculations/components/SavedCalculationPicker";
-import { createHumanDesignViewModel } from "../../features/human-design/model/humanDesignViewModel";
+import {
+  createHumanDesignTransitViewModel,
+  createHumanDesignViewModel
+} from "../../features/human-design/model/humanDesignViewModel";
 import { HumanDesignPageView, type HumanDesignPageViewProps } from "./HumanDesignPageView";
 
 describe("HumanDesignPageView", () => {
@@ -50,7 +54,7 @@ describe("HumanDesignPageView", () => {
       (element) =>
       element.type === "button" &&
       element.props.disabled === true &&
-        ["Транзиты", "PDF", "AI-разбор"].some((label) =>
+        ["PDF", "AI-разбор"].some((label) =>
           textOf(element).includes(label)
         )
     );
@@ -62,8 +66,48 @@ describe("HumanDesignPageView", () => {
     expect(text).toContain("Канал 20–34");
     expect(text).toContain("Личность");
     expect(text).toContain("Дизайн");
-    expect(disabledFutureButtons).toHaveLength(3);
+    expect(disabledFutureButtons).toHaveLength(2);
     expect(linkButton?.props.disabled).toBe(false);
+  });
+
+  it("renders transit mode as a saved-calculation overlay with read-only fetch action", () => {
+    const onFetchTransit = vi.fn();
+    const onChangeTransitInstant = vi.fn();
+    const view = HumanDesignPageView({
+      ...baseProps(),
+      mode: "transit",
+      selectedClient: clientOption("22222222-2222-4222-8222-222222222222", "Марина Краснова"),
+      model: createHumanDesignViewModel(sampleResult()),
+      transitModel: createHumanDesignTransitViewModel(sampleTransitResult()),
+      transitInstantValue: "2026-07-23T12:15",
+      canOpenTransitMode: true,
+      selectedCalculationId: "11111111-1111-4111-8111-111111111111",
+      isLinked: false,
+      onFetchTransit,
+      onChangeTransitInstant
+    });
+    const text = textOf(view);
+    const instantInput = walk(view).find(
+      (element): element is ReactElement<{ value: string; onChange: (event: never) => void }> =>
+        element.type === "input" && element.props.type === "datetime-local"
+    );
+    const primaryButton = walk(view).find(
+      (element): element is ReactElement<{ disabled?: boolean; onClick: () => void }> =>
+        element.type === "button" && textOf(element).includes("Показать")
+    );
+    const persistButton = walk(view).find(
+      (element) => element.type === "button" && textOf(element).includes("Привязать")
+    );
+
+    expect(text).toContain("Транзитные каналы");
+    expect(text).toContain("Дозамкнутые 1");
+    expect(text).toContain("Канал 20–10");
+    expect(text).toContain("свои 20 + транзит 10");
+    expect(text).toContain("Транзитный checksum");
+    expect(instantInput?.props.value).toBe("2026-07-23T12:15");
+    primaryButton?.props.onClick();
+    expect(onFetchTransit).toHaveBeenCalledOnce();
+    expect(persistButton?.props.disabled).toBe(true);
   });
 
   it("renders partner mode with two CRM selectors and connection dynamics", () => {
@@ -142,6 +186,9 @@ function baseProps(): HumanDesignPageViewProps {
     selectedClient: null,
     selectedPartnerClient: null,
     model: null,
+    transitModel: null,
+    transitInstantValue: "2026-07-23T12:15",
+    canOpenTransitMode: false,
     selectedDetailKey: "type",
     status: {
       tone: "empty",
@@ -156,8 +203,10 @@ function baseProps(): HumanDesignPageViewProps {
     onSelectMode: vi.fn(),
     onSelectClient: vi.fn(),
     onSelectPartnerClient: vi.fn(),
+    onChangeTransitInstant: vi.fn(),
     onSelectDetail: vi.fn(),
     onPreview: vi.fn(),
+    onFetchTransit: vi.fn(),
     onPersist: vi.fn(),
     onSelectSaved: vi.fn(),
     onRecalculate: vi.fn()
@@ -368,6 +417,94 @@ function sampleCompatibilityResult(): HumanDesignCompatibilityResult {
       algorithm: "sha256",
       canonicalization: "json-stable-v1",
       value: `sha256:${"f".repeat(64)}`
+    }
+  };
+}
+
+function sampleTransitResult(): HumanDesignTransitResult {
+  const checksum = `sha256:${"9".repeat(64)}`;
+  const natal = {
+    ...sampleResult(),
+    definedChannels: [],
+    definedCenters: [],
+    definedGates: [
+      { gate: 20, activatedBy: [{ side: "personality" as const, body: "sun" as const, line: 1 }] }
+    ]
+  };
+  const bodies = [
+    "sun",
+    "earth",
+    "moon",
+    "north_node",
+    "south_node",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ] as const;
+
+  return {
+    methodCode: "human_design_classic",
+    engineRevision: 1,
+    schemaVersion: "human-design-transit-result.v1",
+    mode: "transit",
+    natal,
+    transitSnapshot: {
+      instant: "2026-07-23T09:15:00.000Z",
+      date: "2026-07-23",
+      time: "12:15",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173
+    },
+    transitActivations: bodies.map((body, index) => ({
+      side: "transit",
+      body,
+      longitude: index,
+      gate: index === 0 ? 10 : index + 1,
+      line: ((index % 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6
+    })),
+    transitDefinedGates: [
+      {
+        gate: 10,
+        activatedBy: [{ body: "sun", line: 1 }]
+      }
+    ],
+    completedChannels: [
+      {
+        code: "20-10",
+        gates: [20, 10],
+        centers: ["throat", "g"],
+        circuit: "integration",
+        natalGate: 20,
+        transitGate: 10
+      }
+    ],
+    temporarilyDefinedCenters: [
+      {
+        code: "g",
+        definedByCompletedChannels: ["20-10"]
+      }
+    ],
+    summary: {
+      transitActivationCount: 13,
+      completedChannelCount: 1,
+      temporarilyDefinedCenterCount: 1
+    },
+    inputFingerprint: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      scope: "human-design-transit-input.v1",
+      value: checksum
+    },
+    resultChecksum: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      value: checksum
     }
   };
 }

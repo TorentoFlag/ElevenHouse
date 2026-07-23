@@ -65,6 +65,9 @@ Findings:
   transit route implemented with focused service and HTTP e2e coverage.
 - [x] 2026-07-23: Task 3 frontend API/query foundation added for read-only
   transit overlay fetch; visual controller/view mode is next.
+- [x] 2026-07-23: Task 3 frontend controller/view mode added with saved
+  individual gate, transit instant control, read-only fetch action, bodygraph
+  transit overlay and summary rendering.
 
 ## Decision Log
 
@@ -187,6 +190,14 @@ optional `instant`, calls `GET
 /human-design/calculations/:calculationId/transits`, parses
 `humanDesignTransitResponseSchema`, and is exposed through a React Query
 mutation for on-demand read-only fetches. Focused frontend API/query tests pass.
+
+Observed 2026-07-23: `HumanDesignPageView` now exposes the `Транзиты` mode only
+when a saved individual result is open, keeps transit non-persisted, uses
+`datetime-local` for the selected moment, fetches the backend overlay on demand,
+renders completed transit channels, temporary centers, transit activations and
+the transit checksum, and passes overlay data to the bodygraph for distinct
+transit gate/channel/center highlighting. React still does not compute Human
+Design mechanics.
 
 ### Task 4: Runtime And Visual Evidence
 

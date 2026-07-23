@@ -3,6 +3,7 @@ import {
   humanDesignChannelGeometry,
   humanDesignGateGeometry,
   type HumanDesignDetailKey,
+  type HumanDesignTransitViewModel,
   type HumanDesignViewModel
 } from "../model/humanDesignViewModel";
 import type { CSSProperties } from "react";
@@ -10,17 +11,26 @@ import styles from "./HumanDesignBodygraph.module.css";
 
 export type HumanDesignBodygraphProps = {
   readonly model: HumanDesignViewModel;
+  readonly transitModel?: HumanDesignTransitViewModel | null;
   readonly selectedKey: HumanDesignDetailKey;
   readonly onSelect: (key: HumanDesignDetailKey) => void;
 };
 
 export function HumanDesignBodygraph({
   model,
+  transitModel = null,
   selectedKey,
   onSelect
 }: HumanDesignBodygraphProps) {
   const definedCenters = new Set(model.definedCenterCodes);
   const activeChannels = new Set(model.result.definedChannels.map((channel) => channel.code));
+  const transitChannels = new Set(
+    transitModel?.completedChannels.map((channel) => channel.code) ?? []
+  );
+  const temporaryCenters = new Set(
+    transitModel?.temporarilyDefinedCenters.map((center) => center.code) ?? []
+  );
+  const transitGates = new Set(transitModel?.transitGateNumbers ?? []);
 
   return (
     <svg
@@ -48,6 +58,7 @@ export function HumanDesignBodygraph({
         const key = `ch:${channel.code}` as const;
         const isSelected = selectedKey === key;
         const isActive = activeChannels.has(channel.code);
+        const isTransit = transitChannels.has(channel.code);
 
         return (
           <g key={channel.code}>
@@ -55,6 +66,11 @@ export function HumanDesignBodygraph({
               className={isSelected ? styles.channelSelected : styles.channelBase}
               points={toPolyline(points)}
             />
+            {isTransit ? (
+              <polyline className={styles.channelTransit} points={toPolyline(points)}>
+                <title>{`Транзит дозамыкает канал ${channel.code.replace("-", "–")}`}</title>
+              </polyline>
+            ) : null}
             {isActive ? (
               <polyline
                 className={styles.channelActive}
@@ -78,10 +94,12 @@ export function HumanDesignBodygraph({
       {humanDesignCenterGeometry.map((center) => {
         const modelCenter = model.centers.find((item) => item.code === center.code);
         const isDefined = definedCenters.has(center.code);
+        const isTemporary = !isDefined && temporaryCenters.has(center.code);
         const isSelected = selectedKey === center.code;
         const className = [
           styles.center,
           isDefined ? styles.centerDefined : styles.centerOpen,
+          isTemporary ? styles.centerTemporary : "",
           isSelected ? styles.centerSelected : ""
         ]
           .filter(Boolean)
@@ -116,6 +134,7 @@ export function HumanDesignBodygraph({
         const isPersonality = sides?.has("personality") ?? false;
         const isDesign = sides?.has("design") ?? false;
         const isDefinedCenter = definedCenters.has(point.center);
+        const isTransit = transitGates.has(number);
 
         return (
           <g
@@ -145,14 +164,18 @@ export function HumanDesignBodygraph({
                     ? styles.gatePersonality
                     : isDesign
                       ? styles.gateDesign
-                      : isDefinedCenter
-                        ? styles.gateDefined
-                        : styles.gateOpen
+                      : isTransit
+                        ? styles.gateTransit
+                        : isDefinedCenter
+                          ? styles.gateDefined
+                          : styles.gateOpen
                 }
               />
             )}
             <text
-              className={isPersonality || isDesign ? styles.gateTextActive : styles.gateText}
+              className={
+                isPersonality || isDesign || isTransit ? styles.gateTextActive : styles.gateText
+              }
               x={point.x}
               y={point.y + 2.9}
               textAnchor="middle"

@@ -106,6 +106,10 @@
   opacity: 0.46;
 }
 
+.modeButton:disabled {
+  cursor: not-allowed;
+}
+
 .stateSummary {
   display: grid;
   flex: 0 1 320px;
@@ -494,6 +498,118 @@
 
 .bothDot {
   background: linear-gradient(90deg, #efeafb 50%, #e5566d 50%);
+}
+
+.transitDot {
+  background: #6fa8ff;
+}
+
+.transitField {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--hd-line);
+  border-radius: 10px;
+  background: var(--hd-surface);
+}
+
+.transitField span {
+  color: rgb(186 178 218 / 0.62);
+  font-size: 10.5px;
+  font-weight: 760;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.transitField input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  color: rgb(229 225 244 / 0.96);
+  font: inherit;
+  font-size: 13px;
+}
+
+.transitField input:disabled {
+  opacity: 0.52;
+}
+
+.transitMetrics {
+  display: grid;
+  gap: 6px;
+}
+
+.transitMetrics div,
+.transitItem,
+.transitPanel {
+  border: 1px solid rgb(111 168 255 / 0.24);
+  border-radius: 10px;
+  background: rgb(111 168 255 / 0.08);
+}
+
+.transitMetrics div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+}
+
+.transitMetrics span,
+.transitItem span,
+.transitItem small,
+.transitPanel span {
+  color: rgb(186 178 218 / 0.66);
+  font-size: 10.5px;
+  font-weight: 760;
+}
+
+.transitMetrics strong,
+.transitItem strong {
+  color: #8fbdff;
+  font-size: 12.5px;
+  line-height: 1.25;
+  text-align: right;
+}
+
+.transitItem {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+}
+
+.transitItem span {
+  color: var(--hd-gold);
+  font-family: var(--eh-font-mono);
+}
+
+.transitItem strong {
+  text-align: left;
+}
+
+.transitActivations {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transitPanel {
+  display: grid;
+  gap: 10px;
+  padding: 11px 12px;
+}
+
+.transitPanel div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.transitPanel code {
+  color: #8fbdff;
+  font-family: var(--eh-font-mono);
+  font-size: 11px;
 }
 
 .emptyState {

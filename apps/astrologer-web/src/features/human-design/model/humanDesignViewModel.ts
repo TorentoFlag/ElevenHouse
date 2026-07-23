@@ -1,10 +1,12 @@
 import type {
   HumanDesignCompatibilityResult,
   HumanDesignIndividualResult,
-  HumanDesignResult
+  HumanDesignResult,
+  HumanDesignTransitResult
 } from "@elevenhouse/contracts";
 
 type HumanDesignActivation = HumanDesignIndividualResult["activations"][number];
+type HumanDesignTransitActivation = HumanDesignTransitResult["transitActivations"][number];
 type HumanDesignCenterCode = HumanDesignIndividualResult["definedCenters"][number]["code"];
 type HumanDesignChannelCode = HumanDesignIndividualResult["definedChannels"][number]["code"];
 type HumanDesignConnectionDynamicCode =
@@ -53,6 +55,15 @@ export type HumanDesignActivationView = {
   readonly side: HumanDesignActivation["side"];
 };
 
+export type HumanDesignTransitActivationView = {
+  readonly body: HumanDesignTransitActivation["body"];
+  readonly label: string;
+  readonly glyph: string;
+  readonly gate: number;
+  readonly line: number;
+  readonly side: HumanDesignTransitActivation["side"];
+};
+
 export type HumanDesignViewModel = {
   readonly mode: HumanDesignResult["mode"];
   readonly sourceResult: HumanDesignResult;
@@ -66,6 +77,38 @@ export type HumanDesignViewModel = {
   readonly definedCenterCodes: readonly HumanDesignCenterCode[];
   readonly checksumShort: string;
   readonly compatibility: HumanDesignCompatibilityView | null;
+};
+
+export type HumanDesignTransitViewModel = {
+  readonly result: HumanDesignTransitResult;
+  readonly snapshotLabel: string;
+  readonly checksumShort: string;
+  readonly transitActivations: readonly HumanDesignTransitActivationView[];
+  readonly transitGateNumbers: readonly number[];
+  readonly completedChannels: readonly HumanDesignTransitChannelView[];
+  readonly temporarilyDefinedCenters: readonly HumanDesignTransitCenterView[];
+  readonly summary: {
+    readonly transitActivationCount: number;
+    readonly completedChannelCount: number;
+    readonly temporarilyDefinedCenterCount: number;
+  };
+};
+
+export type HumanDesignTransitChannelView = {
+  readonly code: HumanDesignChannelCode;
+  readonly label: string;
+  readonly name: string;
+  readonly gates: readonly [number, number];
+  readonly natalGate: number;
+  readonly transitGate: number;
+};
+
+export type HumanDesignTransitCenterView = {
+  readonly code: HumanDesignCenterCode;
+  readonly label: string;
+  readonly theme: string;
+  readonly definedByCompletedChannels: readonly HumanDesignChannelCode[];
+  readonly color: string;
 };
 
 export type HumanDesignCompatibilityView = {
@@ -407,6 +450,43 @@ export function createHumanDesignViewModel(
   };
 }
 
+export function createHumanDesignTransitViewModel(
+  result: HumanDesignTransitResult
+): HumanDesignTransitViewModel {
+  return {
+    result,
+    snapshotLabel: formatTransitSnapshot(result.transitSnapshot),
+    checksumShort: result.resultChecksum.value.slice(7, 19),
+    transitActivations: result.transitActivations.map((activation) => ({
+      side: activation.side,
+      body: activation.body,
+      label: planetLabels[activation.body].label,
+      glyph: planetLabels[activation.body].glyph,
+      gate: activation.gate,
+      line: activation.line
+    })),
+    transitGateNumbers: Array.from(
+      new Set(result.transitActivations.map((activation) => activation.gate))
+    ).sort((left, right) => left - right),
+    completedChannels: result.completedChannels.map((channel) => ({
+      code: channel.code,
+      label: channel.code.replace("-", "–"),
+      name: channelNames[channel.code],
+      gates: channel.gates,
+      natalGate: channel.natalGate,
+      transitGate: channel.transitGate
+    })),
+    temporarilyDefinedCenters: result.temporarilyDefinedCenters.map((center) => ({
+      code: center.code,
+      label: centerMeta[center.code].label,
+      theme: centerMeta[center.code].theme,
+      definedByCompletedChannels: center.definedByCompletedChannels,
+      color: centerMeta[center.code].color
+    })),
+    summary: result.summary
+  };
+}
+
 export function getHumanDesignDetail(
   model: HumanDesignViewModel,
   key: HumanDesignDetailKey
@@ -585,4 +665,14 @@ function toActivationViews(
       gate: activation.gate,
       line: activation.line
     }));
+}
+
+function formatTransitSnapshot(snapshot: HumanDesignTransitResult["transitSnapshot"]): string {
+  return `${formatDate(snapshot.date)} · ${snapshot.time} · ${snapshot.timezone}`;
+}
+
+function formatDate(value: string): string {
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}.${month}.${year}`;
 }

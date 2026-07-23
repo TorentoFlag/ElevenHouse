@@ -3,10 +3,12 @@ import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import {
   createHumanDesignViewModel,
+  createHumanDesignTransitViewModel,
   type HumanDesignDetailKey
 } from "../../features/human-design/model/humanDesignViewModel";
 import {
   useCreateHumanDesignCalculationMutation,
+  useGetHumanDesignTransitMutation,
   useHumanDesignCalculationListQuery,
   usePreviewHumanDesignMutation,
   useRecalculateHumanDesignCalculationMutation
@@ -28,6 +30,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
   const previewMutation = usePreviewHumanDesignMutation();
   const createMutation = useCreateHumanDesignCalculationMutation();
   const recalculateMutation = useRecalculateHumanDesignCalculationMutation();
+  const transitMutation = useGetHumanDesignTransitMutation();
   const [mode, setMode] = useState<HumanDesignWorkspaceMode>("individual");
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
   const [selectedPartnerClient, setSelectedPartnerClient] =
@@ -35,30 +38,50 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
   const [savedResponse, setSavedResponse] = useState<
     ReturnType<typeof toHumanDesignCalculationResponse> | null
   >(null);
+  const [transitInstantValue, setTransitInstantValue] = useState(() =>
+    toDatetimeLocalValue(new Date())
+  );
   const [selectedDetailKey, setSelectedDetailKey] = useState<HumanDesignDetailKey>("type");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const calculations = useMemo(
-    () => getActiveHumanDesignCalculations(listQuery.data?.calculations ?? [], mode),
+    () =>
+      getActiveHumanDesignCalculations(
+        listQuery.data?.calculations ?? [],
+        mode === "compatibility" ? "compatibility" : "individual"
+      ),
     [listQuery.data?.calculations, mode]
   );
   const model = useMemo(
     () =>
       savedResponse
         ? createHumanDesignViewModel(savedResponse.result)
-        : previewMutation.data
+      : previewMutation.data
           ? createHumanDesignViewModel(previewMutation.data.result)
           : null,
     [previewMutation.data, savedResponse]
   );
+  const transitModel = useMemo(
+    () =>
+      transitMutation.data
+        ? createHumanDesignTransitViewModel(transitMutation.data.result)
+        : null,
+    [transitMutation.data]
+  );
   const isBusy =
-    previewMutation.isPending || createMutation.isPending || recalculateMutation.isPending;
+    previewMutation.isPending ||
+    createMutation.isPending ||
+    recalculateMutation.isPending ||
+    transitMutation.isPending;
+  const canOpenTransitMode = savedResponse?.result.mode === "individual";
   const status = getHumanDesignStatus({
     mode,
     selectedClient,
     selectedPartnerClient,
     hasResult: Boolean(model),
+    hasTransitResult: Boolean(transitModel),
     isLinked: Boolean(savedResponse),
     isBusy,
+    canOpenTransitMode,
     errorMessage
   });
 
@@ -67,14 +90,32 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     selectedClient,
     selectedPartnerClient,
     model,
+    transitModel,
+    transitInstantValue,
+    canOpenTransitMode,
     selectedDetailKey,
     calculations,
     selectedCalculationId: savedResponse?.calculation.id ?? null,
     status,
     errorMessage,
     isBusy,
-    isLinked: Boolean(savedResponse),
+    isLinked: mode !== "transit" && Boolean(savedResponse),
     onSelectMode: (nextMode) => {
+      if (nextMode === "transit") {
+        if (!canOpenTransitMode) {
+          setErrorMessage("Откройте сохранённый individual расчёт Human Design.");
+          return;
+        }
+        setMode("transit");
+        setSelectedPartnerClient(null);
+        setSelectedDetailKey("type");
+        setErrorMessage(null);
+        previewMutation.reset();
+        createMutation.reset();
+        recalculateMutation.reset();
+        void fetchTransit();
+        return;
+      }
       setMode(nextMode);
       clearResultState(nextMode);
     },
@@ -93,19 +134,25 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
         void previewCompatibility(selectedClient, client);
       }
     },
+    onChangeTransitInstant: (value) => {
+      setTransitInstantValue(value);
+      transitMutation.reset();
+      setErrorMessage(null);
+    },
     onSelectDetail: setSelectedDetailKey,
     onSelectSaved: (calculation) => {
       try {
         const response = toHumanDesignCalculationResponse(calculation);
-        setMode(calculation.mode);
+        setMode(mode === "transit" && response.result.mode === "individual" ? "transit" : calculation.mode);
         setSavedResponse(response);
         setSelectedClient(toClientOptionFromHumanDesignCalculation(calculation, "subject"));
         setSelectedPartnerClient(toClientOptionFromHumanDesignCalculation(calculation, "partner"));
-        setSelectedDetailKey(defaultDetailKey(calculation.mode));
+        setSelectedDetailKey(defaultDetailKey(mode === "transit" ? "transit" : calculation.mode));
         setErrorMessage(null);
         previewMutation.reset();
         createMutation.reset();
         recalculateMutation.reset();
+        transitMutation.reset();
       } catch {
         setErrorMessage("Сохранённый расчёт Human Design повреждён или устарел.");
       }
@@ -115,6 +162,9 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       if (mode === "compatibility" && selectedClient && selectedPartnerClient) {
         void previewCompatibility(selectedClient, selectedPartnerClient);
       }
+    },
+    onFetchTransit: () => {
+      void fetchTransit();
     },
     onPersist: () => {
       if (mode === "individual" && selectedClient && model) void persistIndividual(selectedClient);
@@ -134,6 +184,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     previewMutation.reset();
     createMutation.reset();
     recalculateMutation.reset();
+    transitMutation.reset();
   }
 
   async function previewIndividual(client: ClientSelectOption) {
@@ -152,6 +203,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setSavedResponse(null);
       createMutation.reset();
       recalculateMutation.reset();
+      transitMutation.reset();
       setSelectedDetailKey("type");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -176,6 +228,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setSavedResponse(null);
       createMutation.reset();
       recalculateMutation.reset();
+      transitMutation.reset();
       setSelectedDetailKey("compatibility:summary");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -195,6 +248,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setSavedResponse(response);
       previewMutation.reset();
       recalculateMutation.reset();
+      transitMutation.reset();
       setSelectedDetailKey("type");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -220,6 +274,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setSavedResponse(response);
       previewMutation.reset();
       recalculateMutation.reset();
+      transitMutation.reset();
       setSelectedDetailKey("compatibility:summary");
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
@@ -238,7 +293,29 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       );
       previewMutation.reset();
       createMutation.reset();
+      transitMutation.reset();
       setSelectedDetailKey(defaultDetailKey(response.calculation.mode));
+    } catch (error) {
+      setErrorMessage(getHumanDesignErrorMessage(error));
+    }
+  }
+
+  async function fetchTransit() {
+    if (!savedResponse || savedResponse.result.mode !== "individual") {
+      setErrorMessage("Откройте сохранённый individual расчёт Human Design.");
+      return;
+    }
+    const instant = toTransitInstant(transitInstantValue);
+    if (!instant) {
+      setErrorMessage("Укажите корректный момент транзита.");
+      return;
+    }
+    setErrorMessage(null);
+    try {
+      await transitMutation.mutateAsync({
+        calculationId: savedResponse.calculation.id,
+        query: { instant }
+      });
     } catch (error) {
       setErrorMessage(getHumanDesignErrorMessage(error));
     }
@@ -250,8 +327,10 @@ function getHumanDesignStatus(input: {
   readonly selectedClient: ClientSelectOption | null;
   readonly selectedPartnerClient: ClientSelectOption | null;
   readonly hasResult: boolean;
+  readonly hasTransitResult: boolean;
   readonly isLinked: boolean;
   readonly isBusy: boolean;
+  readonly canOpenTransitMode: boolean;
   readonly errorMessage: string | null;
 }): HumanDesignPageStatus {
   if (input.errorMessage) {
@@ -264,8 +343,29 @@ function getHumanDesignStatus(input: {
   if (input.isBusy) {
     return {
       tone: "busy",
-      title: "Расчёт Human Design",
+      title: input.mode === "transit" ? "Расчёт транзита" : "Расчёт Human Design",
       detail: "Запрашиваем chart-engine через backend."
+    };
+  }
+  if (input.mode === "transit") {
+    if (!input.canOpenTransitMode) {
+      return {
+        tone: "warning",
+        title: "Нет natal основы",
+        detail: "Откройте сохранённый individual расчёт."
+      };
+    }
+    if (input.hasTransitResult) {
+      return {
+        tone: "success",
+        title: "Транзит рассчитан",
+        detail: "Overlay пришёл из read-only backend route."
+      };
+    }
+    return {
+      tone: "ready",
+      title: "Момент транзита выбран",
+      detail: "Можно построить transit overlay."
     };
   }
   if (input.isLinked) {
@@ -353,4 +453,15 @@ function defaultDetailKey(mode: HumanDesignWorkspaceMode): HumanDesignDetailKey 
 function getHumanDesignErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim()) return error.message;
   return "Не удалось рассчитать Human Design.";
+}
+
+function toDatetimeLocalValue(date: Date): string {
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function toTransitInstant(value: string): string | null {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
 }

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type {
   HumanDesignCompatibilityResult,
-  HumanDesignIndividualResult
+  HumanDesignIndividualResult,
+  HumanDesignTransitResult
 } from "@elevenhouse/contracts";
 import {
+  createHumanDesignTransitViewModel,
   createHumanDesignViewModel,
   getHumanDesignDetail
 } from "./humanDesignViewModel";
@@ -80,6 +82,32 @@ describe("humanDesignViewModel", () => {
       title: "Партнёрский разбор",
       subtitle: "Connection dynamics"
     });
+  });
+
+  it("maps transit overlays to completed channels and temporary centers", () => {
+    const model = createHumanDesignTransitViewModel(transitResult());
+
+    expect(model.snapshotLabel).toBe("23.07.2026 · 12:15 · Europe/Moscow");
+    expect(model.transitGateNumbers).toContain(10);
+    expect(model.completedChannels).toEqual([
+      {
+        code: "20-10",
+        label: "20–10",
+        name: "Пробуждения",
+        gates: [20, 10],
+        natalGate: 20,
+        transitGate: 10
+      }
+    ]);
+    expect(model.temporarilyDefinedCenters).toEqual([
+      {
+        code: "g",
+        label: "G-центр",
+        theme: "идентичность, любовь, направление",
+        definedByCompletedChannels: ["20-10"],
+        color: "#e9c964"
+      }
+    ]);
   });
 });
 
@@ -241,6 +269,94 @@ function compatibilityResult(): HumanDesignCompatibilityResult {
       algorithm: "sha256",
       canonicalization: "json-stable-v1",
       value: `sha256:${"f".repeat(64)}`
+    }
+  };
+}
+
+function transitResult(): HumanDesignTransitResult {
+  const checksum = `sha256:${"9".repeat(64)}`;
+  const natal = {
+    ...result(),
+    definedChannels: [],
+    definedCenters: [],
+    definedGates: [
+      { gate: 20, activatedBy: [{ side: "personality" as const, body: "sun" as const, line: 1 }] }
+    ]
+  };
+  const bodies = [
+    "sun",
+    "earth",
+    "moon",
+    "north_node",
+    "south_node",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ] as const;
+
+  return {
+    methodCode: "human_design_classic",
+    engineRevision: 1,
+    schemaVersion: "human-design-transit-result.v1",
+    mode: "transit",
+    natal,
+    transitSnapshot: {
+      instant: "2026-07-23T09:15:00.000Z",
+      date: "2026-07-23",
+      time: "12:15",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173
+    },
+    transitActivations: bodies.map((body, index) => ({
+      side: "transit",
+      body,
+      longitude: index,
+      gate: index === 0 ? 10 : index + 1,
+      line: ((index % 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6
+    })),
+    transitDefinedGates: [
+      {
+        gate: 10,
+        activatedBy: [{ body: "sun", line: 1 }]
+      }
+    ],
+    completedChannels: [
+      {
+        code: "20-10",
+        gates: [20, 10],
+        centers: ["throat", "g"],
+        circuit: "integration",
+        natalGate: 20,
+        transitGate: 10
+      }
+    ],
+    temporarilyDefinedCenters: [
+      {
+        code: "g",
+        definedByCompletedChannels: ["20-10"]
+      }
+    ],
+    summary: {
+      transitActivationCount: 13,
+      completedChannelCount: 1,
+      temporarilyDefinedCenterCount: 1
+    },
+    inputFingerprint: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      scope: "human-design-transit-input.v1",
+      value: checksum
+    },
+    resultChecksum: {
+      algorithm: "sha256",
+      canonicalization: "json-stable-v1",
+      value: checksum
     }
   };
 }
