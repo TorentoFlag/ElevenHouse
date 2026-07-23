@@ -223,6 +223,10 @@ describe("chartsApi", () => {
     await expect(getChartCalculation(calculationId)).resolves.toMatchObject({
       schemaVersion: "chart-result.v1"
     });
+
+    expect(application.http.get).toHaveBeenNthCalledWith(1, `/charts/jobs/${jobId}`, {
+      cache: "no-store"
+    });
   });
 
   it("recalculates an existing chart through the calculation-scoped CSRF route", async () => {

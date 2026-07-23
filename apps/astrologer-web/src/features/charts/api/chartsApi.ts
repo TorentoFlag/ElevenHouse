@@ -125,7 +125,9 @@ export async function createProgressionChartJob(
 }
 
 export async function getChartJob(jobId: string): Promise<ChartJobResponse> {
-  return chartJobResponseSchema.parse(await application.http.get(`/charts/jobs/${jobId}`));
+  return chartJobResponseSchema.parse(
+    await application.http.get(`/charts/jobs/${jobId}`, { cache: "no-store" })
+  );
 }
 
 export async function getChartCalculation(

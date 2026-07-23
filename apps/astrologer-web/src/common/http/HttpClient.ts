@@ -16,6 +16,7 @@ export type HttpClientCsrfOptions = {
 export type HttpRequestOptions = {
   readonly method?: "DELETE" | "GET" | "POST" | "PUT";
   readonly body?: unknown;
+  readonly cache?: RequestCache;
   readonly csrf?: boolean;
   readonly headers?: Readonly<Record<string, string>>;
 };
@@ -33,9 +34,13 @@ export class HttpClient {
     this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
   }
 
-  get<TResponse>(path: string): Promise<TResponse> {
+  get<TResponse>(
+    path: string,
+    options: Omit<HttpRequestOptions, "method" | "body"> = {}
+  ): Promise<TResponse> {
     return this.request<TResponse>(path, {
-      method: "GET"
+      method: "GET",
+      ...options
     });
   }
 
@@ -97,6 +102,7 @@ export class HttpClient {
     return {
       method,
       credentials: this.credentials,
+      ...(options.cache ? { cache: options.cache } : {}),
       ...(Object.keys(headers).length > 0 ? { headers } : {}),
       ...(options.body === undefined
         ? {}

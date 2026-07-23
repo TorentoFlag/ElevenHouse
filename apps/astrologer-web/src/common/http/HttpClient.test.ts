@@ -69,6 +69,22 @@ describe("HttpClient", () => {
     });
   });
 
+  it("forwards explicit cache mode for polling requests", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ status: "calculating" }));
+    const http = new HttpClient({
+      basePath: "/api",
+      fetcher
+    });
+
+    await http.get("/charts/jobs/job_1", { cache: "no-store" });
+
+    expect(fetcher).toHaveBeenCalledWith("/api/charts/jobs/job_1", {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store"
+    });
+  });
+
   it("returns undefined for empty successful responses", async () => {
     const http = new HttpClient({
       basePath: "/api",
