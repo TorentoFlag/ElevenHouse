@@ -7,6 +7,7 @@
   --chart-gold-soft: rgb(246 210 102 / 0.13);
   --chart-violet: #b69aff;
   --chart-blue: #62a7ff;
+  container: chart-engine-page / inline-size;
   display: flex;
   height: calc(100dvh - var(--astrologer-app-header-height, 68px));
   min-height: 0;
@@ -20,12 +21,13 @@
 .toolbar {
   box-sizing: border-box;
   display: flex;
-  flex: 0 0 60px;
-  height: 60px;
+  flex: 0 0 auto;
+  min-height: 60px;
   align-items: center;
-  gap: 16px;
+  gap: 8px clamp(8px, 0.8vw, 12px);
+  flex-wrap: wrap;
   min-width: 0;
-  padding: 0 20px;
+  padding: 8px clamp(12px, 1.2vw, 20px);
   border-bottom: 1px solid var(--chart-line);
   background: rgb(13 12 32 / 0.94);
 }
@@ -61,8 +63,9 @@
   color: var(--chart-gold);
 }
 .clientStrip {
-  width: min(356px, 30vw);
-  min-width: 252px;
+  width: clamp(216px, 20vw, 340px);
+  min-width: 0;
+  flex: 0 1 clamp(216px, 20vw, 340px);
 }
 .clientButton {
   display: grid;
@@ -100,7 +103,8 @@
 }
 .modeTabs {
   display: inline-flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  max-width: 100%;
   gap: 2px;
   overflow: hidden;
   padding: 3px;
@@ -113,7 +117,7 @@
 .modeDisabled {
   flex: 0 0 auto;
   min-height: 32px;
-  padding: 0 16px;
+  padding: 0 clamp(10px, 0.7vw, 14px);
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -136,9 +140,9 @@
 .stateSummary {
   box-sizing: border-box;
   display: grid;
-  flex: 0 1 320px;
-  min-width: 220px;
-  max-width: 360px;
+  flex: 0 2 260px;
+  min-width: 180px;
+  max-width: 320px;
   gap: 2px;
   padding: 7px 12px;
   border: 1px solid var(--chart-line-strong);
@@ -197,6 +201,9 @@
   grid-template-columns: 118px 92px;
   align-items: center;
   gap: 8px;
+}
+.solarReturnYearField {
+  grid-template-columns: 106px;
 }
 .transitMomentFields label {
   display: grid;
@@ -282,7 +289,7 @@
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: 218px minmax(500px, 1fr) 340px;
+  grid-template-columns: minmax(190px, 218px) minmax(360px, 1fr) minmax(300px, 340px);
 }
 .rail,
 .panel {
@@ -1251,11 +1258,8 @@
   outline: none;
 }
 
-@media (max-width: 1180px) {
+@container chart-engine-page (max-width: 940px) {
   .toolbar {
-    flex-wrap: wrap;
-    height: auto;
-    min-height: 60px;
     padding-block: 10px;
   }
   .body {
@@ -1265,6 +1269,95 @@
     grid-column: 1 / -1;
     border-top: 1px solid var(--chart-line);
     border-left: 0;
+  }
+}
+
+@media (max-width: 980px) {
+  .toolbar {
+    padding-block: 10px;
+  }
+  .body {
+    grid-template-columns: 210px minmax(360px, 1fr);
+  }
+  .panel {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--chart-line);
+    border-left: 0;
+  }
+}
+
+@container chart-engine-page (max-width: 760px) {
+  .toolbar {
+    display: grid;
+    flex-basis: auto;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 20px;
+  }
+  .titleGroup {
+    min-width: 0;
+  }
+  .clientStrip {
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
+  }
+  .modeTabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .modeActive,
+  .modeDisabled {
+    flex: 1 0 auto;
+  }
+  .toolbarSpacer {
+    display: none;
+  }
+  .stateSummary {
+    width: 100%;
+    max-width: none;
+  }
+  .calculateButton,
+  .toolButton,
+  .toolButtonActive {
+    width: 100%;
+    justify-content: center;
+  }
+  .body {
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+  .rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--chart-line);
+  }
+  .rail,
+  .panel,
+  .workspace {
+    overflow: visible;
+  }
+  .wheelStage {
+    min-height: 420px;
+    padding: 20px 20px 8px;
+    gap: 12px;
+  }
+  .wheelSvg {
+    width: min(100%, 300px);
+    max-height: 300px;
+  }
+  .hoverDetailSlot {
+    min-height: 64px;
+  }
+  .hoverDetailCard,
+  .statusCard,
+  .statusCardError {
+    width: calc(100% - 40px);
+  }
+  .statusCard,
+  .statusCardError {
+    position: static;
   }
 }
 

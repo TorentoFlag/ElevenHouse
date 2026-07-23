@@ -1199,6 +1199,8 @@ function TransitMomentFields({
         <input
           aria-label="Дата транзита"
           disabled={disabled}
+          id="chart-transit-date"
+          name="transitDate"
           type="date"
           value={value.date}
           onChange={(event) => onChange({ ...value, date: event.target.value })}
@@ -1209,6 +1211,8 @@ function TransitMomentFields({
         <input
           aria-label="Время транзита"
           disabled={disabled}
+          id="chart-transit-time"
+          name="transitTime"
           type="time"
           value={value.time}
           onChange={(event) => onChange({ ...value, time: event.target.value })}
@@ -1228,7 +1232,7 @@ function SolarReturnYearField({
   readonly onChange?: (year: number) => void;
 }) {
   return (
-    <div className={styles.transitMomentFields}>
+    <div className={`${styles.transitMomentFields} ${styles.solarReturnYearField}`}>
       <label>
         <span>Год соляра</span>
         <input
