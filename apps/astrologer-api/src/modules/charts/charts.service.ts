@@ -16,6 +16,7 @@ import {
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalJobCreateResponseSchema,
+  chartProgressionJobCreateRequestSchema,
   chartSolarReturnJobCreateRequestSchema,
   chartSynastryJobCreateRequestSchema,
   chartTransitJobCreateRequestSchema,
@@ -24,6 +25,7 @@ import {
   type ChartCalculationResponse,
   type ChartJobResponse,
   type ChartNatalJobCreateResponse,
+  type ChartProgressionJobCreateRequest,
   type ChartSolarReturnJobCreateRequest,
   type ChartSynastryJobCreateRequest,
   type ChartTransitJobCreateRequest
@@ -305,6 +307,72 @@ export class ChartsService {
       const outcome = await createChartJobAndRequestCalculation({
         store: this.commandStore,
         method: "solar_return",
+        ownerUserId,
+        clientId: parsedBody.clientId,
+        inputFingerprint: requestFingerprint,
+        inputSnapshot: requestSnapshot,
+        settingsSnapshot: parsedBody.settings,
+        now: this.clock.now()
+      });
+      if (outcome.kind === "existing_result") {
+        const result = await this.jobStore.getOwnerScopedResult({
+          ownerUserId,
+          calculationId: outcome.calculationId
+        });
+        if (!result) {
+          throw chartHttpError(
+            404,
+            "CHART_CALCULATION_NOT_FOUND",
+            "Chart calculation was not found"
+          );
+        }
+        return chartNatalJobCreateResponseSchema.parse({
+          status: "succeeded",
+          calculationId: outcome.calculationId,
+          result: storedChartCalculationPayloadSchema.parse(result)
+        });
+      }
+      return chartNatalJobCreateResponseSchema.parse({
+        status: "calculating",
+        jobId: outcome.jobId
+      });
+    });
+  }
+
+  async createProgressionJob(
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<ChartNatalJobCreateResponse> {
+    const parsedBody = parseChartContract<ChartProgressionJobCreateRequest>(
+      chartProgressionJobCreateRequestSchema,
+      body
+    );
+    const ownerUserId = requireOwnerUserId(request);
+    return mapChartError(async () => {
+      const client = await this.clientStore.getAstrologerClient({
+        astrologerUserId: ownerUserId,
+        clientUserId: parsedBody.clientId
+      });
+      if (!client?.birthData) {
+        throw chartHttpError(404, "CHART_CLIENT_NOT_FOUND", "Client was not found");
+      }
+      const inputSnapshot = toChartInputSnapshot(assertChartBirthDataReady(client.birthData));
+      const progressionSnapshot = {
+        targetDate: parsedBody.targetDate,
+        progressionType: "secondary" as const
+      };
+      const requestSnapshot = { inputSnapshot, progressionSnapshot };
+      const requestFingerprint = sha256CanonicalJson({
+        schemaVersion: "chart-request.v1",
+        providerVersion,
+        method: "progression",
+        clientId: parsedBody.clientId,
+        inputSnapshot: requestSnapshot as CanonicalJson,
+        settings: parsedBody.settings as CanonicalJson
+      });
+      const outcome = await createChartJobAndRequestCalculation({
+        store: this.commandStore,
+        method: "progression",
         ownerUserId,
         clientId: parsedBody.clientId,
         inputFingerprint: requestFingerprint,

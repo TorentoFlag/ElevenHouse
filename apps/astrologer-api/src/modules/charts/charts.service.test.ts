@@ -208,6 +208,38 @@ describe("ChartsService", () => {
     );
   });
 
+  it("creates secondary progression jobs from the owner-scoped CRM birth data snapshot", async () => {
+    const commandStore = createCommandStore();
+    const service = createService({ commandStore });
+
+    await service.createProgressionJob(
+      {
+        clientId,
+        targetDate: "2026-07-23",
+        settings: settings()
+      },
+      request()
+    );
+
+    expect(commandStore.createOrReuseChartJobAndRequestCalculation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "progression",
+        ownerUserId,
+        clientId,
+        inputSnapshot: {
+          inputSnapshot: expect.objectContaining({
+            birthDate: "1990-07-15",
+            timezone: "Europe/Rome"
+          }),
+          progressionSnapshot: {
+            targetDate: "2026-07-23",
+            progressionType: "secondary"
+          }
+        }
+      })
+    );
+  });
+
   it("reuses an existing solar return calculation result for an identical request", async () => {
     const calculationId = "77777777-7777-4777-8777-777777777777";
     const commandStore = createCommandStore({
@@ -368,7 +400,7 @@ function createClientStore(
     listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
     getAstrologerClient: vi.fn(async ({ clientUserId }) => {
       const birthData = input.clients
-        ? input.clients[clientUserId]
+        ? (input.clients[clientUserId] ?? null)
         : (input.birthData ?? readyBirthData({ clientUserId }));
       return {
         clientUserId,

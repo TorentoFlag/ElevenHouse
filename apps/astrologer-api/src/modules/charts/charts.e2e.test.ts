@@ -145,6 +145,9 @@ describe("charts HTTP routes", () => {
         cookie: `${sessionCookieName}=${sessionToken}`
       }
     );
+    const progressionResponse = await postJson("/charts/progressions/jobs", validProgressionBody(), {
+      cookie: `${sessionCookieName}=${sessionToken}`
+    });
     const pdfResponse = await postJson(
       "/charts/calculations/77777777-7777-4777-8777-777777777777/report/pdf",
       { expectedResultChecksum: `sha256:${"a".repeat(64)}`, locale: "ru" },
@@ -155,6 +158,7 @@ describe("charts HTTP routes", () => {
     expect(transitResponse.status).toBe(403);
     expect(synastryResponse.status).toBe(403);
     expect(solarReturnResponse.status).toBe(403);
+    expect(progressionResponse.status).toBe(403);
     expect(pdfResponse.status).toBe(403);
   });
 
@@ -182,6 +186,20 @@ describe("charts HTTP routes", () => {
     const response = await postJson(
       "/charts/solar-return/jobs",
       validSolarReturnBody(),
+      csrfHeaders()
+    );
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      status: "calculating",
+      jobId: "66666666-6666-4666-8666-666666666666"
+    });
+  });
+
+  it("creates authenticated progression jobs through the CSRF-protected route", async () => {
+    const response = await postJson(
+      "/charts/progressions/jobs",
+      validProgressionBody(),
       csrfHeaders()
     );
 
@@ -494,6 +512,13 @@ function validSolarReturnBody(): Record<string, unknown> {
   return {
     ...validBody(),
     year: 2026
+  };
+}
+
+function validProgressionBody(): Record<string, unknown> {
+  return {
+    ...validBody(),
+    targetDate: "2026-07-23"
   };
 }
 

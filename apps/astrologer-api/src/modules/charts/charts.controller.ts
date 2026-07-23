@@ -33,6 +33,12 @@ export class ChartsController {
     return this.service.createSolarReturnJob(body, request);
   }
 
+  @Post("progressions/jobs")
+  @RequireCsrf()
+  createProgressionJob(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.service.createProgressionJob(body, request);
+  }
+
   @Get("jobs/:jobId")
   getJob(@Param("jobId") jobId: string, @Req() request: AstrologerSessionRequest) {
     return this.service.getJob(jobId, request);
