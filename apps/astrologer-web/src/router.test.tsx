@@ -12,6 +12,7 @@ import { ProductsPage } from "./pages/products/ProductsPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { CalendarPage } from "./pages/calendar/CalendarPage";
 import { HumanDesignPage } from "./pages/human-design/HumanDesignPage";
+import { InboxPage } from "./pages/inbox/InboxPage";
 import { astrologerRoutes } from "./router";
 
 vi.mock("react-router", async (importOriginal) => {
@@ -40,6 +41,7 @@ describe("astrologerRoutes", () => {
     const matrixRoute = shellRoute?.children?.find((route) => route.path === "/matrix");
     const humanDesignRoute = shellRoute?.children?.find((route) => route.path === "/human-design");
     const referenceRoute = shellRoute?.children?.find((route) => route.path === "/reference");
+    const inboxRoute = shellRoute?.children?.find((route) => route.path === "/inbox");
     const settingsRoute = shellRoute?.children?.find((route) => route.path === "/settings");
 
     expect(isValidElement(rootRedirect?.element) && rootRedirect.element.type).toBe(Navigate);
@@ -65,6 +67,7 @@ describe("astrologerRoutes", () => {
     expect(isValidElement(referenceRoute?.element) && referenceRoute.element.type).toBe(
       ReferencePage
     );
+    expect(isValidElement(inboxRoute?.element) && inboxRoute.element.type).toBe(InboxPage);
     expect(isValidElement(settingsRoute?.element) && settingsRoute.element.type).toBe(SettingsPage);
   });
 });

@@ -1,0 +1,305 @@
+import { HttpException, Inject, Injectable, UnauthorizedException, type MessageEvent } from "@nestjs/common";
+import type { Observable } from "rxjs";
+import {
+  MessagingClientRelationshipError,
+  MessagingIdempotencyConflictError,
+  MessagingThreadNotFoundError,
+  MessagingValidationError,
+  createClientFromThread,
+  createOutboundMessage,
+  linkThreadToClient,
+  markThreadRead,
+  recordTelegramBusinessConnection,
+  recordTelegramBusinessMessage,
+  type MessagingReadStore,
+  type MessagingStore
+} from "@elevenhouse/domain";
+import {
+  CreateMessagingThreadClientRequestSchema,
+  LinkMessagingThreadClientRequestSchema,
+  MessagingChannelConnectionResponseSchema,
+  MessagingMessageResponseSchema,
+  MessagingThreadClientLinkResponseSchema,
+  MessagingThreadDetailQuerySchema,
+  MessagingThreadListQuerySchema,
+  MessagingThreadListResponseSchema,
+  MessagingThreadMutationResponseSchema,
+  MessagingThreadParamsSchema,
+  MessagingThreadResponseSchema,
+  SendMessagingMessageRequestSchema,
+  type MessagingChannelConnectionResponse,
+  type MessagingMessageResponse,
+  type MessagingThreadClientLinkResponse,
+  type MessagingThreadListResponse,
+  type MessagingThreadMutationResponse,
+  type MessagingThreadResponse
+} from "@elevenhouse/contracts";
+import type { ZodType } from "@elevenhouse/validation";
+import { SystemClock } from "../clock/system-clock.service";
+import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { messagingHttpError } from "./messaging-http-errors";
+import { MESSAGING_READ_STORE, MESSAGING_STORE } from "./messaging.tokens";
+import { createMessagingRealtimeEventStream } from "./realtime-event-stream";
+import type { ParsedTelegramBusinessWebhookUpdate } from "./telegram-business-webhook";
+
+@Injectable()
+export class MessagingService {
+  constructor(
+    @Inject(MESSAGING_STORE) private readonly store: MessagingStore,
+    @Inject(MESSAGING_READ_STORE) private readonly readStore: MessagingReadStore,
+    private readonly clock: SystemClock
+  ) {}
+
+  async listChannelConnections(
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<MessagingChannelConnectionResponse> {
+    const astrologerUserId = requireAstrologerUserId(request);
+    const result = await this.readStore.listChannelConnections({ astrologerUserId });
+    return MessagingChannelConnectionResponseSchema.parse(result);
+  }
+
+  async listThreads(
+    query: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<MessagingThreadListResponse> {
+    const parsedQuery = parseContract(MessagingThreadListQuerySchema, query);
+    const astrologerUserId = requireAstrologerUserId(request);
+    const result = await this.readStore.listThreads({ astrologerUserId, ...parsedQuery });
+    return MessagingThreadListResponseSchema.parse(result);
+  }
+
+  async getThread(
+    threadId: string,
+    query: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<MessagingThreadResponse> {
+    const params = parseContract(MessagingThreadParamsSchema, { threadId });
+    const parsedQuery = parseContract(MessagingThreadDetailQuerySchema, query);
+    const astrologerUserId = requireAstrologerUserId(request);
+    const result = await this.readStore.getThread({
+      astrologerUserId,
+      threadId: params.threadId,
+      ...parsedQuery
+    });
+    if (!result) throw messagingHttpError(404, "messaging_thread_not_found", "Messaging thread was not found");
+    return MessagingThreadResponseSchema.parse(result);
+  }
+
+  async sendMessage(
+    threadId: string,
+    body: unknown,
+    idempotencyKey: string | undefined,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<MessagingMessageResponse> {
+    return mapMessagingErrors(async () => {
+      const params = parseContract(MessagingThreadParamsSchema, { threadId });
+      const command = parseContract(SendMessagingMessageRequestSchema, body);
+      const result = await createOutboundMessage({
+        store: this.store,
+        astrologerUserId: requireAstrologerUserId(request),
+        threadId: params.threadId,
+        channelConnectionId: command.channelConnectionId,
+        text: command.text,
+        idempotencyKey: idempotencyKey ?? "",
+        now: this.clock.now()
+      });
+      return MessagingMessageResponseSchema.parse({ message: toMessageResponse(result.message) });
+    });
+  }
+
+  async linkClient(
+    threadId: string,
+    body: unknown,
+    idempotencyKey: string | undefined,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<MessagingThreadClientLinkResponse> {
+    return mapMessagingErrors(async () => {
+      const params = parseContract(MessagingThreadParamsSchema, { threadId });
+      const command = parseContract(LinkMessagingThreadClientRequestSchema, body);
+      const thread = await linkThreadToClient({
+        store: this.store,
+        astrologerUserId: requireAstrologerUserId(request),
+        threadId: params.threadId,
+        clientUserId: command.clientUserId,
+        idempotencyKey: idempotencyKey ?? "",
+        now: this.clock.now()
+      });
+      return MessagingThreadClientLinkResponseSchema.parse({
+        thread: await this.requireThreadReadModel(thread.id, request),
+        clientUserId: command.clientUserId
+      });
+    });
+  }
+
+  async createClient(
+    threadId: string,
+    body: unknown,
+    idempotencyKey: string | undefined,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<MessagingThreadClientLinkResponse> {
+    return mapMessagingErrors(async () => {
+      const params = parseContract(MessagingThreadParamsSchema, { threadId });
+      const command = parseContract(CreateMessagingThreadClientRequestSchema, body);
+      const thread = await createClientFromThread({
+        store: this.store,
+        astrologerUserId: requireAstrologerUserId(request),
+        threadId: params.threadId,
+        displayName: command.displayName,
+        idempotencyKey: idempotencyKey ?? "",
+        now: this.clock.now()
+      });
+      if (!thread.clientUserId) throw new Error("Expected created messaging client to be linked to the thread");
+      return MessagingThreadClientLinkResponseSchema.parse({
+        thread: await this.requireThreadReadModel(thread.id, request),
+        clientUserId: thread.clientUserId
+      });
+    });
+  }
+
+  async markRead(
+    threadId: string,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<MessagingThreadMutationResponse> {
+    return mapMessagingErrors(async () => {
+      const params = parseContract(MessagingThreadParamsSchema, { threadId });
+      const thread = await markThreadRead({
+        store: this.store,
+        astrologerUserId: requireAstrologerUserId(request),
+        threadId: params.threadId,
+        now: this.clock.now()
+      });
+      return MessagingThreadMutationResponseSchema.parse({
+        thread: await this.requireThreadReadModel(thread.id, request)
+      });
+    });
+  }
+
+  streamRealtimeEvents(
+    lastEventId: string | undefined,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Observable<MessageEvent> {
+    return createMessagingRealtimeEventStream({
+      readStore: this.readStore,
+      astrologerUserId: requireAstrologerUserId(request),
+      lastEventId,
+      pollIntervalMs: 2000,
+      heartbeatIntervalMs: 25_000
+    });
+  }
+
+  async handleTelegramBusinessWebhookUpdate(
+    update: ParsedTelegramBusinessWebhookUpdate
+  ): Promise<void> {
+    if (update.kind === "business_connection") {
+      await recordTelegramBusinessConnection({
+        store: this.store,
+        businessConnectionId: update.businessConnectionId,
+        userId: update.userId,
+        userChatId: update.userChatId,
+        username: update.username,
+        displayName: update.displayName,
+        connectedAt: update.connectedAt,
+        enabled: update.enabled,
+        rights: update.rights,
+        now: this.clock.now()
+      });
+      return;
+    }
+
+    if (update.kind === "business_message" && update.contentType === "text" && update.text) {
+      await recordTelegramBusinessMessage({
+        store: this.store,
+        updateId: update.updateId,
+        businessConnectionId: update.businessConnectionId,
+        providerMessageId: update.providerMessageId,
+        providerChatId: update.providerChatId,
+        providerUserId: update.providerUserId,
+        username: update.username,
+        displayName: update.displayName,
+        text: update.text,
+        providerSentAt: update.providerSentAt,
+        now: this.clock.now()
+      });
+    }
+  }
+
+  private async requireThreadReadModel(
+    threadId: string,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ) {
+    const result = await this.readStore.getThread({
+      astrologerUserId: requireAstrologerUserId(request),
+      threadId,
+      limit: 1,
+      offset: 0
+    });
+    if (!result) throw messagingHttpError(404, "messaging_thread_not_found", "Messaging thread was not found");
+    return result.thread;
+  }
+}
+
+function toMessageResponse(message: {
+  readonly id: string;
+  readonly threadId: string;
+  readonly channelConnectionId: string;
+  readonly externalIdentityId: string | null;
+  readonly direction: "inbound" | "outbound";
+  readonly text: string;
+  readonly status: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}) {
+  return {
+    id: message.id,
+    threadId: message.threadId,
+    channelConnectionId: message.channelConnectionId,
+    externalIdentityId: message.externalIdentityId,
+    direction: message.direction,
+    senderKind: message.direction === "outbound" ? "astrologer" : "client",
+    contentType: "text",
+    text: message.text,
+    mediaAssetId: null,
+    status: message.status,
+    failureCode: null,
+    providerSentAt: null,
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt
+  };
+}
+
+function requireAstrologerUserId(
+  request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+): string {
+  const astrologerUserId = request.currentAstrologerAccount?.account.id;
+  if (!astrologerUserId) throw new UnauthorizedException("Valid astrologer session is required");
+  return astrologerUserId;
+}
+
+function parseContract<T>(schema: ZodType<T>, value: unknown): T {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw messagingHttpError(400, "messaging_validation_error", "Invalid messaging request");
+  }
+  return result.data;
+}
+
+async function mapMessagingErrors<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof HttpException) throw error;
+    if (error instanceof MessagingValidationError) {
+      throw messagingHttpError(400, error.code, "Invalid messaging request");
+    }
+    if (error instanceof MessagingThreadNotFoundError) {
+      throw messagingHttpError(404, error.code, "Messaging thread was not found");
+    }
+    if (error instanceof MessagingIdempotencyConflictError) {
+      throw messagingHttpError(409, error.code, "Messaging request conflicts with a previous request");
+    }
+    if (error instanceof MessagingClientRelationshipError) {
+      throw messagingHttpError(422, error.code, "Client relationship is not active");
+    }
+    throw error;
+  }
+}

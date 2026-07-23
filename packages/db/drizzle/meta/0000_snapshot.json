@@ -1,5 +1,5 @@
 {
-  "id": "29ae569f-8a30-4f7e-9ae4-902483a559c9",
+  "id": "2d780b9c-aeb7-4e7e-9360-84545537e890",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -5897,6 +5897,327 @@
       },
       "isRLSEnabled": false
     },
+    "public.chart_calculation_jobs": {
+      "name": "chart_calculation_jobs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result_calculation_id": {
+          "name": "result_calculation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "method": {
+          "name": "method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'natal'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "input_fingerprint": {
+          "name": "input_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_snapshot": {
+          "name": "input_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "settings_snapshot": {
+          "name": "settings_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'kerykeion'"
+        },
+        "schema_version": {
+          "name": "schema_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'chart-result.v1'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "max_attempts": {
+          "name": "max_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 3
+        },
+        "locked_by": {
+          "name": "locked_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "locked_until": {
+          "name": "locked_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_message": {
+          "name": "last_error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "chart_calculation_jobs_owner_idx": {
+          "name": "chart_calculation_jobs_owner_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "chart_calculation_jobs_client_idx": {
+          "name": "chart_calculation_jobs_client_idx",
+          "columns": [
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "chart_calculation_jobs_status_updated_idx": {
+          "name": "chart_calculation_jobs_status_updated_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "chart_calculation_jobs_active_fingerprint_unique": {
+          "name": "chart_calculation_jobs_active_fingerprint_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "input_fingerprint",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"chart_calculation_jobs\".\"status\" in ('queued', 'processing')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "chart_calculation_jobs_success_fingerprint_unique": {
+          "name": "chart_calculation_jobs_success_fingerprint_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "input_fingerprint",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"chart_calculation_jobs\".\"status\" = 'succeeded'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "chart_calculation_jobs_owner_user_id_users_id_fk": {
+          "name": "chart_calculation_jobs_owner_user_id_users_id_fk",
+          "tableFrom": "chart_calculation_jobs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "chart_calculation_jobs_client_id_client_profiles_user_id_fk": {
+          "name": "chart_calculation_jobs_client_id_client_profiles_user_id_fk",
+          "tableFrom": "chart_calculation_jobs",
+          "tableTo": "client_profiles",
+          "columnsFrom": [
+            "client_id"
+          ],
+          "columnsTo": [
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "chart_calculation_jobs_result_calculation_id_calculation_records_id_fk": {
+          "name": "chart_calculation_jobs_result_calculation_id_calculation_records_id_fk",
+          "tableFrom": "chart_calculation_jobs",
+          "tableTo": "calculation_records",
+          "columnsFrom": [
+            "result_calculation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "chart_calculation_jobs_method_check": {
+          "name": "chart_calculation_jobs_method_check",
+          "value": "\"chart_calculation_jobs\".\"method\" in ('natal', 'transit', 'synastry', 'solar_return')"
+        },
+        "chart_calculation_jobs_status_check": {
+          "name": "chart_calculation_jobs_status_check",
+          "value": "\"chart_calculation_jobs\".\"status\" in ('queued', 'processing', 'succeeded', 'failed')"
+        },
+        "chart_calculation_jobs_provider_check": {
+          "name": "chart_calculation_jobs_provider_check",
+          "value": "\"chart_calculation_jobs\".\"provider\" in ('kerykeion')"
+        },
+        "chart_calculation_jobs_schema_version_check": {
+          "name": "chart_calculation_jobs_schema_version_check",
+          "value": "\"chart_calculation_jobs\".\"schema_version\" in ('chart-result.v1')"
+        },
+        "chart_calculation_jobs_input_fingerprint_check": {
+          "name": "chart_calculation_jobs_input_fingerprint_check",
+          "value": "\"chart_calculation_jobs\".\"input_fingerprint\" ~ '^sha256:[a-f0-9]{64}$'"
+        },
+        "chart_calculation_jobs_input_snapshot_object_check": {
+          "name": "chart_calculation_jobs_input_snapshot_object_check",
+          "value": "jsonb_typeof(\"chart_calculation_jobs\".\"input_snapshot\") = 'object'"
+        },
+        "chart_calculation_jobs_settings_snapshot_object_check": {
+          "name": "chart_calculation_jobs_settings_snapshot_object_check",
+          "value": "jsonb_typeof(\"chart_calculation_jobs\".\"settings_snapshot\") = 'object'"
+        },
+        "chart_calculation_jobs_attempts_check": {
+          "name": "chart_calculation_jobs_attempts_check",
+          "value": "\"chart_calculation_jobs\".\"attempts\" >= 0"
+        },
+        "chart_calculation_jobs_max_attempts_check": {
+          "name": "chart_calculation_jobs_max_attempts_check",
+          "value": "\"chart_calculation_jobs\".\"max_attempts\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.client_profiles": {
       "name": "client_profiles",
       "schema": "",
@@ -6047,6 +6368,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "birth_time_dst_occurrence": {
+          "name": "birth_time_dst_occurrence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "birth_latitude": {
           "name": "birth_latitude",
           "type": "double precision",
@@ -6139,6 +6466,10 @@
         "client_birth_data_source_check": {
           "name": "client_birth_data_source_check",
           "value": "\"client_birth_data\".\"source\" in ('client_profile', 'booking', 'import', 'manual')"
+        },
+        "client_birth_data_time_dst_occurrence_check": {
+          "name": "client_birth_data_time_dst_occurrence_check",
+          "value": "\"client_birth_data\".\"birth_time_dst_occurrence\" is null or \"client_birth_data\".\"birth_time_dst_occurrence\" in ('first', 'second')"
         },
         "client_birth_data_birth_date_check": {
           "name": "client_birth_data_birth_date_check",
@@ -8243,6 +8574,1235 @@
         "idempotency_commands_result_state_check": {
           "name": "idempotency_commands_result_state_check",
           "value": "(\"idempotency_commands\".\"state\" = 'processing' and \"idempotency_commands\".\"result\" is null) or (\"idempotency_commands\".\"state\" = 'completed' and jsonb_typeof(\"idempotency_commands\".\"result\") = 'object')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.messaging_channel_connections": {
+      "name": "messaging_channel_connections",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "astrologer_user_id": {
+          "name": "astrologer_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'connecting'"
+        },
+        "external_account_id": {
+          "name": "external_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "display_name_snapshot": {
+          "name": "display_name_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "username_snapshot": {
+          "name": "username_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "capabilities": {
+          "name": "capabilities",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "consent_record_id": {
+          "name": "consent_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "connected_at": {
+          "name": "connected_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_synced_at": {
+          "name": "last_synced_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_message": {
+          "name": "last_error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "messaging_channel_connections_astrologer_provider_mode_status_idx": {
+          "name": "messaging_channel_connections_astrologer_provider_mode_status_idx",
+          "columns": [
+            {
+              "expression": "astrologer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "messaging_channel_connections_external_account_unique": {
+          "name": "messaging_channel_connections_external_account_unique",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"messaging_channel_connections\".\"external_account_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "messaging_channel_connections_astrologer_user_id_users_id_fk": {
+          "name": "messaging_channel_connections_astrologer_user_id_users_id_fk",
+          "tableFrom": "messaging_channel_connections",
+          "tableTo": "users",
+          "columnsFrom": [
+            "astrologer_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "messaging_channel_connections_id_provider_unique": {
+          "name": "messaging_channel_connections_id_provider_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "provider"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "messaging_channel_connections_provider_check": {
+          "name": "messaging_channel_connections_provider_check",
+          "value": "\"messaging_channel_connections\".\"provider\" in ('telegram', 'instagram')"
+        },
+        "messaging_channel_connections_mode_check": {
+          "name": "messaging_channel_connections_mode_check",
+          "value": "\"messaging_channel_connections\".\"mode\" in ('telegram_business_bot', 'telegram_mtproto_account', 'instagram_graph')"
+        },
+        "messaging_channel_connections_provider_mode_check": {
+          "name": "messaging_channel_connections_provider_mode_check",
+          "value": "(\"messaging_channel_connections\".\"provider\" = 'telegram' and \"messaging_channel_connections\".\"mode\" in ('telegram_business_bot', 'telegram_mtproto_account')) or (\"messaging_channel_connections\".\"provider\" = 'instagram' and \"messaging_channel_connections\".\"mode\" = 'instagram_graph')"
+        },
+        "messaging_channel_connections_status_check": {
+          "name": "messaging_channel_connections_status_check",
+          "value": "\"messaging_channel_connections\".\"status\" in ('connecting', 'active', 'paused', 'revoked', 'reauth_required', 'error')"
+        },
+        "messaging_channel_connections_capabilities_object_check": {
+          "name": "messaging_channel_connections_capabilities_object_check",
+          "value": "jsonb_typeof(\"messaging_channel_connections\".\"capabilities\") = 'object'"
+        },
+        "messaging_channel_connections_external_account_id_length_check": {
+          "name": "messaging_channel_connections_external_account_id_length_check",
+          "value": "\"messaging_channel_connections\".\"external_account_id\" is null or length(trim(\"messaging_channel_connections\".\"external_account_id\")) between 1 and 200"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.messaging_external_identities": {
+      "name": "messaging_external_identities",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "channel_connection_id": {
+          "name": "channel_connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_user_id": {
+          "name": "provider_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_chat_id": {
+          "name": "provider_chat_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "username_snapshot": {
+          "name": "username_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "display_name_snapshot": {
+          "name": "display_name_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avatar_media_id": {
+          "name": "avatar_media_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "linked_client_user_id": {
+          "name": "linked_client_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "link_status": {
+          "name": "link_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unlinked'"
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "messaging_external_identities_connection_chat_unique": {
+          "name": "messaging_external_identities_connection_chat_unique",
+          "columns": [
+            {
+              "expression": "channel_connection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_chat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "messaging_external_identities_linked_client_idx": {
+          "name": "messaging_external_identities_linked_client_idx",
+          "columns": [
+            {
+              "expression": "linked_client_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "messaging_external_identities_linked_client_user_id_users_id_fk": {
+          "name": "messaging_external_identities_linked_client_user_id_users_id_fk",
+          "tableFrom": "messaging_external_identities",
+          "tableTo": "users",
+          "columnsFrom": [
+            "linked_client_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "messaging_external_identities_connection_provider_fk": {
+          "name": "messaging_external_identities_connection_provider_fk",
+          "tableFrom": "messaging_external_identities",
+          "tableTo": "messaging_channel_connections",
+          "columnsFrom": [
+            "channel_connection_id",
+            "provider"
+          ],
+          "columnsTo": [
+            "id",
+            "provider"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "messaging_external_identities_id_provider_unique": {
+          "name": "messaging_external_identities_id_provider_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "provider"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "messaging_external_identities_provider_check": {
+          "name": "messaging_external_identities_provider_check",
+          "value": "\"messaging_external_identities\".\"provider\" in ('telegram', 'instagram')"
+        },
+        "messaging_external_identities_link_status_check": {
+          "name": "messaging_external_identities_link_status_check",
+          "value": "\"messaging_external_identities\".\"link_status\" in ('unlinked', 'suggested', 'linked', 'ignored')"
+        },
+        "messaging_external_identities_provider_chat_id_length_check": {
+          "name": "messaging_external_identities_provider_chat_id_length_check",
+          "value": "length(trim(\"messaging_external_identities\".\"provider_chat_id\")) between 1 and 200"
+        },
+        "messaging_external_identities_seen_at_check": {
+          "name": "messaging_external_identities_seen_at_check",
+          "value": "\"messaging_external_identities\".\"last_seen_at\" >= \"messaging_external_identities\".\"first_seen_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.messaging_threads": {
+      "name": "messaging_threads",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "astrologer_user_id": {
+          "name": "astrologer_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_user_id": {
+          "name": "client_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "last_message_id": {
+          "name": "last_message_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_message_at": {
+          "name": "last_message_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unread_astrologer_count": {
+          "name": "unread_astrologer_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "messaging_threads_astrologer_status_last_message_idx": {
+          "name": "messaging_threads_astrologer_status_last_message_idx",
+          "columns": [
+            {
+              "expression": "astrologer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_message_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "messaging_threads_astrologer_client_idx": {
+          "name": "messaging_threads_astrologer_client_idx",
+          "columns": [
+            {
+              "expression": "astrologer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "client_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "messaging_threads_astrologer_user_id_users_id_fk": {
+          "name": "messaging_threads_astrologer_user_id_users_id_fk",
+          "tableFrom": "messaging_threads",
+          "tableTo": "users",
+          "columnsFrom": [
+            "astrologer_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "messaging_threads_client_user_id_users_id_fk": {
+          "name": "messaging_threads_client_user_id_users_id_fk",
+          "tableFrom": "messaging_threads",
+          "tableTo": "users",
+          "columnsFrom": [
+            "client_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "messaging_threads_status_check": {
+          "name": "messaging_threads_status_check",
+          "value": "\"messaging_threads\".\"status\" in ('open', 'archived', 'blocked')"
+        },
+        "messaging_threads_unread_astrologer_count_check": {
+          "name": "messaging_threads_unread_astrologer_count_check",
+          "value": "\"messaging_threads\".\"unread_astrologer_count\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.messaging_thread_identities": {
+      "name": "messaging_thread_identities",
+      "schema": "",
+      "columns": {
+        "thread_id": {
+          "name": "thread_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_identity_id": {
+          "name": "external_identity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "messaging_thread_identities_thread_identity_unique": {
+          "name": "messaging_thread_identities_thread_identity_unique",
+          "columns": [
+            {
+              "expression": "thread_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_identity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "messaging_thread_identities_external_identity_unique": {
+          "name": "messaging_thread_identities_external_identity_unique",
+          "columns": [
+            {
+              "expression": "external_identity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "messaging_thread_identities_primary_thread_provider_unique": {
+          "name": "messaging_thread_identities_primary_thread_provider_unique",
+          "columns": [
+            {
+              "expression": "thread_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"messaging_thread_identities\".\"is_primary\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "messaging_thread_identities_thread_id_messaging_threads_id_fk": {
+          "name": "messaging_thread_identities_thread_id_messaging_threads_id_fk",
+          "tableFrom": "messaging_thread_identities",
+          "tableTo": "messaging_threads",
+          "columnsFrom": [
+            "thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "messaging_thread_identities_external_identity_provider_fk": {
+          "name": "messaging_thread_identities_external_identity_provider_fk",
+          "tableFrom": "messaging_thread_identities",
+          "tableTo": "messaging_external_identities",
+          "columnsFrom": [
+            "external_identity_id",
+            "provider"
+          ],
+          "columnsTo": [
+            "id",
+            "provider"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "messaging_thread_identities_provider_check": {
+          "name": "messaging_thread_identities_provider_check",
+          "value": "\"messaging_thread_identities\".\"provider\" in ('telegram', 'instagram')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.messages": {
+      "name": "messages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "channel_connection_id": {
+          "name": "channel_connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_identity_id": {
+          "name": "external_identity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "direction": {
+          "name": "direction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sender_kind": {
+          "name": "sender_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_message_id": {
+          "name": "provider_message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_update_id": {
+          "name": "provider_update_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_sent_at": {
+          "name": "provider_sent_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'text'"
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "media_asset_id": {
+          "name": "media_asset_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "failure_code": {
+          "name": "failure_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "messages_inbound_provider_dedupe_unique": {
+          "name": "messages_inbound_provider_dedupe_unique",
+          "columns": [
+            {
+              "expression": "channel_connection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_identity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_message_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "direction",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"messages\".\"provider_message_id\" is not null and \"messages\".\"external_identity_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "messages_outbound_idempotency_unique": {
+          "name": "messages_outbound_idempotency_unique",
+          "columns": [
+            {
+              "expression": "thread_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"messages\".\"direction\" = 'outbound'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "messages_thread_created_idx": {
+          "name": "messages_thread_created_idx",
+          "columns": [
+            {
+              "expression": "thread_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "messages_thread_id_messaging_threads_id_fk": {
+          "name": "messages_thread_id_messaging_threads_id_fk",
+          "tableFrom": "messages",
+          "tableTo": "messaging_threads",
+          "columnsFrom": [
+            "thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "messages_channel_connection_id_messaging_channel_connections_id_fk": {
+          "name": "messages_channel_connection_id_messaging_channel_connections_id_fk",
+          "tableFrom": "messages",
+          "tableTo": "messaging_channel_connections",
+          "columnsFrom": [
+            "channel_connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "messages_external_identity_id_messaging_external_identities_id_fk": {
+          "name": "messages_external_identity_id_messaging_external_identities_id_fk",
+          "tableFrom": "messages",
+          "tableTo": "messaging_external_identities",
+          "columnsFrom": [
+            "external_identity_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "messages_direction_check": {
+          "name": "messages_direction_check",
+          "value": "\"messages\".\"direction\" in ('inbound', 'outbound')"
+        },
+        "messages_sender_kind_check": {
+          "name": "messages_sender_kind_check",
+          "value": "\"messages\".\"sender_kind\" in ('client', 'astrologer', 'system')"
+        },
+        "messages_content_type_check": {
+          "name": "messages_content_type_check",
+          "value": "\"messages\".\"content_type\" in ('text', 'image', 'file', 'voice', 'unsupported')"
+        },
+        "messages_status_check": {
+          "name": "messages_status_check",
+          "value": "\"messages\".\"status\" in ('received', 'queued', 'sending', 'sent', 'delivered', 'read', 'failed', 'unknown', 'deleted')"
+        },
+        "messages_text_length_check": {
+          "name": "messages_text_length_check",
+          "value": "length(\"messages\".\"text\") <= 4000"
+        },
+        "messages_outbound_request_check": {
+          "name": "messages_outbound_request_check",
+          "value": "\"messages\".\"direction\" <> 'outbound' or (\"messages\".\"idempotency_key\" is not null and \"messages\".\"request_hash\" ~ '^sha256:[a-f0-9]{64}$')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.message_delivery_attempts": {
+      "name": "message_delivery_attempts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "message_id": {
+          "name": "message_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempt_number": {
+          "name": "attempt_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_request_id": {
+          "name": "provider_request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_response_message_id": {
+          "name": "provider_response_message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_status_code": {
+          "name": "provider_status_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "retryable": {
+          "name": "retryable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempted_at": {
+          "name": "attempted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "message_delivery_attempts_message_attempt_unique": {
+          "name": "message_delivery_attempts_message_attempt_unique",
+          "columns": [
+            {
+              "expression": "message_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "attempt_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "message_delivery_attempts_message_id_messages_id_fk": {
+          "name": "message_delivery_attempts_message_id_messages_id_fk",
+          "tableFrom": "message_delivery_attempts",
+          "tableTo": "messages",
+          "columnsFrom": [
+            "message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "message_delivery_attempts_provider_check": {
+          "name": "message_delivery_attempts_provider_check",
+          "value": "\"message_delivery_attempts\".\"provider\" in ('telegram', 'instagram')"
+        },
+        "message_delivery_attempts_status_check": {
+          "name": "message_delivery_attempts_status_check",
+          "value": "\"message_delivery_attempts\".\"status\" in ('sent', 'failed', 'unknown')"
+        },
+        "message_delivery_attempts_number_check": {
+          "name": "message_delivery_attempts_number_check",
+          "value": "\"message_delivery_attempts\".\"attempt_number\" > 0"
+        },
+        "message_delivery_attempts_status_code_check": {
+          "name": "message_delivery_attempts_status_code_check",
+          "value": "\"message_delivery_attempts\".\"provider_status_code\" is null or \"message_delivery_attempts\".\"provider_status_code\" between 100 and 599"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.messaging_realtime_events": {
+      "name": "messaging_realtime_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "bigserial",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "astrologer_user_id": {
+          "name": "astrologer_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "message_id": {
+          "name": "message_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "channel_connection_id": {
+          "name": "channel_connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_identity_id": {
+          "name": "external_identity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "messaging_realtime_events_event_id_unique": {
+          "name": "messaging_realtime_events_event_id_unique",
+          "columns": [
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "messaging_realtime_events_astrologer_event_id_idx": {
+          "name": "messaging_realtime_events_astrologer_event_id_idx",
+          "columns": [
+            {
+              "expression": "astrologer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "messaging_realtime_events_astrologer_user_id_users_id_fk": {
+          "name": "messaging_realtime_events_astrologer_user_id_users_id_fk",
+          "tableFrom": "messaging_realtime_events",
+          "tableTo": "users",
+          "columnsFrom": [
+            "astrologer_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "messaging_realtime_events_type_check": {
+          "name": "messaging_realtime_events_type_check",
+          "value": "\"messaging_realtime_events\".\"type\" in ('thread.created', 'thread.updated', 'message.received', 'message.updated', 'message.deleted', 'channelConnection.updated', 'identity.linked', 'delivery.failed')"
         }
       },
       "isRLSEnabled": false

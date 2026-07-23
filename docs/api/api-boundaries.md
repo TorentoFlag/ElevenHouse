@@ -75,7 +75,9 @@ application submission, CRM clients, calculations, canonical Pythagorean
 numerology, canonical Ladini 22 Matrix calculations with private notes and a
 versioned interpretation catalog, Human Design preview/persist/recalculate, и
 provider-neutral AI generation через
-OpenAI.
+OpenAI. Messaging is the planned provider-neutral foundation for durable
+conversations, Telegram delivery and realtime freshness; its implementation
+mapping is recorded in `docs/decisions/0010-messaging-channel-architecture.md`.
 
 Ответственности:
 
@@ -84,6 +86,7 @@ OpenAI.
 - Availability.
 - Bookings.
 - Clients.
+- Messaging commands, provider webhook ingestion and realtime freshness.
 - Sessions и materials.
 - Wallet/finance views.
 - Analytics.
@@ -165,6 +168,15 @@ POST /calculations/:calculationId/interpretations
 POST /calculations/:calculationId/interpretations/:interpretationId/approve
 POST /calculations/:calculationId/publish
 POST /calculations/:calculationId/archive
+GET  /messaging/channel-connections
+GET  /messaging/threads
+GET  /messaging/threads/:threadId
+POST /messaging/threads/:threadId/messages
+POST /messaging/threads/:threadId/link-client
+POST /messaging/threads/:threadId/create-client
+POST /messaging/threads/:threadId/read
+POST /messaging/webhooks/telegram/bot
+GET  /messaging/events
 ```
 
 Availability, calendar and manual-booking routes are authenticated and owner
@@ -175,6 +187,20 @@ an active live product and an exact currently available start before the
 transactional scheduling adapter claims the owner-wide occupied range. Replays
 return the persisted result; reuse with a different request and overlap races
 return stable safe conflict codes.
+
+Messaging commands are authenticated and owner scoped. State-changing
+`/messaging/*` commands require CSRF; outbound send also requires an
+`Idempotency-Key`. They atomically persist Messaging state and an outbox event;
+delivery is performed later by `notification-worker`, which reloads
+authoritative state by identifier. `GET /messaging/events` is an SSE freshness
+transport behind an app-local `RealtimeGateway`, not a message write path.
+`POST /messaging/webhooks/telegram/bot` is CSRF-exempt only because it is a
+provider-authenticated webhook; it must validate provider authenticity and
+dedupe provider update/message ids before acknowledgement.
+
+Messaging logging must never include phone numbers, Telegram verification or
+2FA codes, business-connection secrets, raw provider payloads, session strings,
+credentials or message bodies.
 
 `POST /numerology/preview` is authenticated and read-only, so it does not require
 CSRF and must not create calculation, participant-link or interpretation rows.
@@ -263,8 +289,7 @@ report to be `ready`; its locale comes from that report. Numerology PDFs render
 deterministic current calculation data without requiring an approved
 interpretation. Chart PDFs render deterministic current calculation data plus
 owner-scoped dictionary entries by exact chart codes. Enqueue is idempotent for
-the same authoritative document fingerprint. Recalculation atomically
-invalidates current PDF
+the same authoritative document fingerprint. Recalculation atomically invalidates current PDF
 jobs/artifact references and writes cleanup events; old jobs cannot be
 downloaded, and object deletion is performed asynchronously by `workers`. API
 responses expose public job state and the presigned URL only: storage keys,

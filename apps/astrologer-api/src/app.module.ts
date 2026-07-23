@@ -17,6 +17,7 @@ import { HumanDesignModule } from "./modules/human-design/human-design.module";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { MediaModule } from "./modules/media/media.module";
 import { MatrixModule } from "./modules/matrix/matrix.module";
+import { MessagingModule } from "./modules/messaging/messaging.module";
 import { NumerologyModule } from "./modules/numerology/numerology.module";
 import { PlatformBillingModule } from "./modules/platform-billing/platform-billing.module";
 import { ProductsModule } from "./modules/products/products.module";
@@ -52,6 +53,7 @@ import { VerificationModule } from "./modules/verification/verification.module";
     NumerologyModule,
     MatrixModule,
     HumanDesignModule,
+    MessagingModule,
     AstrologerProfileModule,
     HealthModule
   ]

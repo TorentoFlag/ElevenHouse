@@ -35,6 +35,7 @@ const defaultSecurityConfig = {
   csrfCookieName: "elevenhouse_astrologer_csrf",
   csrfHeaderName: "x-csrf-token",
   csrfTokenTtlSeconds: 604800,
+  telegramBotWebhookSecret: null,
   allowedOrigins: ["http://localhost:5174"],
   chartEngineBaseUrl: "http://localhost:8012",
   authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
@@ -216,6 +217,17 @@ describe("createAstrologerApiRuntimeConfig", () => {
     });
   });
 
+  it("parses Telegram Bot API webhook secret settings from env", () => {
+    expect(
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret"
+      })
+    ).toMatchObject({
+      telegramBotWebhookSecret: "telegram-provider-secret"
+    });
+  });
+
   it("rejects __Host-prefixed astrologer session cookie names without Secure", () => {
     expect(() =>
       createAstrologerApiRuntimeConfig({
@@ -255,6 +267,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         NODE_ENV: "production",
         ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
         ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret"
       })
     ).toThrow("ASTROLOGER_API_ALLOWED_ORIGINS is required in production");
@@ -267,9 +280,21 @@ describe("createAstrologerApiRuntimeConfig", () => {
         NODE_ENV: "production",
         ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
         ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
         ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com"
       })
     ).toThrow("ASTROLOGER_API_PASSWORDLESS_CODE_SECRET is required in production");
+  });
+
+  it("requires an explicit Telegram Bot API webhook secret in production", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
+        ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy"
+      })
+    ).toThrow("ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET is required in production");
   });
 
   it("uses host-prefixed astrologer session cookies when production security settings are complete", () => {
@@ -279,6 +304,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         NODE_ENV: "production",
         ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
         ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
         CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
@@ -287,6 +313,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
       sessionCookieSecure: true,
       sessionCookieName: "__Host-elevenhouse_astrologer_session",
       csrfSecret: "configured-astrologer-csrf-secret-with-enough-entropy",
+      telegramBotWebhookSecret: "telegram-provider-secret",
       passwordlessCodeSecret: "configured-secret",
       allowedOrigins: ["https://astrologer.elevenhouse.com"]
     });
@@ -299,6 +326,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         NODE_ENV: "production",
         ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
         ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
         CHART_ENGINE_BASE_URL: "http://localhost:8012"
@@ -391,6 +419,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         NODE_ENV: "production",
         ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
         ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
         ASTROLOGER_AI_ENABLED: "true",

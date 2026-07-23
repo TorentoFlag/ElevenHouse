@@ -66,6 +66,31 @@ describe("notification-worker readiness", () => {
     });
   });
 
+  it("includes optional dependency checks in the readiness response", async () => {
+    await expect(
+      createWorkerReadiness({
+        service: "notification-worker",
+        now: new Date("2026-06-18T10:00:00.000Z"),
+        checks: {
+          postgres: vi.fn(async () => undefined),
+          authCodeDeliveryQueue: vi.fn(async () => undefined),
+          authCodeDeliveryWorker: vi.fn(async () => undefined),
+          messagingDeliveryQueue: vi.fn(async () => undefined)
+        }
+      })
+    ).resolves.toEqual({
+      service: "notification-worker",
+      status: "ready",
+      timestamp: "2026-06-18T10:00:00.000Z",
+      dependencies: {
+        postgres: { status: "ready" },
+        authCodeDeliveryQueue: { status: "ready" },
+        authCodeDeliveryWorker: { status: "ready" },
+        messagingDeliveryQueue: { status: "ready" }
+      }
+    });
+  });
+
   it("serves live and ready HTTP probes", async () => {
     const server = createWorkerReadinessServer({
       getReadiness: async () => ({

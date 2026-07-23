@@ -31,6 +31,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_API_CSRF_COOKIE_NAME: z.string().trim().min(1).default("elevenhouse_astrologer_csrf"),
   ASTROLOGER_API_CSRF_HEADER_NAME: z.string().trim().min(1).default("x-csrf-token"),
   ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
+  ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: optionalTrimmedNonEmptyStringSchema,
   ASTROLOGER_API_ALLOWED_ORIGINS: z.string().trim().optional(),
   CHART_ENGINE_BASE_URL: z.string().trim().url().default("http://localhost:8012"),
   ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
@@ -142,6 +143,7 @@ export type AstrologerApiRuntimeConfig = {
   readonly csrfCookieName: string;
   readonly csrfHeaderName: string;
   readonly csrfTokenTtlSeconds: number;
+  readonly telegramBotWebhookSecret: string | null;
   readonly allowedOrigins: readonly string[];
   readonly chartEngineBaseUrl: string;
   readonly authCodeDeliveryEncryptionKey: Buffer;
@@ -240,6 +242,10 @@ export function createAstrologerApiRuntimeConfig(
     throw new Error("ASTROLOGER_API_CSRF_SECRET is required in production");
   }
 
+  if (config.NODE_ENV === "production" && !config.ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET) {
+    throw new Error("ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET is required in production");
+  }
+
   if (config.NODE_ENV === "production" && !config.ASTROLOGER_API_PASSWORDLESS_CODE_SECRET) {
     throw new Error("ASTROLOGER_API_PASSWORDLESS_CODE_SECRET is required in production");
   }
@@ -289,6 +295,7 @@ export function createAstrologerApiRuntimeConfig(
     csrfCookieName: config.ASTROLOGER_API_CSRF_COOKIE_NAME,
     csrfHeaderName: config.ASTROLOGER_API_CSRF_HEADER_NAME.toLowerCase(),
     csrfTokenTtlSeconds: config.ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS,
+    telegramBotWebhookSecret: config.ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET ?? null,
     allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5174"],
     chartEngineBaseUrl: stripTrailingSlashes(config.CHART_ENGINE_BASE_URL),
     authCodeDeliveryEncryptionKey: parseBase64Aes256GcmKey(

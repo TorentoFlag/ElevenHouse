@@ -10,3 +10,4 @@ export * from "./clients";
 export * from "./charts";
 export * from "./matrix";
 export * from "./scheduling";
+export * from "./messaging";

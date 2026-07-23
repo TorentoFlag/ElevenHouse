@@ -21,6 +21,19 @@ const notificationWorkerRuntimeConfigSchema = z
       .int()
       .positive()
       .default(1000),
+    NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED: z.enum(["true", "false"]).default("false"),
+    NOTIFICATION_WORKER_MESSAGING_DELIVERY_ATTEMPTS: z.coerce.number().int().positive().default(5),
+    NOTIFICATION_WORKER_MESSAGING_DELIVERY_BACKOFF_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(1000),
+    NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: z.string().trim().min(1).optional(),
+    NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: z
+      .string()
+      .trim()
+      .url()
+      .default("https://api.telegram.org"),
     NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL: z.string().trim().url().optional(),
     NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN: z.string().trim().min(1).optional(),
     NOTIFICATION_WORKER_AUTH_CODE_EMAIL_FROM: z.string().trim().min(1).optional(),
@@ -29,40 +42,46 @@ const notificationWorkerRuntimeConfigSchema = z
     NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM: z.string().trim().min(1).optional()
   })
   .superRefine((config, context) => {
-    if (config.NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE !== "http") {
-      return;
+    if (config.NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE === "http") {
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL,
+        ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL"],
+        context
+      );
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN,
+        ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN"],
+        context
+      );
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_FROM,
+        ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_FROM"],
+        context
+      );
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL,
+        ["NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL"],
+        context
+      );
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN,
+        ["NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN"],
+        context
+      );
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM,
+        ["NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM"],
+        context
+      );
     }
 
-    requireHttpDeliverySetting(
-      config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL,
-      ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL"],
-      context
-    );
-    requireHttpDeliverySetting(
-      config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN,
-      ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN"],
-      context
-    );
-    requireHttpDeliverySetting(
-      config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_FROM,
-      ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_FROM"],
-      context
-    );
-    requireHttpDeliverySetting(
-      config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL,
-      ["NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL"],
-      context
-    );
-    requireHttpDeliverySetting(
-      config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN,
-      ["NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN"],
-      context
-    );
-    requireHttpDeliverySetting(
-      config.NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM,
-      ["NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM"],
-      context
-    );
+    if (config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED === "true") {
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN,
+        ["NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN"],
+        context
+      );
+    }
   });
 
 export type AuthCodeHttpDeliveryOptions = {
@@ -82,8 +101,17 @@ export type NotificationWorkerRuntimeConfig = {
   readonly outboxPublishingLockTimeoutMs: number;
   readonly authCodeDeliveryAttempts: number;
   readonly authCodeDeliveryBackoffMs: number;
+  readonly messagingDeliveryEnabled: boolean;
+  readonly messagingDeliveryAttempts: number;
+  readonly messagingDeliveryBackoffMs: number;
+  readonly telegramBusinessDelivery: TelegramBusinessDeliveryOptions | null;
   readonly authCodeEmailDelivery: AuthCodeHttpDeliveryOptions | null;
   readonly authCodeSmsDelivery: AuthCodeHttpDeliveryOptions | null;
+};
+
+export type TelegramBusinessDeliveryOptions = {
+  readonly botToken: string;
+  readonly botApiBaseUrl: string;
 };
 
 export function createNotificationWorkerRuntimeConfig(
@@ -104,6 +132,16 @@ export function createNotificationWorkerRuntimeConfig(
     outboxPublishingLockTimeoutMs: config.NOTIFICATION_WORKER_OUTBOX_PUBLISHING_LOCK_TIMEOUT_MS,
     authCodeDeliveryAttempts: config.NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_ATTEMPTS,
     authCodeDeliveryBackoffMs: config.NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_BACKOFF_MS,
+    messagingDeliveryEnabled: config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED === "true",
+    messagingDeliveryAttempts: config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ATTEMPTS,
+    messagingDeliveryBackoffMs: config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_BACKOFF_MS,
+    telegramBusinessDelivery:
+      config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED === "true"
+        ? toTelegramBusinessDeliveryOptions({
+            botToken: config.NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN,
+            botApiBaseUrl: config.NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL
+          })
+        : null,
     authCodeEmailDelivery:
       config.NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE === "dev_console"
         ? null
@@ -120,6 +158,20 @@ export function createNotificationWorkerRuntimeConfig(
             bearerToken: config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN,
             from: config.NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM
           })
+  };
+}
+
+function toTelegramBusinessDeliveryOptions(input: {
+  readonly botToken: string | undefined;
+  readonly botApiBaseUrl: string;
+}): TelegramBusinessDeliveryOptions {
+  if (!input.botToken) {
+    throw new Error("Telegram Business delivery settings are required when messaging delivery is enabled");
+  }
+
+  return {
+    botToken: input.botToken,
+    botApiBaseUrl: input.botApiBaseUrl
   };
 }
 

@@ -353,6 +353,7 @@ export type AppShellNavigationItemId =
   | "humanDesign"
   | "astroCalendar"
   | "astroDiary"
+  | "inbox"
   | "reference"
   | "settings";
 
@@ -530,7 +531,8 @@ export const astrologerCopyByLocale = {
           { id: "numerology", title: "Нумерология", href: "/numerology" },
           { id: "destinyMatrix", title: "Матрица судьбы", href: "/matrix" },
           { id: "humanDesign", title: "Дизайн человека", href: "/human-design" },
-          { id: "reference", title: "Справочники", href: "/reference" }
+          { id: "reference", title: "Справочники", href: "/reference" },
+          { id: "inbox", title: "Сообщения", href: "/inbox" }
         ],
         footerItems: [{ id: "settings", title: "Настройки", href: "/settings" }]
       }
@@ -961,7 +963,8 @@ export const astrologerCopyByLocale = {
           { id: "numerology", title: "Numerology", href: "/numerology" },
           { id: "destinyMatrix", title: "Destiny Matrix", href: "/matrix" },
           { id: "humanDesign", title: "Human Design", href: "/human-design" },
-          { id: "reference", title: "References", href: "/reference" }
+          { id: "reference", title: "References", href: "/reference" },
+          { id: "inbox", title: "Messages", href: "/inbox" }
         ],
         footerItems: [{ id: "settings", title: "Settings", href: "/settings" }]
       }

@@ -1,0 +1,2 @@
+export const MESSAGING_STORE = Symbol("MESSAGING_STORE");
+export const MESSAGING_READ_STORE = Symbol("MESSAGING_READ_STORE");

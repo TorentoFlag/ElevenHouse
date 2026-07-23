@@ -2,6 +2,7 @@ import { createLogger } from "@elevenhouse/observability";
 import { createAes256GcmSecretCipher } from "@elevenhouse/auth";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
+import { createDrizzleMessagingDeliveryProcessingStore } from "@elevenhouse/db/messaging";
 import { createDrizzleAuthCodeDeliveryProcessingStore } from "@elevenhouse/db/notifications";
 import {
   ChannelAuthCodeDeliveryProvider,
@@ -16,8 +17,18 @@ import {
 } from "./auth-code-delivery.queue";
 import { processAuthCodeDeliveryJob } from "./auth-code-delivery.processor";
 import { relayPendingOutboxEvents } from "./outbox-relay";
+import {
+  createMessagingDeliveryQueue,
+  createMessagingDeliveryWorker
+} from "./messaging-delivery.queue";
+import { processMessagingDeliveryJob } from "./messaging-delivery.processor";
+import { relayPendingMessagingOutboxEvents } from "./messaging-delivery.outbox-relay";
 import { createWorkerReadiness, createWorkerReadinessServer } from "./readiness";
 import { createNotificationWorkerRuntimeConfig } from "./runtime-config";
+import {
+  TelegramBusinessMessagingDeliveryProvider,
+  type MessagingDeliveryProvider
+} from "./telegram-business-provider";
 
 const serviceName = "notification-worker";
 const logger = createLogger("notification-worker");
@@ -30,6 +41,13 @@ const authCodeDeliveryStore = createDrizzleAuthCodeDeliveryProcessingStore(
   postgresRuntime.database
 );
 const deliveryProvider = createDeliveryProvider();
+const messagingDeliveryQueue = config.messagingDeliveryEnabled
+  ? createMessagingDeliveryQueue(config.redisUrl)
+  : null;
+const messagingDeliveryStore = config.messagingDeliveryEnabled
+  ? createDrizzleMessagingDeliveryProcessingStore(postgresRuntime.database)
+  : null;
+const messagingDeliveryProvider = createMessagingDeliveryProvider();
 const authCodeDeliveryWorker = createAuthCodeDeliveryWorker(config.redisUrl, (job) =>
   processAuthCodeDeliveryJob({
     job,
@@ -40,6 +58,18 @@ const authCodeDeliveryWorker = createAuthCodeDeliveryWorker(config.redisUrl, (jo
     logger
   })
 );
+const messagingDeliveryWorker =
+  config.messagingDeliveryEnabled && messagingDeliveryStore && messagingDeliveryProvider
+    ? createMessagingDeliveryWorker(config.redisUrl, (job) =>
+        processMessagingDeliveryJob({
+          job,
+          store: messagingDeliveryStore,
+          provider: messagingDeliveryProvider,
+          now: new Date(),
+          logger
+        })
+      )
+    : null;
 const readinessChecks = {
   postgres: async () => {
     await postgresRuntime.pool.query("select 1");
@@ -49,7 +79,17 @@ const readinessChecks = {
   },
   authCodeDeliveryWorker: async () => {
     await authCodeDeliveryWorker.waitUntilReady();
-  }
+  },
+  ...(messagingDeliveryQueue && messagingDeliveryWorker
+    ? {
+        messagingDeliveryQueue: async () => {
+          await messagingDeliveryQueue.waitUntilReady();
+        },
+        messagingDeliveryWorker: async () => {
+          await messagingDeliveryWorker.waitUntilReady();
+        }
+      }
+    : {})
 };
 const healthServer = createWorkerReadinessServer({
   getReadiness: () =>
@@ -74,6 +114,18 @@ function createDeliveryProvider(): AuthCodeDeliveryProvider {
   );
 }
 
+function createMessagingDeliveryProvider(): MessagingDeliveryProvider | null {
+  if (!config.messagingDeliveryEnabled) {
+    return null;
+  }
+
+  if (!config.telegramBusinessDelivery) {
+    throw new Error("Telegram Business delivery settings are required when messaging delivery is enabled");
+  }
+
+  return new TelegramBusinessMessagingDeliveryProvider(config.telegramBusinessDelivery);
+}
+
 let relayTimer: ReturnType<typeof setInterval> | undefined;
 
 function startRelay(): ReturnType<typeof setInterval> {
@@ -92,6 +144,22 @@ function startRelay(): ReturnType<typeof setInterval> {
     }).catch((error: unknown) => {
       logger.error("notification outbox relay failed", { error });
     });
+    if (messagingDeliveryQueue) {
+      relayPendingMessagingOutboxEvents({
+        store: outboxStore,
+        queue: messagingDeliveryQueue,
+        now: new Date(),
+        batchSize: config.outboxRelayBatchSize,
+        publishingLockTimeoutMs: config.outboxPublishingLockTimeoutMs,
+        logger,
+        queueOptions: {
+          attempts: config.messagingDeliveryAttempts,
+          backoffMs: config.messagingDeliveryBackoffMs
+        }
+      }).catch((error: unknown) => {
+        logger.error("messaging delivery outbox relay failed", { error });
+      });
+    }
   }, config.outboxRelayIntervalMs);
 
   timer.unref();
@@ -119,6 +187,8 @@ async function shutdown(): Promise<void> {
     clearInterval(relayTimer);
   }
   await closeHealthServer();
+  await messagingDeliveryWorker?.close();
+  await messagingDeliveryQueue?.close();
   await authCodeDeliveryWorker.close();
   await authCodeDeliveryQueue.close();
   await postgresRuntime.close();

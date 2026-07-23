@@ -51,6 +51,10 @@ describe("createNotificationWorkerRuntimeConfig", () => {
       outboxPublishingLockTimeoutMs: 30000,
       authCodeDeliveryAttempts: 7,
       authCodeDeliveryBackoffMs: 500,
+      messagingDeliveryEnabled: false,
+      messagingDeliveryAttempts: 5,
+      messagingDeliveryBackoffMs: 1000,
+      telegramBusinessDelivery: null,
       authCodeEmailDelivery: {
         endpointUrl: "https://delivery.internal/auth/email",
         bearerToken: "email-token",
@@ -60,6 +64,36 @@ describe("createNotificationWorkerRuntimeConfig", () => {
         endpointUrl: "https://delivery.internal/auth/sms",
         bearerToken: "sms-token",
         from: "ElevenHouse"
+      }
+    });
+  });
+
+  it("requires Telegram Bot credentials when messaging delivery is enabled", () => {
+    expect(() =>
+      createNotificationWorkerRuntimeConfig({
+        ...requiredDeliveryConfig,
+        NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED: "true"
+      })
+    ).toThrow("NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN");
+  });
+
+  it("parses Telegram Business messaging delivery settings", () => {
+    expect(
+      createNotificationWorkerRuntimeConfig({
+        ...requiredDeliveryConfig,
+        NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED: "true",
+        NOTIFICATION_WORKER_MESSAGING_DELIVERY_ATTEMPTS: "6",
+        NOTIFICATION_WORKER_MESSAGING_DELIVERY_BACKOFF_MS: "750",
+        NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: "telegram-token",
+        NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: "https://telegram.test"
+      })
+    ).toMatchObject({
+      messagingDeliveryEnabled: true,
+      messagingDeliveryAttempts: 6,
+      messagingDeliveryBackoffMs: 750,
+      telegramBusinessDelivery: {
+        botToken: "telegram-token",
+        botApiBaseUrl: "https://telegram.test"
       }
     });
   });

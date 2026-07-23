@@ -17,3 +17,4 @@ export * from "./clients";
 export * from "./calendar";
 export * from "./charts";
 export * from "./human-design";
+export * from "./messaging";

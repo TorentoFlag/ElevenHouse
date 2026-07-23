@@ -11,34 +11,22 @@ export type WorkerReadiness = {
   readonly service: string;
   readonly status: WorkerReadinessStatus;
   readonly timestamp: string;
-  readonly dependencies: {
-    readonly postgres: WorkerReadinessDependency;
-    readonly authCodeDeliveryQueue: WorkerReadinessDependency;
-    readonly authCodeDeliveryWorker: WorkerReadinessDependency;
-  };
+  readonly dependencies: Record<string, WorkerReadinessDependency>;
 };
 
-export type WorkerReadinessChecks = {
-  readonly postgres: () => Promise<void>;
-  readonly authCodeDeliveryQueue: () => Promise<void>;
-  readonly authCodeDeliveryWorker: () => Promise<void>;
-};
+export type WorkerReadinessChecks = Record<string, () => Promise<void>>;
 
 export async function createWorkerReadiness(input: {
   readonly service: string;
   readonly checks: WorkerReadinessChecks;
   readonly now?: Date;
 }): Promise<WorkerReadiness> {
-  const [postgres, authCodeDeliveryQueue, authCodeDeliveryWorker] = await Promise.all([
-    runReadinessCheck(input.checks.postgres),
-    runReadinessCheck(input.checks.authCodeDeliveryQueue),
-    runReadinessCheck(input.checks.authCodeDeliveryWorker)
-  ]);
-  const dependencies = {
-    postgres,
-    authCodeDeliveryQueue,
-    authCodeDeliveryWorker
-  };
+  const dependencies: Record<string, WorkerReadinessDependency> = {};
+  await Promise.all(
+    Object.entries(input.checks).map(async ([name, check]) => {
+      dependencies[name] = await runReadinessCheck(check);
+    })
+  );
 
   return {
     service: input.service,

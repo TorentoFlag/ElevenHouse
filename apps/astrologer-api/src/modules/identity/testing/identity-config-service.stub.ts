@@ -5,6 +5,7 @@ export function createIdentityConfigServiceStub(input: {
   readonly sessionCookieName: string;
   readonly csrfCookieName: string;
   readonly csrfHeaderName: string;
+  readonly telegramBotWebhookSecret?: string | null;
   readonly passwordlessRateLimits: PasswordlessRateLimitOptions;
 }): Pick<ConfigService, "get" | "getOrThrow"> {
   const getOptional = (key: string): unknown => {
@@ -52,6 +53,10 @@ export function createIdentityConfigServiceStub(input: {
 
       if (key === "astrologerApi.allowedOrigins") {
         return ["http://localhost:3000"];
+      }
+
+      if (key === "astrologerApi.telegramBotWebhookSecret") {
+        return input.telegramBotWebhookSecret ?? null;
       }
 
       if (key === "astrologerApi.passwordlessCodeSecret") {

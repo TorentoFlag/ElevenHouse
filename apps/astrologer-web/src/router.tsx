@@ -12,6 +12,7 @@ import { SettingsPage } from "./pages/settings/SettingsPage";
 import { CalendarPage } from "./pages/calendar/CalendarPage";
 import { ChartEngineRoute } from "./pages/chart-engine/ChartEngineRoute";
 import { HumanDesignPage } from "./pages/human-design/HumanDesignPage";
+import { InboxPage } from "./pages/inbox/InboxPage";
 
 export const astrologerRoutes = [
   {
@@ -43,6 +44,10 @@ export const astrologerRoutes = [
           {
             path: "/reference",
             element: <ReferencePage />
+          },
+          {
+            path: "/inbox",
+            element: <InboxPage />
           },
           {
             path: "/numerology",

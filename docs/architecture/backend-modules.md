@@ -148,7 +148,14 @@ feature-module boundaries, explicit auth/permissions и audit logging.
   Human Design contours.
 - `Charts`: расчёты астрологических карт и generated chart artifacts.
 - `Sessions`: lifecycle консультации, recordings, materials.
-- `Messaging`: threads и messages там, где используется platform messaging.
+- `Messaging`: provider-neutral channel connections, external identities,
+  threads, messages, delivery attempts, inbound dedupe, outbound idempotency
+  and realtime event publication. `Clients` owns CRM relationships, manual
+  client creation, birth data and private notes; Messaging owns conversation
+  state and provider boundaries. Telegram Business / Secretary bot and Telegram
+  MTProto Account are first-class connection modes. Instagram remains a future
+  provider adapter shape. See
+  `docs/decisions/0010-messaging-channel-architecture.md`.
 - `Content`: posts, lead magnets, materials, broadcasts, content products.
 - `Reviews`: review submission, moderation, display aggregates.
 - `Moderation`: queues, decisions, reasons, escalation. Moderator decisions for
@@ -176,6 +183,25 @@ Client starts booking
 ```
 
 Controllers должны только оркестрировать use cases. В них не должна жить бизнес-логика workflow.
+
+### Messaging delivery and realtime
+
+`astrologer-api` owns authenticated `/messaging/*` commands, provider webhook
+ingestion and the SSE freshness endpoint. Its transactions persist Messaging
+state and an outbox event together; controllers never call provider adapters
+directly. Provider webhooks are CSRF-exempt only because their authenticity is
+validated by the provider-specific webhook boundary.
+
+`notification-worker` may relay and execute Messaging delivery jobs, but it
+does not own conversations, CRM relationships or the source of truth. Queue
+payloads contain only identifiers; the worker reloads authoritative connection
+and message state before calling a provider adapter. Realtime is exposed through
+an app-local `RealtimeGateway` abstraction, with SSE as the first transport and
+WebSocket reserved for later approved bidirectional features.
+
+Messaging logging must never include phone numbers, Telegram verification or
+2FA codes, business-connection secrets, raw provider payloads, session strings,
+credentials or message bodies.
 
 ### Chart Engine
 
