@@ -393,6 +393,14 @@ export class HumanDesignService {
           );
         }
         const result = validatedSavedResult(calculation);
+        const transit = parsedBody.transitInstant
+          ? await this.createAiTransitOverlay({
+              ownerUserId,
+              calculation,
+              result,
+              instant: parsedBody.transitInstant
+            })
+          : null;
         const profile = await this.profileStore.findByOwnerUserId({ ownerUserId });
         const locale = profile?.locale === "en" ? "en" : "ru";
         const generated = await this.aiGeneration.generate({
@@ -401,7 +409,8 @@ export class HumanDesignService {
             buildHumanDesignAiContext({
               locale,
               result: toDomainAiBaseResult(result),
-              resultChecksum: calculation.resultChecksum
+              resultChecksum: calculation.resultChecksum,
+              transit
             })
           ),
           ownerUserId,
@@ -422,6 +431,46 @@ export class HumanDesignService {
         return toHumanDesignResponse(saved);
       })
     );
+  }
+
+  private async createAiTransitOverlay(input: {
+    readonly ownerUserId: string;
+    readonly calculation: CalculationRecord;
+    readonly result: HumanDesignResult;
+    readonly instant: string;
+  }) {
+    if (input.calculation.mode !== "individual" || input.result.mode !== "individual") {
+      throw humanDesignHttpError(
+        409,
+        "HUMAN_DESIGN_RESULT_INTEGRITY_FAILED",
+        "Human Design transit AI requires an individual calculation"
+      );
+    }
+    const natalBase = toDomainIndividualBaseResult(input.result);
+    const prepared = await this.resolveClientBirthData({
+      ownerUserId: input.ownerUserId,
+      clientId: participantClientId(input.calculation, "subject")
+    });
+    const transitSnapshot = buildTransitSnapshot({
+      instant: new Date(input.instant),
+      birthData: prepared.birthData
+    });
+    try {
+      const transitLongitudes = await this.resolvedInputProvider.resolveTransit({
+        transitSnapshot
+      });
+      return buildHumanDesignTransitResult({
+        natal: natalBase,
+        transit: transitLongitudes,
+        transitSnapshot
+      });
+    } catch {
+      throw humanDesignHttpError(
+        502,
+        "HUMAN_DESIGN_PROVIDER_FAILED",
+        "Human Design positions provider failed"
+      );
+    }
   }
 
   private async resolveClientInput(input: {

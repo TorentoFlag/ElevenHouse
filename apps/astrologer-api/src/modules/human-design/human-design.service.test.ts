@@ -404,6 +404,52 @@ describe("HumanDesignService", () => {
     );
   });
 
+  it("creates a Human Design AI draft with server-resolved transit overlay context", async () => {
+    const { service, aiGeneration, resolvedInputProvider } = createService();
+    const saved = await service.createCalculation(
+      {
+        mode: "individual",
+        methodCode: "human_design_classic",
+        source: "client",
+        clientId: clientUserId
+      },
+      request()
+    );
+
+    await service.createAiDraft(
+      saved.calculation.id,
+      {
+        expectedResultChecksum: saved.calculation.resultChecksum,
+        transitInstant: "2026-07-23T09:15:00.000Z"
+      },
+      request()
+    );
+
+    expect(resolvedInputProvider.resolveTransit).toHaveBeenCalledWith({
+      transitSnapshot: expect.objectContaining({
+        instant: "2026-07-23T09:15:00.000Z"
+      })
+    });
+    expect(aiGeneration.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          mode: "individual",
+          transit: expect.objectContaining({
+            snapshot: expect.objectContaining({
+              instant: "2026-07-23T09:15:00.000Z"
+            }),
+            summary: expect.objectContaining({
+              transitActivationCount: 13
+            })
+          })
+        })
+      })
+    );
+    expect(JSON.stringify(vi.mocked(aiGeneration.generate).mock.calls[0]?.[0].input)).not.toContain(
+      "longitude"
+    );
+  });
+
   it("rejects stale Human Design AI draft requests before calling AI", async () => {
     const { service, aiGeneration } = createService();
     const saved = await service.createCalculation(

@@ -56,6 +56,9 @@ Accessed: 2026-07-23.
 - [x] 2026-07-23: Task 3 editable lifecycle implemented for saved
   individual/compatibility results through shared calculation interpretation
   save/approve mutations.
+- [x] 2026-07-23: Transit-overlay AI context wired: request accepts an optional
+  transit instant, backend recomputes the overlay through the Human Design
+  provider and sends only minimized transit summary to AI.
 
 ## Plan of Work
 
@@ -112,8 +115,9 @@ calculations and renders the latest draft/approved interpretation in the right
 panel. Backend stale/quota/provider failures map to stable Russian messages.
 The panel editor now supports local text edits, checksum-bound save and approve
 of the latest clean draft through the shared calculation interpretation API.
-Transit overlay AI remains disabled until the API accepts an explicit overlay
-context.
+Transit overlay AI uses the same saved individual calculation, sends only the
+selected instant from the browser and recomputes the overlay server-side before
+building the minimized AI context.
 
 ### Task 4: Runtime Evidence
 

@@ -527,7 +527,8 @@ export type RecalculateHumanDesignCalculationRequest = z.infer<
 
 export const createHumanDesignAiDraftRequestSchema = z
   .object({
-    expectedResultChecksum: sha256DigestSchema
+    expectedResultChecksum: sha256DigestSchema,
+    transitInstant: timestampSchema.optional()
   })
   .strict();
 export type CreateHumanDesignAiDraftRequest = z.infer<

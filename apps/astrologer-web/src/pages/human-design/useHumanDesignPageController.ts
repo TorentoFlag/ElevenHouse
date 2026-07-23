@@ -152,10 +152,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     aiDraftText: interpretationText,
     aiDraftStatus: interpretationState.latestStatus,
     aiDraftErrorMessage,
-    aiDraftDisabledReason:
-      mode === "transit"
-        ? "AI-разбор транзитного overlay будет отдельным backend контуром"
-        : interpretationState.aiDisabledReason,
+    aiDraftDisabledReason: interpretationState.aiDisabledReason,
     aiDraftSaveDisabled: interpretationState.saveDisabled,
     aiDraftApproveDisabled: interpretationState.approveDisabled,
     pdfLabel: pdfAction.label,
@@ -447,10 +444,6 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setAiDraftErrorMessage("Сначала сохраните расчёт.");
       return;
     }
-    if (mode === "transit") {
-      setAiDraftErrorMessage("AI-разбор транзитного overlay будет отдельным backend контуром.");
-      return;
-    }
     const interpretationState = getHumanDesignInterpretationState(
       savedResponse.calculation,
       interpretationText,
@@ -460,12 +453,20 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setAiDraftErrorMessage(interpretationState.aiDisabledReason);
       return;
     }
+    const transitInstant = mode === "transit" ? toTransitInstant(transitInstantValue) : null;
+    if (mode === "transit" && !transitInstant) {
+      setAiDraftErrorMessage("Укажите корректный момент транзита.");
+      return;
+    }
     setErrorMessage(null);
     setAiDraftErrorMessage(null);
     try {
       const response = await aiDraftMutation.mutateAsync({
         calculationId: savedResponse.calculation.id,
-        body: { expectedResultChecksum: savedResponse.calculation.resultChecksum }
+        body: {
+          expectedResultChecksum: savedResponse.calculation.resultChecksum,
+          ...(transitInstant ? { transitInstant } : {})
+        }
       });
       setSavedResponse(response);
       previewMutation.reset();

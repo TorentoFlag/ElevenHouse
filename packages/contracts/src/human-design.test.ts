@@ -152,7 +152,22 @@ describe("Human Design contracts", () => {
     expect(
       createHumanDesignAiDraftRequestSchema.parse({ expectedResultChecksum: digest("a") })
     ).toEqual({ expectedResultChecksum: digest("a") });
+    expect(
+      createHumanDesignAiDraftRequestSchema.parse({
+        expectedResultChecksum: digest("a"),
+        transitInstant: "2026-07-23T09:15:00.000Z"
+      })
+    ).toEqual({
+      expectedResultChecksum: digest("a"),
+      transitInstant: "2026-07-23T09:15:00.000Z"
+    });
     expect(() => createHumanDesignAiDraftRequestSchema.parse({})).toThrow();
+    expect(() =>
+      createHumanDesignAiDraftRequestSchema.parse({
+        expectedResultChecksum: digest("a"),
+        transitInstant: "not-a-date"
+      })
+    ).toThrow();
     expect(() =>
       createHumanDesignAiDraftRequestSchema.parse({
         expectedResultChecksum: digest("a"),
