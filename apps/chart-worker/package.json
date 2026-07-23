@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "dev": "tsx src/main.ts",
+    "dev": "node scripts/dev-compiled.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

@@ -79,6 +79,13 @@ pnpm --filter @elevenhouse/notification-worker dev
 pnpm --filter @elevenhouse/chart-worker dev
 ```
 
+`astrologer-api` and `chart-worker` use the shared compiled dev runner. Their
+`dev` scripts first run a workspace-aware build for the app and dependencies
+(`pnpm --filter @elevenhouse/<app>... build`), then start local TypeScript watch
+and `node --watch dist/main.js`. This is intentional: local workspace package
+exports resolve through `dist`, so chart runtime proof must not replace these
+scripts with direct `tsx src/main.ts` execution.
+
 For local passwordless auth development:
 
 ```bash
@@ -87,16 +94,6 @@ source .env
 set +a
 NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE=dev_console pnpm --filter @elevenhouse/notification-worker dev
 ```
-
-If `astrologer-api` dev path fails on Nest decorator metadata in this
-environment, the known fallback is:
-
-```bash
-pnpm --filter @elevenhouse/astrologer-api build
-node apps/astrologer-api/dist/main.js
-```
-
-Use fallback only when the user explicitly asked to run the service.
 
 ## Stop/Restart
 

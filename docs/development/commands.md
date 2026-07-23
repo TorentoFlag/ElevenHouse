@@ -93,6 +93,12 @@ curl -fsS http://localhost:3002/health
 
 Если сервис не запущен, агент сообщает об этом и не подбирает другой порт.
 
+`@elevenhouse/astrologer-api` and `@elevenhouse/chart-worker` run through the
+compiled dev runner. Their `dev` scripts perform a workspace-aware build
+(`pnpm --filter @elevenhouse/<app>... build`) before starting TypeScript watch
+and `node --watch dist/main.js`, because local workspace exports resolve from
+`dist`.
+
 ## Command patterns
 
 ### Targeted verification

@@ -1,3 +1,3 @@
 import { runCompiledDev } from "../../../scripts/dev/compiled-dev-runner.mjs";
 
-runCompiledDev({ packageName: "@elevenhouse/astrologer-api" });
+runCompiledDev({ packageName: "@elevenhouse/chart-worker" });
