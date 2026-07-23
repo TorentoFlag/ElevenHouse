@@ -4,6 +4,7 @@ import type {
   ChartSettings,
   ChartTransitMoment,
   StoredChartCalculationPayload,
+  StoredChartCompositeCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
   StoredChartProgressionCalculationPayload,
   StoredChartSynastryCalculationPayload
@@ -14,6 +15,7 @@ import {
   readChartEngineUrlState,
   restoreChartEngineViewState,
   submitChartCalculation,
+  submitCompositeCalculation,
   submitProgressionCalculation,
   submitSolarReturnCalculation,
   submitSynastryCalculation,
@@ -132,6 +134,26 @@ describe("chart engine controller submission", () => {
     });
   });
 
+  it("creates composite jobs with the selected partner client", async () => {
+    const create = vi.fn(async () => calculatingResponse);
+    const partnerClientId = "55555555-5555-4555-8555-555555555555";
+
+    await expect(
+      submitCompositeCalculation({
+        clientId,
+        partnerClientId,
+        settings: settings(),
+        create
+      })
+    ).resolves.toEqual(calculatingResponse);
+
+    expect(create).toHaveBeenCalledWith({
+      clientId,
+      partnerClientId,
+      settings: settings()
+    });
+  });
+
   it("creates solar return jobs with the selected target year", async () => {
     const create = vi.fn(async () => calculatingResponse);
 
@@ -194,7 +216,7 @@ describe("chart engine URL state", () => {
     ).toBe(`?panel=aspects&clientId=${clientId}`);
   });
 
-  it("keeps partner client id only for synastry URL state", () => {
+  it("keeps partner client id only for relationship chart URL state", () => {
     const partnerClientId = "55555555-5555-4555-8555-555555555555";
 
     expect(
@@ -216,6 +238,17 @@ describe("chart engine URL state", () => {
         calculationId
       })
     ).toBe(`?panel=aspects&clientId=${clientId}&calculationId=${calculationId}`);
+
+    expect(
+      buildChartEngineSearch("?panel=aspects&partnerClientId=old", {
+        mode: "composite",
+        clientId,
+        partnerClientId,
+        calculationId
+      })
+    ).toBe(
+      `?panel=aspects&partnerClientId=${partnerClientId}&clientId=${clientId}&calculationId=${calculationId}`
+    );
   });
 
   it("clears calculation id when building URL state for a different chart mode", () => {
@@ -252,6 +285,14 @@ describe("chart engine persisted result state", () => {
   it("restores synastry mode and partner client id from a loaded calculation", () => {
     expect(restoreChartEngineViewState(synastryResult())).toEqual({
       mode: "synastry",
+      settings: settings(),
+      partnerClientId: "55555555-5555-4555-8555-555555555555"
+    });
+  });
+
+  it("restores composite mode and partner client id from a loaded calculation", () => {
+    expect(restoreChartEngineViewState(compositeResult())).toEqual({
+      mode: "composite",
       settings: settings(),
       partnerClientId: "55555555-5555-4555-8555-555555555555"
     });
@@ -349,6 +390,21 @@ function synastryResult(): StoredChartSynastryCalculationPayload {
       houseOverlays: [],
       warnings: []
     }
+  };
+}
+
+function compositeResult(): StoredChartCompositeCalculationPayload {
+  const synastry = synastryResult();
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "composite",
+    provider: synastry.provider,
+    settings: synastry.settings,
+    inputSnapshot: synastry.inputSnapshot,
+    partnerInputSnapshot: synastry.partnerInputSnapshot,
+    relationshipSnapshot: synastry.relationshipSnapshot,
+    result: emptyRenderResult()
   };
 }
 

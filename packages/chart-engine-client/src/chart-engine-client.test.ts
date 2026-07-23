@@ -147,6 +147,43 @@ describe("ChartEngineHttpClient", () => {
     );
   });
 
+  it("posts composite input to the private chart engine", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => compositeResult
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012/",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateComposite(compositeRequest)).resolves.toMatchObject({
+      schemaVersion: "chart-result.v1",
+      method: "composite",
+      result: { points: expect.arrayContaining([expect.objectContaining({ id: "sun" })]) }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://chart-engine:8012/v1/composite",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("treats invalid composite provider JSON as permanent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaVersion: "wrong" })
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateComposite(compositeRequest)).rejects.toBeInstanceOf(
+      ChartEnginePermanentError
+    );
+  });
+
   it("posts solar return input to the private chart engine", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -355,6 +392,22 @@ const synastryResult = {
     ],
     warnings: []
   }
+} as const;
+
+const compositeRequest = {
+  ...synastryRequest,
+  method: "composite"
+} as const;
+
+const compositeResult = {
+  schemaVersion: "chart-result.v1",
+  method: "composite",
+  provider: result.provider,
+  settings: { zodiac: "tropical", ...request.settings },
+  inputSnapshot: request.inputSnapshot,
+  partnerInputSnapshot: synastryRequest.partnerInputSnapshot,
+  relationshipSnapshot: synastryRequest.relationshipSnapshot,
+  result: result.result
 } as const;
 
 const solarReturnRequest = {

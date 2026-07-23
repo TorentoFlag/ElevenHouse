@@ -27,6 +27,12 @@ export class ChartsController {
     return this.service.createSynastryJob(body, request);
   }
 
+  @Post("composite/jobs")
+  @RequireCsrf()
+  createCompositeJob(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.service.createCompositeJob(body, request);
+  }
+
   @Post("solar-return/jobs")
   @RequireCsrf()
   createSolarReturnJob(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {

@@ -14,6 +14,7 @@ import {
   toClientSelectOptions
 } from "../../features/clients/model/clientSelectorModel";
 import {
+  createCompositeChartJob,
   createNatalChartJob,
   createProgressionChartJob,
   createSolarReturnChartJob,
@@ -221,6 +222,51 @@ export function useChartEngineController() {
     },
     onError: (error) => {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить синстрию");
+    }
+  });
+  const compositeCalculationMutation = useMutation({
+    mutationFn: ({
+      clientId,
+      partnerClientId,
+      settings
+    }: {
+      readonly clientId: string;
+      readonly partnerClientId: string;
+      readonly settings: ChartSettings;
+    }) =>
+      submitCompositeCalculation({
+        clientId,
+        partnerClientId,
+        settings,
+        create: createCompositeChartJob
+      }),
+    onSuccess: (response, variables) => {
+      setErrorMessage(null);
+      setHasResultStaleIntent(false);
+      if (response.status === "succeeded") {
+        setJobId(null);
+        setCalculationId(response.calculationId);
+        setImmediateResult(response.result as StoredChartCalculationPayload);
+        writeChartEngineUrlState({
+          mode: "composite",
+          clientId: variables.clientId,
+          partnerClientId: variables.partnerClientId,
+          calculationId: response.calculationId
+        });
+        return;
+      }
+      setImmediateResult(null);
+      setCalculationId(null);
+      setJobId(response.jobId);
+      writeChartEngineUrlState({
+        mode: "composite",
+        clientId: variables.clientId,
+        partnerClientId: variables.partnerClientId,
+        calculationId: null
+      });
+    },
+    onError: (error) => {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить композит");
     }
   });
   const solarReturnCalculationMutation = useMutation({
@@ -454,6 +500,7 @@ export function useChartEngineController() {
       calculationMutation.isPending ||
       transitCalculationMutation.isPending ||
       synastryCalculationMutation.isPending ||
+      compositeCalculationMutation.isPending ||
       solarReturnCalculationMutation.isPending ||
       progressionCalculationMutation.isPending ||
       jobId ||
@@ -477,6 +524,7 @@ export function useChartEngineController() {
     result,
     transitCalculationMutation.isPending,
     synastryCalculationMutation.isPending,
+    compositeCalculationMutation.isPending,
     solarReturnCalculationMutation.isPending,
     progressionCalculationMutation.isPending
   ]);
@@ -484,6 +532,7 @@ export function useChartEngineController() {
     calculationMutation.isPending ||
     transitCalculationMutation.isPending ||
     synastryCalculationMutation.isPending ||
+    compositeCalculationMutation.isPending ||
     solarReturnCalculationMutation.isPending ||
     progressionCalculationMutation.isPending ||
     birthDataMutation.isPending ||
@@ -589,7 +638,7 @@ export function useChartEngineController() {
       setErrorMessage(null);
       setHasResultStaleIntent(false);
       writeChartEngineUrlState({
-        mode: "synastry",
+        mode: mode === "composite" ? "composite" : "synastry",
         clientId: selectedClient?.value ?? null,
         partnerClientId: client.value,
         calculationId: null
@@ -657,6 +706,37 @@ export function useChartEngineController() {
         return;
       }
       await synastryCalculationMutation.mutateAsync({
+        clientId: selectedClient.value,
+        partnerClientId: selectedPartnerClient.value,
+        settings
+      });
+    },
+    onCreateCompositeJob: async () => {
+      if (!selectedClient) {
+        setErrorMessage("Выберите клиента из CRM");
+        return;
+      }
+      if (!selectedPartnerClient) {
+        setErrorMessage("Выберите партнёра из CRM");
+        return;
+      }
+      if (selectedClient.value === selectedPartnerClient.value) {
+        setErrorMessage("Для композита выберите другого клиента");
+        return;
+      }
+      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
+      if (!readiness.ready) {
+        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
+        return;
+      }
+      const partnerReadiness = getChartBirthDataReadiness(selectedPartnerClient.birthData);
+      if (!partnerReadiness.ready) {
+        setErrorMessage(
+          `Не хватает данных рождения партнёра: ${partnerReadiness.missing.join(", ")}`
+        );
+        return;
+      }
+      await compositeCalculationMutation.mutateAsync({
         clientId: selectedClient.value,
         partnerClientId: selectedPartnerClient.value,
         settings
@@ -770,6 +850,20 @@ export async function submitSynastryCalculation({
   return create({ clientId, partnerClientId, settings });
 }
 
+export async function submitCompositeCalculation({
+  clientId,
+  create,
+  partnerClientId,
+  settings
+}: {
+  readonly clientId: string;
+  readonly partnerClientId: string;
+  readonly settings: ChartSettings;
+  readonly create: typeof createCompositeChartJob;
+}) {
+  return create({ clientId, partnerClientId, settings });
+}
+
 export async function submitSolarReturnCalculation({
   clientId,
   create,
@@ -809,6 +903,14 @@ export function restoreChartEngineViewState(result: StoredChartCalculationPayloa
   if (result.method === "synastry") {
     return {
       mode: "synastry",
+      settings: result.settings,
+      partnerClientId: result.relationshipSnapshot.partnerClientId
+    };
+  }
+
+  if (result.method === "composite") {
+    return {
+      mode: "composite",
       settings: result.settings,
       partnerClientId: result.relationshipSnapshot.partnerClientId
     };
@@ -885,7 +987,8 @@ export function readChartEngineUrlState(
 export function buildChartEngineSearch(search: string, state: ChartEngineUrlState): string {
   const params = new URLSearchParams(search);
   const shouldKeepPartnerClientId =
-    Boolean(state.partnerClientId) && (state.mode == null || state.mode === "synastry");
+    Boolean(state.partnerClientId) &&
+    (state.mode == null || state.mode === "synastry" || state.mode === "composite");
 
   if (state.clientId) {
     params.set("clientId", state.clientId);

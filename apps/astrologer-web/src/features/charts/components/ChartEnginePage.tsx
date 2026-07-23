@@ -25,7 +25,13 @@ import { ChartWheel } from "./ChartWheel";
 import styles from "./ChartEnginePage.module.css";
 
 export type ChartEnginePageJobState = "idle" | "calculating" | "succeeded" | "failed";
-export type ChartEngineMode = "natal" | "transit" | "progression" | "synastry" | "solar_return";
+export type ChartEngineMode =
+  | "natal"
+  | "transit"
+  | "progression"
+  | "synastry"
+  | "composite"
+  | "solar_return";
 export type ChartTransitMomentInput = {
   readonly date: string;
   readonly time: string;
@@ -49,6 +55,7 @@ export type ChartEnginePageProps = {
   readonly onCreateNatalJob: () => void | Promise<void>;
   readonly onCreateTransitJob?: () => void | Promise<void>;
   readonly onCreateSynastryJob?: () => void | Promise<void>;
+  readonly onCreateCompositeJob?: () => void | Promise<void>;
   readonly onCreateSolarReturnJob?: () => void | Promise<void>;
   readonly onCreateProgressionJob?: () => void | Promise<void>;
   readonly onTransitMomentChange?: (moment: ChartTransitMomentInput) => void;
@@ -85,6 +92,7 @@ export function ChartEnginePage({
   onCreateNatalJob,
   onCreateTransitJob,
   onCreateSynastryJob,
+  onCreateCompositeJob,
   onCreateSolarReturnJob,
   onCreateProgressionJob,
   onTransitMomentChange,
@@ -116,11 +124,14 @@ export function ChartEnginePage({
   const activeTransitMoment = transitMoment ?? localTransitMoment;
   const activeSolarReturnYear = solarReturnYear ?? new Date().getFullYear();
   const activeProgressionTargetDate = progressionTargetDate ?? localProgressionTargetDate;
-  const isSynastryPartnerBlocked = Boolean(
-    activeMode === "synastry" && selectedPartnerClient && !partnerReadiness.ready
+  const isPartnerMode = activeMode === "synastry" || activeMode === "composite";
+  const isPartnerBirthDataBlocked = Boolean(
+    isPartnerMode && selectedPartnerClient && !partnerReadiness.ready
   );
   const displayResult =
-    isBirthDataBlocked || isSynastryPartnerBlocked || result?.method !== activeMode ? null : result;
+    isBirthDataBlocked || isPartnerBirthDataBlocked || result?.method !== activeMode
+      ? null
+      : result;
   const isCurrentResultCalculated = Boolean(
     displayResult && !isResultStale && jobState === "succeeded"
   );
@@ -173,7 +184,7 @@ export function ChartEnginePage({
             </button>
           )}
         </div>
-        {activeMode === "synastry" ? (
+        {isPartnerMode ? (
           <div className={styles.clientStrip}>
             {onSelectPartnerClient ? (
               <ClientSearchCombobox
@@ -249,6 +260,19 @@ export function ChartEnginePage({
             Синастрия
           </button>
           <button
+            className={activeMode === "composite" ? styles.modeActive : styles.modeButton}
+            type="button"
+            onClick={() =>
+              setChartMode({
+                mode: "composite",
+                onModeChange,
+                setLocalMode
+              })
+            }
+          >
+            Композит
+          </button>
+          <button
             className={activeMode === "solar_return" ? styles.modeActive : styles.modeButton}
             type="button"
             onClick={() =>
@@ -314,6 +338,7 @@ export function ChartEnginePage({
               onCreateNatalJob,
               onCreateTransitJob,
               onCreateSynastryJob,
+              onCreateCompositeJob,
               onCreateSolarReturnJob,
               onCreateProgressionJob
             })
@@ -438,7 +463,7 @@ export function ChartEnginePage({
             selectedPartnerClient={selectedPartnerClient}
             missingBirthData={isBirthDataBlocked && !readiness.ready ? readiness.missing : []}
             missingPartnerBirthData={
-              isSynastryPartnerBlocked && !partnerReadiness.ready ? partnerReadiness.missing : []
+              isPartnerBirthDataBlocked && !partnerReadiness.ready ? partnerReadiness.missing : []
             }
             pdfErrorMessage={pdfErrorMessage}
           />
@@ -589,11 +614,15 @@ function getChartViewState({
     };
   }
 
-  if (mode === "synastry") {
+  if (mode === "synastry" || mode === "composite") {
+    const methodName = mode === "composite" ? "композита" : "синастрии";
     if (!selectedPartnerClient) {
       return {
         status: "Выберите партнёра",
-        detail: "Синастрия требует второго клиента из CRM.",
+        detail:
+          mode === "composite"
+            ? "Композит требует второго клиента из CRM."
+            : "Синастрия требует второго клиента из CRM.",
         actionLabel: "Выберите партнёра",
         canCalculate: false,
         tone: "idle"
@@ -602,7 +631,7 @@ function getChartViewState({
     if (selectedPartnerClient.value === selectedClient.value) {
       return {
         status: "Нужен другой партнёр",
-        detail: "Для синастрии выберите второго клиента, не текущую карту.",
+        detail: `Для ${methodName} выберите второго клиента, не текущую карту.`,
         actionLabel: "Выберите другого",
         canCalculate: false,
         tone: "warning"
@@ -639,11 +668,13 @@ function getChartViewState({
           ? "Транзиты рассчитаны по наталу клиента и выбранному моменту."
           : mode === "synastry"
             ? "Синастрия рассчитана для выбранной пары клиентов."
-            : mode === "solar_return"
-              ? "Соляр рассчитан по наталу клиента и выбранному году."
-              : mode === "progression"
-                ? "Прогрессии рассчитаны по наталу клиента и выбранной дате."
-              : "Натальная карта рассчитана и привязана к клиенту.",
+            : mode === "composite"
+              ? "Композит рассчитан как одно колесо отношений для выбранной пары."
+              : mode === "solar_return"
+                ? "Соляр рассчитан по наталу клиента и выбранному году."
+                : mode === "progression"
+                  ? "Прогрессии рассчитаны по наталу клиента и выбранной дате."
+                  : "Натальная карта рассчитана и привязана к клиенту.",
       actionLabel: "Актуальна",
       canCalculate: false,
       tone: "success"
@@ -667,21 +698,25 @@ function getChartViewState({
         ? "Натал клиента и момент транзита готовы для расчёта."
         : mode === "synastry"
           ? "Оба клиента готовы для расчёта совместимости."
-          : mode === "solar_return"
-            ? "Натал клиента и год соляра готовы для расчёта."
-            : mode === "progression"
-              ? "Натал клиента и дата прогрессии готовы для расчёта."
-            : "Данные рождения и настройки готовы для натальной карты.",
+          : mode === "composite"
+            ? "Оба клиента готовы для расчёта композитной карты."
+            : mode === "solar_return"
+              ? "Натал клиента и год соляра готовы для расчёта."
+              : mode === "progression"
+                ? "Натал клиента и дата прогрессии готовы для расчёта."
+                : "Данные рождения и настройки готовы для натальной карты.",
     actionLabel:
       mode === "transit"
         ? "Рассчитать транзиты"
         : mode === "synastry"
           ? "Рассчитать синастрию"
-          : mode === "solar_return"
-            ? "Рассчитать соляр"
-            : mode === "progression"
-              ? "Рассчитать прогрессии"
-            : "Рассчитать",
+          : mode === "composite"
+            ? "Рассчитать композит"
+            : mode === "solar_return"
+              ? "Рассчитать соляр"
+              : mode === "progression"
+                ? "Рассчитать прогрессии"
+                : "Рассчитать",
     canCalculate: !isBusy,
     tone: "ready"
   };
@@ -955,11 +990,13 @@ function StatusCard({
         <span>
           {mode === "synastry"
             ? "Берём данные рождения обоих клиентов из CRM и строим canonical result."
-            : mode === "solar_return"
-              ? "Берём натал из CRM, считаем соляр на выбранный год и строим dual-wheel result."
-              : mode === "progression"
-                ? "Берём натал из CRM, считаем вторичные прогрессии на выбранную дату и строим dual-wheel result."
-              : "Берём данные рождения из CRM и строим canonical natal result."}
+            : mode === "composite"
+              ? "Берём данные рождения обоих клиентов из CRM и строим single-wheel composite result."
+              : mode === "solar_return"
+                ? "Берём натал из CRM, считаем соляр на выбранный год и строим dual-wheel result."
+                : mode === "progression"
+                  ? "Берём натал из CRM, считаем вторичные прогрессии на выбранную дату и строим dual-wheel result."
+                  : "Берём данные рождения из CRM и строим canonical natal result."}
         </span>
       </div>
     );
@@ -982,7 +1019,7 @@ function StatusCard({
       </div>
     );
   }
-  if (mode === "synastry" && !selectedPartnerClient) {
+  if ((mode === "synastry" || mode === "composite") && !selectedPartnerClient) {
     return (
       <div className={styles.statusCard} role="status">
         <strong>Выберите партнёра</strong>
@@ -994,7 +1031,10 @@ function StatusCard({
     return (
       <div className={styles.statusCard} role="status">
         <strong>Нужны данные партнёра</strong>
-        <span>Добавьте {missingPartnerBirthData.join(", ")}, чтобы рассчитать синастрию.</span>
+        <span>
+          Добавьте {missingPartnerBirthData.join(", ")}, чтобы рассчитать{" "}
+          {mode === "composite" ? "композит" : "синастрию"}.
+        </span>
       </div>
     );
   }
@@ -1007,11 +1047,13 @@ function StatusCard({
             ? "Выберите клиента и момент транзита: дата, время и место будут отправлены в backend-контур."
             : mode === "synastry"
               ? "Выберите второго клиента: в backend уйдут только id пары и настройки расчёта."
-              : mode === "solar_return"
-                ? "Выберите клиента и год соляра: backend сам возьмёт birth data из CRM."
-                : mode === "progression"
-                  ? "Выберите клиента и дату прогрессии: backend сам возьмёт birth data из CRM."
-                : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
+              : mode === "composite"
+                ? "Выберите второго клиента: backend рассчитает одно колесо отношений по CRM birth data."
+                : mode === "solar_return"
+                  ? "Выберите клиента и год соляра: backend сам возьмёт birth data из CRM."
+                  : mode === "progression"
+                    ? "Выберите клиента и дату прогрессии: backend сам возьмёт birth data из CRM."
+                    : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
         </span>
       </div>
     );
@@ -1025,11 +1067,13 @@ function StatusCard({
             ? "Данные рождения, настройки или момент транзита изменились. Пересчитайте карту."
             : mode === "synastry"
               ? "Данные одного из участников или настройки изменились. Пересчитайте синастрию."
-              : mode === "solar_return"
-                ? "Данные рождения, настройки или год соляра изменились. Пересчитайте соляр."
-                : mode === "progression"
-                  ? "Данные рождения, настройки или дата прогрессии изменились. Пересчитайте прогрессии."
-                : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
+              : mode === "composite"
+                ? "Данные одного из участников или настройки изменились. Пересчитайте композит."
+                : mode === "solar_return"
+                  ? "Данные рождения, настройки или год соляра изменились. Пересчитайте соляр."
+                  : mode === "progression"
+                    ? "Данные рождения, настройки или дата прогрессии изменились. Пересчитайте прогрессии."
+                    : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
         </span>
       </div>
     );
@@ -1158,6 +1202,7 @@ function getModeTitle(mode: ChartEngineMode): string {
   if (mode === "transit") return "Транзитная карта";
   if (mode === "progression") return "Прогрессии";
   if (mode === "synastry") return "Синастрия";
+  if (mode === "composite") return "Композит";
   if (mode === "solar_return") return "Соляр";
   return "Натальная карта";
 }
@@ -1166,6 +1211,7 @@ function getCalculatingLabel(mode: ChartEngineMode): string {
   if (mode === "transit") return "Рассчитываем транзиты";
   if (mode === "progression") return "Рассчитываем прогрессии";
   if (mode === "synastry") return "Рассчитываем синастрию";
+  if (mode === "composite") return "Рассчитываем композит";
   if (mode === "solar_return") return "Рассчитываем соляр";
   return "Рассчитываем карту";
 }
@@ -1174,6 +1220,7 @@ function getEmptyResultLabel(mode: ChartEngineMode): string {
   if (mode === "transit") return "Готово к расчёту транзитов";
   if (mode === "progression") return "Готово к расчёту прогрессий";
   if (mode === "synastry") return "Готово к расчёту синастрии";
+  if (mode === "composite") return "Готово к расчёту композита";
   if (mode === "solar_return") return "Готово к расчёту соляра";
   return "Готово к расчёту натала";
 }
@@ -1182,6 +1229,7 @@ function getSucceededLabel(mode: ChartEngineMode): string {
   if (mode === "transit") return "Транзитная карта рассчитана";
   if (mode === "progression") return "Прогрессии рассчитаны";
   if (mode === "synastry") return "Синастрия рассчитана";
+  if (mode === "composite") return "Композит рассчитан";
   if (mode === "solar_return") return "Соляр рассчитан";
   return "Натальная карта рассчитана";
 }
@@ -1191,6 +1239,7 @@ function runChartCalculationAction({
   onCreateNatalJob,
   onCreateTransitJob,
   onCreateSynastryJob,
+  onCreateCompositeJob,
   onCreateSolarReturnJob,
   onCreateProgressionJob
 }: {
@@ -1198,6 +1247,7 @@ function runChartCalculationAction({
   readonly onCreateNatalJob: () => void | Promise<void>;
   readonly onCreateTransitJob?: () => void | Promise<void>;
   readonly onCreateSynastryJob?: () => void | Promise<void>;
+  readonly onCreateCompositeJob?: () => void | Promise<void>;
   readonly onCreateSolarReturnJob?: () => void | Promise<void>;
   readonly onCreateProgressionJob?: () => void | Promise<void>;
 }) {
@@ -1209,6 +1259,9 @@ function runChartCalculationAction({
   }
   if (activeMode === "synastry") {
     return onCreateSynastryJob?.();
+  }
+  if (activeMode === "composite") {
+    return onCreateCompositeJob?.();
   }
   if (activeMode === "solar_return") {
     return onCreateSolarReturnJob?.();

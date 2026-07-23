@@ -50,9 +50,16 @@ export const chartSynastryJobCreateRequestSchema = z
     settings: chartSettingsSchema
   })
   .strict();
-export type ChartSynastryJobCreateRequest = z.infer<
-  typeof chartSynastryJobCreateRequestSchema
->;
+export type ChartSynastryJobCreateRequest = z.infer<typeof chartSynastryJobCreateRequestSchema>;
+
+export const chartCompositeJobCreateRequestSchema = z
+  .object({
+    clientId: uuidSchema,
+    partnerClientId: uuidSchema,
+    settings: chartSettingsSchema
+  })
+  .strict();
+export type ChartCompositeJobCreateRequest = z.infer<typeof chartCompositeJobCreateRequestSchema>;
 
 export const chartSolarReturnJobCreateRequestSchema = z
   .object({
@@ -170,9 +177,7 @@ export const chartProgressionRequestSnapshotSchema = z
     progressionType: z.literal("secondary")
   })
   .strict();
-export type ChartProgressionRequestSnapshot = z.infer<
-  typeof chartProgressionRequestSnapshotSchema
->;
+export type ChartProgressionRequestSnapshot = z.infer<typeof chartProgressionRequestSnapshotSchema>;
 
 export const chartProgressionSnapshotSchema = chartProgressionRequestSnapshotSchema
   .extend({
@@ -195,9 +200,7 @@ export const chartNatalCalculationRequestSchema = z
     inputSnapshot: chartInputSnapshotSchema
   })
   .strict();
-export type ChartNatalCalculationRequestInput = z.input<
-  typeof chartNatalCalculationRequestSchema
->;
+export type ChartNatalCalculationRequestInput = z.input<typeof chartNatalCalculationRequestSchema>;
 export type ChartNatalCalculationRequest = z.infer<typeof chartNatalCalculationRequestSchema>;
 
 export const chartTransitCalculationRequestSchema = z
@@ -232,8 +235,28 @@ export const chartSynastryCalculationRequestSchema = z
 export type ChartSynastryCalculationRequestInput = z.input<
   typeof chartSynastryCalculationRequestSchema
 >;
-export type ChartSynastryCalculationRequest = z.infer<
-  typeof chartSynastryCalculationRequestSchema
+export type ChartSynastryCalculationRequest = z.infer<typeof chartSynastryCalculationRequestSchema>;
+
+export const chartCompositeCalculationRequestSchema = z
+  .object({
+    schemaVersion: z.literal("chart-request.v1"),
+    method: z.literal("composite"),
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    partnerInputSnapshot: chartInputSnapshotSchema,
+    relationshipSnapshot: z
+      .object({
+        primaryClientId: uuidSchema,
+        partnerClientId: uuidSchema
+      })
+      .strict()
+  })
+  .strict();
+export type ChartCompositeCalculationRequestInput = z.input<
+  typeof chartCompositeCalculationRequestSchema
+>;
+export type ChartCompositeCalculationRequest = z.infer<
+  typeof chartCompositeCalculationRequestSchema
 >;
 
 export const chartSolarReturnCalculationRequestSchema = z
@@ -516,9 +539,7 @@ export const chartSynastryRelationshipScoreSchema = z
     )
   })
   .strict();
-export type ChartSynastryRelationshipScore = z.infer<
-  typeof chartSynastryRelationshipScoreSchema
->;
+export type ChartSynastryRelationshipScore = z.infer<typeof chartSynastryRelationshipScoreSchema>;
 
 export const chartSynastryRenderResultSchema = z
   .object({
@@ -582,6 +603,27 @@ export type StoredChartSynastryCalculationPayload = z.infer<
   typeof storedChartSynastryCalculationPayloadSchema
 >;
 
+export const storedChartCompositeCalculationPayloadSchema = z
+  .object({
+    schemaVersion: z.literal("chart-result.v1"),
+    method: z.literal("composite"),
+    provider: chartProviderMetadataSchema,
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    partnerInputSnapshot: chartInputSnapshotSchema,
+    relationshipSnapshot: z
+      .object({
+        primaryClientId: uuidSchema,
+        partnerClientId: uuidSchema
+      })
+      .strict(),
+    result: chartRenderResultSchema
+  })
+  .strict();
+export type StoredChartCompositeCalculationPayload = z.infer<
+  typeof storedChartCompositeCalculationPayloadSchema
+>;
+
 export const storedChartSolarReturnCalculationPayloadSchema = z
   .object({
     schemaVersion: z.literal("chart-result.v1"),
@@ -616,6 +658,7 @@ export const storedChartCalculationPayloadSchema = z.discriminatedUnion("method"
   storedChartNatalCalculationPayloadSchema,
   storedChartTransitCalculationPayloadSchema,
   storedChartSynastryCalculationPayloadSchema,
+  storedChartCompositeCalculationPayloadSchema,
   storedChartSolarReturnCalculationPayloadSchema,
   storedChartProgressionCalculationPayloadSchema
 ]);
@@ -629,9 +672,7 @@ export const chartPlanetaryPositionsSettingsSchema = z
     nodeType: z.enum(["true", "mean"])
   })
   .strict();
-export type ChartPlanetaryPositionsSettings = z.infer<
-  typeof chartPlanetaryPositionsSettingsSchema
->;
+export type ChartPlanetaryPositionsSettings = z.infer<typeof chartPlanetaryPositionsSettingsSchema>;
 
 export const chartPlanetaryPositionsRequestSchema = z
   .object({
@@ -644,9 +685,7 @@ export const chartPlanetaryPositionsRequestSchema = z
 export type ChartPlanetaryPositionsRequestInput = z.input<
   typeof chartPlanetaryPositionsRequestSchema
 >;
-export type ChartPlanetaryPositionsRequest = z.infer<
-  typeof chartPlanetaryPositionsRequestSchema
->;
+export type ChartPlanetaryPositionsRequest = z.infer<typeof chartPlanetaryPositionsRequestSchema>;
 
 const chartPlanetaryPositionBodySchema = z.enum([
   "sun",
@@ -693,6 +732,4 @@ export const chartPlanetaryPositionsResponseSchema = z
       }
     }
   });
-export type ChartPlanetaryPositionsResponse = z.infer<
-  typeof chartPlanetaryPositionsResponseSchema
->;
+export type ChartPlanetaryPositionsResponse = z.infer<typeof chartPlanetaryPositionsResponseSchema>;

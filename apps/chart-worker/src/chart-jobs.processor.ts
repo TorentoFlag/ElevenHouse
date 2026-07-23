@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 import {
   chartInputSnapshotSchema,
+  chartCompositeCalculationRequestSchema,
   chartProgressionCalculationRequestSchema,
   chartSolarReturnCalculationRequestSchema,
   chartSettingsSchema,
   type ChartNatalCalculationRequest,
+  type ChartCompositeCalculationRequest,
   type ChartProgressionCalculationRequest,
   type ChartSolarReturnCalculationRequest,
   chartSynastryCalculationRequestSchema,
@@ -12,6 +14,7 @@ import {
   chartTransitSnapshotSchema,
   type ChartTransitCalculationRequest,
   type StoredChartProgressionCalculationPayload,
+  type StoredChartCompositeCalculationPayload,
   type StoredChartSolarReturnCalculationPayload,
   type StoredChartSynastryCalculationPayload,
   type StoredChartTransitCalculationPayload,
@@ -32,6 +35,9 @@ export type ChartEngineClient = {
   readonly calculateSynastry: (
     payload: ChartSynastryCalculationRequest
   ) => Promise<StoredChartSynastryCalculationPayload>;
+  readonly calculateComposite: (
+    payload: ChartCompositeCalculationRequest
+  ) => Promise<StoredChartCompositeCalculationPayload>;
   readonly calculateSolarReturn: (
     payload: ChartSolarReturnCalculationRequest
   ) => Promise<StoredChartSolarReturnCalculationPayload>;
@@ -48,6 +54,14 @@ const transitJobInputSnapshotSchema = z
   .strict();
 
 const synastryJobInputSnapshotSchema = chartSynastryCalculationRequestSchema
+  .pick({
+    inputSnapshot: true,
+    partnerInputSnapshot: true,
+    relationshipSnapshot: true
+  })
+  .strict();
+
+const compositeJobInputSnapshotSchema = chartCompositeCalculationRequestSchema
   .pick({
     inputSnapshot: true,
     partnerInputSnapshot: true,
@@ -159,6 +173,18 @@ async function calculateChartResult(input: {
       relationshipSnapshot: snapshots.relationshipSnapshot
     };
     return input.engine.calculateSynastry(request);
+  }
+  if (claim.method === "composite") {
+    const snapshots = compositeJobInputSnapshotSchema.parse(claim.inputSnapshot);
+    const request: ChartCompositeCalculationRequest = {
+      schemaVersion: "chart-request.v1",
+      method: "composite",
+      settings,
+      inputSnapshot: snapshots.inputSnapshot,
+      partnerInputSnapshot: snapshots.partnerInputSnapshot,
+      relationshipSnapshot: snapshots.relationshipSnapshot
+    };
+    return input.engine.calculateComposite(request);
   }
   if (claim.method === "solar_return") {
     const snapshots = solarReturnJobInputSnapshotSchema.parse(claim.inputSnapshot);

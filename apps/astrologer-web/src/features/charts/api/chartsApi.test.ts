@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChartNatalJobCreateResponse } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import {
+  createCompositeChartJob,
   createNatalChartJob,
   createProgressionChartJob,
   createSolarReturnChartJob,
@@ -126,6 +127,43 @@ describe("chartsApi", () => {
 
     expect(post).toHaveBeenCalledWith(
       "/charts/synastry/jobs",
+      {
+        clientId,
+        partnerClientId,
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      },
+      { csrf: true }
+    );
+    expect(JSON.stringify(post.mock.calls[0]?.[1])).not.toContain("birthDate");
+  });
+
+  it("creates composite jobs with two client ids and settings only", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(createResponse);
+
+    await expect(
+      createCompositeChartJob({
+        clientId,
+        partnerClientId,
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        birthDate: "1990-07-15",
+        partnerBirthDate: "1992-08-11"
+      })
+    ).resolves.toEqual(createResponse);
+
+    expect(post).toHaveBeenCalledWith(
+      "/charts/composite/jobs",
       {
         clientId,
         partnerClientId,

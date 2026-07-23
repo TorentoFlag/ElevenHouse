@@ -72,6 +72,9 @@ export function buildChartInterpretationAnchors(
   if (synastryResult) {
     return buildSynastryAnchors(synastryResult);
   }
+  if (result.method === "composite") {
+    return buildCompositeAnchors(result);
+  }
 
   const renderResult = getPrimaryChartRenderResult(result);
   const pointsById = new Map(renderResult.points.map((point) => [point.id, point]));
@@ -114,6 +117,113 @@ export function buildChartInterpretationAnchors(
         )
       : [])
   ];
+}
+
+function buildCompositeAnchors(
+  result: StoredChartCalculationPayload
+): readonly ChartInterpretationAnchor[] {
+  const renderResult = getPrimaryChartRenderResult(result);
+  const pointsById = new Map(renderResult.points.map((point) => [point.id, point]));
+
+  return [
+    ...buildCompositePointAnchors(renderResult.points),
+    ...buildCompositeHouseAnchors(result),
+    ...buildCompositeAspectAnchors(renderResult.aspects, pointsById)
+  ];
+}
+
+function buildCompositePointAnchors(
+  points: readonly ChartPoint[]
+): readonly ChartInterpretationAnchor[] {
+  return sortPoints(points).flatMap((point) => {
+    const anchors: ChartInterpretationAnchor[] = [];
+    const pointId = formatDictionaryCodePart(point.id);
+    const pointLabel = getChartPointDisplayLabel(point.id, point.label);
+    const position = `${formatChartPointPosition(point)}${
+      point.house ? ` · ${romanHouses[point.house]} дом` : ""
+    }`;
+
+    if (signDictionaryPointIds.has(pointId as (typeof pointOrder)[number])) {
+      anchors.push({
+        id: `composite-point-sign-${point.id}`,
+        code: `composite.${pointId}.${formatDictionaryCodePart(point.sign)}`,
+        categoryCode: "planets_in_signs",
+        group: "points",
+        label: `${pointLabel} в ${formatSignPrepositional(point.sign)}`,
+        meta: "Композит · планета в знаке",
+        position
+      });
+    }
+
+    if (point.house && houseDictionaryPointIds.has(pointId as (typeof pointOrder)[number])) {
+      anchors.push({
+        id: `composite-point-house-${point.id}`,
+        code: `composite.${pointId}.house.${point.house}`,
+        categoryCode: "planets_in_houses",
+        group: "points",
+        label: `${pointLabel} · ${romanHouses[point.house]} дом`,
+        meta: "Композит · планета в доме",
+        position
+      });
+    }
+
+    return anchors;
+  });
+}
+
+function buildCompositeHouseAnchors(
+  result: StoredChartCalculationPayload
+): readonly ChartInterpretationAnchor[] {
+  return [...getPrimaryChartRenderResult(result).houses]
+    .sort((left, right) => left.number - right.number)
+    .map((house) => {
+      const position = getRoundedChartPointPosition(house);
+
+      return {
+        id: `composite-house-${house.number}`,
+        code: `composite.house.${house.number}`,
+        categoryCode: "house_meanings" as const,
+        group: "houses" as const,
+        label: `${romanHouses[house.number]} дом`,
+        meta: "Композит · значение дома",
+        position: `${formatHouseSignDisplay(position.sign)} ${position.degree}`
+      };
+    });
+}
+
+function buildCompositeAspectAnchors(
+  aspects: readonly ChartAspect[],
+  pointsById: ReadonlyMap<string, ChartPoint>
+): readonly ChartInterpretationAnchor[] {
+  return [...aspects]
+    .filter(
+      (aspect) =>
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.pointA) as (typeof pointOrder)[number]
+        ) &&
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.pointB) as (typeof pointOrder)[number]
+        )
+    )
+    .sort((left, right) => left.orb - right.orb)
+    .slice(0, maxPlanetAspectAnchors)
+    .map((aspect) => {
+      const [pointA, pointB] = orderAspectPair(aspect.pointA, aspect.pointB);
+      const pointALabel = getPointLabel(pointsById, pointA);
+      const pointBLabel = getPointLabel(pointsById, pointB);
+
+      return {
+        id: `composite-aspect-${pointA}-${pointB}-${aspect.type}`,
+        code: `composite.aspect.${formatDictionaryCodePart(
+          pointA
+        )}.${normalizeAspectTypeCode(aspect.type)}.${formatDictionaryCodePart(pointB)}`,
+        categoryCode: "planet_aspects" as const,
+        group: "aspects" as const,
+        label: `${pointALabel} — ${pointBLabel}`,
+        meta: "Композит · аспект",
+        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+      };
+    });
 }
 
 export function getChartInterpretationLookupCodes(

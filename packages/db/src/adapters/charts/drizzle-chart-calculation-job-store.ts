@@ -162,7 +162,10 @@ async function getOwnerScopedJob(
     .select()
     .from(chartCalculationJobs)
     .where(
-      and(eq(chartCalculationJobs.ownerUserId, input.ownerUserId), eq(chartCalculationJobs.id, input.jobId))
+      and(
+        eq(chartCalculationJobs.ownerUserId, input.ownerUserId),
+        eq(chartCalculationJobs.id, input.jobId)
+      )
     )
     .limit(1);
 
@@ -369,6 +372,7 @@ function buildChartResultSummary(result: StoredChartCalculationPayload) {
 function buildChartCalculationTitle(method: ChartCalculationJobRow["method"]): string {
   if (method === "transit") return "Transit chart";
   if (method === "synastry") return "Synastry chart";
+  if (method === "composite") return "Composite chart";
   if (method === "solar_return") return "Solar return chart";
   if (method === "progression") return "Progression chart";
   return "Natal chart";

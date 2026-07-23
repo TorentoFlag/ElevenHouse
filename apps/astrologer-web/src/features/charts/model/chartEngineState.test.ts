@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   ChartSettings,
   StoredChartCalculationPayload,
+  StoredChartCompositeCalculationPayload,
   StoredChartNatalCalculationPayload,
   StoredChartProgressionCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
@@ -115,6 +116,22 @@ describe("chartEngineState", () => {
         readyBirthData(),
         chartSettings(),
         "synastry",
+        undefined,
+        {
+          ...readyBirthData(),
+          birthDate: "1992-08-12"
+        }
+      )
+    ).toBe(true);
+  });
+
+  it("marks a composite result stale when the partner birth data changed", () => {
+    expect(
+      isChartResultStale(
+        compositeResult(),
+        readyBirthData(),
+        chartSettings(),
+        "composite",
         undefined,
         {
           ...readyBirthData(),
@@ -253,6 +270,21 @@ function synastryResult(): StoredChartSynastryCalculationPayload {
       houseOverlays: [],
       warnings: []
     }
+  };
+}
+
+function compositeResult(): StoredChartCompositeCalculationPayload {
+  const synastry = synastryResult();
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "composite",
+    provider: synastry.provider,
+    settings: synastry.settings,
+    inputSnapshot: synastry.inputSnapshot,
+    partnerInputSnapshot: synastry.partnerInputSnapshot,
+    relationshipSnapshot: synastry.relationshipSnapshot,
+    result: chartResult().result
   };
 }
 

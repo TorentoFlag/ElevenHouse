@@ -28,7 +28,8 @@ type LegacyCalculationRow = QueryResultRow & {
 };
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
-if (!databaseUrl) throw new Error("DATABASE_URL is required for production baseline reconciliation");
+if (!databaseUrl)
+  throw new Error("DATABASE_URL is required for production baseline reconciliation");
 
 const client = new Client({ connectionString: databaseUrl });
 
@@ -53,9 +54,7 @@ async function main(): Promise<void> {
       await client.query("COMMIT");
       console.log("Fresh database detected; the current baseline will be applied by Drizzle");
     } else {
-      await client.query(
-        "LOCK TABLE drizzle.__drizzle_migrations IN SHARE ROW EXCLUSIVE MODE"
-      );
+      await client.query("LOCK TABLE drizzle.__drizzle_migrations IN SHARE ROW EXCLUSIVE MODE");
       const migrations = await readMigrationLedger();
 
       const history = classifyBaselineHistory(migrations);
@@ -508,7 +507,9 @@ async function reconcileChartCalculationJobsIfPrerequisitesExist(): Promise<void
         FOREIGN KEY (client_id) REFERENCES client_profiles(user_id) ON DELETE cascade,
       CONSTRAINT chart_calculation_jobs_result_calculation_id_calculation_records_id_fk
         FOREIGN KEY (result_calculation_id) REFERENCES calculation_records(id) ON DELETE set null,
-      CONSTRAINT chart_calculation_jobs_method_check CHECK (method in ('natal')),
+      CONSTRAINT chart_calculation_jobs_method_check CHECK (
+        method in ('natal', 'transit', 'synastry', 'composite', 'solar_return', 'progression')
+      ),
       CONSTRAINT chart_calculation_jobs_status_check CHECK (
         status in ('queued', 'processing', 'succeeded', 'failed')
       ),

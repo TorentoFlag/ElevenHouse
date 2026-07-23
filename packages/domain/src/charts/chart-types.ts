@@ -2,6 +2,7 @@ export type ChartCalculationMethod =
   | "natal"
   | "transit"
   | "synastry"
+  | "composite"
   | "solar_return"
   | "progression";
 export type ChartJobStatus = "queued" | "processing" | "succeeded" | "failed";

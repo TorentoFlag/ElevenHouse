@@ -3,7 +3,7 @@ from importlib.metadata import version
 from math import ceil
 from typing import Any
 
-from kerykeion import AspectsFactory, AstrologicalSubjectFactory
+from kerykeion import AspectsFactory, AstrologicalSubjectFactory, CompositeSubjectFactory
 from kerykeion.chart_data_factory import ChartDataFactory
 from kerykeion.planetary_return_factory import PlanetaryReturnFactory
 
@@ -25,6 +25,7 @@ from chart_engine.schemas import (
     ChartTransitAspect,
     ChartTransitRenderResult,
     ChartWarning,
+    CompositeRequest,
     NatalRequest,
     PlanetaryPosition,
     PlanetaryPositionsPayload,
@@ -36,6 +37,7 @@ from chart_engine.schemas import (
     SolarReturnRequest,
     SolarReturnSnapshot,
     StoredChartCalculationPayload,
+    StoredChartCompositeCalculationPayload,
     StoredChartProgressionCalculationPayload,
     StoredChartSolarReturnCalculationPayload,
     StoredChartSynastryCalculationPayload,
@@ -385,6 +387,58 @@ def calculate_synastry(request: SynastryRequest) -> StoredChartSynastryCalculati
             houseOverlays=_map_house_overlays(synastry_data.house_comparison),
             relationshipScore=_map_relationship_score(synastry_data.relationship_score),
             warnings=warnings,
+        ),
+    )
+
+
+def calculate_composite(request: CompositeRequest) -> StoredChartCompositeCalculationPayload:
+    active_points = _active_points(request.settings.nodeType)
+    primary_subject = _create_subject(
+        name="primary",
+        date=request.inputSnapshot.birthDate,
+        time=request.inputSnapshot.birthTime,
+        timezone=request.inputSnapshot.timezone,
+        latitude=request.inputSnapshot.latitude,
+        longitude=request.inputSnapshot.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+    partner_subject = _create_subject(
+        name="partner",
+        date=request.partnerInputSnapshot.birthDate,
+        time=request.partnerInputSnapshot.birthTime,
+        timezone=request.partnerInputSnapshot.timezone,
+        latitude=request.partnerInputSnapshot.latitude,
+        longitude=request.partnerInputSnapshot.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+    composite_subject = CompositeSubjectFactory(
+        primary_subject,
+        partner_subject,
+        chart_name="composite",
+    ).get_midpoint_composite_subject_model()
+    warnings = _map_warnings(request)
+
+    return StoredChartCompositeCalculationPayload(
+        schemaVersion="chart-result.v1",
+        method="composite",
+        provider=ProviderMetadata(
+            name="kerykeion",
+            version=version("kerykeion"),
+            ephemeris="swiss-ephemeris",
+        ),
+        settings=request.settings,
+        inputSnapshot=request.inputSnapshot,
+        partnerInputSnapshot=request.partnerInputSnapshot,
+        relationshipSnapshot=request.relationshipSnapshot,
+        result=_map_render_result(
+            composite_subject,
+            request.settings.nodeType,
+            request.settings.aspectPreset,
+            request.settings.orbMultiplier,
+            active_points,
+            warnings,
         ),
     )
 
@@ -982,7 +1036,7 @@ def _map_distributions(subject: Any) -> ChartDistributions:
 
 
 def _map_warnings(
-    request: NatalRequest | TransitRequest | SynastryRequest | SolarReturnRequest,
+    request: NatalRequest | TransitRequest | SynastryRequest | CompositeRequest | SolarReturnRequest,
 ) -> list[ChartWarning]:
     warnings = []
     if request.inputSnapshot.birthTimePrecision == "approximate":
@@ -992,14 +1046,18 @@ def _map_warnings(
                 message="Chart calculated with approximate birth time.",
             )
         )
-    if (
-        isinstance(request, SynastryRequest)
-        and request.partnerInputSnapshot.birthTimePrecision == "approximate"
-    ):
+    if isinstance(request, SynastryRequest) and request.partnerInputSnapshot.birthTimePrecision == "approximate":
         warnings.append(
             ChartWarning(
                 code="PARTNER_BIRTH_TIME_APPROXIMATE",
                 message="Partner chart calculated with approximate birth time.",
+            )
+        )
+    if isinstance(request, CompositeRequest) and request.partnerInputSnapshot.birthTimePrecision == "approximate":
+        warnings.append(
+            ChartWarning(
+                code="PARTNER_BIRTH_TIME_APPROXIMATE",
+                message="Composite calculated with approximate partner birth time.",
             )
         )
     return warnings

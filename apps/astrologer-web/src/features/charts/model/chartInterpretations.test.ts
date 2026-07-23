@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
   StoredChartCalculationPayload,
+  StoredChartCompositeCalculationPayload,
   StoredChartNatalCalculationPayload,
   StoredChartProgressionCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
@@ -82,7 +83,9 @@ describe("chartInterpretations", () => {
     expect(anchors.map((anchor) => `${anchor.group}:${anchor.label}`)).toContain(
       "aspects:Солярный Марс — Солнце"
     );
-    expect(anchors.find((anchor) => anchor.code === "solar_return.mars.opposition.sun")).toMatchObject({
+    expect(
+      anchors.find((anchor) => anchor.code === "solar_return.mars.opposition.sun")
+    ).toMatchObject({
       categoryCode: "planet_aspects",
       meta: "Соляр к наталу",
       position: "Оппозиция · орбис 1.20°"
@@ -92,13 +95,13 @@ describe("chartInterpretations", () => {
   it("derives deterministic dictionary anchors for progression aspects to natal points", () => {
     const anchors = buildChartInterpretationAnchors(progressionResult());
 
-    expect(getChartInterpretationLookupCodes(anchors)).toContain(
-      "progression.mars.opposition.sun"
-    );
+    expect(getChartInterpretationLookupCodes(anchors)).toContain("progression.mars.opposition.sun");
     expect(anchors.map((anchor) => `${anchor.group}:${anchor.label}`)).toContain(
       "aspects:Прогрессивный Марс — Солнце"
     );
-    expect(anchors.find((anchor) => anchor.code === "progression.mars.opposition.sun")).toMatchObject({
+    expect(
+      anchors.find((anchor) => anchor.code === "progression.mars.opposition.sun")
+    ).toMatchObject({
       categoryCode: "planet_aspects",
       meta: "Прогрессия к наталу",
       position: "Оппозиция · орбис 1.20°"
@@ -124,6 +127,26 @@ describe("chartInterpretations", () => {
         "synastry.overlay.primary.venus.partner_house.7:planets_in_houses:Венера клиента · VII дом партнёра",
         "synastry.overlay.partner.mars.primary_house.4:planets_in_houses:Марс партнёра · IV дом клиента",
         "synastry.score.very_important:aspects:Оценка совместимости"
+      ])
+    );
+  });
+
+  it("derives composite-specific dictionary anchors instead of natal lookup codes", () => {
+    const anchors = buildChartInterpretationAnchors(compositeResult());
+
+    expect(getChartInterpretationLookupCodes(anchors)).toEqual(
+      expect.arrayContaining([
+        "composite.sun.cancer",
+        "composite.sun.house.11",
+        "composite.house.1",
+        "composite.aspect.sun.square.moon"
+      ])
+    );
+    expect(getChartInterpretationLookupCodes(anchors)).not.toContain("sun_cancer");
+    expect(anchors.map((anchor) => `${anchor.code}:${anchor.categoryCode}:${anchor.meta}`)).toEqual(
+      expect.arrayContaining([
+        "composite.sun.cancer:planets_in_signs:Композит · планета в знаке",
+        "composite.aspect.sun.square.moon:planet_aspects:Композит · аспект"
       ])
     );
   });
@@ -316,6 +339,31 @@ function synastryResult(): StoredChartSynastryCalculationPayload {
       },
       warnings: []
     }
+  };
+}
+
+function compositeResult(): StoredChartCompositeCalculationPayload {
+  const natal = chartResult();
+
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "composite",
+    provider: natal.provider,
+    settings: natal.settings,
+    inputSnapshot: natal.inputSnapshot,
+    partnerInputSnapshot: {
+      birthDate: "1992-08-11",
+      birthTime: "08:15",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173,
+      birthTimePrecision: "exact"
+    },
+    relationshipSnapshot: {
+      primaryClientId: "22222222-2222-4222-8222-222222222222",
+      partnerClientId: "55555555-5555-4555-8555-555555555555"
+    },
+    result: natal.result
   };
 }
 

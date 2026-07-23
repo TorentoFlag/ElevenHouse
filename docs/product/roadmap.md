@@ -110,8 +110,15 @@
       point/aspect tables and Dictionary-backed `solar_return.*` missing-entry
       creation affordances. Solar PDF/export, relocated return, public sharing
       and AI solar text remain separate future contours.
+- [x] Chart Engine composite first slice: two owner-scoped CRM clients,
+      canonical single-wheel relationship result, private primary/partner input
+      snapshots, Kerykeion `CompositeSubjectFactory` provider path, worker/API
+      integration, `/chart-engine` `Композит` mode, partner selector,
+      single-wheel rendering and Dictionary-backed `composite.*` anchors with
+      authenticated browser calculate/reload evidence. Composite PDF/export,
+      public sharing and AI relationship text remain separate future contours.
 - [ ] Chart Engine method expansion after solar return: progressions,
-      composite, child-chart interpretation mode, horary and astrocartography.
+      child-chart interpretation mode, horary and astrocartography.
       Progressions now have the first production slice across contracts,
       persistence, worker/provider, frontend controls/rendering and Dictionary
       anchors plus authenticated `/chart-engine` browser evidence for mode

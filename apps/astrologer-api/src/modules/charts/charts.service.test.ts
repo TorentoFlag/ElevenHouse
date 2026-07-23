@@ -171,6 +171,63 @@ describe("ChartsService", () => {
     );
   });
 
+  it("creates composite jobs from two owner-scoped CRM birth data snapshots", async () => {
+    const clientStore = createClientStore({
+      clients: {
+        [clientId]: readyBirthData({ clientUserId: clientId, birthDate: "1990-07-15" }),
+        [partnerClientId]: readyBirthData({
+          clientUserId: partnerClientId,
+          birthDate: "1992-08-11",
+          birthTime: "08:15",
+          birthTimezone: "Europe/Moscow",
+          birthLatitude: 55.7558,
+          birthLongitude: 37.6173
+        })
+      }
+    });
+    const commandStore = createCommandStore();
+    const service = createService({ clientStore, commandStore });
+
+    await service.createCompositeJob(
+      {
+        clientId,
+        partnerClientId,
+        settings: settings()
+      },
+      request()
+    );
+
+    expect(clientStore.getAstrologerClient).toHaveBeenCalledWith({
+      astrologerUserId: ownerUserId,
+      clientUserId: clientId
+    });
+    expect(clientStore.getAstrologerClient).toHaveBeenCalledWith({
+      astrologerUserId: ownerUserId,
+      clientUserId: partnerClientId
+    });
+    expect(commandStore.createOrReuseChartJobAndRequestCalculation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "composite",
+        ownerUserId,
+        clientId,
+        inputSnapshot: {
+          inputSnapshot: expect.objectContaining({
+            birthDate: "1990-07-15",
+            timezone: "Europe/Rome"
+          }),
+          partnerInputSnapshot: expect.objectContaining({
+            birthDate: "1992-08-11",
+            timezone: "Europe/Moscow"
+          }),
+          relationshipSnapshot: {
+            primaryClientId: clientId,
+            partnerClientId
+          }
+        }
+      })
+    );
+  });
+
   it("creates solar return jobs with natal-backed return location", async () => {
     const commandStore = createCommandStore();
     const service = createService({ commandStore });
@@ -277,6 +334,21 @@ describe("ChartsService", () => {
       )
     ).rejects.toMatchObject({
       response: expect.objectContaining({ code: "CHART_SYNASTRY_PARTNER_REQUIRED" })
+    });
+    expect(commandStore.createOrReuseChartJobAndRequestCalculation).not.toHaveBeenCalled();
+  });
+
+  it("rejects composite jobs for the same client", async () => {
+    const commandStore = createCommandStore();
+    const service = createService({ commandStore });
+
+    await expect(
+      service.createCompositeJob(
+        { clientId, partnerClientId: clientId, settings: settings() },
+        request()
+      )
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: "CHART_COMPOSITE_PARTNER_REQUIRED" })
     });
     expect(commandStore.createOrReuseChartJobAndRequestCalculation).not.toHaveBeenCalled();
   });

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from chart_engine.kerykeion_adapter import (
+    calculate_composite,
     calculate_natal,
     calculate_planetary_positions,
     calculate_progression,
@@ -9,6 +10,7 @@ from chart_engine.kerykeion_adapter import (
     calculate_transit,
 )
 from chart_engine.schemas import (
+    CompositeRequest,
     HealthResponse,
     NatalRequest,
     PlanetaryPositionsPayload,
@@ -16,6 +18,7 @@ from chart_engine.schemas import (
     ProgressionRequest,
     SolarReturnRequest,
     StoredChartCalculationPayload,
+    StoredChartCompositeCalculationPayload,
     StoredChartProgressionCalculationPayload,
     StoredChartSolarReturnCalculationPayload,
     StoredChartSynastryCalculationPayload,
@@ -54,6 +57,15 @@ def transits(request: TransitRequest) -> StoredChartTransitCalculationPayload:
 )
 def synastry(request: SynastryRequest) -> StoredChartSynastryCalculationPayload:
     return calculate_synastry(request)
+
+
+@app.post(
+    "/v1/composite",
+    response_model=StoredChartCompositeCalculationPayload,
+    response_model_exclude_none=True,
+)
+def composite(request: CompositeRequest) -> StoredChartCompositeCalculationPayload:
+    return calculate_composite(request)
 
 
 @app.post(

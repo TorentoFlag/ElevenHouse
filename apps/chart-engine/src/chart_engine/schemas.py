@@ -63,6 +63,15 @@ class SynastryRequest(BaseModel):
     relationshipSnapshot: RelationshipSnapshot
 
 
+class CompositeRequest(BaseModel):
+    schemaVersion: Literal["chart-request.v1"]
+    method: Literal["composite"]
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+    partnerInputSnapshot: NatalInputSnapshot
+    relationshipSnapshot: RelationshipSnapshot
+
+
 class SolarReturnLocation(BaseModel):
     timezone: str
     latitude: float = Field(ge=-90, le=90)
@@ -308,6 +317,17 @@ class StoredChartSynastryCalculationPayload(BaseModel):
     partnerInputSnapshot: NatalInputSnapshot
     relationshipSnapshot: RelationshipSnapshot
     result: ChartSynastryRenderResult
+
+
+class StoredChartCompositeCalculationPayload(BaseModel):
+    schemaVersion: Literal["chart-result.v1"]
+    method: Literal["composite"]
+    provider: ProviderMetadata
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+    partnerInputSnapshot: NatalInputSnapshot
+    relationshipSnapshot: RelationshipSnapshot
+    result: ChartRenderResult
 
 
 class StoredChartSolarReturnCalculationPayload(BaseModel):

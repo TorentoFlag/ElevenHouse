@@ -6181,7 +6181,7 @@
       "checkConstraints": {
         "chart_calculation_jobs_method_check": {
           "name": "chart_calculation_jobs_method_check",
-          "value": "\"chart_calculation_jobs\".\"method\" in ('natal', 'transit', 'synastry', 'solar_return', 'progression')"
+          "value": "\"chart_calculation_jobs\".\"method\" in ('natal', 'transit', 'synastry', 'composite', 'solar_return', 'progression')"
         },
         "chart_calculation_jobs_status_check": {
           "name": "chart_calculation_jobs_status_check",

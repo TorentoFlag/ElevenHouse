@@ -96,7 +96,7 @@ export function isChartResultStale(
     return true;
   }
 
-  if (result.method === "synastry") {
+  if (result.method === "synastry" || result.method === "composite") {
     if (partnerBirthData === undefined) {
       return false;
     }

@@ -1,4 +1,5 @@
 import {
+  chartCompositeCalculationRequestSchema,
   chartNatalCalculationRequestSchema,
   chartPlanetaryPositionsRequestSchema,
   chartPlanetaryPositionsResponseSchema,
@@ -11,6 +12,8 @@ import {
   storedChartSynastryCalculationPayloadSchema,
   storedChartTransitCalculationPayloadSchema,
   storedChartCalculationPayloadSchema,
+  storedChartCompositeCalculationPayloadSchema,
+  type ChartCompositeCalculationRequestInput,
   type ChartNatalCalculationRequestInput,
   type ChartPlanetaryPositionsRequestInput,
   type ChartPlanetaryPositionsResponse,
@@ -22,6 +25,7 @@ import {
   type StoredChartSolarReturnCalculationPayload,
   type StoredChartSynastryCalculationPayload,
   type StoredChartTransitCalculationPayload,
+  type StoredChartCompositeCalculationPayload,
   type StoredChartCalculationPayload
 } from "@elevenhouse/contracts";
 
@@ -106,6 +110,28 @@ export class ChartEngineHttpClient {
     const parsed = storedChartSynastryCalculationPayloadSchema.safeParse(data);
     if (!parsed.success) {
       throw new ChartEnginePermanentError("Chart engine returned invalid synastry result", {
+        cause: parsed.error
+      });
+    }
+    return parsed.data;
+  }
+
+  async calculateComposite(
+    payload: ChartCompositeCalculationRequestInput
+  ): Promise<StoredChartCompositeCalculationPayload> {
+    const parsedPayload = chartCompositeCalculationRequestSchema.parse(payload);
+    const response = await this.fetchFn(`${this.baseUrl}/v1/composite`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(parsedPayload)
+    });
+    if (!response.ok) {
+      throw new Error(`CHART_ENGINE_HTTP_${response.status}`);
+    }
+    const data: unknown = await response.json();
+    const parsed = storedChartCompositeCalculationPayloadSchema.safeParse(data);
+    if (!parsed.success) {
+      throw new ChartEnginePermanentError("Chart engine returned invalid composite result", {
         cause: parsed.error
       });
     }

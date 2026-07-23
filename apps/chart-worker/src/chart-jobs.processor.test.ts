@@ -63,6 +63,11 @@ const synastryJob = {
   }
 } as const;
 
+const compositeJob = {
+  ...synastryJob,
+  method: "composite"
+} as const;
+
 const solarReturnJob = {
   ...job,
   method: "solar_return",
@@ -168,6 +173,17 @@ const synastryResult = {
   }
 } as const;
 
+const compositeResult = {
+  schemaVersion: "chart-result.v1",
+  method: "composite",
+  provider: result.provider,
+  settings: job.settingsSnapshot,
+  inputSnapshot: job.inputSnapshot,
+  partnerInputSnapshot: compositeJob.inputSnapshot.partnerInputSnapshot,
+  relationshipSnapshot: compositeJob.inputSnapshot.relationshipSnapshot,
+  result: result.result
+} as const;
+
 const solarReturnResult = {
   schemaVersion: "chart-result.v1",
   method: "solar_return",
@@ -252,9 +268,7 @@ describe("processChartCalculationJob", () => {
       settings: job.settingsSnapshot,
       inputSnapshot: job.inputSnapshot
     });
-    expect(store.complete).toHaveBeenCalledWith(
-      expect.objectContaining({ jobId: job.id, result })
-    );
+    expect(store.complete).toHaveBeenCalledWith(expect.objectContaining({ jobId: job.id, result }));
   });
 
   it("dispatches transit jobs to the transit provider endpoint", async () => {
@@ -316,6 +330,39 @@ describe("processChartCalculationJob", () => {
     });
     expect(store.complete).toHaveBeenCalledWith(
       expect.objectContaining({ jobId: synastryJob.id, result: synastryResult })
+    );
+  });
+
+  it("dispatches composite jobs to the composite provider endpoint", async () => {
+    const store = {
+      findByJobId: vi.fn().mockResolvedValue(compositeJob),
+      claimForProcessing: vi.fn().mockResolvedValue(compositeJob),
+      complete: vi.fn().mockResolvedValue(true),
+      fail: vi.fn()
+    };
+    const engine = createEngine({ calculateComposite: vi.fn().mockResolvedValue(compositeResult) });
+
+    await processChartCalculationJob({
+      jobId: compositeJob.id,
+      finalAttempt: false,
+      store,
+      engine,
+      now: new Date("2026-07-22T12:00:00.000Z")
+    });
+
+    expect(engine.calculateNatal).not.toHaveBeenCalled();
+    expect(engine.calculateTransit).not.toHaveBeenCalled();
+    expect(engine.calculateSynastry).not.toHaveBeenCalled();
+    expect(engine.calculateComposite).toHaveBeenCalledWith({
+      schemaVersion: "chart-request.v1",
+      method: "composite",
+      settings: compositeJob.settingsSnapshot,
+      inputSnapshot: job.inputSnapshot,
+      partnerInputSnapshot: compositeJob.inputSnapshot.partnerInputSnapshot,
+      relationshipSnapshot: compositeJob.inputSnapshot.relationshipSnapshot
+    });
+    expect(store.complete).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: compositeJob.id, result: compositeResult })
     );
   });
 
@@ -460,6 +507,7 @@ function createEngine(overrides: Partial<ChartEngineClient> = {}): ChartEngineCl
     calculateNatal: vi.fn(),
     calculateTransit: vi.fn(),
     calculateSynastry: vi.fn(),
+    calculateComposite: vi.fn(),
     calculateSolarReturn: vi.fn(),
     calculateProgression: vi.fn(),
     ...overrides

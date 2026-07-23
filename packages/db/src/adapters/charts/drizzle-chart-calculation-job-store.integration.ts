@@ -32,9 +32,10 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
              )`,
           [CHART_CALCULATION_REQUESTED_EVENT, ownerUserIds]
         );
-        await runtime.pool.query("delete from chart_calculation_jobs where owner_user_id = any($1)", [
-          ownerUserIds
-        ]);
+        await runtime.pool.query(
+          "delete from chart_calculation_jobs where owner_user_id = any($1)",
+          [ownerUserIds]
+        );
         await runtime.pool.query("delete from calculation_records where owner_user_id = any($1)", [
           ownerUserIds
         ]);
@@ -172,6 +173,45 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
     });
   });
 
+  it("persists composite calculation records with single-wheel relationship summary", async () => {
+    const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
+    const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+    const created = await jobStore.createOrReuseChartJob(createCompositeInput(ownerUserId));
+    if (created.kind !== "active_job") throw new Error("Expected active job");
+
+    await expect(
+      workerStore.complete({
+        jobId: created.jobId,
+        result: compositeChartResult(),
+        resultChecksum: digest("9"),
+        now: "2026-07-20T12:00:05.000Z"
+      })
+    ).resolves.toBe(true);
+
+    const job = await runtime.database.query.chartCalculationJobs.findFirst({
+      where: eq(chartCalculationJobs.id, created.jobId)
+    });
+    const calculation = await runtime.database.query.calculationRecords.findFirst({
+      where: eq(
+        calculationRecords.id,
+        job?.resultCalculationId ?? raise("Expected result calculation id")
+      )
+    });
+
+    expect(calculation).toMatchObject({
+      methodCode: "composite",
+      title: "Composite chart",
+      resultSummary: {
+        provider: "kerykeion",
+        pointCount: 14,
+        houseCount: 12,
+        aspectCount: 0
+      }
+    });
+  });
+
   it("persists progression calculation records with dual-wheel summary", async () => {
     const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
     const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
@@ -271,6 +311,30 @@ function createSolarReturnInput(ownerUserId: string) {
   };
 }
 
+function createCompositeInput(ownerUserId: string) {
+  const input = createInput(ownerUserId);
+  return {
+    ...input,
+    method: "composite" as const,
+    inputFingerprint: digest("8"),
+    inputSnapshot: {
+      inputSnapshot: input.inputSnapshot,
+      partnerInputSnapshot: {
+        birthDate: "1992-08-11",
+        birthTime: "22:15",
+        timezone: "Europe/Moscow",
+        latitude: 55.7558,
+        longitude: 37.6173,
+        birthTimePrecision: "exact"
+      },
+      relationshipSnapshot: {
+        primaryClientId: ownerUserId,
+        partnerClientId: ownerUserId
+      }
+    }
+  };
+}
+
 function createProgressionInput(ownerUserId: string) {
   const input = createInput(ownerUserId);
   return {
@@ -345,6 +409,30 @@ function solarReturnChartResult() {
       aspectsToNatal: [],
       warnings: []
     }
+  };
+}
+
+function compositeChartResult() {
+  const natal = chartResult();
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "composite",
+    provider: natal.provider,
+    settings: natal.settings,
+    inputSnapshot: natal.inputSnapshot,
+    partnerInputSnapshot: {
+      birthDate: "1992-08-11",
+      birthTime: "22:15",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173,
+      birthTimePrecision: "exact"
+    },
+    relationshipSnapshot: {
+      primaryClientId: "00000000-0000-4000-8000-000000000001",
+      partnerClientId: "00000000-0000-4000-8000-000000000002"
+    },
+    result: natal.result
   };
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  chartCompositeJobCreateRequestSchema,
   chartPlanetaryPositionsRequestSchema,
   chartPlanetaryPositionsResponseSchema,
   chartJobResponseSchema,
@@ -102,6 +103,40 @@ describe("chart contracts", () => {
   it("rejects browser-supplied birth data in synastry job requests", () => {
     expect(() =>
       chartSynastryJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        partnerClientId: "00000000-0000-4000-8000-000000000002",
+        partnerBirthDate: "1992-08-11",
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).toThrow();
+  });
+
+  it("accepts a composite job request by two CRM client ids and settings", () => {
+    expect(
+      chartCompositeJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        partnerClientId: "00000000-0000-4000-8000-000000000002",
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).toMatchObject({
+      clientId: "00000000-0000-4000-8000-000000000001",
+      partnerClientId: "00000000-0000-4000-8000-000000000002"
+    });
+  });
+
+  it("rejects browser-supplied birth data in composite job requests", () => {
+    expect(() =>
+      chartCompositeJobCreateRequestSchema.parse({
         clientId: "00000000-0000-4000-8000-000000000001",
         partnerClientId: "00000000-0000-4000-8000-000000000002",
         partnerBirthDate: "1992-08-11",
@@ -472,6 +507,60 @@ describe("chart contracts", () => {
         }
       })
     ).toThrow();
+  });
+
+  it("accepts complete render data for a composite single-wheel relationship chart", () => {
+    const payload = storedChartCalculationPayloadSchema.parse({
+      schemaVersion: "chart-result.v1",
+      method: "composite",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: {
+        zodiac: "tropical",
+        houseSystem: "placidus",
+        nodeType: "true",
+        aspectPreset: "major",
+        orbMultiplier: 1
+      },
+      inputSnapshot: {
+        birthDate: "1990-07-15",
+        birthTime: "10:30",
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964,
+        birthTimePrecision: "exact"
+      },
+      partnerInputSnapshot: {
+        birthDate: "1992-08-11",
+        birthTime: "22:15",
+        timezone: "Europe/Moscow",
+        latitude: 55.7558,
+        longitude: 37.6173,
+        birthTimePrecision: "approximate"
+      },
+      relationshipSnapshot: {
+        primaryClientId: "00000000-0000-4000-8000-000000000001",
+        partnerClientId: "00000000-0000-4000-8000-000000000002"
+      },
+      result: {
+        ...completeRenderResult(),
+        warnings: [
+          {
+            code: "PARTNER_BIRTH_TIME_APPROXIMATE",
+            message: "Composite calculated with approximate partner birth time."
+          }
+        ]
+      }
+    });
+
+    expect(payload.method).toBe("composite");
+    if (payload.method !== "composite") {
+      throw new Error("Expected composite chart payload");
+    }
+    expect(payload.result.points).toHaveLength(14);
+    expect(payload.result).not.toHaveProperty("primary");
+    expect(payload.relationshipSnapshot.partnerClientId).toBe(
+      "00000000-0000-4000-8000-000000000002"
+    );
   });
 
   it("accepts complete render data for a solar return dual-wheel screen", () => {
