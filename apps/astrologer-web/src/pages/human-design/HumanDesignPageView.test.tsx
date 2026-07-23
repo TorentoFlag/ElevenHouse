@@ -25,18 +25,28 @@ describe("HumanDesignPageView", () => {
     expect(mobileBlock).toContain("margin: -32px -16px;");
   });
 
-  it("uses CRM client selection and does not expose manual birth-data or longitude input", () => {
+  it("uses CRM client selection and hides side columns until a client is selected", () => {
     const view = HumanDesignPageView(baseProps());
     const pickers = walk(view).filter((element) => element.type === ClientSearchCombobox);
+    const sideColumns = walk(view).filter(
+      (element) =>
+        element.type === "aside" &&
+        (element.props["aria-label"] === "Свойства Human Design" ||
+          element.props["aria-label"] === "Деталь Human Design")
+    );
 
     expect(pickers).toHaveLength(1);
     expect(pickers[0]?.props.label).toBe("Клиент");
     expect(walk(view).some((element) => element.type === "input")).toBe(false);
-    expect(textOf(view)).toContain("Выберите клиента из CRM.");
+    expect(sideColumns).toHaveLength(2);
+    expect(sideColumns.every((column) => column.props.hidden === true)).toBe(true);
+    expect(textOf(view)).not.toContain("Выберите клиента из CRM.");
     expect(
       walk(view).some((element) => element.type === "h2" && textOf(element) === "Клиент")
     ).toBe(false);
     expect(textOf(view)).not.toContain("Birth data берутся из карточки клиента");
+    expect(textOf(view)).not.toContain("Поддержан individual preview из CRM birth data.");
+    expect(textOf(view)).toContain("Выберите клиента и рассчитайте бодиграф");
   });
 
   it("does not render the toolbar status summary for missing client birth data", () => {

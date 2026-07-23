@@ -99,11 +99,17 @@ export function HumanDesignPageView({
   const detail = model ? getHumanDesignDetail(model, selectedDetailKey) : null;
   const isTransitMode = mode === "transit";
   const isAiDraftDisabled = Boolean(aiDraftDisabledReason);
+  const isClientSelected = Boolean(selectedClient);
   const canRunPrimaryAction = isTransitMode
     ? Boolean(selectedCalculationId)
     : Boolean(selectedClient) && (mode !== "compatibility" || Boolean(selectedPartnerClient));
+  const emptyStateSubtitle = isTransitMode
+    ? "Transit overlay строится поверх сохранённого natal результата."
+    : mode === "compatibility"
+      ? "Партнёрский preview использует два CRM bodygraph результата."
+      : null;
   const clientRailMessage = !selectedClient
-    ? "Выберите клиента из CRM."
+    ? null
     : !selectedClient.hasBirthDate
       ? "В карточке клиента не заполнена дата рождения."
       : isTransitMode && !selectedCalculationId
@@ -233,8 +239,8 @@ export function HumanDesignPageView({
         </button>
       </header>
 
-      <section className={styles.body}>
-        <aside className={styles.rail} aria-label="Свойства Human Design">
+      <section className={styles.body} data-empty-client={!isClientSelected ? "true" : undefined}>
+        <aside className={styles.rail} aria-label="Свойства Human Design" hidden={!isClientSelected}>
           {clientRailMessage ? (
             <section className={styles.railGroup}>
               <p className={styles.warningText}>{clientRailMessage}</p>
@@ -453,18 +459,12 @@ export function HumanDesignPageView({
                   ? "Выберите двух клиентов и рассчитайте связь"
                   : "Выберите клиента и рассчитайте бодиграф"}
               </strong>
-              <span>
-                {mode === "transit"
-                  ? "Transit overlay строится поверх сохранённого natal результата."
-                  : mode === "compatibility"
-                  ? "Партнёрский preview использует два CRM bodygraph результата."
-                  : "Поддержан individual preview из CRM birth data."}
-              </span>
+              {emptyStateSubtitle ? <span>{emptyStateSubtitle}</span> : null}
             </div>
           )}
         </section>
 
-        <aside className={styles.panel} aria-label="Деталь Human Design">
+        <aside className={styles.panel} aria-label="Деталь Human Design" hidden={!isClientSelected}>
           <div className={styles.panelHead} data-tone={detail?.tone ?? "muted"}>
             <span>{detail?.subtitle ?? "Деталь"}</span>
             <strong>{detail?.title ?? "Выберите элемент"}</strong>

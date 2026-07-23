@@ -154,6 +154,15 @@
   grid-template-columns: 234px minmax(480px, 1fr) minmax(320px, 360px);
 }
 
+.body[data-empty-client="true"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.body[data-empty-client="true"] .workspace {
+  grid-column: 1;
+  grid-row: 1;
+}
+
 .rail,
 .panel {
   min-height: 0;
