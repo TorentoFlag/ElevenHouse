@@ -471,12 +471,6 @@ export function HumanDesignPageView({
           </div>
           <div className={styles.panelBody}>
             <p>{detail?.text ?? "После расчёта здесь появится описание выбранного свойства."}</p>
-            {model ? (
-              <div className={styles.checksum}>
-                <span>Checksum</span>
-                <code>{model.checksumShort}</code>
-              </div>
-            ) : null}
             {selectedCalculationId ? (
               <div className={styles.aiPanel}>
                 <div className={styles.aiPanelHead}>
@@ -520,10 +514,6 @@ export function HumanDesignPageView({
             {pdfErrorMessage ? <p className={styles.errorText}>{pdfErrorMessage}</p> : null}
             {isTransitMode && transitModel ? (
               <div className={styles.transitPanel}>
-                <div>
-                  <span>Транзитный checksum</span>
-                  <code>{transitModel.checksumShort}</code>
-                </div>
                 <p>
                   {`Активаций: ${transitModel.summary.transitActivationCount}. Дозамкнутых каналов: ${transitModel.summary.completedChannelCount}. Временных центров: ${transitModel.summary.temporarilyDefinedCenterCount}.`}
                 </p>

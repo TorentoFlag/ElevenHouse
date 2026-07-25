@@ -90,6 +90,7 @@ describe("HumanDesignPageView", () => {
     expect(text).toContain("Канал 20–34");
     expect(text).toContain("Личность");
     expect(text).toContain("Дизайн");
+    expect(text).not.toContain("Checksum");
     expect(linkButton).toBeUndefined();
     expect(getActionMenuItem(view, "link").disabled).toBe(false);
   });
@@ -205,7 +206,7 @@ describe("HumanDesignPageView", () => {
     expect(text).toContain("Дозамкнутые 1");
     expect(text).toContain("Канал 20–10");
     expect(text).toContain("свои 20 + транзит 10");
-    expect(text).toContain("Транзитный checksum");
+    expect(text).not.toContain("Транзитный checksum");
     expect(instantInput?.props.value).toBe("2026-07-23T12:15");
     primaryItem.onSelect();
     expect(onFetchTransit).toHaveBeenCalledOnce();

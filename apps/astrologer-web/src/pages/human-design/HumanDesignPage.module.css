@@ -723,31 +723,6 @@
   line-height: 1.6;
 }
 
-.checksum {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--hd-line);
-  border-radius: 10px;
-  background: var(--hd-surface);
-}
-
-.checksum span {
-  color: rgb(186 178 218 / 0.62);
-  font-size: 10.5px;
-  font-weight: 780;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.checksum code {
-  color: var(--hd-gold);
-  font-family: var(--eh-font-mono);
-  font-size: 11px;
-}
-
 .errorText {
   color: #ff9aa8 !important;
 }
