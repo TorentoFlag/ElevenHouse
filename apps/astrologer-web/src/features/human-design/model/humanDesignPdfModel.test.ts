@@ -69,7 +69,11 @@ describe("Human Design PDF model", () => {
         isBusy: false,
         isTransitMode: true
       })
-    ).toMatchObject({ kind: "disabled", disabled: true });
+    ).toMatchObject({
+      kind: "disabled",
+      disabled: true,
+      title: "PDF доступен для сохранённого индивидуального расчёта, не для транзитного overlay"
+    });
   });
 
   it("enqueues and downloads through injected operations", async () => {

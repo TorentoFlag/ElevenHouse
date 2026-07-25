@@ -477,7 +477,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       previewMutation.reset();
       createMutation.reset();
       recalculateMutation.reset();
-      transitMutation.reset();
+      if (mode !== "transit") transitMutation.reset();
     } catch (error) {
       setAiDraftErrorMessage(getHumanDesignAiDraftErrorMessage(error));
     }

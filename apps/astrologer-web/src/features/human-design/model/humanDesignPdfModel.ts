@@ -25,7 +25,12 @@ export function buildHumanDesignPdfAction(input: {
     return action("disabled", "PDF", true, "Сначала сохраните расчёт");
   }
   if (input.isTransitMode) {
-    return action("disabled", "PDF", true, "PDF строится для сохранённого расчёта");
+    return action(
+      "disabled",
+      "PDF",
+      true,
+      "PDF доступен для сохранённого индивидуального расчёта, не для транзитного overlay"
+    );
   }
   if (!input.currentResultChecksum) {
     return action("disabled", "PDF", true, "Загружаем состояние PDF");
