@@ -8,7 +8,6 @@ const gateSchema = z.number().int().min(1).max(64);
 const lineSchema = z.number().int().min(1).max(6);
 
 const humanDesignMethodCodeSchema = z.literal("human_design_classic");
-const humanDesignModeSchema = z.enum(["individual", "compatibility"]);
 const humanDesignIndividualModeSchema = z.literal("individual");
 const humanDesignCompatibilityModeSchema = z.literal("compatibility");
 const humanDesignTransitModeSchema = z.literal("transit");
@@ -18,19 +17,6 @@ const humanDesignCompatibilitySchemaVersionSchema = z.literal(
 );
 const humanDesignTransitSchemaVersionSchema = z.literal("human-design-transit-result.v1");
 const humanDesignSideSchema = z.enum(["personality", "design"]);
-const humanDesignBaseBodySchema = z.enum([
-  "sun",
-  "moon",
-  "north_node",
-  "mercury",
-  "venus",
-  "mars",
-  "jupiter",
-  "saturn",
-  "uranus",
-  "neptune",
-  "pluto"
-]);
 const humanDesignActiveBodySchema = z.enum([
   "sun",
   "earth",

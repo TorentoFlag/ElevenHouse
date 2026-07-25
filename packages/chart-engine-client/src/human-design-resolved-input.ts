@@ -19,19 +19,7 @@ const minuteGranularPositionsToleranceMs = 60 * 1000;
 const minuteMs = 60 * 1000;
 const dayMs = 24 * 60 * 60 * 1000;
 
-const positionBodyIds = [
-  "sun",
-  "moon",
-  "north_node",
-  "mercury",
-  "venus",
-  "mars",
-  "jupiter",
-  "saturn",
-  "uranus",
-  "neptune",
-  "pluto"
-] as const;
+type PositionBodyId = keyof HumanDesignBasePlanetaryLongitudes;
 
 export type HumanDesignPositionsChartEngine = {
   calculatePlanetaryPositions(
@@ -122,7 +110,7 @@ function toBasePlanetaryLongitudes(
 
 function getPositionLongitude(
   response: ChartPlanetaryPositionsResponse,
-  id: (typeof positionBodyIds)[number]
+  id: PositionBodyId
 ): number {
   const position = response.positions.find((candidate) => candidate.id === id);
   if (!position) throw new Error(`Chart engine positions response is missing ${id}`);

@@ -15,19 +15,7 @@ const defaultPositionsSettings: ChartPlanetaryPositionsSettings = {
   nodeType: "true"
 };
 
-const positionBodyIds = [
-  "sun",
-  "moon",
-  "north_node",
-  "mercury",
-  "venus",
-  "mars",
-  "jupiter",
-  "saturn",
-  "uranus",
-  "neptune",
-  "pluto"
-] as const;
+type PositionBodyId = keyof HumanDesignBasePlanetaryLongitudes;
 
 export function createChartEngineHumanDesignResolvedInputProvider(
   configService: ConfigService
@@ -79,7 +67,7 @@ function toBasePlanetaryLongitudes(
 
 function getPositionLongitude(
   response: ChartPlanetaryPositionsResponse,
-  id: (typeof positionBodyIds)[number]
+  id: PositionBodyId
 ): number {
   const position = response.positions.find((candidate) => candidate.id === id);
   if (!position) throw new Error(`Chart engine positions response is missing ${id}`);

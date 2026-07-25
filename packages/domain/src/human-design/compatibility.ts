@@ -4,7 +4,7 @@ import {
   HUMAN_DESIGN_CHANNELS,
   type HumanDesignCircuit
 } from "./catalog";
-import type { HumanDesignDefinedCenter, HumanDesignDefinedChannel } from "./definition";
+import type { HumanDesignDefinedCenter } from "./definition";
 import {
   HUMAN_DESIGN_ENGINE_REVISION,
   HUMAN_DESIGN_METHOD_CODE,

@@ -106,6 +106,7 @@ describe("Finance persistence schema", () => {
     expect(financePaymentProviderValues).toEqual(["arc_pay"]);
     expect(financePaymentProviderEnvironmentValues).toEqual(["sandbox", "live"]);
     expect(financeCurrencyValues).toEqual(["RUB"]);
+    expect(ledgerEntrySideValues).toEqual(["debit", "credit"]);
   });
 
   it("uses non-32-bit minor-unit money columns with explicit RUB checks", () => {

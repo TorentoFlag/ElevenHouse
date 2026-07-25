@@ -353,7 +353,7 @@ export class HumanDesignService {
               transitSnapshot
             })
           });
-        } catch (error) {
+        } catch {
           throw humanDesignHttpError(
             502,
             "HUMAN_DESIGN_PROVIDER_FAILED",
@@ -486,7 +486,7 @@ export class HumanDesignService {
         ...prepared,
         resolvedLongitudes: resolved
       };
-    } catch (error) {
+    } catch {
       throw humanDesignHttpError(
         502,
         "HUMAN_DESIGN_PROVIDER_FAILED",
