@@ -1,7 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 import {
   createAes256GcmSecretCipher,
-  type Aes256GcmSecretCipher
+  type Aes256GcmSecretCipher,
+  type CustomerPlatformRole
 } from "@elevenhouse/auth";
 import type {
   AuthCodeEncryptionPort,
@@ -15,6 +16,7 @@ import {
   claimClientJoinIntent,
   createAuthCodeDeliveryEncryptionAad,
   createNumericPasswordlessCode,
+  isCustomerPlatformRole,
   requestPasswordlessCode,
   verifyPasswordlessCode
 } from "@elevenhouse/domain";
@@ -184,7 +186,7 @@ export class DomainPasswordlessAuthHandler {
         account: {
           id: result.user.id,
           status: result.user.status,
-          roles: result.roleAssignments.map((assignment) => assignment.role)
+          roles: customerRoles(result.roleAssignments.map((assignment) => assignment.role))
         }
       },
       session: {
@@ -193,4 +195,8 @@ export class DomainPasswordlessAuthHandler {
       }
     };
   }
+}
+
+function customerRoles(roles: readonly string[]): CustomerPlatformRole[] {
+  return roles.filter(isCustomerPlatformRole);
 }

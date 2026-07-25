@@ -26,6 +26,22 @@ export const financePolicySnapshotSchema = z
   .strict();
 export type FinancePolicySnapshot = z.infer<typeof financePolicySnapshotSchema>;
 
+export const financePolicyResponseSchema = financePolicySnapshotSchema
+  .extend({
+    isActive: z.boolean(),
+    createdByUserId: uuidSchema.nullable(),
+    createdAt: isoDateTimeSchema
+  })
+  .strict();
+export type FinancePolicyResponse = z.infer<typeof financePolicyResponseSchema>;
+
+export const financePoliciesResponseSchema = z
+  .object({
+    policies: z.array(financePolicyResponseSchema)
+  })
+  .strict();
+export type FinancePoliciesResponse = z.infer<typeof financePoliciesResponseSchema>;
+
 export const updateFinancePolicyRequestSchema = z
   .object({
     riskTier: riskTierSchema,
@@ -37,3 +53,49 @@ export const updateFinancePolicyRequestSchema = z
   })
   .strict();
 export type UpdateFinancePolicyRequest = z.infer<typeof updateFinancePolicyRequestSchema>;
+
+const nullableOverrideNumber = <T extends z.ZodNumber>(schema: T) => schema.nullable();
+
+export const updateAstrologerRiskProfileRequestSchema = z
+  .object({
+    riskTier: riskTierSchema,
+    manualRiskTier: riskTierSchema.nullable(),
+    manualOverrideReason: z.string().trim().min(1).max(2_000).nullable(),
+    holdDurationHoursOverride: nullableOverrideNumber(holdDurationHoursSchema),
+    reserveBpsOverride: nullableOverrideNumber(basisPointsSchema),
+    reserveReleaseDelayDaysOverride: nullableOverrideNumber(reserveReleaseDelayDaysSchema),
+    platformFeeBpsOverride: nullableOverrideNumber(basisPointsSchema),
+    providerSettlementRequiredOverride: z.boolean().nullable()
+  })
+  .strict()
+  .superRefine((request, context) => {
+    if (request.manualRiskTier && request.manualOverrideReason === null) {
+      context.addIssue({
+        code: "custom",
+        path: ["manualOverrideReason"],
+        message: "Manual risk override reason is required"
+      });
+    }
+    if (!request.manualRiskTier && request.manualOverrideReason !== null) {
+      context.addIssue({
+        code: "custom",
+        path: ["manualOverrideReason"],
+        message: "Manual override reason requires a manual risk tier"
+      });
+    }
+  });
+export type UpdateAstrologerRiskProfileRequest = z.infer<
+  typeof updateAstrologerRiskProfileRequestSchema
+>;
+
+export const astrologerRiskProfileResponseSchema = updateAstrologerRiskProfileRequestSchema
+  .extend({
+    astrologerUserId: uuidSchema,
+    reviewedByUserId: uuidSchema.nullable(),
+    reviewedAt: isoDateTimeSchema.nullable(),
+    updatedAt: isoDateTimeSchema
+  })
+  .strict();
+export type AstrologerRiskProfileResponse = z.infer<
+  typeof astrologerRiskProfileResponseSchema
+>;

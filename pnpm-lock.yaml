@@ -65,9 +65,18 @@ importers:
 
   apps/admin-api:
     dependencies:
+      '@elevenhouse/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@elevenhouse/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@elevenhouse/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@elevenhouse/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@elevenhouse/observability':
         specifier: workspace:*
         version: link:../../packages/observability

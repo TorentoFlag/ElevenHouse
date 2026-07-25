@@ -72,6 +72,7 @@ export type FinancePolicyStore = {
   readonly findActivePolicyByRiskTier: (
     riskTier: RiskTier
   ) => Promise<FinancePolicySnapshot | null>;
+  readonly findLatestPolicyVersion: () => Promise<number>;
   readonly findEffectivePolicyForAstrologer: (
     astrologerUserId: string
   ) => Promise<EffectiveFinancePolicy | null>;

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type {
   AstrologerRiskProfile,
   CreateFinancePolicyInput,
@@ -20,11 +20,19 @@ export function createDrizzleFinancePolicyStore(
 ): FinancePolicyStore {
   return {
     findActivePolicyByRiskTier: (riskTier) => findActivePolicyByRiskTier(database, riskTier),
+    findLatestPolicyVersion: () => findLatestPolicyVersion(database),
     findEffectivePolicyForAstrologer: (astrologerUserId) =>
       findEffectivePolicyForAstrologer(database, astrologerUserId),
     createPolicySnapshot: (input) => createPolicySnapshot(database, input),
     upsertAstrologerRiskProfile: (input) => upsertAstrologerRiskProfile(database, input)
   };
+}
+
+async function findLatestPolicyVersion(database: FinanceDatabase): Promise<number> {
+  const [row] = await database
+    .select({ value: sql<number>`coalesce(max(${financePolicies.policyVersion}), 0)` })
+    .from(financePolicies);
+  return Number(row?.value ?? 0);
 }
 
 async function findActivePolicyByRiskTier(

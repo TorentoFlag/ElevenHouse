@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import type { CustomerPlatformRole } from "@elevenhouse/auth";
 import type {
   ClientJoinIntentClaimStore,
   PasswordlessCustomerAccountRegistrationSessionStore,
@@ -6,6 +7,7 @@ import type {
 } from "@elevenhouse/domain";
 import {
   claimClientJoinIntent,
+  isCustomerPlatformRole,
   verifyPasswordlessCodeAndRegisterCustomerAccountWithSession
 } from "@elevenhouse/domain";
 import type { VerifyRegistrationPasswordlessCodeResponse } from "@elevenhouse/contracts";
@@ -97,7 +99,7 @@ export class DomainRegistrationHandler {
         account: {
           id: result.user.id,
           status: "active",
-          roles: result.roleAssignments.map((assignment) => assignment.role),
+          roles: customerRoles(result.roleAssignments.map((assignment) => assignment.role)),
           displayName: result.userProfile.displayName
         }
       },
@@ -107,4 +109,8 @@ export class DomainRegistrationHandler {
       }
     };
   }
+}
+
+function customerRoles(roles: readonly string[]): CustomerPlatformRole[] {
+  return roles.filter(isCustomerPlatformRole);
 }

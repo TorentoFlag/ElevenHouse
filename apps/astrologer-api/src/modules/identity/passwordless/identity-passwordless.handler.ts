@@ -1,7 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 import {
   createAes256GcmSecretCipher,
-  type Aes256GcmSecretCipher
+  type Aes256GcmSecretCipher,
+  type CustomerPlatformRole
 } from "@elevenhouse/auth";
 import type {
   AuthCodeEncryptionPort,
@@ -12,6 +13,7 @@ import type {
 import {
   createAuthCodeDeliveryEncryptionAad,
   createNumericPasswordlessCode,
+  isCustomerPlatformRole,
   requestPasswordlessCode,
   verifyPasswordlessCode
 } from "@elevenhouse/domain";
@@ -170,7 +172,7 @@ export class DomainPasswordlessAuthHandler {
       );
     }
 
-    const roles = result.roleAssignments.map((assignment) => assignment.role);
+    const roles = customerRoles(result.roleAssignments.map((assignment) => assignment.role));
 
     if (!roles.includes("astrologer")) {
       throw new AstrologerAccountAccessDeniedError(
@@ -192,4 +194,8 @@ export class DomainPasswordlessAuthHandler {
       }
     };
   }
+}
+
+function customerRoles(roles: readonly string[]): CustomerPlatformRole[] {
+  return roles.filter(isCustomerPlatformRole);
 }

@@ -17,6 +17,22 @@ export default defineConfig({
       "@elevenhouse/contracts": fileURLToPath(
         new URL("./packages/contracts/src/index.ts", import.meta.url)
       ),
+      "@elevenhouse/auth/roles": fileURLToPath(
+        new URL("./packages/auth/src/roles.ts", import.meta.url)
+      ),
+      "@elevenhouse/auth": fileURLToPath(new URL("./packages/auth/src/index.ts", import.meta.url)),
+      "@elevenhouse/db/finance": fileURLToPath(
+        new URL("./packages/db/src/adapters/finance/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/db/auth-sessions": fileURLToPath(
+        new URL(
+          "./packages/db/src/adapters/identity/auth-sessions/index.ts",
+          import.meta.url
+        )
+      ),
+      "@elevenhouse/db/runtime": fileURLToPath(
+        new URL("./packages/db/src/runtime/index.ts", import.meta.url)
+      ),
       "@elevenhouse/design-system/components/Modal": fileURLToPath(
         new URL("./packages/design-system/src/components/Modal/index.ts", import.meta.url)
       ),
