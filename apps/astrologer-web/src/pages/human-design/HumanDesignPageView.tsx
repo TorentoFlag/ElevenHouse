@@ -250,6 +250,8 @@ export function HumanDesignPageView({
               <label className={styles.transitField}>
                 <span>Момент</span>
                 <input
+                  id="human-design-transit-instant"
+                  name="humanDesignTransitInstant"
                   type="datetime-local"
                   value={transitInstantValue}
                   disabled={isBusy || !selectedCalculationId}
@@ -482,6 +484,8 @@ export function HumanDesignPageView({
                   <strong>{aiDraftStatus === "approved" ? "Утверждён" : aiDraftText ? "Черновик" : "Нет черновика"}</strong>
                 </div>
                 <textarea
+                  id="human-design-ai-draft-text"
+                  name="humanDesignAiDraftText"
                   className={styles.aiTextArea}
                   value={aiDraftText}
                   placeholder="Сохранённый расчёт готов к AI-черновику."
