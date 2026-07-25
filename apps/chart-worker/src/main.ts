@@ -1,4 +1,5 @@
 import { createLogger, serializeError } from "@elevenhouse/observability";
+import { createDrizzleAstroCalendarGenerationStore } from "@elevenhouse/db/astro-calendar";
 import { createDrizzleChartWorkerJobStore } from "@elevenhouse/db/charts";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
@@ -8,8 +9,10 @@ import {
   createChartCalculationOutboxRelay,
   relayPendingChartCalculationEvents
 } from "./chart-jobs.outbox-relay";
+import { processAstroCalendarGenerationJob } from "./astro-calendar-jobs.processor";
 import { processChartCalculationJob } from "./chart-jobs.processor";
 import {
+  astroCalendarGenerationJobName,
   chartCalculationJobName,
   createChartCalculationQueue,
   createChartCalculationWorker,
@@ -25,6 +28,7 @@ const config = createChartWorkerRuntimeConfig();
 const postgres = createPostgresRuntime();
 const outboxStore = createDrizzleOutboxRelayStore(postgres.database);
 const jobStore = createDrizzleChartWorkerJobStore(postgres.database);
+const astroCalendarGenerationStore = createDrizzleAstroCalendarGenerationStore(postgres.database);
 const chartEngine = new ChartEngineHttpClient({ baseUrl: config.chartEngineBaseUrl });
 const queue = createChartCalculationQueue(config.redisUrl);
 const worker = createChartCalculationWorker(
@@ -37,6 +41,16 @@ const worker = createChartCalculationWorker(
         jobId: job.data.jobId,
         finalAttempt,
         store: jobStore,
+        engine: chartEngine,
+        now: new Date()
+      });
+      return;
+    }
+    if (job.name === astroCalendarGenerationJobName && "generationId" in job.data) {
+      await processAstroCalendarGenerationJob({
+        generationId: job.data.generationId,
+        finalAttempt,
+        store: astroCalendarGenerationStore,
         engine: chartEngine,
         now: new Date()
       });

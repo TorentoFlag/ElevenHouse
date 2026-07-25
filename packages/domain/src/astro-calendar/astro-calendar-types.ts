@@ -18,7 +18,19 @@ export type AstroCalendarWarningCode =
   | "GENERATION_FAILED"
   | "DICTIONARY_ENTRY_MISSING";
 
+export type AstroCalendarMissingDictionaryAction = {
+  readonly type: "create_dictionary_entry";
+  readonly dictionaryCode: string;
+  readonly suggestedCategory: "planet-sign" | "planet-house" | "aspect" | "calendar";
+};
+
 export type AstroCalendarGenerationStatus = "calculating" | "ready" | "failed" | "stale";
+
+export const ASTRO_CALENDAR_GENERATION_REQUESTED_EVENT = "astro_calendar.generation.requested.v1";
+
+export type AstroCalendarGenerationRequestedPayload = {
+  readonly generationId: string;
+};
 
 export type AstroCalendarSettingsFingerprintInput = {
   readonly astrologerId: string;
@@ -73,7 +85,7 @@ export type AstroCalendarWarning = {
   readonly clientId: string | null;
   readonly eventId: string | null;
   readonly dictionaryCode: string | null;
-  readonly action: null;
+  readonly action: AstroCalendarMissingDictionaryAction | null;
 };
 
 export type AstroCalendarGenerationPlanInput = {

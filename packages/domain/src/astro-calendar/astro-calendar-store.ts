@@ -97,6 +97,9 @@ export type AstroCalendarGenerationStore = {
     readonly ownerUserId: string;
     readonly inputFingerprint: string;
   }) => Promise<AstroCalendarGenerationWithEvents | null>;
+  readonly findById: (input: {
+    readonly generationId: string;
+  }) => Promise<AstroCalendarGenerationWithEvents | null>;
   readonly findLatestForRange: (
     input: AstroCalendarRangeLookupInput
   ) => Promise<AstroCalendarGenerationWithEvents | null>;

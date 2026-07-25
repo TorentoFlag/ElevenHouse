@@ -39,6 +39,46 @@ const result = {
   }
 };
 
+const astroCalendarRequest = {
+  start: "2026-07-01",
+  end: "2026-07-31",
+  timeZone: "Europe/Moscow",
+  scope: "global",
+  clientIds: [],
+  eventTypes: ["global.ingress"],
+  settings: { zodiac: "tropical", ...request.settings }
+} as const;
+
+const astroCalendarResult = {
+  schemaVersion: "astro-calendar-range.v1",
+  timeZone: "Europe/Moscow",
+  range: { start: "2026-07-01", end: "2026-07-31" },
+  generation: {
+    status: "ready",
+    generationId: "77777777-7777-4777-8777-777777777777",
+    fingerprint: "sha256:".padEnd(71, "a"),
+    generatedAt: "2026-07-25T12:00:00.000Z",
+    provider: result.provider
+  },
+  events: [],
+  readiness: {
+    clientsTotal: 0,
+    clientsReady: 0,
+    clientsWithMissingBirthData: 0,
+    clientsWithUnknownBirthTime: 0,
+    clientsWithApproximateBirthTime: 0
+  },
+  summary: {
+    eventCount: 0,
+    globalEventCount: 0,
+    clientEventCount: 0,
+    byType: {},
+    byTone: {}
+  },
+  dictionaryCodes: [],
+  warnings: []
+} as const;
+
 describe("ChartEngineHttpClient", () => {
   it("posts natal input to the private chart engine", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
@@ -71,6 +111,45 @@ describe("ChartEngineHttpClient", () => {
     });
 
     await expect(client.calculateNatal(request)).rejects.toBeInstanceOf(ChartEnginePermanentError);
+  });
+
+  it("posts astro calendar range input to the private chart engine", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => astroCalendarResult
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012/",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateAstroCalendarRange(astroCalendarRequest)).resolves.toMatchObject({
+      schemaVersion: "astro-calendar-range.v1",
+      generation: { status: "ready" }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://chart-engine:8012/v1/astro-calendar/range",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(astroCalendarRequest)
+      })
+    );
+  });
+
+  it("treats invalid astro calendar provider JSON as permanent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaVersion: "wrong" })
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateAstroCalendarRange(astroCalendarRequest)).rejects.toBeInstanceOf(
+      ChartEnginePermanentError
+    );
   });
 
   it("posts transit input to the private chart engine", async () => {
@@ -306,13 +385,11 @@ describe("ChartEngineHttpClient", () => {
       fetchFn: fetchMock
     });
 
-    await expect(client.calculateAstrocartography(astrocartographyRequest)).resolves.toMatchObject(
-      {
-        schemaVersion: "chart-result.v1",
-        method: "astrocartography",
-        result: { lines: expect.arrayContaining([expect.objectContaining({ id: "sun_mc" })]) }
-      }
-    );
+    await expect(client.calculateAstrocartography(astrocartographyRequest)).resolves.toMatchObject({
+      schemaVersion: "chart-result.v1",
+      method: "astrocartography",
+      result: { lines: expect.arrayContaining([expect.objectContaining({ id: "sun_mc" })]) }
+    });
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://chart-engine:8012/v1/astrocartography",

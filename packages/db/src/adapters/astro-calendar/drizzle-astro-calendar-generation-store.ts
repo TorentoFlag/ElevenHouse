@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { ASTRO_CALENDAR_GENERATION_REQUESTED_EVENT } from "@elevenhouse/domain";
 import type {
   AstroCalendarGenerationRecord,
   AstroCalendarGenerationStore,
@@ -6,7 +7,7 @@ import type {
   AstroCalendarStoredEvent
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
-import { astroCalendarEvents, astroCalendarGenerations } from "../../schema";
+import { astroCalendarEvents, astroCalendarGenerations, outboxEvents } from "../../schema";
 
 type AstroCalendarGenerationRow = typeof astroCalendarGenerations.$inferSelect;
 type AstroCalendarEventRow = typeof astroCalendarEvents.$inferSelect;
@@ -23,6 +24,7 @@ export function createDrizzleAstroCalendarGenerationStore(
         ownerUserId: input.ownerUserId,
         inputFingerprint: input.inputFingerprint
       }),
+    findById: (input) => findGenerationWithEventsById(database, input.generationId),
     findLatestForRange: (input) => findLatestForRange(database, input),
     markReady: (input) => markReady(database, input),
     markFailed: (input) => markFailed(database, input),
@@ -36,27 +38,32 @@ async function createCalculating(
   input: Parameters<AstroCalendarGenerationStore["createCalculating"]>[0]
 ): Promise<AstroCalendarGenerationRecord> {
   const now = new Date(input.now);
-  const [inserted] = await database
-    .insert(astroCalendarGenerations)
-    .values({
-      ownerUserId: input.ownerUserId,
-      status: "calculating",
-      inputFingerprint: input.inputFingerprint,
-      rangeStart: input.rangeStart,
-      rangeEnd: input.rangeEnd,
-      timeZone: input.timeZone,
-      requestSnapshot: input.requestSnapshot,
-      settingsSnapshot: input.settingsSnapshot,
-      readinessSummary: input.readinessSummary,
-      summary: {},
-      warnings: input.warnings,
-      createdAt: now,
-      updatedAt: now
-    })
-    .onConflictDoNothing({
-      target: [astroCalendarGenerations.ownerUserId, astroCalendarGenerations.inputFingerprint]
-    })
-    .returning();
+  const inserted = await database.transaction(async (transaction) => {
+    const [row] = await transaction
+      .insert(astroCalendarGenerations)
+      .values({
+        ownerUserId: input.ownerUserId,
+        status: "calculating",
+        inputFingerprint: input.inputFingerprint,
+        rangeStart: input.rangeStart,
+        rangeEnd: input.rangeEnd,
+        timeZone: input.timeZone,
+        requestSnapshot: input.requestSnapshot,
+        settingsSnapshot: input.settingsSnapshot,
+        readinessSummary: input.readinessSummary,
+        summary: {},
+        warnings: input.warnings,
+        createdAt: now,
+        updatedAt: now
+      })
+      .onConflictDoNothing({
+        target: [astroCalendarGenerations.ownerUserId, astroCalendarGenerations.inputFingerprint]
+      })
+      .returning();
+
+    if (row) await requestGeneration(transaction, row.id, now);
+    return row;
+  });
 
   if (inserted) return toGenerationRecord(inserted);
 
@@ -171,26 +178,30 @@ async function markCalculating(
   database: AstroCalendarDatabase,
   input: Parameters<AstroCalendarGenerationStore["markCalculating"]>[0]
 ): Promise<AstroCalendarGenerationRecord | null> {
-  const [updated] = await database
-    .update(astroCalendarGenerations)
-    .set({
-      status: "calculating",
-      generatedAt: null,
-      provider: null,
-      errorCode: null,
-      errorMessage: null,
-      updatedAt: new Date(input.now)
-    })
-    .where(
-      and(
-        eq(astroCalendarGenerations.id, input.generationId),
-        eq(astroCalendarGenerations.ownerUserId, input.ownerUserId),
-        inArray(astroCalendarGenerations.status, ["failed", "stale"])
+  return database.transaction(async (transaction) => {
+    const [updated] = await transaction
+      .update(astroCalendarGenerations)
+      .set({
+        status: "calculating",
+        generatedAt: null,
+        provider: null,
+        errorCode: null,
+        errorMessage: null,
+        updatedAt: new Date(input.now)
+      })
+      .where(
+        and(
+          eq(astroCalendarGenerations.id, input.generationId),
+          eq(astroCalendarGenerations.ownerUserId, input.ownerUserId),
+          inArray(astroCalendarGenerations.status, ["failed", "stale"])
+        )
       )
-    )
-    .returning();
+      .returning();
 
-  return updated ? toGenerationRecord(updated) : null;
+    if (!updated) return null;
+    await requestGeneration(transaction, updated.id, new Date(input.now));
+    return toGenerationRecord(updated);
+  });
 }
 
 async function markStaleByOwner(
@@ -223,6 +234,19 @@ async function findGenerationWithEvents(
     input.ownerUserId,
     input.inputFingerprint
   );
+  return row ? hydrateGenerationWithEvents(database, row) : null;
+}
+
+async function findGenerationWithEventsById(
+  database: AstroCalendarDatabase,
+  generationId: string
+): Promise<AstroCalendarGenerationWithEvents | null> {
+  const [row] = await database
+    .select()
+    .from(astroCalendarGenerations)
+    .where(eq(astroCalendarGenerations.id, generationId))
+    .limit(1);
+
   return row ? hydrateGenerationWithEvents(database, row) : null;
 }
 
@@ -259,6 +283,41 @@ async function hydrateGenerationWithEvents(
     generation: toGenerationRecord(row),
     events: eventRows.map(toStoredEvent)
   };
+}
+
+async function requestGeneration(
+  database: AstroCalendarDatabase,
+  generationId: string,
+  now: Date
+): Promise<void> {
+  await database
+    .insert(outboxEvents)
+    .values({
+      eventType: ASTRO_CALENDAR_GENERATION_REQUESTED_EVENT,
+      aggregateId: generationId,
+      payload: { generationId },
+      status: "pending",
+      attempts: 0,
+      availableAt: now,
+      lockedAt: null,
+      publishedAt: null,
+      lastError: null,
+      createdAt: now,
+      updatedAt: now
+    })
+    .onConflictDoUpdate({
+      target: [outboxEvents.eventType, outboxEvents.aggregateId],
+      set: {
+        payload: { generationId },
+        status: "pending",
+        attempts: 0,
+        availableAt: now,
+        lockedAt: null,
+        publishedAt: null,
+        lastError: null,
+        updatedAt: now
+      }
+    });
 }
 
 function toGenerationRecord(row: AstroCalendarGenerationRow): AstroCalendarGenerationRecord {

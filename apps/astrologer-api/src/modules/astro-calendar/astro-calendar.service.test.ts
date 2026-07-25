@@ -216,6 +216,7 @@ function createGenerationStore(
       })
     ),
     findByFingerprint: vi.fn(async () => null),
+    findById: vi.fn(async () => null),
     findLatestForRange: vi.fn(async () => null),
     markReady: vi.fn(),
     markFailed: vi.fn(),

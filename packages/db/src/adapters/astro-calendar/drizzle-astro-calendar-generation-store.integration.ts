@@ -2,13 +2,15 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { ElevenHouseDatabase } from "../../runtime";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { ASTRO_CALENDAR_GENERATION_REQUESTED_EVENT } from "@elevenhouse/domain";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import { createPostgresRuntime } from "../../runtime";
-import { astroCalendarEvents, astroCalendarGenerations, users } from "../../schema";
+import { astroCalendarEvents, astroCalendarGenerations, outboxEvents, users } from "../../schema";
 import { createDrizzleAstroCalendarGenerationStore } from "./drizzle-astro-calendar-generation-store";
 
 const databaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
 const ownerUserIds: string[] = [];
+const generationIds: string[] = [];
 
 describe("Astro Calendar generation Drizzle/PostgreSQL integration", () => {
   const runtime = createPostgresRuntime({ DATABASE_URL: databaseUrl });
@@ -19,6 +21,11 @@ describe("Astro Calendar generation Drizzle/PostgreSQL integration", () => {
 
   afterAll(async () => {
     try {
+      if (generationIds.length > 0) {
+        await runtime.pool.query("delete from outbox_events where aggregate_id = any($1)", [
+          generationIds
+        ]);
+      }
       if (ownerUserIds.length > 0) {
         await runtime.pool.query(
           "delete from astro_calendar_events where owner_user_id = any($1)",
@@ -42,15 +49,23 @@ describe("Astro Calendar generation Drizzle/PostgreSQL integration", () => {
 
     const first = await store.createCalculating(input);
     const second = await store.createCalculating(input);
+    generationIds.push(first.id);
 
     expect(second.id).toBe(first.id);
     expect(second.status).toBe("calculating");
+    await expect(readOutbox(runtime.database, first.id)).resolves.toMatchObject({
+      eventType: ASTRO_CALENDAR_GENERATION_REQUESTED_EVENT,
+      aggregateId: first.id,
+      status: "pending",
+      payload: { generationId: first.id }
+    });
   });
 
   it("marks a generation ready with chronological events", async () => {
     const store = createDrizzleAstroCalendarGenerationStore(runtime.database);
     const ownerUserId = await createUser(runtime.database);
     const generation = await store.createCalculating(createGenerationInput(ownerUserId, "b"));
+    generationIds.push(generation.id);
 
     const ready = await store.markReady({
       ownerUserId,
@@ -82,6 +97,7 @@ describe("Astro Calendar generation Drizzle/PostgreSQL integration", () => {
     const ownerUserId = await createUser(runtime.database);
     const failedGeneration = await store.createCalculating(createGenerationInput(ownerUserId, "c"));
     const readyGeneration = await store.createCalculating(createGenerationInput(ownerUserId, "d"));
+    generationIds.push(failedGeneration.id, readyGeneration.id);
     await store.markReady({
       ownerUserId,
       generationId: readyGeneration.id,
@@ -129,8 +145,20 @@ describe("Astro Calendar generation Drizzle/PostgreSQL integration", () => {
       errorCode: null,
       errorMessage: null
     });
+    await expect(readOutbox(runtime.database, failedGeneration.id)).resolves.toMatchObject({
+      eventType: ASTRO_CALENDAR_GENERATION_REQUESTED_EVENT,
+      aggregateId: failedGeneration.id,
+      status: "pending",
+      attempts: 0
+    });
   });
 });
+
+async function readOutbox(database: ElevenHouseDatabase, generationId: string) {
+  return database.query.outboxEvents.findFirst({
+    where: eq(outboxEvents.aggregateId, generationId)
+  });
+}
 
 async function createUser(database: ElevenHouseDatabase): Promise<string> {
   const id = randomUUID();

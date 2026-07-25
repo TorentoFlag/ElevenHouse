@@ -1,15 +1,21 @@
 import type { OutboxRelayStore } from "@elevenhouse/db/outbox";
-import { CHART_CALCULATION_REQUESTED_EVENT } from "@elevenhouse/domain";
+import {
+  ASTRO_CALENDAR_GENERATION_REQUESTED_EVENT,
+  CHART_CALCULATION_REQUESTED_EVENT
+} from "@elevenhouse/domain";
 import type { Logger } from "@elevenhouse/observability";
 import { z } from "@elevenhouse/validation";
 import {
+  astroCalendarGenerationJobName,
   chartCalculationJobName,
+  toAstroCalendarGenerationJobOptions,
   toChartCalculationJobOptions,
   type ChartCalculationQueue,
   type ChartCalculationQueueOptions
 } from "./chart-jobs.queue";
 
-const payloadSchema = z.object({ jobId: z.string().uuid() }).strict();
+const chartCalculationPayloadSchema = z.object({ jobId: z.string().uuid() }).strict();
+const astroCalendarGenerationPayloadSchema = z.object({ generationId: z.string().uuid() }).strict();
 
 export function createChartCalculationOutboxRelay(input: {
   readonly relayOnce: () => Promise<void>;
@@ -58,7 +64,7 @@ export async function relayPendingChartCalculationEvents(input: {
   readonly logger?: Logger;
 }): Promise<number> {
   const events = await input.store.claimPending({
-    eventTypes: [CHART_CALCULATION_REQUESTED_EVENT],
+    eventTypes: [CHART_CALCULATION_REQUESTED_EVENT, ASTRO_CALENDAR_GENERATION_REQUESTED_EVENT],
     limit: input.batchSize,
     now: input.now,
     stalePublishingBefore: new Date(input.now.getTime() - input.publishingLockTimeoutMs)
@@ -66,15 +72,32 @@ export async function relayPendingChartCalculationEvents(input: {
 
   for (const event of events) {
     try {
-      const data = payloadSchema.parse(event.payload);
-      if (event.aggregateId !== data.jobId) {
-        throw new Error("Chart calculation event aggregate does not match its payload");
+      if (event.eventType === CHART_CALCULATION_REQUESTED_EVENT) {
+        const data = chartCalculationPayloadSchema.parse(event.payload);
+        if (event.aggregateId !== data.jobId) {
+          throw new Error("Chart calculation event aggregate does not match its payload");
+        }
+        await input.queue.add(
+          chartCalculationJobName,
+          data,
+          toChartCalculationJobOptions({ ...input.queueOptions, jobId: data.jobId })
+        );
+      } else if (event.eventType === ASTRO_CALENDAR_GENERATION_REQUESTED_EVENT) {
+        const data = astroCalendarGenerationPayloadSchema.parse(event.payload);
+        if (event.aggregateId !== data.generationId) {
+          throw new Error("Astro calendar event aggregate does not match its payload");
+        }
+        await input.queue.add(
+          astroCalendarGenerationJobName,
+          data,
+          toAstroCalendarGenerationJobOptions({
+            ...input.queueOptions,
+            generationId: data.generationId
+          })
+        );
+      } else {
+        throw new Error(`Unsupported chart worker outbox event type: ${event.eventType}`);
       }
-      await input.queue.add(
-        chartCalculationJobName,
-        data,
-        toChartCalculationJobOptions({ ...input.queueOptions, jobId: data.jobId })
-      );
       await input.store.markPublished({ eventId: event.id, publishedAt: input.now });
       input.logger?.info("chart calculation outbox event published", {
         outboxEventId: event.id,

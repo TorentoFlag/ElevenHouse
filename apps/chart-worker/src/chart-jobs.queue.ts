@@ -3,39 +3,40 @@ import type { Logger } from "@elevenhouse/observability";
 
 export const chartCalculationQueueName = "chart.calculation";
 export const chartCalculationJobName = "calculate-natal-chart";
+export const astroCalendarGenerationJobName = "generate-astro-calendar";
 
 export type ChartCalculationQueuePayload = {
   readonly jobId: string;
 };
+export type AstroCalendarGenerationQueuePayload = {
+  readonly generationId: string;
+};
+export type ChartWorkerQueuePayload =
+  | ChartCalculationQueuePayload
+  | AstroCalendarGenerationQueuePayload;
+export type ChartWorkerJobName =
+  | typeof chartCalculationJobName
+  | typeof astroCalendarGenerationJobName;
 export type ChartCalculationQueueOptions = {
   readonly attempts: number;
   readonly backoffMs: number;
   readonly jitter: number;
 };
-export type ChartCalculationQueue = Queue<
-  ChartCalculationQueuePayload,
-  void,
-  typeof chartCalculationJobName
->;
-export type ChartCalculationWorker = Worker<
-  ChartCalculationQueuePayload,
-  void,
-  typeof chartCalculationJobName
->;
+export type ChartCalculationQueue = Queue<ChartWorkerQueuePayload, void, ChartWorkerJobName>;
+export type ChartCalculationWorker = Worker<ChartWorkerQueuePayload, void, ChartWorkerJobName>;
 
 export function createChartCalculationQueue(redisUrl: string): ChartCalculationQueue {
-  return new Queue<ChartCalculationQueuePayload, void, typeof chartCalculationJobName>(
-    chartCalculationQueueName,
-    { connection: toRedisConnectionOptions(redisUrl) }
-  );
+  return new Queue<ChartWorkerQueuePayload, void, ChartWorkerJobName>(chartCalculationQueueName, {
+    connection: toRedisConnectionOptions(redisUrl)
+  });
 }
 
 export function createChartCalculationWorker(
   redisUrl: string,
-  processor: Processor<ChartCalculationQueuePayload, void, typeof chartCalculationJobName>,
+  processor: Processor<ChartWorkerQueuePayload, void, ChartWorkerJobName>,
   concurrency: number
 ): ChartCalculationWorker {
-  return new Worker<ChartCalculationQueuePayload, void, typeof chartCalculationJobName>(
+  return new Worker<ChartWorkerQueuePayload, void, ChartWorkerJobName>(
     chartCalculationQueueName,
     processor,
     { connection: toRedisConnectionOptions(redisUrl), concurrency }
@@ -44,6 +45,10 @@ export function createChartCalculationWorker(
 
 export function buildChartCalculationBullMqJobId(jobId: string): string {
   return `chart-calculation-${jobId}`;
+}
+
+export function buildAstroCalendarGenerationBullMqJobId(generationId: string): string {
+  return `astro-calendar-generation-${generationId}`;
 }
 
 export function toChartCalculationJobOptions(
@@ -55,6 +60,15 @@ export function toChartCalculationJobOptions(
     backoff: { type: "exponential", delay: input.backoffMs, jitter: input.jitter },
     removeOnComplete: { age: 24 * 60 * 60, count: 1000 },
     removeOnFail: { age: 7 * 24 * 60 * 60, count: 1000 }
+  };
+}
+
+export function toAstroCalendarGenerationJobOptions(
+  input: ChartCalculationQueueOptions & { readonly generationId: string }
+): JobsOptions {
+  return {
+    ...toChartCalculationJobOptions({ ...input, jobId: input.generationId }),
+    jobId: buildAstroCalendarGenerationBullMqJobId(input.generationId)
   };
 }
 
