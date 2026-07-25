@@ -7,6 +7,7 @@ export * from "./media";
 export * from "./astrologer-profile";
 export * from "./verification";
 export * from "./calculations";
+export * from "./astro-calendar";
 export * from "./clients";
 export * from "./matrix";
 export * from "./scheduling";

@@ -6,6 +6,7 @@ export * from "./products";
 export * from "./astrologer-profile";
 export * from "./platform-billing";
 export * from "./verification";
+export * from "./astro-calendar";
 export * from "./clients";
 export * from "./charts";
 export * from "./matrix";
