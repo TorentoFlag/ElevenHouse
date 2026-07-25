@@ -19,6 +19,7 @@ export * from "./availability";
 export * from "./bookings";
 export * from "./calendar";
 export * from "./charts";
+export * from "./astro-calendar";
 export * from "./human-design";
 export * from "./messaging";
 export * from "./money";
