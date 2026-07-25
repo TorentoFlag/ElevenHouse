@@ -676,7 +676,7 @@ CREATE TABLE "chart_calculation_jobs" (
 	"finished_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "chart_calculation_jobs_method_check" CHECK ("chart_calculation_jobs"."method" in ('natal', 'transit', 'synastry', 'composite', 'solar_return', 'progression', 'horary')),
+	CONSTRAINT "chart_calculation_jobs_method_check" CHECK ("chart_calculation_jobs"."method" in ('natal', 'astrocartography', 'transit', 'synastry', 'composite', 'solar_return', 'progression', 'horary')),
 	CONSTRAINT "chart_calculation_jobs_status_check" CHECK ("chart_calculation_jobs"."status" in ('queued', 'processing', 'succeeded', 'failed')),
 	CONSTRAINT "chart_calculation_jobs_provider_check" CHECK ("chart_calculation_jobs"."provider" in ('kerykeion')),
 	CONSTRAINT "chart_calculation_jobs_schema_version_check" CHECK ("chart_calculation_jobs"."schema_version" in ('chart-result.v1')),
@@ -1287,6 +1287,356 @@ CREATE INDEX "messages_thread_created_idx" ON "messages" USING btree ("thread_id
 CREATE UNIQUE INDEX "message_delivery_attempts_message_attempt_unique" ON "message_delivery_attempts" USING btree ("message_id","attempt_number");--> statement-breakpoint
 CREATE UNIQUE INDEX "messaging_realtime_events_event_id_unique" ON "messaging_realtime_events" USING btree ("event_id");--> statement-breakpoint
 CREATE INDEX "messaging_realtime_events_astrologer_event_id_idx" ON "messaging_realtime_events" USING btree ("astrologer_user_id","event_id");
+--> statement-breakpoint
+CREATE TABLE "astrologer_risk_profiles" (
+	"astrologer_user_id" uuid PRIMARY KEY NOT NULL,
+	"risk_tier" text DEFAULT 'standard' NOT NULL,
+	"manual_risk_tier" text,
+	"manual_override_reason" text,
+	"hold_duration_hours_override" integer,
+	"reserve_bps_override" integer,
+	"reserve_release_delay_days_override" integer,
+	"platform_fee_bps_override" integer,
+	"provider_settlement_required_override" boolean,
+	"reviewed_by_user_id" uuid,
+	"reviewed_at" timestamp with time zone,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "astrologer_risk_profiles_risk_tier_check" CHECK ("astrologer_risk_profiles"."risk_tier" in ('low', 'standard', 'elevated', 'high', 'manual_review')),
+	CONSTRAINT "astrologer_risk_profiles_manual_risk_tier_check" CHECK ("astrologer_risk_profiles"."manual_risk_tier" is null or "astrologer_risk_profiles"."manual_risk_tier" in ('low', 'standard', 'elevated', 'high', 'manual_review')),
+	CONSTRAINT "astrologer_risk_profiles_hold_override_check" CHECK ("astrologer_risk_profiles"."hold_duration_hours_override" is null or "astrologer_risk_profiles"."hold_duration_hours_override" between 0 and 4320),
+	CONSTRAINT "astrologer_risk_profiles_reserve_override_check" CHECK ("astrologer_risk_profiles"."reserve_bps_override" is null or "astrologer_risk_profiles"."reserve_bps_override" between 0 and 10000),
+	CONSTRAINT "astrologer_risk_profiles_reserve_release_override_check" CHECK ("astrologer_risk_profiles"."reserve_release_delay_days_override" is null or "astrologer_risk_profiles"."reserve_release_delay_days_override" between 0 and 540),
+	CONSTRAINT "astrologer_risk_profiles_fee_override_check" CHECK ("astrologer_risk_profiles"."platform_fee_bps_override" is null or "astrologer_risk_profiles"."platform_fee_bps_override" between 0 and 10000),
+	CONSTRAINT "astrologer_risk_profiles_manual_override_check" CHECK (("astrologer_risk_profiles"."manual_risk_tier" is null and "astrologer_risk_profiles"."manual_override_reason" is null and "astrologer_risk_profiles"."reviewed_by_user_id" is null and "astrologer_risk_profiles"."reviewed_at" is null) or ("astrologer_risk_profiles"."manual_risk_tier" is not null and "astrologer_risk_profiles"."manual_override_reason" is not null and length(trim("astrologer_risk_profiles"."manual_override_reason")) between 1 and 2000 and "astrologer_risk_profiles"."reviewed_by_user_id" is not null and "astrologer_risk_profiles"."reviewed_at" is not null))
+);
+--> statement-breakpoint
+CREATE TABLE "finance_policies" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"policy_version" integer NOT NULL,
+	"risk_tier" text NOT NULL,
+	"hold_duration_hours" integer DEFAULT 48 NOT NULL,
+	"reserve_bps" integer DEFAULT 0 NOT NULL,
+	"reserve_release_delay_days" integer DEFAULT 0 NOT NULL,
+	"platform_fee_bps" integer NOT NULL,
+	"provider_settlement_required" boolean DEFAULT true NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"created_by_user_id" uuid,
+	"snapshotted_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "finance_policies_risk_tier_check" CHECK ("finance_policies"."risk_tier" in ('low', 'standard', 'elevated', 'high', 'manual_review')),
+	CONSTRAINT "finance_policies_hold_duration_check" CHECK ("finance_policies"."hold_duration_hours" between 0 and 4320),
+	CONSTRAINT "finance_policies_reserve_bps_check" CHECK ("finance_policies"."reserve_bps" between 0 and 10000),
+	CONSTRAINT "finance_policies_reserve_release_delay_check" CHECK ("finance_policies"."reserve_release_delay_days" between 0 and 540),
+	CONSTRAINT "finance_policies_platform_fee_bps_check" CHECK ("finance_policies"."platform_fee_bps" between 0 and 10000)
+);
+--> statement-breakpoint
+CREATE TABLE "orders" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"client_user_id" uuid NOT NULL,
+	"astrologer_user_id" uuid NOT NULL,
+	"product_id" uuid NOT NULL,
+	"direct_link_intent_id" uuid,
+	"status" text DEFAULT 'pending_payment' NOT NULL,
+	"gross_amount_minor" bigint NOT NULL,
+	"gross_currency" text NOT NULL,
+	"platform_fee_amount_minor" bigint NOT NULL,
+	"platform_fee_currency" text NOT NULL,
+	"astrologer_net_amount_minor" bigint NOT NULL,
+	"astrologer_net_currency" text NOT NULL,
+	"finance_policy_snapshot_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "orders_status_check" CHECK ("orders"."status" in ('draft', 'pending_payment', 'paid', 'fulfilled', 'cancelled', 'expired', 'partially_refunded', 'refunded', 'chargeback')),
+	CONSTRAINT "orders_money_currency_check" CHECK ("orders"."gross_currency" in ('RUB') and "orders"."platform_fee_currency" = "orders"."gross_currency" and "orders"."astrologer_net_currency" = "orders"."gross_currency"),
+	CONSTRAINT "orders_money_amount_check" CHECK ("orders"."gross_amount_minor" >= 0 and "orders"."gross_amount_minor" <= 9007199254740991 and "orders"."platform_fee_amount_minor" >= 0 and "orders"."platform_fee_amount_minor" <= 9007199254740991 and "orders"."astrologer_net_amount_minor" >= 0 and "orders"."astrologer_net_amount_minor" <= 9007199254740991),
+	CONSTRAINT "orders_money_allocation_check" CHECK ("orders"."gross_amount_minor" = "orders"."platform_fee_amount_minor" + "orders"."astrologer_net_amount_minor")
+);
+--> statement-breakpoint
+CREATE TABLE "payment_attempts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"order_id" uuid NOT NULL,
+	"provider" text NOT NULL,
+	"environment" text NOT NULL,
+	"status" text DEFAULT 'created' NOT NULL,
+	"amount_minor" bigint NOT NULL,
+	"currency" text NOT NULL,
+	"provider_payment_id" text,
+	"provider_checkout_id" text,
+	"idempotency_key" text NOT NULL,
+	"metadata" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "payment_attempts_provider_check" CHECK ("payment_attempts"."provider" in ('arc_pay')),
+	CONSTRAINT "payment_attempts_environment_check" CHECK ("payment_attempts"."environment" in ('sandbox', 'live')),
+	CONSTRAINT "payment_attempts_status_check" CHECK ("payment_attempts"."status" in ('created', 'checkout_opened', 'pending', 'authorized', 'captured', 'settled', 'failed', 'declined', 'timeout', 'expired', 'voided', 'partially_refunded', 'refunded', 'chargeback')),
+	CONSTRAINT "payment_attempts_amount_check" CHECK ("payment_attempts"."amount_minor" >= 0 and "payment_attempts"."amount_minor" <= 9007199254740991),
+	CONSTRAINT "payment_attempts_currency_check" CHECK ("payment_attempts"."currency" in ('RUB')),
+	CONSTRAINT "payment_attempts_provider_payment_id_length_check" CHECK ("payment_attempts"."provider_payment_id" is null or length(trim("payment_attempts"."provider_payment_id")) between 1 and 160),
+	CONSTRAINT "payment_attempts_provider_checkout_id_length_check" CHECK ("payment_attempts"."provider_checkout_id" is null or length(trim("payment_attempts"."provider_checkout_id")) between 1 and 160),
+	CONSTRAINT "payment_attempts_idempotency_key_length_check" CHECK (length(trim("payment_attempts"."idempotency_key")) between 1 and 160),
+	CONSTRAINT "payment_attempts_metadata_check" CHECK (jsonb_typeof("payment_attempts"."metadata") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "payment_provider_events" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"payment_attempt_id" uuid,
+	"provider" text NOT NULL,
+	"environment" text NOT NULL,
+	"provider_webhook_id" text NOT NULL,
+	"provider_payment_id" text,
+	"type" text NOT NULL,
+	"occurred_at" timestamp with time zone NOT NULL,
+	"received_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"payload" jsonb NOT NULL,
+	CONSTRAINT "payment_provider_events_provider_check" CHECK ("payment_provider_events"."provider" in ('arc_pay')),
+	CONSTRAINT "payment_provider_events_environment_check" CHECK ("payment_provider_events"."environment" in ('sandbox', 'live')),
+	CONSTRAINT "payment_provider_events_type_check" CHECK ("payment_provider_events"."type" in ('payment.created', 'payment.checkout_opened', 'payment.pending', 'payment.pending_3ds', 'payment.authorized', 'payment.processing', 'payment.captured', 'payment.settled', 'payment.failed', 'payment.declined', 'payment.timeout', 'payment.expired', 'payment.voided', 'payment.refunded', 'payment.partially_refunded', 'payment.chargeback', 'settlement.cleared', 'reconciliation.exception')),
+	CONSTRAINT "payment_provider_events_webhook_id_length_check" CHECK (length(trim("payment_provider_events"."provider_webhook_id")) between 1 and 160),
+	CONSTRAINT "payment_provider_events_payment_id_length_check" CHECK ("payment_provider_events"."provider_payment_id" is null or length(trim("payment_provider_events"."provider_payment_id")) between 1 and 160),
+	CONSTRAINT "payment_provider_events_payload_check" CHECK (jsonb_typeof("payment_provider_events"."payload") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "refunds" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"order_id" uuid NOT NULL,
+	"payment_attempt_id" uuid NOT NULL,
+	"provider_event_id" uuid,
+	"provider" text NOT NULL,
+	"environment" text NOT NULL,
+	"status" text DEFAULT 'requested' NOT NULL,
+	"amount_minor" bigint NOT NULL,
+	"currency" text NOT NULL,
+	"reason" text,
+	"provider_refund_id" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "refunds_status_check" CHECK ("refunds"."status" in ('requested', 'processing', 'succeeded', 'failed')),
+	CONSTRAINT "refunds_provider_check" CHECK ("refunds"."provider" in ('arc_pay')),
+	CONSTRAINT "refunds_environment_check" CHECK ("refunds"."environment" in ('sandbox', 'live')),
+	CONSTRAINT "refunds_amount_check" CHECK ("refunds"."amount_minor" > 0 and "refunds"."amount_minor" <= 9007199254740991),
+	CONSTRAINT "refunds_currency_check" CHECK ("refunds"."currency" in ('RUB')),
+	CONSTRAINT "refunds_provider_refund_id_length_check" CHECK ("refunds"."provider_refund_id" is null or length(trim("refunds"."provider_refund_id")) between 1 and 160)
+);
+--> statement-breakpoint
+CREATE TABLE "payout_methods" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"astrologer_user_id" uuid NOT NULL,
+	"method" text NOT NULL,
+	"currency" text DEFAULT 'RUB' NOT NULL,
+	"display_name" text NOT NULL,
+	"manual_bank_transfer_details" jsonb,
+	"provider" text,
+	"environment" text,
+	"provider_payout_account_id" text,
+	"is_default" boolean DEFAULT false NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "payout_methods_method_check" CHECK ("payout_methods"."method" in ('manual_bank_transfer', 'arc_pay_provider')),
+	CONSTRAINT "payout_methods_currency_check" CHECK ("payout_methods"."currency" in ('RUB')),
+	CONSTRAINT "payout_methods_provider_check" CHECK ("payout_methods"."provider" is null or "payout_methods"."provider" in ('arc_pay')),
+	CONSTRAINT "payout_methods_environment_check" CHECK ("payout_methods"."environment" is null or "payout_methods"."environment" in ('sandbox', 'live')),
+	CONSTRAINT "payout_methods_display_name_check" CHECK (length(trim("payout_methods"."display_name")) between 1 and 160),
+	CONSTRAINT "payout_methods_method_provider_shape_check" CHECK (("payout_methods"."method" = 'manual_bank_transfer' and "payout_methods"."provider" is null and "payout_methods"."environment" is null and "payout_methods"."provider_payout_account_id" is null and "payout_methods"."manual_bank_transfer_details" is not null and jsonb_typeof("payout_methods"."manual_bank_transfer_details") = 'object') or ("payout_methods"."method" = 'arc_pay_provider' and "payout_methods"."provider" is not null and "payout_methods"."provider" = 'arc_pay' and "payout_methods"."environment" is not null and "payout_methods"."provider_payout_account_id" is not null and length(trim("payout_methods"."provider_payout_account_id")) between 1 and 160 and "payout_methods"."manual_bank_transfer_details" is null))
+);
+--> statement-breakpoint
+CREATE TABLE "payout_requests" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"astrologer_user_id" uuid NOT NULL,
+	"payout_method_id" uuid NOT NULL,
+	"status" text DEFAULT 'requested' NOT NULL,
+	"amount_minor" bigint NOT NULL,
+	"currency" text NOT NULL,
+	"method" text NOT NULL,
+	"provider" text,
+	"environment" text,
+	"requested_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"reviewed_at" timestamp with time zone,
+	"completed_at" timestamp with time zone,
+	"admin_user_id" uuid,
+	"admin_note" text,
+	"failure_reason" text,
+	"external_reference" text,
+	"transferred_at" timestamp with time zone,
+	"provider_payout_id" text,
+	"metadata" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "payout_requests_status_check" CHECK ("payout_requests"."status" in ('requested', 'under_review', 'approved', 'processing_manual', 'processing_provider', 'paid', 'failed', 'rejected', 'cancelled')),
+	CONSTRAINT "payout_requests_method_check" CHECK ("payout_requests"."method" in ('manual_bank_transfer', 'arc_pay_provider')),
+	CONSTRAINT "payout_requests_amount_check" CHECK ("payout_requests"."amount_minor" > 0 and "payout_requests"."amount_minor" <= 9007199254740991),
+	CONSTRAINT "payout_requests_currency_check" CHECK ("payout_requests"."currency" in ('RUB')),
+	CONSTRAINT "payout_requests_provider_check" CHECK ("payout_requests"."provider" is null or "payout_requests"."provider" in ('arc_pay')),
+	CONSTRAINT "payout_requests_environment_check" CHECK ("payout_requests"."environment" is null or "payout_requests"."environment" in ('sandbox', 'live')),
+	CONSTRAINT "payout_requests_method_provider_shape_check" CHECK (("payout_requests"."method" = 'manual_bank_transfer' and "payout_requests"."provider" is null and "payout_requests"."environment" is null and "payout_requests"."provider_payout_id" is null) or ("payout_requests"."method" = 'arc_pay_provider' and "payout_requests"."provider" is not null and "payout_requests"."provider" = 'arc_pay' and "payout_requests"."environment" is not null)),
+	CONSTRAINT "payout_requests_paid_evidence_check" CHECK ("payout_requests"."status" <> 'paid' or ("payout_requests"."external_reference" is not null and "payout_requests"."transferred_at" is not null)),
+	CONSTRAINT "payout_requests_failure_reason_check" CHECK ("payout_requests"."status" not in ('failed', 'rejected') or ("payout_requests"."failure_reason" is not null and length(trim("payout_requests"."failure_reason")) between 1 and 2000)),
+	CONSTRAINT "payout_requests_admin_note_length_check" CHECK ("payout_requests"."admin_note" is null or length(trim("payout_requests"."admin_note")) between 1 and 2000),
+	CONSTRAINT "payout_requests_external_reference_length_check" CHECK ("payout_requests"."external_reference" is null or length(trim("payout_requests"."external_reference")) between 1 and 240),
+	CONSTRAINT "payout_requests_provider_payout_id_length_check" CHECK ("payout_requests"."provider_payout_id" is null or length(trim("payout_requests"."provider_payout_id")) between 1 and 160),
+	CONSTRAINT "payout_requests_metadata_check" CHECK (jsonb_typeof("payout_requests"."metadata") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "ledger_accounts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"account_type" text NOT NULL,
+	"astrologer_user_id" uuid,
+	"balance_bucket" text,
+	"currency" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ledger_accounts_account_type_check" CHECK ("ledger_accounts"."account_type" in ('platform_clearing', 'platform_revenue', 'provider_fees', 'astrologer_pending', 'astrologer_available', 'astrologer_reserved', 'astrologer_payout_pending', 'astrologer_negative_balance', 'payout_clearing')),
+	CONSTRAINT "ledger_accounts_balance_bucket_check" CHECK ("ledger_accounts"."balance_bucket" is null or "ledger_accounts"."balance_bucket" in ('pending', 'available', 'reserved', 'payout_pending', 'negative_balance')),
+	CONSTRAINT "ledger_accounts_currency_check" CHECK ("ledger_accounts"."currency" in ('RUB')),
+	CONSTRAINT "ledger_accounts_astrologer_shape_check" CHECK (("ledger_accounts"."account_type" in ('platform_clearing', 'platform_revenue', 'provider_fees', 'payout_clearing') and "ledger_accounts"."astrologer_user_id" is null and "ledger_accounts"."balance_bucket" is null) or ("ledger_accounts"."account_type" = 'astrologer_pending' and "ledger_accounts"."astrologer_user_id" is not null and "ledger_accounts"."balance_bucket" = 'pending') or ("ledger_accounts"."account_type" = 'astrologer_available' and "ledger_accounts"."astrologer_user_id" is not null and "ledger_accounts"."balance_bucket" = 'available') or ("ledger_accounts"."account_type" = 'astrologer_reserved' and "ledger_accounts"."astrologer_user_id" is not null and "ledger_accounts"."balance_bucket" = 'reserved') or ("ledger_accounts"."account_type" = 'astrologer_payout_pending' and "ledger_accounts"."astrologer_user_id" is not null and "ledger_accounts"."balance_bucket" = 'payout_pending') or ("ledger_accounts"."account_type" = 'astrologer_negative_balance' and "ledger_accounts"."astrologer_user_id" is not null and "ledger_accounts"."balance_bucket" = 'negative_balance'))
+);
+--> statement-breakpoint
+CREATE TABLE "ledger_entries" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"ledger_transaction_id" uuid NOT NULL,
+	"account_id" uuid NOT NULL,
+	"entry_side" text NOT NULL,
+	"amount_minor" bigint NOT NULL,
+	"currency" text NOT NULL,
+	"metadata" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ledger_entries_side_check" CHECK ("ledger_entries"."entry_side" in ('debit', 'credit')),
+	CONSTRAINT "ledger_entries_amount_check" CHECK ("ledger_entries"."amount_minor" > 0 and "ledger_entries"."amount_minor" <= 9007199254740991),
+	CONSTRAINT "ledger_entries_currency_check" CHECK ("ledger_entries"."currency" in ('RUB')),
+	CONSTRAINT "ledger_entries_metadata_check" CHECK (jsonb_typeof("ledger_entries"."metadata") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "ledger_transactions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"operation_type" text NOT NULL,
+	"order_id" uuid,
+	"payout_request_id" uuid,
+	"occurred_at" timestamp with time zone NOT NULL,
+	"posted_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"metadata" jsonb NOT NULL,
+	CONSTRAINT "ledger_transactions_operation_type_check" CHECK ("ledger_transactions"."operation_type" in ('sale_captured', 'platform_fee_recorded', 'provider_fee_recorded', 'hold_created', 'funds_released', 'reserve_created', 'reserve_released', 'payout_reserved', 'payout_paid', 'payout_failed', 'refund_recorded', 'chargeback_recorded', 'manual_adjustment')),
+	CONSTRAINT "ledger_transactions_source_check" CHECK ("ledger_transactions"."order_id" is not null or "ledger_transactions"."payout_request_id" is not null or "ledger_transactions"."operation_type" = 'manual_adjustment'),
+	CONSTRAINT "ledger_transactions_metadata_check" CHECK (jsonb_typeof("ledger_transactions"."metadata") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "wallet_balance_read_models" (
+	"astrologer_user_id" uuid PRIMARY KEY NOT NULL,
+	"pending_amount_minor" bigint DEFAULT 0 NOT NULL,
+	"pending_currency" text DEFAULT 'RUB' NOT NULL,
+	"available_amount_minor" bigint DEFAULT 0 NOT NULL,
+	"available_currency" text DEFAULT 'RUB' NOT NULL,
+	"reserved_amount_minor" bigint DEFAULT 0 NOT NULL,
+	"reserved_currency" text DEFAULT 'RUB' NOT NULL,
+	"payout_pending_amount_minor" bigint DEFAULT 0 NOT NULL,
+	"payout_pending_currency" text DEFAULT 'RUB' NOT NULL,
+	"negative_balance_amount_minor" bigint DEFAULT 0 NOT NULL,
+	"negative_balance_currency" text DEFAULT 'RUB' NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "wallet_balance_read_models_amount_check" CHECK ("wallet_balance_read_models"."pending_amount_minor" >= 0 and "wallet_balance_read_models"."pending_amount_minor" <= 9007199254740991 and "wallet_balance_read_models"."available_amount_minor" >= 0 and "wallet_balance_read_models"."available_amount_minor" <= 9007199254740991 and "wallet_balance_read_models"."reserved_amount_minor" >= 0 and "wallet_balance_read_models"."reserved_amount_minor" <= 9007199254740991 and "wallet_balance_read_models"."payout_pending_amount_minor" >= 0 and "wallet_balance_read_models"."payout_pending_amount_minor" <= 9007199254740991 and "wallet_balance_read_models"."negative_balance_amount_minor" >= 0 and "wallet_balance_read_models"."negative_balance_amount_minor" <= 9007199254740991),
+	CONSTRAINT "wallet_balance_read_models_currency_check" CHECK ("wallet_balance_read_models"."pending_currency" = 'RUB' and "wallet_balance_read_models"."available_currency" = 'RUB' and "wallet_balance_read_models"."reserved_currency" = 'RUB' and "wallet_balance_read_models"."payout_pending_currency" = 'RUB' and "wallet_balance_read_models"."negative_balance_currency" = 'RUB')
+);
+--> statement-breakpoint
+CREATE TABLE "reconciliation_records" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"provider" text NOT NULL,
+	"environment" text NOT NULL,
+	"provider_payment_id" text,
+	"provider_payout_id" text,
+	"provider_settlement_id" text,
+	"provider_event_id" uuid,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"exception_code" text,
+	"exception_message" text,
+	"provider_occurred_at" timestamp with time zone,
+	"checked_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"resolved_at" timestamp with time zone,
+	"payload" jsonb NOT NULL,
+	CONSTRAINT "reconciliation_records_provider_check" CHECK ("reconciliation_records"."provider" in ('arc_pay')),
+	CONSTRAINT "reconciliation_records_environment_check" CHECK ("reconciliation_records"."environment" in ('sandbox', 'live')),
+	CONSTRAINT "reconciliation_records_status_check" CHECK ("reconciliation_records"."status" in ('pending', 'matched', 'exception', 'ignored')),
+	CONSTRAINT "reconciliation_records_provider_identifier_check" CHECK ("reconciliation_records"."provider_payment_id" is not null or "reconciliation_records"."provider_payout_id" is not null or "reconciliation_records"."provider_settlement_id" is not null),
+	CONSTRAINT "reconciliation_records_exception_check" CHECK ("reconciliation_records"."status" <> 'exception' or ("reconciliation_records"."exception_code" is not null and length(trim("reconciliation_records"."exception_code")) between 1 and 120 and "reconciliation_records"."exception_message" is not null and length(trim("reconciliation_records"."exception_message")) between 1 and 2000)),
+	CONSTRAINT "reconciliation_records_payload_check" CHECK (jsonb_typeof("reconciliation_records"."payload") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "finance_idempotency_commands" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"scope" text NOT NULL,
+	"idempotency_key" text NOT NULL,
+	"actor_user_id" uuid,
+	"request_hash" text NOT NULL,
+	"state" text DEFAULT 'processing' NOT NULL,
+	"result" jsonb,
+	"error_code" text,
+	"expires_at" timestamp with time zone NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "finance_idempotency_commands_scope_length_check" CHECK (length(trim("finance_idempotency_commands"."scope")) between 1 and 150),
+	CONSTRAINT "finance_idempotency_commands_key_length_check" CHECK (length(trim("finance_idempotency_commands"."idempotency_key")) between 1 and 160),
+	CONSTRAINT "finance_idempotency_commands_request_hash_check" CHECK ("finance_idempotency_commands"."request_hash" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "finance_idempotency_commands_state_check" CHECK ("finance_idempotency_commands"."state" in ('processing', 'completed', 'failed')),
+	CONSTRAINT "finance_idempotency_commands_result_state_check" CHECK (("finance_idempotency_commands"."state" = 'processing' and "finance_idempotency_commands"."result" is null and "finance_idempotency_commands"."error_code" is null) or ("finance_idempotency_commands"."state" = 'completed' and "finance_idempotency_commands"."result" is not null and jsonb_typeof("finance_idempotency_commands"."result") = 'object' and "finance_idempotency_commands"."error_code" is null) or ("finance_idempotency_commands"."state" = 'failed' and "finance_idempotency_commands"."result" is null and "finance_idempotency_commands"."error_code" is not null and length(trim("finance_idempotency_commands"."error_code")) between 1 and 120))
+);
+--> statement-breakpoint
+ALTER TABLE "astrologer_risk_profiles" ADD CONSTRAINT "astrologer_risk_profiles_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "astrologer_risk_profiles" ADD CONSTRAINT "astrologer_risk_profiles_reviewed_by_user_id_users_id_fk" FOREIGN KEY ("reviewed_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "finance_policies" ADD CONSTRAINT "finance_policies_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_direct_link_intent_id_client_join_intents_id_fk" FOREIGN KEY ("direct_link_intent_id") REFERENCES "public"."client_join_intents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_finance_policy_snapshot_id_finance_policies_id_fk" FOREIGN KEY ("finance_policy_snapshot_id") REFERENCES "public"."finance_policies"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payment_attempts" ADD CONSTRAINT "payment_attempts_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payment_provider_events" ADD CONSTRAINT "payment_provider_events_payment_attempt_id_payment_attempts_id_fk" FOREIGN KEY ("payment_attempt_id") REFERENCES "public"."payment_attempts"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "refunds" ADD CONSTRAINT "refunds_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "refunds" ADD CONSTRAINT "refunds_payment_attempt_id_payment_attempts_id_fk" FOREIGN KEY ("payment_attempt_id") REFERENCES "public"."payment_attempts"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "refunds" ADD CONSTRAINT "refunds_provider_event_id_payment_provider_events_id_fk" FOREIGN KEY ("provider_event_id") REFERENCES "public"."payment_provider_events"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payout_methods" ADD CONSTRAINT "payout_methods_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payout_requests" ADD CONSTRAINT "payout_requests_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payout_requests" ADD CONSTRAINT "payout_requests_payout_method_id_payout_methods_id_fk" FOREIGN KEY ("payout_method_id") REFERENCES "public"."payout_methods"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payout_requests" ADD CONSTRAINT "payout_requests_admin_user_id_users_id_fk" FOREIGN KEY ("admin_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ledger_accounts" ADD CONSTRAINT "ledger_accounts_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ledger_entries" ADD CONSTRAINT "ledger_entries_ledger_transaction_id_ledger_transactions_id_fk" FOREIGN KEY ("ledger_transaction_id") REFERENCES "public"."ledger_transactions"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ledger_entries" ADD CONSTRAINT "ledger_entries_account_id_ledger_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."ledger_accounts"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ledger_transactions" ADD CONSTRAINT "ledger_transactions_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ledger_transactions" ADD CONSTRAINT "ledger_transactions_payout_request_id_payout_requests_id_fk" FOREIGN KEY ("payout_request_id") REFERENCES "public"."payout_requests"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "wallet_balance_read_models" ADD CONSTRAINT "wallet_balance_read_models_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "reconciliation_records" ADD CONSTRAINT "reconciliation_records_provider_event_id_payment_provider_events_id_fk" FOREIGN KEY ("provider_event_id") REFERENCES "public"."payment_provider_events"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "finance_idempotency_commands" ADD CONSTRAINT "finance_idempotency_commands_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "astrologer_risk_profiles_risk_tier_idx" ON "astrologer_risk_profiles" USING btree ("risk_tier");--> statement-breakpoint
+CREATE UNIQUE INDEX "finance_policies_version_unique" ON "finance_policies" USING btree ("policy_version");--> statement-breakpoint
+CREATE UNIQUE INDEX "finance_policies_active_risk_tier_unique" ON "finance_policies" USING btree ("risk_tier") WHERE "finance_policies"."is_active" = true;--> statement-breakpoint
+CREATE INDEX "finance_policies_risk_version_idx" ON "finance_policies" USING btree ("risk_tier","policy_version");--> statement-breakpoint
+CREATE INDEX "orders_client_created_idx" ON "orders" USING btree ("client_user_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "orders_astrologer_created_idx" ON "orders" USING btree ("astrologer_user_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "orders_status_created_idx" ON "orders" USING btree ("status","created_at","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "payment_attempts_provider_payment_unique" ON "payment_attempts" USING btree ("provider","environment","provider_payment_id") WHERE "payment_attempts"."provider_payment_id" is not null;--> statement-breakpoint
+CREATE INDEX "payment_attempts_order_created_idx" ON "payment_attempts" USING btree ("order_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "payment_attempts_provider_status_idx" ON "payment_attempts" USING btree ("provider","environment","status");--> statement-breakpoint
+CREATE UNIQUE INDEX "payment_provider_events_webhook_unique" ON "payment_provider_events" USING btree ("provider","environment","provider_webhook_id");--> statement-breakpoint
+CREATE INDEX "payment_provider_events_payment_idx" ON "payment_provider_events" USING btree ("provider","environment","provider_payment_id");--> statement-breakpoint
+CREATE INDEX "payment_provider_events_received_idx" ON "payment_provider_events" USING btree ("received_at","id");--> statement-breakpoint
+CREATE INDEX "refunds_order_created_idx" ON "refunds" USING btree ("order_id","created_at","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "refunds_provider_refund_unique" ON "refunds" USING btree ("provider","environment","provider_refund_id") WHERE "refunds"."provider_refund_id" is not null;--> statement-breakpoint
+CREATE INDEX "refunds_payment_attempt_idx" ON "refunds" USING btree ("payment_attempt_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "payout_methods_default_astrologer_unique" ON "payout_methods" USING btree ("astrologer_user_id") WHERE "payout_methods"."is_default" = true;--> statement-breakpoint
+CREATE UNIQUE INDEX "payout_methods_provider_account_unique" ON "payout_methods" USING btree ("provider","environment","provider_payout_account_id") WHERE "payout_methods"."provider_payout_account_id" is not null;--> statement-breakpoint
+CREATE INDEX "payout_methods_astrologer_created_idx" ON "payout_methods" USING btree ("astrologer_user_id","created_at");--> statement-breakpoint
+CREATE INDEX "payout_requests_astrologer_requested_idx" ON "payout_requests" USING btree ("astrologer_user_id","requested_at","id");--> statement-breakpoint
+CREATE INDEX "payout_requests_status_requested_idx" ON "payout_requests" USING btree ("status","requested_at","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "payout_requests_provider_payout_unique" ON "payout_requests" USING btree ("provider","environment","provider_payout_id") WHERE "payout_requests"."provider_payout_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "ledger_accounts_platform_unique" ON "ledger_accounts" USING btree ("account_type","currency") WHERE "ledger_accounts"."astrologer_user_id" is null;--> statement-breakpoint
+CREATE UNIQUE INDEX "ledger_accounts_astrologer_unique" ON "ledger_accounts" USING btree ("astrologer_user_id","account_type","currency") WHERE "ledger_accounts"."astrologer_user_id" is not null;--> statement-breakpoint
+CREATE INDEX "ledger_accounts_astrologer_bucket_idx" ON "ledger_accounts" USING btree ("astrologer_user_id","balance_bucket");--> statement-breakpoint
+CREATE INDEX "ledger_entries_transaction_account_side_idx" ON "ledger_entries" USING btree ("ledger_transaction_id","account_id","entry_side");--> statement-breakpoint
+CREATE INDEX "ledger_entries_account_created_idx" ON "ledger_entries" USING btree ("account_id","created_at");--> statement-breakpoint
+CREATE INDEX "ledger_transactions_order_idx" ON "ledger_transactions" USING btree ("order_id");--> statement-breakpoint
+CREATE INDEX "ledger_transactions_payout_request_idx" ON "ledger_transactions" USING btree ("payout_request_id");--> statement-breakpoint
+CREATE INDEX "ledger_transactions_posted_idx" ON "ledger_transactions" USING btree ("posted_at","id");--> statement-breakpoint
+CREATE INDEX "reconciliation_records_provider_payment_idx" ON "reconciliation_records" USING btree ("provider","environment","provider_payment_id");--> statement-breakpoint
+CREATE INDEX "reconciliation_records_provider_payout_idx" ON "reconciliation_records" USING btree ("provider","environment","provider_payout_id");--> statement-breakpoint
+CREATE INDEX "reconciliation_records_status_checked_idx" ON "reconciliation_records" USING btree ("status","checked_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "finance_idempotency_commands_scope_key_unique" ON "finance_idempotency_commands" USING btree ("scope","idempotency_key");--> statement-breakpoint
+CREATE INDEX "finance_idempotency_commands_actor_created_idx" ON "finance_idempotency_commands" USING btree ("actor_user_id","created_at");--> statement-breakpoint
+CREATE INDEX "finance_idempotency_commands_expiry_idx" ON "finance_idempotency_commands" USING btree ("expires_at");
 --> statement-breakpoint
 ALTER TABLE "schedule_reservations"
   ADD CONSTRAINT "schedule_reservations_active_owner_range_exclude"

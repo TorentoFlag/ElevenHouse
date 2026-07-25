@@ -375,9 +375,18 @@ importers:
 
   apps/payment-worker:
     dependencies:
+      '@elevenhouse/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@elevenhouse/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@elevenhouse/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@elevenhouse/validation':
+        specifier: workspace:*
+        version: link:../../packages/validation
     devDependencies:
       '@types/node':
         specifier: 25.9.2

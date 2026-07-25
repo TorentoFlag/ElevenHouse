@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type {
   AuthCodeDeliveryRequestedPayload,
+  CapturedSaleOutboxEvent,
   CalculationPdfDeleteRequestedPayload,
   CalculationPdfRequestedPayload,
   ChartCalculationRequestedPayload,
@@ -23,6 +24,7 @@ export const outboxEventStatusValues = ["pending", "publishing", "published"] as
 
 export type OutboxEventPayload =
   | AuthCodeDeliveryRequestedPayload
+  | CapturedSaleOutboxEvent["payload"]
   | RedactedAuthCodeDeliveryRequestedPayload
   | CalculationPdfRequestedPayload
   | CalculationPdfDeleteRequestedPayload

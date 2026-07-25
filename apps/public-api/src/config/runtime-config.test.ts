@@ -18,7 +18,14 @@ const defaultCsrfConfig = {
   csrfCookieName: "elevenhouse_public_csrf",
   csrfHeaderName: "x-csrf-token",
   csrfTokenTtlSeconds: 604800,
-  allowedOrigins: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"]
+  allowedOrigins: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
+  arcPay: {
+    apiBaseUrl: "https://api.arcpay.space",
+    secret: null,
+    environment: "sandbox",
+    captureMode: null,
+    paymentMethods: []
+  }
 };
 const defaultTrustedStaticCode = {
   channel: "phone",
@@ -216,7 +223,10 @@ describe("createPublicApiRuntimeConfig", () => {
         NODE_ENV: "production",
         PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
-        PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com"
+        PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com",
+        ARC_PAY_SECRET: "arc-pay-secret",
+        ARC_PAY_CAPTURE_MODE: "one_stage",
+        ARC_PAY_PAYMENT_METHODS: '[{"method":"bank_card","paymentMode":"redirect"}]'
       })
     ).toThrow("PUBLIC_API_SESSION_COOKIE_SECURE=true is required in production");
   });
@@ -252,7 +262,10 @@ describe("createPublicApiRuntimeConfig", () => {
         PUBLIC_API_SESSION_COOKIE_SECURE: "true",
         PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
-        PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com"
+        PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com",
+        ARC_PAY_SECRET: "arc-pay-secret",
+        ARC_PAY_CAPTURE_MODE: "one_stage",
+        ARC_PAY_PAYMENT_METHODS: '[{"method":"bank_card","paymentMode":"redirect"}]'
       })
     ).toMatchObject({
       sessionCookieSecure: true,
@@ -261,6 +274,34 @@ describe("createPublicApiRuntimeConfig", () => {
       csrfSecret: "configured-csrf-secret-with-enough-entropy",
       allowedOrigins: ["https://client.elevenhouse.com"]
     });
+  });
+
+  it("requires configured credentials and discovered payment methods in production", () => {
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        PUBLIC_API_SESSION_COOKIE_SECURE: "true",
+        PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+        PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
+        PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com"
+      })
+    ).toThrow("ARC_PAY_SECRET, ARC_PAY_CAPTURE_MODE and ARC_PAY_PAYMENT_METHODS are required");
+  });
+
+  it("rejects Arc Pay values outside the documented checkout enums", () => {
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ARC_PAY_CAPTURE_MODE: "automatic"
+      })
+    ).toThrow();
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ARC_PAY_PAYMENT_METHODS: '[{"method":"card","paymentMode":"redirect"}]'
+      })
+    ).toThrow();
   });
 
   it("requires an explicit auth code delivery encryption key", () => {

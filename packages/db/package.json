@@ -184,6 +184,16 @@
       "types": "./dist/adapters/messaging/index.d.ts",
       "import": "./dist/adapters/messaging/index.js",
       "require": "./dist/adapters/messaging/index.js"
+    },
+    "./finance": {
+      "types": "./dist/adapters/finance/index.d.ts",
+      "import": "./dist/adapters/finance/index.js",
+      "require": "./dist/adapters/finance/index.js"
+    },
+    "./adapters/finance": {
+      "types": "./dist/adapters/finance/index.d.ts",
+      "import": "./dist/adapters/finance/index.js",
+      "require": "./dist/adapters/finance/index.js"
     }
   },
   "scripts": {

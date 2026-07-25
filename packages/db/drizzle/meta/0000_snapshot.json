@@ -1,5 +1,5 @@
 {
-  "id": "2d780b9c-aeb7-4e7e-9360-84545537e890",
+  "id": "62ddeae0-e7ed-49f2-894e-0fddc65320bf",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -6181,7 +6181,7 @@
       "checkConstraints": {
         "chart_calculation_jobs_method_check": {
           "name": "chart_calculation_jobs_method_check",
-          "value": "\"chart_calculation_jobs\".\"method\" in ('natal', 'transit', 'synastry', 'composite', 'solar_return', 'progression', 'horary')"
+          "value": "\"chart_calculation_jobs\".\"method\" in ('natal', 'astrocartography', 'transit', 'synastry', 'composite', 'solar_return', 'progression', 'horary')"
         },
         "chart_calculation_jobs_status_check": {
           "name": "chart_calculation_jobs_status_check",
@@ -9803,6 +9803,2752 @@
         "messaging_realtime_events_type_check": {
           "name": "messaging_realtime_events_type_check",
           "value": "\"messaging_realtime_events\".\"type\" in ('thread.created', 'thread.updated', 'message.received', 'message.updated', 'message.deleted', 'channelConnection.updated', 'identity.linked', 'delivery.failed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.astrologer_risk_profiles": {
+      "name": "astrologer_risk_profiles",
+      "schema": "",
+      "columns": {
+        "astrologer_user_id": {
+          "name": "astrologer_user_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "risk_tier": {
+          "name": "risk_tier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'standard'"
+        },
+        "manual_risk_tier": {
+          "name": "manual_risk_tier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "manual_override_reason": {
+          "name": "manual_override_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hold_duration_hours_override": {
+          "name": "hold_duration_hours_override",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reserve_bps_override": {
+          "name": "reserve_bps_override",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reserve_release_delay_days_override": {
+          "name": "reserve_release_delay_days_override",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "platform_fee_bps_override": {
+          "name": "platform_fee_bps_override",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_settlement_required_override": {
+          "name": "provider_settlement_required_override",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_by_user_id": {
+          "name": "reviewed_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "astrologer_risk_profiles_risk_tier_idx": {
+          "name": "astrologer_risk_profiles_risk_tier_idx",
+          "columns": [
+            {
+              "expression": "risk_tier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "astrologer_risk_profiles_astrologer_user_id_users_id_fk": {
+          "name": "astrologer_risk_profiles_astrologer_user_id_users_id_fk",
+          "tableFrom": "astrologer_risk_profiles",
+          "tableTo": "users",
+          "columnsFrom": [
+            "astrologer_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "astrologer_risk_profiles_reviewed_by_user_id_users_id_fk": {
+          "name": "astrologer_risk_profiles_reviewed_by_user_id_users_id_fk",
+          "tableFrom": "astrologer_risk_profiles",
+          "tableTo": "users",
+          "columnsFrom": [
+            "reviewed_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "astrologer_risk_profiles_risk_tier_check": {
+          "name": "astrologer_risk_profiles_risk_tier_check",
+          "value": "\"astrologer_risk_profiles\".\"risk_tier\" in ('low', 'standard', 'elevated', 'high', 'manual_review')"
+        },
+        "astrologer_risk_profiles_manual_risk_tier_check": {
+          "name": "astrologer_risk_profiles_manual_risk_tier_check",
+          "value": "\"astrologer_risk_profiles\".\"manual_risk_tier\" is null or \"astrologer_risk_profiles\".\"manual_risk_tier\" in ('low', 'standard', 'elevated', 'high', 'manual_review')"
+        },
+        "astrologer_risk_profiles_hold_override_check": {
+          "name": "astrologer_risk_profiles_hold_override_check",
+          "value": "\"astrologer_risk_profiles\".\"hold_duration_hours_override\" is null or \"astrologer_risk_profiles\".\"hold_duration_hours_override\" between 0 and 4320"
+        },
+        "astrologer_risk_profiles_reserve_override_check": {
+          "name": "astrologer_risk_profiles_reserve_override_check",
+          "value": "\"astrologer_risk_profiles\".\"reserve_bps_override\" is null or \"astrologer_risk_profiles\".\"reserve_bps_override\" between 0 and 10000"
+        },
+        "astrologer_risk_profiles_reserve_release_override_check": {
+          "name": "astrologer_risk_profiles_reserve_release_override_check",
+          "value": "\"astrologer_risk_profiles\".\"reserve_release_delay_days_override\" is null or \"astrologer_risk_profiles\".\"reserve_release_delay_days_override\" between 0 and 540"
+        },
+        "astrologer_risk_profiles_fee_override_check": {
+          "name": "astrologer_risk_profiles_fee_override_check",
+          "value": "\"astrologer_risk_profiles\".\"platform_fee_bps_override\" is null or \"astrologer_risk_profiles\".\"platform_fee_bps_override\" between 0 and 10000"
+        },
+        "astrologer_risk_profiles_manual_override_check": {
+          "name": "astrologer_risk_profiles_manual_override_check",
+          "value": "(\"astrologer_risk_profiles\".\"manual_risk_tier\" is null and \"astrologer_risk_profiles\".\"manual_override_reason\" is null and \"astrologer_risk_profiles\".\"reviewed_by_user_id\" is null and \"astrologer_risk_profiles\".\"reviewed_at\" is null) or (\"astrologer_risk_profiles\".\"manual_risk_tier\" is not null and \"astrologer_risk_profiles\".\"manual_override_reason\" is not null and length(trim(\"astrologer_risk_profiles\".\"manual_override_reason\")) between 1 and 2000 and \"astrologer_risk_profiles\".\"reviewed_by_user_id\" is not null and \"astrologer_risk_profiles\".\"reviewed_at\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.finance_policies": {
+      "name": "finance_policies",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "policy_version": {
+          "name": "policy_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "risk_tier": {
+          "name": "risk_tier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hold_duration_hours": {
+          "name": "hold_duration_hours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 48
+        },
+        "reserve_bps": {
+          "name": "reserve_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reserve_release_delay_days": {
+          "name": "reserve_release_delay_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "platform_fee_bps": {
+          "name": "platform_fee_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_settlement_required": {
+          "name": "provider_settlement_required",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "snapshotted_at": {
+          "name": "snapshotted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "finance_policies_version_unique": {
+          "name": "finance_policies_version_unique",
+          "columns": [
+            {
+              "expression": "policy_version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "finance_policies_active_risk_tier_unique": {
+          "name": "finance_policies_active_risk_tier_unique",
+          "columns": [
+            {
+              "expression": "risk_tier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"finance_policies\".\"is_active\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "finance_policies_risk_version_idx": {
+          "name": "finance_policies_risk_version_idx",
+          "columns": [
+            {
+              "expression": "risk_tier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "policy_version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "finance_policies_created_by_user_id_users_id_fk": {
+          "name": "finance_policies_created_by_user_id_users_id_fk",
+          "tableFrom": "finance_policies",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "finance_policies_risk_tier_check": {
+          "name": "finance_policies_risk_tier_check",
+          "value": "\"finance_policies\".\"risk_tier\" in ('low', 'standard', 'elevated', 'high', 'manual_review')"
+        },
+        "finance_policies_hold_duration_check": {
+          "name": "finance_policies_hold_duration_check",
+          "value": "\"finance_policies\".\"hold_duration_hours\" between 0 and 4320"
+        },
+        "finance_policies_reserve_bps_check": {
+          "name": "finance_policies_reserve_bps_check",
+          "value": "\"finance_policies\".\"reserve_bps\" between 0 and 10000"
+        },
+        "finance_policies_reserve_release_delay_check": {
+          "name": "finance_policies_reserve_release_delay_check",
+          "value": "\"finance_policies\".\"reserve_release_delay_days\" between 0 and 540"
+        },
+        "finance_policies_platform_fee_bps_check": {
+          "name": "finance_policies_platform_fee_bps_check",
+          "value": "\"finance_policies\".\"platform_fee_bps\" between 0 and 10000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.orders": {
+      "name": "orders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "client_user_id": {
+          "name": "client_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "astrologer_user_id": {
+          "name": "astrologer_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "direct_link_intent_id": {
+          "name": "direct_link_intent_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending_payment'"
+        },
+        "gross_amount_minor": {
+          "name": "gross_amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gross_currency": {
+          "name": "gross_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "platform_fee_amount_minor": {
+          "name": "platform_fee_amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "platform_fee_currency": {
+          "name": "platform_fee_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "astrologer_net_amount_minor": {
+          "name": "astrologer_net_amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "astrologer_net_currency": {
+          "name": "astrologer_net_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "finance_policy_snapshot_id": {
+          "name": "finance_policy_snapshot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "orders_client_created_idx": {
+          "name": "orders_client_created_idx",
+          "columns": [
+            {
+              "expression": "client_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_astrologer_created_idx": {
+          "name": "orders_astrologer_created_idx",
+          "columns": [
+            {
+              "expression": "astrologer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_status_created_idx": {
+          "name": "orders_status_created_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "orders_client_user_id_users_id_fk": {
+          "name": "orders_client_user_id_users_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "users",
+          "columnsFrom": [
+            "client_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "orders_astrologer_user_id_users_id_fk": {
+          "name": "orders_astrologer_user_id_users_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "users",
+          "columnsFrom": [
+            "astrologer_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "orders_product_id_products_id_fk": {
+          "name": "orders_product_id_products_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "products",
+          "columnsFrom": [
+            "product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "orders_direct_link_intent_id_client_join_intents_id_fk": {
+          "name": "orders_direct_link_intent_id_client_join_intents_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "client_join_intents",
+          "columnsFrom": [
+            "direct_link_intent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "orders_finance_policy_snapshot_id_finance_policies_id_fk": {
+          "name": "orders_finance_policy_snapshot_id_finance_policies_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "finance_policies",
+          "columnsFrom": [
+            "finance_policy_snapshot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "orders_status_check": {
+          "name": "orders_status_check",
+          "value": "\"orders\".\"status\" in ('draft', 'pending_payment', 'paid', 'fulfilled', 'cancelled', 'expired', 'partially_refunded', 'refunded', 'chargeback')"
+        },
+        "orders_money_currency_check": {
+          "name": "orders_money_currency_check",
+          "value": "\"orders\".\"gross_currency\" in ('RUB') and \"orders\".\"platform_fee_currency\" = \"orders\".\"gross_currency\" and \"orders\".\"astrologer_net_currency\" = \"orders\".\"gross_currency\""
+        },
+        "orders_money_amount_check": {
+          "name": "orders_money_amount_check",
+          "value": "\"orders\".\"gross_amount_minor\" >= 0 and \"orders\".\"gross_amount_minor\" <= 9007199254740991 and \"orders\".\"platform_fee_amount_minor\" >= 0 and \"orders\".\"platform_fee_amount_minor\" <= 9007199254740991 and \"orders\".\"astrologer_net_amount_minor\" >= 0 and \"orders\".\"astrologer_net_amount_minor\" <= 9007199254740991"
+        },
+        "orders_money_allocation_check": {
+          "name": "orders_money_allocation_check",
+          "value": "\"orders\".\"gross_amount_minor\" = \"orders\".\"platform_fee_amount_minor\" + \"orders\".\"astrologer_net_amount_minor\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payment_attempts": {
+      "name": "payment_attempts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'created'"
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_payment_id": {
+          "name": "provider_payment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_checkout_id": {
+          "name": "provider_checkout_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "payment_attempts_provider_payment_unique": {
+          "name": "payment_attempts_provider_payment_unique",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "environment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_payment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"payment_attempts\".\"provider_payment_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_attempts_order_created_idx": {
+          "name": "payment_attempts_order_created_idx",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_attempts_provider_status_idx": {
+          "name": "payment_attempts_provider_status_idx",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "environment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payment_attempts_order_id_orders_id_fk": {
+          "name": "payment_attempts_order_id_orders_id_fk",
+          "tableFrom": "payment_attempts",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "payment_attempts_provider_check": {
+          "name": "payment_attempts_provider_check",
+          "value": "\"payment_attempts\".\"provider\" in ('arc_pay')"
+        },
+        "payment_attempts_environment_check": {
+          "name": "payment_attempts_environment_check",
+          "value": "\"payment_attempts\".\"environment\" in ('sandbox', 'live')"
+        },
+        "payment_attempts_status_check": {
+          "name": "payment_attempts_status_check",
+          "value": "\"payment_attempts\".\"status\" in ('created', 'checkout_opened', 'pending', 'authorized', 'captured', 'settled', 'failed', 'declined', 'timeout', 'expired', 'voided', 'partially_refunded', 'refunded', 'chargeback')"
+        },
+        "payment_attempts_amount_check": {
+          "name": "payment_attempts_amount_check",
+          "value": "\"payment_attempts\".\"amount_minor\" >= 0 and \"payment_attempts\".\"amount_minor\" <= 9007199254740991"
+        },
+        "payment_attempts_currency_check": {
+          "name": "payment_attempts_currency_check",
+          "value": "\"payment_attempts\".\"currency\" in ('RUB')"
+        },
+        "payment_attempts_provider_payment_id_length_check": {
+          "name": "payment_attempts_provider_payment_id_length_check",
+          "value": "\"payment_attempts\".\"provider_payment_id\" is null or length(trim(\"payment_attempts\".\"provider_payment_id\")) between 1 and 160"
+        },
+        "payment_attempts_provider_checkout_id_length_check": {
+          "name": "payment_attempts_provider_checkout_id_length_check",
+          "value": "\"payment_attempts\".\"provider_checkout_id\" is null or length(trim(\"payment_attempts\".\"provider_checkout_id\")) between 1 and 160"
+        },
+        "payment_attempts_idempotency_key_length_check": {
+          "name": "payment_attempts_idempotency_key_length_check",
+          "value": "length(trim(\"payment_attempts\".\"idempotency_key\")) between 1 and 160"
+        },
+        "payment_attempts_metadata_check": {
+          "name": "payment_attempts_metadata_check",
+          "value": "jsonb_typeof(\"payment_attempts\".\"metadata\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payment_provider_events": {
+      "name": "payment_provider_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "payment_attempt_id": {
+          "name": "payment_attempt_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_webhook_id": {
+          "name": "provider_webhook_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_payment_id": {
+          "name": "provider_payment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "payment_provider_events_webhook_unique": {
+          "name": "payment_provider_events_webhook_unique",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "environment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_webhook_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_provider_events_payment_idx": {
+          "name": "payment_provider_events_payment_idx",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "environment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_payment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_provider_events_received_idx": {
+          "name": "payment_provider_events_received_idx",
+          "columns": [
+            {
+              "expression": "received_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payment_provider_events_payment_attempt_id_payment_attempts_id_fk": {
+          "name": "payment_provider_events_payment_attempt_id_payment_attempts_id_fk",
+          "tableFrom": "payment_provider_events",
+          "tableTo": "payment_attempts",
+          "columnsFrom": [
+            "payment_attempt_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "payment_provider_events_provider_check": {
+          "name": "payment_provider_events_provider_check",
+          "value": "\"payment_provider_events\".\"provider\" in ('arc_pay')"
+        },
+        "payment_provider_events_environment_check": {
+          "name": "payment_provider_events_environment_check",
+          "value": "\"payment_provider_events\".\"environment\" in ('sandbox', 'live')"
+        },
+        "payment_provider_events_type_check": {
+          "name": "payment_provider_events_type_check",
+          "value": "\"payment_provider_events\".\"type\" in ('payment.created', 'payment.checkout_opened', 'payment.pending', 'payment.pending_3ds', 'payment.authorized', 'payment.processing', 'payment.captured', 'payment.settled', 'payment.failed', 'payment.declined', 'payment.timeout', 'payment.expired', 'payment.voided', 'payment.refunded', 'payment.partially_refunded', 'payment.chargeback', 'settlement.cleared', 'reconciliation.exception')"
+        },
+        "payment_provider_events_webhook_id_length_check": {
+          "name": "payment_provider_events_webhook_id_length_check",
+          "value": "length(trim(\"payment_provider_events\".\"provider_webhook_id\")) between 1 and 160"
+        },
+        "payment_provider_events_payment_id_length_check": {
+          "name": "payment_provider_events_payment_id_length_check",
+          "value": "\"payment_provider_events\".\"provider_payment_id\" is null or length(trim(\"payment_provider_events\".\"provider_payment_id\")) between 1 and 160"
+        },
+        "payment_provider_events_payload_check": {
+          "name": "payment_provider_events_payload_check",
+          "value": "jsonb_typeof(\"payment_provider_events\".\"payload\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.refunds": {
+      "name": "refunds",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payment_attempt_id": {
+          "name": "payment_attempt_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_event_id": {
+          "name": "provider_event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'requested'"
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_refund_id": {
+          "name": "provider_refund_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "refunds_provider_refund_unique": {
+          "name": "refunds_provider_refund_unique",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "environment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_refund_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"refunds\".\"provider_refund_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "refunds_order_created_idx": {
+          "name": "refunds_order_created_idx",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "refunds_payment_attempt_idx": {
+          "name": "refunds_payment_attempt_idx",
+          "columns": [
+            {
+              "expression": "payment_attempt_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "refunds_order_id_orders_id_fk": {
+          "name": "refunds_order_id_orders_id_fk",
+          "tableFrom": "refunds",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "refunds_payment_attempt_id_payment_attempts_id_fk": {
+          "name": "refunds_payment_attempt_id_payment_attempts_id_fk",
+          "tableFrom": "refunds",
+          "tableTo": "payment_attempts",
+          "columnsFrom": [
+            "payment_attempt_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "refunds_provider_event_id_payment_provider_events_id_fk": {
+          "name": "refunds_provider_event_id_payment_provider_events_id_fk",
+          "tableFrom": "refunds",
+          "tableTo": "payment_provider_events",
+          "columnsFrom": [
+            "provider_event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "refunds_status_check": {
+          "name": "refunds_status_check",
+          "value": "\"refunds\".\"status\" in ('requested', 'processing', 'succeeded', 'failed')"
+        },
+        "refunds_provider_check": {
+          "name": "refunds_provider_check",
+          "value": "\"refunds\".\"provider\" in ('arc_pay')"
+        },
+        "refunds_environment_check": {
+          "name": "refunds_environment_check",
+          "value": "\"refunds\".\"environment\" in ('sandbox', 'live')"
+        },
+        "refunds_amount_check": {
+          "name": "refunds_amount_check",
+          "value": "\"refunds\".\"amount_minor\" > 0 and \"refunds\".\"amount_minor\" <= 9007199254740991"
+        },
+        "refunds_currency_check": {
+          "name": "refunds_currency_check",
+          "value": "\"refunds\".\"currency\" in ('RUB')"
+        },
+        "refunds_provider_refund_id_length_check": {
+          "name": "refunds_provider_refund_id_length_check",
+          "value": "\"refunds\".\"provider_refund_id\" is null or length(trim(\"refunds\".\"provider_refund_id\")) between 1 and 160"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payout_methods": {
+      "name": "payout_methods",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "astrologer_user_id": {
+          "name": "astrologer_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "method": {
+          "name": "method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'RUB'"
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "manual_bank_transfer_details": {
+          "name": "manual_bank_transfer_details",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_payout_account_id": {
+          "name": "provider_payout_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_default": {
+          "name": "is_default",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "payout_methods_default_astrologer_unique": {
+          "name": "payout_methods_default_astrologer_unique",
+          "columns": [
+            {
+              "expression": "astrologer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"payout_methods\".\"is_default\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payout_methods_provider_account_unique": {
+          "name": "payout_methods_provider_account_unique",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "environment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_payout_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"payout_methods\".\"provider_payout_account_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payout_methods_astrologer_created_idx": {
+          "name": "payout_methods_astrologer_created_idx",
+          "columns": [
+            {
+              "expression": "astrologer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payout_methods_astrologer_user_id_users_id_fk": {
+          "name": "payout_methods_astrologer_user_id_users_id_fk",
+          "tableFrom": "payout_methods",
+          "tableTo": "users",
+          "columnsFrom": [
+            "astrologer_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "payout_methods_method_check": {
+          "name": "payout_methods_method_check",
+          "value": "\"payout_methods\".\"method\" in ('manual_bank_transfer', 'arc_pay_provider')"
+        },
+        "payout_methods_currency_check": {
+          "name": "payout_methods_currency_check",
+          "value": "\"payout_methods\".\"currency\" in ('RUB')"
+        },
+        "payout_methods_provider_check": {
+          "name": "payout_methods_provider_check",
+          "value": "\"payout_methods\".\"provider\" is null or \"payout_methods\".\"provider\" in ('arc_pay')"
+        },
+        "payout_methods_environment_check": {
+          "name": "payout_methods_environment_check",
+          "value": "\"payout_methods\".\"environment\" is null or \"payout_methods\".\"environment\" in ('sandbox', 'live')"
+        },
+        "payout_methods_display_name_check": {
+          "name": "payout_methods_display_name_check",
+          "value": "length(trim(\"payout_methods\".\"display_name\")) between 1 and 160"
+        },
+        "payout_methods_method_provider_shape_check": {
+          "name": "payout_methods_method_provider_shape_check",
+          "value": "(\"payout_methods\".\"method\" = 'manual_bank_transfer' and \"payout_methods\".\"provider\" is null and \"payout_methods\".\"environment\" is null and \"payout_methods\".\"provider_payout_account_id\" is null and \"payout_methods\".\"manual_bank_transfer_details\" is not null and jsonb_typeof(\"payout_methods\".\"manual_bank_transfer_details\") = 'object') or (\"payout_methods\".\"method\" = 'arc_pay_provider' and \"payout_methods\".\"provider\" is not null and \"payout_methods\".\"provider\" = 'arc_pay' and \"payout_methods\".\"environment\" is not null and \"payout_methods\".\"provider_payout_account_id\" is not null and length(trim(\"payout_methods\".\"provider_payout_account_id\")) between 1 and 160 and \"payout_methods\".\"manual_bank_transfer_details\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payout_requests": {
+      "name": "payout_requests",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "astrologer_user_id": {
+          "name": "astrologer_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payout_method_id": {
+          "name": "payout_method_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'requested'"
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "method": {
+          "name": "method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "admin_user_id": {
+          "name": "admin_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "admin_note": {
+          "name": "admin_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure_reason": {
+          "name": "failure_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_reference": {
+          "name": "external_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transferred_at": {
+          "name": "transferred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_payout_id": {
+          "name": "provider_payout_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "payout_requests_astrologer_requested_idx": {
+          "name": "payout_requests_astrologer_requested_idx",
+          "columns": [
+            {
+              "expression": "astrologer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "requested_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payout_requests_status_requested_idx": {
+          "name": "payout_requests_status_requested_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "requested_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payout_requests_provider_payout_unique": {
+          "name": "payout_requests_provider_payout_unique",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "environment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_payout_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"payout_requests\".\"provider_payout_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payout_requests_astrologer_user_id_users_id_fk": {
+          "name": "payout_requests_astrologer_user_id_users_id_fk",
+          "tableFrom": "payout_requests",
+          "tableTo": "users",
+          "columnsFrom": [
+            "astrologer_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "payout_requests_payout_method_id_payout_methods_id_fk": {
+          "name": "payout_requests_payout_method_id_payout_methods_id_fk",
+          "tableFrom": "payout_requests",
+          "tableTo": "payout_methods",
+          "columnsFrom": [
+            "payout_method_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "payout_requests_admin_user_id_users_id_fk": {
+          "name": "payout_requests_admin_user_id_users_id_fk",
+          "tableFrom": "payout_requests",
+          "tableTo": "users",
+          "columnsFrom": [
+            "admin_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "payout_requests_status_check": {
+          "name": "payout_requests_status_check",
+          "value": "\"payout_requests\".\"status\" in ('requested', 'under_review', 'approved', 'processing_manual', 'processing_provider', 'paid', 'failed', 'rejected', 'cancelled')"
+        },
+        "payout_requests_method_check": {
+          "name": "payout_requests_method_check",
+          "value": "\"payout_requests\".\"method\" in ('manual_bank_transfer', 'arc_pay_provider')"
+        },
+        "payout_requests_amount_check": {
+          "name": "payout_requests_amount_check",
+          "value": "\"payout_requests\".\"amount_minor\" > 0 and \"payout_requests\".\"amount_minor\" <= 9007199254740991"
+        },
+        "payout_requests_currency_check": {
+          "name": "payout_requests_currency_check",
+          "value": "\"payout_requests\".\"currency\" in ('RUB')"
+        },
+        "payout_requests_provider_check": {
+          "name": "payout_requests_provider_check",
+          "value": "\"payout_requests\".\"provider\" is null or \"payout_requests\".\"provider\" in ('arc_pay')"
+        },
+        "payout_requests_environment_check": {
+          "name": "payout_requests_environment_check",
+          "value": "\"payout_requests\".\"environment\" is null or \"payout_requests\".\"environment\" in ('sandbox', 'live')"
+        },
+        "payout_requests_method_provider_shape_check": {
+          "name": "payout_requests_method_provider_shape_check",
+          "value": "(\"payout_requests\".\"method\" = 'manual_bank_transfer' and \"payout_requests\".\"provider\" is null and \"payout_requests\".\"environment\" is null and \"payout_requests\".\"provider_payout_id\" is null) or (\"payout_requests\".\"method\" = 'arc_pay_provider' and \"payout_requests\".\"provider\" is not null and \"payout_requests\".\"provider\" = 'arc_pay' and \"payout_requests\".\"environment\" is not null)"
+        },
+        "payout_requests_paid_evidence_check": {
+          "name": "payout_requests_paid_evidence_check",
+          "value": "\"payout_requests\".\"status\" <> 'paid' or (\"payout_requests\".\"external_reference\" is not null and \"payout_requests\".\"transferred_at\" is not null)"
+        },
+        "payout_requests_failure_reason_check": {
+          "name": "payout_requests_failure_reason_check",
+          "value": "\"payout_requests\".\"status\" not in ('failed', 'rejected') or (\"payout_requests\".\"failure_reason\" is not null and length(trim(\"payout_requests\".\"failure_reason\")) between 1 and 2000)"
+        },
+        "payout_requests_admin_note_length_check": {
+          "name": "payout_requests_admin_note_length_check",
+          "value": "\"payout_requests\".\"admin_note\" is null or length(trim(\"payout_requests\".\"admin_note\")) between 1 and 2000"
+        },
+        "payout_requests_external_reference_length_check": {
+          "name": "payout_requests_external_reference_length_check",
+          "value": "\"payout_requests\".\"external_reference\" is null or length(trim(\"payout_requests\".\"external_reference\")) between 1 and 240"
+        },
+        "payout_requests_provider_payout_id_length_check": {
+          "name": "payout_requests_provider_payout_id_length_check",
+          "value": "\"payout_requests\".\"provider_payout_id\" is null or length(trim(\"payout_requests\".\"provider_payout_id\")) between 1 and 160"
+        },
+        "payout_requests_metadata_check": {
+          "name": "payout_requests_metadata_check",
+          "value": "jsonb_typeof(\"payout_requests\".\"metadata\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ledger_accounts": {
+      "name": "ledger_accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "account_type": {
+          "name": "account_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "astrologer_user_id": {
+          "name": "astrologer_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "balance_bucket": {
+          "name": "balance_bucket",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ledger_accounts_platform_unique": {
+          "name": "ledger_accounts_platform_unique",
+          "columns": [
+            {
+              "expression": "account_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "currency",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ledger_accounts\".\"astrologer_user_id\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ledger_accounts_astrologer_unique": {
+          "name": "ledger_accounts_astrologer_unique",
+          "columns": [
+            {
+              "expression": "astrologer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "account_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "currency",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ledger_accounts\".\"astrologer_user_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ledger_accounts_astrologer_bucket_idx": {
+          "name": "ledger_accounts_astrologer_bucket_idx",
+          "columns": [
+            {
+              "expression": "astrologer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "balance_bucket",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ledger_accounts_astrologer_user_id_users_id_fk": {
+          "name": "ledger_accounts_astrologer_user_id_users_id_fk",
+          "tableFrom": "ledger_accounts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "astrologer_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ledger_accounts_account_type_check": {
+          "name": "ledger_accounts_account_type_check",
+          "value": "\"ledger_accounts\".\"account_type\" in ('platform_clearing', 'platform_revenue', 'provider_fees', 'astrologer_pending', 'astrologer_available', 'astrologer_reserved', 'astrologer_payout_pending', 'astrologer_negative_balance', 'payout_clearing')"
+        },
+        "ledger_accounts_balance_bucket_check": {
+          "name": "ledger_accounts_balance_bucket_check",
+          "value": "\"ledger_accounts\".\"balance_bucket\" is null or \"ledger_accounts\".\"balance_bucket\" in ('pending', 'available', 'reserved', 'payout_pending', 'negative_balance')"
+        },
+        "ledger_accounts_currency_check": {
+          "name": "ledger_accounts_currency_check",
+          "value": "\"ledger_accounts\".\"currency\" in ('RUB')"
+        },
+        "ledger_accounts_astrologer_shape_check": {
+          "name": "ledger_accounts_astrologer_shape_check",
+          "value": "(\"ledger_accounts\".\"account_type\" in ('platform_clearing', 'platform_revenue', 'provider_fees', 'payout_clearing') and \"ledger_accounts\".\"astrologer_user_id\" is null and \"ledger_accounts\".\"balance_bucket\" is null) or (\"ledger_accounts\".\"account_type\" = 'astrologer_pending' and \"ledger_accounts\".\"astrologer_user_id\" is not null and \"ledger_accounts\".\"balance_bucket\" = 'pending') or (\"ledger_accounts\".\"account_type\" = 'astrologer_available' and \"ledger_accounts\".\"astrologer_user_id\" is not null and \"ledger_accounts\".\"balance_bucket\" = 'available') or (\"ledger_accounts\".\"account_type\" = 'astrologer_reserved' and \"ledger_accounts\".\"astrologer_user_id\" is not null and \"ledger_accounts\".\"balance_bucket\" = 'reserved') or (\"ledger_accounts\".\"account_type\" = 'astrologer_payout_pending' and \"ledger_accounts\".\"astrologer_user_id\" is not null and \"ledger_accounts\".\"balance_bucket\" = 'payout_pending') or (\"ledger_accounts\".\"account_type\" = 'astrologer_negative_balance' and \"ledger_accounts\".\"astrologer_user_id\" is not null and \"ledger_accounts\".\"balance_bucket\" = 'negative_balance')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ledger_entries": {
+      "name": "ledger_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "ledger_transaction_id": {
+          "name": "ledger_transaction_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_side": {
+          "name": "entry_side",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ledger_entries_transaction_account_side_idx": {
+          "name": "ledger_entries_transaction_account_side_idx",
+          "columns": [
+            {
+              "expression": "ledger_transaction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entry_side",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ledger_entries_account_created_idx": {
+          "name": "ledger_entries_account_created_idx",
+          "columns": [
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ledger_entries_ledger_transaction_id_ledger_transactions_id_fk": {
+          "name": "ledger_entries_ledger_transaction_id_ledger_transactions_id_fk",
+          "tableFrom": "ledger_entries",
+          "tableTo": "ledger_transactions",
+          "columnsFrom": [
+            "ledger_transaction_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "ledger_entries_account_id_ledger_accounts_id_fk": {
+          "name": "ledger_entries_account_id_ledger_accounts_id_fk",
+          "tableFrom": "ledger_entries",
+          "tableTo": "ledger_accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ledger_entries_side_check": {
+          "name": "ledger_entries_side_check",
+          "value": "\"ledger_entries\".\"entry_side\" in ('debit', 'credit')"
+        },
+        "ledger_entries_amount_check": {
+          "name": "ledger_entries_amount_check",
+          "value": "\"ledger_entries\".\"amount_minor\" > 0 and \"ledger_entries\".\"amount_minor\" <= 9007199254740991"
+        },
+        "ledger_entries_currency_check": {
+          "name": "ledger_entries_currency_check",
+          "value": "\"ledger_entries\".\"currency\" in ('RUB')"
+        },
+        "ledger_entries_metadata_check": {
+          "name": "ledger_entries_metadata_check",
+          "value": "jsonb_typeof(\"ledger_entries\".\"metadata\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ledger_transactions": {
+      "name": "ledger_transactions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "operation_type": {
+          "name": "operation_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payout_request_id": {
+          "name": "payout_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "posted_at": {
+          "name": "posted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "ledger_transactions_order_idx": {
+          "name": "ledger_transactions_order_idx",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ledger_transactions_payout_request_idx": {
+          "name": "ledger_transactions_payout_request_idx",
+          "columns": [
+            {
+              "expression": "payout_request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ledger_transactions_posted_idx": {
+          "name": "ledger_transactions_posted_idx",
+          "columns": [
+            {
+              "expression": "posted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ledger_transactions_order_id_orders_id_fk": {
+          "name": "ledger_transactions_order_id_orders_id_fk",
+          "tableFrom": "ledger_transactions",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "ledger_transactions_payout_request_id_payout_requests_id_fk": {
+          "name": "ledger_transactions_payout_request_id_payout_requests_id_fk",
+          "tableFrom": "ledger_transactions",
+          "tableTo": "payout_requests",
+          "columnsFrom": [
+            "payout_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ledger_transactions_operation_type_check": {
+          "name": "ledger_transactions_operation_type_check",
+          "value": "\"ledger_transactions\".\"operation_type\" in ('sale_captured', 'platform_fee_recorded', 'provider_fee_recorded', 'hold_created', 'funds_released', 'reserve_created', 'reserve_released', 'payout_reserved', 'payout_paid', 'payout_failed', 'refund_recorded', 'chargeback_recorded', 'manual_adjustment')"
+        },
+        "ledger_transactions_source_check": {
+          "name": "ledger_transactions_source_check",
+          "value": "\"ledger_transactions\".\"order_id\" is not null or \"ledger_transactions\".\"payout_request_id\" is not null or \"ledger_transactions\".\"operation_type\" = 'manual_adjustment'"
+        },
+        "ledger_transactions_metadata_check": {
+          "name": "ledger_transactions_metadata_check",
+          "value": "jsonb_typeof(\"ledger_transactions\".\"metadata\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.wallet_balance_read_models": {
+      "name": "wallet_balance_read_models",
+      "schema": "",
+      "columns": {
+        "astrologer_user_id": {
+          "name": "astrologer_user_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "pending_amount_minor": {
+          "name": "pending_amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "pending_currency": {
+          "name": "pending_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'RUB'"
+        },
+        "available_amount_minor": {
+          "name": "available_amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "available_currency": {
+          "name": "available_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'RUB'"
+        },
+        "reserved_amount_minor": {
+          "name": "reserved_amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reserved_currency": {
+          "name": "reserved_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'RUB'"
+        },
+        "payout_pending_amount_minor": {
+          "name": "payout_pending_amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "payout_pending_currency": {
+          "name": "payout_pending_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'RUB'"
+        },
+        "negative_balance_amount_minor": {
+          "name": "negative_balance_amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "negative_balance_currency": {
+          "name": "negative_balance_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'RUB'"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "wallet_balance_read_models_astrologer_user_id_users_id_fk": {
+          "name": "wallet_balance_read_models_astrologer_user_id_users_id_fk",
+          "tableFrom": "wallet_balance_read_models",
+          "tableTo": "users",
+          "columnsFrom": [
+            "astrologer_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "wallet_balance_read_models_amount_check": {
+          "name": "wallet_balance_read_models_amount_check",
+          "value": "\"wallet_balance_read_models\".\"pending_amount_minor\" >= 0 and \"wallet_balance_read_models\".\"pending_amount_minor\" <= 9007199254740991 and \"wallet_balance_read_models\".\"available_amount_minor\" >= 0 and \"wallet_balance_read_models\".\"available_amount_minor\" <= 9007199254740991 and \"wallet_balance_read_models\".\"reserved_amount_minor\" >= 0 and \"wallet_balance_read_models\".\"reserved_amount_minor\" <= 9007199254740991 and \"wallet_balance_read_models\".\"payout_pending_amount_minor\" >= 0 and \"wallet_balance_read_models\".\"payout_pending_amount_minor\" <= 9007199254740991 and \"wallet_balance_read_models\".\"negative_balance_amount_minor\" >= 0 and \"wallet_balance_read_models\".\"negative_balance_amount_minor\" <= 9007199254740991"
+        },
+        "wallet_balance_read_models_currency_check": {
+          "name": "wallet_balance_read_models_currency_check",
+          "value": "\"wallet_balance_read_models\".\"pending_currency\" = 'RUB' and \"wallet_balance_read_models\".\"available_currency\" = 'RUB' and \"wallet_balance_read_models\".\"reserved_currency\" = 'RUB' and \"wallet_balance_read_models\".\"payout_pending_currency\" = 'RUB' and \"wallet_balance_read_models\".\"negative_balance_currency\" = 'RUB'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.reconciliation_records": {
+      "name": "reconciliation_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_payment_id": {
+          "name": "provider_payment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_payout_id": {
+          "name": "provider_payout_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_settlement_id": {
+          "name": "provider_settlement_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_event_id": {
+          "name": "provider_event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "exception_code": {
+          "name": "exception_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exception_message": {
+          "name": "exception_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_occurred_at": {
+          "name": "provider_occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "checked_at": {
+          "name": "checked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "reconciliation_records_provider_payment_idx": {
+          "name": "reconciliation_records_provider_payment_idx",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "environment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_payment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "reconciliation_records_provider_payout_idx": {
+          "name": "reconciliation_records_provider_payout_idx",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "environment",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_payout_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "reconciliation_records_status_checked_idx": {
+          "name": "reconciliation_records_status_checked_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "checked_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "reconciliation_records_provider_event_id_payment_provider_events_id_fk": {
+          "name": "reconciliation_records_provider_event_id_payment_provider_events_id_fk",
+          "tableFrom": "reconciliation_records",
+          "tableTo": "payment_provider_events",
+          "columnsFrom": [
+            "provider_event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "reconciliation_records_provider_check": {
+          "name": "reconciliation_records_provider_check",
+          "value": "\"reconciliation_records\".\"provider\" in ('arc_pay')"
+        },
+        "reconciliation_records_environment_check": {
+          "name": "reconciliation_records_environment_check",
+          "value": "\"reconciliation_records\".\"environment\" in ('sandbox', 'live')"
+        },
+        "reconciliation_records_status_check": {
+          "name": "reconciliation_records_status_check",
+          "value": "\"reconciliation_records\".\"status\" in ('pending', 'matched', 'exception', 'ignored')"
+        },
+        "reconciliation_records_provider_identifier_check": {
+          "name": "reconciliation_records_provider_identifier_check",
+          "value": "\"reconciliation_records\".\"provider_payment_id\" is not null or \"reconciliation_records\".\"provider_payout_id\" is not null or \"reconciliation_records\".\"provider_settlement_id\" is not null"
+        },
+        "reconciliation_records_exception_check": {
+          "name": "reconciliation_records_exception_check",
+          "value": "\"reconciliation_records\".\"status\" <> 'exception' or (\"reconciliation_records\".\"exception_code\" is not null and length(trim(\"reconciliation_records\".\"exception_code\")) between 1 and 120 and \"reconciliation_records\".\"exception_message\" is not null and length(trim(\"reconciliation_records\".\"exception_message\")) between 1 and 2000)"
+        },
+        "reconciliation_records_payload_check": {
+          "name": "reconciliation_records_payload_check",
+          "value": "jsonb_typeof(\"reconciliation_records\".\"payload\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.finance_idempotency_commands": {
+      "name": "finance_idempotency_commands",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'processing'"
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "finance_idempotency_commands_scope_key_unique": {
+          "name": "finance_idempotency_commands_scope_key_unique",
+          "columns": [
+            {
+              "expression": "scope",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "finance_idempotency_commands_actor_created_idx": {
+          "name": "finance_idempotency_commands_actor_created_idx",
+          "columns": [
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "finance_idempotency_commands_expiry_idx": {
+          "name": "finance_idempotency_commands_expiry_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "finance_idempotency_commands_actor_user_id_users_id_fk": {
+          "name": "finance_idempotency_commands_actor_user_id_users_id_fk",
+          "tableFrom": "finance_idempotency_commands",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "finance_idempotency_commands_scope_length_check": {
+          "name": "finance_idempotency_commands_scope_length_check",
+          "value": "length(trim(\"finance_idempotency_commands\".\"scope\")) between 1 and 150"
+        },
+        "finance_idempotency_commands_key_length_check": {
+          "name": "finance_idempotency_commands_key_length_check",
+          "value": "length(trim(\"finance_idempotency_commands\".\"idempotency_key\")) between 1 and 160"
+        },
+        "finance_idempotency_commands_request_hash_check": {
+          "name": "finance_idempotency_commands_request_hash_check",
+          "value": "\"finance_idempotency_commands\".\"request_hash\" ~ '^sha256:[a-f0-9]{64}$'"
+        },
+        "finance_idempotency_commands_state_check": {
+          "name": "finance_idempotency_commands_state_check",
+          "value": "\"finance_idempotency_commands\".\"state\" in ('processing', 'completed', 'failed')"
+        },
+        "finance_idempotency_commands_result_state_check": {
+          "name": "finance_idempotency_commands_result_state_check",
+          "value": "(\"finance_idempotency_commands\".\"state\" = 'processing' and \"finance_idempotency_commands\".\"result\" is null and \"finance_idempotency_commands\".\"error_code\" is null) or (\"finance_idempotency_commands\".\"state\" = 'completed' and \"finance_idempotency_commands\".\"result\" is not null and jsonb_typeof(\"finance_idempotency_commands\".\"result\") = 'object' and \"finance_idempotency_commands\".\"error_code\" is null) or (\"finance_idempotency_commands\".\"state\" = 'failed' and \"finance_idempotency_commands\".\"result\" is null and \"finance_idempotency_commands\".\"error_code\" is not null and length(trim(\"finance_idempotency_commands\".\"error_code\")) between 1 and 120)"
         }
       },
       "isRLSEnabled": false

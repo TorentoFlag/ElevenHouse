@@ -70,8 +70,32 @@ const publicApiRuntimeConfigSchema = z.object({
     .string()
     .trim()
     .min(1)
-    .default("elevenhouse:public-api")
+    .default("elevenhouse:public-api"),
+  ARC_PAY_API_BASE_URL: z.string().url().default("https://api.arcpay.space"),
+  ARC_PAY_SECRET: z.string().trim().min(1).optional(),
+  ARC_PAY_ENVIRONMENT: z.enum(["sandbox", "live"]).default("sandbox"),
+  ARC_PAY_CAPTURE_MODE: z.enum(["one_stage", "two_stage"]).optional(),
+  ARC_PAY_PAYMENT_METHODS: z.string().trim().min(1).optional()
 });
+
+const arcPayPaymentMethodSchema = z
+  .object({
+    method: z.enum([
+      "bank_card",
+      "sbp",
+      "sberpay",
+      "tpay",
+      "alfapay",
+      "dolyami",
+      "mirpay",
+      "applepay",
+      "googlepay"
+    ]),
+    paymentMode: z.enum(["h2h", "redirect"])
+  })
+  .strict();
+
+type ArcPayPaymentMethod = z.infer<typeof arcPayPaymentMethodSchema>;
 
 export type PublicApiRuntimeConfig = {
   readonly port: number;
@@ -114,6 +138,13 @@ export type PublicApiRuntimeConfig = {
       readonly windowSeconds: number;
     };
   };
+  readonly arcPay: {
+    readonly apiBaseUrl: string;
+    readonly secret: string | null;
+    readonly environment: "sandbox" | "live";
+    readonly captureMode: "one_stage" | "two_stage" | null;
+    readonly paymentMethods: readonly ArcPayPaymentMethod[];
+  };
 };
 
 export function createPublicApiRuntimeConfig(
@@ -146,6 +177,20 @@ export function createPublicApiRuntimeConfig(
 
   if (config.NODE_ENV === "production" && allowedOrigins.length === 0) {
     throw new Error("PUBLIC_API_ALLOWED_ORIGINS is required in production");
+  }
+
+  const arcPayPaymentMethods = parseArcPayPaymentMethods(config.ARC_PAY_PAYMENT_METHODS);
+  const arcPayConfigured =
+    Boolean(config.ARC_PAY_SECRET) &&
+    Boolean(config.ARC_PAY_CAPTURE_MODE) &&
+    arcPayPaymentMethods.length > 0;
+  if (config.NODE_ENV === "production" && !arcPayConfigured) {
+    throw new Error(
+      "ARC_PAY_SECRET, ARC_PAY_CAPTURE_MODE and ARC_PAY_PAYMENT_METHODS are required in production"
+    );
+  }
+  if (new URL(config.ARC_PAY_API_BASE_URL).protocol !== "https:") {
+    throw new Error("ARC_PAY_API_BASE_URL must use HTTPS");
   }
 
   return {
@@ -196,8 +241,29 @@ export function createPublicApiRuntimeConfig(
         limit: config.PUBLIC_API_PASSWORDLESS_VERIFY_IP_LIMIT,
         windowSeconds: config.PUBLIC_API_PASSWORDLESS_VERIFY_IP_WINDOW_SECONDS
       }
+    },
+    arcPay: {
+      apiBaseUrl: config.ARC_PAY_API_BASE_URL,
+      secret: config.ARC_PAY_SECRET ?? null,
+      environment: config.ARC_PAY_ENVIRONMENT,
+      captureMode: config.ARC_PAY_CAPTURE_MODE ?? null,
+      paymentMethods: arcPayPaymentMethods
     }
   };
+}
+
+function parseArcPayPaymentMethods(value: string | undefined): readonly ArcPayPaymentMethod[] {
+  if (!value) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error("ARC_PAY_PAYMENT_METHODS must be valid JSON");
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error("ARC_PAY_PAYMENT_METHODS must be a non-empty JSON array");
+  }
+  return parsed.map((entry) => arcPayPaymentMethodSchema.parse(entry));
 }
 
 function parseAllowedOrigins(value: string | undefined): readonly string[] {
