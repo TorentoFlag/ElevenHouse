@@ -5,6 +5,7 @@ import type {
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import { outboxEvents } from "../../schema";
+import { confirmPaidBooking } from "../scheduling";
 import { createDrizzleLedgerTransactionStore } from "./drizzle-ledger-store";
 import { createDrizzleOrderTransactionStore, markFinanceOrderPaid } from "./drizzle-order-store";
 import { createDrizzlePaymentWebhookStore } from "./drizzle-payment-store";
@@ -20,6 +21,7 @@ export function createDrizzleCapturedSaleUnitOfWork(
           ...createDrizzleOrderTransactionStore(transaction),
           ...createDrizzleLedgerTransactionStore(transaction),
           markOrderPaid: (input) => markFinanceOrderPaid(transaction, input),
+          confirmPaidBooking: (input) => confirmPaidBooking(transaction, input),
           recordCapturedSaleOutboxEvents: (input) =>
             recordCapturedSaleOutboxEvents(transaction, input)
         } satisfies CapturedSaleTransactionStore)

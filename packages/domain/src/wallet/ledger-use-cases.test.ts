@@ -16,6 +16,7 @@ const now = "2026-07-24T12:00:00.000Z";
 const paymentAttemptId = "11111111-1111-4111-8111-111111111111";
 const orderId = "22222222-2222-4222-8222-222222222222";
 const providerPaymentId = "33333333-3333-4333-8333-333333333333";
+const bookingId = "99999999-9999-4999-8999-999999999999";
 type Mutable<T> = { -readonly [Key in keyof T]: T[Key] };
 
 describe("capturePaymentProviderWebhook", () => {
@@ -69,13 +70,13 @@ describe("capturePaymentProviderWebhook", () => {
         aggregateId: paymentAttemptId
       }),
       expect.objectContaining({ eventType: "orders.order_paid", aggregateId: orderId }),
-      expect.objectContaining({ eventType: "booking.payment_confirmed", aggregateId: orderId }),
+      expect.objectContaining({ eventType: "booking.payment_confirmed", aggregateId: bookingId }),
       expect.objectContaining({
         eventType: "notifications.payment_confirmation_requested",
         aggregateId: orderId
       })
     ]);
-    expect(harness.bookingMutationCalls).toBe(0);
+    expect(harness.bookingMutationCalls).toBe(1);
   });
 
   it("replays a captured webhook without another ledger posting, wallet projection, outbox insert, or booking mutation", async () => {
@@ -89,7 +90,7 @@ describe("capturePaymentProviderWebhook", () => {
     expect(harness.ledgerTransactions).toHaveLength(1);
     expect(harness.outboxEvents).toHaveLength(4);
     expect(harness.walletPendingAmountMinor).toBe(43_000);
-    expect(harness.bookingMutationCalls).toBe(0);
+    expect(harness.bookingMutationCalls).toBe(1);
   });
 
   it("rejects amount and currency mismatches before any captured-sale state is persisted", async () => {
@@ -170,6 +171,7 @@ function createHarness(options: { readonly failOutbox?: boolean } = {}) {
     astrologerUserId: "44444444-4444-4444-8444-444444444444",
     productId: "77777777-7777-4777-8777-777777777777",
     directLinkIntentId: null,
+    bookingId,
     status: "pending_payment",
     grossAmount: { amountMinor: 50_000, currency: "RUB" },
     // These deliberately differ from any current policy calculation.
@@ -185,7 +187,7 @@ function createHarness(options: { readonly failOutbox?: boolean } = {}) {
   let walletPendingAmountMinor = 0;
   let transactCalls = 0;
   let failOutbox = options.failOutbox ?? false;
-  const bookingMutationCalls = 0;
+  let bookingMutationCalls = 0;
 
   const store: CapturedSaleTransactionStore = {
     findAttemptById: async (id) => (id === attempt.id ? { ...attempt } : null),
@@ -224,6 +226,35 @@ function createHarness(options: { readonly failOutbox?: boolean } = {}) {
       order.updatedAt = input.now;
       return { ...order };
     },
+    confirmPaidBooking: async (input) => {
+      if (input.bookingId !== bookingId || input.orderId !== orderId) return null;
+      bookingMutationCalls += 1;
+      return {
+        id: bookingId,
+        reservationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        ownerUserId: order.astrologerUserId,
+        clientUserId: order.clientUserId,
+        productId: order.productId,
+        source: "client_paid",
+        state: "confirmed",
+        holdExpiresAt: null,
+        startAt: "2026-07-25T10:00:00.000Z",
+        endAt: "2026-07-25T11:00:00.000Z",
+        productTitle: "Natal reading",
+        durationMinutes: 60,
+        deliveryFormat: "video",
+        priceMinor: order.grossAmount.amountMinor,
+        currency: order.grossAmount.currency,
+        timeZone: "Europe/Moscow",
+        policySnapshot: {
+          bufferBeforeMinutes: 0,
+          bufferAfterMinutes: 0,
+          minimumNoticeMinutes: 0
+        },
+        createdAt: now,
+        updatedAt: input.now
+      };
+    },
     createTransaction: async (input) => {
       ledgerTransactions.push(input);
       walletPendingAmountMinor = input.entries
@@ -254,7 +285,8 @@ function createHarness(options: { readonly failOutbox?: boolean } = {}) {
         providerEvents: [...providerEvents],
         ledgerTransactions: [...ledgerTransactions],
         outboxEvents: [...outboxEvents],
-        walletPendingAmountMinor
+        walletPendingAmountMinor,
+        bookingMutationCalls
       };
       try {
         return await operation(store);
@@ -265,6 +297,7 @@ function createHarness(options: { readonly failOutbox?: boolean } = {}) {
         ledgerTransactions.splice(0, ledgerTransactions.length, ...snapshot.ledgerTransactions);
         outboxEvents.splice(0, outboxEvents.length, ...snapshot.outboxEvents);
         walletPendingAmountMinor = snapshot.walletPendingAmountMinor;
+        bookingMutationCalls = snapshot.bookingMutationCalls;
         throw error;
       }
     }
@@ -277,7 +310,9 @@ function createHarness(options: { readonly failOutbox?: boolean } = {}) {
     providerEvents,
     ledgerTransactions,
     outboxEvents,
-    bookingMutationCalls,
+    get bookingMutationCalls() {
+      return bookingMutationCalls;
+    },
     get transactCalls() {
       return transactCalls;
     },

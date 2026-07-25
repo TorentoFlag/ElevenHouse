@@ -1,9 +1,12 @@
 import {
   capturePaymentProviderWebhook,
   ingestPaymentProviderWebhook,
+  releaseTerminalPaymentProviderWebhook,
   type CapturedSaleUnitOfWork,
   type FinanceOrderStore,
-  type PaymentStore
+  type PaymentStore,
+  type TerminalPaymentProviderEventType,
+  type TerminalPaymentUnitOfWork
 } from "@elevenhouse/domain";
 import type { ArcPayWebhookEvent } from "../arc-pay/arc-pay-webhook";
 
@@ -21,6 +24,7 @@ export function createPaymentWebhookProcessor(input: {
   >;
   readonly orderStore: Pick<FinanceOrderStore, "findById">;
   readonly capturedSale: CapturedSaleUnitOfWork;
+  readonly terminalPayment: TerminalPaymentUnitOfWork;
   readonly resolvePaymentAttemptId: (input: {
     readonly providerPaymentId: string;
     readonly environment: "sandbox" | "live";
@@ -52,18 +56,52 @@ export function createPaymentWebhookProcessor(input: {
         payload: event.payload,
         moneyFacts: event.moneyFacts
       };
-      const result =
-        event.type === "payment.captured"
-          ? await capturePaymentProviderWebhook({
-              capturedSale: input.capturedSale,
-              request: { ...request, type: "payment.captured" }
-            })
-          : await ingestPaymentProviderWebhook({
-              paymentStore: input.paymentStore,
-              orderStore: input.orderStore,
-              request
-            });
+      const result = await processPaymentProviderEvent(input, event, request);
       return { duplicate: result.kind === "replayed" };
     }
   };
+}
+
+function isTerminalReleaseEvent(type: ArcPayWebhookEvent["type"]): type is TerminalPaymentProviderEventType {
+  return (
+    type === "payment.failed" ||
+    type === "payment.declined" ||
+    type === "payment.expired" ||
+    type === "payment.voided"
+  );
+}
+
+async function processPaymentProviderEvent(
+  input: {
+    readonly paymentStore: Pick<
+      PaymentStore,
+      | "findAttemptById"
+      | "linkAttemptToProviderPayment"
+      | "recordProviderEvent"
+      | "findProviderEventByWebhookId"
+    >;
+    readonly orderStore: Pick<FinanceOrderStore, "findById">;
+    readonly capturedSale: CapturedSaleUnitOfWork;
+    readonly terminalPayment: TerminalPaymentUnitOfWork;
+  },
+  event: ArcPayWebhookEvent,
+  request: Parameters<typeof ingestPaymentProviderWebhook>[0]["request"]
+) {
+  if (event.type === "payment.captured") {
+    return capturePaymentProviderWebhook({
+      capturedSale: input.capturedSale,
+      request: { ...request, type: "payment.captured" }
+    });
+  }
+  if (isTerminalReleaseEvent(event.type)) {
+    return releaseTerminalPaymentProviderWebhook({
+      terminalPayment: input.terminalPayment,
+      request: { ...request, type: event.type }
+    });
+  }
+  return ingestPaymentProviderWebhook({
+    paymentStore: input.paymentStore,
+    orderStore: input.orderStore,
+    request
+  });
 }

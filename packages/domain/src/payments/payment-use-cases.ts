@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { BookingCommandStore } from "../bookings";
 import type { Money } from "../money";
 import type { FinanceOrder, FinanceOrderStore } from "../orders";
 import type {
@@ -34,6 +35,28 @@ export type PaymentCheckout = {
   readonly paymentAttemptId: string;
   readonly checkoutUrl: string;
   readonly providerCheckoutId: string;
+};
+
+export type TerminalPaymentProviderEventType =
+  | "payment.failed"
+  | "payment.declined"
+  | "payment.expired"
+  | "payment.voided";
+
+export type TerminalPaymentTransactionStore = Pick<
+  PaymentStore,
+  | "findAttemptById"
+  | "findProviderEventByWebhookId"
+  | "linkAttemptToProviderPayment"
+  | "recordProviderEvent"
+> &
+  Pick<FinanceOrderStore, "findById" | "updateStatus"> &
+  Pick<BookingCommandStore, "releasePaidBookingPaymentHold">;
+
+export type TerminalPaymentUnitOfWork = {
+  readonly transact: <T>(
+    operation: (store: TerminalPaymentTransactionStore) => Promise<T>
+  ) => Promise<T>;
 };
 
 export class PaymentCheckoutOrderNotFoundError extends Error {
@@ -110,6 +133,13 @@ export type IngestPaymentProviderWebhookInput = {
   readonly request: IngestPaymentProviderWebhookRequest;
 };
 
+export type ReleaseTerminalPaymentProviderWebhookInput = {
+  readonly terminalPayment: TerminalPaymentUnitOfWork;
+  readonly request: IngestPaymentProviderWebhookRequest & {
+    readonly type: TerminalPaymentProviderEventType;
+  };
+};
+
 export class PaymentWebhookAttemptNotFoundError extends Error {
   readonly code = "payment_webhook_attempt_not_found";
 
@@ -152,6 +182,15 @@ export class PaymentWebhookCurrencyMismatchError extends Error {
   constructor() {
     super("Provider webhook currency does not match the linked payment");
     this.name = "PaymentWebhookCurrencyMismatchError";
+  }
+}
+
+export class PaymentTerminalBookingNotReleasableError extends Error {
+  readonly code = "payment_terminal_booking_not_releasable";
+
+  constructor() {
+    super("Terminal payment booking could not be released");
+    this.name = "PaymentTerminalBookingNotReleasableError";
   }
 }
 
@@ -248,6 +287,79 @@ export async function ingestPaymentProviderWebhook(
   });
 }
 
+/**
+ * Terminal provider events for an unpaid order must release the booking slot in
+ * the same transaction as webhook persistence. Otherwise a stored duplicate
+ * webhook could suppress the retry that frees the reservation.
+ */
+export async function releaseTerminalPaymentProviderWebhook(
+  input: ReleaseTerminalPaymentProviderWebhookInput
+): Promise<{ readonly kind: "created" | "replayed"; readonly event: PaymentProviderEvent }> {
+  return input.terminalPayment.transact(async (store) => {
+    const existing = await store.findProviderEventByWebhookId({
+      provider: input.request.provider,
+      environment: input.request.environment,
+      providerWebhookId: input.request.providerWebhookId
+    });
+    if (existing) return { kind: "replayed", event: existing };
+
+    const attempt = await store.findAttemptById(input.request.paymentAttemptId);
+    if (!attempt) throw new PaymentWebhookAttemptNotFoundError();
+    if (
+      attempt.provider !== input.request.provider ||
+      attempt.environment !== input.request.environment
+    ) {
+      throw new PaymentWebhookProviderContextMismatchError();
+    }
+
+    const order = await store.findById(attempt.orderId);
+    if (!order) throw new PaymentWebhookOrderNotFoundError();
+    assertPaymentMatchesOrder(attempt, order);
+    assertWebhookMoneyFacts(input.request.moneyFacts, attempt.amount);
+
+    const linkedAttempt = await store.linkAttemptToProviderPayment({
+      paymentAttemptId: attempt.id,
+      provider: input.request.provider,
+      environment: input.request.environment,
+      providerPaymentId: input.request.providerPaymentId,
+      now: input.request.receivedAt
+    });
+    if (!linkedAttempt) throw new PaymentWebhookAttemptNotFoundError();
+
+    const providerEvent = await store.recordProviderEvent({
+      paymentAttemptId: linkedAttempt.id,
+      provider: input.request.provider,
+      environment: input.request.environment,
+      providerWebhookId: input.request.providerWebhookId,
+      providerPaymentId: input.request.providerPaymentId,
+      type: input.request.type,
+      occurredAt: input.request.occurredAt,
+      receivedAt: input.request.receivedAt,
+      payload: input.request.payload
+    });
+    if (providerEvent.kind === "replayed") return providerEvent;
+
+    if (order.status !== "pending_payment") return providerEvent;
+
+    const nextState = terminalBookingState(input.request.type);
+    await store.updateStatus({
+      orderId: order.id,
+      status: nextState,
+      now: input.request.receivedAt
+    });
+    if (order.bookingId) {
+      const booking = await store.releasePaidBookingPaymentHold({
+        bookingId: order.bookingId,
+        state: nextState,
+        now: input.request.receivedAt
+      });
+      if (!booking) throw new PaymentTerminalBookingNotReleasableError();
+    }
+
+    return providerEvent;
+  });
+}
+
 async function requirePayableOrder(
   input: CreatePaymentCheckoutUseCaseInput
 ): Promise<FinanceOrder> {
@@ -268,6 +380,12 @@ function checkoutFromAttempt(attempt: PaymentAttempt): PaymentCheckout | null {
     };
   }
   return null;
+}
+
+function terminalBookingState(
+  type: TerminalPaymentProviderEventType
+): "cancelled" | "expired" {
+  return type === "payment.expired" ? "expired" : "cancelled";
 }
 
 export function assertPaymentMatchesOrder(attempt: PaymentAttempt, order: FinanceOrder): void {

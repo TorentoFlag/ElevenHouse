@@ -97,10 +97,26 @@ describe("scheduling persistence schema", () => {
         "schedule_reservations_occupied_range_check"
       ])
     );
+    expect(Object.keys(getTableColumns(bookings))).toEqual(
+      expect.arrayContaining([
+        "reservationId",
+        "source",
+        "state",
+        "holdExpiresAt",
+        "serviceStartAt"
+      ])
+    );
     expect(bookingConfig.foreignKeys.map((key) => key.getName())).toEqual(
       expect.arrayContaining([
         "bookings_reservation_owner_fk",
         "bookings_product_owner_fk"
+      ])
+    );
+    expect(bookingConfig.checks.map((check) => check.name)).toEqual(
+      expect.arrayContaining([
+        "bookings_state_check",
+        "bookings_source_check",
+        "bookings_hold_expiry_check"
       ])
     );
     expect(blockConfig.foreignKeys.map((key) => key.getName())).toContain(

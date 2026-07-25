@@ -115,6 +115,7 @@ describe("Finance persistence schema", () => {
     const payoutColumns = getTableColumns(payoutRequests);
 
     expect(orderColumns.grossAmountMinor.getSQLType()).toBe("bigint");
+    expect(Object.keys(orderColumns)).toEqual(expect.arrayContaining(["bookingId"]));
     expect(attemptColumns.amountMinor.getSQLType()).toBe("bigint");
     expect(payoutColumns.amountMinor.getSQLType()).toBe("bigint");
     expect(financeSafeIntegerMinorUnitMax).toBe(Number.MAX_SAFE_INTEGER);
@@ -135,6 +136,13 @@ describe("Finance persistence schema", () => {
         "payment_attempts_amount_check"
       ])
     );
+  });
+
+  it("links live paid orders to at most one booking hold", () => {
+    expect(tableForeignKeyNames(orders)).toEqual(
+      expect.arrayContaining(["orders_booking_id_bookings_id_fk"])
+    );
+    expect(tableIndexNames(orders)).toEqual(expect.arrayContaining(["orders_booking_unique"]));
   });
 
   it("enforces provider payment and webhook uniqueness boundaries", () => {

@@ -3,6 +3,7 @@ import {
   FinanceIdempotencyConflictError,
   FinanceIdempotencyFailedError,
   FinanceIdempotencyInProgressError,
+  OrderBookingHoldNotClaimableError,
   OrderClientRelationshipRequiredError,
   OrderFinancePolicyUnavailableError,
   OrderProductNotAvailableError,
@@ -79,6 +80,7 @@ async function mapOrderErrors<T>(operation: () => Promise<T>): Promise<T> {
     }
     if (
       error instanceof OrderFinancePolicyUnavailableError ||
+      error instanceof OrderBookingHoldNotClaimableError ||
       error instanceof FinanceIdempotencyInProgressError ||
       error instanceof FinanceIdempotencyFailedError
     ) {

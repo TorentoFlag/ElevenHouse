@@ -363,13 +363,29 @@ const bookingPolicySnapshotSchema = z
   })
   .strict();
 
-export const manualBookingSchema = z
+export const bookingLifecycleStateSchema = z.enum([
+  "hold",
+  "pending_payment",
+  "confirmed",
+  "completed",
+  "cancelled",
+  "no_show",
+  "expired"
+]);
+export type BookingLifecycleState = z.infer<typeof bookingLifecycleStateSchema>;
+
+export const bookingSourceSchema = z.enum(["manual", "client_paid"]);
+export type BookingSource = z.infer<typeof bookingSourceSchema>;
+
+const bookingBaseSchema = z
   .object({
     id: uuidSchema,
     reservationId: uuidSchema,
     clientUserId: uuidSchema,
     productId: uuidSchema,
-    state: z.literal("confirmed"),
+    source: bookingSourceSchema,
+    state: bookingLifecycleStateSchema,
+    holdExpiresAt: instantSchema.nullable(),
     startAt: instantSchema,
     endAt: instantSchema,
     productTitle: z.string().trim().min(1).max(200),
@@ -383,9 +399,49 @@ export const manualBookingSchema = z
     updatedAt: instantSchema
   })
   .strict()
-  .refine((booking) => Date.parse(booking.startAt) < Date.parse(booking.endAt), {
-    message: "Booking end must be after start"
+  .superRefine((booking, context) => {
+    if (Date.parse(booking.startAt) >= Date.parse(booking.endAt)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endAt"],
+        message: "Booking end must be after start"
+      });
+    }
+    if (booking.state === "hold" && booking.holdExpiresAt === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["holdExpiresAt"],
+        message: "Held bookings require an expiry"
+      });
+    }
+    if (booking.state !== "hold" && booking.holdExpiresAt !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["holdExpiresAt"],
+        message: "Only held bookings can expose a hold expiry"
+      });
+    }
   });
+
+export const bookingSchema = bookingBaseSchema;
+export type BookingContract = z.infer<typeof bookingSchema>;
+
+export const manualBookingSchema = bookingBaseSchema.superRefine((booking, context) => {
+  if (booking.source !== "manual") {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["source"],
+      message: "Manual booking response must use manual source"
+    });
+  }
+  if (booking.state !== "confirmed") {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["state"],
+      message: "Manual booking creation returns a confirmed booking"
+    });
+  }
+});
 export type ManualBooking = z.infer<typeof manualBookingSchema>;
 
 export const manualBookingResponseSchema = z
@@ -398,10 +454,36 @@ export type ManualBookingResponse = z.infer<typeof manualBookingResponseSchema>;
 
 export const bookingResponseSchema = z
   .object({
-    booking: manualBookingSchema
+    booking: bookingSchema
   })
   .strict();
 export type BookingResponse = z.infer<typeof bookingResponseSchema>;
+
+export const createPaidBookingHoldRequestSchema = z
+  .object({
+    astrologerUserId: uuidSchema,
+    productId: uuidSchema,
+    directLinkIntentId: uuidSchema.nullable().optional(),
+    deliveryFormat: z.enum(productDeliveryFormatValues),
+    projectedStartAt: instantSchema
+  })
+  .strict()
+  .transform((value) => ({
+    ...value,
+    directLinkIntentId: value.directLinkIntentId ?? null
+  }));
+export type CreatePaidBookingHoldRequest = z.infer<typeof createPaidBookingHoldRequestSchema>;
+
+export const paidBookingHoldResponseSchema = z
+  .object({
+    booking: bookingSchema.refine(
+      (booking) => booking.source === "client_paid" && booking.state === "hold",
+      "Paid booking hold response must be a client paid hold"
+    ),
+    replayed: z.boolean()
+  })
+  .strict();
+export type PaidBookingHoldResponse = z.infer<typeof paidBookingHoldResponseSchema>;
 
 export const bookingParamsSchema = z
   .object({

@@ -8,7 +8,8 @@ import {
 import {
   createDrizzleCapturedSaleUnitOfWork,
   createDrizzleOrderStore,
-  createDrizzlePaymentStore
+  createDrizzlePaymentStore,
+  createDrizzleTerminalPaymentUnitOfWork
 } from "@elevenhouse/db/finance";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
 import { createArcPayPaymentAttemptResolver } from "./arc-pay/arc-pay-payment-reader";
@@ -30,6 +31,7 @@ async function startPaymentWorker(): Promise<void> {
     paymentStore,
     orderStore: createDrizzleOrderStore(postgresRuntime.database),
     capturedSale: createDrizzleCapturedSaleUnitOfWork(postgresRuntime.database),
+    terminalPayment: createDrizzleTerminalPaymentUnitOfWork(postgresRuntime.database),
     resolvePaymentAttemptId: createArcPayPaymentAttemptResolver(config.arcPay)
       .resolvePaymentAttemptId
   });

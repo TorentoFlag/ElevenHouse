@@ -8,7 +8,8 @@ import {
   type ManualBookingClaim,
   type ManualBookingCommand,
   type ManualCalendarBlockClaim,
-  type ManualCalendarBlockCommand
+  type ManualCalendarBlockCommand,
+  type PaidBookingHoldCommand
 } from "@elevenhouse/domain";
 import { Client } from "pg";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
@@ -102,6 +103,50 @@ describe("scheduling command stores Drizzle/PostgreSQL integration", () => {
         bookingId: results[0]?.booking.id ?? raise("Expected booking")
       })
     ).resolves.toBeNull();
+  });
+
+  it("releases an expired paid hold before inserting a new overlapping booking", async () => {
+    const fixture = await createFixture();
+    const store = createDrizzleBookingCommandStore(runtime.database);
+    const claim = bookingClaim(fixture, "2026-05-30T14:00:00Z", "2026-05-30T15:00:00Z");
+    const held = await store.executePaidHold(
+      paidBookingHoldCommand(fixture.clientUserId, "paid-hold-expired", "x"),
+      async () => ({
+        ...claim,
+        holdExpiresAt: "2026-05-20T10:15:00.000Z"
+      })
+    );
+
+    await expect(
+      store.executeManualBooking(
+        bookingCommand(
+          fixture.ownerUserId,
+          "booking-after-expired-paid-hold",
+          "y",
+          "2026-05-20T10:16:00.000Z"
+        ),
+        async () => claim
+      )
+    ).resolves.toMatchObject({ kind: "created" });
+
+    const result = await runtime.pool.query<{
+      booking_state: string;
+      booking_hold_expires_at: Date | null;
+      reservation_lifecycle: string;
+    }>(
+      `select b.state as booking_state,
+              b.hold_expires_at as booking_hold_expires_at,
+              r.lifecycle as reservation_lifecycle
+         from bookings b
+         inner join schedule_reservations r on r.id = b.reservation_id
+        where b.id = $1`,
+      [held.booking.id]
+    );
+    expect(result.rows[0]).toEqual({
+      booking_state: "expired",
+      booking_hold_expires_at: null,
+      reservation_lifecycle: "released"
+    });
   });
 
   it("creates, replays and idempotently releases owner-scoped manual blocks", async () => {
@@ -325,15 +370,31 @@ function manualBlockClaim(
 function bookingCommand(
   actorUserId: string,
   key: string,
-  hashCharacter: string
+  hashCharacter: string,
+  now = "2026-05-20T10:00:00.000Z"
 ): ManualBookingCommand {
   return {
     actorUserId,
     scope: "bookings.manual.create",
     key,
     requestHash: digest(hashCharacter),
-    now: "2026-05-20T10:00:00.000Z",
+    now,
     expiresAt: "2026-05-21T10:00:00.000Z"
+  };
+}
+
+function paidBookingHoldCommand(
+  actorUserId: string,
+  key: string,
+  hashCharacter: string
+): PaidBookingHoldCommand {
+  return {
+    actorUserId,
+    scope: "bookings.paid.hold.create",
+    key,
+    requestHash: digest(hashCharacter),
+    now: "2026-05-20T10:00:00.000Z",
+    expiresAt: "2026-05-20T10:15:00.000Z"
   };
 }
 

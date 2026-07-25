@@ -207,6 +207,7 @@ function order(): FinanceOrder {
     astrologerUserId: "44444444-4444-4444-8444-444444444444",
     productId: "55555555-5555-4555-8555-555555555555",
     directLinkIntentId: null,
+    bookingId: null,
     status: "pending_payment",
     grossAmount: { amountMinor: 500_00, currency: "RUB" },
     platformFee: { amountMinor: 50_00, currency: "RUB" },

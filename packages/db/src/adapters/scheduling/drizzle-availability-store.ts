@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, lt, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, lt, ne, or, sql } from "drizzle-orm";
 import type {
   AvailabilityDateOverride,
   AvailabilitySchedule,
@@ -135,6 +135,10 @@ export function createDrizzleAvailabilityStore(
             eq(scheduleReservations.ownerUserId, input.ownerUserId),
             eq(scheduleReservations.scheduleId, input.scheduleId),
             eq(scheduleReservations.lifecycle, "active"),
+            or(
+              ne(scheduleReservations.kind, "hold"),
+              gt(scheduleReservations.holdExpiresAt, sql`now()`)
+            ),
             lt(scheduleReservations.occupiedStartAt, new Date(input.rangeEndAt)),
             gt(scheduleReservations.occupiedEndAt, new Date(input.rangeStartAt))
           )

@@ -6,7 +6,16 @@ import type {
   ProductStatus
 } from "../products";
 
-export type BookingState = "confirmed" | "cancelled";
+export type BookingState =
+  | "hold"
+  | "pending_payment"
+  | "confirmed"
+  | "completed"
+  | "cancelled"
+  | "no_show"
+  | "expired";
+
+export type BookingSource = "manual" | "client_paid";
 
 export type BookingPolicySnapshot = {
   readonly bufferBeforeMinutes: number;
@@ -20,7 +29,9 @@ export type Booking = {
   readonly ownerUserId: string;
   readonly clientUserId: string;
   readonly productId: string;
+  readonly source: BookingSource;
   readonly state: BookingState;
+  readonly holdExpiresAt: string | null;
   readonly startAt: string;
   readonly endAt: string;
   readonly productTitle: string;
@@ -54,6 +65,17 @@ export type CreateManualBookingInput = {
 };
 
 export type CreateManualBookingResult = {
+  readonly booking: Booking;
+  readonly replayed: boolean;
+};
+
+export type CreatePaidBookingHoldInput = {
+  readonly productId: string;
+  readonly deliveryFormat: ProductDeliveryFormat;
+  readonly projectedStartAt: string;
+};
+
+export type CreatePaidBookingHoldResult = {
   readonly booking: Booking;
   readonly replayed: boolean;
 };

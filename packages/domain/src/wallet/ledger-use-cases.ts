@@ -40,6 +40,11 @@ export type CapturedSaleTransactionStore = Pick<
       readonly orderId: string;
       readonly now: string;
     }) => Promise<FinanceOrder | null>;
+    readonly confirmPaidBooking: (input: {
+      readonly bookingId: string;
+      readonly orderId: string;
+      readonly now: string;
+    }) => Promise<unknown | null>;
     readonly recordCapturedSaleOutboxEvents: (
       input: readonly CapturedSaleOutboxEvent[]
     ) => Promise<void>;
@@ -67,6 +72,15 @@ export class PaymentCaptureOrderNotPayableError extends Error {
   constructor() {
     super("Captured payment order is not pending payment");
     this.name = "PaymentCaptureOrderNotPayableError";
+  }
+}
+
+export class PaymentCaptureBookingNotConfirmableError extends Error {
+  readonly code = "payment_capture_booking_not_confirmable";
+
+  constructor() {
+    super("Captured payment booking is not pending payment");
+    this.name = "PaymentCaptureBookingNotConfirmableError";
   }
 }
 
@@ -128,6 +142,14 @@ export async function capturePaymentProviderWebhook(
       now: input.request.receivedAt
     });
     if (!paidOrder) throw new PaymentCaptureOrderNotPayableError();
+    if (order.bookingId) {
+      const booking = await store.confirmPaidBooking({
+        bookingId: order.bookingId,
+        orderId: order.id,
+        now: input.request.receivedAt
+      });
+      if (!booking) throw new PaymentCaptureBookingNotConfirmableError();
+    }
 
     await store.createTransaction(createCapturedSaleLedgerTransaction(order, providerEvent.event));
     await store.recordCapturedSaleOutboxEvents(
@@ -212,12 +234,16 @@ export function createCapturedSaleOutboxEvents(
       payload,
       occurredAt: providerEvent.receivedAt
     },
-    {
-      eventType: "booking.payment_confirmed",
-      aggregateId: order.id,
-      payload,
-      occurredAt: providerEvent.receivedAt
-    },
+    ...(order.bookingId
+      ? [
+          {
+            eventType: "booking.payment_confirmed" as const,
+            aggregateId: order.bookingId,
+            payload,
+            occurredAt: providerEvent.receivedAt
+          }
+        ]
+      : []),
     {
       eventType: "notifications.payment_confirmation_requested",
       aggregateId: order.id,

@@ -23,12 +23,15 @@ import type {
   BookingClientReader,
   BookingCommandStore,
   BookingProductReader,
-  ManualBookingClaim
+  ManualBookingClaim,
+  PaidBookingHoldClaim
 } from "./booking-ports";
 import type {
   Booking,
   BookingProduct,
   AvailableBookingSlotsResult,
+  CreatePaidBookingHoldInput,
+  CreatePaidBookingHoldResult,
   CreateManualBookingInput,
   CreateManualBookingResult
 } from "./booking-types";
@@ -75,6 +78,8 @@ export async function getAvailableBookingSlots(input: {
 }
 
 const manualBookingScope = "bookings.manual.create" as const;
+const paidBookingHoldScope = "bookings.paid.hold.create" as const;
+const paidBookingHoldTtlMinutes = 15;
 
 export async function createManualBooking(input: {
   readonly commandStore: BookingCommandStore;
@@ -121,6 +126,60 @@ export async function createManualBooking(input: {
         projectedStartAt,
         now
       })
+  );
+
+  return { booking: result.booking, replayed: result.kind === "replayed" };
+}
+
+export async function createPaidBookingHold(input: {
+  readonly commandStore: BookingCommandStore;
+  readonly availabilityStore: AvailabilityStore;
+  readonly clientReader: BookingClientReader;
+  readonly productReader: BookingProductReader;
+  readonly clientUserId: string;
+  readonly ownerUserId: string;
+  readonly idempotencyKey: string;
+  readonly input: CreatePaidBookingHoldInput;
+  readonly now: Date;
+}): Promise<CreatePaidBookingHoldResult> {
+  const clientUserId = normalizeRequiredString(input.clientUserId, "Booking client is required");
+  const ownerUserId = normalizeRequiredString(input.ownerUserId, "Booking owner is required");
+  const productId = normalizeRequiredString(input.input.productId, "Booking product is required");
+  const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
+  const projectedStartAt = normalizeInstant(input.input.projectedStartAt);
+  const now = input.now.toISOString();
+  const holdExpiresAt = Temporal.Instant.from(now).add({ minutes: paidBookingHoldTtlMinutes }).toString();
+  const requestHash = hashPaidBookingHoldRequest({
+    clientUserId,
+    ownerUserId,
+    productId,
+    deliveryFormat: input.input.deliveryFormat,
+    projectedStartAt
+  });
+
+  const result = await input.commandStore.executePaidHold(
+    {
+      actorUserId: clientUserId,
+      scope: paidBookingHoldScope,
+      key: idempotencyKey,
+      requestHash,
+      now,
+      expiresAt: holdExpiresAt
+    },
+    async () => ({
+      ...(await createBookingClaim({
+        availabilityStore: input.availabilityStore,
+        clientReader: input.clientReader,
+        productReader: input.productReader,
+        ownerUserId,
+        clientUserId,
+        productId,
+        deliveryFormat: input.input.deliveryFormat,
+        projectedStartAt,
+        now
+      })),
+      holdExpiresAt
+    })
   );
 
   return { booking: result.booking, replayed: result.kind === "replayed" };
@@ -282,6 +341,24 @@ function hashManualBookingRequest(input: {
     manualBookingScope,
     input.ownerUserId,
     input.clientUserId,
+    input.productId,
+    input.deliveryFormat,
+    input.projectedStartAt
+  ]);
+  return `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
+}
+
+function hashPaidBookingHoldRequest(input: {
+  readonly clientUserId: string;
+  readonly ownerUserId: string;
+  readonly productId: string;
+  readonly deliveryFormat: string;
+  readonly projectedStartAt: string;
+}): `sha256:${string}` {
+  const canonical = JSON.stringify([
+    paidBookingHoldScope,
+    input.clientUserId,
+    input.ownerUserId,
     input.productId,
     input.deliveryFormat,
     input.projectedStartAt

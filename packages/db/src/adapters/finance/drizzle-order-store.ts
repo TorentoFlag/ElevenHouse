@@ -1,13 +1,14 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import type {
   CreateFinanceOrderRecordInput,
   FinanceOrder,
   FinanceOrderStore,
   UpdateFinanceOrderStatusInput
 } from "@elevenhouse/domain";
+import { OrderBookingHoldNotClaimableError as OrderBookingHoldNotClaimable } from "@elevenhouse/domain";
 import type { Money } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
-import { orders } from "../../schema";
+import { bookings, orders, scheduleReservations } from "../../schema";
 import {
   executeIdempotentFinanceCommand,
   type FinanceDatabase,
@@ -70,6 +71,7 @@ async function insertOrder(
       astrologerUserId: input.astrologerUserId,
       productId: input.productId,
       directLinkIntentId: input.directLinkIntentId,
+      bookingId: input.bookingId ?? null,
       status: input.status ?? "pending_payment",
       grossAmountMinor: input.grossAmount.amountMinor,
       grossCurrency: input.grossAmount.currency,
@@ -83,7 +85,56 @@ async function insertOrder(
     })
     .returning();
   if (!row) throw new Error("Expected finance order insert to return a row");
+  if (input.bookingId) {
+    await claimPaidBookingHoldForOrder(database, {
+      bookingId: input.bookingId,
+      orderId: row.id,
+      clientUserId: input.clientUserId,
+      astrologerUserId: input.astrologerUserId,
+      productId: input.productId,
+      now: input.now
+    });
+  }
   return toFinanceOrder(row);
+}
+
+async function claimPaidBookingHoldForOrder(
+  database: FinanceTransaction,
+  input: {
+    readonly bookingId: string;
+    readonly orderId: string;
+    readonly clientUserId: string;
+    readonly astrologerUserId: string;
+    readonly productId: string;
+    readonly now: string;
+  }
+): Promise<void> {
+  const [booking] = await database
+    .update(bookings)
+    .set({ state: "pending_payment", holdExpiresAt: null, updatedAt: new Date(input.now) })
+    .where(
+      and(
+        eq(bookings.id, input.bookingId),
+        eq(bookings.clientUserId, input.clientUserId),
+        eq(bookings.ownerUserId, input.astrologerUserId),
+        eq(bookings.productId, input.productId),
+        eq(bookings.source, "client_paid"),
+        eq(bookings.state, "hold"),
+        gt(bookings.holdExpiresAt, new Date(input.now))
+      )
+    )
+    .returning({ reservationId: bookings.reservationId });
+  if (!booking) throw new OrderBookingHoldNotClaimable();
+
+  await database
+    .update(scheduleReservations)
+    .set({
+      kind: "booking",
+      sourceAggregateId: input.bookingId,
+      holdExpiresAt: null,
+      updatedAt: new Date(input.now)
+    })
+    .where(eq(scheduleReservations.id, booking.reservationId));
 }
 
 async function updateOrderStatus(
@@ -113,6 +164,7 @@ function toFinanceOrder(row: OrderRow): FinanceOrder {
     astrologerUserId: row.astrologerUserId,
     productId: row.productId,
     directLinkIntentId: row.directLinkIntentId,
+    bookingId: row.bookingId,
     status: row.status as FinanceOrder["status"],
     grossAmount: money(row.grossAmountMinor, row.grossCurrency),
     platformFee: money(row.platformFeeAmountMinor, row.platformFeeCurrency),

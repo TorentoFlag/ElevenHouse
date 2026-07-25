@@ -30,6 +30,7 @@ export type CreateOrderRequestInput = {
   readonly astrologerUserId: string;
   readonly productId: string;
   readonly directLinkIntentId: string | null;
+  readonly bookingId?: string | null;
   readonly clientBirthDataId?: string | null;
 };
 
@@ -57,6 +58,15 @@ export class OrderFinancePolicyUnavailableError extends Error {
   constructor() {
     super("Effective finance policy is not available for this astrologer");
     this.name = "OrderFinancePolicyUnavailableError";
+  }
+}
+
+export class OrderBookingHoldNotClaimableError extends Error {
+  readonly code = "order_booking_hold_not_claimable";
+
+  constructor() {
+    super("Booking hold is not available for order creation");
+    this.name = "OrderBookingHoldNotClaimableError";
   }
 }
 
@@ -96,6 +106,7 @@ export async function createOrder(input: CreateOrderUseCaseInput): Promise<Finan
         astrologerUserId: input.request.astrologerUserId,
         productId: input.request.productId,
         directLinkIntentId: input.request.directLinkIntentId,
+        bookingId: input.request.bookingId ?? null,
         status: "pending_payment",
         grossAmount,
         platformFee: { amountMinor: feeMinor, currency: grossAmount.currency },
@@ -151,6 +162,7 @@ function hashCreateOrderRequest(
     astrologerUserId: request.astrologerUserId,
     productId: request.productId,
     directLinkIntentId: request.directLinkIntentId,
+    bookingId: request.bookingId ?? null,
     clientBirthDataId: request.clientBirthDataId ?? null
   };
 

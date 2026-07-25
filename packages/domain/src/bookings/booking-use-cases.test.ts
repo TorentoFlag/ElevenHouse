@@ -14,10 +14,16 @@ import type {
   BookingClientReader,
   BookingCommandStore,
   BookingProductReader,
+  PaidBookingHoldClaim,
   ManualBookingClaim
 } from "./booking-ports";
 import type { Booking, BookingProduct } from "./booking-types";
-import { createManualBooking, getAvailableBookingSlots, getBooking } from "./booking-use-cases";
+import {
+  createManualBooking,
+  createPaidBookingHold,
+  getAvailableBookingSlots,
+  getBooking
+} from "./booking-use-cases";
 
 const ownerUserId = "11111111-1111-4111-8111-111111111111";
 const clientUserId = "22222222-2222-4222-8222-222222222222";
@@ -90,7 +96,33 @@ function bookingFromClaim(claim: ManualBookingClaim, now: string): Booking {
     ownerUserId: claim.ownerUserId,
     clientUserId: claim.clientUserId,
     productId: claim.productId,
+    source: "manual",
     state: "confirmed",
+    holdExpiresAt: null,
+    startAt: claim.serviceStartAt,
+    endAt: claim.serviceEndAt,
+    productTitle: claim.productSnapshot.title,
+    durationMinutes: claim.productSnapshot.durationMinutes,
+    deliveryFormat: claim.productSnapshot.deliveryFormat,
+    priceMinor: claim.productSnapshot.priceMinor,
+    currency: claim.productSnapshot.currency,
+    timeZone: claim.scheduleSnapshot.timeZone,
+    policySnapshot: claim.scheduleSnapshot.policy,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function paidBookingFromClaim(claim: PaidBookingHoldClaim, now: string): Booking {
+  return {
+    id: bookingId,
+    reservationId,
+    ownerUserId: claim.ownerUserId,
+    clientUserId: claim.clientUserId,
+    productId: claim.productId,
+    source: "client_paid",
+    state: "hold",
+    holdExpiresAt: claim.holdExpiresAt,
     startAt: claim.serviceStartAt,
     endAt: claim.serviceEndAt,
     productTitle: claim.productSnapshot.title,
@@ -145,7 +177,55 @@ function createCommandStore(options: { replay?: boolean } = {}): BookingCommandS
       const claim = await createClaim();
       return { kind: "created" as const, booking: bookingFromClaim(claim, command.now) };
     }),
+    executePaidHold: vi.fn(),
+    confirmPaidBooking: vi.fn(async () => null),
+    releasePaidBookingPaymentHold: vi.fn(async () => null),
     findByOwnerAndId: vi.fn(async () => null)
+  };
+}
+
+function createPaidCommandStore(options: { replay?: boolean } = {}): BookingCommandStore {
+  return {
+    ...createCommandStore(),
+    executePaidHold: vi.fn(async (command, createClaim) => {
+      if (options.replay) {
+        return {
+          kind: "replayed" as const,
+          booking: paidBookingFromClaim(
+            {
+              ownerUserId,
+              clientUserId,
+              productId,
+              scheduleId,
+              serviceStartAt: "2026-05-29T07:00:00Z",
+              serviceEndAt: "2026-05-29T08:00:00Z",
+              occupiedStartAt: "2026-05-29T06:50:00Z",
+              occupiedEndAt: "2026-05-29T08:10:00Z",
+              holdExpiresAt: "2026-05-20T00:15:00Z",
+              productSnapshot: {
+                title: product.title,
+                durationMinutes: 60,
+                deliveryFormat: "video",
+                priceMinor: 490000,
+                currency: "RUB"
+              },
+              scheduleSnapshot: {
+                timeZone: schedule.timeZone,
+                policy: {
+                  bufferBeforeMinutes: 10,
+                  bufferAfterMinutes: 10,
+                  minimumNoticeMinutes: 60
+                }
+              }
+            },
+            command.now
+          )
+        };
+      }
+
+      const claim = await createClaim();
+      return { kind: "created" as const, booking: paidBookingFromClaim(claim, command.now) };
+    })
   };
 }
 
@@ -236,6 +316,43 @@ describe("booking use cases", () => {
       actorUserId: ownerUserId,
       scope: "bookings.manual.create",
       key: "booking-12345",
+      now: now.toISOString()
+    });
+    expect(command?.requestHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it("creates a paid client booking hold with an expiry before order checkout", async () => {
+    const commandStore = createPaidCommandStore();
+    const now = new Date("2026-05-20T00:00:00.000Z");
+
+    await expect(
+      createPaidBookingHold({
+        commandStore,
+        availabilityStore: createAvailabilityStore(),
+        clientReader: createClientReader(),
+        productReader: createProductReader(),
+        clientUserId,
+        ownerUserId,
+        idempotencyKey: "booking-hold-12345",
+        input: request,
+        now
+      })
+    ).resolves.toMatchObject({
+      replayed: false,
+      booking: {
+        source: "client_paid",
+        state: "hold",
+        holdExpiresAt: "2026-05-20T00:15:00Z",
+        startAt: "2026-05-29T07:00:00Z",
+        endAt: "2026-05-29T08:00:00Z"
+      }
+    });
+
+    const command = vi.mocked(commandStore.executePaidHold).mock.calls[0]?.[0];
+    expect(command).toMatchObject({
+      actorUserId: clientUserId,
+      scope: "bookings.paid.hold.create",
+      key: "booking-hold-12345",
       now: now.toISOString()
     });
     expect(command?.requestHash).toMatch(/^sha256:[a-f0-9]{64}$/);

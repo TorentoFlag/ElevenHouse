@@ -21,6 +21,7 @@ const productId = "33333333-3333-4333-8333-333333333333";
 const directLinkIntentId = "44444444-4444-4444-8444-444444444444";
 const policyId = "55555555-5555-4555-8555-555555555555";
 const orderId = "66666666-6666-4666-8666-666666666666";
+const bookingId = "99999999-9999-4999-8999-999999999999";
 const now = new Date("2026-07-24T10:00:00.000Z");
 
 describe("createOrder", () => {
@@ -87,6 +88,32 @@ describe("createOrder", () => {
 
     expect(harness.orderStore.createdInputs[0]).toMatchObject({
       directLinkIntentId: null
+    });
+  });
+
+  it("carries a paid booking hold into the created order for later payment confirmation", async () => {
+    const harness = createHarness();
+
+    await expect(
+      createOrder({
+        ...harness.dependencies,
+        clientUserId,
+        request: { astrologerUserId, productId, directLinkIntentId, bookingId },
+        idempotencyKey: "order-create:client:booking-1",
+        now,
+        idGenerator: () => orderId
+      })
+    ).resolves.toMatchObject({
+      id: orderId,
+      bookingId,
+      status: "pending_payment"
+    });
+
+    expect(harness.orderStore.createdInputs[0]).toMatchObject({
+      bookingId,
+      clientUserId,
+      astrologerUserId,
+      productId
     });
   });
 
@@ -314,6 +341,7 @@ function createOrderRecordInput(
     astrologerUserId,
     productId,
     directLinkIntentId,
+    bookingId: null,
     status: "pending_payment",
     grossAmount: { amountMinor: 500_00, currency: "RUB" },
     platformFee: { amountMinor: 50_00, currency: "RUB" },
@@ -331,6 +359,7 @@ function toOrder(input: CreateFinanceOrderRecordInput): FinanceOrder {
     astrologerUserId: input.astrologerUserId,
     productId: input.productId,
     directLinkIntentId: input.directLinkIntentId,
+    bookingId: input.bookingId ?? null,
     status: input.status ?? "pending_payment",
     grossAmount: input.grossAmount,
     platformFee: input.platformFee,

@@ -23,9 +23,22 @@ export type ManualBookingClaim = {
   };
 };
 
+export type PaidBookingHoldClaim = ManualBookingClaim & {
+  readonly holdExpiresAt: string;
+};
+
 export type ManualBookingCommand = {
   readonly actorUserId: string;
   readonly scope: "bookings.manual.create";
+  readonly key: string;
+  readonly requestHash: `sha256:${string}`;
+  readonly now: string;
+  readonly expiresAt: string;
+};
+
+export type PaidBookingHoldCommand = {
+  readonly actorUserId: string;
+  readonly scope: "bookings.paid.hold.create";
   readonly key: string;
   readonly requestHash: `sha256:${string}`;
   readonly now: string;
@@ -40,6 +53,23 @@ export type BookingCommandStore = {
     readonly kind: "created" | "replayed";
     readonly booking: Booking;
   }>;
+  readonly executePaidHold: (
+    command: PaidBookingHoldCommand,
+    createClaim: () => Promise<PaidBookingHoldClaim>
+  ) => Promise<{
+    readonly kind: "created" | "replayed";
+    readonly booking: Booking;
+  }>;
+  readonly confirmPaidBooking: (input: {
+    readonly bookingId: string;
+    readonly orderId: string;
+    readonly now: string;
+  }) => Promise<Booking | null>;
+  readonly releasePaidBookingPaymentHold: (input: {
+    readonly bookingId: string;
+    readonly state: "cancelled" | "expired";
+    readonly now: string;
+  }) => Promise<Booking | null>;
   readonly findByOwnerAndId: (input: {
     readonly ownerUserId: string;
     readonly bookingId: string;

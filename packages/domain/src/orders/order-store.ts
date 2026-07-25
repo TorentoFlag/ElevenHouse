@@ -21,6 +21,7 @@ export type FinanceOrder = {
   readonly astrologerUserId: string;
   readonly productId: string;
   readonly directLinkIntentId: string | null;
+  readonly bookingId: string | null;
   readonly status: OrderStatus;
   readonly grossAmount: Money;
   readonly platformFee: Money;
@@ -36,6 +37,7 @@ export type CreateFinanceOrderRecordInput = {
   readonly astrologerUserId: string;
   readonly productId: string;
   readonly directLinkIntentId: string | null;
+  readonly bookingId?: string | null;
   readonly status?: OrderStatus;
   readonly grossAmount: Money;
   readonly platformFee: Money;

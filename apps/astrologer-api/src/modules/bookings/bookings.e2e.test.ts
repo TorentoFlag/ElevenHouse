@@ -369,6 +369,9 @@ function createCommandStore(): BookingCommandStore {
       saved = { key: command.key, hash: command.requestHash };
       return { kind: "created" as const, booking };
     }),
+    executePaidHold: vi.fn(),
+    confirmPaidBooking: vi.fn(async () => null),
+    releasePaidBookingPaymentHold: vi.fn(async () => null),
     findByOwnerAndId: vi.fn(async ({ ownerUserId: candidateOwner, bookingId: candidate }) =>
       candidateOwner === ownerUserId && candidate === bookingId ? booking : null
     )
@@ -382,7 +385,9 @@ function createBooking(): Booking {
     ownerUserId,
     clientUserId,
     productId,
+    source: "manual",
     state: "confirmed",
+    holdExpiresAt: null,
     startAt: "2026-07-20T07:00:00.000Z",
     endAt: "2026-07-20T08:00:00.000Z",
     productTitle: "Натальный разбор",

@@ -20,6 +20,7 @@ import {
 import { products } from "../products/products.schema";
 import { availabilitySchedules } from "./availability.schema";
 import {
+  bookingSourceValues,
   bookingStateValues,
   formatSchedulingSqlValues,
   manualCalendarBlockStateValues,
@@ -138,7 +139,9 @@ export const bookings = pgTable(
       .references(() => users.id, { onDelete: "restrict" }),
     productId: uuid("product_id").notNull(),
     reservationId: uuid("reservation_id").notNull(),
+    source: text("source").notNull().default("manual"),
     state: text("state").notNull().default("confirmed"),
+    holdExpiresAt: timestamp("hold_expires_at", { withTimezone: true }),
     serviceStartAt: timestamp("service_start_at", { withTimezone: true }).notNull(),
     serviceEndAt: timestamp("service_end_at", { withTimezone: true }).notNull(),
     productTitleSnapshot: text("product_title_snapshot").notNull(),
@@ -166,6 +169,14 @@ export const bookings = pgTable(
     check(
       "bookings_state_check",
       sql`${table.state} in ${sql.raw(formatSchedulingSqlValues(bookingStateValues))}`
+    ),
+    check(
+      "bookings_source_check",
+      sql`${table.source} in ${sql.raw(formatSchedulingSqlValues(bookingSourceValues))}`
+    ),
+    check(
+      "bookings_hold_expiry_check",
+      sql`(${table.state} = 'hold' and ${table.holdExpiresAt} is not null) or (${table.state} <> 'hold' and ${table.holdExpiresAt} is null)`
     ),
     check("bookings_service_range_check", sql`${table.serviceStartAt} < ${table.serviceEndAt}`),
     check(

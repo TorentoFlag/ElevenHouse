@@ -232,6 +232,7 @@ function createOrderStore(): FinanceOrderStore {
           astrologerUserId: input.astrologerUserId,
           productId: input.productId,
           directLinkIntentId: input.directLinkIntentId,
+          bookingId: input.bookingId ?? null,
           status: input.status ?? "pending_payment",
           grossAmount: input.grossAmount,
           platformFee: input.platformFee,

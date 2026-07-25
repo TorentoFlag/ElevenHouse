@@ -1,11 +1,14 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import type {
+  Booking,
   CapturedSaleTransactionStore,
   CapturedSaleUnitOfWork,
   FinanceOrder,
   PaymentAttempt,
-  PaymentProviderEvent
+  PaymentProviderEvent,
+  TerminalPaymentTransactionStore,
+  TerminalPaymentUnitOfWork
 } from "@elevenhouse/domain";
 import { verifyArcPayWebhookSignature } from "../arc-pay/arc-pay-signature";
 import { createPaymentWebhookHandler } from "./payment-webhook.server";
@@ -15,6 +18,8 @@ const webhookSecret = "arc-pay-webhook-secret";
 const now = new Date("2026-07-24T12:00:00.000Z");
 const paymentAttemptId = "11111111-1111-4111-8111-111111111111";
 const providerPaymentId = "22222222-2222-4222-8222-222222222222";
+const orderId = "33333333-3333-4333-8333-333333333333";
+const bookingId = "99999999-9999-4999-8999-999999999999";
 
 describe("Arc Pay payment webhook ingestion", () => {
   it("returns 401 for an invalid signature before parsing or processing the body", async () => {
@@ -151,7 +156,7 @@ describe("Arc Pay payment webhook ingestion", () => {
     expect(harness.orderStore.updateStatus).not.toHaveBeenCalled();
   });
 
-  it("persists Arc Pay pending_3ds and expired provider evidence without fulfillment effects", async () => {
+  it("persists Arc Pay pending_3ds without fulfillment effects and expires bookings on terminal expiry", async () => {
     const harness = createHarness();
 
     await expect(
@@ -181,7 +186,18 @@ describe("Arc Pay payment webhook ingestion", () => {
       { type: "payment.pending_3ds" },
       { type: "payment.expired" }
     ]);
-    expect(harness.orderStore.updateStatus).not.toHaveBeenCalled();
+    expect(harness.orderStore.updateStatus).toHaveBeenCalledWith({
+      orderId,
+      status: "expired",
+      now: now.toISOString()
+    });
+    expect(harness.releasedBookingHolds).toEqual([
+      {
+        bookingId,
+        state: "expired",
+        now: now.toISOString()
+      }
+    ]);
   });
 
   it("returns retryable 500 when the local attempt is not available yet", async () => {
@@ -250,7 +266,7 @@ describe("Arc Pay payment webhook ingestion", () => {
 function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
   const attempt: PaymentAttempt = {
     id: paymentAttemptId,
-    orderId: "33333333-3333-4333-8333-333333333333",
+    orderId,
     provider: "arc_pay",
     environment: "sandbox",
     status: "checkout_opened",
@@ -268,6 +284,7 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
     astrologerUserId: "66666666-6666-4666-8666-666666666666",
     productId: "77777777-7777-4777-8777-777777777777",
     directLinkIntentId: null,
+    bookingId,
     status: "pending_payment",
     grossAmount: { amountMinor: 50_000, currency: "RUB" },
     platformFee: { amountMinor: 5_000, currency: "RUB" },
@@ -280,6 +297,7 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
   const linkedProviderPaymentIds: string[] = [];
   const ledgerTransactions: unknown[] = [];
   const outboxEvents: unknown[] = [];
+  const releasedBookingHolds: unknown[] = [];
   const eventByWebhookId = new Map<string, PaymentProviderEvent>();
   const orderStore = {
     findById: vi.fn(async () => order),
@@ -321,6 +339,9 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
     updatedAt: input.now
   }));
   const markOrderPaid: CapturedSaleTransactionStore["markOrderPaid"] = markOrderPaidSpy;
+  const confirmPaidBooking: CapturedSaleTransactionStore["confirmPaidBooking"] = vi.fn(
+    async () => ({ id: bookingId })
+  );
   const capturedSale: CapturedSaleUnitOfWork = {
     transact: async (operation) => {
       const transactionStore: CapturedSaleTransactionStore = {
@@ -330,6 +351,7 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
         recordProviderEvent: paymentStore.recordProviderEvent,
         findById: orderStore.findById,
         markOrderPaid,
+        confirmPaidBooking,
         createTransaction: async (input) => {
           ledgerTransactions.push(input);
           return { ...input, id: "ledger-transaction-1", entries: [] };
@@ -341,10 +363,28 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
       return operation(transactionStore);
     }
   };
+  const terminalPayment: TerminalPaymentUnitOfWork = {
+    transact: async (operation) => {
+      const transactionStore: TerminalPaymentTransactionStore = {
+        findAttemptById: paymentStore.findAttemptById,
+        findProviderEventByWebhookId: paymentStore.findProviderEventByWebhookId,
+        linkAttemptToProviderPayment: paymentStore.linkAttemptToProviderPayment,
+        recordProviderEvent: paymentStore.recordProviderEvent,
+        findById: orderStore.findById,
+        updateStatus: orderStore.updateStatus,
+        releasePaidBookingPaymentHold: async (input) => {
+          releasedBookingHolds.push(input);
+          return paidBooking(input.state);
+        }
+      };
+      return operation(transactionStore);
+    }
+  };
   const processor = createPaymentWebhookProcessor({
     paymentStore,
     orderStore,
     capturedSale,
+    terminalPayment,
     resolvePaymentAttemptId,
     now: () => now
   });
@@ -356,6 +396,7 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
     createdEvents,
     ledgerTransactions,
     outboxEvents,
+    releasedBookingHolds,
     linkedProviderPaymentIds,
     resolvePaymentAttemptId,
     handler: createPaymentWebhookHandler({
@@ -364,6 +405,34 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
       now: () => now,
       processor
     })
+  };
+}
+
+function paidBooking(state: "cancelled" | "expired"): Booking {
+  return {
+    id: bookingId,
+    reservationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    ownerUserId: "44444444-4444-4444-8444-444444444444",
+    clientUserId: "33333333-3333-4333-8333-333333333333",
+    productId: "55555555-5555-4555-8555-555555555555",
+    source: "client_paid",
+    state,
+    holdExpiresAt: null,
+    startAt: "2026-07-25T09:00:00.000Z",
+    endAt: "2026-07-25T10:00:00.000Z",
+    productTitle: "Натальный разбор",
+    durationMinutes: 60,
+    deliveryFormat: "video",
+    priceMinor: 50_000,
+    currency: "RUB",
+    timeZone: "Europe/Moscow",
+    policySnapshot: {
+      bufferBeforeMinutes: 10,
+      bufferAfterMinutes: 10,
+      minimumNoticeMinutes: 360
+    },
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString()
   };
 }
 

@@ -3,8 +3,10 @@ import {
   availabilityScheduleResponseSchema,
   availableBookingSlotsQuerySchema,
   availableBookingSlotsResponseSchema,
+  bookingLifecycleStateSchema,
   bookingParamsSchema,
   bookingResponseSchema,
+  createPaidBookingHoldRequestSchema,
   calendarRangeQuerySchema,
   calendarRangeResponseSchema,
   createManualBlockRequestSchema,
@@ -12,6 +14,7 @@ import {
   manualBlockResponseSchema,
   manualBlockParamsSchema,
   manualBookingResponseSchema,
+  paidBookingHoldResponseSchema,
   putDefaultAvailabilityScheduleRequestSchema,
   replaceAvailabilityScheduleRequestSchema
 } from "./calendar";
@@ -94,7 +97,9 @@ describe("calendar contracts", () => {
           reservationId,
           clientUserId,
           productId,
+          source: "manual",
           state: "confirmed",
+          holdExpiresAt: null,
           startAt: "2026-05-29T08:00:00.000Z",
           endAt: "2026-05-29T09:00:00.000Z",
           productTitle: "Натальный разбор",
@@ -342,7 +347,9 @@ describe("calendar contracts", () => {
         reservationId,
         clientUserId,
         productId,
+        source: "manual",
         state: "confirmed",
+        holdExpiresAt: null,
         startAt: "2026-05-29T08:00:00.000Z",
         endAt: "2026-05-29T09:00:00.000Z",
         productTitle: "Натальный разбор",
@@ -367,6 +374,97 @@ describe("calendar contracts", () => {
       manualBookingResponseSchema.safeParse({
         ...response,
         booking: { ...response.booking, state: "completed" }
+      }).success
+    ).toBe(false);
+  });
+
+  it("accepts paid booking lifecycle states without widening manual booking creation", () => {
+    expect(bookingLifecycleStateSchema.options).toEqual([
+      "hold",
+      "pending_payment",
+      "confirmed",
+      "completed",
+      "cancelled",
+      "no_show",
+      "expired"
+    ]);
+
+    const heldBooking = {
+      id: bookingId,
+      reservationId,
+      clientUserId,
+      productId,
+      source: "client_paid",
+      state: "hold",
+      holdExpiresAt: "2026-05-20T10:15:00.000Z",
+      startAt: "2026-05-29T08:00:00.000Z",
+      endAt: "2026-05-29T09:00:00.000Z",
+      productTitle: "Натальный разбор",
+      durationMinutes: 60,
+      deliveryFormat: "video",
+      priceMinor: 490000,
+      currency: "RUB",
+      timeZone: "Europe/Moscow",
+      policySnapshot: {
+        bufferBeforeMinutes: 10,
+        bufferAfterMinutes: 10,
+        minimumNoticeMinutes: 360
+      },
+      createdAt: "2026-05-20T10:00:00.000Z",
+      updatedAt: "2026-05-20T10:00:00.000Z"
+    } as const;
+
+    expect(bookingResponseSchema.parse({ booking: heldBooking })).toEqual({
+      booking: heldBooking
+    });
+    expect(
+      manualBookingResponseSchema.safeParse({ booking: heldBooking, replayed: false }).success
+    ).toBe(false);
+  });
+
+  it("validates the public paid booking hold request and response", () => {
+    const request = {
+      astrologerUserId: "77777777-7777-4777-8777-777777777777",
+      productId,
+      directLinkIntentId: null,
+      deliveryFormat: "video",
+      projectedStartAt: "2026-05-29T08:00:00.000Z"
+    } as const;
+
+    const response = {
+      booking: {
+        id: bookingId,
+        reservationId,
+        clientUserId,
+        productId,
+        source: "client_paid",
+        state: "hold",
+        holdExpiresAt: "2026-05-20T10:15:00.000Z",
+        startAt: request.projectedStartAt,
+        endAt: "2026-05-29T09:00:00.000Z",
+        productTitle: "Натальный разбор",
+        durationMinutes: 60,
+        deliveryFormat: "video",
+        priceMinor: 490000,
+        currency: "RUB",
+        timeZone: "Europe/Moscow",
+        policySnapshot: {
+          bufferBeforeMinutes: 10,
+          bufferAfterMinutes: 10,
+          minimumNoticeMinutes: 360
+        },
+        createdAt: "2026-05-20T10:00:00.000Z",
+        updatedAt: "2026-05-20T10:00:00.000Z"
+      },
+      replayed: false
+    } as const;
+
+    expect(createPaidBookingHoldRequestSchema.parse(request)).toEqual(request);
+    expect(paidBookingHoldResponseSchema.parse(response)).toEqual(response);
+    expect(
+      createPaidBookingHoldRequestSchema.safeParse({
+        ...request,
+        projectedStartAt: "2026-05-29 11:00"
       }).success
     ).toBe(false);
   });

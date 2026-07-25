@@ -25,6 +25,7 @@ export const orderResponseSchema = z
     astrologerUserId: uuidSchema,
     productId: uuidSchema,
     directLinkIntentId: uuidSchema.nullable(),
+    bookingId: uuidSchema.nullable(),
     status: orderStatusSchema,
     grossAmount: moneySchema,
     platformFee: moneySchema,
@@ -63,12 +64,14 @@ export const createOrderRequestSchema = z
     astrologerUserId: uuidSchema,
     productId: uuidSchema,
     directLinkIntentId: uuidSchema.nullable().optional(),
+    bookingId: uuidSchema.nullable().optional(),
     clientBirthDataId: uuidSchema.nullable().optional()
   })
   .strict()
   .transform((value) => ({
     ...value,
     directLinkIntentId: value.directLinkIntentId ?? null,
+    bookingId: value.bookingId ?? null,
     clientBirthDataId: value.clientBirthDataId ?? null
   }));
 export type CreateOrderRequest = z.infer<typeof createOrderRequestSchema>;

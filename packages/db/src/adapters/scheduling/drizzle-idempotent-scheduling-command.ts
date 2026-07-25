@@ -16,7 +16,7 @@ type PersistedCommand = {
   readonly expiresAt: string;
 };
 
-const apiSurface = "astrologer-api";
+const defaultApiSurface = "astrologer-api";
 
 export async function executeIdempotentSchedulingCommand<T>(input: {
   readonly database: ElevenHouseDatabase;
@@ -25,7 +25,9 @@ export async function executeIdempotentSchedulingCommand<T>(input: {
     transaction: SchedulingTransaction
   ) => Promise<{ readonly aggregateId: string; readonly value: T }>;
   readonly replay: (aggregateId: string) => Promise<T | null>;
+  readonly apiSurface?: "astrologer-api" | "public-api";
 }): Promise<{ readonly kind: "created" | "replayed"; readonly value: T }> {
+  const apiSurface = input.apiSurface ?? defaultApiSurface;
   try {
     const value = await input.database.transaction(async (transaction) => {
       const [commandRow] = await transaction

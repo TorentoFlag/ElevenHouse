@@ -140,6 +140,7 @@ When a client buys from an astrologer, ElevenHouse should:
 - [x] 2026-07-24: Task 5 public payment checkout implemented and verified with domain/provider/public-API HTTP tests and affected package typechecks; no live Arc Pay request was made.
 - [x] 2026-07-24: Task 6 payment-worker webhook ingestion implemented and verified with focused signature/parser/processor tests and affected package typechecks; review fixes added `/v1/payments/{id}` lookup, preflight duplicate webhook detection and real Arc Pay `payment.pending_3ds`/`payment.expired` event support. No worker process, database integration, or live Arc Pay webhook was started.
 - [x] 2026-07-24: Task 7 captured-sale ledger posting implemented and verified with focused domain/db/worker tests and affected package typechecks; review fix made captured-sale outbox inserts idempotent on `(event_type, aggregate_id)`.
+- [x] 2026-07-25: Task 8 booking lifecycle rewrite implemented for paid client flow: public paid booking hold, order booking linkage, hold-to-pending transition, captured-payment booking confirmation, terminal payment release, expired hold cleanup before new slot claims, explicit manual booking source/status and affected read contract updates. Verified with focused contracts/domain/schema/API/worker/frontend tests and affected package typechecks; local DB reset/integration tests and live runtime were not run because process/DB lifecycle authority was not granted.
 
 ## Surprises & Discoveries
 
@@ -160,6 +161,8 @@ When a client buys from an astrologer, ElevenHouse should:
 - 2026-07-24: Arc Pay Hosted Checkout OpenAPI uses `payment_methods[].method = bank_card` for cards and `capture_mode = one_stage | two_stage`; invalid shorthand such as `card` or `automatic` must be rejected by runtime config before provider calls.
 - 2026-07-24: Arc Pay payment lookup endpoint is `/v1/payments/{id}`. Webhook duplicate detection must query stored provider events before calling Arc Pay, otherwise already-processed retries can fail if the provider API is temporarily unavailable.
 - 2026-07-24: Captured provider event, `pending_payment -> paid`, sale ledger posting, wallet pending projection and captured-sale outbox rows must commit atomically. Otherwise a stored duplicate webhook can suppress the retry that would repair missing ledger movement.
+- 2026-07-25: Paid booking holds cannot rely on availability projection alone for expiry. PostgreSQL active-reservation exclusion still blocks inserts until expired holds are released, so the booking command store now releases overlapping expired paid holds inside the same transaction before inserting a new reservation.
+- 2026-07-25: Provider `payment.timeout` remains unknown/evidence-only. Only terminal `payment.failed`, `payment.declined`, `payment.expired` and `payment.voided` release unpaid paid bookings through the terminal-payment unit of work.
 
 ## Decision Log
 
@@ -676,11 +679,11 @@ sale_captured:
 - Client paid flow owns `hold -> pending_payment -> confirmed`.
 - Manual astrologer booking remains supported but explicit as manual source.
 
-- [ ] Write failing tests for slot hold, hold expiry, payment failure release, payment captured confirmation and no double booking.
-- [ ] Migrate schema values and booking domain state machine.
-- [ ] Implement public booking intent/select-slot routes.
-- [ ] Preserve existing manual booking behavior with explicit source/status mapping.
-- [ ] Run calendar/booking contracts, domain and API tests.
+- [x] Write failing tests for slot hold, hold expiry, payment failure release, payment captured confirmation and no double booking.
+- [x] Migrate schema values and booking domain state machine.
+- [x] Implement public booking intent/select-slot routes.
+- [x] Preserve existing manual booking behavior with explicit source/status mapping.
+- [x] Run calendar/booking contracts, domain and API tests.
 
 ### Task 9: Finance Policies, Risk Profiles and Admin Settings
 

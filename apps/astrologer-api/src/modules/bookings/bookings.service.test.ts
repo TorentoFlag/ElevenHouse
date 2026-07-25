@@ -44,7 +44,9 @@ const booking: Booking = {
   ownerUserId,
   clientUserId,
   productId,
+  source: "manual",
   state: "confirmed",
+  holdExpiresAt: null,
   startAt: "2026-07-20T07:00:00.000Z",
   endAt: "2026-07-20T08:00:00.000Z",
   productTitle: "Натальный разбор",
@@ -180,14 +182,14 @@ function createService(
       findByOwnerAndId: vi.fn(async () => ({
         id: productId,
         title: booking.productTitle,
-        status: "active",
-        executionMode: "live",
-        participantMode: "solo",
+        status: "active" as const,
+        executionMode: "live" as const,
+        participantMode: "solo" as const,
         durationMinutes: 60,
-        deliveryFormats: ["video"],
+        deliveryFormats: ["video" as const],
         priceMinor: booking.priceMinor,
-        currency: "RUB"
-      }) as const)
+        currency: "RUB" as const
+      }))
     } satisfies BookingProductReader,
     { now: () => new Date("2026-07-17T09:00:00.000Z") }
   );
@@ -196,6 +198,9 @@ function createService(
 function createCommandStore(overrides: Partial<BookingCommandStore> = {}): BookingCommandStore {
   return {
     executeManualBooking: vi.fn(async () => ({ kind: "created" as const, booking })),
+    executePaidHold: vi.fn(),
+    confirmPaidBooking: vi.fn(async () => null),
+    releasePaidBookingPaymentHold: vi.fn(async () => null),
     findByOwnerAndId: vi.fn(async () => booking),
     ...overrides
   };

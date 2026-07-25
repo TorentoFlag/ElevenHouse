@@ -5,3 +5,4 @@ export * from "./drizzle-ledger-store";
 export * from "./drizzle-order-store";
 export * from "./drizzle-payment-store";
 export * from "./drizzle-payout-store";
+export * from "./drizzle-terminal-payment-unit-of-work";

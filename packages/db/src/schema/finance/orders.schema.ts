@@ -1,8 +1,9 @@
 import { sql } from "drizzle-orm";
-import { bigint, check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, check, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { clientJoinIntents } from "../clients/client-join-intents.schema";
 import { users } from "../identity/accounts.schema";
 import { products } from "../products/products.schema";
+import { bookings } from "../scheduling/bookings.schema";
 import {
   financeCurrencyValues,
   financeSafeIntegerMinorUnitMax,
@@ -27,6 +28,7 @@ export const orders = pgTable(
     directLinkIntentId: uuid("direct_link_intent_id").references(() => clientJoinIntents.id, {
       onDelete: "set null"
     }),
+    bookingId: uuid("booking_id").references(() => bookings.id, { onDelete: "restrict" }),
     status: text("status").notNull().default("pending_payment"),
     grossAmountMinor: bigint("gross_amount_minor", { mode: "number" }).notNull(),
     grossCurrency: text("gross_currency").notNull(),
@@ -61,6 +63,7 @@ export const orders = pgTable(
     ),
     index("orders_client_created_idx").on(table.clientUserId, table.createdAt, table.id),
     index("orders_astrologer_created_idx").on(table.astrologerUserId, table.createdAt, table.id),
-    index("orders_status_created_idx").on(table.status, table.createdAt, table.id)
+    index("orders_status_created_idx").on(table.status, table.createdAt, table.id),
+    uniqueIndex("orders_booking_unique").on(table.bookingId)
   ]
 );

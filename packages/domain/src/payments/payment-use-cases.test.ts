@@ -3,12 +3,17 @@ import {
   PaymentCheckoutOrderAccessDeniedError,
   PaymentCheckoutOrderNotPayableError,
   createPaymentCheckout,
+  releaseTerminalPaymentProviderWebhook,
+  type Booking,
+  type BookingCommandStore,
   type CreatePaymentAttemptInput,
   type FinanceOrder,
   type FinanceOrderStore,
   type PaymentAttempt,
+  type PaymentProviderEvent,
   type PaymentProviderPort,
-  type PaymentStore
+  type PaymentStore,
+  type TerminalPaymentUnitOfWork
 } from "../index";
 
 const clientUserId = "11111111-1111-4111-8111-111111111111";
@@ -83,6 +88,47 @@ describe("createPaymentCheckout", () => {
   });
 });
 
+describe("releaseTerminalPaymentProviderWebhook", () => {
+  it("records terminal provider evidence and releases the paid booking hold atomically", async () => {
+    const harness = createTerminalHarness({
+      order: order({ bookingId: "77777777-7777-4777-8777-777777777777" })
+    });
+
+    await expect(releaseTerminalPaymentProviderWebhook(terminalWebhook(harness))).resolves.toEqual({
+      kind: "created",
+      event: expect.objectContaining({ type: "payment.expired" })
+    });
+
+    expect(harness.orderStore.updateStatus).toHaveBeenCalledWith({
+      orderId,
+      status: "expired",
+      now: now.toISOString()
+    });
+    expect(harness.bookingStore.releasePaidBookingPaymentHold).toHaveBeenCalledWith({
+      bookingId: "77777777-7777-4777-8777-777777777777",
+      state: "expired",
+      now: now.toISOString()
+    });
+  });
+
+  it("does not replay order or booking changes for an already stored terminal webhook", async () => {
+    const existingEvent = providerEvent({ type: "payment.failed" });
+    const harness = createTerminalHarness({
+      order: order({ bookingId: "77777777-7777-4777-8777-777777777777" }),
+      existingEvent
+    });
+
+    await expect(
+      releaseTerminalPaymentProviderWebhook(
+        terminalWebhook(harness, { type: "payment.failed" })
+      )
+    ).resolves.toEqual({ kind: "replayed", event: existingEvent });
+
+    expect(harness.orderStore.updateStatus).not.toHaveBeenCalled();
+    expect(harness.bookingStore.releasePaidBookingPaymentHold).not.toHaveBeenCalled();
+  });
+});
+
 function createCheckout(harness: ReturnType<typeof createHarness>) {
   return createPaymentCheckout({
     orderStore: harness.orderStore,
@@ -148,20 +194,22 @@ function createHarness(
   };
 }
 
-function order(): FinanceOrder {
+function order(overrides: Partial<FinanceOrder> = {}): FinanceOrder {
   return {
     id: orderId,
     clientUserId,
     astrologerUserId: "44444444-4444-4444-8444-444444444444",
     productId: "55555555-5555-4555-855555555555",
     directLinkIntentId: null,
+    bookingId: null,
     status: "pending_payment",
     grossAmount: { amountMinor: 500_00, currency: "RUB" },
     platformFee: { amountMinor: 50_00, currency: "RUB" },
     astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" },
     financePolicySnapshotId: "66666666-6666-4666-8666-666666666666",
     createdAt: now.toISOString(),
-    updatedAt: now.toISOString()
+    updatedAt: now.toISOString(),
+    ...overrides
   };
 }
 
@@ -177,6 +225,126 @@ function attempt(overrides: Partial<PaymentAttempt> = {}): PaymentAttempt {
     providerCheckoutId: null,
     idempotencyKey: "checkout:request-1",
     metadata: {},
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    ...overrides
+  };
+}
+
+function createTerminalHarness(
+  options: {
+    readonly order?: FinanceOrder;
+    readonly existingEvent?: PaymentProviderEvent;
+  } = {}
+) {
+  const currentOrder = options.order ?? order();
+  const paymentStore = {
+    findAttemptById: vi.fn(async () => attempt({ status: "checkout_opened" })),
+    findProviderEventByWebhookId: vi.fn(async () => options.existingEvent ?? null),
+    linkAttemptToProviderPayment: vi.fn(async (input) =>
+      attempt({ status: "checkout_opened", providerPaymentId: input.providerPaymentId })
+    ),
+    recordProviderEvent: vi.fn(async (input) => ({
+      kind: "created" as const,
+      event: providerEvent({ type: input.type, providerWebhookId: input.providerWebhookId })
+    }))
+  } satisfies Pick<
+    PaymentStore,
+    | "findAttemptById"
+    | "findProviderEventByWebhookId"
+    | "linkAttemptToProviderPayment"
+    | "recordProviderEvent"
+  >;
+  const orderStore = {
+    findById: vi.fn(async () => currentOrder),
+    updateStatus: vi.fn(async (input) => ({
+      ...currentOrder,
+      status: input.status,
+      updatedAt: input.now
+    }))
+  } satisfies Pick<FinanceOrderStore, "findById" | "updateStatus">;
+  const bookingStore = {
+    releasePaidBookingPaymentHold: vi.fn(async (input) => booking({ state: input.state }))
+  } satisfies Pick<BookingCommandStore, "releasePaidBookingPaymentHold">;
+  return {
+    orderStore,
+    bookingStore,
+    terminalPayment: {
+      transact: async (operation) =>
+        operation({
+          ...paymentStore,
+          ...orderStore,
+          releasePaidBookingPaymentHold: bookingStore.releasePaidBookingPaymentHold
+        })
+    } satisfies TerminalPaymentUnitOfWork
+  };
+}
+
+function terminalWebhook(
+  harness: ReturnType<typeof createTerminalHarness>,
+  overrides: {
+    readonly type?: "payment.failed" | "payment.declined" | "payment.expired" | "payment.voided";
+  } = {}
+) {
+  return {
+    terminalPayment: harness.terminalPayment,
+    request: {
+      paymentAttemptId,
+      provider: "arc_pay" as const,
+      environment: "sandbox" as const,
+      providerWebhookId: "arc-webhook-terminal-1",
+      providerPaymentId: "arc-payment-1",
+      type: overrides.type ?? "payment.expired",
+      occurredAt: now.toISOString(),
+      receivedAt: now.toISOString(),
+      payload: {},
+      moneyFacts: {
+        kind: "exact" as const,
+        amounts: [{ amountMinor: 500_00, currency: "RUB" }] as const
+      }
+    }
+  };
+}
+
+function providerEvent(overrides: Partial<PaymentProviderEvent> = {}): PaymentProviderEvent {
+  return {
+    id: "provider-event-1",
+    paymentAttemptId,
+    provider: "arc_pay",
+    environment: "sandbox",
+    providerWebhookId: "arc-webhook-terminal-1",
+    providerPaymentId: "arc-payment-1",
+    type: "payment.expired",
+    occurredAt: now.toISOString(),
+    receivedAt: now.toISOString(),
+    payload: {},
+    ...overrides
+  };
+}
+
+function booking(overrides: Partial<Booking> = {}): Booking {
+  return {
+    id: "77777777-7777-4777-8777-777777777777",
+    reservationId: "88888888-8888-4888-8888-888888888888",
+    ownerUserId: "44444444-4444-4444-8444-444444444444",
+    clientUserId,
+    productId: "55555555-5555-4555-855555555555",
+    source: "client_paid",
+    state: "expired",
+    holdExpiresAt: null,
+    startAt: "2026-07-25T09:00:00.000Z",
+    endAt: "2026-07-25T10:00:00.000Z",
+    productTitle: "Натальный разбор",
+    durationMinutes: 60,
+    deliveryFormat: "video",
+    priceMinor: 500_00,
+    currency: "RUB",
+    timeZone: "Europe/Moscow",
+    policySnapshot: {
+      bufferBeforeMinutes: 10,
+      bufferAfterMinutes: 10,
+      minimumNoticeMinutes: 360
+    },
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
     ...overrides

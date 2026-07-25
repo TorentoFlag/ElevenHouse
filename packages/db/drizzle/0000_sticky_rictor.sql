@@ -873,7 +873,9 @@ CREATE TABLE "bookings" (
 	"client_user_id" uuid NOT NULL,
 	"product_id" uuid NOT NULL,
 	"reservation_id" uuid NOT NULL,
+	"source" text DEFAULT 'manual' NOT NULL,
 	"state" text DEFAULT 'confirmed' NOT NULL,
+	"hold_expires_at" timestamp with time zone,
 	"service_start_at" timestamp with time zone NOT NULL,
 	"service_end_at" timestamp with time zone NOT NULL,
 	"product_title_snapshot" text NOT NULL,
@@ -886,7 +888,9 @@ CREATE TABLE "bookings" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "bookings_reservation_unique" UNIQUE("reservation_id"),
-	CONSTRAINT "bookings_state_check" CHECK ("bookings"."state" in ('confirmed', 'cancelled')),
+	CONSTRAINT "bookings_state_check" CHECK ("bookings"."state" in ('hold', 'pending_payment', 'confirmed', 'completed', 'cancelled', 'no_show', 'expired')),
+	CONSTRAINT "bookings_source_check" CHECK ("bookings"."source" in ('manual', 'client_paid')),
+	CONSTRAINT "bookings_hold_expiry_check" CHECK (("bookings"."state" = 'hold' and "bookings"."hold_expires_at" is not null) or ("bookings"."state" <> 'hold' and "bookings"."hold_expires_at" is null)),
 	CONSTRAINT "bookings_service_range_check" CHECK ("bookings"."service_start_at" < "bookings"."service_end_at"),
 	CONSTRAINT "bookings_product_title_length_check" CHECK (length(trim("bookings"."product_title_snapshot")) between 1 and 200),
 	CONSTRAINT "bookings_duration_check" CHECK ("bookings"."duration_minutes_snapshot" between 1 and 1440),
@@ -1081,213 +1085,6 @@ CREATE TABLE "messaging_realtime_events" (
 	CONSTRAINT "messaging_realtime_events_type_check" CHECK ("messaging_realtime_events"."type" in ('thread.created', 'thread.updated', 'message.received', 'message.updated', 'message.deleted', 'channelConnection.updated', 'identity.linked', 'delivery.failed'))
 );
 --> statement-breakpoint
-ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_assigned_by_user_id_users_id_fk" FOREIGN KEY ("assigned_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_sessions" ADD CONSTRAINT "user_sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "auth_challenge_deliveries" ADD CONSTRAINT "auth_challenge_deliveries_challenge_id_auth_challenges_id_fk" FOREIGN KEY ("challenge_id") REFERENCES "public"."auth_challenges"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "auth_challenge_delivery_attempts" ADD CONSTRAINT "auth_challenge_delivery_attempts_delivery_id_auth_challenge_deliveries_id_fk" FOREIGN KEY ("delivery_id") REFERENCES "public"."auth_challenge_deliveries"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "auth_security_events" ADD CONSTRAINT "auth_security_events_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "auth_security_events" ADD CONSTRAINT "auth_security_events_session_id_user_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."user_sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dictionary_platform_entries" ADD CONSTRAINT "dictionary_platform_entries_category_id_dictionary_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."dictionary_categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_category_id_dictionary_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."dictionary_categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_platform_entry_identity_fk" FOREIGN KEY ("platform_entry_id","category_id","code","locale") REFERENCES "public"."dictionary_platform_entries"("id","category_id","code","locale") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "products" ADD CONSTRAINT "products_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "products" ADD CONSTRAINT "products_cover_media_id_media_assets_id_fk" FOREIGN KEY ("cover_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "product_delivery_formats" ADD CONSTRAINT "product_delivery_formats_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "product_required_client_data" ADD CONSTRAINT "product_required_client_data_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "product_methods" ADD CONSTRAINT "product_methods_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "product_access_grants" ADD CONSTRAINT "product_access_grants_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "product_included_items" ADD CONSTRAINT "product_included_items_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "product_modifiers" ADD CONSTRAINT "product_modifiers_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_plan_id_platform_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."platform_plans"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "billing_payment_methods" ADD CONSTRAINT "billing_payment_methods_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "platform_plan_features" ADD CONSTRAINT "platform_plan_features_plan_id_platform_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."platform_plans"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "platform_subscriptions" ADD CONSTRAINT "platform_subscriptions_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "platform_subscriptions" ADD CONSTRAINT "platform_subscriptions_plan_id_platform_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."platform_plans"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "media_assets" ADD CONSTRAINT "media_assets_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "media_variants" ADD CONSTRAINT "media_variants_asset_id_media_assets_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."media_assets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_avatar_media_id_media_assets_id_fk" FOREIGN KEY ("avatar_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_cover_media_id_media_assets_id_fk" FOREIGN KEY ("cover_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "verification_applications" ADD CONSTRAINT "verification_applications_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "verification_applications" ADD CONSTRAINT "verification_applications_reviewer_user_id_users_id_fk" FOREIGN KEY ("reviewer_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "verification_application_documents" ADD CONSTRAINT "verification_application_documents_application_id_verification_applications_id_fk" FOREIGN KEY ("application_id") REFERENCES "public"."verification_applications"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "verification_application_documents" ADD CONSTRAINT "verification_application_documents_media_id_media_assets_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "calculation_records" ADD CONSTRAINT "calculation_records_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "calculation_participants" ADD CONSTRAINT "calculation_participants_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "calculation_client_links" ADD CONSTRAINT "calculation_client_links_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "calculation_interpretations" ADD CONSTRAINT "calculation_interpretations_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "calculation_artifacts" ADD CONSTRAINT "calculation_artifacts_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "calculation_artifacts" ADD CONSTRAINT "calculation_artifacts_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_artifact_id_fk" FOREIGN KEY ("artifact_id","calculation_id") REFERENCES "public"."calculation_artifacts"("id","calculation_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_media_asset_id_fk" FOREIGN KEY ("media_asset_id","owner_user_id") REFERENCES "public"."media_assets"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_client_id_client_profiles_user_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."client_profiles"("user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_result_calculation_id_calculation_records_id_fk" FOREIGN KEY ("result_calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "client_profiles" ADD CONSTRAINT "client_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "client_birth_data" ADD CONSTRAINT "client_birth_data_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_claimed_by_client_user_id_users_id_fk" FOREIGN KEY ("claimed_by_client_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "matrix_notes" ADD CONSTRAINT "matrix_notes_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "matrix_report_drafts" ADD CONSTRAINT "matrix_report_drafts_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "availability_date_overrides" ADD CONSTRAINT "availability_date_overrides_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "availability_override_periods" ADD CONSTRAINT "availability_override_periods_override_schedule_owner_fk" FOREIGN KEY ("override_id","schedule_id","owner_user_id") REFERENCES "public"."availability_date_overrides"("id","schedule_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "availability_product_assignments" ADD CONSTRAINT "availability_product_assignments_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "availability_product_assignments" ADD CONSTRAINT "availability_product_assignments_product_owner_fk" FOREIGN KEY ("product_id","owner_user_id") REFERENCES "public"."products"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "availability_schedules" ADD CONSTRAINT "availability_schedules_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "availability_weekly_periods" ADD CONSTRAINT "availability_weekly_periods_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "bookings" ADD CONSTRAINT "bookings_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "bookings" ADD CONSTRAINT "bookings_reservation_owner_fk" FOREIGN KEY ("reservation_id","owner_user_id") REFERENCES "public"."schedule_reservations"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "bookings" ADD CONSTRAINT "bookings_product_owner_fk" FOREIGN KEY ("product_id","owner_user_id") REFERENCES "public"."products"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "manual_calendar_blocks" ADD CONSTRAINT "manual_calendar_blocks_reservation_owner_fk" FOREIGN KEY ("reservation_id","owner_user_id") REFERENCES "public"."schedule_reservations"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "schedule_reservations" ADD CONSTRAINT "schedule_reservations_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "idempotency_commands" ADD CONSTRAINT "idempotency_commands_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "messaging_channel_connections" ADD CONSTRAINT "messaging_channel_connections_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "messaging_external_identities" ADD CONSTRAINT "messaging_external_identities_linked_client_user_id_users_id_fk" FOREIGN KEY ("linked_client_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "messaging_external_identities" ADD CONSTRAINT "messaging_external_identities_connection_provider_fk" FOREIGN KEY ("channel_connection_id","provider") REFERENCES "public"."messaging_channel_connections"("id","provider") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "messaging_threads" ADD CONSTRAINT "messaging_threads_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "messaging_threads" ADD CONSTRAINT "messaging_threads_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "messaging_thread_identities" ADD CONSTRAINT "messaging_thread_identities_thread_id_messaging_threads_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."messaging_threads"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "messaging_thread_identities" ADD CONSTRAINT "messaging_thread_identities_external_identity_provider_fk" FOREIGN KEY ("external_identity_id","provider") REFERENCES "public"."messaging_external_identities"("id","provider") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "messages" ADD CONSTRAINT "messages_thread_id_messaging_threads_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."messaging_threads"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "messages" ADD CONSTRAINT "messages_channel_connection_id_messaging_channel_connections_id_fk" FOREIGN KEY ("channel_connection_id") REFERENCES "public"."messaging_channel_connections"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "messages" ADD CONSTRAINT "messages_external_identity_id_messaging_external_identities_id_fk" FOREIGN KEY ("external_identity_id") REFERENCES "public"."messaging_external_identities"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "message_delivery_attempts" ADD CONSTRAINT "message_delivery_attempts_message_id_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "messaging_realtime_events" ADD CONSTRAINT "messaging_realtime_events_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
-CREATE UNIQUE INDEX "auth_identities_email_login_unique" ON "auth_identities" USING btree (lower("email")) WHERE "auth_identities"."provider" = 'email' and "auth_identities"."email" is not null;--> statement-breakpoint
-CREATE UNIQUE INDEX "auth_identities_phone_login_unique" ON "auth_identities" USING btree ("phone_number") WHERE "auth_identities"."provider" = 'phone' and "auth_identities"."phone_number" is not null;--> statement-breakpoint
-CREATE INDEX "auth_identities_user_id_index" ON "auth_identities" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "auth_identities_email_index" ON "auth_identities" USING btree ("email");--> statement-breakpoint
-CREATE INDEX "auth_identities_phone_number_index" ON "auth_identities" USING btree ("phone_number");--> statement-breakpoint
-CREATE UNIQUE INDEX "user_role_assignments_user_role_unique" ON "user_role_assignments" USING btree ("user_id","role");--> statement-breakpoint
-CREATE INDEX "user_role_assignments_role_index" ON "user_role_assignments" USING btree ("role");--> statement-breakpoint
-CREATE UNIQUE INDEX "user_sessions_token_hash_unique" ON "user_sessions" USING btree ("token_hash");--> statement-breakpoint
-CREATE INDEX "user_sessions_user_id_index" ON "user_sessions" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "user_sessions_active_user_index" ON "user_sessions" USING btree ("user_id") WHERE "user_sessions"."status" = 'active';--> statement-breakpoint
-CREATE INDEX "user_sessions_expires_at_index" ON "user_sessions" USING btree ("expires_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "auth_challenges_pending_identifier_unique" ON "auth_challenges" USING btree ("channel","identifier_normalized") WHERE "auth_challenges"."status" = 'pending';--> statement-breakpoint
-CREATE INDEX "auth_challenges_expires_at_index" ON "auth_challenges" USING btree ("expires_at");--> statement-breakpoint
-CREATE INDEX "auth_challenges_created_at_index" ON "auth_challenges" USING btree ("created_at");--> statement-breakpoint
-CREATE INDEX "auth_challenge_deliveries_challenge_id_index" ON "auth_challenge_deliveries" USING btree ("challenge_id");--> statement-breakpoint
-CREATE INDEX "auth_challenge_deliveries_status_created_at_index" ON "auth_challenge_deliveries" USING btree ("status","created_at");--> statement-breakpoint
-CREATE INDEX "auth_challenge_deliveries_created_at_index" ON "auth_challenge_deliveries" USING btree ("created_at");--> statement-breakpoint
-CREATE INDEX "auth_challenge_delivery_attempts_delivery_id_index" ON "auth_challenge_delivery_attempts" USING btree ("delivery_id");--> statement-breakpoint
-CREATE INDEX "auth_challenge_delivery_attempts_delivery_attempt_index" ON "auth_challenge_delivery_attempts" USING btree ("delivery_id","attempt_number","attempted_at");--> statement-breakpoint
-CREATE INDEX "auth_challenge_delivery_attempts_attempted_at_index" ON "auth_challenge_delivery_attempts" USING btree ("attempted_at");--> statement-breakpoint
-CREATE INDEX "auth_security_events_user_id_index" ON "auth_security_events" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "auth_security_events_session_id_index" ON "auth_security_events" USING btree ("session_id");--> statement-breakpoint
-CREATE INDEX "auth_security_events_event_type_index" ON "auth_security_events" USING btree ("event_type");--> statement-breakpoint
-CREATE INDEX "auth_security_events_occurred_at_index" ON "auth_security_events" USING btree ("occurred_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "outbox_events_event_type_aggregate_id_unique" ON "outbox_events" USING btree ("event_type","aggregate_id");--> statement-breakpoint
-CREATE INDEX "outbox_events_pending_index" ON "outbox_events" USING btree ("status","available_at","created_at");--> statement-breakpoint
-CREATE INDEX "outbox_events_locked_at_index" ON "outbox_events" USING btree ("locked_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "dictionary_categories_code_unique" ON "dictionary_categories" USING btree ("code");--> statement-breakpoint
-CREATE INDEX "dictionary_platform_entries_locale_status_category_index" ON "dictionary_platform_entries" USING btree ("locale","status","category_id");--> statement-breakpoint
-CREATE INDEX "dictionary_astrologer_entries_custom_owner_locale_category_index" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","locale","category_id") WHERE "dictionary_astrologer_entries"."entry_type" = 'custom';--> statement-breakpoint
-CREATE INDEX "dictionary_astrologer_entries_platform_entry_id_index" ON "dictionary_astrologer_entries" USING btree ("platform_entry_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "dictionary_astrologer_entries_override_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","platform_entry_id","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'override';--> statement-breakpoint
-CREATE UNIQUE INDEX "dictionary_astrologer_entries_custom_code_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","code","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'custom';--> statement-breakpoint
-CREATE INDEX "products_owner_created_id_idx" ON "products" USING btree ("owner_user_id","created_at","id");--> statement-breakpoint
-CREATE INDEX "products_owner_status_created_id_idx" ON "products" USING btree ("owner_user_id","status","created_at","id");--> statement-breakpoint
-CREATE INDEX "product_delivery_formats_product_id_idx" ON "product_delivery_formats" USING btree ("product_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "product_delivery_formats_product_value_unique" ON "product_delivery_formats" USING btree ("product_id","value");--> statement-breakpoint
-CREATE INDEX "product_required_client_data_product_id_idx" ON "product_required_client_data" USING btree ("product_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "product_required_client_data_product_value_unique" ON "product_required_client_data" USING btree ("product_id","value");--> statement-breakpoint
-CREATE INDEX "product_methods_product_id_idx" ON "product_methods" USING btree ("product_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "product_methods_product_value_unique" ON "product_methods" USING btree ("product_id","value");--> statement-breakpoint
-CREATE INDEX "product_access_grants_product_id_idx" ON "product_access_grants" USING btree ("product_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "product_access_grants_product_value_unique" ON "product_access_grants" USING btree ("product_id","value");--> statement-breakpoint
-CREATE INDEX "product_included_items_product_id_idx" ON "product_included_items" USING btree ("product_id");--> statement-breakpoint
-CREATE INDEX "product_modifiers_product_id_idx" ON "product_modifiers" USING btree ("product_id");--> statement-breakpoint
-CREATE INDEX "product_templates_active_locale_order_idx" ON "product_templates" USING btree ("locale","sort_order","code") WHERE "product_templates"."status" = 'active';--> statement-breakpoint
-CREATE INDEX "billing_invoices_owner_issued_idx" ON "billing_invoices" USING btree ("owner_user_id","issued_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "billing_invoices_provider_invoice_unique" ON "billing_invoices" USING btree ("provider","provider_invoice_id");--> statement-breakpoint
-CREATE INDEX "billing_payment_methods_owner_created_idx" ON "billing_payment_methods" USING btree ("owner_user_id","created_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "billing_payment_methods_provider_method_unique" ON "billing_payment_methods" USING btree ("provider","provider_payment_method_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "billing_payment_methods_default_owner_unique" ON "billing_payment_methods" USING btree ("owner_user_id") WHERE "billing_payment_methods"."is_default" = true;--> statement-breakpoint
-CREATE INDEX "platform_plan_features_plan_id_idx" ON "platform_plan_features" USING btree ("plan_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "platform_plan_features_plan_value_unique" ON "platform_plan_features" USING btree ("plan_id","value");--> statement-breakpoint
-CREATE INDEX "platform_subscriptions_owner_created_idx" ON "platform_subscriptions" USING btree ("owner_user_id","created_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "platform_subscriptions_current_owner_unique" ON "platform_subscriptions" USING btree ("owner_user_id") WHERE "platform_subscriptions"."is_current" = true;--> statement-breakpoint
-CREATE INDEX "media_assets_owner_purpose_status_created_idx" ON "media_assets" USING btree ("owner_user_id","purpose","status","created_at");--> statement-breakpoint
-CREATE INDEX "media_assets_owner_created_id_idx" ON "media_assets" USING btree ("owner_user_id","created_at","id");--> statement-breakpoint
-CREATE INDEX "media_variants_asset_id_idx" ON "media_variants" USING btree ("asset_id");--> statement-breakpoint
-CREATE INDEX "astrologer_profiles_public_handle_idx" ON "astrologer_profiles" USING btree ("public_handle");--> statement-breakpoint
-CREATE INDEX "verification_applications_owner_submitted_idx" ON "verification_applications" USING btree ("owner_user_id","submitted_at","id");--> statement-breakpoint
-CREATE INDEX "verification_applications_status_submitted_idx" ON "verification_applications" USING btree ("status","submitted_at");--> statement-breakpoint
-CREATE INDEX "verification_application_documents_application_idx" ON "verification_application_documents" USING btree ("application_id");--> statement-breakpoint
-CREATE INDEX "verification_application_documents_media_idx" ON "verification_application_documents" USING btree ("media_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "verification_application_documents_application_media_unique" ON "verification_application_documents" USING btree ("application_id","media_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "calculation_records_exact_request_unique" ON "calculation_records" USING btree ("owner_user_id","module","mode","method_code","request_fingerprint");--> statement-breakpoint
-CREATE INDEX "calculation_records_owner_updated_id_idx" ON "calculation_records" USING btree ("owner_user_id","updated_at","id");--> statement-breakpoint
-CREATE INDEX "calculation_records_owner_status_updated_id_idx" ON "calculation_records" USING btree ("owner_user_id","status","updated_at","id");--> statement-breakpoint
-CREATE INDEX "calculation_records_owner_module_created_id_idx" ON "calculation_records" USING btree ("owner_user_id","module","created_at","id");--> statement-breakpoint
-CREATE INDEX "calculation_records_owner_status_module_created_id_idx" ON "calculation_records" USING btree ("owner_user_id","status","module","created_at","id");--> statement-breakpoint
-CREATE INDEX "calculation_participants_record_role_idx" ON "calculation_participants" USING btree ("calculation_id","role");--> statement-breakpoint
-CREATE INDEX "calculation_participants_record_order_idx" ON "calculation_participants" USING btree ("calculation_id","order");--> statement-breakpoint
-CREATE INDEX "calculation_client_links_record_idx" ON "calculation_client_links" USING btree ("calculation_id");--> statement-breakpoint
-CREATE INDEX "calculation_client_links_client_idx" ON "calculation_client_links" USING btree ("client_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "calculation_client_links_record_client_unique" ON "calculation_client_links" USING btree ("calculation_id","client_id");--> statement-breakpoint
-CREATE INDEX "calculation_interpretations_record_idx" ON "calculation_interpretations" USING btree ("calculation_id");--> statement-breakpoint
-CREATE INDEX "calculation_artifacts_record_idx" ON "calculation_artifacts" USING btree ("calculation_id");--> statement-breakpoint
-CREATE INDEX "calculation_artifacts_media_idx" ON "calculation_artifacts" USING btree ("media_asset_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "calculation_pdf_jobs_idempotency_unique" ON "calculation_pdf_jobs" USING btree ("owner_user_id","calculation_id","result_checksum","locale","document_fingerprint") WHERE "calculation_pdf_jobs"."status" <> 'failed';--> statement-breakpoint
-CREATE INDEX "calculation_pdf_jobs_owner_calculation_locale_created_idx" ON "calculation_pdf_jobs" USING btree ("owner_user_id","calculation_id","locale","created_at","id");--> statement-breakpoint
-CREATE INDEX "calculation_pdf_jobs_status_updated_idx" ON "calculation_pdf_jobs" USING btree ("status","updated_at");--> statement-breakpoint
-CREATE INDEX "chart_calculation_jobs_owner_idx" ON "chart_calculation_jobs" USING btree ("owner_user_id");--> statement-breakpoint
-CREATE INDEX "chart_calculation_jobs_client_idx" ON "chart_calculation_jobs" USING btree ("client_id");--> statement-breakpoint
-CREATE INDEX "chart_calculation_jobs_status_updated_idx" ON "chart_calculation_jobs" USING btree ("status","updated_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "chart_calculation_jobs_active_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" in ('queued', 'processing');--> statement-breakpoint
-CREATE UNIQUE INDEX "chart_calculation_jobs_success_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" = 'succeeded';--> statement-breakpoint
-CREATE UNIQUE INDEX "client_birth_data_client_unique" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
-CREATE INDEX "client_birth_data_client_idx" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "client_astrologer_relationships_unique" ON "client_astrologer_relationships" USING btree ("client_user_id","astrologer_user_id");--> statement-breakpoint
-CREATE INDEX "client_astrologer_relationships_astrologer_status_idx" ON "client_astrologer_relationships" USING btree ("astrologer_user_id","status");--> statement-breakpoint
-CREATE INDEX "client_astrologer_relationships_client_status_idx" ON "client_astrologer_relationships" USING btree ("client_user_id","status");--> statement-breakpoint
-CREATE UNIQUE INDEX "client_join_intents_token_hash_unique" ON "client_join_intents" USING btree ("token_hash");--> statement-breakpoint
-CREATE INDEX "client_join_intents_astrologer_status_idx" ON "client_join_intents" USING btree ("astrologer_user_id","status");--> statement-breakpoint
-CREATE INDEX "client_join_intents_claimed_client_idx" ON "client_join_intents" USING btree ("claimed_by_client_user_id");--> statement-breakpoint
-CREATE INDEX "matrix_notes_owner_calculation_created_id_idx" ON "matrix_notes" USING btree ("owner_user_id","calculation_id","created_at","id");--> statement-breakpoint
-CREATE INDEX "matrix_report_drafts_owner_calculation_idx" ON "matrix_report_drafts" USING btree ("owner_user_id","calculation_id");--> statement-breakpoint
-CREATE INDEX "availability_date_overrides_schedule_date_idx" ON "availability_date_overrides" USING btree ("schedule_id","local_date");--> statement-breakpoint
-CREATE INDEX "availability_override_periods_override_start_idx" ON "availability_override_periods" USING btree ("override_id","start_minute");--> statement-breakpoint
-CREATE INDEX "availability_product_assignments_owner_product_idx" ON "availability_product_assignments" USING btree ("owner_user_id","product_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "availability_schedules_default_owner_unique" ON "availability_schedules" USING btree ("owner_user_id") WHERE "availability_schedules"."is_default" = true;--> statement-breakpoint
-CREATE INDEX "availability_schedules_owner_updated_idx" ON "availability_schedules" USING btree ("owner_user_id","updated_at");--> statement-breakpoint
-CREATE INDEX "availability_weekly_periods_schedule_day_idx" ON "availability_weekly_periods" USING btree ("schedule_id","weekday","start_minute");--> statement-breakpoint
-CREATE INDEX "bookings_owner_service_idx" ON "bookings" USING btree ("owner_user_id","service_start_at","id");--> statement-breakpoint
-CREATE INDEX "bookings_owner_client_created_idx" ON "bookings" USING btree ("owner_user_id","client_user_id","created_at","id");--> statement-breakpoint
-CREATE INDEX "manual_calendar_blocks_owner_state_updated_idx" ON "manual_calendar_blocks" USING btree ("owner_user_id","state","updated_at");--> statement-breakpoint
-CREATE INDEX "schedule_reservations_owner_service_idx" ON "schedule_reservations" USING btree ("owner_user_id","service_start_at","service_end_at");--> statement-breakpoint
-CREATE INDEX "schedule_reservations_owner_lifecycle_occupied_idx" ON "schedule_reservations" USING btree ("owner_user_id","lifecycle","occupied_start_at","occupied_end_at");--> statement-breakpoint
-CREATE INDEX "schedule_reservations_hold_expiry_idx" ON "schedule_reservations" USING btree ("lifecycle","hold_expires_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "idempotency_commands_scope_key_unique" ON "idempotency_commands" USING btree ("api_surface","actor_user_id","command_scope","key");--> statement-breakpoint
-CREATE INDEX "idempotency_commands_expiry_idx" ON "idempotency_commands" USING btree ("expires_at");--> statement-breakpoint
-CREATE INDEX "idempotency_commands_actor_created_idx" ON "idempotency_commands" USING btree ("actor_user_id","created_at");--> statement-breakpoint
-CREATE INDEX "messaging_channel_connections_astrologer_provider_mode_status_idx" ON "messaging_channel_connections" USING btree ("astrologer_user_id","provider","mode","status");--> statement-breakpoint
-CREATE UNIQUE INDEX "messaging_channel_connections_external_account_unique" ON "messaging_channel_connections" USING btree ("provider","external_account_id") WHERE "messaging_channel_connections"."external_account_id" is not null;--> statement-breakpoint
-CREATE UNIQUE INDEX "messaging_external_identities_connection_chat_unique" ON "messaging_external_identities" USING btree ("channel_connection_id","provider_chat_id");--> statement-breakpoint
-CREATE INDEX "messaging_external_identities_linked_client_idx" ON "messaging_external_identities" USING btree ("linked_client_user_id");--> statement-breakpoint
-CREATE INDEX "messaging_threads_astrologer_status_last_message_idx" ON "messaging_threads" USING btree ("astrologer_user_id","status","last_message_at");--> statement-breakpoint
-CREATE INDEX "messaging_threads_astrologer_client_idx" ON "messaging_threads" USING btree ("astrologer_user_id","client_user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "messaging_thread_identities_thread_identity_unique" ON "messaging_thread_identities" USING btree ("thread_id","external_identity_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "messaging_thread_identities_external_identity_unique" ON "messaging_thread_identities" USING btree ("external_identity_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "messaging_thread_identities_primary_thread_provider_unique" ON "messaging_thread_identities" USING btree ("thread_id","provider") WHERE "messaging_thread_identities"."is_primary" = true;--> statement-breakpoint
-CREATE UNIQUE INDEX "messages_inbound_provider_dedupe_unique" ON "messages" USING btree ("channel_connection_id","external_identity_id","provider_message_id","direction") WHERE "messages"."provider_message_id" is not null and "messages"."external_identity_id" is not null;--> statement-breakpoint
-CREATE UNIQUE INDEX "messages_outbound_idempotency_unique" ON "messages" USING btree ("thread_id","idempotency_key") WHERE "messages"."direction" = 'outbound';--> statement-breakpoint
-CREATE INDEX "messages_thread_created_idx" ON "messages" USING btree ("thread_id","created_at","id");--> statement-breakpoint
-CREATE UNIQUE INDEX "message_delivery_attempts_message_attempt_unique" ON "message_delivery_attempts" USING btree ("message_id","attempt_number");--> statement-breakpoint
-CREATE UNIQUE INDEX "messaging_realtime_events_event_id_unique" ON "messaging_realtime_events" USING btree ("event_id");--> statement-breakpoint
-CREATE INDEX "messaging_realtime_events_astrologer_event_id_idx" ON "messaging_realtime_events" USING btree ("astrologer_user_id","event_id");
---> statement-breakpoint
 CREATE TABLE "astrologer_risk_profiles" (
 	"astrologer_user_id" uuid PRIMARY KEY NOT NULL,
 	"risk_tier" text DEFAULT 'standard' NOT NULL,
@@ -1336,6 +1133,7 @@ CREATE TABLE "orders" (
 	"astrologer_user_id" uuid NOT NULL,
 	"product_id" uuid NOT NULL,
 	"direct_link_intent_id" uuid,
+	"booking_id" uuid,
 	"status" text DEFAULT 'pending_payment' NOT NULL,
 	"gross_amount_minor" bigint NOT NULL,
 	"gross_currency" text NOT NULL,
@@ -1576,6 +1374,86 @@ CREATE TABLE "finance_idempotency_commands" (
 	CONSTRAINT "finance_idempotency_commands_result_state_check" CHECK (("finance_idempotency_commands"."state" = 'processing' and "finance_idempotency_commands"."result" is null and "finance_idempotency_commands"."error_code" is null) or ("finance_idempotency_commands"."state" = 'completed' and "finance_idempotency_commands"."result" is not null and jsonb_typeof("finance_idempotency_commands"."result") = 'object' and "finance_idempotency_commands"."error_code" is null) or ("finance_idempotency_commands"."state" = 'failed' and "finance_idempotency_commands"."result" is null and "finance_idempotency_commands"."error_code" is not null and length(trim("finance_idempotency_commands"."error_code")) between 1 and 120))
 );
 --> statement-breakpoint
+ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_assigned_by_user_id_users_id_fk" FOREIGN KEY ("assigned_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_sessions" ADD CONSTRAINT "user_sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "auth_challenge_deliveries" ADD CONSTRAINT "auth_challenge_deliveries_challenge_id_auth_challenges_id_fk" FOREIGN KEY ("challenge_id") REFERENCES "public"."auth_challenges"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "auth_challenge_delivery_attempts" ADD CONSTRAINT "auth_challenge_delivery_attempts_delivery_id_auth_challenge_deliveries_id_fk" FOREIGN KEY ("delivery_id") REFERENCES "public"."auth_challenge_deliveries"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "auth_security_events" ADD CONSTRAINT "auth_security_events_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "auth_security_events" ADD CONSTRAINT "auth_security_events_session_id_user_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."user_sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "dictionary_platform_entries" ADD CONSTRAINT "dictionary_platform_entries_category_id_dictionary_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."dictionary_categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_category_id_dictionary_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."dictionary_categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "dictionary_astrologer_entries" ADD CONSTRAINT "dictionary_astrologer_entries_platform_entry_identity_fk" FOREIGN KEY ("platform_entry_id","category_id","code","locale") REFERENCES "public"."dictionary_platform_entries"("id","category_id","code","locale") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "products" ADD CONSTRAINT "products_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "products" ADD CONSTRAINT "products_cover_media_id_media_assets_id_fk" FOREIGN KEY ("cover_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "product_delivery_formats" ADD CONSTRAINT "product_delivery_formats_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "product_required_client_data" ADD CONSTRAINT "product_required_client_data_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "product_methods" ADD CONSTRAINT "product_methods_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "product_access_grants" ADD CONSTRAINT "product_access_grants_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "product_included_items" ADD CONSTRAINT "product_included_items_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "product_modifiers" ADD CONSTRAINT "product_modifiers_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_plan_id_platform_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."platform_plans"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "billing_payment_methods" ADD CONSTRAINT "billing_payment_methods_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "platform_plan_features" ADD CONSTRAINT "platform_plan_features_plan_id_platform_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."platform_plans"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "platform_subscriptions" ADD CONSTRAINT "platform_subscriptions_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "platform_subscriptions" ADD CONSTRAINT "platform_subscriptions_plan_id_platform_plans_id_fk" FOREIGN KEY ("plan_id") REFERENCES "public"."platform_plans"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "media_assets" ADD CONSTRAINT "media_assets_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "media_variants" ADD CONSTRAINT "media_variants_asset_id_media_assets_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."media_assets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_avatar_media_id_media_assets_id_fk" FOREIGN KEY ("avatar_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "astrologer_profiles" ADD CONSTRAINT "astrologer_profiles_cover_media_id_media_assets_id_fk" FOREIGN KEY ("cover_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "verification_applications" ADD CONSTRAINT "verification_applications_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "verification_applications" ADD CONSTRAINT "verification_applications_reviewer_user_id_users_id_fk" FOREIGN KEY ("reviewer_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "verification_application_documents" ADD CONSTRAINT "verification_application_documents_application_id_verification_applications_id_fk" FOREIGN KEY ("application_id") REFERENCES "public"."verification_applications"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "verification_application_documents" ADD CONSTRAINT "verification_application_documents_media_id_media_assets_id_fk" FOREIGN KEY ("media_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_records" ADD CONSTRAINT "calculation_records_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_participants" ADD CONSTRAINT "calculation_participants_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_client_links" ADD CONSTRAINT "calculation_client_links_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_interpretations" ADD CONSTRAINT "calculation_interpretations_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_artifacts" ADD CONSTRAINT "calculation_artifacts_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_artifacts" ADD CONSTRAINT "calculation_artifacts_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_artifact_id_fk" FOREIGN KEY ("artifact_id","calculation_id") REFERENCES "public"."calculation_artifacts"("id","calculation_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_media_asset_id_fk" FOREIGN KEY ("media_asset_id","owner_user_id") REFERENCES "public"."media_assets"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_client_id_client_profiles_user_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."client_profiles"("user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_result_calculation_id_calculation_records_id_fk" FOREIGN KEY ("result_calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_profiles" ADD CONSTRAINT "client_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_birth_data" ADD CONSTRAINT "client_birth_data_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_claimed_by_client_user_id_users_id_fk" FOREIGN KEY ("claimed_by_client_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "matrix_notes" ADD CONSTRAINT "matrix_notes_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "matrix_report_drafts" ADD CONSTRAINT "matrix_report_drafts_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_date_overrides" ADD CONSTRAINT "availability_date_overrides_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_override_periods" ADD CONSTRAINT "availability_override_periods_override_schedule_owner_fk" FOREIGN KEY ("override_id","schedule_id","owner_user_id") REFERENCES "public"."availability_date_overrides"("id","schedule_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_product_assignments" ADD CONSTRAINT "availability_product_assignments_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_product_assignments" ADD CONSTRAINT "availability_product_assignments_product_owner_fk" FOREIGN KEY ("product_id","owner_user_id") REFERENCES "public"."products"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_schedules" ADD CONSTRAINT "availability_schedules_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "availability_weekly_periods" ADD CONSTRAINT "availability_weekly_periods_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_reservation_owner_fk" FOREIGN KEY ("reservation_id","owner_user_id") REFERENCES "public"."schedule_reservations"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_product_owner_fk" FOREIGN KEY ("product_id","owner_user_id") REFERENCES "public"."products"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "manual_calendar_blocks" ADD CONSTRAINT "manual_calendar_blocks_reservation_owner_fk" FOREIGN KEY ("reservation_id","owner_user_id") REFERENCES "public"."schedule_reservations"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_reservations" ADD CONSTRAINT "schedule_reservations_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "idempotency_commands" ADD CONSTRAINT "idempotency_commands_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messaging_channel_connections" ADD CONSTRAINT "messaging_channel_connections_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messaging_external_identities" ADD CONSTRAINT "messaging_external_identities_linked_client_user_id_users_id_fk" FOREIGN KEY ("linked_client_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messaging_external_identities" ADD CONSTRAINT "messaging_external_identities_connection_provider_fk" FOREIGN KEY ("channel_connection_id","provider") REFERENCES "public"."messaging_channel_connections"("id","provider") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messaging_threads" ADD CONSTRAINT "messaging_threads_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messaging_threads" ADD CONSTRAINT "messaging_threads_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messaging_thread_identities" ADD CONSTRAINT "messaging_thread_identities_thread_id_messaging_threads_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."messaging_threads"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messaging_thread_identities" ADD CONSTRAINT "messaging_thread_identities_external_identity_provider_fk" FOREIGN KEY ("external_identity_id","provider") REFERENCES "public"."messaging_external_identities"("id","provider") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messages" ADD CONSTRAINT "messages_thread_id_messaging_threads_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."messaging_threads"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messages" ADD CONSTRAINT "messages_channel_connection_id_messaging_channel_connections_id_fk" FOREIGN KEY ("channel_connection_id") REFERENCES "public"."messaging_channel_connections"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messages" ADD CONSTRAINT "messages_external_identity_id_messaging_external_identities_id_fk" FOREIGN KEY ("external_identity_id") REFERENCES "public"."messaging_external_identities"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "message_delivery_attempts" ADD CONSTRAINT "message_delivery_attempts_message_id_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messaging_realtime_events" ADD CONSTRAINT "messaging_realtime_events_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astrologer_risk_profiles" ADD CONSTRAINT "astrologer_risk_profiles_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astrologer_risk_profiles" ADD CONSTRAINT "astrologer_risk_profiles_reviewed_by_user_id_users_id_fk" FOREIGN KEY ("reviewed_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "finance_policies" ADD CONSTRAINT "finance_policies_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -1583,6 +1461,7 @@ ALTER TABLE "orders" ADD CONSTRAINT "orders_client_user_id_users_id_fk" FOREIGN 
 ALTER TABLE "orders" ADD CONSTRAINT "orders_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_direct_link_intent_id_client_join_intents_id_fk" FOREIGN KEY ("direct_link_intent_id") REFERENCES "public"."client_join_intents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_booking_id_bookings_id_fk" FOREIGN KEY ("booking_id") REFERENCES "public"."bookings"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_finance_policy_snapshot_id_finance_policies_id_fk" FOREIGN KEY ("finance_policy_snapshot_id") REFERENCES "public"."finance_policies"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payment_attempts" ADD CONSTRAINT "payment_attempts_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payment_provider_events" ADD CONSTRAINT "payment_provider_events_payment_attempt_id_payment_attempts_id_fk" FOREIGN KEY ("payment_attempt_id") REFERENCES "public"."payment_attempts"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -1601,6 +1480,132 @@ ALTER TABLE "ledger_transactions" ADD CONSTRAINT "ledger_transactions_payout_req
 ALTER TABLE "wallet_balance_read_models" ADD CONSTRAINT "wallet_balance_read_models_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reconciliation_records" ADD CONSTRAINT "reconciliation_records_provider_event_id_payment_provider_events_id_fk" FOREIGN KEY ("provider_event_id") REFERENCES "public"."payment_provider_events"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "finance_idempotency_commands" ADD CONSTRAINT "finance_idempotency_commands_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
+CREATE UNIQUE INDEX "auth_identities_email_login_unique" ON "auth_identities" USING btree (lower("email")) WHERE "auth_identities"."provider" = 'email' and "auth_identities"."email" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "auth_identities_phone_login_unique" ON "auth_identities" USING btree ("phone_number") WHERE "auth_identities"."provider" = 'phone' and "auth_identities"."phone_number" is not null;--> statement-breakpoint
+CREATE INDEX "auth_identities_user_id_index" ON "auth_identities" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "auth_identities_email_index" ON "auth_identities" USING btree ("email");--> statement-breakpoint
+CREATE INDEX "auth_identities_phone_number_index" ON "auth_identities" USING btree ("phone_number");--> statement-breakpoint
+CREATE UNIQUE INDEX "user_role_assignments_user_role_unique" ON "user_role_assignments" USING btree ("user_id","role");--> statement-breakpoint
+CREATE INDEX "user_role_assignments_role_index" ON "user_role_assignments" USING btree ("role");--> statement-breakpoint
+CREATE UNIQUE INDEX "user_sessions_token_hash_unique" ON "user_sessions" USING btree ("token_hash");--> statement-breakpoint
+CREATE INDEX "user_sessions_user_id_index" ON "user_sessions" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "user_sessions_active_user_index" ON "user_sessions" USING btree ("user_id") WHERE "user_sessions"."status" = 'active';--> statement-breakpoint
+CREATE INDEX "user_sessions_expires_at_index" ON "user_sessions" USING btree ("expires_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "auth_challenges_pending_identifier_unique" ON "auth_challenges" USING btree ("channel","identifier_normalized") WHERE "auth_challenges"."status" = 'pending';--> statement-breakpoint
+CREATE INDEX "auth_challenges_expires_at_index" ON "auth_challenges" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "auth_challenges_created_at_index" ON "auth_challenges" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "auth_challenge_deliveries_challenge_id_index" ON "auth_challenge_deliveries" USING btree ("challenge_id");--> statement-breakpoint
+CREATE INDEX "auth_challenge_deliveries_status_created_at_index" ON "auth_challenge_deliveries" USING btree ("status","created_at");--> statement-breakpoint
+CREATE INDEX "auth_challenge_deliveries_created_at_index" ON "auth_challenge_deliveries" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "auth_challenge_delivery_attempts_delivery_id_index" ON "auth_challenge_delivery_attempts" USING btree ("delivery_id");--> statement-breakpoint
+CREATE INDEX "auth_challenge_delivery_attempts_delivery_attempt_index" ON "auth_challenge_delivery_attempts" USING btree ("delivery_id","attempt_number","attempted_at");--> statement-breakpoint
+CREATE INDEX "auth_challenge_delivery_attempts_attempted_at_index" ON "auth_challenge_delivery_attempts" USING btree ("attempted_at");--> statement-breakpoint
+CREATE INDEX "auth_security_events_user_id_index" ON "auth_security_events" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "auth_security_events_session_id_index" ON "auth_security_events" USING btree ("session_id");--> statement-breakpoint
+CREATE INDEX "auth_security_events_event_type_index" ON "auth_security_events" USING btree ("event_type");--> statement-breakpoint
+CREATE INDEX "auth_security_events_occurred_at_index" ON "auth_security_events" USING btree ("occurred_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "outbox_events_event_type_aggregate_id_unique" ON "outbox_events" USING btree ("event_type","aggregate_id");--> statement-breakpoint
+CREATE INDEX "outbox_events_pending_index" ON "outbox_events" USING btree ("status","available_at","created_at");--> statement-breakpoint
+CREATE INDEX "outbox_events_locked_at_index" ON "outbox_events" USING btree ("locked_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "dictionary_categories_code_unique" ON "dictionary_categories" USING btree ("code");--> statement-breakpoint
+CREATE INDEX "dictionary_platform_entries_locale_status_category_index" ON "dictionary_platform_entries" USING btree ("locale","status","category_id");--> statement-breakpoint
+CREATE INDEX "dictionary_astrologer_entries_custom_owner_locale_category_index" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","locale","category_id") WHERE "dictionary_astrologer_entries"."entry_type" = 'custom';--> statement-breakpoint
+CREATE INDEX "dictionary_astrologer_entries_platform_entry_id_index" ON "dictionary_astrologer_entries" USING btree ("platform_entry_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "dictionary_astrologer_entries_override_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","platform_entry_id","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'override';--> statement-breakpoint
+CREATE UNIQUE INDEX "dictionary_astrologer_entries_custom_code_unique" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","category_id","code","locale") WHERE "dictionary_astrologer_entries"."entry_type" = 'custom';--> statement-breakpoint
+CREATE INDEX "products_owner_created_id_idx" ON "products" USING btree ("owner_user_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "products_owner_status_created_id_idx" ON "products" USING btree ("owner_user_id","status","created_at","id");--> statement-breakpoint
+CREATE INDEX "product_delivery_formats_product_id_idx" ON "product_delivery_formats" USING btree ("product_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "product_delivery_formats_product_value_unique" ON "product_delivery_formats" USING btree ("product_id","value");--> statement-breakpoint
+CREATE INDEX "product_required_client_data_product_id_idx" ON "product_required_client_data" USING btree ("product_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "product_required_client_data_product_value_unique" ON "product_required_client_data" USING btree ("product_id","value");--> statement-breakpoint
+CREATE INDEX "product_methods_product_id_idx" ON "product_methods" USING btree ("product_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "product_methods_product_value_unique" ON "product_methods" USING btree ("product_id","value");--> statement-breakpoint
+CREATE INDEX "product_access_grants_product_id_idx" ON "product_access_grants" USING btree ("product_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "product_access_grants_product_value_unique" ON "product_access_grants" USING btree ("product_id","value");--> statement-breakpoint
+CREATE INDEX "product_included_items_product_id_idx" ON "product_included_items" USING btree ("product_id");--> statement-breakpoint
+CREATE INDEX "product_modifiers_product_id_idx" ON "product_modifiers" USING btree ("product_id");--> statement-breakpoint
+CREATE INDEX "product_templates_active_locale_order_idx" ON "product_templates" USING btree ("locale","sort_order","code") WHERE "product_templates"."status" = 'active';--> statement-breakpoint
+CREATE INDEX "billing_invoices_owner_issued_idx" ON "billing_invoices" USING btree ("owner_user_id","issued_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "billing_invoices_provider_invoice_unique" ON "billing_invoices" USING btree ("provider","provider_invoice_id");--> statement-breakpoint
+CREATE INDEX "billing_payment_methods_owner_created_idx" ON "billing_payment_methods" USING btree ("owner_user_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "billing_payment_methods_provider_method_unique" ON "billing_payment_methods" USING btree ("provider","provider_payment_method_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "billing_payment_methods_default_owner_unique" ON "billing_payment_methods" USING btree ("owner_user_id") WHERE "billing_payment_methods"."is_default" = true;--> statement-breakpoint
+CREATE INDEX "platform_plan_features_plan_id_idx" ON "platform_plan_features" USING btree ("plan_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "platform_plan_features_plan_value_unique" ON "platform_plan_features" USING btree ("plan_id","value");--> statement-breakpoint
+CREATE INDEX "platform_subscriptions_owner_created_idx" ON "platform_subscriptions" USING btree ("owner_user_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "platform_subscriptions_current_owner_unique" ON "platform_subscriptions" USING btree ("owner_user_id") WHERE "platform_subscriptions"."is_current" = true;--> statement-breakpoint
+CREATE INDEX "media_assets_owner_purpose_status_created_idx" ON "media_assets" USING btree ("owner_user_id","purpose","status","created_at");--> statement-breakpoint
+CREATE INDEX "media_assets_owner_created_id_idx" ON "media_assets" USING btree ("owner_user_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "media_variants_asset_id_idx" ON "media_variants" USING btree ("asset_id");--> statement-breakpoint
+CREATE INDEX "astrologer_profiles_public_handle_idx" ON "astrologer_profiles" USING btree ("public_handle");--> statement-breakpoint
+CREATE INDEX "verification_applications_owner_submitted_idx" ON "verification_applications" USING btree ("owner_user_id","submitted_at","id");--> statement-breakpoint
+CREATE INDEX "verification_applications_status_submitted_idx" ON "verification_applications" USING btree ("status","submitted_at");--> statement-breakpoint
+CREATE INDEX "verification_application_documents_application_idx" ON "verification_application_documents" USING btree ("application_id");--> statement-breakpoint
+CREATE INDEX "verification_application_documents_media_idx" ON "verification_application_documents" USING btree ("media_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "verification_application_documents_application_media_unique" ON "verification_application_documents" USING btree ("application_id","media_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "calculation_records_exact_request_unique" ON "calculation_records" USING btree ("owner_user_id","module","mode","method_code","request_fingerprint");--> statement-breakpoint
+CREATE INDEX "calculation_records_owner_updated_id_idx" ON "calculation_records" USING btree ("owner_user_id","updated_at","id");--> statement-breakpoint
+CREATE INDEX "calculation_records_owner_status_updated_id_idx" ON "calculation_records" USING btree ("owner_user_id","status","updated_at","id");--> statement-breakpoint
+CREATE INDEX "calculation_records_owner_module_created_id_idx" ON "calculation_records" USING btree ("owner_user_id","module","created_at","id");--> statement-breakpoint
+CREATE INDEX "calculation_records_owner_status_module_created_id_idx" ON "calculation_records" USING btree ("owner_user_id","status","module","created_at","id");--> statement-breakpoint
+CREATE INDEX "calculation_participants_record_role_idx" ON "calculation_participants" USING btree ("calculation_id","role");--> statement-breakpoint
+CREATE INDEX "calculation_participants_record_order_idx" ON "calculation_participants" USING btree ("calculation_id","order");--> statement-breakpoint
+CREATE INDEX "calculation_client_links_record_idx" ON "calculation_client_links" USING btree ("calculation_id");--> statement-breakpoint
+CREATE INDEX "calculation_client_links_client_idx" ON "calculation_client_links" USING btree ("client_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "calculation_client_links_record_client_unique" ON "calculation_client_links" USING btree ("calculation_id","client_id");--> statement-breakpoint
+CREATE INDEX "calculation_interpretations_record_idx" ON "calculation_interpretations" USING btree ("calculation_id");--> statement-breakpoint
+CREATE INDEX "calculation_artifacts_record_idx" ON "calculation_artifacts" USING btree ("calculation_id");--> statement-breakpoint
+CREATE INDEX "calculation_artifacts_media_idx" ON "calculation_artifacts" USING btree ("media_asset_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "calculation_pdf_jobs_idempotency_unique" ON "calculation_pdf_jobs" USING btree ("owner_user_id","calculation_id","result_checksum","locale","document_fingerprint") WHERE "calculation_pdf_jobs"."status" <> 'failed';--> statement-breakpoint
+CREATE INDEX "calculation_pdf_jobs_owner_calculation_locale_created_idx" ON "calculation_pdf_jobs" USING btree ("owner_user_id","calculation_id","locale","created_at","id");--> statement-breakpoint
+CREATE INDEX "calculation_pdf_jobs_status_updated_idx" ON "calculation_pdf_jobs" USING btree ("status","updated_at");--> statement-breakpoint
+CREATE INDEX "chart_calculation_jobs_owner_idx" ON "chart_calculation_jobs" USING btree ("owner_user_id");--> statement-breakpoint
+CREATE INDEX "chart_calculation_jobs_client_idx" ON "chart_calculation_jobs" USING btree ("client_id");--> statement-breakpoint
+CREATE INDEX "chart_calculation_jobs_status_updated_idx" ON "chart_calculation_jobs" USING btree ("status","updated_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "chart_calculation_jobs_active_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" in ('queued', 'processing');--> statement-breakpoint
+CREATE UNIQUE INDEX "chart_calculation_jobs_success_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" = 'succeeded';--> statement-breakpoint
+CREATE UNIQUE INDEX "client_birth_data_client_unique" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
+CREATE INDEX "client_birth_data_client_idx" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "client_astrologer_relationships_unique" ON "client_astrologer_relationships" USING btree ("client_user_id","astrologer_user_id");--> statement-breakpoint
+CREATE INDEX "client_astrologer_relationships_astrologer_status_idx" ON "client_astrologer_relationships" USING btree ("astrologer_user_id","status");--> statement-breakpoint
+CREATE INDEX "client_astrologer_relationships_client_status_idx" ON "client_astrologer_relationships" USING btree ("client_user_id","status");--> statement-breakpoint
+CREATE UNIQUE INDEX "client_join_intents_token_hash_unique" ON "client_join_intents" USING btree ("token_hash");--> statement-breakpoint
+CREATE INDEX "client_join_intents_astrologer_status_idx" ON "client_join_intents" USING btree ("astrologer_user_id","status");--> statement-breakpoint
+CREATE INDEX "client_join_intents_claimed_client_idx" ON "client_join_intents" USING btree ("claimed_by_client_user_id");--> statement-breakpoint
+CREATE INDEX "matrix_notes_owner_calculation_created_id_idx" ON "matrix_notes" USING btree ("owner_user_id","calculation_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "matrix_report_drafts_owner_calculation_idx" ON "matrix_report_drafts" USING btree ("owner_user_id","calculation_id");--> statement-breakpoint
+CREATE INDEX "availability_date_overrides_schedule_date_idx" ON "availability_date_overrides" USING btree ("schedule_id","local_date");--> statement-breakpoint
+CREATE INDEX "availability_override_periods_override_start_idx" ON "availability_override_periods" USING btree ("override_id","start_minute");--> statement-breakpoint
+CREATE INDEX "availability_product_assignments_owner_product_idx" ON "availability_product_assignments" USING btree ("owner_user_id","product_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "availability_schedules_default_owner_unique" ON "availability_schedules" USING btree ("owner_user_id") WHERE "availability_schedules"."is_default" = true;--> statement-breakpoint
+CREATE INDEX "availability_schedules_owner_updated_idx" ON "availability_schedules" USING btree ("owner_user_id","updated_at");--> statement-breakpoint
+CREATE INDEX "availability_weekly_periods_schedule_day_idx" ON "availability_weekly_periods" USING btree ("schedule_id","weekday","start_minute");--> statement-breakpoint
+CREATE INDEX "bookings_owner_service_idx" ON "bookings" USING btree ("owner_user_id","service_start_at","id");--> statement-breakpoint
+CREATE INDEX "bookings_owner_client_created_idx" ON "bookings" USING btree ("owner_user_id","client_user_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "manual_calendar_blocks_owner_state_updated_idx" ON "manual_calendar_blocks" USING btree ("owner_user_id","state","updated_at");--> statement-breakpoint
+CREATE INDEX "schedule_reservations_owner_service_idx" ON "schedule_reservations" USING btree ("owner_user_id","service_start_at","service_end_at");--> statement-breakpoint
+CREATE INDEX "schedule_reservations_owner_lifecycle_occupied_idx" ON "schedule_reservations" USING btree ("owner_user_id","lifecycle","occupied_start_at","occupied_end_at");--> statement-breakpoint
+CREATE INDEX "schedule_reservations_hold_expiry_idx" ON "schedule_reservations" USING btree ("lifecycle","hold_expires_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "idempotency_commands_scope_key_unique" ON "idempotency_commands" USING btree ("api_surface","actor_user_id","command_scope","key");--> statement-breakpoint
+CREATE INDEX "idempotency_commands_expiry_idx" ON "idempotency_commands" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "idempotency_commands_actor_created_idx" ON "idempotency_commands" USING btree ("actor_user_id","created_at");--> statement-breakpoint
+CREATE INDEX "messaging_channel_connections_astrologer_provider_mode_status_idx" ON "messaging_channel_connections" USING btree ("astrologer_user_id","provider","mode","status");--> statement-breakpoint
+CREATE UNIQUE INDEX "messaging_channel_connections_external_account_unique" ON "messaging_channel_connections" USING btree ("provider","external_account_id") WHERE "messaging_channel_connections"."external_account_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "messaging_external_identities_connection_chat_unique" ON "messaging_external_identities" USING btree ("channel_connection_id","provider_chat_id");--> statement-breakpoint
+CREATE INDEX "messaging_external_identities_linked_client_idx" ON "messaging_external_identities" USING btree ("linked_client_user_id");--> statement-breakpoint
+CREATE INDEX "messaging_threads_astrologer_status_last_message_idx" ON "messaging_threads" USING btree ("astrologer_user_id","status","last_message_at");--> statement-breakpoint
+CREATE INDEX "messaging_threads_astrologer_client_idx" ON "messaging_threads" USING btree ("astrologer_user_id","client_user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "messaging_thread_identities_thread_identity_unique" ON "messaging_thread_identities" USING btree ("thread_id","external_identity_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "messaging_thread_identities_external_identity_unique" ON "messaging_thread_identities" USING btree ("external_identity_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "messaging_thread_identities_primary_thread_provider_unique" ON "messaging_thread_identities" USING btree ("thread_id","provider") WHERE "messaging_thread_identities"."is_primary" = true;--> statement-breakpoint
+CREATE UNIQUE INDEX "messages_inbound_provider_dedupe_unique" ON "messages" USING btree ("channel_connection_id","external_identity_id","provider_message_id","direction") WHERE "messages"."provider_message_id" is not null and "messages"."external_identity_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "messages_outbound_idempotency_unique" ON "messages" USING btree ("thread_id","idempotency_key") WHERE "messages"."direction" = 'outbound';--> statement-breakpoint
+CREATE INDEX "messages_thread_created_idx" ON "messages" USING btree ("thread_id","created_at","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "message_delivery_attempts_message_attempt_unique" ON "message_delivery_attempts" USING btree ("message_id","attempt_number");--> statement-breakpoint
+CREATE UNIQUE INDEX "messaging_realtime_events_event_id_unique" ON "messaging_realtime_events" USING btree ("event_id");--> statement-breakpoint
+CREATE INDEX "messaging_realtime_events_astrologer_event_id_idx" ON "messaging_realtime_events" USING btree ("astrologer_user_id","event_id");--> statement-breakpoint
 CREATE INDEX "astrologer_risk_profiles_risk_tier_idx" ON "astrologer_risk_profiles" USING btree ("risk_tier");--> statement-breakpoint
 CREATE UNIQUE INDEX "finance_policies_version_unique" ON "finance_policies" USING btree ("policy_version");--> statement-breakpoint
 CREATE UNIQUE INDEX "finance_policies_active_risk_tier_unique" ON "finance_policies" USING btree ("risk_tier") WHERE "finance_policies"."is_active" = true;--> statement-breakpoint
@@ -1608,14 +1613,15 @@ CREATE INDEX "finance_policies_risk_version_idx" ON "finance_policies" USING btr
 CREATE INDEX "orders_client_created_idx" ON "orders" USING btree ("client_user_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "orders_astrologer_created_idx" ON "orders" USING btree ("astrologer_user_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "orders_status_created_idx" ON "orders" USING btree ("status","created_at","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "orders_booking_unique" ON "orders" USING btree ("booking_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "payment_attempts_provider_payment_unique" ON "payment_attempts" USING btree ("provider","environment","provider_payment_id") WHERE "payment_attempts"."provider_payment_id" is not null;--> statement-breakpoint
 CREATE INDEX "payment_attempts_order_created_idx" ON "payment_attempts" USING btree ("order_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "payment_attempts_provider_status_idx" ON "payment_attempts" USING btree ("provider","environment","status");--> statement-breakpoint
 CREATE UNIQUE INDEX "payment_provider_events_webhook_unique" ON "payment_provider_events" USING btree ("provider","environment","provider_webhook_id");--> statement-breakpoint
 CREATE INDEX "payment_provider_events_payment_idx" ON "payment_provider_events" USING btree ("provider","environment","provider_payment_id");--> statement-breakpoint
 CREATE INDEX "payment_provider_events_received_idx" ON "payment_provider_events" USING btree ("received_at","id");--> statement-breakpoint
-CREATE INDEX "refunds_order_created_idx" ON "refunds" USING btree ("order_id","created_at","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "refunds_provider_refund_unique" ON "refunds" USING btree ("provider","environment","provider_refund_id") WHERE "refunds"."provider_refund_id" is not null;--> statement-breakpoint
+CREATE INDEX "refunds_order_created_idx" ON "refunds" USING btree ("order_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "refunds_payment_attempt_idx" ON "refunds" USING btree ("payment_attempt_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "payout_methods_default_astrologer_unique" ON "payout_methods" USING btree ("astrologer_user_id") WHERE "payout_methods"."is_default" = true;--> statement-breakpoint
 CREATE UNIQUE INDEX "payout_methods_provider_account_unique" ON "payout_methods" USING btree ("provider","environment","provider_payout_account_id") WHERE "payout_methods"."provider_payout_account_id" is not null;--> statement-breakpoint
