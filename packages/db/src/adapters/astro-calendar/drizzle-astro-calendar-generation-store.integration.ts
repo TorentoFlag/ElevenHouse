@@ -117,6 +117,18 @@ describe("Astro Calendar generation Drizzle/PostgreSQL integration", () => {
         where: eq(astroCalendarGenerations.id, readyGeneration.id)
       })
     ).resolves.toMatchObject({ status: "stale" });
+
+    const retried = await store.markCalculating({
+      ownerUserId,
+      generationId: failedGeneration.id,
+      now: "2026-07-01T00:08:00.000Z"
+    });
+    expect(retried).toMatchObject({
+      id: failedGeneration.id,
+      status: "calculating",
+      errorCode: null,
+      errorMessage: null
+    });
   });
 });
 

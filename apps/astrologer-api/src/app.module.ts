@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { createAstrologerApiRuntimeConfig } from "./config/runtime-config";
 import { AiModule } from "./modules/ai/ai.module";
+import { AstroCalendarModule } from "./modules/astro-calendar/astro-calendar.module";
 import { AvailabilityModule } from "./modules/availability/availability.module";
 import { AstrologerProfileModule } from "./modules/astrologer-profile/astrologer-profile.module";
 import { BookingsModule } from "./modules/bookings/bookings.module";
@@ -44,6 +45,7 @@ import { VerificationModule } from "./modules/verification/verification.module";
     PlatformBillingModule,
     ProductsModule,
     AvailabilityModule,
+    AstroCalendarModule,
     CalendarModule,
     BookingsModule,
     VerificationModule,

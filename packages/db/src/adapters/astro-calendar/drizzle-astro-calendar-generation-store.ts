@@ -26,6 +26,7 @@ export function createDrizzleAstroCalendarGenerationStore(
     findLatestForRange: (input) => findLatestForRange(database, input),
     markReady: (input) => markReady(database, input),
     markFailed: (input) => markFailed(database, input),
+    markCalculating: (input) => markCalculating(database, input),
     markStaleByOwner: (input) => markStaleByOwner(database, input)
   };
 }
@@ -159,6 +160,32 @@ async function markFailed(
       and(
         eq(astroCalendarGenerations.id, input.generationId),
         eq(astroCalendarGenerations.ownerUserId, input.ownerUserId)
+      )
+    )
+    .returning();
+
+  return updated ? toGenerationRecord(updated) : null;
+}
+
+async function markCalculating(
+  database: AstroCalendarDatabase,
+  input: Parameters<AstroCalendarGenerationStore["markCalculating"]>[0]
+): Promise<AstroCalendarGenerationRecord | null> {
+  const [updated] = await database
+    .update(astroCalendarGenerations)
+    .set({
+      status: "calculating",
+      generatedAt: null,
+      provider: null,
+      errorCode: null,
+      errorMessage: null,
+      updatedAt: new Date(input.now)
+    })
+    .where(
+      and(
+        eq(astroCalendarGenerations.id, input.generationId),
+        eq(astroCalendarGenerations.ownerUserId, input.ownerUserId),
+        inArray(astroCalendarGenerations.status, ["failed", "stale"])
       )
     )
     .returning();

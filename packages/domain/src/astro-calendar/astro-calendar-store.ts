@@ -106,6 +106,11 @@ export type AstroCalendarGenerationStore = {
   readonly markFailed: (
     input: MarkAstroCalendarGenerationFailedInput
   ) => Promise<AstroCalendarGenerationRecord | null>;
+  readonly markCalculating: (input: {
+    readonly ownerUserId: string;
+    readonly generationId: string;
+    readonly now: string;
+  }) => Promise<AstroCalendarGenerationRecord | null>;
   readonly markStaleByOwner: (input: {
     readonly ownerUserId: string;
     readonly now: string;

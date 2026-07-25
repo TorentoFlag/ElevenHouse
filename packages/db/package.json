@@ -155,6 +155,16 @@
       "import": "./dist/adapters/charts/index.js",
       "require": "./dist/adapters/charts/index.js"
     },
+    "./astro-calendar": {
+      "types": "./dist/adapters/astro-calendar/index.d.ts",
+      "import": "./dist/adapters/astro-calendar/index.js",
+      "require": "./dist/adapters/astro-calendar/index.js"
+    },
+    "./adapters/astro-calendar": {
+      "types": "./dist/adapters/astro-calendar/index.d.ts",
+      "import": "./dist/adapters/astro-calendar/index.js",
+      "require": "./dist/adapters/astro-calendar/index.js"
+    },
     "./matrix": {
       "types": "./dist/adapters/matrix/index.d.ts",
       "import": "./dist/adapters/matrix/index.js",
