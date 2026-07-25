@@ -16,6 +16,7 @@ import { HumanDesignCalculationMenu } from "./HumanDesignCalculationMenu";
 import styles from "./HumanDesignPage.module.css";
 
 export type HumanDesignWorkspaceMode = "individual" | "compatibility" | "transit";
+export type HumanDesignToolbarOverlay = "calculations" | "actions" | null;
 
 export type HumanDesignPageViewProps = {
   readonly mode: HumanDesignWorkspaceMode;
@@ -41,6 +42,8 @@ export type HumanDesignPageViewProps = {
   readonly pdfErrorMessage: string | null;
   readonly isBusy: boolean;
   readonly isLinked: boolean;
+  readonly openToolbarOverlay: HumanDesignToolbarOverlay;
+  readonly onOpenToolbarOverlayChange: (overlay: HumanDesignToolbarOverlay) => void;
   readonly onSelectMode: (mode: HumanDesignWorkspaceMode) => void;
   readonly onSelectClient: (client: ClientSelectOption) => void;
   readonly onSelectPartnerClient: (client: ClientSelectOption) => void;
@@ -82,6 +85,8 @@ export function HumanDesignPageView({
   pdfErrorMessage,
   isBusy,
   isLinked,
+  openToolbarOverlay,
+  onOpenToolbarOverlayChange,
   onSelectMode,
   onSelectClient,
   onSelectPartnerClient,
@@ -174,6 +179,10 @@ export function HumanDesignPageView({
           calculations={calculations}
           selectedCalculationId={selectedCalculationId}
           disabled={isBusy}
+          open={openToolbarOverlay === "calculations"}
+          onOpenChange={(isOpen) =>
+            onOpenToolbarOverlayChange(isOpen ? "calculations" : null)
+          }
           onSelect={onSelectSaved}
         />
         <div className={styles.clientStrip}>
@@ -227,12 +236,13 @@ export function HumanDesignPageView({
             Партнёрский
           </button>
         </nav>
-        <div className={styles.toolbarSpacer} />
         <ActionMenu
           className={styles.toolbarActionsMenu}
           label="Действия"
           triggerAriaLabel="Действия Human Design"
           align="end"
+          open={openToolbarOverlay === "actions"}
+          onOpenChange={(isOpen) => onOpenToolbarOverlayChange(isOpen ? "actions" : null)}
           items={toolbarActionItems}
         />
       </header>

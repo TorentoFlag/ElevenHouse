@@ -122,3 +122,9 @@
 .gateTextActive {
   fill: #100d24;
 }
+
+@media (max-width: 1540px) and (max-height: 800px) {
+  .bodygraph {
+    width: min(270px, 100%);
+  }
+}

@@ -272,9 +272,14 @@ describe("HumanDesignPageView", () => {
   it("groups toolbar calculation actions into a single actions menu", () => {
     const view = HumanDesignPageView(baseProps());
     const menu = getToolbarActionMenu(view);
+    const calculationsMenu = getCalculationMenu(view);
 
     expect(menu.props.label).toBe("Действия");
     expect(menu.props.triggerAriaLabel).toBe("Действия Human Design");
+    expect(menu.props.open).toBe(false);
+    expect(calculationsMenu.props.open).toBe(false);
+    expect(typeof menu.props.onOpenChange).toBe("function");
+    expect(typeof calculationsMenu.props.onOpenChange).toBe("function");
     expect(menu.props.items.map((item) => item.id)).toEqual([
       "calculate",
       "link",
@@ -291,6 +296,48 @@ describe("HumanDesignPageView", () => {
     expect(walk(view).some((element) => element.type === "button" && textOf(element) === "Обновить")).toBe(
       false
     );
+    expect(
+      walk(view).some((element) =>
+        typeof element.props.className === "string"
+          ? element.props.className.includes("toolbarSpacer")
+          : false
+      )
+    ).toBe(false);
+  });
+
+  it("renders only one open toolbar overlay at a time", () => {
+    const withActionsOpen = HumanDesignPageView({
+      ...baseProps(),
+      openToolbarOverlay: "actions"
+    });
+    const withCalculationsOpen = HumanDesignPageView({
+      ...baseProps(),
+      openToolbarOverlay: "calculations"
+    });
+
+    expect(getToolbarActionMenu(withActionsOpen).props.open).toBe(true);
+    expect(getCalculationMenu(withActionsOpen).props.open).toBe(false);
+    expect(getToolbarActionMenu(withCalculationsOpen).props.open).toBe(false);
+    expect(getCalculationMenu(withCalculationsOpen).props.open).toBe(true);
+  });
+
+  it("keeps compact desktop Human Design controls and bodygraph viewport-contained", () => {
+    const pageCss = readFileSync(
+      new URL("./HumanDesignPage.module.css", import.meta.url),
+      "utf8"
+    );
+    const bodygraphCss = readFileSync(
+      new URL("../../features/human-design/components/HumanDesignBodygraph.module.css", import.meta.url),
+      "utf8"
+    );
+
+    expect(pageCss).toContain("flex: 1 1 360px;");
+    expect(pageCss).toContain("@media (max-width: 1540px) and (max-height: 800px)");
+    expect(pageCss).toContain("margin-top: 56px;");
+    expect(pageCss).toContain("margin-top: 6px;");
+    expect(pageCss).toContain("max-height: 168px;");
+    expect(bodygraphCss).toContain("@media (max-width: 1540px) and (max-height: 800px)");
+    expect(bodygraphCss).toContain("width: min(270px, 100%);");
   });
 
   it("enables recalculation only for an opened saved calculation", () => {
@@ -333,6 +380,19 @@ function getToolbarActionMenu(root: ReactElement): ReactElement<ComponentProps<t
   return menu;
 }
 
+function getCalculationMenu(root: ReactElement): ReactElement<ComponentProps<typeof HumanDesignCalculationMenu>> {
+  const menu = walk(root).find(
+    (element): element is ReactElement<ComponentProps<typeof HumanDesignCalculationMenu>> =>
+      element.type === HumanDesignCalculationMenu
+  );
+
+  if (!menu) {
+    throw new Error("Expected Human Design calculation menu to be rendered");
+  }
+
+  return menu;
+}
+
 function getActionMenuItem(root: ReactElement, id: string): ActionMenuItem {
   const item = getToolbarActionMenu(root).props.items.find((candidate) => candidate.id === id);
 
@@ -368,6 +428,8 @@ function baseProps(): HumanDesignPageViewProps {
     selectedCalculationId: null,
     isBusy: false,
     isLinked: false,
+    openToolbarOverlay: null,
+    onOpenToolbarOverlayChange: vi.fn(),
     onSelectMode: vi.fn(),
     onSelectClient: vi.fn(),
     onSelectPartnerClient: vi.fn(),

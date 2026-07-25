@@ -8,6 +8,8 @@ export type HumanDesignCalculationMenuProps = {
   readonly calculations: readonly CalculationRecordResponse[];
   readonly selectedCalculationId: string | null;
   readonly disabled: boolean;
+  readonly open?: boolean;
+  readonly onOpenChange?: (isOpen: boolean) => void;
   readonly onSelect: (calculation: CalculationRecordResponse) => void;
 };
 
@@ -20,9 +22,20 @@ export function HumanDesignCalculationMenu({
   calculations,
   selectedCalculationId,
   disabled,
+  open: controlledOpen,
+  onOpenChange,
   onSelect
 }: HumanDesignCalculationMenuProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const isOpen = controlledOpen ?? internalOpen;
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!isControlled) {
+      setInternalOpen(nextOpen);
+    }
+
+    onOpenChange?.(nextOpen);
+  };
 
   return renderHumanDesignCalculationMenu({
     calculations,
@@ -30,7 +43,7 @@ export function HumanDesignCalculationMenu({
     disabled,
     onSelect,
     isOpen,
-    onOpenChange: setIsOpen
+    onOpenChange: handleOpenChange
   });
 }
 

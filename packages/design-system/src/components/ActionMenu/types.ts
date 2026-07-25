@@ -18,6 +18,9 @@ export type ActionMenuProps = Omit<ComponentPropsWithRef<"div">, "children"> & {
   readonly items: readonly ActionMenuItem[];
   readonly align?: ActionMenuAlign;
   readonly disabled?: boolean;
+  readonly open?: boolean;
+  readonly defaultOpen?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
   readonly menuClassName?: string;
   readonly itemClassName?: string;
   readonly triggerAriaLabel?: string;

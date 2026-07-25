@@ -51,4 +51,19 @@ describe("ActionMenu", () => {
     expect(markup).toContain("...");
     expect(markup).not.toContain("ehActionMenu__triggerChevron");
   });
+
+  it("can be controlled by the owning surface", () => {
+    const markup = renderToStaticMarkup(
+      <ActionMenu
+        label="Действия"
+        open
+        onOpenChange={vi.fn()}
+        items={[{ id: "edit", label: "Изменить", onSelect: vi.fn() }]}
+      />
+    );
+
+    expect(markup).toContain('aria-expanded="true"');
+    expect(markup).toContain('role="menu"');
+    expect(markup).toContain("Изменить");
+  });
 });

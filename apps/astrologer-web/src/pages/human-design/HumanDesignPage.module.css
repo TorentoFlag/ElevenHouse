@@ -57,8 +57,10 @@
 
 .clientStrip {
   display: grid;
-  width: min(420px, 34vw);
-  min-width: 252px;
+  width: auto;
+  min-width: 300px;
+  max-width: 420px;
+  flex: 1 1 360px;
   gap: 8px;
 }
 
@@ -108,11 +110,6 @@
 
 .modeButton:disabled {
   cursor: not-allowed;
-}
-
-.toolbarSpacer {
-  min-width: 6px;
-  flex: 1;
 }
 
 .calculateButton,
@@ -751,6 +748,33 @@
     max-height: 240px;
     border-top: 1px solid var(--hd-line);
     border-left: 0;
+  }
+}
+
+@media (max-width: 1540px) and (max-height: 800px) {
+  .clientStrip {
+    min-width: 280px;
+    flex-basis: 320px;
+  }
+
+  .workspace {
+    padding: 12px 16px;
+  }
+
+  .graphWrap {
+    gap: 14px;
+  }
+
+  .activationColumn {
+    margin-top: 56px;
+  }
+
+  .legend {
+    margin-top: 6px;
+  }
+
+  .panel {
+    max-height: 168px;
   }
 }
 

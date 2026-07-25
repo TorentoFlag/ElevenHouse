@@ -33,7 +33,11 @@ import {
   toClientOptionFromHumanDesignCalculation,
   toHumanDesignCalculationResponse
 } from "../../features/human-design/model/humanDesignSavedCalculationModel";
-import type { HumanDesignPageViewProps, HumanDesignWorkspaceMode } from "./HumanDesignPageView";
+import type {
+  HumanDesignPageViewProps,
+  HumanDesignToolbarOverlay,
+  HumanDesignWorkspaceMode
+} from "./HumanDesignPageView";
 
 export function useHumanDesignPageController(): HumanDesignPageViewProps {
   useDocumentTitle("ElevenHouse | Дизайн человека");
@@ -58,6 +62,8 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     toDatetimeLocalValue(new Date())
   );
   const [selectedDetailKey, setSelectedDetailKey] = useState<HumanDesignDetailKey>("type");
+  const [openToolbarOverlay, setOpenToolbarOverlay] =
+    useState<HumanDesignToolbarOverlay>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [aiDraftErrorMessage, setAiDraftErrorMessage] = useState<string | null>(null);
   const [pdfErrorMessage, setPdfErrorMessage] = useState<string | null>(null);
@@ -144,7 +150,10 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     pdfErrorMessage: pdfErrorMessage ?? pdfAction.errorMessage,
     isBusy,
     isLinked: mode !== "transit" && Boolean(savedResponse),
+    openToolbarOverlay,
+    onOpenToolbarOverlayChange: setOpenToolbarOverlay,
     onSelectMode: (nextMode) => {
+      setOpenToolbarOverlay(null);
       if (nextMode === "transit") {
         if (!canOpenTransitMode) {
           setErrorMessage("Откройте сохранённый individual расчёт Human Design.");
@@ -170,6 +179,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       clearResultState(nextMode);
     },
     onSelectClient: (client) => {
+      setOpenToolbarOverlay(null);
       setSelectedClient(client);
       clearResultState(mode);
       if (mode === "individual" && client.hasBirthDate) void previewIndividual(client);
@@ -178,6 +188,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       }
     },
     onSelectPartnerClient: (client) => {
+      setOpenToolbarOverlay(null);
       setSelectedPartnerClient(client);
       clearResultState("compatibility");
       if (mode === "compatibility" && selectedClient?.hasBirthDate && client.hasBirthDate) {
@@ -200,6 +211,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setAiDraftErrorMessage(null);
     },
     onSelectSaved: (calculation) => {
+      setOpenToolbarOverlay(null);
       try {
         const response = toHumanDesignCalculationResponse(calculation);
         setMode(mode === "transit" && response.result.mode === "individual" ? "transit" : calculation.mode);

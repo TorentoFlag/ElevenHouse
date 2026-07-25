@@ -12,6 +12,9 @@ export function ActionMenu({
   items,
   align = "end",
   disabled = false,
+  open: controlledOpen,
+  defaultOpen = false,
+  onOpenChange,
   className,
   menuClassName,
   itemClassName,
@@ -23,8 +26,18 @@ export function ActionMenu({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  const isControlled = controlledOpen !== undefined;
+  const open = controlledOpen ?? internalOpen;
+
+  const setMenuOpen = (nextOpen: boolean) => {
+    if (!isControlled) {
+      setInternalOpen(nextOpen);
+    }
+
+    onOpenChange?.(nextOpen);
+  };
 
   useEffect(() => {
     if (!open || typeof document === "undefined") {
@@ -33,13 +46,19 @@ export function ActionMenu({
 
     const handleDocumentMouseDown = (event: globalThis.MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
+        setMenuOpen(false);
       }
     };
 
     document.addEventListener("mousedown", handleDocumentMouseDown);
 
     return () => document.removeEventListener("mousedown", handleDocumentMouseDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setActiveItemId(null);
+    }
   }, [open]);
 
   useEffect(() => {
@@ -55,12 +74,12 @@ export function ActionMenu({
       return;
     }
 
-    setOpen(true);
+    setMenuOpen(true);
     setActiveItemId(initialItemId);
   };
 
   const closeMenu = ({ restoreFocus }: { readonly restoreFocus: boolean }) => {
-    setOpen(false);
+    setMenuOpen(false);
     setActiveItemId(null);
 
     if (restoreFocus) {
