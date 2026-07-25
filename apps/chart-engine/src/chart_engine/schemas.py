@@ -1,6 +1,7 @@
+from datetime import date, timedelta
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class HealthResponse(BaseModel):
@@ -161,6 +162,48 @@ class PlanetaryPositionsRequest(BaseModel):
     method: Literal["planetary_positions"]
     settings: PlanetaryPositionsSettings
     inputSnapshot: NatalInputSnapshot
+
+
+class AstroCalendarDateRange(BaseModel):
+    start: date
+    end: date
+
+    @model_validator(mode="after")
+    def validate_range(self):
+        if self.end < self.start:
+            raise ValueError("Astro calendar range end cannot be before start")
+        if self.end - self.start > timedelta(days=93):
+            raise ValueError("Astro calendar range cannot exceed 93 days")
+        return self
+
+
+class AstroCalendarRequest(BaseModel):
+    start: date
+    end: date
+    timeZone: str = Field(min_length=1, max_length=100)
+    settings: NatalSettings
+    eventTypes: list[
+        Literal[
+            "global.moon_phase",
+            "global.eclipse",
+            "global.ingress",
+            "client.birthday",
+            "client.solar_window",
+            "client.transit_aspect",
+        ]
+    ] = Field(
+        default_factory=lambda: [
+            "global.moon_phase",
+            "global.eclipse",
+            "global.ingress",
+        ],
+        max_length=6,
+    )
+
+    @model_validator(mode="after")
+    def validate_range(self):
+        AstroCalendarDateRange(start=self.start, end=self.end)
+        return self
 
 
 class ProviderMetadata(BaseModel):
@@ -348,6 +391,106 @@ class ChartAstrocartographyLine(BaseModel):
 class ChartAstrocartographyRenderResult(BaseModel):
     lines: list[ChartAstrocartographyLine]
     warnings: list[ChartWarning]
+
+
+class AstroCalendarWarningAction(BaseModel):
+    type: Literal["create_dictionary_entry"]
+    dictionaryCode: str
+    suggestedCategory: Literal["planet-sign", "planet-house", "aspect", "calendar"]
+
+
+class AstroCalendarWarning(BaseModel):
+    code: Literal[
+        "NO_PROFILE_TIMEZONE",
+        "CLIENT_BIRTH_DATA_MISSING",
+        "CLIENT_BIRTH_TIME_UNKNOWN",
+        "CLIENT_BIRTH_TIME_APPROXIMATE",
+        "CLIENT_SCOPE_TRUNCATED",
+        "PROVIDER_PRECISION_LIMITED",
+        "GENERATION_FAILED",
+        "DICTIONARY_ENTRY_MISSING",
+    ]
+    severity: Literal["info", "warning", "error"]
+    message: str = Field(min_length=1, max_length=500)
+    clientId: str | None
+    eventId: str | None
+    dictionaryCode: str | None
+    action: AstroCalendarWarningAction | None
+
+
+class AstroCalendarClientRef(BaseModel):
+    clientId: str
+    displayName: str
+    initials: str
+
+
+class AstroCalendarChartLink(BaseModel):
+    mode: Literal["transit", "solar_return"]
+    clientId: str
+    date: date
+
+
+class AstroCalendarEvent(BaseModel):
+    id: str
+    source: Literal["global", "client"]
+    type: Literal[
+        "global.moon_phase",
+        "global.eclipse",
+        "global.ingress",
+        "client.birthday",
+        "client.solar_window",
+        "client.transit_aspect",
+    ]
+    startsAt: str
+    endsAt: str | None
+    timePrecision: Literal["exact", "hour", "day"]
+    title: str
+    subtitle: str | None
+    description: str | None
+    tone: Literal["neutral", "supportive", "intense", "opportunity"]
+    points: list[str]
+    aspect: str | None
+    sign: str | None
+    clientRefs: list[AstroCalendarClientRef]
+    chartLink: AstroCalendarChartLink | None
+    dictionaryCodes: list[str]
+    warnings: list[AstroCalendarWarning]
+
+
+class AstroCalendarReadinessSummary(BaseModel):
+    clientsTotal: int = Field(ge=0)
+    clientsReady: int = Field(ge=0)
+    clientsWithMissingBirthData: int = Field(ge=0)
+    clientsWithUnknownBirthTime: int = Field(ge=0)
+    clientsWithApproximateBirthTime: int = Field(ge=0)
+
+
+class AstroCalendarSummary(BaseModel):
+    eventCount: int = Field(ge=0)
+    globalEventCount: int = Field(ge=0)
+    clientEventCount: int = Field(ge=0)
+    byType: dict[str, int]
+    byTone: dict[str, int]
+
+
+class AstroCalendarGenerationMetadata(BaseModel):
+    status: Literal["ready", "calculating", "failed", "stale"]
+    generationId: str | None
+    fingerprint: str
+    generatedAt: str | None
+    provider: ProviderMetadata | None
+
+
+class AstroCalendarRangeResponse(BaseModel):
+    schemaVersion: Literal["astro-calendar-range.v1"]
+    timeZone: str
+    range: AstroCalendarDateRange
+    generation: AstroCalendarGenerationMetadata
+    events: list[AstroCalendarEvent]
+    readiness: AstroCalendarReadinessSummary
+    summary: AstroCalendarSummary
+    dictionaryCodes: list[str]
+    warnings: list[AstroCalendarWarning]
 
 
 class StoredChartCalculationPayload(BaseModel):

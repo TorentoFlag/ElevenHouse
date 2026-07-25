@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from chart_engine.kerykeion_adapter import (
+    calculate_astro_calendar_range,
     calculate_astrocartography,
     calculate_composite,
     calculate_natal,
@@ -12,6 +13,8 @@ from chart_engine.kerykeion_adapter import (
     calculate_transit,
 )
 from chart_engine.schemas import (
+    AstroCalendarRangeResponse,
+    AstroCalendarRequest,
     AstrocartographyRequest,
     CompositeRequest,
     HealthResponse,
@@ -58,6 +61,14 @@ def natal(request: NatalRequest) -> StoredChartCalculationPayload:
 )
 def astrocartography(request: AstrocartographyRequest) -> StoredChartAstrocartographyCalculationPayload:
     return calculate_astrocartography(request)
+
+
+@app.post(
+    "/v1/astro-calendar/range",
+    response_model=AstroCalendarRangeResponse,
+)
+def astro_calendar_range(request: AstroCalendarRequest) -> AstroCalendarRangeResponse:
+    return calculate_astro_calendar_range(request)
 
 
 @app.post("/v1/transits", response_model=StoredChartTransitCalculationPayload, response_model_exclude_none=True)

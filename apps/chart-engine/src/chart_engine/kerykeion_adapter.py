@@ -1,4 +1,6 @@
-from datetime import date, timedelta
+import hashlib
+import json
+from datetime import date, datetime, timedelta, timezone
 from importlib.metadata import version
 from math import ceil
 from typing import Any
@@ -10,6 +12,14 @@ from kerykeion.planetary_return_factory import PlanetaryReturnFactory
 
 from chart_engine.schemas import (
     AstrocartographyRequest,
+    AstroCalendarDateRange,
+    AstroCalendarEvent,
+    AstroCalendarGenerationMetadata,
+    AstroCalendarReadinessSummary,
+    AstroCalendarRangeResponse,
+    AstroCalendarRequest,
+    AstroCalendarSummary,
+    AstroCalendarWarning,
     ChartAstrocartographyLine,
     ChartAstrocartographyPathPoint,
     ChartAstrocartographyRenderResult,
@@ -229,6 +239,47 @@ ASPECT_ORBS = {
     "quintile": 1.0,
 }
 
+ASTRO_CALENDAR_GLOBAL_EVENT_TYPES = {
+    "global.moon_phase",
+    "global.eclipse",
+    "global.ingress",
+}
+
+ASTRO_CALENDAR_INGRESS_POINTS = {
+    "sun": ("Sun", swe.SUN),
+    "moon": ("Moon", swe.MOON),
+    "mercury": ("Mercury", swe.MERCURY),
+    "venus": ("Venus", swe.VENUS),
+    "mars": ("Mars", swe.MARS),
+    "jupiter": ("Jupiter", swe.JUPITER),
+    "saturn": ("Saturn", swe.SATURN),
+    "uranus": ("Uranus", swe.URANUS),
+    "neptune": ("Neptune", swe.NEPTUNE),
+    "pluto": ("Pluto", swe.PLUTO),
+}
+
+ASTRO_CALENDAR_PHASES = {
+    0.0: ("new_moon", "New Moon", "conjunction"),
+    90.0: ("first_quarter", "First Quarter Moon", "square"),
+    180.0: ("full_moon", "Full Moon", "opposition"),
+    270.0: ("last_quarter", "Last Quarter Moon", "square"),
+}
+
+ASTRO_CALENDAR_SIGN_NAMES = [
+    "aries",
+    "taurus",
+    "gemini",
+    "cancer",
+    "leo",
+    "virgo",
+    "libra",
+    "scorpio",
+    "sagittarius",
+    "capricorn",
+    "aquarius",
+    "pisces",
+]
+
 
 def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
     active_points = _active_points(request.settings.nodeType)
@@ -305,6 +356,64 @@ def calculate_astrocartography(
             ),
             warnings=warnings,
         ),
+    )
+
+
+def calculate_astro_calendar_range(request: AstroCalendarRequest) -> AstroCalendarRangeResponse:
+    requested_types = set(request.eventTypes)
+    unsupported_types = sorted(requested_types - ASTRO_CALENDAR_GLOBAL_EVENT_TYPES)
+    warnings = [_unsupported_astro_calendar_event_warning(event_type) for event_type in unsupported_types]
+    start_jd = _julian_day_for_date(request.start)
+    end_exclusive_jd = _julian_day_for_date(request.end + timedelta(days=1))
+    events: list[AstroCalendarEvent] = []
+
+    if "global.moon_phase" in requested_types:
+        events.extend(_moon_phase_events(start_jd, end_exclusive_jd))
+    if "global.eclipse" in requested_types:
+        events.extend(_eclipse_events(start_jd, end_exclusive_jd))
+    if "global.ingress" in requested_types:
+        events.extend(_ingress_events(start_jd, end_exclusive_jd))
+
+    events.sort(key=lambda event: (event.startsAt, event.id))
+    dictionary_codes = sorted({code for event in events for code in event.dictionaryCodes})
+    by_type = {event_type: 0 for event_type in request.eventTypes}
+    by_tone: dict[str, int] = {}
+    for event in events:
+        by_type[event.type] = by_type.get(event.type, 0) + 1
+        by_tone[event.tone] = by_tone.get(event.tone, 0) + 1
+
+    return AstroCalendarRangeResponse(
+        schemaVersion="astro-calendar-range.v1",
+        timeZone=request.timeZone,
+        range=AstroCalendarDateRange(start=request.start, end=request.end),
+        generation=AstroCalendarGenerationMetadata(
+            status="ready",
+            generationId=None,
+            fingerprint=_astro_calendar_fingerprint(request),
+            generatedAt=_utc_now_string(),
+            provider=ProviderMetadata(
+                name="kerykeion",
+                version=version("kerykeion"),
+                ephemeris="swiss-ephemeris",
+            ),
+        ),
+        events=events,
+        readiness=AstroCalendarReadinessSummary(
+            clientsTotal=0,
+            clientsReady=0,
+            clientsWithMissingBirthData=0,
+            clientsWithUnknownBirthTime=0,
+            clientsWithApproximateBirthTime=0,
+        ),
+        summary=AstroCalendarSummary(
+            eventCount=len(events),
+            globalEventCount=len(events),
+            clientEventCount=0,
+            byType=by_type,
+            byTone=by_tone,
+        ),
+        dictionaryCodes=dictionary_codes,
+        warnings=warnings,
     )
 
 
@@ -754,6 +863,307 @@ def calculate_planetary_positions(request: PlanetaryPositionsRequest) -> Planeta
         inputSnapshot=request.inputSnapshot,
         positions=positions,
     )
+
+
+def _moon_phase_events(start_jd: float, end_exclusive_jd: float) -> list[AstroCalendarEvent]:
+    events: list[AstroCalendarEvent] = []
+    step_days = 0.25
+    previous_jd = start_jd
+    previous_phase = _moon_phase_angle(previous_jd)
+    previous_unwrapped = previous_phase
+    current_jd = start_jd + step_days
+
+    while current_jd <= end_exclusive_jd + step_days:
+        phase = _moon_phase_angle(current_jd)
+        current_unwrapped = phase
+        while current_unwrapped < previous_unwrapped:
+            current_unwrapped += 360.0
+
+        for target, (phase_id, title, aspect) in ASTRO_CALENDAR_PHASES.items():
+            target_unwrapped = target
+            while target_unwrapped < previous_unwrapped:
+                target_unwrapped += 360.0
+            if previous_unwrapped < target_unwrapped <= current_unwrapped:
+                event_jd = _refine_phase_jd(previous_jd, current_jd, target_unwrapped)
+                if start_jd <= event_jd < end_exclusive_jd:
+                    sign = _planet_sign(swe.MOON, event_jd)
+                    starts_at = _jd_to_utc_datetime_string(event_jd)
+                    events.append(
+                        AstroCalendarEvent(
+                            id=f"global-moon-phase-{phase_id}-{starts_at[:10]}",
+                            source="global",
+                            type="global.moon_phase",
+                            startsAt=starts_at,
+                            endsAt=None,
+                            timePrecision="exact",
+                            title=title,
+                            subtitle=sign,
+                            description=None,
+                            tone="neutral" if phase_id in {"new_moon", "full_moon"} else "supportive",
+                            points=["Moon"],
+                            aspect=aspect,
+                            sign=sign,
+                            clientRefs=[],
+                            chartLink=None,
+                            dictionaryCodes=[f"astro_calendar.global.moon_phase.{phase_id}.{sign}"],
+                            warnings=[],
+                        )
+                    )
+
+        previous_jd = current_jd
+        previous_unwrapped = current_unwrapped
+        current_jd += step_days
+
+    return events
+
+
+def _ingress_events(start_jd: float, end_exclusive_jd: float) -> list[AstroCalendarEvent]:
+    events: list[AstroCalendarEvent] = []
+    step_days = 0.25
+
+    for point_id, (label, planet) in ASTRO_CALENDAR_INGRESS_POINTS.items():
+        previous_jd = start_jd
+        previous_sign = _planet_sign(planet, previous_jd)
+        current_jd = start_jd + step_days
+
+        while current_jd <= end_exclusive_jd + step_days:
+            current_sign = _planet_sign(planet, current_jd)
+            if current_sign != previous_sign:
+                event_jd = _refine_ingress_jd(
+                    previous_jd,
+                    current_jd,
+                    planet,
+                    current_sign,
+                )
+                if start_jd <= event_jd < end_exclusive_jd:
+                    starts_at = _jd_to_utc_datetime_string(event_jd)
+                    events.append(
+                        AstroCalendarEvent(
+                            id=f"global-ingress-{point_id}-{current_sign}-{starts_at[:10]}",
+                            source="global",
+                            type="global.ingress",
+                            startsAt=starts_at,
+                            endsAt=None,
+                            timePrecision="exact",
+                            title=f"{label} enters {current_sign}",
+                            subtitle=current_sign,
+                            description=None,
+                            tone="opportunity",
+                            points=[label],
+                            aspect=None,
+                            sign=current_sign,
+                            clientRefs=[],
+                            chartLink=None,
+                            dictionaryCodes=[
+                                f"astro_calendar.global.ingress.{point_id}.{current_sign}"
+                            ],
+                            warnings=[],
+                        )
+                    )
+                previous_sign = current_sign
+
+            previous_jd = current_jd
+            current_jd += step_days
+
+    return events
+
+
+def _eclipse_events(start_jd: float, end_exclusive_jd: float) -> list[AstroCalendarEvent]:
+    events: list[AstroCalendarEvent] = []
+    events.extend(_solar_eclipse_events(start_jd, end_exclusive_jd))
+    events.extend(_lunar_eclipse_events(start_jd, end_exclusive_jd))
+    return events
+
+
+def _solar_eclipse_events(start_jd: float, end_exclusive_jd: float) -> list[AstroCalendarEvent]:
+    events: list[AstroCalendarEvent] = []
+    search_jd = start_jd - 1.0
+
+    while search_jd < end_exclusive_jd:
+        retflag, times = swe.sol_eclipse_when_glob(search_jd, swe.FLG_SWIEPH, 0, False)
+        maximum_jd = times[0]
+        if maximum_jd >= end_exclusive_jd:
+            break
+        if maximum_jd >= start_jd:
+            starts_at = _jd_to_utc_datetime_string(maximum_jd)
+            sign = _planet_sign(swe.SUN, maximum_jd)
+            eclipse_kind = _solar_eclipse_kind(retflag)
+            events.append(
+                AstroCalendarEvent(
+                    id=f"global-eclipse-solar-{eclipse_kind}-{starts_at[:10]}",
+                    source="global",
+                    type="global.eclipse",
+                    startsAt=starts_at,
+                    endsAt=None,
+                    timePrecision="hour",
+                    title=f"Solar eclipse ({eclipse_kind})",
+                    subtitle=sign,
+                    description=None,
+                    tone="intense",
+                    points=["Sun", "Moon"],
+                    aspect="conjunction",
+                    sign=sign,
+                    clientRefs=[],
+                    chartLink=None,
+                    dictionaryCodes=[
+                        f"astro_calendar.global.eclipse.solar.{eclipse_kind}.{sign}"
+                    ],
+                    warnings=[],
+                )
+            )
+        search_jd = maximum_jd + 1.0
+
+    return events
+
+
+def _lunar_eclipse_events(start_jd: float, end_exclusive_jd: float) -> list[AstroCalendarEvent]:
+    events: list[AstroCalendarEvent] = []
+    search_jd = start_jd - 1.0
+
+    while search_jd < end_exclusive_jd:
+        retflag, times = swe.lun_eclipse_when(search_jd, swe.FLG_SWIEPH, 0, False)
+        maximum_jd = times[0]
+        if maximum_jd >= end_exclusive_jd:
+            break
+        if maximum_jd >= start_jd:
+            starts_at = _jd_to_utc_datetime_string(maximum_jd)
+            sign = _planet_sign(swe.MOON, maximum_jd)
+            eclipse_kind = _lunar_eclipse_kind(retflag)
+            events.append(
+                AstroCalendarEvent(
+                    id=f"global-eclipse-lunar-{eclipse_kind}-{starts_at[:10]}",
+                    source="global",
+                    type="global.eclipse",
+                    startsAt=starts_at,
+                    endsAt=None,
+                    timePrecision="hour",
+                    title=f"Lunar eclipse ({eclipse_kind})",
+                    subtitle=sign,
+                    description=None,
+                    tone="intense",
+                    points=["Sun", "Moon"],
+                    aspect="opposition",
+                    sign=sign,
+                    clientRefs=[],
+                    chartLink=None,
+                    dictionaryCodes=[
+                        f"astro_calendar.global.eclipse.lunar.{eclipse_kind}.{sign}"
+                    ],
+                    warnings=[],
+                )
+            )
+        search_jd = maximum_jd + 1.0
+
+    return events
+
+
+def _unsupported_astro_calendar_event_warning(event_type: str) -> AstroCalendarWarning:
+    return AstroCalendarWarning(
+        code="PROVIDER_PRECISION_LIMITED",
+        severity="warning",
+        message=f"Chart engine does not generate {event_type} without owner-scoped CRM data.",
+        clientId=None,
+        eventId=None,
+        dictionaryCode=None,
+        action=None,
+    )
+
+
+def _astro_calendar_fingerprint(request: AstroCalendarRequest) -> str:
+    payload = {
+        "start": request.start.isoformat(),
+        "end": request.end.isoformat(),
+        "timeZone": request.timeZone,
+        "settings": request.settings.model_dump(mode="json"),
+        "eventTypes": sorted(request.eventTypes),
+    }
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+    return f"astro-calendar:{digest[:48]}"
+
+
+def _julian_day_for_date(value: date) -> float:
+    return swe.julday(value.year, value.month, value.day, 0.0, swe.GREG_CAL)
+
+
+def _planet_longitude(planet: int, julian_day: float) -> float:
+    values, _ = swe.calc_ut(julian_day, planet, swe.FLG_SWIEPH | swe.FLG_SPEED)
+    return float(values[0]) % 360.0
+
+
+def _planet_sign(planet: int, julian_day: float) -> str:
+    return ASTRO_CALENDAR_SIGN_NAMES[int(_planet_longitude(planet, julian_day) // 30) % 12]
+
+
+def _moon_phase_angle(julian_day: float) -> float:
+    moon = _planet_longitude(swe.MOON, julian_day)
+    sun = _planet_longitude(swe.SUN, julian_day)
+    return (moon - sun) % 360.0
+
+
+def _refine_phase_jd(left_jd: float, right_jd: float, target_unwrapped: float) -> float:
+    left_phase = _moon_phase_angle(left_jd)
+    while left_phase > target_unwrapped:
+        left_phase -= 360.0
+    while left_phase + 360.0 <= target_unwrapped:
+        left_phase += 360.0
+
+    for _ in range(40):
+        mid_jd = (left_jd + right_jd) / 2
+        mid_phase = _moon_phase_angle(mid_jd)
+        while mid_phase < left_phase:
+            mid_phase += 360.0
+        if mid_phase < target_unwrapped:
+            left_jd = mid_jd
+            left_phase = mid_phase
+        else:
+            right_jd = mid_jd
+
+    return (left_jd + right_jd) / 2
+
+
+def _refine_ingress_jd(left_jd: float, right_jd: float, planet: int, target_sign: str) -> float:
+    for _ in range(40):
+        mid_jd = (left_jd + right_jd) / 2
+        if _planet_sign(planet, mid_jd) == target_sign:
+            right_jd = mid_jd
+        else:
+            left_jd = mid_jd
+
+    return (left_jd + right_jd) / 2
+
+
+def _solar_eclipse_kind(retflag: int) -> str:
+    if retflag & swe.ECL_TOTAL:
+        return "total"
+    if retflag & swe.ECL_ANNULAR:
+        return "annular"
+    if retflag & swe.ECL_ANNULAR_TOTAL:
+        return "hybrid"
+    if retflag & swe.ECL_PARTIAL:
+        return "partial"
+    return "solar"
+
+
+def _lunar_eclipse_kind(retflag: int) -> str:
+    if retflag & swe.ECL_TOTAL:
+        return "total"
+    if retflag & swe.ECL_PARTIAL:
+        return "partial"
+    if retflag & swe.ECL_PENUMBRAL:
+        return "penumbral"
+    return "lunar"
+
+
+def _jd_to_utc_datetime_string(julian_day: float) -> str:
+    year, month, day, hour_value = swe.revjul(julian_day, swe.GREG_CAL)
+    resolved = datetime(year, month, day, tzinfo=timezone.utc) + timedelta(
+        seconds=round(hour_value * 3_600, 3)
+    )
+    return resolved.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _utc_now_string() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _astrocartography_lines(julian_day: float, house_system: str) -> list[ChartAstrocartographyLine]:
