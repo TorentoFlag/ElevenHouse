@@ -13,28 +13,23 @@ import {
 import {
   assignAstrologerRiskProfile,
   ensureDefaultFinancePolicy,
-  updateFinancePolicy,
-  type FinancePolicyStore
+  updateFinancePolicy
 } from "@elevenhouse/domain";
 import { SystemClock } from "../../common/system-clock.js";
-import {
-  ADMIN_FINANCE_POLICY_AUDIT_SINK,
-  ADMIN_FINANCE_POLICY_STORE
-} from "./finance-policies.tokens";
-import type { AdminFinancePolicyAuditSink } from "./finance-policies.audit";
+import { ADMIN_FINANCE_POLICY_UNIT_OF_WORK } from "./finance-policies.tokens";
+import type { AdminFinancePolicyUnitOfWork } from "./finance-policies.unit-of-work";
 
 @Injectable()
 export class FinancePoliciesService {
   constructor(
-    @Inject(ADMIN_FINANCE_POLICY_STORE) private readonly store: FinancePolicyStore,
-    @Inject(ADMIN_FINANCE_POLICY_AUDIT_SINK)
-    private readonly auditSink: AdminFinancePolicyAuditSink,
+    @Inject(ADMIN_FINANCE_POLICY_UNIT_OF_WORK)
+    private readonly unitOfWork: AdminFinancePolicyUnitOfWork,
     private readonly clock: SystemClock
   ) {}
 
   async listPolicies(): Promise<FinancePoliciesResponse> {
-    const policies = await Promise.all(
-      riskTierValues.map((riskTier) => this.store.findActivePolicyByRiskTier(riskTier))
+    const policies = await this.unitOfWork.execute(({ store }) =>
+      Promise.all(riskTierValues.map((riskTier) => store.findActivePolicyByRiskTier(riskTier)))
     );
     return financePoliciesResponseSchema.parse({
       policies: policies.filter((policy): policy is NonNullable<typeof policy> => Boolean(policy))
@@ -43,17 +38,20 @@ export class FinancePoliciesService {
 
   async ensureDefault(adminUserId: string): Promise<FinancePolicyResponse> {
     const now = this.clock.now();
-    const policy = await ensureDefaultFinancePolicy({
-      store: this.store,
-      adminUserId,
-      now
-    });
-    await this.auditSink.record({
-      actorUserId: adminUserId,
-      action: "finance_policy.default_created",
-      targetId: policy.id,
-      occurredAt: now.toISOString(),
-      metadata: { riskTier: policy.riskTier, policyVersion: policy.policyVersion }
+    const policy = await this.unitOfWork.execute(async ({ store, auditSink }) => {
+      const ensuredPolicy = await ensureDefaultFinancePolicy({
+        store,
+        adminUserId,
+        now
+      });
+      await auditSink.record({
+        actorUserId: adminUserId,
+        action: "finance_policy.default_created",
+        targetId: ensuredPolicy.id,
+        occurredAt: now.toISOString(),
+        metadata: { riskTier: ensuredPolicy.riskTier, policyVersion: ensuredPolicy.policyVersion }
+      });
+      return ensuredPolicy;
     });
     return financePolicyResponseSchema.parse(policy);
   }
@@ -61,21 +59,24 @@ export class FinancePoliciesService {
   async updatePolicy(adminUserId: string, body: unknown): Promise<FinancePolicyResponse> {
     const request = parseBody(updateFinancePolicyRequestSchema, body);
     const now = this.clock.now();
-    const policy = await updateFinancePolicy({
-      store: this.store,
-      adminUserId,
-      request,
-      now
-    });
-    await this.auditSink.record({
-      actorUserId: adminUserId,
-      action: "finance_policy.updated",
-      targetId: policy.id,
-      occurredAt: now.toISOString(),
-      metadata: {
-        riskTier: policy.riskTier,
-        policyVersion: policy.policyVersion
-      }
+    const policy = await this.unitOfWork.execute(async ({ store, auditSink }) => {
+      const updatedPolicy = await updateFinancePolicy({
+        store,
+        adminUserId,
+        request,
+        now
+      });
+      await auditSink.record({
+        actorUserId: adminUserId,
+        action: "finance_policy.updated",
+        targetId: updatedPolicy.id,
+        occurredAt: now.toISOString(),
+        metadata: {
+          riskTier: updatedPolicy.riskTier,
+          policyVersion: updatedPolicy.policyVersion
+        }
+      });
+      return updatedPolicy;
     });
     return financePolicyResponseSchema.parse(policy);
   }
@@ -87,22 +88,25 @@ export class FinancePoliciesService {
   ): Promise<AstrologerRiskProfileResponse> {
     const request = parseBody(updateAstrologerRiskProfileRequestSchema, body);
     const now = this.clock.now();
-    const profile = await assignAstrologerRiskProfile({
-      store: this.store,
-      adminUserId,
-      astrologerUserId,
-      request,
-      now
-    });
-    await this.auditSink.record({
-      actorUserId: adminUserId,
-      action: "astrologer_risk_profile.updated",
-      targetId: astrologerUserId,
-      occurredAt: now.toISOString(),
-      metadata: {
-        riskTier: profile.riskTier,
-        manualRiskTier: profile.manualRiskTier
-      }
+    const profile = await this.unitOfWork.execute(async ({ store, auditSink }) => {
+      const updatedProfile = await assignAstrologerRiskProfile({
+        store,
+        adminUserId,
+        astrologerUserId,
+        request,
+        now
+      });
+      await auditSink.record({
+        actorUserId: adminUserId,
+        action: "astrologer_risk_profile.updated",
+        targetId: astrologerUserId,
+        occurredAt: now.toISOString(),
+        metadata: {
+          riskTier: updatedProfile.riskTier,
+          manualRiskTier: updatedProfile.manualRiskTier
+        }
+      });
+      return updatedProfile;
     });
     return astrologerRiskProfileResponseSchema.parse(profile);
   }

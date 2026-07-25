@@ -30,6 +30,12 @@ export default defineConfig({
           import.meta.url
         )
       ),
+      "@elevenhouse/db/audit-log": fileURLToPath(
+        new URL("./packages/db/src/adapters/audit-log/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/db/adapters/audit-log": fileURLToPath(
+        new URL("./packages/db/src/adapters/audit-log/index.ts", import.meta.url)
+      ),
       "@elevenhouse/db/runtime": fileURLToPath(
         new URL("./packages/db/src/runtime/index.ts", import.meta.url)
       ),

@@ -1,3 +1,5 @@
+import type { AuditLogStore } from "@elevenhouse/domain";
+
 export type AdminFinancePolicyAuditEvent = {
   readonly actorUserId: string;
   readonly action:
@@ -13,9 +15,24 @@ export type AdminFinancePolicyAuditSink = {
   readonly record: (event: AdminFinancePolicyAuditEvent) => Promise<void>;
 };
 
-export class ConsoleAdminFinancePolicyAuditSink implements AdminFinancePolicyAuditSink {
+export class DurableAdminFinancePolicyAuditSink implements AdminFinancePolicyAuditSink {
+  constructor(private readonly auditLogStore: AuditLogStore) {}
+
   async record(event: AdminFinancePolicyAuditEvent): Promise<void> {
-    // Temporary structured audit sink until the shared AuditLog module lands.
-    console.info("admin finance policy audit", event);
+    await this.auditLogStore.createEntry({
+      actorUserId: event.actorUserId,
+      action: event.action,
+      targetType: targetTypeForAction(event.action),
+      targetId: event.targetId,
+      occurredAt: event.occurredAt,
+      metadata: event.metadata
+    });
   }
+}
+
+function targetTypeForAction(action: AdminFinancePolicyAuditEvent["action"]): string {
+  if (action === "astrologer_risk_profile.updated") {
+    return "astrologer_risk_profile";
+  }
+  return "finance_policy";
 }

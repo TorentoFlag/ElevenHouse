@@ -1374,6 +1374,20 @@ CREATE TABLE "finance_idempotency_commands" (
 	CONSTRAINT "finance_idempotency_commands_result_state_check" CHECK (("finance_idempotency_commands"."state" = 'processing' and "finance_idempotency_commands"."result" is null and "finance_idempotency_commands"."error_code" is null) or ("finance_idempotency_commands"."state" = 'completed' and "finance_idempotency_commands"."result" is not null and jsonb_typeof("finance_idempotency_commands"."result") = 'object' and "finance_idempotency_commands"."error_code" is null) or ("finance_idempotency_commands"."state" = 'failed' and "finance_idempotency_commands"."result" is null and "finance_idempotency_commands"."error_code" is not null and length(trim("finance_idempotency_commands"."error_code")) between 1 and 120))
 );
 --> statement-breakpoint
+CREATE TABLE "audit_log_entries" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"actor_user_id" uuid,
+	"action" text NOT NULL,
+	"target_type" text NOT NULL,
+	"target_id" text NOT NULL,
+	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	CONSTRAINT "audit_log_entries_action_check" CHECK (length(trim("audit_log_entries"."action")) between 1 and 160),
+	CONSTRAINT "audit_log_entries_target_type_check" CHECK (length(trim("audit_log_entries"."target_type")) between 1 and 120),
+	CONSTRAINT "audit_log_entries_target_id_check" CHECK (length(trim("audit_log_entries"."target_id")) between 1 and 200),
+	CONSTRAINT "audit_log_entries_metadata_check" CHECK (jsonb_typeof("audit_log_entries"."metadata") = 'object')
+);
+--> statement-breakpoint
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1480,6 +1494,7 @@ ALTER TABLE "ledger_transactions" ADD CONSTRAINT "ledger_transactions_payout_req
 ALTER TABLE "wallet_balance_read_models" ADD CONSTRAINT "wallet_balance_read_models_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reconciliation_records" ADD CONSTRAINT "reconciliation_records_provider_event_id_payment_provider_events_id_fk" FOREIGN KEY ("provider_event_id") REFERENCES "public"."payment_provider_events"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "finance_idempotency_commands" ADD CONSTRAINT "finance_idempotency_commands_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "audit_log_entries" ADD CONSTRAINT "audit_log_entries_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_email_login_unique" ON "auth_identities" USING btree (lower("email")) WHERE "auth_identities"."provider" = 'email' and "auth_identities"."email" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_phone_login_unique" ON "auth_identities" USING btree ("phone_number") WHERE "auth_identities"."provider" = 'phone' and "auth_identities"."phone_number" is not null;--> statement-breakpoint
@@ -1642,7 +1657,11 @@ CREATE INDEX "reconciliation_records_provider_payout_idx" ON "reconciliation_rec
 CREATE INDEX "reconciliation_records_status_checked_idx" ON "reconciliation_records" USING btree ("status","checked_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "finance_idempotency_commands_scope_key_unique" ON "finance_idempotency_commands" USING btree ("scope","idempotency_key");--> statement-breakpoint
 CREATE INDEX "finance_idempotency_commands_actor_created_idx" ON "finance_idempotency_commands" USING btree ("actor_user_id","created_at");--> statement-breakpoint
-CREATE INDEX "finance_idempotency_commands_expiry_idx" ON "finance_idempotency_commands" USING btree ("expires_at");
+CREATE INDEX "finance_idempotency_commands_expiry_idx" ON "finance_idempotency_commands" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "audit_log_entries_actor_user_id_index" ON "audit_log_entries" USING btree ("actor_user_id");--> statement-breakpoint
+CREATE INDEX "audit_log_entries_action_index" ON "audit_log_entries" USING btree ("action");--> statement-breakpoint
+CREATE INDEX "audit_log_entries_target_index" ON "audit_log_entries" USING btree ("target_type","target_id");--> statement-breakpoint
+CREATE INDEX "audit_log_entries_occurred_at_index" ON "audit_log_entries" USING btree ("occurred_at");
 --> statement-breakpoint
 ALTER TABLE "schedule_reservations"
   ADD CONSTRAINT "schedule_reservations_active_owner_range_exclude"

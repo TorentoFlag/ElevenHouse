@@ -16,7 +16,7 @@ type FinancePolicyRow = typeof financePolicies.$inferSelect;
 type AstrologerRiskProfileRow = typeof astrologerRiskProfiles.$inferSelect;
 
 export function createDrizzleFinancePolicyStore(
-  database: ElevenHouseDatabase
+  database: FinanceDatabase
 ): FinancePolicyStore {
   return {
     findActivePolicyByRiskTier: (riskTier) => findActivePolicyByRiskTier(database, riskTier),
@@ -80,39 +80,47 @@ async function findEffectivePolicyForAstrologer(
 }
 
 async function createPolicySnapshot(
-  database: ElevenHouseDatabase,
+  database: FinanceDatabase,
   input: CreateFinancePolicyInput
 ): Promise<FinancePolicySnapshot> {
-  return database.transaction(async (transaction) => {
-    await transaction
-      .update(financePolicies)
-      .set({ isActive: false })
-      .where(eq(financePolicies.riskTier, input.riskTier));
-    const timestamp = new Date(input.now);
-    const [row] = await transaction
-      .insert(financePolicies)
-      .values({
-        ...(input.id ? { id: input.id } : {}),
-        policyVersion: input.policyVersion,
-        riskTier: input.riskTier,
-        holdDurationHours: input.holdDurationHours,
-        reserveBps: input.reserveBps,
-        reserveReleaseDelayDays: input.reserveReleaseDelayDays,
-        platformFeeBps: input.platformFeeBps,
-        providerSettlementRequired: input.providerSettlementRequired,
-        isActive: true,
-        createdByUserId: input.createdByUserId,
-        snapshottedAt: timestamp,
-        createdAt: timestamp
-      })
-      .returning();
-    if (!row) throw new Error("Expected finance policy insert to return a row");
-    return toFinancePolicySnapshot(row);
-  });
+  if (hasTransaction(database)) {
+    return database.transaction((transaction) => insertPolicySnapshot(transaction, input));
+  }
+  return insertPolicySnapshot(database, input);
+}
+
+async function insertPolicySnapshot(
+  database: FinanceDatabase,
+  input: CreateFinancePolicyInput
+): Promise<FinancePolicySnapshot> {
+  await database
+    .update(financePolicies)
+    .set({ isActive: false })
+    .where(eq(financePolicies.riskTier, input.riskTier));
+  const timestamp = new Date(input.now);
+  const [row] = await database
+    .insert(financePolicies)
+    .values({
+      ...(input.id ? { id: input.id } : {}),
+      policyVersion: input.policyVersion,
+      riskTier: input.riskTier,
+      holdDurationHours: input.holdDurationHours,
+      reserveBps: input.reserveBps,
+      reserveReleaseDelayDays: input.reserveReleaseDelayDays,
+      platformFeeBps: input.platformFeeBps,
+      providerSettlementRequired: input.providerSettlementRequired,
+      isActive: true,
+      createdByUserId: input.createdByUserId,
+      snapshottedAt: timestamp,
+      createdAt: timestamp
+    })
+    .returning();
+  if (!row) throw new Error("Expected finance policy insert to return a row");
+  return toFinancePolicySnapshot(row);
 }
 
 async function upsertAstrologerRiskProfile(
-  database: ElevenHouseDatabase,
+  database: FinanceDatabase,
   input: UpsertAstrologerRiskProfileInput
 ): Promise<AstrologerRiskProfile> {
   const [row] = await database
@@ -150,6 +158,10 @@ async function upsertAstrologerRiskProfile(
     .returning();
   if (!row) throw new Error("Expected astrologer risk profile upsert to return a row");
   return toAstrologerRiskProfile(row);
+}
+
+function hasTransaction(database: FinanceDatabase): database is ElevenHouseDatabase {
+  return typeof (database as { transaction?: unknown }).transaction === "function";
 }
 
 function toFinancePolicySnapshot(row: FinancePolicyRow): FinancePolicySnapshot {

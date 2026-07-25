@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import type { PlatformRole } from "@elevenhouse/auth";
 import type {
+  AuditLogStore,
   AuthSessionAuthenticationStore,
   FinancePolicySnapshot,
   FinancePolicyStore,
@@ -17,11 +18,9 @@ import { AdminCsrfTokenService } from "../security/csrf/admin-csrf-token.service
 import { CsrfGuard } from "../security/csrf/csrf.guard";
 import { FinancePoliciesController } from "./finance-policies.controller";
 import { FinancePoliciesService } from "./finance-policies.service";
-import {
-  ADMIN_FINANCE_POLICY_AUDIT_SINK,
-  ADMIN_FINANCE_POLICY_STORE
-} from "./finance-policies.tokens";
-import type { AdminFinancePolicyAuditSink } from "./finance-policies.audit";
+import { ADMIN_FINANCE_POLICY_UNIT_OF_WORK } from "./finance-policies.tokens";
+import { DurableAdminFinancePolicyAuditSink } from "./finance-policies.audit";
+import type { AdminFinancePolicyUnitOfWork } from "./finance-policies.unit-of-work";
 
 const now = new Date("2026-07-25T10:00:00.000Z");
 const sessionCookieName = "elevenhouse_admin_session";
@@ -36,14 +35,23 @@ let moduleRef: TestingModule;
 let baseUrl: string;
 let csrfToken: string;
 let store: FinancePolicyStore;
-let auditSink: AdminFinancePolicyAuditSink;
+let auditLogStore: AuditLogStore;
+let unitOfWork: AdminFinancePolicyUnitOfWork;
 let roles: readonly PlatformRole[];
 
 describe("admin finance policy HTTP flow", () => {
   beforeEach(async () => {
     roles = ["admin"];
     store = createFinancePolicyStore();
-    auditSink = { record: vi.fn(async () => undefined) };
+    auditLogStore = createAuditLogStore();
+    unitOfWork = {
+      execute: vi.fn(async (operation) =>
+        operation({
+          store,
+          auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
+        })
+      )
+    };
 
     moduleRef = await Test.createTestingModule({
       controllers: [FinancePoliciesController],
@@ -56,8 +64,7 @@ describe("admin finance policy HTTP flow", () => {
         { provide: SystemClock, useValue: { now: vi.fn(() => now) } },
         { provide: ConfigService, useValue: configService() },
         { provide: AUTH_SESSION_AUTHENTICATION_STORE, useValue: authStore() },
-        { provide: ADMIN_FINANCE_POLICY_STORE, useValue: store },
-        { provide: ADMIN_FINANCE_POLICY_AUDIT_SINK, useValue: auditSink }
+        { provide: ADMIN_FINANCE_POLICY_UNIT_OF_WORK, useValue: unitOfWork }
       ]
     }).compile();
 
@@ -132,10 +139,11 @@ describe("admin finance policy HTTP flow", () => {
         providerSettlementRequired: true
       }
     });
-    expect(auditSink.record).toHaveBeenCalledWith(
+    expect(auditLogStore.createEntry).toHaveBeenCalledWith(
       expect.objectContaining({
         actorUserId: adminUserId,
         action: "finance_policy.updated",
+        targetType: "finance_policy",
         metadata: { riskTier: "standard", policyVersion: 2 }
       })
     );
@@ -196,10 +204,11 @@ describe("admin finance policy HTTP flow", () => {
         reviewedAt: now.toISOString()
       }
     });
-    expect(auditSink.record).toHaveBeenCalledWith(
+    expect(auditLogStore.createEntry).toHaveBeenCalledWith(
       expect.objectContaining({
         actorUserId: adminUserId,
         action: "astrologer_risk_profile.updated",
+        targetType: "astrologer_risk_profile",
         targetId: astrologerUserId,
         metadata: { riskTier: "standard", manualRiskTier: "high" }
       })
@@ -253,6 +262,20 @@ function createCsrfToken(service: AdminCsrfTokenService): string {
     now
   });
   return token;
+}
+
+function createAuditLogStore(): AuditLogStore {
+  return {
+    createEntry: vi.fn(async (input) => ({
+      id: "77777777-7777-4777-8777-777777777777",
+      actorUserId: input.actorUserId,
+      action: input.action,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      occurredAt: input.occurredAt,
+      metadata: input.metadata
+    }))
+  };
 }
 
 function createFinancePolicyStore(): FinancePolicyStore {

@@ -194,6 +194,16 @@
       "types": "./dist/adapters/finance/index.d.ts",
       "import": "./dist/adapters/finance/index.js",
       "require": "./dist/adapters/finance/index.js"
+    },
+    "./audit-log": {
+      "types": "./dist/adapters/audit-log/index.d.ts",
+      "import": "./dist/adapters/audit-log/index.js",
+      "require": "./dist/adapters/audit-log/index.js"
+    },
+    "./adapters/audit-log": {
+      "types": "./dist/adapters/audit-log/index.d.ts",
+      "import": "./dist/adapters/audit-log/index.js",
+      "require": "./dist/adapters/audit-log/index.js"
     }
   },
   "scripts": {

@@ -1,0 +1,377 @@
+.adminFinanceShell {
+  min-height: 100vh;
+  display: flex;
+  background: #10111f;
+  color: #f4f4f8;
+}
+
+.adminFinanceRail {
+  width: 230px;
+  flex: 0 0 230px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: #171826;
+  padding: 18px 12px;
+}
+
+.adminFinanceBrand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 18px;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.adminFinanceBrandIcon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: #b79cfb;
+  color: #16131f;
+}
+
+.adminFinanceNav {
+  display: grid;
+  gap: 4px;
+}
+
+.adminFinanceNavItem {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: #a7a2c8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.adminFinanceNavItem:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.adminFinanceNavItemActive {
+  border-color: rgba(183, 156, 251, 0.42);
+  background: rgba(183, 156, 251, 0.14);
+  color: #f4f4f8;
+}
+
+.adminFinanceMain {
+  min-width: 0;
+  flex: 1;
+  padding: 0 0 40px;
+}
+
+.adminFinanceHeader {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(16, 17, 31, 0.88);
+  padding: 0 24px;
+}
+
+.adminFinanceHeader h1,
+.adminFinancePanel h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.adminFinanceHeader h1 {
+  font-size: 19px;
+  line-height: 1.2;
+}
+
+.adminFinancePanel h2 {
+  font-size: 16px;
+}
+
+.adminFinanceKicker {
+  margin: 0 0 5px;
+  color: #a7a2c8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.adminFinanceStatusGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 22px 24px 0;
+}
+
+.adminFinanceStatusCard {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #191a2a;
+  color: #f4f4f8;
+}
+
+.adminFinanceStatusCard span,
+.adminFinanceStatusCard small,
+.adminFinanceMuted {
+  color: #a7a2c8;
+}
+
+.adminFinanceStatusCard strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 22px;
+}
+
+.adminFinanceStatusCard small {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.adminFinanceWorkGrid {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.95fr) minmax(420px, 1.05fr);
+  gap: 16px;
+  padding: 16px 24px 0;
+  align-items: start;
+}
+
+.adminFinancePanel {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #191a2a;
+  color: #f4f4f8;
+}
+
+.adminFinanceRiskPanel {
+  grid-column: 1 / -1;
+}
+
+.adminFinancePanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.adminFinanceTierList {
+  display: grid;
+  gap: 7px;
+}
+
+.adminFinanceTier {
+  display: grid;
+  grid-template-columns: 10px minmax(110px, 0.8fr) minmax(160px, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: #141523;
+  color: #f4f4f8;
+  cursor: pointer;
+  font: inherit;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.adminFinanceTierActive {
+  border-color: rgba(183, 156, 251, 0.5);
+  background: rgba(183, 156, 251, 0.13);
+}
+
+.adminFinanceRiskDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.adminFinanceRiskDot-positive {
+  background: #4ec8a0;
+}
+
+.adminFinanceRiskDot-neutral {
+  background: #a7a2c8;
+}
+
+.adminFinanceRiskDot-warning {
+  background: #f4c430;
+}
+
+.adminFinanceRiskDot-danger {
+  background: #f47a7a;
+}
+
+.adminFinanceTierName {
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.adminFinanceTierMeta {
+  color: #a7a2c8;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminFinanceTable {
+  margin-top: 16px;
+  overflow-x: auto;
+}
+
+.adminFinanceTableRow {
+  display: grid;
+  grid-template-columns: 1.2fr 0.7fr 0.8fr 0.8fr 0.7fr;
+  gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: #d8d5e8;
+  font-size: 12.5px;
+  padding: 10px 0;
+}
+
+.adminFinanceTableHead {
+  border-top: 0;
+  color: #a7a2c8;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.adminFinanceForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.adminFinanceField,
+.adminFinanceToggle {
+  display: grid;
+  gap: 7px;
+  color: #a7a2c8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.adminFinanceFieldWide,
+.adminFinanceToggle {
+  grid-column: 1 / -1;
+}
+
+.adminFinanceField input,
+.adminFinanceField select,
+.adminFinanceField textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9px;
+  background: #11121f;
+  color: #f4f4f8;
+  font: inherit;
+  font-size: 13px;
+  padding: 10px 11px;
+}
+
+.adminFinanceField textarea {
+  resize: vertical;
+}
+
+.adminFinanceField input:focus,
+.adminFinanceField select:focus,
+.adminFinanceField textarea:focus,
+.adminFinanceTier:focus-visible,
+.adminFinanceNavItem:focus-visible {
+  outline: 2px solid rgba(183, 156, 251, 0.8);
+  outline-offset: 2px;
+}
+
+.adminFinanceToggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: #141523;
+  padding: 10px 12px;
+}
+
+.adminFinanceToggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #b79cfb;
+}
+
+.adminFinanceNotice,
+.adminFinanceError {
+  margin: 14px 24px 0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.adminFinanceNotice {
+  border: 1px solid rgba(78, 200, 160, 0.28);
+  background: rgba(78, 200, 160, 0.11);
+  color: #9be7ca;
+}
+
+.adminFinanceError {
+  border: 1px solid rgba(244, 122, 122, 0.28);
+  background: rgba(244, 122, 122, 0.1);
+  color: #ffb6b6;
+}
+
+@media (max-width: 980px) {
+  .adminFinanceShell {
+    display: block;
+  }
+
+  .adminFinanceRail {
+    width: auto;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .adminFinanceNav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .adminFinanceStatusGrid,
+  .adminFinanceWorkGrid {
+    grid-template-columns: 1fr;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .adminFinanceHeader {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 620px) {
+  .adminFinanceHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .adminFinanceStatusGrid,
+  .adminFinanceForm {
+    grid-template-columns: 1fr;
+  }
+
+  .adminFinanceTier {
+    grid-template-columns: 10px 1fr;
+  }
+
+  .adminFinanceTierMeta {
+    grid-column: 2;
+  }
+}

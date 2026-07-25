@@ -1,5 +1,5 @@
 {
-  "id": "dd0e2d40-7d97-46b4-b863-4ebffd3673a6",
+  "id": "ea868be1-034d-451b-8007-61ca6d931ad6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -12604,6 +12604,162 @@
         "finance_idempotency_commands_result_state_check": {
           "name": "finance_idempotency_commands_result_state_check",
           "value": "(\"finance_idempotency_commands\".\"state\" = 'processing' and \"finance_idempotency_commands\".\"result\" is null and \"finance_idempotency_commands\".\"error_code\" is null) or (\"finance_idempotency_commands\".\"state\" = 'completed' and \"finance_idempotency_commands\".\"result\" is not null and jsonb_typeof(\"finance_idempotency_commands\".\"result\") = 'object' and \"finance_idempotency_commands\".\"error_code\" is null) or (\"finance_idempotency_commands\".\"state\" = 'failed' and \"finance_idempotency_commands\".\"result\" is null and \"finance_idempotency_commands\".\"error_code\" is not null and length(trim(\"finance_idempotency_commands\".\"error_code\")) between 1 and 120)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.audit_log_entries": {
+      "name": "audit_log_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_type": {
+          "name": "target_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        }
+      },
+      "indexes": {
+        "audit_log_entries_actor_user_id_index": {
+          "name": "audit_log_entries_actor_user_id_index",
+          "columns": [
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_log_entries_action_index": {
+          "name": "audit_log_entries_action_index",
+          "columns": [
+            {
+              "expression": "action",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_log_entries_target_index": {
+          "name": "audit_log_entries_target_index",
+          "columns": [
+            {
+              "expression": "target_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "target_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_log_entries_occurred_at_index": {
+          "name": "audit_log_entries_occurred_at_index",
+          "columns": [
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "audit_log_entries_actor_user_id_users_id_fk": {
+          "name": "audit_log_entries_actor_user_id_users_id_fk",
+          "tableFrom": "audit_log_entries",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "audit_log_entries_action_check": {
+          "name": "audit_log_entries_action_check",
+          "value": "length(trim(\"audit_log_entries\".\"action\")) between 1 and 160"
+        },
+        "audit_log_entries_target_type_check": {
+          "name": "audit_log_entries_target_type_check",
+          "value": "length(trim(\"audit_log_entries\".\"target_type\")) between 1 and 120"
+        },
+        "audit_log_entries_target_id_check": {
+          "name": "audit_log_entries_target_id_check",
+          "value": "length(trim(\"audit_log_entries\".\"target_id\")) between 1 and 200"
+        },
+        "audit_log_entries_metadata_check": {
+          "name": "audit_log_entries_metadata_check",
+          "value": "jsonb_typeof(\"audit_log_entries\".\"metadata\") = 'object'"
         }
       },
       "isRLSEnabled": false

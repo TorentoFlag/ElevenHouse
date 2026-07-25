@@ -117,6 +117,9 @@ importers:
 
   apps/admin-web:
     dependencies:
+      '@elevenhouse/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@elevenhouse/design-system':
         specifier: workspace:*
         version: link:../../packages/design-system
