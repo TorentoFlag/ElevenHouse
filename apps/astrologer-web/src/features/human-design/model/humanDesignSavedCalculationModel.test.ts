@@ -76,6 +76,54 @@ describe("humanDesignSavedCalculationModel", () => {
       hasBirthDate: true
     });
   });
+
+  it("builds saved compatibility client options from role-specific input snapshots", () => {
+    const partnerClientId = "33333333-3333-4333-8333-333333333333";
+    const saved = calculation({
+      mode: "compatibility",
+      inputData: {
+        mode: "compatibility",
+        source: "client_pair",
+        subject: {
+          clientId,
+          displayName: "Марина Краснова",
+          birthData: { birthDate: "1990-07-15" }
+        },
+        partner: {
+          clientId: partnerClientId,
+          displayName: "Алексей Орлов",
+          birthData: { birthDate: "1987-09-22" }
+        }
+      },
+      participants: [
+        {
+          role: "subject",
+          source: "crm_client",
+          clientId,
+          displayName: "Марина Краснова"
+        },
+        {
+          role: "partner",
+          source: "crm_client",
+          clientId: partnerClientId,
+          displayName: "Алексей Орлов"
+        }
+      ]
+    });
+
+    expect(toClientOptionFromHumanDesignCalculation(saved, "subject")).toMatchObject({
+      value: clientId,
+      label: "Марина Краснова",
+      birthDateDisplay: "15.07.1990",
+      hasBirthDate: true
+    });
+    expect(toClientOptionFromHumanDesignCalculation(saved, "partner")).toMatchObject({
+      value: partnerClientId,
+      label: "Алексей Орлов",
+      birthDateDisplay: "22.09.1987",
+      hasBirthDate: true
+    });
+  });
 });
 
 function calculation(overrides: Partial<CalculationRecordResponse>): CalculationRecordResponse {

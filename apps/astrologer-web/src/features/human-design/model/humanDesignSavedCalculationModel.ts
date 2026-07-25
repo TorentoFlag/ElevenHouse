@@ -53,7 +53,7 @@ export function toClientOptionFromHumanDesignCalculation(
   if (!subject?.clientId) return null;
 
   const input = asRecord(calculation.inputData);
-  const birthData = asRecord(input?.birthData);
+  const birthData = getBirthDataSnapshot(input, role);
   const birthDate = typeof birthData?.birthDate === "string" ? birthData.birthDate : null;
   const birthDateDisplay = formatBirthDate(birthDate);
   const label = subject.displayName;
@@ -69,6 +69,17 @@ export function toClientOptionFromHumanDesignCalculation(
     hasBirthDate: Boolean(birthDate),
     birthData: null
   };
+}
+
+function getBirthDataSnapshot(
+  input: Record<string, unknown> | null,
+  role: "subject" | "partner"
+): Record<string, unknown> | null {
+  const directBirthData = asRecord(input?.birthData);
+  if (directBirthData) return directBirthData;
+
+  const participant = asRecord(input?.[role]);
+  return asRecord(participant?.birthData);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

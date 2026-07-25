@@ -177,6 +177,16 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       }
       setMode(nextMode);
       clearResultState(nextMode);
+      if (nextMode === "individual" && selectedClient?.hasBirthDate) {
+        void previewIndividual(selectedClient);
+      }
+      if (
+        nextMode === "compatibility" &&
+        selectedClient?.hasBirthDate &&
+        selectedPartnerClient?.hasBirthDate
+      ) {
+        void previewCompatibility(selectedClient, selectedPartnerClient);
+      }
     },
     onSelectClient: (client) => {
       setOpenToolbarOverlay(null);
