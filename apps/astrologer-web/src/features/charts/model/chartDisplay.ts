@@ -187,6 +187,9 @@ export function getPrimaryChartRenderResult(
   if (result.method === "progression") {
     return result.result.natal;
   }
+  if (result.method === "astrocartography") {
+    throw new Error("Astrocartography result does not contain a wheel render result");
+  }
 
   return result.result;
 }

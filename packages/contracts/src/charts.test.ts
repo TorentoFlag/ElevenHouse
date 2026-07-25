@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  chartAstrocartographyJobCreateRequestSchema,
   chartCompositeJobCreateRequestSchema,
   chartHoraryJobCreateRequestSchema,
+  chartAstrocartographyCalculationRequestSchema,
   chartPlanetaryPositionsRequestSchema,
   chartPlanetaryPositionsResponseSchema,
   chartJobResponseSchema,
@@ -245,6 +247,38 @@ describe("chart contracts", () => {
         category: "career"
       }
     });
+  });
+
+  it("accepts an astrocartography job request by client id and settings only", () => {
+    expect(
+      chartAstrocartographyJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).toMatchObject({
+      clientId: "00000000-0000-4000-8000-000000000001",
+      settings: { houseSystem: "placidus" }
+    });
+  });
+
+  it("rejects browser-supplied birth data in astrocartography job requests", () => {
+    expect(() =>
+      chartAstrocartographyJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        birthDate: "1990-07-15",
+        settings: {
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).toThrow();
   });
 
   it("rejects horary job requests without question text", () => {
@@ -816,6 +850,68 @@ describe("chart contracts", () => {
     expect(payload).not.toHaveProperty("inputSnapshot");
   });
 
+  it("accepts complete render data for an astrocartography map screen", () => {
+    const inputSnapshot = {
+      birthDate: "1990-07-15",
+      birthTime: "10:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964,
+      birthTimePrecision: "exact"
+    } as const;
+
+    expect(
+      chartAstrocartographyCalculationRequestSchema.parse({
+        schemaVersion: "chart-request.v1",
+        method: "astrocartography",
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        inputSnapshot
+      })
+    ).toMatchObject({ method: "astrocartography", inputSnapshot });
+
+    const payload = storedChartCalculationPayloadSchema.parse({
+      schemaVersion: "chart-result.v1",
+      method: "astrocartography",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: {
+        zodiac: "tropical",
+        houseSystem: "placidus",
+        nodeType: "true",
+        aspectPreset: "major",
+        orbMultiplier: 1
+      },
+      inputSnapshot,
+      result: {
+        lines: completeAstrocartographyLines(),
+        warnings: [
+          {
+            code: "ASTROCARTOGRAPHY_POLAR_REGIONS_OMITTED",
+            message: "Polar regions are omitted from ASC/DSC line sampling."
+          }
+        ]
+      }
+    });
+
+    expect(payload.method).toBe("astrocartography");
+    if (payload.method !== "astrocartography") {
+      throw new Error("Expected astrocartography chart payload");
+    }
+    const firstLine = payload.result.lines[0];
+    expect(firstLine).toMatchObject({
+      id: "sun_mc",
+      point: "sun",
+      angle: "mc"
+    });
+    expect(payload.result.lines).toHaveLength(40);
+    expect(firstLine?.path).toHaveLength(3);
+  });
+
   it("accepts an arbitrary-moment planetary positions request for Human Design", () => {
     expect(
       chartPlanetaryPositionsRequestSchema.parse({
@@ -897,6 +993,35 @@ function completePlanetaryPositions() {
     longitude: 10 + index,
     retrograde: false
   }));
+}
+
+function completeAstrocartographyLines() {
+  const points = [
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ];
+  const angles = ["mc", "ic", "asc", "dsc"];
+  return points.flatMap((point, pointIndex) =>
+    angles.map((angle, angleIndex) => ({
+      id: `${point}_${angle}`,
+      point,
+      angle,
+      label: `${point} ${angle}`,
+      path: [
+        { latitude: -66, longitude: -120 + pointIndex * 10 + angleIndex },
+        { latitude: 0, longitude: -120 + pointIndex * 10 + angleIndex },
+        { latitude: 66, longitude: -120 + pointIndex * 10 + angleIndex }
+      ]
+    }))
+  );
 }
 
 function completeRenderResult() {

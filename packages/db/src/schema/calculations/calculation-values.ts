@@ -27,6 +27,7 @@ export const calculationPdfJobStatusValues = ["queued", "processing", "ready", "
 
 export const chartCalculationJobMethodValues = [
   "natal",
+  "astrocartography",
   "transit",
   "synastry",
   "composite",

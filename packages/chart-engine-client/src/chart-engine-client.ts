@@ -1,4 +1,5 @@
 import {
+  chartAstrocartographyCalculationRequestSchema,
   chartCompositeCalculationRequestSchema,
   chartHoraryCalculationRequestSchema,
   chartNatalCalculationRequestSchema,
@@ -10,11 +11,13 @@ import {
   chartTransitCalculationRequestSchema,
   storedChartProgressionCalculationPayloadSchema,
   storedChartSolarReturnCalculationPayloadSchema,
+  storedChartAstrocartographyCalculationPayloadSchema,
   storedChartHoraryCalculationPayloadSchema,
   storedChartSynastryCalculationPayloadSchema,
   storedChartTransitCalculationPayloadSchema,
   storedChartCalculationPayloadSchema,
   storedChartCompositeCalculationPayloadSchema,
+  type ChartAstrocartographyCalculationRequestInput,
   type ChartCompositeCalculationRequestInput,
   type ChartHoraryCalculationRequestInput,
   type ChartNatalCalculationRequestInput,
@@ -26,6 +29,7 @@ import {
   type ChartTransitCalculationRequestInput,
   type StoredChartProgressionCalculationPayload,
   type StoredChartSolarReturnCalculationPayload,
+  type StoredChartAstrocartographyCalculationPayload,
   type StoredChartHoraryCalculationPayload,
   type StoredChartSynastryCalculationPayload,
   type StoredChartTransitCalculationPayload,
@@ -202,6 +206,28 @@ export class ChartEngineHttpClient {
     const parsed = storedChartHoraryCalculationPayloadSchema.safeParse(data);
     if (!parsed.success) {
       throw new ChartEnginePermanentError("Chart engine returned invalid horary result", {
+        cause: parsed.error
+      });
+    }
+    return parsed.data;
+  }
+
+  async calculateAstrocartography(
+    payload: ChartAstrocartographyCalculationRequestInput
+  ): Promise<StoredChartAstrocartographyCalculationPayload> {
+    const parsedPayload = chartAstrocartographyCalculationRequestSchema.parse(payload);
+    const response = await this.fetchFn(`${this.baseUrl}/v1/astrocartography`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(parsedPayload)
+    });
+    if (!response.ok) {
+      throw new Error(`CHART_ENGINE_HTTP_${response.status}`);
+    }
+    const data: unknown = await response.json();
+    const parsed = storedChartAstrocartographyCalculationPayloadSchema.safeParse(data);
+    if (!parsed.success) {
+      throw new ChartEnginePermanentError("Chart engine returned invalid astrocartography result", {
         cause: parsed.error
       });
     }

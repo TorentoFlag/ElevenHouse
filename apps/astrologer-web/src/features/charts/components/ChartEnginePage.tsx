@@ -5,6 +5,7 @@ import type {
   ChartSettings,
   ClientBirthDataUpsertRequest,
   DictionaryLocale,
+  StoredChartAstrocartographyCalculationPayload,
   StoredChartCalculationPayload
 } from "@elevenhouse/contracts";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
@@ -24,6 +25,7 @@ import {
 } from "../model/chartDisplay";
 import { ChartSettingsPanel } from "./ChartSettingsPanel";
 import { ChartTables, type ChartPanelTab } from "./ChartTables";
+import { AstrocartographyMap } from "./AstrocartographyMap";
 import { ChartWheel } from "./ChartWheel";
 import styles from "./ChartEnginePage.module.css";
 
@@ -36,6 +38,7 @@ export type ChartEngineMode =
   | "synastry"
   | "composite"
   | "solar_return"
+  | "astrocartography"
   | "horary";
 export type ChartTransitMomentInput = {
   readonly date: string;
@@ -73,6 +76,7 @@ export type ChartEnginePageProps = {
   readonly onCreateSolarReturnJob?: () => void | Promise<void>;
   readonly onCreateProgressionJob?: () => void | Promise<void>;
   readonly onCreateHoraryJob?: () => void | Promise<void>;
+  readonly onCreateAstrocartographyJob?: () => void | Promise<void>;
   readonly onTransitMomentChange?: (moment: ChartTransitMomentInput) => void;
   readonly onSolarReturnYearChange?: (year: number) => void;
   readonly onProgressionTargetDateChange?: (targetDate: string) => void;
@@ -113,6 +117,7 @@ export function ChartEnginePage({
   onCreateSolarReturnJob,
   onCreateProgressionJob,
   onCreateHoraryJob,
+  onCreateAstrocartographyJob,
   onTransitMomentChange,
   onSolarReturnYearChange,
   onProgressionTargetDateChange,
@@ -152,6 +157,7 @@ export function ChartEnginePage({
   }, [horaryQuestion]);
   const activeHoraryQuestion = localHoraryQuestion;
   const isPartnerMode = activeMode === "synastry" || activeMode === "composite";
+  const isAstrocartographyMode = activeMode === "astrocartography";
   const needsBirthData = activeMode !== "horary";
   const expectedResultMethod = getChartResultMethodForMode(activeMode);
   const horaryReadiness = getChartHoraryQuestionReadiness(activeHoraryQuestion);
@@ -163,6 +169,9 @@ export function ChartEnginePage({
     isBirthDataBlocked || isPartnerBirthDataBlocked || result?.method !== expectedResultMethod
       ? null
       : result;
+  const astrocartographyResult =
+    displayResult?.method === "astrocartography" ? displayResult : null;
+  const wheelResult = astrocartographyResult ? null : displayResult;
   const isCurrentResultCalculated = Boolean(
     displayResult && !isResultStale && jobState === "succeeded"
   );
@@ -183,6 +192,8 @@ export function ChartEnginePage({
   const [activePanelTab, setActivePanelTab] = useState<ChartPanelTab>("planets");
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
+  const visiblePanelTabs = isAstrocartographyMode ? astrocartographyPanelTabs : panelTabs;
+  const visiblePanelTab = isAstrocartographyMode ? "interpretations" : activePanelTab;
 
   return (
     <main className={styles.page}>
@@ -343,6 +354,19 @@ export function ChartEnginePage({
           >
             Хорар
           </button>
+          <button
+            className={activeMode === "astrocartography" ? styles.modeActive : styles.modeButton}
+            type="button"
+            onClick={() =>
+              setChartMode({
+                mode: "astrocartography",
+                onModeChange,
+                setLocalMode
+              })
+            }
+          >
+            Астрокарта
+          </button>
         </nav>
         <div
           aria-label="Состояние карты"
@@ -412,7 +436,8 @@ export function ChartEnginePage({
               onCreateCompositeJob,
               onCreateSolarReturnJob,
               onCreateProgressionJob,
-              onCreateHoraryJob
+              onCreateHoraryJob,
+              onCreateAstrocartographyJob
             })
           }
         >
@@ -434,9 +459,9 @@ export function ChartEnginePage({
               ? "PDF для детской карты будет отдельным контуром"
               : activeMode === "horary"
                 ? "PDF для хорара будет отдельным контуром"
-              : activeMode !== "natal"
-                ? "PDF для этого метода будет отдельным контуром"
-                : pdfTitle
+                : activeMode !== "natal"
+                  ? "PDF для этого метода будет отдельным контуром"
+                  : pdfTitle
           }
           onClick={() => void onPdf?.()}
         >
@@ -491,9 +516,21 @@ export function ChartEnginePage({
             </section>
           ) : null}
           <section className={styles.railGroup}>
-            <h2>Большая тройка</h2>
-            {displayResult ? (
-              getBigThree(displayResult).map((item) => (
+            <h2>{isAstrocartographyMode ? "Астрокарта" : "Большая тройка"}</h2>
+            {astrocartographyResult ? (
+              getAstrocartographySummary(astrocartographyResult).map((item) => (
+                <div className={styles.summaryCard} key={item.label}>
+                  <span className={styles.summaryGlyph} aria-hidden="true">
+                    {item.symbol}
+                  </span>
+                  <div>
+                    <strong>{item.label}</strong>
+                    <span>{item.value}</span>
+                  </div>
+                </div>
+              ))
+            ) : wheelResult ? (
+              getBigThree(wheelResult).map((item) => (
                 <div className={styles.summaryCard} key={item.label}>
                   <span className={styles.summaryGlyph} aria-hidden="true">
                     {item.symbol}
@@ -505,35 +542,44 @@ export function ChartEnginePage({
                 </div>
               ))
             ) : (
-              <p className={styles.muted}>Появится после расчёта.</p>
+              <p className={styles.muted}>
+                {isAstrocartographyMode
+                  ? "Появится после расчёта линий."
+                  : "Появится после расчёта."}
+              </p>
             )}
           </section>
-          {displayResult ? <DistributionSummary result={displayResult} /> : null}
-          {displayResult ? <DominantsSummary result={displayResult} /> : null}
-          <section className={styles.railGroup}>
-            <h2>Ретроградные</h2>
-            {displayResult &&
-            getPrimaryChartRenderResult(displayResult).points.filter((point) => point.retrograde)
-              .length ? (
-              getPrimaryChartRenderResult(displayResult)
-                .points.filter((point) => point.retrograde)
-                .map((point) => (
-                  <div className={styles.retroPill} key={point.id}>
-                    {getChartPointDisplayLabel(point.id, point.label)} R
-                  </div>
-                ))
-            ) : (
-              <p className={styles.muted}>Нет в текущем результате.</p>
-            )}
-          </section>
+          {wheelResult ? <DistributionSummary result={wheelResult} /> : null}
+          {wheelResult ? <DominantsSummary result={wheelResult} /> : null}
+          {wheelResult ? (
+            <section className={styles.railGroup}>
+              <h2>Ретроградные</h2>
+              {getPrimaryChartRenderResult(wheelResult).points.filter((point) => point.retrograde)
+                .length ? (
+                getPrimaryChartRenderResult(wheelResult)
+                  .points.filter((point) => point.retrograde)
+                  .map((point) => (
+                    <div className={styles.retroPill} key={point.id}>
+                      {getChartPointDisplayLabel(point.id, point.label)} R
+                    </div>
+                  ))
+              ) : (
+                <p className={styles.muted}>Нет в текущем результате.</p>
+              )}
+            </section>
+          ) : null}
         </aside>
 
         <section className={styles.workspace}>
-          <ChartWheel
-            result={displayResult}
-            hoveredPointId={hoveredPointId}
-            onHoverPoint={setHoveredPointId}
-          />
+          {isAstrocartographyMode ? (
+            <AstrocartographyMap result={astrocartographyResult} />
+          ) : (
+            <ChartWheel
+              result={wheelResult}
+              hoveredPointId={hoveredPointId}
+              onHoverPoint={setHoveredPointId}
+            />
+          )}
           <StatusCard
             jobState={jobState}
             errorMessage={errorMessage}
@@ -574,10 +620,10 @@ export function ChartEnginePage({
           ) : (
             <>
               <div className={styles.panelTabs}>
-                {panelTabs.map((tab) => (
+                {visiblePanelTabs.map((tab) => (
                   <button
-                    aria-pressed={activePanelTab === tab.id}
-                    className={activePanelTab === tab.id ? styles.panelTabActive : styles.panelTab}
+                    aria-pressed={visiblePanelTab === tab.id}
+                    className={visiblePanelTab === tab.id ? styles.panelTabActive : styles.panelTab}
                     key={tab.id}
                     type="button"
                     onClick={() => setActivePanelTab(tab.id)}
@@ -587,7 +633,7 @@ export function ChartEnginePage({
                 ))}
               </div>
               <ChartTables
-                activeTab={activePanelTab}
+                activeTab={visiblePanelTab}
                 hoveredPointId={hoveredPointId}
                 interpretationMode={activeMode === "child_chart" ? "child" : "default"}
                 locale={locale}
@@ -662,7 +708,8 @@ function getChartViewState({
       status: "Ошибка расчёта",
       detail: errorMessage ?? "Проверьте данные рождения клиента и повторите расчёт.",
       actionLabel: "Повторить расчёт",
-      canCalculate: mode === "horary" ? horaryReadiness.ready && !isBusy : readiness.ready && !isBusy,
+      canCalculate:
+        mode === "horary" ? horaryReadiness.ready && !isBusy : readiness.ready && !isBusy,
       tone: "error"
     };
   }
@@ -777,10 +824,17 @@ function getChartViewState({
     return {
       status: "Требуется пересчёт",
       detail:
-        mode === "child_chart"
-          ? "Данные рождения или настройки изменились. Пересчитайте детскую карту."
-          : "Данные рождения или настройки изменились.",
-      actionLabel: mode === "child_chart" ? "Пересчитать детскую" : "Пересчитать карту",
+        mode === "astrocartography"
+          ? "Данные рождения или настройки изменились. Пересчитайте астрокарту."
+          : mode === "child_chart"
+            ? "Данные рождения или настройки изменились. Пересчитайте детскую карту."
+            : "Данные рождения или настройки изменились.",
+      actionLabel:
+        mode === "astrocartography"
+          ? "Пересчитать линии"
+          : mode === "child_chart"
+            ? "Пересчитать детскую"
+            : "Пересчитать карту",
       canCalculate: !isBusy,
       tone: "warning"
     };
@@ -800,9 +854,11 @@ function getChartViewState({
                 ? "Соляр рассчитан по наталу клиента и выбранному году."
                 : mode === "progression"
                   ? "Прогрессии рассчитаны по наталу клиента и выбранной дате."
-                  : mode === "child_chart"
-                    ? "Расчёт использует натальные положения; трактовки адаптированы для родительского чтения."
-                    : "Натальная карта рассчитана и привязана к клиенту.",
+                  : mode === "astrocartography"
+                    ? "Линии планет рассчитаны по наталу клиента."
+                    : mode === "child_chart"
+                      ? "Расчёт использует натальные положения; трактовки адаптированы для родительского чтения."
+                      : "Натальная карта рассчитана и привязана к клиенту.",
       actionLabel: "Актуальна",
       canCalculate: false,
       tone: "success"
@@ -832,9 +888,11 @@ function getChartViewState({
               ? "Натал клиента и год соляра готовы для расчёта."
               : mode === "progression"
                 ? "Натал клиента и дата прогрессии готовы для расчёта."
-                : mode === "child_chart"
-                  ? "Натал ребёнка будет рассчитан из CRM birth data, а трактовки откроются в мягком детском режиме."
-                  : "Данные рождения и настройки готовы для натальной карты.",
+                : mode === "astrocartography"
+                  ? "Натал клиента готов для расчёта линий на карте мира."
+                  : mode === "child_chart"
+                    ? "Натал ребёнка будет рассчитан из CRM birth data, а трактовки откроются в мягком детском режиме."
+                    : "Данные рождения и настройки готовы для натальной карты.",
     actionLabel:
       mode === "transit"
         ? "Рассчитать транзиты"
@@ -843,12 +901,14 @@ function getChartViewState({
           : mode === "composite"
             ? "Рассчитать композит"
             : mode === "solar_return"
-            ? "Рассчитать соляр"
-            : mode === "progression"
-              ? "Рассчитать прогрессии"
-              : mode === "child_chart"
-                ? "Рассчитать детскую"
-                : "Рассчитать",
+              ? "Рассчитать соляр"
+              : mode === "progression"
+                ? "Рассчитать прогрессии"
+                : mode === "astrocartography"
+                  ? "Рассчитать линии"
+                  : mode === "child_chart"
+                    ? "Рассчитать детскую"
+                    : "Рассчитать",
     canCalculate: !isBusy,
     tone: "ready"
   };
@@ -919,6 +979,23 @@ function DominantsSummary({ result }: { readonly result: StoredChartCalculationP
       )}
     </section>
   );
+}
+
+function getAstrocartographySummary(
+  result: StoredChartAstrocartographyCalculationPayload
+): readonly {
+  readonly label: string;
+  readonly symbol: string;
+  readonly value: string;
+}[] {
+  const planets = new Set(result.result.lines.map((line) => line.point));
+  const angles = new Set(result.result.lines.map((line) => line.angle));
+
+  return [
+    { label: "Линии", symbol: "⌁", value: String(result.result.lines.length) },
+    { label: "Планеты", symbol: "☉︎", value: String(planets.size) },
+    { label: "Углы", symbol: "A", value: [...angles].map(formatAstrocartographyAngle).join(" · ") }
+  ];
 }
 
 function DistributionBar({
@@ -1125,14 +1202,16 @@ function StatusCard({
             : mode === "composite"
               ? "Берём данные рождения обоих клиентов из CRM и строим single-wheel composite result."
               : mode === "solar_return"
-              ? "Берём натал из CRM, считаем соляр на выбранный год и строим dual-wheel result."
-              : mode === "progression"
-                ? "Берём натал из CRM, считаем вторичные прогрессии на выбранную дату и строим dual-wheel result."
-                : mode === "horary"
-                  ? "Строим карту на момент вопроса; birth data клиента не используется."
-                : mode === "child_chart"
-                  ? "Берём birth data из CRM, считаем натал и открываем мягкий детский режим трактовок."
-                  : "Берём данные рождения из CRM и строим canonical natal result."}
+                ? "Берём натал из CRM, считаем соляр на выбранный год и строим dual-wheel result."
+                : mode === "progression"
+                  ? "Берём натал из CRM, считаем вторичные прогрессии на выбранную дату и строим dual-wheel result."
+                  : mode === "horary"
+                    ? "Строим карту на момент вопроса; birth data клиента не используется."
+                    : mode === "astrocartography"
+                      ? "Берём birth data из CRM и строим линии планет на карте мира."
+                      : mode === "child_chart"
+                        ? "Берём birth data из CRM, считаем натал и открываем мягкий детский режим трактовок."
+                        : "Берём данные рождения из CRM и строим canonical natal result."}
         </span>
       </div>
     );
@@ -1186,14 +1265,16 @@ function StatusCard({
               : mode === "composite"
                 ? "Выберите второго клиента: backend рассчитает одно колесо отношений по CRM birth data."
                 : mode === "solar_return"
-                ? "Выберите клиента и год соляра: backend сам возьмёт birth data из CRM."
-                : mode === "progression"
-                  ? "Выберите клиента и дату прогрессии: backend сам возьмёт birth data из CRM."
-                  : mode === "horary"
-                    ? "Выберите клиента как CRM-контекст и заполните вопрос, момент и место вопроса."
-                  : mode === "child_chart"
-                    ? "Выберите клиента: backend рассчитает натал, а трактовки откроются в детском режиме."
-                    : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
+                  ? "Выберите клиента и год соляра: backend сам возьмёт birth data из CRM."
+                  : mode === "progression"
+                    ? "Выберите клиента и дату прогрессии: backend сам возьмёт birth data из CRM."
+                    : mode === "horary"
+                      ? "Выберите клиента как CRM-контекст и заполните вопрос, момент и место вопроса."
+                      : mode === "astrocartography"
+                        ? "Выберите клиента: backend рассчитает линии планет из CRM birth data."
+                        : mode === "child_chart"
+                          ? "Выберите клиента: backend рассчитает натал, а трактовки откроются в детском режиме."
+                          : "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."}
         </span>
       </div>
     );
@@ -1215,9 +1296,11 @@ function StatusCard({
                     ? "Данные рождения, настройки или дата прогрессии изменились. Пересчитайте прогрессии."
                     : mode === "horary"
                       ? "Вопрос, момент, место или настройки изменились. Пересчитайте хорар."
-                    : mode === "child_chart"
-                      ? "Данные рождения или настройки изменились. Пересчитайте детскую карту."
-                      : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
+                      : mode === "astrocartography"
+                        ? "Данные рождения или настройки изменились. Пересчитайте линии карты мира."
+                        : mode === "child_chart"
+                          ? "Данные рождения или настройки изменились. Пересчитайте детскую карту."
+                          : "Данные рождения или настройки изменились. Пересчитайте натал, чтобы обновить колесо и таблицы."}
         </span>
       </div>
     );
@@ -1304,6 +1387,14 @@ function formatChartWarning(warning: ReturnType<typeof getChartWarnings>[number]
   return warning.message;
 }
 
+function formatAstrocartographyAngle(angle: string): string {
+  if (angle === "mc") return "MC";
+  if (angle === "ic") return "IC";
+  if (angle === "asc") return "Asc";
+  if (angle === "dsc") return "Dsc";
+  return angle;
+}
+
 const elementItems = [
   { key: "fire", label: "Огонь" },
   { key: "earth", label: "Земля" },
@@ -1342,6 +1433,9 @@ const panelTabs: readonly { readonly id: ChartPanelTab; readonly label: string }
   { id: "interpretations", label: "Трактовки" }
 ];
 
+const astrocartographyPanelTabs: readonly { readonly id: ChartPanelTab; readonly label: string }[] =
+  [{ id: "interpretations", label: "Трактовки" }];
+
 function getModeTitle(mode: ChartEngineMode): string {
   if (mode === "child_chart") return "Детская карта";
   if (mode === "transit") return "Транзитная карта";
@@ -1350,6 +1444,7 @@ function getModeTitle(mode: ChartEngineMode): string {
   if (mode === "composite") return "Композит";
   if (mode === "solar_return") return "Соляр";
   if (mode === "horary") return "Хорар";
+  if (mode === "astrocartography") return "Астрокартография";
   return "Натальная карта";
 }
 
@@ -1361,6 +1456,7 @@ function getCalculatingLabel(mode: ChartEngineMode): string {
   if (mode === "composite") return "Рассчитываем композит";
   if (mode === "solar_return") return "Рассчитываем соляр";
   if (mode === "horary") return "Рассчитываем хорар";
+  if (mode === "astrocartography") return "Рассчитываем линии";
   return "Рассчитываем карту";
 }
 
@@ -1372,6 +1468,7 @@ function getEmptyResultLabel(mode: ChartEngineMode): string {
   if (mode === "composite") return "Готово к расчёту композита";
   if (mode === "solar_return") return "Готово к расчёту соляра";
   if (mode === "horary") return "Готово к хорару";
+  if (mode === "astrocartography") return "Готово к расчёту астрокарты";
   return "Готово к расчёту натала";
 }
 
@@ -1383,6 +1480,7 @@ function getSucceededLabel(mode: ChartEngineMode): string {
   if (mode === "composite") return "Композит рассчитан";
   if (mode === "solar_return") return "Соляр рассчитан";
   if (mode === "horary") return "Хорар рассчитан";
+  if (mode === "astrocartography") return "Астрокарта рассчитана";
   return "Натальная карта рассчитана";
 }
 
@@ -1394,7 +1492,8 @@ function runChartCalculationAction({
   onCreateCompositeJob,
   onCreateSolarReturnJob,
   onCreateProgressionJob,
-  onCreateHoraryJob
+  onCreateHoraryJob,
+  onCreateAstrocartographyJob
 }: {
   readonly activeMode: ChartEngineMode;
   readonly onCreateNatalJob: () => void | Promise<void>;
@@ -1404,6 +1503,7 @@ function runChartCalculationAction({
   readonly onCreateSolarReturnJob?: () => void | Promise<void>;
   readonly onCreateProgressionJob?: () => void | Promise<void>;
   readonly onCreateHoraryJob?: () => void | Promise<void>;
+  readonly onCreateAstrocartographyJob?: () => void | Promise<void>;
 }) {
   if (activeMode === "child_chart") {
     return onCreateNatalJob();
@@ -1425,6 +1525,9 @@ function runChartCalculationAction({
   }
   if (activeMode === "horary") {
     return onCreateHoraryJob?.();
+  }
+  if (activeMode === "astrocartography") {
+    return onCreateAstrocartographyJob?.();
   }
 
   return onCreateNatalJob();

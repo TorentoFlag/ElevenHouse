@@ -7,6 +7,7 @@ import type {
   ChartRenderResult,
   ChartSettings,
   DictionaryEntriesResponse,
+  StoredChartAstrocartographyCalculationPayload,
   StoredChartCalculationPayload,
   StoredChartHoraryCalculationPayload,
   StoredChartNatalCalculationPayload,
@@ -415,6 +416,80 @@ describe("ChartEnginePage", () => {
     expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
   });
 
+  it("switches to astrocartography mode and submits the map calculation", async () => {
+    const user = userEvent.setup();
+    const onCreateAstrocartographyJob = vi.fn(async () => undefined);
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        mode="natal"
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onCreateAstrocartographyJob={onCreateAstrocartographyJob}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Астрокарта" }));
+
+    expect(screen.getByText("Астрокартография")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Рассчитать линии" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Рассчитать линии" }));
+
+    expect(onCreateAstrocartographyJob).toHaveBeenCalledOnce();
+  });
+
+  it("renders astrocartography empty state without the natal wheel tables", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        mode="astrocartography"
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("img", { name: "Астрокартографическая карта" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Круг карты" })).not.toBeInTheDocument();
+    expect(screen.getByText("Появится после расчёта линий.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Трактовки" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Планеты" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText("После расчёта здесь появятся трактовки из canonical result.")
+    ).toBeInTheDocument();
+  });
+
+  it("renders astrocartography map result and keeps PDF disabled", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={astrocartographyResult()}
+        errorMessage={null}
+        isBusy={false}
+        mode="astrocartography"
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        pdfDisabled={false}
+      />
+    );
+
+    expect(screen.getAllByText("Астрокарта рассчитана").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("astrocartography-map")).toBeInTheDocument();
+    expect(screen.getByTestId("astrocartography-line-sun_mc")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
+  });
+
   it("loads horary-specific dictionary anchors without natal fallback", async () => {
     const user = userEvent.setup();
     const get = vi.spyOn(application.http, "get").mockResolvedValue({
@@ -455,6 +530,50 @@ describe("ChartEnginePage", () => {
     expect(within(interpretationsPanel).getByText("AI-трактовка · хорар")).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith(
       "/dictionary/entries/by-codes?locale=ru&codes=horary.question.career%2Chorary.sun.cancer%2Chorary.sun.house.10%2Chorary.house.1"
+    );
+    expect(get.mock.calls[0]?.[0]).not.toContain("sun_cancer");
+  });
+
+  it("loads astrocartography-specific dictionary anchors without natal fallback", async () => {
+    const user = userEvent.setup();
+    const get = vi.spyOn(application.http, "get").mockResolvedValue({
+      entries: [],
+      total: 0,
+      counts: { sources: { all: 0, platform: 0, modified: 0, custom: 0 } }
+    } satisfies DictionaryEntriesResponse);
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={astrocartographyResult()}
+        errorMessage={null}
+        isBusy={false}
+        mode="astrocartography"
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Трактовки" }));
+
+    const interpretationsPanel = screen.getByRole("region", { name: "Трактовки" });
+    expect(
+      within(interpretationsPanel).getByText("Астрокартография · библиотека")
+    ).toBeInTheDocument();
+    expect(
+      await within(interpretationsPanel).findByText(
+        "В справочнике пока нет записи astrocartography.sun.mc."
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(interpretationsPanel).getByRole("link", {
+        name: "Создать трактовку astrocartography.sun.mc в справочнике"
+      })
+    ).toHaveAttribute("href", expect.stringContaining("create=astrocartography.sun.mc"));
+    expect(get).toHaveBeenCalledWith(
+      "/dictionary/entries/by-codes?locale=ru&codes=astrocartography.sun.mc%2Castrocartography.moon.asc"
     );
     expect(get.mock.calls[0]?.[0]).not.toContain("sun_cancer");
   });
@@ -1084,7 +1203,9 @@ describe("ChartEnginePage", () => {
     );
 
     expect(screen.getByText("Детская карта рассчитана")).toBeInTheDocument();
-    expect(screen.getByText(/трактовки адаптированы для родительского чтения/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/трактовки адаптированы для родительского чтения/i)
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "Трактовки" }));
@@ -1807,6 +1928,41 @@ function horaryResult(): StoredChartHoraryCalculationPayload {
       houses: [{ number: 1, longitude: 180, sign: "libra", signDegree: 0 }],
       aspects: []
     }).result
+  };
+}
+
+function astrocartographyResult(): StoredChartAstrocartographyCalculationPayload {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "astrocartography",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    inputSnapshot: chartResult().inputSnapshot,
+    result: {
+      lines: [
+        {
+          id: "sun_mc",
+          point: "sun",
+          angle: "mc",
+          label: "Солнце MC",
+          path: [
+            { latitude: -66, longitude: 10 },
+            { latitude: 66, longitude: 10 }
+          ]
+        },
+        {
+          id: "moon_asc",
+          point: "moon",
+          angle: "asc",
+          label: "Луна Asc",
+          path: [
+            { latitude: -20, longitude: -30 },
+            { latitude: 20, longitude: 30 }
+          ]
+        }
+      ],
+      warnings: []
+    }
   };
 }
 

@@ -33,6 +33,13 @@ class NatalRequest(BaseModel):
     inputSnapshot: NatalInputSnapshot
 
 
+class AstrocartographyRequest(BaseModel):
+    schemaVersion: Literal["chart-request.v1"]
+    method: Literal["astrocartography"]
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+
+
 class TransitSnapshot(BaseModel):
     date: str
     time: str
@@ -314,6 +321,35 @@ class ChartSynastryRenderResult(BaseModel):
     warnings: list[ChartWarning]
 
 
+class ChartAstrocartographyPathPoint(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
+class ChartAstrocartographyLine(BaseModel):
+    id: str
+    point: Literal[
+        "sun",
+        "moon",
+        "mercury",
+        "venus",
+        "mars",
+        "jupiter",
+        "saturn",
+        "uranus",
+        "neptune",
+        "pluto",
+    ]
+    angle: Literal["asc", "dsc", "mc", "ic"]
+    label: str
+    path: list[ChartAstrocartographyPathPoint]
+
+
+class ChartAstrocartographyRenderResult(BaseModel):
+    lines: list[ChartAstrocartographyLine]
+    warnings: list[ChartWarning]
+
+
 class StoredChartCalculationPayload(BaseModel):
     schemaVersion: Literal["chart-result.v1"]
     method: Literal["natal"]
@@ -321,6 +357,15 @@ class StoredChartCalculationPayload(BaseModel):
     settings: NatalSettings
     inputSnapshot: NatalInputSnapshot
     result: ChartRenderResult
+
+
+class StoredChartAstrocartographyCalculationPayload(BaseModel):
+    schemaVersion: Literal["chart-result.v1"]
+    method: Literal["astrocartography"]
+    provider: ProviderMetadata
+    settings: NatalSettings
+    inputSnapshot: NatalInputSnapshot
+    result: ChartAstrocartographyRenderResult
 
 
 class StoredChartTransitCalculationPayload(BaseModel):

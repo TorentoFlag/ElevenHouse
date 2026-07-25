@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
   StoredChartCalculationPayload,
+  StoredChartAstrocartographyCalculationPayload,
   StoredChartCompositeCalculationPayload,
   StoredChartHoraryCalculationPayload,
   StoredChartNatalCalculationPayload,
@@ -198,6 +199,23 @@ describe("chartInterpretations", () => {
         "horary.question.career:aspects:Хорар · категория вопроса"
       ])
     );
+  });
+
+  it("derives astrocartography line anchors without natal fallback", () => {
+    const anchors = buildChartInterpretationAnchors(astrocartographyResult());
+
+    expect(getChartInterpretationLookupCodes(anchors)).toEqual([
+      "astrocartography.sun.mc",
+      "astrocartography.moon.asc"
+    ]);
+    expect(anchors.map((anchor) => `${anchor.code}:${anchor.categoryCode}:${anchor.meta}`)).toEqual([
+      "astrocartography.sun.mc:planet_aspects:Астрокартография · линия планеты",
+      "astrocartography.moon.asc:planet_aspects:Астрокартография · линия планеты"
+    ]);
+    expect(anchors.map((anchor) => `${anchor.group}:${anchor.label}`)).toEqual([
+      "aspects:Солнце MC",
+      "aspects:Луна Asc"
+    ]);
   });
 });
 
@@ -432,6 +450,41 @@ function horaryResult(): StoredChartHoraryCalculationPayload {
       longitude: 37.6173
     },
     result: chartResult().result
+  };
+}
+
+function astrocartographyResult(): StoredChartAstrocartographyCalculationPayload {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "astrocartography",
+    provider: chartResult().provider,
+    settings: chartResult().settings,
+    inputSnapshot: chartResult().inputSnapshot,
+    result: {
+      lines: [
+        {
+          id: "sun_mc",
+          point: "sun",
+          angle: "mc",
+          label: "Солнце MC",
+          path: [
+            { latitude: -66, longitude: 10 },
+            { latitude: 66, longitude: 10 }
+          ]
+        },
+        {
+          id: "moon_asc",
+          point: "moon",
+          angle: "asc",
+          label: "Луна Asc",
+          path: [
+            { latitude: -20, longitude: -30 },
+            { latitude: 20, longitude: 30 }
+          ]
+        }
+      ],
+      warnings: []
+    }
   };
 }
 

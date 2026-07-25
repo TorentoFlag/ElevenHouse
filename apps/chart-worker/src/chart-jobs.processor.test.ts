@@ -116,6 +116,15 @@ const horaryJob = {
   }
 } as const;
 
+const astrocartographyJob = {
+  ...job,
+  method: "astrocartography",
+  settingsSnapshot: job.settingsSnapshot,
+  inputSnapshot: {
+    inputSnapshot: job.inputSnapshot
+  }
+} as const;
+
 const result = {
   schemaVersion: "chart-result.v1",
   method: "natal",
@@ -268,6 +277,18 @@ const horaryResult = {
   settings: job.settingsSnapshot,
   questionSnapshot: horaryJob.inputSnapshot.questionSnapshot,
   result: result.result
+} as const;
+
+const astrocartographyResult = {
+  schemaVersion: "chart-result.v1",
+  method: "astrocartography",
+  provider: result.provider,
+  settings: job.settingsSnapshot,
+  inputSnapshot: job.inputSnapshot,
+  result: {
+    lines: completeAstrocartographyLines(),
+    warnings: []
+  }
 } as const;
 
 describe("processChartCalculationJob", () => {
@@ -496,6 +517,42 @@ describe("processChartCalculationJob", () => {
     );
   });
 
+  it("dispatches astrocartography jobs to the astrocartography provider endpoint", async () => {
+    const store = {
+      findByJobId: vi.fn().mockResolvedValue(astrocartographyJob),
+      claimForProcessing: vi.fn().mockResolvedValue(astrocartographyJob),
+      complete: vi.fn().mockResolvedValue(true),
+      fail: vi.fn()
+    };
+    const engine = createEngine({
+      calculateAstrocartography: vi.fn().mockResolvedValue(astrocartographyResult)
+    });
+
+    await processChartCalculationJob({
+      jobId: astrocartographyJob.id,
+      finalAttempt: false,
+      store,
+      engine,
+      now: new Date("2026-07-22T12:00:00.000Z")
+    });
+
+    expect(engine.calculateNatal).not.toHaveBeenCalled();
+    expect(engine.calculateTransit).not.toHaveBeenCalled();
+    expect(engine.calculateSynastry).not.toHaveBeenCalled();
+    expect(engine.calculateSolarReturn).not.toHaveBeenCalled();
+    expect(engine.calculateProgression).not.toHaveBeenCalled();
+    expect(engine.calculateHorary).not.toHaveBeenCalled();
+    expect(engine.calculateAstrocartography).toHaveBeenCalledWith({
+      schemaVersion: "chart-request.v1",
+      method: "astrocartography",
+      settings: astrocartographyJob.settingsSnapshot,
+      inputSnapshot: astrocartographyJob.inputSnapshot.inputSnapshot
+    });
+    expect(store.complete).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: astrocartographyJob.id, result: astrocartographyResult })
+    );
+  });
+
   it("treats already succeeded jobs as no-op", async () => {
     const store = {
       findByJobId: vi.fn().mockResolvedValue({ ...job, status: "succeeded" }),
@@ -572,6 +629,36 @@ function createEngine(overrides: Partial<ChartEngineClient> = {}): ChartEngineCl
     calculateSolarReturn: vi.fn(),
     calculateProgression: vi.fn(),
     calculateHorary: vi.fn(),
+    calculateAstrocartography: vi.fn(),
     ...overrides
   };
+}
+
+function completeAstrocartographyLines() {
+  const points = [
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ];
+  const angles = ["mc", "ic", "asc", "dsc"];
+  return points.flatMap((point, pointIndex) =>
+    angles.map((angle, angleIndex) => ({
+      id: `${point}_${angle}`,
+      point,
+      angle,
+      label: `${point} ${angle}`,
+      path: [
+        { latitude: -66, longitude: -100 + pointIndex * 8 + angleIndex },
+        { latitude: 0, longitude: -100 + pointIndex * 8 + angleIndex },
+        { latitude: 66, longitude: -100 + pointIndex * 8 + angleIndex }
+      ]
+    }))
+  );
 }

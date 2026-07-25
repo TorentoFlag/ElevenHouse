@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChartNatalJobCreateResponse } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import {
+  createAstrocartographyChartJob,
   createHoraryChartJob,
   createCompositeChartJob,
   createNatalChartJob,
@@ -303,6 +304,40 @@ describe("chartsApi", () => {
           timezone: "Europe/Moscow",
           latitude: 55.7558,
           longitude: 37.6173
+        }
+      },
+      { csrf: true }
+    );
+    expect(JSON.stringify(post.mock.calls[0]?.[1])).not.toContain("birthDate");
+  });
+
+  it("creates astrocartography jobs with client id and settings only", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(createResponse);
+
+    await expect(
+      createAstrocartographyChartJob({
+        clientId,
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        },
+        birthDate: "1990-07-15"
+      })
+    ).resolves.toEqual(createResponse);
+
+    expect(post).toHaveBeenCalledWith(
+      "/charts/astrocartography/jobs",
+      {
+        clientId,
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
         }
       },
       { csrf: true }

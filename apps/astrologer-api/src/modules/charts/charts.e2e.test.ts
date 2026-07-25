@@ -158,6 +158,13 @@ describe("charts HTTP routes", () => {
     const horaryResponse = await postJson("/charts/horary/jobs", validHoraryBody(), {
       cookie: `${sessionCookieName}=${sessionToken}`
     });
+    const astrocartographyResponse = await postJson(
+      "/charts/astrocartography/jobs",
+      validBody(),
+      {
+        cookie: `${sessionCookieName}=${sessionToken}`
+      }
+    );
     const pdfResponse = await postJson(
       "/charts/calculations/77777777-7777-4777-8777-777777777777/report/pdf",
       { expectedResultChecksum: `sha256:${"a".repeat(64)}`, locale: "ru" },
@@ -171,6 +178,7 @@ describe("charts HTTP routes", () => {
     expect(solarReturnResponse.status).toBe(403);
     expect(progressionResponse.status).toBe(403);
     expect(horaryResponse.status).toBe(403);
+    expect(astrocartographyResponse.status).toBe(403);
     expect(pdfResponse.status).toBe(403);
   });
 
@@ -234,6 +242,16 @@ describe("charts HTTP routes", () => {
 
   it("creates authenticated horary jobs through the CSRF-protected route", async () => {
     const response = await postJson("/charts/horary/jobs", validHoraryBody(), csrfHeaders());
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      status: "calculating",
+      jobId: "66666666-6666-4666-8666-666666666666"
+    });
+  });
+
+  it("creates authenticated astrocartography jobs through the CSRF-protected route", async () => {
+    const response = await postJson("/charts/astrocartography/jobs", validBody(), csrfHeaders());
 
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({

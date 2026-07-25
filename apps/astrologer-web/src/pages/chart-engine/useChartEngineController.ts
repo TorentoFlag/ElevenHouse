@@ -15,6 +15,7 @@ import {
   toClientSelectOptions
 } from "../../features/clients/model/clientSelectorModel";
 import {
+  createAstrocartographyChartJob,
   createHoraryChartJob,
   createCompositeChartJob,
   createNatalChartJob,
@@ -406,6 +407,48 @@ export function useChartEngineController() {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить хорар");
     }
   });
+  const astrocartographyCalculationMutation = useMutation({
+    mutationFn: ({
+      clientId,
+      settings
+    }: {
+      readonly clientId: string;
+      readonly settings: ChartSettings;
+    }) =>
+      submitAstrocartographyCalculation({
+        clientId,
+        settings,
+        create: createAstrocartographyChartJob
+      }),
+    onSuccess: (response, variables) => {
+      setErrorMessage(null);
+      setHasResultStaleIntent(false);
+      if (response.status === "succeeded") {
+        setJobId(null);
+        setCalculationId(response.calculationId);
+        setImmediateResult(response.result as StoredChartCalculationPayload);
+        writeChartEngineUrlState({
+          mode: "astrocartography",
+          clientId: variables.clientId,
+          calculationId: response.calculationId
+        });
+        return;
+      }
+      setImmediateResult(null);
+      setCalculationId(null);
+      setJobId(response.jobId);
+      writeChartEngineUrlState({
+        mode: "astrocartography",
+        clientId: variables.clientId,
+        calculationId: null
+      });
+    },
+    onError: (error) => {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Не удалось запустить астрокарту"
+      );
+    }
+  });
 
   const birthDataMutation = useMutation({
     mutationFn: async (data: Parameters<typeof updateClientBirthData>[1]) => {
@@ -559,6 +602,7 @@ export function useChartEngineController() {
       solarReturnCalculationMutation.isPending ||
       progressionCalculationMutation.isPending ||
       horaryCalculationMutation.isPending ||
+      astrocartographyCalculationMutation.isPending ||
       jobId ||
       jobQuery.data?.status === "calculating"
     ) {
@@ -583,7 +627,8 @@ export function useChartEngineController() {
     compositeCalculationMutation.isPending,
     solarReturnCalculationMutation.isPending,
     progressionCalculationMutation.isPending,
-    horaryCalculationMutation.isPending
+    horaryCalculationMutation.isPending,
+    astrocartographyCalculationMutation.isPending
   ]);
   const isBusy =
     calculationMutation.isPending ||
@@ -593,6 +638,7 @@ export function useChartEngineController() {
     solarReturnCalculationMutation.isPending ||
     progressionCalculationMutation.isPending ||
     horaryCalculationMutation.isPending ||
+    astrocartographyCalculationMutation.isPending ||
     birthDataMutation.isPending ||
     enqueuePdfMutation.isPending ||
     downloadPdfMutation.isPending ||
@@ -861,6 +907,21 @@ export function useChartEngineController() {
         question: questionSnapshot
       });
     },
+    onCreateAstrocartographyJob: async () => {
+      if (!selectedClient) {
+        setErrorMessage("Выберите клиента из CRM");
+        return;
+      }
+      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
+      if (!readiness.ready) {
+        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
+        return;
+      }
+      await astrocartographyCalculationMutation.mutateAsync({
+        clientId: selectedClient.value,
+        settings
+      });
+    },
     onPdf: async () => {
       try {
         setErrorMessage(null);
@@ -989,6 +1050,18 @@ export async function submitHoraryCalculation({
   return create({ clientId, settings, question });
 }
 
+export async function submitAstrocartographyCalculation({
+  clientId,
+  create,
+  settings
+}: {
+  readonly clientId: string;
+  readonly settings: ChartSettings;
+  readonly create: typeof createAstrocartographyChartJob;
+}) {
+  return create({ clientId, settings });
+}
+
 export function restoreChartEngineViewState(
   result: StoredChartCalculationPayload,
   options: { readonly mode?: ChartEngineMode } = {}
@@ -1006,6 +1079,13 @@ export function restoreChartEngineViewState(
       mode: "horary",
       settings: result.settings,
       horaryQuestion: result.questionSnapshot
+    };
+  }
+
+  if (result.method === "astrocartography") {
+    return {
+      mode: "astrocartography",
+      settings: result.settings
     };
   }
 
@@ -1115,7 +1195,7 @@ export function buildChartEngineSearch(search: string, state: ChartEngineUrlStat
   } else {
     params.delete("calculationId");
   }
-  if (state.mode === "child_chart" || state.mode === "horary") {
+  if (state.mode === "child_chart" || state.mode === "horary" || state.mode === "astrocartography") {
     params.set("mode", state.mode);
   } else {
     params.delete("mode");
@@ -1142,7 +1222,9 @@ function normalizeUrlParam(value: string | null): string | null {
 }
 
 function readChartEngineMode(value: string | null): ChartEngineMode | undefined {
-  return value === "child_chart" || value === "horary" ? value : undefined;
+  return value === "child_chart" || value === "horary" || value === "astrocartography"
+    ? value
+    : undefined;
 }
 
 function getDefaultTransitMoment(): ChartTransitMomentInput {

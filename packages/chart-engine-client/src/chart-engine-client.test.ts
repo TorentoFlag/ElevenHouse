@@ -296,6 +296,45 @@ describe("ChartEngineHttpClient", () => {
     );
   });
 
+  it("posts astrocartography input to the private chart engine", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => astrocartographyResult
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012/",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateAstrocartography(astrocartographyRequest)).resolves.toMatchObject(
+      {
+        schemaVersion: "chart-result.v1",
+        method: "astrocartography",
+        result: { lines: expect.arrayContaining([expect.objectContaining({ id: "sun_mc" })]) }
+      }
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://chart-engine:8012/v1/astrocartography",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("treats invalid astrocartography provider JSON as permanent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaVersion: "wrong" })
+    });
+    const client = new ChartEngineHttpClient({
+      baseUrl: "http://chart-engine:8012",
+      fetchFn: fetchMock
+    });
+
+    await expect(client.calculateAstrocartography(astrocartographyRequest)).rejects.toBeInstanceOf(
+      ChartEnginePermanentError
+    );
+  });
+
   it("posts planetary positions input to the private chart engine", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -559,6 +598,25 @@ const horaryResult = {
   result: result.result
 } as const;
 
+const astrocartographyRequest = {
+  schemaVersion: "chart-request.v1",
+  method: "astrocartography",
+  settings: request.settings,
+  inputSnapshot: request.inputSnapshot
+} as const;
+
+const astrocartographyResult = {
+  schemaVersion: "chart-result.v1",
+  method: "astrocartography",
+  provider: result.provider,
+  settings: { zodiac: "tropical", ...request.settings },
+  inputSnapshot: request.inputSnapshot,
+  result: {
+    lines: completeAstrocartographyLines(),
+    warnings: []
+  }
+} as const;
+
 const positionsResult = {
   schemaVersion: "chart-positions-result.v1",
   method: "planetary_positions",
@@ -622,4 +680,33 @@ function completePlanetaryPositions() {
     longitude: index * 20,
     retrograde: false
   }));
+}
+
+function completeAstrocartographyLines() {
+  const points = [
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ];
+  const angles = ["mc", "ic", "asc", "dsc"];
+  return points.flatMap((point, pointIndex) =>
+    angles.map((angle, angleIndex) => ({
+      id: `${point}_${angle}`,
+      point,
+      angle,
+      label: `${point} ${angle}`,
+      path: [
+        { latitude: -66, longitude: -90 + pointIndex * 8 + angleIndex },
+        { latitude: 0, longitude: -90 + pointIndex * 8 + angleIndex },
+        { latitude: 66, longitude: -90 + pointIndex * 8 + angleIndex }
+      ]
+    }))
+  );
 }

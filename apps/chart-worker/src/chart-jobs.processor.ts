@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import {
+  chartAstrocartographyCalculationRequestSchema,
   chartInputSnapshotSchema,
   chartCompositeCalculationRequestSchema,
   chartHoraryCalculationRequestSchema,
   chartProgressionCalculationRequestSchema,
   chartSolarReturnCalculationRequestSchema,
   chartSettingsSchema,
+  type ChartAstrocartographyCalculationRequest,
   type ChartNatalCalculationRequest,
   type ChartCompositeCalculationRequest,
   type ChartHoraryCalculationRequest,
@@ -16,6 +18,7 @@ import {
   chartTransitSnapshotSchema,
   type ChartTransitCalculationRequest,
   type StoredChartProgressionCalculationPayload,
+  type StoredChartAstrocartographyCalculationPayload,
   type StoredChartCompositeCalculationPayload,
   type StoredChartHoraryCalculationPayload,
   type StoredChartSolarReturnCalculationPayload,
@@ -50,6 +53,9 @@ export type ChartEngineClient = {
   readonly calculateHorary: (
     payload: ChartHoraryCalculationRequest
   ) => Promise<StoredChartHoraryCalculationPayload>;
+  readonly calculateAstrocartography: (
+    payload: ChartAstrocartographyCalculationRequest
+  ) => Promise<StoredChartAstrocartographyCalculationPayload>;
 };
 
 const transitJobInputSnapshotSchema = z
@@ -92,6 +98,12 @@ const progressionJobInputSnapshotSchema = chartProgressionCalculationRequestSche
 const horaryJobInputSnapshotSchema = chartHoraryCalculationRequestSchema
   .pick({
     questionSnapshot: true
+  })
+  .strict();
+
+const astrocartographyJobInputSnapshotSchema = chartAstrocartographyCalculationRequestSchema
+  .pick({
+    inputSnapshot: true
   })
   .strict();
 
@@ -229,6 +241,16 @@ async function calculateChartResult(input: {
       questionSnapshot: snapshots.questionSnapshot
     };
     return input.engine.calculateHorary(request);
+  }
+  if (claim.method === "astrocartography") {
+    const snapshots = astrocartographyJobInputSnapshotSchema.parse(claim.inputSnapshot);
+    const request: ChartAstrocartographyCalculationRequest = {
+      schemaVersion: "chart-request.v1",
+      method: "astrocartography",
+      settings,
+      inputSnapshot: snapshots.inputSnapshot
+    };
+    return input.engine.calculateAstrocartography(request);
   }
   throw new UnrecoverableError("Unsupported chart calculation method");
 }

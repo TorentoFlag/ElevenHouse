@@ -5,6 +5,7 @@ import type {
   ChartSettings,
   ChartTransitMoment,
   StoredChartCalculationPayload,
+  StoredChartAstrocartographyCalculationPayload,
   StoredChartCompositeCalculationPayload,
   StoredChartHoraryCalculationPayload,
   StoredChartNatalCalculationPayload,
@@ -18,6 +19,7 @@ import {
   readChartEngineUrlState,
   restoreChartEngineViewState,
   submitChartCalculation,
+  submitAstrocartographyCalculation,
   submitCompositeCalculation,
   submitHoraryCalculation,
   submitProgressionCalculation,
@@ -214,6 +216,23 @@ describe("chart engine controller submission", () => {
       settings: settings()
     });
   });
+
+  it("creates astrocartography jobs with the selected client and settings", async () => {
+    const create = vi.fn(async () => calculatingResponse);
+
+    await expect(
+      submitAstrocartographyCalculation({
+        clientId,
+        settings: settings(),
+        create
+      })
+    ).resolves.toEqual(calculatingResponse);
+
+    expect(create).toHaveBeenCalledWith({
+      clientId,
+      settings: settings()
+    });
+  });
 });
 
 describe("chart engine URL state", () => {
@@ -235,6 +254,15 @@ describe("chart engine URL state", () => {
   it("reads horary mode from the route query", () => {
     expect(readChartEngineUrlState(`?clientId=${clientId}&mode=horary`)).toEqual({
       mode: "horary",
+      clientId,
+      partnerClientId: null,
+      calculationId: null
+    });
+  });
+
+  it("reads astrocartography mode from the route query", () => {
+    expect(readChartEngineUrlState(`?clientId=${clientId}&mode=astrocartography`)).toEqual({
+      mode: "astrocartography",
       clientId,
       partnerClientId: null,
       calculationId: null
@@ -333,6 +361,19 @@ describe("chart engine URL state", () => {
       })
     ).toBe(`?panel=interpretations&clientId=${clientId}&calculationId=${calculationId}&mode=horary`);
   });
+
+  it("persists astrocartography mode without partner client id", () => {
+    expect(
+      buildChartEngineSearch("?panel=interpretations&partnerClientId=old", {
+        mode: "astrocartography",
+        clientId,
+        partnerClientId: "55555555-5555-4555-8555-555555555555",
+        calculationId
+      })
+    ).toBe(
+      `?panel=interpretations&clientId=${clientId}&calculationId=${calculationId}&mode=astrocartography`
+    );
+  });
 });
 
 describe("chart engine persisted result state", () => {
@@ -384,6 +425,13 @@ describe("chart engine persisted result state", () => {
       mode: "horary",
       settings: settings(),
       horaryQuestion: horaryQuestion()
+    });
+  });
+
+  it("restores astrocartography mode from a loaded calculation", () => {
+    expect(restoreChartEngineViewState(astrocartographyResult())).toEqual({
+      mode: "astrocartography",
+      settings: settings()
     });
   });
 
@@ -569,6 +617,31 @@ function horaryResult(): StoredChartHoraryCalculationPayload {
     settings: settings(),
     questionSnapshot: horaryQuestion(),
     result: emptyRenderResult()
+  };
+}
+
+function astrocartographyResult(): StoredChartAstrocartographyCalculationPayload {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "astrocartography",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: settings(),
+    inputSnapshot: natalResult().inputSnapshot,
+    result: {
+      lines: [
+        {
+          id: "sun_mc",
+          point: "sun",
+          angle: "mc",
+          label: "Солнце MC",
+          path: [
+            { latitude: -66, longitude: 10 },
+            { latitude: 66, longitude: 10 }
+          ]
+        }
+      ],
+      warnings: []
+    }
   };
 }
 

@@ -328,6 +328,84 @@ describe("ChartsService", () => {
     );
   });
 
+  it("creates astrocartography jobs from owner-scoped CRM birth data", async () => {
+    const clientStore = createClientStore();
+    const commandStore = createCommandStore();
+    const service = createService({ clientStore, commandStore });
+
+    await service.createAstrocartographyJob(
+      {
+        clientId,
+        settings: settings()
+      },
+      request()
+    );
+
+    expect(clientStore.getAstrologerClient).toHaveBeenCalledWith({
+      astrologerUserId: ownerUserId,
+      clientUserId: clientId
+    });
+    expect(commandStore.createOrReuseChartJobAndRequestCalculation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "astrocartography",
+        ownerUserId,
+        clientId,
+        inputSnapshot: {
+          inputSnapshot: expect.objectContaining({
+            birthDate: "1990-07-15",
+            birthTime: "10:30",
+            timezone: "Europe/Rome"
+          })
+        },
+        settingsSnapshot: expect.objectContaining(settings())
+      })
+    );
+  });
+
+  it("rejects browser-supplied birth data in astrocartography job requests", async () => {
+    const commandStore = createCommandStore();
+    const service = createService({ commandStore });
+
+    await expect(
+      service.createAstrocartographyJob(
+        {
+          clientId,
+          birthDate: "1988-01-01",
+          settings: settings()
+        },
+        request()
+      )
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: "CHART_VALIDATION_FAILED" })
+    });
+    expect(commandStore.createOrReuseChartJobAndRequestCalculation).not.toHaveBeenCalled();
+  });
+
+  it("reuses an existing astrocartography calculation result for an identical request", async () => {
+    const calculationId = "77777777-7777-4777-8777-777777777777";
+    const commandStore = createCommandStore({
+      outcome: { kind: "existing_result", calculationId }
+    });
+    const jobStore = createJobStore({
+      result: astrocartographyResult()
+    });
+    const service = createService({ commandStore, jobStore });
+
+    await expect(
+      service.createAstrocartographyJob(
+        {
+          clientId,
+          settings: settings()
+        },
+        request()
+      )
+    ).resolves.toMatchObject({
+      status: "succeeded",
+      calculationId,
+      result: { method: "astrocartography" }
+    });
+  });
+
   it("reuses an existing solar return calculation result for an identical request", async () => {
     const calculationId = "77777777-7777-4777-8777-777777777777";
     const commandStore = createCommandStore({
@@ -605,6 +683,57 @@ function solarReturnResult() {
       warnings: []
     }
   };
+}
+
+function astrocartographyResult() {
+  const inputSnapshot = {
+    birthDate: "1990-07-15",
+    birthTime: "10:30",
+    timezone: "Europe/Rome",
+    latitude: 41.9028,
+    longitude: 12.4964,
+    birthTimePrecision: "exact" as const
+  };
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "astrocartography",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: { zodiac: "tropical" as const, ...settings() },
+    inputSnapshot,
+    result: {
+      lines: completeAstrocartographyLines(),
+      warnings: []
+    }
+  };
+}
+
+function completeAstrocartographyLines() {
+  const points = [
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ];
+  const angles = ["mc", "ic", "asc", "dsc"];
+  return points.flatMap((point, pointIndex) =>
+    angles.map((angle, angleIndex) => ({
+      id: `${point}_${angle}`,
+      point,
+      angle,
+      label: `${point} ${angle}`,
+      path: [
+        { latitude: -66, longitude: -80 + pointIndex * 8 + angleIndex },
+        { latitude: 0, longitude: -80 + pointIndex * 8 + angleIndex },
+        { latitude: 66, longitude: -80 + pointIndex * 8 + angleIndex }
+      ]
+    }))
+  );
 }
 
 function completePoints() {

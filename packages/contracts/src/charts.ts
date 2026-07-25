@@ -23,6 +23,16 @@ export const chartNatalJobCreateRequestSchema = z
   .strict();
 export type ChartNatalJobCreateRequest = z.infer<typeof chartNatalJobCreateRequestSchema>;
 
+export const chartAstrocartographyJobCreateRequestSchema = z
+  .object({
+    clientId: uuidSchema,
+    settings: chartSettingsSchema
+  })
+  .strict();
+export type ChartAstrocartographyJobCreateRequest = z.infer<
+  typeof chartAstrocartographyJobCreateRequestSchema
+>;
+
 export const chartTransitMomentSchema = z
   .object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -235,6 +245,21 @@ export const chartNatalCalculationRequestSchema = z
   .strict();
 export type ChartNatalCalculationRequestInput = z.input<typeof chartNatalCalculationRequestSchema>;
 export type ChartNatalCalculationRequest = z.infer<typeof chartNatalCalculationRequestSchema>;
+
+export const chartAstrocartographyCalculationRequestSchema = z
+  .object({
+    schemaVersion: z.literal("chart-request.v1"),
+    method: z.literal("astrocartography"),
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema
+  })
+  .strict();
+export type ChartAstrocartographyCalculationRequestInput = z.input<
+  typeof chartAstrocartographyCalculationRequestSchema
+>;
+export type ChartAstrocartographyCalculationRequest = z.infer<
+  typeof chartAstrocartographyCalculationRequestSchema
+>;
 
 export const chartTransitCalculationRequestSchema = z
   .object({
@@ -587,6 +612,79 @@ export const chartSynastryRelationshipScoreSchema = z
   .strict();
 export type ChartSynastryRelationshipScore = z.infer<typeof chartSynastryRelationshipScoreSchema>;
 
+export const chartAstrocartographyPointSchema = z.enum([
+  "sun",
+  "moon",
+  "mercury",
+  "venus",
+  "mars",
+  "jupiter",
+  "saturn",
+  "uranus",
+  "neptune",
+  "pluto"
+]);
+export type ChartAstrocartographyPoint = z.infer<typeof chartAstrocartographyPointSchema>;
+
+export const chartAstrocartographyAngleSchema = z.enum(["asc", "dsc", "mc", "ic"]);
+export type ChartAstrocartographyAngle = z.infer<typeof chartAstrocartographyAngleSchema>;
+
+export const chartAstrocartographyPathPointSchema = z
+  .object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180)
+  })
+  .strict();
+export type ChartAstrocartographyPathPoint = z.infer<
+  typeof chartAstrocartographyPathPointSchema
+>;
+
+export const chartAstrocartographyLineSchema = z
+  .object({
+    id: z.string().trim().min(1).max(120),
+    point: chartAstrocartographyPointSchema,
+    angle: chartAstrocartographyAngleSchema,
+    label: z.string().trim().min(1).max(120),
+    path: z.array(chartAstrocartographyPathPointSchema).min(2)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const expectedId = `${value.point}_${value.angle}`;
+    if (value.id !== expectedId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["id"],
+        message: `Astrocartography line id must be ${expectedId}`
+      });
+    }
+  });
+export type ChartAstrocartographyLine = z.infer<typeof chartAstrocartographyLineSchema>;
+
+export const chartAstrocartographyRenderResultSchema = z
+  .object({
+    lines: z.array(chartAstrocartographyLineSchema),
+    warnings: z.array(chartWarningSchema)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const lineIds = new Set(value.lines.map((line) => line.id));
+    for (const point of chartAstrocartographyPointSchema.options) {
+      for (const angle of chartAstrocartographyAngleSchema.options) {
+        const lineId = `${point}_${angle}`;
+        if (!lineIds.has(lineId)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["lines"],
+            message: `Missing astrocartography line ${lineId}`
+          });
+        }
+      }
+    }
+  });
+export type ChartAstrocartographyRenderResult = z.infer<
+  typeof chartAstrocartographyRenderResultSchema
+>;
+
 export const chartSynastryRenderResultSchema = z
   .object({
     primary: chartRenderResultSchema,
@@ -611,6 +709,20 @@ export const storedChartNatalCalculationPayloadSchema = z
   .strict();
 export type StoredChartNatalCalculationPayload = z.infer<
   typeof storedChartNatalCalculationPayloadSchema
+>;
+
+export const storedChartAstrocartographyCalculationPayloadSchema = z
+  .object({
+    schemaVersion: z.literal("chart-result.v1"),
+    method: z.literal("astrocartography"),
+    provider: chartProviderMetadataSchema,
+    settings: chartSettingsSchema,
+    inputSnapshot: chartInputSnapshotSchema,
+    result: chartAstrocartographyRenderResultSchema
+  })
+  .strict();
+export type StoredChartAstrocartographyCalculationPayload = z.infer<
+  typeof storedChartAstrocartographyCalculationPayloadSchema
 >;
 
 export const storedChartTransitCalculationPayloadSchema = z
@@ -716,6 +828,7 @@ export type StoredChartHoraryCalculationPayload = z.infer<
 
 export const storedChartCalculationPayloadSchema = z.discriminatedUnion("method", [
   storedChartNatalCalculationPayloadSchema,
+  storedChartAstrocartographyCalculationPayloadSchema,
   storedChartTransitCalculationPayloadSchema,
   storedChartSynastryCalculationPayloadSchema,
   storedChartCompositeCalculationPayloadSchema,

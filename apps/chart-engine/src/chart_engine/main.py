@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from chart_engine.kerykeion_adapter import (
+    calculate_astrocartography,
     calculate_composite,
     calculate_natal,
     calculate_planetary_positions,
@@ -11,6 +12,7 @@ from chart_engine.kerykeion_adapter import (
     calculate_transit,
 )
 from chart_engine.schemas import (
+    AstrocartographyRequest,
     CompositeRequest,
     HealthResponse,
     HoraryRequest,
@@ -19,6 +21,7 @@ from chart_engine.schemas import (
     PlanetaryPositionsRequest,
     ProgressionRequest,
     SolarReturnRequest,
+    StoredChartAstrocartographyCalculationPayload,
     StoredChartCalculationPayload,
     StoredChartCompositeCalculationPayload,
     StoredChartHoraryCalculationPayload,
@@ -46,6 +49,15 @@ def ready() -> HealthResponse:
 @app.post("/v1/natal", response_model=StoredChartCalculationPayload, response_model_exclude_none=True)
 def natal(request: NatalRequest) -> StoredChartCalculationPayload:
     return calculate_natal(request)
+
+
+@app.post(
+    "/v1/astrocartography",
+    response_model=StoredChartAstrocartographyCalculationPayload,
+    response_model_exclude_none=True,
+)
+def astrocartography(request: AstrocartographyRequest) -> StoredChartAstrocartographyCalculationPayload:
+    return calculate_astrocartography(request)
 
 
 @app.post("/v1/transits", response_model=StoredChartTransitCalculationPayload, response_model_exclude_none=True)

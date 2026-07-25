@@ -138,10 +138,14 @@
       Dictionary-backed `horary.*` anchors with honest missing-entry creation
       affordances. Horary PDF/export, automated judgement/verdict and AI
       horary answer remain separate future contours.
-- [ ] Chart Engine remaining method expansion: astrocartography. It still
-      requires its own contracts, domain/API workflow, worker/provider adapter,
-      map UI state matrix, PDF/report decision and Dictionary
-      interpretation-code coverage before enabling the mode.
+- [x] Chart Engine astrocartography first slice: owner-scoped CRM client,
+      canonical `astrocartography` result with 10 planets x 4 angular lines,
+      worker/provider integration over Swiss Ephemeris primitives,
+      `/chart-engine` `Астрокарта` mode, map visualization, RU state copy,
+      disabled PDF and Dictionary-backed `astrocartography.<point>.<angle>`
+      anchors with honest missing-entry creation affordances. Relocation
+      charts, city scoring/crossings, public sharing, PDF/export and AI text
+      remain separate future contours.
 - [x] Human Design individual v1: owner-scoped CRM client input only, exact
       chart-engine personality/design longitude resolution, deterministic
       `human_design_classic` domain mechanics, generic calculation persistence,

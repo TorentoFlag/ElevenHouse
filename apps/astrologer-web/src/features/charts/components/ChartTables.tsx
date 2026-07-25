@@ -55,7 +55,9 @@ export function ChartTables({
   if (!result) {
     return (
       <div className={styles.panelEmpty}>
-        После расчёта здесь появятся планеты, аспекты и дома из canonical result.
+        {activeTab === "interpretations"
+          ? "После расчёта здесь появятся трактовки из canonical result."
+          : "После расчёта здесь появятся планеты, аспекты и дома из canonical result."}
       </div>
     );
   }
@@ -627,9 +629,7 @@ function InterpretationSummary({
       <h2 id="chart-interpretations-heading">Трактовки</h2>
       <div className={styles.interpretationStack}>
         <div>
-          <div className={styles.interpretationKicker}>
-            {interpretationCopy.kicker}
-          </div>
+          <div className={styles.interpretationKicker}>{interpretationCopy.kicker}</div>
           <div className={styles.interpretationGroupStack}>
             {anchorGroups.map((group) => (
               <section className={styles.interpretationGroup} key={group.id}>
@@ -675,9 +675,7 @@ function InterpretationSummary({
             </div>
             <b>позже</b>
           </div>
-          <p>
-            {interpretationCopy.aiDescription}
-          </p>
+          <p>{interpretationCopy.aiDescription}</p>
           <button type="button" disabled>
             AI-черновик недоступен
           </button>
@@ -713,6 +711,15 @@ function getInterpretationCopy({
       aiLabel: "AI-трактовка · хорар",
       aiDescription:
         "AI-контур и автоматический ответ для хорара ещё не подключены. Пока показываем только детерминированные опорные положения из canonical result."
+    };
+  }
+
+  if (result.method === "astrocartography") {
+    return {
+      kicker: "Астрокартография · библиотека",
+      aiLabel: "AI-трактовка · астрокартография",
+      aiDescription:
+        "AI-контур для астрокартографии ещё не подключён. Пока показываем только детерминированные линии планет из canonical result."
     };
   }
 

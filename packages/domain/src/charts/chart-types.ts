@@ -1,5 +1,6 @@
 export type ChartCalculationMethod =
   | "natal"
+  | "astrocartography"
   | "transit"
   | "synastry"
   | "composite"

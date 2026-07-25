@@ -80,6 +80,9 @@ export function buildChartInterpretationAnchors(
   if (result.method === "horary") {
     return buildHoraryAnchors(result);
   }
+  if (result.method === "astrocartography") {
+    return buildAstrocartographyAnchors(result);
+  }
   if (options.mode === "child" && result.method === "natal") {
     return buildChildAnchors(result);
   }
@@ -365,6 +368,36 @@ function buildHoraryAnchors(
     ...buildHoraryHouseAnchors(result),
     ...buildHoraryAspectAnchors(renderResult.aspects, pointsById)
   ];
+}
+
+function buildAstrocartographyAnchors(
+  result: StoredChartCalculationPayload
+): readonly ChartInterpretationAnchor[] {
+  if (result.method !== "astrocartography") {
+    return [];
+  }
+
+  return result.result.lines.map((line) => ({
+    id: `astrocartography-line-${line.id}`,
+    code: `astrocartography.${formatDictionaryCodePart(line.point)}.${formatDictionaryCodePart(
+      line.angle
+    )}`,
+    categoryCode: "planet_aspects" as const,
+    group: "aspects" as const,
+    label: line.label,
+    meta: "Астрокартография · линия планеты",
+    position: `${getChartPointDisplayLabel(line.point, line.point)} · ${formatAstrocartographyAngle(
+      line.angle
+    )} · ${line.path.length} точек`
+  }));
+}
+
+function formatAstrocartographyAngle(angle: string): string {
+  if (angle === "mc") return "MC";
+  if (angle === "ic") return "IC";
+  if (angle === "asc") return "Asc";
+  if (angle === "dsc") return "Dsc";
+  return angle;
 }
 
 function buildHoraryPointAnchors(

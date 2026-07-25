@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { StoredChartAstrocartographyCalculationPayload } from "@elevenhouse/contracts";
 import {
   formatAspectTypeDisplay,
   formatChartPointPosition,
   formatHouseSignDisplay,
   getChartPointDisplayLabel,
-  getChartPointSymbol
+  getChartPointSymbol,
+  getPrimaryChartRenderResult
 } from "./chartDisplay";
 
 describe("chartDisplay", () => {
@@ -37,5 +39,48 @@ describe("chartDisplay", () => {
       "Водолей 0°00'"
     );
     expect(formatChartPointPosition({ sign: "pisces", signDegree: 29.999 })).toBe("Овен 0°00'");
+  });
+
+  it("rejects astrocartography payloads in wheel-only helpers", () => {
+    const result = {
+      schemaVersion: "chart-result.v1",
+      method: "astrocartography",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: {
+        zodiac: "tropical",
+        houseSystem: "placidus",
+        nodeType: "true",
+        aspectPreset: "major",
+        orbMultiplier: 1
+      },
+      inputSnapshot: {
+        birthDate: "1990-07-15",
+        birthTime: "10:30",
+        timezone: "Europe/Moscow",
+        latitude: 55.7558,
+        longitude: 37.6173,
+        birthTimePrecision: "exact"
+      },
+      result: {
+        lines: [
+          {
+            id: "sun_mc",
+            point: "sun",
+            angle: "mc",
+            label: "Солнце MC",
+            path: [
+              { latitude: -66, longitude: 10 },
+              { latitude: 0, longitude: 10 },
+              { latitude: 66, longitude: 10 }
+            ]
+          }
+        ],
+        warnings: []
+      }
+    } satisfies StoredChartAstrocartographyCalculationPayload;
+
+    expect(() => getPrimaryChartRenderResult(result)).toThrow(
+      "Astrocartography result does not contain a wheel render result"
+    );
   });
 });

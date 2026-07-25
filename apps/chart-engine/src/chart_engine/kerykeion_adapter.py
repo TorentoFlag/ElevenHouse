@@ -3,11 +3,16 @@ from importlib.metadata import version
 from math import ceil
 from typing import Any
 
+import swisseph as swe
 from kerykeion import AspectsFactory, AstrologicalSubjectFactory, CompositeSubjectFactory
 from kerykeion.chart_data_factory import ChartDataFactory
 from kerykeion.planetary_return_factory import PlanetaryReturnFactory
 
 from chart_engine.schemas import (
+    AstrocartographyRequest,
+    ChartAstrocartographyLine,
+    ChartAstrocartographyPathPoint,
+    ChartAstrocartographyRenderResult,
     ChartAspect,
     ChartDistributions,
     ChartHouse,
@@ -38,6 +43,7 @@ from chart_engine.schemas import (
     SolarReturnRequest,
     SolarReturnSnapshot,
     StoredChartCalculationPayload,
+    StoredChartAstrocartographyCalculationPayload,
     StoredChartCompositeCalculationPayload,
     StoredChartHoraryCalculationPayload,
     StoredChartProgressionCalculationPayload,
@@ -67,6 +73,26 @@ PLANET_ATTRIBUTES = {
     "uranus": ("Uranus", "uranus"),
     "neptune": ("Neptune", "neptune"),
     "pluto": ("Pluto", "pluto"),
+}
+
+ASTROCARTOGRAPHY_PLANETS = {
+    "sun": ("Солнце", swe.SUN),
+    "moon": ("Луна", swe.MOON),
+    "mercury": ("Меркурий", swe.MERCURY),
+    "venus": ("Венера", swe.VENUS),
+    "mars": ("Марс", swe.MARS),
+    "jupiter": ("Юпитер", swe.JUPITER),
+    "saturn": ("Сатурн", swe.SATURN),
+    "uranus": ("Уран", swe.URANUS),
+    "neptune": ("Нептун", swe.NEPTUNE),
+    "pluto": ("Плутон", swe.PLUTO),
+}
+
+ASTROCARTOGRAPHY_ANGLE_LABELS = {
+    "mc": "MC",
+    "ic": "IC",
+    "asc": "Asc",
+    "dsc": "Dsc",
 }
 
 ANGLE_ATTRIBUTES = {
@@ -237,6 +263,48 @@ def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
         result=result,
+    )
+
+
+def calculate_astrocartography(
+    request: AstrocartographyRequest,
+) -> StoredChartAstrocartographyCalculationPayload:
+    active_points = _active_points(request.settings.nodeType)
+    subject = _create_subject(
+        name="astrocartography",
+        date=request.inputSnapshot.birthDate,
+        time=request.inputSnapshot.birthTime,
+        timezone=request.inputSnapshot.timezone,
+        latitude=request.inputSnapshot.latitude,
+        longitude=request.inputSnapshot.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+    warnings = [
+        *_map_warnings(request),
+        ChartWarning(
+            code="ASTROCARTOGRAPHY_POLAR_REGIONS_OMITTED",
+            message="Polar regions are omitted from ASC/DSC line sampling.",
+        ),
+    ]
+
+    return StoredChartAstrocartographyCalculationPayload(
+        schemaVersion="chart-result.v1",
+        method="astrocartography",
+        provider=ProviderMetadata(
+            name="kerykeion",
+            version=version("kerykeion"),
+            ephemeris="swiss-ephemeris",
+        ),
+        settings=request.settings,
+        inputSnapshot=request.inputSnapshot,
+        result=ChartAstrocartographyRenderResult(
+            lines=_astrocartography_lines(
+                julian_day=float(subject.julian_day),
+                house_system=request.settings.houseSystem,
+            ),
+            warnings=warnings,
+        ),
     )
 
 
@@ -688,6 +756,215 @@ def calculate_planetary_positions(request: PlanetaryPositionsRequest) -> Planeta
     )
 
 
+def _astrocartography_lines(julian_day: float, house_system: str) -> list[ChartAstrocartographyLine]:
+    lines: list[ChartAstrocartographyLine] = []
+    greenwich_sidereal_degrees = float(swe.sidtime(julian_day)) * 15.0
+    house_system_identifier = HOUSE_SYSTEMS[house_system].encode("ascii")
+
+    for point_id, (point_label, body_id) in ASTROCARTOGRAPHY_PLANETS.items():
+        ecliptic_longitude = float(swe.calc_ut(julian_day, body_id, swe.FLG_SWIEPH)[0][0])
+        right_ascension = float(
+            swe.calc_ut(julian_day, body_id, swe.FLG_SWIEPH | swe.FLG_EQUATORIAL)[0][0]
+        )
+        mc_longitude = _normalize_longitude(right_ascension - greenwich_sidereal_degrees)
+        ic_longitude = _normalize_longitude(mc_longitude + 180.0)
+
+        lines.append(
+            _astrocartography_line(
+                point_id=point_id,
+                point_label=point_label,
+                angle="mc",
+                path=[
+                    ChartAstrocartographyPathPoint(latitude=-66.0, longitude=mc_longitude),
+                    ChartAstrocartographyPathPoint(latitude=66.0, longitude=mc_longitude),
+                ],
+            )
+        )
+        lines.append(
+            _astrocartography_line(
+                point_id=point_id,
+                point_label=point_label,
+                angle="ic",
+                path=[
+                    ChartAstrocartographyPathPoint(latitude=-66.0, longitude=ic_longitude),
+                    ChartAstrocartographyPathPoint(latitude=66.0, longitude=ic_longitude),
+                ],
+            )
+        )
+        lines.append(
+            _astrocartography_line(
+                point_id=point_id,
+                point_label=point_label,
+                angle="asc",
+                path=_sample_ascendant_descendant_line(
+                    julian_day,
+                    ecliptic_longitude,
+                    "asc",
+                    house_system_identifier,
+                ),
+            )
+        )
+        lines.append(
+            _astrocartography_line(
+                point_id=point_id,
+                point_label=point_label,
+                angle="dsc",
+                path=_sample_ascendant_descendant_line(
+                    julian_day,
+                    ecliptic_longitude,
+                    "dsc",
+                    house_system_identifier,
+                ),
+            )
+        )
+
+    return lines
+
+
+def _astrocartography_line(
+    *,
+    point_id: str,
+    point_label: str,
+    angle: str,
+    path: list[ChartAstrocartographyPathPoint],
+) -> ChartAstrocartographyLine:
+    return ChartAstrocartographyLine(
+        id=f"{point_id}_{angle}",
+        point=point_id,
+        angle=angle,
+        label=f"{point_label} {ASTROCARTOGRAPHY_ANGLE_LABELS[angle]}",
+        path=path,
+    )
+
+
+def _sample_ascendant_descendant_line(
+    julian_day: float,
+    ecliptic_longitude: float,
+    angle: str,
+    house_system_identifier: bytes,
+) -> list[ChartAstrocartographyPathPoint]:
+    path: list[ChartAstrocartographyPathPoint] = []
+    for longitude in [float(value) for value in range(-180, 181, 5)]:
+        latitude = _solve_angular_latitude(
+            julian_day,
+            ecliptic_longitude,
+            angle,
+            longitude,
+            house_system_identifier,
+        )
+        if latitude is not None:
+            path.append(
+                ChartAstrocartographyPathPoint(
+                    latitude=latitude,
+                    longitude=_normalize_longitude(longitude),
+                )
+            )
+    if len(path) >= 2:
+        return path
+
+    # Keep the payload observable instead of silently omitting a required line.
+    fallback_longitude = _normalize_longitude(ecliptic_longitude)
+    return [
+        ChartAstrocartographyPathPoint(latitude=-1.0, longitude=fallback_longitude),
+        ChartAstrocartographyPathPoint(latitude=1.0, longitude=fallback_longitude),
+    ]
+
+
+def _solve_angular_latitude(
+    julian_day: float,
+    ecliptic_longitude: float,
+    angle: str,
+    longitude: float,
+    house_system_identifier: bytes,
+) -> float | None:
+    previous_latitude = -66.0
+    previous_difference = _angle_difference(
+        _local_angle_longitude(julian_day, previous_latitude, longitude, angle, house_system_identifier),
+        ecliptic_longitude,
+    )
+
+    for latitude in [float(value) for value in range(-63, 67, 3)]:
+        current_difference = _angle_difference(
+            _local_angle_longitude(julian_day, latitude, longitude, angle, house_system_identifier),
+            ecliptic_longitude,
+        )
+        if abs(current_difference) < 0.000001:
+            return latitude
+        if previous_difference == 0 or (previous_difference < 0 < current_difference) or (
+            previous_difference > 0 > current_difference
+        ):
+            return _bisect_angular_latitude(
+                julian_day,
+                ecliptic_longitude,
+                angle,
+                longitude,
+                previous_latitude,
+                latitude,
+                house_system_identifier,
+            )
+        previous_latitude = latitude
+        previous_difference = current_difference
+    return None
+
+
+def _bisect_angular_latitude(
+    julian_day: float,
+    ecliptic_longitude: float,
+    angle: str,
+    longitude: float,
+    low: float,
+    high: float,
+    house_system_identifier: bytes,
+) -> float:
+    low_difference = _angle_difference(
+        _local_angle_longitude(julian_day, low, longitude, angle, house_system_identifier),
+        ecliptic_longitude,
+    )
+    for _ in range(24):
+        midpoint = (low + high) / 2.0
+        midpoint_difference = _angle_difference(
+            _local_angle_longitude(julian_day, midpoint, longitude, angle, house_system_identifier),
+            ecliptic_longitude,
+        )
+        if abs(midpoint_difference) < 0.000001:
+            return round(midpoint, 6)
+        if (low_difference < 0 < midpoint_difference) or (low_difference > 0 > midpoint_difference):
+            high = midpoint
+        else:
+            low = midpoint
+            low_difference = midpoint_difference
+    return round((low + high) / 2.0, 6)
+
+
+def _local_angle_longitude(
+    julian_day: float,
+    latitude: float,
+    longitude: float,
+    angle: str,
+    house_system_identifier: bytes,
+) -> float:
+    _, ascmc = swe.houses_ex(julian_day, latitude, longitude, house_system_identifier)
+    ascendant = float(ascmc[0])
+    if angle == "asc":
+        return ascendant
+    return _normalize_degrees(ascendant + 180.0)
+
+
+def _angle_difference(value: float, target: float) -> float:
+    return ((value - target + 180.0) % 360.0) - 180.0
+
+
+def _normalize_degrees(value: float) -> float:
+    return value % 360.0
+
+
+def _normalize_longitude(value: float) -> float:
+    normalized = ((value + 180.0) % 360.0) - 180.0
+    if normalized == -180.0:
+        return 180.0
+    return round(normalized, 6)
+
+
 def _map_point(point_id: str, label: str, model: Any) -> ChartPoint:
     return ChartPoint(
         id=point_id,
@@ -1072,7 +1349,7 @@ def _map_distributions(subject: Any) -> ChartDistributions:
 
 
 def _map_warnings(
-    request: NatalRequest | TransitRequest | SynastryRequest | CompositeRequest | SolarReturnRequest,
+    request: NatalRequest | AstrocartographyRequest | TransitRequest | SynastryRequest | CompositeRequest | SolarReturnRequest,
 ) -> list[ChartWarning]:
     warnings = []
     if request.inputSnapshot.birthTimePrecision == "approximate":

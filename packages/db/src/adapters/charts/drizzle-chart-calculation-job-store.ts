@@ -374,6 +374,14 @@ function buildChartResultSummary(result: StoredChartCalculationPayload) {
       timezone: result.questionSnapshot.timezone
     };
   }
+  if (result.method === "astrocartography") {
+    return {
+      provider: result.provider.name,
+      lineCount: result.result.lines.length,
+      pointCount: new Set(result.result.lines.map((line) => line.point)).size,
+      angleCount: new Set(result.result.lines.map((line) => line.angle)).size
+    };
+  }
   return {
     provider: result.provider.name,
     pointCount: result.result.points.length,
@@ -389,6 +397,7 @@ function buildChartCalculationTitle(method: ChartCalculationJobRow["method"]): s
   if (method === "solar_return") return "Solar return chart";
   if (method === "progression") return "Progression chart";
   if (method === "horary") return "Horary chart";
+  if (method === "astrocartography") return "Astrocartography map";
   return "Natal chart";
 }
 

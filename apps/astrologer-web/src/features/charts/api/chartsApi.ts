@@ -5,6 +5,7 @@ import {
   calculationPdfJobResponseSchema,
   calculationPdfLatestQuerySchema,
   chartCalculationResponseSchema,
+  chartAstrocartographyJobCreateRequestSchema,
   chartCompositeJobCreateRequestSchema,
   chartHoraryJobCreateRequestSchema,
   chartJobResponseSchema,
@@ -44,6 +45,24 @@ export async function createNatalChartJob(
 
   return chartNatalJobCreateResponseSchema.parse(
     await application.http.post("/charts/natal/jobs", body, { csrf: true })
+  );
+}
+
+export type CreateAstrocartographyChartJobInput = {
+  readonly clientId: string;
+  readonly settings: ChartSettings;
+} & Record<string, unknown>;
+
+export async function createAstrocartographyChartJob(
+  input: CreateAstrocartographyChartJobInput
+): Promise<ChartNatalJobCreateResponse> {
+  const body = chartAstrocartographyJobCreateRequestSchema.parse({
+    clientId: input.clientId,
+    settings: input.settings
+  });
+
+  return chartNatalJobCreateResponseSchema.parse(
+    await application.http.post("/charts/astrocartography/jobs", body, { csrf: true })
   );
 }
 
