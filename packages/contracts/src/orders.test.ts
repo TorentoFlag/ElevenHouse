@@ -13,6 +13,12 @@ const order = {
   platformFee: { amountMinor: 50_00, currency: "RUB" },
   astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" },
   financePolicySnapshotId: "66666666-6666-4666-8666-666666666666",
+  financePolicyRiskTier: "standard",
+  financePolicyHoldDurationHours: 48,
+  financePolicyReserveBps: 0,
+  financePolicyReserveReleaseDelayDays: 0,
+  financePolicyPlatformFeeBps: 1_000,
+  financePolicyProviderSettlementRequired: true,
   createdAt: "2026-07-24T10:00:00.000Z",
   updatedAt: "2026-07-24T10:01:00.000Z"
 } as const;

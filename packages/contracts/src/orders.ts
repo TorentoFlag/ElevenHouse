@@ -1,4 +1,5 @@
 import { z } from "@elevenhouse/validation";
+import { riskTierSchema } from "./finance-policies";
 import { moneySchema } from "./money";
 
 const isoDateTimeSchema = z.string().datetime({ offset: true });
@@ -31,6 +32,12 @@ export const orderResponseSchema = z
     platformFee: moneySchema,
     astrologerNetAmount: moneySchema,
     financePolicySnapshotId: uuidSchema,
+    financePolicyRiskTier: riskTierSchema,
+    financePolicyHoldDurationHours: z.number().int().min(0).max(24 * 180),
+    financePolicyReserveBps: z.number().int().min(0).max(10_000),
+    financePolicyReserveReleaseDelayDays: z.number().int().min(0).max(540),
+    financePolicyPlatformFeeBps: z.number().int().min(0).max(10_000),
+    financePolicyProviderSettlementRequired: z.boolean(),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema
   })

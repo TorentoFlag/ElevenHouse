@@ -174,6 +174,7 @@ POST /calculations/:calculationId/interpretations/:interpretationId/approve
 POST /calculations/:calculationId/publish
 POST /calculations/:calculationId/archive
 GET  /messaging/channel-connections
+POST /messaging/channel-connections/telegram/business/start
 GET  /messaging/threads
 GET  /messaging/threads/:threadId
 POST /messaging/threads/:threadId/messages
@@ -348,9 +349,9 @@ and must not know provider keys, prompt ids or provider internals.
 ## Admin API
 
 `admin-api` является отдельной поверхностью authenticated workflows
-администраторов, супер-администраторов и модераторов. В текущем коде app создан
-как минимальная health-only Nest-заготовка; `admin-web` существует как frontend
-shell, а доменные internal routes ещё не реализованы.
+администраторов, супер-администраторов и модераторов. В текущем коде app
+содержит health, internal identity/session foundation и первый finance policy
+контур для настройки risk/hold/reserve.
 
 Ответственности администратора/супер-администратора/модератора:
 
@@ -373,11 +374,22 @@ POST /identity/logout
 /admin/moderation
 /admin/payments
 /admin/settings
+GET  /admin/finance/policies
+POST /admin/finance/policies/default
+PUT  /admin/finance/policies/default
+PUT  /admin/finance/risk-profiles/:astrologerId
+POST /admin/finance/orders/:orderId/apply-risk-policy
 ```
 
 Новые admin/moderator/super_admin workflows не должны добавляться в `public-api`
 или `astrologer-api`. Они должны жить в `admin-api` и вызывать domain use cases
 с audit logging.
+
+Order-level finance policy changes are never implicit. New orders store the
+effective risk/hold/reserve policy snapshot at creation time; applying the
+current effective risk policy to an existing active order requires the explicit
+`POST /admin/finance/orders/:orderId/apply-risk-policy` action and a durable
+audit entry.
 
 ## Правило контрактов
 

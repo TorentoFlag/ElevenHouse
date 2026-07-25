@@ -5,6 +5,8 @@ import type { PlatformRole } from "@elevenhouse/auth";
 import type {
   AuditLogStore,
   AuthSessionAuthenticationStore,
+  FinanceOrder,
+  FinanceOrderStore,
   FinancePolicySnapshot,
   FinancePolicyStore,
   RiskTier
@@ -29,12 +31,14 @@ const csrfHeaderName = "x-csrf-token";
 const sessionToken = "admin-session-token";
 const adminUserId = "11111111-1111-4111-8111-111111111111";
 const astrologerUserId = "22222222-2222-4222-8222-222222222222";
+const orderId = "88888888-8888-4888-8888-888888888888";
 
 let app: INestApplication;
 let moduleRef: TestingModule;
 let baseUrl: string;
 let csrfToken: string;
 let store: FinancePolicyStore;
+let orderStore: Pick<FinanceOrderStore, "applyFinancePolicy" | "findById">;
 let auditLogStore: AuditLogStore;
 let unitOfWork: AdminFinancePolicyUnitOfWork;
 let roles: readonly PlatformRole[];
@@ -43,11 +47,13 @@ describe("admin finance policy HTTP flow", () => {
   beforeEach(async () => {
     roles = ["admin"];
     store = createFinancePolicyStore();
+    orderStore = createOrderStore();
     auditLogStore = createAuditLogStore();
     unitOfWork = {
       execute: vi.fn(async (operation) =>
         operation({
           store,
+          orderStore,
           auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
         })
       )
@@ -214,6 +220,48 @@ describe("admin finance policy HTTP flow", () => {
       })
     );
   });
+
+  it("applies the current risk policy to an active order with CSRF and audit evidence", async () => {
+    await expect(
+      postJson(`/admin/finance/orders/${orderId}/apply-risk-policy`, undefined, authCookie())
+    ).resolves.toMatchObject({ status: 403 });
+
+    const response = await postJson(
+      `/admin/finance/orders/${orderId}/apply-risk-policy`,
+      undefined,
+      authenticatedCookies(),
+      {
+        origin: "http://localhost:5175",
+        [csrfHeaderName]: csrfToken
+      }
+    );
+
+    expect(response).toMatchObject({
+      status: 201,
+      body: {
+        id: orderId,
+        status: "paid",
+        financePolicySnapshotId: "33333333-3333-4333-8333-333333333333",
+        financePolicyRiskTier: "standard",
+        financePolicyHoldDurationHours: 48,
+        financePolicyReserveBps: 0,
+        financePolicyPlatformFeeBps: 1000,
+        financePolicyProviderSettlementRequired: true
+      }
+    });
+    expect(auditLogStore.createEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: adminUserId,
+        action: "finance_policy.applied_to_order",
+        targetType: "finance_order",
+        targetId: orderId,
+        metadata: expect.objectContaining({
+          beforePolicySnapshotId: "99999999-9999-4999-8999-999999999999",
+          afterPolicySnapshotId: "33333333-3333-4333-8333-333333333333"
+        })
+      })
+    );
+  });
 });
 
 async function getJson(path: string, cookie?: string) {
@@ -237,6 +285,24 @@ async function putJson(
       ...headers
     },
     body: JSON.stringify(body)
+  });
+  return { status: response.status, body: await response.json() };
+}
+
+async function postJson(
+  path: string,
+  body?: unknown,
+  cookie?: string,
+  headers: Record<string, string> = {}
+) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+      ...(cookie ? { cookie } : {}),
+      ...headers
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) })
   });
   return { status: response.status, body: await response.json() };
 }
@@ -296,7 +362,18 @@ function createFinancePolicyStore(): FinancePolicyStore {
       riskTier === "standard" ? activePolicy : null
     ),
     findLatestPolicyVersion: vi.fn(async () => latestVersion),
-    findEffectivePolicyForAstrologer: vi.fn(async () => null),
+    findEffectivePolicyForAstrologer: vi.fn(async () => ({
+      policyId: activePolicy.id,
+      policyVersion: activePolicy.policyVersion,
+      riskTier: activePolicy.riskTier,
+      baseRiskTier: activePolicy.riskTier,
+      profile: null,
+      holdDurationHours: activePolicy.holdDurationHours,
+      reserveBps: activePolicy.reserveBps,
+      reserveReleaseDelayDays: activePolicy.reserveReleaseDelayDays,
+      platformFeeBps: activePolicy.platformFeeBps,
+      providerSettlementRequired: activePolicy.providerSettlementRequired
+    })),
     createPolicySnapshot: vi.fn(async (input) => {
       latestVersion = input.policyVersion;
       return policy({
@@ -330,6 +407,28 @@ function createFinancePolicyStore(): FinancePolicyStore {
   };
 }
 
+function createOrderStore(): Pick<FinanceOrderStore, "applyFinancePolicy" | "findById"> {
+  let currentOrder = order();
+  return {
+    findById: vi.fn(async (id) => (id === currentOrder.id ? currentOrder : null)),
+    applyFinancePolicy: vi.fn(async (input) => {
+      if (input.orderId !== currentOrder.id) return null;
+      currentOrder = {
+        ...currentOrder,
+        financePolicySnapshotId: input.financePolicySnapshotId,
+        financePolicyRiskTier: input.financePolicyRiskTier,
+        financePolicyHoldDurationHours: input.financePolicyHoldDurationHours,
+        financePolicyReserveBps: input.financePolicyReserveBps,
+        financePolicyReserveReleaseDelayDays: input.financePolicyReserveReleaseDelayDays,
+        financePolicyPlatformFeeBps: input.financePolicyPlatformFeeBps,
+        financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
+        updatedAt: input.now
+      };
+      return currentOrder;
+    })
+  };
+}
+
 function policy(
   overrides: Partial<FinancePolicySnapshot> & Pick<FinancePolicySnapshot, "id" | "riskTier">
 ): FinancePolicySnapshot {
@@ -346,6 +445,31 @@ function policy(
     createdByUserId: overrides.createdByUserId ?? null,
     snapshottedAt: overrides.snapshottedAt ?? now.toISOString(),
     createdAt: overrides.createdAt ?? now.toISOString()
+  };
+}
+
+function order(overrides: Partial<FinanceOrder> = {}): FinanceOrder {
+  return {
+    id: orderId,
+    clientUserId: "99999999-9999-4999-8999-999999999990",
+    astrologerUserId,
+    productId: "99999999-9999-4999-8999-999999999991",
+    directLinkIntentId: null,
+    bookingId: null,
+    status: "paid",
+    grossAmount: { amountMinor: 500_00, currency: "RUB" },
+    platformFee: { amountMinor: 50_00, currency: "RUB" },
+    astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" },
+    financePolicySnapshotId: "99999999-9999-4999-8999-999999999999",
+    financePolicyRiskTier: "low",
+    financePolicyHoldDurationHours: 24,
+    financePolicyReserveBps: 0,
+    financePolicyReserveReleaseDelayDays: 0,
+    financePolicyPlatformFeeBps: 1000,
+    financePolicyProviderSettlementRequired: true,
+    createdAt: "2026-07-24T10:00:00.000Z",
+    updatedAt: "2026-07-24T10:00:00.000Z",
+    ...overrides
   };
 }
 

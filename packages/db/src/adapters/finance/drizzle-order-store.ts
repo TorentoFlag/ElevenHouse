@@ -1,5 +1,6 @@
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, inArray } from "drizzle-orm";
 import type {
+  ApplyFinancePolicyToOrderInput,
   CreateFinanceOrderRecordInput,
   FinanceOrder,
   FinanceOrderStore,
@@ -39,8 +40,9 @@ export function createDrizzleOrderStore(database: ElevenHouseDatabase): FinanceO
 
 export function createDrizzleOrderTransactionStore(
   database: FinanceDatabase
-): Pick<FinanceOrderStore, "findById" | "updateStatus"> {
+): Pick<FinanceOrderStore, "applyFinancePolicy" | "findById" | "updateStatus"> {
   return {
+    applyFinancePolicy: (input) => applyFinancePolicyToOrder(database, input),
     updateStatus: (input) => updateOrderStatus(database, input),
     findById: (orderId) => findOrderById(database, orderId)
   };
@@ -80,6 +82,12 @@ async function insertOrder(
       astrologerNetAmountMinor: input.astrologerNetAmount.amountMinor,
       astrologerNetCurrency: input.astrologerNetAmount.currency,
       financePolicySnapshotId: input.financePolicySnapshotId,
+      financePolicyRiskTier: input.financePolicyRiskTier,
+      financePolicyHoldDurationHours: input.financePolicyHoldDurationHours,
+      financePolicyReserveBps: input.financePolicyReserveBps,
+      financePolicyReserveReleaseDelayDays: input.financePolicyReserveReleaseDelayDays,
+      financePolicyPlatformFeeBps: input.financePolicyPlatformFeeBps,
+      financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
       createdAt: timestamp,
       updatedAt: timestamp
     })
@@ -144,7 +152,28 @@ async function updateOrderStatus(
   const [row] = await database
     .update(orders)
     .set({ status: input.status, updatedAt: new Date(input.now) })
-    .where(eq(orders.id, input.orderId))
+    .where(and(eq(orders.id, input.orderId), inArray(orders.status, policyApplicableOrderStatuses)))
+    .returning();
+  return row ? toFinanceOrder(row) : null;
+}
+
+async function applyFinancePolicyToOrder(
+  database: FinanceDatabase,
+  input: ApplyFinancePolicyToOrderInput
+): Promise<FinanceOrder | null> {
+  const [row] = await database
+    .update(orders)
+    .set({
+      financePolicySnapshotId: input.financePolicySnapshotId,
+      financePolicyRiskTier: input.financePolicyRiskTier,
+      financePolicyHoldDurationHours: input.financePolicyHoldDurationHours,
+      financePolicyReserveBps: input.financePolicyReserveBps,
+      financePolicyReserveReleaseDelayDays: input.financePolicyReserveReleaseDelayDays,
+      financePolicyPlatformFeeBps: input.financePolicyPlatformFeeBps,
+      financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
+      updatedAt: new Date(input.now)
+    })
+    .where(and(eq(orders.id, input.orderId), inArray(orders.status, policyApplicableOrderStatuses)))
     .returning();
   return row ? toFinanceOrder(row) : null;
 }
@@ -170,6 +199,12 @@ function toFinanceOrder(row: OrderRow): FinanceOrder {
     platformFee: money(row.platformFeeAmountMinor, row.platformFeeCurrency),
     astrologerNetAmount: money(row.astrologerNetAmountMinor, row.astrologerNetCurrency),
     financePolicySnapshotId: row.financePolicySnapshotId,
+    financePolicyRiskTier: row.financePolicyRiskTier as FinanceOrder["financePolicyRiskTier"],
+    financePolicyHoldDurationHours: row.financePolicyHoldDurationHours,
+    financePolicyReserveBps: row.financePolicyReserveBps,
+    financePolicyReserveReleaseDelayDays: row.financePolicyReserveReleaseDelayDays,
+    financePolicyPlatformFeeBps: row.financePolicyPlatformFeeBps,
+    financePolicyProviderSettlementRequired: row.financePolicyProviderSettlementRequired,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
@@ -179,6 +214,8 @@ function money(amountMinor: number, currency: string): Money {
   if (currency !== "RUB") throw new Error(`Unsupported finance currency: ${currency}`);
   return { amountMinor, currency };
 }
+
+const policyApplicableOrderStatuses = ["pending_payment", "paid", "fulfilled"] as const;
 
 function readResultId(result: Record<string, unknown>, key: string): string {
   const value = result[key];

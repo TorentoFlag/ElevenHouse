@@ -213,6 +213,12 @@ function order(): FinanceOrder {
     platformFee: { amountMinor: 50_00, currency: "RUB" },
     astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" },
     financePolicySnapshotId: "66666666-6666-4666-8666-666666666666",
+    financePolicyRiskTier: "standard",
+    financePolicyHoldDurationHours: 48,
+    financePolicyReserveBps: 0,
+    financePolicyReserveReleaseDelayDays: 0,
+    financePolicyPlatformFeeBps: 1_000,
+    financePolicyProviderSettlementRequired: true,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString()
   };

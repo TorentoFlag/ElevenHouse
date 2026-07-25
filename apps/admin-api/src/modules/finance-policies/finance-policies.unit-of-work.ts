@@ -1,8 +1,9 @@
 import type { AdminFinancePolicyAuditSink } from "./finance-policies.audit";
-import type { FinancePolicyStore } from "@elevenhouse/domain";
+import type { FinanceOrderStore, FinancePolicyStore } from "@elevenhouse/domain";
 
 export type AdminFinancePolicyUnitOfWorkContext = {
   readonly store: FinancePolicyStore;
+  readonly orderStore: Pick<FinanceOrderStore, "applyFinancePolicy" | "findById">;
   readonly auditSink: AdminFinancePolicyAuditSink;
 };
 

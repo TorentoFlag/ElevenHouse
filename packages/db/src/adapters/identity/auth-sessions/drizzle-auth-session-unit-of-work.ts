@@ -24,10 +24,7 @@ type UserSessionsInsert = typeof userSessions.$inferInsert;
 type AuthSecurityEventsInsert = typeof authSecurityEvents.$inferInsert;
 type UserSessionsSelect = typeof userSessions.$inferSelect;
 type AuthSecurityEventsSelect = typeof authSecurityEvents.$inferSelect;
-type CustomerPlatformRole = Extract<
-  (typeof databasePlatformRoleValues)[number],
-  "client" | "astrologer"
->;
+type DatabasePlatformRole = (typeof databasePlatformRoleValues)[number];
 
 export type AuthSessionCreationDrizzleExecutor = Pick<ElevenHouseDatabase, "insert">;
 export type AuthSessionCreationDrizzleDatabase = Pick<ElevenHouseDatabase, "transaction">;
@@ -41,7 +38,7 @@ export type AuthSessionRevocationDrizzleDatabase = Pick<ElevenHouseDatabase, "tr
 const authSessionStatusSet = new Set<string>(authSessionStatusValues);
 const authSecurityEventTypeSet = new Set<string>(authSecurityEventTypeValues);
 const userStatusSet = new Set<string>(userStatusValues);
-const customerRoleSet = new Set<string>(["client", "astrologer"]);
+const platformRoleSet = new Set<string>(databasePlatformRoleValues);
 
 export function createDrizzleAuthSessionCreationUnitOfWork(
   database: AuthSessionCreationDrizzleDatabase
@@ -144,9 +141,7 @@ async function findSessionByTokenHash(
   return {
     session: toAuthSession(row),
     user: toUserAccount(row.user),
-    roleAssignments: row.user.roleAssignments
-      .filter((assignment) => isCustomerPlatformRole(assignment.role))
-      .map(toUserRoleAssignment)
+    roleAssignments: row.user.roleAssignments.map(toUserRoleAssignment)
   };
 }
 
@@ -185,7 +180,7 @@ function toUserRoleAssignment(row: {
   readonly assignedAt: Date;
 }) {
   const role = row.role;
-  if (!isCustomerPlatformRole(role)) {
+  if (!isDatabasePlatformRole(role)) {
     throw new Error(`Unexpected user_role_assignments.role value: ${role}`);
   }
 
@@ -292,6 +287,6 @@ function isUserAccountStatus(value: string): value is UserAccountStatus {
   return userStatusSet.has(value);
 }
 
-function isCustomerPlatformRole(value: string): value is CustomerPlatformRole {
-  return customerRoleSet.has(value);
+function isDatabasePlatformRole(value: string): value is DatabasePlatformRole {
+  return platformRoleSet.has(value);
 }

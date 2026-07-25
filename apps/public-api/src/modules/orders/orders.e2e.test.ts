@@ -238,6 +238,12 @@ function createOrderStore(): FinanceOrderStore {
           platformFee: input.platformFee,
           astrologerNetAmount: input.astrologerNetAmount,
           financePolicySnapshotId: input.financePolicySnapshotId,
+          financePolicyRiskTier: input.financePolicyRiskTier,
+          financePolicyHoldDurationHours: input.financePolicyHoldDurationHours,
+          financePolicyReserveBps: input.financePolicyReserveBps,
+          financePolicyReserveReleaseDelayDays: input.financePolicyReserveReleaseDelayDays,
+          financePolicyPlatformFeeBps: input.financePolicyPlatformFeeBps,
+          financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
           createdAt: input.now,
           updatedAt: input.now
         } satisfies FinanceOrder
@@ -245,6 +251,7 @@ function createOrderStore(): FinanceOrderStore {
     }),
     create: vi.fn(),
     updateStatus: vi.fn(),
+    applyFinancePolicy: vi.fn(),
     findById: vi.fn()
   };
 }

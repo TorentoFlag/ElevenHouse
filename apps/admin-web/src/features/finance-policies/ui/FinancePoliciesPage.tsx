@@ -9,7 +9,7 @@ import { Check } from "@elevenhouse/design-system/icons/Check";
 import { Refresh } from "@elevenhouse/design-system/icons/Refresh";
 import { Settings } from "@elevenhouse/design-system/icons/Settings";
 import { Wallet } from "@elevenhouse/design-system/icons/Wallet";
-import type { FinancePolicyResponse, RiskTier } from "@elevenhouse/contracts";
+import type { FinancePolicyResponse, RiskTier } from "@elevenhouse/contracts/finance-policies";
 import type { AdminFinancePoliciesApi } from "../api/adminFinancePoliciesApi";
 import { createAdminFinancePoliciesApi } from "../api/adminFinancePoliciesApi";
 import {
@@ -273,6 +273,7 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
 
               <form className="adminFinanceForm" onSubmit={(event) => void handlePolicySubmit(event)}>
                 <RiskTierSelect
+                  name="policyRiskTier"
                   value={policyForm.riskTier}
                   onChange={(riskTier) =>
                     setPolicyForm((previous) => ({ ...previous, riskTier }))
@@ -280,6 +281,7 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
                 />
                 <NumberField
                   label="Hold, hours"
+                  name="policyHoldDurationHours"
                   value={policyForm.holdDurationHours}
                   min={0}
                   max={4320}
@@ -289,6 +291,7 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
                 />
                 <NumberField
                   label="Reserve, bps"
+                  name="policyReserveBps"
                   value={policyForm.reserveBps}
                   min={0}
                   max={10000}
@@ -296,6 +299,7 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
                 />
                 <NumberField
                   label="Reserve release, days"
+                  name="policyReserveReleaseDelayDays"
                   value={policyForm.reserveReleaseDelayDays}
                   min={0}
                   max={540}
@@ -305,6 +309,7 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
                 />
                 <NumberField
                   label="Platform fee, bps"
+                  name="policyPlatformFeeBps"
                   value={policyForm.platformFeeBps}
                   min={0}
                   max={10000}
@@ -314,14 +319,16 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
                 />
                 <label className="adminFinanceToggle">
                   <input
+                    name="policyProviderSettlementRequired"
                     type="checkbox"
                     checked={policyForm.providerSettlementRequired}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const providerSettlementRequired = event.currentTarget.checked;
                       setPolicyForm((previous) => ({
                         ...previous,
-                        providerSettlementRequired: event.currentTarget.checked
-                      }))
-                    }
+                        providerSettlementRequired
+                      }));
+                    }}
                   />
                   <span>Require provider settlement/reconciliation clearance</span>
                 </label>
@@ -346,23 +353,27 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
                 <label className="adminFinanceField adminFinanceFieldWide">
                   <span>Astrologer UUID</span>
                   <input
+                    name="astrologerUserId"
                     value={riskForm.astrologerUserId}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const astrologerUserId = event.currentTarget.value;
                       setRiskForm((previous) => ({
                         ...previous,
-                        astrologerUserId: event.currentTarget.value
-                      }))
-                    }
+                        astrologerUserId
+                      }));
+                    }}
                     placeholder="22222222-2222-4222-8222-222222222222"
                   />
                 </label>
                 <RiskTierSelect
                   label="Base tier"
+                  name="astrologerBaseRiskTier"
                   value={riskForm.riskTier}
                   onChange={(riskTier) => setRiskForm((previous) => ({ ...previous, riskTier }))}
                 />
                 <RiskTierSelect
                   label="Manual tier"
+                  name="astrologerManualRiskTier"
                   value={riskForm.manualRiskTier}
                   onChange={(manualRiskTier) =>
                     setRiskForm((previous) => ({ ...previous, manualRiskTier }))
@@ -370,6 +381,7 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
                 />
                 <NumberField
                   label="Hold override, hours"
+                  name="astrologerHoldDurationHoursOverride"
                   value={riskForm.holdDurationHoursOverride}
                   min={0}
                   max={4320}
@@ -379,6 +391,7 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
                 />
                 <NumberField
                   label="Reserve override, bps"
+                  name="astrologerReserveBpsOverride"
                   value={riskForm.reserveBpsOverride}
                   min={0}
                   max={10000}
@@ -388,6 +401,7 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
                 />
                 <NumberField
                   label="Reserve release override, days"
+                  name="astrologerReserveReleaseDelayDaysOverride"
                   value={riskForm.reserveReleaseDelayDaysOverride}
                   min={0}
                   max={540}
@@ -401,27 +415,31 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
                 <label className="adminFinanceField adminFinanceFieldWide">
                   <span>Manual reason</span>
                   <textarea
+                    name="astrologerManualOverrideReason"
                     value={riskForm.manualOverrideReason}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const manualOverrideReason = event.currentTarget.value;
                       setRiskForm((previous) => ({
                         ...previous,
-                        manualOverrideReason: event.currentTarget.value
-                      }))
-                    }
+                        manualOverrideReason
+                      }));
+                    }}
                     placeholder="Chargeback, refund or quality risk evidence"
                     rows={3}
                   />
                 </label>
                 <label className="adminFinanceToggle adminFinanceFieldWide">
                   <input
+                    name="astrologerProviderSettlementRequiredOverride"
                     type="checkbox"
                     checked={riskForm.providerSettlementRequiredOverride}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const providerSettlementRequiredOverride = event.currentTarget.checked;
                       setRiskForm((previous) => ({
                         ...previous,
-                        providerSettlementRequiredOverride: event.currentTarget.checked
-                      }))
-                    }
+                        providerSettlementRequiredOverride
+                      }));
+                    }}
                   />
                   <span>Require provider clearance for this astrologer</span>
                 </label>
@@ -456,6 +474,7 @@ function StatusCard(props: { readonly label: string; readonly value: string; rea
 
 function RiskTierSelect(props: {
   readonly label?: string;
+  readonly name: string;
   readonly value: RiskTier;
   readonly onChange: (riskTier: RiskTier) => void;
 }) {
@@ -463,8 +482,12 @@ function RiskTierSelect(props: {
     <label className="adminFinanceField">
       <span>{props.label ?? "Risk tier"}</span>
       <select
+        name={props.name}
         value={props.value}
-        onChange={(event) => props.onChange(event.currentTarget.value as RiskTier)}
+        onChange={(event) => {
+          const riskTier = event.currentTarget.value as RiskTier;
+          props.onChange(riskTier);
+        }}
       >
         {financePolicyRiskTierOptions.map((option) => (
           <option key={option.value} value={option.value}>
@@ -478,6 +501,7 @@ function RiskTierSelect(props: {
 
 function NumberField(props: {
   readonly label: string;
+  readonly name: string;
   readonly value: number;
   readonly min: number;
   readonly max: number;
@@ -487,11 +511,15 @@ function NumberField(props: {
     <label className="adminFinanceField">
       <span>{props.label}</span>
       <input
+        name={props.name}
         type="number"
         min={props.min}
         max={props.max}
         value={props.value}
-        onChange={(event) => props.onChange(Number(event.currentTarget.value))}
+        onChange={(event) => {
+          const value = Number(event.currentTarget.value);
+          props.onChange(value);
+        }}
       />
     </label>
   );

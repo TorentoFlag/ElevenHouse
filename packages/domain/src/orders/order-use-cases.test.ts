@@ -47,7 +47,13 @@ describe("createOrder", () => {
       grossAmount: { amountMinor: 500_00, currency: "RUB" },
       platformFee: { amountMinor: 50_00, currency: "RUB" },
       astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" },
-      financePolicySnapshotId: policyId
+      financePolicySnapshotId: policyId,
+      financePolicyRiskTier: "standard",
+      financePolicyHoldDurationHours: 48,
+      financePolicyReserveBps: 0,
+      financePolicyReserveReleaseDelayDays: 0,
+      financePolicyPlatformFeeBps: 1_000,
+      financePolicyProviderSettlementRequired: true
     });
 
     expect(harness.orderStore.executeCreateOrder).toHaveBeenCalledWith(
@@ -65,7 +71,48 @@ describe("createOrder", () => {
       status: "pending_payment",
       grossAmount: { amountMinor: 500_00, currency: "RUB" },
       platformFee: { amountMinor: 50_00, currency: "RUB" },
-      astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" }
+      astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" },
+      financePolicyRiskTier: "standard",
+      financePolicyHoldDurationHours: 48,
+      financePolicyReserveBps: 0,
+      financePolicyReserveReleaseDelayDays: 0,
+      financePolicyPlatformFeeBps: 1_000,
+      financePolicyProviderSettlementRequired: true
+    });
+  });
+
+  it("snapshots effective risk profile overrides on the created order", async () => {
+    const harness = createHarness({
+      effectivePolicy: {
+        ...effectivePolicy(),
+        riskTier: "high",
+        holdDurationHours: 168,
+        reserveBps: 2_000,
+        reserveReleaseDelayDays: 90,
+        platformFeeBps: 1_500,
+        providerSettlementRequired: false
+      }
+    });
+
+    await createOrder({
+      ...harness.dependencies,
+      clientUserId,
+      request: { astrologerUserId, productId, directLinkIntentId },
+      idempotencyKey: "order-create:client:risk-override-1",
+      now,
+      idGenerator: () => orderId
+    });
+
+    expect(harness.orderStore.createdInputs[0]).toMatchObject({
+      financePolicySnapshotId: policyId,
+      financePolicyRiskTier: "high",
+      financePolicyHoldDurationHours: 168,
+      financePolicyReserveBps: 2_000,
+      financePolicyReserveReleaseDelayDays: 90,
+      financePolicyPlatformFeeBps: 1_500,
+      financePolicyProviderSettlementRequired: false,
+      platformFee: { amountMinor: 75_00, currency: "RUB" },
+      astrologerNetAmount: { amountMinor: 425_00, currency: "RUB" }
     });
   });
 
@@ -259,6 +306,7 @@ function createHarness(options: {
   readonly hasRelationship?: boolean;
   readonly product?: Product | null;
   readonly hasPolicy?: boolean;
+  readonly effectivePolicy?: EffectiveFinancePolicy;
   readonly replay?: boolean;
   readonly conflict?: boolean;
 } = {}) {
@@ -272,7 +320,7 @@ function createHarness(options: {
   } satisfies Pick<ProductStore, "findByOwnerAndId">;
   const financePolicyStore = {
     findEffectivePolicyForAstrologer: vi.fn(async () =>
-      options.hasPolicy === false ? null : effectivePolicy()
+      options.hasPolicy === false ? null : (options.effectivePolicy ?? effectivePolicy())
     )
   } satisfies Pick<FinancePolicyStore, "findEffectivePolicyForAstrologer">;
   const orderStore = createOrderStore({ replay: options.replay, conflict: options.conflict });
@@ -313,6 +361,7 @@ function createOrderStore(options: {
     }),
     create: vi.fn(),
     updateStatus: vi.fn(),
+    applyFinancePolicy: vi.fn(),
     findById: vi.fn()
   };
 }
@@ -347,6 +396,12 @@ function createOrderRecordInput(
     platformFee: { amountMinor: 50_00, currency: "RUB" },
     astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" },
     financePolicySnapshotId: policyId,
+    financePolicyRiskTier: "standard",
+    financePolicyHoldDurationHours: 48,
+    financePolicyReserveBps: 0,
+    financePolicyReserveReleaseDelayDays: 0,
+    financePolicyPlatformFeeBps: 1_000,
+    financePolicyProviderSettlementRequired: true,
     now: now.toISOString(),
     ...overrides
   };
@@ -365,6 +420,12 @@ function toOrder(input: CreateFinanceOrderRecordInput): FinanceOrder {
     platformFee: input.platformFee,
     astrologerNetAmount: input.astrologerNetAmount,
     financePolicySnapshotId: input.financePolicySnapshotId,
+    financePolicyRiskTier: input.financePolicyRiskTier,
+    financePolicyHoldDurationHours: input.financePolicyHoldDurationHours,
+    financePolicyReserveBps: input.financePolicyReserveBps,
+    financePolicyReserveReleaseDelayDays: input.financePolicyReserveReleaseDelayDays,
+    financePolicyPlatformFeeBps: input.financePolicyPlatformFeeBps,
+    financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
     createdAt: input.now,
     updatedAt: input.now
   };

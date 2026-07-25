@@ -3,6 +3,7 @@ import type {
   FinanceIdempotentCommand,
   FinanceIdempotentCommandResult
 } from "../finance/shared/idempotent-command";
+import type { RiskTier } from "../finance-policies";
 
 export type OrderStatus =
   | "draft"
@@ -27,6 +28,12 @@ export type FinanceOrder = {
   readonly platformFee: Money;
   readonly astrologerNetAmount: Money;
   readonly financePolicySnapshotId: string;
+  readonly financePolicyRiskTier: RiskTier;
+  readonly financePolicyHoldDurationHours: number;
+  readonly financePolicyReserveBps: number;
+  readonly financePolicyReserveReleaseDelayDays: number;
+  readonly financePolicyPlatformFeeBps: number;
+  readonly financePolicyProviderSettlementRequired: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -43,12 +50,30 @@ export type CreateFinanceOrderRecordInput = {
   readonly platformFee: Money;
   readonly astrologerNetAmount: Money;
   readonly financePolicySnapshotId: string;
+  readonly financePolicyRiskTier: RiskTier;
+  readonly financePolicyHoldDurationHours: number;
+  readonly financePolicyReserveBps: number;
+  readonly financePolicyReserveReleaseDelayDays: number;
+  readonly financePolicyPlatformFeeBps: number;
+  readonly financePolicyProviderSettlementRequired: boolean;
   readonly now: string;
 };
 
 export type UpdateFinanceOrderStatusInput = {
   readonly orderId: string;
   readonly status: OrderStatus;
+  readonly now: string;
+};
+
+export type ApplyFinancePolicyToOrderInput = {
+  readonly orderId: string;
+  readonly financePolicySnapshotId: string;
+  readonly financePolicyRiskTier: RiskTier;
+  readonly financePolicyHoldDurationHours: number;
+  readonly financePolicyReserveBps: number;
+  readonly financePolicyReserveReleaseDelayDays: number;
+  readonly financePolicyPlatformFeeBps: number;
+  readonly financePolicyProviderSettlementRequired: boolean;
   readonly now: string;
 };
 
@@ -59,5 +84,8 @@ export type FinanceOrderStore = {
   ) => Promise<FinanceIdempotentCommandResult<FinanceOrder>>;
   readonly create: (input: CreateFinanceOrderRecordInput) => Promise<FinanceOrder>;
   readonly updateStatus: (input: UpdateFinanceOrderStatusInput) => Promise<FinanceOrder | null>;
+  readonly applyFinancePolicy: (
+    input: ApplyFinancePolicyToOrderInput
+  ) => Promise<FinanceOrder | null>;
   readonly findById: (orderId: string) => Promise<FinanceOrder | null>;
 };

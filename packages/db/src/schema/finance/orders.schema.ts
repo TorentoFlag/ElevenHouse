@@ -1,5 +1,16 @@
 import { sql } from "drizzle-orm";
-import { bigint, check, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  check,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid
+} from "drizzle-orm/pg-core";
 import { clientJoinIntents } from "../clients/client-join-intents.schema";
 import { users } from "../identity/accounts.schema";
 import { products } from "../products/products.schema";
@@ -8,7 +19,8 @@ import {
   financeCurrencyValues,
   financeSafeIntegerMinorUnitMax,
   formatFinanceSqlValues,
-  orderStatusValues
+  orderStatusValues,
+  riskTierValues
 } from "./finance-values";
 import { financePolicies } from "./policies.schema";
 
@@ -41,6 +53,22 @@ export const orders = pgTable(
     financePolicySnapshotId: uuid("finance_policy_snapshot_id")
       .notNull()
       .references(() => financePolicies.id, { onDelete: "restrict" }),
+    financePolicyRiskTier: text("finance_policy_risk_tier").notNull().default("standard"),
+    financePolicyHoldDurationHours: integer("finance_policy_hold_duration_hours")
+      .notNull()
+      .default(48),
+    financePolicyReserveBps: integer("finance_policy_reserve_bps").notNull().default(0),
+    financePolicyReserveReleaseDelayDays: integer("finance_policy_reserve_release_delay_days")
+      .notNull()
+      .default(0),
+    financePolicyPlatformFeeBps: integer("finance_policy_platform_fee_bps")
+      .notNull()
+      .default(1000),
+    financePolicyProviderSettlementRequired: boolean(
+      "finance_policy_provider_settlement_required"
+    )
+      .notNull()
+      .default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -60,6 +88,26 @@ export const orders = pgTable(
     check(
       "orders_money_allocation_check",
       sql`${table.grossAmountMinor} = ${table.platformFeeAmountMinor} + ${table.astrologerNetAmountMinor}`
+    ),
+    check(
+      "orders_finance_policy_risk_tier_check",
+      sql`${table.financePolicyRiskTier} in ${sql.raw(formatFinanceSqlValues(riskTierValues))}`
+    ),
+    check(
+      "orders_finance_policy_hold_duration_check",
+      sql`${table.financePolicyHoldDurationHours} between 0 and 4320`
+    ),
+    check(
+      "orders_finance_policy_reserve_bps_check",
+      sql`${table.financePolicyReserveBps} between 0 and 10000`
+    ),
+    check(
+      "orders_finance_policy_reserve_release_check",
+      sql`${table.financePolicyReserveReleaseDelayDays} between 0 and 540`
+    ),
+    check(
+      "orders_finance_policy_platform_fee_check",
+      sql`${table.financePolicyPlatformFeeBps} between 0 and 10000`
     ),
     index("orders_client_created_idx").on(table.clientUserId, table.createdAt, table.id),
     index("orders_astrologer_created_idx").on(table.astrologerUserId, table.createdAt, table.id),

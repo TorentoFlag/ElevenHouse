@@ -14,6 +14,9 @@ export default defineConfig({
       "@elevenhouse/contracts/media": fileURLToPath(
         new URL("./packages/contracts/src/media.ts", import.meta.url)
       ),
+      "@elevenhouse/contracts/finance-policies": fileURLToPath(
+        new URL("./packages/contracts/src/finance-policies.ts", import.meta.url)
+      ),
       "@elevenhouse/contracts": fileURLToPath(
         new URL("./packages/contracts/src/index.ts", import.meta.url)
       ),

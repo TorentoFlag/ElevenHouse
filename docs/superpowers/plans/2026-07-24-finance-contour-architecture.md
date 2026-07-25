@@ -141,7 +141,7 @@ When a client buys from an astrologer, ElevenHouse should:
 - [x] 2026-07-24: Task 6 payment-worker webhook ingestion implemented and verified with focused signature/parser/processor tests and affected package typechecks; review fixes added `/v1/payments/{id}` lookup, preflight duplicate webhook detection and real Arc Pay `payment.pending_3ds`/`payment.expired` event support. No worker process, database integration, or live Arc Pay webhook was started.
 - [x] 2026-07-24: Task 7 captured-sale ledger posting implemented and verified with focused domain/db/worker tests and affected package typechecks; review fix made captured-sale outbox inserts idempotent on `(event_type, aggregate_id)`.
 - [x] 2026-07-25: Task 8 booking lifecycle rewrite implemented for paid client flow: public paid booking hold, order booking linkage, hold-to-pending transition, captured-payment booking confirmation, terminal payment release, expired hold cleanup before new slot claims, explicit manual booking source/status and affected read contract updates. Verified with focused contracts/domain/schema/API/worker/frontend tests and affected package typechecks; local DB reset/integration tests and live runtime were not run because process/DB lifecycle authority was not granted.
-- [ ] 2026-07-25: Task 9 backend foundation implemented for finance policy/risk admin settings: domain use cases, response/request contracts, Drizzle policy version lookup, `admin-api` cookie-session auth/CSRF foundation, `GET /admin/finance/policies`, `POST /admin/finance/policies/default`, `PUT /admin/finance/policies/default` and `PUT /admin/finance/risk-profiles/:astrologerId`. Durable `AuditLog` schema/adapter and admin-web policy/risk settings UI are implemented. Verified with focused admin HTTP/frontend/schema tests and affected package/API typechecks. Remaining before Task 9 completion: later order-level policy apply endpoint for explicit current-order action and live browser/runtime proof when services may be managed.
+- [ ] 2026-07-25: Task 9 backend foundation implemented for finance policy/risk admin settings: domain use cases, response/request contracts, Drizzle policy version lookup, `admin-api` cookie-session auth/CSRF foundation, `GET /admin/finance/policies`, `POST /admin/finance/policies/default`, `PUT /admin/finance/policies/default`, `PUT /admin/finance/risk-profiles/:astrologerId` and `POST /admin/finance/orders/:orderId/apply-risk-policy`. Durable `AuditLog` schema/adapter and admin-web policy/risk settings UI are implemented. Order records now store effective risk/hold/reserve snapshot fields at creation time; current-order policy application is explicit and audited. Verified with focused admin HTTP/frontend/schema tests and affected package/API typechecks. Remaining before Task 9 completion: live browser/runtime proof when services may be managed.
 
 ## Surprises & Discoveries
 
@@ -168,6 +168,7 @@ When a client buys from an astrologer, ElevenHouse should:
 - 2026-07-25: Domain role assignments were typed as customer roles only, while the platform already defines internal roles and DB tests contain admin roles. `UserRoleAssignment.role` now uses platform roles; customer-facing responses explicitly filter back to customer roles.
 - 2026-07-25: Durable `AuditLog` module was absent. Added shared `audit_log_entries` schema and Drizzle adapter; finance policy admin mutations now execute policy changes and audit writes inside one DB transaction through an app-local unit of work.
 - 2026-07-25: `admin-web` was a shell placeholder. The first production admin screen is now finance policy/risk settings, wired to real `admin-api` contracts/fetch calls with credentialed cookies and CSRF headers for mutations. Runtime/browser visual acceptance remains blocked until process/browser authority is available.
+- 2026-07-25: Orders originally stored only `financePolicySnapshotId`, while effective astrologer risk profile overrides were resolved dynamically. That would make future release jobs vulnerable to current profile drift, so orders now persist effective risk/hold/reserve/platform-fee/settlement fields at creation and explicit admin apply time.
 
 ## Decision Log
 
@@ -183,12 +184,13 @@ When a client buys from an astrologer, ElevenHouse should:
 - 2026-07-24: Store provider/environment on refunds. Rationale: provider refund id uniqueness must be enforceable directly in DB as `(provider, environment, provider_refund_id)`, not indirectly through payment attempts.
 - 2026-07-24: Expose finance adapters via `@elevenhouse/db/finance` and `@elevenhouse/db/adapters/finance`. Rationale: API apps and `payment-worker` should compose the bounded context through a stable adapter entrypoint.
 - 2026-07-24: Keep `directLinkIntentId` nullable on orders. Rationale: explicit client-astrologer relationship is the authorization boundary; a join intent is evidence for initial linking, not a required artifact for every later purchase.
+- 2026-07-25: Store applied effective finance policy fields directly on orders. Rationale: release/reserve/refund workflows must use immutable order evidence, not the astrologer's mutable current risk profile.
 
 ## Outcomes & Retrospective
 
 - Tasks 1-3 are implemented for contracts, schema, domain ports and Drizzle adapter infrastructure.
 - Task 3 achieved the API/worker-facing write layer foundation: finance idempotency, order persistence, payment attempt/provider event/refund persistence with provider context guards, ledger transaction posting with wallet read-model recompute, manual/provider-ready payout records and configurable policy/risk profile access.
-- Task 9 now exposes admin finance policy/risk settings behind internal cookie-session auth and CSRF, writes durable audit entries in the same DB transaction as policy/risk changes, and has a first admin-web settings UI wired to real admin-api contracts. Remaining Task 9 work is the explicit current-order risk policy apply endpoint plus live runtime/design-parity proof.
+- Task 9 now exposes admin finance policy/risk settings behind internal cookie-session auth and CSRF, writes durable audit entries in the same DB transaction as policy/risk/order apply changes, has a first admin-web settings UI wired to real admin-api contracts, and supports explicit current-order risk policy application. Remaining Task 9 work is live runtime/design-parity proof.
 - Real Postgres integration remains pending until a task has explicit authority to manage local DB lifecycle and apply the finance baseline to the local database.
 
 ## Context and Orientation
@@ -197,7 +199,7 @@ Current relevant repository state:
 
 - `apps/public-api` has identity, client join and client profile foundations; booking/orders/payments are missing.
 - `apps/astrologer-api` has products, profile, verification submission, calendar/manual booking and platform billing; wallet/finance/payouts are missing.
-- `apps/admin-api` now has health plus the first admin finance policy/risk settings module with durable audit writes; payout queue, disputes and broader settings are still missing.
+- `apps/admin-api` now has health plus the first admin finance policy/risk settings module with durable audit writes and explicit current-order policy apply; payout queue, disputes and broader settings are still missing.
 - `apps/admin-web` now opens on finance policy/risk settings instead of the shell placeholder; broader admin navigation and live runtime proof are still missing.
 - `apps/payment-worker` has readiness only; webhook/reconciliation/release/payout jobs are missing.
 - `packages/contracts` exports platform billing/products/calendar contracts but no order/payment/wallet contracts.
@@ -717,7 +719,7 @@ sale_captured:
 - [x] Implement policy use cases and admin API module.
 - [x] Implement admin UI for settings and risk assignment with neutral copy.
 - [x] Run admin-api and admin-web focused tests.
-- [ ] Implement `POST /admin/finance/orders/:orderId/apply-risk-policy` for explicit current-order action and prove no silent retroactive recalculation.
+- [x] Implement `POST /admin/finance/orders/:orderId/apply-risk-policy` for explicit current-order action and prove no silent retroactive recalculation.
 - [ ] Complete live runtime/browser design-parity proof when process/browser authority is available.
 
 ### Task 10: Fund Release and Reserve Jobs

@@ -5,7 +5,8 @@ export type AdminFinancePolicyAuditEvent = {
   readonly action:
     | "finance_policy.updated"
     | "finance_policy.default_created"
-    | "astrologer_risk_profile.updated";
+    | "astrologer_risk_profile.updated"
+    | "finance_policy.applied_to_order";
   readonly targetId: string;
   readonly occurredAt: string;
   readonly metadata: Record<string, unknown>;
@@ -33,6 +34,9 @@ export class DurableAdminFinancePolicyAuditSink implements AdminFinancePolicyAud
 function targetTypeForAction(action: AdminFinancePolicyAuditEvent["action"]): string {
   if (action === "astrologer_risk_profile.updated") {
     return "astrologer_risk_profile";
+  }
+  if (action === "finance_policy.applied_to_order") {
+    return "finance_order";
   }
   return "finance_policy";
 }

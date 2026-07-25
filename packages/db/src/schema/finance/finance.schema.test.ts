@@ -115,7 +115,17 @@ describe("Finance persistence schema", () => {
     const payoutColumns = getTableColumns(payoutRequests);
 
     expect(orderColumns.grossAmountMinor.getSQLType()).toBe("bigint");
-    expect(Object.keys(orderColumns)).toEqual(expect.arrayContaining(["bookingId"]));
+    expect(Object.keys(orderColumns)).toEqual(
+      expect.arrayContaining([
+        "bookingId",
+        "financePolicyRiskTier",
+        "financePolicyHoldDurationHours",
+        "financePolicyReserveBps",
+        "financePolicyReserveReleaseDelayDays",
+        "financePolicyPlatformFeeBps",
+        "financePolicyProviderSettlementRequired"
+      ])
+    );
     expect(attemptColumns.amountMinor.getSQLType()).toBe("bigint");
     expect(payoutColumns.amountMinor.getSQLType()).toBe("bigint");
     expect(financeSafeIntegerMinorUnitMax).toBe(Number.MAX_SAFE_INTEGER);
@@ -124,7 +134,12 @@ describe("Finance persistence schema", () => {
         "orders_status_check",
         "orders_money_currency_check",
         "orders_money_amount_check",
-        "orders_money_allocation_check"
+        "orders_money_allocation_check",
+        "orders_finance_policy_risk_tier_check",
+        "orders_finance_policy_hold_duration_check",
+        "orders_finance_policy_reserve_bps_check",
+        "orders_finance_policy_reserve_release_check",
+        "orders_finance_policy_platform_fee_check"
       ])
     );
     expect(tableCheckNames(paymentAttempts)).toEqual(
@@ -308,6 +323,10 @@ describe("Finance persistence schema", () => {
     }
 
     expect(migration).toContain('"gross_amount_minor" bigint NOT NULL');
+    expect(migration).toContain('"finance_policy_risk_tier" text DEFAULT \'standard\' NOT NULL');
+    expect(migration).toContain(
+      'CONSTRAINT "orders_finance_policy_risk_tier_check" CHECK ("orders"."finance_policy_risk_tier" in'
+    );
     expect(migration).toContain(
       '"orders"."gross_amount_minor" >= 0 and "orders"."gross_amount_minor" <= 9007199254740991'
     );

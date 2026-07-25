@@ -48,6 +48,12 @@ describe("OrdersService", () => {
       platformFee: { amountMinor: 50_00, currency: "RUB" },
       astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" },
       financePolicySnapshotId: policyId,
+      financePolicyRiskTier: "standard",
+      financePolicyHoldDurationHours: 48,
+      financePolicyReserveBps: 0,
+      financePolicyReserveReleaseDelayDays: 0,
+      financePolicyPlatformFeeBps: 1_000,
+      financePolicyProviderSettlementRequired: true,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString()
     });
@@ -161,6 +167,7 @@ function createOrderStore(conflict = false): FinanceOrderStore {
     }),
     create: vi.fn(),
     updateStatus: vi.fn(),
+    applyFinancePolicy: vi.fn(),
     findById: vi.fn()
   };
 }
@@ -193,6 +200,12 @@ function toOrder(input: CreateFinanceOrderRecordInput): FinanceOrder {
     platformFee: input.platformFee,
     astrologerNetAmount: input.astrologerNetAmount,
     financePolicySnapshotId: input.financePolicySnapshotId,
+    financePolicyRiskTier: input.financePolicyRiskTier,
+    financePolicyHoldDurationHours: input.financePolicyHoldDurationHours,
+    financePolicyReserveBps: input.financePolicyReserveBps,
+    financePolicyReserveReleaseDelayDays: input.financePolicyReserveReleaseDelayDays,
+    financePolicyPlatformFeeBps: input.financePolicyPlatformFeeBps,
+    financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
     createdAt: input.now,
     updatedAt: input.now
   };

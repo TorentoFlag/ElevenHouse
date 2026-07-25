@@ -112,6 +112,12 @@ export async function createOrder(input: CreateOrderUseCaseInput): Promise<Finan
         platformFee: { amountMinor: feeMinor, currency: grossAmount.currency },
         astrologerNetAmount: { amountMinor: remainderMinor, currency: grossAmount.currency },
         financePolicySnapshotId: policy.policyId,
+        financePolicyRiskTier: policy.riskTier,
+        financePolicyHoldDurationHours: policy.holdDurationHours,
+        financePolicyReserveBps: policy.reserveBps,
+        financePolicyReserveReleaseDelayDays: policy.reserveReleaseDelayDays,
+        financePolicyPlatformFeeBps: policy.platformFeeBps,
+        financePolicyProviderSettlementRequired: policy.providerSettlementRequired,
         now: nowIso
       };
     }

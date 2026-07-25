@@ -34,6 +34,11 @@
       "types": "./dist/calendar.d.ts",
       "import": "./dist/calendar.js",
       "require": "./dist/calendar.js"
+    },
+    "./finance-policies": {
+      "types": "./dist/finance-policies.d.ts",
+      "import": "./dist/finance-policies.js",
+      "require": "./dist/finance-policies.js"
     }
   },
   "scripts": {

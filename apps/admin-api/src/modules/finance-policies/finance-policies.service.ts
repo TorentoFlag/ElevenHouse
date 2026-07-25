@@ -1,18 +1,30 @@
-import { BadRequestException, Inject, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException
+} from "@nestjs/common";
 import {
   astrologerRiskProfileResponseSchema,
   financePoliciesResponseSchema,
   financePolicyResponseSchema,
+  orderResponseSchema,
   riskTierValues,
   updateAstrologerRiskProfileRequestSchema,
   updateFinancePolicyRequestSchema,
   type AstrologerRiskProfileResponse,
   type FinancePoliciesResponse,
-  type FinancePolicyResponse
+  type FinancePolicyResponse,
+  type OrderResponse
 } from "@elevenhouse/contracts";
 import {
+  applyEffectiveFinancePolicyToOrder,
   assignAstrologerRiskProfile,
   ensureDefaultFinancePolicy,
+  FinancePolicyEffectivePolicyUnavailableError,
+  FinancePolicyOrderNotApplicableError,
+  FinancePolicyOrderNotFoundError,
   updateFinancePolicy
 } from "@elevenhouse/domain";
 import { SystemClock } from "../../common/system-clock.js";
@@ -109,6 +121,49 @@ export class FinancePoliciesService {
       return updatedProfile;
     });
     return astrologerRiskProfileResponseSchema.parse(profile);
+  }
+
+  async applyRiskPolicyToOrder(adminUserId: string, orderId: string): Promise<OrderResponse> {
+    const now = this.clock.now();
+    try {
+      const result = await this.unitOfWork.execute(async ({ store, orderStore, auditSink }) => {
+        const applied = await applyEffectiveFinancePolicyToOrder({
+          financePolicyStore: store,
+          orderStore,
+          orderId,
+          now
+        });
+        await auditSink.record({
+          actorUserId: adminUserId,
+          action: "finance_policy.applied_to_order",
+          targetId: applied.after.id,
+          occurredAt: now.toISOString(),
+          metadata: {
+            beforePolicySnapshotId: applied.before.financePolicySnapshotId,
+            afterPolicySnapshotId: applied.after.financePolicySnapshotId,
+            beforeRiskTier: applied.before.financePolicyRiskTier,
+            afterRiskTier: applied.after.financePolicyRiskTier,
+            holdDurationHours: applied.after.financePolicyHoldDurationHours,
+            reserveBps: applied.after.financePolicyReserveBps,
+            reserveReleaseDelayDays: applied.after.financePolicyReserveReleaseDelayDays,
+            providerSettlementRequired: applied.after.financePolicyProviderSettlementRequired
+          }
+        });
+        return applied.after;
+      });
+      return orderResponseSchema.parse(result);
+    } catch (error) {
+      if (error instanceof FinancePolicyOrderNotFoundError) {
+        throw new NotFoundException(error.code);
+      }
+      if (
+        error instanceof FinancePolicyOrderNotApplicableError ||
+        error instanceof FinancePolicyEffectivePolicyUnavailableError
+      ) {
+        throw new ConflictException(error.code);
+      }
+      throw error;
+    }
   }
 }
 

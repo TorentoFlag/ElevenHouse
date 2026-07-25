@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import type { FinanceOrder, FinanceOrderStore } from "../orders";
 import type {
   AstrologerRiskProfile,
+  EffectiveFinancePolicy,
   FinancePolicySnapshot,
   FinancePolicyStore,
   RiskTier
@@ -41,6 +43,33 @@ export class FinancePolicyValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "FinancePolicyValidationError";
+  }
+}
+
+export class FinancePolicyOrderNotFoundError extends Error {
+  readonly code = "finance_policy_order_not_found";
+
+  constructor() {
+    super("Finance order was not found");
+    this.name = "FinancePolicyOrderNotFoundError";
+  }
+}
+
+export class FinancePolicyOrderNotApplicableError extends Error {
+  readonly code = "finance_policy_order_not_applicable";
+
+  constructor() {
+    super("Finance policy can only be applied to an active unresolved order");
+    this.name = "FinancePolicyOrderNotApplicableError";
+  }
+}
+
+export class FinancePolicyEffectivePolicyUnavailableError extends Error {
+  readonly code = "finance_policy_effective_policy_unavailable";
+
+  constructor() {
+    super("Effective finance policy is not available for this order");
+    this.name = "FinancePolicyEffectivePolicyUnavailableError";
   }
 }
 
@@ -107,6 +136,36 @@ export async function assignAstrologerRiskProfile(input: {
   });
 }
 
+export async function applyEffectiveFinancePolicyToOrder(input: {
+  readonly orderStore: Pick<FinanceOrderStore, "findById" | "applyFinancePolicy">;
+  readonly financePolicyStore: Pick<FinancePolicyStore, "findEffectivePolicyForAstrologer">;
+  readonly orderId: string;
+  readonly now: Date;
+}): Promise<{ readonly before: FinanceOrder; readonly after: FinanceOrder }> {
+  const order = await input.orderStore.findById(input.orderId);
+  if (!order) throw new FinancePolicyOrderNotFoundError();
+  if (!isPolicyApplicableOrderStatus(order.status)) {
+    throw new FinancePolicyOrderNotApplicableError();
+  }
+
+  const policy = await input.financePolicyStore.findEffectivePolicyForAstrologer(
+    order.astrologerUserId
+  );
+  if (!policy) throw new FinancePolicyEffectivePolicyUnavailableError();
+
+  const updated = await input.orderStore.applyFinancePolicy({
+    orderId: order.id,
+    ...toOrderPolicyInput(policy),
+    now: input.now.toISOString()
+  });
+  if (!updated) {
+    const current = await input.orderStore.findById(input.orderId);
+    if (current) throw new FinancePolicyOrderNotApplicableError();
+    throw new FinancePolicyOrderNotFoundError();
+  }
+  return { before: order, after: updated };
+}
+
 async function createPolicySnapshot(
   store: Pick<FinancePolicyStore, "findLatestPolicyVersion" | "createPolicySnapshot">,
   input: {
@@ -130,6 +189,22 @@ async function createPolicySnapshot(
     createdByUserId: input.adminUserId,
     now: input.now.toISOString()
   });
+}
+
+function toOrderPolicyInput(policy: EffectiveFinancePolicy) {
+  return {
+    financePolicySnapshotId: policy.policyId,
+    financePolicyRiskTier: policy.riskTier,
+    financePolicyHoldDurationHours: policy.holdDurationHours,
+    financePolicyReserveBps: policy.reserveBps,
+    financePolicyReserveReleaseDelayDays: policy.reserveReleaseDelayDays,
+    financePolicyPlatformFeeBps: policy.platformFeeBps,
+    financePolicyProviderSettlementRequired: policy.providerSettlementRequired
+  };
+}
+
+function isPolicyApplicableOrderStatus(status: FinanceOrder["status"]): boolean {
+  return status === "pending_payment" || status === "paid" || status === "fulfilled";
 }
 
 function validatePolicyCommand(command: UpdateFinancePolicyCommand): void {

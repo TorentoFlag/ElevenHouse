@@ -178,6 +178,12 @@ function createHarness(options: { readonly failOutbox?: boolean } = {}) {
     platformFee: { amountMinor: 7_000, currency: "RUB" },
     astrologerNetAmount: { amountMinor: 43_000, currency: "RUB" },
     financePolicySnapshotId: "88888888-8888-4888-8888-888888888888",
+    financePolicyRiskTier: "standard",
+    financePolicyHoldDurationHours: 48,
+    financePolicyReserveBps: 0,
+    financePolicyReserveReleaseDelayDays: 0,
+    financePolicyPlatformFeeBps: 1_400,
+    financePolicyProviderSettlementRequired: true,
     createdAt: now,
     updatedAt: now
   };

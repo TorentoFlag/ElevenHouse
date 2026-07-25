@@ -369,6 +369,12 @@ describe("createDrizzleAuthSessionAuthenticationStore", () => {
           userId: "user_1",
           role: "client",
           assignedAt: "2026-06-14T10:01:00.000Z"
+        },
+        {
+          id: "role_admin",
+          userId: "user_1",
+          role: "admin",
+          assignedAt: "2026-06-14T10:01:00.000Z"
         }
       ]
     });

@@ -12,7 +12,8 @@ import {
 import type {
   AstrologerRiskProfileResponse,
   FinancePoliciesResponse,
-  FinancePolicyResponse
+  FinancePolicyResponse,
+  OrderResponse
 } from "@elevenhouse/contracts";
 import { AdminSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AdminSessionRequest } from "../identity/session/identity-current-session.service";
@@ -52,6 +53,15 @@ export class FinancePoliciesController {
     @Body() body: unknown
   ): Promise<AstrologerRiskProfileResponse> {
     return this.service.updateRiskProfile(requireAdminUserId(request), astrologerId, body);
+  }
+
+  @Post("orders/:orderId/apply-risk-policy")
+  @RequireCsrf()
+  applyRiskPolicyToOrder(
+    @Req() request: AdminSessionRequest,
+    @Param("orderId") orderId: string
+  ): Promise<OrderResponse> {
+    return this.service.applyRiskPolicyToOrder(requireAdminUserId(request), orderId);
   }
 }
 

@@ -9,7 +9,7 @@ import {
   type FinancePolicyResponse,
   type UpdateAstrologerRiskProfileRequest,
   type UpdateFinancePolicyRequest
-} from "@elevenhouse/contracts";
+} from "@elevenhouse/contracts/finance-policies";
 
 export type AdminFinancePoliciesApi = {
   readonly listPolicies: () => Promise<FinancePoliciesResponse>;

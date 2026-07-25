@@ -3,7 +3,7 @@ import type {
   RiskTier,
   UpdateAstrologerRiskProfileRequest,
   UpdateFinancePolicyRequest
-} from "@elevenhouse/contracts";
+} from "@elevenhouse/contracts/finance-policies";
 
 export const financePolicyRiskTierOptions = [
   { value: "low", label: "Low", tone: "positive" },
