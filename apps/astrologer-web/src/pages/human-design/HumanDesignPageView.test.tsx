@@ -24,6 +24,10 @@ describe("HumanDesignPageView", () => {
     const mobileBlock = css.match(/@media \(max-width: 820px\) \{[\s\S]*?\n\}/)?.[0] ?? "";
 
     expect(mobileBlock).toContain("margin: -32px -16px;");
+    expect(mobileBlock).toContain("grid-template-columns: repeat(3, minmax(0, 1fr));");
+    expect(mobileBlock).toContain("overflow: hidden;");
+    expect(mobileBlock).toContain("font-size: 9.5px;");
+    expect(mobileBlock).not.toContain("overflow-x: auto;");
   });
 
   it("uses CRM client selection and hides side columns until a client is selected", () => {
@@ -48,6 +52,26 @@ describe("HumanDesignPageView", () => {
     expect(textOf(view)).not.toContain("Birth data берутся из карточки клиента");
     expect(textOf(view)).not.toContain("Поддержан individual preview из CRM birth data.");
     expect(textOf(view)).toContain("Выберите клиента и рассчитайте бодиграф");
+  });
+
+  it("keeps empty states free of technical preview copy", () => {
+    const partnerEmpty = HumanDesignPageView({
+      ...baseProps(),
+      mode: "compatibility",
+      selectedClient: clientOption("22222222-2222-4222-8222-222222222222", "Марина Краснова")
+    });
+    const transitEmpty = HumanDesignPageView({
+      ...baseProps(),
+      mode: "transit",
+      selectedClient: clientOption("22222222-2222-4222-8222-222222222222", "Марина Краснова")
+    });
+    const combinedText = `${textOf(partnerEmpty)} ${textOf(transitEmpty)}`;
+
+    expect(textOf(partnerEmpty)).toContain("Выберите двух клиентов и рассчитайте связь");
+    expect(textOf(transitEmpty)).toContain("Откройте сохранённый individual расчёт");
+    expect(combinedText).not.toContain("preview");
+    expect(combinedText).not.toContain("CRM bodygraph");
+    expect(combinedText).not.toContain("natal");
   });
 
   it("does not render the toolbar status summary for missing client birth data", () => {
@@ -228,6 +252,7 @@ describe("HumanDesignPageView", () => {
     expect(pickers).toHaveLength(2);
     expect(pickers.map((picker) => picker.props.label)).toEqual(["Клиент", "Партнёр"]);
     expect(pickers[1]?.props.excludeClientIds).toEqual(["22222222-2222-4222-8222-222222222222"]);
+    expect(pickers[1]?.props.emptyMessage).toBe("Нет доступных партнёров");
     expect(text).toContain("Партнёрский разбор");
     expect(text).toContain("Электромагнитика");
     expect(text).toContain("Канал 43–23");

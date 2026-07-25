@@ -110,11 +110,6 @@ export function HumanDesignPageView({
   const canRunPrimaryAction = isTransitMode
     ? Boolean(selectedCalculationId)
     : Boolean(selectedClient) && (mode !== "compatibility" || Boolean(selectedPartnerClient));
-  const emptyStateSubtitle = isTransitMode
-    ? "Transit overlay строится поверх сохранённого natal результата."
-    : mode === "compatibility"
-      ? "Партнёрский preview использует два CRM bodygraph результата."
-      : null;
   const clientRailMessage = !selectedClient
     ? null
     : !selectedClient.hasBirthDate
@@ -205,6 +200,7 @@ export function HumanDesignPageView({
               excludeClientIds={selectedClient ? [selectedClient.value] : []}
               requireBirthDate={false}
               fullWidth
+              emptyMessage="Нет доступных партнёров"
               disabled={isBusy}
               onSelect={onSelectPartnerClient}
             />
@@ -469,7 +465,6 @@ export function HumanDesignPageView({
                   ? "Выберите двух клиентов и рассчитайте связь"
                   : "Выберите клиента и рассчитайте бодиграф"}
               </strong>
-              {emptyStateSubtitle ? <span>{emptyStateSubtitle}</span> : null}
             </div>
           )}
         </section>

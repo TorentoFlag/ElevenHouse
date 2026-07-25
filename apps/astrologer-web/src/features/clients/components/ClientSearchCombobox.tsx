@@ -24,6 +24,7 @@ export type ClientSearchComboboxProps = {
   readonly disabled?: boolean;
   readonly requireBirthDate?: boolean;
   readonly fullWidth?: boolean;
+  readonly emptyMessage?: string;
   readonly onSelect: (client: ClientSelectOption) => void;
 };
 
@@ -37,6 +38,7 @@ export function ClientSearchCombobox({
   disabled = false,
   requireBirthDate = true,
   fullWidth = false,
+  emptyMessage,
   onSelect
 }: ClientSearchComboboxProps) {
   const generatedId = useId();
@@ -106,6 +108,7 @@ export function ClientSearchCombobox({
       disabled={disabled}
       requireBirthDate={requireBirthDate}
       fullWidth={fullWidth}
+      emptyMessage={emptyMessage}
       loadMoreRef={(node) => {
         loadMoreNodeRef.current = node;
       }}

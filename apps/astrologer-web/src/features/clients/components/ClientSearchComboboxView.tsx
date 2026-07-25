@@ -22,6 +22,7 @@ export type ClientSearchComboboxViewProps = {
   readonly disabled?: boolean;
   readonly requireBirthDate?: boolean;
   readonly fullWidth?: boolean;
+  readonly emptyMessage?: string;
   readonly loadMoreRef?: (node: HTMLDivElement | null) => void;
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly onSearchChange: (value: string) => void;
@@ -47,6 +48,7 @@ export function ClientSearchComboboxView({
   disabled = false,
   requireBirthDate = true,
   fullWidth = false,
+  emptyMessage = "Клиентов пока нет",
   loadMoreRef,
   onOpenChange,
   onSearchChange,
@@ -139,7 +141,7 @@ export function ClientSearchComboboxView({
               {isInitialLoading ? <div className={styles.status}>Загружаем клиентов...</div> : null}
               {!isInitialLoading && clients.length === 0 ? (
                 <div className={styles.status}>
-                  {searchQuery.trim() ? "Ничего не найдено" : "Клиентов пока нет"}
+                  {searchQuery.trim() ? "Ничего не найдено" : emptyMessage}
                 </div>
               ) : null}
               {clients.map((client) => {

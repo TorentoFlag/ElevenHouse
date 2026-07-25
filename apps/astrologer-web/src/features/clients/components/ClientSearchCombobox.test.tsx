@@ -94,6 +94,24 @@ describe("ClientSearchComboboxView", () => {
     expect(includesText(endView.props, "Все найденные клиенты загружены")).toBe(false);
   });
 
+  it("uses a custom empty message without changing search-empty copy", () => {
+    const emptyView = ClientSearchComboboxView({
+      ...baseProps(),
+      isOpen: true,
+      emptyMessage: "Нет доступных партнёров"
+    });
+    const searchEmptyView = ClientSearchComboboxView({
+      ...baseProps(),
+      isOpen: true,
+      emptyMessage: "Нет доступных партнёров",
+      searchQuery: "мар"
+    });
+
+    expect(includesText(emptyView.props, "Нет доступных партнёров")).toBe(true);
+    expect(includesText(searchEmptyView.props, "Ничего не найдено")).toBe(true);
+    expect(includesText(searchEmptyView.props, "Нет доступных партнёров")).toBe(false);
+  });
+
   it("keeps the trigger shrink-safe inside dense toolbar rows", () => {
     const css = readFileSync(new URL("./ClientSearchCombobox.module.css", import.meta.url), "utf8");
     const rootRule = getCssRule(css, ".root");

@@ -793,8 +793,20 @@
   }
 
   .modeTabs {
+    display: grid;
     width: 100%;
-    overflow-x: auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+  }
+
+  .modeActive,
+  .modeButton,
+  .modeDisabled {
+    min-width: 0;
+    padding: 0 3px;
+    overflow: hidden;
+    font-size: 9.5px;
+    text-align: center;
   }
 
   .body {
