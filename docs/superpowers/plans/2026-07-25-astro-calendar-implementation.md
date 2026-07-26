@@ -327,9 +327,9 @@
 
 **Implementation**
 
-- [ ] Add typed API client for range read and generation/retry.
-- [ ] Add query state for selected range, timezone, scope, client filters and event types.
-- [ ] Add generation state matrix:
+- [x] Add typed API client for range read and generation/retry.
+- [x] Add query state for selected range, timezone, scope, client filters and event types.
+- [x] Add generation state matrix:
   - no data;
   - no time;
   - approximate time;
@@ -338,21 +338,21 @@
   - stale after client/settings change;
   - already calculated;
   - recalculation.
-- [ ] Fetch dictionary entries by deterministic `dictionaryCodes`.
-- [ ] Render missing dictionary entries honestly with a create action.
+- [x] Fetch dictionary entries by deterministic `dictionaryCodes`.
+- [x] Render missing dictionary entries honestly with a create action.
 - [ ] Keep future modes visible only as disabled honest affordances when present in design.
 
 **Tests**
 
-- [ ] API parser rejects malformed response.
-- [ ] Missing dictionary entries are surfaced.
-- [ ] Stale response enables recalculation affordance.
-- [ ] Calculating state does not show fake queued completion.
+- [x] API parser rejects malformed response.
+- [x] Missing dictionary entries are surfaced.
+- [x] Stale response enables recalculation affordance.
+- [x] Calculating state does not show fake queued completion.
 
 **Verification**
 
-- [ ] Frontend feature tests.
-- [ ] Typecheck for affected app/package.
+- [x] Frontend feature tests.
+- [x] Typecheck for affected app/package.
 
 ---
 
@@ -439,4 +439,3 @@
 
 - [ ] `pnpm docs:check`
 - [ ] `git diff --check -- <owned-doc-paths>`
-
