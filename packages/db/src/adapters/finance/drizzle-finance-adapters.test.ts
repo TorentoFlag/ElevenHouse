@@ -6,7 +6,8 @@ import {
   LedgerAccountShapeError,
   LedgerUnbalancedTransactionError,
   PayoutStatusEvidenceError,
-  type FinanceIdempotentCommand
+  type FinanceIdempotentCommand,
+  type ReleasableCapturedSaleHold
 } from "@elevenhouse/domain";
 import { financeIdempotencyCommands } from "../../schema";
 import {
@@ -15,7 +16,9 @@ import {
 } from "./drizzle-finance-command-store";
 import {
   assertFinanceLedgerBalanced,
-  assertLedgerAccountShape
+  assertLedgerAccountShape,
+  createCapturedSaleHoldReleaseCommand,
+  replayCapturedSaleHoldReleaseResult
 } from "./drizzle-ledger-store";
 import {
   assertProviderEventPaymentMatchesAttempt,
@@ -177,6 +180,39 @@ describe("finance adapter guardrails", () => {
         transferredAt: now
       })
     ).not.toThrow();
+  });
+
+  it("uses order-scoped finance idempotency for captured sale hold releases", () => {
+    const hold: ReleasableCapturedSaleHold = {
+      orderId: "22222222-2222-4222-8222-222222222222",
+      astrologerUserId: "44444444-4444-4444-8444-444444444444",
+      amount: { amountMinor: 43_000, currency: "RUB" },
+      capturedAt: "2026-07-24T12:00:00.000Z",
+      holdReleaseAt: "2026-07-26T12:00:00.000Z",
+      paymentAttemptId: "11111111-1111-4111-8111-111111111111",
+      providerEventId: "provider-event-1"
+    };
+
+    expect(
+      createCapturedSaleHoldReleaseCommand({
+        hold,
+        now: "2026-07-27T12:00:00.000Z",
+        commandExpiresAt: "2026-08-26T12:00:00.000Z"
+      })
+    ).toEqual({
+      scope: "finance.hold-release",
+      idempotencyKey: "order:22222222-2222-4222-8222-222222222222",
+      actorUserId: null,
+      requestHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      now: "2026-07-27T12:00:00.000Z",
+      expiresAt: "2026-08-26T12:00:00.000Z"
+    });
+    expect(
+      replayCapturedSaleHoldReleaseResult({
+        ledgerTransactionId: "99999999-9999-4999-8999-999999999999"
+      })
+    ).toEqual({ transactionId: "99999999-9999-4999-8999-999999999999" });
+    expect(replayCapturedSaleHoldReleaseResult({})).toBeNull();
   });
 });
 

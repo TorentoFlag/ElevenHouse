@@ -15,7 +15,15 @@ const runtimeConfigSchema = z.object({
     .int()
     .positive()
     .max(3600)
-    .default(300)
+    .default(300),
+  PAYMENT_WORKER_HOLD_RELEASE_INTERVAL_MS: z.coerce.number().int().min(0).default(60_000),
+  PAYMENT_WORKER_HOLD_RELEASE_BATCH_SIZE: z.coerce.number().int().positive().max(1_000).default(100),
+  PAYMENT_WORKER_HOLD_RELEASE_COMMAND_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(31_536_000)
+    .default(2_592_000)
 });
 
 export type PaymentWorkerRuntimeConfig = {
@@ -29,6 +37,11 @@ export type PaymentWorkerRuntimeConfig = {
     readonly webhookSecret: string | null;
     readonly environment: "sandbox" | "live";
     readonly timestampToleranceSeconds: number;
+  };
+  readonly holdRelease: {
+    readonly intervalMs: number;
+    readonly batchSize: number;
+    readonly commandTtlMs: number;
   };
 };
 
@@ -59,6 +72,11 @@ export function createPaymentWorkerRuntimeConfig(
       webhookSecret: config.PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET ?? null,
       environment: config.PAYMENT_WORKER_ARC_PAY_ENVIRONMENT,
       timestampToleranceSeconds: config.PAYMENT_WORKER_ARC_PAY_TIMESTAMP_TOLERANCE_SECONDS
+    },
+    holdRelease: {
+      intervalMs: config.PAYMENT_WORKER_HOLD_RELEASE_INTERVAL_MS,
+      batchSize: config.PAYMENT_WORKER_HOLD_RELEASE_BATCH_SIZE,
+      commandTtlMs: config.PAYMENT_WORKER_HOLD_RELEASE_COMMAND_TTL_SECONDS * 1000
     }
   };
 }

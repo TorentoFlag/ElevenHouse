@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   capturePaymentProviderWebhook,
+  createCapturedSaleHoldReleaseLedgerTransaction,
   PaymentWebhookAmountMismatchError,
   PaymentWebhookCurrencyMismatchError,
+  releaseDueCapturedSaleHolds,
   type CapturedSaleOutboxEvent,
   type CapturedSaleTransactionStore,
   type CapturedSaleUnitOfWork,
@@ -32,6 +34,12 @@ describe("capturePaymentProviderWebhook", () => {
       expect.objectContaining({
         operationType: "sale_captured",
         orderId,
+        metadata: expect.objectContaining({
+          holdDurationHours: 48,
+          holdReleaseAt: "2026-07-26T12:00:00.000Z",
+          financePolicySnapshotId: "88888888-8888-4888-8888-888888888888",
+          financePolicyRiskTier: "standard"
+        }),
         entries: [
           expect.objectContaining({
             side: "debit",
@@ -45,6 +53,11 @@ describe("capturePaymentProviderWebhook", () => {
           expect.objectContaining({
             side: "credit",
             amount: { amountMinor: 43_000, currency: "RUB" },
+            metadata: expect.objectContaining({
+              holdDurationHours: 48,
+              holdReleaseAt: "2026-07-26T12:00:00.000Z",
+              financePolicySnapshotId: "88888888-8888-4888-8888-888888888888"
+            }),
             account: {
               accountType: "astrologer_pending",
               astrologerUserId: "44444444-4444-4444-8444-444444444444",
@@ -118,6 +131,111 @@ describe("capturePaymentProviderWebhook", () => {
     expect(harness.providerEvents).toHaveLength(1);
     expect(harness.ledgerTransactions).toHaveLength(1);
     expect(harness.outboxEvents).toHaveLength(4);
+  });
+});
+
+describe("releaseDueCapturedSaleHolds", () => {
+  it("releases due captured-sale holds with an idempotent command per order", async () => {
+    const hold = {
+      orderId,
+      astrologerUserId: "44444444-4444-4444-8444-444444444444",
+      amount: { amountMinor: 43_000, currency: "RUB" as const },
+      capturedAt: now,
+      holdReleaseAt: "2026-07-26T12:00:00.000Z",
+      paymentAttemptId,
+      providerEventId: "provider-event-1"
+    };
+    const releases: Parameters<
+      NonNullable<Parameters<typeof releaseDueCapturedSaleHolds>[0]["store"]["releaseCapturedSaleHold"]>
+    >[0][] = [];
+    const result = await releaseDueCapturedSaleHolds({
+      store: {
+        listReleasableCapturedSaleHolds: async (input) => {
+          expect(input).toEqual({ now: "2026-07-27T12:00:00.000Z", limit: 10 });
+          return [
+            hold,
+            { ...hold, orderId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }
+          ];
+        },
+        releaseCapturedSaleHold: async (input) => {
+          releases.push(input);
+          return {
+            kind: input.hold.orderId === orderId ? "released" : "replayed",
+            transactionId: `ledger:${input.hold.orderId}`
+          };
+        }
+      },
+      now: new Date("2026-07-27T12:00:00.000Z"),
+      limit: 10
+    });
+
+    expect(result).toEqual({
+      scanned: 2,
+      released: 1,
+      replayed: 1,
+      orderIds: [orderId, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"]
+    });
+    expect(releases).toEqual([
+      expect.objectContaining({
+        hold,
+        now: "2026-07-27T12:00:00.000Z",
+        commandExpiresAt: "2026-08-26T12:00:00.000Z"
+      }),
+      expect.objectContaining({
+        hold: expect.objectContaining({ orderId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }),
+        now: "2026-07-27T12:00:00.000Z",
+        commandExpiresAt: "2026-08-26T12:00:00.000Z"
+      })
+    ]);
+  });
+
+  it("builds a balanced pending-to-available release transaction for a captured sale hold", () => {
+    expect(
+      createCapturedSaleHoldReleaseLedgerTransaction(
+        {
+          orderId,
+          astrologerUserId: "44444444-4444-4444-8444-444444444444",
+          amount: { amountMinor: 43_000, currency: "RUB" },
+          capturedAt: now,
+          holdReleaseAt: "2026-07-26T12:00:00.000Z",
+          paymentAttemptId,
+          providerEventId: "provider-event-1"
+        },
+        "2026-07-27T12:00:00.000Z"
+      )
+    ).toEqual({
+      operationType: "funds_released",
+      orderId,
+      payoutRequestId: null,
+      occurredAt: "2026-07-27T12:00:00.000Z",
+      postedAt: "2026-07-27T12:00:00.000Z",
+      metadata: {
+        reason: "captured_sale_hold_elapsed",
+        holdReleaseAt: "2026-07-26T12:00:00.000Z",
+        providerEventId: "provider-event-1",
+        paymentAttemptId
+      },
+      entries: [
+        expect.objectContaining({
+          account: {
+            accountType: "astrologer_pending",
+            astrologerUserId: "44444444-4444-4444-8444-444444444444",
+            currency: "RUB"
+          },
+          side: "debit",
+          amount: { amountMinor: 43_000, currency: "RUB" }
+        }),
+        expect.objectContaining({
+          account: {
+            accountType: "astrologer_available",
+            astrologerUserId: "44444444-4444-4444-8444-444444444444",
+            currency: "RUB"
+          },
+          side: "credit",
+          amount: { amountMinor: 43_000, currency: "RUB" }
+        })
+      ]
+    });
   });
 });
 

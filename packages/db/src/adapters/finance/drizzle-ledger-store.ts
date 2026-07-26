@@ -1,15 +1,20 @@
+import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import {
+  createCapturedSaleHoldReleaseLedgerTransaction,
   LedgerAccountShapeError,
   LedgerUnbalancedTransactionError,
   type CreateLedgerEntryInput,
   type CreateLedgerTransactionInput,
+  type FinanceIdempotentCommand,
+  type HoldReleaseStore,
   type LedgerAccountRef,
   type LedgerAccountType,
   type LedgerEntryRecord,
   type LedgerStore,
   type LedgerTransactionRecord,
   type Money,
+  type ReleasableCapturedSaleHold,
   type WalletBalance,
   type WalletBalanceBucket
 } from "@elevenhouse/domain";
@@ -20,7 +25,12 @@ import {
   ledgerTransactions,
   walletBalanceReadModels
 } from "../../schema";
-import type { FinanceDatabase, FinanceTransaction } from "./drizzle-finance-command-store";
+import {
+  executeIdempotentFinanceCommand,
+  type FinanceDatabase,
+  type FinanceIdempotencyResult,
+  type FinanceTransaction
+} from "./drizzle-finance-command-store";
 
 type LedgerAccountRow = typeof ledgerAccounts.$inferSelect;
 type LedgerTransactionRow = typeof ledgerTransactions.$inferSelect;
@@ -46,6 +56,33 @@ export function createDrizzleLedgerTransactionStore(
   return {
     createTransaction: (input) => createLedgerTransaction(database, input),
     findWalletBalance: (astrologerUserId) => findWalletBalance(database, astrologerUserId)
+  };
+}
+
+export function createDrizzleHoldReleaseStore(database: ElevenHouseDatabase): HoldReleaseStore {
+  return {
+    listReleasableCapturedSaleHolds: (input) => listReleasableCapturedSaleHolds(database, input),
+    releaseCapturedSaleHold: async (input) => {
+      const result = await executeIdempotentFinanceCommand({
+        database,
+        command: createCapturedSaleHoldReleaseCommand(input),
+        create: async (transaction) => {
+          const ledgerTransaction = await createLedgerTransaction(
+            transaction,
+            createCapturedSaleHoldReleaseLedgerTransaction(input.hold, input.now)
+          );
+          return {
+            result: { ledgerTransactionId: ledgerTransaction.id },
+            value: { transactionId: ledgerTransaction.id }
+          };
+        },
+        replay: async (persistedResult) => replayCapturedSaleHoldReleaseResult(persistedResult)
+      });
+      return {
+        kind: result.kind === "created" ? "released" : "replayed",
+        transactionId: result.value.transactionId
+      };
+    }
   };
 }
 
@@ -103,6 +140,99 @@ export async function createLedgerTransaction(
   }
 
   return toLedgerTransactionRecord(transactionRow, insertedEntries);
+}
+
+export async function listReleasableCapturedSaleHolds(
+  database: FinanceDatabase,
+  input: { readonly now: string; readonly limit: number }
+): Promise<readonly ReleasableCapturedSaleHold[]> {
+  const rows = await database
+    .select({
+      orderId: ledgerTransactions.orderId,
+      astrologerUserId: ledgerAccounts.astrologerUserId,
+      amountMinor: ledgerEntries.amountMinor,
+      currency: ledgerEntries.currency,
+      capturedAt: ledgerTransactions.occurredAt,
+      holdReleaseAt: sql<string>`${ledgerEntries.metadata}->>'holdReleaseAt'`,
+      paymentAttemptId: sql<string | null>`${ledgerTransactions.metadata}->>'paymentAttemptId'`,
+      providerEventId: sql<string | null>`${ledgerTransactions.metadata}->>'providerEventId'`
+    })
+    .from(ledgerTransactions)
+    .innerJoin(ledgerEntries, eq(ledgerEntries.ledgerTransactionId, ledgerTransactions.id))
+    .innerJoin(ledgerAccounts, eq(ledgerAccounts.id, ledgerEntries.accountId))
+    .where(
+      and(
+        eq(ledgerTransactions.operationType, "sale_captured"),
+        eq(ledgerAccounts.accountType, "astrologer_pending"),
+        eq(ledgerEntries.side, "credit"),
+        sql`${ledgerTransactions.orderId} is not null`,
+        sql`${ledgerAccounts.astrologerUserId} is not null`,
+        sql`${ledgerEntries.metadata}->>'holdReleaseAt' is not null`,
+        sql`(${ledgerEntries.metadata}->>'holdReleaseAt')::timestamptz <= ${new Date(input.now)}`,
+        sql`not exists (
+          select 1
+          from ledger_transactions released
+          where released.operation_type = 'funds_released'
+            and released.order_id = ${ledgerTransactions.orderId}
+        )`
+      )
+    )
+    .orderBy(sql`(${ledgerEntries.metadata}->>'holdReleaseAt')::timestamptz`, ledgerTransactions.id)
+    .limit(input.limit);
+
+  return rows.map((row) => {
+    if (!row.orderId || !row.astrologerUserId) {
+      throw new Error("Due captured sale hold query returned an incomplete owner");
+    }
+    return {
+      orderId: row.orderId,
+      astrologerUserId: row.astrologerUserId,
+      amount: money(row.amountMinor, row.currency),
+      capturedAt: row.capturedAt.toISOString(),
+      holdReleaseAt: row.holdReleaseAt,
+      paymentAttemptId: row.paymentAttemptId,
+      providerEventId: row.providerEventId
+    };
+  });
+}
+
+export function createCapturedSaleHoldReleaseCommand(input: {
+  readonly hold: ReleasableCapturedSaleHold;
+  readonly now: string;
+  readonly commandExpiresAt: string;
+}): FinanceIdempotentCommand {
+  return {
+    scope: "finance.hold-release",
+    idempotencyKey: `order:${input.hold.orderId}`,
+    actorUserId: null,
+    requestHash: hashCapturedSaleHoldRelease(input.hold),
+    now: input.now,
+    expiresAt: input.commandExpiresAt
+  };
+}
+
+export function replayCapturedSaleHoldReleaseResult(
+  result: FinanceIdempotencyResult
+): { readonly transactionId: string } | null {
+  const ledgerTransactionId = result.ledgerTransactionId;
+  return typeof ledgerTransactionId === "string" ? { transactionId: ledgerTransactionId } : null;
+}
+
+function hashCapturedSaleHoldRelease(hold: ReleasableCapturedSaleHold): `sha256:${string}` {
+  return `sha256:${createHash("sha256")
+    .update(
+      JSON.stringify({
+        orderId: hold.orderId,
+        astrologerUserId: hold.astrologerUserId,
+        amount: hold.amount,
+        capturedAt: hold.capturedAt,
+        holdReleaseAt: hold.holdReleaseAt,
+        paymentAttemptId: hold.paymentAttemptId,
+        providerEventId: hold.providerEventId
+      }),
+      "utf8"
+    )
+    .digest("hex")}`;
 }
 
 export function assertFinanceLedgerBalanced(entries: readonly CreateLedgerEntryInput[]): void {

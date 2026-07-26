@@ -14,6 +14,11 @@ describe("payment worker runtime config", () => {
         webhookSecret: null,
         environment: "sandbox",
         timestampToleranceSeconds: 300
+      },
+      holdRelease: {
+        intervalMs: 60_000,
+        batchSize: 100,
+        commandTtlMs: 2_592_000_000
       }
     });
   });
@@ -29,5 +34,19 @@ describe("payment worker runtime config", () => {
         PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET: "webhook-secret"
       })
     ).toThrow("PAYMENT_WORKER_ARC_PAY_API_BASE_URL must use HTTPS");
+  });
+
+  it("normalizes captured-sale hold release worker settings", () => {
+    expect(
+      createPaymentWorkerRuntimeConfig({
+        PAYMENT_WORKER_HOLD_RELEASE_INTERVAL_MS: "300000",
+        PAYMENT_WORKER_HOLD_RELEASE_BATCH_SIZE: "500",
+        PAYMENT_WORKER_HOLD_RELEASE_COMMAND_TTL_SECONDS: "86400"
+      }).holdRelease
+    ).toEqual({
+      intervalMs: 300_000,
+      batchSize: 500,
+      commandTtlMs: 86_400_000
+    });
   });
 });

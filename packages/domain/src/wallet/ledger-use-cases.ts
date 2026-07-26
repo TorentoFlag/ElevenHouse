@@ -1,5 +1,6 @@
 import type { FinanceOrder, FinanceOrderStore } from "../orders";
 import type { PaymentProviderEvent, PaymentStore } from "../payments/payment-store";
+import type { Money } from "../money";
 import {
   assertPaymentMatchesOrder,
   assertWebhookMoneyFacts,
@@ -64,6 +65,35 @@ export type CapturePaymentProviderWebhookInput = {
 export type CapturePaymentProviderWebhookResult = {
   readonly kind: "created" | "replayed";
   readonly event: PaymentProviderEvent;
+};
+
+export type ReleasableCapturedSaleHold = {
+  readonly orderId: string;
+  readonly astrologerUserId: string;
+  readonly amount: Money;
+  readonly capturedAt: string;
+  readonly holdReleaseAt: string;
+  readonly paymentAttemptId: string | null;
+  readonly providerEventId: string | null;
+};
+
+export type HoldReleaseStore = {
+  readonly listReleasableCapturedSaleHolds: (input: {
+    readonly now: string;
+    readonly limit: number;
+  }) => Promise<readonly ReleasableCapturedSaleHold[]>;
+  readonly releaseCapturedSaleHold: (input: {
+    readonly hold: ReleasableCapturedSaleHold;
+    readonly now: string;
+    readonly commandExpiresAt: string;
+  }) => Promise<{ readonly kind: "released" | "replayed"; readonly transactionId: string }>;
+};
+
+export type ReleaseDueCapturedSaleHoldsResult = {
+  readonly scanned: number;
+  readonly released: number;
+  readonly replayed: number;
+  readonly orderIds: readonly string[];
 };
 
 export class PaymentCaptureOrderNotPayableError extends Error {
@@ -164,6 +194,10 @@ export function createCapturedSaleLedgerTransaction(
   order: FinanceOrder,
   providerEvent: PaymentProviderEvent
 ): CreateLedgerTransactionInput {
+  const holdReleaseAt = computeHoldReleaseAt(
+    providerEvent.receivedAt,
+    order.financePolicyHoldDurationHours
+  );
   return {
     operationType: "sale_captured",
     orderId: order.id,
@@ -174,7 +208,11 @@ export function createCapturedSaleLedgerTransaction(
       providerEventId: providerEvent.id,
       paymentAttemptId: providerEvent.paymentAttemptId,
       provider: providerEvent.provider,
-      providerPaymentId: providerEvent.providerPaymentId
+      providerPaymentId: providerEvent.providerPaymentId,
+      holdDurationHours: order.financePolicyHoldDurationHours,
+      holdReleaseAt,
+      financePolicySnapshotId: order.financePolicySnapshotId,
+      financePolicyRiskTier: order.financePolicyRiskTier
     },
     entries: [
       {
@@ -195,7 +233,13 @@ export function createCapturedSaleLedgerTransaction(
         },
         side: "credit",
         amount: order.astrologerNetAmount,
-        metadata: { orderId: order.id, providerEventId: providerEvent.id }
+        metadata: {
+          orderId: order.id,
+          providerEventId: providerEvent.id,
+          holdDurationHours: order.financePolicyHoldDurationHours,
+          holdReleaseAt,
+          financePolicySnapshotId: order.financePolicySnapshotId
+        }
       },
       {
         account: {
@@ -206,6 +250,87 @@ export function createCapturedSaleLedgerTransaction(
         side: "credit",
         amount: order.platformFee,
         metadata: { orderId: order.id, providerEventId: providerEvent.id }
+      }
+    ]
+  };
+}
+
+export async function releaseDueCapturedSaleHolds(input: {
+  readonly store: HoldReleaseStore;
+  readonly now: Date;
+  readonly limit: number;
+  readonly commandTtlMs?: number;
+}): Promise<ReleaseDueCapturedSaleHoldsResult> {
+  if (!Number.isSafeInteger(input.limit) || input.limit <= 0) {
+    throw new Error("Captured sale hold release limit must be a positive safe integer");
+  }
+  const now = input.now.toISOString();
+  const commandExpiresAt = new Date(
+    input.now.getTime() + (input.commandTtlMs ?? 30 * 24 * 60 * 60 * 1000)
+  ).toISOString();
+  const holds = await input.store.listReleasableCapturedSaleHolds({ now, limit: input.limit });
+  let released = 0;
+  let replayed = 0;
+
+  for (const hold of holds) {
+    const result = await input.store.releaseCapturedSaleHold({ hold, now, commandExpiresAt });
+    if (result.kind === "released") released += 1;
+    else replayed += 1;
+  }
+
+  return {
+    scanned: holds.length,
+    released,
+    replayed,
+    orderIds: holds.map((hold) => hold.orderId)
+  };
+}
+
+export function createCapturedSaleHoldReleaseLedgerTransaction(
+  hold: ReleasableCapturedSaleHold,
+  now: string
+): CreateLedgerTransactionInput {
+  assertPositiveRubMoney(hold.amount);
+  return {
+    operationType: "funds_released",
+    orderId: hold.orderId,
+    payoutRequestId: null,
+    occurredAt: now,
+    postedAt: now,
+    metadata: {
+      reason: "captured_sale_hold_elapsed",
+      holdReleaseAt: hold.holdReleaseAt,
+      providerEventId: hold.providerEventId,
+      paymentAttemptId: hold.paymentAttemptId
+    },
+    entries: [
+      {
+        account: {
+          accountType: "astrologer_pending",
+          astrologerUserId: hold.astrologerUserId,
+          currency: hold.amount.currency
+        },
+        side: "debit",
+        amount: hold.amount,
+        metadata: {
+          orderId: hold.orderId,
+          reason: "captured_sale_hold_elapsed",
+          holdReleaseAt: hold.holdReleaseAt
+        }
+      },
+      {
+        account: {
+          accountType: "astrologer_available",
+          astrologerUserId: hold.astrologerUserId,
+          currency: hold.amount.currency
+        },
+        side: "credit",
+        amount: hold.amount,
+        metadata: {
+          orderId: hold.orderId,
+          reason: "captured_sale_hold_elapsed",
+          holdReleaseAt: hold.holdReleaseAt
+        }
       }
     ]
   };
@@ -251,4 +376,24 @@ export function createCapturedSaleOutboxEvents(
       occurredAt: providerEvent.receivedAt
     }
   ];
+}
+
+function computeHoldReleaseAt(capturedAt: string, holdDurationHours: number): string {
+  if (
+    !Number.isSafeInteger(holdDurationHours) ||
+    holdDurationHours < 0 ||
+    holdDurationHours > 4_320
+  ) {
+    throw new Error("Finance policy hold duration must be a safe integer between 0 and 4320 hours");
+  }
+  const capturedTime = new Date(capturedAt).getTime();
+  if (!Number.isFinite(capturedTime)) throw new Error("Captured sale timestamp is invalid");
+  return new Date(capturedTime + holdDurationHours * 60 * 60 * 1000).toISOString();
+}
+
+function assertPositiveRubMoney(amount: Money): void {
+  if (amount.currency !== "RUB") throw new Error(`Unsupported finance currency: ${amount.currency}`);
+  if (!Number.isSafeInteger(amount.amountMinor) || amount.amountMinor <= 0) {
+    throw new Error("Finance money amount must be a positive safe integer");
+  }
 }
