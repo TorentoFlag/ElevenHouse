@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Param,
   Post,
   Put,
@@ -25,7 +26,7 @@ import { FinancePoliciesService } from "./finance-policies.service";
 @Controller("admin/finance")
 @UseGuards(AdminSessionAuthGuard)
 export class FinancePoliciesController {
-  constructor(private readonly service: FinancePoliciesService) {}
+  constructor(@Inject(FinancePoliciesService) private readonly service: FinancePoliciesService) {}
 
   @Get("policies")
   listPolicies(): Promise<FinancePoliciesResponse> {

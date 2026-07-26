@@ -47,13 +47,18 @@ export class FinancePoliciesService {
   constructor(
     @Inject(ADMIN_FINANCE_POLICY_UNIT_OF_WORK)
     private readonly unitOfWork: AdminFinancePolicyUnitOfWork,
+    @Inject(SystemClock)
     private readonly clock: SystemClock
   ) {}
 
   async listPolicies(): Promise<FinancePoliciesResponse> {
-    const policies = await this.unitOfWork.execute(({ store }) =>
-      Promise.all(riskTierValues.map((riskTier) => store.findActivePolicyByRiskTier(riskTier)))
-    );
+    const policies = await this.unitOfWork.execute(async ({ store }) => {
+      const result = [];
+      for (const riskTier of riskTierValues) {
+        result.push(await store.findActivePolicyByRiskTier(riskTier));
+      }
+      return result;
+    });
     return financePoliciesResponseSchema.parse({
       policies: policies.filter((policy): policy is NonNullable<typeof policy> => Boolean(policy))
     });

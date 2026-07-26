@@ -27,7 +27,9 @@ export class IdentityCurrentSessionService {
   constructor(
     @Inject(AUTH_SESSION_AUTHENTICATION_STORE)
     private readonly store: AuthSessionAuthenticationStore,
+    @Inject(SystemClock)
     private readonly clock: SystemClock,
+    @Inject(ConfigService)
     private readonly configService: ConfigService
   ) {}
 
