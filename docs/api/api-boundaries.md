@@ -61,10 +61,12 @@ runtime setting so Express resolves proxy headers; controllers must not parse
 
 `POST /client-join-intents` resolves an active visible astrologer by exact
 public handle and returns a short-lived opaque join token plus the safe public
-identity required by the entry screen. Passwordless login/registration may
-consume that token to create or reactivate the explicit client-astrologer
-relationship. `GET /me/astrologers` lists only active explicit relationships;
-it cannot search, recommend or enumerate unrelated astrologers.
+identity required by the entry screen. The frontend may store that response as
+same-session pending context so the auth screen can show which astrologer will
+be linked. Passwordless login/registration may consume the token to create or
+reactivate the explicit client-astrologer relationship, after which pending
+context must be cleared. `GET /me/astrologers` lists only active explicit
+relationships; it cannot search, recommend or enumerate unrelated astrologers.
 
 `GET /me/overview` is client-role and owner scoped. It returns only explicit
 client-astrologer relationships, saved birth profiles and current cabinet

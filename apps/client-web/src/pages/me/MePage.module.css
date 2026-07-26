@@ -116,6 +116,7 @@
 
 .astrologerList,
 .relatedList,
+.bookingList,
 .birthList,
 .birthListCompact {
   display: grid;
@@ -127,6 +128,7 @@
 
 .astrologerList li,
 .relatedList li,
+.bookingList li,
 .birthList li,
 .birthListCompact li {
   display: flex;
@@ -137,6 +139,7 @@
 
 .astrologerList strong,
 .relatedList strong,
+.bookingList strong,
 .birthList strong,
 .birthListCompact strong {
   display: block;
@@ -147,6 +150,7 @@
 
 .astrologerList small,
 .relatedList small,
+.bookingList small,
 .birthList small,
 .birthListCompact small {
   display: block;
@@ -213,6 +217,7 @@
 }
 
 .homeGrid,
+.bookingGrid,
 .dataGrid {
   display: grid;
   gap: var(--eh-space-22);
@@ -222,6 +227,10 @@
 
 .homeGrid {
   grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+}
+
+.bookingGrid {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .heroCard,
@@ -312,6 +321,7 @@
 }
 
 .primaryButton,
+.secondaryButton,
 .iconButton {
   display: inline-flex;
   align-items: center;
@@ -336,7 +346,20 @@
   color: var(--eh-color-muted);
 }
 
+.secondaryButton {
+  min-height: 36px;
+  padding: 0 var(--eh-space-14);
+  background: var(--eh-color-night-950);
+  border-color: var(--eh-color-moon-300-alpha-14);
+  color: var(--eh-color-moon-120);
+}
+
+.secondaryButton:disabled {
+  color: var(--eh-color-muted);
+}
+
 .primaryButton:disabled,
+.secondaryButton:disabled,
 .iconButton:disabled,
 .selectorButton:disabled {
   opacity: 0.72;
@@ -361,6 +384,7 @@
 }
 
 .relatedList li,
+.bookingList li,
 .birthList li,
 .birthListCompact li {
   min-height: 58px;
@@ -369,6 +393,21 @@
   border: 1px solid var(--eh-color-moon-300-alpha-14);
   border-radius: var(--eh-radius-12);
   background: rgb(29 26 62 / 0.66);
+}
+
+.bookingList li {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 1fr) minmax(180px, auto) auto;
+}
+
+.bookingPerson {
+  min-width: 0;
+}
+
+.bookingStatus {
+  color: var(--eh-color-gold);
+  font-size: var(--eh-font-size-12);
+  font-weight: var(--eh-font-weight-semibold);
 }
 
 .birthList li,
@@ -492,7 +531,7 @@
   }
 
   .nav {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .navItem,
@@ -524,8 +563,18 @@
   }
 
   .homeGrid,
+  .bookingGrid,
   .summaryGrid,
   .formGrid {
     grid-template-columns: 1fr;
+  }
+
+  .bookingList li {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .bookingStatus,
+  .bookingList .secondaryButton {
+    grid-column: 1 / -1;
   }
 }

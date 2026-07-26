@@ -15,8 +15,10 @@ import {
 import { useCallback, useRef, useState } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { ClientCopy } from "../../common/i18n/clientCopy";
+import { readPendingClientJoinIntent } from "../../features/client-join/model/clientJoinStorage";
 import { AuthStepMotion } from "./AuthStepMotion";
 import { AuthVisualPane } from "./AuthVisualPane";
+import { PendingClientJoinBanner } from "./PendingClientJoinBanner";
 import {
   createInitialPhoneInputState,
   type PhoneInputState
@@ -63,6 +65,7 @@ export function AuthPage() {
   const [pendingCredential, setPendingCredential] =
     useState<PasswordlessPendingCredential | null>(null);
   const [code, setCode] = useState("");
+  const [pendingJoinIntent] = useState(() => readPendingClientJoinIntent());
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -167,6 +170,7 @@ export function AuthPage() {
     <main className={styles.page}>
       <AuthVisualPane copy={copy.visual} motionKey={locale} />
       <section className={styles.formPane} aria-label={copy.sectionAriaLabel}>
+        {pendingJoinIntent ? <PendingClientJoinBanner context={pendingJoinIntent} /> : null}
         <AuthStepMotion step={authStep}>
           {authStep === "credentials" ? (
             <OtpAuthForm

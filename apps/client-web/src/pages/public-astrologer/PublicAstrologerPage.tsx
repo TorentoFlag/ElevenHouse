@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
-import type { CreateClientJoinIntentResponse } from "@elevenhouse/contracts";
+import { useParams } from "react-router";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { createClientJoinIntent } from "../../features/client-join/api/clientJoinApi";
-import { writeClientJoinIntentToken } from "../../features/client-join/model/clientJoinStorage";
-
-type JoinState =
-  | { readonly status: "loading" }
-  | { readonly status: "ready"; readonly intent: CreateClientJoinIntentResponse }
-  | { readonly status: "error" };
+import { writePendingClientJoinIntent } from "../../features/client-join/model/clientJoinStorage";
+import {
+  PublicAstrologerPageView,
+  type PublicAstrologerJoinState
+} from "./PublicAstrologerPageView";
 
 export function PublicAstrologerPage() {
   const { handle } = useParams<{ handle: string }>();
-  const [state, setState] = useState<JoinState>({ status: "loading" });
+  const [state, setState] = useState<PublicAstrologerJoinState>({ status: "loading" });
 
   useDocumentTitle(handle ? `Astrologer ${handle}` : "Astrologer");
 
@@ -27,7 +25,7 @@ export function PublicAstrologerPage() {
     createClientJoinIntent({ publicHandle: handle })
       .then((intent) => {
         if (cancelled) return;
-        writeClientJoinIntentToken(intent.token);
+        writePendingClientJoinIntent(intent);
         setState({ status: "ready", intent });
       })
       .catch(() => {
@@ -41,25 +39,5 @@ export function PublicAstrologerPage() {
     };
   }, [handle]);
 
-  if (state.status === "loading") {
-    return <main aria-busy="true">Подготавливаем приглашение...</main>;
-  }
-
-  if (state.status === "error") {
-    return (
-      <main>
-        <h1>Профиль недоступен</h1>
-        <p>Проверьте ссылку, которую отправил астролог.</p>
-      </main>
-    );
-  }
-
-  return (
-    <main>
-      <p>@{state.intent.astrologer.publicHandle}</p>
-      <h1>{state.intent.astrologer.publicName}</h1>
-      <p>Войдите или зарегистрируйтесь, чтобы присоединиться к астрологу.</p>
-      <Link to="/auth">Продолжить</Link>
-    </main>
-  );
+  return <PublicAstrologerPageView state={state} />;
 }

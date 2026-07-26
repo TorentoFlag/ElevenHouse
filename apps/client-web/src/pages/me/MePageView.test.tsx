@@ -90,6 +90,80 @@ describe("MePageView", () => {
     expect(markup).toContain('name="birthDate"');
     expect(markup).toContain('name="birthTime"');
   });
+
+  it("enables booking entry only for explicitly linked astrologers", () => {
+    const markup = renderToStaticMarkup(
+      <MePageView
+        activeSection="booking"
+        form={defaultForm}
+        overview={{
+          astrologers: [
+            {
+              astrologerUserId: "22222222-2222-4222-8222-222222222222",
+              publicHandle: "alisa-vega",
+              publicName: "Алиса Вега",
+              relationshipStatus: "active",
+              firstLinkedAt: "2026-07-06T10:00:00.000Z",
+              lastLinkedAt: "2026-07-06T10:00:00.000Z"
+            }
+          ],
+          birthProfiles: [birthProfile()],
+          summary: {
+            directLinkOnly: true,
+            upcomingBookingCount: 0,
+            availableMaterialCount: 0,
+            unreadNotificationCount: 0,
+            activeSubscriptionCount: 0
+          }
+        }}
+        status="ready"
+        onFormChange={vi.fn()}
+        onRetry={vi.fn()}
+        onSectionChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />
+    );
+
+    expect(markup).toContain("Выберите связанного астролога");
+    expect(markup).toContain("Алиса Вега");
+    expect(markup).toContain("Расписание пока не опубликовано");
+    expect(markup).toContain("Данные для записи");
+    expect(markup).toMatch(
+      /<button class="[^"]*primaryButton[^"]*" type="button"><svg[\s\S]* Записаться<\/button>/
+    );
+    expect(markup).not.toContain("Найти астролога");
+    expect(markup).not.toContain("Каталог");
+    expect(markup).not.toContain("Рекомендации");
+  });
+
+  it("keeps booking unavailable until the client has a direct relationship", () => {
+    const markup = renderToStaticMarkup(
+      <MePageView
+        activeSection="booking"
+        form={defaultForm}
+        overview={{
+          astrologers: [],
+          birthProfiles: [],
+          summary: {
+            directLinkOnly: true,
+            upcomingBookingCount: 0,
+            availableMaterialCount: 0,
+            unreadNotificationCount: 0,
+            activeSubscriptionCount: 0
+          }
+        }}
+        status="ready"
+        onFormChange={vi.fn()}
+        onRetry={vi.fn()}
+        onSectionChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />
+    );
+
+    expect(markup).toContain("Откройте ссылку астролога, чтобы записаться");
+    expect(markup).toContain("В кабинете доступны только астрологи, с которыми уже есть явная связь.");
+    expect(markup).toContain("disabled");
+  });
 });
 
 function birthProfile(

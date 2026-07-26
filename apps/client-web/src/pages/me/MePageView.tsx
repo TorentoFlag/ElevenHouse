@@ -6,7 +6,7 @@ import type {
 import type { FormEvent } from "react";
 import styles from "./MePage.module.css";
 
-export type ClientCabinetSection = "home" | "sessions" | "feed" | "data" | "billing";
+export type ClientCabinetSection = "home" | "booking" | "sessions" | "feed" | "data" | "billing";
 export type ClientCabinetStatus = "loading" | "ready" | "saving" | "saved" | "error";
 
 export type BirthProfileFormState = {
@@ -29,10 +29,11 @@ export type MePageViewProps = {
 
 const navItems: ReadonlyArray<{
   readonly id: ClientCabinetSection;
-  readonly iconName: "layoutGrid" | "video" | "content" | "orbit" | "wallet";
+  readonly iconName: "layoutGrid" | "calendar" | "video" | "content" | "orbit" | "wallet";
   readonly label: string;
 }> = [
   { id: "home", iconName: "layoutGrid", label: "Главная" },
+  { id: "booking", iconName: "calendar", label: "Запись" },
   { id: "sessions", iconName: "video", label: "Консультации" },
   { id: "feed", iconName: "content", label: "Лента" },
   { id: "data", iconName: "orbit", label: "Мои данные" },
@@ -136,7 +137,12 @@ export function MePageView({
       <section className={styles.contentShell}>
         <header className={styles.header}>
           <h1>{activeTitle}</h1>
-          <button className={styles.primaryButton} type="button" disabled>
+          <button
+            className={styles.primaryButton}
+            type="button"
+            disabled={safeOverview.astrologers.length === 0}
+            onClick={() => onSectionChange("booking")}
+          >
             <Icon iconName="plus" size={16} /> Записаться
           </button>
           <button className={styles.iconButton} type="button" disabled aria-label="Уведомления">
@@ -151,6 +157,9 @@ export function MePageView({
         <div className={styles.content}>
           {activeSection === "home" ? (
             <HomeSection overview={safeOverview} onSectionChange={onSectionChange} />
+          ) : null}
+          {activeSection === "booking" ? (
+            <BookingEntrySection overview={safeOverview} onSectionChange={onSectionChange} />
           ) : null}
           {activeSection === "sessions" ? <EmptySection title="Пока нет предстоящих консультаций." /> : null}
           {activeSection === "feed" ? <EmptySection title="Лента появится после публикаций связанных астрологов." /> : null}
@@ -237,9 +246,85 @@ function HomeSection({
                   <strong>{astrologer.publicName}</strong>
                   <small>@{astrologer.publicHandle}</small>
                 </span>
+                <button className={styles.linkButton} type="button" onClick={() => onSectionChange("booking")}>
+                  Записаться
+                </button>
               </li>
             ))}
           </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function BookingEntrySection({
+  overview,
+  onSectionChange
+}: {
+  readonly overview: ClientCabinetOverviewResponse;
+  readonly onSectionChange: (section: ClientCabinetSection) => void;
+}) {
+  if (overview.astrologers.length === 0) {
+    return (
+      <section className={styles.sectionCard}>
+        <div className={styles.emptyBlock}>
+          <Icon iconName="calendar" size={22} />
+          <h2>Откройте ссылку астролога, чтобы записаться</h2>
+          <p>В кабинете доступны только астрологи, с которыми уже есть явная связь.</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <div className={styles.bookingGrid}>
+      <section className={styles.heroCard}>
+        <span className={styles.eyebrow}>Запись</span>
+        <h2>Выберите связанного астролога</h2>
+        <p>
+          Онлайн-запись появится после публикации консультаций и расписания этим астрологом.
+        </p>
+      </section>
+
+      <section className={styles.sectionCard}>
+        <div className={styles.sectionHeader}>
+          <h2>Доступные астрологи</h2>
+          <span className={styles.counter}>{overview.astrologers.length}</span>
+        </div>
+        <ul className={styles.bookingList}>
+          {overview.astrologers.map((astrologer) => (
+            <li key={astrologer.astrologerUserId}>
+              <span className={styles.avatar}>{getInitials(astrologer.publicName)}</span>
+              <span className={styles.bookingPerson}>
+                <strong>{astrologer.publicName}</strong>
+                <small>@{astrologer.publicHandle}</small>
+              </span>
+              <span className={styles.bookingStatus}>Расписание пока не опубликовано</span>
+              <button className={styles.secondaryButton} type="button" disabled>
+                Выбрать время
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className={styles.sectionCard}>
+        <div className={styles.sectionHeader}>
+          <div>
+            <span className={styles.eyebrow}>Данные для записи</span>
+            <h2>Профиль рождения</h2>
+          </div>
+          <button className={styles.linkButton} type="button" onClick={() => onSectionChange("data")}>
+            Открыть
+          </button>
+        </div>
+        {overview.birthProfiles.length === 0 ? (
+          <p className={styles.emptyInline}>
+            Добавьте основной профиль, чтобы астролог мог использовать его для консультации.
+          </p>
+        ) : (
+          <BirthProfileList profiles={overview.birthProfiles} compact />
         )}
       </section>
     </div>
