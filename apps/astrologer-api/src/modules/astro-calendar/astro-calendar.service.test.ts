@@ -67,6 +67,81 @@ describe("AstroCalendarService", () => {
     );
   });
 
+  it("returns an existing ready generation with events for duplicate generation requests", async () => {
+    const readyGeneration = generation({
+      readinessSummary: {
+        clientsTotal: 0,
+        clientsReady: 0,
+        clientsWithMissingBirthData: 0,
+        clientsWithUnknownBirthTime: 0,
+        clientsWithApproximateBirthTime: 0
+      },
+      summary: {
+        eventCount: 1,
+        globalEventCount: 1,
+        clientEventCount: 0,
+        byType: { "global.ingress": 1 },
+        byTone: { opportunity: 1 }
+      }
+    });
+    const readyEvent = {
+      id: "66666666-6666-4666-8666-666666666666",
+      eventId: "global-ingress-sun-leo",
+      ownerUserId,
+      generationId,
+      source: "global",
+      type: "global.ingress",
+      startsAt: "2026-07-22T12:00:00.000Z",
+      endsAt: null,
+      dictionaryCodes: ["astro_calendar.global.ingress.sun.leo"],
+      payload: {
+        id: "global-ingress-sun-leo",
+        source: "global",
+        type: "global.ingress",
+        startsAt: "2026-07-22T12:00:00.000Z",
+        endsAt: null,
+        timePrecision: "exact",
+        title: "Солнце входит в Лев",
+        subtitle: null,
+        description: null,
+        tone: "opportunity",
+        points: ["sun"],
+        aspect: null,
+        sign: "leo",
+        clientRefs: [],
+        chartLink: null,
+        dictionaryCodes: ["astro_calendar.global.ingress.sun.leo"],
+        warnings: []
+      }
+    } as const;
+    const generationStore = createGenerationStore({
+      createCalculating: vi.fn(async () => readyGeneration),
+      findByFingerprint: vi.fn(async () => ({ generation: readyGeneration, events: [readyEvent] }))
+    });
+    const service = createService({ generationStore });
+
+    const response = await service.createGeneration(
+      {
+        start: "2026-07-01",
+        end: "2026-07-31",
+        timeZone: "Europe/Moscow",
+        clientIds: [clientId],
+        eventTypes: ["global.ingress"],
+        settings: settings()
+      },
+      request()
+    );
+
+    expect(response.generation.status).toBe("ready");
+    expect(response.readiness.clientsTotal).toBe(1);
+    expect(response.readiness.clientsReady).toBe(1);
+    expect(response.summary.eventCount).toBe(1);
+    expect(response.events).toHaveLength(1);
+    expect(generationStore.findByFingerprint).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerUserId })
+    );
+  });
+
   it("forbids client ids outside the astrologer scope", async () => {
     const service = createService({
       clientStore: createClientStore({
@@ -262,6 +337,7 @@ function birthData(targetClientId: string): ClientBirthData {
     id: "55555555-5555-4555-8555-555555555555",
     clientUserId: targetClientId,
     label: null,
+    isPrimary: true,
     birthDate: "1990-07-15",
     birthTime: "14:30",
     birthTimePrecision: "exact" as const,

@@ -72,7 +72,9 @@ export class AstroCalendarService {
       ownerUserId,
       inputFingerprint: context.fingerprint
     });
-    if (current) return toRangeResponse(current, parsedQuery, context.fingerprint);
+    if (current) {
+      return toRangeResponse(current, parsedQuery, context.fingerprint, context.readiness);
+    }
 
     const latest = await this.generationStore.findLatestForRange({
       ownerUserId,
@@ -129,7 +131,22 @@ export class AstroCalendarService {
       now: this.clock.now().toISOString()
     });
 
-    return toRangeResponse({ generation, events: [] }, parsedBody, context.fingerprint);
+    if (generation.status === "ready") {
+      const current = await this.generationStore.findByFingerprint({
+        ownerUserId,
+        inputFingerprint: context.fingerprint
+      });
+      if (current) {
+        return toRangeResponse(current, parsedBody, context.fingerprint, context.readiness);
+      }
+    }
+
+    return toRangeResponse(
+      { generation, events: [] },
+      parsedBody,
+      context.fingerprint,
+      context.readiness
+    );
   }
 
   async retryGeneration(
@@ -259,7 +276,8 @@ function normalizeEventTypes(
 function toRangeResponse(
   stored: AstroCalendarGenerationWithEvents,
   range: { readonly start: string; readonly end: string; readonly timeZone: string },
-  fingerprint: string
+  fingerprint: string,
+  readiness = stored.generation.readinessSummary
 ): AstroCalendarRangeResponse {
   const events = stored.generation.status === "ready" ? stored.events.map(toContractEvent) : [];
   const warnings = [
@@ -278,7 +296,7 @@ function toRangeResponse(
       provider: stored.generation.provider
     },
     events,
-    readiness: stored.generation.readinessSummary,
+    readiness,
     summary: stored.generation.status === "ready" ? stored.generation.summary : emptySummary(),
     dictionaryCodes: collectDictionaryCodes(events, warnings),
     warnings

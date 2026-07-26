@@ -48,6 +48,11 @@ describe("processAstroCalendarGenerationJob", () => {
       expect.objectContaining({
         ownerUserId,
         generationId,
+        readinessSummary: clientReadinessSummary,
+        warnings: [
+          expect.objectContaining({ code: "CLIENT_BIRTH_TIME_APPROXIMATE" }),
+          expect.objectContaining({ code: "PROVIDER_PRECISION_LIMITED" })
+        ],
         events: [
           expect.objectContaining({
             eventId: "global-ingress-sun-leo",
@@ -157,9 +162,19 @@ function generation(
       eventTypes: ["global.ingress"]
     },
     settingsSnapshot: settings,
-    readinessSummary: astroCalendarResponse.readiness,
+    readinessSummary: clientReadinessSummary,
     summary: astroCalendarResponse.summary,
-    warnings: [],
+    warnings: [
+      {
+        code: "CLIENT_BIRTH_TIME_APPROXIMATE",
+        severity: "warning",
+        message: "У клиента указано примерное время рождения.",
+        clientId: "22222222-2222-4222-8222-222222222222",
+        eventId: null,
+        dictionaryCode: null,
+        action: null
+      }
+    ],
     provider: null,
     generatedAt: null,
     errorCode: null,
@@ -217,5 +232,23 @@ const astroCalendarResponse = {
     byTone: { opportunity: 1 }
   },
   dictionaryCodes: ["astro_calendar.global.ingress.sun.leo"],
-  warnings: []
+  warnings: [
+    {
+      code: "PROVIDER_PRECISION_LIMITED",
+      severity: "warning",
+      message: "Chart engine does not generate client events without owner-scoped CRM data.",
+      clientId: null,
+      eventId: null,
+      dictionaryCode: null,
+      action: null
+    }
+  ]
 } as AstroCalendarRangeResponse;
+
+const clientReadinessSummary = {
+  clientsTotal: 2,
+  clientsReady: 2,
+  clientsWithMissingBirthData: 0,
+  clientsWithUnknownBirthTime: 0,
+  clientsWithApproximateBirthTime: 1
+} as const;

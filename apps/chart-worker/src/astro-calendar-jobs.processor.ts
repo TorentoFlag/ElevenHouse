@@ -61,9 +61,9 @@ export async function processAstroCalendarGenerationJob(input: {
       ownerUserId: current.generation.ownerUserId,
       generationId: current.generation.id,
       provider: response.generation.provider,
-      readinessSummary: response.readiness,
+      readinessSummary: current.generation.readinessSummary,
       summary: response.summary,
-      warnings: response.warnings,
+      warnings: [...current.generation.warnings, ...response.warnings],
       events: response.events.map((event) => ({
         eventId: event.id,
         source: event.source,
