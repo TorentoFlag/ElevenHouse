@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@elevenhouse/auth": "workspace:*",
+    "@elevenhouse/contracts": "workspace:*",
     "@elevenhouse/validation": "workspace:*",
     "@js-temporal/polyfill": "0.5.1"
   },

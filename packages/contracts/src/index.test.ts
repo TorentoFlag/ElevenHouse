@@ -7,6 +7,7 @@ import {
   dictionaryEntriesResponseSchema,
   healthResponseSchema,
   humanDesignPreviewRequestSchema,
+  flowGraphSchema,
   createProductRequestSchema,
   requestPasswordlessCodeRequestSchema,
   requestPasswordlessCodeResponseSchema,
@@ -46,5 +47,9 @@ describe("contracts public barrel", () => {
 
   it("exports Human Design contracts", () => {
     expect(humanDesignPreviewRequestSchema.parse).toBeTypeOf("function");
+  });
+
+  it("exports flow contracts", () => {
+    expect(flowGraphSchema.parse).toBeTypeOf("function");
   });
 });

@@ -644,6 +644,9 @@ importers:
       '@elevenhouse/auth':
         specifier: workspace:*
         version: link:../auth
+      '@elevenhouse/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@elevenhouse/validation':
         specifier: workspace:*
         version: link:../validation

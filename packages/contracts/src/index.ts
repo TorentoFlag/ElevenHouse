@@ -16,6 +16,7 @@ export * from "./matrix-report";
 export * from "./clients";
 export * from "./calendar";
 export * from "./astro-calendar";
+export * from "./flows";
 export * from "./charts";
 export * from "./human-design";
 export * from "./messaging";
