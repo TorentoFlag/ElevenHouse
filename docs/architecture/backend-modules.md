@@ -47,31 +47,43 @@ export class AppModule {}
 
 `apps/public-api` сейчас содержит:
 
+- `booking`
 - `client-join`
 - `client-profile`
+- `database`
 - `health`
 - `identity`
-- `database`
+- `orders`
+- `payments`
 - `redis`
 - `security`
 
 `client-join` создаёт direct-link join intent по public handle и связывает его
 с client registration/login flow. `client-profile` отдаёт только связанные с
 клиентом профили астрологов, cabinet overview и owner-scoped primary-compatible
-multi birth profiles; это foundation client cabinet, не discovery API. Booking,
-orders, payments, materials, feed, subscriptions, journal и client-visible
-calculation delivery остаются отдельными незавершёнными contours.
+multi birth profiles; это foundation client cabinet, не discovery API.
+`booking`, `orders` and `payments` now provide the first direct-link command
+contour for booking intent, order creation and checkout initiation. Full public
+product/profile reads, slot-selection UI integration, materials, feed,
+subscriptions, journal and client-visible calculation delivery remain separate
+incomplete contours.
 
 `apps/astrologer-api` сейчас содержит:
 
 - `ai`
+- `astro-calendar`
 - `astrologer-profile`
+- `availability`
+- `bookings`
 - `calculations`
+- `calendar`
+- `charts`
 - `clock`
 - `clients`
 - `database`
 - `dictionary`
 - `dictionary-ai`
+- `finance`
 - `health`
 - `human-design`
 - `identity`
@@ -86,12 +98,19 @@ calculation delivery остаются отдельными незавершён�
 
 `apps/admin-api` сейчас содержит:
 
+- `database`
+- `finance-policies`
 - `health`
+- `identity`
+- `security`
 
-Это только минимальная Nest-заготовка отдельной внутренней API-поверхности.
-Admin/moderator/super_admin workflows не должны добавляться в `public-api` или
-`astrologer-api`; они должны добавляться в `admin-api` через такие же
-feature-module boundaries, explicit auth/permissions и audit logging.
+Это отдельная внутренняя API-поверхность с техническим `health` module и первым
+finance-policy/risk/payout contour. `finance-policies` composes database,
+admin-session auth guard, CSRF, finance policy, order, ledger and payout stores,
+idempotent finance commands and durable audit writes. Broader user,
+verification, moderation, payment-support and platform-settings workflows still
+belong in future `admin-api` feature modules, not in `public-api` or
+`astrologer-api`.
 
 ## Основные модули
 
@@ -140,20 +159,22 @@ feature-module boundaries, explicit auth/permissions и audit logging.
 - `HumanDesign`: typed individual preview, persistence and recalculation
   orchestration for the `human_design_classic` base engine. Preview is
   authenticated/read-only and rejects browser birth-data fields. Persist and
-  recalculate are CSRF-protected state-changing routes that hydrate an
-  owner-scoped CRM `clientId`, resolve birth/design longitudes through the
+  recalculate are CSRF-protected state-changing routes that hydrate
+  owner-scoped CRM client input, resolve birth/design longitudes through the
   private chart-engine provider boundary, delegate mechanics to
   `packages/domain/src/human-design`, store records via the shared
-  `Calculations` module and keep the linked CRM subject identity stable.
-  Compatibility and read-only transits are implemented through the same
-  server/domain authority. Human Design AI interpretation now follows the
-  Numerology-style shared calculation interpretation contour: only owned saved
-  results with the current checksum can generate editable drafts, AI receives a
-  minimized deterministic Human Design context, and frontend/public responses
-  expose no model or prompt metadata. Human Design PDF backend routes and
-  worker renderer use the shared private calculation-PDF contour, current
-  checksum and optional approved interpretation source locator; frontend PDF
-  controls remain a follow-up slice.
+  `Calculations` module and keep linked CRM subject/partner identity stable.
+  Individual, compatibility and read-only transit overlay mechanics are
+  implemented through the same server/domain authority. Human Design AI
+  interpretation follows the Numerology-style shared calculation
+  interpretation contour: only owned saved results with the current checksum
+  can generate editable drafts, optional transit context is server-resolved and
+  checksum-bound, AI receives minimized deterministic Human Design context, and
+  frontend/public responses expose no model or prompt metadata. Human Design
+  PDF backend routes and frontend controls use the shared private
+  calculation-PDF contour, current checksum and optional approved
+  interpretation source locator; transit overlays are not exported as a
+  standalone PDF.
 - `Charts`: расчёты астрологических карт и generated chart artifacts.
 - `Sessions`: lifecycle консультации, recordings, materials.
 - `Messaging`: provider-neutral channel connections, external identities,

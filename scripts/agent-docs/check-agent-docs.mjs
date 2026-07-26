@@ -60,6 +60,68 @@ const staleStatements = [
     file: "docs/architecture/media-storage.md",
     pattern: /## Implementation Plan/i,
     label: "implemented media architecture is still presented as a future plan"
+  },
+  {
+    file: "docs/development/local-setup.md",
+    pattern: /admin-api` сейчас является health-only/i,
+    label: "local setup marks admin-api as health-only"
+  },
+  {
+    file: "docs/api/api-boundaries.md",
+    pattern: /Compatibility,\s*transits,\s*AI interpretation and PDF export remain separate future contours/i,
+    label: "Human Design implemented contours are marked future"
+  },
+  {
+    file: "docs/architecture/backend-modules.md",
+    pattern: /минимальная Nest-заготовка отдельной внутренней API-поверхности/i,
+    label: "admin-api implemented finance policy contour is marked as minimal scaffold"
+  },
+  {
+    file: "docs/architecture/design-reference-inventory.md",
+    pattern: /technical `health` module only/i,
+    label: "design inventory marks admin-api as health-only"
+  },
+  {
+    file: "docs/architecture/design-reference-inventory.md",
+    pattern: /missing beyond health/i,
+    label: "design inventory hides implemented admin finance foundation"
+  },
+  {
+    file: "docs/architecture/overview.md",
+    pattern: /health-only Nest-заготовка/i,
+    label: "overview marks admin-api as health-only"
+  }
+];
+
+const currentStateDocumentation = [
+  {
+    sourceDirectory: "apps",
+    docs: ["docs/architecture/repository-structure.md"]
+  },
+  {
+    sourceDirectory: "packages",
+    docs: ["docs/architecture/repository-structure.md"]
+  },
+  {
+    sourceDirectory: "apps/public-api/src/modules",
+    docs: [
+      "docs/architecture/backend-modules.md",
+      "docs/architecture/design-reference-inventory.md"
+    ]
+  },
+  {
+    sourceDirectory: "apps/astrologer-api/src/modules",
+    docs: [
+      "docs/architecture/backend-modules.md",
+      "docs/architecture/design-reference-inventory.md"
+    ]
+  },
+  {
+    sourceDirectory: "apps/admin-api/src/modules",
+    docs: [
+      "docs/architecture/backend-modules.md",
+      "docs/architecture/design-reference-inventory.md"
+    ]
   }
 ];
 
@@ -150,7 +212,52 @@ export async function checkAgentDocs({ rootDir = process.cwd() } = {}) {
     }
   }
 
+  for (const assertion of currentStateDocumentation) {
+    await checkDirectoryEntriesDocumented(rootDir, assertion, errors);
+  }
+
   return { filesChecked: markdownFiles.length, errors };
+}
+
+async function checkDirectoryEntriesDocumented(rootDir, assertion, errors) {
+  const sourcePath = path.join(rootDir, assertion.sourceDirectory);
+  if (!(await pathExists(sourcePath))) {
+    errors.push(`${assertion.sourceDirectory}: current-state source directory is missing`);
+    return;
+  }
+
+  const entries = (await readdir(sourcePath, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+
+  for (const docPath of assertion.docs) {
+    const content = await readRequiredFile(rootDir, docPath, errors);
+    if (content === undefined) {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (!documentsDirectoryEntry(content, entry)) {
+        errors.push(
+          `${docPath}: missing current ${assertion.sourceDirectory} entry ${JSON.stringify(
+            entry
+          )}`
+        );
+      }
+    }
+  }
+}
+
+function documentsDirectoryEntry(content, entry) {
+  const escaped = escapeRegExp(entry);
+  return new RegExp(`(?:^|[\\s\`'"/])${escaped}(?:/|\`|'|"|\\s|,|\\.|$)`, "m").test(
+    content
+  );
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function collectMarkdownFiles(rootDir) {

@@ -33,12 +33,95 @@ const skills = [
   "elevenhouse-design-parity"
 ];
 
+const fixtureApps = [
+  "admin-api",
+  "admin-web",
+  "astrologer-api",
+  "astrologer-web",
+  "chart-engine",
+  "chart-worker",
+  "client-web",
+  "landing",
+  "notification-worker",
+  "payment-worker",
+  "public-api",
+  "workers"
+];
+
+const fixturePackages = [
+  "ai",
+  "auth",
+  "chart-engine-client",
+  "config",
+  "contracts",
+  "db",
+  "design-system",
+  "domain",
+  "i18n",
+  "numerology-presentation",
+  "observability",
+  "testing",
+  "validation"
+];
+
+const fixtureBackendModules = {
+  "apps/public-api/src/modules": [
+    "booking",
+    "client-join",
+    "client-profile",
+    "database",
+    "health",
+    "identity",
+    "orders",
+    "payments",
+    "redis",
+    "security"
+  ],
+  "apps/astrologer-api/src/modules": [
+    "ai",
+    "astro-calendar",
+    "astrologer-profile",
+    "availability",
+    "bookings",
+    "calculations",
+    "calendar",
+    "charts",
+    "clients",
+    "clock",
+    "database",
+    "dictionary",
+    "dictionary-ai",
+    "finance",
+    "health",
+    "human-design",
+    "identity",
+    "matrix",
+    "media",
+    "messaging",
+    "numerology",
+    "platform-billing",
+    "products",
+    "redis",
+    "security",
+    "verification"
+  ],
+  "apps/admin-api/src/modules": [
+    "database",
+    "finance-policies",
+    "health",
+    "identity",
+    "security"
+  ]
+};
+
 async function createValidFixture() {
   const rootDir = await mkdtemp(path.join(tmpdir(), "elevenhouse-agent-docs-"));
 
   for (const [relativePath, markers] of Object.entries(requiredFiles)) {
     await writeFixtureFile(rootDir, relativePath, `${markers.join("\n\n")}\n`);
   }
+
+  await createCurrentStateFixture(rootDir);
 
   for (const skill of skills) {
     const sharedMainMarker =
@@ -51,6 +134,62 @@ async function createValidFixture() {
   }
 
   return rootDir;
+}
+
+async function createCurrentStateFixture(rootDir) {
+  for (const app of fixtureApps) {
+    await mkdir(path.join(rootDir, "apps", app), { recursive: true });
+  }
+
+  for (const packageName of fixturePackages) {
+    await mkdir(path.join(rootDir, "packages", packageName), { recursive: true });
+  }
+
+  for (const [moduleRoot, modules] of Object.entries(fixtureBackendModules)) {
+    for (const moduleName of modules) {
+      await mkdir(path.join(rootDir, moduleRoot, moduleName), { recursive: true });
+    }
+  }
+
+  await writeFixtureFile(
+    rootDir,
+    "docs/architecture/repository-structure.md",
+    [
+      "# Структура репозитория",
+      "",
+      "## Apps",
+      ...fixtureApps.map((app) => `- \`${app}/\``),
+      "",
+      "## Packages",
+      ...fixturePackages.map((packageName) => `- \`${packageName}/\``),
+      ""
+    ].join("\n")
+  );
+
+  const allBackendModules = Object.values(fixtureBackendModules).flat();
+  const backendModuleList = Array.from(new Set(allBackendModules)).sort();
+
+  await writeFixtureFile(
+    rootDir,
+    "docs/architecture/backend-modules.md",
+    [
+      "# Доменные модули backend",
+      "",
+      ...backendModuleList.map((moduleName) => `- \`${moduleName}\``),
+      ""
+    ].join("\n")
+  );
+
+  await writeFixtureFile(
+    rootDir,
+    "docs/architecture/design-reference-inventory.md",
+    [
+      "# Design Implementation Inventory",
+      "",
+      ...backendModuleList.map((moduleName) => `\`${moduleName}\``),
+      ""
+    ].join("\n")
+  );
 }
 
 async function writeFixtureFile(rootDir, relativePath, content) {
@@ -162,4 +301,23 @@ test("rejects known contradictory active-document statements", async () => {
   const result = await checkAgentDocs({ rootDir });
 
   assert.ok(result.errors.some((error) => error.includes("known stale statement")));
+});
+
+test("rejects active docs missing current app, package, or backend module entries", async () => {
+  const rootDir = await createValidFixture();
+  await writeFixtureFile(
+    rootDir,
+    "docs/architecture/backend-modules.md",
+    "# Доменные модули backend\n\n- `health`\n"
+  );
+
+  const result = await checkAgentDocs({ rootDir });
+
+  assert.ok(
+    result.errors.some(
+      (error) =>
+        error.includes("docs/architecture/backend-modules.md") &&
+        error.includes("finance-policies")
+    )
+  );
 });

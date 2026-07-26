@@ -27,7 +27,7 @@ Backend нужно разделить по профилю нагрузки и о
 
 - `public-api`: обслуживает `client-web`, прямые страницы астрологов, booking, клиентские заказы, публичные checkout flows.
 - `astrologer-api`: обслуживает `astrologer-web`, CRM и authenticated workflows астролога.
-- `admin-api`: отдельный backend для `admin-web`, moderation/admin/super_admin workflows и audit-sensitive internal operations. В текущем коде создана минимальная health-only Nest-заготовка; доменные внутренние workflows ещё не реализованы.
+- `admin-api`: отдельный backend для `admin-web`, moderation/admin/super_admin workflows и audit-sensitive internal operations. В текущем коде есть `health` и первый finance-policy/risk/payout contour с admin-session auth, CSRF, idempotent finance commands and durable audit writes; broader internal workflows ещё не реализованы.
 - `workers`: общие фоновые задачи, включая transactional-outbox relay и
   детерминированный private PDF export для сохранённых расчётов.
 - `payment-worker`: payment webhooks, reconciliation, refunds, payout jobs.

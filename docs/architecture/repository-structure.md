@@ -21,12 +21,14 @@ ElevenHouse/
   packages/
     ai/
     auth/
+    chart-engine-client/
     config/
     contracts/
     db/
     design-system/
     domain/
     i18n/
+    numerology-presentation/
     observability/
     testing/
     validation/
@@ -40,9 +42,11 @@ ElevenHouse/
 ```
 
 `apps/admin-api` является отдельной backend-поверхностью для
-moderator/admin/super_admin workflows. В текущем коде создана минимальная
-заготовка приложения с техническим `health` module; доменные admin workflows,
-auth/permissions и audit-contour ещё не реализованы.
+moderator/admin/super_admin workflows. В текущем коде реализован технический
+`health` module и первый internal finance-policy/risk/payout contour с
+admin-session auth guard, CSRF, database composition, idempotent finance
+commands and durable audit writes. Остальные moderator/admin/super_admin
+workflows добавляются только здесь, а не в `public-api` или `astrologer-api`.
 
 ## Apps
 
@@ -64,12 +68,15 @@ auth/permissions и audit-contour ещё не реализованы.
 
 - `ai`: provider-neutral AI generation ports, prompt definitions and prompt registry.
 - `auth`: roles, permissions, session helpers and auth crypto helpers.
+- `chart-engine-client`: typed client for the private chart-engine runtime.
 - `config`: typed environment configuration helpers.
 - `contracts`: API DTOs, event schemas, generated clients или shared contracts.
 - `db`: schema, migrations, repositories, transaction helpers.
 - `design-system`: собственная UI-система ElevenHouse, tokens, primitives, components.
 - `domain`: business use cases и domain services.
 - `i18n`: translation infrastructure и shared message keys.
+- `numerology-presentation`: deterministic presentation helpers for numerology
+  result rendering.
 - `observability`: logging, metrics, tracing helpers.
 - `testing`: factories, mocks, test utilities.
 - `validation`: shared validation schemas.

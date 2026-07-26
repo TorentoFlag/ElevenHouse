@@ -67,9 +67,10 @@ verification и targeted examples зафиксированы в `commands.md`.
 - `admin-api`: `3003`
 - `notification-worker` readiness: `3013`
 
-`admin-api` сейчас является health-only заготовкой. Запускай его только когда
-явно нужна проверка внутренней API-поверхности; доменные admin routes ещё не
-реализованы.
+`admin-api` сейчас содержит `health` и первый finance-policy/risk/payout
+contour. Запускай его только когда явно нужна проверка внутренней
+API-поверхности; broader user, verification, moderation, payment-support and
+platform-settings routes ещё не реализованы.
 
 For local passwordless auth development, set
 `NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE=dev_console`. In this mode the
@@ -81,7 +82,9 @@ configured.
 ## Current Foundation Scope
 
 Фундаментальный слой уже содержит первые production-срезы identity, dictionary,
-products, notification outbox delivery и AI draft generation. Его базовые задачи:
+products, client cabinet foundation, direct-link booking/order/payment commands,
+calendar/manual booking, calculation methods, messaging, finance/admin policy,
+notification outbox delivery и AI draft generation. Его базовые задачи:
 
 - держать monorepo границы;
 - запускать apps independently;

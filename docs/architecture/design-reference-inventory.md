@@ -25,7 +25,7 @@ Feature priority stays in user decisions and product planning, not this file.
 
 ## Validated Design Project Facts
 
-Validated against the repository on 2026-07-16.
+Validated against the repository on 2026-07-26.
 
 - `ElevenHouseDesign/ElevenHouse.html` loads a single browser prototype with
   React UMD, Babel-in-browser, Three.js, many JSX files and a root demo router.
@@ -52,10 +52,12 @@ Validated against the repository on 2026-07-16.
 ### Backend
 
 `apps/public-api` currently exposes health, client identity/passwordless
-sessions, direct-link join intents, related-astrologer reads and client birth
-data. It has `client-join` and `client-profile` feature modules alongside
-identity/database/redis/security. Booking, orders, payments, full public profile
-reads and the rest of the client cabinet remain missing.
+sessions, direct-link join intents, related-astrologer reads, client birth data,
+booking intent creation, order creation and payment checkout initiation. It has
+`booking`, `client-join`, `client-profile`, `database`, `health`, `identity`,
+`orders`, `payments`, `redis` and `security` feature modules. Full public
+profile reads, public product/slot selection reads, client-facing checkout UI
+and the rest of the client cabinet remain incomplete.
 
 `apps/astrologer-api` currently has these feature modules:
 
@@ -70,6 +72,19 @@ reads and the rest of the client cabinet remain missing.
 - `astrologer-profile`: current astrologer profile read/upsert, public handle,
   profile media references, visibility status and explicit read-model integrity
   issues for unavailable profile media.
+- `availability`, `calendar`, `bookings`: owner-scoped default schedule,
+  manual blocks, range reads, available slots, booking detail and idempotent
+  manual booking commands.
+- `finance`: owner-scoped finance overview, manual bank-transfer payout method
+  and payout request commands.
+- `clients`: CRM client list/read and owner-scoped birth-data mutation
+  foundation.
+- `calculations`, `charts`, `numerology`, `matrix`, `human-design` and
+  `astro-calendar`: saved calculation lifecycle and the current deterministic
+  calculation method surfaces, including chart PDF export, Human Design
+  compatibility/transit/AI/PDF contours and astro-calendar range/generation.
+- `messaging`: provider-neutral channel connections, threads, outbound
+  commands, Telegram bot webhook ingestion and SSE freshness.
 - `media`: upload intents, completion and profile/product media asset metadata.
 - `platform-billing`: current platform plan/billing overview for settings,
   including backend-derived current plan state and billing integrity issues.
@@ -77,28 +92,33 @@ reads and the rest of the client cabinet remain missing.
   submission of identity/qualification documents for moderator review.
 - `ai`: provider-neutral generation service, safety identifier, usage recorder
   and rate limiting.
-- `security`: route metadata and session cookie CSRF policy.
+- `security`: route metadata, session cookie CSRF policy and idempotency policy
+  where required by command routes.
 - `database`, `redis`, `clock`, `health`: technical modules.
 
-`apps/admin-api` currently exists as a minimal separate Nest app with a
-technical `health` module only. Internal admin, moderator and super-admin
-workflows still require dedicated admin feature modules, authorization,
-permissions and audit logging, and must not be added to `public-api` or
-`astrologer-api`.
+`apps/admin-api` currently exists as a separate Nest app with `database`,
+`finance-policies`, `health`, `identity` and `security` modules. The first
+admin finance policy/risk/payout contour is implemented with session auth,
+CSRF, idempotent finance commands and durable audit writes. Broader internal
+user, verification, moderation, payment-support and platform-settings workflows
+still require dedicated admin feature modules and must not be added to
+`public-api` or `astrologer-api`.
 
 Shared contracts exist for `identity`, `clients`, `products`, `dictionary`,
 `ai-drafts`, `astrologer-profile`, `media`, `platform-billing`, `verification`,
-calculations/numerology/matrix and `health`.
+calculations, charts, numerology, matrix, Human Design, finance, messaging,
+calendar/availability/booking and `health`.
 
 Domain and DB layers currently cover identity/accounts/roles/auth sessions,
 client profiles/relationships/join intents/birth data, products and localized
 platform product templates, dictionary, media assets, verification
-applications/documents, calculations/numerology/matrix, outbox, auth-code
-delivery and `AstrologerProfile`. The `AstrologerProfile` API surface
-covers current profile read/upsert and explicit media integrity issues on reads;
-public-page read/edit, notification preferences, integrations and payouts remain
-separate missing contours. Verification moderator decisions remain a future
-`admin-api` contour with audit logging.
+applications/documents, calculations/charts/numerology/matrix/Human Design,
+availability/calendar/booking, orders/payments, finance policies, wallet/ledger,
+payouts, messaging, outbox, auth-code delivery and `AstrologerProfile`. The
+`AstrologerProfile` API surface covers current profile read/upsert and explicit
+media integrity issues on reads; full public-page read/edit, notification
+preferences, integrations and broader admin/moderation workflows remain separate
+incomplete contours.
 
 ### Frontend
 
@@ -116,6 +136,10 @@ separate missing contours. Verification moderator decisions remain a future
   overview/actions where provider URLs exist.
 - `/settings` verification section with current status, private document upload
   and submission to moderator review.
+- `/calendar`, `/chart-engine`, `/numerology`, `/matrix`, `/human-design`,
+  `/astro-calendar`, `/clients`, `/inbox` and `/finance` first production
+  slices backed by their owning APIs, with remaining state coverage tracked per
+  inventory row below.
 
 `apps/client-web` currently has:
 
@@ -127,7 +151,9 @@ separate missing contours. Verification moderator decisions remain a future
   overview and multi birth-profile APIs; booking, materials, feed,
   subscriptions, journal and client-visible calculations remain missing.
 
-`apps/admin-web` currently has only a shell placeholder.
+`apps/admin-web` currently opens the finance policy/risk settings surface backed
+by `admin-api` finance policy routes. Broader admin navigation, moderation,
+verification queues, user search and platform settings remain incomplete.
 
 The frontends use shared contracts, Zod response parsing, React Query and the
 shared HTTP client pattern with credentials and CSRF headers where applicable.
@@ -221,13 +247,13 @@ must not be added to `astrologer-api`.
 
 | Design area                      | Design files                        | Production surface                          | Domain ownership                                                                                     | API/contracts status  | Frontend status   | Notes                                                                                         |
 | -------------------------------- | ----------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------- | ----------------- | --------------------------------------------------------------------------------------------- |
-| Admin overview and analytics     | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `PlatformAnalytics`, `Users/Roles`, `Verification`, `Moderation`, `Payments`, `Disputes`, `AuditLog` | missing beyond health | shell placeholder | Needs internal role authorization and backend read models.                                    |
-| User operations and payout terms | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `Users/Roles`, `AstrologerProfile`, `Payouts`, `PlatformPlans`, `AuditLog`                           | missing beyond health | missing           | Admin user actions and payout overrides must be audited and must call domain use cases.       |
-| Verification queues              | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `Verification`, `AstrologerProfile`, `KYC`, `AuditLog`                                               | missing beyond health | missing           | Verification status is protected workflow state, not an astrologer-editable profile field.    |
-| Moderation queues                | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `Moderation`, `Content`, `Reviews`, `PublicPage`, `Products`, `AuditLog`                             | missing beyond health | missing           | Moderation decisions need reasons, reviewer identity and audit trail.                         |
-| Disputes and refunds             | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `Disputes`, `Orders`, `Payments`, `Refunds`, `Wallet/Ledger`, `AuditLog`                             | missing beyond health | missing           | Refunds must go through payment/billing use cases and idempotent provider workflows.          |
-| Admin plans                      | `admin-plans.jsx`, `plans-data.jsx` | `admin-web` + `admin-api`                   | `PlatformPlans`, `Billing`, `Entitlements`, `AuditLog`                                               | missing beyond health | missing           | Plan edits are sensitive platform settings and need auditability.                             |
-| Platform settings and legal      | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `PlatformSettings`, `LegalDocuments`, `FeatureFlags`, `AuditLog`                                     | missing beyond health | missing           | Settings cannot be local toggles. They require permission checks, versioning and audit logs.  |
+| Admin overview and analytics     | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `PlatformAnalytics`, `Users/Roles`, `Verification`, `Moderation`, `Payments`, `Disputes`, `AuditLog` | missing except admin auth/security/database foundation and finance-policy audit contour | shell placeholder | Needs internal role authorization and backend read models.                                    |
+| User operations and payout terms | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `Users/Roles`, `AstrologerProfile`, `Payouts`, `PlatformPlans`, `AuditLog`                           | partial finance policy/risk/payout status contour; user operations missing | partial finance policy/risk settings surface | Admin user actions and payout overrides must be audited and must call domain use cases.       |
+| Verification queues              | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `Verification`, `AstrologerProfile`, `KYC`, `AuditLog`                                               | missing except admin auth/security/database foundation | missing           | Verification status is protected workflow state, not an astrologer-editable profile field.    |
+| Moderation queues                | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `Moderation`, `Content`, `Reviews`, `PublicPage`, `Products`, `AuditLog`                             | missing except admin auth/security/database foundation | missing           | Moderation decisions need reasons, reviewer identity and audit trail.                         |
+| Disputes and refunds             | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `Disputes`, `Orders`, `Payments`, `Refunds`, `Wallet/Ledger`, `AuditLog`                             | missing except finance policy/payout status foundation; refund workflow missing | missing           | Refunds must go through payment/billing use cases and idempotent provider workflows.          |
+| Admin plans                      | `admin-plans.jsx`, `plans-data.jsx` | `admin-web` + `admin-api`                   | `PlatformPlans`, `Billing`, `Entitlements`, `AuditLog`                                               | missing except admin auth/security/database foundation | missing           | Plan edits are sensitive platform settings and need auditability.                             |
+| Platform settings and legal      | `admin.jsx`, `admin-data.jsx`       | `admin-web` + `admin-api`                   | `PlatformSettings`, `LegalDocuments`, `FeatureFlags`, `AuditLog`                                     | missing except admin auth/security/database foundation | missing           | Settings cannot be local toggles. They require permission checks, versioning and audit logs.  |
 | Admin communications             | `admin.jsx` (`AdmCompose`)          | `admin-web` + future notification/admin API | `Notifications`, `Support`, `AuditLog`                                                               | missing               | missing           | Operator messages must use notification providers/templates and record sender/action context. |
 
 ## Cross-Cutting Design Assets

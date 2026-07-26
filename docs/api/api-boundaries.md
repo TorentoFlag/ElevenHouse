@@ -4,9 +4,11 @@
 
 `public-api` обслуживает высоконагруженные client-facing flows. В текущем коде
 реализованы health, identity/passwordless/session, direct-link client join,
-related-astrologer read, cabinet overview и client birth-profile routes.
-Booking, orders, payments, public profile read model и остальная часть client
-cabinet остаются будущими модулями этой поверхности.
+related-astrologer read, cabinet overview, client birth-profile routes and the
+first direct-link booking/order/payment command contour. Full public profile
+read model, public product/slot selection reads, client-facing checkout UI,
+materials, feed, subscriptions, journal and client-visible calculation delivery
+remain incomplete contours on this surface.
 
 Ответственности:
 
@@ -87,15 +89,16 @@ by profile storage.
 ## Astrologer API
 
 `astrologer-api` обслуживает authenticated workflows астрологов. В текущем коде
-реализованы health, identity/passwordless/session, dictionary, dictionary AI draft,
-products, media uploads, profile/settings billing overview, verification
-application submission, CRM clients, calculations, canonical Pythagorean
-numerology, canonical Ladini 22 Matrix calculations with private notes and a
-versioned interpretation catalog, Human Design preview/persist/recalculate, и
-provider-neutral AI generation через
-OpenAI. Messaging is the planned provider-neutral foundation for durable
-conversations, Telegram delivery and realtime freshness; its implementation
-mapping is recorded in `docs/decisions/0010-messaging-channel-architecture.md`.
+реализованы health, identity/passwordless/session, dictionary, dictionary AI
+draft, products, media uploads, profile/settings billing overview, verification
+application submission, CRM clients, availability, calendar/manual booking,
+finance overview/manual payout requests, calculations, chart calculations and
+PDF export, canonical Pythagorean numerology, canonical Ladini 22 Matrix
+calculations with private notes and a versioned interpretation catalog, Human
+Design individual/compatibility/transit/AI/PDF contours, provider-neutral
+Messaging commands/webhook/SSE freshness and provider-neutral AI generation
+through OpenAI. Messaging architecture is recorded in
+`docs/decisions/0010-messaging-channel-architecture.md`.
 
 Ответственности:
 
@@ -322,24 +325,33 @@ metadata are never frontend contracts.
 
 `POST /human-design/preview` is authenticated and read-only, so it does not
 require CSRF and must not create calculation, participant-link, interpretation,
-artifact, outbox or DB rows. The preview contract accepts either internal
-provider-resolved personality/design longitudes or an owner-scoped CRM
-`clientId` for `human_design_classic`; browser-supplied birth date, birth time,
-timezone or place fields are rejected. For CRM input, `astrologer-api` hydrates
-the related client birth data, validates calculation readiness and resolves
-birth/design positions through the private chart-engine provider boundary. The
-server/domain is the only Human Design mechanics authority and returns a
-deterministic individual result with input fingerprint and SHA-256 result
-checksum. `POST /human-design/calculations` persists an owner-scoped
-`human_design` calculation through the shared calculations store and immediately
-links the CRM subject privately to the astrologer. `POST
-/human-design/calculations/:calculationId/recalculate` reloads the saved
-Human Design record, keeps the same CRM subject identity and replaces the
-result from current CRM birth data through the same chart-engine/domain
-pipeline. State-changing Human Design routes require CSRF. Compatibility,
-transits, AI interpretation and PDF export remain separate future contours; the
-current individual frontend already supports owner-scoped saved-result reopen
-through the generic calculations list.
+artifact, outbox or DB rows. The preview contract accepts internal
+provider-resolved personality/design longitudes, an owner-scoped CRM `clientId`
+for individual mode, or an owner-scoped distinct CRM client pair for
+compatibility mode; browser-supplied birth date, birth time, timezone or place
+fields are rejected. For CRM input, `astrologer-api` hydrates related client
+birth data, validates calculation readiness and resolves birth/design positions
+through the private chart-engine provider boundary. The server/domain is the
+only Human Design mechanics authority and returns deterministic individual or
+compatibility results with input fingerprint and SHA-256 result checksum.
+`POST /human-design/calculations` persists an owner-scoped `human_design`
+calculation through the shared calculations store and privately links the CRM
+subject, plus partner for compatibility mode, to the astrologer. `POST
+/human-design/calculations/:calculationId/recalculate` reloads the saved Human
+Design record, keeps the same CRM participant identities and replaces the result
+from current CRM birth data through the same chart-engine/domain pipeline.
+State-changing Human Design routes require CSRF.
+
+`GET /human-design/calculations/:calculationId/transits` is an authenticated
+read-only overlay route for saved individual calculations. It resolves transit
+positions server-side for the requested instant, returns a checksum-bound
+`human-design-transit-result.v1` result and performs no persistence. `POST
+/human-design/calculations/:calculationId/ai-draft` accepts the strict current
+checksum body and may include a server-resolved transit focus; AI receives only
+minimized deterministic Human Design context and frontend responses expose no
+provider/model/prompt metadata. Human Design PDF routes use the shared private
+calculation-PDF lifecycle for current saved individual or compatibility results;
+transit overlays are not standalone PDF exports.
 
 `GET /products/templates` returns active platform-owned starter templates in the
 requested locale. `POST /products/templates/:templateCode/drafts` requires an
@@ -397,6 +409,8 @@ POST /admin/finance/policies/default
 PUT  /admin/finance/policies/default
 PUT  /admin/finance/risk-profiles/:astrologerId
 POST /admin/finance/orders/:orderId/apply-risk-policy
+GET  /admin/finance/payout-requests
+PUT  /admin/finance/payout-requests/:payoutRequestId/status
 ```
 
 Новые admin/moderator/super_admin workflows не должны добавляться в `public-api`
@@ -430,7 +444,7 @@ Admin actions должны вызывать domain use cases и писать aud
 
 ## Правило browser security
 
-Cookie-auth state-changing routes в `public-api`, `astrologer-api` и будущем `admin-api`
+Cookie-auth state-changing routes в `public-api`, `astrologer-api` и `admin-api`
 должны явно декларировать CSRF policy через security layer соответствующего backend app.
 Не реализуй CSRF-проверки локально внутри booking/orders/payments/identity,
 astrologer или admin controllers.
