@@ -146,12 +146,15 @@ describe("AstroCalendarPageView", () => {
     expect(markup).toContain("Горизонт · 30 дней");
     expect(markup).toContain("Полнолуние 17° Водолея");
     expect(markup).toContain("Марина Краснова");
+    expect(markup).toContain("id=\"astro-calendar-search\"");
+    expect(markup).toContain("name=\"astro-calendar-search\"");
     expect(markup).toContain("Период кульминации");
     expect(markup).toContain("Автоматизации появятся после отдельного production-контура");
     expect(markup).toContain("disabled");
     expect(css).toContain("height: calc(100dvh - var(--astrologer-app-header-height, 68px))");
     expect(css).toMatch(/\.timeline\s*\{[^}]*height:\s*44px/s);
-    expect(css).toMatch(/\.layout\s*\{[^}]*grid-template-columns:\s*260px minmax\(520px, 1fr\) 360px/s);
+    expect(css).toMatch(/\.layout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 920px\)/s);
+    expect(css).toMatch(/\.layout\s*\{[^}]*justify-content:\s*center/s);
   });
 
   it("keeps missing dictionary entries honest with a create link to references", () => {
@@ -245,10 +248,11 @@ describe("AstroCalendarPageView", () => {
     expect(staleMarkup).toContain("Пересчитать");
   });
 
-  it("uses responsive CSS without a separate mobile wrapper", () => {
+  it("uses responsive CSS without a separate mobile wrapper or clipped side rails", () => {
     const css = readFileSync(new URL("./AstroCalendarPage.module.css", import.meta.url), "utf8");
 
-    expect(css).toMatch(/@media \(max-width: 900px\)[\s\S]*\.layout\s*\{[^}]*grid-template-columns:\s*1fr/s);
+    expect(css).toMatch(/@media \(min-width: 1360px\)[\s\S]*\.layout\s*\{[^}]*grid-template-columns:\s*230px minmax\(520px, 1fr\) 320px/s);
+    expect(css).toMatch(/@media \(max-width: 900px\)[\s\S]*\.layout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
     expect(css).toMatch(/@media \(max-width: 640px\)[\s\S]*\.toolbar\s*\{[^}]*padding:\s*10px/s);
     expect(css).not.toContain("ios-frame");
   });

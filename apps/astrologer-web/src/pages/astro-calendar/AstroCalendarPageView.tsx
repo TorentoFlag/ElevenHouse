@@ -121,6 +121,8 @@ export function AstroCalendarPageView({
         <label className={styles.searchBox}>
           <Icon iconName="search" width={15} height={15} aria-hidden="true" />
           <input
+            id="astro-calendar-search"
+            name="astro-calendar-search"
             value={search}
             placeholder="Поиск: событие, знак, клиент..."
             onChange={(event) => onSearchChange(event.currentTarget.value)}
