@@ -366,31 +366,38 @@
 
 **Implementation**
 
-- [ ] Map design-reference states from:
+- [x] Map design-reference states from:
   - `ElevenHouseDesign/app/astro-calendar.jsx`
   - `ElevenHouseDesign/app/astro-calendar-data.jsx`
-- [ ] Implement first-screen workspace, not a landing page.
-- [ ] Match core layout:
+- [x] Implement first-screen workspace, not a landing page.
+- [x] Match core layout:
   - top toolbar;
   - left filters/client readiness rail;
   - central calendar grid;
   - right detail/interpretation panel;
   - event chips;
   - generation status controls.
-- [ ] Match typography, colors, borders, radii, spacing and scroll behavior from reference.
-- [ ] Implement responsive states for desktop and narrow viewports.
-- [ ] Ensure interactive controls are keyboard/focus accessible.
+- [x] Match typography, colors, borders, radii, spacing and scroll behavior from reference.
+- [x] Implement responsive states for desktop and narrow viewports.
+- [x] Ensure interactive controls are keyboard/focus accessible.
 
 **Tests**
 
-- [ ] Component tests for visible state matrix.
-- [ ] No overlapping text on narrow/desktop viewport fixtures.
+- [x] Component tests for visible state matrix.
+- [x] No overlapping text on narrow/desktop viewport fixtures.
 
 **Verification**
 
 - [ ] Real browser screenshot comparison against reference route/state.
 - [ ] Console/network inspection for `/astro-calendar`.
 - [ ] Keyboard/focus smoke check.
+
+**Current blocker**
+
+- 2026-07-26: production web on `http://localhost:5174/astro-calendar` redirects to
+  `/auth` in the available Chrome session because `/api/identity/me` returns `401`.
+  Browser screenshot comparison, route console/network inspection and keyboard/focus
+  smoke remain open until an authenticated astrologer browser session is available.
 
 ---
 

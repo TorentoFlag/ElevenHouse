@@ -13,6 +13,7 @@ import { CalendarPage } from "./pages/calendar/CalendarPage";
 import { ChartEngineRoute } from "./pages/chart-engine/ChartEngineRoute";
 import { HumanDesignPage } from "./pages/human-design/HumanDesignPage";
 import { InboxPage } from "./pages/inbox/InboxPage";
+import { AstroCalendarPage } from "./pages/astro-calendar/AstroCalendarPage";
 
 export const astrologerRoutes = [
   {
@@ -60,6 +61,10 @@ export const astrologerRoutes = [
           {
             path: "/human-design",
             element: <HumanDesignPage />
+          },
+          {
+            path: "/astro-calendar",
+            element: <AstroCalendarPage />
           },
           {
             path: "/chart-engine",

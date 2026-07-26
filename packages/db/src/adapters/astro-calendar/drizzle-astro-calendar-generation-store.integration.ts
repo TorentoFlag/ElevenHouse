@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ASTRO_CALENDAR_GENERATION_REQUESTED_EVENT } from "@elevenhouse/domain";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import { createPostgresRuntime } from "../../runtime";
-import { astroCalendarEvents, astroCalendarGenerations, outboxEvents, users } from "../../schema";
+import { astroCalendarGenerations, outboxEvents, users } from "../../schema";
 import { createDrizzleAstroCalendarGenerationStore } from "./drizzle-astro-calendar-generation-store";
 
 const databaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
