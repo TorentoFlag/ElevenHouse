@@ -1,0 +1,339 @@
+import { describe, expect, it } from "vitest";
+import {
+  approvePayoutStatusUpdate,
+  PayoutInsufficientAvailableBalanceError,
+  PayoutMethodMissingError,
+  requestAstrologerPayout,
+  releaseAstrologerFundsFromHold,
+  type PayoutCommandStore,
+  type PayoutMethodRecord,
+  type PayoutRequestRecord
+} from "./payout-use-cases";
+import type { CreateLedgerTransactionInput, WalletBalance } from "../wallet";
+
+const now = "2026-07-25T10:00:00.000Z";
+const astrologerUserId = "22222222-2222-4222-8222-222222222222";
+const adminUserId = "11111111-1111-4111-8111-111111111111";
+const payoutMethodId = "33333333-3333-4333-8333-333333333333";
+const payoutRequestId = "44444444-4444-4444-8444-444444444444";
+
+describe("payout use cases", () => {
+  it("creates a manual payout request only from available balance and reserves it", async () => {
+    const store = createStore({
+      availableAmountMinor: 25_000_00,
+      method: defaultMethod()
+    });
+
+    const request = await requestAstrologerPayout({
+      store,
+      astrologerUserId,
+      amount: { amountMinor: 10_000_00, currency: "RUB" },
+      metadata: { source: "astrologer_finance" },
+      now
+    });
+
+    expect(request).toMatchObject({
+      astrologerUserId,
+      amount: { amountMinor: 10_000_00, currency: "RUB" },
+      method: "manual_bank_transfer",
+      status: "requested"
+    });
+    expect(store.ledgerTransactions).toEqual([
+      expect.objectContaining({
+        operationType: "payout_reserved",
+        payoutRequestId,
+        entries: [
+          expect.objectContaining({
+            side: "debit",
+            account: {
+              accountType: "astrologer_available",
+              astrologerUserId,
+              currency: "RUB"
+            }
+          }),
+          expect.objectContaining({
+            side: "credit",
+            account: {
+              accountType: "astrologer_payout_pending",
+              astrologerUserId,
+              currency: "RUB"
+            }
+          })
+        ]
+      })
+    ]);
+  });
+
+  it("rejects payout creation without method or enough available balance", async () => {
+    await expect(
+      requestAstrologerPayout({
+        store: createStore({ availableAmountMinor: 25_000_00, method: null }),
+        astrologerUserId,
+        amount: { amountMinor: 10_000_00, currency: "RUB" },
+        metadata: {},
+        now
+      })
+    ).rejects.toBeInstanceOf(PayoutMethodMissingError);
+
+    await expect(
+      requestAstrologerPayout({
+        store: createStore({ availableAmountMinor: 9_999_99, method: defaultMethod() }),
+        astrologerUserId,
+        amount: { amountMinor: 10_000_00, currency: "RUB" },
+        metadata: {},
+        now
+      })
+    ).rejects.toBeInstanceOf(PayoutInsufficientAvailableBalanceError);
+  });
+
+  it("posts paid and failed status updates to ledger once terminal state changes", async () => {
+    const store = createStore({
+      availableAmountMinor: 25_000_00,
+      method: defaultMethod(),
+      request: payoutRequest({ status: "processing_manual" })
+    });
+
+    const paid = await approvePayoutStatusUpdate({
+      store,
+      payoutRequestId,
+      adminUserId,
+      update: {
+        status: "paid",
+        externalReference: "bank-transfer-1001",
+        transferredAt: now,
+        adminNote: "Paid from bank cabinet"
+      },
+      now
+    });
+
+    expect(paid.status).toBe("paid");
+    expect(store.ledgerTransactions).toEqual([
+      expect.objectContaining({
+        operationType: "payout_paid",
+        entries: [
+          expect.objectContaining({
+            side: "debit",
+            account: {
+              accountType: "astrologer_payout_pending",
+              astrologerUserId,
+              currency: "RUB"
+            }
+          }),
+          expect.objectContaining({
+            side: "credit",
+            account: { accountType: "payout_clearing", astrologerUserId: null, currency: "RUB" }
+          })
+        ]
+      })
+    ]);
+
+    const replay = await approvePayoutStatusUpdate({
+      store,
+      payoutRequestId,
+      adminUserId,
+      update: {
+        status: "paid",
+        externalReference: "bank-transfer-1001",
+        transferredAt: now,
+        adminNote: "Paid from bank cabinet"
+      },
+      now
+    });
+    expect(replay.status).toBe("paid");
+    expect(store.ledgerTransactions).toHaveLength(1);
+  });
+
+  it("returns payout pending money to available when manual transfer fails", async () => {
+    const store = createStore({
+      availableAmountMinor: 25_000_00,
+      method: defaultMethod(),
+      request: payoutRequest({ status: "processing_manual" })
+    });
+
+    const failed = await approvePayoutStatusUpdate({
+      store,
+      payoutRequestId,
+      adminUserId,
+      update: {
+        status: "failed",
+        failureReason: "Bank rejected recipient account",
+        adminNote: "Needs payout details update"
+      },
+      now
+    });
+
+    expect(failed.status).toBe("failed");
+    expect(store.ledgerTransactions).toEqual([
+      expect.objectContaining({
+        operationType: "payout_failed",
+        entries: [
+          expect.objectContaining({
+            side: "debit",
+            account: {
+              accountType: "astrologer_payout_pending",
+              astrologerUserId,
+              currency: "RUB"
+            }
+          }),
+          expect.objectContaining({
+            side: "credit",
+            account: {
+              accountType: "astrologer_available",
+              astrologerUserId,
+              currency: "RUB"
+            }
+          })
+        ]
+      })
+    ]);
+  });
+
+  it("releases eligible hold money from pending to available", async () => {
+    const store = createStore({ availableAmountMinor: 0, method: defaultMethod() });
+
+    await releaseAstrologerFundsFromHold({
+      store,
+      astrologerUserId,
+      orderId: "55555555-5555-4555-8555-555555555555",
+      amount: { amountMinor: 7_500_00, currency: "RUB" },
+      reason: "hold_expired_and_settlement_cleared",
+      now
+    });
+
+    expect(store.ledgerTransactions).toEqual([
+      expect.objectContaining({
+        operationType: "funds_released",
+        orderId: "55555555-5555-4555-8555-555555555555",
+        entries: [
+          expect.objectContaining({
+            side: "debit",
+            account: {
+              accountType: "astrologer_pending",
+              astrologerUserId,
+              currency: "RUB"
+            }
+          }),
+          expect.objectContaining({
+            side: "credit",
+            account: {
+              accountType: "astrologer_available",
+              astrologerUserId,
+              currency: "RUB"
+            }
+          })
+        ]
+      })
+    ]);
+  });
+});
+
+function createStore(input: {
+  readonly availableAmountMinor: number;
+  readonly method: PayoutMethodRecord | null;
+  readonly request?: PayoutRequestRecord;
+}): PayoutCommandStore & { readonly ledgerTransactions: CreateLedgerTransactionInput[] } {
+  let request = input.request ?? null;
+  const ledgerTransactions: CreateLedgerTransactionInput[] = [];
+  return {
+    ledgerTransactions,
+    findDefaultMethod: async () => input.method,
+    findWalletBalance: async () => balance(input.availableAmountMinor),
+    createRequest: async (createInput) => {
+      request = payoutRequest({
+        amountMinor: createInput.amount.amountMinor,
+        metadata: createInput.metadata
+      });
+      return request;
+    },
+    findRequestById: async (id) => (id === request?.id ? request : null),
+    updateRequestStatus: async (updateInput) => {
+      if (!request || updateInput.payoutRequestId !== request.id) return null;
+      request = {
+        ...request,
+        status: updateInput.status,
+        adminUserId: updateInput.adminUserId,
+        adminNote: updateInput.adminNote ?? null,
+        failureReason: updateInput.failureReason ?? null,
+        externalReference: updateInput.externalReference ?? null,
+        transferredAt: updateInput.transferredAt ?? null,
+        providerPayoutId: updateInput.providerPayoutId ?? null,
+        reviewedAt: updateInput.adminUserId ? updateInput.now : request.reviewedAt,
+        completedAt:
+          updateInput.status === "paid" || updateInput.status === "failed"
+            ? updateInput.now
+            : request.completedAt,
+        updatedAt: updateInput.now
+      };
+      return request;
+    },
+    createTransaction: async (transaction) => {
+      ledgerTransactions.push(transaction);
+      return {
+        ...transaction,
+        id: `ledger-${ledgerTransactions.length}`,
+        entries: transaction.entries.map((entry, index) => ({
+          ...entry,
+          id: `entry-${index}`,
+          ledgerAccountId: `account-${index}`
+        }))
+      };
+    }
+  };
+}
+
+function defaultMethod(): PayoutMethodRecord {
+  return {
+    id: payoutMethodId,
+    astrologerUserId,
+    method: "manual_bank_transfer",
+    currency: "RUB",
+    displayName: "Счет •• 4417",
+    manualBankTransferDetails: { recipient: "Astrologer" },
+    provider: null,
+    environment: null,
+    providerPayoutAccountId: null,
+    isDefault: true,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function payoutRequest(
+  overrides: Partial<PayoutRequestRecord> & { readonly amountMinor?: number } = {}
+): PayoutRequestRecord {
+  return {
+    id: payoutRequestId,
+    astrologerUserId,
+    payoutMethodId,
+    status: overrides.status ?? "requested",
+    amount: { amountMinor: overrides.amountMinor ?? 10_000_00, currency: "RUB" },
+    method: "manual_bank_transfer",
+    provider: null,
+    environment: null,
+    requestedAt: now,
+    reviewedAt: null,
+    completedAt: null,
+    adminUserId: null,
+    adminNote: null,
+    failureReason: null,
+    externalReference: null,
+    transferredAt: null,
+    providerPayoutId: null,
+    metadata: overrides.metadata ?? {},
+    createdAt: now,
+    updatedAt: now,
+    ...overrides
+  };
+}
+
+function balance(availableAmountMinor: number): WalletBalance {
+  return {
+    astrologerUserId,
+    pending: { amountMinor: 0, currency: "RUB" },
+    available: { amountMinor: availableAmountMinor, currency: "RUB" },
+    reserved: { amountMinor: 0, currency: "RUB" },
+    payoutPending: { amountMinor: 0, currency: "RUB" },
+    negativeBalance: { amountMinor: 0, currency: "RUB" },
+    updatedAt: now
+  };
+}

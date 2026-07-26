@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adminPayoutQueueResponseSchema,
   adminPayoutStatusUpdateSchema,
   payoutRequestResponseSchema,
   payoutRequestStatusSchema
@@ -81,4 +82,36 @@ describe("payout contracts", () => {
 	      adminPayoutStatusUpdateSchema.parse({ status: "failed", adminNote: "No reference" })
 	    ).toThrow();
 	  });
+
+  it("exposes admin payout queue summary without provider balance semantics", () => {
+    const queue = {
+      summary: {
+        requestedCount: 2,
+        underReviewCount: 1,
+        processingCount: 1,
+        readyToPayAmount: { amountMinor: 18_900_00, currency: "RUB" },
+        processingAmount: { amountMinor: 10_000_00, currency: "RUB" }
+      },
+      requests: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          astrologerUserId: "22222222-2222-4222-8222-222222222222",
+          status: "processing_manual",
+          amount: { amountMinor: 10_000_00, currency: "RUB" },
+          method: "manual_bank_transfer",
+          requestedAt: "2026-07-24T10:00:00.000Z",
+          reviewedAt: "2026-07-24T10:05:00.000Z",
+          completedAt: null,
+          adminUserId: "33333333-3333-4333-8333-333333333333",
+          adminNote: "Ready for bank cabinet transfer",
+          failureReason: null,
+          externalReference: null,
+          transferredAt: null,
+          providerPayoutId: null
+        }
+      ]
+    } as const;
+
+    expect(adminPayoutQueueResponseSchema.parse(queue)).toEqual(queue);
+  });
 	});

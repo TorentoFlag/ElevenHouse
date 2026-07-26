@@ -39,6 +39,16 @@
       "types": "./dist/finance-policies.d.ts",
       "import": "./dist/finance-policies.js",
       "require": "./dist/finance-policies.js"
+    },
+    "./money": {
+      "types": "./dist/money.d.ts",
+      "import": "./dist/money.js",
+      "require": "./dist/money.js"
+    },
+    "./payouts": {
+      "types": "./dist/payouts.d.ts",
+      "import": "./dist/payouts.js",
+      "require": "./dist/payouts.js"
     }
   },
   "scripts": {

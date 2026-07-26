@@ -7,7 +7,9 @@ describe("FinancePoliciesPage", () => {
   it("renders the admin finance policy controls instead of the shell placeholder", () => {
     const html = renderToStaticMarkup(<FinancePoliciesPage api={apiStub()} />);
 
-    expect(html).toContain("Политики удержаний и риска");
+    expect(html).toContain("Финансы");
+    expect(html).toContain("Выплаты");
+    expect(html).toContain("Политики");
     expect(html).toContain("Finance controls");
     expect(html).not.toContain("Admin surface");
   });
@@ -18,6 +20,17 @@ function apiStub(): AdminFinancePoliciesApi {
     listPolicies: vi.fn(async () => ({ policies: [] })),
     ensureDefaultPolicy: vi.fn(),
     updateDefaultPolicy: vi.fn(),
-    updateAstrologerRiskProfile: vi.fn()
+    updateAstrologerRiskProfile: vi.fn(),
+    listPayoutRequests: vi.fn(async () => ({
+      summary: {
+        requestedCount: 0,
+        underReviewCount: 0,
+        processingCount: 0,
+        readyToPayAmount: { amountMinor: 0, currency: "RUB" as const },
+        processingAmount: { amountMinor: 0, currency: "RUB" as const }
+      },
+      requests: []
+    })),
+    updatePayoutRequestStatus: vi.fn()
   };
 }

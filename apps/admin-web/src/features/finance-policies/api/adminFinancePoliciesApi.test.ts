@@ -56,6 +56,67 @@ describe("createAdminFinancePoliciesApi", () => {
       })
     );
   });
+
+  it("loads payout queue and sends CSRF protected status updates", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          summary: {
+            requestedCount: 1,
+            underReviewCount: 0,
+            processingCount: 1,
+            readyToPayAmount: { amountMinor: 10_000_00, currency: "RUB" },
+            processingAmount: { amountMinor: 15_000_00, currency: "RUB" }
+          },
+          requests: []
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "11111111-1111-4111-8111-111111111111",
+          astrologerUserId: "22222222-2222-4222-8222-222222222222",
+          status: "paid",
+          amount: { amountMinor: 10_000_00, currency: "RUB" },
+          method: "manual_bank_transfer",
+          requestedAt: "2026-07-24T10:00:00.000Z",
+          reviewedAt: "2026-07-24T10:05:00.000Z",
+          completedAt: "2026-07-24T10:20:00.000Z",
+          adminUserId: "33333333-3333-4333-8333-333333333333",
+          adminNote: "Paid manually",
+          failureReason: null,
+          externalReference: "bank-transfer-1001",
+          transferredAt: "2026-07-24T10:20:00.000Z",
+          providerPayoutId: null
+        })
+      );
+    const api = createAdminFinancePoliciesApi({
+      fetcher,
+      csrfTokenReader: () => "csrf-token"
+    });
+
+    await expect(api.listPayoutRequests()).resolves.toMatchObject({
+      summary: { requestedCount: 1 }
+    });
+    await api.updatePayoutRequestStatus("11111111-1111-4111-8111-111111111111", {
+      status: "paid",
+      externalReference: "bank-transfer-1001",
+      transferredAt: "2026-07-24T10:20:00.000Z",
+      adminNote: "Paid manually"
+    });
+
+    expect(fetcher).toHaveBeenLastCalledWith(
+      "/admin/finance/payout-requests/11111111-1111-4111-8111-111111111111/status",
+      expect.objectContaining({
+        method: "PUT",
+        credentials: "include",
+        headers: expect.objectContaining({
+          "content-type": "application/json",
+          "x-csrf-token": "csrf-token"
+        })
+      })
+    );
+  });
 });
 
 function jsonResponse(body: unknown): Response {

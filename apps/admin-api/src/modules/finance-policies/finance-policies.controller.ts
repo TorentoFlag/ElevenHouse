@@ -10,6 +10,8 @@ import {
   UseGuards
 } from "@nestjs/common";
 import type {
+  AdminPayoutQueueResponse,
+  PayoutRequestResponse,
   AstrologerRiskProfileResponse,
   FinancePoliciesResponse,
   FinancePolicyResponse,
@@ -62,6 +64,25 @@ export class FinancePoliciesController {
     @Param("orderId") orderId: string
   ): Promise<OrderResponse> {
     return this.service.applyRiskPolicyToOrder(requireAdminUserId(request), orderId);
+  }
+
+  @Get("payout-requests")
+  listPayoutRequests(): Promise<AdminPayoutQueueResponse> {
+    return this.service.listPayoutRequests();
+  }
+
+  @Put("payout-requests/:payoutRequestId/status")
+  @RequireCsrf()
+  updatePayoutRequestStatus(
+    @Req() request: AdminSessionRequest,
+    @Param("payoutRequestId") payoutRequestId: string,
+    @Body() body: unknown
+  ): Promise<PayoutRequestResponse> {
+    return this.service.updatePayoutRequestStatus(
+      requireAdminUserId(request),
+      payoutRequestId,
+      body
+    );
   }
 }
 

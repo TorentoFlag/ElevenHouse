@@ -42,8 +42,11 @@ export function createDrizzleLedgerStore(database: ElevenHouseDatabase): LedgerS
 
 export function createDrizzleLedgerTransactionStore(
   database: FinanceTransaction
-): Pick<LedgerStore, "createTransaction"> {
-  return { createTransaction: (input) => createLedgerTransaction(database, input) };
+): Pick<LedgerStore, "createTransaction" | "findWalletBalance"> {
+  return {
+    createTransaction: (input) => createLedgerTransaction(database, input),
+    findWalletBalance: (astrologerUserId) => findWalletBalance(database, astrologerUserId)
+  };
 }
 
 export async function createLedgerTransaction(

@@ -9,6 +9,11 @@ import type {
   FinanceOrderStore,
   FinancePolicySnapshot,
   FinancePolicyStore,
+  LedgerStore,
+  CreateLedgerEntryInput,
+  PayoutRequestRecord,
+  PayoutRequestStatus,
+  PayoutStore,
   RiskTier
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,6 +44,8 @@ let baseUrl: string;
 let csrfToken: string;
 let store: FinancePolicyStore;
 let orderStore: Pick<FinanceOrderStore, "applyFinancePolicy" | "findById">;
+let payoutStore: Pick<PayoutStore, "findRequestById" | "listRequests" | "updateRequestStatus">;
+let ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
 let auditLogStore: AuditLogStore;
 let unitOfWork: AdminFinancePolicyUnitOfWork;
 let roles: readonly PlatformRole[];
@@ -48,12 +55,16 @@ describe("admin finance policy HTTP flow", () => {
     roles = ["admin"];
     store = createFinancePolicyStore();
     orderStore = createOrderStore();
+    payoutStore = createPayoutStore();
+    ledgerStore = createLedgerStore();
     auditLogStore = createAuditLogStore();
     unitOfWork = {
       execute: vi.fn(async (operation) =>
         operation({
           store,
           orderStore,
+          payoutStore,
+          ledgerStore,
           auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
         })
       )
@@ -262,6 +273,87 @@ describe("admin finance policy HTTP flow", () => {
       })
     );
   });
+
+  it("lists manual payout requests and updates payout status with ledger and audit evidence", async () => {
+    const queue = await getJson("/admin/finance/payout-requests", authCookie());
+
+    expect(queue).toMatchObject({
+      status: 200,
+      body: {
+        summary: {
+          requestedCount: 1,
+          underReviewCount: 0,
+          processingCount: 1,
+          readyToPayAmount: { amountMinor: 10_000_00, currency: "RUB" },
+          processingAmount: { amountMinor: 15_000_00, currency: "RUB" }
+        },
+        requests: expect.arrayContaining([
+          expect.objectContaining({
+            id: "44444444-4444-4444-8444-444444444444",
+            status: "requested",
+            method: "manual_bank_transfer"
+          })
+        ])
+      }
+    });
+
+    await expect(
+      putJson(
+        "/admin/finance/payout-requests/55555555-5555-4555-8555-555555555555/status",
+        {
+          status: "paid",
+          externalReference: "bank-transfer-1001",
+          transferredAt: now.toISOString(),
+          adminNote: "Paid manually"
+        },
+        authCookie()
+      )
+    ).resolves.toMatchObject({ status: 403 });
+
+    const paid = await putJson(
+      "/admin/finance/payout-requests/55555555-5555-4555-8555-555555555555/status",
+      {
+        status: "paid",
+        externalReference: "bank-transfer-1001",
+        transferredAt: now.toISOString(),
+        adminNote: "Paid manually"
+      },
+      authenticatedCookies(),
+      {
+        origin: "http://localhost:5175",
+        [csrfHeaderName]: csrfToken
+      }
+    );
+
+    expect(paid).toMatchObject({
+      status: 200,
+      body: {
+        id: "55555555-5555-4555-8555-555555555555",
+        status: "paid",
+        externalReference: "bank-transfer-1001",
+        transferredAt: now.toISOString(),
+        adminUserId
+      }
+    });
+    expect(ledgerStore.createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationType: "payout_paid",
+        payoutRequestId: "55555555-5555-4555-8555-555555555555"
+      })
+    );
+    expect(auditLogStore.createEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: adminUserId,
+        action: "payout_request.status_updated",
+        targetType: "payout_request",
+        targetId: "55555555-5555-4555-8555-555555555555",
+        metadata: expect.objectContaining({
+          status: "paid",
+          externalReference: "bank-transfer-1001"
+        })
+      })
+    );
+  });
 });
 
 async function getJson(path: string, cookie?: string) {
@@ -445,6 +537,107 @@ function policy(
     createdByUserId: overrides.createdByUserId ?? null,
     snapshottedAt: overrides.snapshottedAt ?? now.toISOString(),
     createdAt: overrides.createdAt ?? now.toISOString()
+  };
+}
+
+function createPayoutStore(): Pick<
+  PayoutStore,
+  "findRequestById" | "listRequests" | "updateRequestStatus"
+> {
+  let requests: PayoutRequestRecord[] = [
+    payoutRequest({
+      id: "44444444-4444-4444-8444-444444444444",
+      status: "requested",
+      amountMinor: 10_000_00
+    }),
+    payoutRequest({
+      id: "55555555-5555-4555-8555-555555555555",
+      status: "processing_manual",
+      amountMinor: 15_000_00,
+      reviewedAt: now.toISOString(),
+      adminUserId
+    })
+  ];
+
+  return {
+    findRequestById: vi.fn(async (payoutRequestId) =>
+      requests.find((request) => request.id === payoutRequestId) ?? null
+    ),
+    listRequests: vi.fn(async () => requests),
+    updateRequestStatus: vi.fn(async (input) => {
+      const existing = requests.find((request) => request.id === input.payoutRequestId);
+      if (!existing) return null;
+      const updated = {
+        ...existing,
+        status: input.status,
+        adminUserId: input.adminUserId,
+        adminNote: input.adminNote ?? null,
+        failureReason: input.failureReason ?? null,
+        externalReference: input.externalReference ?? null,
+        transferredAt: input.transferredAt ?? null,
+        providerPayoutId: input.providerPayoutId ?? null,
+        reviewedAt: input.adminUserId ? input.now : existing.reviewedAt,
+        completedAt:
+          input.status === "paid" || input.status === "failed" ? input.now : existing.completedAt,
+        updatedAt: input.now
+      };
+      requests = requests.map((request) => (request.id === updated.id ? updated : request));
+      return updated;
+    })
+  };
+}
+
+function createLedgerStore(): Pick<LedgerStore, "createTransaction" | "findWalletBalance"> {
+  return {
+    createTransaction: vi.fn(async (input) => ({
+      ...input,
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      entries: input.entries.map((entry: CreateLedgerEntryInput, index: number) => ({
+        ...entry,
+        id: `bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb${index}`,
+        ledgerAccountId: `cccccccc-cccc-4ccc-8ccc-ccccccccccc${index}`
+      }))
+    })),
+    findWalletBalance: vi.fn(async () => ({
+      astrologerUserId,
+      pending: { amountMinor: 0, currency: "RUB" as const },
+      available: { amountMinor: 25_000_00, currency: "RUB" as const },
+      reserved: { amountMinor: 0, currency: "RUB" as const },
+      payoutPending: { amountMinor: 15_000_00, currency: "RUB" as const },
+      negativeBalance: { amountMinor: 0, currency: "RUB" as const },
+      updatedAt: now.toISOString()
+    }))
+  };
+}
+
+function payoutRequest(overrides: {
+  readonly id: string;
+  readonly status: PayoutRequestStatus;
+  readonly amountMinor: number;
+  readonly reviewedAt?: string | null;
+  readonly adminUserId?: string | null;
+}) {
+  return {
+    id: overrides.id,
+    astrologerUserId,
+    payoutMethodId: "33333333-3333-4333-8333-333333333333",
+    status: overrides.status,
+    amount: { amountMinor: overrides.amountMinor, currency: "RUB" as const },
+    method: "manual_bank_transfer" as const,
+    provider: null,
+    environment: null,
+    requestedAt: now.toISOString(),
+    reviewedAt: overrides.reviewedAt ?? null,
+    completedAt: null,
+    adminUserId: overrides.adminUserId ?? null,
+    adminNote: null,
+    failureReason: null,
+    externalReference: null,
+    transferredAt: null,
+    providerPayoutId: null,
+    metadata: {},
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString()
   };
 }
 

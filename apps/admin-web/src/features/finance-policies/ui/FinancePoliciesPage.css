@@ -1,24 +1,40 @@
 .adminFinanceShell {
+  --admin-bg: #0d0c20;
+  --admin-panel: #17142f;
+  --admin-surface: #1c1935;
+  --admin-surface-2: #24203f;
+  --admin-line: rgba(255, 255, 255, 0.1);
+  --admin-line-strong: rgba(255, 255, 255, 0.16);
+  --admin-text: #f4f2fb;
+  --admin-muted: #a7a2c8;
+  --admin-muted-2: #7e789e;
+  --admin-accent: #b79cfb;
+  --admin-accent-soft: rgba(183, 156, 251, 0.14);
+  --admin-positive: #4ec8a0;
+  --admin-warning: #f4c430;
+  --admin-danger: #f47a7a;
   min-height: 100vh;
   display: flex;
-  background: #10111f;
-  color: #f4f4f8;
+  background: var(--admin-bg);
+  color: var(--admin-text);
 }
 
 .adminFinanceRail {
   width: 230px;
   flex: 0 0 230px;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  background: #171826;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--admin-line);
+  background: var(--admin-panel);
   padding: 18px 12px;
 }
 
 .adminFinanceBrand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 10px 18px;
-  font-size: 15px;
+  gap: 9px;
+  padding: 0 10px 14px;
+  font-size: 14.5px;
   font-weight: 750;
 }
 
@@ -27,14 +43,14 @@
   width: 30px;
   height: 30px;
   place-items: center;
-  border-radius: 8px;
-  background: #b79cfb;
-  color: #16131f;
+  border-radius: 9px;
+  background: var(--admin-accent);
+  color: #14111e;
 }
 
 .adminFinanceNav {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .adminFinanceNavItem {
@@ -45,7 +61,7 @@
   border: 1px solid transparent;
   border-radius: 11px;
   background: transparent;
-  color: #a7a2c8;
+  color: var(--admin-muted);
   cursor: pointer;
   font: inherit;
   font-size: 13.5px;
@@ -54,21 +70,82 @@
   text-align: left;
 }
 
-.adminFinanceNavItem:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
+.adminFinanceNavItem svg {
+  width: 17px;
+  height: 17px;
+  color: currentColor;
 }
 
 .adminFinanceNavItemActive {
   border-color: rgba(183, 156, 251, 0.42);
-  background: rgba(183, 156, 251, 0.14);
-  color: #f4f4f8;
+  background: var(--admin-accent-soft);
+  color: var(--admin-text);
+}
+
+.adminFinanceNavBadge {
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  border-radius: 999px;
+  background: var(--admin-accent);
+  color: #14111e;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.adminFinanceRailFooter {
+  margin-top: auto;
+  padding: 0 4px;
+}
+
+.adminFinanceRailFooter > span,
+.adminFinanceKicker {
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.adminFinanceRailFooter > div {
+  display: flex;
+  gap: 2px;
+  margin-top: 7px;
+  border: 1px solid var(--admin-line-strong);
+  border-radius: 999px;
+  background: var(--admin-surface-2);
+  padding: 3px;
+}
+
+.adminFinanceRoleButton {
+  flex: 1;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--admin-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 6px 8px;
+}
+
+.adminFinanceRoleButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.adminFinanceRoleButtonActive {
+  background: var(--admin-accent);
+  color: #14111e;
 }
 
 .adminFinanceMain {
   min-width: 0;
   flex: 1;
-  padding: 0 0 40px;
+  padding-bottom: 40px;
 }
 
 .adminFinanceHeader {
@@ -77,8 +154,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(16, 17, 31, 0.88);
+  border-bottom: 1px solid var(--admin-line);
+  background: rgba(13, 12, 32, 0.88);
   padding: 0 24px;
 }
 
@@ -93,17 +170,16 @@
   line-height: 1.2;
 }
 
-.adminFinancePanel h2 {
-  font-size: 16px;
+.adminFinanceHeaderMeta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--admin-muted);
+  font-size: 12px;
 }
 
 .adminFinanceKicker {
   margin: 0 0 5px;
-  color: #a7a2c8;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 .adminFinanceStatusGrid {
@@ -113,26 +189,27 @@
   padding: 22px 24px 0;
 }
 
-.adminFinanceStatusCard {
+.adminFinanceStatusCard,
+.adminFinancePanel {
   display: block;
   min-width: 0;
-  border-color: rgba(255, 255, 255, 0.1);
-  background: #191a2a;
-  color: #f4f4f8;
+  border-color: var(--admin-line);
+  background: var(--admin-surface);
+  color: var(--admin-text);
 }
 
 .adminFinanceStatusCard span,
 .adminFinanceStatusCard small,
 .adminFinanceMuted {
-  color: #a7a2c8;
+  color: var(--admin-muted);
 }
 
 .adminFinanceStatusCard strong {
   display: block;
   margin-top: 8px;
+  overflow-wrap: anywhere;
   font-size: 22px;
   line-height: 1.08;
-  overflow-wrap: anywhere;
 }
 
 .adminFinanceStatusCard small {
@@ -142,32 +219,188 @@
   line-height: 1.25;
 }
 
+.adminFinanceOverviewGrid,
+.adminFinancePayoutGrid,
 .adminFinanceWorkGrid {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(420px, 1fr);
   gap: 16px;
   padding: 16px 24px 0;
   align-items: start;
 }
 
-.adminFinancePanel {
-  display: block;
-  min-width: 0;
-  border-color: rgba(255, 255, 255, 0.1);
-  background: #191a2a;
-  color: #f4f4f8;
+.adminFinanceOverviewGrid {
+  grid-template-columns: minmax(460px, 1.5fr) minmax(300px, 1fr);
 }
 
-.adminFinanceRiskPanel {
-  grid-column: 1 / -1;
+.adminFinancePayoutGrid,
+.adminFinanceWorkGrid {
+  grid-template-columns: minmax(520px, 1.35fr) minmax(360px, 0.9fr);
 }
 
+.adminFinanceContentPanel {
+  margin: 16px 24px 0;
+}
+
+.adminFinanceSideStack {
+  display: grid;
+  gap: 16px;
+}
+
+.adminFinanceActivityPanel,
+.adminFinancePayoutListPanel {
+  padding: 0;
+}
+
+.adminFinancePanelTitleRow,
 .adminFinancePanelHead {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+}
+
+.adminFinancePanelTitleRow {
+  border-bottom: 1px solid var(--admin-line);
+  padding: 16px 20px 13px;
+}
+
+.adminFinancePanelTitleRow h2,
+.adminFinancePanelHead h2,
+.adminFinancePanel h2 {
+  font-size: 15.5px;
+}
+
+.adminFinancePanelHead {
   margin-bottom: 16px;
+}
+
+.adminFinanceLiveDot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--admin-positive);
+  font-size: 11.5px;
+}
+
+.adminFinanceLiveDot::before {
+  width: 7px;
+  height: 7px;
+  content: "";
+  border-radius: 999px;
+  background: var(--admin-positive);
+}
+
+.adminFinanceActivityRow {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--admin-line);
+  padding: 11px 20px;
+}
+
+.adminFinanceActivityRow:first-of-type {
+  border-top: 0;
+}
+
+.adminFinanceActivityRow strong,
+.adminFinanceActivityRow small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminFinanceActivityRow strong {
+  font-size: 13px;
+}
+
+.adminFinanceActivityRow small,
+.adminFinanceActivityRow em {
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.adminFinanceActivityIcon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.adminFinanceActivityIcon-positive {
+  background: rgba(78, 200, 160, 0.16);
+  color: var(--admin-positive);
+}
+
+.adminFinanceActivityIcon-warning {
+  background: rgba(244, 196, 48, 0.16);
+  color: var(--admin-warning);
+}
+
+.adminFinanceActivityIcon-neutral {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent);
+}
+
+.adminFinanceAttentionButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--admin-line);
+  border-radius: 12px;
+  background: #16142b;
+  color: var(--admin-text);
+  cursor: pointer;
+  font: inherit;
+  padding: 11px 13px;
+}
+
+.adminFinanceAttentionButton span {
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+.adminFinanceAttentionButton strong {
+  font-size: 16px;
+}
+
+.adminFinanceFacts {
+  display: grid;
+  gap: 10px;
+}
+
+.adminFinanceFactsCompact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.adminFinanceFact {
+  border: 1px solid var(--admin-line);
+  border-radius: 11px;
+  background: #16142b;
+  padding: 12px 14px;
+}
+
+.adminFinanceFact span,
+.adminFinanceFact strong {
+  display: block;
+}
+
+.adminFinanceFact span {
+  color: var(--admin-muted);
+  font-size: 11.5px;
+}
+
+.adminFinanceFact strong {
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+  font-size: 13px;
 }
 
 .adminFinanceTierList {
@@ -180,17 +413,18 @@
   grid-template-columns: 10px minmax(92px, 0.8fr) minmax(120px, 1fr);
   align-items: center;
   gap: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--admin-line);
   border-radius: 10px;
-  background: #141523;
-  color: #f4f4f8;
+  background: #141323;
+  color: var(--admin-text);
   cursor: pointer;
   font: inherit;
   padding: 10px 12px;
   text-align: left;
 }
 
-.adminFinanceTierActive {
+.adminFinanceTierActive,
+.adminFinanceTableButtonActive {
   border-color: rgba(183, 156, 251, 0.5);
   background: rgba(183, 156, 251, 0.13);
 }
@@ -202,19 +436,19 @@
 }
 
 .adminFinanceRiskDot-positive {
-  background: #4ec8a0;
+  background: var(--admin-positive);
 }
 
 .adminFinanceRiskDot-neutral {
-  background: #a7a2c8;
+  background: var(--admin-muted);
 }
 
 .adminFinanceRiskDot-warning {
-  background: #f4c430;
+  background: var(--admin-warning);
 }
 
 .adminFinanceRiskDot-danger {
-  background: #f47a7a;
+  background: var(--admin-danger);
 }
 
 .adminFinanceTierName {
@@ -224,15 +458,14 @@
 }
 
 .adminFinanceTierMeta {
-  color: #a7a2c8;
-  font-size: 12px;
   overflow: hidden;
+  color: var(--admin-muted);
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .adminFinanceTable {
-  margin-top: 16px;
   overflow-x: auto;
 }
 
@@ -240,18 +473,92 @@
   display: grid;
   grid-template-columns: minmax(90px, 1.2fr) minmax(58px, 0.7fr) minmax(68px, 0.8fr) minmax(54px, 0.8fr) minmax(54px, 0.7fr);
   gap: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--admin-line);
   color: #d8d5e8;
   font-size: 12.5px;
   padding: 10px 0;
 }
 
+.adminFinancePayoutTable .adminFinanceTableRow {
+  grid-template-columns: minmax(180px, 1.4fr) minmax(94px, 0.75fr) minmax(96px, 0.8fr) minmax(98px, 0.7fr) minmax(80px, 0.6fr);
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
 .adminFinanceTableHead {
   border-top: 0;
-  color: #a7a2c8;
+  color: var(--admin-muted);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.adminFinanceTableButton {
+  width: 100%;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.adminFinanceUserCell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.adminFinanceAvatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.adminFinanceMono {
+  font-variant-numeric: tabular-nums;
+}
+
+.adminFinanceStatusPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 750;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+
+.adminFinanceStatusPill-neutral {
+  color: var(--admin-muted);
+  background: rgba(167, 162, 200, 0.1);
+}
+
+.adminFinanceStatusPill-positive {
+  color: var(--admin-positive);
+  background: rgba(78, 200, 160, 0.12);
+}
+
+.adminFinanceStatusPill-warning {
+  color: var(--admin-warning);
+  background: rgba(244, 196, 48, 0.12);
+}
+
+.adminFinanceStatusPill-danger {
+  color: var(--admin-danger);
+  background: rgba(244, 122, 122, 0.12);
 }
 
 .adminFinanceForm {
@@ -260,11 +567,15 @@
   gap: 13px;
 }
 
+.adminFinancePayoutForm {
+  grid-template-columns: 1fr;
+}
+
 .adminFinanceField,
 .adminFinanceToggle {
   display: grid;
   gap: 7px;
-  color: #a7a2c8;
+  color: var(--admin-muted);
   font-size: 12px;
   font-weight: 700;
 }
@@ -277,12 +588,12 @@
 .adminFinanceField input,
 .adminFinanceField select,
 .adminFinanceField textarea {
-  width: 100%;
   box-sizing: border-box;
+  width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 9px;
-  background: #11121f;
-  color: #f4f4f8;
+  background: #111021;
+  color: var(--admin-text);
   font: inherit;
   font-size: 13px;
   padding: 10px 11px;
@@ -296,7 +607,9 @@
 .adminFinanceField select:focus,
 .adminFinanceField textarea:focus,
 .adminFinanceTier:focus-visible,
-.adminFinanceNavItem:focus-visible {
+.adminFinanceNavItem:focus-visible,
+.adminFinanceTableButton:focus-visible,
+.adminFinanceAttentionButton:focus-visible {
   outline: 2px solid rgba(183, 156, 251, 0.8);
   outline-offset: 2px;
 }
@@ -305,16 +618,34 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--admin-line);
   border-radius: 10px;
-  background: #141523;
+  background: #141323;
   padding: 10px 12px;
 }
 
 .adminFinanceToggle input {
   width: 16px;
   height: 16px;
-  accent-color: #b79cfb;
+  accent-color: var(--admin-accent);
+}
+
+.adminFinanceRejectBox {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-top: 14px;
+  border-top: 1px solid var(--admin-line);
+  padding-top: 14px;
+}
+
+.adminFinanceEmpty {
+  border-top: 1px solid var(--admin-line);
+  color: var(--admin-muted);
+  font-size: 13px;
+  padding: 28px;
+  text-align: center;
 }
 
 .adminFinanceNotice,
@@ -331,10 +662,21 @@
   color: #9be7ca;
 }
 
-.adminFinanceError {
+.adminFinanceError,
+.adminFinanceErrorInline {
   border: 1px solid rgba(244, 122, 122, 0.28);
   background: rgba(244, 122, 122, 0.1);
   color: #ffb6b6;
+}
+
+.adminFinanceErrorInline {
+  margin: 0 0 14px;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.adminFinanceRiskPanel {
+  max-width: 920px;
 }
 
 @media (max-width: 1420px) {
@@ -342,6 +684,8 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .adminFinanceOverviewGrid,
+  .adminFinancePayoutGrid,
   .adminFinanceWorkGrid {
     grid-template-columns: 1fr;
   }
@@ -355,37 +699,56 @@
   .adminFinanceRail {
     width: auto;
     border-right: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--admin-line);
   }
 
   .adminFinanceNav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .adminFinanceWorkGrid {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .adminFinanceStatusGrid {
-    padding-left: 16px;
-    padding-right: 16px;
+  .adminFinanceRailFooter {
+    display: none;
   }
 
   .adminFinanceHeader {
     padding: 16px;
   }
+
+  .adminFinanceHeaderMeta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .adminFinanceStatusGrid,
+  .adminFinanceOverviewGrid,
+  .adminFinancePayoutGrid,
+  .adminFinanceWorkGrid {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .adminFinanceContentPanel {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 700px) {
   .adminFinanceHeader {
     align-items: flex-start;
     flex-direction: column;
   }
 
   .adminFinanceStatusGrid,
-  .adminFinanceForm {
+  .adminFinanceForm,
+  .adminFinanceFactsCompact,
+  .adminFinanceRejectBox {
     grid-template-columns: 1fr;
+  }
+
+  .adminFinanceNav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .adminFinanceTier {
@@ -394,5 +757,14 @@
 
   .adminFinanceTierMeta {
     grid-column: 2;
+  }
+
+  .adminFinancePayoutTable .adminFinanceTableRow {
+    grid-template-columns: minmax(128px, 1fr) minmax(72px, auto) minmax(74px, auto);
+  }
+
+  .adminFinancePayoutTable .adminFinanceTableRow > :nth-child(4),
+  .adminFinancePayoutTable .adminFinanceTableRow > :nth-child(5) {
+    display: none;
   }
 }

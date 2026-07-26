@@ -10,6 +10,14 @@ import {
   type UpdateAstrologerRiskProfileRequest,
   type UpdateFinancePolicyRequest
 } from "@elevenhouse/contracts/finance-policies";
+import {
+  adminPayoutQueueResponseSchema,
+  adminPayoutStatusUpdateSchema,
+  payoutRequestResponseSchema,
+  type AdminPayoutQueueResponse,
+  type AdminPayoutStatusUpdate,
+  type PayoutRequestResponse
+} from "@elevenhouse/contracts/payouts";
 
 export type AdminFinancePoliciesApi = {
   readonly listPolicies: () => Promise<FinancePoliciesResponse>;
@@ -21,6 +29,11 @@ export type AdminFinancePoliciesApi = {
     astrologerUserId: string,
     request: UpdateAstrologerRiskProfileRequest
   ) => Promise<AstrologerRiskProfileResponse>;
+  readonly listPayoutRequests: () => Promise<AdminPayoutQueueResponse>;
+  readonly updatePayoutRequestStatus: (
+    payoutRequestId: string,
+    request: AdminPayoutStatusUpdate
+  ) => Promise<PayoutRequestResponse>;
 };
 
 export type CreateAdminFinancePoliciesApiInput = {
@@ -76,6 +89,20 @@ export function createAdminFinancePoliciesApi(
           method: "PUT",
           body: JSON.stringify(parsed)
         })
+      );
+    },
+    listPayoutRequests: async () =>
+      adminPayoutQueueResponseSchema.parse(await request("/admin/finance/payout-requests")),
+    updatePayoutRequestStatus: async (payoutRequestId, rawRequest) => {
+      const parsed = adminPayoutStatusUpdateSchema.parse(rawRequest);
+      return payoutRequestResponseSchema.parse(
+        await request(
+          `/admin/finance/payout-requests/${encodeURIComponent(payoutRequestId)}/status`,
+          {
+            method: "PUT",
+            body: JSON.stringify(parsed)
+          }
+        )
       );
     }
   };

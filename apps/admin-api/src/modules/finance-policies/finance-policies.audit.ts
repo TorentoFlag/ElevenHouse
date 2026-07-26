@@ -6,7 +6,8 @@ export type AdminFinancePolicyAuditEvent = {
     | "finance_policy.updated"
     | "finance_policy.default_created"
     | "astrologer_risk_profile.updated"
-    | "finance_policy.applied_to_order";
+    | "finance_policy.applied_to_order"
+    | "payout_request.status_updated";
   readonly targetId: string;
   readonly occurredAt: string;
   readonly metadata: Record<string, unknown>;
@@ -37,6 +38,9 @@ function targetTypeForAction(action: AdminFinancePolicyAuditEvent["action"]): st
   }
   if (action === "finance_policy.applied_to_order") {
     return "finance_order";
+  }
+  if (action === "payout_request.status_updated") {
+    return "payout_request";
   }
   return "finance_policy";
 }

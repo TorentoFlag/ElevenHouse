@@ -90,6 +90,11 @@ export type UpdatePayoutRequestStatusInput = {
   readonly now: string;
 };
 
+export type ListPayoutRequestsInput = {
+  readonly statuses?: readonly PayoutRequestStatus[];
+  readonly limit?: number;
+};
+
 export class PayoutStatusEvidenceError extends Error {
   readonly code = "payout_status_evidence_invalid";
 
@@ -107,4 +112,5 @@ export type PayoutStore = {
     input: UpdatePayoutRequestStatusInput
   ) => Promise<PayoutRequestRecord | null>;
   readonly findRequestById: (payoutRequestId: string) => Promise<PayoutRequestRecord | null>;
+  readonly listRequests: (input?: ListPayoutRequestsInput) => Promise<readonly PayoutRequestRecord[]>;
 };

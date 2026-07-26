@@ -1,9 +1,10 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   PayoutStatusEvidenceError,
   type CreatePayoutMethodInput,
   type CreatePayoutRequestInput,
   type FinancePaymentProvider,
+  type ListPayoutRequestsInput,
   type Money,
   type PaymentProviderEnvironment,
   type PayoutMethodRecord,
@@ -24,7 +25,8 @@ export function createDrizzlePayoutStore(database: ElevenHouseDatabase): PayoutS
     findDefaultMethod: (astrologerUserId) => findDefaultPayoutMethod(database, astrologerUserId),
     createRequest: (input) => createPayoutRequest(database, input),
     updateRequestStatus: (input) => updatePayoutRequestStatus(database, input),
-    findRequestById: (payoutRequestId) => findPayoutRequestById(database, payoutRequestId)
+    findRequestById: (payoutRequestId) => findPayoutRequestById(database, payoutRequestId),
+    listRequests: (input) => listPayoutRequests(database, input)
   };
 }
 
@@ -168,6 +170,24 @@ async function findPayoutRequestById(
     .where(eq(payoutRequests.id, payoutRequestId))
     .limit(1);
   return row ? toPayoutRequest(row) : null;
+}
+
+async function listPayoutRequests(
+  database: FinanceDatabase,
+  input: ListPayoutRequestsInput = {}
+): Promise<readonly PayoutRequestRecord[]> {
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+  const rows = await database
+    .select()
+    .from(payoutRequests)
+    .where(
+      input.statuses?.length
+        ? inArray(payoutRequests.status, [...input.statuses])
+        : undefined
+    )
+    .orderBy(desc(payoutRequests.requestedAt), desc(payoutRequests.id))
+    .limit(limit);
+  return rows.map(toPayoutRequest);
 }
 
 function toPayoutMethod(row: PayoutMethodRow): PayoutMethodRecord {

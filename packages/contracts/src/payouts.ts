@@ -1,5 +1,5 @@
 import { z } from "@elevenhouse/validation";
-import { nonZeroMoneySchema } from "./money";
+import { moneySchema, nonZeroMoneySchema } from "./money";
 
 const isoDateTimeSchema = z.string().datetime({ offset: true });
 const uuidSchema = z.string().uuid();
@@ -132,3 +132,22 @@ export const adminPayoutStatusUpdateSchema = z.discriminatedUnion("status", [
     .strict()
 ]);
 export type AdminPayoutStatusUpdate = z.infer<typeof adminPayoutStatusUpdateSchema>;
+
+export const adminPayoutQueueSummarySchema = z
+  .object({
+    requestedCount: z.number().int().min(0),
+    underReviewCount: z.number().int().min(0),
+    processingCount: z.number().int().min(0),
+    readyToPayAmount: moneySchema,
+    processingAmount: moneySchema
+  })
+  .strict();
+export type AdminPayoutQueueSummary = z.infer<typeof adminPayoutQueueSummarySchema>;
+
+export const adminPayoutQueueResponseSchema = z
+  .object({
+    summary: adminPayoutQueueSummarySchema,
+    requests: z.array(payoutRequestResponseSchema)
+  })
+  .strict();
+export type AdminPayoutQueueResponse = z.infer<typeof adminPayoutQueueResponseSchema>;

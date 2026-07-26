@@ -2,7 +2,9 @@ import { Module } from "@nestjs/common";
 import { createDrizzleAuditLogStore } from "@elevenhouse/db/audit-log";
 import {
   createDrizzleFinancePolicyStore,
-  createDrizzleOrderTransactionStore
+  createDrizzleLedgerTransactionStore,
+  createDrizzleOrderTransactionStore,
+  createDrizzlePayoutStore
 } from "@elevenhouse/db/finance";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
@@ -27,6 +29,8 @@ import type { AdminFinancePolicyUnitOfWork } from "./finance-policies.unit-of-wo
             operation({
               store: createDrizzleFinancePolicyStore(transaction as never),
               orderStore: createDrizzleOrderTransactionStore(transaction as never),
+              payoutStore: createDrizzlePayoutStore(transaction as never),
+              ledgerStore: createDrizzleLedgerTransactionStore(transaction as never),
               auditSink: new DurableAdminFinancePolicyAuditSink(
                 createDrizzleAuditLogStore(transaction as never)
               )
