@@ -69,6 +69,10 @@ export type AstrologerCopy = {
     title: string;
     kicker: string;
   };
+  finance: {
+    documentTitle: string;
+    title: string;
+  };
   calendar: {
     documentTitle: string;
     title: string;
@@ -345,6 +349,7 @@ export type AppShellNavigationItemId =
   | "analytics"
   | "calendar"
   | "clients"
+  | "finance"
   | "products"
   | "funnels"
   | "chartEngine"
@@ -526,6 +531,7 @@ export const astrologerCopyByLocale = {
         items: [
           { id: "dashboard", title: "Дашборд", href: "/dashboard" },
           { id: "calendar", title: "Календарь", href: "/calendar" },
+          { id: "finance", title: "Финансы", href: "/finance" },
           { id: "products", title: "Продукты", href: "/products" },
           { id: "chartEngine", title: "Движок карт", href: "/chart-engine" },
           { id: "numerology", title: "Нумерология", href: "/numerology" },
@@ -542,6 +548,10 @@ export const astrologerCopyByLocale = {
       documentTitle: "ElevenHouse | Кабинет астролога",
       kicker: "Astrologer surface",
       title: "ElevenHouse Astrologer Web"
+    },
+    finance: {
+      documentTitle: "ElevenHouse | Финансы",
+      title: "Финансы"
     },
     calendar: {
       documentTitle: "ElevenHouse | Календарь",
@@ -633,8 +643,7 @@ export const astrologerCopyByLocale = {
           previousMonthLabel: "Предыдущий месяц",
           nextMonthLabel: "Следующий месяц",
           timeSlotsLabel: (date) => `Доступное время${date ? ` · ${date}` : ""}`,
-          availableDateLabel: (date, count) =>
-            `${date}, ${formatRussianSlotCount(count)}`,
+          availableDateLabel: (date, count) => `${date}, ${formatRussianSlotCount(count)}`,
           unavailableDateLabel: (date) => `${date}, нет доступного времени`,
           selectedDateLabel: "Выбранный день",
           slotCountLabel: formatRussianSlotCount,
@@ -642,7 +651,8 @@ export const astrologerCopyByLocale = {
         }
       },
       availabilityEditor: {
-        instruction: "Настройте рабочие часы и правила записи. Изменения применятся после сохранения.",
+        instruction:
+          "Настройте рабочие часы и правила записи. Изменения применятся после сохранения.",
         title: "Настройка доступности",
         description: "Время хранится в часовом поясе вашего профиля.",
         startIntervalLabel: "Шаг начала записи",
@@ -658,7 +668,15 @@ export const astrologerCopyByLocale = {
         immediateLabel: "Сразу",
         weeklyTitle: "Рабочие часы",
         weeklyDescription: "Можно добавить несколько периодов в один день.",
-        weekdays: ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"],
+        weekdays: [
+          "Понедельник",
+          "Вторник",
+          "Среда",
+          "Четверг",
+          "Пятница",
+          "Суббота",
+          "Воскресенье"
+        ],
         unavailableLabel: "Недоступно",
         addPeriodLabel: "Добавить период",
         removePeriodLabel: "Удалить период",
@@ -680,7 +698,8 @@ export const astrologerCopyByLocale = {
         savingLabel: "Сохраняем…",
         loadErrorLabel: "Не удалось загрузить доступность.",
         saveErrorLabel: "Не удалось сохранить доступность. Проверьте периоды и повторите.",
-        conflictErrorLabel: "Расписание изменилось в другой вкладке. Данные обновлены — внесите изменения ещё раз.",
+        conflictErrorLabel:
+          "Расписание изменилось в другой вкладке. Данные обновлены — внесите изменения ещё раз.",
         savedLabel: "Доступность сохранена",
         retryLabel: "Повторить"
       }
@@ -959,6 +978,7 @@ export const astrologerCopyByLocale = {
         items: [
           { id: "dashboard", title: "Dashboard", href: "/dashboard" },
           { id: "calendar", title: "Calendar", href: "/calendar" },
+          { id: "finance", title: "Finance", href: "/finance" },
           { id: "products", title: "Products", href: "/products" },
           { id: "chartEngine", title: "Chart engine", href: "/chart-engine" },
           { id: "numerology", title: "Numerology", href: "/numerology" },
@@ -975,6 +995,10 @@ export const astrologerCopyByLocale = {
       documentTitle: "ElevenHouse | Astrologer dashboard",
       kicker: "Astrologer surface",
       title: "ElevenHouse Astrologer Web"
+    },
+    finance: {
+      documentTitle: "ElevenHouse | Finance",
+      title: "Finance"
     },
     calendar: {
       documentTitle: "ElevenHouse | Calendar",
@@ -993,12 +1017,12 @@ export const astrologerCopyByLocale = {
       retryLabel: "Retry",
       profileRequired: {
         title: "Complete your astrologer profile",
-        description:
-          "Calendar needs your time zone to show bookings and availability correctly.",
+        description: "Calendar needs your time zone to show bookings and availability correctly.",
         settingsLabel: "Go to settings"
       },
       emptyLabel: "No bookings in this period",
-      conflictMessage: "This time is no longer available. Choose another slot from the refreshed calendar.",
+      conflictMessage:
+        "This time is no longer available. Choose another slot from the refreshed calendar.",
       mobileAgenda: {
         agendaLabel: "Schedule",
         confirmedLabel: "Confirmed",
@@ -1113,7 +1137,8 @@ export const astrologerCopyByLocale = {
         savingLabel: "Saving…",
         loadErrorLabel: "Could not load availability.",
         saveErrorLabel: "Could not save availability. Check the periods and try again.",
-        conflictErrorLabel: "The schedule changed in another tab. It has been refreshed; apply your changes again.",
+        conflictErrorLabel:
+          "The schedule changed in another tab. It has been refreshed; apply your changes again.",
         savedLabel: "Availability saved",
         retryLabel: "Retry"
       }

@@ -11,6 +11,7 @@ const iconByNavigationItemId = {
   analytics: <Icon iconName="flow" width={20} height={20} aria-hidden="true" />,
   calendar: <Icon iconName="content" width={20} height={20} aria-hidden="true" />,
   clients: <Icon iconName="chat" width={20} height={20} aria-hidden="true" />,
+  finance: <Icon iconName="wallet" width={20} height={20} aria-hidden="true" />,
   products: <Icon iconName="box" width={20} height={20} aria-hidden="true" />,
   funnels: <Icon iconName="flow" width={20} height={20} aria-hidden="true" />,
   chartEngine: <Icon iconName="orbit" width={20} height={20} aria-hidden="true" />,

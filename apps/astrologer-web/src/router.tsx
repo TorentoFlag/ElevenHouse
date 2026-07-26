@@ -3,6 +3,7 @@ import { RequireCurrentAccount } from "./features/auth/routes/RequireCurrentAcco
 import { AstrologerAppLayout } from "./layouts/AstrologerAppLayout";
 import { AuthPage } from "./pages/auth/AuthPage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
+import { FinancePage } from "./pages/finance/FinancePage";
 import { NotFoundPage } from "./pages/not-found/NotFoundPage";
 import { MatrixPage } from "./pages/matrix/MatrixPage";
 import { NumerologyPage } from "./pages/numerology/NumerologyPage";
@@ -37,6 +38,10 @@ export const astrologerRoutes = [
           {
             path: "/calendar",
             element: <CalendarPage />
+          },
+          {
+            path: "/finance",
+            element: <FinancePage />
           },
           {
             path: "/products",

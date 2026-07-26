@@ -2,9 +2,11 @@ import type { Money } from "../money";
 import type {
   CreateLedgerTransactionInput,
   LedgerStore,
-  LedgerTransactionRecord
+  LedgerTransactionRecord,
+  WalletBalance
 } from "../wallet";
 import type {
+  CreatePayoutMethodInput,
   PayoutMethodRecord,
   PayoutRequestRecord,
   PayoutRequestStatus,
@@ -19,13 +21,52 @@ export type PayoutCommandStore = Pick<
 > &
   Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
 
-export type PayoutStatusCommandStore = Pick<PayoutStore, "findRequestById" | "updateRequestStatus"> &
+export type AstrologerPayoutReadStore = Pick<PayoutStore, "findDefaultMethod" | "listRequests"> &
+  Pick<LedgerStore, "findWalletBalance">;
+
+export type PayoutMethodCommandStore = Pick<PayoutStore, "createMethod" | "findDefaultMethod">;
+
+export type PayoutStatusCommandStore = Pick<
+  PayoutStore,
+  "findRequestById" | "updateRequestStatus"
+> &
   Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
+
+export type AstrologerFinanceOverview = {
+  readonly balance: WalletBalance;
+  readonly defaultPayoutMethod: PayoutMethodRecord | null;
+  readonly recentPayoutRequests: readonly PayoutRequestRecord[];
+  readonly canRequestPayout: boolean;
+  readonly minimumPayoutAmount: Money;
+  readonly payoutRequestUnavailableReason:
+    | "payout_method_required"
+    | "insufficient_available_balance"
+    | null;
+};
+
+export type GetAstrologerFinanceOverviewInput = {
+  readonly store: AstrologerPayoutReadStore;
+  readonly astrologerUserId: string;
+  readonly minimumPayoutAmount: Money;
+  readonly now: string;
+};
+
+export type CreateManualPayoutMethodInput = {
+  readonly store: PayoutMethodCommandStore;
+  readonly astrologerUserId: string;
+  readonly displayName: string;
+  readonly recipientName: string;
+  readonly bankName: string;
+  readonly accountNumberLast4: string;
+  readonly details: Record<string, unknown>;
+  readonly now: string;
+};
 
 export type RequestAstrologerPayoutInput = {
   readonly store: PayoutCommandStore;
   readonly astrologerUserId: string;
   readonly amount: Money;
+  readonly method: PayoutMethodRecord["method"];
   readonly metadata: Record<string, unknown>;
   readonly now: string;
 };
@@ -92,6 +133,24 @@ export class PayoutInsufficientAvailableBalanceError extends Error {
   }
 }
 
+export class PayoutMethodMismatchError extends Error {
+  readonly code = "payout_method_mismatch";
+
+  constructor() {
+    super("Payout request method must match the configured default payout method");
+    this.name = "PayoutMethodMismatchError";
+  }
+}
+
+export class PayoutMethodAlreadyConfiguredError extends Error {
+  readonly code = "payout_method_already_configured";
+
+  constructor() {
+    super("Default payout method is already configured");
+    this.name = "PayoutMethodAlreadyConfiguredError";
+  }
+}
+
 export class PayoutRequestNotFoundError extends Error {
   readonly code = "payout_request_not_found";
 
@@ -104,10 +163,49 @@ export class PayoutRequestNotFoundError extends Error {
 export class PayoutStatusTransitionError extends Error {
   readonly code = "payout_status_transition_invalid";
 
-  constructor(readonly from: PayoutRequestStatus, readonly to: PayoutRequestStatus) {
+  constructor(
+    readonly from: PayoutRequestStatus,
+    readonly to: PayoutRequestStatus
+  ) {
     super(`Invalid payout status transition: ${from} -> ${to}`);
     this.name = "PayoutStatusTransitionError";
   }
+}
+
+export async function getAstrologerFinanceOverview(
+  input: GetAstrologerFinanceOverviewInput
+): Promise<AstrologerFinanceOverview> {
+  assertPositiveRubMoney(input.minimumPayoutAmount);
+
+  const [balance, defaultPayoutMethod, recentPayoutRequests] = await Promise.all([
+    input.store.findWalletBalance(input.astrologerUserId),
+    input.store.findDefaultMethod(input.astrologerUserId),
+    input.store.listRequests({ astrologerUserId: input.astrologerUserId, limit: 10 })
+  ]);
+  const resolvedBalance = balance ?? emptyWalletBalance(input.astrologerUserId, input.now);
+  const payoutRequestUnavailableReason = resolvePayoutUnavailableReason({
+    balance: resolvedBalance,
+    defaultPayoutMethod,
+    minimumPayoutAmount: input.minimumPayoutAmount
+  });
+
+  return {
+    balance: resolvedBalance,
+    defaultPayoutMethod,
+    recentPayoutRequests,
+    canRequestPayout: payoutRequestUnavailableReason === null,
+    minimumPayoutAmount: input.minimumPayoutAmount,
+    payoutRequestUnavailableReason
+  };
+}
+
+export async function createManualPayoutMethod(
+  input: CreateManualPayoutMethodInput
+): Promise<PayoutMethodRecord> {
+  const existing = await input.store.findDefaultMethod(input.astrologerUserId);
+  if (existing) throw new PayoutMethodAlreadyConfiguredError();
+
+  return input.store.createMethod(toCreateManualPayoutMethodInput(input));
 }
 
 export async function requestAstrologerPayout(
@@ -120,6 +218,7 @@ export async function requestAstrologerPayout(
     input.store.findWalletBalance(input.astrologerUserId)
   ]);
   if (!method) throw new PayoutMethodMissingError();
+  if (method.method !== input.method) throw new PayoutMethodMismatchError();
   if ((balance?.available.amountMinor ?? 0) < input.amount.amountMinor) {
     throw new PayoutInsufficientAvailableBalanceError();
   }
@@ -140,6 +239,53 @@ export async function requestAstrologerPayout(
   return request;
 }
 
+function toCreateManualPayoutMethodInput(
+  input: CreateManualPayoutMethodInput
+): CreatePayoutMethodInput {
+  return {
+    astrologerUserId: input.astrologerUserId,
+    method: "manual_bank_transfer",
+    currency: "RUB",
+    displayName: input.displayName,
+    manualBankTransferDetails: {
+      ...input.details,
+      recipientName: input.recipientName,
+      bankName: input.bankName,
+      accountNumberLast4: input.accountNumberLast4
+    },
+    provider: null,
+    environment: null,
+    providerPayoutAccountId: null,
+    isDefault: true,
+    now: input.now
+  };
+}
+
+function resolvePayoutUnavailableReason(input: {
+  readonly balance: WalletBalance;
+  readonly defaultPayoutMethod: PayoutMethodRecord | null;
+  readonly minimumPayoutAmount: Money;
+}): AstrologerFinanceOverview["payoutRequestUnavailableReason"] {
+  if (!input.defaultPayoutMethod) return "payout_method_required";
+  if (input.balance.available.amountMinor < input.minimumPayoutAmount.amountMinor) {
+    return "insufficient_available_balance";
+  }
+  return null;
+}
+
+function emptyWalletBalance(astrologerUserId: string, now: string): WalletBalance {
+  const zero = { amountMinor: 0, currency: "RUB" as const };
+  return {
+    astrologerUserId,
+    pending: zero,
+    available: zero,
+    reserved: zero,
+    payoutPending: zero,
+    negativeBalance: zero,
+    updatedAt: now
+  };
+}
+
 export async function approvePayoutStatusUpdate(
   input: ApprovePayoutStatusUpdateInput
 ): Promise<PayoutRequestRecord> {
@@ -152,11 +298,13 @@ export async function approvePayoutStatusUpdate(
     payoutRequestId: input.payoutRequestId,
     status: input.update.status,
     adminUserId: input.adminUserId,
-    adminNote: "adminNote" in input.update ? input.update.adminNote ?? null : null,
+    adminNote: "adminNote" in input.update ? (input.update.adminNote ?? null) : null,
     failureReason: "failureReason" in input.update ? input.update.failureReason : undefined,
-    externalReference: "externalReference" in input.update ? input.update.externalReference : undefined,
+    externalReference:
+      "externalReference" in input.update ? input.update.externalReference : undefined,
     transferredAt: "transferredAt" in input.update ? input.update.transferredAt : undefined,
-    providerPayoutId: "providerPayoutId" in input.update ? input.update.providerPayoutId : undefined,
+    providerPayoutId:
+      "providerPayoutId" in input.update ? input.update.providerPayoutId : undefined,
     now: input.now
   });
   if (!updated) throw new PayoutRequestNotFoundError();
@@ -341,11 +489,20 @@ function assertPayoutTransition(from: PayoutRequestStatus, to: PayoutRequestStat
 }
 
 function isTerminalPayoutStatus(status: PayoutRequestStatus): boolean {
-  return status === "paid" || status === "failed" || status === "rejected" || status === "cancelled";
+  return (
+    status === "paid" || status === "failed" || status === "rejected" || status === "cancelled"
+  );
 }
 
 const allowedPayoutTransitions: Record<PayoutRequestStatus, readonly PayoutRequestStatus[]> = {
-  requested: ["under_review", "approved", "processing_manual", "processing_provider", "rejected", "cancelled"],
+  requested: [
+    "under_review",
+    "approved",
+    "processing_manual",
+    "processing_provider",
+    "rejected",
+    "cancelled"
+  ],
   under_review: ["approved", "processing_manual", "processing_provider", "rejected", "cancelled"],
   approved: ["processing_manual", "processing_provider", "rejected", "cancelled"],
   processing_manual: ["paid", "failed"],

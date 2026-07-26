@@ -5,6 +5,7 @@ import { RequireCurrentAccount } from "./features/auth/routes/RequireCurrentAcco
 import { AstrologerAppLayout } from "./layouts/AstrologerAppLayout";
 import { AuthPage } from "./pages/auth/AuthPage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
+import { FinancePage } from "./pages/finance/FinancePage";
 import { MatrixPage } from "./pages/matrix/MatrixPage";
 import { NumerologyPage } from "./pages/numerology/NumerologyPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
@@ -36,6 +37,7 @@ describe("astrologerRoutes", () => {
     );
     const dashboardRoute = shellRoute?.children?.find((route) => route.path === "/dashboard");
     const productsRoute = shellRoute?.children?.find((route) => route.path === "/products");
+    const financeRoute = shellRoute?.children?.find((route) => route.path === "/finance");
     const calendarRoute = shellRoute?.children?.find((route) => route.path === "/calendar");
     const numerologyRoute = shellRoute?.children?.find((route) => route.path === "/numerology");
     const matrixRoute = shellRoute?.children?.find((route) => route.path === "/matrix");
@@ -55,6 +57,7 @@ describe("astrologerRoutes", () => {
     expect(isValidElement(dashboardRoute?.element) && dashboardRoute.element.type).toBe(
       DashboardPage
     );
+    expect(isValidElement(financeRoute?.element) && financeRoute.element.type).toBe(FinancePage);
     expect(isValidElement(productsRoute?.element) && productsRoute.element.type).toBe(ProductsPage);
     expect(isValidElement(calendarRoute?.element) && calendarRoute.element.type).toBe(CalendarPage);
     expect(isValidElement(numerologyRoute?.element) && numerologyRoute.element.type).toBe(

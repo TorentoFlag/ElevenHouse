@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException
 } from "@nestjs/common";
+import { createHash } from "node:crypto";
 import {
   adminPayoutQueueResponseSchema,
   adminPayoutStatusUpdateSchema,
@@ -29,6 +30,10 @@ import {
   applyEffectiveFinancePolicyToOrder,
   assignAstrologerRiskProfile,
   ensureDefaultFinancePolicy,
+  FinanceIdempotencyConflictError,
+  FinanceIdempotencyFailedError,
+  FinanceIdempotencyInProgressError,
+  type FinanceIdempotentCommand,
   FinancePolicyEffectivePolicyUnavailableError,
   FinancePolicyOrderNotApplicableError,
   FinancePolicyOrderNotFoundError,
@@ -40,7 +45,10 @@ import {
 } from "@elevenhouse/domain";
 import { SystemClock } from "../../common/system-clock.js";
 import { ADMIN_FINANCE_POLICY_UNIT_OF_WORK } from "./finance-policies.tokens";
-import type { AdminFinancePolicyUnitOfWork } from "./finance-policies.unit-of-work";
+import type {
+  AdminFinancePolicyUnitOfWork,
+  AdminFinancePolicyUnitOfWorkContext
+} from "./finance-policies.unit-of-work";
 
 @Injectable()
 export class FinancePoliciesService {
@@ -209,34 +217,43 @@ export class FinancePoliciesService {
   ): Promise<PayoutRequestResponse> {
     const update = parseBody(adminPayoutStatusUpdateSchema, body);
     const now = this.clock.now();
+    const nowIso = now.toISOString();
     try {
-      const request = await this.unitOfWork.execute(async ({ payoutStore, ledgerStore, auditSink }) => {
-        const updated = await approvePayoutStatusUpdate({
-          store: {
-            ...payoutStore,
-            ...ledgerStore
-          },
-          payoutRequestId,
-          adminUserId,
-          update: toDomainPayoutStatusUpdate(update),
-          now: now.toISOString()
-        });
-        await auditSink.record({
-          actorUserId: adminUserId,
-          action: "payout_request.status_updated",
-          targetId: updated.id,
-          occurredAt: now.toISOString(),
-          metadata: {
-            status: updated.status,
-            amountMinor: updated.amount.amountMinor,
-            currency: updated.amount.currency,
-            method: updated.method,
-            externalReference: updated.externalReference,
-            providerPayoutId: updated.providerPayoutId
-          }
-        });
-        return updated;
-      });
+      const request = isTerminalPayoutStatus(update.status)
+        ? (
+            await this.unitOfWork.executeIdempotent({
+              command: createTerminalPayoutStatusCommand({
+                adminUserId,
+                payoutRequestId,
+                update,
+                now
+              }),
+              create: async (context) => {
+                const updated = await updatePayoutStatusInContext({
+                  ...context,
+                  adminUserId,
+                  payoutRequestId,
+                  update,
+                  now: nowIso
+                });
+                return { result: { payoutRequestId: updated.id }, value: updated };
+              },
+              replay: async ({ payoutStore }, result) => {
+                const replayPayoutRequestId = result.payoutRequestId;
+                if (typeof replayPayoutRequestId !== "string") return null;
+                return payoutStore.findRequestById(replayPayoutRequestId);
+              }
+            })
+          ).value
+        : await this.unitOfWork.execute((context) =>
+            updatePayoutStatusInContext({
+              ...context,
+              adminUserId,
+              payoutRequestId,
+              update,
+              now: nowIso
+            })
+          );
       return toPayoutRequestResponse(request);
     } catch (error) {
       if (error instanceof PayoutRequestNotFoundError) {
@@ -248,9 +265,51 @@ export class FinancePoliciesService {
       if (error instanceof PayoutStatusEvidenceError) {
         throw new BadRequestException(error.code);
       }
+      if (
+        error instanceof FinanceIdempotencyConflictError ||
+        error instanceof FinanceIdempotencyInProgressError ||
+        error instanceof FinanceIdempotencyFailedError
+      ) {
+        throw new ConflictException(error.code);
+      }
       throw error;
     }
   }
+}
+
+async function updatePayoutStatusInContext(
+  input: AdminFinancePolicyUnitOfWorkContext & {
+    readonly adminUserId: string;
+    readonly payoutRequestId: string;
+    readonly update: AdminPayoutStatusUpdate;
+    readonly now: string;
+  }
+): Promise<PayoutRequestRecord> {
+  const updated = await approvePayoutStatusUpdate({
+    store: {
+      ...input.payoutStore,
+      ...input.ledgerStore
+    },
+    payoutRequestId: input.payoutRequestId,
+    adminUserId: input.adminUserId,
+    update: toDomainPayoutStatusUpdate(input.update),
+    now: input.now
+  });
+  await input.auditSink.record({
+    actorUserId: input.adminUserId,
+    action: "payout_request.status_updated",
+    targetId: updated.id,
+    occurredAt: input.now,
+    metadata: {
+      status: updated.status,
+      amountMinor: updated.amount.amountMinor,
+      currency: updated.amount.currency,
+      method: updated.method,
+      externalReference: updated.externalReference,
+      providerPayoutId: updated.providerPayoutId
+    }
+  });
+  return updated;
 }
 
 function parseBody<T>(schema: { parse: (value: unknown) => T }, value: unknown): T {
@@ -263,6 +322,41 @@ function parseBody<T>(schema: { parse: (value: unknown) => T }, value: unknown):
 
 function toDomainPayoutStatusUpdate(update: AdminPayoutStatusUpdate) {
   return update;
+}
+
+function createTerminalPayoutStatusCommand(input: {
+  readonly adminUserId: string;
+  readonly payoutRequestId: string;
+  readonly update: AdminPayoutStatusUpdate;
+  readonly now: Date;
+}): FinanceIdempotentCommand {
+  return {
+    scope: "admin.finance.payout-status.terminal",
+    idempotencyKey: `${input.payoutRequestId}:terminal`,
+    actorUserId: input.adminUserId,
+    requestHash: `sha256:${createHash("sha256")
+      .update(stableStringify({ payoutRequestId: input.payoutRequestId, update: input.update }))
+      .digest("hex")}`,
+    now: input.now.toISOString(),
+    expiresAt: new Date(input.now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
+  };
+}
+
+function isTerminalPayoutStatus(status: AdminPayoutStatusUpdate["status"]): boolean {
+  return (
+    status === "paid" || status === "failed" || status === "rejected" || status === "cancelled"
+  );
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function toPayoutRequestResponse(request: PayoutRequestRecord): PayoutRequestResponse {
@@ -302,7 +396,10 @@ function createPayoutQueueSummary(requests: readonly PayoutRequestRecord[]) {
   };
 }
 
-function sumByStatus(requests: readonly PayoutRequestRecord[], statuses: ReadonlySet<string>): number {
+function sumByStatus(
+  requests: readonly PayoutRequestRecord[],
+  statuses: ReadonlySet<string>
+): number {
   return requests.reduce(
     (sum, request) => sum + (statuses.has(request.status) ? request.amount.amountMinor : 0),
     0

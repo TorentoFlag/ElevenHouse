@@ -1,7 +1,4 @@
-import type {
-  FinancePaymentProvider,
-  PaymentProviderEnvironment
-} from "../payments/payment-store";
+import type { FinancePaymentProvider, PaymentProviderEnvironment } from "../payments/payment-store";
 import type { Money } from "../money";
 
 export type PayoutRequestStatus =
@@ -91,6 +88,7 @@ export type UpdatePayoutRequestStatusInput = {
 };
 
 export type ListPayoutRequestsInput = {
+  readonly astrologerUserId?: string;
   readonly statuses?: readonly PayoutRequestStatus[];
   readonly limit?: number;
 };
@@ -112,5 +110,7 @@ export type PayoutStore = {
     input: UpdatePayoutRequestStatusInput
   ) => Promise<PayoutRequestRecord | null>;
   readonly findRequestById: (payoutRequestId: string) => Promise<PayoutRequestRecord | null>;
-  readonly listRequests: (input?: ListPayoutRequestsInput) => Promise<readonly PayoutRequestRecord[]>;
+  readonly listRequests: (
+    input?: ListPayoutRequestsInput
+  ) => Promise<readonly PayoutRequestRecord[]>;
 };

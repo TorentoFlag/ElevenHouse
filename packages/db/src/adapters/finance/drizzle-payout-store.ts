@@ -132,10 +132,12 @@ async function updatePayoutRequestStatus(
   return row ? toPayoutRequest(row) : null;
 }
 
-export function assertPayoutStatusEvidence(input: Pick<
-  UpdatePayoutRequestStatusInput,
-  "status" | "externalReference" | "transferredAt" | "failureReason"
->): void {
+export function assertPayoutStatusEvidence(
+  input: Pick<
+    UpdatePayoutRequestStatusInput,
+    "status" | "externalReference" | "transferredAt" | "failureReason"
+  >
+): void {
   if (input.status === "paid") {
     if (!input.externalReference || !input.transferredAt) {
       throw new PayoutStatusEvidenceError(
@@ -177,14 +179,16 @@ async function listPayoutRequests(
   input: ListPayoutRequestsInput = {}
 ): Promise<readonly PayoutRequestRecord[]> {
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+  const filters = [
+    input.astrologerUserId
+      ? eq(payoutRequests.astrologerUserId, input.astrologerUserId)
+      : undefined,
+    input.statuses?.length ? inArray(payoutRequests.status, [...input.statuses]) : undefined
+  ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter));
   const rows = await database
     .select()
     .from(payoutRequests)
-    .where(
-      input.statuses?.length
-        ? inArray(payoutRequests.status, [...input.statuses])
-        : undefined
-    )
+    .where(filters.length > 0 ? and(...filters) : undefined)
     .orderBy(desc(payoutRequests.requestedAt), desc(payoutRequests.id))
     .limit(limit);
   return rows.map(toPayoutRequest);

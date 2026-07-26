@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   approvePayoutStatusUpdate,
+  createManualPayoutMethod,
+  getAstrologerFinanceOverview,
   PayoutInsufficientAvailableBalanceError,
+  PayoutMethodAlreadyConfiguredError,
+  PayoutMethodMismatchError,
   PayoutMethodMissingError,
   requestAstrologerPayout,
   releaseAstrologerFundsFromHold,
@@ -9,6 +13,7 @@ import {
   type PayoutMethodRecord,
   type PayoutRequestRecord
 } from "./payout-use-cases";
+import type { PayoutStore } from "./payout-store";
 import type { CreateLedgerTransactionInput, WalletBalance } from "../wallet";
 
 const now = "2026-07-25T10:00:00.000Z";
@@ -18,6 +23,99 @@ const payoutMethodId = "33333333-3333-4333-8333-333333333333";
 const payoutRequestId = "44444444-4444-4444-8444-444444444444";
 
 describe("payout use cases", () => {
+  it("returns astrologer finance overview from wallet and payout read models", async () => {
+    const store = createStore({
+      availableAmountMinor: 25_000_00,
+      method: defaultMethod(),
+      request: payoutRequest({ status: "requested" })
+    });
+
+    const overview = await getAstrologerFinanceOverview({
+      store,
+      astrologerUserId,
+      minimumPayoutAmount: { amountMinor: 1_000_00, currency: "RUB" },
+      now
+    });
+
+    expect(overview).toMatchObject({
+      balance: {
+        astrologerUserId,
+        available: { amountMinor: 25_000_00, currency: "RUB" }
+      },
+      defaultPayoutMethod: { id: payoutMethodId, method: "manual_bank_transfer" },
+      recentPayoutRequests: [expect.objectContaining({ id: payoutRequestId })],
+      canRequestPayout: true,
+      payoutRequestUnavailableReason: null
+    });
+  });
+
+  it("blocks payout requests until default payout method exists and available balance reaches minimum", async () => {
+    await expect(
+      getAstrologerFinanceOverview({
+        store: createStore({ availableAmountMinor: 25_000_00, method: null }),
+        astrologerUserId,
+        minimumPayoutAmount: { amountMinor: 1_000_00, currency: "RUB" },
+        now
+      })
+    ).resolves.toMatchObject({
+      canRequestPayout: false,
+      payoutRequestUnavailableReason: "payout_method_required"
+    });
+
+    await expect(
+      getAstrologerFinanceOverview({
+        store: createStore({ availableAmountMinor: 999_99, method: defaultMethod() }),
+        astrologerUserId,
+        minimumPayoutAmount: { amountMinor: 1_000_00, currency: "RUB" },
+        now
+      })
+    ).resolves.toMatchObject({
+      canRequestPayout: false,
+      payoutRequestUnavailableReason: "insufficient_available_balance"
+    });
+  });
+
+  it("creates a default manual bank transfer payout method once", async () => {
+    const store = createStore({ availableAmountMinor: 0, method: null });
+
+    const method = await createManualPayoutMethod({
+      store,
+      astrologerUserId,
+      displayName: "Основной счет",
+      recipientName: "Alisa Vega",
+      bankName: "T-Bank",
+      accountNumberLast4: "4417",
+      details: { bik: "044525974" },
+      now
+    });
+
+    expect(method).toMatchObject({
+      astrologerUserId,
+      method: "manual_bank_transfer",
+      displayName: "Основной счет",
+      manualBankTransferDetails: {
+        recipientName: "Alisa Vega",
+        bankName: "T-Bank",
+        accountNumberLast4: "4417",
+        bik: "044525974"
+      },
+      isDefault: true
+    });
+
+    await expect(
+      createManualPayoutMethod({
+        store,
+        astrologerUserId,
+        displayName: "Другой счет",
+        recipientName: "Alisa Vega",
+        bankName: "T-Bank",
+        accountNumberLast4: "1111",
+        details: {},
+        now
+      })
+    ).rejects.toBeInstanceOf(PayoutMethodAlreadyConfiguredError);
+  });
+
   it("creates a manual payout request only from available balance and reserves it", async () => {
     const store = createStore({
       availableAmountMinor: 25_000_00,
@@ -28,6 +126,7 @@ describe("payout use cases", () => {
       store,
       astrologerUserId,
       amount: { amountMinor: 10_000_00, currency: "RUB" },
+      method: "manual_bank_transfer",
       metadata: { source: "astrologer_finance" },
       now
     });
@@ -70,6 +169,7 @@ describe("payout use cases", () => {
         store: createStore({ availableAmountMinor: 25_000_00, method: null }),
         astrologerUserId,
         amount: { amountMinor: 10_000_00, currency: "RUB" },
+        method: "manual_bank_transfer",
         metadata: {},
         now
       })
@@ -80,10 +180,24 @@ describe("payout use cases", () => {
         store: createStore({ availableAmountMinor: 9_999_99, method: defaultMethod() }),
         astrologerUserId,
         amount: { amountMinor: 10_000_00, currency: "RUB" },
+        method: "manual_bank_transfer",
         metadata: {},
         now
       })
     ).rejects.toBeInstanceOf(PayoutInsufficientAvailableBalanceError);
+  });
+
+  it("rejects payout request when requested method does not match configured default method", async () => {
+    await expect(
+      requestAstrologerPayout({
+        store: createStore({ availableAmountMinor: 25_000_00, method: defaultMethod() }),
+        astrologerUserId,
+        amount: { amountMinor: 10_000_00, currency: "RUB" },
+        method: "arc_pay_provider",
+        metadata: {},
+        now
+      })
+    ).rejects.toBeInstanceOf(PayoutMethodMismatchError);
   });
 
   it("posts paid and failed status updates to ledger once terminal state changes", async () => {
@@ -227,17 +341,42 @@ describe("payout use cases", () => {
   });
 });
 
+type TestPayoutStore = PayoutCommandStore & {
+  readonly createMethod: PayoutStore["createMethod"];
+  readonly listRequests: PayoutStore["listRequests"];
+  readonly ledgerTransactions: CreateLedgerTransactionInput[];
+};
+
 function createStore(input: {
   readonly availableAmountMinor: number;
   readonly method: PayoutMethodRecord | null;
   readonly request?: PayoutRequestRecord;
-}): PayoutCommandStore & { readonly ledgerTransactions: CreateLedgerTransactionInput[] } {
+}): TestPayoutStore {
   let request = input.request ?? null;
+  let method = input.method;
   const ledgerTransactions: CreateLedgerTransactionInput[] = [];
   return {
     ledgerTransactions,
-    findDefaultMethod: async () => input.method,
+    findDefaultMethod: async () => method,
+    createMethod: async (createInput) => {
+      method = {
+        id: payoutMethodId,
+        astrologerUserId: createInput.astrologerUserId,
+        method: createInput.method,
+        currency: createInput.currency,
+        displayName: createInput.displayName,
+        manualBankTransferDetails: createInput.manualBankTransferDetails,
+        provider: createInput.provider,
+        environment: createInput.environment,
+        providerPayoutAccountId: createInput.providerPayoutAccountId,
+        isDefault: createInput.isDefault,
+        createdAt: createInput.now,
+        updatedAt: createInput.now
+      };
+      return method;
+    },
     findWalletBalance: async () => balance(input.availableAmountMinor),
+    listRequests: async () => (request ? [request] : []),
     createRequest: async (createInput) => {
       request = payoutRequest({
         amountMinor: createInput.amount.amountMinor,

@@ -1,31 +1,41 @@
 import { Module } from "@nestjs/common";
-import { createDrizzleAuditLogStore } from "@elevenhouse/db/audit-log";
+import { ConfigModule } from "@nestjs/config";
 import {
-  createDrizzleFinancePolicyStore,
   createDrizzleLedgerTransactionStore,
-  createDrizzleOrderTransactionStore,
   createDrizzlePayoutStore,
   executeIdempotentFinanceCommand
 } from "@elevenhouse/db/finance";
 import type { FinanceTransaction } from "@elevenhouse/db/finance";
+import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
 import { SecurityModule } from "../security/security.module";
-import { DurableAdminFinancePolicyAuditSink } from "./finance-policies.audit";
-import { FinancePoliciesController } from "./finance-policies.controller";
-import { FinancePoliciesService } from "./finance-policies.service";
-import { ADMIN_FINANCE_POLICY_UNIT_OF_WORK } from "./finance-policies.tokens";
-import type { AdminFinancePolicyUnitOfWork } from "./finance-policies.unit-of-work";
+import { FinanceController } from "./finance.controller";
+import { FinanceService } from "./finance.service";
+import { ASTROLOGER_FINANCE_OPTIONS, ASTROLOGER_FINANCE_UNIT_OF_WORK } from "./finance.tokens";
+import type {
+  AstrologerFinanceOptions,
+  AstrologerFinanceUnitOfWork,
+  AstrologerFinanceUnitOfWorkContext
+} from "./finance.unit-of-work";
+
+const financeOptions: AstrologerFinanceOptions = {
+  minimumPayoutAmountMinor: 1_000_00
+};
 
 @Module({
-  imports: [DatabaseModule, IdentityModule, SecurityModule],
-  controllers: [FinancePoliciesController],
+  imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, SecurityModule],
+  controllers: [FinanceController],
   providers: [
-    FinancePoliciesService,
+    FinanceService,
     {
-      provide: ADMIN_FINANCE_POLICY_UNIT_OF_WORK,
-      useFactory: (postgresRuntime: PostgresRuntimeService): AdminFinancePolicyUnitOfWork => ({
+      provide: ASTROLOGER_FINANCE_OPTIONS,
+      useValue: financeOptions
+    },
+    {
+      provide: ASTROLOGER_FINANCE_UNIT_OF_WORK,
+      useFactory: (postgresRuntime: PostgresRuntimeService): AstrologerFinanceUnitOfWork => ({
         execute: (operation) =>
           postgresRuntime.database.transaction((transaction) =>
             operation(createUnitOfWorkContext(transaction))
@@ -45,14 +55,13 @@ import type { AdminFinancePolicyUnitOfWork } from "./finance-policies.unit-of-wo
     }
   ]
 })
-export class FinancePoliciesModule {}
+export class FinanceModule {}
 
-function createUnitOfWorkContext(transaction: FinanceTransaction) {
+function createUnitOfWorkContext(
+  transaction: FinanceTransaction
+): AstrologerFinanceUnitOfWorkContext {
   return {
-    store: createDrizzleFinancePolicyStore(transaction),
-    orderStore: createDrizzleOrderTransactionStore(transaction),
     payoutStore: createDrizzlePayoutStore(transaction),
-    ledgerStore: createDrizzleLedgerTransactionStore(transaction),
-    auditSink: new DurableAdminFinancePolicyAuditSink(createDrizzleAuditLogStore(transaction))
+    ledgerStore: createDrizzleLedgerTransactionStore(transaction)
   };
 }

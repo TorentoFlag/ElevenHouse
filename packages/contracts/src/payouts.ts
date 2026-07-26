@@ -22,6 +22,20 @@ export const payoutMethodValues = ["manual_bank_transfer", "arc_pay_provider"] a
 export const payoutMethodSchema = z.enum(payoutMethodValues);
 export type PayoutMethod = z.infer<typeof payoutMethodSchema>;
 
+export const payoutMethodResponseSchema = z
+  .object({
+    id: uuidSchema,
+    astrologerUserId: uuidSchema,
+    method: payoutMethodSchema,
+    currency: moneySchema.shape.currency,
+    displayName: z.string().min(1).max(160),
+    isDefault: z.boolean(),
+    createdAt: isoDateTimeSchema,
+    updatedAt: isoDateTimeSchema
+  })
+  .strict();
+export type PayoutMethodResponse = z.infer<typeof payoutMethodResponseSchema>;
+
 export const payoutRequestResponseSchema = z
   .object({
     id: uuidSchema,
@@ -74,6 +88,49 @@ export const createPayoutRequestSchema = z
   })
   .strict();
 export type CreatePayoutRequest = z.infer<typeof createPayoutRequestSchema>;
+
+export const createManualBankTransferPayoutMethodSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(160),
+    recipientName: z.string().trim().min(1).max(160),
+    bankName: z.string().trim().min(1).max(160),
+    accountNumberLast4: z
+      .string()
+      .trim()
+      .regex(/^\d{4}$/),
+    details: z.record(z.string().min(1).max(80), z.unknown()).optional(),
+    idempotencyKey: z.string().min(1).max(160)
+  })
+  .strict();
+export type CreateManualBankTransferPayoutMethod = z.infer<
+  typeof createManualBankTransferPayoutMethodSchema
+>;
+
+export const astrologerFinanceOverviewResponseSchema = z
+  .object({
+    balance: z
+      .object({
+        astrologerUserId: uuidSchema,
+        pending: moneySchema,
+        available: moneySchema,
+        reserved: moneySchema,
+        payoutPending: moneySchema,
+        negativeBalance: moneySchema,
+        updatedAt: isoDateTimeSchema
+      })
+      .strict(),
+    defaultPayoutMethod: payoutMethodResponseSchema.nullable(),
+    recentPayoutRequests: z.array(payoutRequestResponseSchema),
+    canRequestPayout: z.boolean(),
+    minimumPayoutAmount: moneySchema,
+    payoutRequestUnavailableReason: z
+      .enum(["payout_method_required", "insufficient_available_balance"])
+      .nullable()
+  })
+  .strict();
+export type AstrologerFinanceOverviewResponse = z.infer<
+  typeof astrologerFinanceOverviewResponseSchema
+>;
 
 export const adminPayoutStatusUpdateSchema = z.discriminatedUnion("status", [
   z

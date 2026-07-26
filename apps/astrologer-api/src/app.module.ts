@@ -13,6 +13,7 @@ import { ClientsModule } from "./modules/clients/clients.module";
 import { DatabaseModule } from "./modules/database/database.module";
 import { DictionaryAiModule } from "./modules/dictionary-ai/dictionary-ai.module";
 import { DictionaryModule } from "./modules/dictionary/dictionary.module";
+import { FinanceModule } from "./modules/finance/finance.module";
 import { HealthModule } from "./modules/health/health.module";
 import { HumanDesignModule } from "./modules/human-design/human-design.module";
 import { IdentityModule } from "./modules/identity/identity.module";
@@ -41,6 +42,7 @@ import { VerificationModule } from "./modules/verification/verification.module";
     AiModule,
     DictionaryModule,
     DictionaryAiModule,
+    FinanceModule,
     MediaModule,
     PlatformBillingModule,
     ProductsModule,

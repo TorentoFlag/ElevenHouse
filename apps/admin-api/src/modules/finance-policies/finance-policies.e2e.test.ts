@@ -2,6 +2,7 @@ import type { INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import type { PlatformRole } from "@elevenhouse/auth";
+import { FinanceIdempotencyConflictError } from "@elevenhouse/domain";
 import type {
   AuditLogStore,
   AuthSessionAuthenticationStore,
@@ -58,6 +59,8 @@ describe("admin finance policy HTTP flow", () => {
     payoutStore = createPayoutStore();
     ledgerStore = createLedgerStore();
     auditLogStore = createAuditLogStore();
+    const completedFinanceCommands = new Map<string, Record<string, unknown>>();
+    const financeCommandHashes = new Map<string, string>();
     unitOfWork = {
       execute: vi.fn(async (operation) =>
         operation({
@@ -67,7 +70,41 @@ describe("admin finance policy HTTP flow", () => {
           ledgerStore,
           auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
         })
-      )
+      ),
+      executeIdempotent: async (input) => {
+        const key = `${input.command.scope}:${input.command.idempotencyKey}`;
+        const existingHash = financeCommandHashes.get(key);
+        if (existingHash) {
+          if (existingHash !== input.command.requestHash) {
+            throw new FinanceIdempotencyConflictError();
+          }
+          const result = completedFinanceCommands.get(key);
+          if (!result) throw new Error("Expected completed finance command result");
+          const value = await input.replay(
+            {
+              store,
+              orderStore,
+              payoutStore,
+              ledgerStore,
+              auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
+            },
+            result
+          );
+          if (!value) throw new Error("Expected finance command replay value");
+          return { kind: "replayed" as const, value };
+        }
+
+        financeCommandHashes.set(key, input.command.requestHash);
+        const created = await input.create({
+          store,
+          orderStore,
+          payoutStore,
+          ledgerStore,
+          auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
+        });
+        completedFinanceCommands.set(key, created.result);
+        return { kind: "created" as const, value: created.value };
+      }
     };
 
     moduleRef = await Test.createTestingModule({
@@ -139,10 +176,15 @@ describe("admin finance policy HTTP flow", () => {
       putJson("/admin/finance/policies/default", body, authCookie())
     ).resolves.toMatchObject({ status: 403 });
 
-    const response = await putJson("/admin/finance/policies/default", body, authenticatedCookies(), {
-      origin: "http://localhost:5175",
-      [csrfHeaderName]: csrfToken
-    });
+    const response = await putJson(
+      "/admin/finance/policies/default",
+      body,
+      authenticatedCookies(),
+      {
+        origin: "http://localhost:5175",
+        [csrfHeaderName]: csrfToken
+      }
+    );
 
     expect(response).toMatchObject({
       status: 200,
@@ -335,12 +377,36 @@ describe("admin finance policy HTTP flow", () => {
         adminUserId
       }
     });
+    const replayed = await putJson(
+      "/admin/finance/payout-requests/55555555-5555-4555-8555-555555555555/status",
+      {
+        status: "paid",
+        externalReference: "bank-transfer-1001",
+        transferredAt: now.toISOString(),
+        adminNote: "Paid manually"
+      },
+      authenticatedCookies(),
+      {
+        origin: "http://localhost:5175",
+        [csrfHeaderName]: csrfToken
+      }
+    );
+
+    expect(replayed).toMatchObject({
+      status: 200,
+      body: {
+        id: "55555555-5555-4555-8555-555555555555",
+        status: "paid",
+        externalReference: "bank-transfer-1001"
+      }
+    });
     expect(ledgerStore.createTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
         operationType: "payout_paid",
         payoutRequestId: "55555555-5555-4555-8555-555555555555"
       })
     );
+    expect(ledgerStore.createTransaction).toHaveBeenCalledTimes(1);
     expect(auditLogStore.createEntry).toHaveBeenCalledWith(
       expect.objectContaining({
         actorUserId: adminUserId,
@@ -353,6 +419,7 @@ describe("admin finance policy HTTP flow", () => {
         })
       })
     );
+    expect(auditLogStore.createEntry).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -560,8 +627,8 @@ function createPayoutStore(): Pick<
   ];
 
   return {
-    findRequestById: vi.fn(async (payoutRequestId) =>
-      requests.find((request) => request.id === payoutRequestId) ?? null
+    findRequestById: vi.fn(
+      async (payoutRequestId) => requests.find((request) => request.id === payoutRequestId) ?? null
     ),
     listRequests: vi.fn(async () => requests),
     updateRequestStatus: vi.fn(async (input) => {
