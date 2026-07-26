@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   MessagingChannelConnectionResponseSchema,
   MessagingChannelModeSchema,
+  MessagingThreadDetailQuerySchema,
   MessagingProviderSchema,
   MessagingRealtimeEventSchema,
+  StartTelegramBusinessConnectionResponseSchema,
   SendMessagingMessageRequestSchema
 } from "./messaging";
 
@@ -35,9 +37,7 @@ describe("messaging contracts", () => {
   });
 
   it("accepts Telegram Business, Telegram Account, and Instagram channel modes", () => {
-    expect(MessagingChannelModeSchema.parse("telegram_business_bot")).toBe(
-      "telegram_business_bot"
-    );
+    expect(MessagingChannelModeSchema.parse("telegram_business_bot")).toBe("telegram_business_bot");
     expect(MessagingChannelModeSchema.parse("telegram_mtproto_account")).toBe(
       "telegram_mtproto_account"
     );
@@ -49,6 +49,14 @@ describe("messaging contracts", () => {
       text: "Привет"
     });
     expect(() => SendMessagingMessageRequestSchema.parse({ text: "   " })).toThrow();
+  });
+
+  it("does not cap thread detail reads unless pagination is explicit", () => {
+    expect(MessagingThreadDetailQuerySchema.parse({})).toEqual({ offset: 0 });
+    expect(MessagingThreadDetailQuerySchema.parse({ limit: "250", offset: "25" })).toEqual({
+      limit: 250,
+      offset: 25
+    });
   });
 
   it("accepts message-received realtime events with a required opaque event id", () => {
@@ -81,6 +89,24 @@ describe("messaging contracts", () => {
     expect(() =>
       MessagingChannelConnectionResponseSchema.parse({
         channelConnections: [{ ...channelConnection, sessionCiphertext: "secret" }]
+      })
+    ).toThrow();
+  });
+
+  it("accepts Telegram Business start responses without exposing provider secrets", () => {
+    const response = StartTelegramBusinessConnectionResponseSchema.parse({
+      channelConnection: { ...channelConnection, status: "connecting", connectedAt: null },
+      telegramBotUsername: "elevenhouse_test_bot",
+      telegramBotUrl: "https://t.me/elevenhouse_test_bot"
+    });
+
+    expect(response.channelConnection.status).toBe("connecting");
+    expect(response.telegramBotUrl).toBe("https://t.me/elevenhouse_test_bot");
+    expect(() =>
+      StartTelegramBusinessConnectionResponseSchema.parse({
+        channelConnection: { ...channelConnection, businessConnectionId: "bc_secret" },
+        telegramBotUsername: "elevenhouse_test_bot",
+        telegramBotUrl: "https://t.me/elevenhouse_test_bot"
       })
     ).toThrow();
   });

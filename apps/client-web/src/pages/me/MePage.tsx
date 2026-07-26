@@ -1,130 +1,153 @@
-import { useEffect, useState } from "react";
+import type {
+  ClientBirthDataUpsertRequest,
+  ClientCabinetOverviewResponse
+} from "@elevenhouse/contracts";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import {
-  getClientBirthData,
-  getRelatedAstrologers,
-  upsertClientBirthData
+  createClientBirthProfile,
+  getClientCabinetOverview,
+  updateClientBirthProfile
 } from "../../features/client-profile/api/clientProfileApi";
+import {
+  MePageView,
+  type BirthProfileFormState,
+  type ClientCabinetSection,
+  type ClientCabinetStatus
+} from "./MePageView";
 
-type RelatedAstrologer = {
-  readonly astrologerUserId: string;
-  readonly publicHandle: string;
-  readonly publicName: string;
+const emptyForm: BirthProfileFormState = {
+  birthDate: "",
+  birthPlaceText: "",
+  birthTime: "",
+  label: "Я"
 };
 
 export function MePage() {
-  const [astrologers, setAstrologers] = useState<readonly RelatedAstrologer[]>([]);
-  const [birthDate, setBirthDate] = useState("");
-  const [birthTime, setBirthTime] = useState("");
-  const [birthPlaceText, setBirthPlaceText] = useState("");
-  const [status, setStatus] = useState<"loading" | "ready" | "saving" | "saved" | "error">(
-    "loading"
-  );
+  const [activeSection, setActiveSection] = useState<ClientCabinetSection>("home");
+  const [form, setForm] = useState<BirthProfileFormState>(emptyForm);
+  const [overview, setOverview] = useState<ClientCabinetOverviewResponse | null>(null);
+  const [status, setStatus] = useState<ClientCabinetStatus>("loading");
 
-  useDocumentTitle("Me");
+  useDocumentTitle("Кабинет клиента");
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadOverview = useCallback(() => {
+    let isCancelled = false;
 
-    Promise.all([getRelatedAstrologers(), getClientBirthData()])
-      .then(([related, birthData]) => {
-        if (cancelled) return;
-        setAstrologers(related.astrologers);
-        setBirthDate(birthData?.birthDate ?? "");
-        setBirthTime(birthData?.birthTime ?? "");
-        setBirthPlaceText(birthData?.birthPlaceText ?? "");
+    setStatus("loading");
+
+    void getClientCabinetOverview()
+      .then((nextOverview) => {
+        if (isCancelled) return;
+        setOverview(nextOverview);
+        setForm(getPrimaryBirthProfileForm(nextOverview) ?? emptyForm);
         setStatus("ready");
       })
       .catch(() => {
-        if (!cancelled) setStatus("error");
+        if (!isCancelled) {
+          setStatus("error");
+        }
       });
 
     return () => {
-      cancelled = true;
+      isCancelled = true;
     };
   }, []);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  useEffect(() => loadOverview(), [loadOverview]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("saving");
 
     try {
-      const saved = await upsertClientBirthData({
-        label: null,
-        birthDate: birthDate || null,
-        birthTime: birthTime || null,
-        birthTimePrecision: birthTime ? "exact" : "unknown",
-        birthPlaceText: birthPlaceText || null,
-        birthCountryCode: null,
-        birthCity: null,
-        birthRegion: null,
-        birthTimezone: null,
-        birthTimeDstOccurrence: null,
-        birthLatitude: null,
-        birthLongitude: null
-      });
-      setBirthDate(saved.birthDate ?? "");
-      setBirthTime(saved.birthTime ?? "");
-      setBirthPlaceText(saved.birthPlaceText ?? "");
+      const primaryProfile = overview?.birthProfiles.find((profile) => profile.isPrimary) ?? null;
+      const request = toBirthProfileRequest(form);
+      const savedProfile = primaryProfile
+        ? await updateClientBirthProfile(primaryProfile.id, request)
+        : await createClientBirthProfile(request);
+      const nextOverview = mergeBirthProfile(overview, savedProfile);
+      setOverview(nextOverview);
+      setForm(getPrimaryBirthProfileForm(nextOverview) ?? emptyForm);
       setStatus("saved");
     } catch {
       setStatus("error");
     }
   }
 
-  if (status === "loading") {
-    return <main aria-busy="true">Загружаем профиль...</main>;
+  return (
+    <MePageView
+      activeSection={activeSection}
+      form={form}
+      overview={overview}
+      status={status}
+      onFormChange={setForm}
+      onRetry={() => {
+        loadOverview();
+      }}
+      onSectionChange={setActiveSection}
+      onSubmit={handleSubmit}
+    />
+  );
+}
+
+function getPrimaryBirthProfileForm(
+  overview: ClientCabinetOverviewResponse
+): BirthProfileFormState | null {
+  const primaryProfile = overview.birthProfiles.find((profile) => profile.isPrimary);
+  if (!primaryProfile) {
+    return null;
   }
 
-  return (
-    <main>
-      <h1>Профиль клиента</h1>
-      <section>
-        <h2>Мои астрологи</h2>
-        {astrologers.length === 0 ? (
-          <p>Пока нет связанных астрологов.</p>
-        ) : (
-          <ul>
-            {astrologers.map((astrologer) => (
-              <li key={astrologer.astrologerUserId}>
-                {astrologer.publicName} @{astrologer.publicHandle}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+  return {
+    birthDate: primaryProfile.birthDate ?? "",
+    birthPlaceText: primaryProfile.birthPlaceText ?? "",
+    birthTime: primaryProfile.birthTime ?? "",
+    label: primaryProfile.label ?? "Я"
+  };
+}
 
-      <form onSubmit={handleSubmit}>
-        <h2>Данные рождения</h2>
-        <label>
-          Дата рождения
-          <input
-            type="date"
-            value={birthDate}
-            onChange={(event) => setBirthDate(event.target.value)}
-          />
-        </label>
-        <label>
-          Время рождения
-          <input
-            type="time"
-            value={birthTime}
-            onChange={(event) => setBirthTime(event.target.value)}
-          />
-        </label>
-        <label>
-          Место рождения
-          <input
-            value={birthPlaceText}
-            onChange={(event) => setBirthPlaceText(event.target.value)}
-          />
-        </label>
-        <button type="submit" disabled={status === "saving"}>
-          Сохранить
-        </button>
-        {status === "saved" ? <p>Сохранено</p> : null}
-        {status === "error" ? <p>Не удалось выполнить действие</p> : null}
-      </form>
-    </main>
-  );
+function toBirthProfileRequest(form: BirthProfileFormState): ClientBirthDataUpsertRequest {
+  const hasBirthTime = form.birthTime.trim().length > 0;
+
+  return {
+    birthCity: null,
+    birthCountryCode: null,
+    birthDate: form.birthDate || null,
+    birthLatitude: null,
+    birthLongitude: null,
+    birthPlaceText: form.birthPlaceText || null,
+    birthRegion: null,
+    birthTime: hasBirthTime ? form.birthTime : null,
+    birthTimeDstOccurrence: null,
+    birthTimePrecision: hasBirthTime ? "exact" : "unknown",
+    birthTimezone: null,
+    isPrimary: true,
+    label: form.label || "Я"
+  };
+}
+
+function mergeBirthProfile(
+  overview: ClientCabinetOverviewResponse | null,
+  savedProfile: ClientCabinetOverviewResponse["birthProfiles"][number]
+): ClientCabinetOverviewResponse {
+  const currentOverview = overview ?? {
+    astrologers: [],
+    birthProfiles: [],
+    summary: {
+      activeSubscriptionCount: 0,
+      availableMaterialCount: 0,
+      directLinkOnly: true,
+      unreadNotificationCount: 0,
+      upcomingBookingCount: 0
+    }
+  };
+  const birthProfiles = currentOverview.birthProfiles
+    .filter((profile) => profile.id !== savedProfile.id)
+    .map((profile) => (savedProfile.isPrimary ? { ...profile, isPrimary: false } : profile));
+
+  return {
+    ...currentOverview,
+    birthProfiles: [savedProfile, ...birthProfiles]
+  };
 }

@@ -6,7 +6,8 @@ import {
   listMessagingChannelConnections,
   listMessagingThreads,
   markMessagingThreadRead,
-  sendMessagingMessage
+  sendMessagingMessage,
+  startTelegramBusinessConnection
 } from "../api/messagingApi";
 import {
   createMessagingThreadClientMutationOptions,
@@ -17,7 +18,8 @@ import {
   listMessagingThreadsQueryOptions,
   markMessagingThreadReadMutationOptions,
   messagingQueryKeys,
-  sendMessagingMessageMutationOptions
+  sendMessagingMessageMutationOptions,
+  startTelegramBusinessConnectionMutationOptions
 } from "./messagingQueries";
 
 vi.mock("../api/messagingApi", () => ({
@@ -33,7 +35,12 @@ vi.mock("../api/messagingApi", () => ({
   listMessagingChannelConnections: vi.fn(async () => ({ channelConnections: [] })),
   listMessagingThreads: vi.fn(async () => ({ threads: [], nextCursor: null })),
   markMessagingThreadRead: vi.fn(async () => ({ thread: { id: "thread-id" } })),
-  sendMessagingMessage: vi.fn(async () => ({ message: { id: "message-id" } }))
+  sendMessagingMessage: vi.fn(async () => ({ message: { id: "message-id" } })),
+  startTelegramBusinessConnection: vi.fn(async () => ({
+    channelConnection: { id: "55555555-5555-4555-8555-555555555555" },
+    telegramBotUsername: "ElevenHouseTestBot",
+    telegramBotUrl: "https://t.me/ElevenHouseTestBot"
+  }))
 }));
 
 describe("messagingQueries", () => {
@@ -111,6 +118,21 @@ describe("messagingQueries", () => {
     });
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: messagingQueryKeys.threads()
+    });
+  });
+
+  it("starts Telegram Business connection and refreshes channel connections", async () => {
+    const queryClient = { invalidateQueries: vi.fn(async () => undefined) };
+    const options = startTelegramBusinessConnectionMutationOptions(queryClient);
+
+    await expect(options.mutationFn()).resolves.toMatchObject({
+      telegramBotUrl: "https://t.me/ElevenHouseTestBot"
+    });
+    await options.onSuccess?.();
+
+    expect(startTelegramBusinessConnection).toHaveBeenCalledWith();
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: messagingQueryKeys.channelConnections()
     });
   });
 

@@ -7,7 +7,8 @@ import {
   listMessagingChannelConnections,
   listMessagingThreads,
   markMessagingThreadRead,
-  sendMessagingMessage
+  sendMessagingMessage,
+  startTelegramBusinessConnection
 } from "./messagingApi";
 
 const threadId = "44444444-4444-4444-8444-444444444444";
@@ -18,7 +19,8 @@ describe("messagingApi", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("lists messaging channel connections and threads with contract parsing", async () => {
-    const get = vi.spyOn(application.http, "get")
+    const get = vi
+      .spyOn(application.http, "get")
       .mockResolvedValueOnce({
         channelConnections: [channelConnection()]
       })
@@ -47,7 +49,7 @@ describe("messagingApi", () => {
     });
 
     await expect(getMessagingThread(threadId)).rejects.toThrow();
-    expect(get).toHaveBeenCalledWith(`/messaging/threads/${threadId}?limit=100&offset=0`);
+    expect(get).toHaveBeenCalledWith(`/messaging/threads/${threadId}`);
   });
 
   it("sends outbound messages with csrf and Idempotency-Key", async () => {
@@ -64,8 +66,28 @@ describe("messagingApi", () => {
     );
   });
 
+  it("starts Telegram Business connection with csrf and parses the public bot link", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue({
+      channelConnection: channelConnection({ status: "connecting" }),
+      telegramBotUsername: "ElevenHouseTestBot",
+      telegramBotUrl: "https://t.me/ElevenHouseTestBot"
+    });
+
+    await expect(startTelegramBusinessConnection()).resolves.toMatchObject({
+      channelConnection: { id: connectionId, status: "connecting" },
+      telegramBotUrl: "https://t.me/ElevenHouseTestBot"
+    });
+
+    expect(post).toHaveBeenCalledWith(
+      "/messaging/channel-connections/telegram/business/start",
+      undefined,
+      { csrf: true }
+    );
+  });
+
   it("links and creates clients with idempotency keys, and marks read with csrf", async () => {
-    const post = vi.spyOn(application.http, "post")
+    const post = vi
+      .spyOn(application.http, "post")
       .mockResolvedValueOnce({ thread: thread(clientUserId), clientUserId })
       .mockResolvedValueOnce({ thread: thread(clientUserId), clientUserId })
       .mockResolvedValueOnce({ thread: thread(clientUserId) });
@@ -92,21 +114,18 @@ describe("messagingApi", () => {
       { displayName: "Марина" },
       { csrf: true, headers: { "idempotency-key": "create-key-1" } }
     );
-    expect(post).toHaveBeenNthCalledWith(
-      3,
-      `/messaging/threads/${threadId}/read`,
-      undefined,
-      { csrf: true }
-    );
+    expect(post).toHaveBeenNthCalledWith(3, `/messaging/threads/${threadId}/read`, undefined, {
+      csrf: true
+    });
   });
 });
 
-function channelConnection() {
+function channelConnection(overrides: { status?: "connecting" | "active" } = {}) {
   return {
     id: connectionId,
     provider: "telegram",
     mode: "telegram_business_bot",
-    status: "active",
+    status: overrides.status ?? "active",
     displayName: "Alisa",
     username: "alisa",
     capabilities: {
@@ -118,7 +137,7 @@ function channelConnection() {
       supportsMessageDeletes: true,
       supportsAttachments: true
     },
-    connectedAt: "2026-07-22T10:00:00.000Z",
+    connectedAt: overrides.status === "connecting" ? null : "2026-07-22T10:00:00.000Z",
     lastSyncedAt: null,
     lastErrorCode: null
   };

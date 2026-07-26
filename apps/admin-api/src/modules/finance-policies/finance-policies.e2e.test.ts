@@ -14,8 +14,7 @@ import type {
   CreateLedgerEntryInput,
   PayoutRequestRecord,
   PayoutRequestStatus,
-  PayoutStore,
-  RiskTier
+  PayoutStore
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SystemClock } from "../../common/system-clock.js";

@@ -4,9 +4,9 @@
 
 `public-api` обслуживает высоконагруженные client-facing flows. В текущем коде
 реализованы health, identity/passwordless/session, direct-link client join,
-related-astrologer read и client birth-data routes. Booking, orders, payments,
-public profile read model и остальная часть client cabinet остаются будущими
-модулями этой поверхности.
+related-astrologer read, cabinet overview и client birth-profile routes.
+Booking, orders, payments, public profile read model и остальная часть client
+cabinet остаются будущими модулями этой поверхности.
 
 Ответственности:
 
@@ -31,8 +31,12 @@ GET  /identity/me
 POST /identity/logout
 POST /client-join-intents
 GET  /me/astrologers
+GET  /me/overview
 GET  /me/birth-data
 PUT  /me/birth-data
+GET  /me/birth-profiles
+POST /me/birth-profiles
+PUT  /me/birth-profiles/:birthDataId
 GET  /a/:handle
 POST /booking/intent
 POST /booking/:intentId/select-slot
@@ -62,9 +66,21 @@ consume that token to create or reactivate the explicit client-astrologer
 relationship. `GET /me/astrologers` lists only active explicit relationships;
 it cannot search, recommend or enumerate unrelated astrologers.
 
-`GET/PUT /me/birth-data` is client-role and owner scoped. It stores the client's
-own reusable birth-data record; sharing that record with an astrologer/order is
-a separate consent-bound workflow and is not implied by profile storage.
+`GET /me/overview` is client-role and owner scoped. It returns only explicit
+client-astrologer relationships, saved birth profiles and current cabinet
+summary counters. The `directLinkOnly: true` summary flag is an invariant, not a
+feature toggle; this API must not search, recommend or enumerate astrologers.
+
+`GET/PUT /me/birth-data` is client-role and owner scoped. It is the
+primary-profile compatibility route: reads and updates the client's current
+primary reusable birth-data record.
+
+`GET /me/birth-profiles`, `POST /me/birth-profiles` and
+`PUT /me/birth-profiles/:birthDataId` are client-role and owner scoped.
+They support multiple saved birth profiles with at most one primary profile per
+client. Birth-profile mutations require CSRF. Sharing any saved birth profile
+with an astrologer/order is a separate consent-bound workflow and is not implied
+by profile storage.
 
 ## Astrologer API
 

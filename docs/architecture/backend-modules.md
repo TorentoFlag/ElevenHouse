@@ -57,9 +57,10 @@ export class AppModule {}
 
 `client-join` создаёт direct-link join intent по public handle и связывает его
 с client registration/login flow. `client-profile` отдаёт только связанные с
-клиентом профили астрологов и хранит owner-scoped birth data; это foundation
-client cabinet, не discovery API. Booking, orders, payments и полный cabinet
-остаются отдельными незавершёнными contours.
+клиентом профили астрологов, cabinet overview и owner-scoped primary-compatible
+multi birth profiles; это foundation client cabinet, не discovery API. Booking,
+orders, payments, materials, feed, subscriptions, journal и client-visible
+calculation delivery остаются отдельными незавершёнными contours.
 
 `apps/astrologer-api` сейчас содержит:
 

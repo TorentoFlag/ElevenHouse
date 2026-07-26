@@ -38,6 +38,7 @@ export class BookingService {
     private readonly availabilityStore: AvailabilityStore,
     @Inject(PUBLIC_BOOKING_CLIENT_READER) private readonly clientReader: BookingClientReader,
     @Inject(PUBLIC_BOOKING_PRODUCT_READER) private readonly productReader: BookingProductReader,
+    @Inject(SystemClock)
     private readonly clock: SystemClock
   ) {}
 

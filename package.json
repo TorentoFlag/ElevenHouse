@@ -22,6 +22,9 @@
     "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\" \"*.config.{ts,js}\"",
     "test": "vitest run --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "telegram:webhook:info": "node scripts/dev/telegram-business-webhook.mjs get-webhook-info",
+    "telegram:webhook:listen": "node scripts/dev/telegram-business-webhook.mjs listen",
+    "telegram:webhook:set": "node scripts/dev/telegram-business-webhook.mjs set-webhook",
     "typecheck": "turbo typecheck",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },

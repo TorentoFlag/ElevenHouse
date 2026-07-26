@@ -1,4 +1,5 @@
 import { HttpException, Inject, Injectable, UnauthorizedException, type MessageEvent } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import type { Observable } from "rxjs";
 import {
   MessagingClientRelationshipError,
@@ -11,6 +12,7 @@ import {
   markThreadRead,
   recordTelegramBusinessConnection,
   recordTelegramBusinessMessage,
+  startTelegramBusinessConnection,
   type MessagingReadStore,
   type MessagingStore
 } from "@elevenhouse/domain";
@@ -27,8 +29,10 @@ import {
   MessagingThreadParamsSchema,
   MessagingThreadResponseSchema,
   SendMessagingMessageRequestSchema,
+  StartTelegramBusinessConnectionResponseSchema,
   type MessagingChannelConnectionResponse,
   type MessagingMessageResponse,
+  type StartTelegramBusinessConnectionResponse,
   type MessagingThreadClientLinkResponse,
   type MessagingThreadListResponse,
   type MessagingThreadMutationResponse,
@@ -47,7 +51,8 @@ export class MessagingService {
   constructor(
     @Inject(MESSAGING_STORE) private readonly store: MessagingStore,
     @Inject(MESSAGING_READ_STORE) private readonly readStore: MessagingReadStore,
-    private readonly clock: SystemClock
+    private readonly clock: SystemClock,
+    private readonly configService: ConfigService
   ) {}
 
   async listChannelConnections(
@@ -56,6 +61,34 @@ export class MessagingService {
     const astrologerUserId = requireAstrologerUserId(request);
     const result = await this.readStore.listChannelConnections({ astrologerUserId });
     return MessagingChannelConnectionResponseSchema.parse(result);
+  }
+
+  async startTelegramBusinessConnection(
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<StartTelegramBusinessConnectionResponse> {
+    return mapMessagingErrors(async () => {
+      const astrologerUserId = requireAstrologerUserId(request);
+      const result = await startTelegramBusinessConnection({
+        store: this.store,
+        astrologerUserId,
+        now: this.clock.now()
+      });
+      const connections = await this.readStore.listChannelConnections({ astrologerUserId });
+      const connection = connections.channelConnections.find(
+        (candidate) => candidate.id === result.connectionId
+      );
+      if (!connection) {
+        throw new Error("Started Telegram Business connection was not available in the read model");
+      }
+      const telegramBotUsername = normalizeTelegramBotUsername(
+        this.configService.get<string | null>("astrologerApi.telegramBusinessBotUsername") ?? null
+      );
+      return StartTelegramBusinessConnectionResponseSchema.parse({
+        channelConnection: connection,
+        telegramBotUsername,
+        telegramBotUrl: telegramBotUsername ? `https://t.me/${telegramBotUsername}` : null
+      });
+    });
   }
 
   async listThreads(
@@ -281,6 +314,11 @@ function parseContract<T>(schema: ZodType<T>, value: unknown): T {
     throw messagingHttpError(400, "messaging_validation_error", "Invalid messaging request");
   }
   return result.data;
+}
+
+function normalizeTelegramBotUsername(value: string | null): string | null {
+  const normalized = value?.trim().replace(/^@/, "");
+  return normalized || null;
 }
 
 async function mapMessagingErrors<T>(operation: () => Promise<T>): Promise<T> {

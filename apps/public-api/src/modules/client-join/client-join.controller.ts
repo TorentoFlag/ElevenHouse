@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from "@nestjs/common";
+import { Body, Controller, Inject, Post } from "@nestjs/common";
 import type {
   CreateClientJoinIntentRequest,
   CreateClientJoinIntentResponse
@@ -7,7 +7,7 @@ import { ClientJoinService } from "./client-join.service";
 
 @Controller("client-join-intents")
 export class ClientJoinController {
-  constructor(private readonly clientJoinService: ClientJoinService) {}
+  constructor(@Inject(ClientJoinService) private readonly clientJoinService: ClientJoinService) {}
 
   @Post()
   createJoinIntent(

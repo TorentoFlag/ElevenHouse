@@ -14,6 +14,12 @@ export class MessagingController {
     return this.service.listChannelConnections(request);
   }
 
+  @Post("channel-connections/telegram/business/start")
+  @RequireCsrf()
+  startTelegramBusinessConnection(@Req() request: AstrologerSessionRequest) {
+    return this.service.startTelegramBusinessConnection(request);
+  }
+
   @Get("threads")
   listThreads(@Query() query: unknown, @Req() request: AstrologerSessionRequest) {
     return this.service.listThreads(query, request);

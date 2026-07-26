@@ -37,6 +37,7 @@ export class OrdersService {
     private readonly productStore: Pick<ProductStore, "findByOwnerAndId">,
     @Inject(ORDERS_FINANCE_POLICY_STORE)
     private readonly financePolicyStore: Pick<FinancePolicyStore, "findEffectivePolicyForAstrologer">,
+    @Inject(SystemClock)
     private readonly clock: SystemClock
   ) {}
 

@@ -5,7 +5,9 @@ import {
   ClientJoinIntentError,
   claimClientJoinIntent,
   createClientJoinIntent,
+  createClientBirthDataProfile,
   getAstrologerClient,
+  listClientBirthDataProfiles,
   listAstrologerClients,
   normalizeClientBirthDataInput,
   upsertClientBirthData,
@@ -14,8 +16,10 @@ import {
   type ClientBirthData,
   type ClientJoinIntent,
   type ClientStore,
+  type ClientStoreCreateBirthDataProfileInput,
   type ClientStoreCreateJoinIntentInput,
   type ClientStoreEnsureRelationshipInput,
+  type ClientStoreUpdateBirthDataProfileInput,
   type ClientStoreUpsertBirthDataInput,
   type ClientStoreUpsertProfileInput
 } from "./index";
@@ -123,7 +127,8 @@ describe("clients domain", () => {
         birthTimezone: " Europe/Moscow ",
         birthLatitude: 55.7558,
         birthLongitude: 37.6173,
-        source: "client_profile"
+        source: "client_profile",
+        isPrimary: true
       })
     ).toMatchObject({
       label: "Основные данные",
@@ -137,7 +142,8 @@ describe("clients domain", () => {
       birthTimezone: "Europe/Moscow",
       birthLatitude: 55.7558,
       birthLongitude: 37.6173,
-      source: "client_profile"
+      source: "client_profile",
+      isPrimary: true
     });
 
     expect(() =>
@@ -147,6 +153,91 @@ describe("clients domain", () => {
         source: "client_profile"
       })
     ).toThrow(BirthDataValidationError);
+  });
+
+  it("creates multiple birth profiles for one client and keeps one primary", async () => {
+    const store = createMemoryClientStore({
+      clientRoleUsers: [clientUserId],
+      astrologerRoleUsers: [astrologerUserId]
+    });
+
+    await createClientBirthDataProfile({
+      store,
+      clientUserId,
+      now: new Date(now),
+      data: {
+        label: "Я",
+        birthDate: "1990-03-14",
+        birthTime: "08:25",
+        birthTimePrecision: "exact",
+        birthPlaceText: "Москва",
+        source: "client_profile",
+        isPrimary: true
+      }
+    });
+    await createClientBirthDataProfile({
+      store,
+      clientUserId,
+      now: new Date("2026-07-06T10:05:00.000Z"),
+      data: {
+        label: "Партнёр",
+        birthDate: "1988-07-22",
+        birthTime: "19:40",
+        birthTimePrecision: "exact",
+        birthPlaceText: "Калининград",
+        source: "client_profile"
+      }
+    });
+
+    await expect(listClientBirthDataProfiles({ store, clientUserId })).resolves.toMatchObject([
+      { label: "Я", isPrimary: true },
+      { label: "Партнёр", isPrimary: false }
+    ]);
+  });
+
+  it("updates the primary birth profile through the legacy upsert use case", async () => {
+    const store = createMemoryClientStore({
+      clientRoleUsers: [clientUserId],
+      astrologerRoleUsers: [astrologerUserId]
+    });
+
+    await createClientBirthDataProfile({
+      store,
+      clientUserId,
+      now: new Date(now),
+      data: {
+        label: "Я",
+        birthDate: "1990-03-14",
+        source: "client_profile",
+        isPrimary: true
+      }
+    });
+    await createClientBirthDataProfile({
+      store,
+      clientUserId,
+      now: new Date("2026-07-06T10:05:00.000Z"),
+      data: {
+        label: "Партнёр",
+        birthDate: "1988-07-22",
+        source: "client_profile"
+      }
+    });
+
+    await upsertClientBirthData({
+      store,
+      clientUserId,
+      now: new Date("2026-07-06T10:10:00.000Z"),
+      data: {
+        label: "Основной профиль",
+        birthDate: "1991-04-15",
+        source: "client_profile"
+      }
+    });
+
+    await expect(listClientBirthDataProfiles({ store, clientUserId })).resolves.toMatchObject([
+      { label: "Основной профиль", birthDate: "1991-04-15", isPrimary: true },
+      { label: "Партнёр", birthDate: "1988-07-22", isPrimary: false }
+    ]);
   });
 
   it("rejects expired or missing join intents", async () => {
@@ -402,12 +493,13 @@ function createMemoryClientStore(input: {
     },
     upsertClientBirthData: async (birthInput: ClientStoreUpsertBirthDataInput) => {
       const existingIndex = birthData.findIndex(
-        (item) => item.clientUserId === birthInput.clientUserId
+        (item) => item.clientUserId === birthInput.clientUserId && item.isPrimary
       );
       const row: ClientBirthData = {
         id: birthData[existingIndex]?.id ?? `${birthInput.clientUserId}:birth-data`,
         clientUserId: birthInput.clientUserId,
         ...birthInput.data,
+        isPrimary: true,
         createdAt: birthData[existingIndex]?.createdAt ?? birthInput.now,
         updatedAt: birthInput.now
       };
@@ -416,6 +508,55 @@ function createMemoryClientStore(input: {
       } else {
         birthData[existingIndex] = row;
       }
+      return row;
+    },
+    listClientBirthDataProfiles: async (requestedClientUserId: string) =>
+      birthData.filter((item) => item.clientUserId === requestedClientUserId),
+    createClientBirthDataProfile: async (birthInput: ClientStoreCreateBirthDataProfileInput) => {
+      if (birthInput.data.isPrimary) {
+        for (const item of birthData) {
+          if (item.clientUserId === birthInput.clientUserId && item.isPrimary) {
+            Object.assign(item, { isPrimary: false, updatedAt: birthInput.now });
+          }
+        }
+      }
+      const row: ClientBirthData = {
+        id: `${birthInput.clientUserId}:birth-data:${birthData.length + 1}`,
+        clientUserId: birthInput.clientUserId,
+        ...birthInput.data,
+        createdAt: birthInput.now,
+        updatedAt: birthInput.now
+      };
+      birthData.push(row);
+      return row;
+    },
+    updateClientBirthDataProfile: async (birthInput: ClientStoreUpdateBirthDataProfileInput) => {
+      const existingIndex = birthData.findIndex(
+        (item) =>
+          item.clientUserId === birthInput.clientUserId && item.id === birthInput.birthDataId
+      );
+      if (existingIndex === -1) {
+        return null;
+      }
+      if (birthInput.data.isPrimary) {
+        for (const item of birthData) {
+          if (item.clientUserId === birthInput.clientUserId && item.id !== birthInput.birthDataId) {
+            Object.assign(item, { isPrimary: false, updatedAt: birthInput.now });
+          }
+        }
+      }
+      const existing = birthData[existingIndex];
+      if (!existing) {
+        return null;
+      }
+      const row: ClientBirthData = {
+        id: existing.id,
+        clientUserId: existing.clientUserId,
+        ...birthInput.data,
+        createdAt: existing.createdAt,
+        updatedAt: birthInput.now
+      };
+      birthData[existingIndex] = row;
       return row;
     },
     listAstrologerClients: async ({

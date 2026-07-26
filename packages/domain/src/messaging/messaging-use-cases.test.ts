@@ -20,6 +20,7 @@ import type {
   MessagingStore,
   RecordTelegramBusinessConnectionStoreInput,
   RecordTelegramBusinessMessageStoreInput,
+  StartTelegramBusinessConnectionStoreInput,
   RecordInboundProviderMessageStoreInput
 } from "./messaging-store";
 import type {
@@ -35,7 +36,8 @@ import {
   linkThreadToClient,
   markThreadRead,
   normalizeRealtimeEvent,
-  recordInboundProviderMessage
+  recordInboundProviderMessage,
+  startTelegramBusinessConnection
 } from "./messaging-use-cases";
 
 const now = new Date("2026-07-21T10:00:00.000Z");
@@ -374,6 +376,38 @@ describe("Messaging use cases", () => {
       })
     ]);
   });
+
+  it("starts Telegram Business connection as one owner-scoped pending channel", async () => {
+    const store = new InMemoryMessagingStore();
+
+    const started = await startTelegramBusinessConnection({
+      store,
+      astrologerUserId,
+      idGenerator: createIdGenerator("connection"),
+      now
+    });
+    const replayed = await startTelegramBusinessConnection({
+      store,
+      astrologerUserId,
+      idGenerator: createIdGenerator("second"),
+      now
+    });
+
+    expect(started).toEqual({ connectionId: "connection-1" });
+    expect(replayed).toEqual(started);
+    expect(store.startTelegramBusinessCommands).toEqual([
+      {
+        connectionId: "connection-1",
+        astrologerUserId,
+        now: now.toISOString()
+      },
+      {
+        connectionId: "second-1",
+        astrologerUserId,
+        now: now.toISOString()
+      }
+    ]);
+  });
 });
 
 class InMemoryMessagingStore implements MessagingStore {
@@ -392,6 +426,7 @@ class InMemoryMessagingStore implements MessagingStore {
     readonly requestHash: string;
     readonly now: string;
   }> = [];
+  readonly startTelegramBusinessCommands: StartTelegramBusinessConnectionStoreInput[] = [];
   readonly #threads = new Map<string, MessagingThread>([
     ["thread-1", createThread()],
     ["thread-2", createThread({ id: "thread-2", externalIdentityId: "identity-2" })]
@@ -401,6 +436,7 @@ class InMemoryMessagingStore implements MessagingStore {
   readonly #threadClientRequests = new Map<string, { readonly requestHash: string; readonly thread: MessagingThread }>();
   readonly #activeClientUserIds = new Set(["client-existing"]);
   #nextRealtimeEventId = 1;
+  #telegramBusinessConnectionId: string | null = null;
 
   thread(threadId: string): MessagingThread | undefined {
     return this.#threads.get(threadId);
@@ -493,6 +529,14 @@ class InMemoryMessagingStore implements MessagingStore {
         externalIdentityId: "identity-1"
       }
     });
+  }
+
+  async startTelegramBusinessConnection(
+    input: StartTelegramBusinessConnectionStoreInput
+  ): Promise<{ readonly connectionId: string }> {
+    this.startTelegramBusinessCommands.push(input);
+    this.#telegramBusinessConnectionId ??= input.connectionId;
+    return { connectionId: this.#telegramBusinessConnectionId };
   }
 
   async linkThreadToClient(input: LinkThreadToClientStoreInput): Promise<MessagingThread> {

@@ -38,6 +38,19 @@ export type ClientStoreUpsertBirthDataInput = {
   readonly now: string;
 };
 
+export type ClientStoreCreateBirthDataProfileInput = {
+  readonly clientUserId: string;
+  readonly data: NormalizedClientBirthDataInput;
+  readonly now: string;
+};
+
+export type ClientStoreUpdateBirthDataProfileInput = {
+  readonly clientUserId: string;
+  readonly birthDataId: string;
+  readonly data: NormalizedClientBirthDataInput;
+  readonly now: string;
+};
+
 export type ClientStoreListAstrologerClientsInput = {
   readonly astrologerUserId: string;
   readonly query: string;
@@ -70,6 +83,13 @@ export type ClientStore = ClientJoinIntentClaimStore & {
   readonly upsertClientBirthData: (
     input: ClientStoreUpsertBirthDataInput
   ) => Promise<ClientBirthData>;
+  readonly listClientBirthDataProfiles: (clientUserId: string) => Promise<readonly ClientBirthData[]>;
+  readonly createClientBirthDataProfile: (
+    input: ClientStoreCreateBirthDataProfileInput
+  ) => Promise<ClientBirthData>;
+  readonly updateClientBirthDataProfile: (
+    input: ClientStoreUpdateBirthDataProfileInput
+  ) => Promise<ClientBirthData | null>;
   readonly listAstrologerClients: (
     input: ClientStoreListAstrologerClientsInput
   ) => Promise<AstrologerClientList>;

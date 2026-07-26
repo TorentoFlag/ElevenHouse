@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Inject, Post, Req, Res } from "@nestjs/common";
 import type {
   RequestPasswordlessCodeRequest,
   RequestPasswordlessCodeResponse,
@@ -18,7 +18,9 @@ import {
 @Controller("identity/passwordless")
 export class IdentityPasswordlessController {
   constructor(
+    @Inject(IdentityPasswordlessService)
     private readonly identityPasswordlessService: IdentityPasswordlessService,
+    @Inject(PublicSessionCookieService)
     private readonly publicSessionCookieService: PublicSessionCookieService
   ) {}
 

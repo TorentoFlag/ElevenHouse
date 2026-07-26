@@ -36,6 +36,7 @@ const defaultSecurityConfig = {
   csrfHeaderName: "x-csrf-token",
   csrfTokenTtlSeconds: 604800,
   telegramBotWebhookSecret: null,
+  telegramBusinessBotUsername: null,
   allowedOrigins: ["http://localhost:5174"],
   chartEngineBaseUrl: "http://localhost:8012",
   authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
@@ -225,6 +226,17 @@ describe("createAstrologerApiRuntimeConfig", () => {
       })
     ).toMatchObject({
       telegramBotWebhookSecret: "telegram-provider-secret"
+    });
+  });
+
+  it("parses the public Telegram Business bot username from env", () => {
+    expect(
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "@ElevenHouseTestBot"
+      })
+    ).toMatchObject({
+      telegramBusinessBotUsername: "ElevenHouseTestBot"
     });
   });
 

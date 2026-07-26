@@ -71,10 +71,23 @@ export function createDrizzleClientProfileReader(database: ElevenHouseDatabase) 
       const [row] = await database
         .select()
         .from(clientBirthData)
-        .where(eq(clientBirthData.clientUserId, clientUserId))
+        .where(and(eq(clientBirthData.clientUserId, clientUserId), eq(clientBirthData.isPrimary, true)))
         .limit(1);
 
       return row ? toClientBirthData(row) : null;
+    },
+    listBirthDataProfiles: async (clientUserId: string): Promise<readonly ClientBirthData[]> => {
+      const rows = await database
+        .select()
+        .from(clientBirthData)
+        .where(eq(clientBirthData.clientUserId, clientUserId))
+        .orderBy(
+          desc(clientBirthData.isPrimary),
+          desc(clientBirthData.createdAt),
+          desc(clientBirthData.id)
+        );
+
+      return rows.map(toClientBirthData);
     }
   };
 }
@@ -97,6 +110,7 @@ function toClientBirthData(row: ClientBirthDataRow): ClientBirthData {
     birthLatitude: row.birthLatitude,
     birthLongitude: row.birthLongitude,
     source: row.source as ClientBirthData["source"],
+    isPrimary: row.isPrimary,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt)
   };

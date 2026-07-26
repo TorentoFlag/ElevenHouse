@@ -14,7 +14,8 @@ import {
   listMessagingChannelConnections,
   listMessagingThreads,
   markMessagingThreadRead,
-  sendMessagingMessage
+  sendMessagingMessage,
+  startTelegramBusinessConnection
 } from "../api/messagingApi";
 
 type QueryInvalidator = Pick<QueryClient, "invalidateQueries">;
@@ -40,6 +41,14 @@ export function listMessagingThreadsQueryOptions(query: MessagingThreadListQuery
     queryKey: messagingQueryKeys.threadList(query),
     queryFn: () => listMessagingThreads(query),
     placeholderData: keepPreviousData
+  };
+}
+
+export function startTelegramBusinessConnectionMutationOptions(queryClient: QueryInvalidator) {
+  return {
+    mutationFn: () => startTelegramBusinessConnection(),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.channelConnections() })
   };
 }
 

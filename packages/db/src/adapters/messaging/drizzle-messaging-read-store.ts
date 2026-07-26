@@ -62,15 +62,17 @@ export function createDrizzleMessagingReadStore(database: ElevenHouseDatabase): 
         .limit(1);
       if (!threadRow) return null;
 
-      const rows = await database
+      const messageQuery = database
         .select()
         .from(messagingMessages)
         .where(eq(messagingMessages.threadId, threadRow.id))
-        .orderBy(desc(messagingMessages.createdAt), desc(messagingMessages.id))
-        .limit(input.limit + 1)
-        .offset(input.offset);
-      const hasMore = rows.length > input.limit;
-      const visible = rows.slice(0, input.limit);
+        .orderBy(desc(messagingMessages.createdAt), desc(messagingMessages.id));
+      const rows =
+        input.limit === undefined
+          ? await messageQuery.offset(input.offset)
+          : await messageQuery.limit(input.limit + 1).offset(input.offset);
+      const hasMore = input.limit === undefined ? false : rows.length > input.limit;
+      const visible = input.limit === undefined ? rows : rows.slice(0, input.limit);
       return {
         thread: await toReadThread(database, threadRow),
         messages: visible.map(toMessage),

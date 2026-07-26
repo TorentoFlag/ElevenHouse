@@ -94,7 +94,8 @@ describe("ClientsService", () => {
           birthTimezone: "Europe/Rome",
           birthLatitude: 41.9028,
           birthLongitude: 12.4964,
-          source: "manual"
+          source: "manual",
+          isPrimary: true
         }
       }
     });
@@ -115,7 +116,8 @@ describe("ClientsService", () => {
         birthTimeDstOccurrence: null,
         birthLatitude: 41.9028,
         birthLongitude: 12.4964,
-        source: "manual"
+        source: "manual",
+        isPrimary: true
       },
       now
     });
@@ -175,6 +177,7 @@ function createStore(): ClientStore {
       birthLatitude: 55.7558,
       birthLongitude: 37.6173,
       source: "client_profile",
+      isPrimary: true,
       createdAt: now,
       updatedAt: now
     }
@@ -200,6 +203,13 @@ function createStore(): ClientStore {
         updatedAt: input.now
       };
     }),
+    listClientBirthDataProfiles: vi.fn(async () => []),
+    createClientBirthDataProfile: vi.fn(
+      async (): Promise<ClientBirthData> => raise("Unexpected create birth profile call")
+    ),
+    updateClientBirthDataProfile: vi.fn(
+      async (): Promise<ClientBirthData | null> => raise("Unexpected update birth profile call")
+    ),
     listAstrologerClients: vi.fn(
       async (input: ClientStoreListAstrologerClientsInput): Promise<AstrologerClientList> => {
         const clients =

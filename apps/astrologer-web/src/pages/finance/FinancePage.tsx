@@ -125,6 +125,8 @@ export function FinancePage() {
               <label className={styles.field}>
                 <span>Сумма вывода</span>
                 <input
+                  id="finance-payout-amount"
+                  name="amount"
                   inputMode="decimal"
                   value={payoutAmount}
                   placeholder="5000"
@@ -218,6 +220,8 @@ function PayoutMethodFormView({
     <form className={styles.formGrid} onSubmit={onSubmit}>
       <FinanceField label="Название">
         <input
+          id="finance-payout-method-display-name"
+          name="displayName"
           value={form.displayName}
           placeholder="Основной счет"
           onChange={(event) => onChange({ ...form, displayName: event.target.value })}
@@ -225,6 +229,8 @@ function PayoutMethodFormView({
       </FinanceField>
       <FinanceField label="Получатель">
         <input
+          id="finance-payout-method-recipient-name"
+          name="recipientName"
           value={form.recipientName}
           placeholder="Alisa Vega"
           onChange={(event) => onChange({ ...form, recipientName: event.target.value })}
@@ -232,6 +238,8 @@ function PayoutMethodFormView({
       </FinanceField>
       <FinanceField label="Банк">
         <input
+          id="finance-payout-method-bank-name"
+          name="bankName"
           value={form.bankName}
           placeholder="T-Bank"
           onChange={(event) => onChange({ ...form, bankName: event.target.value })}
@@ -239,6 +247,8 @@ function PayoutMethodFormView({
       </FinanceField>
       <FinanceField label="Последние 4 цифры">
         <input
+          id="finance-payout-method-account-last4"
+          name="accountNumberLast4"
           inputMode="numeric"
           maxLength={4}
           value={form.accountNumberLast4}
@@ -250,6 +260,8 @@ function PayoutMethodFormView({
       </FinanceField>
       <FinanceField label="БИК">
         <input
+          id="finance-payout-method-bik"
+          name="bik"
           inputMode="numeric"
           value={form.bik}
           placeholder="044525974"

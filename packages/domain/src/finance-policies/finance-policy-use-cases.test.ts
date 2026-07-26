@@ -12,7 +12,6 @@ import {
   type FinanceOrderStore,
   type FinancePolicySnapshot,
   type FinancePolicyStore,
-  type RiskTier,
   type UpsertAstrologerRiskProfileInput
 } from "../index";
 

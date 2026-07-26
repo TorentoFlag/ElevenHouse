@@ -472,6 +472,42 @@ describe("createDrizzleMessagingStore", () => {
     });
   });
 
+  it("creates one pending Telegram Business connection for the astrologer start flow", async () => {
+    const fake = createStartTelegramBusinessConnectionDatabase();
+
+    await expect(
+      createDrizzleMessagingStore(fake.database as never).startTelegramBusinessConnection({
+        connectionId: "00000000-0000-4000-8000-000000000030",
+        astrologerUserId,
+        now: now.toISOString()
+      })
+    ).resolves.toEqual({ connectionId: "00000000-0000-4000-8000-000000000030" });
+
+    expect(fake.transactionCount).toBe(1);
+    expect(fake.inserts).toEqual([
+      {
+        table: messagingChannelConnections,
+        value: expect.objectContaining({
+          id: "00000000-0000-4000-8000-000000000030",
+          astrologerUserId,
+          provider: "telegram",
+          mode: "telegram_business_bot",
+          status: "connecting",
+          externalAccountId: null,
+          capabilities: {
+            canSend: false,
+            canReceive: false,
+            canRead: false,
+            supportsHistoryImport: false,
+            supportsMessageEdits: false,
+            supportsMessageDeletes: false,
+            supportsAttachments: false
+          }
+        })
+      }
+    ]);
+  });
+
   it("does not claim a pending Telegram Business connection with an unmatched revoked update", async () => {
     const fake = createPendingTelegramBusinessConnectionDatabase();
 
@@ -849,6 +885,34 @@ function createAmbiguousTelegramConnectionDatabase() {
       ])
   };
   return { database };
+}
+
+function createStartTelegramBusinessConnectionDatabase() {
+  const inserts: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  let transactionCount = 0;
+  const database = {
+    execute: async () => undefined,
+    insert: (table: unknown) => ({
+      values: (value: Record<string, unknown>) => ({
+        returning: async () => {
+          inserts.push({ table, value });
+          return [{ id: value.id }];
+        }
+      })
+    }),
+    select: () => selectChain([]),
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => {
+      transactionCount += 1;
+      return callback(database);
+    }
+  };
+  return {
+    database,
+    inserts,
+    get transactionCount() {
+      return transactionCount;
+    }
+  };
 }
 
 function take<T>(values: readonly T[], next: () => number): readonly T[] {

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ilike, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, ilike, ne, sql, type SQL } from "drizzle-orm";
 import {
   ClientAstrologerRelationshipRoleError,
   type AstrologerClientList,
@@ -7,8 +7,10 @@ import {
   type ClientBirthData,
   type ClientJoinIntent,
   type ClientStore,
+  type ClientStoreCreateBirthDataProfileInput,
   type ClientStoreCreateJoinIntentInput,
   type ClientStoreEnsureRelationshipInput,
+  type ClientStoreUpdateBirthDataProfileInput,
   type ClientStoreUpsertBirthDataInput,
   type ClientStoreUpsertProfileInput
 } from "@elevenhouse/domain";
@@ -58,6 +60,10 @@ export function createDrizzleClientStore(database: ClientDrizzleDatabase): Clien
     ensureRelationship: (input) => ensureRelationship(database, input),
     upsertClientProfile: (input) => upsertClientProfile(database, input),
     upsertClientBirthData: (input) => upsertClientBirthData(database, input),
+    listClientBirthDataProfiles: (clientUserId) =>
+      listClientBirthDataProfiles(database, clientUserId),
+    createClientBirthDataProfile: (input) => createClientBirthDataProfile(database, input),
+    updateClientBirthDataProfile: (input) => updateClientBirthDataProfile(database, input),
     listAstrologerClients: (input) => listAstrologerClients(database, input),
     getAstrologerClient: (input) => getAstrologerClient(database, input)
   };
@@ -132,8 +138,10 @@ async function upsertClientBirthData(
         })
         .onConflictDoUpdate({
           target: clientBirthData.clientUserId,
+          targetWhere: sql`${clientBirthData.isPrimary} = true`,
           set: {
             ...input.data,
+            isPrimary: true,
             updatedAt: new Date(input.now)
           }
         })
@@ -142,6 +150,100 @@ async function upsertClientBirthData(
   );
 
   return toClientBirthData(row);
+}
+
+async function listClientBirthDataProfiles(
+  database: ClientDrizzleDatabase,
+  clientUserId: string
+): Promise<readonly ClientBirthData[]> {
+  const rows = await database
+    .select()
+    .from(clientBirthData)
+    .where(eq(clientBirthData.clientUserId, clientUserId))
+    .orderBy(desc(clientBirthData.isPrimary), desc(clientBirthData.createdAt), desc(clientBirthData.id));
+
+  return rows.map(toClientBirthData);
+}
+
+async function createClientBirthDataProfile(
+  database: ClientDrizzleDatabase,
+  input: ClientStoreCreateBirthDataProfileInput
+): Promise<ClientBirthData> {
+  return withClientTransaction(database, async (transaction) => {
+    if (input.data.isPrimary) {
+      await demotePrimaryBirthProfiles(transaction, input.clientUserId, input.now);
+    }
+
+    const row = await insertReturningOne(
+      () =>
+        transaction
+          .insert(clientBirthData)
+          .values({
+            clientUserId: input.clientUserId,
+            ...input.data,
+            createdAt: new Date(input.now),
+            updatedAt: new Date(input.now)
+          })
+          .returning(),
+      "client_birth_data"
+    );
+
+    return toClientBirthData(row);
+  });
+}
+
+async function updateClientBirthDataProfile(
+  database: ClientDrizzleDatabase,
+  input: ClientStoreUpdateBirthDataProfileInput
+): Promise<ClientBirthData | null> {
+  return withClientTransaction(database, async (transaction) => {
+    if (input.data.isPrimary) {
+      await transaction
+        .update(clientBirthData)
+        .set({ isPrimary: false, updatedAt: new Date(input.now) })
+        .where(
+          and(
+            eq(clientBirthData.clientUserId, input.clientUserId),
+            eq(clientBirthData.isPrimary, true),
+            ne(clientBirthData.id, input.birthDataId)
+          )
+        )
+        .returning();
+    }
+
+    const [row] = await transaction
+      .update(clientBirthData)
+      .set({
+        ...input.data,
+        updatedAt: new Date(input.now)
+      })
+      .where(and(eq(clientBirthData.clientUserId, input.clientUserId), eq(clientBirthData.id, input.birthDataId)))
+      .returning();
+
+    return row ? toClientBirthData(row) : null;
+  });
+}
+
+async function demotePrimaryBirthProfiles(
+  database: ClientDrizzleDatabase,
+  clientUserId: string,
+  now: string
+): Promise<void> {
+  await database
+    .update(clientBirthData)
+    .set({ isPrimary: false, updatedAt: new Date(now) })
+    .where(and(eq(clientBirthData.clientUserId, clientUserId), eq(clientBirthData.isPrimary, true)))
+    .returning();
+}
+
+function withClientTransaction<T>(
+  database: ClientDrizzleDatabase,
+  operation: (transaction: ClientDrizzleDatabase) => Promise<T>
+): Promise<T> {
+  if ("transaction" in database && typeof database.transaction === "function") {
+    return database.transaction((transaction) => operation(transaction));
+  }
+  return operation(database);
 }
 
 async function ensureRelationship(
@@ -322,6 +424,7 @@ function toClientBirthData(row: ClientBirthDataRow): ClientBirthData {
     birthLatitude: row.birthLatitude === null ? null : Number(row.birthLatitude),
     birthLongitude: row.birthLongitude === null ? null : Number(row.birthLongitude),
     source: row.source as ClientBirthData["source"],
+    isPrimary: row.isPrimary,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt)
   };

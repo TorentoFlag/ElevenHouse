@@ -458,6 +458,9 @@ function createClientStore(clients: readonly AstrologerClientListItem[]): Client
     ensureRelationship: vi.fn(async () => raise()),
     upsertClientProfile: vi.fn(async () => undefined),
     upsertClientBirthData: vi.fn(async () => raise()),
+    listClientBirthDataProfiles: vi.fn(async () => []),
+    createClientBirthDataProfile: vi.fn(async () => raise()),
+    updateClientBirthDataProfile: vi.fn(async () => raise()),
     listAstrologerClients: vi.fn(async () => ({ clients, total: clients.length })),
     getAstrologerClient: vi.fn(
       async (input) => clients.find((client) => client.clientUserId === input.clientUserId) ?? null
@@ -541,6 +544,7 @@ function client(displayName: string, id: string, birthDate: string): AstrologerC
       birthLatitude: null,
       birthLongitude: null,
       source: "manual",
+      isPrimary: true,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString()
     }

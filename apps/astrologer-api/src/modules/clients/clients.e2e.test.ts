@@ -304,6 +304,7 @@ function createClientStore(): ClientStore {
     birthLatitude: 55.7558,
     birthLongitude: 37.6173,
     source: "client_profile",
+    isPrimary: true,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString()
   };
@@ -339,6 +340,25 @@ function createClientStore(): ClientStore {
         clientUserId: input.clientUserId,
         ...input.data,
         createdAt: now.toISOString(),
+        updatedAt: input.now
+      };
+      return birthData;
+    }),
+    listClientBirthDataProfiles: vi.fn(async () => [birthData]),
+    createClientBirthDataProfile: vi.fn(async (input): Promise<ClientBirthData> => {
+      birthData = {
+        id: "77777777-7777-4777-8777-777777777777",
+        clientUserId: input.clientUserId,
+        ...input.data,
+        createdAt: now.toISOString(),
+        updatedAt: input.now
+      };
+      return birthData;
+    }),
+    updateClientBirthDataProfile: vi.fn(async (input): Promise<ClientBirthData | null> => {
+      birthData = {
+        ...birthData,
+        ...input.data,
         updatedAt: input.now
       };
       return birthData;

@@ -43,7 +43,9 @@ export class DomainRegistrationHandler {
     private readonly registration: PasswordlessCustomerAccountRegistrationSessionUnitOfWork<
       PasswordlessCustomerAccountRegistrationSessionStore & ClientJoinIntentClaimStore
     >,
+    @Inject(PublicSessionTokenIssuer)
     private readonly sessionTokenIssuer: PublicSessionTokenIssuer,
+    @Inject(SystemClock)
     private readonly clock: SystemClock,
     @Inject(REGISTRATION_AUTH_OPTIONS)
     private readonly options: RegistrationAuthOptions

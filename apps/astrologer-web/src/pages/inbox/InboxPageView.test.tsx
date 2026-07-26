@@ -1,14 +1,19 @@
+// @vitest-environment jsdom
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type {
   MessagingChannelConnection,
   MessagingMessage,
   MessagingThread
 } from "@elevenhouse/contracts";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { InboxPageView, type InboxPageViewProps } from "./InboxPageView";
 
 describe("InboxPageView", () => {
+  afterEach(() => cleanup());
+
   it("renders Telegram Business setup state without pretending MTProto is available", () => {
     const markup = renderToStaticMarkup(
       <InboxPageView
@@ -23,6 +28,38 @@ describe("InboxPageView", () => {
     expect(markup).toContain("Telegram Account");
     expect(markup).toContain("Будет доступно позже");
     expect(markup).not.toContain("Подключить Instagram");
+  });
+
+  it("starts Telegram Business connection from the setup card and renders pending state", () => {
+    const onStartTelegramBusinessConnection = vi.fn();
+
+    render(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[telegramConnection({}, { status: "connecting" })]}
+        isStartingTelegramBusinessConnection={false}
+        onStartTelegramBusinessConnection={onStartTelegramBusinessConnection}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Ожидаем Telegram" })[0]!);
+
+    expect(onStartTelegramBusinessConnection).toHaveBeenCalledWith();
+    expect(screen.getByText("Ожидает подтверждения")).toBeTruthy();
+  });
+
+  it("disables Telegram Business start while active or already starting", () => {
+    const activeMarkup = renderToStaticMarkup(
+      <InboxPageView {...baseProps()} channelConnections={[telegramConnection()]} />
+    );
+    const startingMarkup = renderToStaticMarkup(
+      <InboxPageView {...baseProps()} channelConnections={[]} isStartingTelegramBusinessConnection />
+    );
+
+    expect(activeMarkup).toContain("Подключено");
+    expect(activeMarkup).toContain("disabled=\"\"");
+    expect(startingMarkup).toContain("Открываем Telegram");
+    expect(startingMarkup).toContain("disabled=\"\"");
   });
 
   it("renders thread list, selected messages and unlinked chat actions", () => {
@@ -100,7 +137,10 @@ describe("InboxPageView", () => {
   });
 
   it("keeps the production mobile layout as a responsive state, not a separate app", () => {
-    const css = readFileSync(new URL("./InboxPage.module.css", import.meta.url), "utf8");
+    const css = readFileSync(
+      join(process.cwd(), "apps/astrologer-web/src/pages/inbox/InboxPage.module.css"),
+      "utf8"
+    );
 
     expect(css).toMatch(/\.mobileThreadBack\s*\{[^}]*display:\s*none/s);
     expect(css).toMatch(/@media \(max-width: 860px\)[\s\S]*\.contextPanel\s*\{[^}]*display:\s*none/s);
@@ -130,6 +170,9 @@ function baseProps(): InboxPageViewProps {
     onDraftChange: vi.fn(),
     onSend: vi.fn(),
     onMarkRead: vi.fn(),
+    isStartingTelegramBusinessConnection: false,
+    telegramBusinessStartError: null,
+    onStartTelegramBusinessConnection: vi.fn(),
     linkClientUserId: "",
     createClientDisplayName: "",
     isLinkingClient: false,
@@ -143,7 +186,8 @@ function baseProps(): InboxPageViewProps {
 }
 
 function telegramConnection(
-  override: Partial<MessagingChannelConnection["capabilities"]> = {}
+  override: Partial<MessagingChannelConnection["capabilities"]> = {},
+  connectionOverride: Partial<MessagingChannelConnection> = {}
 ): MessagingChannelConnection {
   return {
     id: "11111111-1111-4111-8111-111111111111",
@@ -164,7 +208,8 @@ function telegramConnection(
     },
     connectedAt: "2026-07-22T09:00:00.000Z",
     lastSyncedAt: "2026-07-22T10:00:00.000Z",
-    lastErrorCode: null
+    lastErrorCode: null,
+    ...connectionOverride
   };
 }
 

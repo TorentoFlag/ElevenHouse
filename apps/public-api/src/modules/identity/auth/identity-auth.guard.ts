@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   UnauthorizedException,
   type CanActivate,
@@ -11,7 +12,10 @@ import {
 
 @Injectable()
 export class PublicSessionAuthGuard implements CanActivate {
-  constructor(private readonly currentSessionService: IdentityCurrentSessionService) {}
+  constructor(
+    @Inject(IdentityCurrentSessionService)
+    private readonly currentSessionService: IdentityCurrentSessionService
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<PublicSessionRequest>();

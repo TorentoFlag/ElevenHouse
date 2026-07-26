@@ -12,6 +12,15 @@ const optionalTrimmedNonEmptyStringSchema = z.preprocess(
   (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
   z.string().trim().min(1).optional()
 );
+const optionalTelegramBotUsernameSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    return trimmed.replace(/^@/, "");
+  },
+  z.string().regex(/^[A-Za-z0-9_]{5,32}$/).optional()
+);
 
 const astrologerApiRuntimeConfigSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -32,6 +41,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_API_CSRF_HEADER_NAME: z.string().trim().min(1).default("x-csrf-token"),
   ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
   ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: optionalTrimmedNonEmptyStringSchema,
+  ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: optionalTelegramBotUsernameSchema,
   ASTROLOGER_API_ALLOWED_ORIGINS: z.string().trim().optional(),
   CHART_ENGINE_BASE_URL: z.string().trim().url().default("http://localhost:8012"),
   ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
@@ -144,6 +154,7 @@ export type AstrologerApiRuntimeConfig = {
   readonly csrfHeaderName: string;
   readonly csrfTokenTtlSeconds: number;
   readonly telegramBotWebhookSecret: string | null;
+  readonly telegramBusinessBotUsername: string | null;
   readonly allowedOrigins: readonly string[];
   readonly chartEngineBaseUrl: string;
   readonly authCodeDeliveryEncryptionKey: Buffer;
@@ -296,6 +307,7 @@ export function createAstrologerApiRuntimeConfig(
     csrfHeaderName: config.ASTROLOGER_API_CSRF_HEADER_NAME.toLowerCase(),
     csrfTokenTtlSeconds: config.ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS,
     telegramBotWebhookSecret: config.ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET ?? null,
+    telegramBusinessBotUsername: config.ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME ?? null,
     allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5174"],
     chartEngineBaseUrl: stripTrailingSlashes(config.CHART_ENGINE_BASE_URL),
     authCodeDeliveryEncryptionKey: parseBase64Aes256GcmKey(

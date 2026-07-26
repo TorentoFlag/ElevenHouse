@@ -715,6 +715,7 @@ CREATE TABLE "client_birth_data" (
 	"birth_latitude" double precision,
 	"birth_longitude" double precision,
 	"source" text DEFAULT 'client_profile' NOT NULL,
+	"is_primary" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "client_birth_data_time_precision_check" CHECK ("client_birth_data"."birth_time_precision" in ('exact', 'approximate', 'unknown')),
@@ -1592,7 +1593,7 @@ CREATE INDEX "chart_calculation_jobs_client_idx" ON "chart_calculation_jobs" USI
 CREATE INDEX "chart_calculation_jobs_status_updated_idx" ON "chart_calculation_jobs" USING btree ("status","updated_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "chart_calculation_jobs_active_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" in ('queued', 'processing');--> statement-breakpoint
 CREATE UNIQUE INDEX "chart_calculation_jobs_success_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" = 'succeeded';--> statement-breakpoint
-CREATE UNIQUE INDEX "client_birth_data_client_unique" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "client_birth_data_primary_unique" ON "client_birth_data" USING btree ("client_user_id") WHERE "client_birth_data"."is_primary" = true;--> statement-breakpoint
 CREATE INDEX "client_birth_data_client_idx" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "client_astrologer_relationships_unique" ON "client_astrologer_relationships" USING btree ("client_user_id","astrologer_user_id");--> statement-breakpoint
 CREATE INDEX "client_astrologer_relationships_astrologer_status_idx" ON "client_astrologer_relationships" USING btree ("astrologer_user_id","status");--> statement-breakpoint

@@ -18,6 +18,8 @@ export type InboxPageViewProps = {
   readonly isThreadError: boolean;
   readonly isSending: boolean;
   readonly sendError: string | null;
+  readonly isStartingTelegramBusinessConnection: boolean;
+  readonly telegramBusinessStartError: string | null;
   readonly draft: string;
   readonly search: string;
   readonly linkClientUserId: string;
@@ -28,6 +30,7 @@ export type InboxPageViewProps = {
   readonly onSearchChange: (value: string) => void;
   readonly onSelectThread: (threadId: string) => void;
   readonly onDraftChange: (value: string) => void;
+  readonly onStartTelegramBusinessConnection: () => void;
   readonly onSend: () => void;
   readonly onMarkRead: (threadId: string) => void;
   readonly onLinkClientUserIdChange: (value: string) => void;
@@ -48,6 +51,8 @@ export function InboxPageView({
   isThreadError,
   isSending,
   sendError,
+  isStartingTelegramBusinessConnection,
+  telegramBusinessStartError,
   draft,
   search,
   linkClientUserId,
@@ -58,6 +63,7 @@ export function InboxPageView({
   onSearchChange,
   onSelectThread,
   onDraftChange,
+  onStartTelegramBusinessConnection,
   onSend,
   onMarkRead,
   onLinkClientUserIdChange,
@@ -70,6 +76,8 @@ export function InboxPageView({
   const telegramBusiness = channelConnections.find(
     (connection) => connection.mode === "telegram_business_bot"
   );
+  const telegramBusinessStartDisabled =
+    isStartingTelegramBusinessConnection || telegramBusiness?.status === "active";
   const canSend = telegramBusiness?.status === "active" && telegramBusiness.capabilities.canSend;
   const composerDisabled = !selectedThread || !canSend || isSending;
   const totalUnread = threads.reduce((sum, thread) => sum + thread.unreadCount, 0);
@@ -91,8 +99,13 @@ export function InboxPageView({
           {channelConnections.map((connection) => (
             <ChannelBadge key={connection.id} connection={connection} />
           ))}
-          <button className={styles.connectButton} type="button">
-            Подключить канал
+          <button
+            className={styles.connectButton}
+            type="button"
+            disabled={telegramBusinessStartDisabled}
+            onClick={() => onStartTelegramBusinessConnection()}
+          >
+            {telegramBusinessStartButtonLabel(telegramBusiness, isStartingTelegramBusinessConnection)}
           </button>
         </div>
       </header>
@@ -109,6 +122,22 @@ export function InboxPageView({
                   разрешённого Secretary bot.
                 </p>
                 <ConnectionStatus connection={telegramBusiness} isLoading={isConnectionsLoading} />
+                {telegramBusinessStartError && (
+                  <p className={styles.connectionError} role="alert">
+                    {telegramBusinessStartError}
+                  </p>
+                )}
+                <button
+                  className={styles.connectButton}
+                  type="button"
+                  disabled={telegramBusinessStartDisabled}
+                  onClick={() => onStartTelegramBusinessConnection()}
+                >
+                  {telegramBusinessStartButtonLabel(
+                    telegramBusiness,
+                    isStartingTelegramBusinessConnection
+                  )}
+                </button>
               </div>
             </article>
 
@@ -338,11 +367,46 @@ function ConnectionStatus({
     return <span className={styles.statusWarning}>Не подключено</span>;
   }
 
+  if (connection.status === "connecting") {
+    return <span className={styles.statusMuted}>Ожидает подтверждения</span>;
+  }
+
+  if (connection.status === "reauth_required") {
+    return <span className={styles.statusWarning}>Нужны права Telegram</span>;
+  }
+
+  if (connection.status === "revoked") {
+    return <span className={styles.statusWarning}>Отключено в Telegram</span>;
+  }
+
   if (connection.status !== "active") {
     return <span className={styles.statusWarning}>Требует внимания: {connection.status}</span>;
   }
 
   return <span className={styles.statusOk}>Подключено</span>;
+}
+
+function telegramBusinessStartButtonLabel(
+  connection: MessagingChannelConnection | undefined,
+  isStarting: boolean
+) {
+  if (isStarting) {
+    return "Открываем Telegram";
+  }
+
+  if (connection?.status === "active") {
+    return "Подключено";
+  }
+
+  if (connection?.status === "connecting") {
+    return "Ожидаем Telegram";
+  }
+
+  if (connection?.status === "reauth_required" || connection?.status === "revoked") {
+    return "Подключить заново";
+  }
+
+  return "Подключить Telegram";
 }
 
 function ChannelBadge({ connection }: { readonly connection: MessagingChannelConnection }) {

@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Headers,
+  Inject,
   Post,
   Req,
   UnauthorizedException,
@@ -21,7 +22,7 @@ import { BookingService } from "./booking.service";
 @Controller("booking")
 @UseGuards(PublicSessionAuthGuard)
 export class BookingController {
-  constructor(private readonly bookingService: BookingService) {}
+  constructor(@Inject(BookingService) private readonly bookingService: BookingService) {}
 
   @Post("intent")
   @RequireCsrf()

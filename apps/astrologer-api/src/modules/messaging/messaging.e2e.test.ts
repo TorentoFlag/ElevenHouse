@@ -4,6 +4,7 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
 import {
   MessagingMessageResponseSchema,
+  StartTelegramBusinessConnectionResponseSchema,
   MessagingThreadClientLinkResponseSchema,
   MessagingThreadResponseSchema
 } from "@elevenhouse/contracts";
@@ -54,6 +55,7 @@ const csrfHeaderName = "x-csrf-token";
 let primaryCsrfToken = "";
 let secondaryCsrfToken = "";
 let linkedClientUserId: string | null = null;
+let startedTelegramBusinessConnectionId: string | null = null;
 let inboundProviderMessageCount = 0;
 let businessConnectionUpdateCount = 0;
 let realtimeReadInputs: unknown[] = [];
@@ -72,6 +74,7 @@ describe("messaging HTTP routes", () => {
 
   beforeEach(async () => {
     linkedClientUserId = null;
+    startedTelegramBusinessConnectionId = null;
     inboundProviderMessageCount = 0;
     businessConnectionUpdateCount = 0;
     realtimeReadInputs = [];
@@ -94,6 +97,7 @@ describe("messaging HTTP routes", () => {
           csrfCookieName,
           csrfHeaderName,
           telegramBotWebhookSecret: "telegram-test-secret",
+          telegramBusinessBotUsername: "ElevenHouseTestBot",
           passwordlessRateLimits: limits
         })
       )
@@ -165,6 +169,38 @@ describe("messaging HTTP routes", () => {
     expect(withoutKey.status).toBe(400);
     expect(linkWithoutKey.status).toBe(400);
     expect(createWithoutKey.status).toBe(400);
+  });
+
+  it("starts Telegram Business connection with browser auth and CSRF", async () => {
+    const withoutCsrf = await requestJson(
+      "POST",
+      "/messaging/channel-connections/telegram/business/start",
+      {},
+      auth()
+    );
+    const response = await requestJson(
+      "POST",
+      "/messaging/channel-connections/telegram/business/start",
+      {},
+      csrfAuth()
+    );
+
+    expect(withoutCsrf.status).toBe(403);
+    expect(response.status).toBe(201);
+    StartTelegramBusinessConnectionResponseSchema.parse(response.body);
+    expect(response.body).toMatchObject({
+      channelConnection: {
+        id: connectionId,
+        provider: "telegram",
+        mode: "telegram_business_bot",
+        status: "connecting"
+      },
+      telegramBotUsername: "ElevenHouseTestBot",
+      telegramBotUrl: "https://t.me/ElevenHouseTestBot"
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /providerToken|session|business_connection_id|rawPayload/i
+    );
   });
 
   it("returns safe 404 for a cross-owner thread", async () => {
@@ -366,6 +402,10 @@ function createStore(): MessagingStore {
       businessConnectionUpdateCount += 1;
       return { kind: "recorded" as const };
     }),
+    startTelegramBusinessConnection: vi.fn(async () => {
+      startedTelegramBusinessConnectionId = connectionId;
+      return { connectionId };
+    }),
     recordTelegramBusinessMessage: vi.fn(async () => {
       inboundProviderMessageCount += 1;
       return { kind: "created" as const, message: readDomainInboundMessage() };
@@ -385,7 +425,9 @@ function createStore(): MessagingStore {
 
 function createReadStore(): MessagingReadStore {
   return {
-    listChannelConnections: vi.fn(async () => ({ channelConnections: [] })),
+    listChannelConnections: vi.fn(async () => ({
+      channelConnections: startedTelegramBusinessConnectionId ? [readChannelConnection()] : []
+    })),
     listThreads: vi.fn(async ({ astrologerUserId }) =>
       astrologerUserId === ownerUserId ? { threads: [readThread()], nextCursor: null } : { threads: [], nextCursor: null }
     ),
@@ -413,6 +455,29 @@ function createReadStore(): MessagingReadStore {
           : []
       };
     })
+  };
+}
+
+function readChannelConnection() {
+  return {
+    id: connectionId,
+    provider: "telegram" as const,
+    mode: "telegram_business_bot" as const,
+    status: "connecting" as const,
+    displayName: null,
+    username: null,
+    capabilities: {
+      canSend: false,
+      canReceive: false,
+      canRead: false,
+      supportsHistoryImport: false,
+      supportsMessageEdits: false,
+      supportsMessageDeletes: false,
+      supportsAttachments: false
+    },
+    connectedAt: null,
+    lastSyncedAt: null,
+    lastErrorCode: null
   };
 }
 

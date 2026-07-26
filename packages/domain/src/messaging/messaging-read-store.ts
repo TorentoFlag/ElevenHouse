@@ -73,11 +73,14 @@ export type MessagingReadStore = {
     readonly astrologerUserId: string;
     readonly limit: number;
     readonly offset: number;
-  }) => Promise<{ readonly threads: readonly MessagingReadThread[]; readonly nextCursor: string | null }>;
+  }) => Promise<{
+    readonly threads: readonly MessagingReadThread[];
+    readonly nextCursor: string | null;
+  }>;
   readonly getThread: (input: {
     readonly astrologerUserId: string;
     readonly threadId: string;
-    readonly limit: number;
+    readonly limit?: number;
     readonly offset: number;
   }) => Promise<{
     readonly thread: MessagingReadThread;
@@ -88,5 +91,7 @@ export type MessagingReadStore = {
     readonly astrologerUserId: string;
     readonly afterEventId: string | undefined;
     readonly limit: number;
-  }) => Promise<{ readonly events: readonly (MessagingRealtimeEvent & { readonly astrologerUserId: string })[] }>;
+  }) => Promise<{
+    readonly events: readonly (MessagingRealtimeEvent & { readonly astrologerUserId: string })[];
+  }>;
 };

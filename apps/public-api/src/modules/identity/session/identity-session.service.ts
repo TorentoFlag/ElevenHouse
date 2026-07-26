@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   createSessionToken,
@@ -47,8 +47,11 @@ export class PublicSessionTokenIssuer {
 @Injectable()
 export class PublicSessionCookieService {
   constructor(
+    @Inject(ConfigService)
     private readonly configService: ConfigService,
+    @Inject(PublicCsrfTokenService)
     private readonly csrfTokenService: PublicCsrfTokenService,
+    @Inject(SystemClock)
     private readonly clock: SystemClock
   ) {}
 

@@ -1,4 +1,10 @@
-import { BadRequestException, CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  CanActivate,
+  ExecutionContext,
+  Inject,
+  Injectable
+} from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import {
   idempotencyRequiredMetadataKey,
@@ -11,7 +17,7 @@ type IdempotencyRequest = {
 
 @Injectable()
 export class IdempotencyGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(@Inject(Reflector) private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
     const requirement = this.reflector.getAllAndOverride<IdempotencyRequirement>(

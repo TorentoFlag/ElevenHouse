@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { ForbiddenException, Injectable } from "@nestjs/common";
+import { ForbiddenException, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { hashSessionToken } from "@elevenhouse/auth";
 
@@ -26,7 +26,7 @@ const csrfTokenVersion = "v1";
 
 @Injectable()
 export class PublicCsrfTokenService {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(@Inject(ConfigService) private readonly configService: ConfigService) {}
 
   setCsrfCookie(input: {
     readonly response: CsrfCookieResponse;

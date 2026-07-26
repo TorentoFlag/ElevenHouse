@@ -11,10 +11,12 @@ import {
   MessagingThreadParamsSchema,
   MessagingThreadResponseSchema,
   SendMessagingMessageRequestSchema,
+  StartTelegramBusinessConnectionResponseSchema,
   type CreateMessagingThreadClientRequest,
   type LinkMessagingThreadClientRequest,
   type MessagingChannelConnectionResponse,
   type MessagingMessageResponse,
+  type StartTelegramBusinessConnectionResponse,
   type MessagingThreadClientLinkResponse,
   type MessagingThreadDetailQuery,
   type MessagingThreadListQuery,
@@ -28,6 +30,16 @@ import { application } from "../../../Application";
 export async function listMessagingChannelConnections(): Promise<MessagingChannelConnectionResponse> {
   return MessagingChannelConnectionResponseSchema.parse(
     await application.http.get("/messaging/channel-connections")
+  );
+}
+
+export async function startTelegramBusinessConnection(): Promise<StartTelegramBusinessConnectionResponse> {
+  return StartTelegramBusinessConnectionResponseSchema.parse(
+    await application.http.post(
+      "/messaging/channel-connections/telegram/business/start",
+      undefined,
+      { csrf: true }
+    )
   );
 }
 
@@ -46,10 +58,9 @@ export async function getMessagingThread(
 ): Promise<MessagingThreadResponse> {
   const params = MessagingThreadParamsSchema.parse({ threadId });
   const parsedQuery = MessagingThreadDetailQuerySchema.parse(query);
+  const search = toPaginationSearch(parsedQuery, { omitDefaultOffset: true });
   return MessagingThreadResponseSchema.parse(
-    await application.http.get(
-      `/messaging/threads/${params.threadId}?${toPaginationSearch(parsedQuery)}`
-    )
+    await application.http.get(`/messaging/threads/${params.threadId}${search ? `?${search}` : ""}`)
   );
 }
 
@@ -109,9 +120,16 @@ export async function markMessagingThreadRead(
   );
 }
 
-function toPaginationSearch(query: { readonly limit: number; readonly offset: number }): string {
-  return new URLSearchParams({
-    limit: String(query.limit),
-    offset: String(query.offset)
-  }).toString();
+function toPaginationSearch(
+  query: { readonly limit?: number; readonly offset: number },
+  options: { readonly omitDefaultOffset?: boolean } = {}
+): string {
+  const params = new URLSearchParams();
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  if (!options.omitDefaultOffset || query.offset > 0) {
+    params.set("offset", String(query.offset));
+  }
+  return params.toString();
 }

@@ -30,6 +30,7 @@ import {
 @Injectable()
 export class IdentityRegistrationService {
   constructor(
+    @Inject(DomainRegistrationHandler)
     private readonly handler: DomainRegistrationHandler,
     @Inject(PASSWORDLESS_RATE_LIMITER)
     private readonly rateLimiter: PasswordlessRateLimitPort

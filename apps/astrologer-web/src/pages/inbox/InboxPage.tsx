@@ -10,7 +10,8 @@ import {
   listMessagingChannelConnectionsQueryOptions,
   listMessagingThreadsQueryOptions,
   markMessagingThreadReadMutationOptions,
-  sendMessagingMessageMutationOptions
+  sendMessagingMessageMutationOptions,
+  startTelegramBusinessConnectionMutationOptions
 } from "../../features/messaging/model/messagingQueries";
 import { InboxPageView } from "./InboxPageView";
 
@@ -24,6 +25,9 @@ export function InboxPage() {
   const channelConnectionsQuery = useQuery(listMessagingChannelConnectionsQueryOptions());
   const threadsQuery = useQuery(listMessagingThreadsQueryOptions({ limit: 50, offset: 0 }));
   const threadQuery = useQuery(getMessagingThreadQueryOptions(selectedThreadId));
+  const startTelegramBusinessMutation = useMutation(
+    startTelegramBusinessConnectionMutationOptions(queryClient)
+  );
   const sendMessageMutation = useMutation(sendMessagingMessageMutationOptions(queryClient));
   const markReadMutation = useMutation(markMessagingThreadReadMutationOptions(queryClient));
   const linkClientMutation = useMutation(linkMessagingThreadClientMutationOptions(queryClient));
@@ -78,6 +82,10 @@ export function InboxPage() {
 
   const sendError =
     sendMessageMutation.error instanceof Error ? sendMessageMutation.error.message : null;
+  const telegramBusinessStartError =
+    startTelegramBusinessMutation.error instanceof Error
+      ? startTelegramBusinessMutation.error.message
+      : null;
   const clientActionError =
     linkClientMutation.error instanceof Error
       ? linkClientMutation.error.message
@@ -98,6 +106,8 @@ export function InboxPage() {
       isThreadError={threadQuery.isError}
       isSending={sendMessageMutation.isPending}
       sendError={sendError}
+      isStartingTelegramBusinessConnection={startTelegramBusinessMutation.isPending}
+      telegramBusinessStartError={telegramBusinessStartError}
       draft={draft}
       search={search}
       linkClientUserId={linkClientUserId}
@@ -108,6 +118,16 @@ export function InboxPage() {
       onSearchChange={setSearch}
       onSelectThread={setSelectedThreadId}
       onDraftChange={setDraft}
+      onStartTelegramBusinessConnection={() => {
+        startTelegramBusinessMutation
+          .mutateAsync()
+          .then((result) => {
+            if (result.telegramBotUrl) {
+              window.open(result.telegramBotUrl, "_blank", "noopener,noreferrer");
+            }
+          })
+          .catch(() => undefined);
+      }}
       onSend={() => {
         if (!selectedThreadId || !draft.trim()) {
           return;

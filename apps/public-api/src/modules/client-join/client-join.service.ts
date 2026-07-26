@@ -41,6 +41,7 @@ export class ClientJoinService {
     private readonly profileReader: ClientJoinProfileReader,
     @Inject(CLIENT_JOIN_STORE)
     private readonly store: Pick<ClientStore, "createJoinIntent">,
+    @Inject(SystemClock)
     private readonly clock: SystemClock,
     @Inject(CLIENT_JOIN_OPTIONS)
     private readonly options: ClientJoinOptions

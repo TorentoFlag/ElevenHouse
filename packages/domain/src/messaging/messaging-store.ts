@@ -70,6 +70,16 @@ export type RecordTelegramBusinessConnectionStoreResult = {
   readonly kind: "recorded" | "unmatched";
 };
 
+export type StartTelegramBusinessConnectionStoreInput = {
+  readonly connectionId: string;
+  readonly astrologerUserId: string;
+  readonly now: string;
+};
+
+export type StartTelegramBusinessConnectionStoreResult = {
+  readonly connectionId: string;
+};
+
 export type RecordTelegramBusinessMessageStoreInput = {
   readonly updateId: string;
   readonly businessConnectionId: string;
@@ -140,6 +150,9 @@ export type MessagingStore = {
   readonly recordTelegramBusinessConnection: (
     input: RecordTelegramBusinessConnectionStoreInput
   ) => Promise<RecordTelegramBusinessConnectionStoreResult>;
+  readonly startTelegramBusinessConnection: (
+    input: StartTelegramBusinessConnectionStoreInput
+  ) => Promise<StartTelegramBusinessConnectionStoreResult>;
   readonly recordTelegramBusinessMessage: (
     input: RecordTelegramBusinessMessageStoreInput
   ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;

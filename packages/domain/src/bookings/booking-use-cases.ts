@@ -23,8 +23,7 @@ import type {
   BookingClientReader,
   BookingCommandStore,
   BookingProductReader,
-  ManualBookingClaim,
-  PaidBookingHoldClaim
+  ManualBookingClaim
 } from "./booking-ports";
 import type {
   Booking,

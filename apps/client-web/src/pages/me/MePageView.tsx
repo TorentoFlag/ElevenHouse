@@ -1,0 +1,442 @@
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import type {
+  ClientBirthDataResponse,
+  ClientCabinetOverviewResponse
+} from "@elevenhouse/contracts";
+import type { FormEvent } from "react";
+import styles from "./MePage.module.css";
+
+export type ClientCabinetSection = "home" | "sessions" | "feed" | "data" | "billing";
+export type ClientCabinetStatus = "loading" | "ready" | "saving" | "saved" | "error";
+
+export type BirthProfileFormState = {
+  readonly label: string;
+  readonly birthDate: string;
+  readonly birthTime: string;
+  readonly birthPlaceText: string;
+};
+
+export type MePageViewProps = {
+  readonly activeSection: ClientCabinetSection;
+  readonly form: BirthProfileFormState;
+  readonly overview: ClientCabinetOverviewResponse | null;
+  readonly status: ClientCabinetStatus;
+  readonly onFormChange: (nextForm: BirthProfileFormState) => void;
+  readonly onRetry: () => void;
+  readonly onSectionChange: (section: ClientCabinetSection) => void;
+  readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+};
+
+const navItems: ReadonlyArray<{
+  readonly id: ClientCabinetSection;
+  readonly iconName: "layoutGrid" | "video" | "content" | "orbit" | "wallet";
+  readonly label: string;
+}> = [
+  { id: "home", iconName: "layoutGrid", label: "Главная" },
+  { id: "sessions", iconName: "video", label: "Консультации" },
+  { id: "feed", iconName: "content", label: "Лента" },
+  { id: "data", iconName: "orbit", label: "Мои данные" },
+  { id: "billing", iconName: "wallet", label: "Подписки" }
+];
+
+export function MePageView({
+  activeSection,
+  form,
+  overview,
+  status,
+  onFormChange,
+  onRetry,
+  onSectionChange,
+  onSubmit
+}: MePageViewProps) {
+  const isLoading = status === "loading";
+  const activeTitle = navItems.find((item) => item.id === activeSection)?.label ?? "Главная";
+
+  if (isLoading) {
+    return (
+      <main className={styles.page} aria-busy="true">
+        <CenteredState title="Загружаем кабинет" text="Проверяем ваши связи и сохранённые данные." />
+      </main>
+    );
+  }
+
+  if (status === "error" && overview === null) {
+    return (
+      <main className={styles.page}>
+        <CenteredState
+          title="Не удалось загрузить кабинет"
+          text="Повторите запрос. Если ошибка сохранится, мы покажем её в диагностике API."
+          action={<button className={styles.primaryButton} onClick={onRetry}>Повторить</button>}
+        />
+      </main>
+    );
+  }
+
+  const safeOverview = overview ?? emptyOverview;
+
+  return (
+    <main className={styles.page}>
+      <aside className={styles.sidebar} aria-label="Кабинет клиента">
+        <div className={styles.brand}>
+          <Icon iconName="logoMoon" size={34} />
+          <div>
+            <strong>ElevenHouse</strong>
+            <span>Кабинет клиента</span>
+          </div>
+        </div>
+
+        <section className={styles.astrologerSelector} aria-label="Связанные астрологи">
+          <button className={styles.selectorButton} type="button" disabled>
+            <span className={styles.selectorIcon}>
+              <Icon iconName="users" size={17} />
+            </span>
+            <span>
+              <span className={styles.eyebrow}>Астролог</span>
+              <strong>Все · {safeOverview.astrologers.length}</strong>
+            </span>
+            <Icon iconName="chevronDown" size={16} />
+          </button>
+          {safeOverview.astrologers.length === 0 ? (
+            <p className={styles.selectorHint}>
+              Новые астрологи появляются здесь после входа по личной ссылке астролога.
+            </p>
+          ) : (
+            <ul className={styles.astrologerList}>
+              {safeOverview.astrologers.map((astrologer) => (
+                <li key={astrologer.astrologerUserId}>
+                  <span className={styles.avatar}>{getInitials(astrologer.publicName)}</span>
+                  <span>
+                    <strong>{astrologer.publicName}</strong>
+                    <small>@{astrologer.publicHandle}</small>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <nav className={styles.nav} aria-label="Разделы кабинета">
+          {navItems.map((item) => {
+            const isActive = item.id === activeSection;
+            return (
+              <button
+                key={item.id}
+                className={isActive ? styles.navItemActive : styles.navItem}
+                type="button"
+                onClick={() => onSectionChange(item.id)}
+              >
+                <Icon iconName={item.iconName} size={19} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
+
+      <section className={styles.contentShell}>
+        <header className={styles.header}>
+          <h1>{activeTitle}</h1>
+          <button className={styles.primaryButton} type="button" disabled>
+            <Icon iconName="plus" size={16} /> Записаться
+          </button>
+          <button className={styles.iconButton} type="button" disabled aria-label="Уведомления">
+            <Icon iconName="bell" size={18} />
+          </button>
+          <div className={styles.profilePill}>
+            <span className={styles.avatar}>К</span>
+            <span>Клиент</span>
+          </div>
+        </header>
+
+        <div className={styles.content}>
+          {activeSection === "home" ? (
+            <HomeSection overview={safeOverview} onSectionChange={onSectionChange} />
+          ) : null}
+          {activeSection === "sessions" ? <EmptySection title="Пока нет предстоящих консультаций." /> : null}
+          {activeSection === "feed" ? <EmptySection title="Лента появится после публикаций связанных астрологов." /> : null}
+          {activeSection === "data" ? (
+            <DataSection
+              form={form}
+              profiles={safeOverview.birthProfiles}
+              status={status}
+              onFormChange={onFormChange}
+              onSubmit={onSubmit}
+            />
+          ) : null}
+          {activeSection === "billing" ? <EmptySection title="Активных подписок пока нет." /> : null}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function HomeSection({
+  overview,
+  onSectionChange
+}: {
+  readonly overview: ClientCabinetOverviewResponse;
+  readonly onSectionChange: (section: ClientCabinetSection) => void;
+}) {
+  return (
+    <div className={styles.homeGrid}>
+      <section className={styles.heroCard}>
+        <span className={styles.eyebrow}>Связь с астрологами</span>
+        <h2>Ваш кабинет открыт только для связанных астрологов</h2>
+        <p>Новые астрологи появляются здесь после входа по личной ссылке астролога.</p>
+      </section>
+
+      <section className={styles.summaryGrid} aria-label="Сводка кабинета">
+        <SummaryCard
+          iconName="video"
+          label="Предстоящие консультации"
+          value={overview.summary.upcomingBookingCount}
+        />
+        <SummaryCard
+          iconName="doc"
+          label="Материалы"
+          value={overview.summary.availableMaterialCount}
+        />
+        <SummaryCard
+          iconName="bell"
+          label="Уведомления"
+          value={overview.summary.unreadNotificationCount}
+        />
+        <SummaryCard
+          iconName="wallet"
+          label="Подписки"
+          value={overview.summary.activeSubscriptionCount}
+        />
+      </section>
+
+      <section className={styles.sectionCard}>
+        <div className={styles.sectionHeader}>
+          <h2>Данные рождения</h2>
+          <button className={styles.linkButton} type="button" onClick={() => onSectionChange("data")}>
+            Открыть
+          </button>
+        </div>
+        {overview.birthProfiles.length === 0 ? (
+          <p className={styles.emptyInline}>Добавьте основной профиль, чтобы использовать его в заказах и расчётах.</p>
+        ) : (
+          <BirthProfileList profiles={overview.birthProfiles} compact />
+        )}
+      </section>
+
+      <section className={styles.sectionCard}>
+        <div className={styles.sectionHeader}>
+          <h2>Связанные астрологи</h2>
+        </div>
+        {overview.astrologers.length === 0 ? (
+          <p className={styles.emptyInline}>Откройте ссылку, которую дал астролог, чтобы связать кабинеты.</p>
+        ) : (
+          <ul className={styles.relatedList}>
+            {overview.astrologers.map((astrologer) => (
+              <li key={astrologer.astrologerUserId}>
+                <span className={styles.avatar}>{getInitials(astrologer.publicName)}</span>
+                <span>
+                  <strong>{astrologer.publicName}</strong>
+                  <small>@{astrologer.publicHandle}</small>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function DataSection({
+  form,
+  profiles,
+  status,
+  onFormChange,
+  onSubmit
+}: {
+  readonly form: BirthProfileFormState;
+  readonly profiles: readonly ClientBirthDataResponse[];
+  readonly status: ClientCabinetStatus;
+  readonly onFormChange: (nextForm: BirthProfileFormState) => void;
+  readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className={styles.dataGrid}>
+      <section className={styles.sectionCard}>
+        <div className={styles.sectionHeader}>
+          <div>
+            <span className={styles.eyebrow}>Мои карты</span>
+            <h2>Данные рождения</h2>
+          </div>
+          <span className={styles.counter}>{profiles.length}</span>
+        </div>
+        {profiles.length === 0 ? (
+          <p className={styles.emptyInline}>Сохранённых профилей рождения пока нет.</p>
+        ) : (
+          <BirthProfileList profiles={profiles} />
+        )}
+      </section>
+
+      <form className={styles.sectionCard} onSubmit={onSubmit}>
+        <div className={styles.sectionHeader}>
+          <div>
+            <span className={styles.eyebrow}>Основной профиль</span>
+            <h2>Редактирование</h2>
+          </div>
+        </div>
+        <div className={styles.formGrid}>
+          <label>
+            Название
+            <input
+              id="client-birth-profile-label"
+              name="label"
+              value={form.label}
+              onChange={(event) => onFormChange({ ...form, label: event.target.value })}
+              placeholder="Я"
+            />
+          </label>
+          <label>
+            Дата рождения
+            <input
+              id="client-birth-profile-birth-date"
+              name="birthDate"
+              type="date"
+              value={form.birthDate}
+              onChange={(event) => onFormChange({ ...form, birthDate: event.target.value })}
+            />
+          </label>
+          <label>
+            Время рождения
+            <input
+              id="client-birth-profile-birth-time"
+              name="birthTime"
+              type="time"
+              value={form.birthTime}
+              onChange={(event) => onFormChange({ ...form, birthTime: event.target.value })}
+            />
+          </label>
+          <label>
+            Место рождения
+            <input
+              id="client-birth-profile-birth-place"
+              name="birthPlaceText"
+              value={form.birthPlaceText}
+              onChange={(event) => onFormChange({ ...form, birthPlaceText: event.target.value })}
+              placeholder="Город"
+            />
+          </label>
+        </div>
+        <button className={styles.primaryButton} type="submit" disabled={status === "saving"}>
+          {status === "saving" ? "Сохраняем..." : "Сохранить основной профиль"}
+        </button>
+        {status === "saved" ? <p className={styles.successText}>Сохранено</p> : null}
+        {status === "error" ? <p className={styles.errorText}>Не удалось выполнить действие</p> : null}
+      </form>
+    </div>
+  );
+}
+
+function BirthProfileList({
+  profiles,
+  compact = false
+}: {
+  readonly profiles: readonly ClientBirthDataResponse[];
+  readonly compact?: boolean;
+}) {
+  return (
+    <ul className={compact ? styles.birthListCompact : styles.birthList}>
+      {profiles.map((profile) => (
+        <li key={profile.id}>
+          <span className={styles.birthIcon}><Icon iconName="orbit" size={18} /></span>
+          <span>
+            <strong>{profile.label ?? "Профиль"}</strong>
+            <small>
+              {formatBirthDate(profile.birthDate)}
+              {profile.birthTime ? ` · ${profile.birthTime}` : " · время неизвестно"}
+              {profile.birthPlaceText ? ` · ${profile.birthPlaceText}` : ""}
+            </small>
+          </span>
+          {profile.isPrimary ? <em>Основной профиль</em> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SummaryCard({
+  iconName,
+  label,
+  value
+}: {
+  readonly iconName: "video" | "doc" | "bell" | "wallet";
+  readonly label: string;
+  readonly value: number;
+}) {
+  return (
+    <article className={styles.summaryCard}>
+      <Icon iconName={iconName} size={20} />
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+function EmptySection({ title }: { readonly title: string }) {
+  return (
+    <section className={styles.sectionCard}>
+      <div className={styles.emptyBlock}>
+        <Icon iconName="sparkle" size={22} />
+        <h2>{title}</h2>
+      </div>
+    </section>
+  );
+}
+
+function CenteredState({
+  action,
+  text,
+  title
+}: {
+  readonly action?: React.ReactNode;
+  readonly text: string;
+  readonly title: string;
+}) {
+  return (
+    <section className={styles.centeredState}>
+      <Icon iconName="logoMoon" size={38} />
+      <h1>{title}</h1>
+      <p>{text}</p>
+      {action}
+    </section>
+  );
+}
+
+function formatBirthDate(value: string | null) {
+  if (!value) {
+    return "дата не указана";
+  }
+
+  const [year, month, day] = value.split("-");
+  return `${day}.${month}.${year}`;
+}
+
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+const emptyOverview: ClientCabinetOverviewResponse = {
+  astrologers: [],
+  birthProfiles: [],
+  summary: {
+    directLinkOnly: true,
+    upcomingBookingCount: 0,
+    availableMaterialCount: 0,
+    unreadNotificationCount: 0,
+    activeSubscriptionCount: 0
+  }
+};

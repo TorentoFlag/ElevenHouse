@@ -1,4 +1,4 @@
-import { Controller, HttpCode, Post, Req, Res } from "@nestjs/common";
+import { Controller, HttpCode, Inject, Post, Req, Res } from "@nestjs/common";
 import {
   getIdentityRequestContext,
   type IdentityHttpRequest
@@ -14,7 +14,9 @@ import { RequireCsrf } from "../../security/route-policy/route-security-policy";
 @Controller("identity")
 export class IdentitySessionController {
   constructor(
+    @Inject(IdentityLogoutService)
     private readonly logoutService: IdentityLogoutService,
+    @Inject(PublicSessionCookieService)
     private readonly publicSessionCookieService: PublicSessionCookieService
   ) {}
 

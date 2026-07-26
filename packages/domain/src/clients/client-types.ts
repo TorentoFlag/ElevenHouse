@@ -28,6 +28,7 @@ export type ClientBirthDataInput = {
   readonly birthLatitude?: number | null;
   readonly birthLongitude?: number | null;
   readonly source: ClientBirthDataSource;
+  readonly isPrimary?: boolean | null;
 };
 
 export type NormalizedClientBirthDataInput = {
@@ -44,6 +45,7 @@ export type NormalizedClientBirthDataInput = {
   readonly birthLatitude: number | null;
   readonly birthLongitude: number | null;
   readonly source: ClientBirthDataSource;
+  readonly isPrimary: boolean;
 };
 
 export type ClientBirthData = NormalizedClientBirthDataInput & {

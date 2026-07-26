@@ -159,6 +159,19 @@ export async function recordTelegramBusinessConnection(input: {
   });
 }
 
+export async function startTelegramBusinessConnection(input: {
+  readonly store: MessagingStore;
+  readonly astrologerUserId: string;
+  readonly idGenerator?: () => string;
+  readonly now: Date;
+}): Promise<{ readonly connectionId: string }> {
+  return input.store.startTelegramBusinessConnection({
+    connectionId: identifier(input.idGenerator?.() ?? randomUUID(), "Channel connection id is required"),
+    astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
+    now: input.now.toISOString()
+  });
+}
+
 export async function recordTelegramBusinessMessage(input: {
   readonly store: MessagingStore;
   readonly updateId: string;

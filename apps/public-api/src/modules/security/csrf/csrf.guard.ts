@@ -1,4 +1,10 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  CanActivate,
+  ExecutionContext,
+  Inject,
+  Injectable,
+  UnauthorizedException
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Reflector } from "@nestjs/core";
 import { SystemClock } from "../../../common/system-clock.js";
@@ -12,9 +18,13 @@ type CookieAuthRequest = CsrfRequest & {
 @Injectable()
 export class CsrfGuard implements CanActivate {
   constructor(
+    @Inject(Reflector)
     private readonly reflector: Reflector,
+    @Inject(PublicCsrfTokenService)
     private readonly csrfTokenService: PublicCsrfTokenService,
+    @Inject(ConfigService)
     private readonly configService: ConfigService,
+    @Inject(SystemClock)
     private readonly clock: SystemClock
   ) {}
 

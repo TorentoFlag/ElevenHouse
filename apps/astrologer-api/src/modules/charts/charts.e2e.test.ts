@@ -451,6 +451,9 @@ function createClientStore(): ClientStore {
     ensureRelationship: vi.fn(async () => raise()),
     upsertClientProfile: vi.fn(async () => undefined),
     upsertClientBirthData: vi.fn(async () => raise()),
+    listClientBirthDataProfiles: vi.fn(async () => []),
+    createClientBirthDataProfile: vi.fn(async () => raise()),
+    updateClientBirthDataProfile: vi.fn(async () => raise()),
     listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
     getAstrologerClient: vi.fn(
       async (): Promise<AstrologerClientListItem> => ({
@@ -475,6 +478,7 @@ function createClientStore(): ClientStore {
           birthLatitude: 41.9028,
           birthLongitude: 12.4964,
           source: "manual",
+          isPrimary: true,
           createdAt: now.toISOString(),
           updatedAt: now.toISOString()
         } satisfies ClientBirthData

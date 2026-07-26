@@ -11,8 +11,14 @@ type InsertCall = {
   readonly value: Record<string, unknown>;
 };
 
+type UpdateCall = {
+  readonly table: unknown;
+  readonly value: Record<string, unknown>;
+};
+
 function createFakeInsertDatabase(rows: readonly Record<string, unknown>[]) {
   const inserts: InsertCall[] = [];
+  const updates: UpdateCall[] = [];
   let nextRowIndex = 0;
 
   const insert = (table: unknown) => ({
@@ -34,7 +40,18 @@ function createFakeInsertDatabase(rows: readonly Record<string, unknown>[]) {
     })
   });
 
-  return { database: { insert }, inserts };
+  const update = (table: unknown) => ({
+    set: (value: Record<string, unknown>) => ({
+      where: () => ({
+        returning: async () => {
+          updates.push({ table, value });
+          return [];
+        }
+      })
+    })
+  });
+
+  return { database: { insert, update }, inserts, updates };
 }
 
 describe("createDrizzleClientStore", () => {
@@ -65,6 +82,7 @@ describe("createDrizzleClientStore", () => {
         birthLatitude: "55.7558",
         birthLongitude: "37.6173",
         source: "client_profile",
+        isPrimary: true,
         createdAt: now,
         updatedAt: now
       }
@@ -93,7 +111,8 @@ describe("createDrizzleClientStore", () => {
         birthTimeDstOccurrence: null,
         birthLatitude: 55.7558,
         birthLongitude: 37.6173,
-        source: "client_profile"
+        source: "client_profile",
+        isPrimary: true
       },
       now: now.toISOString()
     });
@@ -111,9 +130,80 @@ describe("createDrizzleClientStore", () => {
         clientUserId: "11111111-1111-4111-8111-111111111111",
         birthDate: "1990-03-14",
         birthTimePrecision: "exact",
-        birthCountryCode: "RU"
+        birthCountryCode: "RU",
+        isPrimary: true
       }
     });
+  });
+
+  it("creates a primary birth profile after demoting previous primary rows", async () => {
+    const now = new Date("2026-07-06T10:00:00.000Z");
+    const { database, inserts, updates } = createFakeInsertDatabase([
+      {
+        id: "66666666-6666-4666-8666-666666666666",
+        clientUserId: "11111111-1111-4111-8111-111111111111",
+        label: "Партнёр",
+        birthDate: "1988-07-22",
+        birthTime: null,
+        birthTimePrecision: "unknown",
+        birthPlaceText: "Калининград",
+        birthCountryCode: null,
+        birthCity: null,
+        birthRegion: null,
+        birthTimezone: null,
+        birthTimeDstOccurrence: null,
+        birthLatitude: null,
+        birthLongitude: null,
+        source: "client_profile",
+        isPrimary: true,
+        createdAt: now,
+        updatedAt: now
+      }
+    ]);
+    const store = createDrizzleClientStore(database as never);
+
+    await expect(
+      store.createClientBirthDataProfile({
+        clientUserId: "11111111-1111-4111-8111-111111111111",
+        data: {
+          label: "Партнёр",
+          birthDate: "1988-07-22",
+          birthTime: null,
+          birthTimePrecision: "unknown",
+          birthPlaceText: "Калининград",
+          birthCountryCode: null,
+          birthCity: null,
+          birthRegion: null,
+          birthTimezone: null,
+          birthTimeDstOccurrence: null,
+          birthLatitude: null,
+          birthLongitude: null,
+          source: "client_profile",
+          isPrimary: true
+        },
+        now: now.toISOString()
+      })
+    ).resolves.toMatchObject({
+      label: "Партнёр",
+      isPrimary: true
+    });
+
+    expect(updates).toEqual([
+      {
+        table: clientBirthData,
+        value: expect.objectContaining({ isPrimary: false })
+      }
+    ]);
+    expect(inserts).toEqual([
+      {
+        table: clientBirthData,
+        value: expect.objectContaining({
+          clientUserId: "11111111-1111-4111-8111-111111111111",
+          label: "Партнёр",
+          isPrimary: true
+        })
+      }
+    ]);
   });
 
   it("creates join intents with token hash only", async () => {

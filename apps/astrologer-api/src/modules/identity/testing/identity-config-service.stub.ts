@@ -6,11 +6,16 @@ export function createIdentityConfigServiceStub(input: {
   readonly csrfCookieName: string;
   readonly csrfHeaderName: string;
   readonly telegramBotWebhookSecret?: string | null;
+  readonly telegramBusinessBotUsername?: string | null;
   readonly passwordlessRateLimits: PasswordlessRateLimitOptions;
 }): Pick<ConfigService, "get" | "getOrThrow"> {
   const getOptional = (key: string): unknown => {
     if (key === "astrologerApi.passwordlessTrustedStaticCode") {
       return null;
+    }
+
+    if (key === "astrologerApi.telegramBusinessBotUsername") {
+      return input.telegramBusinessBotUsername ?? null;
     }
 
     return undefined;

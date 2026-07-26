@@ -58,7 +58,8 @@ export function normalizeClientBirthDataInput(
       180,
       "Birth longitude is invalid"
     ),
-    source: normalizeBirthDataSource(input.source)
+    source: normalizeBirthDataSource(input.source),
+    isPrimary: input.isPrimary === true
   };
 }
 
@@ -166,6 +167,43 @@ export async function upsertClientBirthData(input: {
 }): Promise<ClientBirthData> {
   return input.store.upsertClientBirthData({
     clientUserId: normalizeRequiredString(input.clientUserId, "Client user id is required"),
+    data: normalizeClientBirthDataInput({ ...input.data, isPrimary: true }),
+    now: input.now.toISOString()
+  });
+}
+
+export function listClientBirthDataProfiles(input: {
+  readonly store: ClientStore;
+  readonly clientUserId: string;
+}): Promise<readonly ClientBirthData[]> {
+  return input.store.listClientBirthDataProfiles(
+    normalizeRequiredString(input.clientUserId, "Client user id is required")
+  );
+}
+
+export async function createClientBirthDataProfile(input: {
+  readonly store: ClientStore;
+  readonly clientUserId: string;
+  readonly data: ClientBirthDataInput;
+  readonly now: Date;
+}): Promise<ClientBirthData> {
+  return input.store.createClientBirthDataProfile({
+    clientUserId: normalizeRequiredString(input.clientUserId, "Client user id is required"),
+    data: normalizeClientBirthDataInput(input.data),
+    now: input.now.toISOString()
+  });
+}
+
+export async function updateClientBirthDataProfile(input: {
+  readonly store: ClientStore;
+  readonly clientUserId: string;
+  readonly birthDataId: string;
+  readonly data: ClientBirthDataInput;
+  readonly now: Date;
+}): Promise<ClientBirthData | null> {
+  return input.store.updateClientBirthDataProfile({
+    clientUserId: normalizeRequiredString(input.clientUserId, "Client user id is required"),
+    birthDataId: normalizeRequiredString(input.birthDataId, "Birth profile id is required"),
     data: normalizeClientBirthDataInput(input.data),
     now: input.now.toISOString()
   });

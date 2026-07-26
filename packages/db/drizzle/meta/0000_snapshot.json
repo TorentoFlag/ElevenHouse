@@ -1,5 +1,5 @@
 {
-  "id": "0a753f4c-3466-4143-bda7-2052c1be9db4",
+  "id": "df914551-b73f-4c1c-a14d-8e75a7f5e701",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -6857,6 +6857,13 @@
           "notNull": true,
           "default": "'client_profile'"
         },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -6873,8 +6880,8 @@
         }
       },
       "indexes": {
-        "client_birth_data_client_unique": {
-          "name": "client_birth_data_client_unique",
+        "client_birth_data_primary_unique": {
+          "name": "client_birth_data_primary_unique",
           "columns": [
             {
               "expression": "client_user_id",
@@ -6884,6 +6891,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"client_birth_data\".\"is_primary\" = true",
           "concurrently": false,
           "method": "btree",
           "with": {}

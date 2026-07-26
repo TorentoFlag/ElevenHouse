@@ -36,7 +36,9 @@ export class PaymentsService {
       "executeCreateCheckout" | "markAttemptCheckoutOpened"
     >,
     @Inject(PAYMENTS_PROVIDER) private readonly provider: PaymentProviderPort,
+    @Inject(SystemClock)
     private readonly clock: SystemClock,
+    @Inject(ConfigService)
     private readonly configService: ConfigService
   ) {}
 

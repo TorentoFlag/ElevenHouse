@@ -134,7 +134,8 @@ export const clientBirthDataUpsertRequestSchema = z
       .max(180)
       .nullable()
       .optional()
-      .transform((value) => value ?? null)
+      .transform((value) => value ?? null),
+    isPrimary: z.boolean().optional().default(false)
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -172,29 +173,74 @@ export const clientBirthDataResponseSchema = z
     birthLatitude: z.number().min(-90).max(90).nullable(),
     birthLongitude: z.number().min(-180).max(180).nullable(),
     source: clientBirthDataSourceSchema,
+    isPrimary: z.boolean(),
     createdAt: timestampSchema,
     updatedAt: timestampSchema
   })
   .strict();
 export type ClientBirthDataResponse = z.infer<typeof clientBirthDataResponseSchema>;
 
+export const clientBirthDataListResponseSchema = z
+  .object({
+    profiles: z.array(clientBirthDataResponseSchema)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const primaryCount = value.profiles.filter((profile) => profile.isPrimary).length;
+    if (primaryCount > 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["profiles"],
+        message: "Client birth profile list cannot contain more than one primary profile"
+      });
+    }
+  });
+export type ClientBirthDataListResponse = z.infer<typeof clientBirthDataListResponseSchema>;
+
+const relatedAstrologerResponseItemSchema = z
+  .object({
+    astrologerUserId: uuidSchema,
+    publicHandle: astrologerPublicHandleSchema,
+    publicName: nonEmptyStringSchema.min(2).max(200),
+    relationshipStatus: clientRelationshipStatusSchema,
+    firstLinkedAt: timestampSchema,
+    lastLinkedAt: timestampSchema
+  })
+  .strict();
+
 export const relatedAstrologerListResponseSchema = z
   .object({
-    astrologers: z.array(
-      z
-        .object({
-          astrologerUserId: uuidSchema,
-          publicHandle: astrologerPublicHandleSchema,
-          publicName: nonEmptyStringSchema.min(2).max(200),
-          relationshipStatus: clientRelationshipStatusSchema,
-          firstLinkedAt: timestampSchema,
-          lastLinkedAt: timestampSchema
-        })
-        .strict()
-    )
+    astrologers: z.array(relatedAstrologerResponseItemSchema)
   })
   .strict();
 export type RelatedAstrologerListResponse = z.infer<typeof relatedAstrologerListResponseSchema>;
+
+export const clientCabinetOverviewResponseSchema = z
+  .object({
+    astrologers: z.array(relatedAstrologerResponseItemSchema),
+    birthProfiles: z.array(clientBirthDataResponseSchema),
+    summary: z
+      .object({
+        directLinkOnly: z.literal(true),
+        upcomingBookingCount: z.number().int().min(0),
+        availableMaterialCount: z.number().int().min(0),
+        unreadNotificationCount: z.number().int().min(0),
+        activeSubscriptionCount: z.number().int().min(0)
+      })
+      .strict()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const primaryCount = value.birthProfiles.filter((profile) => profile.isPrimary).length;
+    if (primaryCount > 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["birthProfiles"],
+        message: "Client cabinet overview cannot contain more than one primary birth profile"
+      });
+    }
+  });
+export type ClientCabinetOverviewResponse = z.infer<typeof clientCabinetOverviewResponseSchema>;
 
 export const astrologerClientResponseItemSchema = z
   .object({

@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Headers,
+  Inject,
   Post,
   Req,
   UnauthorizedException,
@@ -21,7 +22,7 @@ import { OrdersService } from "./orders.service";
 @Controller("orders")
 @UseGuards(PublicSessionAuthGuard)
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(@Inject(OrdersService) private readonly ordersService: OrdersService) {}
 
   @Post()
   @RequireCsrf()

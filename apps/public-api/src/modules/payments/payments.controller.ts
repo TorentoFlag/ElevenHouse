@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Headers,
+  Inject,
   Post,
   Req,
   UnauthorizedException,
@@ -18,7 +19,7 @@ import { PaymentsService } from "./payments.service";
 @Controller("payments")
 @UseGuards(PublicSessionAuthGuard)
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(@Inject(PaymentsService) private readonly paymentsService: PaymentsService) {}
 
   @Post("checkout")
   @RequireCsrf()

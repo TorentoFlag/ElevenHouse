@@ -19,18 +19,24 @@ adapters. They remain first-class planned modes in contracts/schema/ADR.
 ## Progress
 
 - [x] 2026-07-22: User approved focusing end-to-end on one channel before
-  implementing MTProto or Instagram.
+      implementing MTProto or Instagram.
 - [x] Add `/inbox` route and navigation item in `astrologer-web`.
 - [x] Build production Inbox page/controller/view from existing Messaging API
-  and realtime client.
+      and realtime client.
 - [x] Cover connection empty/error/success, thread empty/list/detail, unlinked
-  chat link/create-client, composer disabled/sending/error states.
+      chat link/create-client, composer disabled/sending/error states.
 - [x] Verify focused frontend tests and affected `astrologer-web`
-  typecheck/build.
+      typecheck/build.
 - [x] Check browser/design parity availability without process lifecycle
-  changes; record blocked browser acceptance.
+      changes; record blocked browser acceptance.
+- [x] 2026-07-25: User chose Hookdeck for stable local Telegram webhook testing
+      and changed message detail loading from latest `N` to all persisted thread
+      messages.
+- [x] 2026-07-25: Add authenticated CSRF-protected Telegram Business start flow:
+      ElevenHouse creates/reuses one pending channel connection, opens the public
+      bot link, and the Telegram `business_connection` webhook claims it active.
 - [ ] Complete browser/design parity when an attachable browser surface is
-  available.
+      available.
 
 ## Surprises & Discoveries
 
@@ -48,6 +54,15 @@ adapters. They remain first-class planned modes in contracts/schema/ADR.
 - 2026-07-22: Use existing `features/messaging/api` and SSE client first. Add
   backend/API only if the visible workflow exposes a real missing production
   contract.
+- 2026-07-25: Use Hookdeck CLI as the default local Telegram Business webhook
+  gateway. Cloudflare quick tunnels are not stable enough for repeated webhook
+  testing; named Cloudflare tunnels remain an infrastructure alternative.
+- 2026-07-25: Thread detail reads load all persisted messages by default.
+  Pagination remains supported only when a caller explicitly supplies `limit`
+  and `offset`; thread list reads remain paginated.
+- 2026-07-25: Telegram Business connect uses a safe public bot username in
+  `astrologer-api` config. The API never needs the Bot API token; provider token
+  ownership stays with `notification-worker` and webhook verification.
 
 ## Outcomes & Retrospective
 
@@ -80,6 +95,8 @@ Current implementation foundation:
 - `apps/notification-worker/src/messaging-delivery.*`
 - `apps/astrologer-web/src/features/messaging/api/messagingApi.ts`
 - `apps/astrologer-web/src/features/messaging/realtime/messagingRealtimeClient.ts`
+- `scripts/dev/telegram-business-webhook.mjs`
+- `docs/development/agent-runbooks/10-telegram-business-hookdeck.md`
 
 ## Interfaces and Dependencies
 

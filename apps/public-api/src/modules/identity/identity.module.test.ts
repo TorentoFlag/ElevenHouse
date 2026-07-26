@@ -6,18 +6,24 @@ import type {
 } from "@elevenhouse/domain";
 import { hashPasswordlessCode } from "@elevenhouse/domain";
 import { ConfigService } from "@nestjs/config";
+import { SELF_DECLARED_DEPS_METADATA } from "@nestjs/common/constants";
 import { Test } from "@nestjs/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { IdentityPasswordlessService } from "./passwordless/identity-passwordless.service";
+import { IdentityRegistrationService } from "./registration/identity-registration.service";
 import { IdentityModule } from "./identity.module";
 import { AUTH_SESSION_AUTHENTICATION_STORE } from "./auth/identity-auth.tokens";
 import {
   PASSWORDLESS_AUTH_UNIT_OF_WORK,
   PASSWORDLESS_RATE_LIMITER
 } from "./passwordless/identity-passwordless.tokens";
-import { PUBLIC_AUTH_CODE_GENERATOR } from "./passwordless/identity-passwordless.handler";
+import {
+  DomainPasswordlessAuthHandler,
+  PUBLIC_AUTH_CODE_GENERATOR
+} from "./passwordless/identity-passwordless.handler";
+import { DomainRegistrationHandler } from "./registration/identity-registration.handler";
 import { allowAllPasswordlessRateLimiter } from "./testing/allow-all-passwordless-rate-limiter";
 import { IdentityCurrentSessionService } from "./session/identity-current-session.service";
 import { SystemClock } from "../../common/system-clock.js";
@@ -26,6 +32,21 @@ import { PublicSessionTokenIssuer } from "./session/identity-session.service";
 describe("IdentityModule", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("declares handler injection tokens explicitly for tsx runtime metadata", () => {
+    expect(getSelfDeclaredDependency(IdentityPasswordlessService, 0)).toBe(
+      DomainPasswordlessAuthHandler
+    );
+    expect(getSelfDeclaredDependency(IdentityRegistrationService, 0)).toBe(
+      DomainRegistrationHandler
+    );
+    expect(getSelfDeclaredDependency(DomainPasswordlessAuthHandler, 3)).toBe(
+      PublicSessionTokenIssuer
+    );
+    expect(getSelfDeclaredDependency(DomainPasswordlessAuthHandler, 4)).toBe(SystemClock);
+    expect(getSelfDeclaredDependency(DomainRegistrationHandler, 1)).toBe(PublicSessionTokenIssuer);
+    expect(getSelfDeclaredDependency(DomainRegistrationHandler, 2)).toBe(SystemClock);
   });
 
   it("wires passwordless auth to domain-backed providers and keeps session resolution working", async () => {
@@ -328,6 +349,14 @@ describe("IdentityModule", () => {
     expect(redisClient.quit).not.toHaveBeenCalled();
   });
 });
+
+function getSelfDeclaredDependency(target: object, index: number): unknown {
+  const dependencies = Reflect.getMetadata(SELF_DECLARED_DEPS_METADATA, target) as
+    | Array<{ index: number; param: unknown }>
+    | undefined;
+
+  return dependencies?.find((dependency) => dependency.index === index)?.param;
+}
 
 function createConfigServiceStub(): Pick<ConfigService, "get" | "getOrThrow"> {
   return {

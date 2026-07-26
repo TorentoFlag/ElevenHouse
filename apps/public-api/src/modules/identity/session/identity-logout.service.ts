@@ -18,7 +18,9 @@ export class IdentityLogoutService {
   constructor(
     @Inject(AUTH_SESSION_REVOCATION_UNIT_OF_WORK)
     private readonly revocation: AuthSessionRevocationUnitOfWork,
+    @Inject(SystemClock)
     private readonly clock: SystemClock,
+    @Inject(ConfigService)
     private readonly configService: ConfigService
   ) {}
 

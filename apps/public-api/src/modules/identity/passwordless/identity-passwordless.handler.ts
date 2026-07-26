@@ -108,7 +108,9 @@ export class DomainPasswordlessAuthHandler {
     private readonly authCodeEncryption: AuthCodeEncryptionPort,
     @Inject(PUBLIC_AUTH_CODE_GENERATOR)
     private readonly codeGenerator: PasswordlessCodeGenerator,
+    @Inject(PublicSessionTokenIssuer)
     private readonly sessionTokenIssuer: PublicSessionTokenIssuer,
+    @Inject(SystemClock)
     private readonly clock: SystemClock,
     @Inject(PASSWORDLESS_AUTH_OPTIONS)
     private readonly options: PasswordlessAuthOptions

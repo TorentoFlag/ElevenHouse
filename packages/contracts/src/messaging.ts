@@ -58,6 +58,19 @@ export type MessagingChannelConnectionResponse = z.infer<
   typeof MessagingChannelConnectionResponseSchema
 >;
 
+export const StartTelegramBusinessConnectionResponseSchema = z.strictObject({
+  channelConnection: MessagingChannelConnectionSchema,
+  telegramBotUsername: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_]{5,32}$/)
+    .nullable(),
+  telegramBotUrl: z.string().trim().url().nullable()
+});
+export type StartTelegramBusinessConnectionResponse = z.infer<
+  typeof StartTelegramBusinessConnectionResponseSchema
+>;
+
 export const MessagingExternalIdentityLinkStatusSchema = z.enum([
   "unlinked",
   "suggested",
@@ -161,7 +174,7 @@ export type MessagingThreadListResponse = z.infer<typeof MessagingThreadListResp
 
 export const MessagingThreadResponseSchema = z.strictObject({
   thread: MessagingThreadSchema,
-  messages: z.array(MessagingMessageSchema).max(200),
+  messages: z.array(MessagingMessageSchema),
   nextCursor: z.string().trim().min(1).max(200).nullable()
 });
 export type MessagingThreadResponse = z.infer<typeof MessagingThreadResponseSchema>;
@@ -179,8 +192,9 @@ const MessagingPaginationQuerySchema = z.strictObject({
 export const MessagingThreadListQuerySchema = MessagingPaginationQuerySchema;
 export type MessagingThreadListQuery = z.infer<typeof MessagingThreadListQuerySchema>;
 
-export const MessagingThreadDetailQuerySchema = MessagingPaginationQuerySchema.extend({
-  limit: z.coerce.number().int().min(1).max(200).default(100)
+export const MessagingThreadDetailQuerySchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(1000).optional(),
+  offset: z.coerce.number().int().min(0).max(10_000).default(0)
 });
 export type MessagingThreadDetailQuery = z.infer<typeof MessagingThreadDetailQuerySchema>;
 

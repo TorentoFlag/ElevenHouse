@@ -20,7 +20,9 @@ import type {
   RecordInboundProviderMessageStoreInput,
   RecordTelegramBusinessConnectionStoreInput,
   RecordTelegramBusinessConnectionStoreResult,
-  RecordTelegramBusinessMessageStoreInput
+  RecordTelegramBusinessMessageStoreInput,
+  StartTelegramBusinessConnectionStoreInput,
+  StartTelegramBusinessConnectionStoreResult
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
@@ -70,6 +72,7 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     createOutboundMessage: (input) => createOutboundMessage(database, input),
     recordInboundProviderMessage: (input) => recordInboundProviderMessage(database, input),
     recordTelegramBusinessConnection: (input) => recordTelegramBusinessConnection(database, input),
+    startTelegramBusinessConnection: (input) => startTelegramBusinessConnection(database, input),
     recordTelegramBusinessMessage: (input) => recordTelegramBusinessMessage(database, input),
     linkThreadToClient: (input) => linkThreadToClient(database, input),
     createClientFromThread: (input) => createClientFromThread(database, input),
@@ -380,6 +383,92 @@ async function recordTelegramBusinessConnection(
     .returning({ id: messagingChannelConnections.id });
 
   return row ? { kind: "recorded" } : { kind: "unmatched" };
+}
+
+async function startTelegramBusinessConnection(
+  database: ElevenHouseDatabase,
+  input: StartTelegramBusinessConnectionStoreInput
+): Promise<StartTelegramBusinessConnectionStoreResult> {
+  return database.transaction(async (transaction) => {
+    await lockTelegramBusinessConnectionStart(transaction, input);
+    const existing = await findTelegramBusinessConnectionForAstrologer(transaction, input);
+    if (existing) {
+      if (["revoked", "paused", "error"].includes(existing.status)) {
+        const timestamp = new Date(input.now);
+        await transaction
+          .update(messagingChannelConnections)
+          .set({
+            status: "connecting",
+            externalAccountId: null,
+            displayNameSnapshot: null,
+            usernameSnapshot: null,
+            capabilities: telegramBusinessPendingCapabilities(),
+            connectedAt: null,
+            lastSyncedAt: null,
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            updatedAt: timestamp
+          })
+          .where(eq(messagingChannelConnections.id, existing.id));
+      }
+      return { connectionId: existing.id };
+    }
+
+    const timestamp = new Date(input.now);
+    const [row] = await transaction
+      .insert(messagingChannelConnections)
+      .values({
+        id: input.connectionId,
+        astrologerUserId: input.astrologerUserId,
+        provider: "telegram",
+        mode: "telegram_business_bot",
+        status: "connecting",
+        externalAccountId: null,
+        displayNameSnapshot: null,
+        usernameSnapshot: null,
+        capabilities: telegramBusinessPendingCapabilities(),
+        consentRecordId: null,
+        connectedAt: null,
+        lastSyncedAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      })
+      .returning({ id: messagingChannelConnections.id });
+    if (!row) throw new Error("Expected Telegram Business channel connection insert to return a row");
+    return { connectionId: row.id };
+  });
+}
+
+async function lockTelegramBusinessConnectionStart(
+  database: MessagingDatabase,
+  input: { readonly astrologerUserId: string }
+): Promise<void> {
+  await database.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`messaging:telegram_business_bot:${input.astrologerUserId}`}))`
+  );
+}
+
+async function findTelegramBusinessConnectionForAstrologer(
+  database: MessagingDatabase,
+  input: { readonly astrologerUserId: string }
+): Promise<{ readonly id: string; readonly status: string } | null> {
+  const [row] = await database
+    .select({
+      id: messagingChannelConnections.id,
+      status: messagingChannelConnections.status
+    })
+    .from(messagingChannelConnections)
+    .where(
+      and(
+        eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
+        eq(messagingChannelConnections.provider, "telegram"),
+        eq(messagingChannelConnections.mode, "telegram_business_bot")
+      )
+    )
+    .limit(1);
+  return row ?? null;
 }
 
 async function findSinglePendingTelegramBusinessConnection(
@@ -907,6 +996,18 @@ function toTelegramBusinessCapabilities(
     supportsHistoryImport: false,
     supportsMessageEdits: false,
     supportsMessageDeletes: rights.canDeleteSentMessages || rights.canDeleteAllMessages,
+    supportsAttachments: false
+  };
+}
+
+function telegramBusinessPendingCapabilities(): Record<string, boolean> {
+  return {
+    canSend: false,
+    canReceive: false,
+    canRead: false,
+    supportsHistoryImport: false,
+    supportsMessageEdits: false,
+    supportsMessageDeletes: false,
     supportsAttachments: false
   };
 }

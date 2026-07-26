@@ -578,6 +578,9 @@ function createClientStore(
     ensureRelationship: vi.fn(async () => raise()),
     upsertClientProfile: vi.fn(async () => undefined),
     upsertClientBirthData: vi.fn(async () => raise()),
+    listClientBirthDataProfiles: vi.fn(async () => []),
+    createClientBirthDataProfile: vi.fn(async () => raise()),
+    updateClientBirthDataProfile: vi.fn(async () => raise()),
     listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
     getAstrologerClient: vi.fn(async ({ clientUserId }) => {
       const birthData = input.clients
@@ -614,6 +617,7 @@ function readyBirthData(input: Partial<ClientBirthData> = {}): ClientBirthData {
     birthLatitude: input.birthLatitude ?? 41.9028,
     birthLongitude: input.birthLongitude ?? 12.4964,
     source: input.source ?? "manual",
+    isPrimary: input.isPrimary ?? true,
     createdAt: input.createdAt ?? now.toISOString(),
     updatedAt: input.updatedAt ?? now.toISOString()
   };

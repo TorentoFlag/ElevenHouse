@@ -35,6 +35,7 @@ import { assertPasswordlessRateLimitAllowed } from "./identity-passwordless-http
 @Injectable()
 export class IdentityPasswordlessService {
   constructor(
+    @Inject(DomainPasswordlessAuthHandler)
     private readonly handler: DomainPasswordlessAuthHandler,
     @Inject(PASSWORDLESS_RATE_LIMITER)
     private readonly rateLimiter: PasswordlessRateLimitPort

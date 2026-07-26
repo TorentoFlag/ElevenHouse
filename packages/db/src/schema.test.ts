@@ -125,8 +125,13 @@ describe("database account schema constants", () => {
 
     expect(migration).toContain('CREATE TABLE "client_profiles"');
     expect(migration).toContain('CREATE TABLE "client_birth_data"');
+    expect(migration).toContain('"is_primary" boolean DEFAULT false NOT NULL');
     expect(migration).toContain('"birth_time_dst_occurrence" text');
     expect(migration).toContain("client_birth_data_time_dst_occurrence_check");
+    expect(migration).not.toContain('CREATE UNIQUE INDEX "client_birth_data_client_unique"');
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "client_birth_data_primary_unique" ON "client_birth_data" USING btree ("client_user_id") WHERE "client_birth_data"."is_primary" = true'
+    );
     expect(migration).toContain('CREATE TABLE "client_astrologer_relationships"');
     expect(migration).toContain('CREATE TABLE "client_join_intents"');
     expect(migration).toContain(

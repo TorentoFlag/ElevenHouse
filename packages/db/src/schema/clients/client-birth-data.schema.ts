@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   doublePrecision,
   index,
@@ -37,11 +38,14 @@ export const clientBirthData = pgTable(
     birthLatitude: doublePrecision("birth_latitude"),
     birthLongitude: doublePrecision("birth_longitude"),
     source: text("source").notNull().default("client_profile"),
+    isPrimary: boolean("is_primary").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
-    uniqueIndex("client_birth_data_client_unique").on(table.clientUserId),
+    uniqueIndex("client_birth_data_primary_unique")
+      .on(table.clientUserId)
+      .where(sql`${table.isPrimary} = true`),
     index("client_birth_data_client_idx").on(table.clientUserId),
     check(
       "client_birth_data_time_precision_check",
