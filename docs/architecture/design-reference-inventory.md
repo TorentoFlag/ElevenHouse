@@ -148,8 +148,9 @@ incomplete contours.
 - `/a/:handle` direct-link entry backed by a server-created join intent,
   pending astrologer context and auth handoff.
 - Authenticated `/me` cabinet foundation backed by related-astrologer,
-  overview and multi birth-profile APIs; booking, materials, feed,
-  subscriptions, journal and client-visible calculations remain missing.
+  overview and multi birth-profile APIs plus a booking entry for linked
+  astrologers; public product/slot selection, checkout, materials, feed,
+  subscriptions, journal and client-visible calculations remain incomplete.
 
 `apps/admin-web` currently opens the finance policy/risk settings surface backed
 by `admin-api` finance policy routes. Broader admin navigation, moderation,
