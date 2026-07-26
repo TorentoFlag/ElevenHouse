@@ -1,6 +1,7 @@
 import type {
   AstroCalendarGenerationRequest,
   AstroCalendarRangeQuery,
+  AstroCalendarRangeResponse,
   DictionaryEntriesByCodesQuery
 } from "@elevenhouse/contracts";
 import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
@@ -23,8 +24,15 @@ export function astroCalendarRangeQueryOptions(query: AstroCalendarRangeQuery, e
     queryKey: astroCalendarQueryKeys.range(query),
     queryFn: () => getAstroCalendarRange(query),
     placeholderData: keepPreviousData,
+    refetchInterval: astroCalendarRangeRefetchInterval,
     enabled
   };
+}
+
+export function astroCalendarRangeRefetchInterval(query: {
+  readonly state: { readonly data?: AstroCalendarRangeResponse };
+}) {
+  return query.state.data?.generation.status === "calculating" ? 2_000 : false;
 }
 
 export function astroCalendarDictionaryEntriesQueryOptions(

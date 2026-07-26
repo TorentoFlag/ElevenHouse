@@ -14,6 +14,7 @@ import {
   astroCalendarDictionaryEntriesQueryOptions,
   astroCalendarGenerationMutationOptions,
   astroCalendarQueryKeys,
+  astroCalendarRangeRefetchInterval,
   astroCalendarRangeQueryOptions,
   astroCalendarRetryMutationOptions
 } from "./astroCalendarQueries";
@@ -39,6 +40,7 @@ const rangeQuery = {
 
 const generationInput = {
   ...rangeQuery,
+  clients: [],
   settings: {
     zodiac: "tropical",
     houseSystem: "placidus",
@@ -91,6 +93,86 @@ describe("astro calendar query options", () => {
       schemaVersion: "astro-calendar-range.v1"
     });
     expect(getAstroCalendarRange).toHaveBeenCalledWith(rangeQuery);
+  });
+
+  it("polls the range while a generation is calculating", () => {
+    expect(
+      astroCalendarRangeRefetchInterval({
+        state: {
+          data: {
+            schemaVersion: "astro-calendar-range.v1",
+            timeZone: "Europe/Moscow",
+            range: {
+              start: "2026-08-01",
+              end: "2026-08-31"
+            },
+            generation: {
+              status: "calculating",
+              generationId: "33333333-3333-4333-8333-333333333333",
+              fingerprint: "astro-calendar-fingerprint-v1",
+              generatedAt: null,
+              provider: null
+            },
+            events: [],
+            readiness: {
+              clientsTotal: 0,
+              clientsReady: 0,
+              clientsWithMissingBirthData: 0,
+              clientsWithUnknownBirthTime: 0,
+              clientsWithApproximateBirthTime: 0
+            },
+            summary: {
+              eventCount: 0,
+              globalEventCount: 0,
+              clientEventCount: 0,
+              byType: {},
+              byTone: {}
+            },
+            dictionaryCodes: [],
+            warnings: []
+          }
+        }
+      })
+    ).toBe(2_000);
+    expect(
+      astroCalendarRangeRefetchInterval({
+        state: {
+          data: {
+            schemaVersion: "astro-calendar-range.v1",
+            timeZone: "Europe/Moscow",
+            range: {
+              start: "2026-08-01",
+              end: "2026-08-31"
+            },
+            generation: {
+              status: "ready",
+              generationId: "33333333-3333-4333-8333-333333333333",
+              fingerprint: "astro-calendar-fingerprint-v1",
+              generatedAt: "2026-08-01T10:00:00.000Z",
+              provider: null
+            },
+            events: [],
+            readiness: {
+              clientsTotal: 0,
+              clientsReady: 0,
+              clientsWithMissingBirthData: 0,
+              clientsWithUnknownBirthTime: 0,
+              clientsWithApproximateBirthTime: 0
+            },
+            summary: {
+              eventCount: 0,
+              globalEventCount: 0,
+              clientEventCount: 0,
+              byType: {},
+              byTone: {}
+            },
+            dictionaryCodes: [],
+            warnings: []
+          }
+        }
+      })
+    ).toBe(false);
+    expect(astroCalendarRangeRefetchInterval({ state: {} })).toBe(false);
   });
 
   it("fetches dictionary entries by deterministic response codes only when codes exist", async () => {

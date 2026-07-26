@@ -170,7 +170,10 @@
 - [x] `astrologer-api` stores eligible CRM birth-data snapshots in the private generation `requestSnapshot`.
 - [x] `chart-worker` forwards those snapshots to chart-engine.
 - [x] chart-engine generates deterministic `client.birthday` and `client.solar_window` events from snapshots.
-- [ ] `client.transit_aspect` still needs a real provider-backed range-search implementation; current behavior returns a typed `PROVIDER_PRECISION_LIMITED` warning instead of fake events.
+- [x] chart-engine generates provider-backed `client.transit_aspect` range windows from Kerykeion daily ephemeris data and owner-scoped client snapshots.
+- [x] `/astro-calendar` polls the range while generation is `calculating`, then moves to ready state without a manual refresh.
+- [x] Global calendar event titles render in Russian for moon phases, ingresses and eclipses.
+- [x] Browser proof covered local login, owner-scoped QA client fixtures, recalculation, worker completion, auto-refresh, 67 events total, 43 client transit events, missing-dictionary CTAs, clean fresh console and ready health endpoints.
 
 ---
 

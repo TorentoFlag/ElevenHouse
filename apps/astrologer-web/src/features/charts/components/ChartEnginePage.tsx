@@ -1067,7 +1067,8 @@ function BirthDataEditor({
           birthTimezone: normalizeTextField(birthTimezone),
           birthTimeDstOccurrence: birthData?.birthTimeDstOccurrence ?? null,
           birthLatitude: normalizeNumberField(birthLatitude),
-          birthLongitude: normalizeNumberField(birthLongitude)
+          birthLongitude: normalizeNumberField(birthLongitude),
+          isPrimary: birthData?.isPrimary ?? true
         });
       }}
     >

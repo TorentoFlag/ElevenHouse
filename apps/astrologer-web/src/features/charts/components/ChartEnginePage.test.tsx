@@ -42,6 +42,7 @@ const client = {
     birthLatitude: 41.9028,
     birthLongitude: 12.4964,
     source: "manual",
+    isPrimary: true,
     createdAt: "2026-07-20T12:00:00.000Z",
     updatedAt: "2026-07-20T12:00:00.000Z"
   }
@@ -1506,7 +1507,8 @@ describe("ChartEnginePage", () => {
       birthTimezone: "Europe/Rome",
       birthTimeDstOccurrence: null,
       birthLatitude: 41.9028,
-      birthLongitude: 12.4964
+      birthLongitude: 12.4964,
+      isPrimary: true
     });
   });
 });

@@ -1,5 +1,6 @@
 import hashlib
 import json
+from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from importlib.metadata import version
 from math import ceil
@@ -9,7 +10,9 @@ from zoneinfo import ZoneInfo
 import swisseph as swe
 from kerykeion import AspectsFactory, AstrologicalSubjectFactory, CompositeSubjectFactory
 from kerykeion.chart_data_factory import ChartDataFactory
+from kerykeion.ephemeris_data_factory import EphemerisDataFactory
 from kerykeion.planetary_return_factory import PlanetaryReturnFactory
+from kerykeion.transits_time_range_factory import TransitsTimeRangeFactory
 
 from chart_engine.schemas import (
     AstrocartographyRequest,
@@ -249,6 +252,76 @@ ASTRO_CALENDAR_CLIENT_DATE_EVENT_TYPES = {
     "client.birthday",
     "client.solar_window",
 }
+ASTRO_CALENDAR_TRANSIT_EVENT_TYPES = {
+    "client.transit_aspect",
+}
+ASTRO_CALENDAR_TRANSIT_POINTS = {
+    "sun",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto",
+    "north_node",
+}
+ASTRO_CALENDAR_TRANSIT_ORB_LIMIT = 1.0
+ASTRO_CALENDAR_MAX_TRANSIT_EVENTS_PER_CLIENT = 80
+
+ASTRO_CALENDAR_POINT_LABELS_RU = {
+    "sun": "Солнце",
+    "moon": "Луна",
+    "mercury": "Меркурий",
+    "venus": "Венера",
+    "mars": "Марс",
+    "jupiter": "Юпитер",
+    "saturn": "Сатурн",
+    "uranus": "Уран",
+    "neptune": "Нептун",
+    "pluto": "Плутон",
+    "north_node": "Северный узел",
+    "south_node": "Южный узел",
+    "ascendant": "Asc",
+    "midheaven": "MC",
+}
+
+ASTRO_CALENDAR_ASPECT_LABELS_RU = {
+    "conjunction": "соединение",
+    "opposition": "оппозиция",
+    "trine": "трин",
+    "sextile": "секстиль",
+    "square": "квадрат",
+    "semi-sextile": "полусекстиль",
+    "semi-square": "полуквадрат",
+    "quincunx": "квинконс",
+    "quintile": "квинтиль",
+}
+
+ASTRO_CALENDAR_SIGN_LABELS_RU = {
+    "aries": "Овен",
+    "taurus": "Телец",
+    "gemini": "Близнецы",
+    "cancer": "Рак",
+    "leo": "Лев",
+    "virgo": "Дева",
+    "libra": "Весы",
+    "scorpio": "Скорпион",
+    "sagittarius": "Стрелец",
+    "capricorn": "Козерог",
+    "aquarius": "Водолей",
+    "pisces": "Рыбы",
+}
+
+ASTRO_CALENDAR_ECLIPSE_KIND_LABELS_RU = {
+    "total": "полное",
+    "annular": "кольцеобразное",
+    "partial": "частное",
+    "hybrid": "гибридное",
+    "penumbral": "полутеневое",
+    "unknown": "неуточнённое",
+}
 
 ASTRO_CALENDAR_INGRESS_POINTS = {
     "sun": ("Sun", swe.SUN),
@@ -264,10 +337,10 @@ ASTRO_CALENDAR_INGRESS_POINTS = {
 }
 
 ASTRO_CALENDAR_PHASES = {
-    0.0: ("new_moon", "New Moon", "conjunction"),
-    90.0: ("first_quarter", "First Quarter Moon", "square"),
-    180.0: ("full_moon", "Full Moon", "opposition"),
-    270.0: ("last_quarter", "Last Quarter Moon", "square"),
+    0.0: ("new_moon", "Новолуние", "conjunction"),
+    90.0: ("first_quarter", "Первая четверть Луны", "square"),
+    180.0: ("full_moon", "Полнолуние", "opposition"),
+    270.0: ("last_quarter", "Последняя четверть Луны", "square"),
 }
 
 ASTRO_CALENDAR_SIGN_NAMES = [
@@ -366,7 +439,11 @@ def calculate_astrocartography(
 
 def calculate_astro_calendar_range(request: AstroCalendarRequest) -> AstroCalendarRangeResponse:
     requested_types = set(request.eventTypes)
-    supported_types = ASTRO_CALENDAR_GLOBAL_EVENT_TYPES | ASTRO_CALENDAR_CLIENT_DATE_EVENT_TYPES
+    supported_types = (
+        ASTRO_CALENDAR_GLOBAL_EVENT_TYPES
+        | ASTRO_CALENDAR_CLIENT_DATE_EVENT_TYPES
+        | ASTRO_CALENDAR_TRANSIT_EVENT_TYPES
+    )
     unsupported_types = sorted(requested_types - supported_types)
     warnings = [
         _unsupported_astro_calendar_event_warning(event_type) for event_type in unsupported_types
@@ -383,6 +460,8 @@ def calculate_astro_calendar_range(request: AstroCalendarRequest) -> AstroCalend
         events.extend(_ingress_events(start_jd, end_exclusive_jd))
     if requested_types & ASTRO_CALENDAR_CLIENT_DATE_EVENT_TYPES:
         events.extend(_client_date_events(request))
+    if "client.transit_aspect" in requested_types:
+        events.extend(_client_transit_aspect_events(request))
 
     events.sort(key=lambda event: (event.startsAt, event.id))
     dictionary_codes = sorted({code for event in events for code in event.dictionaryCodes})
@@ -1018,6 +1097,196 @@ def _astro_calendar_readiness(request: AstroCalendarRequest) -> AstroCalendarRea
     )
 
 
+def _client_transit_aspect_events(request: AstroCalendarRequest) -> list[AstroCalendarEvent]:
+    events: list[AstroCalendarEvent] = []
+    active_points = _active_points(request.settings.nodeType)
+    allowed_aspects = (
+        MAJOR_ASPECTS
+        if request.settings.aspectPreset == "major"
+        else MAJOR_ASPECTS | MINOR_ASPECTS
+    )
+    active_aspects = _active_aspects(allowed_aspects, request.settings.orbMultiplier)
+    start_datetime = datetime(request.start.year, request.start.month, request.start.day, 12, 0)
+    end_datetime = datetime(request.end.year, request.end.month, request.end.day, 12, 0)
+
+    for client in request.clients:
+        if client.birthTime is None or client.birthTimePrecision == "unknown":
+            continue
+
+        natal_subject = _create_subject(
+            name=client.displayName,
+            date=client.birthDate.isoformat(),
+            time=client.birthTime,
+            timezone=client.birthTimezone,
+            latitude=client.birthLatitude,
+            longitude=client.birthLongitude,
+            house_system=request.settings.houseSystem,
+            active_points=active_points,
+        )
+        ephemeris_points = EphemerisDataFactory(
+            start_datetime,
+            end_datetime,
+            step_type="days",
+            step=1,
+            lat=client.birthLatitude,
+            lng=client.birthLongitude,
+            tz_str=request.timeZone,
+            zodiac_type="Tropical",
+            houses_system_identifier=HOUSE_SYSTEMS[request.settings.houseSystem],
+            max_days=94,
+        ).get_ephemeris_data_as_astrological_subjects()
+        transit_range = TransitsTimeRangeFactory(
+            natal_subject,
+            ephemeris_points,
+            active_points=active_points,
+            active_aspects=active_aspects,
+        ).get_transit_moments()
+
+        windows = _group_astro_calendar_transit_windows(transit_range.transits)
+        for window in windows[:ASTRO_CALENDAR_MAX_TRANSIT_EVENTS_PER_CLIENT]:
+            events.append(_transit_window_event(client, window))
+
+    return events
+
+
+def _group_astro_calendar_transit_windows(transit_moments: list[Any]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+
+    for moment in transit_moments:
+        moment_datetime = _parse_kerykeion_utc_datetime(moment.date)
+        for aspect in moment.aspects:
+            transit_point = POINT_NAME_TO_ID.get(aspect.p1_name)
+            natal_point = POINT_NAME_TO_ID.get(aspect.p2_name)
+            if transit_point is None or natal_point is None:
+                continue
+            if aspect.p1_owner not in {"Now", "transit"} or aspect.p2_owner in {"Now", "transit"}:
+                continue
+            if transit_point not in ASTRO_CALENDAR_TRANSIT_POINTS:
+                continue
+            if float(aspect.orbit) > ASTRO_CALENDAR_TRANSIT_ORB_LIMIT:
+                continue
+
+            grouped[(transit_point, aspect.aspect, natal_point)].append(
+                {
+                    "date": moment_datetime.date(),
+                    "startsAt": _datetime_to_utc_string(moment_datetime),
+                    "transitPoint": transit_point,
+                    "natalPoint": natal_point,
+                    "aspect": aspect.aspect,
+                    "angle": float(aspect.aspect_degrees),
+                    "orb": float(aspect.orbit),
+                    "applying": _is_applying(aspect.aspect_movement),
+                    "sign": _sign_for_longitude(float(aspect.p1_abs_pos)),
+                }
+            )
+
+    windows: list[dict[str, Any]] = []
+    for hits in grouped.values():
+        sorted_hits = sorted(hits, key=lambda hit: (hit["date"], hit["orb"]))
+        current: list[dict[str, Any]] = []
+        previous_date: date | None = None
+        for hit in sorted_hits:
+            if previous_date is not None and (hit["date"] - previous_date).days > 1:
+                windows.append(_summarize_transit_window(current))
+                current = []
+            current.append(hit)
+            previous_date = hit["date"]
+        if current:
+            windows.append(_summarize_transit_window(current))
+
+    return sorted(
+        windows,
+        key=lambda window: (
+            window["startDate"],
+            window["orb"],
+            window["transitPoint"],
+            window["aspect"],
+            window["natalPoint"],
+        ),
+    )
+
+
+def _summarize_transit_window(hits: list[dict[str, Any]]) -> dict[str, Any]:
+    strongest = min(hits, key=lambda hit: (hit["orb"], hit["date"]))
+    return {
+        **strongest,
+        "startDate": hits[0]["date"],
+        "endDate": hits[-1]["date"],
+        "startsAt": _day_start_utc_string(hits[0]["date"]),
+        "endsAt": _day_end_utc_string(hits[-1]["date"]),
+    }
+
+
+def _transit_window_event(client: Any, window: dict[str, Any]) -> AstroCalendarEvent:
+    transit_point = window["transitPoint"]
+    natal_point = window["natalPoint"]
+    aspect = window["aspect"]
+    dictionary_code = f"astro_calendar.client.transit.{transit_point}.{aspect}.{natal_point}"
+    event_id = (
+        f"client-transit-{client.clientId}-{window['startDate'].isoformat()}-"
+        f"{transit_point}-{aspect}-{natal_point}"
+    )
+    transit_label = ASTRO_CALENDAR_POINT_LABELS_RU.get(transit_point, transit_point)
+    natal_label = ASTRO_CALENDAR_POINT_LABELS_RU.get(natal_point, natal_point)
+    aspect_label = ASTRO_CALENDAR_ASPECT_LABELS_RU.get(aspect, aspect)
+
+    return AstroCalendarEvent(
+        id=event_id,
+        source="client",
+        type="client.transit_aspect",
+        startsAt=window["startsAt"],
+        endsAt=window["endsAt"],
+        timePrecision="day",
+        title=f"{transit_label}: {aspect_label} к {natal_label}",
+        subtitle=client.displayName,
+        description=f"Орб {window['orb']:.2f}°",
+        tone=_transit_aspect_tone(aspect),
+        points=[transit_label, natal_label],
+        aspect=aspect,
+        sign=window["sign"],
+        clientRefs=[_astro_calendar_client_ref(client)],
+        chartLink={
+            "mode": "transit",
+            "clientId": client.clientId,
+            "date": window["startDate"],
+        },
+        dictionaryCodes=[dictionary_code],
+        warnings=[],
+    )
+
+
+def _transit_aspect_tone(aspect: str) -> str:
+    if aspect in {"square", "opposition", "semi-square"}:
+        return "intense"
+    if aspect in {"trine", "sextile", "quintile"}:
+        return "supportive"
+    return "neutral"
+
+
+def _sign_label_ru(sign: str) -> str:
+    return ASTRO_CALENDAR_SIGN_LABELS_RU.get(sign, sign)
+
+
+def _eclipse_kind_label_ru(kind: str) -> str:
+    return ASTRO_CALENDAR_ECLIPSE_KIND_LABELS_RU.get(kind, kind)
+
+
+def _parse_kerykeion_utc_datetime(value: str) -> datetime:
+    normalized = value.replace("Z", "+00:00")
+    resolved = datetime.fromisoformat(normalized)
+    if resolved.tzinfo is None:
+        resolved = resolved.replace(tzinfo=timezone.utc)
+    return resolved.astimezone(timezone.utc)
+
+
+def _datetime_to_utc_string(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _sign_for_longitude(longitude: float) -> str:
+    return ASTRO_CALENDAR_SIGN_NAMES[int((longitude % 360.0) // 30) % 12]
+
+
 def _moon_phase_events(start_jd: float, end_exclusive_jd: float) -> list[AstroCalendarEvent]:
     events: list[AstroCalendarEvent] = []
     step_days = 0.25
@@ -1050,10 +1319,10 @@ def _moon_phase_events(start_jd: float, end_exclusive_jd: float) -> list[AstroCa
                             endsAt=None,
                             timePrecision="exact",
                             title=title,
-                            subtitle=sign,
+                            subtitle=_sign_label_ru(sign),
                             description=None,
                             tone="neutral" if phase_id in {"new_moon", "full_moon"} else "supportive",
-                            points=["Moon"],
+                            points=["Луна"],
                             aspect=aspect,
                             sign=sign,
                             clientRefs=[],
@@ -1078,6 +1347,7 @@ def _ingress_events(start_jd: float, end_exclusive_jd: float) -> list[AstroCalen
         previous_jd = start_jd
         previous_sign = _planet_sign(planet, previous_jd)
         current_jd = start_jd + step_days
+        point_label = ASTRO_CALENDAR_POINT_LABELS_RU.get(point_id, label)
 
         while current_jd <= end_exclusive_jd + step_days:
             current_sign = _planet_sign(planet, current_jd)
@@ -1098,11 +1368,11 @@ def _ingress_events(start_jd: float, end_exclusive_jd: float) -> list[AstroCalen
                             startsAt=starts_at,
                             endsAt=None,
                             timePrecision="exact",
-                            title=f"{label} enters {current_sign}",
-                            subtitle=current_sign,
+                            title=f"{point_label} входит в знак {_sign_label_ru(current_sign)}",
+                            subtitle=_sign_label_ru(current_sign),
                             description=None,
                             tone="opportunity",
-                            points=[label],
+                            points=[point_label],
                             aspect=None,
                             sign=current_sign,
                             clientRefs=[],
@@ -1149,11 +1419,11 @@ def _solar_eclipse_events(start_jd: float, end_exclusive_jd: float) -> list[Astr
                     startsAt=starts_at,
                     endsAt=None,
                     timePrecision="hour",
-                    title=f"Solar eclipse ({eclipse_kind})",
-                    subtitle=sign,
+                    title=f"Солнечное затмение ({_eclipse_kind_label_ru(eclipse_kind)})",
+                    subtitle=_sign_label_ru(sign),
                     description=None,
                     tone="intense",
-                    points=["Sun", "Moon"],
+                    points=["Солнце", "Луна"],
                     aspect="conjunction",
                     sign=sign,
                     clientRefs=[],
@@ -1190,11 +1460,11 @@ def _lunar_eclipse_events(start_jd: float, end_exclusive_jd: float) -> list[Astr
                     startsAt=starts_at,
                     endsAt=None,
                     timePrecision="hour",
-                    title=f"Lunar eclipse ({eclipse_kind})",
-                    subtitle=sign,
+                    title=f"Лунное затмение ({_eclipse_kind_label_ru(eclipse_kind)})",
+                    subtitle=_sign_label_ru(sign),
                     description=None,
                     tone="intense",
-                    points=["Sun", "Moon"],
+                    points=["Солнце", "Луна"],
                     aspect="opposition",
                     sign=sign,
                     clientRefs=[],

@@ -34,6 +34,7 @@ describe("clientSelectorModel", () => {
           birthLatitude: 51.4996,
           birthLongitude: 44.4758,
           source: "manual",
+          isPrimary: true,
           createdAt: "2026-07-06T00:00:00.000Z",
           updatedAt: "2026-07-06T00:00:00.000Z"
         }

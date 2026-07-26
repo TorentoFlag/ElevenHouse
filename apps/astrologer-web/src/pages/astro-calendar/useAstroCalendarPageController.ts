@@ -76,6 +76,7 @@ export function useAstroCalendarPageController(input: { readonly locale: Support
     onGenerate: () => {
       const body: AstroCalendarGenerationRequest = {
         ...query,
+        clients: [],
         settings: defaultSettings
       };
       void createGenerationMutation.mutateAsync(body);
@@ -89,6 +90,7 @@ export function useAstroCalendarPageController(input: { readonly locale: Support
 
       const body: AstroCalendarGenerationRequest = {
         ...query,
+        clients: [],
         settings: defaultSettings
       };
       void createGenerationMutation.mutateAsync(body);

@@ -109,6 +109,7 @@ describe("astroCalendarApi", () => {
         scope: "all",
         clientIds: [],
         eventTypes: ["global.moon_phase"],
+        clients: [],
         settings
       })
     ).resolves.toEqual(rangeResponse);
@@ -122,6 +123,7 @@ describe("astroCalendarApi", () => {
         scope: "all",
         clientIds: [],
         eventTypes: ["global.moon_phase"],
+        clients: [],
         settings
       },
       { csrf: true }

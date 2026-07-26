@@ -117,6 +117,7 @@ function clientOption(value: string, label: string, birthDate: string | null): C
           birthLatitude: null,
           birthLongitude: null,
           source: "manual",
+          isPrimary: true,
           createdAt: "2026-07-06T00:00:00.000Z",
           updatedAt: "2026-07-06T00:00:00.000Z"
         }

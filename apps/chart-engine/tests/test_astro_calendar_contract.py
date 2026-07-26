@@ -55,6 +55,9 @@ def test_astro_calendar_range_returns_provider_backed_global_events():
     )
     assert all(event["source"] == "global" for event in data["events"])
     assert all(event["clientRefs"] == [] for event in data["events"])
+    assert any(event["title"] == "Новолуние" for event in data["events"])
+    assert any("входит в знак" in event["title"] for event in data["events"])
+    assert all(" enters " not in event["title"] for event in data["events"])
 
 
 def test_astro_calendar_range_rejects_ranges_over_ninety_three_days():
@@ -109,7 +112,7 @@ def test_astro_calendar_range_returns_client_date_events_from_owner_snapshot():
     assert data["warnings"] == []
 
 
-def test_astro_calendar_range_warns_for_transit_events_until_range_search_is_supported():
+def test_astro_calendar_range_returns_client_transit_aspects_from_owner_snapshot():
     client = TestClient(app)
 
     response = client.post(
@@ -122,15 +125,21 @@ def test_astro_calendar_range_warns_for_transit_events_until_range_search_is_sup
 
     assert response.status_code == 200
     data = response.json()
-    assert data["events"] == []
-    assert data["warnings"] == [
+    assert data["warnings"] == []
+    assert data["summary"]["clientEventCount"] > 0
+    transit_event = next(event for event in data["events"] if event["type"] == "client.transit_aspect")
+    assert transit_event["source"] == "client"
+    assert transit_event["timePrecision"] == "day"
+    assert transit_event["clientRefs"] == [
         {
-            "code": "PROVIDER_PRECISION_LIMITED",
-            "severity": "warning",
-            "message": "Chart engine does not generate client.transit_aspect range events yet.",
-            "clientId": None,
-            "eventId": None,
-            "dictionaryCode": None,
-            "action": None,
+            "clientId": "22222222-2222-4222-8222-222222222222",
+            "displayName": "Мария Иванова",
+            "initials": "МИ",
         }
     ]
+    assert transit_event["chartLink"] == {
+        "mode": "transit",
+        "clientId": "22222222-2222-4222-8222-222222222222",
+        "date": transit_event["startsAt"][:10],
+    }
+    assert transit_event["dictionaryCodes"][0].startswith("astro_calendar.client.transit.")
