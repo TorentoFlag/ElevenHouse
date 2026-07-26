@@ -164,6 +164,14 @@
 - [ ] Chart-engine unit tests for the new endpoint.
 - [ ] Direct local HTTP request against the running chart-engine if the service is already up or user explicitly starts it.
 
+**2026-07-26 update**
+
+- [x] `AstroCalendarGenerationRequest` now accepts owner-scoped client input snapshots.
+- [x] `astrologer-api` stores eligible CRM birth-data snapshots in the private generation `requestSnapshot`.
+- [x] `chart-worker` forwards those snapshots to chart-engine.
+- [x] chart-engine generates deterministic `client.birthday` and `client.solar_window` events from snapshots.
+- [ ] `client.transit_aspect` still needs a real provider-backed range-search implementation; current behavior returns a typed `PROVIDER_PRECISION_LIMITED` warning instead of fake events.
+
 ---
 
 ## Task 3: Astro Calendar Domain Model

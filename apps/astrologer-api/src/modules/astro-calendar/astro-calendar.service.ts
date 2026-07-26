@@ -12,6 +12,7 @@ import {
   astroCalendarGenerationRequestSchema,
   astroCalendarRangeQuerySchema,
   astroCalendarRangeResponseSchema,
+  type AstroCalendarClientInputSnapshot,
   type AstroCalendarEvent,
   type AstroCalendarEventType,
   type AstroCalendarRangeQuery,
@@ -123,6 +124,7 @@ export class AstroCalendarService {
         range: { start: parsedBody.start, end: parsedBody.end },
         scope: parsedBody.scope,
         clientIds: context.clientIds,
+        clients: context.clientSnapshots,
         eventTypes: context.eventTypes
       },
       settingsSnapshot: parsedBody.settings,
@@ -196,6 +198,7 @@ export class AstroCalendarService {
       }))
     });
     const clientIds = clients.map((client) => client.clientUserId);
+    const clientSnapshots = clients.flatMap(toClientInputSnapshot);
     const fingerprint = buildAstroCalendarFingerprint({
       astrologerId: ownerUserId,
       range: { start: input.start, end: input.end },
@@ -207,6 +210,7 @@ export class AstroCalendarService {
 
     return {
       clientIds,
+      clientSnapshots,
       eventTypes,
       fingerprint,
       readiness: generationPlan.readiness,
@@ -261,6 +265,56 @@ export class AstroCalendarService {
         : [];
     return { clients: list.clients, warnings };
   }
+}
+
+function toClientInputSnapshot(client: {
+  readonly clientUserId: string;
+  readonly displayName?: string | null;
+  readonly birthData?: {
+    readonly birthDate: string | null;
+    readonly birthTime: string | null;
+    readonly birthTimePrecision: "exact" | "approximate" | "unknown";
+    readonly birthTimezone: string | null;
+    readonly birthLatitude: number | null;
+    readonly birthLongitude: number | null;
+  } | null;
+}): readonly AstroCalendarClientInputSnapshot[] {
+  const birthData = client.birthData;
+  if (
+    !birthData ||
+    birthData.birthDate === null ||
+    birthData.birthTimezone === null ||
+    birthData.birthLatitude === null ||
+    birthData.birthLongitude === null
+  ) {
+    return [];
+  }
+
+  const displayName = client.displayName?.trim() || "Клиент";
+  return [
+    {
+      clientId: client.clientUserId,
+      displayName,
+      initials: initialsForName(displayName),
+      birthDate: birthData.birthDate,
+      birthTime: birthData.birthTime,
+      birthTimePrecision: birthData.birthTimePrecision,
+      birthTimezone: birthData.birthTimezone,
+      birthLatitude: birthData.birthLatitude,
+      birthLongitude: birthData.birthLongitude
+    }
+  ];
+}
+
+function initialsForName(displayName: string): string {
+  const initials = displayName
+    .split(/\s+/u)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => Array.from(part)[0])
+    .join("")
+    .toUpperCase();
+  return initials || "К";
 }
 
 function normalizeEventTypes(

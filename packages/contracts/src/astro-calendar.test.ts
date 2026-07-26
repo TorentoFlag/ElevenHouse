@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  astroCalendarGenerationRequestSchema,
   astroCalendarEventTypeValues,
   astroCalendarRangeQuerySchema,
   astroCalendarRangeResponseSchema,
+  type AstroCalendarGenerationRequest,
   type AstroCalendarRangeResponse
 } from "./astro-calendar";
 
@@ -247,6 +249,64 @@ describe("astro calendar contracts", () => {
       clientIds: [],
       eventTypes: []
     });
+  });
+
+  it("parses owner-scoped client snapshots for private chart-engine generation", () => {
+    const request = astroCalendarGenerationRequestSchema.parse({
+      start: "2026-07-01",
+      end: "2026-07-31",
+      timeZone: "Europe/Moscow",
+      scope: "client",
+      clientIds: [clientId],
+      eventTypes: ["client.birthday", "client.solar_window"],
+      clients: [
+        {
+          clientId,
+          displayName: "Мария Иванова",
+          initials: "МИ",
+          birthDate: "1990-07-15",
+          birthTime: "14:30",
+          birthTimePrecision: "exact",
+          birthTimezone: "Europe/Moscow",
+          birthLatitude: 55.7558,
+          birthLongitude: 37.6173
+        }
+      ],
+      settings: {
+        zodiac: "tropical",
+        houseSystem: "placidus",
+        nodeType: "true",
+        aspectPreset: "major",
+        orbMultiplier: 1
+      }
+    }) satisfies AstroCalendarGenerationRequest;
+
+    expect(request.clients).toEqual([
+      expect.objectContaining({
+        clientId,
+        displayName: "Мария Иванова",
+        initials: "МИ",
+        birthDate: "1990-07-15",
+        birthTimezone: "Europe/Moscow"
+      })
+    ]);
+
+    expect(
+      astroCalendarGenerationRequestSchema.parse({
+        start: "2026-07-01",
+        end: "2026-07-31",
+        timeZone: "Europe/Moscow",
+        clientIds: [],
+        eventTypes: [],
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      }).clients
+    ).toEqual([]);
   });
 
   it("rejects invalid timezone and invalid date ranges", () => {

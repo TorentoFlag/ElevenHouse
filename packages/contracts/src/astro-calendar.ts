@@ -14,6 +14,7 @@ const dictionaryCodeSchema = z
 const stableIdSchema = z.string().trim().min(1).max(220);
 const optionalTextSchema = z.string().trim().min(1).max(1_000).nullable();
 const nonNegativeCountSchema = z.number().int().min(0).max(1_000_000);
+const clockTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 
 export const astroCalendarScopeValues = ["all", "global", "client"] as const;
 export const astroCalendarScopeSchema = z.enum(astroCalendarScopeValues);
@@ -112,8 +113,27 @@ export const astroCalendarRangeQuerySchema = z
 export type AstroCalendarRangeQueryInput = z.input<typeof astroCalendarRangeQuerySchema>;
 export type AstroCalendarRangeQuery = z.infer<typeof astroCalendarRangeQuerySchema>;
 
+export const astroCalendarClientInputSnapshotSchema = z
+  .object({
+    clientId: uuidSchema,
+    displayName: z.string().trim().min(1).max(160),
+    initials: z.string().trim().min(1).max(8),
+    birthDate: isoCalendarDateSchema,
+    birthTime: clockTimeSchema.nullable(),
+    birthTimePrecision: z.enum(["exact", "approximate", "unknown"]),
+    birthTimezone: ianaTimeZoneSchema,
+    birthLatitude: z.number().gte(-90).lte(90),
+    birthLongitude: z.number().gte(-180).lte(180)
+  })
+  .strict();
+
 export const astroCalendarGenerationRequestSchema = astroCalendarRangeQuerySchema
   .extend({
+    clients: z
+      .array(astroCalendarClientInputSnapshotSchema)
+      .max(500)
+      .optional()
+      .default([]),
     settings: chartSettingsSchema
   })
   .strict();
@@ -121,6 +141,7 @@ export type AstroCalendarGenerationRequestInput = z.input<
   typeof astroCalendarGenerationRequestSchema
 >;
 export type AstroCalendarGenerationRequest = z.infer<typeof astroCalendarGenerationRequestSchema>;
+export type AstroCalendarClientInputSnapshot = AstroCalendarGenerationRequest["clients"][number];
 
 export const astroCalendarClientRefSchema = z
   .object({

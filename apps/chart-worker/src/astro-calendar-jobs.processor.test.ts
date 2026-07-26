@@ -39,9 +39,22 @@ describe("processAstroCalendarGenerationJob", () => {
       start: "2026-07-01",
       end: "2026-07-31",
       timeZone: "Europe/Moscow",
-      scope: "global",
-      clientIds: [],
-      eventTypes: ["global.ingress"],
+      scope: "client",
+      clientIds: ["22222222-2222-4222-8222-222222222222"],
+      eventTypes: ["client.birthday", "client.solar_window"],
+      clients: [
+        {
+          clientId: "22222222-2222-4222-8222-222222222222",
+          displayName: "Мария Иванова",
+          initials: "МИ",
+          birthDate: "1990-07-15",
+          birthTime: "14:30",
+          birthTimePrecision: "exact",
+          birthTimezone: "Europe/Moscow",
+          birthLatitude: 55.7558,
+          birthLongitude: 37.6173
+        }
+      ],
       settings
     });
     expect(store.markReady).toHaveBeenCalledWith(
@@ -157,9 +170,22 @@ function generation(
     timeZone: "Europe/Moscow",
     requestSnapshot: {
       range: { start: "2026-07-01", end: "2026-07-31" },
-      scope: "global",
-      clientIds: [],
-      eventTypes: ["global.ingress"]
+      scope: "client",
+      clientIds: ["22222222-2222-4222-8222-222222222222"],
+      eventTypes: ["client.birthday", "client.solar_window"],
+      clients: [
+        {
+          clientId: "22222222-2222-4222-8222-222222222222",
+          displayName: "Мария Иванова",
+          initials: "МИ",
+          birthDate: "1990-07-15",
+          birthTime: "14:30",
+          birthTimePrecision: "exact",
+          birthTimezone: "Europe/Moscow",
+          birthLatitude: 55.7558,
+          birthLongitude: 37.6173
+        }
+      ]
     },
     settingsSnapshot: settings,
     readinessSummary: clientReadinessSummary,

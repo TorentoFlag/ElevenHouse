@@ -1,5 +1,6 @@
 import { ChartEnginePermanentError } from "@elevenhouse/chart-engine-client";
 import {
+  astroCalendarClientInputSnapshotSchema,
   astroCalendarEventTypeSchema,
   astroCalendarRangeResponseSchema,
   astroCalendarScopeSchema,
@@ -27,6 +28,7 @@ const requestSnapshotSchema = z
       .strict(),
     scope: astroCalendarScopeSchema,
     clientIds: z.array(z.string().uuid()),
+    clients: z.array(astroCalendarClientInputSnapshotSchema).max(500).optional().default([]),
     eventTypes: z.array(astroCalendarEventTypeSchema)
   })
   .strict();
@@ -113,6 +115,7 @@ function toChartEngineRequest(
     timeZone: generation.timeZone,
     scope: requestSnapshot.scope,
     clientIds: requestSnapshot.clientIds,
+    clients: requestSnapshot.clients,
     eventTypes: requestSnapshot.eventTypes,
     settings: chartSettingsSchema.parse(generation.settingsSnapshot)
   };

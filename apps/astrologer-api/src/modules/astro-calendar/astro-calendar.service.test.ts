@@ -62,6 +62,21 @@ describe("AstroCalendarService", () => {
         rangeStart: "2026-07-01",
         rangeEnd: "2026-07-31",
         timeZone: "Europe/Moscow",
+        requestSnapshot: expect.objectContaining({
+          clients: [
+            {
+              clientId,
+              displayName: "Мария",
+              initials: "М",
+              birthDate: "1990-07-15",
+              birthTime: "14:30",
+              birthTimePrecision: "exact",
+              birthTimezone: "Europe/Moscow",
+              birthLatitude: 55.7558,
+              birthLongitude: 37.6173
+            }
+          ]
+        }),
         warnings: []
       })
     );

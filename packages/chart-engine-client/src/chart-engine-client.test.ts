@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AstroCalendarGenerationRequestInput } from "@elevenhouse/contracts";
 import { ChartEngineHttpClient, ChartEnginePermanentError } from "./chart-engine-client";
 
 const request = {
@@ -39,15 +40,28 @@ const result = {
   }
 };
 
-const astroCalendarRequest = {
+const astroCalendarRequest: AstroCalendarGenerationRequestInput = {
   start: "2026-07-01",
   end: "2026-07-31",
   timeZone: "Europe/Moscow",
-  scope: "global",
-  clientIds: [],
-  eventTypes: ["global.ingress"],
+  scope: "client",
+  clientIds: ["22222222-2222-4222-8222-222222222222"],
+  eventTypes: ["client.birthday"],
+  clients: [
+    {
+      clientId: "22222222-2222-4222-8222-222222222222",
+      displayName: "Мария Иванова",
+      initials: "МИ",
+      birthDate: "1990-07-15",
+      birthTime: "14:30",
+      birthTimePrecision: "exact",
+      birthTimezone: "Europe/Moscow",
+      birthLatitude: 55.7558,
+      birthLongitude: 37.6173
+    }
+  ],
   settings: { zodiac: "tropical", ...request.settings }
-} as const;
+};
 
 const astroCalendarResult = {
   schemaVersion: "astro-calendar-range.v1",

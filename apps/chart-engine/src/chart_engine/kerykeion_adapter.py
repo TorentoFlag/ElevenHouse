@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from importlib.metadata import version
 from math import ceil
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import swisseph as swe
 from kerykeion import AspectsFactory, AstrologicalSubjectFactory, CompositeSubjectFactory
@@ -244,6 +245,10 @@ ASTRO_CALENDAR_GLOBAL_EVENT_TYPES = {
     "global.eclipse",
     "global.ingress",
 }
+ASTRO_CALENDAR_CLIENT_DATE_EVENT_TYPES = {
+    "client.birthday",
+    "client.solar_window",
+}
 
 ASTRO_CALENDAR_INGRESS_POINTS = {
     "sun": ("Sun", swe.SUN),
@@ -361,8 +366,11 @@ def calculate_astrocartography(
 
 def calculate_astro_calendar_range(request: AstroCalendarRequest) -> AstroCalendarRangeResponse:
     requested_types = set(request.eventTypes)
-    unsupported_types = sorted(requested_types - ASTRO_CALENDAR_GLOBAL_EVENT_TYPES)
-    warnings = [_unsupported_astro_calendar_event_warning(event_type) for event_type in unsupported_types]
+    supported_types = ASTRO_CALENDAR_GLOBAL_EVENT_TYPES | ASTRO_CALENDAR_CLIENT_DATE_EVENT_TYPES
+    unsupported_types = sorted(requested_types - supported_types)
+    warnings = [
+        _unsupported_astro_calendar_event_warning(event_type) for event_type in unsupported_types
+    ]
     start_jd = _julian_day_for_date(request.start)
     end_exclusive_jd = _julian_day_for_date(request.end + timedelta(days=1))
     events: list[AstroCalendarEvent] = []
@@ -373,14 +381,22 @@ def calculate_astro_calendar_range(request: AstroCalendarRequest) -> AstroCalend
         events.extend(_eclipse_events(start_jd, end_exclusive_jd))
     if "global.ingress" in requested_types:
         events.extend(_ingress_events(start_jd, end_exclusive_jd))
+    if requested_types & ASTRO_CALENDAR_CLIENT_DATE_EVENT_TYPES:
+        events.extend(_client_date_events(request))
 
     events.sort(key=lambda event: (event.startsAt, event.id))
     dictionary_codes = sorted({code for event in events for code in event.dictionaryCodes})
     by_type = {event_type: 0 for event_type in request.eventTypes}
     by_tone: dict[str, int] = {}
+    global_event_count = 0
+    client_event_count = 0
     for event in events:
         by_type[event.type] = by_type.get(event.type, 0) + 1
         by_tone[event.tone] = by_tone.get(event.tone, 0) + 1
+        if event.source == "client":
+            client_event_count += 1
+        else:
+            global_event_count += 1
 
     return AstroCalendarRangeResponse(
         schemaVersion="astro-calendar-range.v1",
@@ -398,17 +414,11 @@ def calculate_astro_calendar_range(request: AstroCalendarRequest) -> AstroCalend
             ),
         ),
         events=events,
-        readiness=AstroCalendarReadinessSummary(
-            clientsTotal=0,
-            clientsReady=0,
-            clientsWithMissingBirthData=0,
-            clientsWithUnknownBirthTime=0,
-            clientsWithApproximateBirthTime=0,
-        ),
+        readiness=_astro_calendar_readiness(request),
         summary=AstroCalendarSummary(
             eventCount=len(events),
-            globalEventCount=len(events),
-            clientEventCount=0,
+            globalEventCount=global_event_count,
+            clientEventCount=client_event_count,
             byType=by_type,
             byTone=by_tone,
         ),
@@ -865,6 +875,149 @@ def calculate_planetary_positions(request: PlanetaryPositionsRequest) -> Planeta
     )
 
 
+def _client_date_events(request: AstroCalendarRequest) -> list[AstroCalendarEvent]:
+    events: list[AstroCalendarEvent] = []
+    requested_types = set(request.eventTypes)
+
+    for client in request.clients:
+        natal_sun_sign = _client_natal_sun_sign(client)
+        for year in range(request.start.year, request.end.year + 1):
+            birthday = _birthday_for_year(client.birthDate, year)
+            if "client.birthday" in requested_types and request.start <= birthday <= request.end:
+                events.append(
+                    AstroCalendarEvent(
+                        id=f"client-birthday-{client.clientId}-{year}",
+                        source="client",
+                        type="client.birthday",
+                        startsAt=_day_start_utc_string(birthday),
+                        endsAt=_day_end_utc_string(birthday),
+                        timePrecision="day",
+                        title="День рождения",
+                        subtitle=client.displayName,
+                        description=None,
+                        tone="supportive",
+                        points=["Sun"],
+                        aspect=None,
+                        sign=natal_sun_sign,
+                        clientRefs=[_astro_calendar_client_ref(client)],
+                        chartLink={
+                            "mode": "solar_return",
+                            "clientId": client.clientId,
+                            "date": birthday,
+                        },
+                        dictionaryCodes=["astro_calendar.client.birthday"],
+                        warnings=[],
+                    )
+                )
+
+            solar_window_start = birthday - timedelta(days=7)
+            solar_window_end = birthday + timedelta(days=7)
+            if (
+                "client.solar_window" in requested_types
+                and solar_window_start <= request.end
+                and solar_window_end >= request.start
+            ):
+                events.append(
+                    AstroCalendarEvent(
+                        id=f"client-solar-window-{client.clientId}-{year}",
+                        source="client",
+                        type="client.solar_window",
+                        startsAt=_day_start_utc_string(solar_window_start),
+                        endsAt=_day_end_utc_string(solar_window_end),
+                        timePrecision="day",
+                        title="Солярное окно",
+                        subtitle=client.displayName,
+                        description=None,
+                        tone="opportunity",
+                        points=["Sun"],
+                        aspect=None,
+                        sign=natal_sun_sign,
+                        clientRefs=[_astro_calendar_client_ref(client)],
+                        chartLink={
+                            "mode": "solar_return",
+                            "clientId": client.clientId,
+                            "date": birthday,
+                        },
+                        dictionaryCodes=["astro_calendar.client.solar_window"],
+                        warnings=[],
+                    )
+                )
+
+    return events
+
+
+def _birthday_for_year(birth_date: date, year: int) -> date:
+    try:
+        return birth_date.replace(year=year)
+    except ValueError:
+        return date(year, 2, 28)
+
+
+def _astro_calendar_client_ref(client: Any) -> dict[str, str]:
+    return {
+        "clientId": client.clientId,
+        "displayName": client.displayName,
+        "initials": client.initials,
+    }
+
+
+def _client_natal_sun_sign(client: Any) -> str:
+    hour = 12
+    minute = 0
+    if client.birthTime is not None:
+        parts = client.birthTime.split(":")
+        hour = int(parts[0])
+        minute = int(parts[1])
+
+    local_datetime = datetime(
+        client.birthDate.year,
+        client.birthDate.month,
+        client.birthDate.day,
+        hour,
+        minute,
+        tzinfo=ZoneInfo(client.birthTimezone),
+    )
+    utc_datetime = local_datetime.astimezone(timezone.utc)
+    julian_day = swe.julday(
+        utc_datetime.year,
+        utc_datetime.month,
+        utc_datetime.day,
+        utc_datetime.hour + utc_datetime.minute / 60.0 + utc_datetime.second / 3600.0,
+        swe.GREG_CAL,
+    )
+    return _planet_sign(swe.SUN, julian_day)
+
+
+def _day_start_utc_string(value: date) -> str:
+    return f"{value.isoformat()}T00:00:00.000Z"
+
+
+def _day_end_utc_string(value: date) -> str:
+    return f"{value.isoformat()}T23:59:59.000Z"
+
+
+def _astro_calendar_readiness(request: AstroCalendarRequest) -> AstroCalendarReadinessSummary:
+    clients_with_unknown_birth_time = sum(
+        1 for client in request.clients if client.birthTime is None
+    )
+    clients_with_approximate_birth_time = sum(
+        1 for client in request.clients if client.birthTimePrecision == "approximate"
+    )
+    clients_ready = sum(
+        1
+        for client in request.clients
+        if client.birthTime is not None and client.birthTimePrecision != "unknown"
+    )
+
+    return AstroCalendarReadinessSummary(
+        clientsTotal=len(request.clients),
+        clientsReady=clients_ready,
+        clientsWithMissingBirthData=0,
+        clientsWithUnknownBirthTime=clients_with_unknown_birth_time,
+        clientsWithApproximateBirthTime=clients_with_approximate_birth_time,
+    )
+
+
 def _moon_phase_events(start_jd: float, end_exclusive_jd: float) -> list[AstroCalendarEvent]:
     events: list[AstroCalendarEvent] = []
     step_days = 0.25
@@ -1058,10 +1211,14 @@ def _lunar_eclipse_events(start_jd: float, end_exclusive_jd: float) -> list[Astr
 
 
 def _unsupported_astro_calendar_event_warning(event_type: str) -> AstroCalendarWarning:
+    if event_type == "client.transit_aspect":
+        message = "Chart engine does not generate client.transit_aspect range events yet."
+    else:
+        message = f"Chart engine does not generate {event_type} without owner-scoped CRM data."
     return AstroCalendarWarning(
         code="PROVIDER_PRECISION_LIMITED",
         severity="warning",
-        message=f"Chart engine does not generate {event_type} without owner-scoped CRM data.",
+        message=message,
         clientId=None,
         eventId=None,
         dictionaryCode=None,
@@ -1076,6 +1233,11 @@ def _astro_calendar_fingerprint(request: AstroCalendarRequest) -> str:
         "timeZone": request.timeZone,
         "settings": request.settings.model_dump(mode="json"),
         "eventTypes": sorted(request.eventTypes),
+        "clientIds": sorted(request.clientIds),
+        "clients": sorted(
+            [client.model_dump(mode="json") for client in request.clients],
+            key=lambda client: client["clientId"],
+        ),
     }
     digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
     return f"astro-calendar:{digest[:48]}"

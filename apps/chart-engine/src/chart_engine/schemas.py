@@ -177,10 +177,25 @@ class AstroCalendarDateRange(BaseModel):
         return self
 
 
+class AstroCalendarClientInputSnapshot(BaseModel):
+    clientId: str = Field(min_length=1)
+    displayName: str = Field(min_length=1, max_length=160)
+    initials: str = Field(min_length=1, max_length=8)
+    birthDate: date
+    birthTime: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    birthTimePrecision: Literal["exact", "approximate", "unknown"]
+    birthTimezone: str = Field(min_length=1, max_length=100)
+    birthLatitude: float = Field(ge=-90, le=90)
+    birthLongitude: float = Field(ge=-180, le=180)
+
+
 class AstroCalendarRequest(BaseModel):
     start: date
     end: date
     timeZone: str = Field(min_length=1, max_length=100)
+    scope: Literal["all", "global", "client"] = "all"
+    clientIds: list[str] = Field(default_factory=list, max_length=500)
+    clients: list[AstroCalendarClientInputSnapshot] = Field(default_factory=list, max_length=500)
     settings: NatalSettings
     eventTypes: list[
         Literal[
