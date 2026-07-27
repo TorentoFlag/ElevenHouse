@@ -107,7 +107,7 @@
 
 .connectButton,
 .contextActions button,
-.composer button {
+.composerRow button {
   min-height: 36px;
   border: 1px solid var(--inbox-line-strong);
   border-radius: 11px;
@@ -123,7 +123,7 @@
 
 .connectButton:disabled,
 .contextActions button:disabled,
-.composer button:disabled {
+.composerRow button:disabled {
   cursor: not-allowed;
   opacity: 0.62;
 }
@@ -246,6 +246,33 @@
   padding: 0 4px;
 }
 
+.searchBox::before {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  color: var(--inbox-dim);
+  content: "";
+  transform: translateY(-50%);
+}
+
+.searchBox::after {
+  position: absolute;
+  top: 50%;
+  left: 29px;
+  z-index: 1;
+  width: 7px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--inbox-dim);
+  content: "";
+  transform: translateY(5px) rotate(45deg);
+}
+
 .searchBox span {
   position: absolute;
   overflow: hidden;
@@ -270,7 +297,10 @@
 
 .searchBox input {
   height: 38px;
-  padding: 0 12px;
+  border-radius: 14px;
+  padding: 0 14px 0 34px;
+  font-size: 15px;
+  font-weight: 400;
 }
 
 .filterChips {
@@ -283,16 +313,17 @@
 
 .filterChip,
 .filterChipActive {
+  box-sizing: border-box;
   display: inline-flex;
-  min-height: 28px;
+  min-height: 26px;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   border: 1px solid var(--inbox-line-strong);
   border-radius: 999px;
-  padding: 0 10px;
+  padding: 0 11px;
   color: var(--inbox-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1;
 }
 
@@ -327,7 +358,7 @@
   gap: 11px;
   align-items: center;
   margin-bottom: 2px;
-  padding: 10px 11px;
+  padding: 9px 11px;
   border: 1px solid transparent;
   border-radius: 12px;
   background: transparent;
@@ -408,6 +439,33 @@
   gap: 12px;
   padding: 12px 22px;
   border-bottom: 1px solid var(--inbox-line);
+}
+
+.threadHeaderIdentity {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.threadHeaderActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.threadHeaderAction {
+  box-sizing: border-box;
+  display: inline-flex;
+  min-height: 37px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--inbox-line-strong);
+  border-radius: 14px;
+  padding: 0 16px;
+  background: var(--inbox-surface);
+  color: var(--inbox-text);
+  font: 600 12.5px / 1 var(--eh-font-sans);
+  text-decoration: none;
 }
 
 .threadHeader h2,

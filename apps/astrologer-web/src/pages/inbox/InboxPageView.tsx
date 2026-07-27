@@ -245,11 +245,18 @@ export function InboxPageView({
             {selectedThread ? (
               <>
                 <span className={styles.avatar}>{initialsForThread(selectedThread)}</span>
-                <div>
+                <div className={styles.threadHeaderIdentity}>
                   <h2>{threadTitle(selectedThread)}</h2>
                   <p>
                     <ProviderPill provider={selectedIdentity?.provider ?? "telegram"} /> Telegram
                   </p>
+                </div>
+                <div className={styles.threadHeaderActions}>
+                  {!selectedThread.clientUserId && (
+                    <a className={styles.threadHeaderAction} href="#inbox-link-client-user-id">
+                      Связать чат
+                    </a>
+                  )}
                 </div>
               </>
             ) : (
@@ -327,11 +334,7 @@ export function InboxPageView({
                   <ProviderPill provider={selectedIdentity?.provider ?? "telegram"} />
                   <div>
                     <strong>{providerLabel(selectedIdentity?.provider ?? "telegram")}</strong>
-                    <span>
-                      {selectedIdentity?.username ??
-                        selectedIdentity?.providerUserId ??
-                        "Без username"}
-                    </span>
+                    <span>{identityHandle(selectedIdentity)}</span>
                   </div>
                 </div>
               </section>
@@ -504,6 +507,16 @@ function ProviderPill({ provider }: { readonly provider: "telegram" | "instagram
 
 function providerLabel(provider: "telegram" | "instagram") {
   return provider === "telegram" ? "Telegram" : "Instagram";
+}
+
+function identityHandle(identity: MessagingThread["primaryIdentity"] | null): string {
+  const username = identity?.username?.trim();
+
+  if (!username) {
+    return "Username не передан";
+  }
+
+  return username.startsWith("@") ? username : `@${username}`;
 }
 
 function MessageBubble({

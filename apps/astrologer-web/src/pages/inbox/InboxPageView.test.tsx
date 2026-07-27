@@ -44,6 +44,9 @@ describe("InboxPageView", () => {
     expect(markup).toContain("Каналы:");
     expect(markup).toContain("Поиск по диалогам...");
     expect(markup).toContain("Непрочит.");
+    expect(markup).not.toContain("Внутренний чат");
+    expect(markup).not.toContain("Instagram");
+    expect(markup).not.toContain("Max");
   });
 
   it("starts Telegram Business connection from the setup card and renders pending state", () => {
@@ -103,8 +106,39 @@ describe("InboxPageView", () => {
     expect(markup).toContain("Черновик уже готов");
     expect(markup).toContain("Связать клиента");
     expect(markup).toContain("Создать клиента");
+    expect(markup).toContain("Связать чат");
+    expect(markup).not.toContain("AI-черновик ответа");
+    expect(markup).not.toContain("Видеозвонок");
     expect(markup).toContain("CRM client user id");
     expect(markup).toContain("Имя нового клиента");
+  });
+
+  it("does not render Telegram provider ids as client contact handles", () => {
+    const markup = renderToStaticMarkup(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[telegramConnection()]}
+        threads={[
+          threadFixture({
+            providerUserId: "8954259054",
+            providerChatId: "8954259054",
+            username: null
+          })
+        ]}
+        selectedThreadResponse={{
+          thread: threadFixture({
+            providerUserId: "8954259054",
+            providerChatId: "8954259054",
+            username: null
+          }),
+          messages: [inboundMessage()],
+          nextCursor: null
+        }}
+      />
+    );
+
+    expect(markup).not.toContain("8954259054");
+    expect(markup).toContain("Username не передан");
   });
 
   it("renders selected thread messages chronologically even when the API page is newest-first", () => {
@@ -326,6 +360,9 @@ function telegramConnection(
 function threadFixture(input: {
   readonly clientUserId?: string | null;
   readonly unreadCount?: number;
+  readonly providerUserId?: string | null;
+  readonly providerChatId?: string;
+  readonly username?: string | null;
 }): MessagingThread {
   return {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -335,9 +372,9 @@ function threadFixture(input: {
       id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       channelConnectionId: "11111111-1111-4111-8111-111111111111",
       provider: "telegram",
-      providerUserId: "4242",
-      providerChatId: "4242",
-      username: "marina",
+      providerUserId: input.providerUserId ?? "4242",
+      providerChatId: input.providerChatId ?? "4242",
+      username: input.username === undefined ? "marina" : input.username,
       displayName: "Марина Краснова",
       avatarMediaId: null,
       linkedClientUserId: input.clientUserId ?? null,
