@@ -179,6 +179,94 @@ describe("createAdminFinancePoliciesApi", () => {
       })
     );
   });
+
+  it("loads reconciliation exceptions and resolves them with CSRF evidence", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          summary: {
+            openCount: 1,
+            oldestOpenAt: "2026-07-24T10:01:00.000Z"
+          },
+          exceptions: [
+            {
+              id: "11111111-1111-4111-8111-111111111111",
+              provider: "arc_pay",
+              environment: "sandbox",
+              providerPaymentId: "provider-payment-1",
+              providerPayoutId: null,
+              providerSettlementId: "settlement-1",
+              providerEventId: "22222222-2222-4222-8222-222222222222",
+              status: "exception",
+              exceptionCode: "amount_mismatch",
+              exceptionMessage: "Provider settlement amount differs from ledger",
+              providerOccurredAt: "2026-07-24T10:00:00.000Z",
+              checkedAt: "2026-07-24T10:01:00.000Z",
+              resolvedAt: null,
+              payload: { source: "settlement.report" }
+            }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "11111111-1111-4111-8111-111111111111",
+          provider: "arc_pay",
+          environment: "sandbox",
+          providerPaymentId: "provider-payment-1",
+          providerPayoutId: null,
+          providerSettlementId: "settlement-1",
+          providerEventId: "22222222-2222-4222-8222-222222222222",
+          status: "matched",
+          exceptionCode: "amount_mismatch",
+          exceptionMessage: "Provider settlement amount differs from ledger",
+          providerOccurredAt: "2026-07-24T10:00:00.000Z",
+          checkedAt: "2026-07-24T10:01:00.000Z",
+          resolvedAt: "2026-07-24T10:10:00.000Z",
+          payload: { source: "settlement.report", adminNote: "Ledger row verified" }
+        })
+      );
+    const api = createAdminFinancePoliciesApi({
+      fetcher,
+      csrfTokenReader: () => "csrf-token"
+    });
+
+    await expect(api.listReconciliationExceptions()).resolves.toMatchObject({
+      summary: { openCount: 1 }
+    });
+    await expect(
+      api.resolveReconciliationException("11111111-1111-4111-8111-111111111111", {
+        resolution: "resolved",
+        adminNote: "Ledger row verified"
+      })
+    ).resolves.toMatchObject({ status: "matched" });
+
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      "/admin/finance/reconciliation/exceptions",
+      expect.objectContaining({
+        credentials: "include",
+        headers: expect.not.objectContaining({ "x-csrf-token": "csrf-token" })
+      })
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      "/admin/finance/reconciliation/exceptions/11111111-1111-4111-8111-111111111111",
+      expect.objectContaining({
+        method: "PUT",
+        credentials: "include",
+        headers: expect.objectContaining({
+          "content-type": "application/json",
+          "x-csrf-token": "csrf-token"
+        }),
+        body: JSON.stringify({
+          resolution: "resolved",
+          adminNote: "Ledger row verified"
+        })
+      })
+    );
+  });
 });
 
 function jsonResponse(body: unknown): Response {

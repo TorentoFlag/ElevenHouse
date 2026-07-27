@@ -22,6 +22,14 @@ import {
   type AdminPayoutStatusUpdate,
   type PayoutRequestResponse
 } from "@elevenhouse/contracts/payouts";
+import {
+  adminReconciliationExceptionQueueResponseSchema,
+  reconciliationRecordResponseSchema,
+  resolveReconciliationExceptionRequestSchema,
+  type AdminReconciliationExceptionQueueResponse,
+  type ReconciliationRecordResponse,
+  type ResolveReconciliationExceptionRequest
+} from "@elevenhouse/contracts/reconciliation";
 
 export type AdminFinancePoliciesApi = {
   readonly listPolicies: () => Promise<FinancePoliciesResponse>;
@@ -37,6 +45,11 @@ export type AdminFinancePoliciesApi = {
   readonly listPaymentReversalCases: (
     type?: "all" | "refund" | "chargeback"
   ) => Promise<AdminPaymentReversalQueueResponse>;
+  readonly listReconciliationExceptions: () => Promise<AdminReconciliationExceptionQueueResponse>;
+  readonly resolveReconciliationException: (
+    reconciliationRecordId: string,
+    request: ResolveReconciliationExceptionRequest
+  ) => Promise<ReconciliationRecordResponse>;
   readonly updatePayoutRequestStatus: (
     payoutRequestId: string,
     request: AdminPayoutStatusUpdate
@@ -104,6 +117,22 @@ export function createAdminFinancePoliciesApi(
       const search = type === "all" ? "" : `?type=${encodeURIComponent(type)}`;
       return adminPaymentReversalQueueResponseSchema.parse(
         await request(`/admin/finance/reversal-cases${search}`)
+      );
+    },
+    listReconciliationExceptions: async () =>
+      adminReconciliationExceptionQueueResponseSchema.parse(
+        await request("/admin/finance/reconciliation/exceptions")
+      ),
+    resolveReconciliationException: async (reconciliationRecordId, rawRequest) => {
+      const parsed = resolveReconciliationExceptionRequestSchema.parse(rawRequest);
+      return reconciliationRecordResponseSchema.parse(
+        await request(
+          `/admin/finance/reconciliation/exceptions/${encodeURIComponent(reconciliationRecordId)}`,
+          {
+            method: "PUT",
+            body: JSON.stringify(parsed)
+          }
+        )
       );
     },
     updatePayoutRequestStatus: async (payoutRequestId, rawRequest) => {

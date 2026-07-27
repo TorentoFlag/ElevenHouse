@@ -222,7 +222,8 @@
 .adminFinanceOverviewGrid,
 .adminFinancePayoutGrid,
 .adminFinanceWorkGrid,
-.adminFinanceDisputesStack {
+.adminFinanceDisputesStack,
+.adminFinanceReconciliationGrid {
   display: grid;
   gap: 16px;
   padding: 16px 24px 0;
@@ -234,7 +235,8 @@
 }
 
 .adminFinancePayoutGrid,
-.adminFinanceWorkGrid {
+.adminFinanceWorkGrid,
+.adminFinanceReconciliationGrid {
   grid-template-columns: minmax(520px, 1.35fr) minmax(360px, 0.9fr);
 }
 
@@ -258,7 +260,8 @@
 }
 
 .adminFinanceActivityPanel,
-.adminFinancePayoutListPanel {
+.adminFinancePayoutListPanel,
+.adminFinanceReconciliationListPanel {
   padding: 0;
 }
 
@@ -467,6 +470,85 @@
   flex: 1;
 }
 
+.adminFinanceReconciliationKpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px 20px 0;
+}
+
+.adminFinanceReconciliationList {
+  display: grid;
+  gap: 8px;
+  padding: 16px 20px 20px;
+}
+
+.adminFinanceReconciliationItem {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid var(--admin-line);
+  border-radius: 11px;
+  background: #141323;
+  color: var(--admin-text);
+  cursor: pointer;
+  font: inherit;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.adminFinanceReconciliationItemActive {
+  border-color: rgba(183, 156, 251, 0.5);
+  background: rgba(183, 156, 251, 0.13);
+}
+
+.adminFinanceReconciliationItemHead,
+.adminFinanceReconciliationEvidence,
+.adminFinanceReconciliationPayload > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.adminFinanceReconciliationItemHead {
+  justify-content: space-between;
+}
+
+.adminFinanceReconciliationItemHead strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.adminFinanceReconciliationItemHead span,
+.adminFinanceReconciliationMessage,
+.adminFinanceReconciliationEvidence,
+.adminFinanceReconciliationPayload > span {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.adminFinanceReconciliationMessage {
+  overflow-wrap: anywhere;
+}
+
+.adminFinanceReconciliationEvidence {
+  font-variant-numeric: tabular-nums;
+}
+
+.adminFinanceReconciliationPayload {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-top: 1px solid var(--admin-line);
+  border-bottom: 1px solid var(--admin-line);
+  padding: 13px 0;
+}
+
+.adminFinanceReconciliationForm {
+  grid-template-columns: 1fr;
+}
+
 .adminFinanceFact {
   border: 1px solid var(--admin-line);
   border-radius: 11px;
@@ -558,10 +640,9 @@
 
 .adminFinanceTableRow {
   display: grid;
-  grid-template-columns: minmax(90px, 1.2fr) minmax(58px, 0.7fr) minmax(68px, 0.8fr) minmax(
-      54px,
-      0.8fr
-    ) minmax(54px, 0.7fr);
+  grid-template-columns:
+    minmax(90px, 1.2fr) minmax(58px, 0.7fr) minmax(68px, 0.8fr) minmax(54px, 0.8fr)
+    minmax(54px, 0.7fr);
   gap: 12px;
   border-top: 1px solid var(--admin-line);
   color: #d8d5e8;
@@ -570,10 +651,9 @@
 }
 
 .adminFinancePayoutTable .adminFinanceTableRow {
-  grid-template-columns: minmax(180px, 1.4fr) minmax(94px, 0.75fr) minmax(96px, 0.8fr) minmax(
-      98px,
-      0.7fr
-    ) minmax(80px, 0.6fr);
+  grid-template-columns:
+    minmax(180px, 1.4fr) minmax(94px, 0.75fr) minmax(96px, 0.8fr) minmax(98px, 0.7fr)
+    minmax(80px, 0.6fr);
   padding-left: 18px;
   padding-right: 18px;
 }
@@ -702,7 +782,8 @@
 .adminFinanceTier:focus-visible,
 .adminFinanceNavItem:focus-visible,
 .adminFinanceTableButton:focus-visible,
-.adminFinanceAttentionButton:focus-visible {
+.adminFinanceAttentionButton:focus-visible,
+.adminFinanceReconciliationItem:focus-visible {
   outline: 2px solid rgba(183, 156, 251, 0.8);
   outline-offset: 2px;
 }
@@ -780,7 +861,8 @@
   .adminFinanceOverviewGrid,
   .adminFinancePayoutGrid,
   .adminFinanceWorkGrid,
-  .adminFinanceDisputesStack {
+  .adminFinanceDisputesStack,
+  .adminFinanceReconciliationGrid {
     grid-template-columns: 1fr;
   }
 }
@@ -818,7 +900,8 @@
   .adminFinanceOverviewGrid,
   .adminFinancePayoutGrid,
   .adminFinanceWorkGrid,
-  .adminFinanceDisputesStack {
+  .adminFinanceDisputesStack,
+  .adminFinanceReconciliationGrid {
     padding-left: 16px;
     padding-right: 16px;
   }
@@ -840,6 +923,7 @@
   .adminFinanceFactsCompact,
   .adminFinanceDisputeKpis,
   .adminFinanceDisputeFacts,
+  .adminFinanceReconciliationKpis,
   .adminFinanceRejectBox {
     grid-template-columns: 1fr;
   }

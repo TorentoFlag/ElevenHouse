@@ -10,6 +10,7 @@ describe("FinancePoliciesPage", () => {
     expect(html).toContain("Финансы");
     expect(html).toContain("Выплаты");
     expect(html).toContain("Споры");
+    expect(html).toContain("Сверка");
     expect(html).toContain("Политики");
     expect(html).toContain("Finance controls");
     expect(html).not.toContain("Admin surface");
@@ -42,6 +43,14 @@ function apiStub(): AdminFinancePoliciesApi {
       },
       cases: []
     })),
+    listReconciliationExceptions: vi.fn(async () => ({
+      summary: {
+        openCount: 0,
+        oldestOpenAt: null
+      },
+      exceptions: []
+    })),
+    resolveReconciliationException: vi.fn(),
     updatePayoutRequestStatus: vi.fn()
   };
 }

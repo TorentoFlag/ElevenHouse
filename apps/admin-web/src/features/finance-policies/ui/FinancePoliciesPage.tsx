@@ -21,6 +21,11 @@ import type {
   AdminPayoutQueueResponse,
   PayoutRequestResponse
 } from "@elevenhouse/contracts/payouts";
+import type {
+  AdminReconciliationException,
+  AdminReconciliationExceptionQueueResponse,
+  ReconciliationExceptionResolution
+} from "@elevenhouse/contracts/reconciliation";
 import type { AdminFinancePoliciesApi } from "../api/adminFinancePoliciesApi";
 import { createAdminFinancePoliciesApi } from "../api/adminFinancePoliciesApi";
 import {
@@ -40,7 +45,7 @@ export type FinancePoliciesPageProps = {
   readonly api?: AdminFinancePoliciesApi;
 };
 
-type AdminFinanceTab = "overview" | "payouts" | "disputes" | "policies" | "risk";
+type AdminFinanceTab = "overview" | "payouts" | "disputes" | "reconciliation" | "policies" | "risk";
 
 type LoadState =
   | { readonly status: "loading" }
@@ -50,6 +55,7 @@ type LoadState =
       readonly policies: readonly FinancePolicyResponse[];
       readonly payoutQueue: AdminPayoutQueueResponse;
       readonly reversalQueue: AdminPaymentReversalQueueResponse;
+      readonly reconciliationQueue: AdminReconciliationExceptionQueueResponse;
     };
 
 type PayoutActionForm = {
@@ -58,6 +64,12 @@ type PayoutActionForm = {
   readonly transferredAt: string;
   readonly adminNote: string;
   readonly failureReason: string;
+};
+
+type ReconciliationActionForm = {
+  readonly reconciliationRecordId: string;
+  readonly resolution: ReconciliationExceptionResolution;
+  readonly adminNote: string;
 };
 
 const emptyPayoutQueue: AdminPayoutQueueResponse = {
@@ -82,6 +94,14 @@ const emptyReversalQueue: AdminPaymentReversalQueueResponse = {
   cases: []
 };
 
+const emptyReconciliationQueue: AdminReconciliationExceptionQueueResponse = {
+  summary: {
+    openCount: 0,
+    oldestOpenAt: null
+  },
+  exceptions: []
+};
+
 export function FinancePoliciesPage({
   api = createAdminFinancePoliciesApi()
 }: FinancePoliciesPageProps) {
@@ -93,15 +113,21 @@ export function FinancePoliciesPage({
     createInitialRiskProfileForm()
   );
   const [payoutAction, setPayoutAction] = useState<PayoutActionForm>(() => emptyPayoutAction());
+  const [reconciliationAction, setReconciliationAction] = useState<ReconciliationActionForm>(() =>
+    emptyReconciliationAction()
+  );
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [savingRisk, setSavingRisk] = useState(false);
   const [savingPayout, setSavingPayout] = useState(false);
+  const [savingReconciliation, setSavingReconciliation] = useState(false);
 
   const policies = loadState.status === "ready" ? loadState.policies : [];
   const payoutQueue = loadState.status === "ready" ? loadState.payoutQueue : emptyPayoutQueue;
   const reversalQueue = loadState.status === "ready" ? loadState.reversalQueue : emptyReversalQueue;
+  const reconciliationQueue =
+    loadState.status === "ready" ? loadState.reconciliationQueue : emptyReconciliationQueue;
   const selectedPolicy = useMemo(
     () => policies.find((policy) => policy.riskTier === selectedRiskTier) ?? null,
     [policies, selectedRiskTier]
@@ -113,21 +139,33 @@ export function FinancePoliciesPage({
       null,
     [payoutAction.payoutRequestId, payoutQueue.requests]
   );
+  const selectedReconciliationException = useMemo(
+    () =>
+      reconciliationQueue.exceptions.find(
+        (exception) => exception.id === reconciliationAction.reconciliationRecordId
+      ) ??
+      reconciliationQueue.exceptions[0] ??
+      null,
+    [reconciliationAction.reconciliationRecordId, reconciliationQueue.exceptions]
+  );
 
   async function refreshFinance() {
     setLoadState({ status: "loading" });
     setSubmitError(null);
     try {
-      const [policyResponse, payoutResponse, reversalResponse] = await Promise.all([
-        api.listPolicies(),
-        api.listPayoutRequests(),
-        api.listPaymentReversalCases()
-      ]);
+      const [policyResponse, payoutResponse, reversalResponse, reconciliationResponse] =
+        await Promise.all([
+          api.listPolicies(),
+          api.listPayoutRequests(),
+          api.listPaymentReversalCases(),
+          api.listReconciliationExceptions()
+        ]);
       setLoadState({
         status: "ready",
         policies: policyResponse.policies,
         payoutQueue: payoutResponse,
-        reversalQueue: reversalResponse
+        reversalQueue: reversalResponse,
+        reconciliationQueue: reconciliationResponse
       });
       const nextSelected = policyResponse.policies.find(
         (policy) => policy.riskTier === selectedRiskTier
@@ -144,6 +182,12 @@ export function FinancePoliciesPage({
         setPayoutAction((previous) => ({
           ...previous,
           payoutRequestId: payoutResponse.requests[0]?.id ?? ""
+        }));
+      }
+      if (!reconciliationAction.reconciliationRecordId && reconciliationResponse.exceptions[0]) {
+        setReconciliationAction((previous) => ({
+          ...previous,
+          reconciliationRecordId: reconciliationResponse.exceptions[0]?.id ?? ""
         }));
       }
     } catch (error) {
@@ -259,6 +303,34 @@ export function FinancePoliciesPage({
     }
   }
 
+  async function handleReconciliationSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedReconciliationException) return;
+    if (!reconciliationAction.adminNote.trim()) {
+      setSubmitError("Добавьте admin note: почему exception можно закрыть или игнорировать.");
+      return;
+    }
+    setSavingReconciliation(true);
+    setSubmitError(null);
+    try {
+      await api.resolveReconciliationException(selectedReconciliationException.id, {
+        resolution: reconciliationAction.resolution,
+        adminNote: reconciliationAction.adminNote.trim()
+      });
+      setStatusMessage(
+        reconciliationAction.resolution === "resolved"
+          ? "Exception закрыт как resolved. Холды смогут релизиться после matched evidence."
+          : "Exception помечен как waived с audit evidence."
+      );
+      setReconciliationAction(emptyReconciliationAction());
+      await refreshFinance();
+    } catch (error) {
+      setSubmitError(errorMessage(error));
+    } finally {
+      setSavingReconciliation(false);
+    }
+  }
+
   return (
     <div className="adminFinanceShell">
       <aside className="adminFinanceRail" aria-label="Admin sections">
@@ -273,7 +345,7 @@ export function FinancePoliciesPage({
             tab="overview"
             activeTab={tab}
             label="Обзор"
-            badge={attentionCount(payoutQueue)}
+            badge={attentionCount(payoutQueue, reversalQueue, reconciliationQueue)}
             onClick={setTab}
             icon={<LayoutGrid />}
           />
@@ -292,6 +364,14 @@ export function FinancePoliciesPage({
             badge={reversalQueue.summary.criticalCount || reversalQueue.cases.length}
             onClick={setTab}
             icon={<Icon iconName="lightning" />}
+          />
+          <NavItem
+            tab="reconciliation"
+            activeTab={tab}
+            label="Сверка"
+            badge={reconciliationQueue.summary.openCount}
+            onClick={setTab}
+            icon={<Icon iconName="flow" />}
           />
           <NavItem
             tab="policies"
@@ -361,6 +441,15 @@ export function FinancePoliciesPage({
             value={formatMoney(reversalQueue.summary.negativeBalanceAmount)}
             note="negative balance"
           />
+          <StatusCard
+            label="Сверка"
+            value={String(reconciliationQueue.summary.openCount)}
+            note={
+              reconciliationQueue.summary.oldestOpenAt
+                ? `oldest ${formatDate(reconciliationQueue.summary.oldestOpenAt)}`
+                : "no exceptions"
+            }
+          />
         </section>
 
         {loadState.status === "loading" ? (
@@ -389,6 +478,7 @@ export function FinancePoliciesPage({
                 policies={policies}
                 payoutQueue={payoutQueue}
                 reversalQueue={reversalQueue}
+                reconciliationQueue={reconciliationQueue}
                 onGo={setTab}
               />
             ) : null}
@@ -411,6 +501,22 @@ export function FinancePoliciesPage({
               />
             ) : null}
             {tab === "disputes" ? <DisputesPanel reversalQueue={reversalQueue} /> : null}
+            {tab === "reconciliation" ? (
+              <ReconciliationPanel
+                reconciliationQueue={reconciliationQueue}
+                selectedException={selectedReconciliationException}
+                action={reconciliationAction}
+                saving={savingReconciliation}
+                onSelect={(exception) =>
+                  setReconciliationAction((previous) => ({
+                    ...previous,
+                    reconciliationRecordId: exception.id
+                  }))
+                }
+                onChange={setReconciliationAction}
+                onSubmit={handleReconciliationSubmit}
+              />
+            ) : null}
             {tab === "policies" ? (
               <PoliciesPanel
                 policies={policies}
@@ -446,6 +552,7 @@ function OverviewPanel(props: {
   readonly policies: readonly FinancePolicyResponse[];
   readonly payoutQueue: AdminPayoutQueueResponse;
   readonly reversalQueue: AdminPaymentReversalQueueResponse;
+  readonly reconciliationQueue: AdminReconciliationExceptionQueueResponse;
   readonly onGo: (tab: AdminFinanceTab) => void;
 }) {
   const policy =
@@ -468,6 +575,12 @@ function OverviewPanel(props: {
           title="Споры и chargeback"
           text={`${props.reversalQueue.cases.length} cases · ${formatMoney(props.reversalQueue.summary.negativeBalanceAmount)} shortfall`}
           time="webhooks"
+        />
+        <ActivityRow
+          tone={props.reconciliationQueue.summary.openCount > 0 ? "warning" : "positive"}
+          title="Сверка provider"
+          text={`${props.reconciliationQueue.summary.openCount} exceptions · settlement clearance gate`}
+          time="reports"
         />
         <ActivityRow
           tone="warning"
@@ -499,6 +612,11 @@ function OverviewPanel(props: {
             label="Споры и возвраты"
             value={String(props.reversalQueue.cases.length)}
             onClick={() => props.onGo("disputes")}
+          />
+          <AttentionButton
+            label="Сверка provider"
+            value={String(props.reconciliationQueue.summary.openCount)}
+            onClick={() => props.onGo("reconciliation")}
           />
           <AttentionButton
             label="Политики холда"
@@ -790,6 +908,175 @@ function DisputesPanel(props: { readonly reversalQueue: AdminPaymentReversalQueu
           </div>
         </Card>
       ))}
+    </div>
+  );
+}
+
+function ReconciliationPanel(props: {
+  readonly reconciliationQueue: AdminReconciliationExceptionQueueResponse;
+  readonly selectedException: AdminReconciliationException | null;
+  readonly action: ReconciliationActionForm;
+  readonly saving: boolean;
+  readonly onSelect: (exception: AdminReconciliationException) => void;
+  readonly onChange: (next: ReconciliationActionForm) => void;
+  readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className="adminFinanceReconciliationGrid">
+      <Card className="adminFinancePanel adminFinanceReconciliationListPanel" padding="medium">
+        <div className="adminFinancePanelTitleRow">
+          <div>
+            <p className="adminFinanceKicker">Provider reconciliation</p>
+            <h2>Exceptions сверки</h2>
+          </div>
+          <Chip
+            label={`${props.reconciliationQueue.summary.openCount} open`}
+            active={props.reconciliationQueue.summary.openCount > 0}
+            type="button"
+          />
+        </div>
+
+        <section className="adminFinanceReconciliationKpis" aria-label="Reconciliation summary">
+          <StatusCard
+            label="Open"
+            value={String(props.reconciliationQueue.summary.openCount)}
+            note="blocks settlement-gated hold release"
+          />
+          <StatusCard
+            label="Oldest"
+            value={
+              props.reconciliationQueue.summary.oldestOpenAt
+                ? formatDate(props.reconciliationQueue.summary.oldestOpenAt)
+                : "-"
+            }
+            note="operator SLA anchor"
+          />
+          <StatusCard label="Provider" value="Arc Pay" note="pay-in settlement evidence" />
+        </section>
+
+        {props.reconciliationQueue.exceptions.length === 0 ? (
+          <div className="adminFinanceEmpty">Открытых reconciliation exceptions нет.</div>
+        ) : null}
+
+        <div className="adminFinanceReconciliationList" role="list">
+          {props.reconciliationQueue.exceptions.map((exception) => (
+            <button
+              key={exception.id}
+              type="button"
+              className={
+                props.selectedException?.id === exception.id
+                  ? "adminFinanceReconciliationItem adminFinanceReconciliationItemActive"
+                  : "adminFinanceReconciliationItem"
+              }
+              onClick={() => props.onSelect(exception)}
+            >
+              <span className="adminFinanceReconciliationItemHead">
+                <strong>{exception.exceptionCode}</strong>
+                <span>{formatDate(exception.checkedAt)}</span>
+              </span>
+              <span className="adminFinanceReconciliationMessage">
+                {exception.exceptionMessage}
+              </span>
+              <span className="adminFinanceReconciliationEvidence">
+                <span>{exception.provider}</span>
+                <span>{providerEvidenceId(exception)}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="adminFinancePanel" padding="medium">
+        <div className="adminFinancePanelHead">
+          <div>
+            <p className="adminFinanceKicker">Resolution</p>
+            <h2>{props.selectedException ? shortId(props.selectedException.id) : "Exception"}</h2>
+          </div>
+          {props.selectedException ? (
+            <span className="adminFinanceStatusPill adminFinanceStatusPill-danger">exception</span>
+          ) : null}
+        </div>
+
+        {props.selectedException ? (
+          <>
+            <div className="adminFinanceFacts adminFinanceFactsCompact">
+              <Fact
+                label="Payment"
+                value={props.selectedException.providerPaymentId ?? "missing"}
+              />
+              <Fact
+                label="Settlement"
+                value={props.selectedException.providerSettlementId ?? "missing"}
+              />
+              <Fact
+                label="Provider event"
+                value={
+                  props.selectedException.providerEventId
+                    ? shortId(props.selectedException.providerEventId)
+                    : "missing"
+                }
+              />
+            </div>
+
+            <div className="adminFinanceReconciliationPayload">
+              <span>Payload keys</span>
+              <div>
+                {Object.keys(props.selectedException.payload).length > 0 ? (
+                  Object.keys(props.selectedException.payload).map((key) => (
+                    <Chip key={key} label={key} type="button" />
+                  ))
+                ) : (
+                  <Chip label="empty" type="button" />
+                )}
+              </div>
+            </div>
+
+            <form
+              className="adminFinanceForm adminFinanceReconciliationForm"
+              onSubmit={props.onSubmit}
+            >
+              <label className="adminFinanceField">
+                <span>Resolution</span>
+                <select
+                  name="reconciliationResolution"
+                  value={props.action.resolution}
+                  onChange={(event) =>
+                    props.onChange({
+                      ...props.action,
+                      resolution: event.currentTarget.value as ReconciliationExceptionResolution
+                    })
+                  }
+                >
+                  <option value="resolved">Resolved after evidence review</option>
+                  <option value="waived">Waived by admin decision</option>
+                </select>
+              </label>
+              <label className="adminFinanceField adminFinanceFieldWide">
+                <span>Admin note</span>
+                <textarea
+                  name="reconciliationAdminNote"
+                  value={props.action.adminNote}
+                  onChange={(event) =>
+                    props.onChange({ ...props.action, adminNote: event.currentTarget.value })
+                  }
+                  rows={3}
+                  placeholder="Settlement report matched ledger row / provider false positive"
+                  required
+                />
+              </label>
+              <Button
+                title="Закрыть exception"
+                type="submit"
+                size="medium"
+                startIcon={<Check />}
+                disabled={props.saving}
+              />
+            </form>
+          </>
+        ) : (
+          <p className="adminFinanceMuted">Нет выбранного exception.</p>
+        )}
+      </Card>
     </div>
   );
 }
@@ -1235,7 +1522,8 @@ function mergePolicy(
       status: "ready",
       policies: [policy],
       payoutQueue: emptyPayoutQueue,
-      reversalQueue: emptyReversalQueue
+      reversalQueue: emptyReversalQueue,
+      reconciliationQueue: emptyReconciliationQueue
     };
   }
   const withoutTier = previous.policies.filter((item) => item.riskTier !== policy.riskTier);
@@ -1245,7 +1533,8 @@ function mergePolicy(
       left.riskTier.localeCompare(right.riskTier)
     ),
     payoutQueue: previous.payoutQueue,
-    reversalQueue: previous.reversalQueue
+    reversalQueue: previous.reversalQueue,
+    reconciliationQueue: previous.reconciliationQueue
   };
 }
 
@@ -1259,6 +1548,14 @@ function emptyPayoutAction(): PayoutActionForm {
   };
 }
 
+function emptyReconciliationAction(): ReconciliationActionForm {
+  return {
+    reconciliationRecordId: "",
+    resolution: "resolved",
+    adminNote: ""
+  };
+}
+
 function titleForTab(tab: AdminFinanceTab): string {
   switch (tab) {
     case "overview":
@@ -1267,6 +1564,8 @@ function titleForTab(tab: AdminFinanceTab): string {
       return "Выплаты";
     case "disputes":
       return "Споры и возвраты";
+    case "reconciliation":
+      return "Сверка provider";
     case "policies":
       return "Политики удержаний и риска";
     case "risk":
@@ -1274,9 +1573,17 @@ function titleForTab(tab: AdminFinanceTab): string {
   }
 }
 
-function attentionCount(queue: AdminPayoutQueueResponse): number {
+function attentionCount(
+  queue: AdminPayoutQueueResponse,
+  reversalQueue: AdminPaymentReversalQueueResponse,
+  reconciliationQueue: AdminReconciliationExceptionQueueResponse
+): number {
   return (
-    queue.summary.requestedCount + queue.summary.underReviewCount + queue.summary.processingCount
+    queue.summary.requestedCount +
+    queue.summary.underReviewCount +
+    queue.summary.processingCount +
+    reversalQueue.summary.criticalCount +
+    reconciliationQueue.summary.openCount
   );
 }
 
@@ -1300,6 +1607,15 @@ function shortId(value: string): string {
 
 function methodLabel(method: PayoutRequestResponse["method"]): string {
   return method === "manual_bank_transfer" ? "банк вручную" : "Arc Pay";
+}
+
+function providerEvidenceId(exception: AdminReconciliationException): string {
+  return (
+    exception.providerPaymentId ??
+    exception.providerPayoutId ??
+    exception.providerSettlementId ??
+    shortId(exception.id)
+  );
 }
 
 function statusLabel(status: PayoutRequestResponse["status"]): string {

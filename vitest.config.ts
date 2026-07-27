@@ -26,6 +26,9 @@ export default defineConfig({
       "@elevenhouse/contracts/payments": fileURLToPath(
         new URL("./packages/contracts/src/payments.ts", import.meta.url)
       ),
+      "@elevenhouse/contracts/reconciliation": fileURLToPath(
+        new URL("./packages/contracts/src/reconciliation.ts", import.meta.url)
+      ),
       "@elevenhouse/contracts": fileURLToPath(
         new URL("./packages/contracts/src/index.ts", import.meta.url)
       ),
