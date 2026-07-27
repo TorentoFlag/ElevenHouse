@@ -28,7 +28,6 @@ type PaymentProviderEventRow = typeof paymentProviderEvents.$inferSelect;
 type RefundRow = typeof refunds.$inferSelect;
 
 const paymentAttemptProviderPaymentUnique = "payment_attempts_provider_payment_unique";
-const refundProviderRefundUnique = "refunds_provider_refund_unique";
 
 export function createDrizzlePaymentStore(database: ElevenHouseDatabase): PaymentStore {
   return {
@@ -63,12 +62,14 @@ export function createDrizzlePaymentWebhookStore(
   | "recordProviderEvent"
   | "findProviderEventByWebhookId"
   | "findAttemptById"
+  | "createRefund"
 > {
   return {
     linkAttemptToProviderPayment: (input) => linkPaymentAttemptToProviderPayment(database, input),
     recordProviderEvent: (input) => recordProviderEvent(database, input),
     findProviderEventByWebhookId: (input) => findProviderEventByWebhookId(database, input),
-    findAttemptById: (paymentAttemptId) => findPaymentAttemptById(database, paymentAttemptId)
+    findAttemptById: (paymentAttemptId) => findPaymentAttemptById(database, paymentAttemptId),
+    createRefund: (input) => createRefund(database, input)
   };
 }
 
@@ -244,40 +245,37 @@ async function findProviderEventByWebhookId(
 }
 
 async function createRefund(
-  database: ElevenHouseDatabase,
+  database: FinanceDatabase,
   input: CreateRefundInput
 ): Promise<{ readonly kind: "created" | "replayed"; readonly refund: RefundRecord }> {
   const attempt = await findPaymentAttemptById(database, input.paymentAttemptId);
   if (!attempt) throw new Error("Payment attempt for refund was not found");
   const providerContext = resolveFinanceRefundProviderContext(input, attempt);
 
-  try {
-    const timestamp = new Date(input.now);
-    const [row] = await database
-      .insert(refunds)
-      .values({
-        ...(input.id ? { id: input.id } : {}),
-        orderId: input.orderId,
-        paymentAttemptId: input.paymentAttemptId,
-        providerEventId: input.providerEventId,
-        provider: providerContext.provider,
-        environment: providerContext.environment,
-        status: input.status ?? "requested",
-        amountMinor: input.amount.amountMinor,
-        currency: input.amount.currency,
-        reason: input.reason,
-        providerRefundId: input.providerRefundId,
-        createdAt: timestamp,
-        updatedAt: timestamp
-      })
-      .returning();
-    if (!row) throw new Error("Expected refund insert to return a row");
-    return { kind: "created", refund: toRefund(row) };
-  } catch (error) {
-    if (!isRefundProviderRefundUniqueViolation(error) || !input.providerRefundId) throw error;
-  }
+  const timestamp = new Date(input.now);
+  const [inserted] = await database
+    .insert(refunds)
+    .values({
+      ...(input.id ? { id: input.id } : {}),
+      orderId: input.orderId,
+      paymentAttemptId: input.paymentAttemptId,
+      providerEventId: input.providerEventId,
+      provider: providerContext.provider,
+      environment: providerContext.environment,
+      status: input.status ?? "requested",
+      amountMinor: input.amount.amountMinor,
+      currency: input.amount.currency,
+      reason: input.reason,
+      providerRefundId: input.providerRefundId,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    })
+    .onConflictDoNothing()
+    .returning();
+  if (inserted) return { kind: "created", refund: toRefund(inserted) };
+  if (!input.providerRefundId) throw new Error("Expected refund insert to return a row");
 
-  const [row] = await database
+  const [existing] = await database
     .select()
     .from(refunds)
     .where(
@@ -288,8 +286,8 @@ async function createRefund(
       )
     )
     .limit(1);
-  if (!row) throw new Error("Expected existing refund after provider refund dedupe");
-  return { kind: "replayed", refund: toRefund(row) };
+  if (!existing) throw new Error("Expected existing refund after provider refund dedupe");
+  return { kind: "replayed", refund: toRefund(existing) };
 }
 
 async function findPaymentAttemptById(
@@ -408,10 +406,6 @@ function money(amountMinor: number, currency: string): Money {
 
 function isPaymentAttemptProviderPaymentUniqueViolation(error: unknown): boolean {
   return hasPostgresConstraintViolation(error, "23505", paymentAttemptProviderPaymentUnique);
-}
-
-function isRefundProviderRefundUniqueViolation(error: unknown): boolean {
-  return hasPostgresConstraintViolation(error, "23505", refundProviderRefundUnique);
 }
 
 function readResultId(result: Record<string, unknown>, key: string): string {

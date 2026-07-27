@@ -101,8 +101,9 @@ export type LedgerStore = {
   /**
    * Wallet read models are recomputed transactionally from persisted ledger
    * entries. Astrologer liability buckets use credit minus debit as the
-   * displayed bucket amount; platform accounts are not exposed in wallet
-   * balances.
+   * displayed bucket amount. `negative_balance` is debt owed by the astrologer,
+   * so debit minus credit is displayed for that bucket. Platform accounts are
+   * not exposed in wallet balances.
    */
   readonly createTransaction: (
     input: CreateLedgerTransactionInput

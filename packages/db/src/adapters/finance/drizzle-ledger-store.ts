@@ -128,8 +128,7 @@ export async function createLedgerTransaction(
 
     if (account.astrologerUserId && account.balanceBucket) {
       const buckets =
-        affectedAstrologerBuckets.get(account.astrologerUserId) ??
-        new Set<WalletBalanceBucket>();
+        affectedAstrologerBuckets.get(account.astrologerUserId) ?? new Set<WalletBalanceBucket>();
       buckets.add(account.balanceBucket as WalletBalanceBucket);
       affectedAstrologerBuckets.set(account.astrologerUserId, buckets);
     }
@@ -332,9 +331,13 @@ async function computeAstrologerBucketAmount(
   astrologerUserId: string,
   bucket: WalletBalanceBucket
 ): Promise<number> {
+  const amountExpression =
+    bucket === "negative_balance"
+      ? sql<number>`coalesce(sum(case when ${ledgerEntries.side} = 'debit' then ${ledgerEntries.amountMinor} when ${ledgerEntries.side} = 'credit' then -${ledgerEntries.amountMinor} else 0 end), 0)`
+      : sql<number>`coalesce(sum(case when ${ledgerEntries.side} = 'credit' then ${ledgerEntries.amountMinor} when ${ledgerEntries.side} = 'debit' then -${ledgerEntries.amountMinor} else 0 end), 0)`;
   const [row] = await database
     .select({
-      amountMinor: sql<number>`coalesce(sum(case when ${ledgerEntries.side} = 'credit' then ${ledgerEntries.amountMinor} when ${ledgerEntries.side} = 'debit' then -${ledgerEntries.amountMinor} else 0 end), 0)`
+      amountMinor: amountExpression
     })
     .from(ledgerEntries)
     .innerJoin(ledgerAccounts, eq(ledgerAccounts.id, ledgerEntries.accountId))

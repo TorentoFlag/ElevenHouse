@@ -12,6 +12,7 @@ const supportedEventTypes = new Set<PaymentProviderEventType>([
   "payment.expired",
   "payment.voided",
   "payment.refunded",
+  "payment.partially_refunded",
   "payment.chargeback"
 ]);
 
@@ -76,7 +77,7 @@ function parseMoneyFacts(
       amounts: [money(data.amount, currency), money(data.captured_amount, currency)]
     };
   }
-  if (type === "payment.refunded") {
+  if (type === "payment.refunded" || type === "payment.partially_refunded") {
     const currency = currencyValue(data.currency);
     uuid(data.refund_id);
     const refundAmount = money(data.refund_amount, currency);

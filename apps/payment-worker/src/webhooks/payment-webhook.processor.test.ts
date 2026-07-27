@@ -4,11 +4,16 @@ import type {
   Booking,
   CapturedSaleTransactionStore,
   CapturedSaleUnitOfWork,
+  CreateLedgerTransactionInput,
   FinanceOrder,
   PaymentAttempt,
   PaymentProviderEvent,
+  RefundRecord,
+  RefundReversalTransactionStore,
+  RefundReversalUnitOfWork,
   TerminalPaymentTransactionStore,
-  TerminalPaymentUnitOfWork
+  TerminalPaymentUnitOfWork,
+  WalletBalance
 } from "@elevenhouse/domain";
 import { verifyArcPayWebhookSignature } from "../arc-pay/arc-pay-signature";
 import { createPaymentWebhookHandler } from "./payment-webhook.server";
@@ -119,6 +124,86 @@ describe("Arc Pay payment webhook ingestion", () => {
         })
       )
     ).resolves.toEqual({ statusCode: 422, body: { error: "payment_currency_mismatch" } });
+  });
+
+  it("records a provider refund through the reversal unit of work", async () => {
+    const harness = createHarness({
+      orderStatus: "paid",
+      wallet: { pending: 45_000, available: 0, reserved: 0, negativeBalance: 0 }
+    });
+    const request = signedRequest({
+      ...basePayload(eventId(13)),
+      event_type: "payment.refunded",
+      data: {
+        payment_id: providerPaymentId,
+        refund_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        refund_amount: 50_000,
+        total_refunded: 50_000,
+        currency: "RUB"
+      }
+    });
+
+    await expect(harness.handler.handle(request)).resolves.toEqual({
+      statusCode: 200,
+      body: { accepted: true, duplicate: false }
+    });
+    await expect(harness.handler.handle(request)).resolves.toEqual({
+      statusCode: 200,
+      body: { accepted: true, duplicate: true }
+    });
+
+    expect(harness.refunds).toEqual([
+      expect.objectContaining({
+        providerRefundId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        amount: { amountMinor: 50_000, currency: "RUB" }
+      })
+    ]);
+    expect(harness.ledgerTransactions).toHaveLength(1);
+    expect(harness.ledgerTransactions[0]).toMatchObject({ operationType: "refund_recorded" });
+    expect(harness.orderStore.updateStatus).toHaveBeenCalledWith({
+      orderId,
+      status: "refunded",
+      now: now.toISOString()
+    });
+  });
+
+  it("records a provider chargeback through the reversal unit of work", async () => {
+    const harness = createHarness({
+      orderStatus: "fulfilled",
+      wallet: { pending: 0, available: 0, reserved: 0, negativeBalance: 0 }
+    });
+
+    await expect(
+      harness.handler.handle(
+        signedRequest({
+          ...basePayload(eventId(14)),
+          event_type: "payment.chargeback",
+          data: { payment_id: providerPaymentId, amount: 50_000, currency: "RUB" }
+        })
+      )
+    ).resolves.toEqual({ statusCode: 200, body: { accepted: true, duplicate: false } });
+
+    expect(harness.refunds).toEqual([]);
+    expect(harness.ledgerTransactions).toHaveLength(1);
+    expect(harness.ledgerTransactions[0]).toMatchObject({
+      operationType: "chargeback_recorded",
+      entries: [
+        expect.objectContaining({
+          account: expect.objectContaining({ accountType: "platform_revenue" })
+        }),
+        expect.objectContaining({
+          account: expect.objectContaining({ accountType: "astrologer_negative_balance" })
+        }),
+        expect.objectContaining({
+          account: expect.objectContaining({ accountType: "platform_clearing" })
+        })
+      ]
+    });
+    expect(harness.orderStore.updateStatus).toHaveBeenCalledWith({
+      orderId,
+      status: "chargeback",
+      now: now.toISOString()
+    });
   });
 
   it("deduplicates a duplicate captured event by webhook id without another order or ledger effect", async () => {
@@ -263,7 +348,18 @@ describe("Arc Pay payment webhook ingestion", () => {
   });
 });
 
-function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
+function createHarness(
+  options: {
+    readonly attemptMissing?: boolean;
+    readonly orderStatus?: FinanceOrder["status"];
+    readonly wallet?: {
+      readonly pending: number;
+      readonly available: number;
+      readonly reserved: number;
+      readonly negativeBalance: number;
+    };
+  } = {}
+) {
   const attempt: PaymentAttempt = {
     id: paymentAttemptId,
     orderId,
@@ -285,7 +381,7 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
     productId: "77777777-7777-4777-8777-777777777777",
     directLinkIntentId: null,
     bookingId,
-    status: "pending_payment",
+    status: options.orderStatus ?? "pending_payment",
     grossAmount: { amountMinor: 50_000, currency: "RUB" },
     platformFee: { amountMinor: 5_000, currency: "RUB" },
     astrologerNetAmount: { amountMinor: 45_000, currency: "RUB" },
@@ -300,11 +396,21 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
     updatedAt: now.toISOString()
   };
   const createdEvents: PaymentProviderEvent[] = [];
+  const refunds: RefundRecord[] = [];
   const linkedProviderPaymentIds: string[] = [];
-  const ledgerTransactions: unknown[] = [];
+  const ledgerTransactions: CreateLedgerTransactionInput[] = [];
   const outboxEvents: unknown[] = [];
   const releasedBookingHolds: unknown[] = [];
   const eventByWebhookId = new Map<string, PaymentProviderEvent>();
+  const walletBalance: WalletBalance = {
+    astrologerUserId: order.astrologerUserId,
+    pending: { amountMinor: options.wallet?.pending ?? 0, currency: "RUB" },
+    available: { amountMinor: options.wallet?.available ?? 0, currency: "RUB" },
+    reserved: { amountMinor: options.wallet?.reserved ?? 0, currency: "RUB" },
+    payoutPending: { amountMinor: 0, currency: "RUB" },
+    negativeBalance: { amountMinor: options.wallet?.negativeBalance ?? 0, currency: "RUB" },
+    updatedAt: now.toISOString()
+  };
   const orderStore = {
     findById: vi.fn(async () => order),
     updateStatus: vi.fn(async (input) => ({ ...order, status: input.status, updatedAt: input.now }))
@@ -336,6 +442,26 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
       eventByWebhookId.set(input.providerWebhookId, event);
       createdEvents.push(event);
       return { kind: "created" as const, event };
+    }),
+    createRefund: vi.fn(async (input) => {
+      const existing = refunds.find((refund) => refund.providerRefundId === input.providerRefundId);
+      if (existing) return { kind: "replayed" as const, refund: existing };
+      const refund: RefundRecord = {
+        id: `refund-${refunds.length + 1}`,
+        orderId: input.orderId,
+        paymentAttemptId: input.paymentAttemptId,
+        providerEventId: input.providerEventId,
+        provider: input.provider ?? attempt.provider,
+        environment: input.environment ?? attempt.environment,
+        status: input.status ?? "requested",
+        amount: input.amount,
+        reason: input.reason,
+        providerRefundId: input.providerRefundId,
+        createdAt: input.now,
+        updatedAt: input.now
+      };
+      refunds.push(refund);
+      return { kind: "created" as const, refund };
     })
   };
   const resolvePaymentAttemptId = vi.fn(async () => paymentAttemptId);
@@ -386,11 +512,32 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
       return operation(transactionStore);
     }
   };
+  const reversal: RefundReversalUnitOfWork = {
+    transact: async (operation) => {
+      const transactionStore: RefundReversalTransactionStore = {
+        findAttemptById: paymentStore.findAttemptById,
+        findProviderEventByWebhookId: paymentStore.findProviderEventByWebhookId,
+        linkAttemptToProviderPayment: paymentStore.linkAttemptToProviderPayment,
+        recordProviderEvent: paymentStore.recordProviderEvent,
+        createRefund: paymentStore.createRefund,
+        findById: orderStore.findById,
+        updateStatus: orderStore.updateStatus,
+        findWalletBalance: async (astrologerUserId) =>
+          astrologerUserId === order.astrologerUserId ? walletBalance : null,
+        createTransaction: async (input) => {
+          ledgerTransactions.push(input);
+          return { ...input, id: "ledger-reversal-1", entries: [] };
+        }
+      };
+      return operation(transactionStore);
+    }
+  };
   const processor = createPaymentWebhookProcessor({
     paymentStore,
     orderStore,
     capturedSale,
     terminalPayment,
+    reversal,
     resolvePaymentAttemptId,
     now: () => now
   });
@@ -400,6 +547,7 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
     orderStore,
     markOrderPaid: markOrderPaidSpy,
     createdEvents,
+    refunds,
     ledgerTransactions,
     outboxEvents,
     releasedBookingHolds,

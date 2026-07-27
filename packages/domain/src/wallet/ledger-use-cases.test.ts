@@ -4,6 +4,7 @@ import {
   createCapturedSaleHoldReleaseLedgerTransaction,
   PaymentWebhookAmountMismatchError,
   PaymentWebhookCurrencyMismatchError,
+  recordPaymentReversalProviderWebhook,
   releaseDueCapturedSaleHolds,
   type CapturedSaleOutboxEvent,
   type CapturedSaleTransactionStore,
@@ -11,7 +12,11 @@ import {
   type CreateLedgerTransactionInput,
   type FinanceOrder,
   type PaymentAttempt,
-  type PaymentProviderEvent
+  type PaymentProviderEvent,
+  type RefundRecord,
+  type RefundReversalTransactionStore,
+  type RefundReversalUnitOfWork,
+  type WalletBalance
 } from "../index";
 
 const now = "2026-07-24T12:00:00.000Z";
@@ -146,16 +151,15 @@ describe("releaseDueCapturedSaleHolds", () => {
       providerEventId: "provider-event-1"
     };
     const releases: Parameters<
-      NonNullable<Parameters<typeof releaseDueCapturedSaleHolds>[0]["store"]["releaseCapturedSaleHold"]>
+      NonNullable<
+        Parameters<typeof releaseDueCapturedSaleHolds>[0]["store"]["releaseCapturedSaleHold"]
+      >
     >[0][] = [];
     const result = await releaseDueCapturedSaleHolds({
       store: {
         listReleasableCapturedSaleHolds: async (input) => {
           expect(input).toEqual({ now: "2026-07-27T12:00:00.000Z", limit: 10 });
-          return [
-            hold,
-            { ...hold, orderId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }
-          ];
+          return [hold, { ...hold, orderId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }];
         },
         releaseCapturedSaleHold: async (input) => {
           releases.push(input);
@@ -236,6 +240,116 @@ describe("releaseDueCapturedSaleHolds", () => {
         })
       ]
     });
+  });
+});
+
+describe("recordPaymentReversalProviderWebhook", () => {
+  it("records a full refund before hold release by reversing platform revenue and pending astrologer funds", async () => {
+    const harness = createReversalHarness({
+      orderStatus: "paid",
+      wallet: { pending: 43_000, available: 0, reserved: 0, negativeBalance: 0 }
+    });
+
+    const result = await recordRefund(harness);
+    const replay = await recordRefund(harness);
+
+    expect(result.kind).toBe("created");
+    expect(replay.kind).toBe("replayed");
+    expect(harness.refunds).toEqual([
+      expect.objectContaining({
+        orderId,
+        paymentAttemptId,
+        providerEventId: "provider-reversal-event-1",
+        providerRefundId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        status: "succeeded",
+        amount: { amountMinor: 50_000, currency: "RUB" },
+        reason: "provider_refund"
+      })
+    ]);
+    expect(harness.order.status).toBe("refunded");
+    expect(harness.ledgerTransactions).toEqual([
+      expect.objectContaining({
+        operationType: "refund_recorded",
+        orderId,
+        metadata: expect.objectContaining({
+          providerEventId: "provider-reversal-event-1",
+          paymentAttemptId,
+          providerRefundId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          reversalGrossAmountMinor: 50_000,
+          platformFeeReversalAmountMinor: 7_000,
+          astrologerShareReversalAmountMinor: 43_000
+        }),
+        entries: [
+          reversalEntry("platform_revenue", null, "debit", 7_000),
+          reversalEntry(
+            "astrologer_pending",
+            "44444444-4444-4444-8444-444444444444",
+            "debit",
+            43_000
+          ),
+          reversalEntry("platform_clearing", null, "credit", 50_000)
+        ]
+      })
+    ]);
+  });
+
+  it("records a partial refund after hold release by prorating order-snapshot platform fee and debiting available funds", async () => {
+    const harness = createReversalHarness({
+      orderStatus: "fulfilled",
+      wallet: { pending: 0, available: 43_000, reserved: 0, negativeBalance: 0 }
+    });
+
+    await expect(
+      recordRefund(harness, {
+        refundAmountMinor: 10_000,
+        totalRefundedMinor: 10_000,
+        providerWebhookId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+      })
+    ).resolves.toMatchObject({ kind: "created" });
+
+    expect(harness.order.status).toBe("partially_refunded");
+    expect(harness.ledgerTransactions).toEqual([
+      expect.objectContaining({
+        operationType: "refund_recorded",
+        entries: [
+          reversalEntry("platform_revenue", null, "debit", 1_400),
+          reversalEntry(
+            "astrologer_available",
+            "44444444-4444-4444-8444-444444444444",
+            "debit",
+            8_600
+          ),
+          reversalEntry("platform_clearing", null, "credit", 10_000)
+        ]
+      })
+    ]);
+  });
+
+  it("records chargeback shortfall as explicit negative balance after astrologer funds were paid out", async () => {
+    const harness = createReversalHarness({
+      orderStatus: "fulfilled",
+      wallet: { pending: 0, available: 0, reserved: 0, negativeBalance: 0 }
+    });
+
+    await expect(recordChargeback(harness)).resolves.toMatchObject({ kind: "created" });
+
+    expect(harness.refunds).toEqual([]);
+    expect(harness.order.status).toBe("chargeback");
+    expect(harness.ledgerTransactions).toEqual([
+      expect.objectContaining({
+        operationType: "chargeback_recorded",
+        entries: [
+          reversalEntry("platform_revenue", null, "debit", 7_000),
+          reversalEntry(
+            "astrologer_negative_balance",
+            "44444444-4444-4444-8444-444444444444",
+            "debit",
+            43_000
+          ),
+          reversalEntry("platform_clearing", null, "credit", 50_000)
+        ]
+      })
+    ]);
   });
 });
 
@@ -453,4 +567,221 @@ function createHarness(options: { readonly failOutbox?: boolean } = {}) {
       return providerEvents.length + ledgerTransactions.length + outboxEvents.length;
     }
   };
+}
+
+function recordRefund(
+  harness: ReturnType<typeof createReversalHarness>,
+  options: {
+    readonly refundAmountMinor?: number;
+    readonly totalRefundedMinor?: number;
+    readonly providerWebhookId?: string;
+  } = {}
+) {
+  const refundAmountMinor = options.refundAmountMinor ?? 50_000;
+  const totalRefundedMinor = options.totalRefundedMinor ?? refundAmountMinor;
+  return recordPaymentReversalProviderWebhook({
+    reversal: harness.unitOfWork,
+    request: {
+      paymentAttemptId,
+      provider: "arc_pay",
+      environment: "sandbox",
+      providerWebhookId: options.providerWebhookId ?? "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      providerPaymentId,
+      type: "payment.refunded",
+      occurredAt: now,
+      receivedAt: now,
+      payload: {
+        data: {
+          payment_id: providerPaymentId,
+          refund_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          refund_amount: refundAmountMinor,
+          total_refunded: totalRefundedMinor,
+          currency: "RUB"
+        }
+      },
+      moneyFacts: {
+        kind: "bounded",
+        amounts: [
+          { amountMinor: refundAmountMinor, currency: "RUB" },
+          { amountMinor: totalRefundedMinor, currency: "RUB" }
+        ]
+      }
+    }
+  });
+}
+
+function recordChargeback(harness: ReturnType<typeof createReversalHarness>) {
+  return recordPaymentReversalProviderWebhook({
+    reversal: harness.unitOfWork,
+    request: {
+      paymentAttemptId,
+      provider: "arc_pay",
+      environment: "sandbox",
+      providerWebhookId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      providerPaymentId,
+      type: "payment.chargeback",
+      occurredAt: now,
+      receivedAt: now,
+      payload: {
+        data: {
+          payment_id: providerPaymentId,
+          amount: 50_000,
+          currency: "RUB"
+        }
+      },
+      moneyFacts: {
+        kind: "bounded",
+        amounts: [{ amountMinor: 50_000, currency: "RUB" }]
+      }
+    }
+  });
+}
+
+function createReversalHarness(input: {
+  readonly orderStatus: FinanceOrder["status"];
+  readonly wallet: {
+    readonly pending: number;
+    readonly available: number;
+    readonly reserved: number;
+    readonly negativeBalance: number;
+  };
+}) {
+  const attempt: Mutable<PaymentAttempt> = {
+    id: paymentAttemptId,
+    orderId,
+    provider: "arc_pay",
+    environment: "sandbox",
+    status: "captured",
+    amount: { amountMinor: 50_000, currency: "RUB" },
+    providerPaymentId: null,
+    providerCheckoutId: "55555555-5555-4555-8555-555555555555",
+    idempotencyKey: "checkout:1",
+    metadata: {},
+    createdAt: now,
+    updatedAt: now
+  };
+  const order: Mutable<FinanceOrder> = {
+    id: orderId,
+    clientUserId: "66666666-6666-4666-8666-666666666666",
+    astrologerUserId: "44444444-4444-4444-8444-444444444444",
+    productId: "77777777-7777-4777-8777-777777777777",
+    directLinkIntentId: null,
+    bookingId,
+    status: input.orderStatus,
+    grossAmount: { amountMinor: 50_000, currency: "RUB" },
+    platformFee: { amountMinor: 7_000, currency: "RUB" },
+    astrologerNetAmount: { amountMinor: 43_000, currency: "RUB" },
+    financePolicySnapshotId: "88888888-8888-4888-8888-888888888888",
+    financePolicyRiskTier: "standard",
+    financePolicyHoldDurationHours: 48,
+    financePolicyReserveBps: 0,
+    financePolicyReserveReleaseDelayDays: 0,
+    financePolicyPlatformFeeBps: 1_400,
+    financePolicyProviderSettlementRequired: true,
+    createdAt: now,
+    updatedAt: now
+  };
+  const providerEvents: PaymentProviderEvent[] = [];
+  const refunds: RefundRecord[] = [];
+  const ledgerTransactions: CreateLedgerTransactionInput[] = [];
+  const walletBalance: Mutable<WalletBalance> = {
+    astrologerUserId: order.astrologerUserId,
+    pending: { amountMinor: input.wallet.pending, currency: "RUB" },
+    available: { amountMinor: input.wallet.available, currency: "RUB" },
+    reserved: { amountMinor: input.wallet.reserved, currency: "RUB" },
+    payoutPending: { amountMinor: 0, currency: "RUB" },
+    negativeBalance: { amountMinor: input.wallet.negativeBalance, currency: "RUB" },
+    updatedAt: now
+  };
+
+  const store: RefundReversalTransactionStore = {
+    findAttemptById: async (id) => (id === attempt.id ? { ...attempt } : null),
+    findProviderEventByWebhookId: async (input) =>
+      providerEvents.find((event) => event.providerWebhookId === input.providerWebhookId) ?? null,
+    linkAttemptToProviderPayment: async (input) => {
+      if (input.paymentAttemptId !== attempt.id) return null;
+      attempt.providerPaymentId = input.providerPaymentId;
+      return { ...attempt, updatedAt: input.now };
+    },
+    recordProviderEvent: async (input) => {
+      const existing = providerEvents.find(
+        (event) => event.providerWebhookId === input.providerWebhookId
+      );
+      if (existing) return { kind: "replayed" as const, event: existing };
+      const event: PaymentProviderEvent = {
+        id: "provider-reversal-event-1",
+        paymentAttemptId: input.paymentAttemptId,
+        provider: input.provider,
+        environment: input.environment,
+        providerWebhookId: input.providerWebhookId,
+        providerPaymentId: input.providerPaymentId,
+        type: input.type,
+        occurredAt: input.occurredAt,
+        receivedAt: input.receivedAt,
+        payload: input.payload
+      };
+      providerEvents.push(event);
+      return { kind: "created" as const, event };
+    },
+    createRefund: async (refundInput) => {
+      const existing = refunds.find(
+        (refund) => refund.providerRefundId === refundInput.providerRefundId
+      );
+      if (existing) return { kind: "replayed" as const, refund: existing };
+      const refund: RefundRecord = {
+        id: "refund-1",
+        orderId: refundInput.orderId,
+        paymentAttemptId: refundInput.paymentAttemptId,
+        providerEventId: refundInput.providerEventId,
+        provider: refundInput.provider ?? attempt.provider,
+        environment: refundInput.environment ?? attempt.environment,
+        status: refundInput.status ?? "requested",
+        amount: refundInput.amount,
+        reason: refundInput.reason,
+        providerRefundId: refundInput.providerRefundId,
+        createdAt: refundInput.now,
+        updatedAt: refundInput.now
+      };
+      refunds.push(refund);
+      return { kind: "created" as const, refund };
+    },
+    findById: async (id) => (id === order.id ? { ...order } : null),
+    updateStatus: async (input) => {
+      if (input.orderId !== order.id) return null;
+      order.status = input.status;
+      order.updatedAt = input.now;
+      return { ...order };
+    },
+    findWalletBalance: async (astrologerUserId) =>
+      astrologerUserId === order.astrologerUserId ? { ...walletBalance } : null,
+    createTransaction: async (transaction) => {
+      ledgerTransactions.push(transaction);
+      return { ...transaction, id: "ledger-reversal-1", entries: [] };
+    }
+  };
+
+  const unitOfWork: RefundReversalUnitOfWork = {
+    transact: async (operation) => operation(store)
+  };
+
+  return {
+    unitOfWork,
+    order,
+    providerEvents,
+    refunds,
+    ledgerTransactions
+  };
+}
+
+function reversalEntry(
+  accountType: CreateLedgerTransactionInput["entries"][number]["account"]["accountType"],
+  astrologerUserId: string | null,
+  side: CreateLedgerTransactionInput["entries"][number]["side"],
+  amountMinor: number
+) {
+  return expect.objectContaining({
+    account: { accountType, astrologerUserId, currency: "RUB" },
+    side,
+    amount: { amountMinor, currency: "RUB" }
+  });
 }

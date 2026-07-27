@@ -1,10 +1,13 @@
 import {
   capturePaymentProviderWebhook,
   ingestPaymentProviderWebhook,
+  recordPaymentReversalProviderWebhook,
   releaseTerminalPaymentProviderWebhook,
   type CapturedSaleUnitOfWork,
   type FinanceOrderStore,
   type PaymentStore,
+  type RefundReversalProviderEventType,
+  type RefundReversalUnitOfWork,
   type TerminalPaymentProviderEventType,
   type TerminalPaymentUnitOfWork
 } from "@elevenhouse/domain";
@@ -25,6 +28,7 @@ export function createPaymentWebhookProcessor(input: {
   readonly orderStore: Pick<FinanceOrderStore, "findById">;
   readonly capturedSale: CapturedSaleUnitOfWork;
   readonly terminalPayment: TerminalPaymentUnitOfWork;
+  readonly reversal: RefundReversalUnitOfWork;
   readonly resolvePaymentAttemptId: (input: {
     readonly providerPaymentId: string;
     readonly environment: "sandbox" | "live";
@@ -62,7 +66,9 @@ export function createPaymentWebhookProcessor(input: {
   };
 }
 
-function isTerminalReleaseEvent(type: ArcPayWebhookEvent["type"]): type is TerminalPaymentProviderEventType {
+function isTerminalReleaseEvent(
+  type: ArcPayWebhookEvent["type"]
+): type is TerminalPaymentProviderEventType {
   return (
     type === "payment.failed" ||
     type === "payment.declined" ||
@@ -83,6 +89,7 @@ async function processPaymentProviderEvent(
     readonly orderStore: Pick<FinanceOrderStore, "findById">;
     readonly capturedSale: CapturedSaleUnitOfWork;
     readonly terminalPayment: TerminalPaymentUnitOfWork;
+    readonly reversal: RefundReversalUnitOfWork;
   },
   event: ArcPayWebhookEvent,
   request: Parameters<typeof ingestPaymentProviderWebhook>[0]["request"]
@@ -99,9 +106,25 @@ async function processPaymentProviderEvent(
       request: { ...request, type: event.type }
     });
   }
+  if (isReversalEvent(event.type)) {
+    return recordPaymentReversalProviderWebhook({
+      reversal: input.reversal,
+      request: { ...request, type: event.type }
+    });
+  }
   return ingestPaymentProviderWebhook({
     paymentStore: input.paymentStore,
     orderStore: input.orderStore,
     request
   });
+}
+
+function isReversalEvent(
+  type: ArcPayWebhookEvent["type"]
+): type is RefundReversalProviderEventType {
+  return (
+    type === "payment.refunded" ||
+    type === "payment.partially_refunded" ||
+    type === "payment.chargeback"
+  );
 }

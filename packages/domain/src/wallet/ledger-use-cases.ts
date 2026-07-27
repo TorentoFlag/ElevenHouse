@@ -1,15 +1,26 @@
 import type { FinanceOrder, FinanceOrderStore } from "../orders";
-import type { PaymentProviderEvent, PaymentStore } from "../payments/payment-store";
+import type {
+  PaymentProviderEvent,
+  PaymentProviderEventType,
+  PaymentStore
+} from "../payments/payment-store";
 import type { Money } from "../money";
 import {
   assertPaymentMatchesOrder,
   assertWebhookMoneyFacts,
+  PaymentWebhookAmountMismatchError,
   PaymentWebhookAttemptNotFoundError,
+  PaymentWebhookCurrencyMismatchError,
   PaymentWebhookOrderNotFoundError,
   PaymentWebhookProviderContextMismatchError,
   type IngestPaymentProviderWebhookRequest
 } from "../payments/payment-use-cases";
-import type { CreateLedgerTransactionInput, LedgerStore } from "./ledger-store";
+import type {
+  CreateLedgerEntryInput,
+  CreateLedgerTransactionInput,
+  LedgerStore,
+  WalletBalance
+} from "./ledger-store";
 
 export type CapturedSaleOutboxEventType =
   | "finance.payment_captured"
@@ -96,6 +107,40 @@ export type ReleaseDueCapturedSaleHoldsResult = {
   readonly orderIds: readonly string[];
 };
 
+export type RefundReversalProviderEventType =
+  | "payment.refunded"
+  | "payment.partially_refunded"
+  | "payment.chargeback";
+
+export type RefundReversalTransactionStore = Pick<
+  PaymentStore,
+  | "findAttemptById"
+  | "findProviderEventByWebhookId"
+  | "linkAttemptToProviderPayment"
+  | "recordProviderEvent"
+  | "createRefund"
+> &
+  Pick<FinanceOrderStore, "findById" | "updateStatus"> &
+  Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
+
+export type RefundReversalUnitOfWork = {
+  readonly transact: <T>(
+    operation: (store: RefundReversalTransactionStore) => Promise<T>
+  ) => Promise<T>;
+};
+
+export type RecordPaymentReversalProviderWebhookInput = {
+  readonly reversal: RefundReversalUnitOfWork;
+  readonly request: IngestPaymentProviderWebhookRequest & {
+    readonly type: RefundReversalProviderEventType;
+  };
+};
+
+export type RecordPaymentReversalProviderWebhookResult = {
+  readonly kind: "created" | "replayed";
+  readonly event: PaymentProviderEvent;
+};
+
 export class PaymentCaptureOrderNotPayableError extends Error {
   readonly code = "payment_capture_order_not_payable";
 
@@ -111,6 +156,24 @@ export class PaymentCaptureBookingNotConfirmableError extends Error {
   constructor() {
     super("Captured payment booking is not pending payment");
     this.name = "PaymentCaptureBookingNotConfirmableError";
+  }
+}
+
+export class PaymentReversalProviderRefundIdMissingError extends Error {
+  readonly code = "payment_reversal_provider_refund_id_missing";
+
+  constructor() {
+    super("Refund webhook is missing provider refund id");
+    this.name = "PaymentReversalProviderRefundIdMissingError";
+  }
+}
+
+export class PaymentReversalOrderNotReversibleError extends Error {
+  readonly code = "payment_reversal_order_not_reversible";
+
+  constructor() {
+    super("Payment reversal order cannot be reversed from its current state");
+    this.name = "PaymentReversalOrderNotReversibleError";
   }
 }
 
@@ -190,6 +253,104 @@ export async function capturePaymentProviderWebhook(
   });
 }
 
+/**
+ * Refunds and chargebacks are provider evidence first, but the business balance
+ * impact is ElevenHouse-owned. The whole reversal posts through one unit of
+ * work so webhook retries cannot persist evidence without the wallet clawback.
+ */
+export async function recordPaymentReversalProviderWebhook(
+  input: RecordPaymentReversalProviderWebhookInput
+): Promise<RecordPaymentReversalProviderWebhookResult> {
+  return input.reversal.transact(async (store) => {
+    const existing = await store.findProviderEventByWebhookId({
+      provider: input.request.provider,
+      environment: input.request.environment,
+      providerWebhookId: input.request.providerWebhookId
+    });
+    if (existing) return { kind: "replayed", event: existing };
+
+    const attempt = await store.findAttemptById(input.request.paymentAttemptId);
+    if (!attempt) throw new PaymentWebhookAttemptNotFoundError();
+    if (
+      attempt.provider !== input.request.provider ||
+      attempt.environment !== input.request.environment
+    ) {
+      throw new PaymentWebhookProviderContextMismatchError();
+    }
+
+    const order = await store.findById(attempt.orderId);
+    if (!order) throw new PaymentWebhookOrderNotFoundError();
+    assertPaymentMatchesOrder(attempt, order);
+    assertWebhookMoneyFacts(input.request.moneyFacts, attempt.amount);
+    assertOrderReversible(order);
+
+    const linkedAttempt = await store.linkAttemptToProviderPayment({
+      paymentAttemptId: attempt.id,
+      provider: input.request.provider,
+      environment: input.request.environment,
+      providerPaymentId: input.request.providerPaymentId,
+      now: input.request.receivedAt
+    });
+    if (!linkedAttempt) throw new PaymentWebhookAttemptNotFoundError();
+
+    const providerEvent = await store.recordProviderEvent({
+      paymentAttemptId: linkedAttempt.id,
+      provider: input.request.provider,
+      environment: input.request.environment,
+      providerWebhookId: input.request.providerWebhookId,
+      providerPaymentId: input.request.providerPaymentId,
+      type: input.request.type,
+      occurredAt: input.request.occurredAt,
+      receivedAt: input.request.receivedAt,
+      payload: input.request.payload
+    });
+    if (providerEvent.kind === "replayed") return providerEvent;
+
+    const reversalAmount = requirePrimaryReversalAmount(input.request);
+    const providerRefundId =
+      input.request.type === "payment.chargeback"
+        ? null
+        : requireProviderRefundId(input.request.payload);
+
+    if (input.request.type !== "payment.chargeback") {
+      const refund = await store.createRefund({
+        orderId: order.id,
+        paymentAttemptId: linkedAttempt.id,
+        providerEventId: providerEvent.event.id,
+        provider: input.request.provider,
+        environment: input.request.environment,
+        status: "succeeded",
+        amount: reversalAmount,
+        reason: "provider_refund",
+        providerRefundId,
+        now: input.request.receivedAt
+      });
+      if (refund.kind === "replayed") return { kind: "replayed", event: providerEvent.event };
+    }
+
+    const updatedOrder = await store.updateStatus({
+      orderId: order.id,
+      status: nextReversalOrderStatus(input.request.type, input.request, order),
+      now: input.request.receivedAt
+    });
+    if (!updatedOrder) throw new PaymentReversalOrderNotReversibleError();
+
+    await store.createTransaction(
+      createPaymentReversalLedgerTransaction({
+        order,
+        providerEvent: providerEvent.event,
+        reversalAmount,
+        walletBalance: await store.findWalletBalance(order.astrologerUserId),
+        providerRefundId,
+        operationType:
+          input.request.type === "payment.chargeback" ? "chargeback_recorded" : "refund_recorded"
+      })
+    );
+
+    return providerEvent;
+  });
+}
+
 export function createCapturedSaleLedgerTransaction(
   order: FinanceOrder,
   providerEvent: PaymentProviderEvent
@@ -252,6 +413,75 @@ export function createCapturedSaleLedgerTransaction(
         metadata: { orderId: order.id, providerEventId: providerEvent.id }
       }
     ]
+  };
+}
+
+export function createPaymentReversalLedgerTransaction(input: {
+  readonly order: FinanceOrder;
+  readonly providerEvent: PaymentProviderEvent;
+  readonly reversalAmount: Money;
+  readonly walletBalance: WalletBalance | null;
+  readonly providerRefundId: string | null;
+  readonly operationType: "refund_recorded" | "chargeback_recorded";
+}): CreateLedgerTransactionInput {
+  assertPositiveRubMoney(input.reversalAmount);
+  const grossMinor = input.reversalAmount.amountMinor;
+  const platformFeeMinor = proratePlatformFee(input.order, grossMinor);
+  const astrologerShareMinor = grossMinor - platformFeeMinor;
+  const entries: CreateLedgerEntryInput[] = [];
+
+  if (platformFeeMinor > 0) {
+    entries.push({
+      account: {
+        accountType: "platform_revenue",
+        astrologerUserId: null,
+        currency: input.reversalAmount.currency
+      },
+      side: "debit",
+      amount: money(platformFeeMinor, input.reversalAmount.currency),
+      metadata: { orderId: input.order.id, providerEventId: input.providerEvent.id }
+    });
+  }
+
+  entries.push(
+    ...allocateAstrologerReversal(
+      astrologerShareMinor,
+      input.walletBalance,
+      input.order.astrologerUserId
+    )
+  );
+  entries.push({
+    account: {
+      accountType: "platform_clearing",
+      astrologerUserId: null,
+      currency: input.reversalAmount.currency
+    },
+    side: "credit",
+    amount: input.reversalAmount,
+    metadata: { orderId: input.order.id, providerEventId: input.providerEvent.id }
+  });
+
+  return {
+    operationType: input.operationType,
+    orderId: input.order.id,
+    payoutRequestId: null,
+    occurredAt: input.providerEvent.occurredAt,
+    postedAt: input.providerEvent.receivedAt,
+    metadata: {
+      reason:
+        input.operationType === "chargeback_recorded" ? "provider_chargeback" : "provider_refund",
+      providerEventId: input.providerEvent.id,
+      paymentAttemptId: input.providerEvent.paymentAttemptId,
+      provider: input.providerEvent.provider,
+      providerPaymentId: input.providerEvent.providerPaymentId,
+      providerRefundId: input.providerRefundId,
+      reversalGrossAmountMinor: grossMinor,
+      platformFeeReversalAmountMinor: platformFeeMinor,
+      astrologerShareReversalAmountMinor: astrologerShareMinor,
+      financePolicySnapshotId: input.order.financePolicySnapshotId,
+      financePolicyRiskTier: input.order.financePolicyRiskTier
+    },
+    entries
   };
 }
 
@@ -391,9 +621,94 @@ function computeHoldReleaseAt(capturedAt: string, holdDurationHours: number): st
   return new Date(capturedTime + holdDurationHours * 60 * 60 * 1000).toISOString();
 }
 
+function requirePrimaryReversalAmount(
+  request: IngestPaymentProviderWebhookRequest & { readonly type: RefundReversalProviderEventType }
+): Money {
+  const amount = request.moneyFacts.amounts[0];
+  if (!amount) throw new PaymentWebhookAmountMismatchError();
+  if (amount.currency !== "RUB") throw new PaymentWebhookCurrencyMismatchError();
+  return { amountMinor: amount.amountMinor, currency: amount.currency };
+}
+
+function requireProviderRefundId(payload: Record<string, unknown>): string {
+  const data = payload.data;
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const refundId = (data as Record<string, unknown>).refund_id;
+    if (typeof refundId === "string" && refundId.length > 0) return refundId;
+  }
+  throw new PaymentReversalProviderRefundIdMissingError();
+}
+
+function nextReversalOrderStatus(
+  type: PaymentProviderEventType,
+  request: IngestPaymentProviderWebhookRequest,
+  order: FinanceOrder
+): "partially_refunded" | "refunded" | "chargeback" {
+  if (type === "payment.chargeback") return "chargeback";
+  const totalRefunded =
+    request.moneyFacts.amounts[1]?.amountMinor ?? request.moneyFacts.amounts[0]?.amountMinor;
+  return totalRefunded === order.grossAmount.amountMinor ? "refunded" : "partially_refunded";
+}
+
+function assertOrderReversible(order: FinanceOrder): void {
+  if (!["paid", "fulfilled", "partially_refunded"].includes(order.status)) {
+    throw new PaymentReversalOrderNotReversibleError();
+  }
+}
+
+function proratePlatformFee(order: FinanceOrder, reversalGrossMinor: number): number {
+  if (reversalGrossMinor === order.grossAmount.amountMinor) return order.platformFee.amountMinor;
+  return Math.floor(
+    (order.platformFee.amountMinor * reversalGrossMinor) / order.grossAmount.amountMinor
+  );
+}
+
+function allocateAstrologerReversal(
+  amountMinor: number,
+  walletBalance: WalletBalance | null,
+  astrologerUserId: string
+): CreateLedgerEntryInput[] {
+  const pendingMinor = Math.min(walletBalance?.pending.amountMinor ?? 0, amountMinor);
+  let remainingMinor = amountMinor - pendingMinor;
+  const availableMinor = Math.min(walletBalance?.available.amountMinor ?? 0, remainingMinor);
+  remainingMinor -= availableMinor;
+  const reservedMinor = Math.min(walletBalance?.reserved.amountMinor ?? 0, remainingMinor);
+  remainingMinor -= reservedMinor;
+
+  return [
+    createAstrologerReversalEntry("astrologer_pending", astrologerUserId, pendingMinor),
+    createAstrologerReversalEntry("astrologer_available", astrologerUserId, availableMinor),
+    createAstrologerReversalEntry("astrologer_reserved", astrologerUserId, reservedMinor),
+    createAstrologerReversalEntry("astrologer_negative_balance", astrologerUserId, remainingMinor)
+  ].filter((entry): entry is CreateLedgerEntryInput => entry !== null);
+}
+
+function createAstrologerReversalEntry(
+  accountType:
+    | "astrologer_pending"
+    | "astrologer_available"
+    | "astrologer_reserved"
+    | "astrologer_negative_balance",
+  astrologerUserId: string,
+  amountMinor: number
+): CreateLedgerEntryInput | null {
+  if (amountMinor <= 0) return null;
+  return {
+    account: { accountType, astrologerUserId, currency: "RUB" },
+    side: "debit",
+    amount: money(amountMinor, "RUB"),
+    metadata: { reason: "payment_reversal" }
+  };
+}
+
 function assertPositiveRubMoney(amount: Money): void {
-  if (amount.currency !== "RUB") throw new Error(`Unsupported finance currency: ${amount.currency}`);
+  if (amount.currency !== "RUB")
+    throw new Error(`Unsupported finance currency: ${amount.currency}`);
   if (!Number.isSafeInteger(amount.amountMinor) || amount.amountMinor <= 0) {
     throw new Error("Finance money amount must be a positive safe integer");
   }
+}
+
+function money(amountMinor: number, currency: Money["currency"]): Money {
+  return { amountMinor, currency };
 }

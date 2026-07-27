@@ -152,7 +152,9 @@ async function updateOrderStatus(
   const [row] = await database
     .update(orders)
     .set({ status: input.status, updatedAt: new Date(input.now) })
-    .where(and(eq(orders.id, input.orderId), inArray(orders.status, policyApplicableOrderStatuses)))
+    .where(
+      and(eq(orders.id, input.orderId), inArray(orders.status, paymentEventMutableOrderStatuses))
+    )
     .returning();
   return row ? toFinanceOrder(row) : null;
 }
@@ -216,6 +218,12 @@ function money(amountMinor: number, currency: string): Money {
 }
 
 const policyApplicableOrderStatuses = ["pending_payment", "paid", "fulfilled"] as const;
+const paymentEventMutableOrderStatuses = [
+  "pending_payment",
+  "paid",
+  "fulfilled",
+  "partially_refunded"
+] as const;
 
 function readResultId(result: Record<string, unknown>, key: string): string {
   const value = result[key];
