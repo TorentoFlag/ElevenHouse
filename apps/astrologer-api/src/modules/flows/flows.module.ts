@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
 import { createDrizzleFlowStore } from "@elevenhouse/db";
 import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
@@ -10,7 +11,7 @@ import { FlowsService } from "./flows.service";
 import { FLOW_STORE } from "./flows.tokens";
 
 @Module({
-  imports: [ClockModule, DatabaseModule, IdentityModule, SecurityModule],
+  imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, SecurityModule],
   controllers: [FlowTemplatesController, FlowsController],
   providers: [
     FlowsService,
