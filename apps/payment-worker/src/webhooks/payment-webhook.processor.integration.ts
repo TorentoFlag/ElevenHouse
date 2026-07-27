@@ -7,6 +7,7 @@ import {
   createDrizzleOrderStore,
   createDrizzlePaymentReversalUnitOfWork,
   createDrizzlePaymentStore,
+  createDrizzleReconciliationStore,
   createDrizzleTerminalPaymentUnitOfWork
 } from "@elevenhouse/db/finance";
 import { assertDevelopmentDatabaseUrl } from "@elevenhouse/db/connection";
@@ -190,6 +191,7 @@ function createHandler(paymentAttemptId: string) {
       capturedSale: createDrizzleCapturedSaleUnitOfWork(runtime.database),
       terminalPayment: createDrizzleTerminalPaymentUnitOfWork(runtime.database),
       reversal: createDrizzlePaymentReversalUnitOfWork(runtime.database),
+      reconciliationStore: createDrizzleReconciliationStore(runtime.database),
       resolvePaymentAttemptId: async () => paymentAttemptId,
       now: () => now
     })

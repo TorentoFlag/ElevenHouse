@@ -13,7 +13,8 @@ const supportedEventTypes = new Set<PaymentProviderEventType>([
   "payment.voided",
   "payment.refunded",
   "payment.partially_refunded",
-  "payment.chargeback"
+  "payment.chargeback",
+  "reconciliation.exception"
 ]);
 
 export type ArcPayWebhookEvent = {

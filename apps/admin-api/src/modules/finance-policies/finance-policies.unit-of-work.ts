@@ -6,7 +6,8 @@ import type {
   FinanceOrderStore,
   FinancePolicyStore,
   LedgerStore,
-  PayoutStore
+  PayoutStore,
+  ReconciliationStore
 } from "@elevenhouse/domain";
 
 export type AdminFinancePolicyUnitOfWorkContext = {
@@ -18,6 +19,7 @@ export type AdminFinancePolicyUnitOfWorkContext = {
   >;
   readonly ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
   readonly reversalCaseStore: AdminPaymentReversalCaseStore;
+  readonly reconciliationStore: Pick<ReconciliationStore, "listOpenExceptions" | "resolveException">;
   readonly auditSink: AdminFinancePolicyAuditSink;
 };
 

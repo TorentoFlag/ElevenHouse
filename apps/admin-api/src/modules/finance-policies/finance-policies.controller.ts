@@ -13,7 +13,9 @@ import {
 } from "@nestjs/common";
 import type {
   AdminPaymentReversalQueueResponse,
+  AdminReconciliationExceptionQueueResponse,
   AdminPayoutQueueResponse,
+  ReconciliationRecordResponse,
   PayoutRequestResponse,
   AstrologerRiskProfileResponse,
   FinancePoliciesResponse,
@@ -79,6 +81,25 @@ export class FinancePoliciesController {
     @Query("type") type?: string
   ): Promise<AdminPaymentReversalQueueResponse> {
     return this.service.listPaymentReversalCases(type);
+  }
+
+  @Get("reconciliation/exceptions")
+  listReconciliationExceptions(): Promise<AdminReconciliationExceptionQueueResponse> {
+    return this.service.listReconciliationExceptions();
+  }
+
+  @Put("reconciliation/exceptions/:reconciliationRecordId")
+  @RequireCsrf()
+  resolveReconciliationException(
+    @Req() request: AdminSessionRequest,
+    @Param("reconciliationRecordId") reconciliationRecordId: string,
+    @Body() body: unknown
+  ): Promise<ReconciliationRecordResponse> {
+    return this.service.resolveReconciliationException(
+      requireAdminUserId(request),
+      reconciliationRecordId,
+      body
+    );
   }
 
   @Put("payout-requests/:payoutRequestId/status")

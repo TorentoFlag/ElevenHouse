@@ -8,11 +8,15 @@ import {
 import { createHash } from "node:crypto";
 import {
   adminPaymentReversalQueueResponseSchema,
+  adminReconciliationExceptionQueueResponseSchema,
   adminPayoutQueueResponseSchema,
   adminPayoutStatusUpdateSchema,
+  reconciliationRecordResponseSchema,
+  resolveReconciliationExceptionRequestSchema,
   type AdminPaymentReversalCase,
   type AdminPaymentReversalCaseType,
   type AdminPaymentReversalQueueResponse,
+  type AdminReconciliationExceptionQueueResponse,
   astrologerRiskProfileResponseSchema,
   financePoliciesResponseSchema,
   financePolicyResponseSchema,
@@ -27,7 +31,8 @@ import {
   type FinancePoliciesResponse,
   type FinancePolicyResponse,
   type OrderResponse,
-  type PayoutRequestResponse
+  type PayoutRequestResponse,
+  type ReconciliationRecordResponse
 } from "@elevenhouse/contracts";
 import {
   approvePayoutStatusUpdate,
@@ -46,6 +51,9 @@ import {
   type PayoutRequestRecord,
   PayoutStatusEvidenceError,
   PayoutStatusTransitionError,
+  ReconciliationRecordNotFoundError,
+  resolveProviderReconciliationException,
+  type ReconciliationRecord,
   updateFinancePolicy
 } from "@elevenhouse/domain";
 import { SystemClock } from "../../common/system-clock.js";
@@ -230,6 +238,55 @@ export class FinancePoliciesService {
     });
   }
 
+  async listReconciliationExceptions(): Promise<AdminReconciliationExceptionQueueResponse> {
+    const exceptions = await this.unitOfWork.execute(({ reconciliationStore }) =>
+      reconciliationStore.listOpenExceptions({ limit: 50 })
+    );
+    return adminReconciliationExceptionQueueResponseSchema.parse({
+      summary: createReconciliationExceptionQueueSummary(exceptions),
+      exceptions: exceptions.map(toReconciliationRecordResponse)
+    });
+  }
+
+  async resolveReconciliationException(
+    adminUserId: string,
+    reconciliationRecordId: string,
+    body: unknown
+  ): Promise<ReconciliationRecordResponse> {
+    const request = parseBody(resolveReconciliationExceptionRequestSchema, body);
+    const now = this.clock.now();
+    try {
+      const record = await this.unitOfWork.execute(async ({ reconciliationStore, auditSink }) => {
+        const resolved = await resolveProviderReconciliationException({
+          store: reconciliationStore,
+          reconciliationRecordId,
+          resolution: request.resolution,
+          adminNote: request.adminNote,
+          resolvedAt: now
+        });
+        await auditSink.record({
+          actorUserId: adminUserId,
+          action: "reconciliation_exception.resolved",
+          targetId: resolved.id,
+          occurredAt: now.toISOString(),
+          metadata: {
+            resolution: request.resolution,
+            adminNote: request.adminNote,
+            previousStatus: "exception",
+            status: resolved.status
+          }
+        });
+        return resolved;
+      });
+      return toReconciliationRecordResponse(record);
+    } catch (error) {
+      if (error instanceof ReconciliationRecordNotFoundError) {
+        throw new NotFoundException(error.code);
+      }
+      throw error;
+    }
+  }
+
   async updatePayoutRequestStatus(
     adminUserId: string,
     payoutRequestId: string,
@@ -350,6 +407,21 @@ function parseBody<T>(schema: { parse: (value: unknown) => T }, value: unknown):
 
 function toDomainPayoutStatusUpdate(update: AdminPayoutStatusUpdate) {
   return update;
+}
+
+function createReconciliationExceptionQueueSummary(
+  exceptions: readonly ReconciliationRecord[]
+): AdminReconciliationExceptionQueueResponse["summary"] {
+  return {
+    openCount: exceptions.length,
+    oldestOpenAt: exceptions[0]?.checkedAt ?? null
+  };
+}
+
+function toReconciliationRecordResponse(
+  record: ReconciliationRecord
+): ReconciliationRecordResponse {
+  return reconciliationRecordResponseSchema.parse(record);
 }
 
 function createTerminalPayoutStatusCommand(input: {

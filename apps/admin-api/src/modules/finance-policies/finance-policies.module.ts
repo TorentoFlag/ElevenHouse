@@ -6,6 +6,7 @@ import {
   createDrizzleOrderTransactionStore,
   createDrizzlePayoutStore,
   createDrizzlePaymentReversalCaseStore,
+  createDrizzleReconciliationStore,
   executeIdempotentFinanceCommand
 } from "@elevenhouse/db/finance";
 import type { FinanceTransaction } from "@elevenhouse/db/finance";
@@ -55,6 +56,7 @@ function createUnitOfWorkContext(transaction: FinanceTransaction) {
     payoutStore: createDrizzlePayoutStore(transaction),
     ledgerStore: createDrizzleLedgerTransactionStore(transaction),
     reversalCaseStore: createDrizzlePaymentReversalCaseStore(transaction),
+    reconciliationStore: createDrizzleReconciliationStore(transaction),
     auditSink: new DurableAdminFinancePolicyAuditSink(createDrizzleAuditLogStore(transaction))
   };
 }

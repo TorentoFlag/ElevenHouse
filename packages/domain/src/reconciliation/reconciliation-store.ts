@@ -1,0 +1,57 @@
+import type {
+  FinancePaymentProvider,
+  PaymentAttempt,
+  PaymentProviderEnvironment
+} from "../payments";
+
+export type ReconciliationStatus = "pending" | "matched" | "exception" | "ignored";
+
+export type ReconciliationRecord = {
+  readonly id: string;
+  readonly provider: FinancePaymentProvider;
+  readonly environment: PaymentProviderEnvironment;
+  readonly providerPaymentId: string | null;
+  readonly providerPayoutId: string | null;
+  readonly providerSettlementId: string | null;
+  readonly providerEventId: string | null;
+  readonly status: ReconciliationStatus;
+  readonly exceptionCode: string | null;
+  readonly exceptionMessage: string | null;
+  readonly providerOccurredAt: string | null;
+  readonly checkedAt: string;
+  readonly resolvedAt: string | null;
+  readonly payload: Record<string, unknown>;
+};
+
+export type CreateReconciliationRecordInput = {
+  readonly provider: FinancePaymentProvider;
+  readonly environment: PaymentProviderEnvironment;
+  readonly providerPaymentId: string | null;
+  readonly providerPayoutId: string | null;
+  readonly providerSettlementId: string | null;
+  readonly providerEventId: string | null;
+  readonly status: ReconciliationStatus;
+  readonly exceptionCode: string | null;
+  readonly exceptionMessage: string | null;
+  readonly providerOccurredAt: string | null;
+  readonly checkedAt: string;
+  readonly payload: Record<string, unknown>;
+};
+
+export type ReconciliationExceptionResolution = "resolved" | "waived";
+
+export type ReconciliationStore = {
+  readonly findAttemptById: (paymentAttemptId: string) => Promise<PaymentAttempt | null>;
+  readonly createRecord: (
+    input: CreateReconciliationRecordInput
+  ) => Promise<{ readonly kind: "created" | "replayed"; readonly record: ReconciliationRecord }>;
+  readonly listOpenExceptions: (input: {
+    readonly limit: number;
+  }) => Promise<readonly ReconciliationRecord[]>;
+  readonly resolveException: (input: {
+    readonly reconciliationRecordId: string;
+    readonly resolution: ReconciliationExceptionResolution;
+    readonly resolvedAt: string;
+    readonly adminNote: string;
+  }) => Promise<ReconciliationRecord | null>;
+};

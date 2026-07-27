@@ -29,5 +29,6 @@ export * from "./payments";
 export * from "./wallet";
 export * from "./payouts";
 export * from "./finance-policies";
+export * from "./reconciliation";
 export * from "./finance/shared/idempotent-command";
 export * from "./audit-log";

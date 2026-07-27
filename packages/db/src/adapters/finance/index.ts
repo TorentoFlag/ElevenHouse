@@ -7,4 +7,5 @@ export * from "./drizzle-payment-store";
 export * from "./drizzle-payment-reversal-case-store";
 export * from "./drizzle-payment-reversal-unit-of-work";
 export * from "./drizzle-payout-store";
+export * from "./drizzle-reconciliation-store";
 export * from "./drizzle-terminal-payment-unit-of-work";

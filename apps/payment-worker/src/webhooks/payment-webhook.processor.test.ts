@@ -8,6 +8,8 @@ import type {
   FinanceOrder,
   PaymentAttempt,
   PaymentProviderEvent,
+  ReconciliationRecord,
+  ReconciliationStore,
   RefundRecord,
   RefundReversalTransactionStore,
   RefundReversalUnitOfWork,
@@ -241,6 +243,64 @@ describe("Arc Pay payment webhook ingestion", () => {
     expect(harness.orderStore.updateStatus).not.toHaveBeenCalled();
   });
 
+  it("records payment.settled as matched reconciliation evidence without fulfillment effects", async () => {
+    const harness = createHarness({ orderStatus: "paid" });
+
+    await expect(
+      harness.handler.handle(
+        signedRequest({
+          ...basePayload(eventId(15)),
+          event_type: "payment.settled",
+          data: {
+            payment_id: providerPaymentId,
+            settlement_id: "settlement-2026-07-27"
+          }
+        })
+      )
+    ).resolves.toEqual({ statusCode: 200, body: { accepted: true, duplicate: false } });
+
+    expect(harness.createdEvents).toMatchObject([{ type: "payment.settled" }]);
+    expect(harness.reconciliationRecords).toEqual([
+      expect.objectContaining({
+        status: "matched",
+        providerPaymentId,
+        providerSettlementId: "settlement-2026-07-27",
+        payload: expect.objectContaining({ source: "payment.settled" })
+      })
+    ]);
+    expect(harness.ledgerTransactions).toEqual([]);
+    expect(harness.orderStore.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it("records reconciliation.exception as an open provider exception", async () => {
+    const harness = createHarness({ orderStatus: "paid" });
+
+    await expect(
+      harness.handler.handle(
+        signedRequest({
+          ...basePayload(eventId(16)),
+          event_type: "reconciliation.exception",
+          data: {
+            payment_id: providerPaymentId,
+            settlement_id: "settlement-2026-07-27",
+            exception_code: "missing_on_bank",
+            exception_message: "Capture is absent from bank settlement file"
+          }
+        })
+      )
+    ).resolves.toEqual({ statusCode: 200, body: { accepted: true, duplicate: false } });
+
+    expect(harness.createdEvents).toMatchObject([{ type: "reconciliation.exception" }]);
+    expect(harness.reconciliationRecords).toEqual([
+      expect.objectContaining({
+        status: "exception",
+        exceptionCode: "missing_on_bank",
+        exceptionMessage: "Capture is absent from bank settlement file",
+        resolvedAt: null
+      })
+    ]);
+  });
+
   it("persists Arc Pay pending_3ds without fulfillment effects and expires bookings on terminal expiry", async () => {
     const harness = createHarness();
 
@@ -397,6 +457,7 @@ function createHarness(
   };
   const createdEvents: PaymentProviderEvent[] = [];
   const refunds: RefundRecord[] = [];
+  const reconciliationRecords: ReconciliationRecord[] = [];
   const linkedProviderPaymentIds: string[] = [];
   const ledgerTransactions: CreateLedgerTransactionInput[] = [];
   const outboxEvents: unknown[] = [];
@@ -532,12 +593,46 @@ function createHarness(
       return operation(transactionStore);
     }
   };
+  const reconciliationStore: ReconciliationStore = {
+    findAttemptById: paymentStore.findAttemptById,
+    createRecord: vi.fn(async (input) => {
+      const existing = reconciliationRecords.find(
+        (record) =>
+          record.provider === input.provider &&
+          record.environment === input.environment &&
+          record.providerPaymentId === input.providerPaymentId &&
+          record.status === input.status
+      );
+      if (existing) return { kind: "replayed" as const, record: existing };
+      const record: ReconciliationRecord = {
+        id: `reconciliation-${reconciliationRecords.length + 1}`,
+        provider: input.provider,
+        environment: input.environment,
+        providerPaymentId: input.providerPaymentId,
+        providerPayoutId: input.providerPayoutId,
+        providerSettlementId: input.providerSettlementId,
+        providerEventId: input.providerEventId,
+        status: input.status,
+        exceptionCode: input.exceptionCode,
+        exceptionMessage: input.exceptionMessage,
+        providerOccurredAt: input.providerOccurredAt,
+        checkedAt: input.checkedAt,
+        resolvedAt: null,
+        payload: input.payload
+      };
+      reconciliationRecords.push(record);
+      return { kind: "created" as const, record };
+    }),
+    listOpenExceptions: vi.fn(),
+    resolveException: vi.fn()
+  };
   const processor = createPaymentWebhookProcessor({
     paymentStore,
     orderStore,
     capturedSale,
     terminalPayment,
     reversal,
+    reconciliationStore,
     resolvePaymentAttemptId,
     now: () => now
   });
@@ -548,6 +643,7 @@ function createHarness(
     markOrderPaid: markOrderPaidSpy,
     createdEvents,
     refunds,
+    reconciliationRecords,
     ledgerTransactions,
     outboxEvents,
     releasedBookingHolds,

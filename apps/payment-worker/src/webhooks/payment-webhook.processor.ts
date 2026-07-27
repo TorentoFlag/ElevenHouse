@@ -1,11 +1,14 @@
 import {
   capturePaymentProviderWebhook,
   ingestPaymentProviderWebhook,
+  recordProviderReconciliationException,
+  recordProviderSettlementMatch,
   recordPaymentReversalProviderWebhook,
   releaseTerminalPaymentProviderWebhook,
   type CapturedSaleUnitOfWork,
   type FinanceOrderStore,
   type PaymentStore,
+  type ReconciliationStore,
   type RefundReversalProviderEventType,
   type RefundReversalUnitOfWork,
   type TerminalPaymentProviderEventType,
@@ -29,6 +32,7 @@ export function createPaymentWebhookProcessor(input: {
   readonly capturedSale: CapturedSaleUnitOfWork;
   readonly terminalPayment: TerminalPaymentUnitOfWork;
   readonly reversal: RefundReversalUnitOfWork;
+  readonly reconciliationStore: ReconciliationStore;
   readonly resolvePaymentAttemptId: (input: {
     readonly providerPaymentId: string;
     readonly environment: "sandbox" | "live";
@@ -88,8 +92,9 @@ async function processPaymentProviderEvent(
     >;
     readonly orderStore: Pick<FinanceOrderStore, "findById">;
     readonly capturedSale: CapturedSaleUnitOfWork;
-    readonly terminalPayment: TerminalPaymentUnitOfWork;
-    readonly reversal: RefundReversalUnitOfWork;
+  readonly terminalPayment: TerminalPaymentUnitOfWork;
+  readonly reversal: RefundReversalUnitOfWork;
+  readonly reconciliationStore: ReconciliationStore;
   },
   event: ArcPayWebhookEvent,
   request: Parameters<typeof ingestPaymentProviderWebhook>[0]["request"]
@@ -111,6 +116,38 @@ async function processPaymentProviderEvent(
       reversal: input.reversal,
       request: { ...request, type: event.type }
     });
+  }
+  if (event.type === "payment.settled") {
+    const result = await ingestPaymentProviderWebhook({
+      paymentStore: input.paymentStore,
+      orderStore: input.orderStore,
+      request: { ...request, type: "payment.settled" }
+    });
+    if (result.kind === "created") {
+      await recordProviderSettlementMatch({
+        store: input.reconciliationStore,
+        paymentAttemptId: request.paymentAttemptId,
+        providerEvent: { ...result.event, type: "payment.settled" },
+        checkedAt: new Date(request.receivedAt)
+      });
+    }
+    return result;
+  }
+  if (event.type === "reconciliation.exception") {
+    const result = await ingestPaymentProviderWebhook({
+      paymentStore: input.paymentStore,
+      orderStore: input.orderStore,
+      request: { ...request, type: "reconciliation.exception" }
+    });
+    if (result.kind === "created") {
+      await recordProviderReconciliationException({
+        store: input.reconciliationStore,
+        paymentAttemptId: request.paymentAttemptId,
+        providerEvent: { ...result.event, type: "reconciliation.exception" },
+        checkedAt: new Date(request.receivedAt)
+      });
+    }
+    return result;
   }
   return ingestPaymentProviderWebhook({
     paymentStore: input.paymentStore,

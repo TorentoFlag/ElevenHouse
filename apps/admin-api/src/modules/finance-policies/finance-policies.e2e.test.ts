@@ -12,6 +12,8 @@ import type {
   FinancePolicySnapshot,
   FinancePolicyStore,
   LedgerStore,
+  ReconciliationRecord,
+  ReconciliationStore,
   CreateLedgerEntryInput,
   PayoutRequestRecord,
   PayoutRequestStatus,
@@ -48,6 +50,7 @@ let orderStore: Pick<FinanceOrderStore, "applyFinancePolicy" | "findById">;
 let payoutStore: Pick<PayoutStore, "findRequestById" | "listRequests" | "updateRequestStatus">;
 let ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
 let reversalCaseStore: AdminPaymentReversalCaseStore;
+let reconciliationStore: ReconciliationStore;
 let auditLogStore: AuditLogStore;
 let unitOfWork: AdminFinancePolicyUnitOfWork;
 let roles: readonly PlatformRole[];
@@ -60,6 +63,7 @@ describe("admin finance policy HTTP flow", () => {
     payoutStore = createPayoutStore();
     ledgerStore = createLedgerStore();
     reversalCaseStore = createReversalCaseStore();
+    reconciliationStore = createReconciliationStore();
     auditLogStore = createAuditLogStore();
     const completedFinanceCommands = new Map<string, Record<string, unknown>>();
     const financeCommandHashes = new Map<string, string>();
@@ -71,6 +75,7 @@ describe("admin finance policy HTTP flow", () => {
           payoutStore,
           ledgerStore,
           reversalCaseStore,
+          reconciliationStore,
           auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
         })
       ),
@@ -90,6 +95,7 @@ describe("admin finance policy HTTP flow", () => {
               payoutStore,
               ledgerStore,
               reversalCaseStore,
+              reconciliationStore,
               auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
             },
             result
@@ -105,6 +111,7 @@ describe("admin finance policy HTTP flow", () => {
           payoutStore,
           ledgerStore,
           reversalCaseStore,
+          reconciliationStore,
           auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
         });
         completedFinanceCommands.set(key, created.result);
@@ -476,6 +483,70 @@ describe("admin finance policy HTTP flow", () => {
       getJson("/admin/finance/reversal-cases?type=pending", authCookie())
     ).resolves.toMatchObject({ status: 400 });
   });
+
+  it("lists and resolves reconciliation exceptions with CSRF and audit evidence", async () => {
+    await expect(getJson("/admin/finance/reconciliation/exceptions")).resolves.toMatchObject({
+      status: 401
+    });
+
+    const queue = await getJson("/admin/finance/reconciliation/exceptions", authCookie());
+    expect(queue).toMatchObject({
+      status: 200,
+      body: {
+        summary: {
+          openCount: 1,
+          oldestOpenAt: "2026-07-25T08:00:00.000Z"
+        },
+        exceptions: [
+          expect.objectContaining({
+            id: "12121212-1212-4121-8121-121212121212",
+            provider: "arc_pay",
+            environment: "sandbox",
+            providerPaymentId: "provider-payment-reconciliation-1",
+            status: "exception",
+            exceptionCode: "missing_on_bank",
+            resolvedAt: null
+          })
+        ]
+      }
+    });
+
+    await expect(
+      putJson(
+        "/admin/finance/reconciliation/exceptions/12121212-1212-4121-8121-121212121212",
+        { resolution: "waived", adminNote: "Below audit threshold after finance review" },
+        authCookie()
+      )
+    ).resolves.toMatchObject({ status: 403 });
+
+    const resolved = await putJson(
+      "/admin/finance/reconciliation/exceptions/12121212-1212-4121-8121-121212121212",
+      { resolution: "waived", adminNote: "Below audit threshold after finance review" },
+      authenticatedCookies(),
+      {
+        origin: "http://localhost:5175",
+        [csrfHeaderName]: csrfToken
+      }
+    );
+
+    expect(resolved).toMatchObject({
+      status: 200,
+      body: {
+        id: "12121212-1212-4121-8121-121212121212",
+        status: "ignored",
+        resolvedAt: now.toISOString()
+      }
+    });
+    expect(auditLogStore.createEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: adminUserId,
+        action: "reconciliation_exception.resolved",
+        targetType: "reconciliation_record",
+        targetId: "12121212-1212-4121-8121-121212121212",
+        metadata: expect.objectContaining({ resolution: "waived" })
+      })
+    );
+  });
 });
 
 async function getJson(path: string, cookie?: string) {
@@ -806,6 +877,48 @@ function createReversalCaseStore(): AdminPaymentReversalCaseStore {
         )
         .slice(0, input.limit)
     )
+  };
+}
+
+function createReconciliationStore(): ReconciliationStore {
+  let records: ReconciliationRecord[] = [
+    {
+      id: "12121212-1212-4121-8121-121212121212",
+      provider: "arc_pay",
+      environment: "sandbox",
+      providerPaymentId: "provider-payment-reconciliation-1",
+      providerPayoutId: null,
+      providerSettlementId: "settlement-2026-07-25",
+      providerEventId: "34343434-3434-4343-8343-343434343434",
+      status: "exception",
+      exceptionCode: "missing_on_bank",
+      exceptionMessage: "Capture is absent from bank settlement file",
+      providerOccurredAt: "2026-07-25T07:30:00.000Z",
+      checkedAt: "2026-07-25T08:00:00.000Z",
+      resolvedAt: null,
+      payload: { source: "reconciliation.exception" }
+    }
+  ];
+  return {
+    findAttemptById: vi.fn(),
+    createRecord: vi.fn(),
+    listOpenExceptions: vi.fn(async (input) => records.slice(0, input.limit)),
+    resolveException: vi.fn(async (input) => {
+      const existing = records.find((record) => record.id === input.reconciliationRecordId);
+      if (!existing) return null;
+      const updated: ReconciliationRecord = {
+        ...existing,
+        status: input.resolution === "resolved" ? "matched" : "ignored",
+        resolvedAt: input.resolvedAt,
+        payload: {
+          ...existing.payload,
+          resolution: input.resolution,
+          adminNote: input.adminNote
+        }
+      };
+      records = records.map((record) => (record.id === updated.id ? updated : record));
+      return updated;
+    })
   };
 }
 
