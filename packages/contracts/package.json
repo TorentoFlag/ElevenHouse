@@ -49,6 +49,11 @@
       "types": "./dist/payouts.d.ts",
       "import": "./dist/payouts.js",
       "require": "./dist/payouts.js"
+    },
+    "./payments": {
+      "types": "./dist/payments.d.ts",
+      "import": "./dist/payments.js",
+      "require": "./dist/payments.js"
     }
   },
   "scripts": {

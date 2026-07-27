@@ -6,11 +6,13 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards
 } from "@nestjs/common";
 import type {
+  AdminPaymentReversalQueueResponse,
   AdminPayoutQueueResponse,
   PayoutRequestResponse,
   AstrologerRiskProfileResponse,
@@ -70,6 +72,13 @@ export class FinancePoliciesController {
   @Get("payout-requests")
   listPayoutRequests(): Promise<AdminPayoutQueueResponse> {
     return this.service.listPayoutRequests();
+  }
+
+  @Get("reversal-cases")
+  listPaymentReversalCases(
+    @Query("type") type?: string
+  ): Promise<AdminPaymentReversalQueueResponse> {
+    return this.service.listPaymentReversalCases(type);
   }
 
   @Put("payout-requests/:payoutRequestId/status")

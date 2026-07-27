@@ -4,6 +4,7 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import type { PlatformRole } from "@elevenhouse/auth";
 import { FinanceIdempotencyConflictError } from "@elevenhouse/domain";
 import type {
+  AdminPaymentReversalCaseStore,
   AuditLogStore,
   AuthSessionAuthenticationStore,
   FinanceOrder,
@@ -46,6 +47,7 @@ let store: FinancePolicyStore;
 let orderStore: Pick<FinanceOrderStore, "applyFinancePolicy" | "findById">;
 let payoutStore: Pick<PayoutStore, "findRequestById" | "listRequests" | "updateRequestStatus">;
 let ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
+let reversalCaseStore: AdminPaymentReversalCaseStore;
 let auditLogStore: AuditLogStore;
 let unitOfWork: AdminFinancePolicyUnitOfWork;
 let roles: readonly PlatformRole[];
@@ -57,6 +59,7 @@ describe("admin finance policy HTTP flow", () => {
     orderStore = createOrderStore();
     payoutStore = createPayoutStore();
     ledgerStore = createLedgerStore();
+    reversalCaseStore = createReversalCaseStore();
     auditLogStore = createAuditLogStore();
     const completedFinanceCommands = new Map<string, Record<string, unknown>>();
     const financeCommandHashes = new Map<string, string>();
@@ -67,6 +70,7 @@ describe("admin finance policy HTTP flow", () => {
           orderStore,
           payoutStore,
           ledgerStore,
+          reversalCaseStore,
           auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
         })
       ),
@@ -85,6 +89,7 @@ describe("admin finance policy HTTP flow", () => {
               orderStore,
               payoutStore,
               ledgerStore,
+              reversalCaseStore,
               auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
             },
             result
@@ -99,6 +104,7 @@ describe("admin finance policy HTTP flow", () => {
           orderStore,
           payoutStore,
           ledgerStore,
+          reversalCaseStore,
           auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
         });
         completedFinanceCommands.set(key, created.result);
@@ -420,6 +426,56 @@ describe("admin finance policy HTTP flow", () => {
     );
     expect(auditLogStore.createEntry).toHaveBeenCalledTimes(1);
   });
+
+  it("lists payment reversal cases for authenticated internal users with optional type filtering", async () => {
+    await expect(getJson("/admin/finance/reversal-cases")).resolves.toMatchObject({ status: 401 });
+
+    const queue = await getJson("/admin/finance/reversal-cases", authCookie());
+    expect(queue).toMatchObject({
+      status: 200,
+      body: {
+        summary: {
+          refundCount: 1,
+          chargebackCount: 1,
+          criticalCount: 1,
+          totalAmount: { amountMinor: 100_000, currency: "RUB" },
+          negativeBalanceAmount: { amountMinor: 45_000, currency: "RUB" }
+        },
+        cases: expect.arrayContaining([
+          expect.objectContaining({
+            id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            type: "chargeback",
+            severity: "critical",
+            providerRefundId: null,
+            orderStatus: "chargeback",
+            ledgerOperationType: "chargeback_recorded",
+            walletBalance: expect.objectContaining({
+              negativeBalance: { amountMinor: 45_000, currency: "RUB" }
+            })
+          }),
+          expect.objectContaining({
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            type: "refund",
+            providerRefundId: "provider-refund-1",
+            ledgerOperationType: "refund_recorded"
+          })
+        ])
+      }
+    });
+
+    await expect(
+      getJson("/admin/finance/reversal-cases?type=chargeback", authCookie())
+    ).resolves.toMatchObject({
+      status: 200,
+      body: {
+        summary: { refundCount: 0, chargebackCount: 1 },
+        cases: [expect.objectContaining({ type: "chargeback" })]
+      }
+    });
+    await expect(
+      getJson("/admin/finance/reversal-cases?type=pending", authCookie())
+    ).resolves.toMatchObject({ status: 400 });
+  });
 });
 
 async function getJson(path: string, cookie?: string) {
@@ -673,6 +729,83 @@ function createLedgerStore(): Pick<LedgerStore, "createTransaction" | "findWalle
       negativeBalance: { amountMinor: 0, currency: "RUB" as const },
       updatedAt: now.toISOString()
     }))
+  };
+}
+
+function createReversalCaseStore(): AdminPaymentReversalCaseStore {
+  const cases: Awaited<ReturnType<AdminPaymentReversalCaseStore["listCases"]>> = [
+    {
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      type: "chargeback",
+      severity: "critical",
+      provider: "arc_pay",
+      environment: "sandbox",
+      providerWebhookId: "wh_chargeback_1",
+      providerPaymentId: "provider-payment-2",
+      providerRefundId: null,
+      paymentAttemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      orderId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      clientUserId: "99999999-9999-4999-8999-999999999990",
+      astrologerUserId,
+      orderStatus: "chargeback",
+      paymentAttemptStatus: "chargeback",
+      amount: { amountMinor: 50_000, currency: "RUB" },
+      refundStatus: null,
+      ledgerOperationType: "chargeback_recorded",
+      ledgerTransactionId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      walletBalance: {
+        astrologerUserId,
+        pending: { amountMinor: 0, currency: "RUB" },
+        available: { amountMinor: 0, currency: "RUB" },
+        reserved: { amountMinor: 0, currency: "RUB" },
+        payoutPending: { amountMinor: 0, currency: "RUB" },
+        negativeBalance: { amountMinor: 45_000, currency: "RUB" },
+        updatedAt: now.toISOString()
+      },
+      occurredAt: "2026-07-25T09:00:00.000Z",
+      receivedAt: "2026-07-25T09:01:00.000Z"
+    },
+    {
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      type: "refund",
+      severity: "attention",
+      provider: "arc_pay",
+      environment: "sandbox",
+      providerWebhookId: "wh_refund_1",
+      providerPaymentId: "provider-payment-1",
+      providerRefundId: "provider-refund-1",
+      paymentAttemptId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      orderId,
+      clientUserId: "99999999-9999-4999-8999-999999999990",
+      astrologerUserId,
+      orderStatus: "refunded",
+      paymentAttemptStatus: "refunded",
+      amount: { amountMinor: 50_000, currency: "RUB" },
+      refundStatus: "succeeded",
+      ledgerOperationType: "refund_recorded",
+      ledgerTransactionId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeef",
+      walletBalance: {
+        astrologerUserId,
+        pending: { amountMinor: 0, currency: "RUB" },
+        available: { amountMinor: 0, currency: "RUB" },
+        reserved: { amountMinor: 0, currency: "RUB" },
+        payoutPending: { amountMinor: 0, currency: "RUB" },
+        negativeBalance: { amountMinor: 45_000, currency: "RUB" },
+        updatedAt: now.toISOString()
+      },
+      occurredAt: "2026-07-25T08:00:00.000Z",
+      receivedAt: "2026-07-25T08:01:00.000Z"
+    }
+  ];
+
+  return {
+    listCases: vi.fn(async (input) =>
+      cases
+        .filter((paymentReversalCase) =>
+          input.types?.length ? input.types.includes(paymentReversalCase.type) : true
+        )
+        .slice(0, input.limit)
+    )
   };
 }
 

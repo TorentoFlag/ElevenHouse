@@ -2,6 +2,7 @@ import type { AdminFinancePolicyAuditSink } from "./finance-policies.audit";
 import type {
   FinanceIdempotentCommand,
   FinanceIdempotentCommandResult,
+  AdminPaymentReversalCaseStore,
   FinanceOrderStore,
   FinancePolicyStore,
   LedgerStore,
@@ -16,6 +17,7 @@ export type AdminFinancePolicyUnitOfWorkContext = {
     "findRequestById" | "listRequests" | "updateRequestStatus"
   >;
   readonly ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
+  readonly reversalCaseStore: AdminPaymentReversalCaseStore;
   readonly auditSink: AdminFinancePolicyAuditSink;
 };
 

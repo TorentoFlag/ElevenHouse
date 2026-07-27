@@ -221,7 +221,8 @@
 
 .adminFinanceOverviewGrid,
 .adminFinancePayoutGrid,
-.adminFinanceWorkGrid {
+.adminFinanceWorkGrid,
+.adminFinanceDisputesStack {
   display: grid;
   gap: 16px;
   padding: 16px 24px 0;
@@ -235,6 +236,16 @@
 .adminFinancePayoutGrid,
 .adminFinanceWorkGrid {
   grid-template-columns: minmax(520px, 1.35fr) minmax(360px, 0.9fr);
+}
+
+.adminFinanceDisputesStack {
+  max-width: 1040px;
+}
+
+.adminFinanceDisputeKpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 14px;
 }
 
 .adminFinanceContentPanel {
@@ -252,11 +263,20 @@
 }
 
 .adminFinancePanelTitleRow,
-.adminFinancePanelHead {
+.adminFinancePanelHead,
+.adminFinanceDisputeHead,
+.adminFinanceDisputeParties,
+.adminFinanceDisputeActions,
+.adminFinanceDisputeEvidence {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 14px;
+}
+
+.adminFinancePanelTitleRow,
+.adminFinancePanelHead,
+.adminFinanceDisputeHead {
+  justify-content: space-between;
 }
 
 .adminFinancePanelTitleRow {
@@ -380,6 +400,73 @@
   margin-bottom: 16px;
 }
 
+.adminFinanceDisputeCard {
+  padding: 0;
+}
+
+.adminFinanceDisputeHead {
+  border-bottom: 1px solid var(--admin-line);
+  padding: 16px 20px 13px;
+}
+
+.adminFinanceDisputeHead h2 {
+  font-size: 15.5px;
+}
+
+.adminFinanceDisputeAmount {
+  color: var(--admin-warning);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.adminFinanceDisputeParties,
+.adminFinanceDisputeFacts,
+.adminFinanceDisputeEvidence,
+.adminFinanceDisputeActions {
+  margin: 0 20px;
+}
+
+.adminFinanceDisputeParties {
+  flex-wrap: wrap;
+  padding: 14px 0 11px;
+}
+
+.adminFinanceDisputeArrow {
+  color: var(--admin-muted-2);
+}
+
+.adminFinanceDisputeSpacer {
+  flex: 1;
+}
+
+.adminFinanceDisputeFacts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding-bottom: 13px;
+}
+
+.adminFinanceDisputeEvidence {
+  flex-wrap: wrap;
+  border-top: 1px solid var(--admin-line);
+  padding: 13px 0;
+}
+
+.adminFinanceDisputeEvidence > span,
+.adminFinanceDisputeActions small {
+  color: var(--admin-muted);
+  font-size: 11.5px;
+}
+
+.adminFinanceDisputeActions {
+  border-top: 1px solid var(--admin-line);
+  padding: 13px 0 16px;
+}
+
+.adminFinanceDisputeActions span {
+  flex: 1;
+}
+
 .adminFinanceFact {
   border: 1px solid var(--admin-line);
   border-radius: 11px;
@@ -471,7 +558,10 @@
 
 .adminFinanceTableRow {
   display: grid;
-  grid-template-columns: minmax(90px, 1.2fr) minmax(58px, 0.7fr) minmax(68px, 0.8fr) minmax(54px, 0.8fr) minmax(54px, 0.7fr);
+  grid-template-columns: minmax(90px, 1.2fr) minmax(58px, 0.7fr) minmax(68px, 0.8fr) minmax(
+      54px,
+      0.8fr
+    ) minmax(54px, 0.7fr);
   gap: 12px;
   border-top: 1px solid var(--admin-line);
   color: #d8d5e8;
@@ -480,7 +570,10 @@
 }
 
 .adminFinancePayoutTable .adminFinanceTableRow {
-  grid-template-columns: minmax(180px, 1.4fr) minmax(94px, 0.75fr) minmax(96px, 0.8fr) minmax(98px, 0.7fr) minmax(80px, 0.6fr);
+  grid-template-columns: minmax(180px, 1.4fr) minmax(94px, 0.75fr) minmax(96px, 0.8fr) minmax(
+      98px,
+      0.7fr
+    ) minmax(80px, 0.6fr);
   padding-left: 18px;
   padding-right: 18px;
 }
@@ -686,7 +779,8 @@
 
   .adminFinanceOverviewGrid,
   .adminFinancePayoutGrid,
-  .adminFinanceWorkGrid {
+  .adminFinanceWorkGrid,
+  .adminFinanceDisputesStack {
     grid-template-columns: 1fr;
   }
 }
@@ -723,7 +817,8 @@
   .adminFinanceStatusGrid,
   .adminFinanceOverviewGrid,
   .adminFinancePayoutGrid,
-  .adminFinanceWorkGrid {
+  .adminFinanceWorkGrid,
+  .adminFinanceDisputesStack {
     padding-left: 16px;
     padding-right: 16px;
   }
@@ -743,6 +838,8 @@
   .adminFinanceStatusGrid,
   .adminFinanceForm,
   .adminFinanceFactsCompact,
+  .adminFinanceDisputeKpis,
+  .adminFinanceDisputeFacts,
   .adminFinanceRejectBox {
     grid-template-columns: 1fr;
   }

@@ -117,6 +117,68 @@ describe("createAdminFinancePoliciesApi", () => {
       })
     );
   });
+
+  it("loads payment reversal cases without CSRF because the route is read-only", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({
+        summary: {
+          refundCount: 0,
+          chargebackCount: 1,
+          criticalCount: 1,
+          totalAmount: { amountMinor: 50_000, currency: "RUB" },
+          negativeBalanceAmount: { amountMinor: 45_000, currency: "RUB" }
+        },
+        cases: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            type: "chargeback",
+            severity: "critical",
+            provider: "arc_pay",
+            environment: "sandbox",
+            providerWebhookId: "wh_chargeback_1",
+            providerPaymentId: "arc-payment-1",
+            providerRefundId: null,
+            paymentAttemptId: "22222222-2222-4222-8222-222222222222",
+            orderId: "33333333-3333-4333-8333-333333333333",
+            clientUserId: "44444444-4444-4444-8444-444444444444",
+            astrologerUserId: "55555555-5555-4555-8555-555555555555",
+            orderStatus: "chargeback",
+            paymentAttemptStatus: "chargeback",
+            amount: { amountMinor: 50_000, currency: "RUB" },
+            refundStatus: null,
+            ledgerOperationType: "chargeback_recorded",
+            ledgerTransactionId: "66666666-6666-4666-8666-666666666666",
+            walletBalance: {
+              astrologerUserId: "55555555-5555-4555-8555-555555555555",
+              pending: { amountMinor: 0, currency: "RUB" },
+              available: { amountMinor: 0, currency: "RUB" },
+              reserved: { amountMinor: 0, currency: "RUB" },
+              payoutPending: { amountMinor: 0, currency: "RUB" },
+              negativeBalance: { amountMinor: 45_000, currency: "RUB" },
+              updatedAt: "2026-07-24T10:02:00.000Z"
+            },
+            occurredAt: "2026-07-24T10:00:00.000Z",
+            receivedAt: "2026-07-24T10:01:00.000Z"
+          }
+        ]
+      })
+    );
+    const api = createAdminFinancePoliciesApi({
+      fetcher,
+      csrfTokenReader: () => "csrf-token"
+    });
+
+    await expect(api.listPaymentReversalCases("chargeback")).resolves.toMatchObject({
+      summary: { chargebackCount: 1 }
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/admin/finance/reversal-cases?type=chargeback",
+      expect.objectContaining({
+        credentials: "include",
+        headers: expect.not.objectContaining({ "x-csrf-token": "csrf-token" })
+      })
+    );
+  });
 });
 
 function jsonResponse(body: unknown): Response {

@@ -11,6 +11,10 @@ import {
   type UpdateFinancePolicyRequest
 } from "@elevenhouse/contracts/finance-policies";
 import {
+  adminPaymentReversalQueueResponseSchema,
+  type AdminPaymentReversalQueueResponse
+} from "@elevenhouse/contracts/payments";
+import {
   adminPayoutQueueResponseSchema,
   adminPayoutStatusUpdateSchema,
   payoutRequestResponseSchema,
@@ -30,6 +34,9 @@ export type AdminFinancePoliciesApi = {
     request: UpdateAstrologerRiskProfileRequest
   ) => Promise<AstrologerRiskProfileResponse>;
   readonly listPayoutRequests: () => Promise<AdminPayoutQueueResponse>;
+  readonly listPaymentReversalCases: (
+    type?: "all" | "refund" | "chargeback"
+  ) => Promise<AdminPaymentReversalQueueResponse>;
   readonly updatePayoutRequestStatus: (
     payoutRequestId: string,
     request: AdminPayoutStatusUpdate
@@ -93,6 +100,12 @@ export function createAdminFinancePoliciesApi(
     },
     listPayoutRequests: async () =>
       adminPayoutQueueResponseSchema.parse(await request("/admin/finance/payout-requests")),
+    listPaymentReversalCases: async (type = "all") => {
+      const search = type === "all" ? "" : `?type=${encodeURIComponent(type)}`;
+      return adminPaymentReversalQueueResponseSchema.parse(
+        await request(`/admin/finance/reversal-cases${search}`)
+      );
+    },
     updatePayoutRequestStatus: async (payoutRequestId, rawRequest) => {
       const parsed = adminPayoutStatusUpdateSchema.parse(rawRequest);
       return payoutRequestResponseSchema.parse(

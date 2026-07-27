@@ -11,11 +11,12 @@ import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { Refresh } from "@elevenhouse/design-system/icons/Refresh";
 import { Settings } from "@elevenhouse/design-system/icons/Settings";
 import { Wallet } from "@elevenhouse/design-system/icons/Wallet";
-import type {
-  FinancePolicyResponse,
-  RiskTier
-} from "@elevenhouse/contracts/finance-policies";
+import type { FinancePolicyResponse, RiskTier } from "@elevenhouse/contracts/finance-policies";
 import type { Money } from "@elevenhouse/contracts/money";
+import type {
+  AdminPaymentReversalCase,
+  AdminPaymentReversalQueueResponse
+} from "@elevenhouse/contracts/payments";
 import type {
   AdminPayoutQueueResponse,
   PayoutRequestResponse
@@ -39,7 +40,7 @@ export type FinancePoliciesPageProps = {
   readonly api?: AdminFinancePoliciesApi;
 };
 
-type AdminFinanceTab = "overview" | "payouts" | "policies" | "risk";
+type AdminFinanceTab = "overview" | "payouts" | "disputes" | "policies" | "risk";
 
 type LoadState =
   | { readonly status: "loading" }
@@ -48,6 +49,7 @@ type LoadState =
       readonly status: "ready";
       readonly policies: readonly FinancePolicyResponse[];
       readonly payoutQueue: AdminPayoutQueueResponse;
+      readonly reversalQueue: AdminPaymentReversalQueueResponse;
     };
 
 type PayoutActionForm = {
@@ -69,7 +71,20 @@ const emptyPayoutQueue: AdminPayoutQueueResponse = {
   requests: []
 };
 
-export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: FinancePoliciesPageProps) {
+const emptyReversalQueue: AdminPaymentReversalQueueResponse = {
+  summary: {
+    refundCount: 0,
+    chargebackCount: 0,
+    criticalCount: 0,
+    totalAmount: { amountMinor: 0, currency: "RUB" },
+    negativeBalanceAmount: { amountMinor: 0, currency: "RUB" }
+  },
+  cases: []
+};
+
+export function FinancePoliciesPage({
+  api = createAdminFinancePoliciesApi()
+}: FinancePoliciesPageProps) {
   const [tab, setTab] = useState<AdminFinanceTab>("overview");
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [selectedRiskTier, setSelectedRiskTier] = useState<RiskTier>("standard");
@@ -86,6 +101,7 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
 
   const policies = loadState.status === "ready" ? loadState.policies : [];
   const payoutQueue = loadState.status === "ready" ? loadState.payoutQueue : emptyPayoutQueue;
+  const reversalQueue = loadState.status === "ready" ? loadState.reversalQueue : emptyReversalQueue;
   const selectedPolicy = useMemo(
     () => policies.find((policy) => policy.riskTier === selectedRiskTier) ?? null,
     [policies, selectedRiskTier]
@@ -102,21 +118,27 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
     setLoadState({ status: "loading" });
     setSubmitError(null);
     try {
-      const [policyResponse, payoutResponse] = await Promise.all([
+      const [policyResponse, payoutResponse, reversalResponse] = await Promise.all([
         api.listPolicies(),
-        api.listPayoutRequests()
+        api.listPayoutRequests(),
+        api.listPaymentReversalCases()
       ]);
       setLoadState({
         status: "ready",
         policies: policyResponse.policies,
-        payoutQueue: payoutResponse
+        payoutQueue: payoutResponse,
+        reversalQueue: reversalResponse
       });
-      const nextSelected = policyResponse.policies.find((policy) => policy.riskTier === selectedRiskTier)
+      const nextSelected = policyResponse.policies.find(
+        (policy) => policy.riskTier === selectedRiskTier
+      )
         ? selectedRiskTier
-        : policyResponse.policies[0]?.riskTier ?? "standard";
+        : (policyResponse.policies[0]?.riskTier ?? "standard");
       setSelectedRiskTier(nextSelected);
       setPolicyForm(
-        policyToForm(policyResponse.policies.find((policy) => policy.riskTier === nextSelected) ?? null)
+        policyToForm(
+          policyResponse.policies.find((policy) => policy.riskTier === nextSelected) ?? null
+        )
       );
       if (!payoutAction.payoutRequestId && payoutResponse.requests[0]) {
         setPayoutAction((previous) => ({
@@ -247,10 +269,44 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
           <span>Админка</span>
         </div>
         <nav className="adminFinanceNav" aria-label="Finance admin navigation">
-          <NavItem tab="overview" activeTab={tab} label="Обзор" badge={attentionCount(payoutQueue)} onClick={setTab} icon={<LayoutGrid />} />
-          <NavItem tab="payouts" activeTab={tab} label="Выплаты" badge={payoutQueue.requests.length} onClick={setTab} icon={<Wallet />} />
-          <NavItem tab="policies" activeTab={tab} label="Политики" onClick={setTab} icon={<Settings />} />
-          <NavItem tab="risk" activeTab={tab} label="Риск" onClick={setTab} icon={<Icon iconName="users" />} />
+          <NavItem
+            tab="overview"
+            activeTab={tab}
+            label="Обзор"
+            badge={attentionCount(payoutQueue)}
+            onClick={setTab}
+            icon={<LayoutGrid />}
+          />
+          <NavItem
+            tab="payouts"
+            activeTab={tab}
+            label="Выплаты"
+            badge={payoutQueue.requests.length}
+            onClick={setTab}
+            icon={<Wallet />}
+          />
+          <NavItem
+            tab="disputes"
+            activeTab={tab}
+            label="Споры"
+            badge={reversalQueue.summary.criticalCount || reversalQueue.cases.length}
+            onClick={setTab}
+            icon={<Icon iconName="lightning" />}
+          />
+          <NavItem
+            tab="policies"
+            activeTab={tab}
+            label="Политики"
+            onClick={setTab}
+            icon={<Settings />}
+          />
+          <NavItem
+            tab="risk"
+            activeTab={tab}
+            label="Риск"
+            onClick={setTab}
+            icon={<Icon iconName="users" />}
+          />
         </nav>
         <div className="adminFinanceRailFooter">
           <span>Роль</span>
@@ -285,9 +341,26 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
 
         <section className="adminFinanceStatusGrid" aria-label="Finance summary">
           <StatusCard label="Default hold" value="48 ч" note="baseline, configurable" />
-          <StatusCard label="Заявки выплат" value={String(payoutQueue.requests.length)} note="ручная обработка" />
-          <StatusCard label="К выплате" value={formatMoney(payoutQueue.summary.readyToPayAmount)} note="reserved in ledger" />
-          <StatusCard label="В процессе" value={formatMoney(payoutQueue.summary.processingAmount)} note="payout pending" />
+          <StatusCard
+            label="Заявки выплат"
+            value={String(payoutQueue.requests.length)}
+            note="ручная обработка"
+          />
+          <StatusCard
+            label="Споры"
+            value={String(reversalQueue.cases.length)}
+            note={`${reversalQueue.summary.criticalCount} critical`}
+          />
+          <StatusCard
+            label="К выплате"
+            value={formatMoney(payoutQueue.summary.readyToPayAmount)}
+            note="reserved in ledger"
+          />
+          <StatusCard
+            label="Shortfall"
+            value={formatMoney(reversalQueue.summary.negativeBalanceAmount)}
+            note="negative balance"
+          />
         </section>
 
         {loadState.status === "loading" ? (
@@ -315,6 +388,7 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
               <OverviewPanel
                 policies={policies}
                 payoutQueue={payoutQueue}
+                reversalQueue={reversalQueue}
                 onGo={setTab}
               />
             ) : null}
@@ -336,6 +410,7 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
                 onReject={() => void handlePayoutRejected()}
               />
             ) : null}
+            {tab === "disputes" ? <DisputesPanel reversalQueue={reversalQueue} /> : null}
             {tab === "policies" ? (
               <PoliciesPanel
                 policies={policies}
@@ -370,9 +445,11 @@ export function FinancePoliciesPage({ api = createAdminFinancePoliciesApi() }: F
 function OverviewPanel(props: {
   readonly policies: readonly FinancePolicyResponse[];
   readonly payoutQueue: AdminPayoutQueueResponse;
+  readonly reversalQueue: AdminPaymentReversalQueueResponse;
   readonly onGo: (tab: AdminFinanceTab) => void;
 }) {
-  const policy = props.policies.find((item) => item.riskTier === "standard") ?? props.policies[0] ?? null;
+  const policy =
+    props.policies.find((item) => item.riskTier === "standard") ?? props.policies[0] ?? null;
   return (
     <div className="adminFinanceOverviewGrid">
       <Card className="adminFinancePanel adminFinanceActivityPanel" padding="medium">
@@ -388,6 +465,12 @@ function OverviewPanel(props: {
         />
         <ActivityRow
           tone="warning"
+          title="Споры и chargeback"
+          text={`${props.reversalQueue.cases.length} cases · ${formatMoney(props.reversalQueue.summary.negativeBalanceAmount)} shortfall`}
+          time="webhooks"
+        />
+        <ActivityRow
+          tone="warning"
           title="Ручная обработка"
           text={`${props.payoutQueue.summary.processingCount} ожидают банковского подтверждения`}
           time="сейчас"
@@ -395,7 +478,11 @@ function OverviewPanel(props: {
         <ActivityRow
           tone="neutral"
           title="Политика удержания"
-          text={policy ? `${policy.riskTier} · ${holdLabel(policy.holdDurationHours)} · ${formatBasisPoints(policy.platformFeeBps)} fee` : "Политика не настроена"}
+          text={
+            policy
+              ? `${policy.riskTier} · ${holdLabel(policy.holdDurationHours)} · ${formatBasisPoints(policy.platformFeeBps)} fee`
+              : "Политика не настроена"
+          }
           time="policy"
         />
       </Card>
@@ -409,15 +496,16 @@ function OverviewPanel(props: {
             onClick={() => props.onGo("payouts")}
           />
           <AttentionButton
+            label="Споры и возвраты"
+            value={String(props.reversalQueue.cases.length)}
+            onClick={() => props.onGo("disputes")}
+          />
+          <AttentionButton
             label="Политики холда"
             value={policy ? holdLabel(policy.holdDurationHours) : "нет"}
             onClick={() => props.onGo("policies")}
           />
-          <AttentionButton
-            label="Ручной риск"
-            value="admin"
-            onClick={() => props.onGo("risk")}
-          />
+          <AttentionButton label="Ручной риск" value="admin" onClick={() => props.onGo("risk")} />
         </Card>
         <Card className="adminFinancePanel" padding="medium">
           <h2>Контур выплат</h2>
@@ -452,7 +540,11 @@ function PayoutsPanel(props: {
           </div>
           <Chip label={`${props.payoutQueue.requests.length} open`} active type="button" />
         </div>
-        <div className="adminFinanceTable adminFinancePayoutTable" role="table" aria-label="Payout requests">
+        <div
+          className="adminFinanceTable adminFinancePayoutTable"
+          role="table"
+          aria-label="Payout requests"
+        >
           <div className="adminFinanceTableRow adminFinanceTableHead" role="row">
             <span>Астролог</span>
             <span>Статус</span>
@@ -475,7 +567,9 @@ function PayoutsPanel(props: {
               onClick={() => props.onSelect(request)}
             >
               <span className="adminFinanceUserCell">
-                <span className="adminFinanceAvatar">{request.astrologerUserId.slice(0, 2).toUpperCase()}</span>
+                <span className="adminFinanceAvatar">
+                  {request.astrologerUserId.slice(0, 2).toUpperCase()}
+                </span>
                 <span>{shortId(request.astrologerUserId)}</span>
               </span>
               <span>
@@ -511,7 +605,10 @@ function PayoutsPanel(props: {
                   name="payoutExternalReference"
                   value={props.action.externalReference}
                   onChange={(event) =>
-                    props.onChange({ ...props.action, externalReference: event.currentTarget.value })
+                    props.onChange({
+                      ...props.action,
+                      externalReference: event.currentTarget.value
+                    })
                   }
                   placeholder="bank-transfer-1001"
                   required
@@ -574,6 +671,125 @@ function PayoutsPanel(props: {
           <p className="adminFinanceMuted">Нет выбранной заявки.</p>
         )}
       </Card>
+    </div>
+  );
+}
+
+function DisputesPanel(props: { readonly reversalQueue: AdminPaymentReversalQueueResponse }) {
+  return (
+    <div className="adminFinanceDisputesStack">
+      <section className="adminFinanceDisputeKpis" aria-label="Dispute summary">
+        <StatusCard
+          label="Возвраты"
+          value={String(props.reversalQueue.summary.refundCount)}
+          note={formatMoney(props.reversalQueue.summary.totalAmount)}
+        />
+        <StatusCard
+          label="Chargeback"
+          value={String(props.reversalQueue.summary.chargebackCount)}
+          note="provider evidence"
+        />
+        <StatusCard
+          label="Critical"
+          value={String(props.reversalQueue.summary.criticalCount)}
+          note="requires operator review"
+        />
+      </section>
+
+      {props.reversalQueue.cases.length === 0 ? (
+        <Card className="adminFinancePanel adminFinanceContentPanel" padding="medium">
+          <p className="adminFinanceMuted">Открытых refund/chargeback cases нет.</p>
+        </Card>
+      ) : null}
+
+      {props.reversalQueue.cases.map((paymentReversalCase) => (
+        <Card
+          className="adminFinancePanel adminFinanceDisputeCard"
+          padding="medium"
+          key={paymentReversalCase.id}
+        >
+          <div className="adminFinanceDisputeHead">
+            <div>
+              <p className="adminFinanceKicker">
+                {paymentReversalCase.type === "chargeback"
+                  ? "Provider chargeback"
+                  : "Provider refund"}
+              </p>
+              <h2>{shortId(paymentReversalCase.orderId)}</h2>
+            </div>
+            <strong className="adminFinanceDisputeAmount">
+              {formatMoney(paymentReversalCase.amount)}
+            </strong>
+            <ReversalSeverityPill severity={paymentReversalCase.severity} />
+          </div>
+
+          <div className="adminFinanceDisputeParties">
+            <span className="adminFinanceUserCell">
+              <span className="adminFinanceAvatar">
+                {paymentReversalCase.clientUserId.slice(0, 2).toUpperCase()}
+              </span>
+              <span>{shortId(paymentReversalCase.clientUserId)}</span>
+            </span>
+            <span className="adminFinanceDisputeArrow">→</span>
+            <span className="adminFinanceUserCell">
+              <span className="adminFinanceAvatar">
+                {paymentReversalCase.astrologerUserId.slice(0, 2).toUpperCase()}
+              </span>
+              <span>{shortId(paymentReversalCase.astrologerUserId)}</span>
+            </span>
+            <span className="adminFinanceDisputeSpacer" />
+            <ReversalTypePill paymentReversalCase={paymentReversalCase} />
+          </div>
+
+          <div className="adminFinanceDisputeFacts">
+            <Fact
+              label="Provider payment"
+              value={paymentReversalCase.providerPaymentId ?? "missing"}
+            />
+            <Fact
+              label="Webhook"
+              value={`${paymentReversalCase.providerWebhookId} · ${formatDate(paymentReversalCase.receivedAt)}`}
+            />
+            <Fact
+              label="Ledger"
+              value={
+                paymentReversalCase.ledgerOperationType
+                  ? `${paymentReversalCase.ledgerOperationType} · ${shortId(paymentReversalCase.ledgerTransactionId ?? "")}`
+                  : "missing"
+              }
+            />
+            <Fact
+              label="Negative balance"
+              value={formatMoney(
+                paymentReversalCase.walletBalance?.negativeBalance ?? {
+                  amountMinor: 0,
+                  currency: paymentReversalCase.amount.currency
+                }
+              )}
+            />
+          </div>
+
+          <div className="adminFinanceDisputeEvidence">
+            <span>Evidence:</span>
+            <Chip label={paymentReversalCase.provider} type="button" />
+            <Chip label={paymentReversalCase.environment} type="button" />
+            <Chip label={paymentReversalCase.orderStatus} type="button" />
+            {paymentReversalCase.refundStatus ? (
+              <Chip label={paymentReversalCase.refundStatus} type="button" />
+            ) : null}
+            {paymentReversalCase.providerRefundId ? (
+              <Chip label={paymentReversalCase.providerRefundId} type="button" />
+            ) : null}
+          </div>
+
+          <div className="adminFinanceDisputeActions">
+            <Button title="Открыть заказ" variant="default" size="small" disabled />
+            <Button title="Ledger details" variant="default" size="small" disabled />
+            <span />
+            <small>Write-flow refunds will use provider commands, idempotency and audit.</small>
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }
@@ -744,7 +960,10 @@ function RiskPanel(props: {
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
-    <Card className="adminFinancePanel adminFinanceRiskPanel adminFinanceContentPanel" padding="medium">
+    <Card
+      className="adminFinancePanel adminFinanceRiskPanel adminFinanceContentPanel"
+      padding="medium"
+    >
       <div className="adminFinancePanelHead">
         <div>
           <p className="adminFinanceKicker">Manual risk</p>
@@ -758,7 +977,10 @@ function RiskPanel(props: {
             name="astrologerUserId"
             value={props.riskForm.astrologerUserId}
             onChange={(event) =>
-              props.onRiskFormChange({ ...props.riskForm, astrologerUserId: event.currentTarget.value })
+              props.onRiskFormChange({
+                ...props.riskForm,
+                astrologerUserId: event.currentTarget.value
+              })
             }
             placeholder="22222222-2222-4222-8222-222222222222"
           />
@@ -813,7 +1035,10 @@ function RiskPanel(props: {
             name="astrologerManualOverrideReason"
             value={props.riskForm.manualOverrideReason}
             onChange={(event) =>
-              props.onRiskFormChange({ ...props.riskForm, manualOverrideReason: event.currentTarget.value })
+              props.onRiskFormChange({
+                ...props.riskForm,
+                manualOverrideReason: event.currentTarget.value
+              })
             }
             placeholder="Chargeback, refund or quality risk evidence"
             rows={3}
@@ -867,7 +1092,11 @@ function NavItem(props: {
   );
 }
 
-function StatusCard(props: { readonly label: string; readonly value: string; readonly note: string }) {
+function StatusCard(props: {
+  readonly label: string;
+  readonly value: string;
+  readonly note: string;
+}) {
   return (
     <Card className="adminFinanceStatusCard" padding="medium">
       <span>{props.label}</span>
@@ -944,7 +1173,11 @@ function ActivityRow(props: {
   );
 }
 
-function AttentionButton(props: { readonly label: string; readonly value: string; readonly onClick: () => void }) {
+function AttentionButton(props: {
+  readonly label: string;
+  readonly value: string;
+  readonly onClick: () => void;
+}) {
   return (
     <button className="adminFinanceAttentionButton" type="button" onClick={props.onClick}>
       <span>{props.label}</span>
@@ -963,7 +1196,34 @@ function Fact(props: { readonly label: string; readonly value: string }) {
 }
 
 function StatusPill(props: { readonly status: PayoutRequestResponse["status"] }) {
-  return <span className={`adminFinanceStatusPill adminFinanceStatusPill-${statusTone(props.status)}`}>{statusLabel(props.status)}</span>;
+  return (
+    <span className={`adminFinanceStatusPill adminFinanceStatusPill-${statusTone(props.status)}`}>
+      {statusLabel(props.status)}
+    </span>
+  );
+}
+
+function ReversalSeverityPill(props: { readonly severity: AdminPaymentReversalCase["severity"] }) {
+  return (
+    <span
+      className={`adminFinanceStatusPill adminFinanceStatusPill-${reversalSeverityTone(props.severity)}`}
+    >
+      {props.severity}
+    </span>
+  );
+}
+
+function ReversalTypePill(props: { readonly paymentReversalCase: AdminPaymentReversalCase }) {
+  const label = props.paymentReversalCase.type === "chargeback" ? "Chargeback" : "Refund";
+  return (
+    <span
+      className={`adminFinanceStatusPill adminFinanceStatusPill-${
+        props.paymentReversalCase.type === "chargeback" ? "danger" : "warning"
+      }`}
+    >
+      {label}
+    </span>
+  );
 }
 
 function mergePolicy(
@@ -971,7 +1231,12 @@ function mergePolicy(
   policy: FinancePolicyResponse
 ): Extract<LoadState, { status: "ready" }> {
   if (previous.status !== "ready") {
-    return { status: "ready", policies: [policy], payoutQueue: emptyPayoutQueue };
+    return {
+      status: "ready",
+      policies: [policy],
+      payoutQueue: emptyPayoutQueue,
+      reversalQueue: emptyReversalQueue
+    };
   }
   const withoutTier = previous.policies.filter((item) => item.riskTier !== policy.riskTier);
   return {
@@ -979,7 +1244,8 @@ function mergePolicy(
     policies: [...withoutTier, policy].sort((left, right) =>
       left.riskTier.localeCompare(right.riskTier)
     ),
-    payoutQueue: previous.payoutQueue
+    payoutQueue: previous.payoutQueue,
+    reversalQueue: previous.reversalQueue
   };
 }
 
@@ -999,6 +1265,8 @@ function titleForTab(tab: AdminFinanceTab): string {
       return "Финансы";
     case "payouts":
       return "Выплаты";
+    case "disputes":
+      return "Споры и возвраты";
     case "policies":
       return "Политики удержаний и риска";
     case "risk":
@@ -1007,7 +1275,9 @@ function titleForTab(tab: AdminFinanceTab): string {
 }
 
 function attentionCount(queue: AdminPayoutQueueResponse): number {
-  return queue.summary.requestedCount + queue.summary.underReviewCount + queue.summary.processingCount;
+  return (
+    queue.summary.requestedCount + queue.summary.underReviewCount + queue.summary.processingCount
+  );
 }
 
 function formatMoney(money: Money): string {
@@ -1019,7 +1289,9 @@ function formatMoney(money: Money): string {
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" }).format(
+    new Date(value)
+  );
 }
 
 function shortId(value: string): string {
@@ -1045,10 +1317,20 @@ function statusLabel(status: PayoutRequestResponse["status"]): string {
   return labels[status];
 }
 
-function statusTone(status: PayoutRequestResponse["status"]): "neutral" | "positive" | "warning" | "danger" {
+function statusTone(
+  status: PayoutRequestResponse["status"]
+): "neutral" | "positive" | "warning" | "danger" {
   if (status === "paid") return "positive";
   if (status === "failed" || status === "rejected" || status === "cancelled") return "danger";
   if (status === "processing_manual" || status === "processing_provider") return "warning";
+  return "neutral";
+}
+
+function reversalSeverityTone(
+  severity: AdminPaymentReversalCase["severity"]
+): "neutral" | "positive" | "warning" | "danger" {
+  if (severity === "critical") return "danger";
+  if (severity === "attention") return "warning";
   return "neutral";
 }
 

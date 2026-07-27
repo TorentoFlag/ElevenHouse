@@ -9,6 +9,7 @@ describe("FinancePoliciesPage", () => {
 
     expect(html).toContain("Финансы");
     expect(html).toContain("Выплаты");
+    expect(html).toContain("Споры");
     expect(html).toContain("Политики");
     expect(html).toContain("Finance controls");
     expect(html).not.toContain("Admin surface");
@@ -30,6 +31,16 @@ function apiStub(): AdminFinancePoliciesApi {
         processingAmount: { amountMinor: 0, currency: "RUB" as const }
       },
       requests: []
+    })),
+    listPaymentReversalCases: vi.fn(async () => ({
+      summary: {
+        refundCount: 0,
+        chargebackCount: 0,
+        criticalCount: 0,
+        totalAmount: { amountMinor: 0, currency: "RUB" as const },
+        negativeBalanceAmount: { amountMinor: 0, currency: "RUB" as const }
+      },
+      cases: []
     })),
     updatePayoutRequestStatus: vi.fn()
   };

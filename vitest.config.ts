@@ -23,6 +23,9 @@ export default defineConfig({
       "@elevenhouse/contracts/payouts": fileURLToPath(
         new URL("./packages/contracts/src/payouts.ts", import.meta.url)
       ),
+      "@elevenhouse/contracts/payments": fileURLToPath(
+        new URL("./packages/contracts/src/payments.ts", import.meta.url)
+      ),
       "@elevenhouse/contracts": fileURLToPath(
         new URL("./packages/contracts/src/index.ts", import.meta.url)
       ),
@@ -34,10 +37,7 @@ export default defineConfig({
         new URL("./packages/db/src/adapters/finance/index.ts", import.meta.url)
       ),
       "@elevenhouse/db/auth-sessions": fileURLToPath(
-        new URL(
-          "./packages/db/src/adapters/identity/auth-sessions/index.ts",
-          import.meta.url
-        )
+        new URL("./packages/db/src/adapters/identity/auth-sessions/index.ts", import.meta.url)
       ),
       "@elevenhouse/db/audit-log": fileURLToPath(
         new URL("./packages/db/src/adapters/audit-log/index.ts", import.meta.url)

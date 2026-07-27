@@ -7,8 +7,12 @@ import {
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import {
+  adminPaymentReversalQueueResponseSchema,
   adminPayoutQueueResponseSchema,
   adminPayoutStatusUpdateSchema,
+  type AdminPaymentReversalCase,
+  type AdminPaymentReversalCaseType,
+  type AdminPaymentReversalQueueResponse,
   astrologerRiskProfileResponseSchema,
   financePoliciesResponseSchema,
   financePolicyResponseSchema,
@@ -37,6 +41,7 @@ import {
   FinancePolicyEffectivePolicyUnavailableError,
   FinancePolicyOrderNotApplicableError,
   FinancePolicyOrderNotFoundError,
+  type AdminPaymentReversalCaseRecord,
   PayoutRequestNotFoundError,
   type PayoutRequestRecord,
   PayoutStatusEvidenceError,
@@ -210,6 +215,21 @@ export class FinancePoliciesService {
     });
   }
 
+  async listPaymentReversalCases(type?: string): Promise<AdminPaymentReversalQueueResponse> {
+    const types = parseReversalCaseTypes(type);
+    const cases = await this.unitOfWork.execute(({ reversalCaseStore }) =>
+      reversalCaseStore.listCases({
+        ...(types ? { types } : {}),
+        limit: 50
+      })
+    );
+    const responseCases = cases.map(toPaymentReversalCaseResponse);
+    return adminPaymentReversalQueueResponseSchema.parse({
+      summary: createPaymentReversalQueueSummary(responseCases),
+      cases: responseCases
+    });
+  }
+
   async updatePayoutRequestStatus(
     adminUserId: string,
     payoutRequestId: string,
@@ -275,6 +295,14 @@ export class FinancePoliciesService {
       throw error;
     }
   }
+}
+
+function parseReversalCaseTypes(
+  type: string | undefined
+): readonly AdminPaymentReversalCaseType[] | undefined {
+  if (!type || type === "all") return undefined;
+  if (type === "refund" || type === "chargeback") return [type];
+  throw new BadRequestException("Invalid payment reversal case type");
 }
 
 async function updatePayoutStatusInContext(
@@ -376,6 +404,50 @@ function toPayoutRequestResponse(request: PayoutRequestRecord): PayoutRequestRes
     transferredAt: request.transferredAt,
     providerPayoutId: request.providerPayoutId
   });
+}
+
+function toPaymentReversalCaseResponse(
+  paymentReversalCase: AdminPaymentReversalCaseRecord
+): AdminPaymentReversalCase {
+  return paymentReversalCase;
+}
+
+function createPaymentReversalQueueSummary(
+  cases: readonly AdminPaymentReversalCase[]
+): AdminPaymentReversalQueueResponse["summary"] {
+  const negativeBalanceByAstrologer = new Map<string, number>();
+  for (const paymentReversalCase of cases) {
+    const negativeBalanceMinor =
+      paymentReversalCase.walletBalance?.negativeBalance.amountMinor ?? 0;
+    const current = negativeBalanceByAstrologer.get(paymentReversalCase.astrologerUserId) ?? 0;
+    if (negativeBalanceMinor > current) {
+      negativeBalanceByAstrologer.set(paymentReversalCase.astrologerUserId, negativeBalanceMinor);
+    }
+  }
+  return {
+    refundCount: cases.filter((paymentReversalCase) => paymentReversalCase.type === "refund")
+      .length,
+    chargebackCount: cases.filter(
+      (paymentReversalCase) => paymentReversalCase.type === "chargeback"
+    ).length,
+    criticalCount: cases.filter(
+      (paymentReversalCase) => paymentReversalCase.severity === "critical"
+    ).length,
+    totalAmount: {
+      amountMinor: cases.reduce(
+        (sum, paymentReversalCase) => sum + paymentReversalCase.amount.amountMinor,
+        0
+      ),
+      currency: "RUB" as const
+    },
+    negativeBalanceAmount: {
+      amountMinor: [...negativeBalanceByAstrologer.values()].reduce(
+        (sum, amountMinor) => sum + amountMinor,
+        0
+      ),
+      currency: "RUB" as const
+    }
+  };
 }
 
 function createPayoutQueueSummary(requests: readonly PayoutRequestRecord[]) {
