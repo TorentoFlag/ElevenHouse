@@ -9,7 +9,7 @@ import type {
   MessagingThread
 } from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { InboxPageView, type InboxPageViewProps } from "./InboxPageView";
+import { InboxPageView, type InboxPageViewProps, type InboxThreadFilter } from "./InboxPageView";
 
 describe("InboxPageView", () => {
   afterEach(() => cleanup());
@@ -47,6 +47,30 @@ describe("InboxPageView", () => {
     expect(markup).not.toContain("Внутренний чат");
     expect(markup).not.toContain("Instagram");
     expect(markup).not.toContain("Max");
+  });
+
+  it("renders thread filter chips as working buttons", () => {
+    const onThreadFilterChange = vi.fn();
+    const activeFilter: InboxThreadFilter = "telegram";
+
+    render(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[telegramConnection()]}
+        activeThreadFilter={activeFilter}
+        onThreadFilterChange={onThreadFilterChange}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "T Telegram" }).getAttribute("aria-pressed")).toBe(
+      "true"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Все" }));
+    fireEvent.click(screen.getByRole("button", { name: "Непрочит." }));
+
+    expect(onThreadFilterChange).toHaveBeenCalledWith("all");
+    expect(onThreadFilterChange).toHaveBeenCalledWith("unread");
   });
 
   it("starts Telegram Business connection from the setup card and renders pending state", () => {
@@ -308,7 +332,9 @@ function baseProps(): InboxPageViewProps {
     sendError: null,
     draft: "",
     search: "",
+    activeThreadFilter: "all",
     onSearchChange: vi.fn(),
+    onThreadFilterChange: vi.fn(),
     onSelectThread: vi.fn(),
     onDraftChange: vi.fn(),
     onSend: vi.fn(),

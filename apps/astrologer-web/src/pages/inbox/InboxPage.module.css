@@ -321,10 +321,24 @@
   border: 1px solid var(--inbox-line-strong);
   border-radius: 999px;
   padding: 0 11px;
+  background: transparent;
   color: var(--inbox-muted);
+  cursor: pointer;
+  font-family: var(--eh-font-sans);
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
+}
+
+.filterChip:hover {
+  border-color: var(--inbox-accent-line);
+  color: var(--inbox-text);
+}
+
+.filterChip:focus-visible,
+.filterChipActive:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.14);
 }
 
 .filterChipActive {

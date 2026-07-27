@@ -4,6 +4,10 @@ import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { createMessagingRealtimeClient } from "../../features/messaging/realtime/messagingRealtimeClient";
 import { getMessagingMessageMediaSource } from "../../features/messaging/api/messagingApi";
 import {
+  filterInboxThreads,
+  type InboxThreadFilter
+} from "../../features/messaging/model/inboxThreadFilters";
+import {
   createMessagingThreadClientMutationOptions,
   getMessagingThreadQueryOptions,
   handleMessagingRealtimeEvent,
@@ -21,6 +25,7 @@ export function InboxPage() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
+  const [activeThreadFilter, setActiveThreadFilter] = useState<InboxThreadFilter>("all");
   const [linkClientUserId, setLinkClientUserId] = useState("");
   const [createClientDisplayName, setCreateClientDisplayName] = useState("");
   const channelConnectionsQuery = useQuery(listMessagingChannelConnectionsQueryOptions());
@@ -32,34 +37,20 @@ export function InboxPage() {
   const sendMessageMutation = useMutation(sendMessagingMessageMutationOptions(queryClient));
   const markReadMutation = useMutation(markMessagingThreadReadMutationOptions(queryClient));
   const linkClientMutation = useMutation(linkMessagingThreadClientMutationOptions(queryClient));
-  const createClientMutation = useMutation(
-    createMessagingThreadClientMutationOptions(queryClient)
-  );
+  const createClientMutation = useMutation(createMessagingThreadClientMutationOptions(queryClient));
   const threads = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
     const allThreads = threadsQuery.data?.threads ?? [];
 
-    if (!normalizedSearch) {
-      return allThreads;
-    }
-
-    return allThreads.filter((thread) => {
-      const identity = thread.primaryIdentity;
-      return [
-        identity?.displayName,
-        identity?.username,
-        identity?.providerChatId,
-        thread.lastMessage?.text
-      ]
-        .filter(Boolean)
-        .some((value) => value?.toLowerCase().includes(normalizedSearch));
+    return filterInboxThreads(allThreads, {
+      search,
+      activeFilter: activeThreadFilter
     });
-  }, [search, threadsQuery.data?.threads]);
+  }, [activeThreadFilter, search, threadsQuery.data?.threads]);
 
   useDocumentTitle("ElevenHouse | Сообщения");
 
   useEffect(() => {
-    if (selectedThreadId || threads.length === 0) {
+    if (selectedThreadId && threads.some((thread) => thread.id === selectedThreadId)) {
       return;
     }
 
@@ -111,12 +102,14 @@ export function InboxPage() {
       telegramBusinessStartError={telegramBusinessStartError}
       draft={draft}
       search={search}
+      activeThreadFilter={activeThreadFilter}
       linkClientUserId={linkClientUserId}
       createClientDisplayName={createClientDisplayName}
       isLinkingClient={linkClientMutation.isPending}
       isCreatingClient={createClientMutation.isPending}
       clientActionError={clientActionError}
       onSearchChange={setSearch}
+      onThreadFilterChange={setActiveThreadFilter}
       onSelectThread={setSelectedThreadId}
       onDraftChange={setDraft}
       onStartTelegramBusinessConnection={() => {

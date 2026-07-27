@@ -4,8 +4,11 @@ import type {
   MessagingThread,
   MessagingThreadResponse
 } from "@elevenhouse/contracts";
+import type { InboxThreadFilter } from "../../features/messaging/model/inboxThreadFilters";
 import styles from "./InboxPage.module.css";
 import { MessageMediaBubble } from "./MessageMediaBubble";
+
+export type { InboxThreadFilter };
 
 export type InboxPageViewProps = {
   readonly channelConnections: MessagingChannelConnection[];
@@ -23,12 +26,14 @@ export type InboxPageViewProps = {
   readonly telegramBusinessStartError: string | null;
   readonly draft: string;
   readonly search: string;
+  readonly activeThreadFilter: InboxThreadFilter;
   readonly linkClientUserId: string;
   readonly createClientDisplayName: string;
   readonly isLinkingClient: boolean;
   readonly isCreatingClient: boolean;
   readonly clientActionError: string | null;
   readonly onSearchChange: (value: string) => void;
+  readonly onThreadFilterChange: (value: InboxThreadFilter) => void;
   readonly onSelectThread: (threadId: string) => void;
   readonly onDraftChange: (value: string) => void;
   readonly onStartTelegramBusinessConnection: () => void;
@@ -61,12 +66,14 @@ export function InboxPageView({
   telegramBusinessStartError,
   draft,
   search,
+  activeThreadFilter,
   linkClientUserId,
   createClientDisplayName,
   isLinkingClient,
   isCreatingClient,
   clientActionError,
   onSearchChange,
+  onThreadFilterChange,
   onSelectThread,
   onDraftChange,
   onStartTelegramBusinessConnection,
@@ -186,13 +193,39 @@ export function InboxPageView({
           </label>
 
           <div className={styles.filterChips} aria-label="Фильтры диалогов">
-            <span className={styles.filterChipActive}>Все</span>
+            <button
+              className={activeThreadFilter === "all" ? styles.filterChipActive : styles.filterChip}
+              type="button"
+              aria-pressed={activeThreadFilter === "all"}
+              onClick={() => onThreadFilterChange("all")}
+            >
+              Все
+            </button>
             {channelConnections.map((connection) => (
-              <span key={connection.id} className={styles.filterChip}>
+              <button
+                key={connection.id}
+                className={
+                  activeThreadFilter === connection.provider
+                    ? styles.filterChipActive
+                    : styles.filterChip
+                }
+                type="button"
+                aria-pressed={activeThreadFilter === connection.provider}
+                onClick={() => onThreadFilterChange(connection.provider)}
+              >
                 <ProviderPill provider={connection.provider} /> {providerLabel(connection.provider)}
-              </span>
+              </button>
             ))}
-            <span className={styles.filterChip}>Непрочит.</span>
+            <button
+              className={
+                activeThreadFilter === "unread" ? styles.filterChipActive : styles.filterChip
+              }
+              type="button"
+              aria-pressed={activeThreadFilter === "unread"}
+              onClick={() => onThreadFilterChange("unread")}
+            >
+              Непрочит.
+            </button>
           </div>
 
           <div className={styles.threadList} data-inbox-thread-list="true">
