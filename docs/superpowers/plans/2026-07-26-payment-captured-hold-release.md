@@ -50,11 +50,13 @@ Use existing `payment-worker` and ledger. Add due-hold release as an internal wo
 - [x] Drizzle hold-release adapter.
 - [x] Payment-worker processor/runtime wiring.
 - [x] Targeted verification and repo gate.
+- [x] 2026-07-27: Release query now respects order policy settlement requirement and blocks funds while an unresolved reconciliation exception exists.
 
 ## Decision Log
 
 - 2026-07-26: Release eligibility is derived from captured sale ledger metadata and order policy snapshot, not Arc Pay settlement balance. Rationale: ElevenHouse balance is business ledger; Arc Pay settlement is reconciliation input.
 - 2026-07-26: Hold-release idempotency key is `order:<orderId>`. Rationale: one captured sale hold per order under current order model; retry safety must survive worker restarts.
+- 2026-07-27: Required settlement is enforced before hold release through `reconciliation_records.status = matched`, and unresolved `exception` records block release. Rationale: the approved 48h hold is not enough when provider settlement/reconciliation has not cleared or has an open mismatch.
 
 ## Context and Orientation
 

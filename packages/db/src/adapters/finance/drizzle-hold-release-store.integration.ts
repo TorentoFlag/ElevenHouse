@@ -12,6 +12,7 @@ const databaseName = `elevenhouse_finance_holds_${randomUUID().replaceAll("-", "
 const isolatedDatabaseUrl = withDatabaseName(integrationDatabaseUrl, databaseName);
 const adminClient = new Client({ connectionString: integrationDatabaseUrl });
 let runtime: PostgresRuntime;
+let policyVersionSequence = 1;
 
 describe("captured sale hold release Drizzle/PostgreSQL integration", () => {
   beforeAll(async () => {
@@ -34,12 +35,14 @@ describe("captured sale hold release Drizzle/PostgreSQL integration", () => {
     const fixture = await createFixture();
     const ledger = createDrizzleLedgerStore(runtime.database);
     const holds = createDrizzleHoldReleaseStore(runtime.database);
+    const dueProviderPaymentId = "33333333-3333-4333-8333-333333333333";
 
     await ledger.createTransaction(
       saleCapturedTransaction({
         orderId: fixture.dueOrderId,
         astrologerUserId: fixture.astrologerUserId,
-        holdReleaseAt: "2026-07-26T12:00:00.000Z"
+        holdReleaseAt: "2026-07-26T12:00:00.000Z",
+        providerPaymentId: dueProviderPaymentId
       })
     );
     await ledger.createTransaction(
@@ -49,6 +52,11 @@ describe("captured sale hold release Drizzle/PostgreSQL integration", () => {
         holdReleaseAt: "2026-07-29T12:00:00.000Z"
       })
     );
+    await insertReconciliationRecord({
+      providerPaymentId: dueProviderPaymentId,
+      status: "matched",
+      checkedAt: "2026-07-26T13:00:00.000Z"
+    });
 
     await expect(
       holds.listReleasableCapturedSaleHolds({
@@ -106,9 +114,108 @@ describe("captured sale hold release Drizzle/PostgreSQL integration", () => {
     );
     expect(releaseCount.rows).toEqual([{ count: "1" }]);
   });
+
+  it("blocks required settlement holds until reconciliation matched and no open exception exists", async () => {
+    const fixture = await createFixture({ providerSettlementRequired: true });
+    const ledger = createDrizzleLedgerStore(runtime.database);
+    const holds = createDrizzleHoldReleaseStore(runtime.database);
+    const providerPaymentId = "44444444-4444-4444-8444-444444444444";
+
+    await ledger.createTransaction(
+      saleCapturedTransaction({
+        orderId: fixture.dueOrderId,
+        astrologerUserId: fixture.astrologerUserId,
+        holdReleaseAt: "2026-07-26T12:00:00.000Z",
+        providerPaymentId
+      })
+    );
+
+    await expect(
+      holds.listReleasableCapturedSaleHolds({
+        now: "2026-07-27T12:00:00.000Z",
+        limit: 10
+      })
+    ).resolves.toEqual([]);
+
+    await insertReconciliationRecord({
+      providerPaymentId,
+      status: "matched",
+      checkedAt: "2026-07-26T13:00:00.000Z"
+    });
+    await insertReconciliationRecord({
+      providerPaymentId,
+      status: "exception",
+      checkedAt: "2026-07-26T14:00:00.000Z",
+      exceptionCode: "amount_mismatch",
+      exceptionMessage: "Provider amount does not match local payment"
+    });
+
+    await expect(
+      holds.listReleasableCapturedSaleHolds({
+        now: "2026-07-27T12:00:00.000Z",
+        limit: 10
+      })
+    ).resolves.toEqual([]);
+
+    await runtime.pool.query(
+      `update reconciliation_records
+       set resolved_at = '2026-07-27T10:00:00.000Z'
+       where provider_payment_id = $1 and status = 'exception'`,
+      [providerPaymentId]
+    );
+
+    const resolvedHolds = await holds.listReleasableCapturedSaleHolds({
+      now: "2026-07-27T12:00:00.000Z",
+      limit: 10
+    });
+    expect(resolvedHolds).toEqual([
+      expect.objectContaining({
+        orderId: fixture.dueOrderId,
+        astrologerUserId: fixture.astrologerUserId,
+        amount: { amountMinor: 43_000, currency: "RUB" },
+        holdReleaseAt: "2026-07-26T12:00:00.000Z"
+      })
+    ]);
+    const [resolvedHold] = resolvedHolds;
+    if (!resolvedHold) throw new Error("Expected reconciled hold");
+    await holds.releaseCapturedSaleHold({
+      hold: resolvedHold,
+      now: "2026-07-27T12:00:00.000Z",
+      commandExpiresAt: "2026-08-26T12:00:00.000Z"
+    });
+  });
+
+  it("allows due holds without reconciliation when the order policy snapshot does not require settlement", async () => {
+    const fixture = await createFixture({ providerSettlementRequired: false });
+    const ledger = createDrizzleLedgerStore(runtime.database);
+    const holds = createDrizzleHoldReleaseStore(runtime.database);
+
+    await ledger.createTransaction(
+      saleCapturedTransaction({
+        orderId: fixture.dueOrderId,
+        astrologerUserId: fixture.astrologerUserId,
+        holdReleaseAt: "2026-07-26T12:00:00.000Z",
+        providerPaymentId: "55555555-5555-4555-8555-555555555555"
+      })
+    );
+
+    await expect(
+      holds.listReleasableCapturedSaleHolds({
+        now: "2026-07-27T12:00:00.000Z",
+        limit: 10
+      })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        orderId: fixture.dueOrderId,
+        astrologerUserId: fixture.astrologerUserId
+      })
+    ]);
+  });
 });
 
-async function createFixture(): Promise<{
+async function createFixture(input?: {
+  readonly providerSettlementRequired?: boolean;
+}): Promise<{
   readonly astrologerUserId: string;
   readonly dueOrderId: string;
   readonly futureOrderId: string;
@@ -119,6 +226,7 @@ async function createFixture(): Promise<{
   const futureOrderId = randomUUID();
   const productId = randomUUID();
   const policyId = randomUUID();
+  const policyVersion = policyVersionSequence++;
 
   await runtime.pool.query("insert into users (id) values ($1), ($2)", [
     astrologerUserId,
@@ -132,9 +240,9 @@ async function createFixture(): Promise<{
   );
   await runtime.pool.query(
     `insert into finance_policies
-      (id, policy_version, risk_tier, hold_duration_hours, platform_fee_bps)
-     values ($1, 1, 'standard', 48, 1400)`,
-    [policyId]
+      (id, policy_version, risk_tier, hold_duration_hours, platform_fee_bps, is_active)
+     values ($1, $2, 'standard', 48, 1400, false)`,
+    [policyId, policyVersion]
   );
   await runtime.pool.query(
     `insert into orders
@@ -145,9 +253,17 @@ async function createFixture(): Promise<{
        finance_policy_reserve_bps, finance_policy_reserve_release_delay_days,
        finance_policy_platform_fee_bps, finance_policy_provider_settlement_required)
      values
-      ($1, $2, $3, $4, 'paid', 50000, 'RUB', 7000, 'RUB', 43000, 'RUB', $5, 'standard', 48, 0, 0, 1400, true),
-      ($6, $2, $3, $4, 'paid', 50000, 'RUB', 7000, 'RUB', 43000, 'RUB', $5, 'standard', 48, 0, 0, 1400, true)`,
-    [dueOrderId, clientUserId, astrologerUserId, productId, policyId, futureOrderId]
+      ($1, $2, $3, $4, 'paid', 50000, 'RUB', 7000, 'RUB', 43000, 'RUB', $5, 'standard', 48, 0, 0, 1400, $7),
+      ($6, $2, $3, $4, 'paid', 50000, 'RUB', 7000, 'RUB', 43000, 'RUB', $5, 'standard', 48, 0, 0, 1400, $7)`,
+    [
+      dueOrderId,
+      clientUserId,
+      astrologerUserId,
+      productId,
+      policyId,
+      futureOrderId,
+      input?.providerSettlementRequired ?? true
+    ]
   );
 
   return { astrologerUserId, dueOrderId, futureOrderId };
@@ -157,7 +273,9 @@ function saleCapturedTransaction(input: {
   readonly orderId: string;
   readonly astrologerUserId: string;
   readonly holdReleaseAt: string;
+  readonly providerPaymentId?: string;
 }): CreateLedgerTransactionInput {
+  const providerPaymentId = input.providerPaymentId ?? "33333333-3333-4333-8333-333333333333";
   return {
     operationType: "sale_captured",
     orderId: input.orderId,
@@ -168,7 +286,8 @@ function saleCapturedTransaction(input: {
       providerEventId: "provider-event-1",
       paymentAttemptId: "11111111-1111-4111-8111-111111111111",
       provider: "arc_pay",
-      providerPaymentId: "33333333-3333-4333-8333-333333333333",
+      environment: "sandbox",
+      providerPaymentId,
       holdDurationHours: 48,
       holdReleaseAt: input.holdReleaseAt,
       financePolicySnapshotId: "88888888-8888-4888-8888-888888888888",
@@ -192,6 +311,9 @@ function saleCapturedTransaction(input: {
         metadata: {
           orderId: input.orderId,
           providerEventId: "provider-event-1",
+          provider: "arc_pay",
+          environment: "sandbox",
+          providerPaymentId,
           holdDurationHours: 48,
           holdReleaseAt: input.holdReleaseAt,
           financePolicySnapshotId: "88888888-8888-4888-8888-888888888888"
@@ -205,6 +327,27 @@ function saleCapturedTransaction(input: {
       }
     ]
   };
+}
+
+async function insertReconciliationRecord(input: {
+  readonly providerPaymentId: string;
+  readonly status: "matched" | "exception";
+  readonly checkedAt: string;
+  readonly exceptionCode?: string;
+  readonly exceptionMessage?: string;
+}): Promise<void> {
+  await runtime.pool.query(
+    `insert into reconciliation_records
+      (provider, environment, provider_payment_id, status, exception_code, exception_message, checked_at, payload)
+     values ('arc_pay', 'sandbox', $1, $2, $3, $4, $5, '{}'::jsonb)`,
+    [
+      input.providerPaymentId,
+      input.status,
+      input.exceptionCode ?? null,
+      input.exceptionMessage ?? null,
+      input.checkedAt
+    ]
+  );
 }
 
 function getIntegrationDatabaseUrl(value: string | undefined): string {

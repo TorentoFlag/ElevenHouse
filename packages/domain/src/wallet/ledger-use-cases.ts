@@ -369,6 +369,7 @@ export function createCapturedSaleLedgerTransaction(
       providerEventId: providerEvent.id,
       paymentAttemptId: providerEvent.paymentAttemptId,
       provider: providerEvent.provider,
+      environment: providerEvent.environment,
       providerPaymentId: providerEvent.providerPaymentId,
       holdDurationHours: order.financePolicyHoldDurationHours,
       holdReleaseAt,

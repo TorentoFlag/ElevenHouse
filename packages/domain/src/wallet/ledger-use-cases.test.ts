@@ -40,6 +40,9 @@ describe("capturePaymentProviderWebhook", () => {
         operationType: "sale_captured",
         orderId,
         metadata: expect.objectContaining({
+          environment: "sandbox",
+          provider: "arc_pay",
+          providerPaymentId,
           holdDurationHours: 48,
           holdReleaseAt: "2026-07-26T12:00:00.000Z",
           financePolicySnapshotId: "88888888-8888-4888-8888-888888888888",

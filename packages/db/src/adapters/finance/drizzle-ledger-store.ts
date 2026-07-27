@@ -23,6 +23,8 @@ import {
   ledgerAccounts,
   ledgerEntries,
   ledgerTransactions,
+  orders,
+  reconciliationRecords,
   walletBalanceReadModels
 } from "../../schema";
 import {
@@ -159,6 +161,7 @@ export async function listReleasableCapturedSaleHolds(
     .from(ledgerTransactions)
     .innerJoin(ledgerEntries, eq(ledgerEntries.ledgerTransactionId, ledgerTransactions.id))
     .innerJoin(ledgerAccounts, eq(ledgerAccounts.id, ledgerEntries.accountId))
+    .innerJoin(orders, eq(orders.id, ledgerTransactions.orderId))
     .where(
       and(
         eq(ledgerTransactions.operationType, "sale_captured"),
@@ -168,6 +171,26 @@ export async function listReleasableCapturedSaleHolds(
         sql`${ledgerAccounts.astrologerUserId} is not null`,
         sql`${ledgerEntries.metadata}->>'holdReleaseAt' is not null`,
         sql`(${ledgerEntries.metadata}->>'holdReleaseAt')::timestamptz <= ${new Date(input.now)}`,
+        sql`not exists (
+          select 1
+          from ${reconciliationRecords} reconciliation_exception
+          where reconciliation_exception.provider = ${ledgerTransactions.metadata}->>'provider'
+            and reconciliation_exception.environment = ${ledgerTransactions.metadata}->>'environment'
+            and reconciliation_exception.provider_payment_id = ${ledgerTransactions.metadata}->>'providerPaymentId'
+            and reconciliation_exception.status = 'exception'
+            and reconciliation_exception.resolved_at is null
+        )`,
+        sql`(
+          ${orders.financePolicyProviderSettlementRequired} = false
+          or exists (
+            select 1
+            from ${reconciliationRecords} reconciliation_match
+            where reconciliation_match.provider = ${ledgerTransactions.metadata}->>'provider'
+              and reconciliation_match.environment = ${ledgerTransactions.metadata}->>'environment'
+              and reconciliation_match.provider_payment_id = ${ledgerTransactions.metadata}->>'providerPaymentId'
+              and reconciliation_match.status = 'matched'
+          )
+        )`,
         sql`not exists (
           select 1
           from ledger_transactions released
