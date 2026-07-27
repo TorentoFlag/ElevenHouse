@@ -255,9 +255,7 @@ export function InboxPageView({
                 <span className={styles.avatar}>{initialsForThread(thread)}</span>
                 <span className={styles.threadMain}>
                   <span className={styles.threadTitle}>{threadTitle(thread)}</span>
-                  <span className={styles.threadPreview}>
-                    {thread.lastMessage?.text ?? "Без текста"}
-                  </span>
+                  <span className={styles.threadPreview}>{threadPreview(thread.lastMessage)}</span>
                 </span>
                 <span className={styles.threadMeta}>
                   <ProviderPill provider={thread.primaryIdentity?.provider ?? "telegram"} />
@@ -560,9 +558,15 @@ function MessageBubble({
   readonly onLoadMessageMediaSource: InboxPageViewProps["onLoadMessageMediaSource"];
 }) {
   const outgoing = message.direction === "outbound";
+  const className = [
+    outgoing ? styles.messageOutgoing : styles.messageIncoming,
+    message.media ? messageMediaClassName(message.media.kind ?? message.contentType) : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <article className={outgoing ? styles.messageOutgoing : styles.messageIncoming}>
+    <article className={className}>
       {message.media ? (
         <MessageMediaBubble message={message} onLoadSource={onLoadMessageMediaSource} />
       ) : (
@@ -571,6 +575,21 @@ function MessageBubble({
       <span>{messageStatusLabel(message.status)}</span>
     </article>
   );
+}
+
+function messageMediaClassName(kind: MessagingMessage["contentType"]): string {
+  switch (kind) {
+    case "image":
+      return styles.messageMediaImage ?? "";
+    case "video":
+      return styles.messageMediaVideo ?? "";
+    case "video_note":
+      return styles.messageMediaVideoNote ?? "";
+    case "voice":
+      return styles.messageMediaVoice ?? "";
+    default:
+      return "";
+  }
 }
 
 function messageStatusLabel(status: MessagingMessage["status"]) {
@@ -593,6 +612,28 @@ function messageStatusLabel(status: MessagingMessage["status"]) {
 
 function threadTitle(thread: MessagingThread) {
   return thread.primaryIdentity?.displayName ?? thread.primaryIdentity?.username ?? "Новый клиент";
+}
+
+function threadPreview(message: MessagingMessage | null) {
+  if (!message) {
+    return "Без текста";
+  }
+
+  const kind = message.media?.kind ?? message.contentType;
+
+  switch (kind) {
+    case "image":
+      return "Фото";
+    case "voice":
+      return "Голос";
+    case "video":
+    case "video_note":
+      return "Видео";
+    case "text":
+      return message.text ?? "Без текста";
+    default:
+      return "Вложение";
+  }
 }
 
 function initialsForThread(thread: MessagingThread) {

@@ -531,6 +531,20 @@
   color: var(--inbox-on-accent);
 }
 
+.messageMediaImage,
+.messageMediaVideo {
+  max-width: min(330px, 74%);
+}
+
+.messageMediaVideoNote {
+  width: fit-content;
+  max-width: min(240px, 74%);
+}
+
+.messageMediaVoice {
+  max-width: min(368px, 74%);
+}
+
 .messageIncoming p,
 .messageOutgoing p {
   margin: 0;
@@ -552,41 +566,147 @@
   gap: 7px;
 }
 
-.mediaButton {
-  justify-self: start;
-  min-height: 30px;
-  padding: 0 11px;
-  border: 1px solid rgb(216 212 236 / 0.2);
+.mediaMessageImage,
+.mediaMessageVideo {
+  width: min(300px, 100%);
+}
+
+.mediaMessageVideoNote {
+  width: min(210px, 100%);
+  min-width: 0;
+}
+
+.mediaMessageVoice {
+  width: min(340px, 100%);
+}
+
+.mediaMessage span {
+  margin-top: 0;
+  opacity: 1;
+}
+
+.mediaMessage .voicePlayer {
+  display: grid;
+  width: min(340px, 100%);
+  min-width: min(220px, 100%);
+  min-height: 42px;
+  grid-template-columns: 30px minmax(116px, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.mediaMessage .voicePlayButton {
+  position: relative;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 0;
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.08);
-  color: inherit;
+  background: var(--inbox-accent-soft);
+  color: #f6d266;
   cursor: pointer;
-  font: 800 11.5px / 1 var(--eh-font-sans);
 }
 
-.mediaButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.68;
+.mediaMessage .voicePlayButton:hover {
+  background: rgb(244 196 48 / 0.22);
 }
 
-.mediaAudio {
-  width: min(260px, 100%);
-  height: 36px;
+.mediaMessage .voicePlayButton:focus-visible {
+  outline: 2px solid var(--inbox-accent);
+  outline-offset: 2px;
+}
+
+.mediaMessage .voicePlayIcon {
+  display: block;
+  width: 0;
+  height: 0;
+  margin-left: 2px;
+  border-block: 6px solid transparent;
+  border-left: 9px solid currentColor;
+}
+
+.mediaMessage .voicePauseIcon {
+  display: block;
+  width: 10px;
+  height: 13px;
+  border-right: 3px solid currentColor;
+  border-left: 3px solid currentColor;
+}
+
+.mediaMessage .voiceWave {
+  display: flex;
+  height: 18px;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mediaMessage .voiceWaveBar,
+.mediaMessage .voiceWaveBarActive {
+  display: block;
+  width: 3px;
+  height: var(--voice-bar-height);
+  flex: 0 0 3px;
+  border-radius: 2px;
+  background: var(--inbox-accent);
+  opacity: 0.78;
+}
+
+.mediaMessage .voiceWaveBar {
+  opacity: 0.34;
+}
+
+.mediaMessage .voiceDuration {
+  display: block;
+  flex: 0 0 auto;
+  color: var(--inbox-dim);
+  font-family: var(--eh-font-mono);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.messageOutgoing .voicePlayButton {
+  background: rgb(255 255 255 / 0.22);
+  color: var(--inbox-on-accent);
+}
+
+.messageOutgoing .voiceWaveBar,
+.messageOutgoing .voiceWaveBarActive {
+  background: var(--inbox-on-accent);
+}
+
+.messageOutgoing .voiceDuration {
+  color: var(--inbox-on-accent);
+  opacity: 0.72;
+}
+
+.mediaHiddenAudio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .mediaImage {
   display: block;
-  width: min(300px, 100%);
+  width: 100%;
   max-height: 320px;
-  border-radius: 12px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 14px;
   object-fit: contain;
   background: rgb(0 0 0 / 0.18);
 }
 
 .mediaVideoNote {
   display: block;
-  width: min(210px, 100%);
+  width: 100%;
   aspect-ratio: 1;
+  border: 1px solid rgb(216 212 236 / 0.14);
   border-radius: 999px;
   object-fit: cover;
   background: rgb(0 0 0 / 0.18);
@@ -594,14 +714,124 @@
 
 .mediaVideo {
   display: block;
-  width: min(300px, 100%);
+  width: 100%;
   max-height: 320px;
-  border-radius: 12px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 14px;
   object-fit: contain;
   background: rgb(0 0 0 / 0.18);
 }
 
-.mediaMeta,
+.mediaAudioSkeleton,
+.mediaImageSkeleton,
+.mediaVideoSkeleton,
+.mediaVideoNoteSkeleton,
+.mediaUnavailable {
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid rgb(216 212 236 / 0.18);
+  background:
+    linear-gradient(110deg, transparent 0%, rgb(255 255 255 / 0.08) 42%, transparent 76%),
+    rgb(255 255 255 / 0.06);
+  background-size:
+    220% 100%,
+    100% 100%;
+  animation: mediaSkeletonPulse 1.45s ease-in-out infinite;
+}
+
+.mediaAudioSkeleton {
+  display: grid;
+  width: min(280px, 100%);
+  min-height: 42px;
+  grid-template-columns: 30px minmax(72px, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border-radius: 999px;
+  padding: 6px 11px;
+}
+
+.mediaPlaySkeleton {
+  display: block;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.13);
+}
+
+.mediaWaveSkeleton {
+  display: block;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 0.22) 0 7%,
+    transparent 7% 13%,
+    rgb(255 255 255 / 0.14) 13% 24%,
+    transparent 24% 31%,
+    rgb(255 255 255 / 0.2) 31% 45%,
+    transparent 45% 52%,
+    rgb(255 255 255 / 0.12) 52% 62%,
+    transparent 62% 70%,
+    rgb(255 255 255 / 0.18) 70% 100%
+  );
+}
+
+.mediaSkeletonDuration {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0.72;
+}
+
+.mediaImageSkeleton,
+.mediaVideoSkeleton {
+  width: min(300px, 100%);
+  aspect-ratio: 16 / 10;
+  border-radius: 14px;
+}
+
+.mediaVideoNoteSkeleton {
+  width: min(210px, 100%);
+  aspect-ratio: 1;
+  border-radius: 999px;
+}
+
+.mediaUnavailable {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-self: start;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: #ffb3b3;
+  font-size: 12px;
+  font-weight: 800;
+  animation: none;
+}
+
+@keyframes mediaSkeletonPulse {
+  0% {
+    background-position:
+      180% 0,
+      0 0;
+  }
+
+  100% {
+    background-position:
+      -80% 0,
+      0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mediaAudioSkeleton,
+  .mediaImageSkeleton,
+  .mediaVideoSkeleton,
+  .mediaVideoNoteSkeleton {
+    animation: none;
+  }
+}
+
 .mediaError {
   margin-top: 0;
 }

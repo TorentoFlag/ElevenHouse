@@ -237,11 +237,13 @@ describe("InboxPageView", () => {
       />
     );
 
-    expect(screen.getByText("Голос загружается")).toBeTruthy();
+    expect(screen.getByLabelText("Голос загружается")).toBeTruthy();
     expect(screen.getByText("Голосовое сообщение недоступно")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Воспроизвести голосовое" }));
+    expect(screen.queryByRole("button", { name: "Воспроизвести голосовое" })).toBeNull();
+    expect(screen.queryAllByText("Голосовое сообщение (0:12)")).toHaveLength(0);
 
-    expect(await screen.findByLabelText("Голосовое сообщение")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Воспроизвести голосовое" })).toBeTruthy();
+    expect(screen.getAllByText("0:12")).toHaveLength(2);
     expect(onLoadMessageMediaSource).toHaveBeenCalledWith("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
   });
 
@@ -273,7 +275,7 @@ describe("InboxPageView", () => {
         {...baseProps()}
         onLoadMessageMediaSource={onLoadMessageMediaSource}
         channelConnections={[telegramConnection()]}
-        threads={[threadFixture({})]}
+        threads={[threadFixture({ lastMessage: videoNoteMessage("ready") })]}
         selectedThreadResponse={{
           thread: threadFixture({}),
           messages: [imageMessage("ready"), videoNoteMessage("ready"), videoMessage("ready")],
@@ -282,10 +284,13 @@ describe("InboxPageView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Показать изображение" }));
-    for (const button of screen.getAllByRole("button", { name: "Воспроизвести видео" })) {
-      fireEvent.click(button);
-    }
+    expect(screen.queryByRole("button", { name: "Показать изображение" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Воспроизвести видео" })).toBeNull();
+    expect(screen.queryByText("Фото карты")).toBeNull();
+    expect(screen.queryByText("Видео кружок (0:07)")).toBeNull();
+    expect(screen.queryByText("Расклад по дому")).toBeNull();
+    expect(screen.getByLabelText("Загружаем изображение")).toBeTruthy();
+    expect(screen.getAllByLabelText("Загружаем видео")).toHaveLength(2);
 
     expect((await screen.findByAltText("Фото карты")).getAttribute("src")).toBe(
       "https://storage.example/private/image.jpg?signed=1"
@@ -389,6 +394,7 @@ function threadFixture(input: {
   readonly providerUserId?: string | null;
   readonly providerChatId?: string;
   readonly username?: string | null;
+  readonly lastMessage?: MessagingMessage;
 }): MessagingThread {
   return {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -408,7 +414,7 @@ function threadFixture(input: {
       firstSeenAt: "2026-07-22T09:00:00.000Z",
       lastSeenAt: "2026-07-22T10:00:00.000Z"
     },
-    lastMessage: inboundMessage(),
+    lastMessage: input.lastMessage ?? inboundMessage(),
     lastMessageAt: "2026-07-22T10:00:00.000Z",
     unreadCount: input.unreadCount ?? 0,
     createdAt: "2026-07-22T09:00:00.000Z",
