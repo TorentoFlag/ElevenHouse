@@ -434,6 +434,60 @@ describe("admin finance policy HTTP flow", () => {
     expect(auditLogStore.createEntry).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects manual payout requests with completion, ledger reversal and audit evidence", async () => {
+    const rejected = await putJson(
+      "/admin/finance/payout-requests/44444444-4444-4444-8444-444444444444/status",
+      {
+        status: "rejected",
+        failureReason: "Bank details do not match recipient",
+        adminNote: "Astrologer must update payout method"
+      },
+      authenticatedCookies(),
+      {
+        origin: "http://localhost:5175",
+        [csrfHeaderName]: csrfToken
+      }
+    );
+
+    expect(rejected).toMatchObject({
+      status: 200,
+      body: {
+        id: "44444444-4444-4444-8444-444444444444",
+        status: "rejected",
+        completedAt: now.toISOString(),
+        failureReason: "Bank details do not match recipient",
+        adminUserId
+      }
+    });
+    expect(ledgerStore.createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationType: "payout_failed",
+        payoutRequestId: "44444444-4444-4444-8444-444444444444",
+        entries: [
+          expect.objectContaining({
+            side: "debit",
+            account: expect.objectContaining({ accountType: "astrologer_payout_pending" })
+          }),
+          expect.objectContaining({
+            side: "credit",
+            account: expect.objectContaining({ accountType: "astrologer_available" })
+          })
+        ]
+      })
+    );
+    expect(auditLogStore.createEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: adminUserId,
+        action: "payout_request.status_updated",
+        targetType: "payout_request",
+        targetId: "44444444-4444-4444-8444-444444444444",
+        metadata: expect.objectContaining({
+          status: "rejected"
+        })
+      })
+    );
+  });
+
   it("lists payment reversal cases for authenticated internal users with optional type filtering", async () => {
     await expect(getJson("/admin/finance/reversal-cases")).resolves.toMatchObject({ status: 401 });
 
@@ -770,8 +824,7 @@ function createPayoutStore(): Pick<
         transferredAt: input.transferredAt ?? null,
         providerPayoutId: input.providerPayoutId ?? null,
         reviewedAt: input.adminUserId ? input.now : existing.reviewedAt,
-        completedAt:
-          input.status === "paid" || input.status === "failed" ? input.now : existing.completedAt,
+        completedAt: isTerminalPayoutStatus(input.status) ? input.now : existing.completedAt,
         updatedAt: input.now
       };
       requests = requests.map((request) => (request.id === updated.id ? updated : request));
@@ -901,6 +954,7 @@ function createReconciliationStore(): ReconciliationStore {
   ];
   return {
     findAttemptById: vi.fn(),
+    findAttemptByProviderPaymentId: vi.fn(),
     createRecord: vi.fn(),
     listOpenExceptions: vi.fn(async (input) => records.slice(0, input.limit)),
     resolveException: vi.fn(async (input) => {
@@ -920,6 +974,12 @@ function createReconciliationStore(): ReconciliationStore {
       return updated;
     })
   };
+}
+
+function isTerminalPayoutStatus(status: PayoutRequestStatus): boolean {
+  return (
+    status === "paid" || status === "failed" || status === "rejected" || status === "cancelled"
+  );
 }
 
 function payoutRequest(overrides: {

@@ -302,6 +302,90 @@ describe("payout use cases", () => {
     ]);
   });
 
+  it("closes rejected payout requests and returns payout pending money to available", async () => {
+    const store = createStore({
+      availableAmountMinor: 25_000_00,
+      method: defaultMethod(),
+      request: payoutRequest({ status: "requested" })
+    });
+
+    const rejected = await approvePayoutStatusUpdate({
+      store,
+      payoutRequestId,
+      adminUserId,
+      update: {
+        status: "rejected",
+        failureReason: "Bank details do not match recipient",
+        adminNote: "Astrologer must update payout method"
+      },
+      now
+    });
+
+    expect(rejected).toMatchObject({
+      status: "rejected",
+      completedAt: now,
+      failureReason: "Bank details do not match recipient"
+    });
+    expect(store.ledgerTransactions).toEqual([
+      expect.objectContaining({
+        operationType: "payout_failed",
+        entries: [
+          expect.objectContaining({
+            side: "debit",
+            account: {
+              accountType: "astrologer_payout_pending",
+              astrologerUserId,
+              currency: "RUB"
+            }
+          }),
+          expect.objectContaining({
+            side: "credit",
+            account: {
+              accountType: "astrologer_available",
+              astrologerUserId,
+              currency: "RUB"
+            }
+          })
+        ]
+      })
+    ]);
+  });
+
+  it("closes cancelled payout requests without failure evidence and releases reserved money", async () => {
+    const store = createStore({
+      availableAmountMinor: 25_000_00,
+      method: defaultMethod(),
+      request: payoutRequest({ status: "approved" })
+    });
+
+    const cancelled = await approvePayoutStatusUpdate({
+      store,
+      payoutRequestId,
+      adminUserId,
+      update: {
+        status: "cancelled",
+        adminNote: "Duplicate request"
+      },
+      now
+    });
+
+    expect(cancelled).toMatchObject({
+      status: "cancelled",
+      completedAt: now,
+      failureReason: null,
+      adminNote: "Duplicate request"
+    });
+    expect(store.ledgerTransactions).toEqual([
+      expect.objectContaining({
+        operationType: "payout_failed",
+        metadata: expect.objectContaining({
+          fromStatus: "approved",
+          toStatus: "cancelled"
+        })
+      })
+    ]);
+  });
+
   it("releases eligible hold money from pending to available", async () => {
     const store = createStore({ availableAmountMinor: 0, method: defaultMethod() });
 
@@ -397,10 +481,9 @@ function createStore(input: {
         transferredAt: updateInput.transferredAt ?? null,
         providerPayoutId: updateInput.providerPayoutId ?? null,
         reviewedAt: updateInput.adminUserId ? updateInput.now : request.reviewedAt,
-        completedAt:
-          updateInput.status === "paid" || updateInput.status === "failed"
-            ? updateInput.now
-            : request.completedAt,
+        completedAt: isTerminalPayoutStatus(updateInput.status)
+          ? updateInput.now
+          : request.completedAt,
         updatedAt: updateInput.now
       };
       return request;
@@ -418,6 +501,12 @@ function createStore(input: {
       };
     }
   };
+}
+
+function isTerminalPayoutStatus(status: PayoutRequestRecord["status"]): boolean {
+  return (
+    status === "paid" || status === "failed" || status === "rejected" || status === "cancelled"
+  );
 }
 
 function defaultMethod(): PayoutMethodRecord {

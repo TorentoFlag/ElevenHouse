@@ -112,7 +112,7 @@ async function updatePayoutRequestStatus(
 ): Promise<PayoutRequestRecord | null> {
   assertPayoutStatusEvidence(input);
   const timestamp = new Date(input.now);
-  const completedAt = input.status === "paid" || input.status === "failed" ? timestamp : undefined;
+  const completedAt = isTerminalPayoutStatus(input.status) ? timestamp : undefined;
   const [row] = await database
     .update(payoutRequests)
     .set({
@@ -130,6 +130,12 @@ async function updatePayoutRequestStatus(
     .where(eq(payoutRequests.id, input.payoutRequestId))
     .returning();
   return row ? toPayoutRequest(row) : null;
+}
+
+function isTerminalPayoutStatus(status: UpdatePayoutRequestStatusInput["status"]): boolean {
+  return (
+    status === "paid" || status === "failed" || status === "rejected" || status === "cancelled"
+  );
 }
 
 export function assertPayoutStatusEvidence(
