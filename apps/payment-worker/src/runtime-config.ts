@@ -17,13 +17,32 @@ const runtimeConfigSchema = z.object({
     .max(3600)
     .default(300),
   PAYMENT_WORKER_HOLD_RELEASE_INTERVAL_MS: z.coerce.number().int().min(0).default(60_000),
-  PAYMENT_WORKER_HOLD_RELEASE_BATCH_SIZE: z.coerce.number().int().positive().max(1_000).default(100),
+  PAYMENT_WORKER_HOLD_RELEASE_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(1_000)
+    .default(100),
   PAYMENT_WORKER_HOLD_RELEASE_COMMAND_TTL_SECONDS: z.coerce
     .number()
     .int()
     .positive()
     .max(31_536_000)
-    .default(2_592_000)
+    .default(2_592_000),
+  PAYMENT_WORKER_RECONCILIATION_INTERVAL_MS: z.coerce.number().int().min(0).default(900_000),
+  PAYMENT_WORKER_RECONCILIATION_LOOKBACK_HOURS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(720)
+    .default(48),
+  PAYMENT_WORKER_RECONCILIATION_PAGE_LIMIT: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(100)
+    .default(100),
+  PAYMENT_WORKER_RECONCILIATION_CURRENCY: z.enum(["RUB"]).default("RUB")
 });
 
 export type PaymentWorkerRuntimeConfig = {
@@ -42,6 +61,12 @@ export type PaymentWorkerRuntimeConfig = {
     readonly intervalMs: number;
     readonly batchSize: number;
     readonly commandTtlMs: number;
+  };
+  readonly reconciliation: {
+    readonly intervalMs: number;
+    readonly lookbackMs: number;
+    readonly pageLimit: number;
+    readonly currency: "RUB";
   };
 };
 
@@ -77,6 +102,12 @@ export function createPaymentWorkerRuntimeConfig(
       intervalMs: config.PAYMENT_WORKER_HOLD_RELEASE_INTERVAL_MS,
       batchSize: config.PAYMENT_WORKER_HOLD_RELEASE_BATCH_SIZE,
       commandTtlMs: config.PAYMENT_WORKER_HOLD_RELEASE_COMMAND_TTL_SECONDS * 1000
+    },
+    reconciliation: {
+      intervalMs: config.PAYMENT_WORKER_RECONCILIATION_INTERVAL_MS,
+      lookbackMs: config.PAYMENT_WORKER_RECONCILIATION_LOOKBACK_HOURS * 60 * 60 * 1000,
+      pageLimit: config.PAYMENT_WORKER_RECONCILIATION_PAGE_LIMIT,
+      currency: config.PAYMENT_WORKER_RECONCILIATION_CURRENCY
     }
   };
 }

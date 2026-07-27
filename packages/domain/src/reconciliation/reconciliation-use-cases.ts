@@ -1,5 +1,6 @@
 import type { PaymentProviderEvent } from "../payments";
 import type {
+  ProviderSettlementLedgerEntry,
   ReconciliationRecord,
   ReconciliationStore,
   ReconciliationExceptionResolution
@@ -47,7 +48,11 @@ export async function recordProviderSettlementMatch(input: {
   readonly providerEvent: PaymentProviderEvent & { readonly type: "payment.settled" };
   readonly checkedAt: Date;
 }): Promise<{ readonly kind: "created" | "replayed"; readonly record: ReconciliationRecord }> {
-  const attempt = await requireMatchingAttempt(input.store, input.paymentAttemptId, input.providerEvent);
+  const attempt = await requireMatchingAttempt(
+    input.store,
+    input.paymentAttemptId,
+    input.providerEvent
+  );
   return input.store.createRecord({
     provider: input.providerEvent.provider,
     environment: input.providerEvent.environment,
@@ -77,11 +82,12 @@ export async function recordProviderReconciliationException(input: {
   readonly providerEvent: PaymentProviderEvent & { readonly type: "reconciliation.exception" };
   readonly checkedAt: Date;
 }): Promise<{ readonly kind: "created" | "replayed"; readonly record: ReconciliationRecord }> {
-  const attempt = await requireMatchingAttempt(input.store, input.paymentAttemptId, input.providerEvent);
-  const exceptionCode = readRequiredString(input.providerEvent.payload, [
-    "data",
-    "exception_code"
-  ]);
+  const attempt = await requireMatchingAttempt(
+    input.store,
+    input.paymentAttemptId,
+    input.providerEvent
+  );
+  const exceptionCode = readRequiredString(input.providerEvent.payload, ["data", "exception_code"]);
   const exceptionMessage = readRequiredString(input.providerEvent.payload, [
     "data",
     "exception_message"
@@ -124,6 +130,70 @@ export async function resolveProviderReconciliationException(input: {
   });
   if (!record) throw new ReconciliationRecordNotFoundError();
   return record;
+}
+
+export type ProviderSettlementLedgerBatchResult = {
+  readonly processed: number;
+  readonly matched: number;
+  readonly exceptions: number;
+  readonly skipped: number;
+  readonly replayed: number;
+};
+
+export async function reconcileProviderSettlementLedgerBatch(input: {
+  readonly store: ReconciliationStore;
+  readonly provider: PaymentProviderEvent["provider"];
+  readonly environment: PaymentProviderEvent["environment"];
+  readonly entries: readonly ProviderSettlementLedgerEntry[];
+  readonly checkedAt: Date;
+}): Promise<ProviderSettlementLedgerBatchResult> {
+  const result = { processed: 0, matched: 0, exceptions: 0, skipped: 0, replayed: 0 };
+  for (const entry of input.entries) {
+    if (entry.provider !== input.provider || entry.environment !== input.environment) {
+      throw new ReconciliationProviderContextMismatchError();
+    }
+    if (entry.referenceType !== "payment") {
+      result.skipped += 1;
+      continue;
+    }
+
+    result.processed += 1;
+    const attempt = entry.providerPaymentId
+      ? await input.store.findAttemptByProviderPaymentId({
+          provider: input.provider,
+          environment: input.environment,
+          providerPaymentId: entry.providerPaymentId
+        })
+      : null;
+
+    const recordInput = attempt
+      ? createSettlementLedgerMatchRecordInput(input, entry, attempt)
+      : createSettlementLedgerExceptionRecordInput(
+          input,
+          entry,
+          "missing_in_elevenhouse",
+          "Provider settlement ledger entry has no matching ElevenHouse payment attempt"
+        );
+
+    const finalRecordInput =
+      attempt && !moneyEquals(attempt.amount, entry.amount)
+        ? createSettlementLedgerExceptionRecordInput(
+            input,
+            entry,
+            "amount_mismatch",
+            "Provider amount differs from local payment attempt"
+          )
+        : recordInput;
+
+    const writeResult = await input.store.createRecord(finalRecordInput);
+    if (writeResult.kind === "replayed") {
+      result.replayed += 1;
+      continue;
+    }
+    if (finalRecordInput.status === "matched") result.matched += 1;
+    if (finalRecordInput.status === "exception") result.exceptions += 1;
+  }
+  return result;
 }
 
 async function requireMatchingAttempt(
@@ -173,4 +243,74 @@ function readPath(payload: Record<string, unknown>, path: readonly string[]): un
     current = (current as Record<string, unknown>)[part];
   }
   return current;
+}
+
+function createSettlementLedgerMatchRecordInput(
+  input: {
+    readonly provider: PaymentProviderEvent["provider"];
+    readonly environment: PaymentProviderEvent["environment"];
+    readonly checkedAt: Date;
+  },
+  entry: ProviderSettlementLedgerEntry,
+  attempt: { readonly providerPaymentId: string | null }
+) {
+  return {
+    provider: input.provider,
+    environment: input.environment,
+    providerPaymentId: entry.providerPaymentId ?? attempt.providerPaymentId,
+    providerPayoutId: null,
+    providerSettlementId: entry.providerLedgerEntryId,
+    providerEventId: null,
+    status: "matched" as const,
+    exceptionCode: null,
+    exceptionMessage: null,
+    providerOccurredAt: entry.providerOccurredAt,
+    checkedAt: input.checkedAt.toISOString(),
+    payload: settlementLedgerPayload(entry)
+  };
+}
+
+function createSettlementLedgerExceptionRecordInput(
+  input: {
+    readonly provider: PaymentProviderEvent["provider"];
+    readonly environment: PaymentProviderEvent["environment"];
+    readonly checkedAt: Date;
+  },
+  entry: ProviderSettlementLedgerEntry,
+  exceptionCode: string,
+  exceptionMessage: string
+) {
+  return {
+    provider: input.provider,
+    environment: input.environment,
+    providerPaymentId: entry.providerPaymentId,
+    providerPayoutId: null,
+    providerSettlementId: entry.providerLedgerEntryId,
+    providerEventId: null,
+    status: "exception" as const,
+    exceptionCode,
+    exceptionMessage,
+    providerOccurredAt: entry.providerOccurredAt,
+    checkedAt: input.checkedAt.toISOString(),
+    payload: settlementLedgerPayload(entry)
+  };
+}
+
+function settlementLedgerPayload(entry: ProviderSettlementLedgerEntry): Record<string, unknown> {
+  return {
+    source: "settlement.ledger",
+    providerLedgerEntryId: entry.providerLedgerEntryId,
+    referenceType: entry.referenceType,
+    direction: entry.direction,
+    settlementStatus: entry.settlementStatus,
+    amount: entry.amount,
+    raw: entry.raw
+  };
+}
+
+function moneyEquals(
+  left: { readonly amountMinor: number; readonly currency: string },
+  right: { readonly amountMinor: number; readonly currency: string }
+): boolean {
+  return left.amountMinor === right.amountMinor && left.currency === right.currency;
 }

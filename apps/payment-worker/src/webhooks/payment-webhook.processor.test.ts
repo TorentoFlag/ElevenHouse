@@ -481,6 +481,23 @@ function createHarness(
       async (input) => eventByWebhookId.get(input.providerWebhookId) ?? null
     ),
     findAttemptById: vi.fn(async () => (options.attemptMissing ? null : attempt)),
+    findAttemptByProviderPaymentId: vi.fn(
+      async (input: {
+        readonly provider: "arc_pay";
+        readonly environment: "sandbox" | "live";
+        readonly providerPaymentId: string;
+      }) => {
+        if (
+          options.attemptMissing ||
+          input.provider !== attempt.provider ||
+          input.environment !== attempt.environment ||
+          input.providerPaymentId !== attempt.providerPaymentId
+        ) {
+          return null;
+        }
+        return attempt;
+      }
+    ),
     linkAttemptToProviderPayment: vi.fn(async (input) => {
       linkedProviderPaymentIds.push(input.providerPaymentId);
       return { ...attempt, providerPaymentId: input.providerPaymentId };
@@ -595,6 +612,7 @@ function createHarness(
   };
   const reconciliationStore: ReconciliationStore = {
     findAttemptById: paymentStore.findAttemptById,
+    findAttemptByProviderPaymentId: paymentStore.findAttemptByProviderPaymentId,
     createRecord: vi.fn(async (input) => {
       const existing = reconciliationRecords.find(
         (record) =>

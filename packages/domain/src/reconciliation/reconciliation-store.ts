@@ -3,6 +3,7 @@ import type {
   PaymentAttempt,
   PaymentProviderEnvironment
 } from "../payments";
+import type { Money } from "../money";
 
 export type ReconciliationStatus = "pending" | "matched" | "exception" | "ignored";
 
@@ -40,8 +41,26 @@ export type CreateReconciliationRecordInput = {
 
 export type ReconciliationExceptionResolution = "resolved" | "waived";
 
+export type ProviderSettlementLedgerEntry = {
+  readonly provider: FinancePaymentProvider;
+  readonly environment: PaymentProviderEnvironment;
+  readonly providerLedgerEntryId: string;
+  readonly providerPaymentId: string | null;
+  readonly amount: Money;
+  readonly direction: string;
+  readonly referenceType: string;
+  readonly providerOccurredAt: string | null;
+  readonly settlementStatus: string | null;
+  readonly raw: Record<string, unknown>;
+};
+
 export type ReconciliationStore = {
   readonly findAttemptById: (paymentAttemptId: string) => Promise<PaymentAttempt | null>;
+  readonly findAttemptByProviderPaymentId: (input: {
+    readonly provider: FinancePaymentProvider;
+    readonly environment: PaymentProviderEnvironment;
+    readonly providerPaymentId: string;
+  }) => Promise<PaymentAttempt | null>;
   readonly createRecord: (
     input: CreateReconciliationRecordInput
   ) => Promise<{ readonly kind: "created" | "replayed"; readonly record: ReconciliationRecord }>;

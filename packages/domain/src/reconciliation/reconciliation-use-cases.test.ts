@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  reconcileProviderSettlementLedgerBatch,
   recordProviderReconciliationException,
   recordProviderSettlementMatch,
   ReconciliationAttemptNotFoundError,
   type PaymentAttempt,
+  type ProviderSettlementLedgerEntry,
   type PaymentProviderEvent,
   type ReconciliationRecord,
   type ReconciliationStore
@@ -79,6 +81,132 @@ describe("provider reconciliation use cases", () => {
 
     expect(harness.records).toEqual([]);
   });
+
+  it("matches payment settlement ledger rows by provider payment id without mutating money", async () => {
+    const harness = createHarness();
+
+    const result = await reconcileProviderSettlementLedgerBatch({
+      store: harness.store,
+      provider: "arc_pay",
+      environment: "sandbox",
+      checkedAt: now,
+      entries: [
+        settlementLedgerEntry({
+          providerLedgerEntryId: "ledger-entry-1",
+          providerPaymentId,
+          amountMinor: 50_000,
+          currency: "RUB"
+        })
+      ]
+    });
+
+    expect(result).toEqual({ processed: 1, matched: 1, exceptions: 0, skipped: 0, replayed: 0 });
+    expect(harness.records).toEqual([
+      expect.objectContaining({
+        providerPaymentId,
+        providerSettlementId: "ledger-entry-1",
+        providerEventId: null,
+        status: "matched",
+        exceptionCode: null,
+        payload: expect.objectContaining({
+          source: "settlement.ledger",
+          providerLedgerEntryId: "ledger-entry-1",
+          referenceType: "payment",
+          direction: "credit"
+        })
+      })
+    ]);
+  });
+
+  it("creates operator-visible exceptions for missing and mismatched settlement ledger rows", async () => {
+    const harness = createHarness();
+
+    const result = await reconcileProviderSettlementLedgerBatch({
+      store: harness.store,
+      provider: "arc_pay",
+      environment: "sandbox",
+      checkedAt: now,
+      entries: [
+        settlementLedgerEntry({
+          providerLedgerEntryId: "ledger-entry-missing",
+          providerPaymentId: "missing-provider-payment",
+          amountMinor: 50_000,
+          currency: "RUB"
+        }),
+        settlementLedgerEntry({
+          providerLedgerEntryId: "ledger-entry-mismatch",
+          providerPaymentId,
+          amountMinor: 49_999,
+          currency: "RUB"
+        })
+      ]
+    });
+
+    expect(result).toEqual({ processed: 2, matched: 0, exceptions: 2, skipped: 0, replayed: 0 });
+    expect(harness.records).toEqual([
+      expect.objectContaining({
+        providerPaymentId: "missing-provider-payment",
+        providerSettlementId: "ledger-entry-missing",
+        status: "exception",
+        exceptionCode: "missing_in_elevenhouse",
+        exceptionMessage:
+          "Provider settlement ledger entry has no matching ElevenHouse payment attempt"
+      }),
+      expect.objectContaining({
+        providerPaymentId,
+        providerSettlementId: "ledger-entry-mismatch",
+        status: "exception",
+        exceptionCode: "amount_mismatch",
+        exceptionMessage: "Provider amount differs from local payment attempt"
+      })
+    ]);
+  });
+
+  it("skips non-payment settlement ledger rows and counts idempotent replays", async () => {
+    const harness = createHarness();
+    harness.records.push({
+      id: "existing-record-1",
+      provider: "arc_pay",
+      environment: "sandbox",
+      providerPaymentId,
+      providerPayoutId: null,
+      providerSettlementId: "ledger-entry-existing",
+      providerEventId: null,
+      status: "matched",
+      exceptionCode: null,
+      exceptionMessage: null,
+      providerOccurredAt: "2026-07-27T07:45:00.000Z",
+      checkedAt: now.toISOString(),
+      resolvedAt: null,
+      payload: { source: "settlement.ledger" }
+    });
+
+    const result = await reconcileProviderSettlementLedgerBatch({
+      store: harness.store,
+      provider: "arc_pay",
+      environment: "sandbox",
+      checkedAt: now,
+      entries: [
+        settlementLedgerEntry({
+          providerLedgerEntryId: "ledger-entry-existing",
+          providerPaymentId,
+          amountMinor: 50_000,
+          currency: "RUB"
+        }),
+        settlementLedgerEntry({
+          providerLedgerEntryId: "ledger-entry-payout",
+          providerPaymentId: null,
+          amountMinor: 45_000,
+          currency: "RUB",
+          referenceType: "payout",
+          direction: "debit"
+        })
+      ]
+    });
+
+    expect(result).toEqual({ processed: 1, matched: 0, exceptions: 0, skipped: 1, replayed: 1 });
+    expect(harness.records).toHaveLength(1);
+  });
 });
 
 function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
@@ -99,12 +227,24 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
   };
   const store: ReconciliationStore = {
     findAttemptById: vi.fn(async () => (options.attemptMissing ? null : attempt)),
+    findAttemptByProviderPaymentId: vi.fn(async (input) => {
+      if (
+        options.attemptMissing ||
+        input.provider !== attempt.provider ||
+        input.environment !== attempt.environment ||
+        input.providerPaymentId !== attempt.providerPaymentId
+      ) {
+        return null;
+      }
+      return attempt;
+    }),
     createRecord: vi.fn(async (input) => {
       const existing = records.find(
         (record) =>
           record.provider === input.provider &&
           record.environment === input.environment &&
-          record.providerPaymentId === input.providerPaymentId &&
+          record.providerSettlementId === input.providerSettlementId &&
+          record.providerEventId === input.providerEventId &&
           record.status === input.status
       );
       if (existing) return { kind: "replayed" as const, record: existing };
@@ -131,6 +271,48 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
     resolveException: vi.fn()
   };
   return { records, store };
+}
+
+function settlementLedgerEntry(
+  overrides: Partial<ProviderSettlementLedgerEntry> & {
+    readonly amountMinor?: number;
+    readonly currency?: "RUB";
+  }
+): ProviderSettlementLedgerEntry {
+  const amountMinor = overrides.amountMinor ?? overrides.amount?.amountMinor ?? 50_000;
+  const currency = overrides.currency ?? overrides.amount?.currency ?? "RUB";
+  const providerLedgerEntryId = overrides.providerLedgerEntryId ?? "ledger-entry-default";
+  const referenceType = overrides.referenceType ?? "payment";
+  const {
+    amountMinor: _amountMinor,
+    currency: _currency,
+    amount: _amount,
+    ...entryOverrides
+  } = overrides;
+  const entry = {
+    provider: "arc_pay",
+    environment: "sandbox",
+    providerLedgerEntryId,
+    providerPaymentId,
+    direction: "credit",
+    referenceType,
+    providerOccurredAt: "2026-07-27T07:45:00.000Z",
+    settlementStatus: "cleared",
+    raw: {
+      entry_id: providerLedgerEntryId,
+      reference_type: referenceType,
+      reference_id: providerPaymentId
+    },
+    ...entryOverrides,
+    amount: { amountMinor, currency }
+  } satisfies ProviderSettlementLedgerEntry;
+  return {
+    ...entry,
+    raw: {
+      ...entry.raw,
+      reference_id: entry.providerPaymentId
+    }
+  };
 }
 
 function settledEvent(): PaymentProviderEvent & { readonly type: "payment.settled" } {

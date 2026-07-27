@@ -19,14 +19,25 @@ describe("payment worker runtime config", () => {
         intervalMs: 60_000,
         batchSize: 100,
         commandTtlMs: 2_592_000_000
+      },
+      reconciliation: {
+        intervalMs: 900_000,
+        lookbackMs: 172_800_000,
+        pageLimit: 100,
+        currency: "RUB"
       }
     });
   });
 
   it("requires both Arc Pay credentials in production and rejects insecure API URLs", () => {
     expect(() =>
-      createPaymentWorkerRuntimeConfig({ NODE_ENV: "production", DATABASE_URL: "postgresql://local" })
-    ).toThrow("PAYMENT_WORKER_ARC_PAY_API_SECRET and PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET are required in production");
+      createPaymentWorkerRuntimeConfig({
+        NODE_ENV: "production",
+        DATABASE_URL: "postgresql://local"
+      })
+    ).toThrow(
+      "PAYMENT_WORKER_ARC_PAY_API_SECRET and PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET are required in production"
+    );
     expect(() =>
       createPaymentWorkerRuntimeConfig({
         PAYMENT_WORKER_ARC_PAY_API_BASE_URL: "http://arc-pay.internal",
@@ -47,6 +58,22 @@ describe("payment worker runtime config", () => {
       intervalMs: 300_000,
       batchSize: 500,
       commandTtlMs: 86_400_000
+    });
+  });
+
+  it("normalizes settlement reconciliation worker settings", () => {
+    expect(
+      createPaymentWorkerRuntimeConfig({
+        PAYMENT_WORKER_RECONCILIATION_INTERVAL_MS: "600000",
+        PAYMENT_WORKER_RECONCILIATION_LOOKBACK_HOURS: "72",
+        PAYMENT_WORKER_RECONCILIATION_PAGE_LIMIT: "50",
+        PAYMENT_WORKER_RECONCILIATION_CURRENCY: "RUB"
+      }).reconciliation
+    ).toEqual({
+      intervalMs: 600_000,
+      lookbackMs: 259_200_000,
+      pageLimit: 50,
+      currency: "RUB"
     });
   });
 });

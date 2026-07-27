@@ -16,10 +16,15 @@ import {
 } from "@elevenhouse/db/finance";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
 import { createArcPayPaymentAttemptResolver } from "./arc-pay/arc-pay-payment-reader";
+import { createArcPaySettlementLedgerClient } from "./arc-pay/arc-pay-settlement-ledger-client";
 import {
   createHoldReleaseProcessor,
   startHoldReleaseInterval
 } from "./holds/hold-release.processor";
+import {
+  createSettlementLedgerReconciliationProcessor,
+  startSettlementLedgerReconciliationInterval
+} from "./reconciliation/settlement-ledger.processor";
 import { createPaymentWorkerRuntimeConfig } from "./runtime-config";
 import {
   createPaymentWebhookHandler,
@@ -34,13 +39,14 @@ async function startPaymentWorker(): Promise<void> {
   const config = createPaymentWorkerRuntimeConfig();
   const postgresRuntime = createPostgresRuntime();
   const paymentStore = createDrizzlePaymentStore(postgresRuntime.database);
+  const reconciliationStore = createDrizzleReconciliationStore(postgresRuntime.database);
   const processor = createPaymentWebhookProcessor({
     paymentStore,
     orderStore: createDrizzleOrderStore(postgresRuntime.database),
     capturedSale: createDrizzleCapturedSaleUnitOfWork(postgresRuntime.database),
     terminalPayment: createDrizzleTerminalPaymentUnitOfWork(postgresRuntime.database),
     reversal: createDrizzlePaymentReversalUnitOfWork(postgresRuntime.database),
-    reconciliationStore: createDrizzleReconciliationStore(postgresRuntime.database),
+    reconciliationStore,
     resolvePaymentAttemptId: createArcPayPaymentAttemptResolver(config.arcPay)
       .resolvePaymentAttemptId
   });
@@ -75,6 +81,30 @@ async function startPaymentWorker(): Promise<void> {
       logger.error("captured sale holds release tick failed", { error: serializeError(error) });
     }
   });
+  if (config.arcPay.apiSecret) {
+    startSettlementLedgerReconciliationInterval({
+      processor: createSettlementLedgerReconciliationProcessor({
+        client: createArcPaySettlementLedgerClient(config.arcPay),
+        store: reconciliationStore,
+        provider: "arc_pay",
+        environment: config.arcPay.environment,
+        lookbackMs: config.reconciliation.lookbackMs,
+        pageLimit: config.reconciliation.pageLimit,
+        currency: config.reconciliation.currency
+      }),
+      intervalMs: config.reconciliation.intervalMs,
+      onResult: (result) => {
+        if (result.matched > 0 || result.exceptions > 0 || result.replayed > 0) {
+          logger.info("settlement ledger reconciliation tick completed", result);
+        }
+      },
+      onError: (error) => {
+        logger.error("settlement ledger reconciliation tick failed", {
+          error: serializeError(error)
+        });
+      }
+    });
+  }
 
   logger.info("payment worker ready", {
     ...createReadinessResponse(service),
@@ -83,7 +113,9 @@ async function startPaymentWorker(): Promise<void> {
     webhookHost: config.webhookHost,
     webhookPort: config.webhookPort,
     holdReleaseIntervalMs: config.holdRelease.intervalMs,
-    holdReleaseBatchSize: config.holdRelease.batchSize
+    holdReleaseBatchSize: config.holdRelease.batchSize,
+    reconciliationIntervalMs: config.arcPay.apiSecret ? config.reconciliation.intervalMs : 0,
+    reconciliationLookbackMs: config.reconciliation.lookbackMs
   });
 }
 

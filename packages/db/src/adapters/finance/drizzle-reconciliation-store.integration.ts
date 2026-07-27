@@ -33,6 +33,17 @@ describe("reconciliation Drizzle/PostgreSQL integration", () => {
     const fixture = await createFixture();
     const store = createDrizzleReconciliationStore(runtime.database);
 
+    await expect(
+      store.findAttemptByProviderPaymentId({
+        provider: "arc_pay",
+        environment: "sandbox",
+        providerPaymentId: fixture.providerPaymentId
+      })
+    ).resolves.toMatchObject({
+      id: fixture.paymentAttemptId,
+      amount: { amountMinor: 50_000, currency: "RUB" }
+    });
+
     const matched = await store.createRecord({
       provider: "arc_pay",
       environment: "sandbox",
@@ -55,6 +66,39 @@ describe("reconciliation Drizzle/PostgreSQL integration", () => {
     expect(matched.kind).toBe("created");
     expect(replayedMatched.kind).toBe("replayed");
     expect(replayedMatched.record.id).toBe(matched.record.id);
+
+    const ledgerMatched = await store.createRecord({
+      provider: "arc_pay",
+      environment: "sandbox",
+      providerPaymentId: fixture.providerPaymentId,
+      providerPayoutId: null,
+      providerSettlementId: "ledger-entry-2026-07-27-1",
+      providerEventId: null,
+      status: "matched",
+      exceptionCode: null,
+      exceptionMessage: null,
+      providerOccurredAt: "2026-07-27T07:45:00.000Z",
+      checkedAt: "2026-07-27T08:10:00.000Z",
+      payload: { source: "settlement.ledger" }
+    });
+    const replayedLedgerMatched = await store.createRecord({
+      provider: "arc_pay",
+      environment: "sandbox",
+      providerPaymentId: fixture.providerPaymentId,
+      providerPayoutId: null,
+      providerSettlementId: "ledger-entry-2026-07-27-1",
+      providerEventId: null,
+      status: "matched",
+      exceptionCode: null,
+      exceptionMessage: null,
+      providerOccurredAt: "2026-07-27T07:45:00.000Z",
+      checkedAt: "2026-07-27T08:15:00.000Z",
+      payload: { source: "settlement.ledger", replay: true }
+    });
+
+    expect(ledgerMatched.kind).toBe("created");
+    expect(replayedLedgerMatched.kind).toBe("replayed");
+    expect(replayedLedgerMatched.record.id).toBe(ledgerMatched.record.id);
 
     const exception = await store.createRecord({
       provider: "arc_pay",
@@ -102,6 +146,7 @@ describe("reconciliation Drizzle/PostgreSQL integration", () => {
 
 async function createFixture(): Promise<{
   readonly providerPaymentId: string;
+  readonly paymentAttemptId: string;
   readonly settledEventId: string;
   readonly exceptionEventId: string;
 }> {
@@ -162,7 +207,7 @@ async function createFixture(): Promise<{
     [settledEventId, paymentAttemptId, providerPaymentId, exceptionEventId]
   );
 
-  return { providerPaymentId, settledEventId, exceptionEventId };
+  return { providerPaymentId, paymentAttemptId, settledEventId, exceptionEventId };
 }
 
 function getIntegrationDatabaseUrl(value: string | undefined): string {

@@ -1,11 +1,15 @@
 import { and, eq, isNull } from "drizzle-orm";
 import type {
   CreateReconciliationRecordInput,
+  FinancePaymentProvider,
+  Money,
+  PaymentAttempt,
+  PaymentProviderEnvironment,
   ReconciliationRecord,
   ReconciliationStore
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
-import { reconciliationRecords } from "../../schema";
+import { paymentAttempts, reconciliationRecords } from "../../schema";
 import type { FinanceDatabase } from "./drizzle-finance-command-store";
 import { createDrizzlePaymentWebhookStore } from "./drizzle-payment-store";
 
@@ -16,10 +20,34 @@ export function createDrizzleReconciliationStore(
 ): ReconciliationStore {
   return {
     findAttemptById: createDrizzlePaymentWebhookStore(database).findAttemptById,
+    findAttemptByProviderPaymentId: (input) =>
+      findPaymentAttemptByProviderPaymentId(database, input),
     createRecord: (input) => createReconciliationRecord(database, input),
     listOpenExceptions: (input) => listOpenReconciliationExceptions(database, input),
     resolveException: (input) => resolveReconciliationException(database, input)
   };
+}
+
+async function findPaymentAttemptByProviderPaymentId(
+  database: ElevenHouseDatabase | FinanceDatabase,
+  input: {
+    readonly provider: FinancePaymentProvider;
+    readonly environment: PaymentProviderEnvironment;
+    readonly providerPaymentId: string;
+  }
+): Promise<PaymentAttempt | null> {
+  const [row] = await database
+    .select()
+    .from(paymentAttempts)
+    .where(
+      and(
+        eq(paymentAttempts.provider, input.provider),
+        eq(paymentAttempts.environment, input.environment),
+        eq(paymentAttempts.providerPaymentId, input.providerPaymentId)
+      )
+    )
+    .limit(1);
+  return row ? toPaymentAttempt(row) : null;
 }
 
 async function createReconciliationRecord(
@@ -90,7 +118,9 @@ async function listOpenReconciliationExceptions(
   const rows = await database
     .select()
     .from(reconciliationRecords)
-    .where(and(eq(reconciliationRecords.status, "exception"), isNull(reconciliationRecords.resolvedAt)))
+    .where(
+      and(eq(reconciliationRecords.status, "exception"), isNull(reconciliationRecords.resolvedAt))
+    )
     .orderBy(reconciliationRecords.checkedAt, reconciliationRecords.id)
     .limit(input.limit);
   return rows.map(toReconciliationRecord);
@@ -149,4 +179,26 @@ function toReconciliationRecord(row: ReconciliationRecordRow): ReconciliationRec
     resolvedAt: row.resolvedAt?.toISOString() ?? null,
     payload: row.payload
   };
+}
+
+function toPaymentAttempt(row: typeof paymentAttempts.$inferSelect): PaymentAttempt {
+  return {
+    id: row.id,
+    orderId: row.orderId,
+    provider: row.provider as FinancePaymentProvider,
+    environment: row.environment as PaymentProviderEnvironment,
+    status: row.status as PaymentAttempt["status"],
+    amount: money(row.amountMinor, row.currency),
+    providerPaymentId: row.providerPaymentId,
+    providerCheckoutId: row.providerCheckoutId,
+    idempotencyKey: row.idempotencyKey,
+    metadata: row.metadata,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+function money(amountMinor: number, currency: string): Money {
+  if (currency !== "RUB") throw new Error(`Unsupported finance currency: ${currency}`);
+  return { amountMinor, currency };
 }
