@@ -965,6 +965,7 @@ CREATE TABLE "messaging_channel_connections" (
 	"mode" text NOT NULL,
 	"status" text DEFAULT 'connecting' NOT NULL,
 	"external_account_id" text,
+	"external_owner_user_id" text,
 	"display_name_snapshot" text,
 	"username_snapshot" text,
 	"capabilities" jsonb NOT NULL,
@@ -981,7 +982,8 @@ CREATE TABLE "messaging_channel_connections" (
 	CONSTRAINT "messaging_channel_connections_provider_mode_check" CHECK (("messaging_channel_connections"."provider" = 'telegram' and "messaging_channel_connections"."mode" in ('telegram_business_bot', 'telegram_mtproto_account')) or ("messaging_channel_connections"."provider" = 'instagram' and "messaging_channel_connections"."mode" = 'instagram_graph')),
 	CONSTRAINT "messaging_channel_connections_status_check" CHECK ("messaging_channel_connections"."status" in ('connecting', 'active', 'paused', 'revoked', 'reauth_required', 'error')),
 	CONSTRAINT "messaging_channel_connections_capabilities_object_check" CHECK (jsonb_typeof("messaging_channel_connections"."capabilities") = 'object'),
-	CONSTRAINT "messaging_channel_connections_external_account_id_length_check" CHECK ("messaging_channel_connections"."external_account_id" is null or length(trim("messaging_channel_connections"."external_account_id")) between 1 and 200)
+	CONSTRAINT "messaging_channel_connections_external_account_id_length_check" CHECK ("messaging_channel_connections"."external_account_id" is null or length(trim("messaging_channel_connections"."external_account_id")) between 1 and 200),
+	CONSTRAINT "messaging_channel_connections_external_owner_id_length_check" CHECK ("messaging_channel_connections"."external_owner_user_id" is null or length(trim("messaging_channel_connections"."external_owner_user_id")) between 1 and 200)
 );
 --> statement-breakpoint
 CREATE TABLE "messaging_external_identities" (
@@ -1742,3 +1744,41 @@ CREATE UNIQUE INDEX "astro_calendar_generations_fingerprint_unique" ON "astro_ca
 CREATE INDEX "astro_calendar_events_owner_starts_idx" ON "astro_calendar_events" USING btree ("owner_user_id","starts_at","id");--> statement-breakpoint
 CREATE INDEX "astro_calendar_events_generation_starts_idx" ON "astro_calendar_events" USING btree ("generation_id","starts_at","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "astro_calendar_events_generation_event_unique" ON "astro_calendar_events" USING btree ("generation_id","event_id");
+--> statement-breakpoint
+CREATE TABLE "flows" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"approval_mode" text DEFAULT 'manual_approve' NOT NULL,
+	"draft_graph" jsonb NOT NULL,
+	"published_version_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"published_at" timestamp with time zone,
+	CONSTRAINT "flows_name_length_check" CHECK (length(trim("flows"."name")) between 1 and 180),
+	CONSTRAINT "flows_status_check" CHECK ("flows"."status" in ('draft', 'published', 'active', 'paused', 'archived')),
+	CONSTRAINT "flows_approval_mode_check" CHECK ("flows"."approval_mode" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
+	CONSTRAINT "flows_draft_graph_object_check" CHECK (jsonb_typeof("flows"."draft_graph") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "flow_versions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"flow_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"version" integer NOT NULL,
+	"approval_mode" text NOT NULL,
+	"graph" jsonb NOT NULL,
+	"published_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "flow_versions_positive_version_check" CHECK ("flow_versions"."version" > 0),
+	CONSTRAINT "flow_versions_approval_mode_check" CHECK ("flow_versions"."approval_mode" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
+	CONSTRAINT "flow_versions_graph_object_check" CHECK (jsonb_typeof("flow_versions"."graph") = 'object')
+);
+--> statement-breakpoint
+ALTER TABLE "flows" ADD CONSTRAINT "flows_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_versions" ADD CONSTRAINT "flow_versions_flow_id_flows_id_fk" FOREIGN KEY ("flow_id") REFERENCES "public"."flows"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_versions" ADD CONSTRAINT "flow_versions_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "flows_owner_status_updated_idx" ON "flows" USING btree ("owner_user_id","status","updated_at");--> statement-breakpoint
+CREATE INDEX "flows_owner_name_idx" ON "flows" USING btree ("owner_user_id","name");--> statement-breakpoint
+CREATE INDEX "flow_versions_owner_published_idx" ON "flow_versions" USING btree ("owner_user_id","published_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_versions_flow_version_unique" ON "flow_versions" USING btree ("flow_id","version");

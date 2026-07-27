@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   flowApprovalModeSchema,
   flowGraphSchema,
+  createFlowRequestSchema,
+  flowResponseSchema,
+  listFlowsResponseSchema,
+  publishFlowResponseSchema,
+  updateFlowDraftRequestSchema,
+  listFlowTemplatesResponseSchema,
   flowTemplateSchema,
   type FlowGraph,
   type FlowTemplate
@@ -99,5 +105,41 @@ describe("flow contracts", () => {
     } satisfies FlowTemplate;
 
     expect(flowTemplateSchema.parse(template)).toEqual(template);
+  });
+
+  it("parses first-slice flow API payloads", () => {
+    const createRequest = {
+      name: "Подготовка к живой сессии",
+      approvalMode: "manual_approve",
+      graph: baseGraph
+    };
+    const flowResponse = {
+      id: "33333333-3333-4333-8333-333333333333",
+      ownerUserId: "44444444-4444-4444-8444-444444444444",
+      name: "Подготовка к живой сессии",
+      status: "draft",
+      approvalMode: "manual_approve",
+      draftGraph: baseGraph,
+      publishedVersionId: null,
+      publishedVersion: null,
+      createdAt: "2026-07-26T10:00:00.000Z",
+      updatedAt: "2026-07-26T10:00:00.000Z",
+      publishedAt: null
+    };
+
+    expect(createFlowRequestSchema.parse(createRequest)).toEqual(createRequest);
+    expect(updateFlowDraftRequestSchema.parse({ name: "Новая воронка" })).toEqual({
+      name: "Новая воронка"
+    });
+    expect(flowResponseSchema.parse(flowResponse)).toEqual(flowResponse);
+    expect(listFlowsResponseSchema.parse({ flows: [flowResponse], total: 1 })).toEqual({
+      flows: [flowResponse],
+      total: 1
+    });
+    expect(publishFlowResponseSchema.parse({ flow: flowResponse, version: null })).toEqual({
+      flow: flowResponse,
+      version: null
+    });
+    expect(listFlowTemplatesResponseSchema.parse({ templates: [] })).toEqual({ templates: [] });
   });
 });

@@ -382,3 +382,85 @@ export const flowTemplateSchema = z
   })
   .strict();
 export type FlowTemplate = z.infer<typeof flowTemplateSchema>;
+
+export const createFlowRequestSchema = z
+  .object({
+    name: titleSchema,
+    approvalMode: flowApprovalModeSchema.default("manual_approve"),
+    graph: flowGraphSchema
+  })
+  .strict();
+export type CreateFlowRequestInput = z.input<typeof createFlowRequestSchema>;
+export type CreateFlowRequest = z.infer<typeof createFlowRequestSchema>;
+
+export const updateFlowDraftRequestSchema = z
+  .object({
+    name: titleSchema.optional(),
+    approvalMode: flowApprovalModeSchema.optional(),
+    graph: flowGraphSchema.optional()
+  })
+  .strict()
+  .superRefine((request, context) => {
+    if (
+      request.name === undefined &&
+      request.approvalMode === undefined &&
+      request.graph === undefined
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Flow draft update requires at least one field"
+      });
+    }
+  });
+export type UpdateFlowDraftRequestInput = z.input<typeof updateFlowDraftRequestSchema>;
+export type UpdateFlowDraftRequest = z.infer<typeof updateFlowDraftRequestSchema>;
+
+export const flowResponseSchema = z
+  .object({
+    id: uuidSchema,
+    ownerUserId: uuidSchema,
+    name: titleSchema,
+    status: flowStatusSchema,
+    approvalMode: flowApprovalModeSchema,
+    draftGraph: flowGraphSchema,
+    publishedVersionId: uuidSchema.nullable(),
+    publishedVersion: z.number().int().positive().nullable(),
+    createdAt: instantSchema,
+    updatedAt: instantSchema,
+    publishedAt: instantSchema.nullable()
+  })
+  .strict();
+export type FlowResponse = z.infer<typeof flowResponseSchema>;
+
+export const listFlowsQuerySchema = z
+  .object({
+    status: z.enum(["all", ...flowStatusValues]).optional().default("all"),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+    offset: z.coerce.number().int().min(0).max(10_000).optional().default(0)
+  })
+  .strict();
+export type ListFlowsQueryInput = z.input<typeof listFlowsQuerySchema>;
+export type ListFlowsQuery = z.infer<typeof listFlowsQuerySchema>;
+
+export const listFlowsResponseSchema = z
+  .object({
+    flows: z.array(flowResponseSchema).max(100),
+    total: z.number().int().min(0)
+  })
+  .strict();
+export type ListFlowsResponse = z.infer<typeof listFlowsResponseSchema>;
+
+export const publishFlowResponseSchema = z
+  .object({
+    flow: flowResponseSchema,
+    version: flowVersionSchema.nullable()
+  })
+  .strict();
+export type PublishFlowResponse = z.infer<typeof publishFlowResponseSchema>;
+
+export const listFlowTemplatesResponseSchema = z
+  .object({
+    templates: z.array(flowTemplateSchema).max(100)
+  })
+  .strict();
+export type ListFlowTemplatesResponse = z.infer<typeof listFlowTemplatesResponseSchema>;

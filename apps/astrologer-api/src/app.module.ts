@@ -14,6 +14,7 @@ import { DatabaseModule } from "./modules/database/database.module";
 import { DictionaryAiModule } from "./modules/dictionary-ai/dictionary-ai.module";
 import { DictionaryModule } from "./modules/dictionary/dictionary.module";
 import { FinanceModule } from "./modules/finance/finance.module";
+import { FlowsModule } from "./modules/flows/flows.module";
 import { HealthModule } from "./modules/health/health.module";
 import { HumanDesignModule } from "./modules/human-design/human-design.module";
 import { IdentityModule } from "./modules/identity/identity.module";
@@ -43,6 +44,7 @@ import { VerificationModule } from "./modules/verification/verification.module";
     DictionaryModule,
     DictionaryAiModule,
     FinanceModule,
+    FlowsModule,
     MediaModule,
     PlatformBillingModule,
     ProductsModule,

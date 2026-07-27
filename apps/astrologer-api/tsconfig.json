@@ -7,6 +7,43 @@
     "moduleResolution": "Node16",
     "paths": {
       "@elevenhouse/contracts": ["../../packages/contracts/dist/index.d.ts"],
+      "@elevenhouse/db": ["../../packages/db/dist/index.d.ts"],
+      "@elevenhouse/db/account-registration": [
+        "../../packages/db/dist/adapters/identity/account-registration/index.d.ts"
+      ],
+      "@elevenhouse/db/astro-calendar": [
+        "../../packages/db/dist/adapters/astro-calendar/index.d.ts"
+      ],
+      "@elevenhouse/db/astrologer-profile": [
+        "../../packages/db/dist/adapters/astrologer-profile/index.d.ts"
+      ],
+      "@elevenhouse/db/auth-sessions": [
+        "../../packages/db/dist/adapters/identity/auth-sessions/index.d.ts"
+      ],
+      "@elevenhouse/db/calculations": [
+        "../../packages/db/dist/adapters/calculations/index.d.ts"
+      ],
+      "@elevenhouse/db/charts": ["../../packages/db/dist/adapters/charts/index.d.ts"],
+      "@elevenhouse/db/clients": ["../../packages/db/dist/adapters/clients/index.d.ts"],
+      "@elevenhouse/db/dictionary": ["../../packages/db/dist/adapters/dictionary/index.d.ts"],
+      "@elevenhouse/db/finance": ["../../packages/db/dist/adapters/finance/index.d.ts"],
+      "@elevenhouse/db/matrix": ["../../packages/db/dist/adapters/matrix/index.d.ts"],
+      "@elevenhouse/db/media": ["../../packages/db/dist/adapters/media/index.d.ts"],
+      "@elevenhouse/db/messaging": ["../../packages/db/dist/adapters/messaging/index.d.ts"],
+      "@elevenhouse/db/passwordless-auth": [
+        "../../packages/db/dist/adapters/identity/passwordless-auth/index.d.ts"
+      ],
+      "@elevenhouse/db/platform-billing": [
+        "../../packages/db/dist/adapters/platform-billing/index.d.ts"
+      ],
+      "@elevenhouse/db/products": ["../../packages/db/dist/adapters/products/index.d.ts"],
+      "@elevenhouse/db/runtime": ["../../packages/db/dist/runtime/index.d.ts"],
+      "@elevenhouse/db/scheduling": [
+        "../../packages/db/dist/adapters/scheduling/index.d.ts"
+      ],
+      "@elevenhouse/db/verification": [
+        "../../packages/db/dist/adapters/verification/index.d.ts"
+      ],
       "@elevenhouse/numerology-presentation": [
         "../../packages/numerology-presentation/dist/index.d.ts"
       ]
