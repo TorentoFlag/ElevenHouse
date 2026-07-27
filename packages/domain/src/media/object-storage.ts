@@ -27,8 +27,19 @@ export type PrivateObjectStoragePort = {
     readonly storageBucket: string;
     readonly storageKey: string;
     readonly fileName: string;
+    readonly mimeType?: MediaMimeType | undefined;
   }) => Promise<{
     readonly url: string;
     readonly expiresAt: string;
   }>;
+};
+
+export type PrivateObjectStorageWriterPort = {
+  readonly putPrivateObject: (input: {
+    readonly storageBucket: string;
+    readonly storageKey: string;
+    readonly body: Uint8Array;
+    readonly mimeType: MediaMimeType;
+    readonly checksumSha256: string;
+  }) => Promise<void>;
 };

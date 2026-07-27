@@ -444,10 +444,10 @@ CREATE TABLE "media_assets" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "media_assets_storage_bucket_storage_key_unique" UNIQUE("storage_bucket","storage_key"),
 	CONSTRAINT "media_assets_id_owner_unique" UNIQUE("id","owner_user_id"),
-	CONSTRAINT "media_assets_purpose_check" CHECK ("media_assets"."purpose" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document', 'calculation_report_pdf')),
+	CONSTRAINT "media_assets_purpose_check" CHECK ("media_assets"."purpose" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document', 'calculation_report_pdf', 'messaging_attachment')),
 	CONSTRAINT "media_assets_status_check" CHECK ("media_assets"."status" in ('uploading', 'processing', 'ready', 'failed', 'deleted')),
 	CONSTRAINT "media_assets_visibility_check" CHECK ("media_assets"."visibility" in ('public', 'private')),
-	CONSTRAINT "media_assets_mime_type_check" CHECK ("media_assets"."mime_type" in ('image/jpeg', 'image/png', 'image/webp', 'image/avif', 'application/pdf')),
+	CONSTRAINT "media_assets_mime_type_check" CHECK ("media_assets"."mime_type" in ('image/jpeg', 'image/png', 'image/webp', 'image/avif', 'application/pdf', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'video/mp4')),
 	CONSTRAINT "media_assets_size_bytes_check" CHECK ("media_assets"."size_bytes" >= 0),
 	CONSTRAINT "media_assets_ready_size_bytes_check" CHECK ("media_assets"."status" <> 'ready' or "media_assets"."size_bytes" > 0),
 	CONSTRAINT "media_assets_width_check" CHECK ("media_assets"."width" is null or "media_assets"."width" > 0),
@@ -1050,10 +1050,43 @@ CREATE TABLE "messages" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "messages_direction_check" CHECK ("messages"."direction" in ('inbound', 'outbound')),
 	CONSTRAINT "messages_sender_kind_check" CHECK ("messages"."sender_kind" in ('client', 'astrologer', 'system')),
-	CONSTRAINT "messages_content_type_check" CHECK ("messages"."content_type" in ('text', 'image', 'file', 'voice', 'unsupported')),
+	CONSTRAINT "messages_content_type_check" CHECK ("messages"."content_type" in ('text', 'image', 'file', 'voice', 'video_note', 'video', 'unsupported')),
 	CONSTRAINT "messages_status_check" CHECK ("messages"."status" in ('received', 'queued', 'sending', 'sent', 'delivered', 'read', 'failed', 'unknown', 'deleted')),
 	CONSTRAINT "messages_text_length_check" CHECK (length("messages"."text") <= 4000),
 	CONSTRAINT "messages_outbound_request_check" CHECK ("messages"."direction" <> 'outbound' or ("messages"."idempotency_key" is not null and "messages"."request_hash" ~ '^sha256:[a-f0-9]{64}$'))
+);
+--> statement-breakpoint
+CREATE TABLE "message_media_ingestions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"message_id" uuid NOT NULL,
+	"channel_connection_id" uuid NOT NULL,
+	"provider" text NOT NULL,
+	"provider_file_id" text NOT NULL,
+	"provider_file_unique_id" text NOT NULL,
+	"provider_mime_type" text,
+	"provider_size_bytes" integer,
+	"content_type" text NOT NULL,
+	"duration_seconds" integer,
+	"width" integer,
+	"height" integer,
+	"download_status" text DEFAULT 'pending' NOT NULL,
+	"media_asset_id" uuid,
+	"failure_code" text,
+	"attempt_count" integer DEFAULT 0 NOT NULL,
+	"next_retry_at" timestamp with time zone,
+	"checksum_sha256" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "message_media_ingestions_provider_check" CHECK ("message_media_ingestions"."provider" in ('telegram', 'instagram')),
+	CONSTRAINT "message_media_ingestions_content_type_check" CHECK ("message_media_ingestions"."content_type" in ('text', 'image', 'file', 'voice', 'video_note', 'video', 'unsupported')),
+	CONSTRAINT "message_media_ingestions_download_status_check" CHECK ("message_media_ingestions"."download_status" in ('pending', 'downloading', 'ready', 'failed', 'permanent_failed')),
+	CONSTRAINT "message_media_ingestions_provider_size_check" CHECK ("message_media_ingestions"."provider_size_bytes" is null or "message_media_ingestions"."provider_size_bytes" >= 0),
+	CONSTRAINT "message_media_ingestions_duration_check" CHECK ("message_media_ingestions"."duration_seconds" is null or "message_media_ingestions"."duration_seconds" >= 0),
+	CONSTRAINT "message_media_ingestions_width_check" CHECK ("message_media_ingestions"."width" is null or "message_media_ingestions"."width" > 0),
+	CONSTRAINT "message_media_ingestions_height_check" CHECK ("message_media_ingestions"."height" is null or "message_media_ingestions"."height" > 0),
+	CONSTRAINT "message_media_ingestions_attempt_count_check" CHECK ("message_media_ingestions"."attempt_count" >= 0),
+	CONSTRAINT "message_media_ingestions_checksum_check" CHECK ("message_media_ingestions"."checksum_sha256" is null or "message_media_ingestions"."checksum_sha256" ~ '^[a-f0-9]{64}$'),
+	CONSTRAINT "message_media_ingestions_ready_media_check" CHECK ("message_media_ingestions"."download_status" <> 'ready' or "message_media_ingestions"."media_asset_id" is not null)
 );
 --> statement-breakpoint
 CREATE TABLE "message_delivery_attempts" (
@@ -1480,6 +1513,10 @@ ALTER TABLE "messaging_thread_identities" ADD CONSTRAINT "messaging_thread_ident
 ALTER TABLE "messages" ADD CONSTRAINT "messages_thread_id_messaging_threads_id_fk" FOREIGN KEY ("thread_id") REFERENCES "public"."messaging_threads"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messages" ADD CONSTRAINT "messages_channel_connection_id_messaging_channel_connections_id_fk" FOREIGN KEY ("channel_connection_id") REFERENCES "public"."messaging_channel_connections"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messages" ADD CONSTRAINT "messages_external_identity_id_messaging_external_identities_id_fk" FOREIGN KEY ("external_identity_id") REFERENCES "public"."messaging_external_identities"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messages" ADD CONSTRAINT "messages_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "message_media_ingestions" ADD CONSTRAINT "message_media_ingestions_message_id_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "message_media_ingestions" ADD CONSTRAINT "message_media_ingestions_channel_connection_id_messaging_channel_connections_id_fk" FOREIGN KEY ("channel_connection_id") REFERENCES "public"."messaging_channel_connections"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "message_media_ingestions" ADD CONSTRAINT "message_media_ingestions_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message_delivery_attempts" ADD CONSTRAINT "message_delivery_attempts_message_id_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messaging_realtime_events" ADD CONSTRAINT "messaging_realtime_events_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astrologer_risk_profiles" ADD CONSTRAINT "astrologer_risk_profiles_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1632,6 +1669,9 @@ CREATE UNIQUE INDEX "messaging_thread_identities_primary_thread_provider_unique"
 CREATE UNIQUE INDEX "messages_inbound_provider_dedupe_unique" ON "messages" USING btree ("channel_connection_id","external_identity_id","provider_message_id","direction") WHERE "messages"."provider_message_id" is not null and "messages"."external_identity_id" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "messages_outbound_idempotency_unique" ON "messages" USING btree ("thread_id","idempotency_key") WHERE "messages"."direction" = 'outbound';--> statement-breakpoint
 CREATE INDEX "messages_thread_created_idx" ON "messages" USING btree ("thread_id","created_at","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "message_media_ingestions_message_unique" ON "message_media_ingestions" USING btree ("message_id");--> statement-breakpoint
+CREATE INDEX "message_media_ingestions_status_retry_idx" ON "message_media_ingestions" USING btree ("download_status","next_retry_at","created_at");--> statement-breakpoint
+CREATE INDEX "message_media_ingestions_message_idx" ON "message_media_ingestions" USING btree ("message_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "message_delivery_attempts_message_attempt_unique" ON "message_delivery_attempts" USING btree ("message_id","attempt_number");--> statement-breakpoint
 CREATE UNIQUE INDEX "messaging_realtime_events_event_id_unique" ON "messaging_realtime_events" USING btree ("event_id");--> statement-breakpoint
 CREATE INDEX "messaging_realtime_events_astrologer_event_id_idx" ON "messaging_realtime_events" USING btree ("astrologer_user_id","event_id");--> statement-breakpoint

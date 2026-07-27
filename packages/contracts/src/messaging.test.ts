@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   MessagingChannelConnectionResponseSchema,
   MessagingChannelModeSchema,
+  MessagingMessageMediaSourceResponseSchema,
+  MessagingMessageSchema,
   MessagingThreadDetailQuerySchema,
   MessagingProviderSchema,
   MessagingRealtimeEventSchema,
@@ -109,5 +111,173 @@ describe("messaging contracts", () => {
         telegramBotUrl: "https://t.me/elevenhouse_test_bot"
       })
     ).toThrow();
+  });
+
+  it("accepts voice message media state without exposing provider file identifiers", () => {
+    const message = MessagingMessageSchema.parse({
+      id: "33333333-3333-4333-8333-333333333333",
+      threadId: "22222222-2222-4222-8222-222222222222",
+      channelConnectionId: "11111111-1111-4111-8111-111111111111",
+      externalIdentityId: "44444444-4444-4444-8444-444444444444",
+      direction: "inbound",
+      senderKind: "client",
+      contentType: "voice",
+      text: "Голосовое сообщение (0:12)",
+      mediaAssetId: null,
+      media: {
+        mediaAssetId: null,
+        kind: "voice",
+        status: "pending",
+        durationSeconds: 12,
+        mimeType: "audio/ogg",
+        sizeBytes: 3210
+      },
+      status: "received",
+      failureCode: null,
+      providerSentAt: "2026-07-27T10:00:00.000Z",
+      createdAt: "2026-07-27T10:00:01.000Z",
+      updatedAt: "2026-07-27T10:00:01.000Z"
+    });
+
+    expect(message.media).toEqual({
+      mediaAssetId: null,
+      kind: "voice",
+      status: "pending",
+      durationSeconds: 12,
+      width: null,
+      height: null,
+      mimeType: "audio/ogg",
+      sizeBytes: 3210
+    });
+    expect(() =>
+      MessagingMessageSchema.parse({
+        ...message,
+        media: { ...message.media, providerFileId: "telegram-file-id" }
+      })
+    ).toThrow();
+  });
+
+  it("accepts image message media state with dimensions", () => {
+    const message = MessagingMessageSchema.parse({
+      id: "33333333-3333-4333-8333-333333333334",
+      threadId: "22222222-2222-4222-8222-222222222222",
+      channelConnectionId: "11111111-1111-4111-8111-111111111111",
+      externalIdentityId: "44444444-4444-4444-8444-444444444444",
+      direction: "inbound",
+      senderKind: "client",
+      contentType: "image",
+      text: "Фото",
+      mediaAssetId: "55555555-5555-4555-8555-555555555555",
+      media: {
+        mediaAssetId: "55555555-5555-4555-8555-555555555555",
+        kind: "image",
+        status: "ready",
+        durationSeconds: null,
+        width: 1280,
+        height: 720,
+        mimeType: "image/jpeg",
+        sizeBytes: 123456
+      },
+      status: "received",
+      failureCode: null,
+      providerSentAt: "2026-07-27T10:00:00.000Z",
+      createdAt: "2026-07-27T10:00:01.000Z",
+      updatedAt: "2026-07-27T10:00:01.000Z"
+    });
+
+    expect(message.media).toMatchObject({
+      kind: "image",
+      status: "ready",
+      width: 1280,
+      height: 720
+    });
+  });
+
+  it("accepts Telegram video-note message media state with duration and dimensions", () => {
+    const message = MessagingMessageSchema.parse({
+      id: "33333333-3333-4333-8333-333333333335",
+      threadId: "22222222-2222-4222-8222-222222222222",
+      channelConnectionId: "11111111-1111-4111-8111-111111111111",
+      externalIdentityId: "44444444-4444-4444-8444-444444444444",
+      direction: "outbound",
+      senderKind: "astrologer",
+      contentType: "video_note",
+      text: "Видео кружок (0:05)",
+      mediaAssetId: null,
+      media: {
+        mediaAssetId: null,
+        kind: "video_note",
+        status: "pending",
+        durationSeconds: 5,
+        width: 384,
+        height: 384,
+        mimeType: "video/mp4",
+        sizeBytes: 654321
+      },
+      status: "sent",
+      failureCode: null,
+      providerSentAt: "2026-07-27T10:00:00.000Z",
+      createdAt: "2026-07-27T10:00:01.000Z",
+      updatedAt: "2026-07-27T10:00:01.000Z"
+    });
+
+    expect(message.contentType).toBe("video_note");
+    expect(message.media).toMatchObject({
+      kind: "video_note",
+      durationSeconds: 5,
+      width: 384,
+      height: 384
+    });
+  });
+
+  it("accepts Telegram video message media state with duration and dimensions", () => {
+    const message = MessagingMessageSchema.parse({
+      id: "33333333-3333-4333-8333-333333333336",
+      threadId: "22222222-2222-4222-8222-222222222222",
+      channelConnectionId: "11111111-1111-4111-8111-111111111111",
+      externalIdentityId: "44444444-4444-4444-8444-444444444444",
+      direction: "inbound",
+      senderKind: "client",
+      contentType: "video",
+      text: "Расклад по дому",
+      mediaAssetId: null,
+      media: {
+        mediaAssetId: null,
+        kind: "video",
+        status: "pending",
+        durationSeconds: 18,
+        width: 1280,
+        height: 720,
+        mimeType: "video/mp4",
+        sizeBytes: 7654321
+      },
+      status: "received",
+      failureCode: null,
+      providerSentAt: "2026-07-27T10:00:00.000Z",
+      createdAt: "2026-07-27T10:00:01.000Z",
+      updatedAt: "2026-07-27T10:00:01.000Z"
+    });
+
+    expect(message.contentType).toBe("video");
+    expect(message.media).toMatchObject({
+      kind: "video",
+      durationSeconds: 18,
+      width: 1280,
+      height: 720
+    });
+  });
+
+  it("accepts a short-lived voice media source response", () => {
+    expect(
+      MessagingMessageMediaSourceResponseSchema.parse({
+        url: "https://media.example/private/voice.ogg?signature=abc",
+        expiresAt: "2026-07-27T10:05:00.000Z",
+        mimeType: "audio/ogg"
+      })
+    ).toEqual({
+      url: "https://media.example/private/voice.ogg?signature=abc",
+      expiresAt: "2026-07-27T10:05:00.000Z",
+      mimeType: "audio/ogg"
+    });
   });
 });

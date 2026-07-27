@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { createMessagingRealtimeClient } from "../../features/messaging/realtime/messagingRealtimeClient";
+import { getMessagingMessageMediaSource } from "../../features/messaging/api/messagingApi";
 import {
   createMessagingThreadClientMutationOptions,
   getMessagingThreadQueryOptions,
@@ -174,6 +175,7 @@ export function InboxPage() {
           .then(() => setCreateClientDisplayName(""))
           .catch(() => undefined);
       }}
+      onLoadMessageMediaSource={getMessagingMessageMediaSource}
     />
   );
 }

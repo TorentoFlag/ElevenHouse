@@ -147,6 +147,7 @@ function createStore(
     listChannelConnections: vi.fn(async () => ({ channelConnections: [] })),
     listThreads: vi.fn(async () => ({ threads: [], nextCursor: null })),
     getThread: vi.fn(async () => null),
+    findMessageMediaSource: vi.fn(async () => null),
     listRealtimeEvents: vi.fn(async () => ({
       events: calls++ === 0 ? firstBatch : secondBatch
     }))

@@ -10,6 +10,7 @@ import {
   messagingExternalIdentities,
   messagingMessages,
   messagingRealtimeEvents,
+  messagingThreadIdentities,
   messagingThreads,
   outboxEvents,
   userRoleAssignments,
@@ -412,6 +413,7 @@ describe("createDrizzleMessagingStore", () => {
       table: messagingChannelConnections,
       value: expect.objectContaining({
         status: "active",
+        externalOwnerUserId: "987654321",
         displayNameSnapshot: "Alisa",
         usernameSnapshot: "alisa_astro",
         capabilities: {
@@ -427,6 +429,135 @@ describe("createDrizzleMessagingStore", () => {
         lastErrorMessage: null
       })
     });
+  });
+
+  it("records Telegram Business messages sent directly by the business account as outbound", async () => {
+    const fake = createTelegramBusinessMessageDatabase({
+      externalOwnerUserId: "987654321"
+    });
+
+    await expect(
+      createDrizzleMessagingStore(fake.database as never).recordTelegramBusinessMessage({
+        updateId: "100501",
+        businessConnectionId: "bc_real",
+        providerMessageId: "346",
+        providerChatId: "777",
+        providerUserId: "987654321",
+        username: "alisa_astro",
+        displayName: "Alisa",
+        chatUsername: "marina",
+        chatDisplayName: "Marina",
+        contentType: "text",
+        text: "Ок, записал на 12",
+        providerSentAt: now.toISOString(),
+        now: now.toISOString()
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      message: {
+        direction: "outbound",
+        status: "sent",
+        text: "Ок, записал на 12"
+      }
+    });
+
+    expect(fake.externalIdentityUpserts).toEqual([
+      expect.objectContaining({
+        providerUserId: null,
+        usernameSnapshot: "marina",
+        displayNameSnapshot: "Marina"
+      })
+    ]);
+    expect(fake.messageInserts).toEqual([
+      expect.objectContaining({
+        direction: "outbound",
+        senderKind: "astrologer",
+        status: "sent",
+        providerMessageId: "346",
+        idempotencyKey: "telegram-business:bc_real:777:346",
+        requestHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/)
+      })
+    ]);
+    expect(fake.threadUpdates).toEqual([
+      expect.objectContaining({
+        lastMessageAt: now
+      })
+    ]);
+    expect(fake.threadUpdates[0]).not.toHaveProperty("unreadAstrologerCount");
+    expect(fake.realtimeEventInserts).toEqual([
+      expect.objectContaining({
+        type: "message.received",
+        channelConnectionId
+      })
+    ]);
+  });
+
+  it("continues recording Telegram Business client messages as inbound", async () => {
+    const fake = createTelegramBusinessMessageDatabase({
+      externalOwnerUserId: "987654321"
+    });
+
+    await createDrizzleMessagingStore(fake.database as never).recordTelegramBusinessMessage({
+      updateId: "100502",
+      businessConnectionId: "bc_real",
+      providerMessageId: "347",
+      providerChatId: "777",
+      providerUserId: "555",
+      username: "marina",
+        displayName: "Marina",
+        chatUsername: "marina",
+        chatDisplayName: "Marina",
+        contentType: "text",
+        text: "Например на 12",
+      providerSentAt: now.toISOString(),
+      now: now.toISOString()
+    });
+
+    expect(fake.messageInserts).toEqual([
+      expect.objectContaining({
+        direction: "inbound",
+        senderKind: "client",
+        contentType: "text",
+        status: "received",
+        idempotencyKey: null,
+        requestHash: null
+      })
+    ]);
+    expect(fake.threadUpdates).toEqual([
+      expect.objectContaining({
+        unreadAstrologerCount: expect.anything()
+      })
+    ]);
+  });
+
+  it("records Telegram Business voice messages with voice content type", async () => {
+    const fake = createTelegramBusinessMessageDatabase({
+      externalOwnerUserId: "987654321"
+    });
+
+    await createDrizzleMessagingStore(fake.database as never).recordTelegramBusinessMessage({
+      updateId: "100503",
+      businessConnectionId: "bc_real",
+      providerMessageId: "348",
+      providerChatId: "777",
+      providerUserId: "555",
+      username: "marina",
+      displayName: "Marina",
+      chatUsername: "marina",
+      chatDisplayName: "Marina",
+      contentType: "voice",
+      text: "Голосовое сообщение (0:12)",
+      providerSentAt: now.toISOString(),
+      now: now.toISOString()
+    });
+
+    expect(fake.messageInserts).toEqual([
+      expect.objectContaining({
+        contentType: "voice",
+        text: "Голосовое сообщение (0:12)",
+        mediaAssetId: null
+      })
+    ]);
   });
 
   it("claims a single pending Telegram Business connection when the first business connection id arrives", async () => {
@@ -555,6 +686,9 @@ describe("createDrizzleMessagingStore", () => {
         providerUserId: "555",
         username: "marina",
         displayName: "Marina",
+        chatUsername: "marina",
+        chatDisplayName: "Marina",
+        contentType: "text",
         text: "Здравствуйте",
         providerSentAt: now.toISOString(),
         now: now.toISOString()
@@ -837,6 +971,110 @@ function createDuplicateThreadClientCommandDatabase(requestHash: string) {
   };
 }
 
+function createTelegramBusinessMessageDatabase(input: { readonly externalOwnerUserId: string | null }) {
+  const externalIdentityUpserts: Record<string, unknown>[] = [];
+  const messageInserts: Record<string, unknown>[] = [];
+  const threadUpdates: Record<string, unknown>[] = [];
+  const realtimeEventInserts: Record<string, unknown>[] = [];
+
+  const database: {
+    insert: (table: unknown) => {
+      values: (value: Record<string, unknown>) => {
+        onConflictDoUpdate?: (config: Record<string, unknown>) => {
+          returning: () => Promise<readonly Record<string, unknown>[]>;
+        };
+        returning: () => Promise<readonly Record<string, unknown>[]>;
+        then: (resolve: (value: undefined) => unknown) => unknown;
+      };
+    };
+    update: (table: unknown) => {
+      set: (value: Record<string, unknown>) => {
+        where: () => {
+          returning: () => Promise<readonly Record<string, unknown>[]>;
+        };
+      };
+    };
+    select: (selection?: Record<string, unknown>) => ReturnType<typeof selectChain>;
+    transaction: <T>(callback: (transaction: unknown) => Promise<T>) => Promise<T>;
+  } = {
+    insert: (table) => ({
+      values: (value) => ({
+        onConflictDoUpdate: () => ({
+          returning: async () => {
+            if (table !== messagingExternalIdentities) return [];
+            externalIdentityUpserts.push(value);
+            return [externalIdentityProjection().externalIdentity];
+          }
+        }),
+        returning: async () => {
+          if (table === messagingMessages) {
+            messageInserts.push(value);
+            return [
+              messageRow({
+                externalIdentityId,
+                direction: value.direction,
+                senderKind: value.senderKind,
+                providerMessageId: value.providerMessageId,
+                providerUpdateId: value.providerUpdateId,
+                providerSentAt: value.providerSentAt,
+                text: value.text,
+                status: value.status,
+                idempotencyKey: value.idempotencyKey,
+                requestHash: value.requestHash,
+                createdAt: value.createdAt,
+                updatedAt: value.updatedAt
+              })
+            ];
+          }
+          if (table === messagingThreads) {
+            return [{ id: threadId }];
+          }
+          if (table === messagingRealtimeEvents) {
+            realtimeEventInserts.push(value);
+            return [realtimeEventRow(value)];
+          }
+          return [];
+        },
+        then: (resolve) => {
+          if (table === messagingThreadIdentities) return resolve(undefined);
+          return resolve(undefined);
+        }
+      })
+    }),
+    update: (table) => ({
+      set: (value) => ({
+        where: () => ({
+          returning: async () => {
+            if (table === messagingThreads) threadUpdates.push(value);
+            return [{ id: threadId }];
+          }
+        })
+      })
+    }),
+    select: (selection) => {
+      if (selection && "externalOwnerUserId" in selection) {
+        return selectChain([{ id: channelConnectionId, astrologerUserId, externalOwnerUserId: input.externalOwnerUserId }]);
+      }
+      if (selection && "thread" in selection) {
+        return selectChain([threadProjection()]);
+      }
+      if (selection && "id" in selection) {
+        return selectChain([{}]);
+      }
+      return selectChain([]);
+    },
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => callback(database)
+  };
+
+  return {
+    database,
+    externalIdentityUpserts,
+    messageInserts,
+    threadUpdates,
+    realtimeEventInserts
+  };
+}
+
 function createPendingTelegramBusinessConnectionDatabase() {
   const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
   let selectCount = 0;
@@ -979,6 +1217,7 @@ function externalIdentityProjection() {
       mode: "telegram_business_bot",
       status: "active",
       externalAccountId: null,
+      externalOwnerUserId: null,
       displayNameSnapshot: null,
       usernameSnapshot: null,
       capabilities: {},

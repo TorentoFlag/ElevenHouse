@@ -45,7 +45,12 @@ test("builds Telegram Bot API webhook requests without exposing secrets in redac
   assert.deepEqual(setWebhook.body, {
     url: webhookUrl,
     secret_token: "webhook-secret",
-    allowed_updates: ["business_connection", "business_message"],
+    allowed_updates: [
+      "business_connection",
+      "business_message",
+      "edited_business_message",
+      "deleted_business_messages"
+    ],
     drop_pending_updates: false
   });
   assert.equal(

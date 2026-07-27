@@ -2,6 +2,7 @@ import type {
   MessagingChannelMode,
   MessagingChannelStatus,
   MessagingMessageDirection,
+  MessagingMessageMedia,
   MessagingMessageStatus,
   MessagingRealtimeEvent,
   MessagingProvider,
@@ -43,14 +44,24 @@ export type MessagingReadMessage = {
   readonly externalIdentityId: string | null;
   readonly direction: MessagingMessageDirection;
   readonly senderKind: "client" | "astrologer" | "system";
-  readonly contentType: "text" | "image" | "file" | "voice" | "unsupported";
+  readonly contentType: "text" | "image" | "file" | "voice" | "video_note" | "video" | "unsupported";
   readonly text: string | null;
   readonly mediaAssetId: string | null;
+  readonly media: MessagingMessageMedia | null;
   readonly status: MessagingMessageStatus;
   readonly failureCode: string | null;
   readonly providerSentAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+};
+
+export type MessagingReadMessageMediaSource = {
+  readonly status: "pending" | "ready" | "failed";
+  readonly mediaAssetId: string | null;
+  readonly storageBucket: string | null;
+  readonly storageKey: string | null;
+  readonly originalFileName: string | null;
+  readonly mimeType: string | null;
 };
 
 export type MessagingReadThread = {
@@ -87,6 +98,10 @@ export type MessagingReadStore = {
     readonly messages: readonly MessagingReadMessage[];
     readonly nextCursor: string | null;
   } | null>;
+  readonly findMessageMediaSource: (input: {
+    readonly astrologerUserId: string;
+    readonly messageId: string;
+  }) => Promise<MessagingReadMessageMediaSource | null>;
   readonly listRealtimeEvents: (input: {
     readonly astrologerUserId: string;
     readonly afterEventId: string | undefined;

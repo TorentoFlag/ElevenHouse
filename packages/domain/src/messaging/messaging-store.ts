@@ -1,11 +1,13 @@
 import type { MessagingMessageDeliveryRequestedEvent } from "./messaging-events";
 import type {
   MessagingMessage,
+  MessagingMessageContentType,
   MessagingMessageWithRequestHash,
   MessagingRealtimeEvent,
   MessagingRealtimeEventDraft,
   MessagingThread,
-  MessagingThreadExternalIdentity
+  MessagingThreadExternalIdentity,
+  TelegramBusinessMediaAttachment
 } from "./messaging-types";
 
 export type CreateOutboundMessageStoreInput = {
@@ -88,10 +90,50 @@ export type RecordTelegramBusinessMessageStoreInput = {
   readonly providerUserId: string | null;
   readonly username: string | null;
   readonly displayName: string | null;
+  readonly chatUsername: string | null;
+  readonly chatDisplayName: string | null;
+  readonly contentType: MessagingMessageContentType;
   readonly text: string;
+  readonly mediaAttachment?: TelegramBusinessMediaAttachment | undefined;
   readonly providerSentAt: string;
   readonly now: string;
 };
+
+export type RecordTelegramBusinessDeletedMessagesStoreInput = {
+  readonly businessConnectionId: string;
+  readonly providerChatId: string;
+  readonly providerMessageIds: readonly string[];
+  readonly now: string;
+};
+
+export type RecordTelegramBusinessDeletedMessagesStoreResult =
+  | {
+      readonly kind: "recorded";
+      readonly deletedCount: number;
+    }
+  | {
+      readonly kind: "unmatched";
+    };
+
+export type RecordTelegramBusinessEditedMessageStoreInput = {
+  readonly updateId: string;
+  readonly businessConnectionId: string;
+  readonly providerMessageId: string;
+  readonly providerChatId: string;
+  readonly text: string;
+  readonly providerSentAt: string;
+  readonly providerEditedAt: string;
+  readonly now: string;
+};
+
+export type RecordTelegramBusinessEditedMessageStoreResult =
+  | {
+      readonly kind: "recorded";
+      readonly updatedCount: number;
+    }
+  | {
+      readonly kind: "unmatched";
+    };
 
 export type LinkThreadToClientStoreInput = {
   readonly astrologerUserId: string;
@@ -156,6 +198,12 @@ export type MessagingStore = {
   readonly recordTelegramBusinessMessage: (
     input: RecordTelegramBusinessMessageStoreInput
   ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;
+  readonly recordTelegramBusinessDeletedMessages: (
+    input: RecordTelegramBusinessDeletedMessagesStoreInput
+  ) => Promise<RecordTelegramBusinessDeletedMessagesStoreResult>;
+  readonly recordTelegramBusinessEditedMessage: (
+    input: RecordTelegramBusinessEditedMessageStoreInput
+  ) => Promise<RecordTelegramBusinessEditedMessageStoreResult>;
   readonly linkThreadToClient: (input: LinkThreadToClientStoreInput) => Promise<MessagingThread>;
   /** Atomically creates the manual client relationship and links the thread's primary identity. */
   readonly createClientFromThread: (

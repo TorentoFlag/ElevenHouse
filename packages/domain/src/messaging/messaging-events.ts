@@ -3,6 +3,8 @@ import type { MessagingOutboxEvent, MessagingRealtimeEventType } from "./messagi
 export const messagingMessageDeliveryRequestedEventType =
   "messaging.message.delivery_requested" as const;
 export const messagingMessageReceivedEventType = "message.received" as const;
+export const messagingMessageUpdatedEventType = "message.updated" as const;
+export const messagingMessageDeletedEventType = "message.deleted" as const;
 export const messagingThreadUpdatedEventType = "thread.updated" as const;
 
 export type MessagingMessageDeliveryRequestedPayload = {
@@ -20,8 +22,8 @@ export type MessagingMessageDeliveryRequestedEvent =
 export const messagingRealtimeEventTypes: readonly MessagingRealtimeEventType[] = [
   "thread.created",
   messagingMessageReceivedEventType,
-  "message.updated",
-  "message.deleted",
+  messagingMessageUpdatedEventType,
+  messagingMessageDeletedEventType,
   "channelConnection.updated",
   "identity.linked",
   "delivery.failed",

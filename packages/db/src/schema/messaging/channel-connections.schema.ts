@@ -19,6 +19,7 @@ export const messagingChannelConnections = pgTable(
     mode: text("mode").notNull(),
     status: text("status").notNull().default("connecting"),
     externalAccountId: text("external_account_id"),
+    externalOwnerUserId: text("external_owner_user_id"),
     displayNameSnapshot: text("display_name_snapshot"),
     usernameSnapshot: text("username_snapshot"),
     capabilities: jsonb("capabilities").$type<Record<string, boolean>>().notNull(),
@@ -56,6 +57,10 @@ export const messagingChannelConnections = pgTable(
     check(
       "messaging_channel_connections_external_account_id_length_check",
       sql`${table.externalAccountId} is null or length(trim(${table.externalAccountId})) between 1 and 200`
+    ),
+    check(
+      "messaging_channel_connections_external_owner_id_length_check",
+      sql`${table.externalOwnerUserId} is null or length(trim(${table.externalOwnerUserId})) between 1 and 200`
     ),
     index("messaging_channel_connections_astrologer_provider_mode_status_idx").on(
       table.astrologerUserId,

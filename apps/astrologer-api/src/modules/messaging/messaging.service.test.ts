@@ -167,6 +167,177 @@ describe("MessagingService", () => {
     );
   });
 
+  it("records Telegram Business voice messages instead of dropping them as unsupported", async () => {
+    const store = createStore();
+    const service = createService({ store });
+
+    await service.handleTelegramBusinessWebhookUpdate({
+      kind: "business_message",
+      updateId: "1008",
+      businessConnectionId: "bc_123",
+      providerMessageId: "349",
+      providerChatId: "777",
+      providerUserId: "555",
+      username: "marina_solar",
+      displayName: "Marina",
+      chatUsername: "marina_solar",
+      chatDisplayName: "Marina",
+      providerSentAt: "2026-07-22T06:07:00.000Z",
+      contentType: "voice",
+      text: "Голосовое сообщение (0:12)",
+      mediaAttachment: {
+        kind: "voice",
+        providerFileId: "voice-file-id",
+        providerFileUniqueId: "voice-file-unique-id",
+        durationSeconds: 12,
+        width: null,
+        height: null,
+        providerMimeType: "audio/ogg",
+        providerSizeBytes: 34567
+      }
+    } as never);
+
+    expect(store.recordTelegramBusinessMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        updateId: "1008",
+        contentType: "voice",
+        text: "Голосовое сообщение (0:12)",
+        mediaAttachment: {
+          kind: "voice",
+          providerFileId: "voice-file-id",
+          providerFileUniqueId: "voice-file-unique-id",
+          durationSeconds: 12,
+          width: null,
+          height: null,
+          providerMimeType: "audio/ogg",
+          providerSizeBytes: 34567
+        }
+      })
+    );
+  });
+
+  it("records Telegram Business image and video note messages as media updates", async () => {
+    const store = createStore();
+    const service = createService({ store });
+
+    await service.handleTelegramBusinessWebhookUpdate({
+      kind: "business_message",
+      updateId: "1009",
+      businessConnectionId: "bc_123",
+      providerMessageId: "350",
+      providerChatId: "777",
+      providerUserId: "555",
+      username: "marina_solar",
+      displayName: "Marina",
+      chatUsername: "marina_solar",
+      chatDisplayName: "Marina",
+      providerSentAt: "2026-07-22T06:08:00.000Z",
+      contentType: "image",
+      text: "Фото карты",
+      mediaAttachment: {
+        kind: "image",
+        providerFileId: "image-file-id",
+        providerFileUniqueId: "image-file-unique-id",
+        durationSeconds: null,
+        width: 1280,
+        height: 720,
+        providerMimeType: null,
+        providerSizeBytes: 98765
+      }
+    } as never);
+
+    await service.handleTelegramBusinessWebhookUpdate({
+      kind: "business_message",
+      updateId: "1010",
+      businessConnectionId: "bc_123",
+      providerMessageId: "351",
+      providerChatId: "777",
+      providerUserId: "555",
+      username: "marina_solar",
+      displayName: "Marina",
+      chatUsername: "marina_solar",
+      chatDisplayName: "Marina",
+      providerSentAt: "2026-07-22T06:09:00.000Z",
+      contentType: "video_note",
+      text: "Видео кружок (0:07)",
+      mediaAttachment: {
+        kind: "video_note",
+        providerFileId: "video-note-file-id",
+        providerFileUniqueId: "video-note-file-unique-id",
+        durationSeconds: 7,
+        width: 384,
+        height: 384,
+        providerMimeType: "video/mp4",
+        providerSizeBytes: 456789
+      }
+    } as never);
+
+    await service.handleTelegramBusinessWebhookUpdate({
+      kind: "business_message",
+      updateId: "1011",
+      businessConnectionId: "bc_123",
+      providerMessageId: "352",
+      providerChatId: "777",
+      providerUserId: "555",
+      username: "marina_solar",
+      displayName: "Marina",
+      chatUsername: "marina_solar",
+      chatDisplayName: "Marina",
+      providerSentAt: "2026-07-22T06:10:00.000Z",
+      contentType: "video",
+      text: "Расклад по дому",
+      mediaAttachment: {
+        kind: "video",
+        providerFileId: "video-file-id",
+        providerFileUniqueId: "video-file-unique-id",
+        durationSeconds: 18,
+        width: 1280,
+        height: 720,
+        providerMimeType: "video/mp4",
+        providerSizeBytes: 7654321
+      }
+    } as never);
+
+    expect(store.recordTelegramBusinessMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        contentType: "image",
+        mediaAttachment: expect.objectContaining({
+          kind: "image",
+          providerFileId: "image-file-id",
+          width: 1280,
+          height: 720
+        })
+      })
+    );
+    expect(store.recordTelegramBusinessMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        contentType: "video_note",
+        mediaAttachment: expect.objectContaining({
+          kind: "video_note",
+          providerFileId: "video-note-file-id",
+          durationSeconds: 7,
+          width: 384,
+          height: 384
+        })
+      })
+    );
+    expect(store.recordTelegramBusinessMessage).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        contentType: "video",
+        mediaAttachment: expect.objectContaining({
+          kind: "video",
+          providerFileId: "video-file-id",
+          durationSeconds: 18,
+          width: 1280,
+          height: 720
+        })
+      })
+    );
+  });
+
   it("rejects invalid identifiers and a missing astrologer session", async () => {
     const service = createService();
 
@@ -191,6 +362,7 @@ function createService(
   return new MessagingService(
     overrides.store ?? createStore(),
     overrides.readStore ?? createReadStore(),
+    { createPresignedDownload: vi.fn(async () => ({ url: "https://storage.example/voice.ogg", expiresAt: now.toISOString() })) },
     { now: () => now },
     {
       get: (key: string) =>
@@ -220,6 +392,8 @@ function createStore(): MessagingStore {
       kind: "created" as const,
       message: domainMessage("inbound")
     })),
+    recordTelegramBusinessDeletedMessages: vi.fn(async () => ({ kind: "recorded" as const, deletedCount: 0 })),
+    recordTelegramBusinessEditedMessage: vi.fn(async () => ({ kind: "recorded" as const, updatedCount: 0 })),
     startTelegramBusinessConnection: vi.fn(async () => ({ connectionId })),
     linkThreadToClient: vi.fn(async (input) => ({ ...thread, clientUserId: input.clientUserId })),
     createClientFromThread: vi.fn(async () => ({ ...thread, clientUserId })),
@@ -248,6 +422,7 @@ function createReadStore(
       messages: [readMessage()],
       nextCursor: null
     })),
+    findMessageMediaSource: vi.fn(async () => null),
     listRealtimeEvents: vi.fn(async () => ({ events: [] }))
   };
 }
@@ -344,6 +519,7 @@ function readMessage() {
     contentType: "text" as const,
     text: "Здравствуйте",
     mediaAssetId: null,
+    media: null,
     status: "queued" as const,
     failureCode: null,
     providerSentAt: null,

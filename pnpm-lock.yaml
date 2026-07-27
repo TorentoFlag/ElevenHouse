@@ -353,6 +353,9 @@ importers:
 
   apps/notification-worker:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1079.0
+        version: 3.1079.0
       '@elevenhouse/auth':
         specifier: workspace:*
         version: link:../../packages/auth

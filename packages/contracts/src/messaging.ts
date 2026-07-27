@@ -118,6 +118,8 @@ export const MessagingMessageContentTypeSchema = z.enum([
   "image",
   "file",
   "voice",
+  "video_note",
+  "video",
   "unsupported"
 ]);
 export type MessagingMessageContentType = z.infer<typeof MessagingMessageContentTypeSchema>;
@@ -135,6 +137,18 @@ export const MessagingMessageStatusSchema = z.enum([
 ]);
 export type MessagingMessageStatus = z.infer<typeof MessagingMessageStatusSchema>;
 
+export const MessagingMessageMediaSchema = z.strictObject({
+  mediaAssetId: UuidSchema.nullable(),
+  kind: z.enum(["voice", "image", "video_note", "video"]),
+  status: z.enum(["pending", "ready", "failed"]),
+  durationSeconds: z.number().int().nonnegative().nullable(),
+  width: z.number().int().positive().nullable().default(null),
+  height: z.number().int().positive().nullable().default(null),
+  mimeType: z.string().trim().min(1).max(100).nullable(),
+  sizeBytes: z.number().int().nonnegative().nullable()
+});
+export type MessagingMessageMedia = z.infer<typeof MessagingMessageMediaSchema>;
+
 export const MessagingMessageSchema = z.strictObject({
   id: UuidSchema,
   threadId: UuidSchema,
@@ -145,6 +159,7 @@ export const MessagingMessageSchema = z.strictObject({
   contentType: MessagingMessageContentTypeSchema,
   text: z.string().max(4_000).nullable(),
   mediaAssetId: UuidSchema.nullable(),
+  media: MessagingMessageMediaSchema.nullable().default(null),
   status: MessagingMessageStatusSchema,
   failureCode: z.string().trim().min(1).max(100).nullable(),
   providerSentAt: TimestampSchema.nullable(),
@@ -202,6 +217,15 @@ export const MessagingMessageResponseSchema = z.strictObject({
   message: MessagingMessageSchema
 });
 export type MessagingMessageResponse = z.infer<typeof MessagingMessageResponseSchema>;
+
+export const MessagingMessageMediaSourceResponseSchema = z.strictObject({
+  url: z.string().trim().url(),
+  expiresAt: TimestampSchema,
+  mimeType: z.string().trim().min(1).max(100)
+});
+export type MessagingMessageMediaSourceResponse = z.infer<
+  typeof MessagingMessageMediaSourceResponseSchema
+>;
 
 export const SendMessagingMessageRequestSchema = z.strictObject({
   text: z.string().trim().min(1).max(4_000),

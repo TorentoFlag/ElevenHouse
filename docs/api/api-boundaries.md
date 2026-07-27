@@ -198,6 +198,7 @@ GET  /messaging/channel-connections
 POST /messaging/channel-connections/telegram/business/start
 GET  /messaging/threads
 GET  /messaging/threads/:threadId
+GET  /messaging/messages/:messageId/media/source
 POST /messaging/threads/:threadId/messages
 POST /messaging/threads/:threadId/link-client
 POST /messaging/threads/:threadId/create-client
@@ -224,6 +225,17 @@ transport behind an app-local `RealtimeGateway`, not a message write path.
 `POST /messaging/webhooks/telegram/bot` is CSRF-exempt only because it is a
 provider-authenticated webhook; it must validate provider authenticity and
 dedupe provider update/message ids before acknowledgement.
+
+Telegram Business voice, image and video-note webhooks persist message text
+fallback plus private provider file metadata and acknowledge before download.
+Media ingestion is performed asynchronously by `notification-worker`, which
+stores a private `messaging_attachment` media asset and emits a
+`message.updated` freshness event.
+Browsers never receive Telegram `file_id`, `file_path`, bot-token file URLs or
+storage bucket/key values. `GET /messaging/messages/:messageId/media/source` is
+authenticated and owner scoped; it returns a short-lived private playback URL
+only for ready media and returns a typed `message_media_not_ready` conflict for
+pending/failed ingestion.
 
 Messaging logging must never include phone numbers, Telegram verification or
 2FA codes, business-connection secrets, raw provider payloads, session strings,

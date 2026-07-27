@@ -15,6 +15,14 @@ export type MessagingChannelStatus =
 
 export type MessagingThreadStatus = "open" | "archived" | "blocked";
 export type MessagingMessageDirection = "inbound" | "outbound";
+export type MessagingMessageContentType =
+  | "text"
+  | "image"
+  | "file"
+  | "voice"
+  | "video_note"
+  | "video"
+  | "unsupported";
 export type MessagingMessageStatus =
   | "received"
   | "queued"
@@ -25,6 +33,12 @@ export type MessagingMessageStatus =
   | "failed"
   | "unknown"
   | "deleted";
+export type MessagingMediaIngestionStatus =
+  | "pending"
+  | "downloading"
+  | "ready"
+  | "failed"
+  | "permanent_failed";
 export type MessagingRealtimeEventType =
   | "thread.created"
   | "thread.updated"
@@ -65,6 +79,33 @@ export type MessagingMessage = {
   readonly idempotencyKey: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+};
+
+export type MessagingMessageMedia = {
+  readonly mediaAssetId: string | null;
+  readonly kind: "voice" | "image" | "video_note" | "video";
+  readonly status: "pending" | "ready" | "failed";
+  readonly durationSeconds: number | null;
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly mimeType: string | null;
+  readonly sizeBytes: number | null;
+};
+
+export type TelegramBusinessMediaAttachment = {
+  readonly kind: "voice" | "image" | "video_note" | "video";
+  readonly providerFileId: string;
+  readonly providerFileUniqueId: string;
+  readonly durationSeconds: number | null;
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly providerMimeType: string | null;
+  readonly providerSizeBytes: number | null;
+};
+
+export type TelegramBusinessVoiceAttachment = TelegramBusinessMediaAttachment & {
+  readonly kind: "voice";
+  readonly durationSeconds: number;
 };
 
 export type MessagingMessageWithRequestHash = MessagingMessage & {

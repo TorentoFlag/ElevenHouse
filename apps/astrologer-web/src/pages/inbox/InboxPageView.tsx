@@ -5,6 +5,7 @@ import type {
   MessagingThreadResponse
 } from "@elevenhouse/contracts";
 import styles from "./InboxPage.module.css";
+import { MessageMediaBubble } from "./MessageMediaBubble";
 
 export type InboxPageViewProps = {
   readonly channelConnections: MessagingChannelConnection[];
@@ -37,6 +38,11 @@ export type InboxPageViewProps = {
   readonly onCreateClientDisplayNameChange: (value: string) => void;
   readonly onLinkClientSubmit: (threadId: string) => void;
   readonly onCreateClientSubmit: (threadId: string) => void;
+  readonly onLoadMessageMediaSource: (messageId: string) => Promise<{
+    readonly url: string;
+    readonly expiresAt: string;
+    readonly mimeType: string;
+  }>;
 };
 
 export function InboxPageView({
@@ -69,7 +75,8 @@ export function InboxPageView({
   onLinkClientUserIdChange,
   onCreateClientDisplayNameChange,
   onLinkClientSubmit,
-  onCreateClientSubmit
+  onCreateClientSubmit,
+  onLoadMessageMediaSource
 }: InboxPageViewProps) {
   const selectedThread = selectedThreadResponse?.thread ?? null;
   const selectedIdentity = selectedThread?.primaryIdentity ?? null;
@@ -78,6 +85,11 @@ export function InboxPageView({
   );
   const telegramBusinessStartDisabled =
     isStartingTelegramBusinessConnection || telegramBusiness?.status === "active";
+  const showTelegramBusinessSetup =
+    isConnectionsLoading ||
+    !telegramBusiness ||
+    telegramBusiness.status !== "active" ||
+    Boolean(telegramBusinessStartError);
   const canSend = telegramBusiness?.status === "active" && telegramBusiness.capabilities.canSend;
   const composerDisabled = !selectedThread || !canSend || isSending;
   const totalUnread = threads.reduce((sum, thread) => sum + thread.unreadCount, 0);
@@ -96,6 +108,7 @@ export function InboxPageView({
           </h1>
         </div>
         <div className={styles.channelStrip} aria-label="Каналы подключения">
+          <span className={styles.channelStripLabel}>Каналы:</span>
           {channelConnections.map((connection) => (
             <ChannelBadge key={connection.id} connection={connection} />
           ))}
@@ -105,60 +118,82 @@ export function InboxPageView({
             disabled={telegramBusinessStartDisabled}
             onClick={() => onStartTelegramBusinessConnection()}
           >
-            {telegramBusinessStartButtonLabel(telegramBusiness, isStartingTelegramBusinessConnection)}
+            {telegramBusinessStartButtonLabel(
+              telegramBusiness,
+              isStartingTelegramBusinessConnection
+            )}
           </button>
         </div>
       </header>
 
       <div className={styles.body}>
         <aside className={styles.threadListPanel} aria-label="Диалоги">
-          <div className={styles.connectionCards}>
-            <article className={styles.connectionCard}>
-              <div className={styles.connectionIcon}>T</div>
-              <div>
-                <h2>Подключить Telegram Business</h2>
-                <p>
-                  Сообщения приходят из личного Telegram Business аккаунта астролога через
-                  разрешённого Secretary bot.
-                </p>
-                <ConnectionStatus connection={telegramBusiness} isLoading={isConnectionsLoading} />
-                {telegramBusinessStartError && (
-                  <p className={styles.connectionError} role="alert">
-                    {telegramBusinessStartError}
+          {showTelegramBusinessSetup && (
+            <div className={styles.connectionCards}>
+              <article className={styles.connectionCard}>
+                <div className={styles.connectionIcon}>T</div>
+                <div>
+                  <h2>Подключить Telegram Business</h2>
+                  <p>
+                    Сообщения приходят из личного Telegram Business аккаунта астролога через
+                    разрешённого Secretary bot.
                   </p>
-                )}
-                <button
-                  className={styles.connectButton}
-                  type="button"
-                  disabled={telegramBusinessStartDisabled}
-                  onClick={() => onStartTelegramBusinessConnection()}
-                >
-                  {telegramBusinessStartButtonLabel(
-                    telegramBusiness,
-                    isStartingTelegramBusinessConnection
+                  <ConnectionStatus
+                    connection={telegramBusiness}
+                    isLoading={isConnectionsLoading}
+                  />
+                  {telegramBusinessStartError && (
+                    <p className={styles.connectionError} role="alert">
+                      {telegramBusinessStartError}
+                    </p>
                   )}
-                </button>
-              </div>
-            </article>
+                  <button
+                    className={styles.connectButton}
+                    type="button"
+                    disabled={telegramBusinessStartDisabled}
+                    onClick={() => onStartTelegramBusinessConnection()}
+                  >
+                    {telegramBusinessStartButtonLabel(
+                      telegramBusiness,
+                      isStartingTelegramBusinessConnection
+                    )}
+                  </button>
+                </div>
+              </article>
 
-            <article className={styles.connectionCardMuted}>
-              <div className={styles.connectionIconMuted}>T</div>
-              <div>
-                <h2>Telegram Account</h2>
-                <p>MTProto вход останется равным способом подключения после этого Telegram slice.</p>
-                <span className={styles.laterBadge}>Будет доступно позже</span>
-              </div>
-            </article>
-          </div>
+              <article className={styles.connectionCardMuted}>
+                <div className={styles.connectionIconMuted}>T</div>
+                <div>
+                  <h2>Telegram Account</h2>
+                  <p>
+                    MTProto вход останется равным способом подключения после этого Telegram slice.
+                  </p>
+                  <span className={styles.laterBadge}>Будет доступно позже</span>
+                </div>
+              </article>
+            </div>
+          )}
 
           <label className={styles.searchBox}>
             <span>Поиск по диалогам</span>
             <input
+              id="inbox-thread-search"
+              name="inboxThreadSearch"
               value={search}
               onChange={(event) => onSearchChange(event.currentTarget.value)}
-              placeholder="Имя, username или текст"
+              placeholder="Поиск по диалогам..."
             />
           </label>
+
+          <div className={styles.filterChips} aria-label="Фильтры диалогов">
+            <span className={styles.filterChipActive}>Все</span>
+            {channelConnections.map((connection) => (
+              <span key={connection.id} className={styles.filterChip}>
+                <ProviderPill provider={connection.provider} /> {providerLabel(connection.provider)}
+              </span>
+            ))}
+            <span className={styles.filterChip}>Непрочит.</span>
+          </div>
 
           <div className={styles.threadList} data-inbox-thread-list="true">
             {isThreadsLoading && <p className={styles.stateText}>Загружаем диалоги</p>}
@@ -187,7 +222,9 @@ export function InboxPageView({
                 <span className={styles.avatar}>{initialsForThread(thread)}</span>
                 <span className={styles.threadMain}>
                   <span className={styles.threadTitle}>{threadTitle(thread)}</span>
-                  <span className={styles.threadPreview}>{thread.lastMessage?.text ?? "Без текста"}</span>
+                  <span className={styles.threadPreview}>
+                    {thread.lastMessage?.text ?? "Без текста"}
+                  </span>
                 </span>
                 <span className={styles.threadMeta}>
                   <ProviderPill provider={thread.primaryIdentity?.provider ?? "telegram"} />
@@ -231,7 +268,11 @@ export function InboxPageView({
               </p>
             )}
             {visibleMessages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
+              <MessageBubble
+                key={message.id}
+                message={message}
+                onLoadMessageMediaSource={onLoadMessageMediaSource}
+              />
             ))}
           </div>
 
@@ -245,7 +286,9 @@ export function InboxPageView({
             }}
           >
             {!canSend && selectedThread && (
-              <p className={styles.composerWarning}>Нет прав на отправку через подключенный канал</p>
+              <p className={styles.composerWarning}>
+                Нет прав на отправку через подключенный канал
+              </p>
             )}
             {sendError && (
               <p className={styles.composerWarning} role="alert">
@@ -254,6 +297,8 @@ export function InboxPageView({
             )}
             <div className={styles.composerRow}>
               <input
+                id="inbox-composer"
+                name="inboxComposer"
                 value={draft}
                 onChange={(event) => onDraftChange(event.currentTarget.value)}
                 placeholder={canSend ? "Ответить через Telegram..." : "Подключите отправку"}
@@ -269,13 +314,27 @@ export function InboxPageView({
         <aside className={styles.contextPanel} aria-label="Контекст клиента">
           {selectedThread ? (
             <>
-              <span className={styles.avatarLarge}>{initialsForThread(selectedThread)}</span>
-              <h2>{threadTitle(selectedThread)}</h2>
-              <p className={styles.contextMuted}>
-                {selectedThread.clientUserId
-                  ? "Чат связан с CRM клиентом"
-                  : "Внешний Telegram чат ещё не связан с CRM"}
-              </p>
+              <div className={styles.contextIdentity}>
+                <span className={styles.avatarLarge}>{initialsForThread(selectedThread)}</span>
+                <h2>{threadTitle(selectedThread)}</h2>
+                <p className={styles.contextMuted}>
+                  {selectedThread.clientUserId ? "CRM клиент" : "Новый внешний чат"}
+                </p>
+              </div>
+              <section className={styles.contextSection} aria-label="Каналы клиента">
+                <div className={styles.contextSectionTitle}>Каналы клиента</div>
+                <div className={styles.contextChannelCard}>
+                  <ProviderPill provider={selectedIdentity?.provider ?? "telegram"} />
+                  <div>
+                    <strong>{providerLabel(selectedIdentity?.provider ?? "telegram")}</strong>
+                    <span>
+                      {selectedIdentity?.username ??
+                        selectedIdentity?.providerUserId ??
+                        "Без username"}
+                    </span>
+                  </div>
+                </div>
+              </section>
               <div className={styles.contextActions}>
                 {!selectedThread.clientUserId && (
                   <>
@@ -284,54 +343,72 @@ export function InboxPageView({
                         {clientActionError}
                       </p>
                     )}
-                    <form
-                      className={styles.clientActionForm}
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        onLinkClientSubmit(selectedThread.id);
-                      }}
+                    <section
+                      className={styles.contextSection}
+                      aria-label="Связать существующего клиента"
                     >
-                      <label>
-                        <span>CRM client user id</span>
-                        <input
-                          value={linkClientUserId}
-                          onChange={(event) =>
-                            onLinkClientUserIdChange(event.currentTarget.value)
-                          }
-                          placeholder="UUID клиента"
-                        />
-                      </label>
-                      <button type="submit" disabled={isLinkingClient || !linkClientUserId.trim()}>
-                        {isLinkingClient ? "Связываем" : "Связать клиента"}
-                      </button>
-                    </form>
-                    <form
-                      className={styles.clientActionForm}
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        onCreateClientSubmit(selectedThread.id);
-                      }}
-                    >
-                      <label>
-                        <span>Имя нового клиента</span>
-                        <input
-                          value={createClientDisplayName}
-                          onChange={(event) =>
-                            onCreateClientDisplayNameChange(event.currentTarget.value)
-                          }
-                          placeholder="Марина Краснова"
-                        />
-                      </label>
-                      <button
-                        type="submit"
-                        disabled={isCreatingClient || !createClientDisplayName.trim()}
+                      <div className={styles.contextSectionTitle}>Связь с CRM</div>
+                      <form
+                        className={styles.clientActionForm}
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          onLinkClientSubmit(selectedThread.id);
+                        }}
                       >
-                        {isCreatingClient ? "Создаём" : "Создать клиента"}
-                      </button>
-                    </form>
+                        <label>
+                          <span>CRM client user id</span>
+                          <input
+                            id="inbox-link-client-user-id"
+                            name="linkClientUserId"
+                            value={linkClientUserId}
+                            onChange={(event) =>
+                              onLinkClientUserIdChange(event.currentTarget.value)
+                            }
+                            placeholder="UUID клиента"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={isLinkingClient || !linkClientUserId.trim()}
+                        >
+                          {isLinkingClient ? "Связываем" : "Связать клиента"}
+                        </button>
+                      </form>
+                    </section>
+                    <section className={styles.contextSection} aria-label="Создать клиента">
+                      <div className={styles.contextSectionTitle}>Новая карточка</div>
+                      <form
+                        className={styles.clientActionForm}
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          onCreateClientSubmit(selectedThread.id);
+                        }}
+                      >
+                        <label>
+                          <span>Имя нового клиента</span>
+                          <input
+                            id="inbox-create-client-display-name"
+                            name="createClientDisplayName"
+                            value={createClientDisplayName}
+                            onChange={(event) =>
+                              onCreateClientDisplayNameChange(event.currentTarget.value)
+                            }
+                            placeholder="Марина Краснова"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={isCreatingClient || !createClientDisplayName.trim()}
+                        >
+                          {isCreatingClient ? "Создаём" : "Создать клиента"}
+                        </button>
+                      </form>
+                    </section>
                   </>
                 )}
-                {selectedThread.clientUserId && <button type="button">Открыть карточку клиента</button>}
+                {selectedThread.clientUserId && (
+                  <button type="button">Открыть карточку клиента</button>
+                )}
               </div>
             </>
           ) : (
@@ -418,15 +495,33 @@ function ChannelBadge({ connection }: { readonly connection: MessagingChannelCon
 }
 
 function ProviderPill({ provider }: { readonly provider: "telegram" | "instagram" }) {
-  return <span className={provider === "telegram" ? styles.providerTelegram : styles.providerInstagram}>T</span>;
+  return (
+    <span className={provider === "telegram" ? styles.providerTelegram : styles.providerInstagram}>
+      {provider === "telegram" ? "T" : "I"}
+    </span>
+  );
 }
 
-function MessageBubble({ message }: { readonly message: MessagingMessage }) {
+function providerLabel(provider: "telegram" | "instagram") {
+  return provider === "telegram" ? "Telegram" : "Instagram";
+}
+
+function MessageBubble({
+  message,
+  onLoadMessageMediaSource
+}: {
+  readonly message: MessagingMessage;
+  readonly onLoadMessageMediaSource: InboxPageViewProps["onLoadMessageMediaSource"];
+}) {
   const outgoing = message.direction === "outbound";
 
   return (
     <article className={outgoing ? styles.messageOutgoing : styles.messageIncoming}>
-      <p>{message.text ?? "Неподдерживаемый тип сообщения"}</p>
+      {message.media ? (
+        <MessageMediaBubble message={message} onLoadSource={onLoadMessageMediaSource} />
+      ) : (
+        <p>{message.text ?? "Неподдерживаемый тип сообщения"}</p>
+      )}
       <span>{messageStatusLabel(message.status)}</span>
     </article>
   );

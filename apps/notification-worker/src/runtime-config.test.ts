@@ -54,6 +54,19 @@ describe("createNotificationWorkerRuntimeConfig", () => {
       messagingDeliveryEnabled: false,
       messagingDeliveryAttempts: 5,
       messagingDeliveryBackoffMs: 1000,
+      messagingMediaIngestionEnabled: false,
+      messagingMediaIngestionAttempts: 5,
+      messagingMediaIngestionBackoffMs: 1000,
+      messagingMediaIngestionBatchSize: 50,
+      messagingMediaIngestionMaxBytes: 20_000_000,
+      mediaStorage: {
+        endpoint: "http://localhost:9000",
+        region: "us-east-1",
+        privateBucket: "elevenhouse-local-private",
+        accessKeyId: "elevenhouse",
+        secretAccessKey: "elevenhouse-secret",
+        forcePathStyle: true
+      },
       telegramBusinessDelivery: null,
       authCodeEmailDelivery: {
         endpointUrl: "https://delivery.internal/auth/email",
@@ -77,6 +90,15 @@ describe("createNotificationWorkerRuntimeConfig", () => {
     ).toThrow("NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN");
   });
 
+  it("requires Telegram Bot credentials when messaging media ingestion is enabled", () => {
+    expect(() =>
+      createNotificationWorkerRuntimeConfig({
+        ...requiredDeliveryConfig,
+        NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED: "true"
+      })
+    ).toThrow("NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN");
+  });
+
   it("parses Telegram Business messaging delivery settings", () => {
     expect(
       createNotificationWorkerRuntimeConfig({
@@ -94,6 +116,45 @@ describe("createNotificationWorkerRuntimeConfig", () => {
       telegramBusinessDelivery: {
         botToken: "telegram-token",
         botApiBaseUrl: "https://telegram.test"
+      }
+    });
+  });
+
+  it("parses messaging media ingestion and private storage settings", () => {
+    expect(
+      createNotificationWorkerRuntimeConfig({
+        ...requiredDeliveryConfig,
+        NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED: "true",
+        NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ATTEMPTS: "4",
+        NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_BACKOFF_MS: "1500",
+        NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_BATCH_SIZE: "25",
+        NOTIFICATION_WORKER_MESSAGING_MEDIA_MAX_BYTES: "123456",
+        NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: "telegram-token",
+        NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: "https://telegram.test",
+        ASTROLOGER_MEDIA_STORAGE_ENDPOINT: "https://objects.test",
+        ASTROLOGER_MEDIA_STORAGE_REGION: "eu-central-1",
+        ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET: "private-media",
+        ASTROLOGER_MEDIA_STORAGE_ACCESS_KEY_ID: "media-key",
+        ASTROLOGER_MEDIA_STORAGE_SECRET_ACCESS_KEY: "media-secret",
+        ASTROLOGER_MEDIA_STORAGE_FORCE_PATH_STYLE: "false"
+      })
+    ).toMatchObject({
+      messagingMediaIngestionEnabled: true,
+      messagingMediaIngestionAttempts: 4,
+      messagingMediaIngestionBackoffMs: 1500,
+      messagingMediaIngestionBatchSize: 25,
+      messagingMediaIngestionMaxBytes: 123456,
+      telegramBusinessDelivery: {
+        botToken: "telegram-token",
+        botApiBaseUrl: "https://telegram.test"
+      },
+      mediaStorage: {
+        endpoint: "https://objects.test",
+        region: "eu-central-1",
+        privateBucket: "private-media",
+        accessKeyId: "media-key",
+        secretAccessKey: "media-secret",
+        forcePathStyle: false
       }
     });
   });

@@ -18,10 +18,12 @@ import type {
   MarkThreadReadStoreInput,
   MarkThreadReadStoreResult,
   MessagingStore,
+  RecordInboundProviderMessageStoreInput,
   RecordTelegramBusinessConnectionStoreInput,
+  RecordTelegramBusinessDeletedMessagesStoreInput,
+  RecordTelegramBusinessEditedMessageStoreInput,
   RecordTelegramBusinessMessageStoreInput,
-  StartTelegramBusinessConnectionStoreInput,
-  RecordInboundProviderMessageStoreInput
+  StartTelegramBusinessConnectionStoreInput
 } from "./messaging-store";
 import type {
   MessagingMessage,
@@ -37,6 +39,9 @@ import {
   markThreadRead,
   normalizeRealtimeEvent,
   recordInboundProviderMessage,
+  recordTelegramBusinessMessage,
+  recordTelegramBusinessDeletedMessages,
+  recordTelegramBusinessEditedMessage,
   startTelegramBusinessConnection
 } from "./messaging-use-cases";
 
@@ -408,6 +413,271 @@ describe("Messaging use cases", () => {
       }
     ]);
   });
+
+  it("normalizes Telegram Business deleted message ids before passing them to the store", async () => {
+    const store = new InMemoryMessagingStore();
+
+    await expect(
+      recordTelegramBusinessDeletedMessages({
+        store,
+        businessConnectionId: " bc_123 ",
+        providerChatId: " 777 ",
+        providerMessageIds: [" 345 ", "346"],
+        now
+      })
+    ).resolves.toEqual({ kind: "recorded", deletedCount: 2 });
+
+    expect(store.telegramBusinessDeleteCommands).toEqual([
+      {
+        businessConnectionId: "bc_123",
+        providerChatId: "777",
+        providerMessageIds: ["345", "346"],
+        now: now.toISOString()
+      }
+    ]);
+  });
+
+  it("normalizes Telegram Business voice messages before passing them to the store", async () => {
+    const store = new InMemoryMessagingStore();
+
+    await expect(
+      recordTelegramBusinessMessage({
+        store,
+        updateId: " 1008 ",
+        businessConnectionId: " bc_123 ",
+        providerMessageId: " 349 ",
+        providerChatId: " 777 ",
+        providerUserId: " 555 ",
+        username: " marina ",
+        displayName: " Marina ",
+        chatUsername: " marina ",
+        chatDisplayName: " Marina ",
+        contentType: "voice",
+        text: "  Голосовое сообщение (0:12)  ",
+        mediaAttachment: {
+          kind: "voice",
+          providerFileId: " voice-file-id ",
+          providerFileUniqueId: " voice-file-unique-id ",
+          durationSeconds: 12,
+          width: null,
+          height: null,
+          providerMimeType: " audio/ogg ",
+          providerSizeBytes: 3210
+        },
+        providerSentAt: "2026-07-22T06:07:00.000Z",
+        now
+      })
+    ).resolves.toMatchObject({ kind: "created" });
+
+    expect(store.telegramBusinessMessageCommands).toEqual([
+      expect.objectContaining({
+        updateId: "1008",
+        businessConnectionId: "bc_123",
+        providerMessageId: "349",
+        providerChatId: "777",
+        providerUserId: "555",
+        username: "marina",
+        displayName: "Marina",
+        chatUsername: "marina",
+        chatDisplayName: "Marina",
+        contentType: "voice",
+        text: "Голосовое сообщение (0:12)",
+        mediaAttachment: {
+          kind: "voice",
+          providerFileId: "voice-file-id",
+          providerFileUniqueId: "voice-file-unique-id",
+          durationSeconds: 12,
+          width: null,
+          height: null,
+          providerMimeType: "audio/ogg",
+          providerSizeBytes: 3210
+        },
+        providerSentAt: "2026-07-22T06:07:00.000Z",
+        now: now.toISOString()
+      })
+    ]);
+  });
+
+  it("normalizes Telegram Business image messages before passing them to the store", async () => {
+    const store = new InMemoryMessagingStore();
+
+    await expect(
+      recordTelegramBusinessMessage({
+        store,
+        updateId: "1009",
+        businessConnectionId: "bc_123",
+        providerMessageId: "350",
+        providerChatId: "777",
+        providerUserId: "555",
+        username: "marina",
+        displayName: "Marina",
+        chatUsername: "marina",
+        chatDisplayName: "Marina",
+        contentType: "image",
+        text: "  Фото карты  ",
+        mediaAttachment: {
+          kind: "image",
+          providerFileId: " image-file-id ",
+          providerFileUniqueId: " image-file-unique-id ",
+          durationSeconds: null,
+          width: 1280,
+          height: 720,
+          providerMimeType: null,
+          providerSizeBytes: 98765
+        },
+        providerSentAt: "2026-07-22T06:08:00.000Z",
+        now
+      })
+    ).resolves.toMatchObject({ kind: "created" });
+
+    expect(store.telegramBusinessMessageCommands.at(-1)).toEqual(
+      expect.objectContaining({
+        contentType: "image",
+        text: "Фото карты",
+        mediaAttachment: {
+          kind: "image",
+          providerFileId: "image-file-id",
+          providerFileUniqueId: "image-file-unique-id",
+          durationSeconds: null,
+          width: 1280,
+          height: 720,
+          providerMimeType: null,
+          providerSizeBytes: 98765
+        }
+      })
+    );
+  });
+
+  it("normalizes Telegram Business video note messages before passing them to the store", async () => {
+    const store = new InMemoryMessagingStore();
+
+    await expect(
+      recordTelegramBusinessMessage({
+        store,
+        updateId: "1010",
+        businessConnectionId: "bc_123",
+        providerMessageId: "351",
+        providerChatId: "777",
+        providerUserId: "555",
+        username: "marina",
+        displayName: "Marina",
+        chatUsername: "marina",
+        chatDisplayName: "Marina",
+        contentType: "video_note",
+        text: "Видео кружок (0:07)",
+        mediaAttachment: {
+          kind: "video_note",
+          providerFileId: "video-note-file-id",
+          providerFileUniqueId: "video-note-file-unique-id",
+          durationSeconds: 7,
+          width: 384,
+          height: 384,
+          providerMimeType: "video/mp4",
+          providerSizeBytes: 456789
+        },
+        providerSentAt: "2026-07-22T06:09:00.000Z",
+        now
+      })
+    ).resolves.toMatchObject({ kind: "created" });
+
+    expect(store.telegramBusinessMessageCommands.at(-1)).toEqual(
+      expect.objectContaining({
+        contentType: "video_note",
+        text: "Видео кружок (0:07)",
+        mediaAttachment: {
+          kind: "video_note",
+          providerFileId: "video-note-file-id",
+          providerFileUniqueId: "video-note-file-unique-id",
+          durationSeconds: 7,
+          width: 384,
+          height: 384,
+          providerMimeType: "video/mp4",
+          providerSizeBytes: 456789
+        }
+      })
+    );
+  });
+
+  it("normalizes Telegram Business video messages before passing them to the store", async () => {
+    const store = new InMemoryMessagingStore();
+
+    await expect(
+      recordTelegramBusinessMessage({
+        store,
+        updateId: "1011",
+        businessConnectionId: "bc_123",
+        providerMessageId: "352",
+        providerChatId: "777",
+        providerUserId: "555",
+        username: "marina",
+        displayName: "Marina",
+        chatUsername: "marina",
+        chatDisplayName: "Marina",
+        contentType: "video",
+        text: "Расклад по дому",
+        mediaAttachment: {
+          kind: "video",
+          providerFileId: "video-file-id",
+          providerFileUniqueId: "video-file-unique-id",
+          durationSeconds: 18,
+          width: 1280,
+          height: 720,
+          providerMimeType: "video/mp4",
+          providerSizeBytes: 7654321
+        },
+        providerSentAt: "2026-07-22T06:10:00.000Z",
+        now
+      })
+    ).resolves.toMatchObject({ kind: "created" });
+
+    expect(store.telegramBusinessMessageCommands.at(-1)).toEqual(
+      expect.objectContaining({
+        contentType: "video",
+        text: "Расклад по дому",
+        mediaAttachment: {
+          kind: "video",
+          providerFileId: "video-file-id",
+          providerFileUniqueId: "video-file-unique-id",
+          durationSeconds: 18,
+          width: 1280,
+          height: 720,
+          providerMimeType: "video/mp4",
+          providerSizeBytes: 7654321
+        }
+      })
+    );
+  });
+
+  it("normalizes Telegram Business edited messages before passing them to the store", async () => {
+    const store = new InMemoryMessagingStore();
+
+    await expect(
+      recordTelegramBusinessEditedMessage({
+        store,
+        updateId: " 1007 ",
+        businessConnectionId: " bc_123 ",
+        providerMessageId: " 345 ",
+        providerChatId: " 777 ",
+        text: "  Здравствуйте, исправлено  ",
+        providerSentAt: "2026-07-22T06:01:00.000Z",
+        providerEditedAt: "2026-07-22T06:06:00.000Z",
+        now
+      })
+    ).resolves.toEqual({ kind: "recorded", updatedCount: 1 });
+
+    expect(store.telegramBusinessEditCommands).toEqual([
+      {
+        updateId: "1007",
+        businessConnectionId: "bc_123",
+        providerMessageId: "345",
+        providerChatId: "777",
+        text: "Здравствуйте, исправлено",
+        providerSentAt: "2026-07-22T06:01:00.000Z",
+        providerEditedAt: "2026-07-22T06:06:00.000Z",
+        now: now.toISOString()
+      }
+    ]);
+  });
 });
 
 class InMemoryMessagingStore implements MessagingStore {
@@ -427,6 +697,9 @@ class InMemoryMessagingStore implements MessagingStore {
     readonly now: string;
   }> = [];
   readonly startTelegramBusinessCommands: StartTelegramBusinessConnectionStoreInput[] = [];
+  readonly telegramBusinessMessageCommands: RecordTelegramBusinessMessageStoreInput[] = [];
+  readonly telegramBusinessDeleteCommands: RecordTelegramBusinessDeletedMessagesStoreInput[] = [];
+  readonly telegramBusinessEditCommands: RecordTelegramBusinessEditedMessageStoreInput[] = [];
   readonly #threads = new Map<string, MessagingThread>([
     ["thread-1", createThread()],
     ["thread-2", createThread({ id: "thread-2", externalIdentityId: "identity-2" })]
@@ -510,6 +783,7 @@ class InMemoryMessagingStore implements MessagingStore {
   async recordTelegramBusinessMessage(
     input: RecordTelegramBusinessMessageStoreInput
   ): Promise<InboundMessageRecordResult> {
+    this.telegramBusinessMessageCommands.push(input);
     return this.recordInboundProviderMessage({
       messageId: "message-telegram-business",
       astrologerUserId,
@@ -529,6 +803,20 @@ class InMemoryMessagingStore implements MessagingStore {
         externalIdentityId: "identity-1"
       }
     });
+  }
+
+  async recordTelegramBusinessDeletedMessages(
+    input: RecordTelegramBusinessDeletedMessagesStoreInput
+  ): Promise<{ readonly kind: "recorded"; readonly deletedCount: number }> {
+    this.telegramBusinessDeleteCommands.push(input);
+    return { kind: "recorded", deletedCount: input.providerMessageIds.length };
+  }
+
+  async recordTelegramBusinessEditedMessage(
+    input: RecordTelegramBusinessEditedMessageStoreInput
+  ): Promise<{ readonly kind: "recorded"; readonly updatedCount: number }> {
+    this.telegramBusinessEditCommands.push(input);
+    return { kind: "recorded", updatedCount: 1 };
   }
 
   async startTelegramBusinessConnection(

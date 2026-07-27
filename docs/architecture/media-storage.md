@@ -25,7 +25,10 @@ The current repository implements:
   read-model integrity issues;
 - private Verification document purposes;
 - private calculation PDF assets, lifecycle and cleanup through the generic
-  calculation-PDF contour.
+  calculation-PDF contour;
+- private Messaging attachments for Telegram Business inbound voice, image and
+  video-note messages, stored as worker-created `messaging_attachment` media
+  assets and referenced from Messaging messages.
 
 Product/profile records store media IDs, while API read models resolve safe
 media responses. Business modules do not store provider credentials, bucket
@@ -55,8 +58,8 @@ Browser-uploadable purposes:
 - `verification_identity_document` — private image/PDF;
 - `verification_qualification_document` — private image/PDF.
 
-`calculation_report_pdf` is private and worker-created; it is deliberately not
-a browser upload purpose.
+`calculation_report_pdf` and `messaging_attachment` are private and
+worker-created; they are deliberately not browser upload purposes.
 
 Each purpose owns exact MIME/size/visibility rules in
 `packages/validation/src/media`. Do not duplicate those limits in apps.
@@ -92,6 +95,12 @@ Implemented `astrologer-api` commands:
 - `POST /media/upload-intents`;
 - `POST /media/:mediaId/complete`.
 
+Messaging provider media playback does not use the generic upload routes.
+Telegram webhooks persist provider media metadata for voice, image and
+video-note messages, `notification-worker` downloads and stores the object
+privately, and `GET /messaging/messages/:messageId/media/source` returns an
+owner-scoped short-lived playback URL only after ingestion is ready.
+
 Business read models embed safe media data when needed. There is no generic
 public route for arbitrary asset IDs, and `public-api` must not expose private
 verification or calculation assets.
@@ -119,7 +128,9 @@ own feature changes:
 - public-page/content/session/recording purposes and access policies;
 - profile avatar/cover upload UX completion where a surface still lacks it;
 - CDN/image transformation policy beyond current public URL resolution;
-- malware scanning and recording-specific compliance/retention.
+- malware scanning and recording-specific compliance/retention;
+- generic Messaging files, outbound attachments and attachment deletion/retention
+  controls beyond message deletion semantics.
 
 Do not fake these capabilities with a local URL, placeholder asset or provider
 fallback. Add purpose-specific contracts, domain behavior and integration tests

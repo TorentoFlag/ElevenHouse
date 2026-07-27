@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
 import {
+  MessagingMessageMediaSourceResponseSchema,
   MessagingMessageResponseSchema,
   StartTelegramBusinessConnectionResponseSchema,
   MessagingThreadClientLinkResponseSchema,
@@ -34,6 +35,7 @@ import { createIdentityConfigServiceStub } from "../identity/testing/identity-co
 import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordless-rate-limiter";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
+import { MEDIA_PRIVATE_OBJECT_STORAGE } from "../media/media.tokens";
 import { MessagingModule } from "./messaging.module";
 import {
   MESSAGING_READ_STORE,
@@ -47,6 +49,7 @@ const threadId = "44444444-4444-4444-8444-444444444444";
 const connectionId = "55555555-5555-4555-8555-555555555555";
 const identityId = "66666666-6666-4666-8666-666666666666";
 const messageId = "77777777-7777-4777-8777-777777777777";
+const pendingMediaMessageId = "77777777-7777-4777-8777-777777777778";
 const sessionToken = "messaging-session-token";
 const otherSessionToken = "other-messaging-session-token";
 const sessionCookieName = "elevenhouse_astrologer_session";
@@ -58,6 +61,8 @@ let linkedClientUserId: string | null = null;
 let startedTelegramBusinessConnectionId: string | null = null;
 let inboundProviderMessageCount = 0;
 let businessConnectionUpdateCount = 0;
+let deletedBusinessMessageCount = 0;
+let editedBusinessMessageCount = 0;
 let realtimeReadInputs: unknown[] = [];
 const limits = {
   requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
@@ -77,6 +82,8 @@ describe("messaging HTTP routes", () => {
     startedTelegramBusinessConnectionId = null;
     inboundProviderMessageCount = 0;
     businessConnectionUpdateCount = 0;
+    deletedBusinessMessageCount = 0;
+    editedBusinessMessageCount = 0;
     realtimeReadInputs = [];
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async () => raise("Unexpected passwordless auth call")
@@ -121,6 +128,8 @@ describe("messaging HTTP routes", () => {
       .useValue(createStore())
       .overrideProvider(MESSAGING_READ_STORE)
       .useValue(createReadStore())
+      .overrideProvider(MEDIA_PRIVATE_OBJECT_STORAGE)
+      .useValue(createPrivateStorage())
       .compile();
     const csrf = moduleRef.get(AstrologerCsrfTokenService);
     primaryCsrfToken = createCsrfToken(csrf, sessionToken);
@@ -239,6 +248,52 @@ describe("messaging HTTP routes", () => {
     );
   });
 
+  it("returns an owner-scoped private media source for a ready voice message", async () => {
+    const response = await requestJson(
+      "GET",
+      `/messaging/messages/${messageId}/media/source`,
+      undefined,
+      auth()
+    );
+
+    expect(response.status).toBe(200);
+    MessagingMessageMediaSourceResponseSchema.parse(response.body);
+    expect(response.body).toEqual({
+      url: "https://storage.example/private/voice.ogg?signed=1",
+      expiresAt: "2026-07-22T10:05:00.000Z",
+      mimeType: "audio/ogg"
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(/providerToken|file_id|business_connection_id/i);
+  });
+
+  it("does not leak cross-owner media source existence", async () => {
+    const response = await requestJson(
+      "GET",
+      `/messaging/messages/${messageId}/media/source`,
+      undefined,
+      auth(otherSessionToken)
+    );
+
+    expect(response).toMatchObject({
+      status: 404,
+      body: { code: "messaging_thread_not_found" }
+    });
+  });
+
+  it("returns typed conflict while message media is still pending", async () => {
+    const response = await requestJson(
+      "GET",
+      `/messaging/messages/${pendingMediaMessageId}/media/source`,
+      undefined,
+      auth()
+    );
+
+    expect(response).toMatchObject({
+      status: 409,
+      body: { code: "message_media_not_ready" }
+    });
+  });
+
   it("streams owner-scoped realtime events after Last-Event-ID without CSRF", async () => {
     const controller = new AbortController();
     const response = await fetch(`${baseUrl}/messaging/events`, {
@@ -319,6 +374,30 @@ describe("messaging HTTP routes", () => {
 
     expect(response).toEqual({ status: 201, body: { ok: true } });
     expect(inboundProviderMessageCount).toBe(1);
+  });
+
+  it("accepts Telegram Business deleted message webhooks without browser auth or CSRF", async () => {
+    const response = await requestJson(
+      "POST",
+      "/messaging/webhooks/telegram/bot",
+      telegramBusinessDeletedMessagesUpdate(),
+      { "x-telegram-bot-api-secret-token": "telegram-test-secret" }
+    );
+
+    expect(response).toEqual({ status: 201, body: { ok: true } });
+    expect(deletedBusinessMessageCount).toBe(2);
+  });
+
+  it("accepts Telegram Business edited message webhooks without browser auth or CSRF", async () => {
+    const response = await requestJson(
+      "POST",
+      "/messaging/webhooks/telegram/bot",
+      telegramBusinessEditedMessageUpdate(),
+      { "x-telegram-bot-api-secret-token": "telegram-test-secret" }
+    );
+
+    expect(response).toEqual({ status: 201, body: { ok: true } });
+    expect(editedBusinessMessageCount).toBe(1);
   });
 
   it("accepts Telegram Business connection webhooks without browser auth or CSRF", async () => {
@@ -410,6 +489,14 @@ function createStore(): MessagingStore {
       inboundProviderMessageCount += 1;
       return { kind: "created" as const, message: readDomainInboundMessage() };
     }),
+    recordTelegramBusinessDeletedMessages: vi.fn(async (input) => {
+      deletedBusinessMessageCount += input.providerMessageIds.length;
+      return { kind: "recorded" as const, deletedCount: input.providerMessageIds.length };
+    }),
+    recordTelegramBusinessEditedMessage: vi.fn(async () => {
+      editedBusinessMessageCount += 1;
+      return { kind: "recorded" as const, updatedCount: 1 };
+    }),
     linkThreadToClient: vi.fn(async (input) => {
       linkedClientUserId = input.clientUserId;
       return { ...thread, clientUserId: input.clientUserId };
@@ -454,7 +541,38 @@ function createReadStore(): MessagingReadStore {
             ]
           : []
       };
+    }),
+    findMessageMediaSource: vi.fn(async (input) => {
+      if (input.astrologerUserId !== ownerUserId) return null;
+      if (input.messageId === pendingMediaMessageId) {
+        return {
+          status: "pending" as const,
+          mediaAssetId: null,
+          storageBucket: null,
+          storageKey: null,
+          originalFileName: null,
+          mimeType: null
+        };
+      }
+      if (input.messageId !== messageId) return null;
+      return {
+        status: "ready" as const,
+        mediaAssetId: "99999999-9999-4999-8999-999999999998",
+        storageBucket: "elevenhouse-local-private",
+        storageKey: "owner/messaging_attachment/media/voice.ogg",
+        originalFileName: "voice.ogg",
+        mimeType: "audio/ogg"
+      };
     })
+  };
+}
+
+function createPrivateStorage() {
+  return {
+    createPresignedDownload: vi.fn(async () => ({
+      url: "https://storage.example/private/voice.ogg?signed=1",
+      expiresAt: "2026-07-22T10:05:00.000Z"
+    }))
   };
 }
 
@@ -534,6 +652,7 @@ function readMessage() {
     contentType: "text" as const,
     text: "Здравствуйте",
     mediaAssetId: null,
+    media: null,
     status: "queued" as const,
     failureCode: null,
     providerSentAt: null,
@@ -578,6 +697,47 @@ function telegramBusinessMessageUpdate() {
       },
       date: 1784700060,
       text: "Здравствуйте"
+    }
+  };
+}
+
+function telegramBusinessDeletedMessagesUpdate() {
+  return {
+    update_id: 100502,
+    deleted_business_messages: {
+      business_connection_id: "bc_test",
+      chat: {
+        id: 777,
+        type: "private",
+        first_name: "Marina",
+        username: "marina"
+      },
+      message_ids: [100500, 100501]
+    }
+  };
+}
+
+function telegramBusinessEditedMessageUpdate() {
+  return {
+    update_id: 100503,
+    edited_business_message: {
+      message_id: 100500,
+      business_connection_id: "bc_test",
+      from: {
+        id: 555,
+        is_bot: false,
+        first_name: "Marina",
+        username: "marina"
+      },
+      chat: {
+        id: 777,
+        type: "private",
+        first_name: "Marina",
+        username: "marina"
+      },
+      date: 1784700060,
+      edit_date: 1784700360,
+      text: "Здравствуйте, исправлено"
     }
   };
 }

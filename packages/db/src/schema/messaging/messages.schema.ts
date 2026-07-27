@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { mediaAssets } from "../media/media-assets.schema";
 import { messagingChannelConnections } from "./channel-connections.schema";
 import { messagingExternalIdentities } from "./external-identities.schema";
 import {
@@ -32,7 +33,9 @@ export const messagingMessages = pgTable(
     providerSentAt: timestamp("provider_sent_at", { withTimezone: true }),
     contentType: text("content_type").notNull().default("text"),
     text: text("text").notNull(),
-    mediaAssetId: uuid("media_asset_id"),
+    mediaAssetId: uuid("media_asset_id").references(() => mediaAssets.id, {
+      onDelete: "restrict"
+    }),
     status: text("status").notNull(),
     failureCode: text("failure_code"),
     idempotencyKey: text("idempotency_key"),

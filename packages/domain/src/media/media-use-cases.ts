@@ -265,6 +265,14 @@ function extensionForMimeType(mimeType: MediaMimeTypeValue): string {
       return "avif";
     case "application/pdf":
       return "pdf";
+    case "audio/ogg":
+      return "ogg";
+    case "audio/mpeg":
+      return "mp3";
+    case "audio/mp4":
+      return "m4a";
+    case "video/mp4":
+      return "mp4";
   }
 }
 

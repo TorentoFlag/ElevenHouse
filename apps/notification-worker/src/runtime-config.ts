@@ -28,12 +28,48 @@ const notificationWorkerRuntimeConfigSchema = z
       .int()
       .positive()
       .default(1000),
+    NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED: z.enum(["true", "false"]).default("false"),
+    NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ATTEMPTS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5),
+    NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_BACKOFF_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(1000),
+    NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_BATCH_SIZE: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(50),
+    NOTIFICATION_WORKER_MESSAGING_MEDIA_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(20_000_000)
+      .default(20_000_000),
     NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: z.string().trim().min(1).optional(),
     NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: z
       .string()
       .trim()
       .url()
       .default("https://api.telegram.org"),
+    ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
+    ASTROLOGER_MEDIA_STORAGE_REGION: z.string().trim().min(1).default("us-east-1"),
+    ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET: z
+      .string()
+      .trim()
+      .min(1)
+      .default("elevenhouse-local-private"),
+    ASTROLOGER_MEDIA_STORAGE_ACCESS_KEY_ID: z.string().trim().min(1).default("elevenhouse"),
+    ASTROLOGER_MEDIA_STORAGE_SECRET_ACCESS_KEY: z
+      .string()
+      .trim()
+      .min(1)
+      .default("elevenhouse-secret"),
+    ASTROLOGER_MEDIA_STORAGE_FORCE_PATH_STYLE: z.enum(["true", "false"]).default("true"),
     NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL: z.string().trim().url().optional(),
     NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN: z.string().trim().min(1).optional(),
     NOTIFICATION_WORKER_AUTH_CODE_EMAIL_FROM: z.string().trim().min(1).optional(),
@@ -75,7 +111,10 @@ const notificationWorkerRuntimeConfigSchema = z
       );
     }
 
-    if (config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED === "true") {
+    if (
+      config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED === "true" ||
+      config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED === "true"
+    ) {
       requireHttpDeliverySetting(
         config.NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN,
         ["NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN"],
@@ -104,6 +143,12 @@ export type NotificationWorkerRuntimeConfig = {
   readonly messagingDeliveryEnabled: boolean;
   readonly messagingDeliveryAttempts: number;
   readonly messagingDeliveryBackoffMs: number;
+  readonly messagingMediaIngestionEnabled: boolean;
+  readonly messagingMediaIngestionAttempts: number;
+  readonly messagingMediaIngestionBackoffMs: number;
+  readonly messagingMediaIngestionBatchSize: number;
+  readonly messagingMediaIngestionMaxBytes: number;
+  readonly mediaStorage: MessagingMediaStorageOptions;
   readonly telegramBusinessDelivery: TelegramBusinessDeliveryOptions | null;
   readonly authCodeEmailDelivery: AuthCodeHttpDeliveryOptions | null;
   readonly authCodeSmsDelivery: AuthCodeHttpDeliveryOptions | null;
@@ -112,6 +157,15 @@ export type NotificationWorkerRuntimeConfig = {
 export type TelegramBusinessDeliveryOptions = {
   readonly botToken: string;
   readonly botApiBaseUrl: string;
+};
+
+export type MessagingMediaStorageOptions = {
+  readonly endpoint: string;
+  readonly region: string;
+  readonly privateBucket: string;
+  readonly accessKeyId: string;
+  readonly secretAccessKey: string;
+  readonly forcePathStyle: boolean;
 };
 
 export function createNotificationWorkerRuntimeConfig(
@@ -135,8 +189,25 @@ export function createNotificationWorkerRuntimeConfig(
     messagingDeliveryEnabled: config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED === "true",
     messagingDeliveryAttempts: config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ATTEMPTS,
     messagingDeliveryBackoffMs: config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_BACKOFF_MS,
+    messagingMediaIngestionEnabled:
+      config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED === "true",
+    messagingMediaIngestionAttempts: config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ATTEMPTS,
+    messagingMediaIngestionBackoffMs:
+      config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_BACKOFF_MS,
+    messagingMediaIngestionBatchSize:
+      config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_BATCH_SIZE,
+    messagingMediaIngestionMaxBytes: config.NOTIFICATION_WORKER_MESSAGING_MEDIA_MAX_BYTES,
+    mediaStorage: {
+      endpoint: config.ASTROLOGER_MEDIA_STORAGE_ENDPOINT,
+      region: config.ASTROLOGER_MEDIA_STORAGE_REGION,
+      privateBucket: config.ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET,
+      accessKeyId: config.ASTROLOGER_MEDIA_STORAGE_ACCESS_KEY_ID,
+      secretAccessKey: config.ASTROLOGER_MEDIA_STORAGE_SECRET_ACCESS_KEY,
+      forcePathStyle: config.ASTROLOGER_MEDIA_STORAGE_FORCE_PATH_STYLE === "true"
+    },
     telegramBusinessDelivery:
-      config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED === "true"
+      config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED === "true" ||
+      config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED === "true"
         ? toTelegramBusinessDeliveryOptions({
             botToken: config.NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN,
             botApiBaseUrl: config.NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL

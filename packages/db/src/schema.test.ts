@@ -24,6 +24,7 @@ import {
   dictionaryPlatformEntries,
   dictionaryPlatformEntryStatusValues,
   identityProviderValues,
+  mediaAudioMimeTypeValues,
   mediaAssets,
   mediaImageMimeTypeValues,
   mediaMimeTypeValues,
@@ -63,6 +64,7 @@ import {
   productTemplates,
   productSubscriptionPeriodValues,
   productTypeValues,
+  messageMediaIngestions,
   userProfiles,
   userStatusValues,
   verificationApplications,
@@ -391,7 +393,8 @@ describe("database account schema constants", () => {
       "profile_cover",
       "verification_identity_document",
       "verification_qualification_document",
-      "calculation_report_pdf"
+      "calculation_report_pdf",
+      "messaging_attachment"
     ]);
     expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
     expect(mediaVisibilityValues).toEqual(["public", "private"]);
@@ -406,8 +409,13 @@ describe("database account schema constants", () => {
       "image/png",
       "image/webp",
       "image/avif",
-      "application/pdf"
+      "application/pdf",
+      "audio/ogg",
+      "audio/mpeg",
+      "audio/mp4",
+      "video/mp4"
     ]);
+    expect(mediaAudioMimeTypeValues).toEqual(["audio/ogg", "audio/mpeg", "audio/mp4"]);
     expect(mediaVariantValues).toEqual(["original", "preview", "card", "cover"]);
     expect(mediaAssets).toBeDefined();
     expect(mediaVariants).toBeDefined();
@@ -426,6 +434,8 @@ describe("database account schema constants", () => {
     expect(migration).toContain('CONSTRAINT "media_assets_status_check"');
     expect(migration).toContain('CONSTRAINT "media_assets_visibility_check"');
     expect(migration).toContain('CONSTRAINT "media_assets_mime_type_check"');
+    expect(migration).toContain("messaging_attachment");
+    expect(migration).toContain("audio/ogg");
     expect(migration).toContain('CONSTRAINT "media_assets_size_bytes_check"');
     expect(migration).toContain('CONSTRAINT "media_assets_ready_size_bytes_check"');
     expect(migration).toContain('CONSTRAINT "media_assets_checksum_sha256_check"');
@@ -443,6 +453,32 @@ describe("database account schema constants", () => {
     );
     expect(migration).toContain(
       'CREATE INDEX "media_assets_owner_purpose_status_created_idx" ON "media_assets" USING btree ("owner_user_id","purpose","status","created_at")'
+    );
+  });
+
+  it("exports messaging media ingestion schema and keeps it in the baseline migration", () => {
+    const migration = readFileSync(currentBaselineMigration, "utf8");
+
+    expect(messageMediaIngestions).toBeDefined();
+    expect(migration).toContain('CREATE TABLE "message_media_ingestions"');
+    expect(migration).toContain('"provider_file_id" text NOT NULL');
+    expect(migration).toContain('"provider_file_unique_id" text NOT NULL');
+    expect(migration).toContain('"width" integer');
+    expect(migration).toContain('"height" integer');
+    expect(migration).toContain(
+      'CONSTRAINT "message_media_ingestions_download_status_check"'
+    );
+    expect(migration).toContain(
+      'CONSTRAINT "message_media_ingestions_width_check"'
+    );
+    expect(migration).toContain(
+      'CONSTRAINT "message_media_ingestions_height_check"'
+    );
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "message_media_ingestions_message_unique" ON "message_media_ingestions" USING btree ("message_id")'
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "messages" ADD CONSTRAINT "messages_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action'
     );
   });
 

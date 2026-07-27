@@ -30,6 +30,22 @@ describe("InboxPageView", () => {
     expect(markup).not.toContain("Подключить Instagram");
   });
 
+  it("keeps connected Telegram inbox focused on dialogs instead of setup cards", () => {
+    const markup = renderToStaticMarkup(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[telegramConnection()]}
+        threads={[threadFixture({})]}
+      />
+    );
+
+    expect(markup).not.toContain("Подключить Telegram Business");
+    expect(markup).not.toContain("Telegram Account");
+    expect(markup).toContain("Каналы:");
+    expect(markup).toContain("Поиск по диалогам...");
+    expect(markup).toContain("Непрочит.");
+  });
+
   it("starts Telegram Business connection from the setup card and renders pending state", () => {
     const onStartTelegramBusinessConnection = vi.fn();
 
@@ -53,13 +69,17 @@ describe("InboxPageView", () => {
       <InboxPageView {...baseProps()} channelConnections={[telegramConnection()]} />
     );
     const startingMarkup = renderToStaticMarkup(
-      <InboxPageView {...baseProps()} channelConnections={[]} isStartingTelegramBusinessConnection />
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[]}
+        isStartingTelegramBusinessConnection
+      />
     );
 
     expect(activeMarkup).toContain("Подключено");
-    expect(activeMarkup).toContain("disabled=\"\"");
+    expect(activeMarkup).toContain('disabled=""');
     expect(startingMarkup).toContain("Открываем Telegram");
-    expect(startingMarkup).toContain("disabled=\"\"");
+    expect(startingMarkup).toContain('disabled=""');
   });
 
   it("renders thread list, selected messages and unlinked chat actions", () => {
@@ -114,7 +134,6 @@ describe("InboxPageView", () => {
     expect(markup.indexOf("Пишу первым")).toBeLessThan(markup.indexOf("Отвечаю вторым"));
   });
 
-
   it("shows delivery states and disables composer while send is unavailable", () => {
     const markup = renderToStaticMarkup(
       <InboxPageView
@@ -133,7 +152,95 @@ describe("InboxPageView", () => {
     expect(markup).toContain("В очереди");
     expect(markup).toContain("Не доставлено");
     expect(markup).toContain("Нет прав на отправку");
-    expect(markup).toContain("disabled=\"\"");
+    expect(markup).toContain('disabled=""');
+  });
+
+  it("renders voice media states and loads audio source only for ready messages", async () => {
+    const onLoadMessageMediaSource = vi.fn(async () => ({
+      url: "https://storage.example/private/voice.ogg?signed=1",
+      expiresAt: "2026-07-22T10:05:00.000Z",
+      mimeType: "audio/ogg"
+    }));
+    render(
+      <InboxPageView
+        {...baseProps()}
+        onLoadMessageMediaSource={onLoadMessageMediaSource}
+        channelConnections={[telegramConnection()]}
+        threads={[threadFixture({})]}
+        selectedThreadResponse={{
+          thread: threadFixture({}),
+          messages: [
+            voiceMessage("pending"),
+            voiceMessage("failed", { id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" }),
+            voiceMessage("ready", { id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" })
+          ],
+          nextCursor: null
+        }}
+      />
+    );
+
+    expect(screen.getByText("Голос загружается")).toBeTruthy();
+    expect(screen.getByText("Голосовое сообщение недоступно")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Воспроизвести голосовое" }));
+
+    expect(await screen.findByLabelText("Голосовое сообщение")).toBeTruthy();
+    expect(onLoadMessageMediaSource).toHaveBeenCalledWith("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+  });
+
+  it("renders image and video media states from Telegram Business messages", async () => {
+    const onLoadMessageMediaSource = vi.fn(async (messageId: string) => {
+      if (messageId === "image-ready") {
+        return {
+          url: "https://storage.example/private/image.jpg?signed=1",
+          expiresAt: "2026-07-22T10:05:00.000Z",
+          mimeType: "image/jpeg"
+        };
+      }
+      if (messageId === "video-ready") {
+        return {
+          url: "https://storage.example/private/video.mp4?signed=1",
+          expiresAt: "2026-07-22T10:05:00.000Z",
+          mimeType: "video/mp4"
+        };
+      }
+      return {
+        url: "https://storage.example/private/video-note.mp4?signed=1",
+        expiresAt: "2026-07-22T10:05:00.000Z",
+        mimeType: "video/mp4"
+      };
+    });
+
+    render(
+      <InboxPageView
+        {...baseProps()}
+        onLoadMessageMediaSource={onLoadMessageMediaSource}
+        channelConnections={[telegramConnection()]}
+        threads={[threadFixture({})]}
+        selectedThreadResponse={{
+          thread: threadFixture({}),
+          messages: [imageMessage("ready"), videoNoteMessage("ready"), videoMessage("ready")],
+          nextCursor: null
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать изображение" }));
+    for (const button of screen.getAllByRole("button", { name: "Воспроизвести видео" })) {
+      fireEvent.click(button);
+    }
+
+    expect((await screen.findByAltText("Фото карты")).getAttribute("src")).toBe(
+      "https://storage.example/private/image.jpg?signed=1"
+    );
+    expect((await screen.findByLabelText("Видео кружок")).getAttribute("src")).toBe(
+      "https://storage.example/private/video-note.mp4?signed=1"
+    );
+    expect((await screen.findByLabelText("Видео")).getAttribute("src")).toBe(
+      "https://storage.example/private/video.mp4?signed=1"
+    );
+    expect(onLoadMessageMediaSource).toHaveBeenCalledWith("image-ready");
+    expect(onLoadMessageMediaSource).toHaveBeenCalledWith("video-note-ready");
+    expect(onLoadMessageMediaSource).toHaveBeenCalledWith("video-ready");
   });
 
   it("keeps the production mobile layout as a responsive state, not a separate app", () => {
@@ -143,7 +250,9 @@ describe("InboxPageView", () => {
     );
 
     expect(css).toMatch(/\.mobileThreadBack\s*\{[^}]*display:\s*none/s);
-    expect(css).toMatch(/@media \(max-width: 860px\)[\s\S]*\.contextPanel\s*\{[^}]*display:\s*none/s);
+    expect(css).toMatch(
+      /@media \(max-width: 860px\)[\s\S]*\.contextPanel\s*\{[^}]*display:\s*none/s
+    );
     expect(css).toMatch(
       /@media \(max-width: 860px\)[\s\S]*\.mobileThreadBack\s*\{[^}]*display:\s*inline-flex/s
     );
@@ -181,7 +290,8 @@ function baseProps(): InboxPageViewProps {
     onLinkClientUserIdChange: vi.fn(),
     onCreateClientDisplayNameChange: vi.fn(),
     onLinkClientSubmit: vi.fn(),
-    onCreateClientSubmit: vi.fn()
+    onCreateClientSubmit: vi.fn(),
+    onLoadMessageMediaSource: vi.fn()
   };
 }
 
@@ -254,6 +364,7 @@ function inboundMessage(input: Partial<MessagingMessage> = {}): MessagingMessage
     contentType: "text",
     text: "Когда будет готов разбор?",
     mediaAssetId: null,
+    media: null,
     status: "received",
     failureCode: null,
     providerSentAt: "2026-07-22T10:00:00.000Z",
@@ -278,4 +389,96 @@ function outboundMessage(
     failureCode: status === "failed" ? "provider_error" : null,
     ...override
   };
+}
+
+function voiceMessage(
+  status: NonNullable<MessagingMessage["media"]>["status"],
+  input: Partial<MessagingMessage> = {}
+): MessagingMessage {
+  return inboundMessage({
+    id: `voice-${status}`,
+    contentType: "voice",
+    text: "Голосовое сообщение (0:12)",
+    mediaAssetId: status === "ready" ? "99999999-9999-4999-8999-999999999998" : null,
+    media: {
+      mediaAssetId: status === "ready" ? "99999999-9999-4999-8999-999999999998" : null,
+      kind: "voice",
+      status,
+      durationSeconds: 12,
+      width: null,
+      height: null,
+      mimeType: "audio/ogg",
+      sizeBytes: 2048
+    },
+    ...input
+  });
+}
+
+function imageMessage(
+  status: NonNullable<MessagingMessage["media"]>["status"],
+  input: Partial<MessagingMessage> = {}
+): MessagingMessage {
+  return inboundMessage({
+    id: `image-${status}`,
+    contentType: "image",
+    text: "Фото карты",
+    mediaAssetId: status === "ready" ? "99999999-9999-4999-8999-999999999997" : null,
+    media: {
+      mediaAssetId: status === "ready" ? "99999999-9999-4999-8999-999999999997" : null,
+      kind: "image",
+      status,
+      durationSeconds: null,
+      width: 1280,
+      height: 720,
+      mimeType: "image/jpeg",
+      sizeBytes: 98765
+    },
+    ...input
+  });
+}
+
+function videoNoteMessage(
+  status: NonNullable<MessagingMessage["media"]>["status"],
+  input: Partial<MessagingMessage> = {}
+): MessagingMessage {
+  return inboundMessage({
+    id: `video-note-${status}`,
+    contentType: "video_note",
+    text: "Видео кружок (0:07)",
+    mediaAssetId: status === "ready" ? "99999999-9999-4999-8999-999999999996" : null,
+    media: {
+      mediaAssetId: status === "ready" ? "99999999-9999-4999-8999-999999999996" : null,
+      kind: "video_note",
+      status,
+      durationSeconds: 7,
+      width: 384,
+      height: 384,
+      mimeType: "video/mp4",
+      sizeBytes: 456789
+    },
+    ...input
+  });
+}
+
+function videoMessage(
+  status: NonNullable<MessagingMessage["media"]>["status"],
+  input: Partial<MessagingMessage> = {}
+): MessagingMessage {
+  return inboundMessage({
+    id: `video-${status}`,
+    contentType: "video",
+    text: "Расклад по дому",
+    mediaAssetId: status === "ready" ? "99999999-9999-4999-8999-999999999995" : null,
+    media: {
+      mediaAssetId: status === "ready" ? "99999999-9999-4999-8999-999999999995" : null,
+      kind: "video",
+      status,
+      durationSeconds: 18,
+      width: 1280,
+      height: 720,
+      mimeType: "video/mp4",
+      sizeBytes: 7654321
+    },
+    ...input
+  });
 }

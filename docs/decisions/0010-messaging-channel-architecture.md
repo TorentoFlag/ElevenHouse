@@ -25,6 +25,14 @@ Idempotency-Key. The command writes durable PostgreSQL state and an outbox event
 in one transaction. Worker delivery reloads message and connection state by id
 and calls provider adapters. Queue payloads contain identifiers only.
 
+Inbound provider media follows the same identifier-first async boundary.
+Telegram Business voice, image and video-note messages persist provider media
+metadata and a `message_media_ingestions` row with the message transaction. A
+worker relay publishes identifier-only ingestion jobs, the worker reloads state
+by ingestion id, downloads through a provider adapter, validates type and size,
+writes a private `messaging_attachment` media asset, attaches it to the message
+and emits `message.updated`.
+
 Realtime uses an app-local RealtimeGateway abstraction. The first transport is
 SSE for server-to-browser freshness. WebSocket remains a later transport option
 for approved bidirectional realtime features.
@@ -44,5 +52,8 @@ not implemented by this decision.
   credentials or message bodies. Queue payloads contain identifiers only.
 - Inbound webhooks must validate provider authenticity and dedupe provider
   update/message ids before acknowledging.
+- Browser playback of provider media must use owner-scoped backend source
+  endpoints and short-lived private storage URLs; provider file ids, file paths,
+  bot-token URLs and storage bucket/key details must not leave the backend.
 - Full Inbox UI must use durable message state plus realtime invalidation, not
   localStorage or mock conversations.

@@ -1,14 +1,17 @@
-import { and, asc, desc, eq, gt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, ne } from "drizzle-orm";
 import type {
   MessagingReadChannelConnection,
   MessagingReadExternalIdentity,
   MessagingReadMessage,
+  MessagingReadMessageMediaSource,
   MessagingRealtimeEvent,
   MessagingReadStore,
   MessagingReadThread
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
+  messageMediaIngestions,
+  mediaAssets,
   messagingChannelConnections,
   messagingExternalIdentities,
   messagingMessages,
@@ -20,6 +23,7 @@ import {
 type MessagingChannelConnectionRow = typeof messagingChannelConnections.$inferSelect;
 type MessagingExternalIdentityRow = typeof messagingExternalIdentities.$inferSelect;
 type MessagingMessageRow = typeof messagingMessages.$inferSelect;
+type MessageMediaIngestionRow = typeof messageMediaIngestions.$inferSelect;
 type MessagingRealtimeEventRow = typeof messagingRealtimeEvents.$inferSelect;
 type MessagingThreadRow = typeof messagingThreads.$inferSelect;
 
@@ -65,7 +69,7 @@ export function createDrizzleMessagingReadStore(database: ElevenHouseDatabase): 
       const messageQuery = database
         .select()
         .from(messagingMessages)
-        .where(eq(messagingMessages.threadId, threadRow.id))
+        .where(and(eq(messagingMessages.threadId, threadRow.id), ne(messagingMessages.status, "deleted")))
         .orderBy(desc(messagingMessages.createdAt), desc(messagingMessages.id));
       const rows =
         input.limit === undefined
@@ -73,9 +77,13 @@ export function createDrizzleMessagingReadStore(database: ElevenHouseDatabase): 
           : await messageQuery.limit(input.limit + 1).offset(input.offset);
       const hasMore = input.limit === undefined ? false : rows.length > input.limit;
       const visible = input.limit === undefined ? rows : rows.slice(0, input.limit);
+      const mediaByMessageId = await listMediaByMessageId(
+        database,
+        visible.map((row) => row.id)
+      );
       return {
         thread: await toReadThread(database, threadRow),
-        messages: visible.map(toMessage),
+        messages: visible.map((row) => toMessage(row, mediaByMessageId.get(row.id) ?? null)),
         nextCursor: hasMore ? String(input.offset + visible.length) : null
       };
     },
@@ -94,6 +102,27 @@ export function createDrizzleMessagingReadStore(database: ElevenHouseDatabase): 
         .orderBy(asc(messagingRealtimeEvents.eventId))
         .limit(input.limit);
       return { events: rows.map(toRealtimeEvent) };
+    },
+    findMessageMediaSource: async (input) => {
+      const [row] = await database
+        .select({
+          ingestion: messageMediaIngestions,
+          media: mediaAssets
+        })
+        .from(messagingMessages)
+        .innerJoin(messagingThreads, eq(messagingThreads.id, messagingMessages.threadId))
+        .leftJoin(messageMediaIngestions, eq(messageMediaIngestions.messageId, messagingMessages.id))
+        .leftJoin(mediaAssets, eq(mediaAssets.id, messagingMessages.mediaAssetId))
+        .where(
+          and(
+            eq(messagingMessages.id, input.messageId),
+            eq(messagingThreads.astrologerUserId, input.astrologerUserId),
+            ne(messagingMessages.status, "deleted")
+          )
+        )
+        .limit(1);
+      if (!row) return null;
+      return toMessageMediaSource(row.ingestion, row.media);
     }
   };
 }
@@ -120,7 +149,7 @@ async function toReadThread(
     ? await database
         .select()
         .from(messagingMessages)
-        .where(eq(messagingMessages.id, thread.lastMessageId))
+        .where(and(eq(messagingMessages.id, thread.lastMessageId), ne(messagingMessages.status, "deleted")))
         .limit(1)
     : [];
   return {
@@ -128,7 +157,9 @@ async function toReadThread(
     clientUserId: thread.clientUserId,
     status: thread.status as MessagingReadThread["status"],
     primaryIdentity: identityRow ? toExternalIdentity(identityRow.identity) : null,
-    lastMessage: lastMessageRow ? toMessage(lastMessageRow) : null,
+    lastMessage: lastMessageRow
+      ? toMessage(lastMessageRow, await findMediaForMessage(database, lastMessageRow.id))
+      : null,
     lastMessageAt: toNullableIsoString(thread.lastMessageAt),
     unreadCount: thread.unreadAstrologerCount,
     createdAt: toIsoString(thread.createdAt),
@@ -168,7 +199,31 @@ function toExternalIdentity(row: MessagingExternalIdentityRow): MessagingReadExt
   };
 }
 
-function toMessage(row: MessagingMessageRow): MessagingReadMessage {
+async function listMediaByMessageId(
+  database: ElevenHouseDatabase,
+  messageIds: readonly string[]
+): Promise<Map<string, MessageMediaIngestionRow>> {
+  if (messageIds.length === 0) return new Map();
+  const rows = await database
+    .select()
+    .from(messageMediaIngestions)
+    .where(inArray(messageMediaIngestions.messageId, [...messageIds]));
+  return new Map(rows.map((row) => [row.messageId, row]));
+}
+
+async function findMediaForMessage(
+  database: ElevenHouseDatabase,
+  messageId: string
+): Promise<MessageMediaIngestionRow | null> {
+  const [row] = await database
+    .select()
+    .from(messageMediaIngestions)
+    .where(eq(messageMediaIngestions.messageId, messageId))
+    .limit(1);
+  return row ?? null;
+}
+
+function toMessage(row: MessagingMessageRow, media: MessageMediaIngestionRow | null = null): MessagingReadMessage {
   return {
     id: row.id,
     threadId: row.threadId,
@@ -179,11 +234,47 @@ function toMessage(row: MessagingMessageRow): MessagingReadMessage {
     contentType: row.contentType as MessagingReadMessage["contentType"],
     text: row.text,
     mediaAssetId: row.mediaAssetId,
+    media: media ? toMessageMedia(media) : null,
     status: row.status as MessagingReadMessage["status"],
     failureCode: row.failureCode,
     providerSentAt: toNullableIsoString(row.providerSentAt),
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt)
+  };
+}
+
+function toMessageMedia(row: MessageMediaIngestionRow): MessagingReadMessage["media"] {
+  const status =
+    row.downloadStatus === "ready" ? "ready" : row.downloadStatus === "permanent_failed" || row.downloadStatus === "failed" ? "failed" : "pending";
+  return {
+    mediaAssetId: row.mediaAssetId,
+    kind: row.contentType as "voice" | "image" | "video_note" | "video",
+    status,
+    durationSeconds: row.durationSeconds,
+    width: row.width,
+    height: row.height,
+    mimeType: row.providerMimeType,
+    sizeBytes: row.providerSizeBytes
+  };
+}
+
+function toMessageMediaSource(
+  ingestion: MessageMediaIngestionRow | null,
+  media: typeof mediaAssets.$inferSelect | null
+): MessagingReadMessageMediaSource {
+  const status =
+    ingestion?.downloadStatus === "ready" && media
+      ? "ready"
+      : ingestion?.downloadStatus === "failed" || ingestion?.downloadStatus === "permanent_failed"
+        ? "failed"
+        : "pending";
+  return {
+    status,
+    mediaAssetId: media?.id ?? null,
+    storageBucket: media?.storageBucket ?? null,
+    storageKey: media?.storageKey ?? null,
+    originalFileName: media?.originalFileName ?? null,
+    mimeType: media?.mimeType ?? null
   };
 }
 

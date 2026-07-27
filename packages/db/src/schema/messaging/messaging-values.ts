@@ -30,6 +30,8 @@ export const messagingMessageContentTypeValues = [
   "image",
   "file",
   "voice",
+  "video_note",
+  "video",
   "unsupported"
 ] as const;
 export const messagingMessageStatusValues = [
@@ -44,6 +46,13 @@ export const messagingMessageStatusValues = [
   "deleted"
 ] as const;
 export const messagingDeliveryAttemptStatusValues = ["sent", "failed", "unknown"] as const;
+export const messagingMediaIngestionStatusValues = [
+  "pending",
+  "downloading",
+  "ready",
+  "failed",
+  "permanent_failed"
+] as const;
 export const messagingRealtimeEventTypeValues = [
   "thread.created",
   "thread.updated",

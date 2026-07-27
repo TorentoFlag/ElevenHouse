@@ -34,6 +34,14 @@ export class MessagingController {
     return this.service.getThread(threadId, query, request);
   }
 
+  @Get("messages/:messageId/media/source")
+  getMessageMediaSource(
+    @Param("messageId") messageId: string,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.getMessageMediaSource(messageId, request);
+  }
+
   @Post("threads/:threadId/messages")
   @RequireIdempotency({ scope: "messaging.messages.send" })
   @RequireCsrf()

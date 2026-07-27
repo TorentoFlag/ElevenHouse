@@ -137,8 +137,12 @@ describe("Messaging persistence schema", () => {
       'CREATE INDEX "messaging_realtime_events_astrologer_event_id_idx" ON "messaging_realtime_events" USING btree ("astrologer_user_id","event_id")'
     );
     expect(migration).toContain('"provider" text NOT NULL');
+    expect(migration).toContain('"external_owner_user_id" text');
     expect(migration).toContain(
       'CONSTRAINT "messaging_channel_connections_provider_mode_check" CHECK (("messaging_channel_connections"."provider" = \'telegram\' and "messaging_channel_connections"."mode" in (\'telegram_business_bot\', \'telegram_mtproto_account\')) or ("messaging_channel_connections"."provider" = \'instagram\' and "messaging_channel_connections"."mode" = \'instagram_graph\'))'
+    );
+    expect(migration).toContain(
+      'CONSTRAINT "messaging_channel_connections_external_owner_id_length_check" CHECK ("messaging_channel_connections"."external_owner_user_id" is null or length(trim("messaging_channel_connections"."external_owner_user_id")) between 1 and 200)'
     );
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "messaging_channel_connections_external_account_unique" ON "messaging_channel_connections" USING btree ("provider","external_account_id") WHERE "messaging_channel_connections"."external_account_id" is not null'

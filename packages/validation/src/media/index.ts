@@ -4,7 +4,8 @@ export const mediaPurposeValues = [
   "profile_cover",
   "verification_identity_document",
   "verification_qualification_document",
-  "calculation_report_pdf"
+  "calculation_report_pdf",
+  "messaging_attachment"
 ] as const;
 export type MediaPurposeValue = (typeof mediaPurposeValues)[number];
 
@@ -34,9 +35,17 @@ export type MediaImageMimeTypeValue = (typeof mediaImageMimeTypeValues)[number];
 export const mediaDocumentMimeTypeValues = ["application/pdf"] as const;
 export type MediaDocumentMimeTypeValue = (typeof mediaDocumentMimeTypeValues)[number];
 
+export const mediaAudioMimeTypeValues = ["audio/ogg", "audio/mpeg", "audio/mp4"] as const;
+export type MediaAudioMimeTypeValue = (typeof mediaAudioMimeTypeValues)[number];
+
+export const mediaVideoMimeTypeValues = ["video/mp4"] as const;
+export type MediaVideoMimeTypeValue = (typeof mediaVideoMimeTypeValues)[number];
+
 export const mediaMimeTypeValues = [
   ...mediaImageMimeTypeValues,
-  ...mediaDocumentMimeTypeValues
+  ...mediaDocumentMimeTypeValues,
+  ...mediaAudioMimeTypeValues,
+  ...mediaVideoMimeTypeValues
 ] as const;
 export type MediaMimeTypeValue = (typeof mediaMimeTypeValues)[number];
 
@@ -71,6 +80,30 @@ export const mediaPurposeUploadLimits = {
   }
 } satisfies Record<
   MediaUploadPurposeValue,
+  {
+    readonly maxSizeBytes: number;
+    readonly allowedMimeTypes: readonly MediaMimeTypeValue[];
+    readonly visibility: MediaVisibilityValue;
+  }
+>;
+
+export const mediaPurposeStorageLimits = {
+  calculation_report_pdf: {
+    maxSizeBytes: 20_000_000,
+    allowedMimeTypes: mediaDocumentMimeTypeValues,
+    visibility: "private"
+  },
+  messaging_attachment: {
+    maxSizeBytes: 20_000_000,
+    allowedMimeTypes: [
+      ...mediaAudioMimeTypeValues,
+      ...mediaImageMimeTypeValues,
+      ...mediaVideoMimeTypeValues
+    ],
+    visibility: "private"
+  }
+} satisfies Record<
+  Exclude<MediaPurposeValue, MediaUploadPurposeValue>,
   {
     readonly maxSizeBytes: number;
     readonly allowedMimeTypes: readonly MediaMimeTypeValue[];

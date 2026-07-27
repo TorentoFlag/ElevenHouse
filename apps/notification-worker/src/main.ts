@@ -1,8 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { createLogger } from "@elevenhouse/observability";
 import { createAes256GcmSecretCipher } from "@elevenhouse/auth";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
-import { createDrizzleMessagingDeliveryProcessingStore } from "@elevenhouse/db/messaging";
+import {
+  createDrizzleMessagingDeliveryProcessingStore,
+  createDrizzleMessagingMediaIngestionProcessingStore
+} from "@elevenhouse/db/messaging";
 import { createDrizzleAuthCodeDeliveryProcessingStore } from "@elevenhouse/db/notifications";
 import {
   ChannelAuthCodeDeliveryProvider,
@@ -23,6 +27,14 @@ import {
 } from "./messaging-delivery.queue";
 import { processMessagingDeliveryJob } from "./messaging-delivery.processor";
 import { relayPendingMessagingOutboxEvents } from "./messaging-delivery.outbox-relay";
+import {
+  createMessagingMediaIngestionQueue,
+  createMessagingMediaIngestionWorker
+} from "./messaging-media-ingestion.queue";
+import { processMessagingMediaIngestionJob } from "./messaging-media-ingestion.processor";
+import { relayPendingMessagingMediaIngestions } from "./messaging-media-ingestion.relay";
+import { TelegramBusinessMediaProvider } from "./messaging-media-ingestion.provider";
+import { createS3MessagingMediaObjectStorage } from "./messaging-media-ingestion.storage";
 import { createWorkerReadiness, createWorkerReadinessServer } from "./readiness";
 import { createNotificationWorkerRuntimeConfig } from "./runtime-config";
 import {
@@ -48,6 +60,16 @@ const messagingDeliveryStore = config.messagingDeliveryEnabled
   ? createDrizzleMessagingDeliveryProcessingStore(postgresRuntime.database)
   : null;
 const messagingDeliveryProvider = createMessagingDeliveryProvider();
+const messagingMediaIngestionQueue = config.messagingMediaIngestionEnabled
+  ? createMessagingMediaIngestionQueue(config.redisUrl)
+  : null;
+const messagingMediaIngestionStore = config.messagingMediaIngestionEnabled
+  ? createDrizzleMessagingMediaIngestionProcessingStore(postgresRuntime.database)
+  : null;
+const messagingMediaIngestionProvider = createMessagingMediaIngestionProvider();
+const messagingMediaIngestionStorage = config.messagingMediaIngestionEnabled
+  ? createS3MessagingMediaObjectStorage(config.mediaStorage)
+  : null;
 const authCodeDeliveryWorker = createAuthCodeDeliveryWorker(config.redisUrl, (job) =>
   processAuthCodeDeliveryJob({
     job,
@@ -70,6 +92,24 @@ const messagingDeliveryWorker =
         })
       )
     : null;
+const messagingMediaIngestionWorker =
+  config.messagingMediaIngestionEnabled &&
+  messagingMediaIngestionStore &&
+  messagingMediaIngestionProvider &&
+  messagingMediaIngestionStorage
+    ? createMessagingMediaIngestionWorker(config.redisUrl, (job) =>
+        processMessagingMediaIngestionJob({
+          job,
+          store: messagingMediaIngestionStore,
+          provider: messagingMediaIngestionProvider,
+          storage: messagingMediaIngestionStorage,
+          privateStorageBucket: config.mediaStorage.privateBucket,
+          maxBytes: config.messagingMediaIngestionMaxBytes,
+          mediaAssetIdGenerator: randomUUID,
+          now: new Date()
+        })
+      )
+    : null;
 const readinessChecks = {
   postgres: async () => {
     await postgresRuntime.pool.query("select 1");
@@ -87,6 +127,19 @@ const readinessChecks = {
         },
         messagingDeliveryWorker: async () => {
           await messagingDeliveryWorker.waitUntilReady();
+        }
+      }
+    : {}),
+  ...(messagingMediaIngestionQueue && messagingMediaIngestionWorker && messagingMediaIngestionStorage
+    ? {
+        messagingMediaIngestionQueue: async () => {
+          await messagingMediaIngestionQueue.waitUntilReady();
+        },
+        messagingMediaIngestionWorker: async () => {
+          await messagingMediaIngestionWorker.waitUntilReady();
+        },
+        messagingMediaIngestionStorage: async () => {
+          await messagingMediaIngestionStorage.checkReady();
         }
       }
     : {})
@@ -126,6 +179,18 @@ function createMessagingDeliveryProvider(): MessagingDeliveryProvider | null {
   return new TelegramBusinessMessagingDeliveryProvider(config.telegramBusinessDelivery);
 }
 
+function createMessagingMediaIngestionProvider(): TelegramBusinessMediaProvider | null {
+  if (!config.messagingMediaIngestionEnabled) {
+    return null;
+  }
+
+  if (!config.telegramBusinessDelivery) {
+    throw new Error("Telegram Business media ingestion settings are required when media ingestion is enabled");
+  }
+
+  return new TelegramBusinessMediaProvider(config.telegramBusinessDelivery);
+}
+
 let relayTimer: ReturnType<typeof setInterval> | undefined;
 
 function startRelay(): ReturnType<typeof setInterval> {
@@ -160,6 +225,20 @@ function startRelay(): ReturnType<typeof setInterval> {
         logger.error("messaging delivery outbox relay failed", { error });
       });
     }
+    if (messagingMediaIngestionQueue && messagingMediaIngestionStore) {
+      relayPendingMessagingMediaIngestions({
+        store: messagingMediaIngestionStore,
+        queue: messagingMediaIngestionQueue,
+        now: new Date(),
+        batchSize: config.messagingMediaIngestionBatchSize,
+        queueOptions: {
+          attempts: config.messagingMediaIngestionAttempts,
+          backoffMs: config.messagingMediaIngestionBackoffMs
+        }
+      }).catch((error: unknown) => {
+        logger.error("messaging media ingestion relay failed", { error });
+      });
+    }
   }, config.outboxRelayIntervalMs);
 
   timer.unref();
@@ -187,6 +266,8 @@ async function shutdown(): Promise<void> {
     clearInterval(relayTimer);
   }
   await closeHealthServer();
+  await messagingMediaIngestionWorker?.close();
+  await messagingMediaIngestionQueue?.close();
   await messagingDeliveryWorker?.close();
   await messagingDeliveryQueue?.close();
   await authCodeDeliveryWorker.close();

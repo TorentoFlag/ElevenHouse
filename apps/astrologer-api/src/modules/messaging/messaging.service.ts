@@ -11,15 +11,19 @@ import {
   linkThreadToClient,
   markThreadRead,
   recordTelegramBusinessConnection,
+  recordTelegramBusinessDeletedMessages,
+  recordTelegramBusinessEditedMessage,
   recordTelegramBusinessMessage,
   startTelegramBusinessConnection,
   type MessagingReadStore,
-  type MessagingStore
+  type MessagingStore,
+  type PrivateObjectStoragePort
 } from "@elevenhouse/domain";
 import {
   CreateMessagingThreadClientRequestSchema,
   LinkMessagingThreadClientRequestSchema,
   MessagingChannelConnectionResponseSchema,
+  MessagingMessageMediaSourceResponseSchema,
   MessagingMessageResponseSchema,
   MessagingThreadClientLinkResponseSchema,
   MessagingThreadDetailQuerySchema,
@@ -31,6 +35,7 @@ import {
   SendMessagingMessageRequestSchema,
   StartTelegramBusinessConnectionResponseSchema,
   type MessagingChannelConnectionResponse,
+  type MessagingMessageMediaSourceResponse,
   type MessagingMessageResponse,
   type StartTelegramBusinessConnectionResponse,
   type MessagingThreadClientLinkResponse,
@@ -41,6 +46,7 @@ import {
 import type { ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { MEDIA_PRIVATE_OBJECT_STORAGE } from "../media/media.tokens";
 import { messagingHttpError } from "./messaging-http-errors";
 import { MESSAGING_READ_STORE, MESSAGING_STORE } from "./messaging.tokens";
 import { createMessagingRealtimeEventStream } from "./realtime-event-stream";
@@ -51,6 +57,7 @@ export class MessagingService {
   constructor(
     @Inject(MESSAGING_STORE) private readonly store: MessagingStore,
     @Inject(MESSAGING_READ_STORE) private readonly readStore: MessagingReadStore,
+    @Inject(MEDIA_PRIVATE_OBJECT_STORAGE) private readonly privateObjectStorage: PrivateObjectStoragePort,
     private readonly clock: SystemClock,
     private readonly configService: ConfigService
   ) {}
@@ -207,6 +214,40 @@ export class MessagingService {
     });
   }
 
+  async getMessageMediaSource(
+    messageId: string,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<MessagingMessageMediaSourceResponse> {
+    const parsedMessageId = parseContract(MessagingThreadParamsSchema.shape.threadId, messageId);
+    const source = await this.readStore.findMessageMediaSource({
+      astrologerUserId: requireAstrologerUserId(request),
+      messageId: parsedMessageId
+    });
+    if (!source) {
+      throw messagingHttpError(404, "messaging_thread_not_found", "Messaging thread was not found");
+    }
+    if (
+      source.status !== "ready" ||
+      !source.mediaAssetId ||
+      !source.storageBucket ||
+      !source.storageKey ||
+      !source.originalFileName ||
+      !source.mimeType
+    ) {
+      throw messagingHttpError(409, "message_media_not_ready", "Message media is not ready");
+    }
+
+    return MessagingMessageMediaSourceResponseSchema.parse({
+      ...(await this.privateObjectStorage.createPresignedDownload({
+        storageBucket: source.storageBucket,
+        storageKey: source.storageKey,
+        fileName: source.originalFileName,
+        mimeType: source.mimeType as never
+      })),
+      mimeType: source.mimeType
+    });
+  }
+
   streamRealtimeEvents(
     lastEventId: string | undefined,
     request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
@@ -239,7 +280,11 @@ export class MessagingService {
       return;
     }
 
-    if (update.kind === "business_message" && update.contentType === "text" && update.text) {
+    if (
+      update.kind === "business_message" &&
+      isPersistableTelegramBusinessMessage(update.contentType) &&
+      update.text
+    ) {
       await recordTelegramBusinessMessage({
         store: this.store,
         updateId: update.updateId,
@@ -249,8 +294,38 @@ export class MessagingService {
         providerUserId: update.providerUserId,
         username: update.username,
         displayName: update.displayName,
+        chatUsername: update.chatUsername,
+        chatDisplayName: update.chatDisplayName,
+        contentType: update.contentType,
+        text: update.text,
+        mediaAttachment: update.mediaAttachment,
+        providerSentAt: update.providerSentAt,
+        now: this.clock.now()
+      });
+      return;
+    }
+
+    if (update.kind === "business_message_edited" && update.contentType === "text" && update.text) {
+      await recordTelegramBusinessEditedMessage({
+        store: this.store,
+        updateId: update.updateId,
+        businessConnectionId: update.businessConnectionId,
+        providerMessageId: update.providerMessageId,
+        providerChatId: update.providerChatId,
         text: update.text,
         providerSentAt: update.providerSentAt,
+        providerEditedAt: update.providerEditedAt,
+        now: this.clock.now()
+      });
+      return;
+    }
+
+    if (update.kind === "business_messages_deleted") {
+      await recordTelegramBusinessDeletedMessages({
+        store: this.store,
+        businessConnectionId: update.businessConnectionId,
+        providerChatId: update.providerChatId,
+        providerMessageIds: update.providerMessageIds,
         now: this.clock.now()
       });
     }
@@ -298,6 +373,22 @@ function toMessageResponse(message: {
     createdAt: message.createdAt,
     updatedAt: message.updatedAt
   };
+}
+
+function isPersistableTelegramBusinessMessage(
+  contentType: ParsedTelegramBusinessWebhookUpdate extends infer T
+    ? T extends { readonly kind: "business_message"; readonly contentType: infer TContentType }
+      ? TContentType
+      : never
+    : never
+): contentType is "text" | "voice" | "image" | "video_note" | "video" {
+  return (
+    contentType === "text" ||
+    contentType === "voice" ||
+    contentType === "image" ||
+    contentType === "video_note" ||
+    contentType === "video"
+  );
 }
 
 function requireAstrologerUserId(

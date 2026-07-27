@@ -1,8 +1,11 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   MessagingClientRelationshipError,
   MessagingIdempotencyConflictError,
-  messagingMessageReceivedEventType
+  messagingMessageDeletedEventType,
+  messagingMessageReceivedEventType,
+  messagingMessageUpdatedEventType
 } from "@elevenhouse/domain";
 import type {
   AppendMessagingRealtimeEventInput,
@@ -20,6 +23,10 @@ import type {
   RecordInboundProviderMessageStoreInput,
   RecordTelegramBusinessConnectionStoreInput,
   RecordTelegramBusinessConnectionStoreResult,
+  RecordTelegramBusinessDeletedMessagesStoreInput,
+  RecordTelegramBusinessDeletedMessagesStoreResult,
+  RecordTelegramBusinessEditedMessageStoreInput,
+  RecordTelegramBusinessEditedMessageStoreResult,
   RecordTelegramBusinessMessageStoreInput,
   StartTelegramBusinessConnectionStoreInput,
   StartTelegramBusinessConnectionStoreResult
@@ -31,6 +38,7 @@ import {
   idempotencyCommands,
   messagingChannelConnections,
   messagingExternalIdentities,
+  messageMediaIngestions,
   messagingMessages,
   messagingRealtimeEvents,
   messagingThreadIdentities,
@@ -74,6 +82,10 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     recordTelegramBusinessConnection: (input) => recordTelegramBusinessConnection(database, input),
     startTelegramBusinessConnection: (input) => startTelegramBusinessConnection(database, input),
     recordTelegramBusinessMessage: (input) => recordTelegramBusinessMessage(database, input),
+    recordTelegramBusinessDeletedMessages: (input) =>
+      recordTelegramBusinessDeletedMessages(database, input),
+    recordTelegramBusinessEditedMessage: (input) =>
+      recordTelegramBusinessEditedMessage(database, input),
     linkThreadToClient: (input) => linkThreadToClient(database, input),
     createClientFromThread: (input) => createClientFromThread(database, input),
     markThreadRead: (input) => markThreadRead(database, input),
@@ -369,6 +381,7 @@ async function recordTelegramBusinessConnection(
     .set({
       status,
       externalAccountId: input.businessConnectionId,
+      externalOwnerUserId: input.userId,
       displayNameSnapshot: input.displayName,
       usernameSnapshot: input.username,
       capabilities: toTelegramBusinessCapabilities(input.rights),
@@ -400,6 +413,7 @@ async function startTelegramBusinessConnection(
           .set({
             status: "connecting",
             externalAccountId: null,
+            externalOwnerUserId: null,
             displayNameSnapshot: null,
             usernameSnapshot: null,
             capabilities: telegramBusinessPendingCapabilities(),
@@ -424,6 +438,7 @@ async function startTelegramBusinessConnection(
         mode: "telegram_business_bot",
         status: "connecting",
         externalAccountId: null,
+        externalOwnerUserId: null,
         displayNameSnapshot: null,
         usernameSnapshot: null,
         capabilities: telegramBusinessPendingCapabilities(),
@@ -512,12 +527,13 @@ async function recordTelegramBusinessMessage(
 
       const timestamp = new Date(input.now);
       const providerSentAt = new Date(input.providerSentAt);
+      const isBusinessOwnerMessage = input.providerUserId === connection.externalOwnerUserId;
       const identity = await upsertTelegramExternalIdentity(transaction, {
         channelConnectionId: connection.id,
         providerChatId: input.providerChatId,
-        providerUserId: input.providerUserId,
-        username: input.username,
-        displayName: input.displayName,
+        providerUserId: isBusinessOwnerMessage ? null : input.providerUserId,
+        username: isBusinessOwnerMessage ? input.chatUsername : input.username,
+        displayName: isBusinessOwnerMessage ? input.chatDisplayName : input.displayName,
         now: timestamp
       });
       const thread = await findOrCreateTelegramThread(transaction, {
@@ -532,32 +548,61 @@ async function recordTelegramBusinessMessage(
           threadId: thread.id,
           channelConnectionId: connection.id,
           externalIdentityId: identity.id,
-          direction: "inbound",
-          senderKind: "client",
+          direction: isBusinessOwnerMessage ? "outbound" : "inbound",
+          senderKind: isBusinessOwnerMessage ? "astrologer" : "client",
           providerMessageId: input.providerMessageId,
           providerUpdateId: input.updateId,
           providerSentAt,
-          contentType: "text",
+          contentType: input.contentType,
           text: input.text,
           mediaAssetId: null,
-          status: "received",
+          status: isBusinessOwnerMessage ? "sent" : "received",
           failureCode: null,
-          idempotencyKey: null,
-          requestHash: null,
+          idempotencyKey: isBusinessOwnerMessage
+            ? telegramBusinessObservedOutboundIdempotencyKey(input)
+            : null,
+          requestHash: isBusinessOwnerMessage ? hashTelegramBusinessMessageRequest(input) : null,
           createdAt: timestamp,
           updatedAt: timestamp
         })
         .returning();
       if (!row) throw new Error("Expected Telegram business message insert to return a row");
 
+      if (input.mediaAttachment) {
+        await transaction.insert(messageMediaIngestions).values({
+          messageId: row.id,
+          channelConnectionId: connection.id,
+          provider: "telegram",
+          providerFileId: input.mediaAttachment.providerFileId,
+          providerFileUniqueId: input.mediaAttachment.providerFileUniqueId,
+          providerMimeType: input.mediaAttachment.providerMimeType,
+          providerSizeBytes: input.mediaAttachment.providerSizeBytes,
+          contentType: input.mediaAttachment.kind,
+          durationSeconds: input.mediaAttachment.durationSeconds,
+          width: input.mediaAttachment.width,
+          height: input.mediaAttachment.height,
+          downloadStatus: "pending",
+          mediaAssetId: null,
+          failureCode: null,
+          attemptCount: 0,
+          nextRetryAt: null,
+          checksumSha256: null,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        });
+      }
+
+      const threadUpdate = {
+        lastMessageId: row.id,
+        lastMessageAt: providerSentAt,
+        ...(isBusinessOwnerMessage
+          ? {}
+          : { unreadAstrologerCount: sql`${messagingThreads.unreadAstrologerCount} + 1` }),
+        updatedAt: timestamp
+      };
       const [updatedThread] = await transaction
         .update(messagingThreads)
-        .set({
-          lastMessageId: row.id,
-          lastMessageAt: providerSentAt,
-          unreadAstrologerCount: sql`${messagingThreads.unreadAstrologerCount} + 1`,
-          updatedAt: timestamp
-        })
+        .set(threadUpdate)
         .where(
           and(
             eq(messagingThreads.id, thread.id),
@@ -580,12 +625,172 @@ async function recordTelegramBusinessMessage(
       return { kind: "created" as const, message: toMessagingMessage(row) };
     });
   } catch (error) {
-    if (!isInboundProviderDedupeViolation(error)) throw error;
+    if (!isTelegramBusinessMessageDedupeViolation(error)) throw error;
   }
 
-  const existing = await findTelegramBusinessInboundMessage(database, input);
+  const existing = await findTelegramBusinessMessage(database, input);
   if (!existing) throw new Error("Expected existing Telegram business message after duplicate conflict");
   return { kind: "duplicate", message: existing };
+}
+
+async function recordTelegramBusinessDeletedMessages(
+  database: ElevenHouseDatabase,
+  input: RecordTelegramBusinessDeletedMessagesStoreInput
+): Promise<RecordTelegramBusinessDeletedMessagesStoreResult> {
+  return database.transaction(async (transaction) => {
+    const connections = await findTelegramBusinessConnections(transaction, {
+      businessConnectionId: input.businessConnectionId,
+      activeOnly: true
+    });
+    if (connections.length > 1) {
+      throw new Error("Telegram business connection is not uniquely bound to one channel connection");
+    }
+    const connection = connections[0];
+    if (!connection) return { kind: "unmatched" as const };
+
+    const identity = await findTelegramExternalIdentityByChat(transaction, {
+      channelConnectionId: connection.id,
+      providerChatId: input.providerChatId
+    });
+    if (!identity) return { kind: "unmatched" as const };
+
+    const timestamp = new Date(input.now);
+    const deletedRows = await transaction
+      .update(messagingMessages)
+      .set({ status: "deleted", updatedAt: timestamp })
+      .where(
+        and(
+          eq(messagingMessages.channelConnectionId, connection.id),
+          eq(messagingMessages.externalIdentityId, identity.id),
+          inArray(messagingMessages.providerMessageId, [...input.providerMessageIds]),
+          ne(messagingMessages.status, "deleted")
+        )
+      )
+      .returning({
+        id: messagingMessages.id,
+        threadId: messagingMessages.threadId,
+        channelConnectionId: messagingMessages.channelConnectionId,
+        externalIdentityId: messagingMessages.externalIdentityId,
+        direction: messagingMessages.direction
+      });
+    if (deletedRows.length === 0) return { kind: "recorded" as const, deletedCount: 0 };
+
+    const threadIds = [...new Set(deletedRows.map((row) => row.threadId))];
+    for (const threadId of threadIds) {
+      const deletedInboundCount = deletedRows.filter(
+        (row) => row.threadId === threadId && row.direction === "inbound"
+      ).length;
+      const latestVisibleMessage = await findLatestVisibleMessageForThread(transaction, { threadId });
+      const threadUpdate = {
+        lastMessageId: latestVisibleMessage?.id ?? null,
+        lastMessageAt: latestVisibleMessage ? new Date(latestVisibleMessage.messageAt) : null,
+        ...(deletedInboundCount > 0
+          ? {
+              unreadAstrologerCount: sql`greatest(${messagingThreads.unreadAstrologerCount} - ${deletedInboundCount}, 0)`
+            }
+          : {}),
+        updatedAt: timestamp
+      };
+      const [updatedThread] = await transaction
+        .update(messagingThreads)
+        .set(threadUpdate)
+        .where(
+          and(
+            eq(messagingThreads.id, threadId),
+            eq(messagingThreads.astrologerUserId, connection.astrologerUserId)
+          )
+        )
+        .returning({ id: messagingThreads.id });
+      if (!updatedThread) throw new Error("Messaging thread is not owned by the astrologer");
+    }
+
+    for (const row of deletedRows) {
+      await appendRealtimeEvent(transaction, {
+        astrologerUserId: connection.astrologerUserId,
+        type: messagingMessageDeletedEventType,
+        occurredAt: input.now,
+        threadId: row.threadId,
+        messageId: row.id,
+        channelConnectionId: row.channelConnectionId,
+        externalIdentityId: row.externalIdentityId ?? undefined
+      });
+    }
+
+    return { kind: "recorded" as const, deletedCount: deletedRows.length };
+  });
+}
+
+async function recordTelegramBusinessEditedMessage(
+  database: ElevenHouseDatabase,
+  input: RecordTelegramBusinessEditedMessageStoreInput
+): Promise<RecordTelegramBusinessEditedMessageStoreResult> {
+  return database.transaction(async (transaction) => {
+    const connections = await findTelegramBusinessConnections(transaction, {
+      businessConnectionId: input.businessConnectionId,
+      activeOnly: true
+    });
+    if (connections.length > 1) {
+      throw new Error("Telegram business connection is not uniquely bound to one channel connection");
+    }
+    const connection = connections[0];
+    if (!connection) return { kind: "unmatched" as const };
+
+    const identity = await findTelegramExternalIdentityByChat(transaction, {
+      channelConnectionId: connection.id,
+      providerChatId: input.providerChatId
+    });
+    if (!identity) return { kind: "unmatched" as const };
+
+    const timestamp = new Date(input.now);
+    const [updatedRow] = await transaction
+      .update(messagingMessages)
+      .set({
+        text: input.text,
+        providerUpdateId: input.updateId,
+        providerSentAt: new Date(input.providerSentAt),
+        updatedAt: timestamp
+      })
+      .where(
+        and(
+          eq(messagingMessages.channelConnectionId, connection.id),
+          eq(messagingMessages.externalIdentityId, identity.id),
+          eq(messagingMessages.providerMessageId, input.providerMessageId),
+          ne(messagingMessages.status, "deleted"),
+          sql`${messagingMessages.providerUpdateId} is distinct from ${input.updateId}`
+        )
+      )
+      .returning({
+        id: messagingMessages.id,
+        threadId: messagingMessages.threadId,
+        channelConnectionId: messagingMessages.channelConnectionId,
+        externalIdentityId: messagingMessages.externalIdentityId
+      });
+    if (!updatedRow) return { kind: "recorded" as const, updatedCount: 0 };
+
+    const [updatedThread] = await transaction
+      .update(messagingThreads)
+      .set({ updatedAt: timestamp })
+      .where(
+        and(
+          eq(messagingThreads.id, updatedRow.threadId),
+          eq(messagingThreads.astrologerUserId, connection.astrologerUserId)
+        )
+      )
+      .returning({ id: messagingThreads.id });
+    if (!updatedThread) throw new Error("Messaging thread is not owned by the astrologer");
+
+    await appendRealtimeEvent(transaction, {
+      astrologerUserId: connection.astrologerUserId,
+      type: messagingMessageUpdatedEventType,
+      occurredAt: input.providerEditedAt,
+      threadId: updatedRow.threadId,
+      messageId: updatedRow.id,
+      channelConnectionId: updatedRow.channelConnectionId,
+      externalIdentityId: updatedRow.externalIdentityId ?? undefined
+    });
+
+    return { kind: "recorded" as const, updatedCount: 1 };
+  });
 }
 
 async function linkThreadToClient(
@@ -854,10 +1059,32 @@ async function upsertTelegramExternalIdentity(
   return row;
 }
 
+async function findTelegramExternalIdentityByChat(
+  database: MessagingDatabase,
+  input: { readonly channelConnectionId: string; readonly providerChatId: string }
+): Promise<MessagingExternalIdentityRow | null> {
+  const [row] = await database
+    .select()
+    .from(messagingExternalIdentities)
+    .where(
+      and(
+        eq(messagingExternalIdentities.channelConnectionId, input.channelConnectionId),
+        eq(messagingExternalIdentities.provider, "telegram"),
+        eq(messagingExternalIdentities.providerChatId, input.providerChatId)
+      )
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 async function findTelegramBusinessConnections(
   database: MessagingDatabase,
   input: { readonly businessConnectionId: string; readonly activeOnly: boolean }
-): Promise<Array<{ readonly id: string; readonly astrologerUserId: string }>> {
+): Promise<Array<{
+  readonly id: string;
+  readonly astrologerUserId: string;
+  readonly externalOwnerUserId: string | null;
+}>> {
   const filters = [
     eq(messagingChannelConnections.provider, "telegram"),
     eq(messagingChannelConnections.mode, "telegram_business_bot"),
@@ -870,7 +1097,8 @@ async function findTelegramBusinessConnections(
   return database
     .select({
       id: messagingChannelConnections.id,
-      astrologerUserId: messagingChannelConnections.astrologerUserId
+      astrologerUserId: messagingChannelConnections.astrologerUserId,
+      externalOwnerUserId: messagingChannelConnections.externalOwnerUserId
     })
     .from(messagingChannelConnections)
     .where(and(...filters))
@@ -952,7 +1180,7 @@ async function findThreadByExternalIdentity(
   return row ? toMessagingThread(row) : null;
 }
 
-async function findTelegramBusinessInboundMessage(
+async function findTelegramBusinessMessage(
   database: MessagingDatabase,
   input: {
     readonly businessConnectionId: string;
@@ -977,13 +1205,57 @@ async function findTelegramBusinessInboundMessage(
         eq(messagingChannelConnections.mode, "telegram_business_bot"),
         eq(messagingChannelConnections.externalAccountId, input.businessConnectionId),
         eq(messagingExternalIdentities.providerChatId, input.providerChatId),
-        eq(messagingMessages.providerMessageId, input.providerMessageId),
-        eq(messagingMessages.direction, "inbound")
+        eq(messagingMessages.providerMessageId, input.providerMessageId)
       )
     )
     .limit(1);
 
   return row ? toMessagingMessage(row.message) : null;
+}
+
+async function findLatestVisibleMessageForThread(
+  database: MessagingDatabase,
+  input: { readonly threadId: string }
+): Promise<{ readonly id: string; readonly messageAt: Date | string } | null> {
+  const messageAt = sql<Date>`coalesce(${messagingMessages.providerSentAt}, ${messagingMessages.createdAt})`;
+  const [row] = await database
+    .select({
+      id: messagingMessages.id,
+      messageAt
+    })
+    .from(messagingMessages)
+    .where(and(eq(messagingMessages.threadId, input.threadId), ne(messagingMessages.status, "deleted")))
+    .orderBy(desc(messageAt), desc(messagingMessages.createdAt), desc(messagingMessages.id))
+    .limit(1);
+  return row ?? null;
+}
+
+function telegramBusinessObservedOutboundIdempotencyKey(
+  input: RecordTelegramBusinessMessageStoreInput
+): string {
+  return [
+    "telegram-business",
+    input.businessConnectionId,
+    input.providerChatId,
+    input.providerMessageId
+  ].join(":");
+}
+
+function hashTelegramBusinessMessageRequest(
+  input: RecordTelegramBusinessMessageStoreInput
+): `sha256:${string}` {
+  return `sha256:${createHash("sha256")
+    .update(
+      JSON.stringify({
+        businessConnectionId: input.businessConnectionId,
+        providerChatId: input.providerChatId,
+        providerMessageId: input.providerMessageId,
+        contentType: input.contentType,
+        text: input.text,
+        providerSentAt: input.providerSentAt
+      })
+    )
+    .digest("hex")}`;
 }
 
 function toTelegramBusinessCapabilities(
@@ -1083,9 +1355,9 @@ async function assertRealtimeReferencesOwned(
   database: MessagingDatabase,
   input: AppendMessagingRealtimeEventInput
 ): Promise<void> {
-  const checks = await Promise.all([
+  const checks = [
     input.threadId
-      ? database
+      ? await database
           .select({ id: messagingThreads.id })
           .from(messagingThreads)
           .where(
@@ -1095,9 +1367,9 @@ async function assertRealtimeReferencesOwned(
             )
           )
           .limit(1)
-      : Promise.resolve([{}]),
+      : [{}],
     input.messageId
-      ? database
+      ? await database
           .select({ id: messagingMessages.id })
           .from(messagingMessages)
           .innerJoin(messagingThreads, eq(messagingThreads.id, messagingMessages.threadId))
@@ -1108,9 +1380,9 @@ async function assertRealtimeReferencesOwned(
             )
           )
           .limit(1)
-      : Promise.resolve([{}]),
+      : [{}],
     input.channelConnectionId
-      ? database
+      ? await database
           .select({ id: messagingChannelConnections.id })
           .from(messagingChannelConnections)
           .where(
@@ -1120,9 +1392,9 @@ async function assertRealtimeReferencesOwned(
             )
           )
           .limit(1)
-      : Promise.resolve([{}]),
+      : [{}],
     input.externalIdentityId
-      ? database
+      ? await database
           .select({ id: messagingExternalIdentities.id })
           .from(messagingExternalIdentities)
           .innerJoin(
@@ -1136,8 +1408,8 @@ async function assertRealtimeReferencesOwned(
             )
           )
           .limit(1)
-      : Promise.resolve([{}])
-  ]);
+      : [{}]
+  ];
   if (checks.some(([row]) => !row)) {
     throw new Error("Messaging realtime event reference is not owned by the astrologer");
   }
@@ -1213,6 +1485,10 @@ function isInboundProviderDedupeViolation(error: unknown): boolean {
 
 function isOutboundIdempotencyViolation(error: unknown): boolean {
   return hasPostgresConstraintViolation(error, "23505", outboundIdempotencyConstraint);
+}
+
+function isTelegramBusinessMessageDedupeViolation(error: unknown): boolean {
+  return isInboundProviderDedupeViolation(error) || isOutboundIdempotencyViolation(error);
 }
 
 function isThreadIdentityExternalIdentityViolation(error: unknown): boolean {

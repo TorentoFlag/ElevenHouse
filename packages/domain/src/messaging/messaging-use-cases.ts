@@ -19,11 +19,13 @@ import type {
 } from "./messaging-store";
 import type {
   MessagingMessage,
+  MessagingMessageContentType,
   MessagingRealtimeEvent,
   MessagingRealtimeEventDraft,
   MessagingRealtimeEventType,
   MessagingThread,
-  NormalizedSendMessageInput
+  NormalizedSendMessageInput,
+  TelegramBusinessMediaAttachment
 } from "./messaging-types";
 
 export function normalizeSendMessageInput(input: {
@@ -181,7 +183,11 @@ export async function recordTelegramBusinessMessage(input: {
   readonly providerUserId: string | null;
   readonly username: string | null;
   readonly displayName: string | null;
+  readonly chatUsername: string | null;
+  readonly chatDisplayName: string | null;
+  readonly contentType?: MessagingMessageContentType;
   readonly text: string;
+  readonly mediaAttachment?: TelegramBusinessMediaAttachment | null;
   readonly providerSentAt: string;
   readonly now: Date;
 }): Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }> {
@@ -193,8 +199,55 @@ export async function recordTelegramBusinessMessage(input: {
     providerUserId: optionalSnapshot(input.providerUserId),
     username: optionalSnapshot(input.username),
     displayName: optionalSnapshot(input.displayName),
+    chatUsername: optionalSnapshot(input.chatUsername),
+    chatDisplayName: optionalSnapshot(input.chatDisplayName),
+    contentType: normalizeMessageContentType(input.contentType ?? "text"),
+    text: bounded(input.text, 1, 4000, "Message text is invalid"),
+    mediaAttachment: normalizeTelegramMediaAttachment(input.mediaAttachment ?? null),
+    providerSentAt: normalizeIsoInstant(input.providerSentAt),
+    now: input.now.toISOString()
+  });
+}
+
+export async function recordTelegramBusinessDeletedMessages(input: {
+  readonly store: MessagingStore;
+  readonly businessConnectionId: string;
+  readonly providerChatId: string;
+  readonly providerMessageIds: readonly string[];
+  readonly now: Date;
+}) {
+  if (input.providerMessageIds.length === 0) {
+    throw new MessagingValidationError("Telegram deleted message ids are required");
+  }
+  return input.store.recordTelegramBusinessDeletedMessages({
+    businessConnectionId: bounded(input.businessConnectionId, 1, 200, "Telegram business connection id is required"),
+    providerChatId: bounded(input.providerChatId, 1, 200, "Telegram chat id is required"),
+    providerMessageIds: input.providerMessageIds.map((messageId) =>
+      bounded(messageId, 1, 200, "Telegram message id is required")
+    ),
+    now: input.now.toISOString()
+  });
+}
+
+export async function recordTelegramBusinessEditedMessage(input: {
+  readonly store: MessagingStore;
+  readonly updateId: string;
+  readonly businessConnectionId: string;
+  readonly providerMessageId: string;
+  readonly providerChatId: string;
+  readonly text: string;
+  readonly providerSentAt: string;
+  readonly providerEditedAt: string;
+  readonly now: Date;
+}) {
+  return input.store.recordTelegramBusinessEditedMessage({
+    updateId: bounded(input.updateId, 1, 200, "Telegram update id is required"),
+    businessConnectionId: bounded(input.businessConnectionId, 1, 200, "Telegram business connection id is required"),
+    providerMessageId: bounded(input.providerMessageId, 1, 200, "Telegram message id is required"),
+    providerChatId: bounded(input.providerChatId, 1, 200, "Telegram chat id is required"),
     text: bounded(input.text, 1, 4000, "Message text is invalid"),
     providerSentAt: normalizeIsoInstant(input.providerSentAt),
+    providerEditedAt: normalizeIsoInstant(input.providerEditedAt),
     now: input.now.toISOString()
   });
 }
@@ -427,6 +480,44 @@ function optional(value: string | null | undefined): string | undefined {
   return normalized || undefined;
 }
 
+function normalizeMessageContentType(value: MessagingMessageContentType): MessagingMessageContentType {
+  if (["text", "image", "file", "voice", "video_note", "video", "unsupported"].includes(value)) return value;
+  throw new MessagingValidationError("Message content type is unsupported");
+}
+
+function normalizeTelegramMediaAttachment(
+  value: TelegramBusinessMediaAttachment | null
+): TelegramBusinessMediaAttachment | undefined {
+  if (!value) return undefined;
+  const kind = normalizeTelegramMediaKind(value.kind);
+  return {
+    kind,
+    providerFileId: bounded(value.providerFileId, 1, 500, "Telegram media file id is required"),
+    providerFileUniqueId: bounded(
+      value.providerFileUniqueId,
+      1,
+      500,
+      "Telegram media unique file id is required"
+    ),
+    durationSeconds:
+      value.durationSeconds === null
+        ? null
+        : nonNegativeInteger(value.durationSeconds, "Telegram media duration is invalid"),
+    width: value.width === null ? null : positiveInteger(value.width, "Telegram media width is invalid"),
+    height: value.height === null ? null : positiveInteger(value.height, "Telegram media height is invalid"),
+    providerMimeType: optionalSnapshot(value.providerMimeType),
+    providerSizeBytes:
+      value.providerSizeBytes === null
+        ? null
+        : nonNegativeInteger(value.providerSizeBytes, "Telegram media size is invalid")
+  };
+}
+
+function normalizeTelegramMediaKind(value: TelegramBusinessMediaAttachment["kind"]): TelegramBusinessMediaAttachment["kind"] {
+  if (value === "voice" || value === "image" || value === "video_note" || value === "video") return value;
+  throw new MessagingValidationError("Telegram media kind is unsupported");
+}
+
 function optionalSnapshot(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   if (!normalized) return null;
@@ -439,6 +530,20 @@ function bounded(value: string, minimum: number, maximum: number, message: strin
     throw new MessagingValidationError(message);
   }
   return normalized;
+}
+
+function nonNegativeInteger(value: number, message: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new MessagingValidationError(message);
+  }
+  return value;
+}
+
+function positiveInteger(value: number, message: string): number {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new MessagingValidationError(message);
+  }
+  return value;
 }
 
 function identifier(value: string, message: string): string {

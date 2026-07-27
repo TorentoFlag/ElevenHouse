@@ -3,6 +3,7 @@ import { application } from "../../../Application";
 import {
   createMessagingThreadClient,
   getMessagingThread,
+  getMessagingMessageMediaSource,
   linkMessagingThreadClient,
   listMessagingChannelConnections,
   listMessagingThreads,
@@ -50,6 +51,21 @@ describe("messagingApi", () => {
 
     await expect(getMessagingThread(threadId)).rejects.toThrow();
     expect(get).toHaveBeenCalledWith(`/messaging/threads/${threadId}`);
+  });
+
+  it("gets a private message media source through the owner-scoped endpoint", async () => {
+    const get = vi.spyOn(application.http, "get").mockResolvedValue({
+      url: "https://storage.example/private/voice.ogg?signed=1",
+      expiresAt: "2026-07-22T10:05:00.000Z",
+      mimeType: "audio/ogg"
+    });
+
+    await expect(getMessagingMessageMediaSource(message().id)).resolves.toEqual({
+      url: "https://storage.example/private/voice.ogg?signed=1",
+      expiresAt: "2026-07-22T10:05:00.000Z",
+      mimeType: "audio/ogg"
+    });
+    expect(get).toHaveBeenCalledWith(`/messaging/messages/${message().id}/media/source`);
   });
 
   it("sends outbound messages with csrf and Idempotency-Key", async () => {

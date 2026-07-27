@@ -2,6 +2,7 @@ import {
   CreateMessagingThreadClientRequestSchema,
   LinkMessagingThreadClientRequestSchema,
   MessagingChannelConnectionResponseSchema,
+  MessagingMessageMediaSourceResponseSchema,
   MessagingMessageResponseSchema,
   MessagingThreadClientLinkResponseSchema,
   MessagingThreadDetailQuerySchema,
@@ -15,6 +16,7 @@ import {
   type CreateMessagingThreadClientRequest,
   type LinkMessagingThreadClientRequest,
   type MessagingChannelConnectionResponse,
+  type MessagingMessageMediaSourceResponse,
   type MessagingMessageResponse,
   type StartTelegramBusinessConnectionResponse,
   type MessagingThreadClientLinkResponse,
@@ -61,6 +63,15 @@ export async function getMessagingThread(
   const search = toPaginationSearch(parsedQuery, { omitDefaultOffset: true });
   return MessagingThreadResponseSchema.parse(
     await application.http.get(`/messaging/threads/${params.threadId}${search ? `?${search}` : ""}`)
+  );
+}
+
+export async function getMessagingMessageMediaSource(
+  messageId: string
+): Promise<MessagingMessageMediaSourceResponse> {
+  const params = MessagingThreadParamsSchema.parse({ threadId: messageId });
+  return MessagingMessageMediaSourceResponseSchema.parse(
+    await application.http.get(`/messaging/messages/${params.threadId}/media/source`)
   );
 }
 

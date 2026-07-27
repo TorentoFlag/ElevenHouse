@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  mediaAudioMimeTypeValues,
   mediaImageMimeTypeValues,
   mediaPurposeUploadLimits,
+  mediaPurposeStorageLimits,
   mediaPurposeValues,
   mediaUploadPurposeValues,
   mediaStatusValues,
@@ -16,7 +18,8 @@ describe("media validation values", () => {
       "profile_cover",
       "verification_identity_document",
       "verification_qualification_document",
-      "calculation_report_pdf"
+      "calculation_report_pdf",
+      "messaging_attachment"
     ]);
     expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
     expect(mediaVisibilityValues).toEqual(["public", "private"]);
@@ -26,13 +29,17 @@ describe("media validation values", () => {
       "image/webp",
       "image/avif"
     ]);
+    expect(mediaAudioMimeTypeValues).toEqual(["audio/ogg", "audio/mpeg", "audio/mp4"]);
   });
 
-  it("keeps generated calculation reports out of the browser-upload vocabulary", () => {
+  it("keeps generated worker media out of the browser-upload vocabulary", () => {
     expect(mediaUploadPurposeValues).not.toContain("calculation_report_pdf");
+    expect(mediaUploadPurposeValues).not.toContain("messaging_attachment");
     expect(mediaPurposeValues).toContain("calculation_report_pdf");
+    expect(mediaPurposeValues).toContain("messaging_attachment");
     expect(mediaPurposeValues).not.toContain("legacy_report_pdf");
     expect(mediaPurposeUploadLimits).not.toHaveProperty("calculation_report_pdf");
+    expect(mediaPurposeUploadLimits).not.toHaveProperty("messaging_attachment");
   });
 
   it("keeps product cover uploads bounded to raster image files", () => {
@@ -52,6 +59,14 @@ describe("media validation values", () => {
     expect(mediaPurposeUploadLimits.verification_qualification_document).toEqual({
       maxSizeBytes: 20_000_000,
       allowedMimeTypes: ["image/jpeg", "image/png", "application/pdf"],
+      visibility: "private"
+    });
+  });
+
+  it("keeps messaging attachments private and bounded to expected audio files", () => {
+    expect(mediaPurposeStorageLimits.messaging_attachment).toEqual({
+      maxSizeBytes: 20_000_000,
+      allowedMimeTypes: [...mediaAudioMimeTypeValues, ...mediaImageMimeTypeValues, "video/mp4"],
       visibility: "private"
     });
   });

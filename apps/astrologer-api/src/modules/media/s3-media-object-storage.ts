@@ -100,6 +100,7 @@ export class S3MediaObjectStorage
     readonly storageBucket: string;
     readonly storageKey: string;
     readonly fileName: string;
+    readonly mimeType?: string | undefined;
   }) {
     if (input.storageBucket !== this.config.privateBucket) {
       throw new Error("Private download requested from an unexpected storage bucket");
@@ -110,8 +111,8 @@ export class S3MediaObjectStorage
       new GetObjectCommand({
         Bucket: input.storageBucket,
         Key: input.storageKey,
-        ResponseContentType: "application/pdf",
-        ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(input.fileName)}`
+        ResponseContentType: input.mimeType ?? "application/pdf",
+        ResponseContentDisposition: `${isAudioMimeType(input.mimeType) ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(input.fileName)}`
       }),
       { expiresIn: this.config.downloadTtlSeconds }
     );
@@ -121,6 +122,10 @@ export class S3MediaObjectStorage
   getPublicUrl(input: { readonly storageKey: string }): string {
     return `${this.config.publicBaseUrl}/${encodeStorageKey(input.storageKey)}`;
   }
+}
+
+function isAudioMimeType(value: string | undefined): boolean {
+  return value === "audio/ogg" || value === "audio/mpeg" || value === "audio/mp4";
 }
 
 function encodeStorageKey(storageKey: string): string {
