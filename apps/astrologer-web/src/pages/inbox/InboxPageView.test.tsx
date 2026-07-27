@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type {
   MessagingChannelConnection,
@@ -15,7 +17,7 @@ describe("InboxPageView", () => {
   afterEach(() => cleanup());
 
   it("renders Telegram Business setup state without pretending MTProto is available", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderStatic(
       <InboxPageView
         {...baseProps()}
         channelConnections={[]}
@@ -31,7 +33,7 @@ describe("InboxPageView", () => {
   });
 
   it("keeps connected Telegram inbox focused on dialogs instead of setup cards", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderStatic(
       <InboxPageView
         {...baseProps()}
         channelConnections={[telegramConnection()]}
@@ -53,7 +55,7 @@ describe("InboxPageView", () => {
     const onThreadFilterChange = vi.fn();
     const activeFilter: InboxThreadFilter = "telegram";
 
-    render(
+    renderWithClient(
       <InboxPageView
         {...baseProps()}
         channelConnections={[telegramConnection()]}
@@ -76,7 +78,7 @@ describe("InboxPageView", () => {
   it("starts Telegram Business connection from the setup card and renders pending state", () => {
     const onStartTelegramBusinessConnection = vi.fn();
 
-    render(
+    renderWithClient(
       <InboxPageView
         {...baseProps()}
         channelConnections={[telegramConnection({}, { status: "connecting" })]}
@@ -92,10 +94,10 @@ describe("InboxPageView", () => {
   });
 
   it("disables Telegram Business start while active or already starting", () => {
-    const activeMarkup = renderToStaticMarkup(
+    const activeMarkup = renderStatic(
       <InboxPageView {...baseProps()} channelConnections={[telegramConnection()]} />
     );
-    const startingMarkup = renderToStaticMarkup(
+    const startingMarkup = renderStatic(
       <InboxPageView
         {...baseProps()}
         channelConnections={[]}
@@ -110,7 +112,7 @@ describe("InboxPageView", () => {
   });
 
   it("renders thread list, selected messages and unlinked chat actions", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderStatic(
       <InboxPageView
         {...baseProps()}
         channelConnections={[telegramConnection()]}
@@ -133,12 +135,44 @@ describe("InboxPageView", () => {
     expect(markup).toContain("Связать чат");
     expect(markup).not.toContain("AI-черновик ответа");
     expect(markup).not.toContain("Видеозвонок");
-    expect(markup).toContain("CRM client user id");
+    expect(markup).not.toContain("CRM client user id");
+    expect(markup).not.toContain("UUID клиента");
+    expect(markup).toContain("Выберите клиента");
     expect(markup).toContain("Имя нового клиента");
   });
 
+  it("links an unlinked chat through a selected CRM client instead of a UUID field", () => {
+    const onLinkClientSubmit = vi.fn();
+
+    renderWithClient(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[telegramConnection()]}
+        threads={[threadFixture({ clientUserId: null })]}
+        selectedThreadResponse={{
+          thread: threadFixture({ clientUserId: null }),
+          messages: [inboundMessage()],
+          nextCursor: null
+        }}
+        linkClientUserId="22222222-2222-4222-8222-222222222222"
+        linkClient={clientOption("22222222-2222-4222-8222-222222222222", "Марина Краснова")}
+        onLinkClientSubmit={onLinkClientSubmit}
+      />
+    );
+
+    expect(screen.queryByText("CRM client user id")).toBeNull();
+    expect(screen.queryByPlaceholderText("UUID клиента")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Клиент" }).textContent).toContain(
+      "Марина Краснова"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Связать клиента" }));
+
+    expect(onLinkClientSubmit).toHaveBeenCalledWith("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+  });
+
   it("does not render Telegram provider ids as client contact handles", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderStatic(
       <InboxPageView
         {...baseProps()}
         channelConnections={[telegramConnection()]}
@@ -166,7 +200,7 @@ describe("InboxPageView", () => {
   });
 
   it("renders selected thread messages chronologically even when the API page is newest-first", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderStatic(
       <InboxPageView
         {...baseProps()}
         channelConnections={[telegramConnection()]}
@@ -193,7 +227,7 @@ describe("InboxPageView", () => {
   });
 
   it("shows delivery states and disables composer while send is unavailable", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderStatic(
       <InboxPageView
         {...baseProps()}
         channelConnections={[telegramConnection({ canSend: false })]}
@@ -219,7 +253,7 @@ describe("InboxPageView", () => {
       expiresAt: "2026-07-22T10:05:00.000Z",
       mimeType: "audio/ogg"
     }));
-    render(
+    renderWithClient(
       <InboxPageView
         {...baseProps()}
         onLoadMessageMediaSource={onLoadMessageMediaSource}
@@ -270,7 +304,7 @@ describe("InboxPageView", () => {
       };
     });
 
-    render(
+    renderWithClient(
       <InboxPageView
         {...baseProps()}
         onLoadMessageMediaSource={onLoadMessageMediaSource}
@@ -322,6 +356,31 @@ describe("InboxPageView", () => {
   });
 });
 
+function renderWithClient(element: ReactElement) {
+  return render(wrapWithQueryClient(element));
+}
+
+function renderStatic(element: ReactElement): string {
+  return renderToStaticMarkup(wrapWithQueryClient(element));
+}
+
+function wrapWithQueryClient(element: ReactElement): ReactElement {
+  return (
+    <QueryClientProvider
+      client={
+        new QueryClient({
+          defaultOptions: {
+            queries: { retry: false },
+            mutations: { retry: false }
+          }
+        })
+      }
+    >
+      {element}
+    </QueryClientProvider>
+  );
+}
+
 function baseProps(): InboxPageViewProps {
   return {
     channelConnections: [telegramConnection()],
@@ -348,15 +407,28 @@ function baseProps(): InboxPageViewProps {
     telegramBusinessStartError: null,
     onStartTelegramBusinessConnection: vi.fn(),
     linkClientUserId: "",
+    linkClient: null,
     createClientDisplayName: "",
     isLinkingClient: false,
     isCreatingClient: false,
     clientActionError: null,
-    onLinkClientUserIdChange: vi.fn(),
+    onLinkClientSelect: vi.fn(),
     onCreateClientDisplayNameChange: vi.fn(),
     onLinkClientSubmit: vi.fn(),
     onCreateClientSubmit: vi.fn(),
     onLoadMessageMediaSource: vi.fn()
+  };
+}
+
+function clientOption(value: string, label: string): NonNullable<InboxPageViewProps["linkClient"]> {
+  return {
+    value,
+    label,
+    initials: "МК",
+    subtitle: "14.03.1990 · Москва",
+    birthDateDisplay: "14.03.1990",
+    hasBirthDate: true,
+    birthData: null
   };
 }
 

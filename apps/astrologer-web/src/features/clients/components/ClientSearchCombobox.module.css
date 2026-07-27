@@ -151,6 +151,11 @@
   box-shadow: 0 22px 50px -18px rgb(0 0 0 / 0.85);
 }
 
+.root[data-full-width="true"] .popup {
+  width: 100%;
+  max-width: 100%;
+}
+
 .searchShell {
   position: relative;
   margin: 4px 4px 6px;

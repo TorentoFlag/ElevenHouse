@@ -4,6 +4,8 @@ import type {
   MessagingThread,
   MessagingThreadResponse
 } from "@elevenhouse/contracts";
+import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
+import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import type { InboxThreadFilter } from "../../features/messaging/model/inboxThreadFilters";
 import styles from "./InboxPage.module.css";
 import { MessageMediaBubble } from "./MessageMediaBubble";
@@ -28,6 +30,7 @@ export type InboxPageViewProps = {
   readonly search: string;
   readonly activeThreadFilter: InboxThreadFilter;
   readonly linkClientUserId: string;
+  readonly linkClient: ClientSelectOption | null;
   readonly createClientDisplayName: string;
   readonly isLinkingClient: boolean;
   readonly isCreatingClient: boolean;
@@ -39,7 +42,7 @@ export type InboxPageViewProps = {
   readonly onStartTelegramBusinessConnection: () => void;
   readonly onSend: () => void;
   readonly onMarkRead: (threadId: string) => void;
-  readonly onLinkClientUserIdChange: (value: string) => void;
+  readonly onLinkClientSelect: (client: ClientSelectOption) => void;
   readonly onCreateClientDisplayNameChange: (value: string) => void;
   readonly onLinkClientSubmit: (threadId: string) => void;
   readonly onCreateClientSubmit: (threadId: string) => void;
@@ -68,6 +71,7 @@ export function InboxPageView({
   search,
   activeThreadFilter,
   linkClientUserId,
+  linkClient,
   createClientDisplayName,
   isLinkingClient,
   isCreatingClient,
@@ -79,7 +83,7 @@ export function InboxPageView({
   onStartTelegramBusinessConnection,
   onSend,
   onMarkRead,
-  onLinkClientUserIdChange,
+  onLinkClientSelect,
   onCreateClientDisplayNameChange,
   onLinkClientSubmit,
   onCreateClientSubmit,
@@ -389,18 +393,18 @@ export function InboxPageView({
                           onLinkClientSubmit(selectedThread.id);
                         }}
                       >
-                        <label>
-                          <span>CRM client user id</span>
-                          <input
-                            id="inbox-link-client-user-id"
-                            name="linkClientUserId"
-                            value={linkClientUserId}
-                            onChange={(event) =>
-                              onLinkClientUserIdChange(event.currentTarget.value)
-                            }
-                            placeholder="UUID клиента"
-                          />
-                        </label>
+                        <ClientSearchCombobox
+                          id="inbox-link-client-user-id"
+                          label="Клиент"
+                          value={linkClientUserId}
+                          placeholder="Выберите клиента"
+                          selectedClient={linkClient}
+                          requireBirthDate={false}
+                          fullWidth
+                          emptyMessage="Клиентов пока нет"
+                          disabled={isLinkingClient}
+                          onSelect={onLinkClientSelect}
+                        />
                         <button
                           type="submit"
                           disabled={isLinkingClient || !linkClientUserId.trim()}

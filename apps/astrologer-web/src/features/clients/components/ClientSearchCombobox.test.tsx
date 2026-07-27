@@ -15,8 +15,7 @@ describe("ClientSearchComboboxView", () => {
     const trigger = findRequiredElement(
       view,
       (element) =>
-        element.type === "button" &&
-        (element.props as { role?: unknown }).role === "combobox"
+        element.type === "button" && (element.props as { role?: unknown }).role === "combobox"
     );
 
     expect((trigger.props as { "aria-expanded"?: unknown })["aria-expanded"]).toBe(false);
@@ -24,9 +23,7 @@ describe("ClientSearchComboboxView", () => {
     expect(includesText(trigger.props, "Марина Краснова")).toBe(true);
     expect(includesText(trigger.props, "14.03.1990")).toBe(true);
     expect(
-      findElements(view).some(
-        (element) => (element.props as { role?: unknown }).role === "listbox"
-      )
+      findElements(view).some((element) => (element.props as { role?: unknown }).role === "listbox")
     ).toBe(false);
   });
 
@@ -48,8 +45,7 @@ describe("ClientSearchComboboxView", () => {
     const searchInput = findRequiredElement(
       view,
       (element) =>
-        element.type === "input" &&
-        (element.props as { role?: unknown }).role === "combobox"
+        element.type === "input" && (element.props as { role?: unknown }).role === "combobox"
     );
     const antonButton = findRequiredElement(
       view,
@@ -69,9 +65,9 @@ describe("ClientSearchComboboxView", () => {
     expect((antonButton.props as { "aria-selected"?: unknown })["aria-selected"]).toBe(false);
     expect((searchInput.props as { id?: unknown }).id).toBe("test-client-picker-search");
     expect((searchInput.props as { name?: unknown }).name).toBe("test-client-picker-search");
-    expect((searchInput.props as { "aria-activedescendant"?: unknown })[
-      "aria-activedescendant"
-    ]).toContain(option.value);
+    expect(
+      (searchInput.props as { "aria-activedescendant"?: unknown })["aria-activedescendant"]
+    ).toContain(option.value);
   });
 
   it("shows infinite-scroll loading without adding a visual end-state row", () => {
@@ -142,8 +138,7 @@ describe("ClientSearchComboboxView", () => {
     const root = findRequiredElement(
       view,
       (element) =>
-        element.type === "div" &&
-        "data-full-width" in (element.props as Record<string, unknown>)
+        element.type === "div" && "data-full-width" in (element.props as Record<string, unknown>)
     );
     const option = findRequiredElement(
       view,
@@ -156,6 +151,14 @@ describe("ClientSearchComboboxView", () => {
     expect((root.props as { "data-full-width"?: unknown })["data-full-width"]).toBe("true");
     expect((option.props as { disabled?: unknown }).disabled).toBe(false);
     expect(onSelect).toHaveBeenCalledWith(withoutBirthDate);
+  });
+
+  it("keeps the full-width popup inside narrow panels", () => {
+    const css = readFileSync(new URL("./ClientSearchCombobox.module.css", import.meta.url), "utf8");
+    const popupRule = getCssRule(css, '.root[data-full-width="true"] .popup');
+
+    expect(popupRule).toContain("width: 100%;");
+    expect(popupRule).toContain("max-width: 100%;");
   });
 });
 

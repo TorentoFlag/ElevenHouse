@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { createMessagingRealtimeClient } from "../../features/messaging/realtime/messagingRealtimeClient";
 import { getMessagingMessageMediaSource } from "../../features/messaging/api/messagingApi";
+import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import {
   filterInboxThreads,
   type InboxThreadFilter
@@ -26,7 +27,7 @@ export function InboxPage() {
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [activeThreadFilter, setActiveThreadFilter] = useState<InboxThreadFilter>("all");
-  const [linkClientUserId, setLinkClientUserId] = useState("");
+  const [linkClient, setLinkClient] = useState<ClientSelectOption | null>(null);
   const [createClientDisplayName, setCreateClientDisplayName] = useState("");
   const channelConnectionsQuery = useQuery(listMessagingChannelConnectionsQueryOptions());
   const threadsQuery = useQuery(listMessagingThreadsQueryOptions({ limit: 50, offset: 0 }));
@@ -56,6 +57,11 @@ export function InboxPage() {
 
     setSelectedThreadId(threads[0]?.id ?? null);
   }, [selectedThreadId, threads]);
+
+  useEffect(() => {
+    setLinkClient(null);
+    setCreateClientDisplayName("");
+  }, [selectedThreadId]);
 
   useEffect(() => {
     if (typeof EventSource === "undefined") {
@@ -103,7 +109,8 @@ export function InboxPage() {
       draft={draft}
       search={search}
       activeThreadFilter={activeThreadFilter}
-      linkClientUserId={linkClientUserId}
+      linkClientUserId={linkClient?.value ?? ""}
+      linkClient={linkClient}
       createClientDisplayName={createClientDisplayName}
       isLinkingClient={linkClientMutation.isPending}
       isCreatingClient={createClientMutation.isPending}
@@ -136,10 +143,10 @@ export function InboxPage() {
           .catch(() => undefined);
       }}
       onMarkRead={(threadId) => markReadMutation.mutate(threadId)}
-      onLinkClientUserIdChange={setLinkClientUserId}
+      onLinkClientSelect={setLinkClient}
       onCreateClientDisplayNameChange={setCreateClientDisplayName}
       onLinkClientSubmit={(threadId) => {
-        const clientUserId = linkClientUserId.trim();
+        const clientUserId = linkClient?.value ?? "";
 
         if (!clientUserId) {
           return;
@@ -150,7 +157,7 @@ export function InboxPage() {
             threadId,
             body: { clientUserId }
           })
-          .then(() => setLinkClientUserId(""))
+          .then(() => setLinkClient(null))
           .catch(() => undefined);
       }}
       onCreateClientSubmit={(threadId) => {
