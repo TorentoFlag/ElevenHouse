@@ -503,6 +503,11 @@ function createStore(): MessagingStore {
     recordTelegramBusinessDeletedMessages: vi.fn(async () => ({ kind: "recorded" as const, deletedCount: 0 })),
     recordTelegramBusinessEditedMessage: vi.fn(async () => ({ kind: "recorded" as const, updatedCount: 0 })),
     startTelegramBusinessConnection: vi.fn(async () => ({ connectionId })),
+    startTelegramMtprotoConnection: vi.fn(async () => ({
+      connectionId,
+      loginStep: "code_required" as const,
+      maskedPhoneNumber: "+7******3535"
+    })),
     linkThreadToClient: vi.fn(async (input) => ({ ...thread, clientUserId: input.clientUserId })),
     createClientFromThread: vi.fn(async () => ({ ...thread, clientUserId })),
     markThreadRead: vi.fn(async () => ({

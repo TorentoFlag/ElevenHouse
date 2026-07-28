@@ -1,5 +1,5 @@
 {
-  "id": "cd871244-1a7f-4857-b376-9678596832d7",
+  "id": "4e7336d9-b80f-4fdf-ad19-e7d6a6d815aa",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -3974,7 +3974,7 @@
       "checkConstraints": {
         "media_assets_purpose_check": {
           "name": "media_assets_purpose_check",
-          "value": "\"media_assets\".\"purpose\" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document', 'calculation_report_pdf')"
+          "value": "\"media_assets\".\"purpose\" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document', 'calculation_report_pdf', 'messaging_attachment')"
         },
         "media_assets_status_check": {
           "name": "media_assets_status_check",
@@ -10421,6 +10421,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "width": {
+          "name": "width",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "height": {
+          "name": "height",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "download_status": {
           "name": "download_status",
           "type": "text",
@@ -10472,18 +10484,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "width": {
-          "name": "width",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "height": {
-          "name": "height",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -10610,6 +10610,14 @@
           "name": "message_media_ingestions_duration_check",
           "value": "\"message_media_ingestions\".\"duration_seconds\" is null or \"message_media_ingestions\".\"duration_seconds\" >= 0"
         },
+        "message_media_ingestions_width_check": {
+          "name": "message_media_ingestions_width_check",
+          "value": "\"message_media_ingestions\".\"width\" is null or \"message_media_ingestions\".\"width\" > 0"
+        },
+        "message_media_ingestions_height_check": {
+          "name": "message_media_ingestions_height_check",
+          "value": "\"message_media_ingestions\".\"height\" is null or \"message_media_ingestions\".\"height\" > 0"
+        },
         "message_media_ingestions_attempt_count_check": {
           "name": "message_media_ingestions_attempt_count_check",
           "value": "\"message_media_ingestions\".\"attempt_count\" >= 0"
@@ -10621,14 +10629,6 @@
         "message_media_ingestions_ready_media_check": {
           "name": "message_media_ingestions_ready_media_check",
           "value": "\"message_media_ingestions\".\"download_status\" <> 'ready' or \"message_media_ingestions\".\"media_asset_id\" is not null"
-        },
-        "message_media_ingestions_width_check": {
-          "name": "message_media_ingestions_width_check",
-          "value": "\"message_media_ingestions\".\"width\" is null or \"message_media_ingestions\".\"width\" > 0"
-        },
-        "message_media_ingestions_height_check": {
-          "name": "message_media_ingestions_height_check",
-          "value": "\"message_media_ingestions\".\"height\" is null or \"message_media_ingestions\".\"height\" > 0"
         }
       },
       "isRLSEnabled": false
@@ -10768,6 +10768,217 @@
         "message_delivery_attempts_status_code_check": {
           "name": "message_delivery_attempts_status_code_check",
           "value": "\"message_delivery_attempts\".\"provider_status_code\" is null or \"message_delivery_attempts\".\"provider_status_code\" between 100 and 599"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.messaging_telegram_mtproto_sessions": {
+      "name": "messaging_telegram_mtproto_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "channel_connection_id": {
+          "name": "channel_connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "login_state": {
+          "name": "login_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'code_required'"
+        },
+        "phone_number_encrypted": {
+          "name": "phone_number_encrypted",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone_code_hash_encrypted": {
+          "name": "phone_code_hash_encrypted",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_encrypted": {
+          "name": "session_encrypted",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_number_last4": {
+          "name": "phone_number_last4",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telegram_user_id": {
+          "name": "telegram_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pts": {
+          "name": "pts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "qts": {
+          "name": "qts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "date_cursor": {
+          "name": "date_cursor",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seq": {
+          "name": "seq",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_owner": {
+          "name": "lease_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "leased_until": {
+          "name": "leased_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_listener_heartbeat_at": {
+          "name": "last_listener_heartbeat_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "messaging_telegram_mtproto_sessions_login_state_idx": {
+          "name": "messaging_telegram_mtproto_sessions_login_state_idx",
+          "columns": [
+            {
+              "expression": "login_state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "messaging_telegram_mtproto_sessions_lease_idx": {
+          "name": "messaging_telegram_mtproto_sessions_lease_idx",
+          "columns": [
+            {
+              "expression": "leased_until",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "login_state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "messaging_telegram_mtproto_sessions_channel_connection_id_messaging_channel_connections_id_fk": {
+          "name": "messaging_telegram_mtproto_sessions_channel_connection_id_messaging_channel_connections_id_fk",
+          "tableFrom": "messaging_telegram_mtproto_sessions",
+          "tableTo": "messaging_channel_connections",
+          "columnsFrom": [
+            "channel_connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "messaging_telegram_mtproto_sessions_connection_unique": {
+          "name": "messaging_telegram_mtproto_sessions_connection_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "channel_connection_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "messaging_telegram_mtproto_sessions_login_state_check": {
+          "name": "messaging_telegram_mtproto_sessions_login_state_check",
+          "value": "\"messaging_telegram_mtproto_sessions\".\"login_state\" in ('code_required', 'password_required', 'authorized', 'reauth_required', 'revoked')"
+        },
+        "messaging_telegram_mtproto_sessions_phone_last4_check": {
+          "name": "messaging_telegram_mtproto_sessions_phone_last4_check",
+          "value": "\"messaging_telegram_mtproto_sessions\".\"phone_number_last4\" ~ '^[0-9]{4}$'"
+        },
+        "messaging_telegram_mtproto_sessions_phone_encrypted_object_check": {
+          "name": "messaging_telegram_mtproto_sessions_phone_encrypted_object_check",
+          "value": "jsonb_typeof(\"messaging_telegram_mtproto_sessions\".\"phone_number_encrypted\") = 'object'"
+        },
+        "messaging_telegram_mtproto_sessions_phone_code_hash_encrypted_object_check": {
+          "name": "messaging_telegram_mtproto_sessions_phone_code_hash_encrypted_object_check",
+          "value": "jsonb_typeof(\"messaging_telegram_mtproto_sessions\".\"phone_code_hash_encrypted\") = 'object'"
+        },
+        "messaging_telegram_mtproto_sessions_session_encrypted_object_check": {
+          "name": "messaging_telegram_mtproto_sessions_session_encrypted_object_check",
+          "value": "\"messaging_telegram_mtproto_sessions\".\"session_encrypted\" is null or jsonb_typeof(\"messaging_telegram_mtproto_sessions\".\"session_encrypted\") = 'object'"
+        },
+        "messaging_telegram_mtproto_sessions_update_cursors_check": {
+          "name": "messaging_telegram_mtproto_sessions_update_cursors_check",
+          "value": "(\"messaging_telegram_mtproto_sessions\".\"pts\" is null or \"messaging_telegram_mtproto_sessions\".\"pts\" >= 0) and (\"messaging_telegram_mtproto_sessions\".\"qts\" is null or \"messaging_telegram_mtproto_sessions\".\"qts\" >= 0) and (\"messaging_telegram_mtproto_sessions\".\"seq\" is null or \"messaging_telegram_mtproto_sessions\".\"seq\" >= 0)"
+        },
+        "messaging_telegram_mtproto_sessions_telegram_user_id_length_check": {
+          "name": "messaging_telegram_mtproto_sessions_telegram_user_id_length_check",
+          "value": "\"messaging_telegram_mtproto_sessions\".\"telegram_user_id\" is null or length(trim(\"messaging_telegram_mtproto_sessions\".\"telegram_user_id\")) between 1 and 200"
+        },
+        "messaging_telegram_mtproto_sessions_lease_owner_length_check": {
+          "name": "messaging_telegram_mtproto_sessions_lease_owner_length_check",
+          "value": "\"messaging_telegram_mtproto_sessions\".\"lease_owner\" is null or length(trim(\"messaging_telegram_mtproto_sessions\".\"lease_owner\")) between 1 and 200"
         }
       },
       "isRLSEnabled": false
@@ -12251,6 +12462,138 @@
         "refunds_provider_refund_id_length_check": {
           "name": "refunds_provider_refund_id_length_check",
           "value": "\"refunds\".\"provider_refund_id\" is null or length(trim(\"refunds\".\"provider_refund_id\")) between 1 and 160"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payment_reversal_case_reviews": {
+      "name": "payment_reversal_case_reviews",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "provider_event_id": {
+          "name": "provider_event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resolution": {
+          "name": "resolution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "admin_user_id": {
+          "name": "admin_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "admin_note": {
+          "name": "admin_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "payment_reversal_case_reviews_provider_event_unique": {
+          "name": "payment_reversal_case_reviews_provider_event_unique",
+          "columns": [
+            {
+              "expression": "provider_event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_reversal_case_reviews_reviewed_at_idx": {
+          "name": "payment_reversal_case_reviews_reviewed_at_idx",
+          "columns": [
+            {
+              "expression": "reviewed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_reversal_case_reviews_admin_user_idx": {
+          "name": "payment_reversal_case_reviews_admin_user_idx",
+          "columns": [
+            {
+              "expression": "admin_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payment_reversal_case_reviews_provider_event_id_payment_provider_events_id_fk": {
+          "name": "payment_reversal_case_reviews_provider_event_id_payment_provider_events_id_fk",
+          "tableFrom": "payment_reversal_case_reviews",
+          "tableTo": "payment_provider_events",
+          "columnsFrom": [
+            "provider_event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "payment_reversal_case_reviews_admin_user_id_users_id_fk": {
+          "name": "payment_reversal_case_reviews_admin_user_id_users_id_fk",
+          "tableFrom": "payment_reversal_case_reviews",
+          "tableTo": "users",
+          "columnsFrom": [
+            "admin_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "payment_reversal_case_reviews_resolution_check": {
+          "name": "payment_reversal_case_reviews_resolution_check",
+          "value": "\"payment_reversal_case_reviews\".\"resolution\" in ('ledger_verified', 'provider_follow_up_required', 'evidence_sent')"
+        },
+        "payment_reversal_case_reviews_admin_note_check": {
+          "name": "payment_reversal_case_reviews_admin_note_check",
+          "value": "length(trim(\"payment_reversal_case_reviews\".\"admin_note\")) between 1 and 2000"
         }
       },
       "isRLSEnabled": false

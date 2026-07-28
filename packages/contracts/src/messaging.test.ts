@@ -8,6 +8,10 @@ import {
   MessagingProviderSchema,
   MessagingRealtimeEventSchema,
   StartTelegramBusinessConnectionResponseSchema,
+  StartTelegramMtprotoConnectionRequestSchema,
+  SubmitTelegramMtprotoCodeRequestSchema,
+  SubmitTelegramMtprotoPasswordRequestSchema,
+  TelegramMtprotoLoginResponseSchema,
   SendMessagingMessageRequestSchema
 } from "./messaging";
 
@@ -109,6 +113,66 @@ describe("messaging contracts", () => {
         channelConnection: { ...channelConnection, businessConnectionId: "bc_secret" },
         telegramBotUsername: "elevenhouse_test_bot",
         telegramBotUrl: "https://t.me/elevenhouse_test_bot"
+      })
+    ).toThrow();
+  });
+
+  it("accepts Telegram Account start requests only with explicit account-access consent", () => {
+    expect(
+      StartTelegramMtprotoConnectionRequestSchema.parse({
+        phoneNumber: "  +7 800 555-35-35  ",
+        consentAccepted: true
+      })
+    ).toEqual({
+      phoneNumber: "+7 800 555-35-35",
+      consentAccepted: true
+    });
+    expect(() =>
+      StartTelegramMtprotoConnectionRequestSchema.parse({
+        phoneNumber: "+78005553535",
+        consentAccepted: false
+      })
+    ).toThrow();
+  });
+
+  it("accepts Telegram Account code and password steps without exposing session material", () => {
+    expect(
+      SubmitTelegramMtprotoCodeRequestSchema.parse({
+        channelConnectionId: channelConnection.id,
+        code: " 777777 "
+      })
+    ).toEqual({ channelConnectionId: channelConnection.id, code: "777777" });
+
+    expect(
+      SubmitTelegramMtprotoPasswordRequestSchema.parse({
+        channelConnectionId: channelConnection.id,
+        password: " telegram 2fa password "
+      })
+    ).toEqual({
+      channelConnectionId: channelConnection.id,
+      password: " telegram 2fa password "
+    });
+  });
+
+  it("accepts Telegram Account login responses without raw phone, code, password or session", () => {
+    const response = TelegramMtprotoLoginResponseSchema.parse({
+      channelConnection: {
+        ...channelConnection,
+        mode: "telegram_mtproto_account",
+        status: "connecting",
+        connectedAt: null
+      },
+      loginStep: "code_required",
+      maskedPhoneNumber: "+7******3535",
+      retryAfterSeconds: null
+    });
+
+    expect(response.loginStep).toBe("code_required");
+    expect(response.maskedPhoneNumber).toBe("+7******3535");
+    expect(() =>
+      TelegramMtprotoLoginResponseSchema.parse({
+        ...response,
+        sessionString: "secret-session"
       })
     ).toThrow();
   });

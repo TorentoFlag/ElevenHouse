@@ -10,6 +10,8 @@ import {
   messagingChannelConnections,
   messagingChannelModeValues,
   messagingExternalIdentities,
+  messagingMtprotoLoginStateValues,
+  messagingTelegramMtprotoSessions,
   messagingMessages,
   messagingProviderValues,
   messagingRealtimeEvents,
@@ -32,6 +34,9 @@ describe("Messaging persistence schema", () => {
     expect(getTableName(messagingMessages)).toBe("messages");
     expect(getTableName(messageDeliveryAttempts)).toBe("message_delivery_attempts");
     expect(getTableName(messagingRealtimeEvents)).toBe("messaging_realtime_events");
+    expect(getTableName(messagingTelegramMtprotoSessions)).toBe(
+      "messaging_telegram_mtproto_sessions"
+    );
   });
 
   it("keeps present and future provider modes explicit", () => {
@@ -49,7 +54,54 @@ describe("Messaging persistence schema", () => {
       "reauth_required",
       "error"
     ]);
+    expect(messagingMtprotoLoginStateValues).toEqual([
+      "code_required",
+      "password_required",
+      "authorized",
+      "reauth_required",
+      "revoked"
+    ]);
     expect(formatMessagingSqlValues(messagingProviderValues)).toBe("('telegram', 'instagram')");
+  });
+
+  it("keeps Telegram Account sessions separate from public channel snapshots", () => {
+    const sessionColumns = Object.keys(getTableColumns(messagingTelegramMtprotoSessions));
+    const sessionConfig = getTableConfig(messagingTelegramMtprotoSessions);
+
+    expect(sessionColumns).toEqual(
+      expect.arrayContaining([
+        "channelConnectionId",
+        "loginState",
+        "phoneNumberEncrypted",
+        "phoneCodeHashEncrypted",
+        "sessionEncrypted",
+        "phoneNumberLast4",
+        "telegramUserId",
+        "pts",
+        "qts",
+        "dateCursor",
+        "seq",
+        "leaseOwner",
+        "leasedUntil",
+        "lastListenerHeartbeatAt"
+      ])
+    );
+    expect(sessionConfig.uniqueConstraints.map((constraint) => constraint.name)).toContain(
+      "messaging_telegram_mtproto_sessions_connection_unique"
+    );
+    expect(sessionConfig.foreignKeys.map((key) => key.getName())).toContain(
+      "messaging_telegram_mtproto_sessions_channel_connection_id_messaging_channel_connections_id_fk"
+    );
+    expect(sessionConfig.checks.map((check) => check.name)).toEqual(
+      expect.arrayContaining([
+        "messaging_telegram_mtproto_sessions_login_state_check",
+        "messaging_telegram_mtproto_sessions_phone_last4_check",
+        "messaging_telegram_mtproto_sessions_phone_encrypted_object_check",
+        "messaging_telegram_mtproto_sessions_phone_code_hash_encrypted_object_check",
+        "messaging_telegram_mtproto_sessions_session_encrypted_object_check",
+        "messaging_telegram_mtproto_sessions_update_cursors_check"
+      ])
+    );
   });
 
   it("accepts identifier-only Messaging delivery payloads in the outbox union", () => {
@@ -124,6 +176,7 @@ describe("Messaging persistence schema", () => {
     const migration = readFileSync(baselineMigrationFile, "utf8");
     const snapshot = JSON.parse(readFileSync(baselineSnapshotFile, "utf8")) as {
       prevId: string;
+      tables: Record<string, unknown>;
     };
     const journal = JSON.parse(readFileSync(migrationJournalFile, "utf8")) as {
       entries: Array<{ idx: number; tag: string }>;
@@ -144,6 +197,14 @@ describe("Messaging persistence schema", () => {
     expect(migration).toContain(
       'CONSTRAINT "messaging_channel_connections_external_owner_id_length_check" CHECK ("messaging_channel_connections"."external_owner_user_id" is null or length(trim("messaging_channel_connections"."external_owner_user_id")) between 1 and 200)'
     );
+    expect(migration).toContain('CREATE TABLE "messaging_telegram_mtproto_sessions"');
+    expect(migration).toContain('"phone_number_encrypted" jsonb NOT NULL');
+    expect(migration).toContain('"phone_code_hash_encrypted" jsonb NOT NULL');
+    expect(migration).toContain('"session_encrypted" jsonb');
+    expect(migration).toContain(
+      'CONSTRAINT "messaging_telegram_mtproto_sessions_update_cursors_check" CHECK (("messaging_telegram_mtproto_sessions"."pts" is null or "messaging_telegram_mtproto_sessions"."pts" >= 0) and ("messaging_telegram_mtproto_sessions"."qts" is null or "messaging_telegram_mtproto_sessions"."qts" >= 0) and ("messaging_telegram_mtproto_sessions"."seq" is null or "messaging_telegram_mtproto_sessions"."seq" >= 0))'
+    );
+    expect(snapshot.tables).toHaveProperty("public.messaging_telegram_mtproto_sessions");
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "messaging_channel_connections_external_account_unique" ON "messaging_channel_connections" USING btree ("provider","external_account_id") WHERE "messaging_channel_connections"."external_account_id" is not null'
     );

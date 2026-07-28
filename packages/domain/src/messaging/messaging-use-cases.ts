@@ -18,6 +18,7 @@ import type {
   TelegramBusinessConnectionRights
 } from "./messaging-store";
 import type {
+  EncryptedMessagingSecret,
   MessagingMessage,
   MessagingMessageContentType,
   MessagingRealtimeEvent,
@@ -170,6 +171,36 @@ export async function startTelegramBusinessConnection(input: {
   return input.store.startTelegramBusinessConnection({
     connectionId: identifier(input.idGenerator?.() ?? randomUUID(), "Channel connection id is required"),
     astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
+    now: input.now.toISOString()
+  });
+}
+
+export async function startTelegramMtprotoConnection(input: {
+  readonly store: MessagingStore;
+  readonly astrologerUserId: string;
+  readonly phoneNumberLast4: string;
+  readonly maskedPhoneNumber: string;
+  readonly encryptedPhoneNumber: EncryptedMessagingSecret;
+  readonly encryptedPhoneCodeHash: EncryptedMessagingSecret;
+  readonly consentAccepted: true;
+  readonly idGenerator?: () => string;
+  readonly now: Date;
+}): Promise<{
+  readonly connectionId: string;
+  readonly loginStep: "code_required";
+  readonly maskedPhoneNumber: string;
+}> {
+  if (input.consentAccepted !== true) {
+    throw new MessagingValidationError("Telegram Account access consent is required");
+  }
+  return input.store.startTelegramMtprotoConnection({
+    connectionId: identifier(input.idGenerator?.() ?? randomUUID(), "Channel connection id is required"),
+    astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
+    phoneNumberLast4: phoneLast4(input.phoneNumberLast4),
+    maskedPhoneNumber: bounded(input.maskedPhoneNumber, 3, 32, "Masked phone number is invalid"),
+    encryptedPhoneNumber: encryptedSecret(input.encryptedPhoneNumber),
+    encryptedPhoneCodeHash: encryptedSecret(input.encryptedPhoneCodeHash),
+    consentAccepted: true,
     now: input.now.toISOString()
   });
 }
@@ -548,4 +579,25 @@ function positiveInteger(value: number, message: string): number {
 
 function identifier(value: string, message: string): string {
   return required(value, message);
+}
+
+function phoneLast4(value: string): string {
+  const normalized = required(value, "Phone number last4 is required");
+  if (!/^[0-9]{4}$/.test(normalized)) {
+    throw new MessagingValidationError("Phone number last4 is invalid");
+  }
+  return normalized;
+}
+
+function encryptedSecret(value: EncryptedMessagingSecret): EncryptedMessagingSecret {
+  if (value.algorithm !== "aes-256-gcm") {
+    throw new MessagingValidationError("Encrypted secret algorithm is unsupported");
+  }
+  return {
+    algorithm: value.algorithm,
+    keyId: bounded(value.keyId, 1, 100, "Encrypted secret key id is required"),
+    iv: bounded(value.iv, 1, 500, "Encrypted secret iv is required"),
+    authTag: bounded(value.authTag, 1, 500, "Encrypted secret auth tag is required"),
+    ciphertext: bounded(value.ciphertext, 1, 20_000, "Encrypted secret ciphertext is required")
+  };
 }

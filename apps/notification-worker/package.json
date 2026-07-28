@@ -14,8 +14,10 @@
     "@elevenhouse/domain": "workspace:*",
     "@elevenhouse/observability": "workspace:*",
     "@elevenhouse/validation": "workspace:*",
+    "big-integer": "^1.6.52",
     "bullmq": "^5.78.1",
-    "pg": "8.21.0"
+    "pg": "8.21.0",
+    "teleproto": "^1.228.4"
   },
   "devDependencies": {
     "@types/node": "25.9.2",

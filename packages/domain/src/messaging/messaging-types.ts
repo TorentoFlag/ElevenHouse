@@ -49,6 +49,16 @@ export type MessagingRealtimeEventType =
   | "identity.linked"
   | "delivery.failed";
 
+export type EncryptedMessagingSecret = {
+  readonly algorithm: "aes-256-gcm";
+  readonly keyId: string;
+  readonly iv: string;
+  readonly authTag: string;
+  readonly ciphertext: string;
+};
+
+export type TelegramMtprotoLoginStep = "code_required" | "password_required" | "connected";
+
 export type MessagingThreadExternalIdentity = {
   readonly id: string;
   readonly channelConnectionId: string;

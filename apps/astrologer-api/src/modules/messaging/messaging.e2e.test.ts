@@ -485,6 +485,11 @@ function createStore(): MessagingStore {
       startedTelegramBusinessConnectionId = connectionId;
       return { connectionId };
     }),
+    startTelegramMtprotoConnection: vi.fn(async () => ({
+      connectionId,
+      loginStep: "code_required" as const,
+      maskedPhoneNumber: "+7******3535"
+    })),
     recordTelegramBusinessMessage: vi.fn(async () => {
       inboundProviderMessageCount += 1;
       return { kind: "created" as const, message: readDomainInboundMessage() };

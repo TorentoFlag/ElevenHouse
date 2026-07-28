@@ -68,6 +68,7 @@ describe("createNotificationWorkerRuntimeConfig", () => {
         forcePathStyle: true
       },
       telegramBusinessDelivery: null,
+      telegramMtproto: null,
       authCodeEmailDelivery: {
         endpointUrl: "https://delivery.internal/auth/email",
         bearerToken: "email-token",
@@ -116,6 +117,38 @@ describe("createNotificationWorkerRuntimeConfig", () => {
       telegramBusinessDelivery: {
         botToken: "telegram-token",
         botApiBaseUrl: "https://telegram.test"
+      }
+    });
+  });
+
+  it("requires Telegram MTProto settings when MTProto messaging is enabled", () => {
+    expect(() =>
+      createNotificationWorkerRuntimeConfig({
+        ...requiredDeliveryConfig,
+        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_ENABLED: "true",
+        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID: "12345",
+        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH: "0123456789abcdef0123456789abcdef"
+      })
+    ).toThrow("NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY");
+  });
+
+  it("parses Telegram MTProto account settings", () => {
+    const mtprotoSessionEncryptionKey = Buffer.alloc(32, 12).toString("base64");
+
+    expect(
+      createNotificationWorkerRuntimeConfig({
+        ...requiredDeliveryConfig,
+        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_ENABLED: "true",
+        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID: "12345",
+        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH: "0123456789abcdef0123456789abcdef",
+        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY: mtprotoSessionEncryptionKey
+      })
+    ).toMatchObject({
+      telegramMtproto: {
+        enabled: true,
+        apiId: 12345,
+        apiHash: "0123456789abcdef0123456789abcdef",
+        sessionEncryptionKey: Buffer.alloc(32, 12)
       }
     });
   });

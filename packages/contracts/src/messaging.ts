@@ -71,6 +71,50 @@ export type StartTelegramBusinessConnectionResponse = z.infer<
   typeof StartTelegramBusinessConnectionResponseSchema
 >;
 
+export const StartTelegramMtprotoConnectionRequestSchema = z.strictObject({
+  phoneNumber: z
+    .string()
+    .trim()
+    .min(5)
+    .max(32)
+    .regex(/^\+?[0-9][0-9\s().-]{4,31}$/),
+  consentAccepted: z.literal(true)
+});
+export type StartTelegramMtprotoConnectionRequest = z.infer<
+  typeof StartTelegramMtprotoConnectionRequestSchema
+>;
+
+export const SubmitTelegramMtprotoCodeRequestSchema = z.strictObject({
+  channelConnectionId: UuidSchema,
+  code: z.string().trim().min(1).max(32)
+});
+export type SubmitTelegramMtprotoCodeRequest = z.infer<
+  typeof SubmitTelegramMtprotoCodeRequestSchema
+>;
+
+export const SubmitTelegramMtprotoPasswordRequestSchema = z.strictObject({
+  channelConnectionId: UuidSchema,
+  password: z.string().min(1).max(256)
+});
+export type SubmitTelegramMtprotoPasswordRequest = z.infer<
+  typeof SubmitTelegramMtprotoPasswordRequestSchema
+>;
+
+export const TelegramMtprotoLoginStepSchema = z.enum([
+  "code_required",
+  "password_required",
+  "connected"
+]);
+export type TelegramMtprotoLoginStep = z.infer<typeof TelegramMtprotoLoginStepSchema>;
+
+export const TelegramMtprotoLoginResponseSchema = z.strictObject({
+  channelConnection: MessagingChannelConnectionSchema,
+  loginStep: TelegramMtprotoLoginStepSchema,
+  maskedPhoneNumber: z.string().trim().min(3).max(32),
+  retryAfterSeconds: z.number().int().positive().nullable()
+});
+export type TelegramMtprotoLoginResponse = z.infer<typeof TelegramMtprotoLoginResponseSchema>;
+
 export const MessagingExternalIdentityLinkStatusSchema = z.enum([
   "unlinked",
   "suggested",

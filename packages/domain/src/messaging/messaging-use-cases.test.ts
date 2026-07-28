@@ -23,7 +23,8 @@ import type {
   RecordTelegramBusinessDeletedMessagesStoreInput,
   RecordTelegramBusinessEditedMessageStoreInput,
   RecordTelegramBusinessMessageStoreInput,
-  StartTelegramBusinessConnectionStoreInput
+  StartTelegramBusinessConnectionStoreInput,
+  StartTelegramMtprotoConnectionStoreInput
 } from "./messaging-store";
 import type {
   MessagingMessage,
@@ -42,7 +43,8 @@ import {
   recordTelegramBusinessMessage,
   recordTelegramBusinessDeletedMessages,
   recordTelegramBusinessEditedMessage,
-  startTelegramBusinessConnection
+  startTelegramBusinessConnection,
+  startTelegramMtprotoConnection
 } from "./messaging-use-cases";
 
 const now = new Date("2026-07-21T10:00:00.000Z");
@@ -414,6 +416,70 @@ describe("Messaging use cases", () => {
     ]);
   });
 
+  it("starts Telegram Account connection with encrypted login material and no plaintext phone", async () => {
+    const store = new InMemoryMessagingStore();
+    const encryptedSecret = {
+      algorithm: "aes-256-gcm" as const,
+      keyId: "mtproto-key-1",
+      iv: "base64-iv",
+      authTag: "base64-tag",
+      ciphertext: "base64-ciphertext"
+    };
+
+    const started = await startTelegramMtprotoConnection({
+      store,
+      astrologerUserId,
+      idGenerator: createIdGenerator("mtproto-connection"),
+      phoneNumberLast4: "3535",
+      maskedPhoneNumber: "+7******3535",
+      encryptedPhoneNumber: encryptedSecret,
+      encryptedPhoneCodeHash: { ...encryptedSecret, ciphertext: "phone-code-hash" },
+      consentAccepted: true,
+      now
+    });
+    const replayed = await startTelegramMtprotoConnection({
+      store,
+      astrologerUserId,
+      idGenerator: createIdGenerator("second-mtproto"),
+      phoneNumberLast4: "3535",
+      maskedPhoneNumber: "+7******3535",
+      encryptedPhoneNumber: encryptedSecret,
+      encryptedPhoneCodeHash: { ...encryptedSecret, ciphertext: "phone-code-hash" },
+      consentAccepted: true,
+      now
+    });
+
+    expect(started).toEqual({
+      connectionId: "mtproto-connection-1",
+      loginStep: "code_required",
+      maskedPhoneNumber: "+7******3535"
+    });
+    expect(replayed).toEqual(started);
+    expect(JSON.stringify(store.startTelegramMtprotoCommands)).not.toContain("78005553535");
+    expect(store.startTelegramMtprotoCommands).toEqual([
+      {
+        connectionId: "mtproto-connection-1",
+        astrologerUserId,
+        phoneNumberLast4: "3535",
+        maskedPhoneNumber: "+7******3535",
+        encryptedPhoneNumber: encryptedSecret,
+        encryptedPhoneCodeHash: { ...encryptedSecret, ciphertext: "phone-code-hash" },
+        consentAccepted: true,
+        now: now.toISOString()
+      },
+      {
+        connectionId: "second-mtproto-1",
+        astrologerUserId,
+        phoneNumberLast4: "3535",
+        maskedPhoneNumber: "+7******3535",
+        encryptedPhoneNumber: encryptedSecret,
+        encryptedPhoneCodeHash: { ...encryptedSecret, ciphertext: "phone-code-hash" },
+        consentAccepted: true,
+        now: now.toISOString()
+      }
+    ]);
+  });
+
   it("normalizes Telegram Business deleted message ids before passing them to the store", async () => {
     const store = new InMemoryMessagingStore();
 
@@ -697,6 +763,7 @@ class InMemoryMessagingStore implements MessagingStore {
     readonly now: string;
   }> = [];
   readonly startTelegramBusinessCommands: StartTelegramBusinessConnectionStoreInput[] = [];
+  readonly startTelegramMtprotoCommands: StartTelegramMtprotoConnectionStoreInput[] = [];
   readonly telegramBusinessMessageCommands: RecordTelegramBusinessMessageStoreInput[] = [];
   readonly telegramBusinessDeleteCommands: RecordTelegramBusinessDeletedMessagesStoreInput[] = [];
   readonly telegramBusinessEditCommands: RecordTelegramBusinessEditedMessageStoreInput[] = [];
@@ -710,6 +777,7 @@ class InMemoryMessagingStore implements MessagingStore {
   readonly #activeClientUserIds = new Set(["client-existing"]);
   #nextRealtimeEventId = 1;
   #telegramBusinessConnectionId: string | null = null;
+  #telegramMtprotoConnectionId: string | null = null;
 
   thread(threadId: string): MessagingThread | undefined {
     return this.#threads.get(threadId);
@@ -825,6 +893,22 @@ class InMemoryMessagingStore implements MessagingStore {
     this.startTelegramBusinessCommands.push(input);
     this.#telegramBusinessConnectionId ??= input.connectionId;
     return { connectionId: this.#telegramBusinessConnectionId };
+  }
+
+  async startTelegramMtprotoConnection(
+    input: StartTelegramMtprotoConnectionStoreInput
+  ): Promise<{
+    readonly connectionId: string;
+    readonly loginStep: "code_required";
+    readonly maskedPhoneNumber: string;
+  }> {
+    this.startTelegramMtprotoCommands.push(input);
+    this.#telegramMtprotoConnectionId ??= input.connectionId;
+    return {
+      connectionId: this.#telegramMtprotoConnectionId,
+      loginStep: "code_required",
+      maskedPhoneNumber: input.maskedPhoneNumber
+    };
   }
 
   async linkThreadToClient(input: LinkThreadToClientStoreInput): Promise<MessagingThread> {

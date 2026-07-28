@@ -15,6 +15,14 @@ export const messagingChannelConnectionStatusValues = [
   "error"
 ] as const;
 
+export const messagingMtprotoLoginStateValues = [
+  "code_required",
+  "password_required",
+  "authorized",
+  "reauth_required",
+  "revoked"
+] as const;
+
 export const messagingExternalIdentityLinkStatusValues = [
   "unlinked",
   "suggested",

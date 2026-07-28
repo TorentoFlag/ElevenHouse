@@ -1,5 +1,6 @@
 import type { MessagingMessageDeliveryRequestedEvent } from "./messaging-events";
 import type {
+  EncryptedMessagingSecret,
   MessagingMessage,
   MessagingMessageContentType,
   MessagingMessageWithRequestHash,
@@ -80,6 +81,23 @@ export type StartTelegramBusinessConnectionStoreInput = {
 
 export type StartTelegramBusinessConnectionStoreResult = {
   readonly connectionId: string;
+};
+
+export type StartTelegramMtprotoConnectionStoreInput = {
+  readonly connectionId: string;
+  readonly astrologerUserId: string;
+  readonly phoneNumberLast4: string;
+  readonly maskedPhoneNumber: string;
+  readonly encryptedPhoneNumber: EncryptedMessagingSecret;
+  readonly encryptedPhoneCodeHash: EncryptedMessagingSecret;
+  readonly consentAccepted: true;
+  readonly now: string;
+};
+
+export type StartTelegramMtprotoConnectionStoreResult = {
+  readonly connectionId: string;
+  readonly loginStep: "code_required";
+  readonly maskedPhoneNumber: string;
 };
 
 export type RecordTelegramBusinessMessageStoreInput = {
@@ -195,6 +213,9 @@ export type MessagingStore = {
   readonly startTelegramBusinessConnection: (
     input: StartTelegramBusinessConnectionStoreInput
   ) => Promise<StartTelegramBusinessConnectionStoreResult>;
+  readonly startTelegramMtprotoConnection: (
+    input: StartTelegramMtprotoConnectionStoreInput
+  ) => Promise<StartTelegramMtprotoConnectionStoreResult>;
   readonly recordTelegramBusinessMessage: (
     input: RecordTelegramBusinessMessageStoreInput
   ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;

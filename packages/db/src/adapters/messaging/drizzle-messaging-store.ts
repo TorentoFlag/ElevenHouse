@@ -29,7 +29,9 @@ import type {
   RecordTelegramBusinessEditedMessageStoreResult,
   RecordTelegramBusinessMessageStoreInput,
   StartTelegramBusinessConnectionStoreInput,
-  StartTelegramBusinessConnectionStoreResult
+  StartTelegramBusinessConnectionStoreResult,
+  StartTelegramMtprotoConnectionStoreInput,
+  StartTelegramMtprotoConnectionStoreResult
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
@@ -41,6 +43,7 @@ import {
   messageMediaIngestions,
   messagingMessages,
   messagingRealtimeEvents,
+  messagingTelegramMtprotoSessions,
   messagingThreadIdentities,
   messagingThreads,
   outboxEvents,
@@ -81,6 +84,7 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     recordInboundProviderMessage: (input) => recordInboundProviderMessage(database, input),
     recordTelegramBusinessConnection: (input) => recordTelegramBusinessConnection(database, input),
     startTelegramBusinessConnection: (input) => startTelegramBusinessConnection(database, input),
+    startTelegramMtprotoConnection: (input) => startTelegramMtprotoConnection(database, input),
     recordTelegramBusinessMessage: (input) => recordTelegramBusinessMessage(database, input),
     recordTelegramBusinessDeletedMessages: (input) =>
       recordTelegramBusinessDeletedMessages(database, input),
@@ -470,12 +474,82 @@ async function startTelegramBusinessConnection(
   });
 }
 
+async function startTelegramMtprotoConnection(
+  database: ElevenHouseDatabase,
+  input: StartTelegramMtprotoConnectionStoreInput
+): Promise<StartTelegramMtprotoConnectionStoreResult> {
+  return database.transaction(async (transaction) => {
+    await lockTelegramMtprotoConnectionStart(transaction, input);
+    const existing = await findTelegramMtprotoConnectionForAstrologer(transaction, input);
+    if (existing) return { connectionId: existing.id, loginStep: "code_required", maskedPhoneNumber: input.maskedPhoneNumber };
+
+    const timestamp = new Date(input.now);
+    const [row] = await transaction
+      .insert(messagingChannelConnections)
+      .values({
+        id: input.connectionId,
+        astrologerUserId: input.astrologerUserId,
+        provider: "telegram",
+        mode: "telegram_mtproto_account",
+        status: "connecting",
+        externalAccountId: null,
+        externalOwnerUserId: null,
+        displayNameSnapshot: null,
+        usernameSnapshot: null,
+        capabilities: telegramMtprotoPendingCapabilities(),
+        consentRecordId: null,
+        connectedAt: null,
+        lastSyncedAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      })
+      .returning({ id: messagingChannelConnections.id });
+    if (!row) throw new Error("Expected Telegram Account channel connection insert to return a row");
+
+    await transaction.insert(messagingTelegramMtprotoSessions).values({
+      channelConnectionId: row.id,
+      loginState: "code_required",
+      phoneNumberEncrypted: input.encryptedPhoneNumber,
+      phoneCodeHashEncrypted: input.encryptedPhoneCodeHash,
+      sessionEncrypted: null,
+      phoneNumberLast4: input.phoneNumberLast4,
+      telegramUserId: null,
+      pts: null,
+      qts: null,
+      dateCursor: null,
+      seq: null,
+      leaseOwner: null,
+      leasedUntil: null,
+      lastListenerHeartbeatAt: null,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    });
+
+    return {
+      connectionId: row.id,
+      loginStep: "code_required",
+      maskedPhoneNumber: input.maskedPhoneNumber
+    };
+  });
+}
+
 async function lockTelegramBusinessConnectionStart(
   database: MessagingDatabase,
   input: { readonly astrologerUserId: string }
 ): Promise<void> {
   await database.execute(
     sql`select pg_advisory_xact_lock(hashtext(${`messaging:telegram_business_bot:${input.astrologerUserId}`}))`
+  );
+}
+
+async function lockTelegramMtprotoConnectionStart(
+  database: MessagingDatabase,
+  input: { readonly astrologerUserId: string }
+): Promise<void> {
+  await database.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`messaging:telegram_mtproto_account:${input.astrologerUserId}`}))`
   );
 }
 
@@ -494,6 +568,27 @@ async function findTelegramBusinessConnectionForAstrologer(
         eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
         eq(messagingChannelConnections.provider, "telegram"),
         eq(messagingChannelConnections.mode, "telegram_business_bot")
+      )
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+async function findTelegramMtprotoConnectionForAstrologer(
+  database: MessagingDatabase,
+  input: { readonly astrologerUserId: string }
+): Promise<{ readonly id: string; readonly status: string } | null> {
+  const [row] = await database
+    .select({
+      id: messagingChannelConnections.id,
+      status: messagingChannelConnections.status
+    })
+    .from(messagingChannelConnections)
+    .where(
+      and(
+        eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
+        eq(messagingChannelConnections.provider, "telegram"),
+        eq(messagingChannelConnections.mode, "telegram_mtproto_account")
       )
     )
     .limit(1);
@@ -1287,6 +1382,18 @@ function toTelegramBusinessCapabilities(
 }
 
 function telegramBusinessPendingCapabilities(): Record<string, boolean> {
+  return {
+    canSend: false,
+    canReceive: false,
+    canRead: false,
+    supportsHistoryImport: false,
+    supportsMessageEdits: false,
+    supportsMessageDeletes: false,
+    supportsAttachments: false
+  };
+}
+
+function telegramMtprotoPendingCapabilities(): Record<string, boolean> {
   return {
     canSend: false,
     canReceive: false,

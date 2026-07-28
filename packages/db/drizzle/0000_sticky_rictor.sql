@@ -687,6 +687,87 @@ CREATE TABLE "chart_calculation_jobs" (
 	CONSTRAINT "chart_calculation_jobs_max_attempts_check" CHECK ("chart_calculation_jobs"."max_attempts" > 0)
 );
 --> statement-breakpoint
+CREATE TABLE "astro_calendar_generations" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"status" text DEFAULT 'calculating' NOT NULL,
+	"input_fingerprint" text NOT NULL,
+	"range_start" date NOT NULL,
+	"range_end" date NOT NULL,
+	"time_zone" text NOT NULL,
+	"request_snapshot" jsonb NOT NULL,
+	"settings_snapshot" jsonb NOT NULL,
+	"readiness_summary" jsonb NOT NULL,
+	"summary" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"warnings" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"provider" jsonb,
+	"generated_at" timestamp with time zone,
+	"error_code" text,
+	"error_message" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "astro_calendar_generations_status_check" CHECK ("astro_calendar_generations"."status" in ('calculating', 'ready', 'failed', 'stale')),
+	CONSTRAINT "astro_calendar_generations_fingerprint_check" CHECK ("astro_calendar_generations"."input_fingerprint" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "astro_calendar_generations_range_check" CHECK ("astro_calendar_generations"."range_end" >= "astro_calendar_generations"."range_start"),
+	CONSTRAINT "astro_calendar_generations_timezone_check" CHECK (length(trim("astro_calendar_generations"."time_zone")) > 0),
+	CONSTRAINT "astro_calendar_generations_request_snapshot_object_check" CHECK (jsonb_typeof("astro_calendar_generations"."request_snapshot") = 'object'),
+	CONSTRAINT "astro_calendar_generations_settings_snapshot_object_check" CHECK (jsonb_typeof("astro_calendar_generations"."settings_snapshot") = 'object'),
+	CONSTRAINT "astro_calendar_generations_readiness_summary_object_check" CHECK (jsonb_typeof("astro_calendar_generations"."readiness_summary") = 'object'),
+	CONSTRAINT "astro_calendar_generations_summary_object_check" CHECK (jsonb_typeof("astro_calendar_generations"."summary") = 'object'),
+	CONSTRAINT "astro_calendar_generations_warnings_array_check" CHECK (jsonb_typeof("astro_calendar_generations"."warnings") = 'array')
+);
+--> statement-breakpoint
+CREATE TABLE "astro_calendar_events" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"generation_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"event_id" text NOT NULL,
+	"source" text NOT NULL,
+	"type" text NOT NULL,
+	"time_precision" text NOT NULL,
+	"starts_at" timestamp with time zone NOT NULL,
+	"ends_at" timestamp with time zone,
+	"payload" jsonb NOT NULL,
+	"dictionary_codes" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "astro_calendar_events_source_check" CHECK ("astro_calendar_events"."source" in ('global', 'client')),
+	CONSTRAINT "astro_calendar_events_type_check" CHECK ("astro_calendar_events"."type" in ('global.moon_phase', 'global.eclipse', 'global.ingress', 'client.birthday', 'client.solar_window', 'client.transit_aspect')),
+	CONSTRAINT "astro_calendar_events_time_precision_check" CHECK ("astro_calendar_events"."time_precision" in ('exact', 'hour', 'day')),
+	CONSTRAINT "astro_calendar_events_payload_object_check" CHECK (jsonb_typeof("astro_calendar_events"."payload") = 'object'),
+	CONSTRAINT "astro_calendar_events_dictionary_codes_array_check" CHECK (jsonb_typeof("astro_calendar_events"."dictionary_codes") = 'array'),
+	CONSTRAINT "astro_calendar_events_range_check" CHECK ("astro_calendar_events"."ends_at" is null or "astro_calendar_events"."ends_at" >= "astro_calendar_events"."starts_at")
+);
+--> statement-breakpoint
+CREATE TABLE "flows" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"approval_mode" text DEFAULT 'manual_approve' NOT NULL,
+	"draft_graph" jsonb NOT NULL,
+	"published_version_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"published_at" timestamp with time zone,
+	CONSTRAINT "flows_name_length_check" CHECK (length(trim("flows"."name")) between 1 and 180),
+	CONSTRAINT "flows_status_check" CHECK ("flows"."status" in ('draft', 'published', 'active', 'paused', 'archived')),
+	CONSTRAINT "flows_approval_mode_check" CHECK ("flows"."approval_mode" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
+	CONSTRAINT "flows_draft_graph_object_check" CHECK (jsonb_typeof("flows"."draft_graph") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "flow_versions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"flow_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"version" integer NOT NULL,
+	"approval_mode" text NOT NULL,
+	"graph" jsonb NOT NULL,
+	"published_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "flow_versions_positive_version_check" CHECK ("flow_versions"."version" > 0),
+	CONSTRAINT "flow_versions_approval_mode_check" CHECK ("flow_versions"."approval_mode" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
+	CONSTRAINT "flow_versions_graph_object_check" CHECK (jsonb_typeof("flow_versions"."graph") = 'object')
+);
+--> statement-breakpoint
 CREATE TABLE "client_profiles" (
 	"user_id" uuid PRIMARY KEY NOT NULL,
 	"display_name_snapshot" text,
@@ -1108,6 +1189,35 @@ CREATE TABLE "message_delivery_attempts" (
 	CONSTRAINT "message_delivery_attempts_status_code_check" CHECK ("message_delivery_attempts"."provider_status_code" is null or "message_delivery_attempts"."provider_status_code" between 100 and 599)
 );
 --> statement-breakpoint
+CREATE TABLE "messaging_telegram_mtproto_sessions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"channel_connection_id" uuid NOT NULL,
+	"login_state" text DEFAULT 'code_required' NOT NULL,
+	"phone_number_encrypted" jsonb NOT NULL,
+	"phone_code_hash_encrypted" jsonb NOT NULL,
+	"session_encrypted" jsonb,
+	"phone_number_last4" text NOT NULL,
+	"telegram_user_id" text,
+	"pts" integer,
+	"qts" integer,
+	"date_cursor" timestamp with time zone,
+	"seq" integer,
+	"lease_owner" text,
+	"leased_until" timestamp with time zone,
+	"last_listener_heartbeat_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "messaging_telegram_mtproto_sessions_connection_unique" UNIQUE("channel_connection_id"),
+	CONSTRAINT "messaging_telegram_mtproto_sessions_login_state_check" CHECK ("messaging_telegram_mtproto_sessions"."login_state" in ('code_required', 'password_required', 'authorized', 'reauth_required', 'revoked')),
+	CONSTRAINT "messaging_telegram_mtproto_sessions_phone_last4_check" CHECK ("messaging_telegram_mtproto_sessions"."phone_number_last4" ~ '^[0-9]{4}$'),
+	CONSTRAINT "messaging_telegram_mtproto_sessions_phone_encrypted_object_check" CHECK (jsonb_typeof("messaging_telegram_mtproto_sessions"."phone_number_encrypted") = 'object'),
+	CONSTRAINT "messaging_telegram_mtproto_sessions_phone_code_hash_encrypted_object_check" CHECK (jsonb_typeof("messaging_telegram_mtproto_sessions"."phone_code_hash_encrypted") = 'object'),
+	CONSTRAINT "messaging_telegram_mtproto_sessions_session_encrypted_object_check" CHECK ("messaging_telegram_mtproto_sessions"."session_encrypted" is null or jsonb_typeof("messaging_telegram_mtproto_sessions"."session_encrypted") = 'object'),
+	CONSTRAINT "messaging_telegram_mtproto_sessions_update_cursors_check" CHECK (("messaging_telegram_mtproto_sessions"."pts" is null or "messaging_telegram_mtproto_sessions"."pts" >= 0) and ("messaging_telegram_mtproto_sessions"."qts" is null or "messaging_telegram_mtproto_sessions"."qts" >= 0) and ("messaging_telegram_mtproto_sessions"."seq" is null or "messaging_telegram_mtproto_sessions"."seq" >= 0)),
+	CONSTRAINT "messaging_telegram_mtproto_sessions_telegram_user_id_length_check" CHECK ("messaging_telegram_mtproto_sessions"."telegram_user_id" is null or length(trim("messaging_telegram_mtproto_sessions"."telegram_user_id")) between 1 and 200),
+	CONSTRAINT "messaging_telegram_mtproto_sessions_lease_owner_length_check" CHECK ("messaging_telegram_mtproto_sessions"."lease_owner" is null or length(trim("messaging_telegram_mtproto_sessions"."lease_owner")) between 1 and 200)
+);
+--> statement-breakpoint
 CREATE TABLE "messaging_realtime_events" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"event_id" bigserial NOT NULL,
@@ -1261,6 +1371,17 @@ CREATE TABLE "refunds" (
 	CONSTRAINT "refunds_amount_check" CHECK ("refunds"."amount_minor" > 0 and "refunds"."amount_minor" <= 9007199254740991),
 	CONSTRAINT "refunds_currency_check" CHECK ("refunds"."currency" in ('RUB')),
 	CONSTRAINT "refunds_provider_refund_id_length_check" CHECK ("refunds"."provider_refund_id" is null or length(trim("refunds"."provider_refund_id")) between 1 and 160)
+);
+--> statement-breakpoint
+CREATE TABLE "payment_reversal_case_reviews" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"provider_event_id" uuid NOT NULL,
+	"resolution" text NOT NULL,
+	"admin_user_id" uuid,
+	"admin_note" text NOT NULL,
+	"reviewed_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "payment_reversal_case_reviews_resolution_check" CHECK ("payment_reversal_case_reviews"."resolution" in ('ledger_verified', 'provider_follow_up_required', 'evidence_sent')),
+	CONSTRAINT "payment_reversal_case_reviews_admin_note_check" CHECK (length(trim("payment_reversal_case_reviews"."admin_note")) between 1 and 2000)
 );
 --> statement-breakpoint
 CREATE TABLE "payout_methods" (
@@ -1483,6 +1604,12 @@ ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_media_as
 ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_client_id_client_profiles_user_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."client_profiles"("user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_result_calculation_id_calculation_records_id_fk" FOREIGN KEY ("result_calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "astro_calendar_generations" ADD CONSTRAINT "astro_calendar_generations_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "astro_calendar_events" ADD CONSTRAINT "astro_calendar_events_generation_id_astro_calendar_generations_id_fk" FOREIGN KEY ("generation_id") REFERENCES "public"."astro_calendar_generations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "astro_calendar_events" ADD CONSTRAINT "astro_calendar_events_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flows" ADD CONSTRAINT "flows_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_versions" ADD CONSTRAINT "flow_versions_flow_id_flows_id_fk" FOREIGN KEY ("flow_id") REFERENCES "public"."flows"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_versions" ADD CONSTRAINT "flow_versions_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_profiles" ADD CONSTRAINT "client_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_birth_data" ADD CONSTRAINT "client_birth_data_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1518,6 +1645,7 @@ ALTER TABLE "message_media_ingestions" ADD CONSTRAINT "message_media_ingestions_
 ALTER TABLE "message_media_ingestions" ADD CONSTRAINT "message_media_ingestions_channel_connection_id_messaging_channel_connections_id_fk" FOREIGN KEY ("channel_connection_id") REFERENCES "public"."messaging_channel_connections"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message_media_ingestions" ADD CONSTRAINT "message_media_ingestions_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message_delivery_attempts" ADD CONSTRAINT "message_delivery_attempts_message_id_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messaging_telegram_mtproto_sessions" ADD CONSTRAINT "messaging_telegram_mtproto_sessions_channel_connection_id_messaging_channel_connections_id_fk" FOREIGN KEY ("channel_connection_id") REFERENCES "public"."messaging_channel_connections"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messaging_realtime_events" ADD CONSTRAINT "messaging_realtime_events_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astrologer_risk_profiles" ADD CONSTRAINT "astrologer_risk_profiles_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astrologer_risk_profiles" ADD CONSTRAINT "astrologer_risk_profiles_reviewed_by_user_id_users_id_fk" FOREIGN KEY ("reviewed_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -1533,6 +1661,8 @@ ALTER TABLE "payment_provider_events" ADD CONSTRAINT "payment_provider_events_pa
 ALTER TABLE "refunds" ADD CONSTRAINT "refunds_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "refunds" ADD CONSTRAINT "refunds_payment_attempt_id_payment_attempts_id_fk" FOREIGN KEY ("payment_attempt_id") REFERENCES "public"."payment_attempts"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "refunds" ADD CONSTRAINT "refunds_provider_event_id_payment_provider_events_id_fk" FOREIGN KEY ("provider_event_id") REFERENCES "public"."payment_provider_events"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payment_reversal_case_reviews" ADD CONSTRAINT "payment_reversal_case_reviews_provider_event_id_payment_provider_events_id_fk" FOREIGN KEY ("provider_event_id") REFERENCES "public"."payment_provider_events"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payment_reversal_case_reviews" ADD CONSTRAINT "payment_reversal_case_reviews_admin_user_id_users_id_fk" FOREIGN KEY ("admin_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payout_methods" ADD CONSTRAINT "payout_methods_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payout_requests" ADD CONSTRAINT "payout_requests_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payout_requests" ADD CONSTRAINT "payout_requests_payout_method_id_payout_methods_id_fk" FOREIGN KEY ("payout_method_id") REFERENCES "public"."payout_methods"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -1632,6 +1762,16 @@ CREATE INDEX "chart_calculation_jobs_client_idx" ON "chart_calculation_jobs" USI
 CREATE INDEX "chart_calculation_jobs_status_updated_idx" ON "chart_calculation_jobs" USING btree ("status","updated_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "chart_calculation_jobs_active_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" in ('queued', 'processing');--> statement-breakpoint
 CREATE UNIQUE INDEX "chart_calculation_jobs_success_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" = 'succeeded';--> statement-breakpoint
+CREATE INDEX "astro_calendar_generations_owner_range_idx" ON "astro_calendar_generations" USING btree ("owner_user_id","range_start","range_end");--> statement-breakpoint
+CREATE INDEX "astro_calendar_generations_status_updated_idx" ON "astro_calendar_generations" USING btree ("status","updated_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "astro_calendar_generations_fingerprint_unique" ON "astro_calendar_generations" USING btree ("owner_user_id","input_fingerprint");--> statement-breakpoint
+CREATE INDEX "astro_calendar_events_owner_starts_idx" ON "astro_calendar_events" USING btree ("owner_user_id","starts_at","id");--> statement-breakpoint
+CREATE INDEX "astro_calendar_events_generation_starts_idx" ON "astro_calendar_events" USING btree ("generation_id","starts_at","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "astro_calendar_events_generation_event_unique" ON "astro_calendar_events" USING btree ("generation_id","event_id");--> statement-breakpoint
+CREATE INDEX "flows_owner_status_updated_idx" ON "flows" USING btree ("owner_user_id","status","updated_at");--> statement-breakpoint
+CREATE INDEX "flows_owner_name_idx" ON "flows" USING btree ("owner_user_id","name");--> statement-breakpoint
+CREATE INDEX "flow_versions_owner_published_idx" ON "flow_versions" USING btree ("owner_user_id","published_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_versions_flow_version_unique" ON "flow_versions" USING btree ("flow_id","version");--> statement-breakpoint
 CREATE UNIQUE INDEX "client_birth_data_primary_unique" ON "client_birth_data" USING btree ("client_user_id") WHERE "client_birth_data"."is_primary" = true;--> statement-breakpoint
 CREATE INDEX "client_birth_data_client_idx" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "client_astrologer_relationships_unique" ON "client_astrologer_relationships" USING btree ("client_user_id","astrologer_user_id");--> statement-breakpoint
@@ -1673,6 +1813,8 @@ CREATE UNIQUE INDEX "message_media_ingestions_message_unique" ON "message_media_
 CREATE INDEX "message_media_ingestions_status_retry_idx" ON "message_media_ingestions" USING btree ("download_status","next_retry_at","created_at");--> statement-breakpoint
 CREATE INDEX "message_media_ingestions_message_idx" ON "message_media_ingestions" USING btree ("message_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "message_delivery_attempts_message_attempt_unique" ON "message_delivery_attempts" USING btree ("message_id","attempt_number");--> statement-breakpoint
+CREATE INDEX "messaging_telegram_mtproto_sessions_login_state_idx" ON "messaging_telegram_mtproto_sessions" USING btree ("login_state");--> statement-breakpoint
+CREATE INDEX "messaging_telegram_mtproto_sessions_lease_idx" ON "messaging_telegram_mtproto_sessions" USING btree ("leased_until","login_state");--> statement-breakpoint
 CREATE UNIQUE INDEX "messaging_realtime_events_event_id_unique" ON "messaging_realtime_events" USING btree ("event_id");--> statement-breakpoint
 CREATE INDEX "messaging_realtime_events_astrologer_event_id_idx" ON "messaging_realtime_events" USING btree ("astrologer_user_id","event_id");--> statement-breakpoint
 CREATE INDEX "astrologer_risk_profiles_risk_tier_idx" ON "astrologer_risk_profiles" USING btree ("risk_tier");--> statement-breakpoint
@@ -1692,6 +1834,9 @@ CREATE INDEX "payment_provider_events_received_idx" ON "payment_provider_events"
 CREATE UNIQUE INDEX "refunds_provider_refund_unique" ON "refunds" USING btree ("provider","environment","provider_refund_id") WHERE "refunds"."provider_refund_id" is not null;--> statement-breakpoint
 CREATE INDEX "refunds_order_created_idx" ON "refunds" USING btree ("order_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "refunds_payment_attempt_idx" ON "refunds" USING btree ("payment_attempt_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "payment_reversal_case_reviews_provider_event_unique" ON "payment_reversal_case_reviews" USING btree ("provider_event_id");--> statement-breakpoint
+CREATE INDEX "payment_reversal_case_reviews_reviewed_at_idx" ON "payment_reversal_case_reviews" USING btree ("reviewed_at");--> statement-breakpoint
+CREATE INDEX "payment_reversal_case_reviews_admin_user_idx" ON "payment_reversal_case_reviews" USING btree ("admin_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "payout_methods_default_astrologer_unique" ON "payout_methods" USING btree ("astrologer_user_id") WHERE "payout_methods"."is_default" = true;--> statement-breakpoint
 CREATE UNIQUE INDEX "payout_methods_provider_account_unique" ON "payout_methods" USING btree ("provider","environment","provider_payout_account_id") WHERE "payout_methods"."provider_payout_account_id" is not null;--> statement-breakpoint
 CREATE INDEX "payout_methods_astrologer_created_idx" ON "payout_methods" USING btree ("astrologer_user_id","created_at");--> statement-breakpoint
@@ -1723,102 +1868,3 @@ ALTER TABLE "schedule_reservations"
     "owner_user_id" WITH =,
     tstzrange("occupied_start_at", "occupied_end_at", '[)') WITH &&
   ) WHERE ("lifecycle" = 'active');
---> statement-breakpoint
-CREATE TABLE "astro_calendar_generations" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_user_id" uuid NOT NULL,
-	"status" text DEFAULT 'calculating' NOT NULL,
-	"input_fingerprint" text NOT NULL,
-	"range_start" date NOT NULL,
-	"range_end" date NOT NULL,
-	"time_zone" text NOT NULL,
-	"request_snapshot" jsonb NOT NULL,
-	"settings_snapshot" jsonb NOT NULL,
-	"readiness_summary" jsonb NOT NULL,
-	"summary" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"warnings" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"provider" jsonb,
-	"generated_at" timestamp with time zone,
-	"error_code" text,
-	"error_message" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "astro_calendar_generations_status_check" CHECK ("astro_calendar_generations"."status" in ('calculating', 'ready', 'failed', 'stale')),
-	CONSTRAINT "astro_calendar_generations_fingerprint_check" CHECK ("astro_calendar_generations"."input_fingerprint" ~ '^sha256:[a-f0-9]{64}$'),
-	CONSTRAINT "astro_calendar_generations_range_check" CHECK ("astro_calendar_generations"."range_end" >= "astro_calendar_generations"."range_start"),
-	CONSTRAINT "astro_calendar_generations_timezone_check" CHECK (length(trim("astro_calendar_generations"."time_zone")) > 0),
-	CONSTRAINT "astro_calendar_generations_request_snapshot_object_check" CHECK (jsonb_typeof("astro_calendar_generations"."request_snapshot") = 'object'),
-	CONSTRAINT "astro_calendar_generations_settings_snapshot_object_check" CHECK (jsonb_typeof("astro_calendar_generations"."settings_snapshot") = 'object'),
-	CONSTRAINT "astro_calendar_generations_readiness_summary_object_check" CHECK (jsonb_typeof("astro_calendar_generations"."readiness_summary") = 'object'),
-	CONSTRAINT "astro_calendar_generations_summary_object_check" CHECK (jsonb_typeof("astro_calendar_generations"."summary") = 'object'),
-	CONSTRAINT "astro_calendar_generations_warnings_array_check" CHECK (jsonb_typeof("astro_calendar_generations"."warnings") = 'array')
-);
---> statement-breakpoint
-CREATE TABLE "astro_calendar_events" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"generation_id" uuid NOT NULL,
-	"owner_user_id" uuid NOT NULL,
-	"event_id" text NOT NULL,
-	"source" text NOT NULL,
-	"type" text NOT NULL,
-	"time_precision" text NOT NULL,
-	"starts_at" timestamp with time zone NOT NULL,
-	"ends_at" timestamp with time zone,
-	"payload" jsonb NOT NULL,
-	"dictionary_codes" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "astro_calendar_events_source_check" CHECK ("astro_calendar_events"."source" in ('global', 'client')),
-	CONSTRAINT "astro_calendar_events_type_check" CHECK ("astro_calendar_events"."type" in ('global.moon_phase', 'global.eclipse', 'global.ingress', 'client.birthday', 'client.solar_window', 'client.transit_aspect')),
-	CONSTRAINT "astro_calendar_events_time_precision_check" CHECK ("astro_calendar_events"."time_precision" in ('exact', 'hour', 'day')),
-	CONSTRAINT "astro_calendar_events_payload_object_check" CHECK (jsonb_typeof("astro_calendar_events"."payload") = 'object'),
-	CONSTRAINT "astro_calendar_events_dictionary_codes_array_check" CHECK (jsonb_typeof("astro_calendar_events"."dictionary_codes") = 'array'),
-	CONSTRAINT "astro_calendar_events_range_check" CHECK ("astro_calendar_events"."ends_at" is null or "astro_calendar_events"."ends_at" >= "astro_calendar_events"."starts_at")
-);
---> statement-breakpoint
-ALTER TABLE "astro_calendar_generations" ADD CONSTRAINT "astro_calendar_generations_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "astro_calendar_events" ADD CONSTRAINT "astro_calendar_events_generation_id_astro_calendar_generations_id_fk" FOREIGN KEY ("generation_id") REFERENCES "public"."astro_calendar_generations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "astro_calendar_events" ADD CONSTRAINT "astro_calendar_events_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "astro_calendar_generations_owner_range_idx" ON "astro_calendar_generations" USING btree ("owner_user_id","range_start","range_end");--> statement-breakpoint
-CREATE INDEX "astro_calendar_generations_status_updated_idx" ON "astro_calendar_generations" USING btree ("status","updated_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "astro_calendar_generations_fingerprint_unique" ON "astro_calendar_generations" USING btree ("owner_user_id","input_fingerprint");--> statement-breakpoint
-CREATE INDEX "astro_calendar_events_owner_starts_idx" ON "astro_calendar_events" USING btree ("owner_user_id","starts_at","id");--> statement-breakpoint
-CREATE INDEX "astro_calendar_events_generation_starts_idx" ON "astro_calendar_events" USING btree ("generation_id","starts_at","id");--> statement-breakpoint
-CREATE UNIQUE INDEX "astro_calendar_events_generation_event_unique" ON "astro_calendar_events" USING btree ("generation_id","event_id");
---> statement-breakpoint
-CREATE TABLE "flows" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_user_id" uuid NOT NULL,
-	"name" text NOT NULL,
-	"status" text DEFAULT 'draft' NOT NULL,
-	"approval_mode" text DEFAULT 'manual_approve' NOT NULL,
-	"draft_graph" jsonb NOT NULL,
-	"published_version_id" uuid,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"published_at" timestamp with time zone,
-	CONSTRAINT "flows_name_length_check" CHECK (length(trim("flows"."name")) between 1 and 180),
-	CONSTRAINT "flows_status_check" CHECK ("flows"."status" in ('draft', 'published', 'active', 'paused', 'archived')),
-	CONSTRAINT "flows_approval_mode_check" CHECK ("flows"."approval_mode" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
-	CONSTRAINT "flows_draft_graph_object_check" CHECK (jsonb_typeof("flows"."draft_graph") = 'object')
-);
---> statement-breakpoint
-CREATE TABLE "flow_versions" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"flow_id" uuid NOT NULL,
-	"owner_user_id" uuid NOT NULL,
-	"version" integer NOT NULL,
-	"approval_mode" text NOT NULL,
-	"graph" jsonb NOT NULL,
-	"published_at" timestamp with time zone NOT NULL,
-	CONSTRAINT "flow_versions_positive_version_check" CHECK ("flow_versions"."version" > 0),
-	CONSTRAINT "flow_versions_approval_mode_check" CHECK ("flow_versions"."approval_mode" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
-	CONSTRAINT "flow_versions_graph_object_check" CHECK (jsonb_typeof("flow_versions"."graph") = 'object')
-);
---> statement-breakpoint
-ALTER TABLE "flows" ADD CONSTRAINT "flows_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "flow_versions" ADD CONSTRAINT "flow_versions_flow_id_flows_id_fk" FOREIGN KEY ("flow_id") REFERENCES "public"."flows"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "flow_versions" ADD CONSTRAINT "flow_versions_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "flows_owner_status_updated_idx" ON "flows" USING btree ("owner_user_id","status","updated_at");--> statement-breakpoint
-CREATE INDEX "flows_owner_name_idx" ON "flows" USING btree ("owner_user_id","name");--> statement-breakpoint
-CREATE INDEX "flow_versions_owner_published_idx" ON "flow_versions" USING btree ("owner_user_id","published_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "flow_versions_flow_version_unique" ON "flow_versions" USING btree ("flow_id","version");

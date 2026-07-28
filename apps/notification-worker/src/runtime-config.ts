@@ -56,6 +56,14 @@ const notificationWorkerRuntimeConfigSchema = z
       .trim()
       .url()
       .default("https://api.telegram.org"),
+    NOTIFICATION_WORKER_TELEGRAM_MTPROTO_ENABLED: z.enum(["true", "false"]).default("false"),
+    NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID: z.coerce.number().int().positive().optional(),
+    NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH: z
+      .string()
+      .trim()
+      .regex(/^[a-f0-9]{32}$/i)
+      .optional(),
+    NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
     ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
     ASTROLOGER_MEDIA_STORAGE_REGION: z.string().trim().min(1).default("us-east-1"),
     ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET: z
@@ -121,6 +129,31 @@ const notificationWorkerRuntimeConfigSchema = z
         context
       );
     }
+
+    const hasAnyMtprotoSetting =
+      config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_ENABLED === "true" ||
+      config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID !== undefined ||
+      config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH !== undefined ||
+      config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY !== undefined;
+    if (hasAnyMtprotoSetting) {
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID === undefined
+          ? undefined
+          : String(config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID),
+        ["NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID"],
+        context
+      );
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH,
+        ["NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH"],
+        context
+      );
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY,
+        ["NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY"],
+        context
+      );
+    }
   });
 
 export type AuthCodeHttpDeliveryOptions = {
@@ -150,6 +183,7 @@ export type NotificationWorkerRuntimeConfig = {
   readonly messagingMediaIngestionMaxBytes: number;
   readonly mediaStorage: MessagingMediaStorageOptions;
   readonly telegramBusinessDelivery: TelegramBusinessDeliveryOptions | null;
+  readonly telegramMtproto: TelegramMtprotoOptions | null;
   readonly authCodeEmailDelivery: AuthCodeHttpDeliveryOptions | null;
   readonly authCodeSmsDelivery: AuthCodeHttpDeliveryOptions | null;
 };
@@ -157,6 +191,13 @@ export type NotificationWorkerRuntimeConfig = {
 export type TelegramBusinessDeliveryOptions = {
   readonly botToken: string;
   readonly botApiBaseUrl: string;
+};
+
+export type TelegramMtprotoOptions = {
+  readonly enabled: true;
+  readonly apiId: number;
+  readonly apiHash: string;
+  readonly sessionEncryptionKey: Buffer;
 };
 
 export type MessagingMediaStorageOptions = {
@@ -213,6 +254,12 @@ export function createNotificationWorkerRuntimeConfig(
             botApiBaseUrl: config.NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL
           })
         : null,
+    telegramMtproto: toTelegramMtprotoOptions({
+      enabled: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_ENABLED === "true",
+      apiId: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID,
+      apiHash: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH,
+      sessionEncryptionKey: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY
+    }),
     authCodeEmailDelivery:
       config.NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE === "dev_console"
         ? null
@@ -229,6 +276,25 @@ export function createNotificationWorkerRuntimeConfig(
             bearerToken: config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN,
             from: config.NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM
           })
+  };
+}
+
+function toTelegramMtprotoOptions(input: {
+  readonly enabled: boolean;
+  readonly apiId: number | undefined;
+  readonly apiHash: string | undefined;
+  readonly sessionEncryptionKey: string | undefined;
+}): TelegramMtprotoOptions | null {
+  if (!input.enabled) return null;
+  if (input.apiId === undefined || !input.apiHash || !input.sessionEncryptionKey) {
+    throw new Error("Telegram MTProto settings are required when MTProto messaging is enabled");
+  }
+
+  return {
+    enabled: true,
+    apiId: input.apiId,
+    apiHash: input.apiHash,
+    sessionEncryptionKey: parseBase64Aes256GcmKey(input.sessionEncryptionKey)
   };
 }
 

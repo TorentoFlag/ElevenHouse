@@ -6,5 +6,6 @@ export * from "./thread-identities.schema";
 export * from "./messages.schema";
 export * from "./message-media-ingestions.schema";
 export * from "./message-delivery-attempts.schema";
+export * from "./telegram-mtproto-sessions.schema";
 export * from "./realtime-events.schema";
 export * from "./relations.schema";

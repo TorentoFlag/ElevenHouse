@@ -1,7 +1,7 @@
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
-import type { CreateOutboundMessageStoreInput } from "@elevenhouse/domain";
+import type { CreateOutboundMessageStoreInput, StartTelegramMtprotoConnectionStoreInput } from "@elevenhouse/domain";
 import {
   clientAstrologerRelationships,
   clientProfiles,
@@ -10,6 +10,7 @@ import {
   messagingExternalIdentities,
   messagingMessages,
   messagingRealtimeEvents,
+  messagingTelegramMtprotoSessions,
   messagingThreadIdentities,
   messagingThreads,
   outboxEvents,
@@ -662,6 +663,68 @@ describe("createDrizzleMessagingStore", () => {
     ]);
   });
 
+  it("creates one pending Telegram Account connection and encrypted session state for the start flow", async () => {
+    const fake = createStartTelegramMtprotoConnectionDatabase();
+    const encryptedSecret = encryptedSecretSnapshot("ciphertext");
+
+    await expect(
+      createDrizzleMessagingStore(fake.database as never).startTelegramMtprotoConnection({
+        connectionId: "00000000-0000-4000-8000-000000000031",
+        astrologerUserId,
+        phoneNumberLast4: "3535",
+        maskedPhoneNumber: "+7******3535",
+        encryptedPhoneNumber: encryptedSecret,
+        encryptedPhoneCodeHash: encryptedSecretSnapshot("phone-code-hash"),
+        consentAccepted: true,
+        now: now.toISOString()
+      })
+    ).resolves.toEqual({
+      connectionId: "00000000-0000-4000-8000-000000000031",
+      loginStep: "code_required",
+      maskedPhoneNumber: "+7******3535"
+    });
+
+    expect(fake.transactionCount).toBe(1);
+    expect(fake.inserts).toEqual([
+      {
+        table: messagingChannelConnections,
+        value: expect.objectContaining({
+          id: "00000000-0000-4000-8000-000000000031",
+          astrologerUserId,
+          provider: "telegram",
+          mode: "telegram_mtproto_account",
+          status: "connecting",
+          externalAccountId: null,
+          displayNameSnapshot: null,
+          usernameSnapshot: null,
+          capabilities: {
+            canSend: false,
+            canReceive: false,
+            canRead: false,
+            supportsHistoryImport: false,
+            supportsMessageEdits: false,
+            supportsMessageDeletes: false,
+            supportsAttachments: false
+          }
+        })
+      },
+      {
+        table: messagingTelegramMtprotoSessions,
+        value: expect.objectContaining({
+          channelConnectionId: "00000000-0000-4000-8000-000000000031",
+          loginState: "code_required",
+          phoneNumberEncrypted: encryptedSecret,
+          phoneCodeHashEncrypted: encryptedSecretSnapshot("phone-code-hash"),
+          sessionEncrypted: null,
+          phoneNumberLast4: "3535"
+        })
+      }
+    ]);
+    expect(fake.inserts.map((insert) => JSON.stringify(insert.value)).join("\n")).not.toContain(
+      "78005553535"
+    );
+  });
+
   it("does not claim a pending Telegram Business connection with an unmatched revoked update", async () => {
     const fake = createPendingTelegramBusinessConnectionDatabase();
 
@@ -1185,6 +1248,51 @@ function createStartTelegramBusinessConnectionDatabase() {
     get transactionCount() {
       return transactionCount;
     }
+  };
+}
+
+function createStartTelegramMtprotoConnectionDatabase() {
+  const inserts: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  let transactionCount = 0;
+  const database = {
+    execute: async () => undefined,
+    insert: (table: unknown) => ({
+      values: (value: Record<string, unknown>) => ({
+        returning: async () => {
+          inserts.push({ table, value });
+          if (table === messagingChannelConnections) return [{ id: value.id }];
+          return [{ id: "00000000-0000-4000-8000-000000000032" }];
+        },
+        then: (resolve: (value: undefined) => unknown) => {
+          inserts.push({ table, value });
+          return resolve(undefined);
+        }
+      })
+    }),
+    select: () => selectChain([]),
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => {
+      transactionCount += 1;
+      return callback(database);
+    }
+  };
+  return {
+    database,
+    inserts,
+    get transactionCount() {
+      return transactionCount;
+    }
+  };
+}
+
+function encryptedSecretSnapshot(
+  ciphertext: string
+): StartTelegramMtprotoConnectionStoreInput["encryptedPhoneNumber"] {
+  return {
+    algorithm: "aes-256-gcm",
+    keyId: "mtproto-key-1",
+    iv: "base64-iv",
+    authTag: "base64-tag",
+    ciphertext
   };
 }
 
