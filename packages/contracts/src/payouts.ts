@@ -18,6 +18,17 @@ export const payoutRequestStatusValues = [
 export const payoutRequestStatusSchema = z.enum(payoutRequestStatusValues);
 export type PayoutRequestStatus = z.infer<typeof payoutRequestStatusSchema>;
 
+export const adminPayoutQueueStatusFilterValues = [
+  "open",
+  "ready",
+  "processing",
+  "failed",
+  "terminal",
+  "all"
+] as const;
+export const adminPayoutQueueStatusFilterSchema = z.enum(adminPayoutQueueStatusFilterValues);
+export type AdminPayoutQueueStatusFilter = z.infer<typeof adminPayoutQueueStatusFilterSchema>;
+
 export const payoutMethodValues = ["manual_bank_transfer", "arc_pay_provider"] as const;
 export const payoutMethodSchema = z.enum(payoutMethodValues);
 export type PayoutMethod = z.infer<typeof payoutMethodSchema>;

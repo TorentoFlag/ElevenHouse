@@ -8,14 +8,19 @@ import {
 import { createHash } from "node:crypto";
 import {
   adminPaymentReversalQueueResponseSchema,
+  adminPayoutQueueStatusFilterSchema,
   adminReconciliationExceptionQueueResponseSchema,
+  adminReconciliationExceptionEvidenceFilterSchema,
   adminPayoutQueueResponseSchema,
   adminPayoutStatusUpdateSchema,
+  financePaymentProviderSchema,
+  paymentProviderEnvironmentSchema,
   reconciliationRecordResponseSchema,
   resolveReconciliationExceptionRequestSchema,
   type AdminPaymentReversalCase,
   type AdminPaymentReversalCaseType,
   type AdminPaymentReversalQueueResponse,
+  type AdminPayoutQueueStatusFilter,
   type AdminReconciliationExceptionQueueResponse,
   astrologerRiskProfileResponseSchema,
   financePoliciesResponseSchema,
@@ -32,6 +37,7 @@ import {
   type FinancePolicyResponse,
   type OrderResponse,
   type PayoutRequestResponse,
+  type PayoutRequestStatus,
   type ReconciliationRecordResponse
 } from "@elevenhouse/contracts";
 import {
@@ -203,17 +209,11 @@ export class FinancePoliciesService {
     }
   }
 
-  async listPayoutRequests(): Promise<AdminPayoutQueueResponse> {
+  async listPayoutRequests(status?: string): Promise<AdminPayoutQueueResponse> {
+    const statusFilter = parsePayoutQueueStatusFilter(status);
     const requests = await this.unitOfWork.execute(({ payoutStore }) =>
       payoutStore.listRequests({
-        statuses: [
-          "requested",
-          "under_review",
-          "approved",
-          "processing_manual",
-          "processing_provider",
-          "failed"
-        ],
+        statuses: payoutStatusesForFilter(statusFilter),
         limit: 50
       })
     );
@@ -238,9 +238,24 @@ export class FinancePoliciesService {
     });
   }
 
-  async listReconciliationExceptions(): Promise<AdminReconciliationExceptionQueueResponse> {
+  async listReconciliationExceptions(query: {
+    readonly provider?: string;
+    readonly environment?: string;
+    readonly evidence?: string;
+  }): Promise<AdminReconciliationExceptionQueueResponse> {
+    const provider = parseOptionalQuery(financePaymentProviderSchema, query.provider);
+    const environment = parseOptionalQuery(paymentProviderEnvironmentSchema, query.environment);
+    const evidence = parseOptionalQuery(
+      adminReconciliationExceptionEvidenceFilterSchema,
+      query.evidence
+    );
     const exceptions = await this.unitOfWork.execute(({ reconciliationStore }) =>
-      reconciliationStore.listOpenExceptions({ limit: 50 })
+      reconciliationStore.listOpenExceptions({
+        ...(provider ? { provider } : {}),
+        ...(environment ? { environment } : {}),
+        evidence: evidence ?? "all",
+        limit: 50
+      })
     );
     return adminReconciliationExceptionQueueResponseSchema.parse({
       summary: createReconciliationExceptionQueueSummary(exceptions),
@@ -360,6 +375,48 @@ function parseReversalCaseTypes(
   if (!type || type === "all") return undefined;
   if (type === "refund" || type === "chargeback") return [type];
   throw new BadRequestException("Invalid payment reversal case type");
+}
+
+function parsePayoutQueueStatusFilter(status: string | undefined): AdminPayoutQueueStatusFilter {
+  return parseOptionalQuery(adminPayoutQueueStatusFilterSchema, status) ?? "open";
+}
+
+function parseOptionalQuery<T>(
+  schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } },
+  value: string | undefined
+): T | undefined {
+  if (!value) return undefined;
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) {
+    throw new BadRequestException("Invalid admin finance query");
+  }
+  return parsed.data;
+}
+
+function payoutStatusesForFilter(
+  filter: AdminPayoutQueueStatusFilter
+): readonly PayoutRequestStatus[] | undefined {
+  switch (filter) {
+    case "open":
+      return [
+        "requested",
+        "under_review",
+        "approved",
+        "processing_manual",
+        "processing_provider",
+        "failed"
+      ];
+    case "ready":
+      return ["requested", "under_review", "approved"];
+    case "processing":
+      return ["processing_manual", "processing_provider"];
+    case "failed":
+      return ["failed"];
+    case "terminal":
+      return ["paid", "failed", "rejected", "cancelled"];
+    case "all":
+      return undefined;
+  }
 }
 
 async function updatePayoutStatusInContext(

@@ -19,10 +19,12 @@ import type {
 } from "@elevenhouse/contracts/payments";
 import type {
   AdminPayoutQueueResponse,
+  AdminPayoutQueueStatusFilter,
   PayoutRequestResponse
 } from "@elevenhouse/contracts/payouts";
 import type {
   AdminReconciliationException,
+  AdminReconciliationExceptionEvidenceFilter,
   AdminReconciliationExceptionQueueResponse,
   ReconciliationExceptionResolution
 } from "@elevenhouse/contracts/reconciliation";
@@ -46,6 +48,28 @@ export type FinancePoliciesPageProps = {
 };
 
 type AdminFinanceTab = "overview" | "payouts" | "disputes" | "reconciliation" | "policies" | "risk";
+
+const payoutFilterOptions: readonly {
+  readonly value: AdminPayoutQueueStatusFilter;
+  readonly label: string;
+}[] = [
+  { value: "open", label: "Открытые" },
+  { value: "ready", label: "К выплате" },
+  { value: "processing", label: "В обработке" },
+  { value: "failed", label: "Ошибки" },
+  { value: "terminal", label: "Закрытые" }
+];
+
+const reconciliationEvidenceFilterOptions: readonly {
+  readonly value: AdminReconciliationExceptionEvidenceFilter;
+  readonly label: string;
+}[] = [
+  { value: "all", label: "Все" },
+  { value: "payment", label: "Payment" },
+  { value: "settlement", label: "Settlement" },
+  { value: "payout", label: "Payout" },
+  { value: "provider_event", label: "Event" }
+];
 
 type LoadState =
   | { readonly status: "loading" }
@@ -113,9 +137,13 @@ export function FinancePoliciesPage({
     createInitialRiskProfileForm()
   );
   const [payoutAction, setPayoutAction] = useState<PayoutActionForm>(() => emptyPayoutAction());
+  const [payoutStatusFilter, setPayoutStatusFilter] =
+    useState<AdminPayoutQueueStatusFilter>("open");
   const [reconciliationAction, setReconciliationAction] = useState<ReconciliationActionForm>(() =>
     emptyReconciliationAction()
   );
+  const [reconciliationEvidenceFilter, setReconciliationEvidenceFilter] =
+    useState<AdminReconciliationExceptionEvidenceFilter>("all");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
@@ -149,16 +177,24 @@ export function FinancePoliciesPage({
     [reconciliationAction.reconciliationRecordId, reconciliationQueue.exceptions]
   );
 
-  async function refreshFinance() {
+  async function refreshFinance(
+    filters: {
+      readonly payoutStatus?: AdminPayoutQueueStatusFilter;
+      readonly reconciliationEvidence?: AdminReconciliationExceptionEvidenceFilter;
+    } = {}
+  ) {
     setLoadState({ status: "loading" });
     setSubmitError(null);
     try {
+      const nextPayoutStatus = filters.payoutStatus ?? payoutStatusFilter;
+      const nextReconciliationEvidence =
+        filters.reconciliationEvidence ?? reconciliationEvidenceFilter;
       const [policyResponse, payoutResponse, reversalResponse, reconciliationResponse] =
         await Promise.all([
           api.listPolicies(),
-          api.listPayoutRequests(),
+          api.listPayoutRequests({ status: nextPayoutStatus }),
           api.listPaymentReversalCases(),
-          api.listReconciliationExceptions()
+          api.listReconciliationExceptions({ evidence: nextReconciliationEvidence })
         ]);
       setLoadState({
         status: "ready",
@@ -178,13 +214,17 @@ export function FinancePoliciesPage({
           policyResponse.policies.find((policy) => policy.riskTier === nextSelected) ?? null
         )
       );
-      if (!payoutAction.payoutRequestId && payoutResponse.requests[0]) {
+      if (!payoutResponse.requests.some((request) => request.id === payoutAction.payoutRequestId)) {
         setPayoutAction((previous) => ({
           ...previous,
           payoutRequestId: payoutResponse.requests[0]?.id ?? ""
         }));
       }
-      if (!reconciliationAction.reconciliationRecordId && reconciliationResponse.exceptions[0]) {
+      if (
+        !reconciliationResponse.exceptions.some(
+          (exception) => exception.id === reconciliationAction.reconciliationRecordId
+        )
+      ) {
         setReconciliationAction((previous) => ({
           ...previous,
           reconciliationRecordId: reconciliationResponse.exceptions[0]?.id ?? ""
@@ -204,6 +244,16 @@ export function FinancePoliciesPage({
     setPolicyForm(policyToForm(policies.find((policy) => policy.riskTier === riskTier) ?? null));
     setStatusMessage(null);
     setSubmitError(null);
+  }
+
+  function selectPayoutStatusFilter(filter: AdminPayoutQueueStatusFilter) {
+    setPayoutStatusFilter(filter);
+    void refreshFinance({ payoutStatus: filter });
+  }
+
+  function selectReconciliationEvidenceFilter(filter: AdminReconciliationExceptionEvidenceFilter) {
+    setReconciliationEvidenceFilter(filter);
+    void refreshFinance({ reconciliationEvidence: filter });
   }
 
   async function handleEnsureDefault() {
@@ -485,9 +535,11 @@ export function FinancePoliciesPage({
             {tab === "payouts" ? (
               <PayoutsPanel
                 payoutQueue={payoutQueue}
+                payoutStatusFilter={payoutStatusFilter}
                 selectedPayout={selectedPayout}
                 action={payoutAction}
                 saving={savingPayout}
+                onFilterChange={selectPayoutStatusFilter}
                 onSelect={(request) =>
                   setPayoutAction((previous) => ({
                     ...previous,
@@ -504,9 +556,11 @@ export function FinancePoliciesPage({
             {tab === "reconciliation" ? (
               <ReconciliationPanel
                 reconciliationQueue={reconciliationQueue}
+                evidenceFilter={reconciliationEvidenceFilter}
                 selectedException={selectedReconciliationException}
                 action={reconciliationAction}
                 saving={savingReconciliation}
+                onEvidenceFilterChange={selectReconciliationEvidenceFilter}
                 onSelect={(exception) =>
                   setReconciliationAction((previous) => ({
                     ...previous,
@@ -640,9 +694,11 @@ function OverviewPanel(props: {
 
 function PayoutsPanel(props: {
   readonly payoutQueue: AdminPayoutQueueResponse;
+  readonly payoutStatusFilter: AdminPayoutQueueStatusFilter;
   readonly selectedPayout: PayoutRequestResponse | null;
   readonly action: PayoutActionForm;
   readonly saving: boolean;
+  readonly onFilterChange: (filter: AdminPayoutQueueStatusFilter) => void;
   readonly onSelect: (request: PayoutRequestResponse) => void;
   readonly onChange: (next: PayoutActionForm) => void;
   readonly onPaid: (event: FormEvent<HTMLFormElement>) => void;
@@ -658,6 +714,12 @@ function PayoutsPanel(props: {
           </div>
           <Chip label={`${props.payoutQueue.requests.length} open`} active type="button" />
         </div>
+        <SegmentFilter
+          label="Фильтр заявок"
+          options={payoutFilterOptions}
+          value={props.payoutStatusFilter}
+          onChange={props.onFilterChange}
+        />
         <div
           className="adminFinanceTable adminFinancePayoutTable"
           role="table"
@@ -914,9 +976,11 @@ function DisputesPanel(props: { readonly reversalQueue: AdminPaymentReversalQueu
 
 function ReconciliationPanel(props: {
   readonly reconciliationQueue: AdminReconciliationExceptionQueueResponse;
+  readonly evidenceFilter: AdminReconciliationExceptionEvidenceFilter;
   readonly selectedException: AdminReconciliationException | null;
   readonly action: ReconciliationActionForm;
   readonly saving: boolean;
+  readonly onEvidenceFilterChange: (filter: AdminReconciliationExceptionEvidenceFilter) => void;
   readonly onSelect: (exception: AdminReconciliationException) => void;
   readonly onChange: (next: ReconciliationActionForm) => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -935,6 +999,13 @@ function ReconciliationPanel(props: {
             type="button"
           />
         </div>
+
+        <SegmentFilter
+          label="Evidence"
+          options={reconciliationEvidenceFilterOptions}
+          value={props.evidenceFilter}
+          onChange={props.onEvidenceFilterChange}
+        />
 
         <section className="adminFinanceReconciliationKpis" aria-label="Reconciliation summary">
           <StatusCard
@@ -1470,6 +1541,33 @@ function AttentionButton(props: {
       <span>{props.label}</span>
       <strong>{props.value}</strong>
     </button>
+  );
+}
+
+function SegmentFilter<T extends string>(props: {
+  readonly label: string;
+  readonly value: T;
+  readonly options: readonly { readonly value: T; readonly label: string }[];
+  readonly onChange: (value: T) => void;
+}) {
+  return (
+    <div className="adminFinanceFilterBar" aria-label={props.label}>
+      {props.options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className={
+            option.value === props.value
+              ? "adminFinanceSegmentButton adminFinanceSegmentButtonActive"
+              : "adminFinanceSegmentButton"
+          }
+          aria-pressed={option.value === props.value}
+          onClick={() => props.onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

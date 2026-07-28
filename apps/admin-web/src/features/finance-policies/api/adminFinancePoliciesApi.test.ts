@@ -95,7 +95,7 @@ describe("createAdminFinancePoliciesApi", () => {
       csrfTokenReader: () => "csrf-token"
     });
 
-    await expect(api.listPayoutRequests()).resolves.toMatchObject({
+    await expect(api.listPayoutRequests({ status: "processing" })).resolves.toMatchObject({
       summary: { requestedCount: 1 }
     });
     await api.updatePayoutRequestStatus("11111111-1111-4111-8111-111111111111", {
@@ -115,6 +115,11 @@ describe("createAdminFinancePoliciesApi", () => {
           "x-csrf-token": "csrf-token"
         })
       })
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      "/admin/finance/payout-requests?status=processing",
+      expect.objectContaining({ credentials: "include" })
     );
   });
 
@@ -232,7 +237,9 @@ describe("createAdminFinancePoliciesApi", () => {
       csrfTokenReader: () => "csrf-token"
     });
 
-    await expect(api.listReconciliationExceptions()).resolves.toMatchObject({
+    await expect(
+      api.listReconciliationExceptions({ evidence: "settlement" })
+    ).resolves.toMatchObject({
       summary: { openCount: 1 }
     });
     await expect(
@@ -244,7 +251,7 @@ describe("createAdminFinancePoliciesApi", () => {
 
     expect(fetcher).toHaveBeenNthCalledWith(
       1,
-      "/admin/finance/reconciliation/exceptions",
+      "/admin/finance/reconciliation/exceptions?evidence=settlement",
       expect.objectContaining({
         credentials: "include",
         headers: expect.not.objectContaining({ "x-csrf-token": "csrf-token" })

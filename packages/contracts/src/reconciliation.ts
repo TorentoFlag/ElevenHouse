@@ -9,6 +9,20 @@ export const reconciliationStatusValues = ["pending", "matched", "exception", "i
 export const reconciliationStatusSchema = z.enum(reconciliationStatusValues);
 export type ReconciliationStatus = z.infer<typeof reconciliationStatusSchema>;
 
+export const adminReconciliationExceptionEvidenceFilterValues = [
+  "all",
+  "payment",
+  "payout",
+  "settlement",
+  "provider_event"
+] as const;
+export const adminReconciliationExceptionEvidenceFilterSchema = z.enum(
+  adminReconciliationExceptionEvidenceFilterValues
+);
+export type AdminReconciliationExceptionEvidenceFilter = z.infer<
+  typeof adminReconciliationExceptionEvidenceFilterSchema
+>;
+
 export const reconciliationExceptionResolutionValues = ["resolved", "waived"] as const;
 export const reconciliationExceptionResolutionSchema = z.enum(
   reconciliationExceptionResolutionValues

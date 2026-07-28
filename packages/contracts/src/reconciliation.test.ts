@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adminReconciliationExceptionEvidenceFilterSchema,
   adminReconciliationExceptionQueueResponseSchema,
   resolveReconciliationExceptionRequestSchema
 } from "./reconciliation";
@@ -47,5 +48,13 @@ describe("reconciliation contracts", () => {
         adminNote: " "
       }).success
     ).toBe(false);
+  });
+
+  it("restricts admin exception queue evidence filters", () => {
+    expect(adminReconciliationExceptionEvidenceFilterSchema.parse("settlement")).toBe("settlement");
+    expect(adminReconciliationExceptionEvidenceFilterSchema.parse("provider_event")).toBe(
+      "provider_event"
+    );
+    expect(() => adminReconciliationExceptionEvidenceFilterSchema.parse("card")).toThrow();
   });
 });

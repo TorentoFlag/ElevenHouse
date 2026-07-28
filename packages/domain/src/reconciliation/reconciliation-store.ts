@@ -41,6 +41,13 @@ export type CreateReconciliationRecordInput = {
 
 export type ReconciliationExceptionResolution = "resolved" | "waived";
 
+export type ReconciliationExceptionEvidenceFilter =
+  | "all"
+  | "payment"
+  | "payout"
+  | "settlement"
+  | "provider_event";
+
 export type ProviderSettlementLedgerEntry = {
   readonly provider: FinancePaymentProvider;
   readonly environment: PaymentProviderEnvironment;
@@ -66,6 +73,9 @@ export type ReconciliationStore = {
   ) => Promise<{ readonly kind: "created" | "replayed"; readonly record: ReconciliationRecord }>;
   readonly listOpenExceptions: (input: {
     readonly limit: number;
+    readonly provider?: FinancePaymentProvider;
+    readonly environment?: PaymentProviderEnvironment;
+    readonly evidence?: ReconciliationExceptionEvidenceFilter;
   }) => Promise<readonly ReconciliationRecord[]>;
   readonly resolveException: (input: {
     readonly reconciliationRecordId: string;

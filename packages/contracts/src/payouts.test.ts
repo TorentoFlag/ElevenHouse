@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   astrologerFinanceOverviewResponseSchema,
+  adminPayoutQueueStatusFilterSchema,
   adminPayoutQueueResponseSchema,
   adminPayoutStatusUpdateSchema,
   createManualBankTransferPayoutMethodSchema,
@@ -116,6 +117,12 @@ describe("payout contracts", () => {
     } as const;
 
     expect(adminPayoutQueueResponseSchema.parse(queue)).toEqual(queue);
+  });
+
+  it("restricts admin payout queue filters to operational status groups", () => {
+    expect(adminPayoutQueueStatusFilterSchema.parse("ready")).toBe("ready");
+    expect(adminPayoutQueueStatusFilterSchema.parse("terminal")).toBe("terminal");
+    expect(() => adminPayoutQueueStatusFilterSchema.parse("paid_manually")).toThrow();
   });
 
   it("exposes astrologer finance overview and payout request inputs", () => {

@@ -1,10 +1,11 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import type {
   CreateReconciliationRecordInput,
   FinancePaymentProvider,
   Money,
   PaymentAttempt,
   PaymentProviderEnvironment,
+  ReconciliationExceptionEvidenceFilter,
   ReconciliationRecord,
   ReconciliationStore
 } from "@elevenhouse/domain";
@@ -113,17 +114,37 @@ async function findDuplicateRecord(
 
 async function listOpenReconciliationExceptions(
   database: ElevenHouseDatabase | FinanceDatabase,
-  input: { readonly limit: number }
+  input: Parameters<ReconciliationStore["listOpenExceptions"]>[0]
 ): Promise<readonly ReconciliationRecord[]> {
+  const predicates = [
+    eq(reconciliationRecords.status, "exception"),
+    isNull(reconciliationRecords.resolvedAt),
+    input.provider ? eq(reconciliationRecords.provider, input.provider) : undefined,
+    input.environment ? eq(reconciliationRecords.environment, input.environment) : undefined,
+    evidencePredicate(input.evidence ?? "all")
+  ].filter((predicate): predicate is NonNullable<typeof predicate> => Boolean(predicate));
   const rows = await database
     .select()
     .from(reconciliationRecords)
-    .where(
-      and(eq(reconciliationRecords.status, "exception"), isNull(reconciliationRecords.resolvedAt))
-    )
+    .where(and(...predicates))
     .orderBy(reconciliationRecords.checkedAt, reconciliationRecords.id)
     .limit(input.limit);
   return rows.map(toReconciliationRecord);
+}
+
+function evidencePredicate(evidence: ReconciliationExceptionEvidenceFilter) {
+  switch (evidence) {
+    case "payment":
+      return isNotNull(reconciliationRecords.providerPaymentId);
+    case "payout":
+      return isNotNull(reconciliationRecords.providerPayoutId);
+    case "settlement":
+      return isNotNull(reconciliationRecords.providerSettlementId);
+    case "provider_event":
+      return isNotNull(reconciliationRecords.providerEventId);
+    case "all":
+      return undefined;
+  }
 }
 
 async function resolveReconciliationException(

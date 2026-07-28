@@ -17,6 +17,7 @@ import {
 import {
   adminPayoutQueueResponseSchema,
   adminPayoutStatusUpdateSchema,
+  type AdminPayoutQueueStatusFilter,
   payoutRequestResponseSchema,
   type AdminPayoutQueueResponse,
   type AdminPayoutStatusUpdate,
@@ -24,6 +25,7 @@ import {
 } from "@elevenhouse/contracts/payouts";
 import {
   adminReconciliationExceptionQueueResponseSchema,
+  type AdminReconciliationExceptionEvidenceFilter,
   reconciliationRecordResponseSchema,
   resolveReconciliationExceptionRequestSchema,
   type AdminReconciliationExceptionQueueResponse,
@@ -41,11 +43,15 @@ export type AdminFinancePoliciesApi = {
     astrologerUserId: string,
     request: UpdateAstrologerRiskProfileRequest
   ) => Promise<AstrologerRiskProfileResponse>;
-  readonly listPayoutRequests: () => Promise<AdminPayoutQueueResponse>;
+  readonly listPayoutRequests: (input?: {
+    readonly status?: AdminPayoutQueueStatusFilter;
+  }) => Promise<AdminPayoutQueueResponse>;
   readonly listPaymentReversalCases: (
     type?: "all" | "refund" | "chargeback"
   ) => Promise<AdminPaymentReversalQueueResponse>;
-  readonly listReconciliationExceptions: () => Promise<AdminReconciliationExceptionQueueResponse>;
+  readonly listReconciliationExceptions: (input?: {
+    readonly evidence?: AdminReconciliationExceptionEvidenceFilter;
+  }) => Promise<AdminReconciliationExceptionQueueResponse>;
   readonly resolveReconciliationException: (
     reconciliationRecordId: string,
     request: ResolveReconciliationExceptionRequest
@@ -111,17 +117,21 @@ export function createAdminFinancePoliciesApi(
         })
       );
     },
-    listPayoutRequests: async () =>
-      adminPayoutQueueResponseSchema.parse(await request("/admin/finance/payout-requests")),
+    listPayoutRequests: async (input = {}) =>
+      adminPayoutQueueResponseSchema.parse(
+        await request(`/admin/finance/payout-requests${searchParams({ status: input.status })}`)
+      ),
     listPaymentReversalCases: async (type = "all") => {
       const search = type === "all" ? "" : `?type=${encodeURIComponent(type)}`;
       return adminPaymentReversalQueueResponseSchema.parse(
         await request(`/admin/finance/reversal-cases${search}`)
       );
     },
-    listReconciliationExceptions: async () =>
+    listReconciliationExceptions: async (input = {}) =>
       adminReconciliationExceptionQueueResponseSchema.parse(
-        await request("/admin/finance/reconciliation/exceptions")
+        await request(
+          `/admin/finance/reconciliation/exceptions${searchParams({ evidence: input.evidence })}`
+        )
       ),
     resolveReconciliationException: async (reconciliationRecordId, rawRequest) => {
       const parsed = resolveReconciliationExceptionRequestSchema.parse(rawRequest);
@@ -180,4 +190,13 @@ function readAdminCsrfCookie(): string | null {
     .map((item) => item.trim())
     .find((item) => item.startsWith(prefix));
   return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
+}
+
+function searchParams(values: Record<string, string | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (value) params.set(key, value);
+  }
+  const serialized = params.toString();
+  return serialized ? `?${serialized}` : "";
 }

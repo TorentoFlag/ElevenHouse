@@ -72,8 +72,8 @@ export class FinancePoliciesController {
   }
 
   @Get("payout-requests")
-  listPayoutRequests(): Promise<AdminPayoutQueueResponse> {
-    return this.service.listPayoutRequests();
+  listPayoutRequests(@Query("status") status?: string): Promise<AdminPayoutQueueResponse> {
+    return this.service.listPayoutRequests(status);
   }
 
   @Get("reversal-cases")
@@ -84,8 +84,12 @@ export class FinancePoliciesController {
   }
 
   @Get("reconciliation/exceptions")
-  listReconciliationExceptions(): Promise<AdminReconciliationExceptionQueueResponse> {
-    return this.service.listReconciliationExceptions();
+  listReconciliationExceptions(
+    @Query("provider") provider?: string,
+    @Query("environment") environment?: string,
+    @Query("evidence") evidence?: string
+  ): Promise<AdminReconciliationExceptionQueueResponse> {
+    return this.service.listReconciliationExceptions({ provider, environment, evidence });
   }
 
   @Put("reconciliation/exceptions/:reconciliationRecordId")

@@ -287,6 +287,33 @@
   padding: 16px 20px 13px;
 }
 
+.adminFinanceFilterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  border-bottom: 1px solid var(--admin-line);
+  padding: 12px 20px;
+}
+
+.adminFinanceSegmentButton {
+  border: 1px solid var(--admin-line);
+  border-radius: 999px;
+  background: #141323;
+  color: var(--admin-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+  padding: 8px 11px;
+}
+
+.adminFinanceSegmentButtonActive {
+  border-color: rgba(183, 156, 251, 0.5);
+  background: var(--admin-accent);
+  color: #14111e;
+}
+
 .adminFinancePanelTitleRow h2,
 .adminFinancePanelHead h2,
 .adminFinancePanel h2 {
@@ -783,6 +810,7 @@
 .adminFinanceNavItem:focus-visible,
 .adminFinanceTableButton:focus-visible,
 .adminFinanceAttentionButton:focus-visible,
+.adminFinanceSegmentButton:focus-visible,
 .adminFinanceReconciliationItem:focus-visible {
   outline: 2px solid rgba(183, 156, 251, 0.8);
   outline-offset: 2px;

@@ -350,6 +350,18 @@ describe("admin finance policy HTTP flow", () => {
         ])
       }
     });
+    await expect(
+      getJson("/admin/finance/payout-requests?status=processing", authCookie())
+    ).resolves.toMatchObject({
+      status: 200,
+      body: {
+        summary: { requestedCount: 0, processingCount: 1 },
+        requests: [expect.objectContaining({ status: "processing_manual" })]
+      }
+    });
+    await expect(
+      getJson("/admin/finance/payout-requests?status=paid_manually", authCookie())
+    ).resolves.toMatchObject({ status: 400 });
 
     await expect(
       putJson(
@@ -564,6 +576,18 @@ describe("admin finance policy HTTP flow", () => {
         ]
       }
     });
+    await expect(
+      getJson("/admin/finance/reconciliation/exceptions?evidence=settlement", authCookie())
+    ).resolves.toMatchObject({
+      status: 200,
+      body: {
+        summary: { openCount: 1 },
+        exceptions: [expect.objectContaining({ providerSettlementId: "settlement-2026-07-25" })]
+      }
+    });
+    await expect(
+      getJson("/admin/finance/reconciliation/exceptions?evidence=card", authCookie())
+    ).resolves.toMatchObject({ status: 400 });
 
     await expect(
       putJson(
@@ -810,7 +834,13 @@ function createPayoutStore(): Pick<
     findRequestById: vi.fn(
       async (payoutRequestId) => requests.find((request) => request.id === payoutRequestId) ?? null
     ),
-    listRequests: vi.fn(async () => requests),
+    listRequests: vi.fn(async (input = {}) =>
+      requests
+        .filter((request) =>
+          input.statuses?.length ? input.statuses.includes(request.status) : true
+        )
+        .slice(0, input.limit ?? requests.length)
+    ),
     updateRequestStatus: vi.fn(async (input) => {
       const existing = requests.find((request) => request.id === input.payoutRequestId);
       if (!existing) return null;
@@ -956,7 +986,26 @@ function createReconciliationStore(): ReconciliationStore {
     findAttemptById: vi.fn(),
     findAttemptByProviderPaymentId: vi.fn(),
     createRecord: vi.fn(),
-    listOpenExceptions: vi.fn(async (input) => records.slice(0, input.limit)),
+    listOpenExceptions: vi.fn(async (input) =>
+      records
+        .filter((record) => (input.provider ? record.provider === input.provider : true))
+        .filter((record) => (input.environment ? record.environment === input.environment : true))
+        .filter((record) => {
+          switch (input.evidence ?? "all") {
+            case "payment":
+              return Boolean(record.providerPaymentId);
+            case "payout":
+              return Boolean(record.providerPayoutId);
+            case "settlement":
+              return Boolean(record.providerSettlementId);
+            case "provider_event":
+              return Boolean(record.providerEventId);
+            case "all":
+              return true;
+          }
+        })
+        .slice(0, input.limit)
+    ),
     resolveException: vi.fn(async (input) => {
       const existing = records.find((record) => record.id === input.reconciliationRecordId);
       if (!existing) return null;

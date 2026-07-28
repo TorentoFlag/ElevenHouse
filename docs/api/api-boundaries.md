@@ -421,8 +421,11 @@ POST /admin/finance/policies/default
 PUT  /admin/finance/policies/default
 PUT  /admin/finance/risk-profiles/:astrologerId
 POST /admin/finance/orders/:orderId/apply-risk-policy
-GET  /admin/finance/payout-requests
+GET  /admin/finance/payout-requests?status=open|ready|processing|failed|terminal|all
 PUT  /admin/finance/payout-requests/:payoutRequestId/status
+GET  /admin/finance/reversal-cases?type=all|refund|chargeback
+GET  /admin/finance/reconciliation/exceptions?evidence=all|payment|settlement|payout|provider_event
+PUT  /admin/finance/reconciliation/exceptions/:reconciliationRecordId
 ```
 
 Новые admin/moderator/super_admin workflows не должны добавляться в `public-api`
