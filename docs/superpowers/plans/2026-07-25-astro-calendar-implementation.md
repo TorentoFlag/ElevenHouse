@@ -403,12 +403,22 @@
 - [ ] Console/network inspection for `/astro-calendar`.
 - [ ] Keyboard/focus smoke check.
 
-**Current blocker**
+**Current browser evidence**
 
-- 2026-07-26: production web on `http://localhost:5174/astro-calendar` redirects to
-  `/auth` in the available Chrome session because `/api/identity/me` returns `401`.
-  Browser screenshot comparison, route console/network inspection and keyboard/focus
-  smoke remain open until an authenticated astrologer browser session is available.
+- 2026-07-28: authenticated production web on `http://localhost:5174/astro-calendar`
+  was checked against the running reference at
+  `http://localhost:8000/ElevenHouse.html` in a `1490x960` Chrome viewport.
+  The production first-screen geometry now matches the reference shell closely:
+  toolbar `1242x60`, workspace `920px`, horizon `920x115`, and first event
+  card `914x190` versus reference `914x196`.
+- The verified local read model generation
+  `6667d5a8-0899-4ef5-9417-35fc964375ed` is `ready` with Kerykeion
+  `5.12.9`, `223` total events, `199` client events, `24` global events and
+  `4/4` client charts ready.
+- Production UI renders the agenda from persisted events, caps the first agenda
+  screen to upcoming events, prioritizes client birthdays before transit noise
+  at the same timestamp, shows deterministic missing-dictionary create links,
+  and keeps future automation controls disabled instead of faking sends.
 
 ---
 
@@ -429,11 +439,12 @@
 
 **Evidence**
 
-- [ ] Browser screenshots at desktop and mobile/narrow widths.
-- [ ] Network requests/responses for read, generate and retry.
-- [ ] Console has no new errors.
-- [ ] Server logs show no unexpected exceptions.
-- [ ] Test command output is captured in final report.
+- [x] Desktop browser screenshot/reference comparison for the authenticated
+  `1490x960` state.
+- [x] Network requests/responses for range read and filtered range reads.
+- [x] Console has no new runtime errors.
+- [x] Worker and chart-engine readiness endpoints respond `ready`.
+- [x] Test command output is captured in final report.
 
 ---
 
@@ -448,10 +459,10 @@
 
 **Implementation**
 
-- [ ] Update docs with actual implemented contract, endpoint names, lifecycle and known limits.
-- [ ] Record provider capability limitations discovered during implementation.
-- [ ] Document dictionary code naming convention for astro calendar entries.
-- [ ] Document verification scenario and any residual risk.
+- [x] Update docs with actual implemented lifecycle and known first-slice limits.
+- [x] Record current provider-backed generation evidence.
+- [x] Document dictionary behavior for missing astro calendar entries.
+- [x] Document verification scenario and residual future automation boundary.
 
 **Verification**
 

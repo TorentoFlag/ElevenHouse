@@ -100,8 +100,11 @@ export function resolveAstroCalendarInterpretations(
   response: AstroCalendarRangeResponse,
   dictionary: DictionaryEntriesResponse | null
 ): AstroCalendarInterpretations {
+  const requestedCodes = new Set(response.dictionaryCodes);
   const entriesByCode = Object.fromEntries(
-    (dictionary?.entries ?? []).map((entry) => [entry.code, entry])
+    (dictionary?.entries ?? [])
+      .filter((entry) => requestedCodes.has(entry.code))
+      .map((entry) => [entry.code, entry])
   );
   const missing = response.dictionaryCodes
     .filter((code) => entriesByCode[code] === undefined)

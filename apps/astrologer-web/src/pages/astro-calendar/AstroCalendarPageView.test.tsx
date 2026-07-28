@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import type {
+  AstroCalendarEvent,
   AstroCalendarRangeResponse,
   DictionaryEffectiveEntryResponse
 } from "@elevenhouse/contracts";
@@ -166,6 +167,89 @@ describe("AstroCalendarPageView", () => {
     expect(markup).not.toContain("AI трактовка");
   });
 
+  it("keeps the first agenda screen focused on upcoming events", () => {
+    const events = Array.from({ length: 15 }, (_, index) => eventWithTitle(index));
+    const markup = renderToStaticMarkup(
+      <AstroCalendarPageView
+        {...baseProps({
+          rangeResponse: {
+            ...response,
+            events,
+            summary: {
+              ...response.summary,
+              eventCount: events.length
+            },
+            dictionaryCodes: []
+          }
+        })}
+      />
+    );
+
+    expect(markup).toContain("Сегодня");
+    expect(markup).not.toContain("Солярное окно до диапазона");
+    expect(markup).toContain("Событие 12");
+    expect(markup).not.toContain("Событие 13");
+  });
+
+  it("prioritizes birthday moments before transit noise at the same timestamp", () => {
+    const birthday = {
+      ...eventWithTitle(1),
+      id: "birthday",
+      type: "client.birthday",
+      title: "День рождения",
+      description: null,
+      clientRefs: [
+        {
+          clientId: "22222222-2222-4222-8222-222222222222",
+          displayName: "Марина Краснова",
+          initials: "МК"
+        }
+      ]
+    } satisfies AstroCalendarEvent;
+    const transit = {
+      ...eventWithTitle(1),
+      id: "transit",
+      type: "client.transit_aspect",
+      title: "Сатурн: секстиль к Сатурн"
+    } satisfies AstroCalendarEvent;
+    const markup = renderToStaticMarkup(
+      <AstroCalendarPageView
+        {...baseProps({
+          rangeResponse: {
+            ...response,
+            events: [transit, birthday],
+            dictionaryCodes: []
+          }
+        })}
+      />
+    );
+
+    expect(markup.indexOf("<h3>День рождения · Марина Краснова</h3>")).toBeLessThan(
+      markup.indexOf("<h3>Сатурн: секстиль к Сатурн</h3>")
+    );
+    expect(markup).toContain("Повод для тёплого касания");
+  });
+
+  it("limits missing dictionary cards while preserving the total missing count", () => {
+    const dictionaryCodes = Array.from({ length: 10 }, (_, index) => `astro_calendar.missing_${index + 1}`);
+    const markup = renderToStaticMarkup(
+      <AstroCalendarPageView
+        {...baseProps({
+          dictionaryEntries: [],
+          rangeResponse: {
+            ...response,
+            dictionaryCodes,
+            warnings: []
+          }
+        })}
+      />
+    );
+
+    expect(markup).toContain("astro_calendar.missing_8");
+    expect(markup).not.toContain("astro_calendar.missing_9");
+    expect(markup).toContain("Ещё 2 кодов без трактовки.");
+  });
+
   it("renders calculating state without claiming queue completion", () => {
     const props = baseProps({
       rangeResponse: {
@@ -248,10 +332,70 @@ describe("AstroCalendarPageView", () => {
     expect(staleMarkup).toContain("Пересчитать");
   });
 
+  it("does not present stale or failed empty generations as an empty successful calendar", () => {
+    const staleMarkup = renderToStaticMarkup(
+      <AstroCalendarPageView
+        {...baseProps({
+          rangeResponse: {
+            ...response,
+            generation: {
+              ...response.generation,
+              status: "stale",
+              generatedAt: null,
+              provider: null
+            },
+            events: [],
+            summary: {
+              eventCount: 0,
+              globalEventCount: 0,
+              clientEventCount: 0,
+              byType: {},
+              byTone: {}
+            },
+            dictionaryCodes: []
+          }
+        })}
+      />
+    );
+    const failedMarkup = renderToStaticMarkup(
+      <AstroCalendarPageView
+        {...baseProps({
+          rangeResponse: {
+            ...response,
+            generation: {
+              ...response.generation,
+              status: "failed",
+              generatedAt: null,
+              provider: null
+            },
+            events: [],
+            summary: {
+              eventCount: 0,
+              globalEventCount: 0,
+              clientEventCount: 0,
+              byType: {},
+              byTone: {}
+            },
+            dictionaryCodes: []
+          }
+        })}
+      />
+    );
+
+    expect(staleMarkup).toContain("Астрокалендарь устарел");
+    expect(staleMarkup).toContain("Пересчитать");
+    expect(staleMarkup).not.toContain("Событий не найдено");
+    expect(failedMarkup).toContain("Расчёт завершился ошибкой");
+    expect(failedMarkup).toContain("Повторить расчёт");
+    expect(failedMarkup).not.toContain("Событий не найдено");
+  });
+
   it("uses responsive CSS without a separate mobile wrapper or clipped side rails", () => {
     const css = readFileSync(new URL("./AstroCalendarPage.module.css", import.meta.url), "utf8");
 
-    expect(css).toMatch(/@media \(min-width: 1360px\)[\s\S]*\.layout\s*\{[^}]*grid-template-columns:\s*230px minmax\(520px, 1fr\) 320px/s);
+    expect(css).toMatch(/\.workspace\s*\{[^}]*max-width:\s*920px/s);
+    expect(css).not.toContain('grid-template-areas: "rail workspace details"');
+    expect(css).not.toContain("230px minmax(520px, 1fr) 320px");
     expect(css).toMatch(/@media \(max-width: 900px\)[\s\S]*\.layout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
     expect(css).toMatch(/@media \(max-width: 640px\)[\s\S]*\.toolbar\s*\{[^}]*padding:\s*10px/s);
     expect(css).not.toContain("ios-frame");
@@ -288,5 +432,19 @@ function baseProps(
     onRetry: vi.fn(),
     onRefresh: vi.fn(),
     ...overrides
+  };
+}
+
+function eventWithTitle(index: number): AstroCalendarEvent {
+  const baseEvent: AstroCalendarEvent = response.events[0]!;
+  return {
+    ...baseEvent,
+    id: `event-${index}`,
+    startsAt:
+      index === 0
+        ? "2026-07-25T00:00:00.000Z"
+        : `2026-08-${String(index).padStart(2, "0")}T08:55:00.000Z`,
+    title: index === 0 ? "Солярное окно до диапазона" : `Событие ${index}`,
+    dictionaryCodes: []
   };
 }

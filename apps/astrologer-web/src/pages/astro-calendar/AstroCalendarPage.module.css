@@ -26,7 +26,7 @@
   align-items: center;
   gap: 12px;
   min-width: 0;
-  padding: 10px 20px;
+  padding: 0 20px;
   border-bottom: 1px solid var(--astro-line);
   background: rgb(13 12 32 / 0.94);
 }
@@ -44,12 +44,6 @@
   font-weight: 760;
 }
 
-.titleGroup p {
-  margin: 2px 0 0;
-  color: rgb(186 178 218 / 0.72);
-  font-size: 12px;
-}
-
 .iconBox,
 .skyIcon {
   display: grid;
@@ -59,7 +53,7 @@
   flex: 0 0 auto;
   border-radius: 10px;
   background: var(--astro-gold-soft);
-  color: var(--astro-gold);
+  color: var(--eh-color-moon-120);
 }
 
 .scopeTabs {
@@ -93,9 +87,10 @@
 }
 
 .searchBox {
+  box-sizing: border-box;
   display: flex;
   min-width: 220px;
-  max-width: 320px;
+  max-width: 280px;
   flex: 1 1 260px;
   align-items: center;
   gap: 8px;
@@ -154,64 +149,36 @@
   opacity: 0.48;
 }
 
+.toolbarMeta {
+  margin-left: auto;
+  color: rgb(186 178 218 / 0.7);
+  font-size: 12.5px;
+}
+
+.toolbarMeta b {
+  color: var(--eh-color-moon-120);
+}
+
 .layout {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-areas:
-    "workspace"
-    "rail"
-    "details";
   grid-template-columns: minmax(0, 920px);
-  align-content: start;
   justify-content: center;
-  gap: 18px;
   overflow-y: auto;
   padding: 20px 24px 48px;
   scrollbar-width: thin;
 }
 
-.rail,
-.details {
-  min-width: 0;
-  min-height: auto;
-  overflow: visible;
-  background: var(--astro-panel);
-}
-
-.rail {
-  grid-area: rail;
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-  gap: 16px;
-  padding: 18px 16px;
-  border: 1px solid var(--astro-line);
-  border-radius: 16px;
-}
-
-.details {
-  grid-area: details;
-  padding: 18px 16px;
-  border: 1px solid var(--astro-line);
-  border-radius: 16px;
-}
-
 .workspace {
-  grid-area: workspace;
+  width: 100%;
+  max-width: 920px;
   min-width: 0;
-  min-height: auto;
-  overflow: visible;
-  padding: 0;
+  margin: 0 auto;
 }
 
-.panelSection {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 0;
-}
-
-.panelSection h2,
-.group h2 {
+.group h2,
+.kicker {
   margin: 0;
   color: rgb(186 178 218 / 0.62);
   font-size: 10.5px;
@@ -220,27 +187,6 @@
   text-transform: uppercase;
 }
 
-.readinessGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.metric {
-  display: grid;
-  gap: 2px;
-  padding: 10px 12px;
-  border: 1px solid var(--astro-line);
-  border-radius: 10px;
-  background: var(--astro-surface);
-}
-
-.metric strong {
-  color: var(--astro-gold);
-  font-size: 18px;
-}
-
-.metric span,
 .muted {
   color: rgb(186 178 218 / 0.72);
   font-size: 12px;
@@ -249,6 +195,7 @@
 .warningList {
   display: grid;
   gap: 6px;
+  min-width: 180px;
 }
 
 .warningList p {
@@ -258,46 +205,55 @@
   line-height: 1.45;
 }
 
+.typeBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
 .typeButton,
 .typeActive {
   display: inline-flex;
-  min-height: 36px;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: 6px;
+  padding: 5px 11px;
   border: 1px solid var(--astro-line);
   border-radius: 999px;
-  background: var(--astro-surface);
-  color: rgb(229 225 244 / 0.75);
+  background: rgb(22 20 47);
+  color: rgb(167 162 200);
   cursor: pointer;
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 11.5px;
+  font-weight: 500;
 }
 
 .typeButton span,
 .typeActive span {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
 }
 
 .typeActive {
-  border-color: rgb(246 210 102 / 0.35);
-  background: var(--astro-gold-soft);
-  color: var(--astro-gold);
+  border-color: rgb(139 92 246 / 0.4);
+  background: rgb(139 92 246 / 0.14);
+  color: rgb(183 156 251);
 }
 
 .skyCard,
 .horizonCard,
+.readinessCard,
 .stateCard,
 .eventCard,
 .interpretationCard,
 .missingCard {
-  border: 1px solid var(--astro-line-strong);
-  border-radius: 16px;
+  border: 1px solid var(--astro-line);
+  border-radius: 20px;
   background: var(--astro-surface);
-  box-shadow: 0 14px 42px rgb(0 0 0 / 0.18);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.03),
+    0 18px 40px -24px rgb(0 0 0 / 0.8);
 }
 
 .skyCard {
@@ -329,6 +285,15 @@
 .horizonCard {
   margin-bottom: 18px;
   padding: 16px 18px 20px;
+}
+
+.readinessCard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
 }
 
 .horizonHeader {
@@ -415,6 +380,21 @@
   width: max-content;
 }
 
+.actionState {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 0 4px;
+}
+
+.actionState span {
+  flex: 1;
+  min-width: 0;
+  color: rgb(186 178 218 / 0.72);
+  font-size: 12.5px;
+}
+
 .agenda {
   display: grid;
   gap: 20px;
@@ -427,6 +407,7 @@
 
 .eventCard {
   display: flex;
+  min-height: 190px;
   overflow: hidden;
 }
 
@@ -438,7 +419,7 @@
 .eventBody {
   flex: 1;
   min-width: 0;
-  padding: 15px 18px;
+  padding: 18px 22px;
 }
 
 .eventMain {
@@ -531,6 +512,18 @@
   padding: 14px;
 }
 
+.interpretations {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.interpretationGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .interpretationCard span,
 .missingCard span {
   color: rgb(186 178 218 / 0.6);
@@ -566,36 +559,6 @@
   font-weight: 760;
 }
 
-@media (min-width: 1360px) {
-  .layout {
-    grid-template-areas: "rail workspace details";
-    grid-template-columns: 230px minmax(520px, 1fr) 320px;
-    align-content: stretch;
-    max-width: 1180px;
-    width: 100%;
-    margin: 0 auto;
-  }
-
-  .rail,
-  .workspace,
-  .details {
-    min-height: 0;
-    overflow-y: auto;
-    scrollbar-width: thin;
-  }
-
-  .rail {
-    display: block;
-    border-width: 0 1px 0 0;
-    border-radius: 0;
-  }
-
-  .details {
-    border-width: 0 0 0 1px;
-    border-radius: 0;
-  }
-}
-
 @media (max-width: 900px) {
   .page {
     margin: -16px;
@@ -606,15 +569,13 @@
     padding: 18px 16px 34px;
   }
 
-  .rail,
-  .workspace,
-  .details {
-    overflow: visible;
+  .toolbarMeta {
+    width: 100%;
+    margin-left: 44px;
   }
 
-  .rail,
-  .details {
-    border: 1px solid var(--astro-line);
+  .interpretationGrid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -635,10 +596,6 @@
     overflow-x: auto;
   }
 
-  .rail {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .workspace {
     padding: 0;
   }
@@ -649,8 +606,15 @@
   }
 
   .secondaryButton,
-  .futureButton {
+  .futureButton,
+  .actionState .primaryButton {
     width: 100%;
+  }
+
+  .actionState {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 0;
   }
 
   .eventFooter {
@@ -659,6 +623,10 @@
 
   .eventFooter,
   .clientRefs {
+    flex-direction: column;
+  }
+
+  .readinessCard {
     flex-direction: column;
   }
 }

@@ -197,6 +197,23 @@ describe("astro calendar state", () => {
     });
   });
 
+  it("ignores dictionary entries that are not requested by the current response", () => {
+    expect(
+      resolveAstroCalendarInterpretations(
+        {
+          ...response,
+          dictionaryCodes: [],
+          warnings: []
+        },
+        dictionaryEntries
+      )
+    ).toEqual({
+      entriesByCode: {},
+      missing: [],
+      status: "none"
+    });
+  });
+
   it("enables recalculation when the range response is stale", () => {
     expect(
       summarizeAstroCalendarState({

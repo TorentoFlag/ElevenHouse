@@ -45,6 +45,16 @@ const eventTypeMeta = {
 } satisfies Record<AstroCalendarEventType, { label: string; glyph: string; color: string }>;
 
 const eventTypeOptions = Object.keys(eventTypeMeta) as AstroCalendarEventType[];
+const maxAgendaEvents = 12;
+const maxVisibleInterpretations = 8;
+const agendaEventTypeRank = {
+  "client.birthday": 0,
+  "client.solar_window": 1,
+  "global.moon_phase": 2,
+  "global.eclipse": 3,
+  "global.ingress": 4,
+  "client.transit_aspect": 5
+} satisfies Record<AstroCalendarEventType, number>;
 
 export function AstroCalendarPageView({
   rangeResponse,
@@ -85,19 +95,36 @@ export function AstroCalendarPageView({
       )
     : null;
   const filteredEvents = filterEvents(rangeResponse?.events ?? [], search);
-  const timelineEvents = filteredEvents.slice(0, 12);
+  const upcomingEvents = filterAgendaEvents(filteredEvents, query);
+  const timelineEvents = upcomingEvents.slice(0, 12);
+  const agendaEvents = upcomingEvents.slice(0, maxAgendaEvents);
   const statusCopy = getStatusCopy(state.status);
+  const shouldShowActionState =
+    filteredEvents.length === 0 &&
+    (state.status === "no-data" || state.status === "stale" || state.status === "failed");
+  const interpretationEntries = Object.values(interpretations?.entriesByCode ?? {});
+  const visibleInterpretationEntries = interpretationEntries.slice(0, maxVisibleInterpretations);
+  const visibleMissingInterpretations = (interpretations?.missing ?? []).slice(
+    0,
+    Math.max(maxVisibleInterpretations - visibleInterpretationEntries.length, 0)
+  );
+  const hiddenInterpretationCount =
+    interpretationEntries.length +
+    (interpretations?.missing.length ?? 0) -
+    visibleInterpretationEntries.length -
+    visibleMissingInterpretations.length;
+  const hasInterpretations =
+    visibleInterpretationEntries.length > 0 || visibleMissingInterpretations.length > 0;
 
   return (
     <section className={styles.page} aria-labelledby="astro-calendar-title">
       <header className={styles.toolbar}>
         <div className={styles.titleGroup}>
           <span className={styles.iconBox} aria-hidden="true">
-            <Icon iconName="calendar" width={18} height={18} />
+            <Icon iconName="logoMoon" width={18} height={18} />
           </span>
           <div>
             <h1 id="astro-calendar-title">Астрокалендарь</h1>
-            <p>{rangeLabel} · {query.timeZone}</p>
           </div>
         </div>
 
@@ -129,43 +156,28 @@ export function AstroCalendarPageView({
           />
         </label>
 
-        <button
-          className={styles.primaryButton}
-          type="button"
-          disabled={isCommandPending || state.primaryAction === "none"}
-          onClick={state.primaryAction === "retry" ? onRetry : onGenerate}
-        >
-          <Icon iconName={state.primaryAction === "retry" ? "refresh" : "lightning"} width={15} height={15} aria-hidden="true" />
-          {state.primaryAction === "retry"
-            ? "Повторить расчёт"
-            : state.primaryAction === "recalculate"
-              ? "Пересчитать"
-              : "Рассчитать"}
-        </button>
+        <span className={styles.toolbarMeta}>
+          Персональные события — по <b>{state.readiness.clientsReady}</b> привязанным картам
+        </span>
       </header>
 
       <div className={styles.layout}>
-        <aside className={styles.rail} aria-label="Фильтры и готовность клиентов">
-          <section className={styles.panelSection}>
-            <h2>Готовность</h2>
-            <div className={styles.readinessGrid}>
-              <Metric label="Клиентов" value={state.readiness.clientsTotal} />
-              <Metric label="Готовы" value={state.readiness.clientsReady} />
-              <Metric label="Нет данных" value={state.readiness.missingBirthData} />
-              <Metric label="Нет времени" value={state.readiness.unknownBirthTime} />
-              <Metric label="Примерно" value={state.readiness.approximateBirthTime} />
+        <main className={styles.workspace} aria-busy={isFetching ? "true" : undefined}>
+          <section className={styles.skyCard}>
+            <span className={styles.skyIcon} aria-hidden="true">
+              <Icon iconName="orbit" width={20} height={20} />
+            </span>
+            <div>
+              <strong>{statusCopy.title}</strong>
+              <p>{statusCopy.description}</p>
             </div>
-            {state.readiness.warnings.length > 0 ? (
-              <div className={styles.warningList}>
-                {state.readiness.warnings.map((warning) => (
-                  <p key={`${warning.code}:${warning.clientId ?? "all"}`}>{warning.message}</p>
-                ))}
-              </div>
-            ) : null}
+            <button className={styles.secondaryButton} type="button" onClick={onRefresh}>
+              <Icon iconName="refresh" width={14} height={14} aria-hidden="true" />
+              Обновить
+            </button>
           </section>
 
-          <section className={styles.panelSection}>
-            <h2>Типы</h2>
+          <div className={styles.typeBar} aria-label="Фильтр типов событий">
             <button
               className={eventType === "all" ? styles.typeActive : styles.typeButton}
               type="button"
@@ -184,23 +196,7 @@ export function AstroCalendarPageView({
                 {eventTypeMeta[type].label}
               </button>
             ))}
-          </section>
-        </aside>
-
-        <main className={styles.workspace} aria-busy={isFetching ? "true" : undefined}>
-          <section className={styles.skyCard}>
-            <span className={styles.skyIcon} aria-hidden="true">
-              <Icon iconName="orbit" width={20} height={20} />
-            </span>
-            <div>
-              <strong>{statusCopy.title}</strong>
-              <p>{statusCopy.description}</p>
-            </div>
-            <button className={styles.secondaryButton} type="button" onClick={onRefresh}>
-              <Icon iconName="refresh" width={14} height={14} aria-hidden="true" />
-              Обновить
-            </button>
-          </section>
+          </div>
 
           <section className={styles.horizonCard} aria-label="Горизонт событий">
             <div className={styles.horizonHeader}>
@@ -233,6 +229,16 @@ export function AstroCalendarPageView({
             </div>
           </section>
 
+          {state.readiness.warnings.length > 0 ? (
+            <section className={styles.readinessCard} aria-label="Готовность клиентских карт">
+              <div className={styles.warningList}>
+                {state.readiness.warnings.map((warning) => (
+                  <p key={`${warning.code}:${warning.clientId ?? "all"}`}>{warning.message}</p>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {isError ? (
             <div className={styles.stateCard} role="alert">
               <strong>Не удалось загрузить астрокалендарь</strong>
@@ -245,11 +251,24 @@ export function AstroCalendarPageView({
               <strong>Расчёт выполняется</strong>
               <span>Фронт не показывает завершение, пока API не вернёт готовый результат.</span>
             </div>
+          ) : shouldShowActionState ? (
+            <div className={styles.actionState}>
+              <span>{rangeLabel} · {query.timeZone}</span>
+              <button
+                className={styles.primaryButton}
+                type="button"
+                disabled={isCommandPending || state.primaryAction === "none"}
+                onClick={state.primaryAction === "retry" ? onRetry : onGenerate}
+              >
+                <Icon iconName={state.primaryAction === "retry" ? "refresh" : "lightning"} width={15} height={15} aria-hidden="true" />
+                {state.primaryAction === "retry" ? "Повторить расчёт" : "Пересчитать"}
+              </button>
+            </div>
           ) : filteredEvents.length === 0 ? (
             <div className={styles.stateCard}>Событий не найдено</div>
           ) : (
             <section className={styles.agenda} aria-label="События астрокалендаря">
-              {groupEvents(filteredEvents).map((group) => (
+              {groupEvents(agendaEvents, query).map((group) => (
                 <div key={group.label} className={styles.group}>
                   <h2>{group.label}</h2>
                   {group.events.map((event) => (
@@ -259,36 +278,41 @@ export function AstroCalendarPageView({
               ))}
             </section>
           )}
-        </main>
 
-        <aside className={styles.details} aria-label="Трактовки">
-          <section className={styles.panelSection}>
-            <h2>Трактовки</h2>
+          <section className={styles.interpretations} aria-label="Трактовки">
+            <h2 className={styles.kicker}>Трактовки</h2>
             {isDictionaryLoading ? <p className={styles.muted}>Загружаем справочник...</p> : null}
             {interpretations?.status === "none" ? (
               <p className={styles.muted}>У событий этого диапазона нет кодов трактовок.</p>
             ) : null}
-            {Object.values(interpretations?.entriesByCode ?? {}).map((entry) => (
-              <article key={entry.code} className={styles.interpretationCard}>
-                <span>{entry.categoryCode}</span>
-                <h3>{entry.title}</h3>
-                <p>{entry.content}</p>
-                <small>Справочник · {entry.source}</small>
-              </article>
-            ))}
-            {interpretations?.missing.map((missing) => (
-              <article key={missing.code} className={styles.missingCard}>
-                <span>Нет трактовки в справочнике</span>
-                <strong>{missing.code}</strong>
-                <a
-                  href={`/reference?code=${encodeURIComponent(missing.code)}&category=${encodeURIComponent(missing.suggestedCategory)}`}
-                >
-                  Создать трактовку
-                </a>
-              </article>
-            ))}
+            {hasInterpretations ? (
+              <div className={styles.interpretationGrid}>
+                {visibleInterpretationEntries.map((entry) => (
+                  <article key={entry.code} className={styles.interpretationCard}>
+                    <span>{entry.categoryCode}</span>
+                    <h3>{entry.title}</h3>
+                    <p>{entry.content}</p>
+                    <small>Справочник · {entry.source}</small>
+                  </article>
+                ))}
+                {visibleMissingInterpretations.map((missing) => (
+                  <article key={missing.code} className={styles.missingCard}>
+                    <span>Нет трактовки в справочнике</span>
+                    <strong>{missing.code}</strong>
+                    <a
+                      href={`/reference?code=${encodeURIComponent(missing.code)}&category=${encodeURIComponent(missing.suggestedCategory)}`}
+                    >
+                      Создать трактовку
+                    </a>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            {hiddenInterpretationCount > 0 ? (
+              <p className={styles.muted}>Ещё {hiddenInterpretationCount} кодов без трактовки.</p>
+            ) : null}
           </section>
-        </aside>
+        </main>
       </div>
     </section>
   );
@@ -296,6 +320,8 @@ export function AstroCalendarPageView({
 
 function EventCard({ event }: { readonly event: AstroCalendarEvent }) {
   const meta = eventTypeMeta[event.type];
+  const description = event.description ?? defaultEventDescription(event.type);
+  const title = displayEventTitle(event);
 
   return (
     <article className={styles.eventCard}>
@@ -310,8 +336,8 @@ function EventCard({ event }: { readonly event: AstroCalendarEvent }) {
               <span style={{ color: meta.color }}>{meta.label}</span>
               <time dateTime={event.startsAt}>{formatEventDate(event.startsAt)}</time>
             </div>
-            <h3>{event.title}</h3>
-            {event.description ? <p>{event.description}</p> : null}
+            <h3>{title}</h3>
+            <p>{description}</p>
           </div>
         </div>
         <div className={styles.eventFooter}>
@@ -345,13 +371,34 @@ function EventCard({ event }: { readonly event: AstroCalendarEvent }) {
   );
 }
 
-function Metric({ label, value }: { readonly label: string; readonly value: number }) {
-  return (
-    <div className={styles.metric}>
-      <strong>{value}</strong>
-      <span>{label}</span>
-    </div>
-  );
+function displayEventTitle(event: AstroCalendarEvent): string {
+  const primaryClient = event.clientRefs[0];
+  if (event.type === "client.birthday" && primaryClient) {
+    return `День рождения · ${primaryClient.displayName}`;
+  }
+  if (event.type === "client.solar_window" && primaryClient) {
+    return `Соляр · ${primaryClient.displayName}`;
+  }
+  return event.title;
+}
+
+function defaultEventDescription(type: AstroCalendarEventType): string {
+  if (type === "client.birthday") {
+    return "Повод для тёплого касания и персонального предложения без ручного поиска по CRM.";
+  }
+  if (type === "client.solar_window") {
+    return "Период вокруг возвращения Солнца: удобно предложить годовой прогноз или соляр.";
+  }
+  if (type === "client.transit_aspect") {
+    return "Персональный транзит по привязанной карте клиента; проверьте уместность касания.";
+  }
+  if (type === "global.moon_phase") {
+    return "Глобальный лунный инфоповод для контента, эфиров и мягких касаний аудитории.";
+  }
+  if (type === "global.eclipse") {
+    return "Сильная глобальная точка периода; подходит для контента с предупреждением о нагрузке.";
+  }
+  return "Глобальное событие периода; можно использовать как повод для контента или рассылки.";
 }
 
 function filterEvents(events: readonly AstroCalendarEvent[], search: string) {
@@ -360,6 +407,7 @@ function filterEvents(events: readonly AstroCalendarEvent[], search: string) {
 
   return events.filter((event) =>
     [
+      displayEventTitle(event),
       event.title,
       event.subtitle ?? "",
       event.description ?? "",
@@ -372,20 +420,56 @@ function filterEvents(events: readonly AstroCalendarEvent[], search: string) {
   );
 }
 
-function groupEvents(events: readonly AstroCalendarEvent[]) {
+function filterAgendaEvents(
+  events: readonly AstroCalendarEvent[],
+  query: AstroCalendarRangeQuery
+) {
+  const rangeStartKey = query.start;
+  return [...events]
+    .filter((event) => dateKeyInTimeZone(event.startsAt, query.timeZone) >= rangeStartKey)
+    .sort(compareAgendaEvents);
+}
+
+function compareAgendaEvents(left: AstroCalendarEvent, right: AstroCalendarEvent): number {
+  const time = new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime();
+  if (time !== 0) return time;
+  const rank = agendaEventTypeRank[left.type] - agendaEventTypeRank[right.type];
+  if (rank !== 0) return rank;
+  return left.title.localeCompare(right.title, "ru");
+}
+
+function groupEvents(events: readonly AstroCalendarEvent[], query: AstroCalendarRangeQuery) {
   const groups = new Map<string, AstroCalendarEvent[]>();
   for (const event of events) {
-    const label = groupLabel(event.startsAt);
+    const label = groupLabel(event.startsAt, query);
     groups.set(label, [...(groups.get(label) ?? []), event]);
   }
   return Array.from(groups, ([label, groupedEvents]) => ({ label, events: groupedEvents }));
 }
 
-function groupLabel(instant: string): string {
-  const day = new Date(instant).getUTCDate();
-  if (day <= 7) return "На этой неделе";
-  if (day <= 31) return "В этом месяце";
+function groupLabel(instant: string, query: AstroCalendarRangeQuery): string {
+  const eventKey = dateKeyInTimeZone(instant, query.timeZone);
+  const rangeStart = new Date(`${query.start}T00:00:00.000Z`);
+  const eventDate = new Date(`${eventKey}T00:00:00.000Z`);
+  const daysFromStart = Math.floor(
+    (eventDate.getTime() - rangeStart.getTime()) / (24 * 60 * 60 * 1000)
+  );
+  if (daysFromStart <= 0) return "Сегодня";
+  if (daysFromStart <= 7) return "На этой неделе";
+  if (daysFromStart <= 31) return "В этом месяце";
   return "Дальше";
+}
+
+function dateKeyInTimeZone(instant: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date(instant));
+  const value = (type: "year" | "month" | "day") =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
 function formatEventDate(instant: string): string {
