@@ -863,6 +863,28 @@
   padding-top: 14px;
 }
 
+.adminFinanceOperationContext {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  border-top: 1px solid var(--admin-line);
+  border-bottom: 1px solid var(--admin-line);
+  padding: 13px 0;
+}
+
+.adminFinanceOperationContext h3 {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.adminFinanceOperationFacts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .adminFinancePayoutBlockNotice {
   display: grid;
   gap: 5px;
@@ -919,6 +941,22 @@
   margin: 0 0 14px;
   border-radius: 10px;
   padding: 12px 14px;
+}
+
+.adminFinanceFeedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.adminFinanceFeedback p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.adminFinanceFeedback .ehButton {
+  flex: 0 0 auto;
 }
 
 .adminFinanceRiskPanel {
@@ -994,6 +1032,7 @@
   .adminFinanceForm,
   .adminFinanceDisputeReviewForm,
   .adminFinanceFactsCompact,
+  .adminFinanceOperationFacts,
   .adminFinanceDisputeKpis,
   .adminFinanceDisputeFacts,
   .adminFinanceReconciliationKpis,
@@ -1020,5 +1059,10 @@
   .adminFinancePayoutTable .adminFinanceTableRow > :nth-child(4),
   .adminFinancePayoutTable .adminFinanceTableRow > :nth-child(5) {
     display: none;
+  }
+
+  .adminFinanceFeedback {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

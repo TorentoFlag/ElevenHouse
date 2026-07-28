@@ -703,9 +703,16 @@ export function FinancePoliciesPage({
           </p>
         ) : null}
         {submitError ? (
-          <p className="adminFinanceError" role="alert">
-            {submitError}
-          </p>
+          <div className="adminFinanceError adminFinanceFeedback" role="alert">
+            <p>{submitError}</p>
+            <Button
+              title="Обновить очередь"
+              variant="default"
+              size="small"
+              startIcon={<Refresh />}
+              onClick={() => void refreshFinance()}
+            />
+          </div>
         ) : null}
       </main>
     </div>
@@ -898,6 +905,12 @@ function PayoutsPanel(props: {
               <Fact label="Астролог" value={shortId(props.selectedPayout.astrologerUserId)} />
               <Fact label="Метод" value={methodLabel(props.selectedPayout.method)} />
             </div>
+            <OperationContext title="Операционный контекст">
+              <Fact label="Request" value={shortId(props.selectedPayout.id)} />
+              <Fact label="Idempotency" value="Terminal payout command" />
+              <Fact label="Audit" value="Admin audit event" />
+              <Fact label="Ledger" value={payoutLedgerContext(props.selectedPayout.status)} />
+            </OperationContext>
             {props.selectedPayout.blockedByChargeback ? (
               <div className="adminFinancePayoutBlockNotice">
                 <strong>Chargeback blocked</strong>
@@ -1304,6 +1317,12 @@ function ReconciliationPanel(props: {
                 )}
               </div>
             </div>
+            <OperationContext title="Evidence context">
+              <Fact label="Record" value={shortId(props.selectedException.id)} />
+              <Fact label="Evidence" value={providerEvidenceId(props.selectedException)} />
+              <Fact label="Clearance" value="Hold release gate" />
+              <Fact label="Audit" value="Admin resolution audit" />
+            </OperationContext>
 
             <form
               className="adminFinanceForm adminFinanceReconciliationForm"
@@ -1783,6 +1802,18 @@ function Fact(props: { readonly label: string; readonly value: string }) {
   );
 }
 
+function OperationContext(props: {
+  readonly title: string;
+  readonly children: ReactElement | readonly ReactElement[];
+}) {
+  return (
+    <section className="adminFinanceOperationContext" aria-label={props.title}>
+      <h3>{props.title}</h3>
+      <div className="adminFinanceFacts adminFinanceOperationFacts">{props.children}</div>
+    </section>
+  );
+}
+
 function StatusPill(props: { readonly status: PayoutRequestResponse["status"] }) {
   return (
     <span className={`adminFinanceStatusPill adminFinanceStatusPill-${statusTone(props.status)}`}>
@@ -1960,6 +1991,17 @@ function isTerminalPayoutStatus(status: PayoutRequestResponse["status"]): boolea
 
 function isPayoutActionBlocked(request: AdminPayoutRequestResponse): boolean {
   return request.blockedByChargeback || isTerminalPayoutStatus(request.status);
+}
+
+function payoutLedgerContext(status: PayoutRequestResponse["status"]): string {
+  if (status === "paid") return "payout_paid posted";
+  if (status === "failed" || status === "rejected" || status === "cancelled") {
+    return "payout_failed posted";
+  }
+  if (status === "processing_manual" || status === "processing_provider") {
+    return "payout pending reserved";
+  }
+  return "available to pending";
 }
 
 function reversalSeverityTone(

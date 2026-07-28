@@ -47,7 +47,7 @@ describe("FinancePoliciesPage", () => {
       "true"
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Сверка" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Сверка/ }));
     await screen.findByRole("heading", { name: "Exceptions сверки" });
     fireEvent.click(screen.getByRole("button", { name: "Settlement" }));
 
@@ -245,6 +245,71 @@ describe("FinancePoliciesPage", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("Состояние уже изменилось");
     expect(alert.textContent).toContain("Обновите очередь");
+  });
+
+  it("lets operators refresh the finance queue directly from a mutation error", async () => {
+    const api = apiStub();
+    vi.mocked(api.listPayoutRequests).mockResolvedValue(payoutQueue([payoutRequest()]));
+    vi.mocked(api.updatePayoutRequestStatus).mockRejectedValue(
+      new AdminFinancePoliciesApiError(409, {
+        message: "payout_status_transition_invalid"
+      })
+    );
+
+    render(<FinancePoliciesPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
+    fireEvent.change(screen.getByLabelText("External reference"), {
+      target: { value: "bank-transfer-1001" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отметить оплаченной" }));
+
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Обновить очередь" }));
+
+    await waitFor(() => expect(api.listPayoutRequests).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows payout and reconciliation operation context for audit and idempotency checks", async () => {
+    const api = apiStub();
+    vi.mocked(api.listPayoutRequests).mockResolvedValue(payoutQueue([payoutRequest()]));
+    vi.mocked(api.listReconciliationExceptions).mockResolvedValue({
+      summary: {
+        openCount: 1,
+        oldestOpenAt: "2026-07-24T10:01:00.000Z"
+      },
+      exceptions: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          provider: "arc_pay",
+          environment: "sandbox",
+          providerPaymentId: "provider-payment-1",
+          providerPayoutId: null,
+          providerSettlementId: "settlement-1",
+          providerEventId: "33333333-3333-4333-8333-333333333333",
+          status: "exception",
+          exceptionCode: "amount_mismatch",
+          exceptionMessage: "Provider settlement amount differs from ledger",
+          providerOccurredAt: "2026-07-24T10:00:00.000Z",
+          checkedAt: "2026-07-24T10:01:00.000Z",
+          resolvedAt: null,
+          payload: { source: "settlement.report" }
+        }
+      ]
+    });
+
+    render(<FinancePoliciesPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
+    expect(await screen.findByText("Операционный контекст")).toBeTruthy();
+    expect(screen.getByText("Terminal payout command")).toBeTruthy();
+    expect(screen.getByText("Admin audit event")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Сверка/ }));
+    expect(await screen.findByText("Evidence context")).toBeTruthy();
+    expect(screen.getByText("Hold release gate")).toBeTruthy();
+    expect(screen.getByText("Admin resolution audit")).toBeTruthy();
   });
 });
 
