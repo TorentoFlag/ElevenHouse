@@ -4,6 +4,7 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
 import {
   astrologerFinanceOverviewResponseSchema,
+  ledgerOperationListResponseSchema,
   payoutMethodResponseSchema,
   payoutRequestResponseSchema
 } from "@elevenhouse/contracts";
@@ -12,6 +13,7 @@ import {
   type AuthSessionAuthenticationStore,
   type AuthSessionRevocationUnitOfWork,
   type CreateLedgerTransactionInput,
+  type LedgerOperationList,
   type LedgerStore,
   type PasswordlessAuthUnitOfWork,
   type PasswordlessCustomerAccountRegistrationSessionUnitOfWork,
@@ -63,7 +65,7 @@ describe("astrologer finance HTTP routes", () => {
   let moduleRef: TestingModule;
   let baseUrl: string;
   let payoutStore: PayoutStore;
-  let ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
+  let ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance" | "listOperations">;
 
   beforeEach(async () => {
     payoutStore = createPayoutStore();
@@ -153,6 +155,34 @@ describe("astrologer finance HTTP routes", () => {
       defaultPayoutMethod: null,
       canRequestPayout: false,
       payoutRequestUnavailableReason: "payout_method_required"
+    });
+  });
+
+  it("returns owner-scoped ledger operations with query filters", async () => {
+    const operations = await getJson(
+      baseUrl,
+      "/finance/operations?limit=10&operationType=sale_captured"
+    );
+
+    expect(operations.status).toBe(200);
+    ledgerOperationListResponseSchema.parse(operations.body);
+    expect(operations.body).toMatchObject({
+      operations: [
+        {
+          operationType: "sale_captured",
+          kind: "sale",
+          direction: "inflow",
+          signedAmountMinor: 5_000_00,
+          amount: { amountMinor: 5_000_00, currency: "RUB" },
+          orderId: "11111111-1111-4111-8111-111111111111"
+        }
+      ],
+      nextCursor: null
+    });
+    expect(ledgerStore.listOperations).toHaveBeenCalledWith({
+      astrologerUserId,
+      limit: 10,
+      operationType: "sale_captured"
     });
   });
 
@@ -307,7 +337,7 @@ function createAuthStore(): AuthSessionAuthenticationStore {
 
 function createFinanceUnitOfWork(
   payoutStore: PayoutStore,
-  ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance">
+  ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance" | "listOperations">
 ): AstrologerFinanceUnitOfWork {
   const completedFinanceCommands = new Map<string, Record<string, unknown>>();
   const financeCommandHashes = new Map<string, string>();
@@ -384,7 +414,10 @@ function createPayoutStore(): PayoutStore {
   };
 }
 
-function createLedgerStore(): Pick<LedgerStore, "createTransaction" | "findWalletBalance"> {
+function createLedgerStore(): Pick<
+  LedgerStore,
+  "createTransaction" | "findWalletBalance" | "listOperations"
+> {
   const balance: WalletBalance = {
     astrologerUserId,
     pending: { amountMinor: 0, currency: "RUB" },
@@ -397,6 +430,28 @@ function createLedgerStore(): Pick<LedgerStore, "createTransaction" | "findWalle
 
   return {
     findWalletBalance: vi.fn(async (userId) => (userId === astrologerUserId ? balance : null)),
+    listOperations: vi.fn(async (input): Promise<LedgerOperationList> => ({
+      operations:
+        input.astrologerUserId === astrologerUserId
+          ? [
+              {
+                id: "99999999-9999-4999-8999-999999999999",
+                operationType: "sale_captured",
+                kind: "sale",
+                direction: "inflow",
+                amount: { amountMinor: 5_000_00, currency: "RUB" },
+                signedAmountMinor: 5_000_00,
+                balanceBucket: "pending",
+                orderId: "11111111-1111-4111-8111-111111111111",
+                payoutRequestId: null,
+                occurredAt: now.toISOString(),
+                postedAt: now.toISOString(),
+                metadata: { providerPaymentId: "arc-pay-1" }
+              }
+            ]
+          : [],
+      nextCursor: null
+    })),
     createTransaction: vi.fn(async (transaction: CreateLedgerTransactionInput) => ({
       ...transaction,
       id: "77777777-7777-4777-8777-777777777777",

@@ -35,6 +35,9 @@ export type LedgerOperationType =
   | "chargeback_recorded"
   | "manual_adjustment";
 
+export type FinanceOperationKind = "sale" | "payout" | "refund" | "adjustment";
+export type FinanceOperationDirection = "inflow" | "outflow" | "neutral";
+
 export type LedgerAccountRef = {
   readonly accountType: LedgerAccountType;
   readonly astrologerUserId: string | null;
@@ -79,6 +82,34 @@ export type WalletBalance = {
   readonly updatedAt: string;
 };
 
+export type LedgerOperation = {
+  readonly id: string;
+  readonly operationType: LedgerOperationType;
+  readonly kind: FinanceOperationKind;
+  readonly direction: FinanceOperationDirection;
+  readonly amount: Money;
+  readonly signedAmountMinor: number;
+  readonly balanceBucket: WalletBalanceBucket | null;
+  readonly orderId: string | null;
+  readonly payoutRequestId: string | null;
+  readonly occurredAt: string;
+  readonly postedAt: string;
+  readonly metadata: Record<string, unknown>;
+};
+
+export type ListLedgerOperationsInput = {
+  readonly astrologerUserId: string;
+  readonly limit: number;
+  readonly cursor?: string;
+  readonly operationType?: LedgerOperationType;
+  readonly balanceBucket?: WalletBalanceBucket;
+};
+
+export type LedgerOperationList = {
+  readonly operations: readonly LedgerOperation[];
+  readonly nextCursor: string | null;
+};
+
 export class LedgerUnbalancedTransactionError extends Error {
   readonly code = "ledger_unbalanced_transaction";
 
@@ -109,4 +140,5 @@ export type LedgerStore = {
     input: CreateLedgerTransactionInput
   ) => Promise<LedgerTransactionRecord>;
   readonly findWalletBalance: (astrologerUserId: string) => Promise<WalletBalance | null>;
+  readonly listOperations: (input: ListLedgerOperationsInput) => Promise<LedgerOperationList>;
 };

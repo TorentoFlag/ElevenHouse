@@ -7,7 +7,7 @@ import type {
 
 export type AstrologerFinanceUnitOfWorkContext = {
   readonly payoutStore: PayoutStore;
-  readonly ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
+  readonly ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance" | "listOperations">;
 };
 
 export type AstrologerFinanceUnitOfWork = {

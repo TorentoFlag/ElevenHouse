@@ -51,6 +51,14 @@ export const ledgerOperationTypeValues = [
 export const ledgerOperationTypeSchema = z.enum(ledgerOperationTypeValues);
 export type LedgerOperationType = z.infer<typeof ledgerOperationTypeSchema>;
 
+export const financeOperationKindValues = ["sale", "payout", "refund", "adjustment"] as const;
+export const financeOperationKindSchema = z.enum(financeOperationKindValues);
+export type FinanceOperationKind = z.infer<typeof financeOperationKindSchema>;
+
+export const financeOperationDirectionValues = ["inflow", "outflow", "neutral"] as const;
+export const financeOperationDirectionSchema = z.enum(financeOperationDirectionValues);
+export type FinanceOperationDirection = z.infer<typeof financeOperationDirectionSchema>;
+
 export const ledgerEntrySchema = z
   .object({
     id: uuidSchema,
@@ -112,9 +120,35 @@ export type WalletBalanceResponse = z.infer<typeof walletBalanceResponseSchema>;
 export const ledgerOperationListQuerySchema = z
   .object({
     cursor: z.string().min(1).max(240).optional(),
-    limit: z.number().int().min(1).max(100).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
     operationType: ledgerOperationTypeSchema.optional(),
     balanceBucket: walletBalanceBucketSchema.optional()
   })
   .strict();
 export type LedgerOperationListQuery = z.infer<typeof ledgerOperationListQuerySchema>;
+
+export const ledgerOperationSchema = z
+  .object({
+    id: uuidSchema,
+    operationType: ledgerOperationTypeSchema,
+    kind: financeOperationKindSchema,
+    direction: financeOperationDirectionSchema,
+    amount: moneySchema,
+    signedAmountMinor: z.number().int().safe(),
+    balanceBucket: walletBalanceBucketSchema.nullable(),
+    orderId: uuidSchema.nullable(),
+    payoutRequestId: uuidSchema.nullable(),
+    occurredAt: isoDateTimeSchema,
+    postedAt: isoDateTimeSchema,
+    metadata: ledgerMetadataSchema
+  })
+  .strict();
+export type LedgerOperation = z.infer<typeof ledgerOperationSchema>;
+
+export const ledgerOperationListResponseSchema = z
+  .object({
+    operations: z.array(ledgerOperationSchema).max(100),
+    nextCursor: z.string().min(1).max(240).nullable()
+  })
+  .strict();
+export type LedgerOperationListResponse = z.infer<typeof ledgerOperationListResponseSchema>;

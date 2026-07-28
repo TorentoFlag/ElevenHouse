@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ledgerOperationListResponseSchema,
   ledgerEntrySideSchema,
   ledgerTransactionSchema,
   ledgerOperationTypeSchema,
@@ -58,6 +59,44 @@ describe("wallet contracts", () => {
     expect(ledgerOperationTypeSchema.parse("payout_reserved")).toBe("payout_reserved");
     expect(ledgerEntrySideSchema.parse("debit")).toBe("debit");
     expect(() => ledgerOperationTypeSchema.parse("balance_set")).toThrow();
+  });
+
+  it("models astrologer-facing ledger operation history with signed amounts", () => {
+    const response = {
+      operations: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          operationType: "sale_captured",
+          kind: "sale",
+          direction: "inflow",
+          amount: { amountMinor: 5_000_00, currency: "RUB" },
+          signedAmountMinor: 5_000_00,
+          balanceBucket: "pending",
+          orderId: "33333333-3333-4333-8333-333333333333",
+          payoutRequestId: null,
+          occurredAt: "2026-07-24T10:00:00.000Z",
+          postedAt: "2026-07-24T10:00:01.000Z",
+          metadata: { providerPaymentId: "arc-pay-1" }
+        },
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          operationType: "payout_reserved",
+          kind: "payout",
+          direction: "outflow",
+          amount: { amountMinor: 3_000_00, currency: "RUB" },
+          signedAmountMinor: -3_000_00,
+          balanceBucket: null,
+          orderId: null,
+          payoutRequestId: "44444444-4444-4444-8444-444444444444",
+          occurredAt: "2026-07-25T10:00:00.000Z",
+          postedAt: "2026-07-25T10:00:01.000Z",
+          metadata: {}
+        }
+      ],
+      nextCursor: "cursor-2"
+    } as const;
+
+    expect(ledgerOperationListResponseSchema.parse(response)).toEqual(response);
   });
 
   it("rejects unbalanced ledger transactions", () => {

@@ -211,6 +211,92 @@ describe("captured sale hold release Drizzle/PostgreSQL integration", () => {
       })
     ]);
   });
+
+  it("lists astrologer ledger operations with filters, signed amounts and cursor pagination", async () => {
+    const fixture = await createFixture({ providerSettlementRequired: false });
+    const otherFixture = await createFixture({ providerSettlementRequired: false });
+    const ledger = createDrizzleLedgerStore(runtime.database);
+
+    await ledger.createTransaction(
+      saleCapturedTransaction({
+        orderId: fixture.dueOrderId,
+        astrologerUserId: fixture.astrologerUserId,
+        holdReleaseAt: "2026-07-26T12:00:00.000Z",
+        providerPaymentId: randomUUID(),
+        postedAt: "2026-07-24T12:00:00.000Z"
+      })
+    );
+    await ledger.createTransaction(
+      saleCapturedTransaction({
+        orderId: otherFixture.dueOrderId,
+        astrologerUserId: otherFixture.astrologerUserId,
+        holdReleaseAt: "2026-07-26T12:00:00.000Z",
+        providerPaymentId: randomUUID(),
+        postedAt: "2026-07-25T12:00:00.000Z"
+      })
+    );
+    await ledger.createTransaction(
+      manualAdjustmentTransaction({
+        astrologerUserId: fixture.astrologerUserId,
+        postedAt: "2026-07-25T13:00:00.000Z"
+      })
+    );
+
+    await expect(
+      ledger.listOperations({
+        astrologerUserId: fixture.astrologerUserId,
+        operationType: "sale_captured",
+        balanceBucket: "pending",
+        limit: 10
+      })
+    ).resolves.toMatchObject({
+      operations: [
+        {
+          operationType: "sale_captured",
+          kind: "sale",
+          direction: "inflow",
+          amount: { amountMinor: 43_000, currency: "RUB" },
+          signedAmountMinor: 43_000,
+          balanceBucket: "pending",
+          orderId: fixture.dueOrderId
+        }
+      ],
+      nextCursor: null
+    });
+
+    const firstPage = await ledger.listOperations({
+      astrologerUserId: fixture.astrologerUserId,
+      limit: 1
+    });
+    expect(firstPage).toMatchObject({
+      operations: [
+        {
+          operationType: "manual_adjustment",
+          kind: "adjustment",
+          direction: "outflow",
+          signedAmountMinor: -1_000
+        }
+      ]
+    });
+    expect(firstPage.nextCursor).toEqual(expect.any(String));
+
+    const secondPage = await ledger.listOperations({
+      astrologerUserId: fixture.astrologerUserId,
+      limit: 1,
+      cursor: firstPage.nextCursor ?? undefined
+    });
+    expect(secondPage).toMatchObject({
+      operations: [
+        {
+          operationType: "sale_captured",
+          kind: "sale",
+          direction: "inflow",
+          signedAmountMinor: 43_000
+        }
+      ],
+      nextCursor: null
+    });
+  });
 });
 
 async function createFixture(input?: {
@@ -274,6 +360,7 @@ function saleCapturedTransaction(input: {
   readonly astrologerUserId: string;
   readonly holdReleaseAt: string;
   readonly providerPaymentId?: string;
+  readonly postedAt?: string;
 }): CreateLedgerTransactionInput {
   const providerPaymentId = input.providerPaymentId ?? "33333333-3333-4333-8333-333333333333";
   return {
@@ -281,7 +368,7 @@ function saleCapturedTransaction(input: {
     orderId: input.orderId,
     payoutRequestId: null,
     occurredAt: "2026-07-24T12:00:00.000Z",
-    postedAt: "2026-07-24T12:00:00.000Z",
+    postedAt: input.postedAt ?? "2026-07-24T12:00:00.000Z",
     metadata: {
       providerEventId: "provider-event-1",
       paymentAttemptId: "11111111-1111-4111-8111-111111111111",
@@ -324,6 +411,34 @@ function saleCapturedTransaction(input: {
         side: "credit",
         amount: { amountMinor: 7_000, currency: "RUB" },
         metadata: { orderId: input.orderId, providerEventId: "provider-event-1" }
+      }
+    ]
+  };
+}
+
+function manualAdjustmentTransaction(input: {
+  readonly astrologerUserId: string;
+  readonly postedAt: string;
+}): CreateLedgerTransactionInput {
+  return {
+    operationType: "manual_adjustment",
+    orderId: null,
+    payoutRequestId: null,
+    occurredAt: input.postedAt,
+    postedAt: input.postedAt,
+    metadata: { reason: "integration_test_adjustment" },
+    entries: [
+      {
+        account: { accountType: "astrologer_pending", astrologerUserId: input.astrologerUserId, currency: "RUB" },
+        side: "debit",
+        amount: { amountMinor: 1_000, currency: "RUB" },
+        metadata: {}
+      },
+      {
+        account: { accountType: "platform_clearing", astrologerUserId: null, currency: "RUB" },
+        side: "credit",
+        amount: { amountMinor: 1_000, currency: "RUB" },
+        metadata: {}
       }
     ]
   };

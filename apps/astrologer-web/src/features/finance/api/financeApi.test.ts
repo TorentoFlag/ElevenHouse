@@ -1,9 +1,13 @@
-import type { AstrologerFinanceOverviewResponse } from "@elevenhouse/contracts";
+import type {
+  AstrologerFinanceOverviewResponse,
+  LedgerOperationListResponse
+} from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { application } from "../../../Application";
 import { createManualBankTransferPayoutMethod } from "./createManualBankTransferPayoutMethod";
 import { createPayoutRequest } from "./createPayoutRequest";
 import { getCurrentFinanceOverview } from "./getCurrentFinanceOverview";
+import { listFinanceOperations } from "./listFinanceOperations";
 
 const overview = {
   balance: {
@@ -22,6 +26,26 @@ const overview = {
   payoutRequestUnavailableReason: "payout_method_required"
 } satisfies AstrologerFinanceOverviewResponse;
 
+const operations = {
+  operations: [
+    {
+      id: "55555555-5555-4555-8555-555555555555",
+      operationType: "sale_captured",
+      kind: "sale",
+      direction: "inflow",
+      amount: { amountMinor: 5_000_00, currency: "RUB" },
+      signedAmountMinor: 5_000_00,
+      balanceBucket: "pending",
+      orderId: "66666666-6666-4666-8666-666666666666",
+      payoutRequestId: null,
+      occurredAt: "2026-07-26T10:00:00.000Z",
+      postedAt: "2026-07-26T10:00:01.000Z",
+      metadata: {}
+    }
+  ],
+  nextCursor: null
+} satisfies LedgerOperationListResponse;
+
 describe("finance API", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -33,6 +57,16 @@ describe("finance API", () => {
     await expect(getCurrentFinanceOverview()).resolves.toEqual(overview);
 
     expect(get).toHaveBeenCalledWith("/finance/me");
+  });
+
+  it("loads ledger operations through the shared response contract", async () => {
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(operations);
+
+    await expect(
+      listFinanceOperations({ limit: 10, operationType: "sale_captured" })
+    ).resolves.toEqual(operations);
+
+    expect(get).toHaveBeenCalledWith("/finance/operations?limit=10&operationType=sale_captured");
   });
 
   it("creates manual payout method with CSRF and idempotency header", async () => {

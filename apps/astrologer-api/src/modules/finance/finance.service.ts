@@ -10,11 +10,14 @@ import {
   astrologerFinanceOverviewResponseSchema,
   createManualBankTransferPayoutMethodSchema,
   createPayoutRequestSchema,
+  ledgerOperationListQuerySchema,
+  ledgerOperationListResponseSchema,
   payoutMethodResponseSchema,
   payoutRequestResponseSchema,
   type AstrologerFinanceOverviewResponse,
   type CreateManualBankTransferPayoutMethod,
   type CreatePayoutRequest,
+  type LedgerOperationListResponse,
   type PayoutMethodResponse,
   type PayoutRequestResponse
 } from "@elevenhouse/contracts";
@@ -73,6 +76,25 @@ export class FinanceService {
         : null,
       recentPayoutRequests: overview.recentPayoutRequests.map(toPayoutRequestResponse)
     });
+  }
+
+  async listOperations(
+    request: AstrologerSessionRequest,
+    query: unknown
+  ): Promise<LedgerOperationListResponse> {
+    const astrologerUserId = requireAstrologerUserId(request);
+    const parsedQuery = parseFinanceQuery(ledgerOperationListQuerySchema, query);
+    const result = await this.unitOfWork.execute(({ ledgerStore }) =>
+      ledgerStore.listOperations({
+        astrologerUserId,
+        limit: parsedQuery.limit ?? 25,
+        ...(parsedQuery.cursor ? { cursor: parsedQuery.cursor } : {}),
+        ...(parsedQuery.operationType ? { operationType: parsedQuery.operationType } : {}),
+        ...(parsedQuery.balanceBucket ? { balanceBucket: parsedQuery.balanceBucket } : {})
+      })
+    );
+
+    return ledgerOperationListResponseSchema.parse(result);
   }
 
   async createManualBankTransferPayoutMethod(
@@ -234,6 +256,14 @@ function parseFinanceBody<T>(schema: { parse: (value: unknown) => T }, value: un
     return schema.parse(value);
   } catch {
     throw new BadRequestException("Invalid finance request");
+  }
+}
+
+function parseFinanceQuery<T>(schema: { parse: (value: unknown) => T }, value: unknown): T {
+  try {
+    return schema.parse(value);
+  } catch {
+    throw new BadRequestException("Invalid finance query");
   }
 }
 

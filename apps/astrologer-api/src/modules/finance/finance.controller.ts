@@ -1,6 +1,8 @@
-import { Body, Controller, Get, Inject, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, Query, Req, UseGuards } from "@nestjs/common";
 import type {
   AstrologerFinanceOverviewResponse,
+  LedgerOperationListQuery,
+  LedgerOperationListResponse,
   PayoutMethodResponse,
   PayoutRequestResponse
 } from "@elevenhouse/contracts";
@@ -19,6 +21,14 @@ export class FinanceController {
     @Req() request: AstrologerSessionRequest
   ): Promise<AstrologerFinanceOverviewResponse> {
     return this.service.getCurrentFinanceOverview(request);
+  }
+
+  @Get("operations")
+  listOperations(
+    @Req() request: AstrologerSessionRequest,
+    @Query() query: LedgerOperationListQuery
+  ): Promise<LedgerOperationListResponse> {
+    return this.service.listOperations(request, query);
   }
 
   @Post("payout-methods/manual-bank-transfer")

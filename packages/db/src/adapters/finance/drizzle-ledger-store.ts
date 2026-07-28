@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import {
   createCapturedSaleHoldReleaseLedgerTransaction,
   LedgerAccountShapeError,
@@ -7,12 +7,16 @@ import {
   type CreateLedgerEntryInput,
   type CreateLedgerTransactionInput,
   type FinanceIdempotentCommand,
+  type FinanceOperationDirection,
+  type FinanceOperationKind,
   type HoldReleaseStore,
   type LedgerAccountRef,
   type LedgerAccountType,
   type LedgerEntryRecord,
+  type LedgerOperation,
   type LedgerStore,
   type LedgerTransactionRecord,
+  type ListLedgerOperationsInput,
   type Money,
   type ReleasableCapturedSaleHold,
   type WalletBalance,
@@ -39,6 +43,19 @@ type LedgerTransactionRow = typeof ledgerTransactions.$inferSelect;
 type LedgerEntryRow = typeof ledgerEntries.$inferSelect;
 type WalletBalanceRow = typeof walletBalanceReadModels.$inferSelect;
 
+type LedgerOperationListRow = {
+  readonly id: string;
+  readonly operationType: LedgerOperation["operationType"];
+  readonly orderId: string | null;
+  readonly payoutRequestId: string | null;
+  readonly occurredAt: Date;
+  readonly postedAt: Date;
+  readonly metadata: Record<string, unknown>;
+  readonly amountMinor: number | string;
+  readonly signedAmountMinor: number | string;
+  readonly balanceBucket: WalletBalanceBucket | null;
+};
+
 type EntryRowWithAccount = {
   readonly entry: LedgerEntryRow;
   readonly account: LedgerAccountRow;
@@ -48,16 +65,18 @@ export function createDrizzleLedgerStore(database: ElevenHouseDatabase): LedgerS
   return {
     createTransaction: (input) =>
       database.transaction((transaction) => createLedgerTransaction(transaction, input)),
-    findWalletBalance: (astrologerUserId) => findWalletBalance(database, astrologerUserId)
+    findWalletBalance: (astrologerUserId) => findWalletBalance(database, astrologerUserId),
+    listOperations: (input) => listLedgerOperations(database, input)
   };
 }
 
 export function createDrizzleLedgerTransactionStore(
   database: FinanceTransaction
-): Pick<LedgerStore, "createTransaction" | "findWalletBalance"> {
+): Pick<LedgerStore, "createTransaction" | "findWalletBalance" | "listOperations"> {
   return {
     createTransaction: (input) => createLedgerTransaction(database, input),
-    findWalletBalance: (astrologerUserId) => findWalletBalance(database, astrologerUserId)
+    findWalletBalance: (astrologerUserId) => findWalletBalance(database, astrologerUserId),
+    listOperations: (input) => listLedgerOperations(database, input)
   };
 }
 
@@ -440,6 +459,73 @@ async function findWalletBalance(
   return row ? toWalletBalance(row) : null;
 }
 
+async function listLedgerOperations(
+  database: FinanceDatabase,
+  input: ListLedgerOperationsInput
+): ReturnType<LedgerStore["listOperations"]> {
+  const pageSize = Math.min(Math.max(input.limit, 1), 100);
+  const cursor = input.cursor ? parseLedgerOperationsCursor(input.cursor) : null;
+  const signedAmountExpression = sql<number>`coalesce(sum(case
+    when ${ledgerAccounts.balanceBucket} = 'negative_balance' and ${ledgerEntries.side} = 'debit' then -${ledgerEntries.amountMinor}
+    when ${ledgerAccounts.balanceBucket} = 'negative_balance' and ${ledgerEntries.side} = 'credit' then ${ledgerEntries.amountMinor}
+    when ${ledgerEntries.side} = 'credit' then ${ledgerEntries.amountMinor}
+    when ${ledgerEntries.side} = 'debit' then -${ledgerEntries.amountMinor}
+    else 0
+  end), 0)`;
+  const filters: SQL[] = [
+    eq(ledgerAccounts.astrologerUserId, input.astrologerUserId),
+    eq(ledgerEntries.currency, "RUB")
+  ];
+  if (input.operationType) filters.push(eq(ledgerTransactions.operationType, input.operationType));
+  if (input.balanceBucket) filters.push(eq(ledgerAccounts.balanceBucket, input.balanceBucket));
+  if (cursor) {
+    filters.push(
+      sql`(${ledgerTransactions.postedAt}, ${ledgerTransactions.id}) < (${new Date(
+        cursor.postedAt
+      )}, ${cursor.id}::uuid)`
+    );
+  }
+
+  const rows = await database
+    .select({
+      id: ledgerTransactions.id,
+      operationType: ledgerTransactions.operationType,
+      orderId: ledgerTransactions.orderId,
+      payoutRequestId: ledgerTransactions.payoutRequestId,
+      occurredAt: ledgerTransactions.occurredAt,
+      postedAt: ledgerTransactions.postedAt,
+      metadata: ledgerTransactions.metadata,
+      signedAmountMinor: signedAmountExpression,
+      amountMinor: sql<number>`greatest(abs(${signedAmountExpression}), coalesce(max(${ledgerEntries.amountMinor}), 0))`,
+      balanceBucket: sql<WalletBalanceBucket | null>`case when count(distinct ${ledgerAccounts.balanceBucket}) = 1 then min(${ledgerAccounts.balanceBucket}) else null end`
+    })
+    .from(ledgerTransactions)
+    .innerJoin(ledgerEntries, eq(ledgerEntries.ledgerTransactionId, ledgerTransactions.id))
+    .innerJoin(ledgerAccounts, eq(ledgerAccounts.id, ledgerEntries.accountId))
+    .where(and(...filters))
+    .groupBy(
+      ledgerTransactions.id,
+      ledgerTransactions.operationType,
+      ledgerTransactions.orderId,
+      ledgerTransactions.payoutRequestId,
+      ledgerTransactions.occurredAt,
+      ledgerTransactions.postedAt,
+      ledgerTransactions.metadata
+    )
+    .orderBy(sql`${ledgerTransactions.postedAt} desc`, sql`${ledgerTransactions.id} desc`)
+    .limit(pageSize + 1);
+  const pageRows = rows.slice(0, pageSize) as readonly LedgerOperationListRow[];
+  const lastRow = pageRows.at(-1);
+
+  return {
+    operations: pageRows.map(toLedgerOperation),
+    nextCursor:
+      rows.length > pageSize && lastRow
+        ? createLedgerOperationsCursor({ id: lastRow.id, postedAt: lastRow.postedAt.toISOString() })
+        : null
+  };
+}
+
 function toLedgerTransactionRecord(
   row: LedgerTransactionRow,
   entries: readonly EntryRowWithAccount[]
@@ -483,6 +569,70 @@ function toWalletBalance(row: WalletBalanceRow): WalletBalance {
   };
 }
 
+function toLedgerOperation(row: LedgerOperationListRow): LedgerOperation {
+  const amountMinor = toSafeMinorUnit(row.amountMinor);
+  const signedAmountMinor = toSafeSignedMinorUnit(row.signedAmountMinor);
+  return {
+    id: row.id,
+    operationType: row.operationType,
+    kind: kindForLedgerOperation(row.operationType),
+    direction: directionForSignedAmount(signedAmountMinor),
+    amount: money(amountMinor, "RUB"),
+    signedAmountMinor,
+    balanceBucket: row.balanceBucket,
+    orderId: row.orderId,
+    payoutRequestId: row.payoutRequestId,
+    occurredAt: row.occurredAt.toISOString(),
+    postedAt: row.postedAt.toISOString(),
+    metadata: row.metadata
+  };
+}
+
+function kindForLedgerOperation(operationType: LedgerOperation["operationType"]): FinanceOperationKind {
+  switch (operationType) {
+    case "sale_captured":
+    case "funds_released":
+      return "sale";
+    case "payout_reserved":
+    case "payout_paid":
+    case "payout_failed":
+      return "payout";
+    case "refund_recorded":
+    case "chargeback_recorded":
+      return "refund";
+    case "platform_fee_recorded":
+    case "provider_fee_recorded":
+    case "hold_created":
+    case "reserve_created":
+    case "reserve_released":
+    case "manual_adjustment":
+      return "adjustment";
+  }
+}
+
+function directionForSignedAmount(signedAmountMinor: number): FinanceOperationDirection {
+  if (signedAmountMinor > 0) return "inflow";
+  if (signedAmountMinor < 0) return "outflow";
+  return "neutral";
+}
+
+function createLedgerOperationsCursor(input: { readonly postedAt: string; readonly id: string }): string {
+  return Buffer.from(JSON.stringify(input), "utf8").toString("base64url");
+}
+
+function parseLedgerOperationsCursor(cursor: string): { readonly postedAt: string; readonly id: string } {
+  const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    typeof (parsed as { postedAt?: unknown }).postedAt !== "string" ||
+    typeof (parsed as { id?: unknown }).id !== "string"
+  ) {
+    throw new Error("Invalid ledger operations cursor");
+  }
+  return parsed as { readonly postedAt: string; readonly id: string };
+}
+
 function walletBucketForAccountType(accountType: LedgerAccountType): WalletBalanceBucket | null {
   switch (accountType) {
     case "astrologer_pending":
@@ -501,6 +651,22 @@ function walletBucketForAccountType(accountType: LedgerAccountType): WalletBalan
     case "payout_clearing":
       return null;
   }
+}
+
+function toSafeMinorUnit(value: number | string): number {
+  const amountMinor = Number(value);
+  if (!Number.isSafeInteger(amountMinor) || amountMinor < 0) {
+    throw new Error("Ledger operation query produced an invalid amount");
+  }
+  return amountMinor;
+}
+
+function toSafeSignedMinorUnit(value: number | string): number {
+  const amountMinor = Number(value);
+  if (!Number.isSafeInteger(amountMinor)) {
+    throw new Error("Ledger operation query produced an invalid signed amount");
+  }
+  return amountMinor;
 }
 
 function money(amountMinor: number, currency: string): Money {

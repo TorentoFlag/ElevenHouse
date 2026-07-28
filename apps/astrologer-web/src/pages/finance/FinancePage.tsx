@@ -3,7 +3,7 @@ import type {
   AstrologerFinanceOverviewResponse,
   CreateManualBankTransferPayoutMethod,
   CreatePayoutRequest,
-  PayoutRequestResponse
+  LedgerOperation
 } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { useI18n } from "@elevenhouse/i18n";
@@ -13,6 +13,7 @@ import { formatMoneyMinor } from "../../features/products/model/productFormattin
 import { useCreateManualPayoutMethodMutation } from "../../features/finance/model/useCreateManualPayoutMethodMutation";
 import { useCreatePayoutRequestMutation } from "../../features/finance/model/useCreatePayoutRequestMutation";
 import { useCurrentFinanceOverviewQuery } from "../../features/finance/model/useCurrentFinanceOverviewQuery";
+import { useFinanceOperationsQuery } from "../../features/finance/model/useFinanceOperationsQuery";
 import styles from "./FinancePage.module.css";
 
 type PayoutMethodForm = {
@@ -23,18 +24,20 @@ type PayoutMethodForm = {
   readonly bik: string;
 };
 
-type OperationFilter = "all" | "open" | "processing" | "terminal";
+type OperationFilter = "all" | LedgerOperation["kind"];
 
 const operationFilters: readonly { readonly value: OperationFilter; readonly label: string }[] = [
   { value: "all", label: "Все" },
-  { value: "open", label: "Открытые" },
-  { value: "processing", label: "В обработке" },
-  { value: "terminal", label: "Закрытые" }
+  { value: "sale", label: "Продажи" },
+  { value: "payout", label: "Выплаты" },
+  { value: "refund", label: "Возвраты" },
+  { value: "adjustment", label: "Корректировки" }
 ];
 
 export function FinancePage() {
   const { dictionary, locale } = useI18n<AstrologerCopy>();
   const financeQuery = useCurrentFinanceOverviewQuery();
+  const operationsQuery = useFinanceOperationsQuery({ limit: 50 });
   const payoutMethodMutation = useCreateManualPayoutMethodMutation();
   const payoutRequestMutation = useCreatePayoutRequestMutation();
   const payoutPanelRef = useRef<HTMLElement | null>(null);
@@ -102,7 +105,14 @@ export function FinancePage() {
         </div>
         <div className={styles.toolbarMeta}>
           <span>{formatPayoutMethodLine(overview)}</span>
-          <button className={styles.ghostButton} type="button" onClick={() => void financeQuery.refetch()}>
+          <button
+            className={styles.ghostButton}
+            type="button"
+            onClick={() => {
+              void financeQuery.refetch();
+              void operationsQuery.refetch();
+            }}
+          >
             <Icon iconName="refresh" width={15} height={15} aria-hidden="true" />
             Обновить
           </button>
@@ -119,6 +129,12 @@ export function FinancePage() {
         ) : null}
         {financeQuery.isError ? (
           <StatusBanner tone="danger">Не удалось загрузить финансовые данные</StatusBanner>
+        ) : null}
+        {operationsQuery.isLoading ? (
+          <StatusBanner tone="neutral">Загружаем операции</StatusBanner>
+        ) : null}
+        {operationsQuery.isError ? (
+          <StatusBanner tone="danger">Не удалось загрузить историю операций</StatusBanner>
         ) : null}
         {payoutMethodMutation.isError ? (
           <StatusBanner tone="danger">Не удалось сохранить реквизиты вывода</StatusBanner>
@@ -137,10 +153,11 @@ export function FinancePage() {
 
         <div className={styles.workspace}>
           <OperationsPanel
-            requests={overview?.recentPayoutRequests ?? []}
+            operations={operationsQuery.data?.operations ?? []}
             filter={operationFilter}
             search={operationSearch}
             locale={locale}
+            isLoading={operationsQuery.isLoading}
             onFilterChange={setOperationFilter}
             onSearchChange={setOperationSearch}
           />
@@ -380,29 +397,43 @@ function FinanceField({
 }
 
 function OperationsPanel({
-  requests,
+  operations,
   filter,
   search,
   locale,
+  isLoading,
   onFilterChange,
   onSearchChange
 }: {
-  readonly requests: readonly PayoutRequestResponse[];
+  readonly operations: readonly LedgerOperation[];
   readonly filter: OperationFilter;
   readonly search: string;
   readonly locale: "ru" | "en";
+  readonly isLoading: boolean;
   readonly onFilterChange: (filter: OperationFilter) => void;
   readonly onSearchChange: (search: string) => void;
 }) {
-  const filteredRequests = requests.filter((request) => {
-    if (!matchesOperationFilter(request, filter)) return false;
+  const filteredOperations = operations.filter((operation) => {
+    if (!matchesOperationFilter(operation, filter)) return false;
     const query = search.trim().toLowerCase();
     if (!query) return true;
-    return `${request.id} ${request.status} ${request.method} ${request.externalReference ?? ""}`
+    return [
+      operation.id,
+      operation.operationType,
+      operation.kind,
+      operation.balanceBucket ?? "",
+      operation.orderId ?? "",
+      operation.payoutRequestId ?? "",
+      operationTitle(operation)
+    ]
+      .join(" ")
       .toLowerCase()
       .includes(query);
   });
-  const totalMinor = filteredRequests.reduce((sum, request) => sum - request.amount.amountMinor, 0);
+  const totalMinor = filteredOperations.reduce(
+    (sum, operation) => sum + operation.signedAmountMinor,
+    0
+  );
 
   return (
     <section className={styles.operationsPanel} aria-label="История операций">
@@ -430,7 +461,7 @@ function OperationsPanel({
         </div>
       </div>
       <div className={styles.operationTotals}>
-        <span>Итого · {filteredRequests.length} операций</span>
+        <span>Итого · {filteredOperations.length} операций</span>
         <strong>{formatSignedMoneyMinor(totalMinor, "RUB", locale)}</strong>
       </div>
       <div className={styles.operationTableHead}>
@@ -439,28 +470,34 @@ function OperationsPanel({
         <span>Сумма</span>
         <span>Дата</span>
       </div>
-      {filteredRequests.length === 0 ? (
-        <p className={styles.emptyState}>Заявок на вывод по фильтру нет</p>
+      {filteredOperations.length === 0 ? (
+        <p className={styles.emptyState}>
+          {isLoading ? "Операции загружаются" : "Операций по фильтру нет"}
+        </p>
       ) : (
         <div className={styles.operationsTable}>
-          {filteredRequests.map((request) => (
-            <div className={styles.operationRow} key={request.id}>
+          {filteredOperations.map((operation) => (
+            <div className={styles.operationRow} key={operation.id}>
               <span className={styles.operationTitle}>
                 <span className={styles.operationIcon}>
                   <Icon iconName="wallet" width={16} height={16} aria-hidden="true" />
                 </span>
                 <span>
-                  <strong>Выплата на {methodDisplayName(request)}</strong>
-                  <small>{shortId(request.id)} · {methodLabel(request.method)}</small>
+                  <strong>{operationTitle(operation)}</strong>
+                  <small>{shortId(operation.id)} · {operationSubtitle(operation)}</small>
                 </span>
               </span>
-              <span className={`${styles.statusPill} ${styles[`statusPill_${statusTone(request.status)}`]}`}>
-                {formatPayoutStatus(request.status)}
+              <span
+                className={`${styles.statusPill} ${
+                  styles[`statusPill_${operationTone(operation)}`]
+                }`}
+              >
+                {operationKindLabel(operation.kind)}
               </span>
               <strong className={styles.operationAmount}>
-                {formatSignedMoneyMinor(-request.amount.amountMinor, request.amount.currency, locale)}
+                {formatOperationAmount(operation, locale)}
               </strong>
-              <time dateTime={request.requestedAt}>{formatDate(request.requestedAt)}</time>
+              <time dateTime={operation.postedAt}>{formatDate(operation.postedAt)}</time>
             </div>
           ))}
         </div>
@@ -539,46 +576,12 @@ function createIdempotencyKey(prefix: string): string {
   return `${prefix}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
 }
 
-function formatPayoutStatus(status: PayoutRequestResponse["status"]): string {
-  switch (status) {
-    case "requested":
-      return "Новая";
-    case "under_review":
-      return "На проверке";
-    case "approved":
-      return "Одобрена";
-    case "processing_manual":
-      return "В ручной выплате";
-    case "processing_provider":
-      return "В провайдере";
-    case "paid":
-      return "Выплачена";
-    case "failed":
-      return "Ошибка";
-    case "rejected":
-      return "Отклонена";
-    case "cancelled":
-      return "Отменена";
-  }
-}
-
 function matchesOperationFilter(
-  request: PayoutRequestResponse,
+  operation: LedgerOperation,
   filter: OperationFilter
 ): boolean {
   if (filter === "all") return true;
-  if (filter === "open") {
-    return request.status === "requested" || request.status === "under_review" || request.status === "approved";
-  }
-  if (filter === "processing") {
-    return request.status === "processing_manual" || request.status === "processing_provider";
-  }
-  return (
-    request.status === "paid" ||
-    request.status === "failed" ||
-    request.status === "rejected" ||
-    request.status === "cancelled"
-  );
+  return operation.kind === filter;
 }
 
 function formatSignedMoneyMinor(
@@ -596,19 +599,92 @@ function formatPayoutMethodLine(overview: AstrologerFinanceOverviewResponse | nu
   return `Вывод · ${method}`;
 }
 
-function methodDisplayName(request: PayoutRequestResponse): string {
-  return request.method === "manual_bank_transfer" ? "ручной перевод" : "Arc Pay";
+function operationTitle(operation: LedgerOperation): string {
+  const metadataTitle = metadataString(operation.metadata, "productTitle");
+  if (metadataTitle) return metadataTitle;
+  switch (operation.operationType) {
+    case "sale_captured":
+      return "Оплата консультации";
+    case "funds_released":
+      return "Средства доступны";
+    case "payout_reserved":
+    case "payout_paid":
+    case "payout_failed":
+      return "Выплата на ручной перевод";
+    case "refund_recorded":
+      return "Возврат клиенту";
+    case "chargeback_recorded":
+      return "Chargeback";
+    case "platform_fee_recorded":
+      return "Комиссия платформы";
+    case "provider_fee_recorded":
+      return "Комиссия провайдера";
+    case "hold_created":
+      return "Холд средств";
+    case "reserve_created":
+      return "Резерв";
+    case "reserve_released":
+      return "Резерв освобожден";
+    case "manual_adjustment":
+      return "Ручная корректировка";
+  }
 }
 
-function methodLabel(method: PayoutRequestResponse["method"]): string {
-  return method === "manual_bank_transfer" ? "ручной банк" : "Arc Pay";
+function operationSubtitle(operation: LedgerOperation): string {
+  const sourceId = operation.orderId
+    ? `заказ ${shortId(operation.orderId)}`
+    : operation.payoutRequestId
+      ? `заявка ${shortId(operation.payoutRequestId)}`
+      : "ledger";
+  const bucket = operation.balanceBucket ? ` · ${balanceBucketLabel(operation.balanceBucket)}` : "";
+  return `${sourceId}${bucket}`;
 }
 
-function statusTone(status: PayoutRequestResponse["status"]): "neutral" | "positive" | "warning" | "danger" {
-  if (status === "paid") return "positive";
-  if (status === "failed" || status === "rejected" || status === "cancelled") return "danger";
-  if (status === "processing_manual" || status === "processing_provider") return "warning";
+function operationKindLabel(kind: LedgerOperation["kind"]): string {
+  switch (kind) {
+    case "sale":
+      return "Продажа";
+    case "payout":
+      return "Выплата";
+    case "refund":
+      return "Возврат";
+    case "adjustment":
+      return "Корректировка";
+  }
+}
+
+function operationTone(operation: LedgerOperation): "neutral" | "positive" | "warning" | "danger" {
+  if (operation.kind === "refund" || operation.signedAmountMinor < 0) return "danger";
+  if (operation.kind === "sale" && operation.direction === "inflow") return "positive";
+  if (operation.direction === "neutral") return "warning";
   return "neutral";
+}
+
+function formatOperationAmount(operation: LedgerOperation, locale: "ru" | "en"): string {
+  if (operation.direction === "neutral") {
+    return formatMoneyMinor(operation.amount.amountMinor, operation.amount.currency, locale);
+  }
+  return formatSignedMoneyMinor(operation.signedAmountMinor, operation.amount.currency, locale);
+}
+
+function balanceBucketLabel(bucket: NonNullable<LedgerOperation["balanceBucket"]>): string {
+  switch (bucket) {
+    case "pending":
+      return "в ожидании";
+    case "available":
+      return "доступно";
+    case "reserved":
+      return "резерв";
+    case "payout_pending":
+      return "в выводе";
+    case "negative_balance":
+      return "долг";
+  }
+}
+
+function metadataString(metadata: Record<string, unknown>, key: string): string | null {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function shortId(value: string): string {
