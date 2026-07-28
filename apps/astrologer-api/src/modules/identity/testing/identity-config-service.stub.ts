@@ -7,6 +7,12 @@ export function createIdentityConfigServiceStub(input: {
   readonly csrfHeaderName: string;
   readonly telegramBotWebhookSecret?: string | null;
   readonly telegramBusinessBotUsername?: string | null;
+  readonly telegramMtproto?: {
+    readonly enabled: true;
+    readonly apiId: number;
+    readonly apiHash: string;
+    readonly sessionEncryptionKey: Buffer;
+  } | null;
   readonly passwordlessRateLimits: PasswordlessRateLimitOptions;
 }): Pick<ConfigService, "get" | "getOrThrow"> {
   const getOptional = (key: string): unknown => {
@@ -16,6 +22,10 @@ export function createIdentityConfigServiceStub(input: {
 
     if (key === "astrologerApi.telegramBusinessBotUsername") {
       return input.telegramBusinessBotUsername ?? null;
+    }
+
+    if (key === "astrologerApi.telegramMtproto") {
+      return input.telegramMtproto ?? null;
     }
 
     return undefined;

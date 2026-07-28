@@ -20,6 +20,12 @@ export class MessagingController {
     return this.service.startTelegramBusinessConnection(request);
   }
 
+  @Post("channel-connections/telegram/mtproto/start")
+  @RequireCsrf()
+  startTelegramMtprotoConnection(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.service.startTelegramMtprotoConnection(body, request);
+  }
+
   @Get("threads")
   listThreads(@Query() query: unknown, @Req() request: AstrologerSessionRequest) {
     return this.service.listThreads(query, request);

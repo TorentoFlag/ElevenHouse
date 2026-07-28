@@ -17,12 +17,17 @@ import { MessagingService } from "./messaging.service";
 import {
   MESSAGING_READ_STORE,
   MESSAGING_STORE,
-  TELEGRAM_BUSINESS_CONNECTION_LOOKUP
+  TELEGRAM_BUSINESS_CONNECTION_LOOKUP,
+  TELEGRAM_MTPROTO_AUTH_PROVIDER
 } from "./messaging.tokens";
 import {
   TelegramBusinessBotApiConnectionLookup,
   type TelegramBusinessConnectionLookupOptions
 } from "./telegram-business-connection-lookup";
+import {
+  TeleprotoTelegramMtprotoAuthProvider,
+  type TelegramMtprotoAuthProviderOptions
+} from "./telegram-mtproto-auth-provider";
 
 @Module({
   imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, MediaModule, SecurityModule],
@@ -46,6 +51,16 @@ import {
           "astrologerApi.telegramBusinessBotApi"
         );
         return options ? new TelegramBusinessBotApiConnectionLookup(options) : null;
+      },
+      inject: [ConfigService]
+    },
+    {
+      provide: TELEGRAM_MTPROTO_AUTH_PROVIDER,
+      useFactory: (configService: ConfigService) => {
+        const options = configService.get<TelegramMtprotoAuthProviderOptions | null>(
+          "astrologerApi.telegramMtproto"
+        );
+        return options ? new TeleprotoTelegramMtprotoAuthProvider(options) : null;
       },
       inject: [ConfigService]
     }

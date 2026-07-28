@@ -38,6 +38,7 @@ const defaultSecurityConfig = {
   telegramBotWebhookSecret: null,
   telegramBusinessBotApi: null,
   telegramBusinessBotUsername: null,
+  telegramMtproto: null,
   allowedOrigins: ["http://localhost:5174"],
   chartEngineBaseUrl: "http://localhost:8012",
   authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
@@ -269,6 +270,38 @@ describe("createAstrologerApiRuntimeConfig", () => {
     ).toMatchObject({
       telegramBusinessBotUsername: "ElevenHouseTestBot"
     });
+  });
+
+  it("parses Telegram MTProto login settings from env", () => {
+    const mtprotoEncryptionKey = Buffer.alloc(32, 12).toString("base64");
+
+    expect(
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_API_TELEGRAM_MTPROTO_ENABLED: "true",
+        ASTROLOGER_API_TELEGRAM_MTPROTO_API_ID: "12345",
+        ASTROLOGER_API_TELEGRAM_MTPROTO_API_HASH: "0123456789abcdef0123456789abcdef",
+        ASTROLOGER_API_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY: mtprotoEncryptionKey
+      })
+    ).toMatchObject({
+      telegramMtproto: {
+        enabled: true,
+        apiId: 12345,
+        apiHash: "0123456789abcdef0123456789abcdef",
+        sessionEncryptionKey: Buffer.alloc(32, 12)
+      }
+    });
+  });
+
+  it("requires complete Telegram MTProto login settings when the login flow is enabled", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_API_TELEGRAM_MTPROTO_ENABLED: "true",
+        ASTROLOGER_API_TELEGRAM_MTPROTO_API_ID: "12345",
+        ASTROLOGER_API_TELEGRAM_MTPROTO_API_HASH: "0123456789abcdef0123456789abcdef"
+      })
+    ).toThrow("Telegram MTProto settings are required when MTProto login is enabled");
   });
 
   it("rejects __Host-prefixed astrologer session cookie names without Secure", () => {

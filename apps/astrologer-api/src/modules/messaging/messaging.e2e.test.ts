@@ -6,6 +6,7 @@ import {
   MessagingMessageMediaSourceResponseSchema,
   MessagingMessageResponseSchema,
   StartTelegramBusinessConnectionResponseSchema,
+  TelegramMtprotoLoginResponseSchema,
   MessagingThreadClientLinkResponseSchema,
   MessagingThreadResponseSchema
 } from "@elevenhouse/contracts";
@@ -39,7 +40,8 @@ import { MEDIA_PRIVATE_OBJECT_STORAGE } from "../media/media.tokens";
 import { MessagingModule } from "./messaging.module";
 import {
   MESSAGING_READ_STORE,
-  MESSAGING_STORE
+  MESSAGING_STORE,
+  TELEGRAM_MTPROTO_AUTH_PROVIDER
 } from "./messaging.tokens";
 
 const now = new Date("2026-07-22T10:00:00.000Z");
@@ -59,6 +61,7 @@ let primaryCsrfToken = "";
 let secondaryCsrfToken = "";
 let linkedClientUserId: string | null = null;
 let startedTelegramBusinessConnectionId: string | null = null;
+let startedTelegramMtprotoConnectionId: string | null = null;
 let inboundProviderMessageCount = 0;
 let businessConnectionUpdateCount = 0;
 let deletedBusinessMessageCount = 0;
@@ -80,6 +83,7 @@ describe("messaging HTTP routes", () => {
   beforeEach(async () => {
     linkedClientUserId = null;
     startedTelegramBusinessConnectionId = null;
+    startedTelegramMtprotoConnectionId = null;
     inboundProviderMessageCount = 0;
     businessConnectionUpdateCount = 0;
     deletedBusinessMessageCount = 0;
@@ -105,6 +109,12 @@ describe("messaging HTTP routes", () => {
           csrfHeaderName,
           telegramBotWebhookSecret: "telegram-test-secret",
           telegramBusinessBotUsername: "ElevenHouseTestBot",
+          telegramMtproto: {
+            enabled: true,
+            apiId: 12345,
+            apiHash: "0123456789abcdef0123456789abcdef",
+            sessionEncryptionKey: Buffer.alloc(32, 12)
+          },
           passwordlessRateLimits: limits
         })
       )
@@ -128,6 +138,13 @@ describe("messaging HTTP routes", () => {
       .useValue(createStore())
       .overrideProvider(MESSAGING_READ_STORE)
       .useValue(createReadStore())
+      .overrideProvider(TELEGRAM_MTPROTO_AUTH_PROVIDER)
+      .useValue({
+        sendCode: vi.fn(async () => ({
+          phoneCodeHash: "telegram-phone-code-hash",
+          isCodeViaApp: true
+        }))
+      })
       .overrideProvider(MEDIA_PRIVATE_OBJECT_STORAGE)
       .useValue(createPrivateStorage())
       .compile();
@@ -209,6 +226,39 @@ describe("messaging HTTP routes", () => {
     });
     expect(JSON.stringify(response.body)).not.toMatch(
       /providerToken|session|business_connection_id|rawPayload/i
+    );
+  });
+
+  it("starts Telegram Account login with browser auth and CSRF", async () => {
+    const withoutCsrf = await requestJson(
+      "POST",
+      "/messaging/channel-connections/telegram/mtproto/start",
+      { phoneNumber: "+78005553535", consentAccepted: true },
+      auth()
+    );
+    const response = await requestJson(
+      "POST",
+      "/messaging/channel-connections/telegram/mtproto/start",
+      { phoneNumber: "+78005553535", consentAccepted: true },
+      csrfAuth()
+    );
+
+    expect(withoutCsrf.status).toBe(403);
+    expect(response.status).toBe(201);
+    TelegramMtprotoLoginResponseSchema.parse(response.body);
+    expect(response.body).toMatchObject({
+      loginStep: "code_required",
+      maskedPhoneNumber: "+7******3535",
+      retryAfterSeconds: null,
+      channelConnection: {
+        id: connectionId,
+        provider: "telegram",
+        mode: "telegram_mtproto_account",
+        status: "connecting"
+      }
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /phoneCodeHash|telegram-phone-code-hash|session|\+78005553535/i
     );
   });
 
@@ -485,11 +535,14 @@ function createStore(): MessagingStore {
       startedTelegramBusinessConnectionId = connectionId;
       return { connectionId };
     }),
-    startTelegramMtprotoConnection: vi.fn(async () => ({
-      connectionId,
-      loginStep: "code_required" as const,
-      maskedPhoneNumber: "+7******3535"
-    })),
+    startTelegramMtprotoConnection: vi.fn(async () => {
+      startedTelegramMtprotoConnectionId = connectionId;
+      return {
+        connectionId,
+        loginStep: "code_required" as const,
+        maskedPhoneNumber: "+7******3535"
+      };
+    }),
     recordTelegramBusinessMessage: vi.fn(async () => {
       inboundProviderMessageCount += 1;
       return { kind: "created" as const, message: readDomainInboundMessage() };
@@ -518,7 +571,10 @@ function createStore(): MessagingStore {
 function createReadStore(): MessagingReadStore {
   return {
     listChannelConnections: vi.fn(async () => ({
-      channelConnections: startedTelegramBusinessConnectionId ? [readChannelConnection()] : []
+      channelConnections:
+        startedTelegramBusinessConnectionId || startedTelegramMtprotoConnectionId
+          ? [readChannelConnection()]
+          : []
     })),
     listTelegramBusinessConnectionReconciliationCandidates: vi.fn(async () => ({ candidates: [] })),
     listThreads: vi.fn(async ({ astrologerUserId }) =>
@@ -586,7 +642,7 @@ function readChannelConnection() {
   return {
     id: connectionId,
     provider: "telegram" as const,
-    mode: "telegram_business_bot" as const,
+    mode: startedTelegramMtprotoConnectionId ? "telegram_mtproto_account" as const : "telegram_business_bot" as const,
     status: "connecting" as const,
     displayName: null,
     username: null,

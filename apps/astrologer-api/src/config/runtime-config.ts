@@ -48,6 +48,17 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .url()
     .optional(),
   ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: optionalTelegramBotUsernameSchema,
+  ASTROLOGER_API_TELEGRAM_MTPROTO_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  ASTROLOGER_API_TELEGRAM_MTPROTO_API_ID: z.coerce.number().int().positive().optional(),
+  ASTROLOGER_API_TELEGRAM_MTPROTO_API_HASH: z
+    .string()
+    .trim()
+    .regex(/^[a-f0-9]{32}$/i)
+    .optional(),
+  ASTROLOGER_API_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
   NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: optionalTrimmedNonEmptyStringSchema,
   NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: z
     .string()
@@ -171,6 +182,12 @@ export type AstrologerApiRuntimeConfig = {
     readonly botApiBaseUrl: string;
   } | null;
   readonly telegramBusinessBotUsername: string | null;
+  readonly telegramMtproto: {
+    readonly enabled: true;
+    readonly apiId: number;
+    readonly apiHash: string;
+    readonly sessionEncryptionKey: Buffer;
+  } | null;
   readonly allowedOrigins: readonly string[];
   readonly chartEngineBaseUrl: string;
   readonly authCodeDeliveryEncryptionKey: Buffer;
@@ -284,6 +301,13 @@ export function createAstrologerApiRuntimeConfig(
     throw new Error("ASTROLOGER_API_TELEGRAM_BOT_TOKEN is required in production");
   }
 
+  const telegramMtproto = toTelegramMtprotoConfig({
+    enabled: config.ASTROLOGER_API_TELEGRAM_MTPROTO_ENABLED,
+    apiId: config.ASTROLOGER_API_TELEGRAM_MTPROTO_API_ID,
+    apiHash: config.ASTROLOGER_API_TELEGRAM_MTPROTO_API_HASH,
+    sessionEncryptionKey: config.ASTROLOGER_API_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY
+  });
+
   if (config.NODE_ENV === "production" && !config.ASTROLOGER_API_PASSWORDLESS_CODE_SECRET) {
     throw new Error("ASTROLOGER_API_PASSWORDLESS_CODE_SECRET is required in production");
   }
@@ -341,6 +365,7 @@ export function createAstrologerApiRuntimeConfig(
         }
       : null,
     telegramBusinessBotUsername: config.ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME ?? null,
+    telegramMtproto,
     allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5174"],
     chartEngineBaseUrl: stripTrailingSlashes(config.CHART_ENGINE_BASE_URL),
     authCodeDeliveryEncryptionKey: parseBase64Aes256GcmKey(
@@ -429,4 +454,23 @@ function parseAllowedOrigins(value: string | undefined): readonly string[] {
 
 function stripTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, "");
+}
+
+function toTelegramMtprotoConfig(input: {
+  readonly enabled: boolean;
+  readonly apiId: number | undefined;
+  readonly apiHash: string | undefined;
+  readonly sessionEncryptionKey: string | undefined;
+}): AstrologerApiRuntimeConfig["telegramMtproto"] {
+  if (!input.enabled) return null;
+  if (input.apiId === undefined || !input.apiHash || !input.sessionEncryptionKey) {
+    throw new Error("Telegram MTProto settings are required when MTProto login is enabled");
+  }
+
+  return {
+    enabled: true,
+    apiId: input.apiId,
+    apiHash: input.apiHash,
+    sessionEncryptionKey: parseBase64Aes256GcmKey(input.sessionEncryptionKey)
+  };
 }

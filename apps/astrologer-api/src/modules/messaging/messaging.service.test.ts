@@ -75,6 +75,79 @@ describe("MessagingService", () => {
     );
   });
 
+  it("starts Telegram Account login with encrypted-only phone snapshots", async () => {
+    const store = createStore();
+    const mtprotoAuthProvider = {
+      sendCode: vi.fn(async () => ({
+        phoneCodeHash: "telegram-phone-code-hash",
+        isCodeViaApp: true
+      }))
+    };
+    const service = createService({
+      store,
+      readStore: createReadStore({ mode: "telegram_mtproto_account", connectionStatus: "connecting" }),
+      mtprotoAuthProvider
+    });
+
+    const response = await service.startTelegramMtprotoConnection(
+      { phoneNumber: "+78005553535", consentAccepted: true },
+      request()
+    );
+
+    expect(response).toMatchObject({
+      loginStep: "code_required",
+      maskedPhoneNumber: "+7******3535",
+      retryAfterSeconds: null,
+      channelConnection: {
+        id: connectionId,
+        provider: "telegram",
+        mode: "telegram_mtproto_account",
+        status: "connecting"
+      }
+    });
+    expect(mtprotoAuthProvider.sendCode).toHaveBeenCalledWith({ phoneNumber: "+78005553535" });
+    expect(store.startTelegramMtprotoConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        astrologerUserId,
+        phoneNumberLast4: "3535",
+        maskedPhoneNumber: "+7******3535",
+        consentAccepted: true,
+        now: now.toISOString(),
+        encryptedPhoneNumber: expect.objectContaining({
+          algorithm: "aes-256-gcm",
+          ciphertext: expect.any(String)
+        }),
+        encryptedPhoneCodeHash: expect.objectContaining({
+          algorithm: "aes-256-gcm",
+          ciphertext: expect.any(String)
+        })
+      })
+    );
+    expect(JSON.stringify((store.startTelegramMtprotoConnection as ReturnType<typeof vi.fn>).mock.calls)).not.toContain(
+      "+78005553535"
+    );
+    expect(JSON.stringify((store.startTelegramMtprotoConnection as ReturnType<typeof vi.fn>).mock.calls)).not.toContain(
+      "telegram-phone-code-hash"
+    );
+    expect(JSON.stringify(response)).not.toMatch(/phoneCodeHash|session|\+78005553535/i);
+  });
+
+  it("returns a typed unavailable error when Telegram Account login is not configured", async () => {
+    const store = createStore();
+    const service = createService({ store, mtprotoAuthProvider: null });
+
+    await expect(
+      service.startTelegramMtprotoConnection(
+        { phoneNumber: "+78005553535", consentAccepted: true },
+        request()
+      )
+    ).rejects.toMatchObject({
+      status: 503,
+      response: expect.objectContaining({ code: "telegram_mtproto_login_unavailable" })
+    });
+    expect(store.startTelegramMtprotoConnection).not.toHaveBeenCalled();
+  });
+
   it("reconciles Telegram Business connection status before listing connections", async () => {
     const store = createStore();
     const readStore = createReadStore({ reconciliationBusinessConnectionId: "bc_revoked" });
@@ -464,18 +537,24 @@ function createService(
     readStore?: MessagingReadStore;
     telegramBusinessBotUsername?: string | null;
     connectionLookup?: ConstructorParameters<typeof MessagingService>[2];
+    mtprotoAuthProvider?: ConstructorParameters<typeof MessagingService>[3];
   } = {}
 ) {
   return new MessagingService(
     overrides.store ?? createStore(),
     overrides.readStore ?? createReadStore(),
     overrides.connectionLookup ?? null,
+    Object.hasOwn(overrides, "mtprotoAuthProvider")
+      ? overrides.mtprotoAuthProvider ?? null
+      : { sendCode: vi.fn(async () => ({ phoneCodeHash: "telegram-phone-code-hash", isCodeViaApp: true })) },
     { createPresignedDownload: vi.fn(async () => ({ url: "https://storage.example/voice.ogg", expiresAt: now.toISOString() })) },
     { now: () => now },
     {
       get: (key: string) =>
         key === "astrologerApi.telegramBusinessBotUsername"
           ? (overrides.telegramBusinessBotUsername ?? null)
+          : key === "astrologerApi.telegramMtproto"
+            ? { enabled: true, apiId: 12345, apiHash: "0123456789abcdef0123456789abcdef", sessionEncryptionKey: Buffer.alloc(32, 12) }
           : undefined
     } as never
   );
@@ -522,13 +601,14 @@ function createReadStore(
   overrides: {
     clientUserId?: string | null;
     connectionStatus?: ReturnType<typeof channelConnection>["status"];
+    mode?: ReturnType<typeof channelConnection>["mode"];
     reconciliationBusinessConnectionId?: string;
     unreadCount?: number;
   } = {}
 ): MessagingReadStore {
   return {
     listChannelConnections: vi.fn(async () => ({
-      channelConnections: [channelConnection({ status: overrides.connectionStatus })]
+      channelConnections: [channelConnection({ status: overrides.connectionStatus, mode: overrides.mode })]
     })),
     listTelegramBusinessConnectionReconciliationCandidates: vi.fn(async () => ({
       candidates: overrides.reconciliationBusinessConnectionId
@@ -582,11 +662,14 @@ function domainMessage(text: string): MessagingMessage {
   };
 }
 
-function channelConnection(overrides: { status?: "connecting" | "active" | "revoked" } = {}) {
+function channelConnection(overrides: {
+  status?: "connecting" | "active" | "revoked";
+  mode?: "telegram_business_bot" | "telegram_mtproto_account";
+} = {}) {
   return {
     id: connectionId,
     provider: "telegram" as const,
-    mode: "telegram_business_bot" as const,
+    mode: overrides.mode ?? "telegram_business_bot" as const,
     status: overrides.status ?? "active" as const,
     displayName: "Telegram",
     username: "telegram",

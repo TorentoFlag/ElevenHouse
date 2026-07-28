@@ -37,6 +37,12 @@ and reauth state are higher-risk prerequisites.
   Drizzle session schema, current baseline SQL/snapshot entries and Drizzle
   start adapter test. History import, actual Teleproto auth calls, API routes,
   worker listeners and UI wizard remain pending slices.
+- 2026-07-28: Added astrologer-api MTProto start route/config/provider wiring.
+  The start flow now validates phone + explicit consent, requests a Telegram
+  login code through a `teleproto` provider, persists only encrypted phone and
+  `phone_code_hash`, and returns a contract-safe `code_required` response.
+  Submit code/password, exported session storage, worker listener and UI wizard
+  remain pending slices.
 
 ## Surprises & Discoveries
 
@@ -132,8 +138,11 @@ Current state:
 
 - `telegram_mtproto_account` exists in shared types and DB mode checks.
 - UI shows the Telegram Account / MTProto option but keeps it disabled.
-- There are no MTProto auth routes, session tables, encrypted session adapter
-  or listener worker yet.
+- `POST /messaging/channel-connections/telegram/mtproto/start` exists in
+  `astrologer-api` and starts the phone-code request with encrypted-only
+  persistence.
+- There are no submit-code/password routes, exported session storage, account
+  listener worker or UI wizard yet.
 
 ## Interfaces and Dependencies
 

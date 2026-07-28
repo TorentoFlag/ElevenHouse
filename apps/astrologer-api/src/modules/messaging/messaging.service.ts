@@ -1,5 +1,6 @@
 import { HttpException, Inject, Injectable, UnauthorizedException, type MessageEvent } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { createAes256GcmSecretCipher } from "@elevenhouse/auth";
 import type { Observable } from "rxjs";
 import {
   MessagingClientRelationshipError,
@@ -15,6 +16,7 @@ import {
   recordTelegramBusinessEditedMessage,
   recordTelegramBusinessMessage,
   startTelegramBusinessConnection,
+  startTelegramMtprotoConnection,
   type MessagingReadStore,
   type MessagingStore,
   type PrivateObjectStoragePort
@@ -34,10 +36,13 @@ import {
   MessagingThreadResponseSchema,
   SendMessagingMessageRequestSchema,
   StartTelegramBusinessConnectionResponseSchema,
+  StartTelegramMtprotoConnectionRequestSchema,
+  TelegramMtprotoLoginResponseSchema,
   type MessagingChannelConnectionResponse,
   type MessagingMessageMediaSourceResponse,
   type MessagingMessageResponse,
   type StartTelegramBusinessConnectionResponse,
+  type TelegramMtprotoLoginResponse,
   type MessagingThreadClientLinkResponse,
   type MessagingThreadListResponse,
   type MessagingThreadMutationResponse,
@@ -51,11 +56,13 @@ import { messagingHttpError } from "./messaging-http-errors";
 import {
   MESSAGING_READ_STORE,
   MESSAGING_STORE,
-  TELEGRAM_BUSINESS_CONNECTION_LOOKUP
+  TELEGRAM_BUSINESS_CONNECTION_LOOKUP,
+  TELEGRAM_MTPROTO_AUTH_PROVIDER
 } from "./messaging.tokens";
 import { createMessagingRealtimeEventStream } from "./realtime-event-stream";
 import type { TelegramBusinessConnectionLookup } from "./telegram-business-connection-lookup";
 import type { ParsedTelegramBusinessWebhookUpdate } from "./telegram-business-webhook";
+import type { TelegramMtprotoAuthProvider } from "./telegram-mtproto-auth-provider";
 
 @Injectable()
 export class MessagingService {
@@ -64,6 +71,8 @@ export class MessagingService {
     @Inject(MESSAGING_READ_STORE) private readonly readStore: MessagingReadStore,
     @Inject(TELEGRAM_BUSINESS_CONNECTION_LOOKUP)
     private readonly telegramBusinessConnectionLookup: TelegramBusinessConnectionLookup | null,
+    @Inject(TELEGRAM_MTPROTO_AUTH_PROVIDER)
+    private readonly telegramMtprotoAuthProvider: TelegramMtprotoAuthProvider | null,
     @Inject(MEDIA_PRIVATE_OBJECT_STORAGE) private readonly privateObjectStorage: PrivateObjectStoragePort,
     private readonly clock: SystemClock,
     private readonly configService: ConfigService
@@ -102,6 +111,67 @@ export class MessagingService {
         channelConnection: connection,
         telegramBotUsername,
         telegramBotUrl: telegramBotUsername ? `https://t.me/${telegramBotUsername}` : null
+      });
+    });
+  }
+
+  async startTelegramMtprotoConnection(
+    body: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<TelegramMtprotoLoginResponse> {
+    return mapMessagingErrors(async () => {
+      if (!this.telegramMtprotoAuthProvider) {
+        throw messagingHttpError(
+          503,
+          "telegram_mtproto_login_unavailable",
+          "Telegram Account login is not configured"
+        );
+      }
+
+      const command = parseContract(StartTelegramMtprotoConnectionRequestSchema, body);
+      const astrologerUserId = requireAstrologerUserId(request);
+      const phoneNumber = normalizeTelegramPhoneNumber(command.phoneNumber);
+      const mtprotoConfig = this.configService.get<{
+        readonly sessionEncryptionKey: Buffer;
+      } | null>("astrologerApi.telegramMtproto");
+      if (!mtprotoConfig?.sessionEncryptionKey) {
+        throw messagingHttpError(
+          503,
+          "telegram_mtproto_login_unavailable",
+          "Telegram Account login is not configured"
+        );
+      }
+      const codeResult = await this.telegramMtprotoAuthProvider.sendCode({ phoneNumber });
+      const cipher = createAes256GcmSecretCipher(mtprotoConfig.sessionEncryptionKey);
+      const result = await startTelegramMtprotoConnection({
+        store: this.store,
+        astrologerUserId,
+        phoneNumberLast4: phoneLast4(phoneNumber),
+        maskedPhoneNumber: maskPhoneNumber(phoneNumber),
+        encryptedPhoneNumber: encryptedMessagingSecret("telegram_mtproto_v1", cipher.encrypt({
+          plaintext: phoneNumber,
+          aad: telegramMtprotoSecretAad(astrologerUserId, "phone_number")
+        })),
+        encryptedPhoneCodeHash: encryptedMessagingSecret("telegram_mtproto_v1", cipher.encrypt({
+          plaintext: codeResult.phoneCodeHash,
+          aad: telegramMtprotoSecretAad(astrologerUserId, "phone_code_hash")
+        })),
+        consentAccepted: command.consentAccepted,
+        now: this.clock.now()
+      });
+      const connections = await this.readStore.listChannelConnections({ astrologerUserId });
+      const connection = connections.channelConnections.find(
+        (candidate) => candidate.id === result.connectionId
+      );
+      if (!connection) {
+        throw new Error("Started Telegram Account connection was not available in the read model");
+      }
+
+      return TelegramMtprotoLoginResponseSchema.parse({
+        channelConnection: connection,
+        loginStep: result.loginStep,
+        maskedPhoneNumber: result.maskedPhoneNumber,
+        retryAfterSeconds: null
       });
     });
   }
@@ -464,6 +534,48 @@ function parseContract<T>(schema: ZodType<T>, value: unknown): T {
 function normalizeTelegramBotUsername(value: string | null): string | null {
   const normalized = value?.trim().replace(/^@/, "");
   return normalized || null;
+}
+
+function normalizeTelegramPhoneNumber(value: string): string {
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  return trimmed.startsWith("+") ? `+${digits}` : digits;
+}
+
+function phoneLast4(value: string): string {
+  return value.replace(/\D/g, "").slice(-4);
+}
+
+function maskPhoneNumber(value: string): string {
+  const normalized = normalizeTelegramPhoneNumber(value);
+  const last4 = phoneLast4(normalized);
+  if (normalized.startsWith("+")) return `${normalized.slice(0, 2)}******${last4}`;
+  return `******${last4}`;
+}
+
+function telegramMtprotoSecretAad(
+  astrologerUserId: string,
+  purpose: "phone_number" | "phone_code_hash"
+): string {
+  return `messaging:telegram_mtproto:${astrologerUserId}:${purpose}`;
+}
+
+function encryptedMessagingSecret(
+  keyId: string,
+  encrypted: {
+    readonly algorithm: "aes-256-gcm";
+    readonly iv: string;
+    readonly authTag: string;
+    readonly ciphertext: string;
+  }
+) {
+  return {
+    algorithm: encrypted.algorithm,
+    keyId,
+    iv: encrypted.iv,
+    authTag: encrypted.authTag,
+    ciphertext: encrypted.ciphertext
+  };
 }
 
 async function mapMessagingErrors<T>(operation: () => Promise<T>): Promise<T> {
