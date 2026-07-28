@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent
+} from "react";
 import { classNames } from "../../helpers/classNames.js";
 import {
   getFirstEnabledActionMenuItemId,
@@ -31,13 +39,16 @@ export function ActionMenu({
   const isControlled = controlledOpen !== undefined;
   const open = controlledOpen ?? internalOpen;
 
-  const setMenuOpen = (nextOpen: boolean) => {
-    if (!isControlled) {
-      setInternalOpen(nextOpen);
-    }
+  const setMenuOpen = useCallback(
+    (nextOpen: boolean) => {
+      if (!isControlled) {
+        setInternalOpen(nextOpen);
+      }
 
-    onOpenChange?.(nextOpen);
-  };
+      onOpenChange?.(nextOpen);
+    },
+    [isControlled, onOpenChange]
+  );
 
   useEffect(() => {
     if (!open || typeof document === "undefined") {
@@ -53,7 +64,7 @@ export function ActionMenu({
     document.addEventListener("mousedown", handleDocumentMouseDown);
 
     return () => document.removeEventListener("mousedown", handleDocumentMouseDown);
-  }, [open]);
+  }, [open, setMenuOpen]);
 
   useEffect(() => {
     if (!open) {

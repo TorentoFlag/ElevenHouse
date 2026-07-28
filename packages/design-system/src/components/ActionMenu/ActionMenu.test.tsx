@@ -1,13 +1,20 @@
+// @vitest-environment jsdom
+
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionMenu } from "./ActionMenu.js";
 
 const actionMenuCss = readFileSync(
-  fileURLToPath(new URL("./ActionMenu.css", import.meta.url)),
+  join(process.cwd(), "packages/design-system/src/components/ActionMenu/ActionMenu.css"),
   "utf8"
 );
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("ActionMenu", () => {
   it("renders an accessible closed menu button shell", () => {
@@ -65,5 +72,22 @@ describe("ActionMenu", () => {
     expect(markup).toContain('aria-expanded="true"');
     expect(markup).toContain('role="menu"');
     expect(markup).toContain("Изменить");
+  });
+
+  it("uses the latest controlled open-change handler when outside click closes the menu", () => {
+    const initialOnOpenChange = vi.fn();
+    const nextOnOpenChange = vi.fn();
+    const items = [{ id: "edit", label: "Изменить", onSelect: vi.fn() }];
+    const { rerender } = render(
+      <ActionMenu label="Действия" open onOpenChange={initialOnOpenChange} items={items} />
+    );
+
+    rerender(<ActionMenu label="Действия" open onOpenChange={nextOnOpenChange} items={items} />);
+    expect(screen.getByRole("menu")).toBeTruthy();
+
+    fireEvent.mouseDown(document.body);
+
+    expect(initialOnOpenChange).not.toHaveBeenCalled();
+    expect(nextOnOpenChange).toHaveBeenCalledWith(false);
   });
 });
