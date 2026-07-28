@@ -93,8 +93,10 @@ describe("payout contracts", () => {
         requestedCount: 2,
         underReviewCount: 1,
         processingCount: 1,
+        chargebackBlockedCount: 1,
         readyToPayAmount: { amountMinor: 18_900_00, currency: "RUB" },
-        processingAmount: { amountMinor: 10_000_00, currency: "RUB" }
+        processingAmount: { amountMinor: 10_000_00, currency: "RUB" },
+        chargebackBlockedAmount: { amountMinor: 8_900_00, currency: "RUB" }
       },
       requests: [
         {
@@ -111,7 +113,8 @@ describe("payout contracts", () => {
           failureReason: null,
           externalReference: null,
           transferredAt: null,
-          providerPayoutId: null
+          providerPayoutId: null,
+          blockedByChargeback: false
         }
       ]
     } as const;

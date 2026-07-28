@@ -66,8 +66,10 @@ describe("createAdminFinancePoliciesApi", () => {
             requestedCount: 1,
             underReviewCount: 0,
             processingCount: 1,
+            chargebackBlockedCount: 0,
             readyToPayAmount: { amountMinor: 10_000_00, currency: "RUB" },
-            processingAmount: { amountMinor: 15_000_00, currency: "RUB" }
+            processingAmount: { amountMinor: 15_000_00, currency: "RUB" },
+            chargebackBlockedAmount: { amountMinor: 0, currency: "RUB" }
           },
           requests: []
         })

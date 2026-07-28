@@ -338,14 +338,17 @@ describe("admin finance policy HTTP flow", () => {
           requestedCount: 1,
           underReviewCount: 0,
           processingCount: 1,
+          chargebackBlockedCount: 0,
           readyToPayAmount: { amountMinor: 10_000_00, currency: "RUB" },
-          processingAmount: { amountMinor: 15_000_00, currency: "RUB" }
+          processingAmount: { amountMinor: 15_000_00, currency: "RUB" },
+          chargebackBlockedAmount: { amountMinor: 0, currency: "RUB" }
         },
         requests: expect.arrayContaining([
           expect.objectContaining({
             id: "44444444-4444-4444-8444-444444444444",
             status: "requested",
-            method: "manual_bank_transfer"
+            method: "manual_bank_transfer",
+            blockedByChargeback: false
           })
         ])
       }
@@ -357,6 +360,25 @@ describe("admin finance policy HTTP flow", () => {
       body: {
         summary: { requestedCount: 0, processingCount: 1 },
         requests: [expect.objectContaining({ status: "processing_manual" })]
+      }
+    });
+    await expect(
+      getJson("/admin/finance/payout-requests?status=terminal", authCookie())
+    ).resolves.toMatchObject({
+      status: 200,
+      body: {
+        summary: {
+          chargebackBlockedCount: 1,
+          chargebackBlockedAmount: { amountMinor: 7_000_00, currency: "RUB" }
+        },
+        requests: [
+          expect.objectContaining({
+            id: "66666666-6666-4666-8666-666666666666",
+            status: "cancelled",
+            blockedByChargeback: true,
+            failureReason: "Provider chargeback blocked payout before paid confirmation"
+          })
+        ]
       }
     });
     await expect(
@@ -932,6 +954,17 @@ function createPayoutStore(): Pick<
       amountMinor: 15_000_00,
       reviewedAt: now.toISOString(),
       adminUserId
+    }),
+    payoutRequest({
+      id: "66666666-6666-4666-8666-666666666666",
+      status: "cancelled",
+      amountMinor: 7_000_00,
+      reviewedAt: now.toISOString(),
+      adminUserId: null,
+      completedAt: now.toISOString(),
+      adminNote:
+        "Blocked automatically by provider chargeback wh_chargeback_1 for order 88888888-8888-4888-8888-888888888888",
+      failureReason: "Provider chargeback blocked payout before paid confirmation"
     })
   ];
 
@@ -1167,6 +1200,9 @@ function payoutRequest(overrides: {
   readonly amountMinor: number;
   readonly reviewedAt?: string | null;
   readonly adminUserId?: string | null;
+  readonly completedAt?: string | null;
+  readonly adminNote?: string | null;
+  readonly failureReason?: string | null;
 }) {
   return {
     id: overrides.id,
@@ -1179,10 +1215,10 @@ function payoutRequest(overrides: {
     environment: null,
     requestedAt: now.toISOString(),
     reviewedAt: overrides.reviewedAt ?? null,
-    completedAt: null,
+    completedAt: overrides.completedAt ?? null,
     adminUserId: overrides.adminUserId ?? null,
-    adminNote: null,
-    failureReason: null,
+    adminNote: overrides.adminNote ?? null,
+    failureReason: overrides.failureReason ?? null,
     externalReference: null,
     transferredAt: null,
     providerPayoutId: null,

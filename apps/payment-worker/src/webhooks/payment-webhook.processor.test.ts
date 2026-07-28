@@ -220,6 +220,7 @@ describe("Arc Pay payment webhook ingestion", () => {
         status: "cancelled",
         adminUserId: null,
         adminNote: expect.stringContaining("provider chargeback"),
+        failureReason: "Provider chargeback blocked payout before paid confirmation",
         now: now.toISOString()
       })
     ]);

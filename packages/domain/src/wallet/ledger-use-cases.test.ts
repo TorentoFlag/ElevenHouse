@@ -407,6 +407,7 @@ describe("recordPaymentReversalProviderWebhook", () => {
         status: "cancelled",
         adminUserId: null,
         adminNote: expect.stringContaining("provider chargeback"),
+        failureReason: "Provider chargeback blocked payout before paid confirmation",
         now
       })
     ]);

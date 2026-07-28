@@ -12,6 +12,7 @@ import {
   adminPayoutQueueStatusFilterSchema,
   adminReconciliationExceptionQueueResponseSchema,
   adminReconciliationExceptionEvidenceFilterSchema,
+  adminPayoutRequestResponseSchema,
   adminPayoutQueueResponseSchema,
   adminPayoutStatusUpdateSchema,
   financePaymentProviderSchema,
@@ -33,6 +34,7 @@ import {
   updateAstrologerRiskProfileRequestSchema,
   updateFinancePolicyRequestSchema,
   type AdminPayoutQueueResponse,
+  type AdminPayoutRequestResponse,
   type AdminPayoutStatusUpdate,
   type AstrologerRiskProfileResponse,
   type FinancePoliciesResponse,
@@ -55,6 +57,7 @@ import {
   FinancePolicyOrderNotApplicableError,
   FinancePolicyOrderNotFoundError,
   type AdminPaymentReversalCaseRecord,
+  chargebackBlockedPayoutFailureReason,
   PayoutRequestNotFoundError,
   type PayoutRequestRecord,
   PayoutStatusEvidenceError,
@@ -221,7 +224,7 @@ export class FinancePoliciesService {
     );
     return adminPayoutQueueResponseSchema.parse({
       summary: createPayoutQueueSummary(requests),
-      requests: requests.map(toPayoutRequestResponse)
+      requests: requests.map(toAdminPayoutRequestResponse)
     });
   }
 
@@ -672,6 +675,13 @@ function toPayoutRequestResponse(request: PayoutRequestRecord): PayoutRequestRes
   });
 }
 
+function toAdminPayoutRequestResponse(request: PayoutRequestRecord): AdminPayoutRequestResponse {
+  return adminPayoutRequestResponseSchema.parse({
+    ...toPayoutRequestResponse(request),
+    blockedByChargeback: isChargebackBlockedPayoutRequest(request)
+  });
+}
+
 function toPaymentReversalCaseResponse(
   paymentReversalCase: AdminPaymentReversalCaseRecord
 ): AdminPaymentReversalCase {
@@ -719,10 +729,12 @@ function createPaymentReversalQueueSummary(
 function createPayoutQueueSummary(requests: readonly PayoutRequestRecord[]) {
   const readyStatuses = new Set(["requested", "under_review", "approved"]);
   const processingStatuses = new Set(["processing_manual", "processing_provider"]);
+  const chargebackBlockedRequests = requests.filter(isChargebackBlockedPayoutRequest);
   return {
     requestedCount: requests.filter((request) => request.status === "requested").length,
     underReviewCount: requests.filter((request) => request.status === "under_review").length,
     processingCount: requests.filter((request) => processingStatuses.has(request.status)).length,
+    chargebackBlockedCount: chargebackBlockedRequests.length,
     readyToPayAmount: {
       amountMinor: sumByStatus(requests, readyStatuses),
       currency: "RUB" as const
@@ -730,8 +742,19 @@ function createPayoutQueueSummary(requests: readonly PayoutRequestRecord[]) {
     processingAmount: {
       amountMinor: sumByStatus(requests, processingStatuses),
       currency: "RUB" as const
+    },
+    chargebackBlockedAmount: {
+      amountMinor: chargebackBlockedRequests.reduce(
+        (sum, request) => sum + request.amount.amountMinor,
+        0
+      ),
+      currency: "RUB" as const
     }
   };
+}
+
+function isChargebackBlockedPayoutRequest(request: PayoutRequestRecord): boolean {
+  return request.failureReason === chargebackBlockedPayoutFailureReason;
 }
 
 function sumByStatus(

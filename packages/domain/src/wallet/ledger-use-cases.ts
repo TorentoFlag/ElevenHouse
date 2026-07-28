@@ -188,6 +188,9 @@ export class PaymentReversalPayoutBlockError extends Error {
   }
 }
 
+export const chargebackBlockedPayoutFailureReason =
+  "Provider chargeback blocked payout before paid confirmation";
+
 /**
  * The provider event, order transition, ledger posting, wallet projection and
  * outbox rows deliberately execute through one unit of work. A failed posting
@@ -529,8 +532,7 @@ async function blockOpenPayoutRequestsForChargeback(input: {
       status,
       adminUserId: null,
       adminNote: `Blocked automatically by provider chargeback ${input.providerEvent.providerWebhookId} for order ${input.order.id}`,
-      failureReason:
-        status === "failed" ? "Provider chargeback blocked payout before paid confirmation" : null,
+      failureReason: chargebackBlockedPayoutFailureReason,
       now: input.providerEvent.receivedAt
     });
     if (!updated) throw new PaymentReversalPayoutBlockError();

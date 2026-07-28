@@ -123,6 +123,56 @@ describe("FinancePoliciesPage", () => {
     );
     expect(api.listPaymentReversalCases).toHaveBeenCalledTimes(2);
   });
+
+  it("shows chargeback-blocked payout requests as terminal evidence without manual pay action", async () => {
+    const api = apiStub();
+    vi.mocked(api.listPayoutRequests).mockResolvedValue({
+      summary: {
+        requestedCount: 0,
+        underReviewCount: 0,
+        processingCount: 0,
+        chargebackBlockedCount: 1,
+        readyToPayAmount: { amountMinor: 0, currency: "RUB" as const },
+        processingAmount: { amountMinor: 0, currency: "RUB" as const },
+        chargebackBlockedAmount: { amountMinor: 45_000, currency: "RUB" as const }
+      },
+      requests: [
+        {
+          id: "99999999-9999-4999-8999-999999999999",
+          astrologerUserId: "55555555-5555-4555-8555-555555555555",
+          status: "cancelled",
+          amount: { amountMinor: 45_000, currency: "RUB" as const },
+          method: "manual_bank_transfer",
+          requestedAt: "2026-07-24T10:00:00.000Z",
+          reviewedAt: "2026-07-24T10:01:00.000Z",
+          completedAt: "2026-07-24T10:02:00.000Z",
+          adminUserId: null,
+          adminNote:
+            "Blocked automatically by provider chargeback wh_chargeback_1 for order 33333333-3333-4333-8333-333333333333",
+          failureReason: "Provider chargeback blocked payout before paid confirmation",
+          externalReference: null,
+          transferredAt: null,
+          providerPayoutId: null,
+          blockedByChargeback: true
+        }
+      ]
+    });
+
+    render(<FinancePoliciesPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
+    fireEvent.click(screen.getByRole("button", { name: "Закрытые" }));
+
+    expect(await screen.findAllByText("Chargeback blocked")).toHaveLength(2);
+    expect(screen.getAllByText(/450/)).toHaveLength(3);
+    expect(
+      screen.getByText("Provider chargeback blocked payout before paid confirmation")
+    ).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "Отметить оплаченной" }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    expect(api.updatePayoutRequestStatus).not.toHaveBeenCalled();
+  });
 });
 
 function apiStub(): AdminFinancePoliciesApi {
@@ -165,8 +215,10 @@ function apiStub(): AdminFinancePoliciesApi {
         requestedCount: 0,
         underReviewCount: 0,
         processingCount: 0,
+        chargebackBlockedCount: 0,
         readyToPayAmount: { amountMinor: 0, currency: "RUB" as const },
-        processingAmount: { amountMinor: 0, currency: "RUB" as const }
+        processingAmount: { amountMinor: 0, currency: "RUB" as const },
+        chargebackBlockedAmount: { amountMinor: 0, currency: "RUB" as const }
       },
       requests: []
     })),

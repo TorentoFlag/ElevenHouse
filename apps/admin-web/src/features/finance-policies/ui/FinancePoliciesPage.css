@@ -863,6 +863,29 @@
   padding-top: 14px;
 }
 
+.adminFinancePayoutBlockNotice {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(244, 122, 122, 0.28);
+  border-radius: 10px;
+  background: rgba(244, 122, 122, 0.1);
+  padding: 12px 14px;
+}
+
+.adminFinancePayoutBlockNotice strong {
+  color: var(--admin-danger);
+  font-size: 13px;
+}
+
+.adminFinancePayoutBlockNotice span,
+.adminFinancePayoutBlockNotice small {
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .adminFinanceEmpty {
   border-top: 1px solid var(--admin-line);
   color: var(--admin-muted);

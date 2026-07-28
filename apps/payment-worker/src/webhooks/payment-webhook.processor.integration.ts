@@ -239,7 +239,7 @@ describe("Arc Pay refund and chargeback webhook PostgreSQL integration", () => {
           status: "cancelled",
           adminUserId: null,
           adminNote: expect.stringContaining("provider chargeback"),
-          failureReason: null
+          failureReason: "Provider chargeback blocked payout before paid confirmation"
         })
       ],
       wallet: {

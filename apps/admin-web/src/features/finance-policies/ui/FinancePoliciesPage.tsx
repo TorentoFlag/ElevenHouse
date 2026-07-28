@@ -19,6 +19,7 @@ import type {
   AdminPaymentReversalQueueResponse
 } from "@elevenhouse/contracts/payments";
 import type {
+  AdminPayoutRequestResponse,
   AdminPayoutQueueResponse,
   AdminPayoutQueueStatusFilter,
   PayoutRequestResponse
@@ -117,8 +118,10 @@ const emptyPayoutQueue: AdminPayoutQueueResponse = {
     requestedCount: 0,
     underReviewCount: 0,
     processingCount: 0,
+    chargebackBlockedCount: 0,
     readyToPayAmount: { amountMinor: 0, currency: "RUB" },
-    processingAmount: { amountMinor: 0, currency: "RUB" }
+    processingAmount: { amountMinor: 0, currency: "RUB" },
+    chargebackBlockedAmount: { amountMinor: 0, currency: "RUB" }
   },
   requests: []
 };
@@ -353,6 +356,7 @@ export function FinancePoliciesPage({
   async function handlePayoutPaid(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedPayout) return;
+    if (isPayoutActionBlocked(selectedPayout)) return;
     setSavingPayout(true);
     setSubmitError(null);
     try {
@@ -374,6 +378,7 @@ export function FinancePoliciesPage({
 
   async function handlePayoutRejected() {
     if (!selectedPayout) return;
+    if (isPayoutActionBlocked(selectedPayout)) return;
     setSavingPayout(true);
     setSubmitError(null);
     try {
@@ -548,6 +553,11 @@ export function FinancePoliciesPage({
             label="К выплате"
             value={formatMoney(payoutQueue.summary.readyToPayAmount)}
             note="reserved in ledger"
+          />
+          <StatusCard
+            label="Chargeback hold"
+            value={String(payoutQueue.summary.chargebackBlockedCount)}
+            note={formatMoney(payoutQueue.summary.chargebackBlockedAmount)}
           />
           <StatusCard
             label="Shortfall"
@@ -773,15 +783,17 @@ function OverviewPanel(props: {
 function PayoutsPanel(props: {
   readonly payoutQueue: AdminPayoutQueueResponse;
   readonly payoutStatusFilter: AdminPayoutQueueStatusFilter;
-  readonly selectedPayout: PayoutRequestResponse | null;
+  readonly selectedPayout: AdminPayoutRequestResponse | null;
   readonly action: PayoutActionForm;
   readonly saving: boolean;
   readonly onFilterChange: (filter: AdminPayoutQueueStatusFilter) => void;
-  readonly onSelect: (request: PayoutRequestResponse) => void;
+  readonly onSelect: (request: AdminPayoutRequestResponse) => void;
   readonly onChange: (next: PayoutActionForm) => void;
   readonly onPaid: (event: FormEvent<HTMLFormElement>) => void;
   readonly onReject: () => void;
 }) {
+  const payoutActionDisabled =
+    props.saving || !props.selectedPayout || isPayoutActionBlocked(props.selectedPayout);
   return (
     <div className="adminFinancePayoutGrid">
       <Card className="adminFinancePanel adminFinancePayoutListPanel" padding="medium">
@@ -808,7 +820,7 @@ function PayoutsPanel(props: {
             <span>Статус</span>
             <span>Сумма</span>
             <span>Метод</span>
-            <span>Дата</span>
+            <span>Risk</span>
           </div>
           {props.payoutQueue.requests.length === 0 ? (
             <div className="adminFinanceEmpty">Нет заявок на вывод</div>
@@ -835,7 +847,15 @@ function PayoutsPanel(props: {
               </span>
               <span className="adminFinanceMono">{formatMoney(request.amount)}</span>
               <span>{methodLabel(request.method)}</span>
-              <span>{formatDate(request.requestedAt)}</span>
+              <span>
+                {request.blockedByChargeback ? (
+                  <span className="adminFinanceStatusPill adminFinanceStatusPill-danger">
+                    Chargeback blocked
+                  </span>
+                ) : (
+                  formatDate(request.requestedAt)
+                )}
+              </span>
             </button>
           ))}
         </div>
@@ -856,6 +876,13 @@ function PayoutsPanel(props: {
               <Fact label="Астролог" value={shortId(props.selectedPayout.astrologerUserId)} />
               <Fact label="Метод" value={methodLabel(props.selectedPayout.method)} />
             </div>
+            {props.selectedPayout.blockedByChargeback ? (
+              <div className="adminFinancePayoutBlockNotice">
+                <strong>Chargeback blocked</strong>
+                <span>{props.selectedPayout.failureReason}</span>
+                <small>{props.selectedPayout.adminNote}</small>
+              </div>
+            ) : null}
             <form className="adminFinanceForm adminFinancePayoutForm" onSubmit={props.onPaid}>
               <label className="adminFinanceField adminFinanceFieldWide">
                 <span>External reference</span>
@@ -870,6 +897,7 @@ function PayoutsPanel(props: {
                   }
                   placeholder="bank-transfer-1001"
                   required
+                  disabled={payoutActionDisabled}
                 />
               </label>
               <label className="adminFinanceField adminFinanceFieldWide">
@@ -882,6 +910,7 @@ function PayoutsPanel(props: {
                   }
                   placeholder="2026-07-25T10:00:00.000Z"
                   required
+                  disabled={payoutActionDisabled}
                 />
               </label>
               <label className="adminFinanceField adminFinanceFieldWide">
@@ -894,6 +923,7 @@ function PayoutsPanel(props: {
                   }
                   rows={2}
                   placeholder="Paid manually from bank cabinet"
+                  disabled={payoutActionDisabled}
                 />
               </label>
               <Button
@@ -901,7 +931,7 @@ function PayoutsPanel(props: {
                 type="submit"
                 size="medium"
                 startIcon={<Check />}
-                disabled={props.saving}
+                disabled={payoutActionDisabled}
               />
             </form>
             <div className="adminFinanceRejectBox">
@@ -914,13 +944,14 @@ function PayoutsPanel(props: {
                     props.onChange({ ...props.action, failureReason: event.currentTarget.value })
                   }
                   placeholder="Bank rejected recipient account"
+                  disabled={payoutActionDisabled}
                 />
               </label>
               <Button
                 title="Отклонить"
                 variant="default"
                 size="medium"
-                disabled={props.saving}
+                disabled={payoutActionDisabled}
                 onClick={props.onReject}
               />
             </div>
@@ -1838,6 +1869,7 @@ function attentionCount(
     queue.summary.requestedCount +
     queue.summary.underReviewCount +
     queue.summary.processingCount +
+    queue.summary.chargebackBlockedCount +
     reversalQueue.summary.criticalCount +
     reconciliationQueue.summary.openCount
   );
@@ -1896,6 +1928,16 @@ function statusTone(
   if (status === "failed" || status === "rejected" || status === "cancelled") return "danger";
   if (status === "processing_manual" || status === "processing_provider") return "warning";
   return "neutral";
+}
+
+function isTerminalPayoutStatus(status: PayoutRequestResponse["status"]): boolean {
+  return (
+    status === "paid" || status === "failed" || status === "rejected" || status === "cancelled"
+  );
+}
+
+function isPayoutActionBlocked(request: AdminPayoutRequestResponse): boolean {
+  return request.blockedByChargeback || isTerminalPayoutStatus(request.status);
 }
 
 function reversalSeverityTone(

@@ -91,6 +91,13 @@ export const payoutRequestResponseSchema = z
   .strict();
 export type PayoutRequestResponse = z.infer<typeof payoutRequestResponseSchema>;
 
+export const adminPayoutRequestResponseSchema = payoutRequestResponseSchema
+  .extend({
+    blockedByChargeback: z.boolean()
+  })
+  .strict();
+export type AdminPayoutRequestResponse = z.infer<typeof adminPayoutRequestResponseSchema>;
+
 export const createPayoutRequestSchema = z
   .object({
     amount: nonZeroMoneySchema,
@@ -206,8 +213,10 @@ export const adminPayoutQueueSummarySchema = z
     requestedCount: z.number().int().min(0),
     underReviewCount: z.number().int().min(0),
     processingCount: z.number().int().min(0),
+    chargebackBlockedCount: z.number().int().min(0),
     readyToPayAmount: moneySchema,
-    processingAmount: moneySchema
+    processingAmount: moneySchema,
+    chargebackBlockedAmount: moneySchema
   })
   .strict();
 export type AdminPayoutQueueSummary = z.infer<typeof adminPayoutQueueSummarySchema>;
@@ -215,7 +224,7 @@ export type AdminPayoutQueueSummary = z.infer<typeof adminPayoutQueueSummarySche
 export const adminPayoutQueueResponseSchema = z
   .object({
     summary: adminPayoutQueueSummarySchema,
-    requests: z.array(payoutRequestResponseSchema)
+    requests: z.array(adminPayoutRequestResponseSchema)
   })
   .strict();
 export type AdminPayoutQueueResponse = z.infer<typeof adminPayoutQueueResponseSchema>;
