@@ -230,6 +230,38 @@ describe("AstroCalendarPageView", () => {
     expect(markup).toContain("Повод для тёплого касания");
   });
 
+  it("uses the event point glyph instead of one shared transit glyph", () => {
+    const venusTransit = {
+      ...eventWithTitle(1),
+      id: "venus-transit",
+      type: "client.transit_aspect",
+      title: "Венера: секстиль к Плутон",
+      points: ["Венера", "Плутон"]
+    } satisfies AstroCalendarEvent;
+    const saturnTransit = {
+      ...eventWithTitle(2),
+      id: "saturn-transit",
+      type: "client.transit_aspect",
+      title: "Сатурн: квадрат к Уран",
+      points: ["Saturn", "Uranus"]
+    } satisfies AstroCalendarEvent;
+    const markup = renderToStaticMarkup(
+      <AstroCalendarPageView
+        {...baseProps({
+          rangeResponse: {
+            ...response,
+            events: [venusTransit, saturnTransit],
+            dictionaryCodes: []
+          }
+        })}
+      />
+    );
+
+    expect(markup).toContain("♀");
+    expect(markup).toContain("♄");
+    expect(markup).not.toContain('title="Венера: секстиль к Плутон">♃</span>');
+  });
+
   it("limits missing dictionary cards while preserving the total missing count", () => {
     const dictionaryCodes = Array.from({ length: 10 }, (_, index) => `astro_calendar.missing_${index + 1}`);
     const markup = renderToStaticMarkup(

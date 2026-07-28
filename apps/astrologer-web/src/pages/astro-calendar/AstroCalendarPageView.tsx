@@ -44,6 +44,33 @@ const eventTypeMeta = {
   "client.transit_aspect": { label: "Транзиты", glyph: "♃", color: "#4ec8a0" }
 } satisfies Record<AstroCalendarEventType, { label: string; glyph: string; color: string }>;
 
+const eventPointGlyphs = {
+  asc: "AC",
+  ascendant: "AC",
+  mc: "MC",
+  midheaven: "MC",
+  mercury: "☿",
+  moon: "☾",
+  mars: "♂",
+  neptune: "♆",
+  pluto: "♇",
+  saturn: "♄",
+  sun: "☉",
+  uranus: "♅",
+  venus: "♀",
+  jupiter: "♃",
+  меркурий: "☿",
+  луна: "☾",
+  марс: "♂",
+  нептун: "♆",
+  плутон: "♇",
+  сатурн: "♄",
+  солнце: "☉",
+  уран: "♅",
+  венера: "♀",
+  юпитер: "♃"
+} as const;
+
 const eventTypeOptions = Object.keys(eventTypeMeta) as AstroCalendarEventType[];
 const maxAgendaEvents = 12;
 const maxVisibleInterpretations = 8;
@@ -215,14 +242,15 @@ export function AstroCalendarPageView({
               <span className={styles.todayMark}>сегодня</span>
               {timelineEvents.map((event, index) => {
                 const meta = eventTypeMeta[event.type];
+                const glyph = eventGlyph(event);
                 return (
                   <span
                     key={event.id}
                     className={styles.timelineDot}
                     style={{ left: `${Math.min(96, 8 + index * 8)}%`, borderColor: meta.color, color: meta.color }}
-                    title={event.title}
+                    title={displayEventTitle(event)}
                   >
-                    {meta.glyph}
+                    {glyph}
                   </span>
                 );
               })}
@@ -322,6 +350,7 @@ function EventCard({ event }: { readonly event: AstroCalendarEvent }) {
   const meta = eventTypeMeta[event.type];
   const description = event.description ?? defaultEventDescription(event.type);
   const title = displayEventTitle(event);
+  const glyph = eventGlyph(event);
 
   return (
     <article className={styles.eventCard}>
@@ -329,7 +358,7 @@ function EventCard({ event }: { readonly event: AstroCalendarEvent }) {
       <div className={styles.eventBody}>
         <div className={styles.eventMain}>
           <span className={styles.eventGlyph} style={{ color: meta.color }}>
-            {meta.glyph}
+            {glyph}
           </span>
           <div>
             <div className={styles.eventMeta}>
@@ -369,6 +398,19 @@ function EventCard({ event }: { readonly event: AstroCalendarEvent }) {
       </div>
     </article>
   );
+}
+
+function eventGlyph(event: AstroCalendarEvent): string {
+  for (const point of event.points) {
+    const normalized = normalizeEventPoint(point);
+    const glyph = eventPointGlyphs[normalized as keyof typeof eventPointGlyphs];
+    if (glyph) return glyph;
+  }
+  return eventTypeMeta[event.type].glyph;
+}
+
+function normalizeEventPoint(point: string): string {
+  return point.trim().toLowerCase().replace(/[_\s-]+/g, "_");
 }
 
 function displayEventTitle(event: AstroCalendarEvent): string {
