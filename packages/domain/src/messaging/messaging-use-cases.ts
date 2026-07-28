@@ -309,6 +309,42 @@ export async function recordTelegramBusinessMessage(input: {
   });
 }
 
+export async function recordTelegramMtprotoMessage(input: {
+  readonly store: MessagingStore;
+  readonly channelConnectionId: string;
+  readonly leaseOwner: string;
+  readonly providerMessageId: string;
+  readonly providerChatId: string;
+  readonly providerUserId: string | null;
+  readonly username: string | null;
+  readonly displayName: string | null;
+  readonly isOutgoing: boolean;
+  readonly text: string;
+  readonly providerSentAt: string;
+  readonly cursor?: {
+    readonly pts?: number | null;
+    readonly qts?: number | null;
+    readonly dateCursor?: string | null;
+    readonly seq?: number | null;
+  } | null;
+  readonly now: Date;
+}): Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }> {
+  return input.store.recordTelegramMtprotoMessage({
+    channelConnectionId: identifier(input.channelConnectionId, "Channel connection id is required"),
+    leaseOwner: bounded(input.leaseOwner, 1, 200, "Telegram MTProto lease owner is required"),
+    providerMessageId: bounded(input.providerMessageId, 1, 200, "Telegram message id is required"),
+    providerChatId: bounded(input.providerChatId, 1, 200, "Telegram chat id is required"),
+    providerUserId: optionalSnapshot(input.providerUserId),
+    username: optionalSnapshot(input.username),
+    displayName: optionalSnapshot(input.displayName),
+    isOutgoing: input.isOutgoing,
+    text: bounded(input.text, 1, 4000, "Message text is invalid"),
+    providerSentAt: normalizeIsoInstant(input.providerSentAt),
+    cursor: normalizeTelegramMtprotoCursor(input.cursor ?? null),
+    now: input.now.toISOString()
+  });
+}
+
 export async function recordTelegramBusinessDeletedMessages(input: {
   readonly store: MessagingStore;
   readonly businessConnectionId: string;
@@ -616,6 +652,29 @@ function normalizeTelegramMediaAttachment(
 function normalizeTelegramMediaKind(value: TelegramBusinessMediaAttachment["kind"]): TelegramBusinessMediaAttachment["kind"] {
   if (value === "voice" || value === "image" || value === "video_note" || value === "video") return value;
   throw new MessagingValidationError("Telegram media kind is unsupported");
+}
+
+function normalizeTelegramMtprotoCursor(
+  value: {
+    readonly pts?: number | null;
+    readonly qts?: number | null;
+    readonly dateCursor?: string | null;
+    readonly seq?: number | null;
+  } | null
+) {
+  if (!value) return null;
+  return {
+    pts: nullableNonNegativeInteger(value.pts ?? null, "Telegram MTProto pts cursor is invalid"),
+    qts: nullableNonNegativeInteger(value.qts ?? null, "Telegram MTProto qts cursor is invalid"),
+    dateCursor: value.dateCursor === null || value.dateCursor === undefined ? null : normalizeIsoInstant(value.dateCursor),
+    seq: nullableNonNegativeInteger(value.seq ?? null, "Telegram MTProto seq cursor is invalid")
+  };
+}
+
+function nullableNonNegativeInteger(value: number | null, message: string): number | null {
+  if (value === null) return null;
+  if (!Number.isSafeInteger(value) || value < 0) throw new MessagingValidationError(message);
+  return value;
 }
 
 function optionalSnapshot(value: string | null | undefined): string | null {

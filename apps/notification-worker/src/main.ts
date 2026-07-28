@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { createLogger } from "@elevenhouse/observability";
 import { createAes256GcmSecretCipher } from "@elevenhouse/auth";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
 import {
+  createDrizzleMessagingStore,
   createDrizzleMessagingDeliveryProcessingStore,
-  createDrizzleMessagingMediaIngestionProcessingStore
+  createDrizzleMessagingMediaIngestionProcessingStore,
+  createDrizzleTelegramMtprotoSessionProcessingStore
 } from "@elevenhouse/db/messaging";
 import { createDrizzleAuthCodeDeliveryProcessingStore } from "@elevenhouse/db/notifications";
 import {
@@ -26,6 +29,7 @@ import {
   createMessagingDeliveryWorker
 } from "./messaging-delivery.queue";
 import { processMessagingDeliveryJob } from "./messaging-delivery.processor";
+import type { MessagingDeliveryProviders } from "./messaging-delivery.processor";
 import { relayPendingMessagingOutboxEvents } from "./messaging-delivery.outbox-relay";
 import {
   createMessagingMediaIngestionQueue,
@@ -37,14 +41,16 @@ import { TelegramBusinessMediaProvider } from "./messaging-media-ingestion.provi
 import { createS3MessagingMediaObjectStorage } from "./messaging-media-ingestion.storage";
 import { createWorkerReadiness, createWorkerReadinessServer } from "./readiness";
 import { createNotificationWorkerRuntimeConfig } from "./runtime-config";
-import {
-  TelegramBusinessMessagingDeliveryProvider,
-  type MessagingDeliveryProvider
-} from "./telegram-business-provider";
+import { TelegramBusinessMessagingDeliveryProvider } from "./telegram-business-provider";
+import { processTelegramMtprotoInboundMessage } from "./telegram-mtproto-inbound.processor";
+import { TelegramMtprotoSessionDeliveryProvider } from "./telegram-mtproto-session-delivery-provider";
+import { TelegramMtprotoSessionSupervisor } from "./telegram-mtproto-session-supervisor";
+import { createTeleprotoMtprotoSessionClientFactory } from "./telegram-mtproto-teleproto-client";
 
 const serviceName = "notification-worker";
 const logger = createLogger("notification-worker");
 const config = createNotificationWorkerRuntimeConfig();
+const workerInstanceId = `${serviceName}:${hostname()}:${process.pid}:${randomUUID()}`;
 const postgresRuntime = createPostgresRuntime();
 const authCodeCipher = createAes256GcmSecretCipher(config.authCodeDeliveryEncryptionKey);
 const authCodeDeliveryQueue = createAuthCodeDeliveryQueue(config.redisUrl);
@@ -59,6 +65,35 @@ const messagingDeliveryQueue = config.messagingDeliveryEnabled
 const messagingDeliveryStore = config.messagingDeliveryEnabled
   ? createDrizzleMessagingDeliveryProcessingStore(postgresRuntime.database)
   : null;
+const telegramMtprotoSessionStore = config.telegramMtproto
+  ? createDrizzleTelegramMtprotoSessionProcessingStore(postgresRuntime.database)
+  : null;
+const telegramMtprotoMessagingStore = config.telegramMtproto
+  ? createDrizzleMessagingStore(postgresRuntime.database)
+  : null;
+const telegramMtprotoSessionSupervisor =
+  config.telegramMtproto && telegramMtprotoSessionStore && telegramMtprotoMessagingStore
+    ? new TelegramMtprotoSessionSupervisor({
+        store: telegramMtprotoSessionStore,
+        cipher: createAes256GcmSecretCipher(config.telegramMtproto.sessionEncryptionKey),
+        apiHash: config.telegramMtproto.apiHash,
+        leaseOwner: workerInstanceId,
+        leaseDurationMs: config.telegramMtproto.leaseDurationMs,
+        claimLimit: config.telegramMtproto.claimLimit,
+        logger,
+        clientFactory: createTeleprotoMtprotoSessionClientFactory({
+          apiId: config.telegramMtproto.apiId,
+          apiHash: config.telegramMtproto.apiHash
+        }),
+        inboundMessageHandler: (input) =>
+          processTelegramMtprotoInboundMessage({
+            store: telegramMtprotoMessagingStore,
+            session: input.session,
+            message: input.message,
+            now: input.now
+          }).then(() => undefined)
+      })
+    : null;
 const messagingDeliveryProvider = createMessagingDeliveryProvider();
 const messagingMediaIngestionQueue = config.messagingMediaIngestionEnabled
   ? createMessagingMediaIngestionQueue(config.redisUrl)
@@ -167,7 +202,7 @@ function createDeliveryProvider(): AuthCodeDeliveryProvider {
   );
 }
 
-function createMessagingDeliveryProvider(): MessagingDeliveryProvider | null {
+function createMessagingDeliveryProvider(): MessagingDeliveryProviders | null {
   if (!config.messagingDeliveryEnabled) {
     return null;
   }
@@ -176,7 +211,20 @@ function createMessagingDeliveryProvider(): MessagingDeliveryProvider | null {
     throw new Error("Telegram Business delivery settings are required when messaging delivery is enabled");
   }
 
-  return new TelegramBusinessMessagingDeliveryProvider(config.telegramBusinessDelivery);
+  const telegramBusiness = new TelegramBusinessMessagingDeliveryProvider(
+    config.telegramBusinessDelivery
+  );
+
+  if (!telegramMtprotoSessionSupervisor) {
+    return telegramBusiness;
+  }
+
+  return {
+    telegramBusiness,
+    telegramMtproto: new TelegramMtprotoSessionDeliveryProvider({
+      registry: telegramMtprotoSessionSupervisor
+    })
+  };
 }
 
 function createMessagingMediaIngestionProvider(): TelegramBusinessMediaProvider | null {
@@ -192,6 +240,7 @@ function createMessagingMediaIngestionProvider(): TelegramBusinessMediaProvider 
 }
 
 let relayTimer: ReturnType<typeof setInterval> | undefined;
+let telegramMtprotoSessionTimer: ReturnType<typeof setInterval> | undefined;
 
 function startRelay(): ReturnType<typeof setInterval> {
   const timer = setInterval(() => {
@@ -245,6 +294,22 @@ function startRelay(): ReturnType<typeof setInterval> {
   return timer;
 }
 
+function startTelegramMtprotoSessionSupervisor(): ReturnType<typeof setInterval> | undefined {
+  if (!config.telegramMtproto || !telegramMtprotoSessionSupervisor) {
+    return undefined;
+  }
+
+  const tick = () => {
+    telegramMtprotoSessionSupervisor.tick(new Date()).catch((error: unknown) => {
+      logger.error("telegram mtproto session supervisor failed", { error });
+    });
+  };
+  tick();
+  const timer = setInterval(tick, config.telegramMtproto.sessionSyncIntervalMs);
+  timer.unref();
+  return timer;
+}
+
 async function startup(): Promise<void> {
   const readiness = await createWorkerReadiness({
     service: serviceName,
@@ -257,6 +322,7 @@ async function startup(): Promise<void> {
   }
 
   await listenHealthServer();
+  telegramMtprotoSessionTimer = startTelegramMtprotoSessionSupervisor();
   relayTimer = startRelay();
   logger.info("notification worker ready", readiness);
 }
@@ -265,6 +331,10 @@ async function shutdown(): Promise<void> {
   if (relayTimer) {
     clearInterval(relayTimer);
   }
+  if (telegramMtprotoSessionTimer) {
+    clearInterval(telegramMtprotoSessionTimer);
+  }
+  await telegramMtprotoSessionSupervisor?.shutdown(new Date());
   await closeHealthServer();
   await messagingMediaIngestionWorker?.close();
   await messagingMediaIngestionQueue?.close();

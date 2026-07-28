@@ -4,7 +4,8 @@ import type { MessagingDeliveryProcessingStore } from "@elevenhouse/db/messaging
 import { createLogger, type LogRecord } from "@elevenhouse/observability";
 import { processMessagingDeliveryJob } from "./messaging-delivery.processor";
 import type { MessagingDeliveryJobData } from "./messaging-delivery.queue";
-import type { MessagingDeliveryProvider } from "./telegram-business-provider";
+import type { TelegramBusinessMessagingDeliveryProvider } from "./telegram-business-provider";
+import type { TelegramMtprotoMessagingProvider } from "./telegram-mtproto-provider";
 
 function createJob(overrides: Partial<Job<MessagingDeliveryJobData>> = {}): Job<MessagingDeliveryJobData> {
   return {
@@ -18,7 +19,7 @@ function createJob(overrides: Partial<Job<MessagingDeliveryJobData>> = {}): Job<
 describe("processMessagingDeliveryJob", () => {
   it("skips missing and non-queued messages", async () => {
     const store = createStore({ workItem: null });
-    const provider = createProvider({ status: "sent" });
+    const provider = createBusinessProvider({ status: "sent" });
 
     await processMessagingDeliveryJob({
       job: createJob(),
@@ -34,7 +35,7 @@ describe("processMessagingDeliveryJob", () => {
   it("calls provider with reloaded DB state and marks sent", async () => {
     const now = new Date("2026-07-22T10:00:00.000Z");
     const store = createStore();
-    const provider = createProvider({
+    const provider = createBusinessProvider({
       status: "sent",
       providerStatusCode: 200,
       providerMessageId: "telegram-100"
@@ -66,10 +67,89 @@ describe("processMessagingDeliveryJob", () => {
     expect(JSON.stringify(logRecords)).not.toContain("Message text from DB");
   });
 
+  it("routes Telegram Account delivery through the MTProto provider", async () => {
+    const now = new Date("2026-07-22T10:00:00.000Z");
+    const store = createStore({
+      workItem: {
+        ...createWorkItem(),
+        mode: "telegram_mtproto_account",
+        peerId: "777000"
+      }
+    });
+    const businessProvider = createBusinessProvider({
+      status: "sent",
+      providerStatusCode: 200,
+      providerMessageId: "telegram-business-100"
+    });
+    const mtprotoProvider = createMtprotoProvider({
+      status: "sent",
+      providerMessageId: "telegram-mtproto-100"
+    });
+    const logRecords: LogRecord[] = [];
+
+    await processMessagingDeliveryJob({
+      job: createJob(),
+      store,
+      provider: {
+        telegramBusiness: businessProvider,
+        telegramMtproto: mtprotoProvider
+      },
+      now,
+      logger: createLogger("messaging-delivery-test", (record) => logRecords.push(record))
+    });
+
+    expect(businessProvider.sendMessage).not.toHaveBeenCalled();
+    expect(mtprotoProvider.sendMessage).toHaveBeenCalledWith({
+      messageId: "message_1",
+      channelConnectionId: "connection_1",
+      peerId: "777000",
+      text: "Message text from DB"
+    });
+    expect(store.recordSent).toHaveBeenCalledWith({
+      messageId: "message_1",
+      attemptNumber: 1,
+      provider: "telegram",
+      providerMessageId: "telegram-mtproto-100",
+      attemptedAt: now
+    });
+    expect(JSON.stringify(logRecords)).not.toContain("Message text from DB");
+  });
+
+  it("records a retryable failure when Telegram Account delivery is not configured in this worker", async () => {
+    const now = new Date("2026-07-22T10:00:00.000Z");
+    const store = createStore({
+      workItem: {
+        ...createWorkItem(),
+        mode: "telegram_mtproto_account",
+        peerId: "777000"
+      }
+    });
+    const provider = createBusinessProvider({ status: "sent" });
+
+    await expect(
+      processMessagingDeliveryJob({
+        job: createJob({ attemptsMade: 0, opts: { attempts: 3 } }),
+        store,
+        provider,
+        now
+      })
+    ).rejects.toThrow("Telegram MTProto delivery is not configured in this worker");
+
+    expect(provider.sendMessage).not.toHaveBeenCalled();
+    expect(store.recordRetryableFailure).toHaveBeenCalledWith({
+      messageId: "message_1",
+      attemptNumber: 1,
+      provider: "telegram",
+      errorCode: "TELEGRAM_MTPROTO_PROVIDER_NOT_CONFIGURED",
+      errorMessage: "Telegram MTProto delivery is not configured in this worker",
+      attemptedAt: now
+    });
+  });
+
   it("records retryable failures and throws for BullMQ retry", async () => {
     const now = new Date("2026-07-22T10:00:00.000Z");
     const store = createStore();
-    const provider = createProvider({
+    const provider = createBusinessProvider({
       status: "failed",
       retryable: true,
       providerStatusCode: 503,
@@ -101,7 +181,7 @@ describe("processMessagingDeliveryJob", () => {
   it("marks final provider failures failed", async () => {
     const now = new Date("2026-07-22T10:00:00.000Z");
     const store = createStore();
-    const provider = createProvider({
+    const provider = createBusinessProvider({
       status: "failed",
       retryable: true,
       providerStatusCode: 503,
@@ -130,7 +210,7 @@ describe("processMessagingDeliveryJob", () => {
   it("passes provider connection failure classification to the final delivery record", async () => {
     const now = new Date("2026-07-22T10:00:00.000Z");
     const store = createStore();
-    const provider = createProvider({
+    const provider = createBusinessProvider({
       status: "failed",
       retryable: false,
       providerStatusCode: 400,
@@ -166,7 +246,7 @@ describe("processMessagingDeliveryJob", () => {
   it("marks ambiguous final timeout unknown", async () => {
     const now = new Date("2026-07-22T10:00:00.000Z");
     const store = createStore();
-    const provider = createProvider({
+    const provider = createBusinessProvider({
       status: "unknown",
       retryable: true,
       errorCode: "TELEGRAM_BUSINESS_EXCEPTION",
@@ -193,7 +273,7 @@ describe("processMessagingDeliveryJob", () => {
   it("records retryable ambiguous timeouts as unknown attempts before the final attempt", async () => {
     const now = new Date("2026-07-22T10:00:00.000Z");
     const store = createStore();
-    const provider = createProvider({
+    const provider = createBusinessProvider({
       status: "unknown",
       retryable: true,
       errorCode: "TELEGRAM_BUSINESS_EXCEPTION",
@@ -234,13 +314,27 @@ function createStore(input: {
   };
 }
 
-function createProvider(result: Partial<Awaited<ReturnType<MessagingDeliveryProvider["sendMessage"]>>>): MessagingDeliveryProvider {
+function createBusinessProvider(
+  result: Partial<Awaited<ReturnType<TelegramBusinessMessagingDeliveryProvider["sendMessage"]>>>
+): Pick<TelegramBusinessMessagingDeliveryProvider, "sendMessage"> {
   return {
     sendMessage: vi.fn(async () => ({
       provider: "telegram",
       retryable: false,
       ...result
-    } as Awaited<ReturnType<MessagingDeliveryProvider["sendMessage"]>>))
+    } as Awaited<ReturnType<TelegramBusinessMessagingDeliveryProvider["sendMessage"]>>))
+  };
+}
+
+function createMtprotoProvider(
+  result: Partial<Awaited<ReturnType<TelegramMtprotoMessagingProvider["sendMessage"]>>>
+): Pick<TelegramMtprotoMessagingProvider, "sendMessage"> {
+  return {
+    sendMessage: vi.fn(async () => ({
+      provider: "telegram",
+      retryable: false,
+      ...result
+    } as Awaited<ReturnType<TelegramMtprotoMessagingProvider["sendMessage"]>>))
   };
 }
 
@@ -251,6 +345,7 @@ function createWorkItem() {
     messageStatus: "queued" as const,
     provider: "telegram" as const,
     mode: "telegram_business_bot" as const,
+    channelConnectionId: "connection_1",
     businessConnectionId: "business-1",
     providerChatId: "chat-1",
     text: "Message text from DB"

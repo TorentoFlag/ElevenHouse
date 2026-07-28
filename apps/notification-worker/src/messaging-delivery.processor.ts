@@ -2,12 +2,26 @@ import type { Job } from "bullmq";
 import type { MessagingDeliveryProcessingStore } from "@elevenhouse/db/messaging";
 import type { Logger } from "@elevenhouse/observability";
 import type { MessagingDeliveryJobData } from "./messaging-delivery.queue";
-import type { MessagingDeliveryProvider, MessagingDeliveryProviderResult } from "./telegram-business-provider";
+import type {
+  MessagingDeliveryProvider,
+  MessagingDeliveryProviderResult
+} from "./telegram-business-provider";
+import type { TelegramMtprotoMessagingProviderResult } from "./telegram-mtproto-provider";
+import type { TelegramMtprotoDeliveryProvider } from "./telegram-mtproto-session-delivery-provider";
+
+export type MessagingDeliveryProviders =
+  | MessagingDeliveryProvider
+  | {
+      readonly telegramBusiness: MessagingDeliveryProvider;
+      readonly telegramMtproto: TelegramMtprotoDeliveryProvider;
+    };
+
+type MessagingDeliveryResult = MessagingDeliveryProviderResult | TelegramMtprotoMessagingProviderResult;
 
 export async function processMessagingDeliveryJob(input: {
   readonly job: Job<MessagingDeliveryJobData>;
   readonly store: MessagingDeliveryProcessingStore;
-  readonly provider: MessagingDeliveryProvider;
+  readonly provider: MessagingDeliveryProviders;
   readonly now: Date;
   readonly logger?: Logger;
 }): Promise<void> {
@@ -26,12 +40,7 @@ export async function processMessagingDeliveryJob(input: {
     return;
   }
 
-  const result = await input.provider.sendMessage({
-    messageId: workItem.messageId,
-    businessConnectionId: workItem.businessConnectionId,
-    chatId: workItem.providerChatId,
-    text: workItem.text
-  });
+  const result = await sendWithProvider(input.provider, workItem);
 
   if (result.status === "sent") {
     await input.store.recordSent({
@@ -91,7 +100,7 @@ async function recordFinal(
   },
   messageId: string,
   attemptNumber: number,
-  result: MessagingDeliveryProviderResult
+  result: MessagingDeliveryResult
 ): Promise<void> {
   const failure = {
     messageId,
@@ -135,10 +144,53 @@ async function recordFinal(
 }
 
 class MessagingDeliveryRetryableError extends Error {
-  constructor(result: MessagingDeliveryProviderResult) {
+  constructor(result: MessagingDeliveryResult) {
     super(result.errorMessage ?? "Messaging delivery failed");
     this.name = "MessagingDeliveryRetryableError";
   }
+}
+
+function sendWithProvider(
+  providers: MessagingDeliveryProviders,
+  workItem: Awaited<ReturnType<MessagingDeliveryProcessingStore["findByOutboxEventId"]>>
+): Promise<MessagingDeliveryResult> {
+  if (!workItem) {
+    throw new Error("Messaging delivery work item is required");
+  }
+
+  if ("sendMessage" in providers) {
+    if (workItem.mode !== "telegram_business_bot") {
+      return Promise.resolve({
+        provider: "telegram",
+        status: "failed",
+        retryable: true,
+        errorCode: "TELEGRAM_MTPROTO_PROVIDER_NOT_CONFIGURED",
+        errorMessage: "Telegram MTProto delivery is not configured in this worker"
+      });
+    }
+    return providers.sendMessage({
+      messageId: workItem.messageId,
+      businessConnectionId: workItem.businessConnectionId,
+      chatId: workItem.providerChatId,
+      text: workItem.text
+    });
+  }
+
+  if (workItem.mode === "telegram_business_bot") {
+    return providers.telegramBusiness.sendMessage({
+      messageId: workItem.messageId,
+      businessConnectionId: workItem.businessConnectionId,
+      chatId: workItem.providerChatId,
+      text: workItem.text
+    });
+  }
+
+  return providers.telegramMtproto.sendMessage({
+    messageId: workItem.messageId,
+    channelConnectionId: workItem.channelConnectionId,
+    peerId: workItem.peerId,
+    text: workItem.text
+  });
 }
 
 function getAttemptNumber(job: Job<MessagingDeliveryJobData>): number {

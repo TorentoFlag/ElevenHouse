@@ -141,14 +141,20 @@ describe("createNotificationWorkerRuntimeConfig", () => {
         NOTIFICATION_WORKER_TELEGRAM_MTPROTO_ENABLED: "true",
         NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID: "12345",
         NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH: "0123456789abcdef0123456789abcdef",
-        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY: mtprotoSessionEncryptionKey
+        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY: mtprotoSessionEncryptionKey,
+        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_LEASE_DURATION_MS: "90000",
+        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_SYNC_INTERVAL_MS: "30000",
+        NOTIFICATION_WORKER_TELEGRAM_MTPROTO_CLAIM_LIMIT: "10"
       })
     ).toMatchObject({
       telegramMtproto: {
         enabled: true,
         apiId: 12345,
         apiHash: "0123456789abcdef0123456789abcdef",
-        sessionEncryptionKey: Buffer.alloc(32, 12)
+        sessionEncryptionKey: Buffer.alloc(32, 12),
+        leaseDurationMs: 90_000,
+        sessionSyncIntervalMs: 30_000,
+        claimLimit: 10
       }
     });
   });

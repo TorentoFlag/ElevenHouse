@@ -658,6 +658,10 @@ function createStore(): MessagingStore {
       inboundProviderMessageCount += 1;
       return { kind: "created" as const, message: readDomainInboundMessage() };
     }),
+    recordTelegramMtprotoMessage: vi.fn(async () => {
+      inboundProviderMessageCount += 1;
+      return { kind: "created" as const, message: readDomainInboundMessage() };
+    }),
     recordTelegramBusinessDeletedMessages: vi.fn(async (input) => {
       deletedBusinessMessageCount += input.providerMessageIds.length;
       return { kind: "recorded" as const, deletedCount: input.providerMessageIds.length };

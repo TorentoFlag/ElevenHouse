@@ -153,6 +153,28 @@ export type RecordTelegramBusinessMessageStoreInput = {
   readonly now: string;
 };
 
+export type TelegramMtprotoUpdateCursor = {
+  readonly pts: number | null;
+  readonly qts: number | null;
+  readonly dateCursor: string | null;
+  readonly seq: number | null;
+};
+
+export type RecordTelegramMtprotoMessageStoreInput = {
+  readonly channelConnectionId: string;
+  readonly leaseOwner: string;
+  readonly providerMessageId: string;
+  readonly providerChatId: string;
+  readonly providerUserId: string | null;
+  readonly username: string | null;
+  readonly displayName: string | null;
+  readonly isOutgoing: boolean;
+  readonly text: string;
+  readonly providerSentAt: string;
+  readonly cursor: TelegramMtprotoUpdateCursor | null;
+  readonly now: string;
+};
+
 export type RecordTelegramBusinessDeletedMessagesStoreInput = {
   readonly businessConnectionId: string;
   readonly providerChatId: string;
@@ -264,6 +286,9 @@ export type MessagingStore = {
   ) => Promise<TelegramMtprotoLoginResultStoreResult>;
   readonly recordTelegramBusinessMessage: (
     input: RecordTelegramBusinessMessageStoreInput
+  ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;
+  readonly recordTelegramMtprotoMessage: (
+    input: RecordTelegramMtprotoMessageStoreInput
   ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;
   readonly recordTelegramBusinessDeletedMessages: (
     input: RecordTelegramBusinessDeletedMessagesStoreInput

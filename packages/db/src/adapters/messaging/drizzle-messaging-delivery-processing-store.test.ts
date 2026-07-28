@@ -43,8 +43,43 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
       messageStatus: "queued",
       provider: "telegram",
       mode: "telegram_business_bot",
+      channelConnectionId,
       businessConnectionId: "business-1",
       providerChatId: "chat-1",
+      text: "Message text from DB"
+    });
+  });
+
+  it("reloads Telegram Account delivery work items without a Business connection id", async () => {
+    const database = createFindDatabase({
+      outboxEventId,
+      payload: {
+        messageId,
+        threadId,
+        channelConnectionId,
+        astrologerUserId
+      },
+      messageId,
+      messageStatus: "queued",
+      text: "Message text from DB",
+      threadId,
+      channelConnectionId,
+      provider: "telegram",
+      mode: "telegram_mtproto_account",
+      businessConnectionId: null,
+      providerChatId: "777000"
+    });
+
+    await expect(
+      createDrizzleMessagingDeliveryProcessingStore(database as never).findByOutboxEventId(outboxEventId)
+    ).resolves.toEqual({
+      outboxEventId,
+      messageId,
+      messageStatus: "queued",
+      provider: "telegram",
+      mode: "telegram_mtproto_account",
+      channelConnectionId,
+      peerId: "777000",
       text: "Message text from DB"
     });
   });

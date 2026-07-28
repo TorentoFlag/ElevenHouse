@@ -48,6 +48,21 @@ and reauth state are higher-risk prerequisites.
   stores only an encrypted partial/final session. The password step decrypts
   the partial session, submits the password without persisting it, activates
   the channel connection and stores only the encrypted final session.
+- 2026-07-28: Added the first notification-worker MTProto account runtime
+  contour. The worker can claim authorized account sessions with a PostgreSQL
+  lease, decrypt the saved session using the owner-scoped AAD, create a
+  Teleproto-backed client through an adapter factory, expose a local leased
+  session provider for outbound delivery, heartbeat/release owned leases and
+  route `telegram_mtproto_account` outbox work items through the shared
+  delivery retry/status pipeline. Live inbound update normalization and
+  `updates.getDifference` reconciliation remain pending.
+- 2026-07-28: Added live MTProto `NewMessage` ingestion for leased account
+  sessions. The worker now subscribes Teleproto clients to new-message events,
+  normalizes text updates, persists inbound client messages and observed
+  outbound Telegram-account messages through the shared Messaging domain/DB
+  store, advances Telegram cursor fields on successful persistence, and logs
+  inbound processing failures. Full `updates.getDifference` gap recovery and
+  MTProto media ingestion remain pending slices.
 
 ## Surprises & Discoveries
 
@@ -105,6 +120,10 @@ Findings:
 - Sourced fact: clients must track update state and fill gaps with
   `updates.getDifference`; a pure in-memory listener is not reliable enough for
   ElevenHouse.
+- Repository evidence: the first live listener slice records `NewMessage`
+  events and persists Telegram `pts/qts/date/seq` cursors when supplied by
+  Teleproto, but does not yet call `updates.getDifference` on startup or gap
+  detection.
 - Sourced fact: MTProto `messages.sendMessage` uses `random_id`, which must be
   tied to our durable outbox/idempotency model to avoid duplicate sends.
 - Repository evidence: Messaging commands already persist state and outbox
@@ -147,7 +166,10 @@ Current state:
   `/code` and `/password` exist in `astrologer-api` with encrypted-only
   persistence and CSRF protection.
 - There is no account listener worker, outbound MTProto delivery route or UI
-  wizard yet.
+- Notification-worker has a leased account session supervisor, outbound
+  delivery route and live text `NewMessage` ingestion. Startup/gap
+  reconciliation through `updates.getDifference`, MTProto media ingestion and
+  UI wizard remain pending.
 
 ## Interfaces and Dependencies
 
@@ -233,11 +255,19 @@ can receive/send live messages through existing Messaging records.
 
 Tasks:
 
-- Add lease acquisition and heartbeat for active sessions.
+- Add lease acquisition and heartbeat for active sessions. Completed for
+  authorized session claim, heartbeat, release and reauth marking.
 - Add listener startup/resume and update cursor persistence.
 - Normalize inbound updates to external identities, threads and messages.
+  Completed for live text `NewMessage` events with inbound/outbound direction
+  split and cursor persistence; `updates.getDifference` startup/gap recovery
+  remains pending.
 - Generalize outbound delivery routing between Business Bot API and MTProto.
-- Persist Telegram `random_id`/provider message id mapping.
+  Completed for delivery work-item union, processor routing and shared
+  retry/final-status recording.
+- Persist Telegram `random_id`/provider message id mapping. Completed for
+  deterministic `random_id` generation and provider response message id storage
+  through the existing delivery attempt/message fields.
 
 ### Slice 4: Frontend Wizard
 
@@ -292,6 +322,8 @@ Full feature acceptance:
 - DB tests for encrypted session persistence, uniqueness and cursors.
 - API e2e tests for auth, CSRF and typed errors.
 - Worker tests for live updates, cursor ack, retry and reauth.
+- Worker lease/outbound tests for session claim, heartbeat, release, MTProto
+  delivery routing and no session-text logging.
 - Browser-backed UI test for the MTProto wizard.
 - Real Telegram account runtime test for login, receive, send and reauth.
 

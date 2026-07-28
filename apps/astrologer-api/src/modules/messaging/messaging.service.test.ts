@@ -730,6 +730,10 @@ function createStore(
       kind: "created" as const,
       message: domainMessage("inbound")
     })),
+    recordTelegramMtprotoMessage: vi.fn(async () => ({
+      kind: "created" as const,
+      message: domainMessage("inbound")
+    })),
     recordTelegramBusinessDeletedMessages: vi.fn(async () => ({ kind: "recorded" as const, deletedCount: 0 })),
     recordTelegramBusinessEditedMessage: vi.fn(async () => ({ kind: "recorded" as const, updatedCount: 0 })),
     startTelegramBusinessConnection: vi.fn(async () => ({ connectionId })),

@@ -22,6 +22,7 @@ export type TelegramMtprotoMessagingProviderResult = {
   readonly provider: "telegram";
   readonly status: "sent" | "failed" | "unknown";
   readonly retryable: boolean;
+  readonly providerStatusCode?: number;
   readonly providerMessageId?: string;
   readonly errorCode?: string;
   readonly errorMessage?: string;

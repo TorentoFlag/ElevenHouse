@@ -28,6 +28,7 @@ import type {
   RecordTelegramBusinessEditedMessageStoreInput,
   RecordTelegramBusinessEditedMessageStoreResult,
   RecordTelegramBusinessMessageStoreInput,
+  RecordTelegramMtprotoMessageStoreInput,
   RecordTelegramMtprotoCodeResultStoreInput,
   RecordTelegramMtprotoPasswordResultStoreInput,
   StartTelegramBusinessConnectionStoreInput,
@@ -94,6 +95,7 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     recordTelegramMtprotoPasswordResult: (input) =>
       recordTelegramMtprotoPasswordResult(database, input),
     recordTelegramBusinessMessage: (input) => recordTelegramBusinessMessage(database, input),
+    recordTelegramMtprotoMessage: (input) => recordTelegramMtprotoMessage(database, input),
     recordTelegramBusinessDeletedMessages: (input) =>
       recordTelegramBusinessDeletedMessages(database, input),
     recordTelegramBusinessEditedMessage: (input) =>
@@ -857,6 +859,103 @@ async function recordTelegramBusinessMessage(
   return { kind: "duplicate", message: existing };
 }
 
+async function recordTelegramMtprotoMessage(
+  database: ElevenHouseDatabase,
+  input: RecordTelegramMtprotoMessageStoreInput
+): Promise<{ readonly kind: "created" | "duplicate"; readonly message: MessagingMessage } | { readonly kind: "unmatched" }> {
+  try {
+    return await database.transaction(async (transaction) => {
+      const connection = await findTelegramMtprotoConnection(transaction, input);
+      if (!connection) return { kind: "unmatched" as const };
+
+      const timestamp = new Date(input.now);
+      const providerSentAt = new Date(input.providerSentAt);
+      const identity = await upsertTelegramExternalIdentity(transaction, {
+        channelConnectionId: connection.id,
+        providerChatId: input.providerChatId,
+        providerUserId: input.isOutgoing ? null : input.providerUserId,
+        username: input.username,
+        displayName: input.displayName,
+        now: timestamp
+      });
+      const thread = await findOrCreateTelegramThread(transaction, {
+        astrologerUserId: connection.astrologerUserId,
+        externalIdentityId: identity.id,
+        now: timestamp
+      });
+
+      const [row] = await transaction
+        .insert(messagingMessages)
+        .values({
+          threadId: thread.id,
+          channelConnectionId: connection.id,
+          externalIdentityId: identity.id,
+          direction: input.isOutgoing ? "outbound" : "inbound",
+          senderKind: input.isOutgoing ? "astrologer" : "client",
+          providerMessageId: input.providerMessageId,
+          providerUpdateId: null,
+          providerSentAt,
+          contentType: "text",
+          text: input.text,
+          mediaAssetId: null,
+          status: input.isOutgoing ? "sent" : "received",
+          failureCode: null,
+          idempotencyKey: input.isOutgoing ? telegramMtprotoObservedOutboundIdempotencyKey(input) : null,
+          requestHash: input.isOutgoing ? hashTelegramMtprotoMessageRequest(input) : null,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        })
+        .returning();
+      if (!row) throw new Error("Expected Telegram MTProto message insert to return a row");
+
+      const threadUpdate = {
+        lastMessageId: row.id,
+        lastMessageAt: providerSentAt,
+        ...(input.isOutgoing
+          ? {}
+          : { unreadAstrologerCount: sql`${messagingThreads.unreadAstrologerCount} + 1` }),
+        updatedAt: timestamp
+      };
+      const [updatedThread] = await transaction
+        .update(messagingThreads)
+        .set(threadUpdate)
+        .where(
+          and(
+            eq(messagingThreads.id, thread.id),
+            eq(messagingThreads.astrologerUserId, connection.astrologerUserId)
+          )
+        )
+        .returning({ id: messagingThreads.id });
+      if (!updatedThread) throw new Error("Messaging thread is not owned by the astrologer");
+
+      if (input.cursor) {
+        await updateTelegramMtprotoCursors(transaction, input, timestamp);
+      }
+
+      await appendRealtimeEvent(transaction, {
+        astrologerUserId: connection.astrologerUserId,
+        type: messagingMessageReceivedEventType,
+        occurredAt: input.now,
+        threadId: thread.id,
+        messageId: row.id,
+        channelConnectionId: connection.id,
+        externalIdentityId: identity.id
+      });
+
+      return { kind: "created" as const, message: toMessagingMessage(row) };
+    });
+  } catch (error) {
+    if (!isTelegramBusinessMessageDedupeViolation(error)) throw error;
+  }
+
+  const existing = await findTelegramMtprotoMessage(database, input);
+  if (!existing) throw new Error("Expected existing Telegram MTProto message after duplicate conflict");
+  if (input.cursor) {
+    await updateTelegramMtprotoCursors(database, input, new Date(input.now));
+  }
+  return { kind: "duplicate", message: existing };
+}
+
 async function recordTelegramBusinessDeletedMessages(
   database: ElevenHouseDatabase,
   input: RecordTelegramBusinessDeletedMessagesStoreInput
@@ -1329,6 +1428,37 @@ async function findTelegramBusinessConnections(
     .limit(2);
 }
 
+async function findTelegramMtprotoConnection(
+  database: MessagingDatabase,
+  input: { readonly channelConnectionId: string; readonly leaseOwner: string }
+): Promise<{
+  readonly id: string;
+  readonly astrologerUserId: string;
+} | null> {
+  const [row] = await database
+    .select({
+      id: messagingChannelConnections.id,
+      astrologerUserId: messagingChannelConnections.astrologerUserId
+    })
+    .from(messagingChannelConnections)
+    .innerJoin(
+      messagingTelegramMtprotoSessions,
+      eq(messagingTelegramMtprotoSessions.channelConnectionId, messagingChannelConnections.id)
+    )
+    .where(
+      and(
+        eq(messagingChannelConnections.id, input.channelConnectionId),
+        eq(messagingChannelConnections.provider, "telegram"),
+        eq(messagingChannelConnections.mode, "telegram_mtproto_account"),
+        eq(messagingChannelConnections.status, "active"),
+        eq(messagingTelegramMtprotoSessions.loginState, "authorized"),
+        eq(messagingTelegramMtprotoSessions.leaseOwner, input.leaseOwner)
+      )
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 async function findOrCreateTelegramThread(
   database: MessagingTransaction,
   input: {
@@ -1437,6 +1567,41 @@ async function findTelegramBusinessMessage(
   return row ? toMessagingMessage(row.message) : null;
 }
 
+async function findTelegramMtprotoMessage(
+  database: MessagingDatabase,
+  input: {
+    readonly channelConnectionId: string;
+    readonly providerChatId: string;
+    readonly providerMessageId: string;
+    readonly isOutgoing: boolean;
+  }
+): Promise<MessagingMessage | null> {
+  const [row] = await database
+    .select({ message: messagingMessages })
+    .from(messagingMessages)
+    .innerJoin(
+      messagingChannelConnections,
+      eq(messagingChannelConnections.id, messagingMessages.channelConnectionId)
+    )
+    .innerJoin(
+      messagingExternalIdentities,
+      eq(messagingExternalIdentities.id, messagingMessages.externalIdentityId)
+    )
+    .where(
+      and(
+        eq(messagingChannelConnections.provider, "telegram"),
+        eq(messagingChannelConnections.mode, "telegram_mtproto_account"),
+        eq(messagingChannelConnections.id, input.channelConnectionId),
+        eq(messagingExternalIdentities.providerChatId, input.providerChatId),
+        eq(messagingMessages.providerMessageId, input.providerMessageId),
+        eq(messagingMessages.direction, input.isOutgoing ? "outbound" : "inbound")
+      )
+    )
+    .limit(1);
+
+  return row ? toMessagingMessage(row.message) : null;
+}
+
 async function findLatestVisibleMessageForThread(
   database: MessagingDatabase,
   input: { readonly threadId: string }
@@ -1465,6 +1630,17 @@ function telegramBusinessObservedOutboundIdempotencyKey(
   ].join(":");
 }
 
+function telegramMtprotoObservedOutboundIdempotencyKey(
+  input: RecordTelegramMtprotoMessageStoreInput
+): string {
+  return [
+    "telegram-mtproto",
+    input.channelConnectionId,
+    input.providerChatId,
+    input.providerMessageId
+  ].join(":");
+}
+
 function hashTelegramBusinessMessageRequest(
   input: RecordTelegramBusinessMessageStoreInput
 ): `sha256:${string}` {
@@ -1480,6 +1656,48 @@ function hashTelegramBusinessMessageRequest(
       })
     )
     .digest("hex")}`;
+}
+
+function hashTelegramMtprotoMessageRequest(
+  input: RecordTelegramMtprotoMessageStoreInput
+): `sha256:${string}` {
+  return `sha256:${createHash("sha256")
+    .update(
+      JSON.stringify({
+        channelConnectionId: input.channelConnectionId,
+        providerChatId: input.providerChatId,
+        providerMessageId: input.providerMessageId,
+        text: input.text,
+        providerSentAt: input.providerSentAt
+      })
+    )
+    .digest("hex")}`;
+}
+
+async function updateTelegramMtprotoCursors(
+  database: MessagingDatabase,
+  input: RecordTelegramMtprotoMessageStoreInput,
+  now: Date
+): Promise<void> {
+  if (!input.cursor) return;
+  const [updated] = await database
+    .update(messagingTelegramMtprotoSessions)
+    .set({
+      pts: input.cursor.pts,
+      qts: input.cursor.qts,
+      dateCursor: input.cursor.dateCursor ? new Date(input.cursor.dateCursor) : null,
+      seq: input.cursor.seq,
+      updatedAt: now
+    })
+    .where(
+      and(
+        eq(messagingTelegramMtprotoSessions.channelConnectionId, input.channelConnectionId),
+        eq(messagingTelegramMtprotoSessions.leaseOwner, input.leaseOwner),
+        eq(messagingTelegramMtprotoSessions.loginState, "authorized")
+      )
+    )
+    .returning({ id: messagingTelegramMtprotoSessions.channelConnectionId });
+  if (!updated) throw new Error("Telegram MTProto session lease was lost before cursor update");
 }
 
 function toTelegramBusinessCapabilities(

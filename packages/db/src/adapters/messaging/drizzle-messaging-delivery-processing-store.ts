@@ -21,16 +21,32 @@ import {
 
 type MessagingDeliveryStatus = "sent" | "failed" | "unknown";
 
-export type MessagingDeliveryWorkItem = {
+export type TelegramBusinessDeliveryWorkItem = {
   readonly outboxEventId: string;
   readonly messageId: string;
   readonly messageStatus: MessagingMessageStatus;
   readonly provider: Extract<MessagingProvider, "telegram">;
   readonly mode: Extract<MessagingChannelMode, "telegram_business_bot">;
+  readonly channelConnectionId: string;
   readonly businessConnectionId: string;
   readonly providerChatId: string;
   readonly text: string;
 };
+
+export type TelegramMtprotoDeliveryWorkItem = {
+  readonly outboxEventId: string;
+  readonly messageId: string;
+  readonly messageStatus: MessagingMessageStatus;
+  readonly provider: Extract<MessagingProvider, "telegram">;
+  readonly mode: Extract<MessagingChannelMode, "telegram_mtproto_account">;
+  readonly channelConnectionId: string;
+  readonly peerId: string;
+  readonly text: string;
+};
+
+export type MessagingDeliveryWorkItem =
+  | TelegramBusinessDeliveryWorkItem
+  | TelegramMtprotoDeliveryWorkItem;
 
 export type MessagingDeliveryAttemptInput = {
   readonly messageId: string;
@@ -249,21 +265,40 @@ function toMessagingDeliveryWorkItem(input: {
     throw new Error(`Outbox event ${input.outboxEventId} does not match messaging aggregate`);
   }
 
-  if (input.provider !== "telegram" || input.mode !== "telegram_business_bot") {
+  if (input.provider !== "telegram") {
     throw new Error(`Unsupported messaging delivery channel for outbox event ${input.outboxEventId}`);
   }
-  if (!input.businessConnectionId) {
-    throw new Error(`Telegram Business connection is missing for outbox event ${input.outboxEventId}`);
+
+  if (input.mode === "telegram_business_bot") {
+    if (!input.businessConnectionId) {
+      throw new Error(`Telegram Business connection is missing for outbox event ${input.outboxEventId}`);
+    }
+
+    return {
+      outboxEventId: input.outboxEventId,
+      messageId: input.messageId,
+      messageStatus: input.messageStatus as MessagingMessageStatus,
+      provider: "telegram",
+      mode: "telegram_business_bot",
+      channelConnectionId: input.channelConnectionId,
+      businessConnectionId: input.businessConnectionId,
+      providerChatId: input.providerChatId,
+      text: input.text
+    };
   }
 
-  return {
-    outboxEventId: input.outboxEventId,
-    messageId: input.messageId,
-    messageStatus: input.messageStatus as MessagingMessageStatus,
-    provider: "telegram",
-    mode: "telegram_business_bot",
-    businessConnectionId: input.businessConnectionId,
-    providerChatId: input.providerChatId,
-    text: input.text
-  };
+  if (input.mode === "telegram_mtproto_account") {
+    return {
+      outboxEventId: input.outboxEventId,
+      messageId: input.messageId,
+      messageStatus: input.messageStatus as MessagingMessageStatus,
+      provider: "telegram",
+      mode: "telegram_mtproto_account",
+      channelConnectionId: input.channelConnectionId,
+      peerId: input.providerChatId,
+      text: input.text
+    };
+  }
+
+  throw new Error(`Unsupported messaging delivery channel for outbox event ${input.outboxEventId}`);
 }

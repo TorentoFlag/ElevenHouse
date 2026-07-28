@@ -543,6 +543,116 @@ describe("createDrizzleMessagingStore", () => {
     ]);
   });
 
+  it("records Telegram MTProto client messages as inbound and advances the leased cursor", async () => {
+    const fake = createTelegramMtprotoMessageDatabase();
+
+    await expect(
+      createDrizzleMessagingStore(fake.database as never).recordTelegramMtprotoMessage({
+        channelConnectionId,
+        leaseOwner: "notification-worker:pid-1",
+        providerMessageId: "4401",
+        providerChatId: "777",
+        providerUserId: "555",
+        username: "marina",
+        displayName: "Marina",
+        isOutgoing: false,
+        text: "Хочу записаться",
+        providerSentAt: now.toISOString(),
+        cursor: {
+          pts: 128,
+          qts: null,
+          dateCursor: "2026-07-22T10:00:01.000Z",
+          seq: 9
+        },
+        now: now.toISOString()
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      message: {
+        direction: "inbound",
+        status: "received",
+        text: "Хочу записаться"
+      }
+    });
+
+    expect(fake.externalIdentityUpserts).toEqual([
+      expect.objectContaining({
+        providerUserId: "555",
+        usernameSnapshot: "marina",
+        displayNameSnapshot: "Marina"
+      })
+    ]);
+    expect(fake.messageInserts).toEqual([
+      expect.objectContaining({
+        direction: "inbound",
+        senderKind: "client",
+        status: "received",
+        providerMessageId: "4401",
+        idempotencyKey: null,
+        requestHash: null
+      })
+    ]);
+    expect(fake.threadUpdates).toEqual([
+      expect.objectContaining({
+        unreadAstrologerCount: expect.anything()
+      })
+    ]);
+    expect(fake.sessionUpdates).toContainEqual(
+      expect.objectContaining({
+        pts: 128,
+        qts: null,
+        dateCursor: new Date("2026-07-22T10:00:01.000Z"),
+        seq: 9,
+        updatedAt: now
+      })
+    );
+  });
+
+  it("records Telegram MTProto messages sent in Telegram as observed outbound without unread count", async () => {
+    const fake = createTelegramMtprotoMessageDatabase();
+
+    await expect(
+      createDrizzleMessagingStore(fake.database as never).recordTelegramMtprotoMessage({
+        channelConnectionId,
+        leaseOwner: "notification-worker:pid-1",
+        providerMessageId: "4402",
+        providerChatId: "777",
+        providerUserId: null,
+        username: "marina",
+        displayName: "Marina",
+        isOutgoing: true,
+        text: "Ок, записал на 12",
+        providerSentAt: now.toISOString(),
+        cursor: null,
+        now: now.toISOString()
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      message: {
+        direction: "outbound",
+        status: "sent",
+        text: "Ок, записал на 12"
+      }
+    });
+
+    expect(fake.messageInserts).toEqual([
+      expect.objectContaining({
+        direction: "outbound",
+        senderKind: "astrologer",
+        status: "sent",
+        providerMessageId: "4402",
+        idempotencyKey: `telegram-mtproto:${channelConnectionId}:777:4402`,
+        requestHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/)
+      })
+    ]);
+    expect(fake.threadUpdates).toEqual([
+      expect.objectContaining({
+        lastMessageAt: now
+      })
+    ]);
+    expect(fake.threadUpdates[0]).not.toHaveProperty("unreadAstrologerCount");
+  });
+
   it("records Telegram Business voice messages with voice content type", async () => {
     const fake = createTelegramBusinessMessageDatabase({
       externalOwnerUserId: "987654321"
@@ -1251,6 +1361,113 @@ function createTelegramBusinessMessageDatabase(input: { readonly externalOwnerUs
     messageInserts,
     threadUpdates,
     realtimeEventInserts
+  };
+}
+
+function createTelegramMtprotoMessageDatabase() {
+  const externalIdentityUpserts: Record<string, unknown>[] = [];
+  const messageInserts: Record<string, unknown>[] = [];
+  const threadUpdates: Record<string, unknown>[] = [];
+  const realtimeEventInserts: Record<string, unknown>[] = [];
+  const sessionUpdates: Record<string, unknown>[] = [];
+
+  const database: {
+    insert: (table: unknown) => {
+      values: (value: Record<string, unknown>) => {
+        onConflictDoUpdate?: (config: Record<string, unknown>) => {
+          returning: () => Promise<readonly Record<string, unknown>[]>;
+        };
+        returning: () => Promise<readonly Record<string, unknown>[]>;
+        then: (resolve: (value: undefined) => unknown) => unknown;
+      };
+    };
+    update: (table: unknown) => {
+      set: (value: Record<string, unknown>) => {
+        where: () => {
+          returning: () => Promise<readonly Record<string, unknown>[]>;
+        };
+      };
+    };
+    select: (selection?: Record<string, unknown>) => ReturnType<typeof selectChain>;
+    transaction: <T>(callback: (transaction: unknown) => Promise<T>) => Promise<T>;
+  } = {
+    insert: (table) => ({
+      values: (value) => ({
+        onConflictDoUpdate: () => ({
+          returning: async () => {
+            if (table !== messagingExternalIdentities) return [];
+            externalIdentityUpserts.push(value);
+            return [externalIdentityProjection().externalIdentity];
+          }
+        }),
+        returning: async () => {
+          if (table === messagingMessages) {
+            messageInserts.push(value);
+            return [
+              messageRow({
+                externalIdentityId,
+                direction: value.direction,
+                senderKind: value.senderKind,
+                providerMessageId: value.providerMessageId,
+                providerUpdateId: value.providerUpdateId,
+                providerSentAt: value.providerSentAt,
+                text: value.text,
+                status: value.status,
+                idempotencyKey: value.idempotencyKey,
+                requestHash: value.requestHash,
+                createdAt: value.createdAt,
+                updatedAt: value.updatedAt
+              })
+            ];
+          }
+          if (table === messagingThreads) {
+            return [{ id: threadId }];
+          }
+          if (table === messagingRealtimeEvents) {
+            realtimeEventInserts.push(value);
+            return [realtimeEventRow(value)];
+          }
+          return [];
+        },
+        then: (resolve) => {
+          if (table === messagingThreadIdentities) return resolve(undefined);
+          return resolve(undefined);
+        }
+      })
+    }),
+    update: (table) => ({
+      set: (value) => ({
+        where: () => ({
+          returning: async () => {
+            if (table === messagingThreads) threadUpdates.push(value);
+            if (table === messagingTelegramMtprotoSessions) sessionUpdates.push(value);
+            return [{ id: table === messagingTelegramMtprotoSessions ? channelConnectionId : threadId }];
+          }
+        })
+      })
+    }),
+    select: (selection) => {
+      if (selection && "astrologerUserId" in selection && !("externalOwnerUserId" in selection)) {
+        return selectChain([{ id: channelConnectionId, astrologerUserId }]);
+      }
+      if (selection && "thread" in selection) {
+        return selectChain([threadProjection()]);
+      }
+      if (selection && "id" in selection) {
+        return selectChain([{}]);
+      }
+      return selectChain([]);
+    },
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => callback(database)
+  };
+
+  return {
+    database,
+    externalIdentityUpserts,
+    messageInserts,
+    threadUpdates,
+    realtimeEventInserts,
+    sessionUpdates
   };
 }
 

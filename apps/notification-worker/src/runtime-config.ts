@@ -64,6 +64,17 @@ const notificationWorkerRuntimeConfigSchema = z
       .regex(/^[a-f0-9]{32}$/i)
       .optional(),
     NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
+    NOTIFICATION_WORKER_TELEGRAM_MTPROTO_LEASE_DURATION_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60_000),
+    NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_SYNC_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(15_000),
+    NOTIFICATION_WORKER_TELEGRAM_MTPROTO_CLAIM_LIMIT: z.coerce.number().int().positive().default(25),
     ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
     ASTROLOGER_MEDIA_STORAGE_REGION: z.string().trim().min(1).default("us-east-1"),
     ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET: z
@@ -198,6 +209,9 @@ export type TelegramMtprotoOptions = {
   readonly apiId: number;
   readonly apiHash: string;
   readonly sessionEncryptionKey: Buffer;
+  readonly leaseDurationMs: number;
+  readonly sessionSyncIntervalMs: number;
+  readonly claimLimit: number;
 };
 
 export type MessagingMediaStorageOptions = {
@@ -258,7 +272,10 @@ export function createNotificationWorkerRuntimeConfig(
       enabled: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_ENABLED === "true",
       apiId: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID,
       apiHash: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH,
-      sessionEncryptionKey: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY
+      sessionEncryptionKey: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY,
+      leaseDurationMs: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_LEASE_DURATION_MS,
+      sessionSyncIntervalMs: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_SYNC_INTERVAL_MS,
+      claimLimit: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_CLAIM_LIMIT
     }),
     authCodeEmailDelivery:
       config.NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE === "dev_console"
@@ -284,6 +301,9 @@ function toTelegramMtprotoOptions(input: {
   readonly apiId: number | undefined;
   readonly apiHash: string | undefined;
   readonly sessionEncryptionKey: string | undefined;
+  readonly leaseDurationMs: number;
+  readonly sessionSyncIntervalMs: number;
+  readonly claimLimit: number;
 }): TelegramMtprotoOptions | null {
   if (!input.enabled) return null;
   if (input.apiId === undefined || !input.apiHash || !input.sessionEncryptionKey) {
@@ -294,7 +314,10 @@ function toTelegramMtprotoOptions(input: {
     enabled: true,
     apiId: input.apiId,
     apiHash: input.apiHash,
-    sessionEncryptionKey: parseBase64Aes256GcmKey(input.sessionEncryptionKey)
+    sessionEncryptionKey: parseBase64Aes256GcmKey(input.sessionEncryptionKey),
+    leaseDurationMs: input.leaseDurationMs,
+    sessionSyncIntervalMs: input.sessionSyncIntervalMs,
+    claimLimit: input.claimLimit
   };
 }
 

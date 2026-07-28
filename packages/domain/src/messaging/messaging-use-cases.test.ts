@@ -25,6 +25,7 @@ import type {
   RecordTelegramBusinessDeletedMessagesStoreInput,
   RecordTelegramBusinessEditedMessageStoreInput,
   RecordTelegramBusinessMessageStoreInput,
+  RecordTelegramMtprotoMessageStoreInput,
   StartTelegramBusinessConnectionStoreInput,
   StartTelegramMtprotoConnectionStoreInput
 } from "./messaging-store";
@@ -45,6 +46,7 @@ import {
   recordTelegramBusinessMessage,
   recordTelegramBusinessDeletedMessages,
   recordTelegramBusinessEditedMessage,
+  recordTelegramMtprotoMessage,
   recordTelegramMtprotoCodeResult,
   recordTelegramMtprotoPasswordResult,
   requireTelegramMtprotoLoginSession,
@@ -828,6 +830,77 @@ describe("Messaging use cases", () => {
     );
   });
 
+  it("normalizes Telegram MTProto account messages before passing them to the store", async () => {
+    const store = new InMemoryMessagingStore();
+
+    await expect(
+      recordTelegramMtprotoMessage({
+        store,
+        channelConnectionId: " connection-1 ",
+        leaseOwner: " notification-worker:pid-1 ",
+        providerMessageId: " 4401 ",
+        providerChatId: " 777 ",
+        providerUserId: " 555 ",
+        username: " marina ",
+        displayName: " Marina ",
+        isOutgoing: false,
+        text: "  Хочу записаться  ",
+        providerSentAt: "2026-07-28T10:04:00.000Z",
+        cursor: {
+          pts: 128,
+          qts: null,
+          dateCursor: "2026-07-28T10:04:01.000Z",
+          seq: 9
+        },
+        now
+      })
+    ).resolves.toMatchObject({ kind: "created" });
+
+    expect(store.telegramMtprotoMessageCommands).toEqual([
+      {
+        channelConnectionId: "connection-1",
+        leaseOwner: "notification-worker:pid-1",
+        providerMessageId: "4401",
+        providerChatId: "777",
+        providerUserId: "555",
+        username: "marina",
+        displayName: "Marina",
+        isOutgoing: false,
+        text: "Хочу записаться",
+        providerSentAt: "2026-07-28T10:04:00.000Z",
+        cursor: {
+          pts: 128,
+          qts: null,
+          dateCursor: "2026-07-28T10:04:01.000Z",
+          seq: 9
+        },
+        now: now.toISOString()
+      }
+    ]);
+  });
+
+  it("rejects Telegram MTProto account messages without text", async () => {
+    const store = new InMemoryMessagingStore();
+
+    await expect(
+      recordTelegramMtprotoMessage({
+        store,
+        channelConnectionId: "connection-1",
+        leaseOwner: "notification-worker:pid-1",
+        providerMessageId: "4402",
+        providerChatId: "777",
+        providerUserId: "555",
+        username: null,
+        displayName: null,
+        isOutgoing: false,
+        text: "   ",
+        providerSentAt: "2026-07-28T10:04:00.000Z",
+        now
+      })
+    ).rejects.toThrow(MessagingValidationError);
+    expect(store.telegramMtprotoMessageCommands).toEqual([]);
+  });
+
   it("normalizes Telegram Business edited messages before passing them to the store", async () => {
     const store = new InMemoryMessagingStore();
 
@@ -881,6 +954,7 @@ class InMemoryMessagingStore implements MessagingStore {
   readonly telegramMtprotoCodeCommands: RecordTelegramMtprotoCodeResultStoreInput[] = [];
   readonly telegramMtprotoPasswordCommands: RecordTelegramMtprotoPasswordResultStoreInput[] = [];
   readonly telegramBusinessMessageCommands: RecordTelegramBusinessMessageStoreInput[] = [];
+  readonly telegramMtprotoMessageCommands: RecordTelegramMtprotoMessageStoreInput[] = [];
   readonly telegramBusinessDeleteCommands: RecordTelegramBusinessDeletedMessagesStoreInput[] = [];
   readonly telegramBusinessEditCommands: RecordTelegramBusinessEditedMessageStoreInput[] = [];
   readonly #threads = new Map<string, MessagingThread>([
@@ -992,6 +1066,31 @@ class InMemoryMessagingStore implements MessagingStore {
         threadId: "thread-1",
         messageId: "message-telegram-business",
         channelConnectionId: "connection-1",
+        externalIdentityId: "identity-1"
+      }
+    });
+  }
+
+  async recordTelegramMtprotoMessage(
+    input: RecordTelegramMtprotoMessageStoreInput
+  ): Promise<InboundMessageRecordResult> {
+    this.telegramMtprotoMessageCommands.push(input);
+    return this.recordInboundProviderMessage({
+      messageId: "message-telegram-mtproto",
+      astrologerUserId,
+      threadId: "thread-1",
+      channelConnectionId: input.channelConnectionId,
+      externalIdentityId: "identity-1",
+      providerMessageId: input.providerMessageId,
+      text: input.text,
+      now: input.now,
+      receivedEvent: {
+        astrologerUserId,
+        type: messagingMessageReceivedEventType,
+        occurredAt: input.now,
+        threadId: "thread-1",
+        messageId: "message-telegram-mtproto",
+        channelConnectionId: input.channelConnectionId,
         externalIdentityId: "identity-1"
       }
     });
