@@ -72,6 +72,31 @@ contour. Запускай его только когда явно нужна п�
 API-поверхности; broader user, verification, moderation, payment-support and
 platform-settings routes ещё не реализованы.
 
+### Admin Finance Browser Fixture
+
+Для network-backed проверки `admin-web` finance без frontend mocks можно
+засидить локальную БД реальным admin session и finance-сценарием:
+
+```bash
+set -a
+source .env
+set +a
+pnpm --filter @elevenhouse/db exec tsx scripts/seed-dev-admin-finance.ts
+```
+
+Скрипт отказывается работать с production или non-local `DATABASE_URL`. Он
+создаёт deterministic local rows для admin user/session, astrologer/client,
+manual payout method, открытую заявку на вывод, заявку, отменённую из-за
+chargeback, balanced ledger transactions, wallet read model и reconciliation
+exception. Для предсказуемого сценария активная `manual_review` finance policy
+переключается на fixture policy с `48` часами hold и `1000` bps platform fee.
+
+После выполнения скрипт печатает `Session cookie` и browser helper. Открой
+`admin-web` на `http://127.0.0.1:5175`, выполни helper в консоли браузера и
+перезагрузи страницу. Дальше `/finance/payouts`, `/finance/reconciliation` и
+связанные admin finance API читают реальные строки из локальной БД через
+`admin-api`.
+
 For local passwordless auth development, set
 `NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE=dev_console`. In this mode the
 notification worker decrypts the auth code, writes it to the worker log, marks
