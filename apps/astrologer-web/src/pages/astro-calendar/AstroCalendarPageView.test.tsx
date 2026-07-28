@@ -144,11 +144,20 @@ describe("AstroCalendarPageView", () => {
     const css = readFileSync(new URL("./AstroCalendarPage.module.css", import.meta.url), "utf8");
 
     expect(markup).toContain("Астрокалендарь");
+    expect(markup).toContain("Горизонт рассчитан");
     expect(markup).toContain("Горизонт · 30 дней");
+    expect(markup).toContain("Событий впереди");
+    expect(markup).toContain("Клиентов затронуто");
+    expect(markup).toContain("Готовых автоматизаций");
+    expect(markup).not.toContain("Глобальных <b>");
     expect(markup).toContain("Полнолуние 17° Водолея");
     expect(markup).toContain("Марина Краснова");
+    expect(markup).toContain("Написать");
+    expect(markup).toContain("Автоматизировать");
+    expect(markup).toContain("Мягкое касание по транзиту без автоматической отправки");
     expect(markup).toContain("id=\"astro-calendar-search\"");
     expect(markup).toContain("name=\"astro-calendar-search\"");
+    expect(markup).toContain("aria-label=\"Поиск по астрокалендарю\"");
     expect(markup).toContain("Период кульминации");
     expect(markup).toContain("Автоматизации появятся после отдельного production-контура");
     expect(markup).toContain("disabled");
@@ -163,8 +172,51 @@ describe("AstroCalendarPageView", () => {
 
     expect(markup).toContain("Нет трактовки в справочнике");
     expect(markup).toContain("astro_calendar.missing");
-    expect(markup).toContain("/reference?code=astro_calendar.missing&amp;category=calendar");
+    expect(markup).toContain(
+      "/reference?create=astro_calendar.missing&amp;search=astro_calendar.missing&amp;title=astro_calendar.missing&amp;category=calendar"
+    );
     expect(markup).not.toContain("AI трактовка");
+  });
+
+  it("filters the ready range locally by scope and type without showing recalculation", () => {
+    const globalMarkup = renderToStaticMarkup(
+      <AstroCalendarPageView {...baseProps({ scope: "global" })} />
+    );
+    const moonMarkup = renderToStaticMarkup(
+      <AstroCalendarPageView
+        {...baseProps({
+          eventType: "global.moon_phase",
+          query: {
+            ...baseProps().query,
+            eventTypes: ["global.moon_phase"]
+          }
+        })}
+      />
+    );
+    const clientMarkup = renderToStaticMarkup(
+      <AstroCalendarPageView {...baseProps({ scope: "client" })} />
+    );
+
+    expect(globalMarkup).toContain("Горизонт рассчитан");
+    expect(globalMarkup).toContain("Полнолуние 17° Водолея");
+    expect(globalMarkup).not.toContain("Марина Краснова");
+    expect(globalMarkup).toContain("Событий впереди <b>1</b>");
+    expect(globalMarkup).toContain("Клиентов затронуто <b>0</b>");
+    expect(globalMarkup).not.toContain("Пересчитать");
+    expect(moonMarkup).toContain("Полнолуние 17° Водолея");
+    expect(moonMarkup).not.toContain("Марина Краснова");
+    expect(clientMarkup).toContain("Марина Краснова");
+    expect(clientMarkup).not.toContain("Полнолуние 17° Водолея");
+  });
+
+  it("keeps dictionary cards scoped to the filtered event set", () => {
+    const markup = renderToStaticMarkup(
+      <AstroCalendarPageView {...baseProps({ scope: "global" })} />
+    );
+
+    expect(markup).toContain("Полнолуние");
+    expect(markup).not.toContain("astro_calendar.missing");
+    expect(markup).not.toContain("Нет трактовки в справочнике");
   });
 
   it("keeps the first agenda screen focused on upcoming events", () => {
@@ -189,6 +241,59 @@ describe("AstroCalendarPageView", () => {
     expect(markup).not.toContain("Солярное окно до диапазона");
     expect(markup).toContain("Событие 12");
     expect(markup).not.toContain("Событие 13");
+  });
+
+  it("keeps horizon counters aligned with the visible upcoming agenda", () => {
+    const previousSolarWindow = {
+      ...response.events[1]!,
+      id: "previous-solar-window",
+      type: "client.solar_window",
+      startsAt: "2026-07-30T00:00:00.000Z",
+      title: "Соляр · скрытое окно",
+      clientRefs: [
+        {
+          clientId: "11111111-1111-4111-8111-111111111111",
+          displayName: "Вера Морозова",
+          initials: "ВМ"
+        }
+      ],
+      dictionaryCodes: ["astro_calendar.client.solar_window"]
+    } satisfies AstroCalendarEvent;
+    const upcomingSolarWindow = {
+      ...previousSolarWindow,
+      id: "upcoming-solar-window",
+      startsAt: "2026-08-03T00:00:00.000Z",
+      title: "Соляр · видимое окно",
+      clientRefs: [
+        {
+          clientId: "22222222-2222-4222-8222-222222222222",
+          displayName: "Марина Краснова",
+          initials: "МК"
+        }
+      ]
+    } satisfies AstroCalendarEvent;
+    const markup = renderToStaticMarkup(
+      <AstroCalendarPageView
+        {...baseProps({
+          eventType: "client.solar_window",
+          query: {
+            ...baseProps().query,
+            eventTypes: ["client.solar_window"]
+          },
+          rangeResponse: {
+            ...response,
+            events: [previousSolarWindow, upcomingSolarWindow],
+            dictionaryCodes: ["astro_calendar.client.solar_window"],
+            warnings: []
+          }
+        })}
+      />
+    );
+
+    expect(markup).toContain("Событий впереди <b>1</b>");
+    expect(markup).toContain("Клиентов затронуто <b>1</b>");
+    expect(markup).toContain("Соляр · Марина Краснова");
+    expect(markup).not.toContain("Вера Морозова");
   });
 
   it("prioritizes birthday moments before transit noise at the same timestamp", () => {
@@ -227,6 +332,7 @@ describe("AstroCalendarPageView", () => {
     expect(markup.indexOf("<h3>День рождения · Марина Краснова</h3>")).toBeLessThan(
       markup.indexOf("<h3>Сатурн: секстиль к Сатурн</h3>")
     );
+    expect(markup).toContain(">☼</span>");
     expect(markup).toContain("Повод для тёплого касания");
   });
 
@@ -264,12 +370,21 @@ describe("AstroCalendarPageView", () => {
 
   it("limits missing dictionary cards while preserving the total missing count", () => {
     const dictionaryCodes = Array.from({ length: 10 }, (_, index) => `astro_calendar.missing_${index + 1}`);
+    const events = dictionaryCodes.map(
+      (code, index) =>
+        ({
+          ...eventWithTitle(index + 1),
+          id: `missing-${index + 1}`,
+          dictionaryCodes: [code]
+        }) satisfies AstroCalendarEvent
+    );
     const markup = renderToStaticMarkup(
       <AstroCalendarPageView
         {...baseProps({
           dictionaryEntries: [],
           rangeResponse: {
             ...response,
+            events,
             dictionaryCodes,
             warnings: []
           }

@@ -34,18 +34,26 @@ export function useAstroCalendarPageController(input: { readonly locale: Support
   const [search, setSearch] = useState("");
   const timeZone = getBrowserTimezone();
   const range = useMemo(() => createDefaultAstroCalendarRange(timeZone), [timeZone]);
-  const query = useMemo(
+  const rangeQueryInput = useMemo(
     () =>
       createAstroCalendarRangeQuery({
         ...range,
         timeZone,
-        scope,
+        scope: "all",
         clientIds: [],
-        eventTypes: eventType === "all" ? [] : [eventType]
+        eventTypes: []
       }),
-    [eventType, range, scope, timeZone]
+    [range, timeZone]
   );
-  const rangeQuery = useAstroCalendarRangeQuery(query);
+  const query = useMemo(
+    () => ({
+      ...rangeQueryInput,
+      scope,
+      eventTypes: eventType === "all" ? [] : [eventType]
+    }),
+    [eventType, rangeQueryInput, scope]
+  );
+  const rangeQuery = useAstroCalendarRangeQuery(rangeQueryInput);
   const dictionaryQuery = useAstroCalendarDictionaryEntriesQuery(
     {
       locale: input.locale,
@@ -75,7 +83,7 @@ export function useAstroCalendarPageController(input: { readonly locale: Support
     onRefresh: () => rangeQuery.refetch(),
     onGenerate: () => {
       const body: AstroCalendarGenerationRequest = {
-        ...query,
+        ...rangeQueryInput,
         clients: [],
         settings: defaultSettings
       };
@@ -89,7 +97,7 @@ export function useAstroCalendarPageController(input: { readonly locale: Support
       }
 
       const body: AstroCalendarGenerationRequest = {
-        ...query,
+        ...rangeQueryInput,
         clients: [],
         settings: defaultSettings
       };

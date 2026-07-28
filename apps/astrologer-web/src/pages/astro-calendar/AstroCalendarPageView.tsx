@@ -37,11 +37,11 @@ export type AstroCalendarPageViewProps = {
 
 const eventTypeMeta = {
   "global.moon_phase": { label: "Луна", glyph: "☾", color: "#d8d4ec" },
-  "global.eclipse": { label: "Затмения", glyph: "☉", color: "#f47a7a" },
-  "global.ingress": { label: "Ингрессии", glyph: "♀", color: "#6fa8ff" },
-  "client.birthday": { label: "Дни рождения", glyph: "☼", color: "#e59cc4" },
-  "client.solar_window": { label: "Соляры", glyph: "☉", color: "#f6d266" },
-  "client.transit_aspect": { label: "Транзиты", glyph: "♃", color: "#4ec8a0" }
+  "global.eclipse": { label: "Затмение", glyph: "☉", color: "#f47a7a" },
+  "global.ingress": { label: "Ингрессия", glyph: "♀", color: "#6fa8ff" },
+  "client.birthday": { label: "День рождения", glyph: "☼", color: "#e59cc4" },
+  "client.solar_window": { label: "Соляр", glyph: "☉", color: "#f6d266" },
+  "client.transit_aspect": { label: "Транзит", glyph: "♃", color: "#4ec8a0" }
 } satisfies Record<AstroCalendarEventType, { label: string; glyph: string; color: string }>;
 
 const eventPointGlyphs = {
@@ -71,7 +71,14 @@ const eventPointGlyphs = {
   юпитер: "♃"
 } as const;
 
-const eventTypeOptions = Object.keys(eventTypeMeta) as AstroCalendarEventType[];
+const eventTypeOptions = [
+  "global.moon_phase",
+  "global.ingress",
+  "global.eclipse",
+  "client.transit_aspect",
+  "client.solar_window",
+  "client.birthday"
+] satisfies AstroCalendarEventType[];
 const maxAgendaEvents = 12;
 const maxVisibleInterpretations = 8;
 const agendaEventTypeRank = {
@@ -104,9 +111,14 @@ export function AstroCalendarPageView({
   onRefresh
 }: AstroCalendarPageViewProps) {
   const state = summarizeAstroCalendarState(rangeResponse);
-  const interpretations = rangeResponse
+  const filteredEvents = filterEvents(rangeResponse?.events ?? [], { scope, eventType, search });
+  const upcomingEvents = filterAgendaEvents(filteredEvents, query);
+  const filteredResponse = rangeResponse
+    ? createFilteredInterpretationResponse(rangeResponse, upcomingEvents)
+    : null;
+  const interpretations = filteredResponse
     ? resolveAstroCalendarInterpretations(
-        rangeResponse,
+        filteredResponse,
         {
           entries: [...dictionaryEntries],
           total: dictionaryEntries.length,
@@ -121,11 +133,12 @@ export function AstroCalendarPageView({
         }
       )
     : null;
-  const filteredEvents = filterEvents(rangeResponse?.events ?? [], search);
-  const upcomingEvents = filterAgendaEvents(filteredEvents, query);
   const timelineEvents = upcomingEvents.slice(0, 12);
   const agendaEvents = upcomingEvents.slice(0, maxAgendaEvents);
   const statusCopy = getStatusCopy(state.status);
+  const skyCopy = getSkyCardCopy(rangeResponse, state.status);
+  const visibleEventCount = upcomingEvents.length;
+  const affectedClientCount = countAffectedClients(upcomingEvents);
   const shouldShowActionState =
     filteredEvents.length === 0 &&
     (state.status === "no-data" || state.status === "stale" || state.status === "failed");
@@ -178,7 +191,8 @@ export function AstroCalendarPageView({
             id="astro-calendar-search"
             name="astro-calendar-search"
             value={search}
-            placeholder="Поиск: событие, знак, клиент..."
+            aria-label="Поиск по астрокалендарю"
+            placeholder="Поиск: событие, знак, клиент…"
             onChange={(event) => onSearchChange(event.currentTarget.value)}
           />
         </label>
@@ -192,14 +206,17 @@ export function AstroCalendarPageView({
         <main className={styles.workspace} aria-busy={isFetching ? "true" : undefined}>
           <section className={styles.skyCard}>
             <span className={styles.skyIcon} aria-hidden="true">
-              <Icon iconName="orbit" width={20} height={20} />
+              <Icon iconName="logoMoon" width={20} height={20} />
             </span>
             <div>
-              <strong>{statusCopy.title}</strong>
-              <p>{statusCopy.description}</p>
+              <strong>{skyCopy.title}</strong>
+              <p>{skyCopy.description}</p>
             </div>
+            <span className={styles.skyBadge} title={statusCopy.description}>
+              {statusBadgeLabel(state.status)}
+            </span>
             <button className={styles.secondaryButton} type="button" onClick={onRefresh}>
-              <Icon iconName="refresh" width={14} height={14} aria-hidden="true" />
+              <Icon iconName="content" width={14} height={14} aria-hidden="true" />
               Обновить
             </button>
           </section>
@@ -229,13 +246,13 @@ export function AstroCalendarPageView({
             <div className={styles.horizonHeader}>
               <strong>Горизонт · 30 дней</strong>
               <span>
-                Событий <b>{rangeResponse?.summary.eventCount ?? 0}</b>
+                Событий впереди <b>{visibleEventCount}</b>
               </span>
               <span>
-                Клиентских <b>{rangeResponse?.summary.clientEventCount ?? 0}</b>
+                Клиентов затронуто <b>{affectedClientCount}</b>
               </span>
               <span>
-                Глобальных <b>{rangeResponse?.summary.globalEventCount ?? 0}</b>
+                Готовых автоматизаций <b>0</b>
               </span>
             </div>
             <div className={styles.timeline}>
@@ -328,7 +345,7 @@ export function AstroCalendarPageView({
                     <span>Нет трактовки в справочнике</span>
                     <strong>{missing.code}</strong>
                     <a
-                      href={`/reference?code=${encodeURIComponent(missing.code)}&category=${encodeURIComponent(missing.suggestedCategory)}`}
+                      href={referenceCreateHref(missing)}
                     >
                       Создать трактовку
                     </a>
@@ -357,7 +374,10 @@ function EventCard({ event }: { readonly event: AstroCalendarEvent }) {
       <div className={styles.eventStripe} style={{ background: meta.color }} />
       <div className={styles.eventBody}>
         <div className={styles.eventMain}>
-          <span className={styles.eventGlyph} style={{ color: meta.color }}>
+          <span
+            className={styles.eventGlyph}
+            style={{ color: meta.color, background: `color-mix(in srgb, ${meta.color} 16%, rgb(25 22 54))` }}
+          >
             {glyph}
           </span>
           <div>
@@ -385,6 +405,23 @@ function EventCard({ event }: { readonly event: AstroCalendarEvent }) {
               Глобальное событие
             </span>
           )}
+        </div>
+        <div className={styles.eventActionRow}>
+          <span>
+            <Icon iconName="sparkle" width={14} height={14} aria-hidden="true" />
+            {eventSuggestion(event)}
+          </span>
+          {event.clientRefs.length > 0 ? (
+            <button
+              className={styles.futureButton}
+              type="button"
+              disabled
+              title="Сообщение по астрособытию требует отдельного production-контура"
+            >
+              <Icon iconName="chat" width={14} height={14} aria-hidden="true" />
+              Написать
+            </button>
+          ) : null}
           <button
             className={styles.futureButton}
             type="button"
@@ -392,7 +429,7 @@ function EventCard({ event }: { readonly event: AstroCalendarEvent }) {
             title="Автоматизации появятся после отдельного production-контура"
           >
             <Icon iconName="flow" width={14} height={14} aria-hidden="true" />
-            Автоматизация
+            Автоматизировать
           </button>
         </div>
       </div>
@@ -401,6 +438,9 @@ function EventCard({ event }: { readonly event: AstroCalendarEvent }) {
 }
 
 function eventGlyph(event: AstroCalendarEvent): string {
+  if (event.type === "client.birthday" || event.type === "client.solar_window") {
+    return eventTypeMeta[event.type].glyph;
+  }
   for (const point of event.points) {
     const normalized = normalizeEventPoint(point);
     const glyph = eventPointGlyphs[normalized as keyof typeof eventPointGlyphs];
@@ -424,6 +464,34 @@ function displayEventTitle(event: AstroCalendarEvent): string {
   return event.title;
 }
 
+function getSkyCardCopy(
+  response: AstroCalendarRangeResponse | null,
+  status: ReturnType<typeof summarizeAstroCalendarState>["status"]
+): { title: string; description: string } {
+  if (!response?.generation.provider || status !== "ready") {
+    return {
+      title: getStatusCopy(status).title,
+      description: getStatusCopy(status).description
+    };
+  }
+  return {
+    title: "Горизонт рассчитан",
+    description: `${response.range.start}–${response.range.end} · ${response.generation.provider.name} ${response.generation.provider.version}`
+  };
+}
+
+function statusBadgeLabel(status: ReturnType<typeof summarizeAstroCalendarState>["status"]): string {
+  if (status === "ready") return "Расчёт готов";
+  if (status === "calculating") return "Идёт расчёт";
+  if (status === "failed") return "Ошибка расчёта";
+  if (status === "stale") return "Нужен пересчёт";
+  return "Нет расчёта";
+}
+
+function countAffectedClients(events: readonly AstroCalendarEvent[]): number {
+  return new Set(events.flatMap((event) => event.clientRefs.map((client) => client.clientId))).size;
+}
+
 function defaultEventDescription(type: AstroCalendarEventType): string {
   if (type === "client.birthday") {
     return "Повод для тёплого касания и персонального предложения без ручного поиска по CRM.";
@@ -443,11 +511,78 @@ function defaultEventDescription(type: AstroCalendarEventType): string {
   return "Глобальное событие периода; можно использовать как повод для контента или рассылки.";
 }
 
-function filterEvents(events: readonly AstroCalendarEvent[], search: string) {
-  const needle = search.trim().toLowerCase();
-  if (!needle) return events;
+function eventSuggestion(event: AstroCalendarEvent): string {
+  if (event.type === "client.birthday") {
+    return "Поздравить + персональный бонус по программе лояльности";
+  }
+  if (event.type === "client.solar_window") {
+    return "Предложить разбор соляра на год";
+  }
+  if (event.type === "client.transit_aspect") {
+    return "Мягкое касание по транзиту без автоматической отправки";
+  }
+  if (event.type === "global.moon_phase") {
+    return "Подготовить пост или эфир по лунному событию";
+  }
+  if (event.type === "global.eclipse") {
+    return "Спец-разбор периода затмений без автозапуска";
+  }
+  return "Оффер или контент-повод по глобальному событию";
+}
 
-  return events.filter((event) =>
+function createFilteredInterpretationResponse(
+  response: AstroCalendarRangeResponse,
+  events: readonly AstroCalendarEvent[]
+): AstroCalendarRangeResponse {
+  const dictionaryCodes = Array.from(new Set(events.flatMap((event) => event.dictionaryCodes)));
+  const dictionaryCodeSet = new Set(dictionaryCodes);
+  const eventIdSet = new Set(events.map((event) => event.id));
+
+  return {
+    ...response,
+    dictionaryCodes,
+    warnings: response.warnings.filter((warning) => {
+      if (warning.eventId) return eventIdSet.has(warning.eventId);
+      if (warning.dictionaryCode) return dictionaryCodeSet.has(warning.dictionaryCode);
+      return true;
+    })
+  };
+}
+
+function referenceCreateHref(missing: {
+  readonly code: string;
+  readonly suggestedCategory: string;
+}): string {
+  const searchParams = new URLSearchParams({
+    create: missing.code,
+    search: missing.code,
+    title: missing.code,
+    category: missing.suggestedCategory
+  });
+
+  return `/reference?${searchParams.toString()}`;
+}
+
+function filterEvents(
+  events: readonly AstroCalendarEvent[],
+  filters: {
+    readonly scope: AstroCalendarScope;
+    readonly eventType: AstroCalendarEventTypeFilter;
+    readonly search: string;
+  }
+) {
+  const scopedEvents =
+    filters.scope === "all"
+      ? events
+      : events.filter((event) => event.source === filters.scope);
+  const typedEvents =
+    filters.eventType === "all"
+      ? scopedEvents
+      : scopedEvents.filter((event) => event.type === filters.eventType);
+  const needle = filters.search.trim().toLowerCase();
+  if (!needle) return typedEvents;
+
+  return typedEvents.filter((event) =>
     [
       displayEventTitle(event),
       event.title,

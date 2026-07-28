@@ -13,7 +13,8 @@ describe("dictionary seed data", () => {
       { code: "planets_in_houses", name: "Планеты в домах", order: 40 },
       { code: "aspects", name: "Аспекты", order: 50 },
       { code: "planet_aspects", name: "Аспекты планет", order: 60 },
-      { code: "house_meanings", name: "Значения домов", order: 70 }
+      { code: "house_meanings", name: "Значения домов", order: 70 },
+      { code: "calendar", name: "Астрокалендарь", order: 80 }
     ]);
   });
 

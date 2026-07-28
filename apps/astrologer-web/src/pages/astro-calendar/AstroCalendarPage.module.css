@@ -13,7 +13,12 @@
   margin: -32px;
   flex-direction: column;
   overflow: hidden;
-  background: #0b0a20;
+  background:
+    radial-gradient(circle at 10% 18%, rgb(229 225 244 / 0.45) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 42% 28%, rgb(229 225 244 / 0.32) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 76% 13%, rgb(229 225 244 / 0.38) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 91% 44%, rgb(229 225 244 / 0.34) 0 1px, transparent 1.5px),
+    #0b0a20;
   color: var(--eh-color-moon-120);
 }
 
@@ -113,6 +118,11 @@
   font-size: 13px;
 }
 
+.searchBox:focus-within {
+  border-color: rgb(246 210 102 / 0.36);
+  box-shadow: 0 0 0 3px rgb(246 210 102 / 0.12);
+}
+
 .primaryButton,
 .secondaryButton,
 .futureButton {
@@ -146,7 +156,7 @@
 .primaryButton:disabled,
 .futureButton:disabled {
   cursor: not-allowed;
-  opacity: 0.48;
+  opacity: 0.58;
 }
 
 .toolbarMeta {
@@ -236,9 +246,9 @@
 }
 
 .typeActive {
-  border-color: rgb(139 92 246 / 0.4);
-  background: rgb(139 92 246 / 0.14);
-  color: rgb(183 156 251);
+  border-color: rgb(246 210 102 / 0.44);
+  background: rgb(246 210 102 / 0.13);
+  color: var(--astro-gold);
 }
 
 .skyCard,
@@ -258,8 +268,9 @@
 
 .skyCard {
   display: flex;
+  min-height: 70px;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   margin-bottom: 14px;
   padding: 14px 18px;
 }
@@ -271,6 +282,21 @@
 
 .skyCard strong {
   font-size: 14.5px;
+}
+
+.skyBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid rgb(244 196 48 / 0.3);
+  border-radius: 999px;
+  background: rgb(246 210 102 / 0.12);
+  color: var(--astro-gold);
+  cursor: help;
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
 }
 
 .skyCard p,
@@ -471,9 +497,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  margin-top: 13px;
-  padding-top: 13px;
-  border-top: 1px solid var(--astro-line);
+  margin-top: 11px;
 }
 
 .clientRefs {
@@ -503,6 +527,31 @@
 
 .futureButton {
   color: rgb(186 178 218 / 0.72);
+}
+
+.eventActionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 13px;
+  padding-top: 13px;
+  border-top: 1px solid var(--astro-line);
+}
+
+.eventActionRow > span {
+  display: flex;
+  flex: 1;
+  min-width: 180px;
+  align-items: center;
+  gap: 7px;
+  color: rgb(229 225 244 / 0.78);
+  font-size: 12.5px;
+}
+
+.eventActionRow > span svg {
+  flex: 0 0 auto;
+  color: var(--astro-gold);
 }
 
 .interpretationCard,
@@ -622,6 +671,7 @@
   }
 
   .eventFooter,
+  .eventActionRow,
   .clientRefs {
     flex-direction: column;
   }
