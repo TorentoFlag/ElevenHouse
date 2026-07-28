@@ -3,7 +3,8 @@ import type {
   AstrologerFinanceOverviewResponse,
   CreateManualBankTransferPayoutMethod,
   CreatePayoutRequest,
-  LedgerOperation
+  LedgerOperation,
+  PayoutRequestResponse
 } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { useI18n } from "@elevenhouse/i18n";
@@ -25,6 +26,13 @@ type PayoutMethodForm = {
 };
 
 type OperationFilter = "all" | LedgerOperation["kind"];
+type BalanceMetricTone = "positive" | "warning" | "neutral" | "accent" | "danger";
+type BalanceMetricViewModel = {
+  readonly label: string;
+  readonly value: number;
+  readonly tone: BalanceMetricTone;
+  readonly note: string;
+};
 
 const operationFilters: readonly { readonly value: OperationFilter; readonly label: string }[] = [
   { value: "all", label: "Все" },
@@ -52,11 +60,17 @@ export function FinancePage() {
   const [operationFilter, setOperationFilter] = useState<OperationFilter>("all");
   const [operationSearch, setOperationSearch] = useState("");
   const overview = financeQuery.data ?? null;
+  const payoutAmountMinor = toAmountMinor(payoutAmount);
+  const availablePayoutMinor = overview?.balance.available.amountMinor ?? 0;
+  const isPayoutAmountAboveAvailable = payoutAmountMinor > availablePayoutMinor;
   const canSubmitPayout =
     Boolean(overview?.canRequestPayout) &&
-    toAmountMinor(payoutAmount) > 0 &&
+    payoutAmountMinor > 0 &&
+    !isPayoutAmountAboveAvailable &&
     !payoutRequestMutation.isPending;
   const isMethodFormComplete = Object.values(methodForm).every((value) => value.trim().length > 0);
+  const operationPages = operationsQuery.data?.pages ?? [];
+  const operations = operationPages.flatMap((page) => page.operations);
 
   useDocumentTitle(dictionary.finance.documentTitle);
 
@@ -77,11 +91,10 @@ export function FinancePage() {
 
   const handlePayoutSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const amountMinor = toAmountMinor(payoutAmount);
-    if (!overview || !canSubmitPayout || amountMinor <= 0) return;
+    if (!overview || !canSubmitPayout || payoutAmountMinor <= 0) return;
 
     const body: CreatePayoutRequest = {
-      amount: { amountMinor, currency: "RUB" },
+      amount: { amountMinor: payoutAmountMinor, currency: "RUB" },
       method: overview.defaultPayoutMethod?.method ?? "manual_bank_transfer",
       idempotencyKey: createIdempotencyKey("payout-request")
     };
@@ -153,13 +166,18 @@ export function FinancePage() {
 
         <div className={styles.workspace}>
           <OperationsPanel
-            operations={operationsQuery.data?.operations ?? []}
+            operations={operations}
             filter={operationFilter}
             search={operationSearch}
             locale={locale}
             isLoading={operationsQuery.isLoading}
+            hasNextPage={Boolean(operationsQuery.hasNextPage)}
+            isFetchingNextPage={operationsQuery.isFetchingNextPage}
             onFilterChange={setOperationFilter}
             onSearchChange={setOperationSearch}
+            onLoadMore={() => {
+              void operationsQuery.fetchNextPage();
+            }}
           />
 
           <aside className={styles.sideStack}>
@@ -173,25 +191,21 @@ export function FinancePage() {
                   label="Метод"
                   value={overview?.defaultPayoutMethod?.displayName ?? "не добавлен"}
                 />
-                <PayoutFact
-                  icon="clock"
-                  label="Обработка"
-                  value="заявка в админку"
-                />
+                <PayoutFact icon="clock" label="Обработка" value="заявка в админку" />
                 <PayoutFact
                   icon="calendar"
                   label="Мин. сумма"
-                  value={overview ? formatMoneyMinor(
-                    overview.minimumPayoutAmount.amountMinor,
-                    overview.minimumPayoutAmount.currency,
-                    locale
-                  ) : "-"}
+                  value={
+                    overview
+                      ? formatMoneyMinor(
+                          overview.minimumPayoutAmount.amountMinor,
+                          overview.minimumPayoutAmount.currency,
+                          locale
+                        )
+                      : "-"
+                  }
                 />
-                <PayoutFact
-                  icon="settings"
-                  label="Провайдер"
-                  value="банк вручную"
-                />
+                <PayoutFact icon="settings" label="Провайдер" value="банк вручную" />
               </div>
               <form className={styles.form} onSubmit={handlePayoutSubmit}>
                 <label className={styles.field}>
@@ -211,13 +225,18 @@ export function FinancePage() {
                       disabled={!overview}
                       onClick={() =>
                         setPayoutAmount(
-                          overview ? String(Math.floor(overview.balance.available.amountMinor / 100)) : ""
+                          overview
+                            ? String(Math.floor(overview.balance.available.amountMinor / 100))
+                            : ""
                         )
                       }
                     >
                       Всё
                     </button>
                   </div>
+                  {isPayoutAmountAboveAvailable ? (
+                    <small className={styles.fieldError}>Больше доступного остатка</small>
+                  ) : null}
                 </label>
                 <button className={styles.primaryButton} type="submit" disabled={!canSubmitPayout}>
                   {payoutRequestMutation.isPending ? "Отправляем" : "Создать заявку"}
@@ -225,6 +244,8 @@ export function FinancePage() {
               </form>
               <p className={styles.panelHint}>{resolvePayoutHelpText(overview, locale)}</p>
             </section>
+
+            <PayoutRequestsPanel requests={overview?.recentPayoutRequests ?? []} locale={locale} />
 
             <section className={styles.panel} aria-label="Реквизиты вывода">
               <div className={styles.panelHeader}>
@@ -264,8 +285,8 @@ function BalanceStrip({
   readonly overview: AstrologerFinanceOverviewResponse | null;
   readonly locale: "ru" | "en";
 }) {
-  const buckets = useMemo(
-    () => [
+  const buckets = useMemo(() => {
+    const baseBuckets: readonly BalanceMetricViewModel[] = [
       {
         label: "Доступно к выводу",
         value: overview?.balance.available.amountMinor ?? 0,
@@ -290,9 +311,19 @@ function BalanceStrip({
         tone: "accent",
         note: "ручная обработка"
       }
-    ],
-    [overview]
-  );
+    ];
+    const debtMinor = overview?.balance.negativeBalance.amountMinor ?? 0;
+    if (debtMinor <= 0) return baseBuckets;
+    return [
+      ...baseBuckets,
+      {
+        label: "Долг",
+        value: debtMinor,
+        tone: "danger",
+        note: "возвраты и chargeback"
+      }
+    ];
+  }, [overview]);
 
   return (
     <section className={styles.balanceStrip} aria-label="Баланс">
@@ -402,16 +433,22 @@ function OperationsPanel({
   search,
   locale,
   isLoading,
+  hasNextPage,
+  isFetchingNextPage,
   onFilterChange,
-  onSearchChange
+  onSearchChange,
+  onLoadMore
 }: {
   readonly operations: readonly LedgerOperation[];
   readonly filter: OperationFilter;
   readonly search: string;
   readonly locale: "ru" | "en";
   readonly isLoading: boolean;
+  readonly hasNextPage: boolean;
+  readonly isFetchingNextPage: boolean;
   readonly onFilterChange: (filter: OperationFilter) => void;
   readonly onSearchChange: (search: string) => void;
+  readonly onLoadMore: () => void;
 }) {
   const filteredOperations = operations.filter((operation) => {
     if (!matchesOperationFilter(operation, filter)) return false;
@@ -484,7 +521,9 @@ function OperationsPanel({
                 </span>
                 <span>
                   <strong>{operationTitle(operation)}</strong>
-                  <small>{shortId(operation.id)} · {operationSubtitle(operation)}</small>
+                  <small>
+                    {shortId(operation.id)} · {operationSubtitle(operation)}
+                  </small>
                 </span>
               </span>
               <span
@@ -499,6 +538,62 @@ function OperationsPanel({
               </strong>
               <time dateTime={operation.postedAt}>{formatDate(operation.postedAt)}</time>
             </div>
+          ))}
+        </div>
+      )}
+      {hasNextPage ? (
+        <div className={styles.loadMoreRow}>
+          <button
+            className={styles.ghostButton}
+            type="button"
+            disabled={isFetchingNextPage}
+            onClick={onLoadMore}
+          >
+            {isFetchingNextPage ? "Загружаем" : "Загрузить еще"}
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function PayoutRequestsPanel({
+  requests,
+  locale
+}: {
+  readonly requests: readonly PayoutRequestResponse[];
+  readonly locale: "ru" | "en";
+}) {
+  return (
+    <section className={styles.panel} aria-label="Заявки на вывод">
+      <div className={styles.panelHeader}>
+        <h2>Заявки на вывод</h2>
+      </div>
+      {requests.length === 0 ? (
+        <p className={styles.panelHint}>Заявок пока нет</p>
+      ) : (
+        <div className={styles.payoutRequestList}>
+          {requests.map((request) => (
+            <article className={styles.payoutRequestRow} key={request.id}>
+              <span className={styles.methodIcon}>
+                <Icon iconName="wallet" width={15} height={15} aria-hidden="true" />
+              </span>
+              <span className={styles.payoutRequestMain}>
+                <strong>
+                  {formatMoneyMinor(request.amount.amountMinor, request.amount.currency, locale)}
+                </strong>
+                <small>
+                  {formatDate(request.requestedAt)} · {shortId(request.id)}
+                </small>
+              </span>
+              <span
+                className={`${styles.statusPill} ${
+                  styles[`statusPill_${payoutRequestTone(request.status)}`]
+                }`}
+              >
+                {payoutRequestStatusLabel(request.status)}
+              </span>
+            </article>
           ))}
         </div>
       )}
@@ -576,19 +671,12 @@ function createIdempotencyKey(prefix: string): string {
   return `${prefix}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
 }
 
-function matchesOperationFilter(
-  operation: LedgerOperation,
-  filter: OperationFilter
-): boolean {
+function matchesOperationFilter(operation: LedgerOperation, filter: OperationFilter): boolean {
   if (filter === "all") return true;
   return operation.kind === filter;
 }
 
-function formatSignedMoneyMinor(
-  amountMinor: number,
-  currency: "RUB",
-  locale: "ru" | "en"
-): string {
+function formatSignedMoneyMinor(amountMinor: number, currency: "RUB", locale: "ru" | "en"): string {
   if (amountMinor === 0) return formatMoneyMinor(0, currency, locale);
   const sign = amountMinor < 0 ? "-" : "+";
   return `${sign}${formatMoneyMinor(Math.abs(amountMinor), currency, locale)}`;
@@ -658,6 +746,48 @@ function operationTone(operation: LedgerOperation): "neutral" | "positive" | "wa
   if (operation.kind === "sale" && operation.direction === "inflow") return "positive";
   if (operation.direction === "neutral") return "warning";
   return "neutral";
+}
+
+function payoutRequestStatusLabel(status: PayoutRequestResponse["status"]): string {
+  switch (status) {
+    case "requested":
+      return "В админке";
+    case "under_review":
+      return "На проверке";
+    case "approved":
+      return "Одобрено";
+    case "processing_manual":
+      return "В ручной выплате";
+    case "processing_provider":
+      return "У провайдера";
+    case "paid":
+      return "Выплачено";
+    case "failed":
+      return "Ошибка";
+    case "rejected":
+      return "Отклонено";
+    case "cancelled":
+      return "Отменено";
+  }
+}
+
+function payoutRequestTone(
+  status: PayoutRequestResponse["status"]
+): "neutral" | "positive" | "warning" | "danger" {
+  switch (status) {
+    case "requested":
+    case "under_review":
+    case "approved":
+    case "processing_manual":
+    case "processing_provider":
+      return "warning";
+    case "paid":
+      return "positive";
+    case "failed":
+    case "rejected":
+    case "cancelled":
+      return "danger";
+  }
 }
 
 function formatOperationAmount(operation: LedgerOperation, locale: "ru" | "en"): string {

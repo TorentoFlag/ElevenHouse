@@ -60,9 +60,12 @@ describe("FinancePage", () => {
       refetch: vi.fn()
     });
     mocks.useFinanceOperationsQuery.mockReturnValue({
-      data: financeOperations(),
+      data: financeOperationsInfinite(),
       isLoading: false,
       isError: false,
+      isFetchingNextPage: false,
+      hasNextPage: false,
+      fetchNextPage: vi.fn(),
       refetch: vi.fn()
     });
     mocks.useCreateManualPayoutMethodMutation.mockReturnValue({
@@ -136,10 +139,77 @@ describe("FinancePage", () => {
       expect.objectContaining({ onSuccess: expect.any(Function) })
     );
   });
+
+  it("surfaces chargeback debt and recent payout request states from the finance overview", () => {
+    mocks.useCurrentFinanceOverviewQuery.mockReturnValue({
+      data: financeOverview({
+        balance: {
+          negativeBalance: { amountMinor: 45_000, currency: "RUB" }
+        }
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn()
+    });
+
+    render(<FinancePage />);
+
+    expect(screen.getByText("Долг")).toBeTruthy();
+    expect(screen.getByText("450 ₽")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Заявки на вывод" })).toBeTruthy();
+    expect(screen.getByText("В ручной выплате")).toBeTruthy();
+    expect(screen.getByText("Выплачено")).toBeTruthy();
+  });
+
+  it("loads the next real ledger page when the operation history has a cursor", () => {
+    const fetchNextPage = vi.fn();
+    mocks.useFinanceOperationsQuery.mockReturnValue({
+      data: {
+        pages: [financeOperations({ nextCursor: "ledger-cursor-2" })],
+        pageParams: [undefined]
+      },
+      isLoading: false,
+      isError: false,
+      isFetchingNextPage: false,
+      hasNextPage: true,
+      fetchNextPage,
+      refetch: vi.fn()
+    });
+
+    render(<FinancePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Загрузить еще" }));
+
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not submit payout requests above the available balance", () => {
+    const mutate = vi.fn();
+    mocks.useCreatePayoutRequestMutation.mockReturnValue({
+      mutate,
+      isPending: false,
+      isError: false,
+      isSuccess: false
+    });
+
+    render(<FinancePage />);
+
+    fireEvent.change(screen.getByLabelText("Сумма"), { target: { value: "20000" } });
+
+    expect(screen.getByText("Больше доступного остатка")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Создать заявку" })).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("button", { name: "Создать заявку" }));
+
+    expect(mutate).not.toHaveBeenCalled();
+  });
 });
 
-function financeOverview(): AstrologerFinanceOverviewResponse {
-  return {
+function financeOverview(
+  overrides: Omit<Partial<AstrologerFinanceOverviewResponse>, "balance"> & {
+    readonly balance?: Partial<AstrologerFinanceOverviewResponse["balance"]>;
+  } = {}
+): AstrologerFinanceOverviewResponse {
+  const overview: AstrologerFinanceOverviewResponse = {
     balance: {
       astrologerUserId: "55555555-5555-4555-8555-555555555555",
       pending: { amountMinor: 789_000, currency: "RUB" },
@@ -197,9 +267,20 @@ function financeOverview(): AstrologerFinanceOverviewResponse {
     minimumPayoutAmount: { amountMinor: 100_000, currency: "RUB" },
     payoutRequestUnavailableReason: null
   };
+
+  return {
+    ...overview,
+    ...overrides,
+    balance: {
+      ...overview.balance,
+      ...overrides.balance
+    }
+  };
 }
 
-function financeOperations(): LedgerOperationListResponse {
+function financeOperations(
+  overrides: Partial<LedgerOperationListResponse> = {}
+): LedgerOperationListResponse {
   return {
     operations: [
       {
@@ -245,6 +326,14 @@ function financeOperations(): LedgerOperationListResponse {
         metadata: {}
       }
     ],
-    nextCursor: null
+    nextCursor: null,
+    ...overrides
+  };
+}
+
+function financeOperationsInfinite(overrides: Partial<LedgerOperationListResponse> = {}) {
+  return {
+    pages: [financeOperations(overrides)],
+    pageParams: [undefined]
   };
 }

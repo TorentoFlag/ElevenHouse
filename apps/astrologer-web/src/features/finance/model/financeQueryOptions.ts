@@ -29,6 +29,20 @@ export function financeOperationsQueryOptions(query: LedgerOperationListQuery = 
   };
 }
 
+export function financeOperationsInfiniteQueryOptions(query: LedgerOperationListQuery = {}) {
+  return {
+    queryKey: financeQueryKeys.operations(query),
+    initialPageParam: query.cursor,
+    queryFn: ({ pageParam }: { readonly pageParam: string | undefined }) =>
+      listFinanceOperations({
+        ...query,
+        ...(pageParam ? { cursor: pageParam } : {})
+      }),
+    getNextPageParam: (lastPage: Awaited<ReturnType<typeof listFinanceOperations>>) =>
+      lastPage.nextCursor ?? undefined
+  };
+}
+
 export function createManualPayoutMethodMutationOptions(
   queryClient: Pick<QueryClient, "invalidateQueries">
 ) {
