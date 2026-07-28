@@ -988,6 +988,7 @@ function PayoutsPanel(props: {
               <Fact label="Audit" value="Admin audit event" />
               <Fact label="Ledger" value={payoutLedgerContext(props.selectedPayout.status)} />
             </OperationContext>
+            <PayoutDetail request={props.selectedPayout} />
             {props.selectedPayout.blockedByChargeback ? (
               <div className="adminFinancePayoutBlockNotice">
                 <strong>Chargeback blocked</strong>
@@ -1195,6 +1196,8 @@ function DisputesPanel(props: {
               ) : null}
             </div>
 
+            <DisputeDetail paymentReversalCase={paymentReversalCase} />
+
             <div className="adminFinanceDisputeActions">
               <Button title="Открыть заказ" variant="default" size="small" disabled />
               <Button title="Ledger details" variant="default" size="small" disabled />
@@ -1394,6 +1397,7 @@ function ReconciliationPanel(props: {
                 )}
               </div>
             </div>
+            <ReconciliationDetail exception={props.selectedException} />
             <OperationContext title="Evidence context">
               <Fact label="Record" value={shortId(props.selectedException.id)} />
               <Fact label="Evidence" value={providerEvidenceId(props.selectedException)} />
@@ -1879,6 +1883,118 @@ function Fact(props: { readonly label: string; readonly value: string }) {
   );
 }
 
+function PayoutDetail(props: { readonly request: AdminPayoutRequestResponse }) {
+  return (
+    <DetailSection title="Payout detail">
+      <div className="adminFinanceDetailGrid">
+        <Fact label="Provider payout" value={props.request.providerPayoutId ?? "not created"} />
+        <Fact
+          label="External reference"
+          value={props.request.externalReference ?? "manual evidence missing"}
+        />
+        <Fact label="Transferred" value={nullableDateTime(props.request.transferredAt)} />
+        <Fact label="Requested" value={formatDateTime(props.request.requestedAt)} />
+        <Fact label="Reviewed" value={nullableDateTime(props.request.reviewedAt)} />
+        <Fact label="Completed" value={nullableDateTime(props.request.completedAt)} />
+        <Fact
+          label="Admin actor"
+          value={props.request.adminUserId ? shortId(props.request.adminUserId) : "not assigned"}
+        />
+        <Fact label="Failure reason" value={props.request.failureReason ?? "no failure evidence"} />
+      </div>
+      <EvidenceNote label="Admin note" value={props.request.adminNote ?? "No admin note yet"} />
+    </DetailSection>
+  );
+}
+
+function DisputeDetail(props: { readonly paymentReversalCase: AdminPaymentReversalCase }) {
+  const review = props.paymentReversalCase.review;
+  return (
+    <DetailSection title="Dispute detail">
+      <div className="adminFinanceDetailGrid">
+        <Fact label="Payment attempt" value={shortId(props.paymentReversalCase.paymentAttemptId)} />
+        <Fact label="Order" value={shortId(props.paymentReversalCase.orderId)} />
+        <Fact label="Client" value={shortId(props.paymentReversalCase.clientUserId)} />
+        <Fact label="Astrologer" value={shortId(props.paymentReversalCase.astrologerUserId)} />
+        <Fact
+          label="Provider payment"
+          value={props.paymentReversalCase.providerPaymentId ?? "missing"}
+        />
+        <Fact
+          label="Provider refund"
+          value={props.paymentReversalCase.providerRefundId ?? "not a refund"}
+        />
+        <Fact
+          label="Wallet shortfall"
+          value={formatMoney(
+            props.paymentReversalCase.walletBalance?.negativeBalance ?? {
+              amountMinor: 0,
+              currency: props.paymentReversalCase.amount.currency
+            }
+          )}
+        />
+        <Fact label="Existing review" value={review?.resolution ?? "not reviewed"} />
+        <Fact label="Occurred" value={formatDateTime(props.paymentReversalCase.occurredAt)} />
+        <Fact label="Received" value={formatDateTime(props.paymentReversalCase.receivedAt)} />
+        <Fact
+          label="Wallet updated"
+          value={nullableDateTime(props.paymentReversalCase.walletBalance?.updatedAt ?? null)}
+        />
+        <Fact label="Reviewed" value={nullableDateTime(review?.reviewedAt ?? null)} />
+      </div>
+      <EvidenceNote label="Review note" value={review?.adminNote ?? "No operator review yet"} />
+    </DetailSection>
+  );
+}
+
+function ReconciliationDetail(props: { readonly exception: AdminReconciliationException }) {
+  return (
+    <DetailSection title="Reconciliation detail">
+      <div className="adminFinanceDetailGrid">
+        <Fact label="Provider payment" value={props.exception.providerPaymentId ?? "missing"} />
+        <Fact label="Provider payout" value={props.exception.providerPayoutId ?? "missing"} />
+        <Fact
+          label="Provider settlement"
+          value={props.exception.providerSettlementId ?? "missing"}
+        />
+        <Fact
+          label="Provider event"
+          value={
+            props.exception.providerEventId ? shortId(props.exception.providerEventId) : "missing"
+          }
+        />
+        <Fact
+          label="Provider occurred"
+          value={nullableDateTime(props.exception.providerOccurredAt)}
+        />
+        <Fact label="Checked" value={formatDateTime(props.exception.checkedAt)} />
+      </div>
+      <EvidenceNote label="Exception message" value={props.exception.exceptionMessage} />
+    </DetailSection>
+  );
+}
+
+function DetailSection(props: {
+  readonly title: string;
+  readonly children: ReactElement | readonly ReactElement[];
+}) {
+  return (
+    <section className="adminFinanceDetailSection" aria-label={props.title}>
+      <h3>{props.title}</h3>
+      {props.children}
+    </section>
+  );
+}
+
+function EvidenceNote(props: { readonly label: string; readonly value: string }) {
+  return (
+    <div className="adminFinanceEvidenceNote">
+      <span>{props.label}</span>
+      <p>{props.value}</p>
+    </div>
+  );
+}
+
 function OperationContext(props: {
   readonly title: string;
   readonly children: ReactElement | readonly ReactElement[];
@@ -2017,6 +2133,19 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" }).format(
     new Date(value)
   );
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
+function nullableDateTime(value: string | null): string {
+  return value ? formatDateTime(value) : "not recorded";
 }
 
 function shortId(value: string): string {

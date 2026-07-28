@@ -173,8 +173,8 @@ describe("FinancePoliciesPage", () => {
     expect(await screen.findAllByText("Chargeback blocked")).toHaveLength(2);
     expect(screen.getAllByText(/450/)).toHaveLength(3);
     expect(
-      screen.getByText("Provider chargeback blocked payout before paid confirmation")
-    ).toBeTruthy();
+      screen.getAllByText("Provider chargeback blocked payout before paid confirmation").length
+    ).toBeGreaterThanOrEqual(1);
     expect(
       (screen.getByRole("button", { name: "Отметить оплаченной" }) as HTMLButtonElement).disabled
     ).toBe(true);
@@ -310,6 +310,145 @@ describe("FinancePoliciesPage", () => {
     expect(await screen.findByText("Evidence context")).toBeTruthy();
     expect(screen.getByText("Hold release gate")).toBeTruthy();
     expect(screen.getByText("Admin resolution audit")).toBeTruthy();
+  });
+
+  it("shows payout detail evidence for provider reference, audit actor and terminal timestamps", async () => {
+    const api = apiStub();
+    vi.mocked(api.listPayoutRequests).mockResolvedValue(
+      payoutQueue([
+        payoutRequest({
+          status: "paid",
+          reviewedAt: "2026-07-24T10:01:00.000Z",
+          completedAt: "2026-07-24T10:04:00.000Z",
+          adminUserId: "77777777-7777-4777-8777-777777777777",
+          adminNote: "Paid from bank cabinet after ledger check",
+          externalReference: "bank-transfer-777",
+          transferredAt: "2026-07-24T10:03:00.000Z",
+          providerPayoutId: "arc-payout-777"
+        })
+      ])
+    );
+
+    render(<FinancePoliciesPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
+
+    expect(await screen.findByText("Payout detail")).toBeTruthy();
+    expect(screen.getByText("Provider payout")).toBeTruthy();
+    expect(screen.getByText("arc-payout-777")).toBeTruthy();
+    expect(screen.getAllByText("External reference").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("bank-transfer-777")).toBeTruthy();
+    expect(screen.getByText("Admin actor")).toBeTruthy();
+    expect(screen.getByText("77777777...7777")).toBeTruthy();
+    expect(screen.getByText("Completed")).toBeTruthy();
+    expect(screen.getByText("Paid from bank cabinet after ledger check")).toBeTruthy();
+  });
+
+  it("shows dispute detail evidence for payment, parties, wallet impact and existing review", async () => {
+    const api = apiStub();
+    vi.mocked(api.listPaymentReversalCases).mockResolvedValue({
+      summary: {
+        refundCount: 0,
+        chargebackCount: 1,
+        criticalCount: 1,
+        totalAmount: { amountMinor: 50_000, currency: "RUB" as const },
+        negativeBalanceAmount: { amountMinor: 45_000, currency: "RUB" as const }
+      },
+      cases: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          type: "chargeback",
+          severity: "critical",
+          provider: "arc_pay",
+          environment: "sandbox",
+          providerWebhookId: "wh_chargeback_1",
+          providerPaymentId: "arc-payment-1",
+          providerRefundId: null,
+          paymentAttemptId: "22222222-2222-4222-8222-222222222222",
+          orderId: "33333333-3333-4333-8333-333333333333",
+          clientUserId: "44444444-4444-4444-8444-444444444444",
+          astrologerUserId: "55555555-5555-4555-8555-555555555555",
+          orderStatus: "chargeback",
+          paymentAttemptStatus: "chargeback",
+          amount: { amountMinor: 50_000, currency: "RUB" as const },
+          refundStatus: null,
+          ledgerOperationType: "chargeback_recorded",
+          ledgerTransactionId: "66666666-6666-4666-8666-666666666666",
+          review: {
+            resolution: "provider_follow_up_required",
+            adminNote: "Evidence sent to bank dispute portal",
+            reviewedByUserId: "77777777-7777-4777-8777-777777777777",
+            reviewedAt: "2026-07-24T10:03:00.000Z"
+          },
+          walletBalance: {
+            astrologerUserId: "55555555-5555-4555-8555-555555555555",
+            pending: { amountMinor: 0, currency: "RUB" as const },
+            available: { amountMinor: 0, currency: "RUB" as const },
+            reserved: { amountMinor: 0, currency: "RUB" as const },
+            payoutPending: { amountMinor: 0, currency: "RUB" as const },
+            negativeBalance: { amountMinor: 45_000, currency: "RUB" as const },
+            updatedAt: "2026-07-24T10:02:00.000Z"
+          },
+          occurredAt: "2026-07-24T10:00:00.000Z",
+          receivedAt: "2026-07-24T10:01:00.000Z"
+        }
+      ]
+    });
+
+    render(<FinancePoliciesPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Споры" }));
+
+    expect(await screen.findByText("Dispute detail")).toBeTruthy();
+    expect(screen.getByText("Payment attempt")).toBeTruthy();
+    expect(screen.getByText("22222222...2222")).toBeTruthy();
+    expect(screen.getByText("Client")).toBeTruthy();
+    expect(screen.getAllByText("44444444...4444").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Wallet shortfall")).toBeTruthy();
+    expect(screen.getAllByText(/450/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Existing review")).toBeTruthy();
+    expect(screen.getByText("Evidence sent to bank dispute portal")).toBeTruthy();
+  });
+
+  it("shows reconciliation detail evidence for provider ids, timeline and payload", async () => {
+    const api = apiStub();
+    vi.mocked(api.listReconciliationExceptions).mockResolvedValue({
+      summary: {
+        openCount: 1,
+        oldestOpenAt: "2026-07-24T10:01:00.000Z"
+      },
+      exceptions: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          provider: "arc_pay",
+          environment: "sandbox",
+          providerPaymentId: "provider-payment-1",
+          providerPayoutId: "provider-payout-1",
+          providerSettlementId: "settlement-1",
+          providerEventId: "33333333-3333-4333-8333-333333333333",
+          status: "exception",
+          exceptionCode: "amount_mismatch",
+          exceptionMessage: "Provider settlement amount differs from ledger",
+          providerOccurredAt: "2026-07-24T10:00:00.000Z",
+          checkedAt: "2026-07-24T10:01:00.000Z",
+          resolvedAt: null,
+          payload: { source: "settlement.report", settlementAmountMinor: 490_000 }
+        }
+      ]
+    });
+
+    render(<FinancePoliciesPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Сверка/ }));
+
+    expect(await screen.findByText("Reconciliation detail")).toBeTruthy();
+    expect(screen.getByText("Provider payment")).toBeTruthy();
+    expect(screen.getAllByText("provider-payment-1").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Provider payout")).toBeTruthy();
+    expect(screen.getByText("provider-payout-1")).toBeTruthy();
+    expect(screen.getByText("Provider occurred")).toBeTruthy();
+    expect(screen.getByText("Checked")).toBeTruthy();
+    expect(screen.getByText("settlementAmountMinor")).toBeTruthy();
   });
 });
 
