@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, ne } from "drizzle-orm";
 import type {
   MessagingReadChannelConnection,
   MessagingReadExternalIdentity,
@@ -37,6 +37,31 @@ export function createDrizzleMessagingReadStore(database: ElevenHouseDatabase): 
         .orderBy(desc(messagingChannelConnections.updatedAt), desc(messagingChannelConnections.id))
         .limit(100);
       return { channelConnections: rows.map(toChannelConnection) };
+    },
+    listTelegramBusinessConnectionReconciliationCandidates: async ({ astrologerUserId }) => {
+      const rows = await database
+        .select({
+          channelConnectionId: messagingChannelConnections.id,
+          businessConnectionId: messagingChannelConnections.externalAccountId
+        })
+        .from(messagingChannelConnections)
+        .where(
+          and(
+            eq(messagingChannelConnections.astrologerUserId, astrologerUserId),
+            eq(messagingChannelConnections.provider, "telegram"),
+            eq(messagingChannelConnections.mode, "telegram_business_bot"),
+            inArray(messagingChannelConnections.status, ["active", "reauth_required"]),
+            isNotNull(messagingChannelConnections.externalAccountId)
+          )
+        )
+        .orderBy(desc(messagingChannelConnections.updatedAt), desc(messagingChannelConnections.id))
+        .limit(10);
+      return {
+        candidates: rows.map((row) => ({
+          channelConnectionId: row.channelConnectionId,
+          businessConnectionId: row.businessConnectionId ?? ""
+        })).filter((row) => row.businessConnectionId.length > 0)
+      };
     },
     listThreads: async (input) => {
       const rows = await database

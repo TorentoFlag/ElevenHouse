@@ -150,6 +150,68 @@ describe("messaging Drizzle/PostgreSQL integration", () => {
     expect(JSON.stringify(outbox.rows[0]?.payload)).not.toContain("Test outbound body");
   });
 
+  it("records Telegram Business connection changes as durable realtime events", async () => {
+    const fixture = await createFixture();
+    const store = createDrizzleMessagingStore(runtime.database);
+    const occurredAt = "2026-07-22T10:01:00.000Z";
+
+    await expect(
+      store.recordTelegramBusinessConnection({
+        businessConnectionId: fixture.businessConnectionId,
+        userId: "987654321",
+        userChatId: "123456789",
+        username: "alisa_astro",
+        displayName: "Alisa",
+        connectedAt: occurredAt,
+        enabled: true,
+        rights: {
+          canReply: true,
+          canReadMessages: true,
+          canDeleteSentMessages: true,
+          canDeleteAllMessages: false,
+          canEditName: false,
+          canEditBio: false,
+          canEditProfilePhoto: false,
+          canEditUsername: false,
+          canChangeGiftSettings: false,
+          canViewGiftsAndStars: false,
+          canConvertGiftsToStars: false,
+          canTransferAndUpgradeGifts: false,
+          canTransferStars: false,
+          canManageStories: false
+        },
+        now: occurredAt
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    const events = await runtime.pool.query<{
+      type: string;
+      astrologer_user_id: string;
+      channel_connection_id: string | null;
+      thread_id: string | null;
+      message_id: string | null;
+      external_identity_id: string | null;
+    }>(
+      `select type, astrologer_user_id, channel_connection_id, thread_id, message_id, external_identity_id
+       from messaging_realtime_events
+       where astrologer_user_id = $1 and type = 'channelConnection.updated'
+       order by event_id desc
+       limit 1`,
+      [fixture.astrologerUserId]
+    );
+
+    expect(events.rows).toEqual([
+      {
+        type: "channelConnection.updated",
+        astrologer_user_id: fixture.astrologerUserId,
+        channel_connection_id: fixture.channelConnectionId,
+        thread_id: null,
+        message_id: null,
+        external_identity_id: null
+      }
+    ]);
+  });
+
   it("records Telegram Business voice messages and exposes voice content type in the read model", async () => {
     const fixture = await createFixture();
     const store = createDrizzleMessagingStore(runtime.database);

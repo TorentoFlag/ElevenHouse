@@ -8,6 +8,7 @@ import { ClientSearchCombobox } from "../../features/clients/components/ClientSe
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import type { InboxThreadFilter } from "../../features/messaging/model/inboxThreadFilters";
 import styles from "./InboxPage.module.css";
+import { ChannelConnectionDialog } from "./TelegramBusinessSetupGuide";
 import { MessageMediaBubble } from "./MessageMediaBubble";
 
 export type { InboxThreadFilter };
@@ -24,6 +25,8 @@ export type InboxPageViewProps = {
   readonly isThreadError: boolean;
   readonly isSending: boolean;
   readonly sendError: string | null;
+  readonly isTelegramBusinessGuideOpen: boolean;
+  readonly telegramBusinessBotUsername: string | null;
   readonly isStartingTelegramBusinessConnection: boolean;
   readonly telegramBusinessStartError: string | null;
   readonly draft: string;
@@ -39,6 +42,8 @@ export type InboxPageViewProps = {
   readonly onThreadFilterChange: (value: InboxThreadFilter) => void;
   readonly onSelectThread: (threadId: string) => void;
   readonly onDraftChange: (value: string) => void;
+  readonly onOpenTelegramBusinessGuide: () => void;
+  readonly onCloseTelegramBusinessGuide: () => void;
   readonly onStartTelegramBusinessConnection: () => void;
   readonly onSend: () => void;
   readonly onMarkRead: (threadId: string) => void;
@@ -65,6 +70,8 @@ export function InboxPageView({
   isThreadError,
   isSending,
   sendError,
+  isTelegramBusinessGuideOpen,
+  telegramBusinessBotUsername,
   isStartingTelegramBusinessConnection,
   telegramBusinessStartError,
   draft,
@@ -80,6 +87,8 @@ export function InboxPageView({
   onThreadFilterChange,
   onSelectThread,
   onDraftChange,
+  onOpenTelegramBusinessGuide,
+  onCloseTelegramBusinessGuide,
   onStartTelegramBusinessConnection,
   onSend,
   onMarkRead,
@@ -94,13 +103,14 @@ export function InboxPageView({
   const telegramBusiness = channelConnections.find(
     (connection) => connection.mode === "telegram_business_bot"
   );
-  const telegramBusinessStartDisabled =
-    isStartingTelegramBusinessConnection || telegramBusiness?.status === "active";
   const showTelegramBusinessSetup =
     isConnectionsLoading ||
     !telegramBusiness ||
     telegramBusiness.status !== "active" ||
     Boolean(telegramBusinessStartError);
+  const connectedChannelConnections = channelConnections.filter(
+    (connection) => connection.status === "active"
+  );
   const canSend = telegramBusiness?.status === "active" && telegramBusiness.capabilities.canSend;
   const composerDisabled = !selectedThread || !canSend || isSending;
   const totalUnread = threads.reduce((sum, thread) => sum + thread.unreadCount, 0);
@@ -120,70 +130,26 @@ export function InboxPageView({
         </div>
         <div className={styles.channelStrip} aria-label="Каналы подключения">
           <span className={styles.channelStripLabel}>Каналы:</span>
-          {channelConnections.map((connection) => (
+          {connectedChannelConnections.map((connection) => (
             <ChannelBadge key={connection.id} connection={connection} />
           ))}
           <button
             className={styles.connectButton}
             type="button"
-            disabled={telegramBusinessStartDisabled}
-            onClick={() => onStartTelegramBusinessConnection()}
+            onClick={() => onOpenTelegramBusinessGuide()}
           >
-            {telegramBusinessStartButtonLabel(
-              telegramBusiness,
-              isStartingTelegramBusinessConnection
-            )}
+            Подключить канал
           </button>
         </div>
       </header>
 
       <div className={styles.body}>
         <aside className={styles.threadListPanel} aria-label="Диалоги">
-          {showTelegramBusinessSetup && (
-            <div className={styles.connectionCards}>
-              <article className={styles.connectionCard}>
-                <div className={styles.connectionIcon}>T</div>
-                <div>
-                  <h2>Подключить Telegram Business</h2>
-                  <p>
-                    Сообщения приходят из личного Telegram Business аккаунта астролога через
-                    разрешённого Secretary bot.
-                  </p>
-                  <ConnectionStatus
-                    connection={telegramBusiness}
-                    isLoading={isConnectionsLoading}
-                  />
-                  {telegramBusinessStartError && (
-                    <p className={styles.connectionError} role="alert">
-                      {telegramBusinessStartError}
-                    </p>
-                  )}
-                  <button
-                    className={styles.connectButton}
-                    type="button"
-                    disabled={telegramBusinessStartDisabled}
-                    onClick={() => onStartTelegramBusinessConnection()}
-                  >
-                    {telegramBusinessStartButtonLabel(
-                      telegramBusiness,
-                      isStartingTelegramBusinessConnection
-                    )}
-                  </button>
-                </div>
-              </article>
-
-              <article className={styles.connectionCardMuted}>
-                <div className={styles.connectionIconMuted}>T</div>
-                <div>
-                  <h2>Telegram Account</h2>
-                  <p>
-                    MTProto вход останется равным способом подключения после этого Telegram slice.
-                  </p>
-                  <span className={styles.laterBadge}>Будет доступно позже</span>
-                </div>
-              </article>
-            </div>
-          )}
+          {showTelegramBusinessSetup && telegramBusinessStartError ? (
+            <p className={styles.connectionError} role="alert">
+              {telegramBusinessStartError}
+            </p>
+          ) : null}
 
           <label className={styles.searchBox}>
             <span>Поиск по диалогам</span>
@@ -454,6 +420,16 @@ export function InboxPageView({
           )}
         </aside>
       </div>
+      {isTelegramBusinessGuideOpen ? (
+        <ChannelConnectionDialog
+          connection={telegramBusiness}
+          isStarting={isStartingTelegramBusinessConnection}
+          errorMessage={telegramBusinessStartError}
+          telegramBotUsername={telegramBusinessBotUsername}
+          onStartConnection={onStartTelegramBusinessConnection}
+          onClose={onCloseTelegramBusinessGuide}
+        />
+      ) : null}
     </section>
   );
 }
@@ -467,66 +443,13 @@ function compareMessagesByCreatedAt(left: MessagingMessage, right: MessagingMess
   return left.id.localeCompare(right.id);
 }
 
-function ConnectionStatus({
-  connection,
-  isLoading
-}: {
-  readonly connection?: MessagingChannelConnection;
-  readonly isLoading: boolean;
-}) {
-  if (isLoading) {
-    return <span className={styles.statusMuted}>Проверяем подключение</span>;
-  }
-
-  if (!connection) {
-    return <span className={styles.statusWarning}>Не подключено</span>;
-  }
-
-  if (connection.status === "connecting") {
-    return <span className={styles.statusMuted}>Ожидает подтверждения</span>;
-  }
-
-  if (connection.status === "reauth_required") {
-    return <span className={styles.statusWarning}>Нужны права Telegram</span>;
-  }
-
-  if (connection.status === "revoked") {
-    return <span className={styles.statusWarning}>Отключено в Telegram</span>;
-  }
-
-  if (connection.status !== "active") {
-    return <span className={styles.statusWarning}>Требует внимания: {connection.status}</span>;
-  }
-
-  return <span className={styles.statusOk}>Подключено</span>;
-}
-
-function telegramBusinessStartButtonLabel(
-  connection: MessagingChannelConnection | undefined,
-  isStarting: boolean
-) {
-  if (isStarting) {
-    return "Открываем Telegram";
-  }
-
-  if (connection?.status === "active") {
-    return "Подключено";
-  }
-
-  if (connection?.status === "connecting") {
-    return "Ожидаем Telegram";
-  }
-
-  if (connection?.status === "reauth_required" || connection?.status === "revoked") {
-    return "Подключить заново";
-  }
-
-  return "Подключить Telegram";
-}
-
 function ChannelBadge({ connection }: { readonly connection: MessagingChannelConnection }) {
   return (
-    <span className={styles.channelBadge} title={connection.displayName ?? connection.mode}>
+    <span
+      className={connection.provider === "telegram" ? styles.providerTelegram : styles.providerInstagram}
+      title={connection.displayName ?? connection.mode}
+      aria-label={`Подключен ${providerLabel(connection.provider)}: ${channelDisplayName(connection)}`}
+    >
       {connection.provider === "telegram" ? "T" : "I"}
     </span>
   );
@@ -542,6 +465,10 @@ function ProviderPill({ provider }: { readonly provider: "telegram" | "instagram
 
 function providerLabel(provider: "telegram" | "instagram") {
   return provider === "telegram" ? "Telegram" : "Instagram";
+}
+
+function channelDisplayName(connection: MessagingChannelConnection) {
+  return connection.displayName ?? connection.username ?? providerLabel(connection.provider);
 }
 
 function identityHandle(identity: MessagingThread["primaryIdentity"] | null): string {

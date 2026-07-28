@@ -48,8 +48,13 @@ import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { MEDIA_PRIVATE_OBJECT_STORAGE } from "../media/media.tokens";
 import { messagingHttpError } from "./messaging-http-errors";
-import { MESSAGING_READ_STORE, MESSAGING_STORE } from "./messaging.tokens";
+import {
+  MESSAGING_READ_STORE,
+  MESSAGING_STORE,
+  TELEGRAM_BUSINESS_CONNECTION_LOOKUP
+} from "./messaging.tokens";
 import { createMessagingRealtimeEventStream } from "./realtime-event-stream";
+import type { TelegramBusinessConnectionLookup } from "./telegram-business-connection-lookup";
 import type { ParsedTelegramBusinessWebhookUpdate } from "./telegram-business-webhook";
 
 @Injectable()
@@ -57,6 +62,8 @@ export class MessagingService {
   constructor(
     @Inject(MESSAGING_STORE) private readonly store: MessagingStore,
     @Inject(MESSAGING_READ_STORE) private readonly readStore: MessagingReadStore,
+    @Inject(TELEGRAM_BUSINESS_CONNECTION_LOOKUP)
+    private readonly telegramBusinessConnectionLookup: TelegramBusinessConnectionLookup | null,
     @Inject(MEDIA_PRIVATE_OBJECT_STORAGE) private readonly privateObjectStorage: PrivateObjectStoragePort,
     private readonly clock: SystemClock,
     private readonly configService: ConfigService
@@ -66,6 +73,7 @@ export class MessagingService {
     request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
   ): Promise<MessagingChannelConnectionResponse> {
     const astrologerUserId = requireAstrologerUserId(request);
+    await this.reconcileTelegramBusinessConnections(astrologerUserId);
     const result = await this.readStore.listChannelConnections({ astrologerUserId });
     return MessagingChannelConnectionResponseSchema.parse(result);
   }
@@ -285,23 +293,13 @@ export class MessagingService {
       isPersistableTelegramBusinessMessage(update.contentType) &&
       update.text
     ) {
-      await recordTelegramBusinessMessage({
-        store: this.store,
-        updateId: update.updateId,
-        businessConnectionId: update.businessConnectionId,
-        providerMessageId: update.providerMessageId,
-        providerChatId: update.providerChatId,
-        providerUserId: update.providerUserId,
-        username: update.username,
-        displayName: update.displayName,
-        chatUsername: update.chatUsername,
-        chatDisplayName: update.chatDisplayName,
-        contentType: update.contentType,
-        text: update.text,
-        mediaAttachment: update.mediaAttachment,
-        providerSentAt: update.providerSentAt,
-        now: this.clock.now()
-      });
+      const result = await this.recordTelegramBusinessMessage(update);
+      if (
+        result.kind === "unmatched" &&
+        await this.hydrateTelegramBusinessConnection(update.businessConnectionId)
+      ) {
+        await this.recordTelegramBusinessMessage(update);
+      }
       return;
     }
 
@@ -343,6 +341,62 @@ export class MessagingService {
     });
     if (!result) throw messagingHttpError(404, "messaging_thread_not_found", "Messaging thread was not found");
     return result.thread;
+  }
+
+  private recordTelegramBusinessMessage(
+    update: Extract<ParsedTelegramBusinessWebhookUpdate, { readonly kind: "business_message" }>
+  ) {
+    return recordTelegramBusinessMessage({
+      store: this.store,
+      updateId: update.updateId,
+      businessConnectionId: update.businessConnectionId,
+      providerMessageId: update.providerMessageId,
+      providerChatId: update.providerChatId,
+      providerUserId: update.providerUserId,
+      username: update.username,
+      displayName: update.displayName,
+      chatUsername: update.chatUsername,
+      chatDisplayName: update.chatDisplayName,
+      contentType: update.contentType,
+      text: update.text ?? "",
+      mediaAttachment: update.mediaAttachment,
+      providerSentAt: update.providerSentAt,
+      now: this.clock.now()
+    });
+  }
+
+  private async hydrateTelegramBusinessConnection(businessConnectionId: string): Promise<boolean> {
+    const snapshot = await this.telegramBusinessConnectionLookup?.findBusinessConnection(
+      businessConnectionId
+    );
+    if (!snapshot) return false;
+    const result = await recordTelegramBusinessConnection({
+      store: this.store,
+      ...snapshot,
+      now: this.clock.now()
+    });
+    return result.kind === "recorded";
+  }
+
+  private async reconcileTelegramBusinessConnections(astrologerUserId: string): Promise<void> {
+    if (!this.telegramBusinessConnectionLookup) return;
+
+    const { candidates } = await this.readStore.listTelegramBusinessConnectionReconciliationCandidates({
+      astrologerUserId
+    });
+    await Promise.all(candidates.map((candidate) => this.reconcileTelegramBusinessConnection(candidate.businessConnectionId)));
+  }
+
+  private async reconcileTelegramBusinessConnection(businessConnectionId: string): Promise<void> {
+    const snapshot = await this.telegramBusinessConnectionLookup?.findBusinessConnection(
+      businessConnectionId
+    );
+    if (!snapshot) return;
+    await recordTelegramBusinessConnection({
+      store: this.store,
+      ...snapshot,
+      now: this.clock.now()
+    });
   }
 }
 

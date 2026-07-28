@@ -14,7 +14,7 @@ export type HttpClientCsrfOptions = {
 };
 
 export type HttpRequestOptions = {
-  readonly method?: "DELETE" | "GET" | "POST" | "PUT";
+  readonly method?: "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
   readonly body?: unknown;
   readonly cache?: RequestCache;
   readonly csrf?: boolean;
@@ -51,6 +51,18 @@ export class HttpClient {
   ): Promise<TResponse> {
     return this.request<TResponse>(path, {
       method: "POST",
+      ...options,
+      ...(body === undefined ? {} : { body })
+    });
+  }
+
+  patch<TResponse>(
+    path: string,
+    body?: unknown,
+    options: Omit<HttpRequestOptions, "method" | "body"> = {}
+  ): Promise<TResponse> {
+    return this.request<TResponse>(path, {
+      method: "PATCH",
       ...options,
       ...(body === undefined ? {} : { body })
     });

@@ -429,6 +429,18 @@ describe("createDrizzleMessagingStore", () => {
         lastErrorMessage: null
       })
     });
+    expect(fake.inserts).toContainEqual({
+      table: messagingRealtimeEvents,
+      value: expect.objectContaining({
+        astrologerUserId,
+        type: "channelConnection.updated",
+        channelConnectionId,
+        threadId: null,
+        messageId: null,
+        externalIdentityId: null,
+        createdAt: now
+      })
+    });
   });
 
   it("records Telegram Business messages sent directly by the business account as outbound", async () => {
@@ -601,6 +613,17 @@ describe("createDrizzleMessagingStore", () => {
         usernameSnapshot: "alisa_astro"
       })
     });
+    expect(fake.realtimeEventInserts).toEqual([
+      expect.objectContaining({
+        astrologerUserId,
+        type: "channelConnection.updated",
+        channelConnectionId,
+        threadId: null,
+        messageId: null,
+        externalIdentityId: null,
+        createdAt: now
+      })
+    ]);
   });
 
   it("creates one pending Telegram Business connection for the astrologer start flow", async () => {
@@ -823,6 +846,8 @@ function createFakeDatabase(
           ? [threadProjection()]
           : selection && "externalIdentity" in selection
             ? [externalIdentityProjection()]
+            : selection && "externalOwnerUserId" in selection
+              ? [{ id: channelConnectionId, astrologerUserId, externalOwnerUserId: "987654321" }]
             : [{}]
       ),
     transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => {
@@ -1077,8 +1102,17 @@ function createTelegramBusinessMessageDatabase(input: { readonly externalOwnerUs
 
 function createPendingTelegramBusinessConnectionDatabase() {
   const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  const realtimeEventInserts: Record<string, unknown>[] = [];
   let selectCount = 0;
   const database = {
+    insert: (table: unknown) => ({
+      values: (value: Record<string, unknown>) => {
+        if (table === messagingRealtimeEvents) realtimeEventInserts.push(value);
+        return {
+          returning: async () => table === messagingRealtimeEvents ? [realtimeEventRow(value)] : []
+        };
+      }
+    }),
     update: (table: unknown) => ({
       set: (value: Record<string, unknown>) => ({
         where: () => {
@@ -1093,10 +1127,11 @@ function createPendingTelegramBusinessConnectionDatabase() {
         : [{ id: channelConnectionId, astrologerUserId }];
       selectCount += 1;
       return selectChain(rows);
-    }
+    },
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => callback(database)
   };
 
-  return { database, updates };
+  return { database, updates, realtimeEventInserts };
 }
 
 function createAmbiguousTelegramConnectionDatabase() {

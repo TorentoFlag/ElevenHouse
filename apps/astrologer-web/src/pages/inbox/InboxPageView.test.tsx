@@ -16,7 +16,7 @@ import { InboxPageView, type InboxPageViewProps, type InboxThreadFilter } from "
 describe("InboxPageView", () => {
   afterEach(() => cleanup());
 
-  it("renders Telegram Business setup state without pretending MTProto is available", () => {
+  it("renders a lean empty inbox setup state without channel setup cards", () => {
     const markup = renderStatic(
       <InboxPageView
         {...baseProps()}
@@ -26,9 +26,11 @@ describe("InboxPageView", () => {
       />
     );
 
-    expect(markup).toContain("Подключить Telegram Business");
-    expect(markup).toContain("Telegram Account");
-    expect(markup).toContain("Будет доступно позже");
+    expect(markup).toContain("Подключить канал");
+    expect(markup).toContain("Поиск по диалогам...");
+    expect(markup).toContain("Пока нет диалогов. Подключите Telegram Business.");
+    expect(markup).not.toContain("Telegram Account");
+    expect(markup).not.toContain("Будет доступно позже");
     expect(markup).not.toContain("Подключить Instagram");
   });
 
@@ -49,6 +51,32 @@ describe("InboxPageView", () => {
     expect(markup).not.toContain("Внутренний чат");
     expect(markup).not.toContain("Instagram");
     expect(markup).not.toContain("Max");
+  });
+
+  it("shows only connected channel badges next to the connect button", () => {
+    renderWithClient(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[
+          telegramConnection(),
+          telegramConnection(
+            {},
+            {
+              id: "22222222-2222-4222-8222-222222222222",
+              status: "connecting",
+              displayName: "Ожидающий Telegram",
+              username: "pending_telegram"
+            }
+          ),
+          instagramConnection()
+        ]}
+      />
+    );
+
+    expect(screen.getByLabelText("Подключен Telegram: Алиса Вега")).toBeTruthy();
+    expect(screen.getByLabelText("Подключен Instagram: Instagram")).toBeTruthy();
+    expect(screen.queryByLabelText("Подключен Telegram: Ожидающий Telegram")).toBeNull();
+    expect(screen.getByRole("button", { name: "Подключить канал" })).toBeTruthy();
   });
 
   it("renders thread filter chips as working buttons", () => {
@@ -75,29 +103,180 @@ describe("InboxPageView", () => {
     expect(onThreadFilterChange).toHaveBeenCalledWith("unread");
   });
 
-  it("starts Telegram Business connection from the setup card and renders pending state", () => {
+  it("opens channel selection before Telegram-specific connection steps", () => {
+    renderWithClient(
+      <InboxPageView {...baseProps()} channelConnections={[]} isTelegramBusinessGuideOpen />
+    );
+
+    expect(screen.getByRole("dialog", { name: "Каналы" })).toBeTruthy();
+    expect(
+      screen.getByText("Подключите канал, через который клиенты будут писать вам.")
+    ).toBeTruthy();
+    expect(screen.getByText("Telegram")).toBeTruthy();
+    expect(screen.getByText("Instagram")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Выбрать Telegram" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Instagram скоро" }).getAttribute("disabled")
+    ).not.toBeNull();
+  });
+
+  it("opens Telegram method selection before the Secretary bot guide", () => {
+    const onStartTelegramBusinessConnection = vi.fn();
+    const onOpenTelegramBusinessGuide = vi.fn();
+
+    renderWithClient(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[]}
+        isTelegramBusinessGuideOpen
+        isStartingTelegramBusinessConnection={false}
+        onOpenTelegramBusinessGuide={onOpenTelegramBusinessGuide}
+        onStartTelegramBusinessConnection={onStartTelegramBusinessConnection}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Telegram" }));
+
+    expect(screen.getByRole("dialog", { name: "Telegram" })).toBeTruthy();
+    expect(screen.getByText("Telegram Business / Secretary bot")).toBeTruthy();
+    expect(screen.getByText("Telegram Account / MTProto")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Настроить Telegram Business" }));
+
+    expect(onStartTelegramBusinessConnection).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Подключить Telegram Business" })).toBeTruthy();
+    expect(onOpenTelegramBusinessGuide).not.toHaveBeenCalled();
+  });
+
+  it("starts the Secretary bot connection from the Telegram Business guide", () => {
+    const onOpenTelegramBusinessGuide = vi.fn();
+    const onStartTelegramBusinessConnection = vi.fn();
+
+    renderWithClient(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[]}
+        isTelegramBusinessGuideOpen
+        onOpenTelegramBusinessGuide={onOpenTelegramBusinessGuide}
+        onStartTelegramBusinessConnection={onStartTelegramBusinessConnection}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Telegram" }));
+    fireEvent.click(screen.getByRole("button", { name: "Настроить Telegram Business" }));
+
+    expect(screen.getByText("Настройки → Telegram Business → Чат-боты")).toBeTruthy();
+    expect(
+      screen.getByText("Нажмите «Создать подключение», чтобы получить username бота.")
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Создать подключение" }));
+
+    expect(onStartTelegramBusinessConnection).toHaveBeenCalledWith();
+    expect(onOpenTelegramBusinessGuide).not.toHaveBeenCalled();
+  });
+
+  it("keeps Telegram Business guide on opening Telegram after the bot username appears", () => {
+    renderWithClient(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[]}
+        isTelegramBusinessGuideOpen
+        telegramBusinessBotUsername="elevenhouse_test_bot"
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Telegram" }));
+    fireEvent.click(screen.getByRole("button", { name: "Настроить Telegram Business" }));
+
+    expect(
+      screen.getByRole("button", { name: "Шаг 2: Открыть Telegram" }).getAttribute("aria-pressed")
+    ).toBe("true");
+    expect(screen.getByText("Откройте настройки Telegram Business")).toBeTruthy();
+    expect(screen.getByText("Чат-боты")).toBeTruthy();
+    expect(screen.getAllByText("@elevenhouse_test_bot").length).toBeGreaterThanOrEqual(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Шаг 3: Найти бота" }));
+
+    expect(screen.getByText("Введите username бота в Telegram")).toBeTruthy();
+    expect(screen.getAllByText("@elevenhouse_test_bot").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("ДОБАВИТЬ")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Шаг 4: Выбрать чаты" }));
+
+    expect(screen.getByText("Выберите доступные чаты")).toBeTruthy();
+    expect(screen.getByText("Доступные чаты")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Шаг 2: Открыть Telegram" }));
+
+    expect(screen.getByText("Откройте настройки Telegram Business")).toBeTruthy();
+  });
+
+  it("shows a prepared connection state instead of repeated guide actions", () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    renderWithClient(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[]}
+        isTelegramBusinessGuideOpen
+        telegramBusinessBotUsername="elevenhouse_test_bot"
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Telegram" }));
+    fireEvent.click(screen.getByRole("button", { name: "Настроить Telegram Business" }));
+
+    expect(screen.queryByRole("button", { name: "Создать подключение" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Закрыть" })).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText("Подключение создано")).toBeNull();
+    expect(screen.queryByText("Продолжайте настройку в Telegram")).toBeNull();
+    expect(screen.getByRole("button", { name: "Закрыть инструкцию" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Скопировать username" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Открыть бота" })).toBeNull();
+    expect(screen.getByText("@elevenhouse_test_bot")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Скопировать username бота" }));
+
+    expect(writeText).toHaveBeenCalledWith("@elevenhouse_test_bot");
+  });
+
+  it("lets astrologers recover the bot username for an existing pending connection", () => {
     const onStartTelegramBusinessConnection = vi.fn();
 
     renderWithClient(
       <InboxPageView
         {...baseProps()}
         channelConnections={[telegramConnection({}, { status: "connecting" })]}
-        isStartingTelegramBusinessConnection={false}
+        isTelegramBusinessGuideOpen
         onStartTelegramBusinessConnection={onStartTelegramBusinessConnection}
       />
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Ожидаем Telegram" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Telegram" }));
+    fireEvent.click(screen.getByRole("button", { name: "Настроить Telegram Business" }));
+
+    expect(screen.queryByRole("button", { name: "Создать подключение" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Показать username бота" }));
 
     expect(onStartTelegramBusinessConnection).toHaveBeenCalledWith();
-    expect(screen.getByText("Ожидает подтверждения")).toBeTruthy();
   });
 
-  it("disables Telegram Business start while active or already starting", () => {
-    const activeMarkup = renderStatic(
+  it("keeps channel selection available while Telegram status changes", () => {
+    const { unmount } = renderWithClient(
       <InboxPageView {...baseProps()} channelConnections={[telegramConnection()]} />
     );
-    const startingMarkup = renderStatic(
+    expect(
+      screen.getByRole("button", { name: "Подключить канал" }).getAttribute("disabled")
+    ).toBeNull();
+    unmount();
+
+    renderWithClient(
       <InboxPageView
         {...baseProps()}
         channelConnections={[]}
@@ -105,10 +284,9 @@ describe("InboxPageView", () => {
       />
     );
 
-    expect(activeMarkup).toContain("Подключено");
-    expect(activeMarkup).toContain('disabled=""');
-    expect(startingMarkup).toContain("Открываем Telegram");
-    expect(startingMarkup).toContain('disabled=""');
+    expect(
+      screen.getByRole("button", { name: "Подключить канал" }).getAttribute("disabled")
+    ).toBeNull();
   });
 
   it("renders thread list, selected messages and unlinked chat actions", () => {
@@ -403,8 +581,12 @@ function baseProps(): InboxPageViewProps {
     onDraftChange: vi.fn(),
     onSend: vi.fn(),
     onMarkRead: vi.fn(),
+    isTelegramBusinessGuideOpen: false,
+    telegramBusinessBotUsername: null,
     isStartingTelegramBusinessConnection: false,
     telegramBusinessStartError: null,
+    onOpenTelegramBusinessGuide: vi.fn(),
+    onCloseTelegramBusinessGuide: vi.fn(),
     onStartTelegramBusinessConnection: vi.fn(),
     linkClientUserId: "",
     linkClient: null,
@@ -452,6 +634,32 @@ function telegramConnection(
       supportsMessageDeletes: false,
       supportsMessageEdits: false,
       ...override
+    },
+    connectedAt: "2026-07-22T09:00:00.000Z",
+    lastSyncedAt: "2026-07-22T10:00:00.000Z",
+    lastErrorCode: null,
+    ...connectionOverride
+  };
+}
+
+function instagramConnection(
+  connectionOverride: Partial<MessagingChannelConnection> = {}
+): MessagingChannelConnection {
+  return {
+    id: "33333333-3333-4333-8333-333333333333",
+    provider: "instagram",
+    mode: "instagram_graph",
+    status: "active",
+    displayName: "Instagram",
+    username: "alisa_vega",
+    capabilities: {
+      canRead: true,
+      canReceive: true,
+      canSend: true,
+      supportsAttachments: false,
+      supportsHistoryImport: false,
+      supportsMessageDeletes: false,
+      supportsMessageEdits: false
     },
     connectedAt: "2026-07-22T09:00:00.000Z",
     lastSyncedAt: "2026-07-22T10:00:00.000Z",

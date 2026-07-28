@@ -195,6 +195,42 @@ describe("HttpClient", () => {
     );
   });
 
+  it("sends protected PATCH requests with a JSON body through the configured base path", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ ok: true }));
+    const http = new HttpClient({
+      basePath: "/api",
+      csrf: {
+        cookieName: "elevenhouse_astrologer_csrf",
+        headerName: "x-csrf-token",
+        readCookie: () => "signed-token"
+      },
+      fetcher
+    });
+
+    await http.patch(
+      "/flows/a2fb1fef-dc5c-44ec-ae36-060f455c8f0f/draft",
+      {
+        name: "Новая воронка"
+      },
+      { csrf: true }
+    );
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/flows/a2fb1fef-dc5c-44ec-ae36-060f455c8f0f/draft",
+      {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "content-type": "application/json",
+          "x-csrf-token": "signed-token"
+        },
+        body: JSON.stringify({
+          name: "Новая воронка"
+        })
+      }
+    );
+  });
+
   it("does not add a CSRF header to unprotected requests", async () => {
     const fetcher = vi.fn(async () => jsonResponse({ ok: true }));
     const http = new HttpClient({

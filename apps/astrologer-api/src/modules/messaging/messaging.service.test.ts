@@ -75,6 +75,50 @@ describe("MessagingService", () => {
     );
   });
 
+  it("reconciles Telegram Business connection status before listing connections", async () => {
+    const store = createStore();
+    const readStore = createReadStore({ reconciliationBusinessConnectionId: "bc_revoked" });
+    const connectionLookup = {
+      findBusinessConnection: vi.fn(async () => ({
+        businessConnectionId: "bc_revoked",
+        userId: "987654321",
+        userChatId: "123456789",
+        username: "alisa_astro",
+        displayName: "Alisa",
+        connectedAt: "2026-07-22T06:00:00.000Z",
+        enabled: false,
+        rights: telegramBusinessRights({ canReply: false, canReadMessages: false })
+      }))
+    };
+    const service = createService({ store, readStore, connectionLookup });
+
+    await expect(service.listChannelConnections(request())).resolves.toMatchObject({
+      channelConnections: [{ id: connectionId }]
+    });
+    expect(readStore.listTelegramBusinessConnectionReconciliationCandidates).toHaveBeenCalledWith({
+      astrologerUserId
+    });
+    expect(connectionLookup.findBusinessConnection).toHaveBeenCalledWith("bc_revoked");
+    expect(store.recordTelegramBusinessConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessConnectionId: "bc_revoked",
+        userId: "987654321",
+        enabled: false,
+        now: now.toISOString()
+      })
+    );
+  });
+
+  it("does not block connection listing when Telegram Business lookup is not configured", async () => {
+    const readStore = createReadStore({ reconciliationBusinessConnectionId: "bc_active" });
+    const service = createService({ readStore, connectionLookup: null });
+
+    await expect(service.listChannelConnections(request())).resolves.toMatchObject({
+      channelConnections: [{ id: connectionId }]
+    });
+    expect(readStore.listTelegramBusinessConnectionReconciliationCandidates).not.toHaveBeenCalled();
+  });
+
   it("validates a send request and persists it with the supplied idempotency key", async () => {
     const store = createStore();
     const service = createService({ store });
@@ -214,6 +258,68 @@ describe("MessagingService", () => {
         }
       })
     );
+  });
+
+  it("hydrates a pending Telegram Business connection from the first business message", async () => {
+    const store = createStore();
+    vi.mocked(store.recordTelegramBusinessMessage)
+      .mockResolvedValueOnce({ kind: "unmatched" })
+      .mockResolvedValueOnce({ kind: "created", message: domainMessage("inbound") });
+    const connectionLookup = {
+      findBusinessConnection: vi.fn(async () => ({
+        businessConnectionId: "bc_recovered",
+        userId: "987654321",
+        userChatId: "123456789",
+        username: "alisa_astro",
+        displayName: "Alisa",
+        connectedAt: "2026-07-22T06:00:00.000Z",
+        enabled: true,
+        rights: {
+          canReply: true,
+          canReadMessages: true,
+          canDeleteSentMessages: true,
+          canDeleteAllMessages: false,
+          canEditName: false,
+          canEditBio: false,
+          canEditProfilePhoto: false,
+          canEditUsername: false,
+          canChangeGiftSettings: false,
+          canViewGiftsAndStars: false,
+          canConvertGiftsToStars: false,
+          canTransferAndUpgradeGifts: false,
+          canTransferStars: false,
+          canManageStories: false
+        }
+      }))
+    };
+    const service = createService({ store, connectionLookup });
+
+    await service.handleTelegramBusinessWebhookUpdate({
+      kind: "business_message",
+      updateId: "1012",
+      businessConnectionId: "bc_recovered",
+      providerMessageId: "353",
+      providerChatId: "777",
+      providerUserId: "555",
+      username: "marina_solar",
+      displayName: "Marina",
+      chatUsername: "marina_solar",
+      chatDisplayName: "Marina",
+      providerSentAt: "2026-07-22T06:11:00.000Z",
+      contentType: "text",
+      text: "Здравствуйте"
+    });
+
+    expect(connectionLookup.findBusinessConnection).toHaveBeenCalledWith("bc_recovered");
+    expect(store.recordTelegramBusinessConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessConnectionId: "bc_recovered",
+        userId: "987654321",
+        username: "alisa_astro",
+        enabled: true
+      })
+    );
+    expect(store.recordTelegramBusinessMessage).toHaveBeenCalledTimes(2);
   });
 
   it("records Telegram Business image and video note messages as media updates", async () => {
@@ -357,11 +463,13 @@ function createService(
     store?: MessagingStore;
     readStore?: MessagingReadStore;
     telegramBusinessBotUsername?: string | null;
+    connectionLookup?: ConstructorParameters<typeof MessagingService>[2];
   } = {}
 ) {
   return new MessagingService(
     overrides.store ?? createStore(),
     overrides.readStore ?? createReadStore(),
+    overrides.connectionLookup ?? null,
     { createPresignedDownload: vi.fn(async () => ({ url: "https://storage.example/voice.ogg", expiresAt: now.toISOString() })) },
     { now: () => now },
     {
@@ -409,12 +517,23 @@ function createReadStore(
   overrides: {
     clientUserId?: string | null;
     connectionStatus?: ReturnType<typeof channelConnection>["status"];
+    reconciliationBusinessConnectionId?: string;
     unreadCount?: number;
   } = {}
 ): MessagingReadStore {
   return {
     listChannelConnections: vi.fn(async () => ({
       channelConnections: [channelConnection({ status: overrides.connectionStatus })]
+    })),
+    listTelegramBusinessConnectionReconciliationCandidates: vi.fn(async () => ({
+      candidates: overrides.reconciliationBusinessConnectionId
+        ? [
+            {
+              channelConnectionId: connectionId,
+              businessConnectionId: overrides.reconciliationBusinessConnectionId
+            }
+          ]
+        : []
     })),
     listThreads: vi.fn(async () => ({ threads: [readThread(overrides)], nextCursor: null })),
     getThread: vi.fn(async () => ({
@@ -458,7 +577,7 @@ function domainMessage(text: string): MessagingMessage {
   };
 }
 
-function channelConnection(overrides: { status?: "connecting" | "active" } = {}) {
+function channelConnection(overrides: { status?: "connecting" | "active" | "revoked" } = {}) {
   return {
     id: connectionId,
     provider: "telegram" as const,
@@ -478,6 +597,43 @@ function channelConnection(overrides: { status?: "connecting" | "active" } = {})
     connectedAt: overrides.status === "connecting" ? null : now.toISOString(),
     lastSyncedAt: overrides.status === "connecting" ? null : now.toISOString(),
     lastErrorCode: null
+  };
+}
+
+function telegramBusinessRights(
+  overrides: Partial<{
+    canReply: boolean;
+    canReadMessages: boolean;
+    canDeleteSentMessages: boolean;
+    canDeleteAllMessages: boolean;
+    canEditName: boolean;
+    canEditBio: boolean;
+    canEditProfilePhoto: boolean;
+    canEditUsername: boolean;
+    canChangeGiftSettings: boolean;
+    canViewGiftsAndStars: boolean;
+    canConvertGiftsToStars: boolean;
+    canTransferAndUpgradeGifts: boolean;
+    canTransferStars: boolean;
+    canManageStories: boolean;
+  }> = {}
+) {
+  return {
+    canReply: true,
+    canReadMessages: true,
+    canDeleteSentMessages: true,
+    canDeleteAllMessages: false,
+    canEditName: false,
+    canEditBio: false,
+    canEditProfilePhoto: false,
+    canEditUsername: false,
+    canChangeGiftSettings: false,
+    canViewGiftsAndStars: false,
+    canConvertGiftsToStars: false,
+    canTransferAndUpgradeGifts: false,
+    canTransferStars: false,
+    canManageStories: false,
+    ...overrides
   };
 }
 

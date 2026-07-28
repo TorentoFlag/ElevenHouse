@@ -64,6 +64,11 @@ export type MessagingReadMessageMediaSource = {
   readonly mimeType: string | null;
 };
 
+export type TelegramBusinessConnectionReconciliationCandidate = {
+  readonly channelConnectionId: string;
+  readonly businessConnectionId: string;
+};
+
 export type MessagingReadThread = {
   readonly id: string;
   readonly clientUserId: string | null;
@@ -80,6 +85,11 @@ export type MessagingReadStore = {
   readonly listChannelConnections: (input: {
     readonly astrologerUserId: string;
   }) => Promise<{ readonly channelConnections: readonly MessagingReadChannelConnection[] }>;
+  readonly listTelegramBusinessConnectionReconciliationCandidates: (input: {
+    readonly astrologerUserId: string;
+  }) => Promise<{
+    readonly candidates: readonly TelegramBusinessConnectionReconciliationCandidate[];
+  }>;
   readonly listThreads: (input: {
     readonly astrologerUserId: string;
     readonly limit: number;

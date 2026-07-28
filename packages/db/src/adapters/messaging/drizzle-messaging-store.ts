@@ -358,44 +358,58 @@ async function recordTelegramBusinessConnection(
   database: ElevenHouseDatabase,
   input: RecordTelegramBusinessConnectionStoreInput
 ): Promise<RecordTelegramBusinessConnectionStoreResult> {
-  const connections = await findTelegramBusinessConnections(database, {
-    businessConnectionId: input.businessConnectionId,
-    activeOnly: false
+  return database.transaction(async (transaction) => {
+    const connections = await findTelegramBusinessConnections(transaction, {
+      businessConnectionId: input.businessConnectionId,
+      activeOnly: false
+    });
+    if (connections.length > 1) {
+      throw new Error("Telegram business connection is not uniquely bound to one channel connection");
+    }
+    const connection = connections[0] ?? (
+      input.enabled ? await findSinglePendingTelegramBusinessConnection(transaction) : null
+    );
+    if (!connection) return { kind: "unmatched" };
+
+    const timestamp = new Date(input.now);
+    const status = !input.enabled
+      ? "revoked"
+      : input.rights.canReply && input.rights.canReadMessages
+        ? "active"
+        : "reauth_required";
+    const [row] = await transaction
+      .update(messagingChannelConnections)
+      .set({
+        status,
+        externalAccountId: input.businessConnectionId,
+        externalOwnerUserId: input.userId,
+        displayNameSnapshot: input.displayName,
+        usernameSnapshot: input.username,
+        capabilities: toTelegramBusinessCapabilities(input.rights),
+        connectedAt: new Date(input.connectedAt),
+        lastSyncedAt: timestamp,
+        lastErrorCode: status === "reauth_required" ? "telegram_business_rights_missing" : null,
+        lastErrorMessage:
+          status === "reauth_required" ? "Required Telegram Business rights are missing" : null,
+        updatedAt: timestamp
+      })
+      .where(eq(messagingChannelConnections.id, connection.id))
+      .returning({ id: messagingChannelConnections.id });
+
+    if (!row) return { kind: "unmatched" };
+
+    await transaction.insert(messagingRealtimeEvents).values({
+      astrologerUserId: connection.astrologerUserId,
+      type: "channelConnection.updated",
+      threadId: null,
+      messageId: null,
+      channelConnectionId: connection.id,
+      externalIdentityId: null,
+      createdAt: timestamp
+    });
+
+    return { kind: "recorded" };
   });
-  if (connections.length > 1) {
-    throw new Error("Telegram business connection is not uniquely bound to one channel connection");
-  }
-  const connection = connections[0] ?? (
-    input.enabled ? await findSinglePendingTelegramBusinessConnection(database) : null
-  );
-  if (!connection) return { kind: "unmatched" };
-
-  const timestamp = new Date(input.now);
-  const status = !input.enabled
-    ? "revoked"
-    : input.rights.canReply && input.rights.canReadMessages
-      ? "active"
-      : "reauth_required";
-  const [row] = await database
-    .update(messagingChannelConnections)
-    .set({
-      status,
-      externalAccountId: input.businessConnectionId,
-      externalOwnerUserId: input.userId,
-      displayNameSnapshot: input.displayName,
-      usernameSnapshot: input.username,
-      capabilities: toTelegramBusinessCapabilities(input.rights),
-      connectedAt: new Date(input.connectedAt),
-      lastSyncedAt: timestamp,
-      lastErrorCode: status === "reauth_required" ? "telegram_business_rights_missing" : null,
-      lastErrorMessage:
-        status === "reauth_required" ? "Required Telegram Business rights are missing" : null,
-      updatedAt: timestamp
-    })
-    .where(eq(messagingChannelConnections.id, connection.id))
-    .returning({ id: messagingChannelConnections.id });
-
-  return row ? { kind: "recorded" } : { kind: "unmatched" };
 }
 
 async function startTelegramBusinessConnection(

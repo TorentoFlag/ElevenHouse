@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import {
   createDrizzleMessagingReadStore,
   createDrizzleMessagingStore
@@ -16,8 +16,13 @@ import { MessagingWebhooksController } from "./messaging-webhooks.controller";
 import { MessagingService } from "./messaging.service";
 import {
   MESSAGING_READ_STORE,
-  MESSAGING_STORE
+  MESSAGING_STORE,
+  TELEGRAM_BUSINESS_CONNECTION_LOOKUP
 } from "./messaging.tokens";
+import {
+  TelegramBusinessBotApiConnectionLookup,
+  type TelegramBusinessConnectionLookupOptions
+} from "./telegram-business-connection-lookup";
 
 @Module({
   imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, MediaModule, SecurityModule],
@@ -33,6 +38,16 @@ import {
       provide: MESSAGING_READ_STORE,
       useFactory: (runtime: PostgresRuntimeService) => createDrizzleMessagingReadStore(runtime.database),
       inject: [PostgresRuntimeService]
+    },
+    {
+      provide: TELEGRAM_BUSINESS_CONNECTION_LOOKUP,
+      useFactory: (configService: ConfigService) => {
+        const options = configService.get<TelegramBusinessConnectionLookupOptions | null>(
+          "astrologerApi.telegramBusinessBotApi"
+        );
+        return options ? new TelegramBusinessBotApiConnectionLookup(options) : null;
+      },
+      inject: [ConfigService]
     }
   ]
 })

@@ -515,6 +515,7 @@ function createReadStore(): MessagingReadStore {
     listChannelConnections: vi.fn(async () => ({
       channelConnections: startedTelegramBusinessConnectionId ? [readChannelConnection()] : []
     })),
+    listTelegramBusinessConnectionReconciliationCandidates: vi.fn(async () => ({ candidates: [] })),
     listThreads: vi.fn(async ({ astrologerUserId }) =>
       astrologerUserId === ownerUserId ? { threads: [readThread()], nextCursor: null } : { threads: [], nextCursor: null }
     ),

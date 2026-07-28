@@ -41,7 +41,19 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_API_CSRF_HEADER_NAME: z.string().trim().min(1).default("x-csrf-token"),
   ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
   ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: optionalTrimmedNonEmptyStringSchema,
+  ASTROLOGER_API_TELEGRAM_BOT_TOKEN: optionalTrimmedNonEmptyStringSchema,
+  ASTROLOGER_API_TELEGRAM_BOT_API_BASE_URL: z
+    .string()
+    .trim()
+    .url()
+    .optional(),
   ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: optionalTelegramBotUsernameSchema,
+  NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: optionalTrimmedNonEmptyStringSchema,
+  NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: z
+    .string()
+    .trim()
+    .url()
+    .optional(),
   ASTROLOGER_API_ALLOWED_ORIGINS: z.string().trim().optional(),
   CHART_ENGINE_BASE_URL: z.string().trim().url().default("http://localhost:8012"),
   ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
@@ -154,6 +166,10 @@ export type AstrologerApiRuntimeConfig = {
   readonly csrfHeaderName: string;
   readonly csrfTokenTtlSeconds: number;
   readonly telegramBotWebhookSecret: string | null;
+  readonly telegramBusinessBotApi: {
+    readonly botToken: string;
+    readonly botApiBaseUrl: string;
+  } | null;
   readonly telegramBusinessBotUsername: string | null;
   readonly allowedOrigins: readonly string[];
   readonly chartEngineBaseUrl: string;
@@ -257,6 +273,17 @@ export function createAstrologerApiRuntimeConfig(
     throw new Error("ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET is required in production");
   }
 
+  const telegramBusinessBotToken =
+    config.ASTROLOGER_API_TELEGRAM_BOT_TOKEN ?? config.NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN;
+  const telegramBusinessBotApiBaseUrl =
+    config.ASTROLOGER_API_TELEGRAM_BOT_API_BASE_URL ??
+    config.NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL ??
+    "https://api.telegram.org";
+
+  if (config.NODE_ENV === "production" && !telegramBusinessBotToken) {
+    throw new Error("ASTROLOGER_API_TELEGRAM_BOT_TOKEN is required in production");
+  }
+
   if (config.NODE_ENV === "production" && !config.ASTROLOGER_API_PASSWORDLESS_CODE_SECRET) {
     throw new Error("ASTROLOGER_API_PASSWORDLESS_CODE_SECRET is required in production");
   }
@@ -307,6 +334,12 @@ export function createAstrologerApiRuntimeConfig(
     csrfHeaderName: config.ASTROLOGER_API_CSRF_HEADER_NAME.toLowerCase(),
     csrfTokenTtlSeconds: config.ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS,
     telegramBotWebhookSecret: config.ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET ?? null,
+    telegramBusinessBotApi: telegramBusinessBotToken
+      ? {
+          botToken: telegramBusinessBotToken,
+          botApiBaseUrl: stripTrailingSlashes(telegramBusinessBotApiBaseUrl)
+        }
+      : null,
     telegramBusinessBotUsername: config.ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME ?? null,
     allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5174"],
     chartEngineBaseUrl: stripTrailingSlashes(config.CHART_ENGINE_BASE_URL),

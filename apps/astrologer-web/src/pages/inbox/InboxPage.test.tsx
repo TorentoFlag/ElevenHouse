@@ -12,7 +12,13 @@ describe("InboxPage", () => {
     expect(source).toContain("sendMessagingMessageMutationOptions");
     expect(source).toContain("createMessagingRealtimeClient");
     expect(source).toContain("handleMessagingRealtimeEvent");
-    expect(source).not.toContain("<h1 id=\"inbox-title\">Сообщения</h1>");
+    expect(source).toContain("isTelegramBusinessGuideOpen");
+    expect(source).toContain("hasActiveTelegramBusinessConnection");
+    expect(source).toContain("wasTelegramBusinessActiveRef");
+    expect(source).toContain("setIsTelegramBusinessGuideOpen(false)");
+    expect(source).toContain("setTelegramBusinessStartGuide(result)");
+    expect(source).not.toContain('<h1 id="inbox-title">Сообщения</h1>');
     expect(source).not.toContain("window.prompt");
+    expect(source).not.toContain("window.open");
   });
 });

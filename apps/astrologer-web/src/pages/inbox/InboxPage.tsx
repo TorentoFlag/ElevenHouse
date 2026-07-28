@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { createMessagingRealtimeClient } from "../../features/messaging/realtime/messagingRealtimeClient";
 import { getMessagingMessageMediaSource } from "../../features/messaging/api/messagingApi";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
+import type { StartTelegramBusinessConnectionResponse } from "@elevenhouse/contracts";
 import {
   filterInboxThreads,
   type InboxThreadFilter
@@ -29,6 +30,9 @@ export function InboxPage() {
   const [activeThreadFilter, setActiveThreadFilter] = useState<InboxThreadFilter>("all");
   const [linkClient, setLinkClient] = useState<ClientSelectOption | null>(null);
   const [createClientDisplayName, setCreateClientDisplayName] = useState("");
+  const [isTelegramBusinessGuideOpen, setIsTelegramBusinessGuideOpen] = useState(false);
+  const [telegramBusinessStartGuide, setTelegramBusinessStartGuide] =
+    useState<StartTelegramBusinessConnectionResponse | null>(null);
   const channelConnectionsQuery = useQuery(listMessagingChannelConnectionsQueryOptions());
   const threadsQuery = useQuery(listMessagingThreadsQueryOptions({ limit: 50, offset: 0 }));
   const threadQuery = useQuery(getMessagingThreadQueryOptions(selectedThreadId));
@@ -39,6 +43,11 @@ export function InboxPage() {
   const markReadMutation = useMutation(markMessagingThreadReadMutationOptions(queryClient));
   const linkClientMutation = useMutation(linkMessagingThreadClientMutationOptions(queryClient));
   const createClientMutation = useMutation(createMessagingThreadClientMutationOptions(queryClient));
+  const channelConnections = channelConnectionsQuery.data?.channelConnections ?? [];
+  const hasActiveTelegramBusinessConnection = channelConnections.some(
+    (connection) => connection.mode === "telegram_business_bot" && connection.status === "active"
+  );
+  const wasTelegramBusinessActiveRef = useRef(hasActiveTelegramBusinessConnection);
   const threads = useMemo(() => {
     const allThreads = threadsQuery.data?.threads ?? [];
 
@@ -78,6 +87,21 @@ export function InboxPage() {
     return () => realtimeClient.close();
   }, [queryClient]);
 
+  useEffect(() => {
+    const wasTelegramBusinessActive = wasTelegramBusinessActiveRef.current;
+    wasTelegramBusinessActiveRef.current = hasActiveTelegramBusinessConnection;
+    if (
+      !isTelegramBusinessGuideOpen ||
+      !hasActiveTelegramBusinessConnection ||
+      wasTelegramBusinessActive
+    ) {
+      return;
+    }
+
+    setIsTelegramBusinessGuideOpen(false);
+    setTelegramBusinessStartGuide(null);
+  }, [hasActiveTelegramBusinessConnection, isTelegramBusinessGuideOpen]);
+
   const sendError =
     sendMessageMutation.error instanceof Error ? sendMessageMutation.error.message : null;
   const telegramBusinessStartError =
@@ -93,7 +117,7 @@ export function InboxPage() {
 
   return (
     <InboxPageView
-      channelConnections={channelConnectionsQuery.data?.channelConnections ?? []}
+      channelConnections={channelConnections}
       threads={threads}
       selectedThreadId={selectedThreadId}
       selectedThreadResponse={threadQuery.data ?? null}
@@ -104,6 +128,8 @@ export function InboxPage() {
       isThreadError={threadQuery.isError}
       isSending={sendMessageMutation.isPending}
       sendError={sendError}
+      isTelegramBusinessGuideOpen={isTelegramBusinessGuideOpen}
+      telegramBusinessBotUsername={telegramBusinessStartGuide?.telegramBotUsername ?? null}
       isStartingTelegramBusinessConnection={startTelegramBusinessMutation.isPending}
       telegramBusinessStartError={telegramBusinessStartError}
       draft={draft}
@@ -119,14 +145,12 @@ export function InboxPage() {
       onThreadFilterChange={setActiveThreadFilter}
       onSelectThread={setSelectedThreadId}
       onDraftChange={setDraft}
+      onOpenTelegramBusinessGuide={() => setIsTelegramBusinessGuideOpen(true)}
+      onCloseTelegramBusinessGuide={() => setIsTelegramBusinessGuideOpen(false)}
       onStartTelegramBusinessConnection={() => {
         startTelegramBusinessMutation
           .mutateAsync()
-          .then((result) => {
-            if (result.telegramBotUrl) {
-              window.open(result.telegramBotUrl, "_blank", "noopener,noreferrer");
-            }
-          })
+          .then((result) => setTelegramBusinessStartGuide(result))
           .catch(() => undefined);
       }}
       onSend={() => {

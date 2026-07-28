@@ -145,6 +145,7 @@ function createStore(
   let calls = 0;
   return {
     listChannelConnections: vi.fn(async () => ({ channelConnections: [] })),
+    listTelegramBusinessConnectionReconciliationCandidates: vi.fn(async () => ({ candidates: [] })),
     listThreads: vi.fn(async () => ({ threads: [], nextCursor: null })),
     getThread: vi.fn(async () => null),
     findMessageMediaSource: vi.fn(async () => null),
