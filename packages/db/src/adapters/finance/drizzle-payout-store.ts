@@ -30,6 +30,16 @@ export function createDrizzlePayoutStore(database: ElevenHouseDatabase): PayoutS
   };
 }
 
+export function createDrizzlePayoutTransactionStore(
+  database: FinanceDatabase
+): Pick<PayoutStore, "findRequestById" | "listRequests" | "updateRequestStatus"> {
+  return {
+    findRequestById: (payoutRequestId) => findPayoutRequestById(database, payoutRequestId),
+    listRequests: (input) => listPayoutRequests(database, input),
+    updateRequestStatus: (input) => updatePayoutRequestStatus(database, input)
+  };
+}
+
 async function createPayoutMethod(
   database: ElevenHouseDatabase,
   input: CreatePayoutMethodInput
@@ -107,7 +117,7 @@ async function createPayoutRequest(
 }
 
 async function updatePayoutRequestStatus(
-  database: ElevenHouseDatabase,
+  database: FinanceDatabase,
   input: UpdatePayoutRequestStatusInput
 ): Promise<PayoutRequestRecord | null> {
   assertPayoutStatusEvidence(input);

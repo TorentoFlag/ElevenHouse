@@ -8,6 +8,7 @@ import type {
   FinanceOrder,
   PaymentAttempt,
   PaymentProviderEvent,
+  PayoutRequestRecord,
   ReconciliationRecord,
   ReconciliationStore,
   RefundRecord,
@@ -27,6 +28,8 @@ const paymentAttemptId = "11111111-1111-4111-8111-111111111111";
 const providerPaymentId = "22222222-2222-4222-8222-222222222222";
 const orderId = "33333333-3333-4333-8333-333333333333";
 const bookingId = "99999999-9999-4999-8999-999999999999";
+const payoutRequestId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+type Mutable<T> = { -readonly [Key in keyof T]: T[Key] };
 
 describe("Arc Pay payment webhook ingestion", () => {
   it("returns 401 for an invalid signature before parsing or processing the body", async () => {
@@ -172,7 +175,8 @@ describe("Arc Pay payment webhook ingestion", () => {
   it("records a provider chargeback through the reversal unit of work", async () => {
     const harness = createHarness({
       orderStatus: "fulfilled",
-      wallet: { pending: 0, available: 0, reserved: 0, negativeBalance: 0 }
+      wallet: { pending: 0, available: 0, reserved: 0, payoutPending: 45_000, negativeBalance: 0 },
+      payoutRequests: [payoutRequest({ status: "approved" })]
     });
 
     await expect(
@@ -186,15 +190,19 @@ describe("Arc Pay payment webhook ingestion", () => {
     ).resolves.toEqual({ statusCode: 200, body: { accepted: true, duplicate: false } });
 
     expect(harness.refunds).toEqual([]);
-    expect(harness.ledgerTransactions).toHaveLength(1);
+    expect(harness.ledgerTransactions).toHaveLength(2);
     expect(harness.ledgerTransactions[0]).toMatchObject({
+      operationType: "payout_failed",
+      payoutRequestId
+    });
+    expect(harness.ledgerTransactions[1]).toMatchObject({
       operationType: "chargeback_recorded",
       entries: [
         expect.objectContaining({
           account: expect.objectContaining({ accountType: "platform_revenue" })
         }),
         expect.objectContaining({
-          account: expect.objectContaining({ accountType: "astrologer_negative_balance" })
+          account: expect.objectContaining({ accountType: "astrologer_available" })
         }),
         expect.objectContaining({
           account: expect.objectContaining({ accountType: "platform_clearing" })
@@ -206,6 +214,15 @@ describe("Arc Pay payment webhook ingestion", () => {
       status: "chargeback",
       now: now.toISOString()
     });
+    expect(harness.payoutStatusUpdates).toEqual([
+      expect.objectContaining({
+        payoutRequestId,
+        status: "cancelled",
+        adminUserId: null,
+        adminNote: expect.stringContaining("provider chargeback"),
+        now: now.toISOString()
+      })
+    ]);
   });
 
   it("deduplicates a duplicate captured event by webhook id without another order or ledger effect", async () => {
@@ -416,8 +433,10 @@ function createHarness(
       readonly pending: number;
       readonly available: number;
       readonly reserved: number;
+      readonly payoutPending?: number;
       readonly negativeBalance: number;
     };
+    readonly payoutRequests?: readonly PayoutRequestRecord[];
   } = {}
 ) {
   const attempt: PaymentAttempt = {
@@ -462,13 +481,17 @@ function createHarness(
   const ledgerTransactions: CreateLedgerTransactionInput[] = [];
   const outboxEvents: unknown[] = [];
   const releasedBookingHolds: unknown[] = [];
+  let payoutRequests = [...(options.payoutRequests ?? [])];
+  const payoutStatusUpdates: Parameters<
+    RefundReversalTransactionStore["updateRequestStatus"]
+  >[0][] = [];
   const eventByWebhookId = new Map<string, PaymentProviderEvent>();
-  const walletBalance: WalletBalance = {
+  const walletBalance: Mutable<WalletBalance> = {
     astrologerUserId: order.astrologerUserId,
     pending: { amountMinor: options.wallet?.pending ?? 0, currency: "RUB" },
     available: { amountMinor: options.wallet?.available ?? 0, currency: "RUB" },
     reserved: { amountMinor: options.wallet?.reserved ?? 0, currency: "RUB" },
-    payoutPending: { amountMinor: 0, currency: "RUB" },
+    payoutPending: { amountMinor: options.wallet?.payoutPending ?? 0, currency: "RUB" },
     negativeBalance: { amountMinor: options.wallet?.negativeBalance ?? 0, currency: "RUB" },
     updatedAt: now.toISOString()
   };
@@ -602,8 +625,42 @@ function createHarness(
         updateStatus: orderStore.updateStatus,
         findWalletBalance: async (astrologerUserId) =>
           astrologerUserId === order.astrologerUserId ? walletBalance : null,
+        listRequests: async (input) =>
+          payoutRequests
+            .filter((request) =>
+              input?.astrologerUserId ? request.astrologerUserId === input.astrologerUserId : true
+            )
+            .filter((request) =>
+              input?.statuses?.length ? input.statuses.includes(request.status) : true
+            )
+            .slice(0, input?.limit ?? 50),
+        updateRequestStatus: async (input) => {
+          payoutStatusUpdates.push(input);
+          const existing = payoutRequests.find((request) => request.id === input.payoutRequestId);
+          if (!existing) return null;
+          const updated: PayoutRequestRecord = {
+            ...existing,
+            status: input.status,
+            adminUserId: input.adminUserId,
+            adminNote: input.adminNote ?? existing.adminNote,
+            failureReason: input.failureReason ?? existing.failureReason,
+            completedAt:
+              input.status === "paid" ||
+              input.status === "failed" ||
+              input.status === "rejected" ||
+              input.status === "cancelled"
+                ? input.now
+                : existing.completedAt,
+            updatedAt: input.now
+          };
+          payoutRequests = payoutRequests.map((request) =>
+            request.id === updated.id ? updated : request
+          );
+          return updated;
+        },
         createTransaction: async (input) => {
           ledgerTransactions.push(input);
+          applyWalletTransaction(walletBalance, input);
           return { ...input, id: "ledger-reversal-1", entries: [] };
         }
       };
@@ -662,6 +719,7 @@ function createHarness(
     createdEvents,
     refunds,
     reconciliationRecords,
+    payoutStatusUpdates,
     ledgerTransactions,
     outboxEvents,
     releasedBookingHolds,
@@ -674,6 +732,28 @@ function createHarness(
       processor
     })
   };
+}
+
+function applyWalletTransaction(
+  walletBalance: Mutable<WalletBalance>,
+  transaction: CreateLedgerTransactionInput
+): void {
+  for (const entry of transaction.entries) {
+    if (entry.account.astrologerUserId !== walletBalance.astrologerUserId) continue;
+    const delta = entry.side === "credit" ? entry.amount.amountMinor : -entry.amount.amountMinor;
+    if (entry.account.accountType === "astrologer_available") {
+      walletBalance.available = {
+        ...walletBalance.available,
+        amountMinor: walletBalance.available.amountMinor + delta
+      };
+    }
+    if (entry.account.accountType === "astrologer_payout_pending") {
+      walletBalance.payoutPending = {
+        ...walletBalance.payoutPending,
+        amountMinor: walletBalance.payoutPending.amountMinor + delta
+      };
+    }
+  }
 }
 
 function paidBooking(state: "cancelled" | "expired"): Booking {
@@ -701,6 +781,31 @@ function paidBooking(state: "cancelled" | "expired"): Booking {
     },
     createdAt: now.toISOString(),
     updatedAt: now.toISOString()
+  };
+}
+
+function payoutRequest(overrides: Partial<PayoutRequestRecord> = {}): PayoutRequestRecord {
+  return {
+    id: overrides.id ?? payoutRequestId,
+    astrologerUserId: overrides.astrologerUserId ?? "66666666-6666-4666-8666-666666666666",
+    payoutMethodId: overrides.payoutMethodId ?? "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    status: overrides.status ?? "requested",
+    amount: overrides.amount ?? { amountMinor: 45_000, currency: "RUB" },
+    method: overrides.method ?? "manual_bank_transfer",
+    provider: overrides.provider ?? null,
+    environment: overrides.environment ?? null,
+    requestedAt: overrides.requestedAt ?? now.toISOString(),
+    reviewedAt: overrides.reviewedAt ?? null,
+    completedAt: overrides.completedAt ?? null,
+    adminUserId: overrides.adminUserId ?? null,
+    adminNote: overrides.adminNote ?? null,
+    failureReason: overrides.failureReason ?? null,
+    externalReference: overrides.externalReference ?? null,
+    transferredAt: overrides.transferredAt ?? null,
+    providerPayoutId: overrides.providerPayoutId ?? null,
+    metadata: overrides.metadata ?? {},
+    createdAt: overrides.createdAt ?? now.toISOString(),
+    updatedAt: overrides.updatedAt ?? now.toISOString()
   };
 }
 

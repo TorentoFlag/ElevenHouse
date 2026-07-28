@@ -4,6 +4,7 @@ import type {
   PaymentProviderEventType,
   PaymentStore
 } from "../payments/payment-store";
+import type { PayoutRequestRecord, PayoutRequestStatus, PayoutStore } from "../payouts";
 import type { Money } from "../money";
 import {
   assertPaymentMatchesOrder,
@@ -121,7 +122,8 @@ export type RefundReversalTransactionStore = Pick<
   | "createRefund"
 > &
   Pick<FinanceOrderStore, "findById" | "updateStatus"> &
-  Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
+  Pick<LedgerStore, "createTransaction" | "findWalletBalance"> &
+  Pick<PayoutStore, "listRequests" | "updateRequestStatus">;
 
 export type RefundReversalUnitOfWork = {
   readonly transact: <T>(
@@ -174,6 +176,15 @@ export class PaymentReversalOrderNotReversibleError extends Error {
   constructor() {
     super("Payment reversal order cannot be reversed from its current state");
     this.name = "PaymentReversalOrderNotReversibleError";
+  }
+}
+
+export class PaymentReversalPayoutBlockError extends Error {
+  readonly code = "payment_reversal_payout_block_failed";
+
+  constructor() {
+    super("Payment reversal could not block an open payout request");
+    this.name = "PaymentReversalPayoutBlockError";
   }
 }
 
@@ -335,12 +346,23 @@ export async function recordPaymentReversalProviderWebhook(
     });
     if (!updatedOrder) throw new PaymentReversalOrderNotReversibleError();
 
+    let walletBalance = await store.findWalletBalance(order.astrologerUserId);
+
+    if (input.request.type === "payment.chargeback") {
+      walletBalance = await blockOpenPayoutRequestsForChargeback({
+        store,
+        order,
+        providerEvent: providerEvent.event,
+        walletBalance
+      });
+    }
+
     await store.createTransaction(
       createPaymentReversalLedgerTransaction({
         order,
         providerEvent: providerEvent.event,
         reversalAmount,
-        walletBalance: await store.findWalletBalance(order.astrologerUserId),
+        walletBalance,
         providerRefundId,
         operationType:
           input.request.type === "payment.chargeback" ? "chargeback_recorded" : "refund_recorded"
@@ -483,6 +505,108 @@ export function createPaymentReversalLedgerTransaction(input: {
       financePolicyRiskTier: input.order.financePolicyRiskTier
     },
     entries
+  };
+}
+
+async function blockOpenPayoutRequestsForChargeback(input: {
+  readonly store: RefundReversalTransactionStore;
+  readonly order: FinanceOrder;
+  readonly providerEvent: PaymentProviderEvent;
+  readonly walletBalance: WalletBalance | null;
+}): Promise<WalletBalance | null> {
+  if ((input.walletBalance?.payoutPending.amountMinor ?? 0) <= 0) return input.walletBalance;
+
+  const requests = await input.store.listRequests({
+    astrologerUserId: input.order.astrologerUserId,
+    statuses: chargebackBlockablePayoutStatuses,
+    limit: 100
+  });
+
+  for (const request of requests) {
+    const status = chargebackBlockedPayoutStatus(request);
+    const updated = await input.store.updateRequestStatus({
+      payoutRequestId: request.id,
+      status,
+      adminUserId: null,
+      adminNote: `Blocked automatically by provider chargeback ${input.providerEvent.providerWebhookId} for order ${input.order.id}`,
+      failureReason:
+        status === "failed" ? "Provider chargeback blocked payout before paid confirmation" : null,
+      now: input.providerEvent.receivedAt
+    });
+    if (!updated) throw new PaymentReversalPayoutBlockError();
+    await input.store.createTransaction(
+      createChargebackBlockedPayoutReleaseLedgerTransaction({
+        before: request,
+        after: updated,
+        providerEvent: input.providerEvent,
+        order: input.order
+      })
+    );
+  }
+
+  return input.store.findWalletBalance(input.order.astrologerUserId);
+}
+
+function chargebackBlockedPayoutStatus(
+  request: PayoutRequestRecord
+): Extract<PayoutRequestStatus, "cancelled" | "failed"> {
+  return request.status === "processing_manual" || request.status === "processing_provider"
+    ? "failed"
+    : "cancelled";
+}
+
+const chargebackBlockablePayoutStatuses = [
+  "requested",
+  "under_review",
+  "approved",
+  "processing_manual",
+  "processing_provider"
+] as const satisfies readonly PayoutRequestStatus[];
+
+function createChargebackBlockedPayoutReleaseLedgerTransaction(input: {
+  readonly before: PayoutRequestRecord;
+  readonly after: PayoutRequestRecord;
+  readonly providerEvent: PaymentProviderEvent;
+  readonly order: FinanceOrder;
+}): CreateLedgerTransactionInput {
+  return {
+    operationType: "payout_failed",
+    orderId: null,
+    payoutRequestId: input.after.id,
+    occurredAt: input.providerEvent.receivedAt,
+    postedAt: input.providerEvent.receivedAt,
+    metadata: {
+      reason: "provider_chargeback_blocked_payout",
+      providerEventId: input.providerEvent.id,
+      providerWebhookId: input.providerEvent.providerWebhookId,
+      orderId: input.order.id,
+      fromStatus: input.before.status,
+      toStatus: input.after.status,
+      failureReason: input.after.failureReason,
+      adminUserId: null
+    },
+    entries: [
+      {
+        account: {
+          accountType: "astrologer_payout_pending",
+          astrologerUserId: input.after.astrologerUserId,
+          currency: input.after.amount.currency
+        },
+        side: "debit",
+        amount: input.after.amount,
+        metadata: { payoutRequestId: input.after.id, reason: "provider_chargeback_blocked_payout" }
+      },
+      {
+        account: {
+          accountType: "astrologer_available",
+          astrologerUserId: input.after.astrologerUserId,
+          currency: input.after.amount.currency
+        },
+        side: "credit",
+        amount: input.after.amount,
+        metadata: { payoutRequestId: input.after.id, reason: "provider_chargeback_blocked_payout" }
+      }
+    ]
   };
 }
 
@@ -675,11 +799,21 @@ function allocateAstrologerReversal(
   remainingMinor -= availableMinor;
   const reservedMinor = Math.min(walletBalance?.reserved.amountMinor ?? 0, remainingMinor);
   remainingMinor -= reservedMinor;
+  const payoutPendingMinor = Math.min(
+    walletBalance?.payoutPending.amountMinor ?? 0,
+    remainingMinor
+  );
+  remainingMinor -= payoutPendingMinor;
 
   return [
     createAstrologerReversalEntry("astrologer_pending", astrologerUserId, pendingMinor),
     createAstrologerReversalEntry("astrologer_available", astrologerUserId, availableMinor),
     createAstrologerReversalEntry("astrologer_reserved", astrologerUserId, reservedMinor),
+    createAstrologerReversalEntry(
+      "astrologer_payout_pending",
+      astrologerUserId,
+      payoutPendingMinor
+    ),
     createAstrologerReversalEntry("astrologer_negative_balance", astrologerUserId, remainingMinor)
   ].filter((entry): entry is CreateLedgerEntryInput => entry !== null);
 }
@@ -689,6 +823,7 @@ function createAstrologerReversalEntry(
     | "astrologer_pending"
     | "astrologer_available"
     | "astrologer_reserved"
+    | "astrologer_payout_pending"
     | "astrologer_negative_balance",
   astrologerUserId: string,
   amountMinor: number

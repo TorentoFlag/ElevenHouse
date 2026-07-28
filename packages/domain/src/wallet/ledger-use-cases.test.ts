@@ -13,6 +13,7 @@ import {
   type FinanceOrder,
   type PaymentAttempt,
   type PaymentProviderEvent,
+  type PayoutRequestRecord,
   type RefundRecord,
   type RefundReversalTransactionStore,
   type RefundReversalUnitOfWork,
@@ -24,6 +25,7 @@ const paymentAttemptId = "11111111-1111-4111-8111-111111111111";
 const orderId = "22222222-2222-4222-8222-222222222222";
 const providerPaymentId = "33333333-3333-4333-8333-333333333333";
 const bookingId = "99999999-9999-4999-8999-999999999999";
+const payoutRequestId = "55555555-5555-4555-8555-555555555555";
 type Mutable<T> = { -readonly [Key in keyof T]: T[Key] };
 
 describe("capturePaymentProviderWebhook", () => {
@@ -331,7 +333,7 @@ describe("recordPaymentReversalProviderWebhook", () => {
   it("records chargeback shortfall as explicit negative balance after astrologer funds were paid out", async () => {
     const harness = createReversalHarness({
       orderStatus: "fulfilled",
-      wallet: { pending: 0, available: 0, reserved: 0, negativeBalance: 0 }
+      wallet: { pending: 0, available: 0, reserved: 0, payoutPending: 0, negativeBalance: 0 }
     });
 
     await expect(recordChargeback(harness)).resolves.toMatchObject({ kind: "created" });
@@ -351,6 +353,61 @@ describe("recordPaymentReversalProviderWebhook", () => {
           ),
           reversalEntry("platform_clearing", null, "credit", 50_000)
         ]
+      })
+    ]);
+  });
+
+  it("blocks an open payout request before clawing chargeback back from astrologer funds", async () => {
+    const harness = createReversalHarness({
+      orderStatus: "fulfilled",
+      wallet: { pending: 0, available: 0, reserved: 0, payoutPending: 43_000, negativeBalance: 0 },
+      payoutRequests: [payoutRequest({ status: "approved" })]
+    });
+
+    await expect(recordChargeback(harness)).resolves.toMatchObject({ kind: "created" });
+
+    expect(harness.refunds).toEqual([]);
+    expect(harness.order.status).toBe("chargeback");
+    expect(harness.ledgerTransactions).toEqual([
+      expect.objectContaining({
+        operationType: "payout_failed",
+        payoutRequestId,
+        entries: [
+          reversalEntry(
+            "astrologer_payout_pending",
+            "44444444-4444-4444-8444-444444444444",
+            "debit",
+            43_000
+          ),
+          reversalEntry(
+            "astrologer_available",
+            "44444444-4444-4444-8444-444444444444",
+            "credit",
+            43_000
+          )
+        ]
+      }),
+      expect.objectContaining({
+        operationType: "chargeback_recorded",
+        entries: [
+          reversalEntry("platform_revenue", null, "debit", 7_000),
+          reversalEntry(
+            "astrologer_available",
+            "44444444-4444-4444-8444-444444444444",
+            "debit",
+            43_000
+          ),
+          reversalEntry("platform_clearing", null, "credit", 50_000)
+        ]
+      })
+    ]);
+    expect(harness.payoutStatusUpdates).toEqual([
+      expect.objectContaining({
+        payoutRequestId,
+        status: "cancelled",
+        adminUserId: null,
+        adminNote: expect.stringContaining("provider chargeback"),
+        now
       })
     ]);
   });
@@ -646,8 +703,10 @@ function createReversalHarness(input: {
     readonly pending: number;
     readonly available: number;
     readonly reserved: number;
+    readonly payoutPending?: number;
     readonly negativeBalance: number;
   };
+  readonly payoutRequests?: readonly PayoutRequestRecord[];
 }) {
   const attempt: Mutable<PaymentAttempt> = {
     id: paymentAttemptId,
@@ -687,12 +746,16 @@ function createReversalHarness(input: {
   const providerEvents: PaymentProviderEvent[] = [];
   const refunds: RefundRecord[] = [];
   const ledgerTransactions: CreateLedgerTransactionInput[] = [];
+  let payoutRequests = [...(input.payoutRequests ?? [])];
+  const payoutStatusUpdates: Parameters<
+    RefundReversalTransactionStore["updateRequestStatus"]
+  >[0][] = [];
   const walletBalance: Mutable<WalletBalance> = {
     astrologerUserId: order.astrologerUserId,
     pending: { amountMinor: input.wallet.pending, currency: "RUB" },
     available: { amountMinor: input.wallet.available, currency: "RUB" },
     reserved: { amountMinor: input.wallet.reserved, currency: "RUB" },
-    payoutPending: { amountMinor: 0, currency: "RUB" },
+    payoutPending: { amountMinor: input.wallet.payoutPending ?? 0, currency: "RUB" },
     negativeBalance: { amountMinor: input.wallet.negativeBalance, currency: "RUB" },
     updatedAt: now
   };
@@ -755,10 +818,48 @@ function createReversalHarness(input: {
       order.updatedAt = input.now;
       return { ...order };
     },
+    listRequests: async (requestInput) =>
+      payoutRequests
+        .filter((request) =>
+          requestInput?.astrologerUserId
+            ? request.astrologerUserId === requestInput.astrologerUserId
+            : true
+        )
+        .filter((request) =>
+          requestInput?.statuses?.length ? requestInput.statuses.includes(request.status) : true
+        )
+        .slice(0, requestInput?.limit ?? 50),
+    updateRequestStatus: async (requestInput) => {
+      payoutStatusUpdates.push(requestInput);
+      const existing = payoutRequests.find(
+        (request) => request.id === requestInput.payoutRequestId
+      );
+      if (!existing) return null;
+      const updated: PayoutRequestRecord = {
+        ...existing,
+        status: requestInput.status,
+        adminUserId: requestInput.adminUserId,
+        adminNote: requestInput.adminNote ?? existing.adminNote,
+        failureReason: requestInput.failureReason ?? existing.failureReason,
+        completedAt:
+          requestInput.status === "paid" ||
+          requestInput.status === "failed" ||
+          requestInput.status === "rejected" ||
+          requestInput.status === "cancelled"
+            ? requestInput.now
+            : existing.completedAt,
+        updatedAt: requestInput.now
+      };
+      payoutRequests = payoutRequests.map((request) =>
+        request.id === updated.id ? updated : request
+      );
+      return updated;
+    },
     findWalletBalance: async (astrologerUserId) =>
       astrologerUserId === order.astrologerUserId ? { ...walletBalance } : null,
     createTransaction: async (transaction) => {
       ledgerTransactions.push(transaction);
+      applyWalletTransaction(walletBalance, transaction);
       return { ...transaction, id: "ledger-reversal-1", entries: [] };
     }
   };
@@ -772,7 +873,55 @@ function createReversalHarness(input: {
     order,
     providerEvents,
     refunds,
-    ledgerTransactions
+    ledgerTransactions,
+    payoutStatusUpdates
+  };
+}
+
+function applyWalletTransaction(
+  walletBalance: Mutable<WalletBalance>,
+  transaction: CreateLedgerTransactionInput
+): void {
+  for (const entry of transaction.entries) {
+    if (entry.account.astrologerUserId !== walletBalance.astrologerUserId) continue;
+    const delta = entry.side === "credit" ? entry.amount.amountMinor : -entry.amount.amountMinor;
+    if (entry.account.accountType === "astrologer_available") {
+      walletBalance.available = {
+        ...walletBalance.available,
+        amountMinor: walletBalance.available.amountMinor + delta
+      };
+    }
+    if (entry.account.accountType === "astrologer_payout_pending") {
+      walletBalance.payoutPending = {
+        ...walletBalance.payoutPending,
+        amountMinor: walletBalance.payoutPending.amountMinor + delta
+      };
+    }
+  }
+}
+
+function payoutRequest(overrides: Partial<PayoutRequestRecord> = {}): PayoutRequestRecord {
+  return {
+    id: overrides.id ?? payoutRequestId,
+    astrologerUserId: overrides.astrologerUserId ?? "44444444-4444-4444-8444-444444444444",
+    payoutMethodId: overrides.payoutMethodId ?? "66666666-6666-4666-8666-666666666666",
+    status: overrides.status ?? "requested",
+    amount: overrides.amount ?? { amountMinor: 43_000, currency: "RUB" },
+    method: overrides.method ?? "manual_bank_transfer",
+    provider: overrides.provider ?? null,
+    environment: overrides.environment ?? null,
+    requestedAt: overrides.requestedAt ?? now,
+    reviewedAt: overrides.reviewedAt ?? null,
+    completedAt: overrides.completedAt ?? null,
+    adminUserId: overrides.adminUserId ?? null,
+    adminNote: overrides.adminNote ?? null,
+    failureReason: overrides.failureReason ?? null,
+    externalReference: overrides.externalReference ?? null,
+    transferredAt: overrides.transferredAt ?? null,
+    providerPayoutId: overrides.providerPayoutId ?? null,
+    metadata: overrides.metadata ?? {},
+    createdAt: overrides.createdAt ?? now,
+    updatedAt: overrides.updatedAt ?? now
   };
 }
 

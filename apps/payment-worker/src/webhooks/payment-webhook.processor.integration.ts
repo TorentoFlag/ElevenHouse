@@ -77,10 +77,12 @@ describe("Arc Pay refund and chargeback webhook PostgreSQL integration", () => {
       orderStatus: "refunded",
       refunds: [{ amountMinor: 50_000, status: "succeeded" }],
       ledgerOperations: { refund_recorded: "1" },
+      payoutRequests: [],
       wallet: {
         pending: "0",
         available: "0",
         reserved: "0",
+        payoutPending: "0",
         negativeBalance: "0"
       }
     });
@@ -138,10 +140,12 @@ describe("Arc Pay refund and chargeback webhook PostgreSQL integration", () => {
       orderStatus: "partially_refunded",
       refunds: [{ amountMinor: 10_000, status: "succeeded" }],
       ledgerOperations: { refund_recorded: "1" },
+      payoutRequests: [],
       wallet: {
         pending: "0",
         available: "36000",
         reserved: "0",
+        payoutPending: "0",
         negativeBalance: "0"
       }
     });
@@ -169,11 +173,81 @@ describe("Arc Pay refund and chargeback webhook PostgreSQL integration", () => {
       orderStatus: "chargeback",
       refunds: [],
       ledgerOperations: { chargeback_recorded: "1" },
+      payoutRequests: [],
       wallet: {
         pending: "0",
         available: "0",
         reserved: "0",
+        payoutPending: "0",
         negativeBalance: "45000"
+      }
+    });
+  });
+
+  it("claws a chargeback from payout pending and blocks an open manual payout request", async () => {
+    const fixture = await createFixture({ orderStatus: "fulfilled" });
+    const ledger = createDrizzleLedgerStore(runtime.database);
+    await ledger.createTransaction(
+      saleCapturedTransaction({
+        orderId: fixture.orderId,
+        astrologerUserId: fixture.astrologerUserId,
+        paymentAttemptId: fixture.paymentAttemptId,
+        providerPaymentId: fixture.providerPaymentId
+      })
+    );
+    await ledger.createTransaction(
+      holdReleaseTransaction({
+        orderId: fixture.orderId,
+        astrologerUserId: fixture.astrologerUserId,
+        paymentAttemptId: fixture.paymentAttemptId
+      })
+    );
+    const payoutRequestId = await createApprovedPayoutRequest({
+      astrologerUserId: fixture.astrologerUserId,
+      amountMinor: 45_000
+    });
+    await ledger.createTransaction(
+      payoutReservedTransaction({
+        payoutRequestId,
+        astrologerUserId: fixture.astrologerUserId,
+        amountMinor: 45_000
+      })
+    );
+    const handler = createHandler(fixture.paymentAttemptId);
+
+    await expect(
+      handler.handle(
+        signedRequest({
+          ...basePayload(randomUUID(), fixture.providerPaymentId),
+          event_type: "payment.chargeback",
+          data: {
+            payment_id: fixture.providerPaymentId,
+            amount: 50_000,
+            currency: "RUB"
+          }
+        })
+      )
+    ).resolves.toEqual({ statusCode: 200, body: { accepted: true, duplicate: false } });
+
+    await expect(financeState(fixture.orderId, fixture.astrologerUserId)).resolves.toEqual({
+      orderStatus: "chargeback",
+      refunds: [],
+      ledgerOperations: { chargeback_recorded: "1", payout_failed: "1" },
+      payoutRequests: [
+        expect.objectContaining({
+          id: payoutRequestId,
+          status: "cancelled",
+          adminUserId: null,
+          adminNote: expect.stringContaining("provider chargeback"),
+          failureReason: null
+        })
+      ],
+      wallet: {
+        pending: "0",
+        available: "0",
+        reserved: "0",
+        payoutPending: "0",
+        negativeBalance: "0"
       }
     });
   });
@@ -303,6 +377,25 @@ function holdReleaseTransaction(input: {
   };
 }
 
+function payoutReservedTransaction(input: {
+  readonly payoutRequestId: string;
+  readonly astrologerUserId: string;
+  readonly amountMinor: number;
+}): CreateLedgerTransactionInput {
+  return {
+    operationType: "payout_reserved",
+    orderId: null,
+    payoutRequestId: input.payoutRequestId,
+    occurredAt: "2026-07-29T11:00:00.000Z",
+    postedAt: "2026-07-29T11:00:00.000Z",
+    metadata: { payoutRequestId: input.payoutRequestId },
+    entries: [
+      ledgerEntry("astrologer_available", input.astrologerUserId, "debit", input.amountMinor),
+      ledgerEntry("astrologer_payout_pending", input.astrologerUserId, "credit", input.amountMinor)
+    ]
+  };
+}
+
 function ledgerEntry(
   accountType: CreateLedgerTransactionInput["entries"][number]["account"]["accountType"],
   astrologerUserId: string | null,
@@ -367,7 +460,7 @@ function signedRequest(payload: Record<string, unknown>) {
 }
 
 async function financeState(orderId: string, astrologerUserId: string) {
-  const [order, refunds, ledgerOperations, wallet] = await Promise.all([
+  const [order, refunds, ledgerOperations, wallet, payoutRequests] = await Promise.all([
     runtime.pool.query<{ status: string }>("select status from orders where id = $1", [orderId]),
     runtime.pool.query<{ amount_minor: string; status: string }>(
       "select amount_minor::text, status from refunds where order_id = $1 order by created_at, id",
@@ -376,20 +469,38 @@ async function financeState(orderId: string, astrologerUserId: string) {
     runtime.pool.query<{ operation_type: string; count: string }>(
       `select operation_type, count(*)::text as count
        from ledger_transactions
-       where order_id = $1 and operation_type in ('refund_recorded', 'chargeback_recorded')
+       where (order_id = $1 or payout_request_id in (
+         select id from payout_requests where astrologer_user_id = $2
+       ))
+         and operation_type in ('refund_recorded', 'chargeback_recorded', 'payout_failed')
        group by operation_type`,
-      [orderId]
+      [orderId, astrologerUserId]
     ),
     runtime.pool.query<{
       pending_amount_minor: string;
       available_amount_minor: string;
       reserved_amount_minor: string;
+      payout_pending_amount_minor: string;
       negative_balance_amount_minor: string;
     }>(
       `select pending_amount_minor::text, available_amount_minor::text,
-        reserved_amount_minor::text, negative_balance_amount_minor::text
+        reserved_amount_minor::text, payout_pending_amount_minor::text,
+        negative_balance_amount_minor::text
        from wallet_balance_read_models
        where astrologer_user_id = $1`,
+      [astrologerUserId]
+    ),
+    runtime.pool.query<{
+      id: string;
+      status: string;
+      admin_user_id: string | null;
+      admin_note: string | null;
+      failure_reason: string | null;
+    }>(
+      `select id, status, admin_user_id, admin_note, failure_reason
+       from payout_requests
+       where astrologer_user_id = $1
+       order by requested_at, id`,
       [astrologerUserId]
     )
   ]);
@@ -402,13 +513,44 @@ async function financeState(orderId: string, astrologerUserId: string) {
     ledgerOperations: Object.fromEntries(
       ledgerOperations.rows.map((row) => [row.operation_type, row.count])
     ),
+    payoutRequests: payoutRequests.rows.map((request) => ({
+      id: request.id,
+      status: request.status,
+      adminUserId: request.admin_user_id,
+      adminNote: request.admin_note,
+      failureReason: request.failure_reason
+    })),
     wallet: {
       pending: wallet.rows[0]?.pending_amount_minor ?? "0",
       available: wallet.rows[0]?.available_amount_minor ?? "0",
       reserved: wallet.rows[0]?.reserved_amount_minor ?? "0",
+      payoutPending: wallet.rows[0]?.payout_pending_amount_minor ?? "0",
       negativeBalance: wallet.rows[0]?.negative_balance_amount_minor ?? "0"
     }
   };
+}
+
+async function createApprovedPayoutRequest(input: {
+  readonly astrologerUserId: string;
+  readonly amountMinor: number;
+}): Promise<string> {
+  const payoutMethodId = randomUUID();
+  const payoutRequestId = randomUUID();
+  await runtime.pool.query(
+    `insert into payout_methods
+      (id, astrologer_user_id, method, currency, display_name, manual_bank_transfer_details, is_default)
+     values ($1, $2, 'manual_bank_transfer', 'RUB', 'Main account', '{"bankName":"T-Bank"}'::jsonb, true)`,
+    [payoutMethodId, input.astrologerUserId]
+  );
+  await runtime.pool.query(
+    `insert into payout_requests
+      (id, astrologer_user_id, payout_method_id, status, amount_minor, currency, method,
+       requested_at, reviewed_at, metadata)
+     values ($1, $2, $3, 'approved', $4, 'RUB', 'manual_bank_transfer',
+       '2026-07-29T10:30:00.000Z', '2026-07-29T10:45:00.000Z', '{}'::jsonb)`,
+    [payoutRequestId, input.astrologerUserId, payoutMethodId, input.amountMinor]
+  );
+  return payoutRequestId;
 }
 
 let policyVersion = 0;

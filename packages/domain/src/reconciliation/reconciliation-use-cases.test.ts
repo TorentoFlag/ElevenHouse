@@ -283,12 +283,10 @@ function settlementLedgerEntry(
   const currency = overrides.currency ?? overrides.amount?.currency ?? "RUB";
   const providerLedgerEntryId = overrides.providerLedgerEntryId ?? "ledger-entry-default";
   const referenceType = overrides.referenceType ?? "payment";
-  const {
-    amountMinor: _amountMinor,
-    currency: _currency,
-    amount: _amount,
-    ...entryOverrides
-  } = overrides;
+  const entryOverrides = { ...overrides };
+  delete entryOverrides.amountMinor;
+  delete entryOverrides.currency;
+  delete entryOverrides.amount;
   const entry = {
     provider: "arc_pay",
     environment: "sandbox",
