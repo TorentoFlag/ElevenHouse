@@ -3,6 +3,9 @@ import type {
   CreateMessagingThreadClientRequest,
   LinkMessagingThreadClientRequest,
   MessagingRealtimeEvent,
+  StartTelegramMtprotoConnectionRequest,
+  SubmitTelegramMtprotoCodeRequest,
+  SubmitTelegramMtprotoPasswordRequest,
   MessagingThreadDetailQuery,
   MessagingThreadListQuery,
   SendMessagingMessageRequest
@@ -15,7 +18,11 @@ import {
   listMessagingThreads,
   markMessagingThreadRead,
   sendMessagingMessage,
-  startTelegramBusinessConnection
+  startInstagramGraphConnection,
+  startTelegramBusinessConnection,
+  startTelegramMtprotoConnection,
+  submitTelegramMtprotoCode,
+  submitTelegramMtprotoPassword
 } from "../api/messagingApi";
 
 type QueryInvalidator = Pick<QueryClient, "invalidateQueries">;
@@ -47,6 +54,40 @@ export function listMessagingThreadsQueryOptions(query: MessagingThreadListQuery
 export function startTelegramBusinessConnectionMutationOptions(queryClient: QueryInvalidator) {
   return {
     mutationFn: () => startTelegramBusinessConnection(),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.channelConnections() })
+  };
+}
+
+export function startInstagramGraphConnectionMutationOptions(queryClient: QueryInvalidator) {
+  return {
+    mutationFn: () => startInstagramGraphConnection(),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.channelConnections() })
+  };
+}
+
+export function startTelegramMtprotoConnectionMutationOptions(queryClient: QueryInvalidator) {
+  return {
+    mutationFn: (input: StartTelegramMtprotoConnectionRequest) =>
+      startTelegramMtprotoConnection(input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.channelConnections() })
+  };
+}
+
+export function submitTelegramMtprotoCodeMutationOptions(queryClient: QueryInvalidator) {
+  return {
+    mutationFn: (input: SubmitTelegramMtprotoCodeRequest) => submitTelegramMtprotoCode(input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.channelConnections() })
+  };
+}
+
+export function submitTelegramMtprotoPasswordMutationOptions(queryClient: QueryInvalidator) {
+  return {
+    mutationFn: (input: SubmitTelegramMtprotoPasswordRequest) =>
+      submitTelegramMtprotoPassword(input),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: messagingQueryKeys.channelConnections() })
   };
@@ -120,7 +161,8 @@ export function createMessagingThreadClientMutationOptions(
 export function markMessagingThreadReadMutationOptions(queryClient: QueryInvalidator) {
   return {
     mutationFn: (threadId: string) => markMessagingThreadRead(threadId),
-    onSuccess: (_data: unknown, threadId: string) => invalidateMessagingThread(queryClient, threadId)
+    onSuccess: (_data: unknown, threadId: string) =>
+      invalidateMessagingThread(queryClient, threadId)
   };
 }
 

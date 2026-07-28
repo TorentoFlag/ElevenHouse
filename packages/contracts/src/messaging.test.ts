@@ -7,6 +7,7 @@ import {
   MessagingThreadDetailQuerySchema,
   MessagingProviderSchema,
   MessagingRealtimeEventSchema,
+  StartInstagramGraphConnectionResponseSchema,
   StartTelegramBusinessConnectionResponseSchema,
   StartTelegramMtprotoConnectionRequestSchema,
   SubmitTelegramMtprotoCodeRequestSchema,
@@ -113,6 +114,32 @@ describe("messaging contracts", () => {
         channelConnection: { ...channelConnection, businessConnectionId: "bc_secret" },
         telegramBotUsername: "elevenhouse_test_bot",
         telegramBotUrl: "https://t.me/elevenhouse_test_bot"
+      })
+    ).toThrow();
+  });
+
+  it("accepts Instagram Graph start responses without exposing provider secrets", () => {
+    const response = StartInstagramGraphConnectionResponseSchema.parse({
+      channelConnection: {
+        ...channelConnection,
+        provider: "instagram",
+        mode: "instagram_graph",
+        status: "connecting",
+        displayName: null,
+        username: null,
+        connectedAt: null
+      },
+      authorizationUrl:
+        "https://www.facebook.com/v25.0/dialog/oauth?client_id=123&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback&state=11111111-1111-4111-8111-111111111111"
+    });
+
+    expect(response.channelConnection.provider).toBe("instagram");
+    expect(response.channelConnection.mode).toBe("instagram_graph");
+    expect(response.authorizationUrl).toContain("dialog/oauth");
+    expect(() =>
+      StartInstagramGraphConnectionResponseSchema.parse({
+        ...response,
+        pageAccessToken: "secret-token"
       })
     ).toThrow();
   });

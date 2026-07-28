@@ -18,8 +18,16 @@ import {
   listMessagingThreadsQueryOptions,
   markMessagingThreadReadMutationOptions,
   sendMessagingMessageMutationOptions,
-  startTelegramBusinessConnectionMutationOptions
+  startInstagramGraphConnectionMutationOptions,
+  startTelegramBusinessConnectionMutationOptions,
+  startTelegramMtprotoConnectionMutationOptions,
+  submitTelegramMtprotoCodeMutationOptions,
+  submitTelegramMtprotoPasswordMutationOptions
 } from "../../features/messaging/model/messagingQueries";
+import {
+  createInitialTelegramMtprotoWizardState,
+  deriveTelegramMtprotoWizardState
+} from "../../features/messaging/model/telegramMtprotoConnectionWizard";
 import { InboxPageView } from "./InboxPageView";
 
 export function InboxPage() {
@@ -33,21 +41,40 @@ export function InboxPage() {
   const [isTelegramBusinessGuideOpen, setIsTelegramBusinessGuideOpen] = useState(false);
   const [telegramBusinessStartGuide, setTelegramBusinessStartGuide] =
     useState<StartTelegramBusinessConnectionResponse | null>(null);
+  const [telegramMtprotoWizard, setTelegramMtprotoWizard] = useState(
+    createInitialTelegramMtprotoWizardState
+  );
+  const [telegramMtprotoPhoneNumber, setTelegramMtprotoPhoneNumber] = useState("");
+  const [telegramMtprotoCode, setTelegramMtprotoCode] = useState("");
+  const [telegramMtprotoPassword, setTelegramMtprotoPassword] = useState("");
+  const [isTelegramMtprotoConsentAccepted, setIsTelegramMtprotoConsentAccepted] = useState(false);
   const channelConnectionsQuery = useQuery(listMessagingChannelConnectionsQueryOptions());
   const threadsQuery = useQuery(listMessagingThreadsQueryOptions({ limit: 50, offset: 0 }));
   const threadQuery = useQuery(getMessagingThreadQueryOptions(selectedThreadId));
   const startTelegramBusinessMutation = useMutation(
     startTelegramBusinessConnectionMutationOptions(queryClient)
   );
+  const startInstagramGraphMutation = useMutation(
+    startInstagramGraphConnectionMutationOptions(queryClient)
+  );
+  const startTelegramMtprotoMutation = useMutation(
+    startTelegramMtprotoConnectionMutationOptions(queryClient)
+  );
+  const submitTelegramMtprotoCodeMutation = useMutation(
+    submitTelegramMtprotoCodeMutationOptions(queryClient)
+  );
+  const submitTelegramMtprotoPasswordMutation = useMutation(
+    submitTelegramMtprotoPasswordMutationOptions(queryClient)
+  );
   const sendMessageMutation = useMutation(sendMessagingMessageMutationOptions(queryClient));
   const markReadMutation = useMutation(markMessagingThreadReadMutationOptions(queryClient));
   const linkClientMutation = useMutation(linkMessagingThreadClientMutationOptions(queryClient));
   const createClientMutation = useMutation(createMessagingThreadClientMutationOptions(queryClient));
   const channelConnections = channelConnectionsQuery.data?.channelConnections ?? [];
-  const hasActiveTelegramBusinessConnection = channelConnections.some(
-    (connection) => connection.mode === "telegram_business_bot" && connection.status === "active"
+  const hasActiveTelegramConnection = channelConnections.some(
+    (connection) => connection.provider === "telegram" && connection.status === "active"
   );
-  const wasTelegramBusinessActiveRef = useRef(hasActiveTelegramBusinessConnection);
+  const wasTelegramActiveRef = useRef(hasActiveTelegramConnection);
   const threads = useMemo(() => {
     const allThreads = threadsQuery.data?.threads ?? [];
 
@@ -88,25 +115,36 @@ export function InboxPage() {
   }, [queryClient]);
 
   useEffect(() => {
-    const wasTelegramBusinessActive = wasTelegramBusinessActiveRef.current;
-    wasTelegramBusinessActiveRef.current = hasActiveTelegramBusinessConnection;
-    if (
-      !isTelegramBusinessGuideOpen ||
-      !hasActiveTelegramBusinessConnection ||
-      wasTelegramBusinessActive
-    ) {
+    const wasTelegramActive = wasTelegramActiveRef.current;
+    wasTelegramActiveRef.current = hasActiveTelegramConnection;
+    if (!isTelegramBusinessGuideOpen || !hasActiveTelegramConnection || wasTelegramActive) {
       return;
     }
 
     setIsTelegramBusinessGuideOpen(false);
     setTelegramBusinessStartGuide(null);
-  }, [hasActiveTelegramBusinessConnection, isTelegramBusinessGuideOpen]);
+    setTelegramMtprotoWizard(createInitialTelegramMtprotoWizardState());
+    setTelegramMtprotoCode("");
+    setTelegramMtprotoPassword("");
+  }, [hasActiveTelegramConnection, isTelegramBusinessGuideOpen]);
 
   const sendError =
     sendMessageMutation.error instanceof Error ? sendMessageMutation.error.message : null;
   const telegramBusinessStartError =
     startTelegramBusinessMutation.error instanceof Error
       ? startTelegramBusinessMutation.error.message
+      : null;
+  const telegramMtprotoError =
+    startTelegramMtprotoMutation.error instanceof Error
+      ? startTelegramMtprotoMutation.error.message
+      : submitTelegramMtprotoCodeMutation.error instanceof Error
+        ? submitTelegramMtprotoCodeMutation.error.message
+        : submitTelegramMtprotoPasswordMutation.error instanceof Error
+          ? submitTelegramMtprotoPasswordMutation.error.message
+          : null;
+  const instagramGraphStartError =
+    startInstagramGraphMutation.error instanceof Error
+      ? startInstagramGraphMutation.error.message
       : null;
   const clientActionError =
     linkClientMutation.error instanceof Error
@@ -132,6 +170,19 @@ export function InboxPage() {
       telegramBusinessBotUsername={telegramBusinessStartGuide?.telegramBotUsername ?? null}
       isStartingTelegramBusinessConnection={startTelegramBusinessMutation.isPending}
       telegramBusinessStartError={telegramBusinessStartError}
+      isStartingInstagramGraphConnection={startInstagramGraphMutation.isPending}
+      instagramGraphStartError={instagramGraphStartError}
+      telegramMtprotoStep={telegramMtprotoWizard.step}
+      telegramMtprotoPhoneNumber={telegramMtprotoPhoneNumber}
+      telegramMtprotoCode={telegramMtprotoCode}
+      telegramMtprotoPassword={telegramMtprotoPassword}
+      telegramMtprotoMaskedPhoneNumber={telegramMtprotoWizard.maskedPhoneNumber}
+      telegramMtprotoRetryAfterSeconds={telegramMtprotoWizard.retryAfterSeconds}
+      isTelegramMtprotoConsentAccepted={isTelegramMtprotoConsentAccepted}
+      isStartingTelegramMtprotoConnection={startTelegramMtprotoMutation.isPending}
+      isSubmittingTelegramMtprotoCode={submitTelegramMtprotoCodeMutation.isPending}
+      isSubmittingTelegramMtprotoPassword={submitTelegramMtprotoPasswordMutation.isPending}
+      telegramMtprotoError={telegramMtprotoError}
       draft={draft}
       search={search}
       activeThreadFilter={activeThreadFilter}
@@ -152,6 +203,69 @@ export function InboxPage() {
           .mutateAsync()
           .then((result) => setTelegramBusinessStartGuide(result))
           .catch(() => undefined);
+      }}
+      onStartInstagramGraphConnection={() => {
+        startInstagramGraphMutation
+          .mutateAsync()
+          .then((result) => window.location.assign(result.authorizationUrl))
+          .catch(() => undefined);
+      }}
+      onTelegramMtprotoPhoneNumberChange={setTelegramMtprotoPhoneNumber}
+      onTelegramMtprotoConsentAcceptedChange={setIsTelegramMtprotoConsentAccepted}
+      onTelegramMtprotoCodeChange={setTelegramMtprotoCode}
+      onTelegramMtprotoPasswordChange={setTelegramMtprotoPassword}
+      onStartTelegramMtprotoConnection={() => {
+        startTelegramMtprotoMutation
+          .mutateAsync({
+            phoneNumber: telegramMtprotoPhoneNumber,
+            consentAccepted: true
+          })
+          .then((result) => {
+            setTelegramMtprotoWizard(deriveTelegramMtprotoWizardState(result));
+            setTelegramMtprotoCode("");
+            setTelegramMtprotoPassword("");
+          })
+          .catch(() => undefined);
+      }}
+      onSubmitTelegramMtprotoCode={() => {
+        const channelConnectionId = telegramMtprotoWizard.channelConnectionId;
+        if (!channelConnectionId || !telegramMtprotoCode.trim()) {
+          return;
+        }
+
+        submitTelegramMtprotoCodeMutation
+          .mutateAsync({
+            channelConnectionId,
+            code: telegramMtprotoCode
+          })
+          .then((result) => {
+            setTelegramMtprotoWizard(deriveTelegramMtprotoWizardState(result));
+            setTelegramMtprotoCode("");
+            setTelegramMtprotoPassword("");
+          })
+          .catch(() => undefined);
+      }}
+      onSubmitTelegramMtprotoPassword={() => {
+        const channelConnectionId = telegramMtprotoWizard.channelConnectionId;
+        if (!channelConnectionId || !telegramMtprotoPassword) {
+          return;
+        }
+
+        submitTelegramMtprotoPasswordMutation
+          .mutateAsync({
+            channelConnectionId,
+            password: telegramMtprotoPassword
+          })
+          .then((result) => {
+            setTelegramMtprotoWizard(deriveTelegramMtprotoWizardState(result));
+            setTelegramMtprotoPassword("");
+          })
+          .catch(() => undefined);
+      }}
+      onResetTelegramMtprotoConnection={() => {
+        setTelegramMtprotoWizard(createInitialTelegramMtprotoWizardState());
+        setTelegramMtprotoCode("");
+        setTelegramMtprotoPassword("");
       }}
       onSend={() => {
         if (!selectedThreadId || !draft.trim()) {

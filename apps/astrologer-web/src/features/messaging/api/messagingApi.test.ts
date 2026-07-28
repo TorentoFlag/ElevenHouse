@@ -9,7 +9,11 @@ import {
   listMessagingThreads,
   markMessagingThreadRead,
   sendMessagingMessage,
-  startTelegramBusinessConnection
+  startInstagramGraphConnection,
+  startTelegramBusinessConnection,
+  startTelegramMtprotoConnection,
+  submitTelegramMtprotoCode,
+  submitTelegramMtprotoPassword
 } from "./messagingApi";
 
 const threadId = "44444444-4444-4444-8444-444444444444";
@@ -101,6 +105,101 @@ describe("messagingApi", () => {
     );
   });
 
+  it("starts Instagram Graph connection with csrf and parses the Meta authorization URL", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue({
+      channelConnection: channelConnection({
+        provider: "instagram",
+        mode: "instagram_graph",
+        status: "connecting"
+      }),
+      authorizationUrl: "https://www.facebook.com/v25.0/dialog/oauth?client_id=123"
+    });
+
+    await expect(startInstagramGraphConnection()).resolves.toMatchObject({
+      channelConnection: { id: connectionId, provider: "instagram", mode: "instagram_graph" },
+      authorizationUrl: "https://www.facebook.com/v25.0/dialog/oauth?client_id=123"
+    });
+
+    expect(post).toHaveBeenCalledWith(
+      "/messaging/channel-connections/instagram/graph/start",
+      undefined,
+      { csrf: true }
+    );
+  });
+
+  it("runs Telegram MTProto login steps through csrf-protected endpoints", async () => {
+    const post = vi
+      .spyOn(application.http, "post")
+      .mockResolvedValueOnce({
+        channelConnection: channelConnection({
+          mode: "telegram_mtproto_account",
+          status: "connecting"
+        }),
+        loginStep: "code_required",
+        maskedPhoneNumber: "+7******3535",
+        retryAfterSeconds: null
+      })
+      .mockResolvedValueOnce({
+        channelConnection: channelConnection({
+          mode: "telegram_mtproto_account",
+          status: "connecting"
+        }),
+        loginStep: "password_required",
+        maskedPhoneNumber: "+7******3535",
+        retryAfterSeconds: null
+      })
+      .mockResolvedValueOnce({
+        channelConnection: channelConnection({
+          mode: "telegram_mtproto_account",
+          status: "active"
+        }),
+        loginStep: "connected",
+        maskedPhoneNumber: "+7******3535",
+        retryAfterSeconds: null
+      });
+
+    await expect(
+      startTelegramMtprotoConnection({
+        phoneNumber: " +7 800 555 35 35 ",
+        consentAccepted: true
+      })
+    ).resolves.toMatchObject({
+      loginStep: "code_required",
+      channelConnection: { id: connectionId, mode: "telegram_mtproto_account" }
+    });
+    await expect(
+      submitTelegramMtprotoCode({
+        channelConnectionId: connectionId,
+        code: " 777777 "
+      })
+    ).resolves.toMatchObject({ loginStep: "password_required" });
+    await expect(
+      submitTelegramMtprotoPassword({
+        channelConnectionId: connectionId,
+        password: "2fa-password"
+      })
+    ).resolves.toMatchObject({ loginStep: "connected" });
+
+    expect(post).toHaveBeenNthCalledWith(
+      1,
+      "/messaging/channel-connections/telegram/mtproto/start",
+      { phoneNumber: "+7 800 555 35 35", consentAccepted: true },
+      { csrf: true }
+    );
+    expect(post).toHaveBeenNthCalledWith(
+      2,
+      "/messaging/channel-connections/telegram/mtproto/code",
+      { channelConnectionId: connectionId, code: "777777" },
+      { csrf: true }
+    );
+    expect(post).toHaveBeenNthCalledWith(
+      3,
+      "/messaging/channel-connections/telegram/mtproto/password",
+      { channelConnectionId: connectionId, password: "2fa-password" },
+      { csrf: true }
+    );
+  });
+
   it("links and creates clients with idempotency keys, and marks read with csrf", async () => {
     const post = vi
       .spyOn(application.http, "post")
@@ -136,11 +235,17 @@ describe("messagingApi", () => {
   });
 });
 
-function channelConnection(overrides: { status?: "connecting" | "active" } = {}) {
+function channelConnection(
+  overrides: {
+    readonly provider?: "telegram" | "instagram";
+    readonly mode?: "telegram_business_bot" | "telegram_mtproto_account" | "instagram_graph";
+    readonly status?: "connecting" | "active";
+  } = {}
+) {
   return {
     id: connectionId,
-    provider: "telegram",
-    mode: "telegram_business_bot",
+    provider: overrides.provider ?? "telegram",
+    mode: overrides.mode ?? "telegram_business_bot",
     status: overrides.status ?? "active",
     displayName: "Alisa",
     username: "alisa",

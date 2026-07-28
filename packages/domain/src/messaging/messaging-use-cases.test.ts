@@ -26,6 +26,7 @@ import type {
   RecordTelegramBusinessEditedMessageStoreInput,
   RecordTelegramBusinessMessageStoreInput,
   RecordTelegramMtprotoMessageStoreInput,
+  StartInstagramGraphConnectionStoreInput,
   StartTelegramBusinessConnectionStoreInput,
   StartTelegramMtprotoConnectionStoreInput
 } from "./messaging-store";
@@ -50,6 +51,7 @@ import {
   recordTelegramMtprotoCodeResult,
   recordTelegramMtprotoPasswordResult,
   requireTelegramMtprotoLoginSession,
+  startInstagramGraphConnection,
   startTelegramBusinessConnection,
   startTelegramMtprotoConnection
 } from "./messaging-use-cases";
@@ -112,7 +114,10 @@ describe("Messaging use cases", () => {
     const created = await createOutboundMessage(input);
     const replayed = await createOutboundMessage({ ...input, text: "Hello, client." });
 
-    expect(created).toMatchObject({ replayed: false, message: { text: "Hello, client.", status: "queued" } });
+    expect(created).toMatchObject({
+      replayed: false,
+      message: { text: "Hello, client.", status: "queued" }
+    });
     expect(replayed).toMatchObject({ message: { id: created.message.id }, replayed: true });
     expect(store.messages).toHaveLength(1);
     expect(store.outboxEvents).toEqual([
@@ -284,7 +289,11 @@ describe("Messaging use cases", () => {
     });
 
     expect(store.createClientCommands).toEqual([
-      expect.objectContaining({ astrologerUserId, displayName: "Telegram contact", now: now.toISOString() })
+      expect.objectContaining({
+        astrologerUserId,
+        displayName: "Telegram contact",
+        now: now.toISOString()
+      })
     ]);
     expect(linked.clientUserId).toBe("client-created");
     expect(store.thread("thread-1")?.clientUserId).toBe("client-created");
@@ -423,6 +432,38 @@ describe("Messaging use cases", () => {
     ]);
   });
 
+  it("starts Instagram Graph connection as one owner-scoped pending channel", async () => {
+    const store = new InMemoryMessagingStore();
+
+    const started = await startInstagramGraphConnection({
+      store,
+      astrologerUserId,
+      idGenerator: createIdGenerator("instagram"),
+      now
+    });
+    const replayed = await startInstagramGraphConnection({
+      store,
+      astrologerUserId,
+      idGenerator: createIdGenerator("second"),
+      now
+    });
+
+    expect(started).toEqual({ connectionId: "instagram-1" });
+    expect(replayed).toEqual(started);
+    expect(store.startInstagramGraphCommands).toEqual([
+      {
+        connectionId: "instagram-1",
+        astrologerUserId,
+        now: now.toISOString()
+      },
+      {
+        connectionId: "second-1",
+        astrologerUserId,
+        now: now.toISOString()
+      }
+    ]);
+  });
+
   it("starts Telegram Account connection with encrypted login material and no plaintext phone", async () => {
     const store = new InMemoryMessagingStore();
     const encryptedSecret = {
@@ -542,7 +583,9 @@ describe("Messaging use cases", () => {
         encryptedSession: encryptedSecretFixture("partial-session")
       })
     ]);
-    expect(JSON.stringify(store.telegramMtprotoCodeCommands)).not.toMatch(/777777|phone-code-hash-plaintext/);
+    expect(JSON.stringify(store.telegramMtprotoCodeCommands)).not.toMatch(
+      /777777|phone-code-hash-plaintext/
+    );
   });
 
   it("records Telegram Account password completion without plaintext password", async () => {
@@ -939,7 +982,10 @@ class InMemoryMessagingStore implements MessagingStore {
   readonly realtimeEvents: MessagingRealtimeEvent[] = [];
   readonly markReadCommands: MarkThreadReadStoreInput[] = [];
   readonly linkClientCommands: Array<
-    LinkThreadToClientStoreInput & { readonly idempotencyKey?: string; readonly requestHash?: string }
+    LinkThreadToClientStoreInput & {
+      readonly idempotencyKey?: string;
+      readonly requestHash?: string;
+    }
   > = [];
   readonly createClientCommands: Array<{
     readonly astrologerUserId: string;
@@ -950,6 +996,7 @@ class InMemoryMessagingStore implements MessagingStore {
     readonly now: string;
   }> = [];
   readonly startTelegramBusinessCommands: StartTelegramBusinessConnectionStoreInput[] = [];
+  readonly startInstagramGraphCommands: StartInstagramGraphConnectionStoreInput[] = [];
   readonly startTelegramMtprotoCommands: StartTelegramMtprotoConnectionStoreInput[] = [];
   readonly telegramMtprotoCodeCommands: RecordTelegramMtprotoCodeResultStoreInput[] = [];
   readonly telegramMtprotoPasswordCommands: RecordTelegramMtprotoPasswordResultStoreInput[] = [];
@@ -963,9 +1010,13 @@ class InMemoryMessagingStore implements MessagingStore {
   ]);
   readonly #requestHashes = new Map<string, `sha256:${string}`>();
   readonly #providerMessages = new Map<string, MessagingMessage>();
-  readonly #threadClientRequests = new Map<string, { readonly requestHash: string; readonly thread: MessagingThread }>();
+  readonly #threadClientRequests = new Map<
+    string,
+    { readonly requestHash: string; readonly thread: MessagingThread }
+  >();
   readonly #activeClientUserIds = new Set(["client-existing"]);
   #nextRealtimeEventId = 1;
+  #instagramGraphConnectionId: string | null = null;
   #telegramBusinessConnectionId: string | null = null;
   #telegramMtprotoConnectionId: string | null = null;
   #telegramMtprotoLoginSession: {
@@ -994,10 +1045,14 @@ class InMemoryMessagingStore implements MessagingStore {
     readonly idempotencyKey: string;
   }): Promise<MessagingMessageWithRequestHash | null> {
     const message = this.messages.find(
-      (candidate) => candidate.threadId === input.threadId && candidate.idempotencyKey === input.idempotencyKey
+      (candidate) =>
+        candidate.threadId === input.threadId && candidate.idempotencyKey === input.idempotencyKey
     );
     if (!message) return null;
-    return { ...message, requestHash: this.#requestHashes.get(`${input.threadId}:${input.idempotencyKey}`)! };
+    return {
+      ...message,
+      requestHash: this.#requestHashes.get(`${input.threadId}:${input.idempotencyKey}`)!
+    };
   }
 
   async createOutboundMessage(input: CreateOutboundMessageStoreInput): Promise<MessagingMessage> {
@@ -1016,7 +1071,9 @@ class InMemoryMessagingStore implements MessagingStore {
     return message;
   }
 
-  async recordInboundProviderMessage(input: RecordInboundProviderMessageStoreInput): Promise<InboundMessageRecordResult> {
+  async recordInboundProviderMessage(
+    input: RecordInboundProviderMessageStoreInput
+  ): Promise<InboundMessageRecordResult> {
     const key = `${input.channelConnectionId}:${input.externalIdentityId}:${input.providerMessageId}`;
     const existing = this.#providerMessages.get(key);
     if (existing) return { kind: "duplicate", message: existing };
@@ -1118,9 +1175,15 @@ class InMemoryMessagingStore implements MessagingStore {
     return { connectionId: this.#telegramBusinessConnectionId };
   }
 
-  async startTelegramMtprotoConnection(
-    input: StartTelegramMtprotoConnectionStoreInput
-  ): Promise<{
+  async startInstagramGraphConnection(
+    input: StartInstagramGraphConnectionStoreInput
+  ): Promise<{ readonly connectionId: string }> {
+    this.startInstagramGraphCommands.push(input);
+    this.#instagramGraphConnectionId ??= input.connectionId;
+    return { connectionId: this.#instagramGraphConnectionId };
+  }
+
+  async startTelegramMtprotoConnection(input: StartTelegramMtprotoConnectionStoreInput): Promise<{
     readonly connectionId: string;
     readonly loginStep: "code_required";
     readonly maskedPhoneNumber: string;
@@ -1191,12 +1254,16 @@ class InMemoryMessagingStore implements MessagingStore {
       if (existing.requestHash !== input.requestHash) throw new MessagingIdempotencyConflictError();
       return existing.thread;
     }
-    if (!this.#activeClientUserIds.has(input.clientUserId)) throw new MessagingClientRelationshipError();
+    if (!this.#activeClientUserIds.has(input.clientUserId))
+      throw new MessagingClientRelationshipError();
     this.linkClientCommands.push(input);
     const thread = this.#threads.get(input.threadId)!;
     const updated = { ...thread, clientUserId: input.clientUserId, updatedAt: input.now };
     this.#threads.set(updated.id, updated);
-    this.#threadClientRequests.set(input.idempotencyKey, { requestHash: input.requestHash, thread: updated });
+    this.#threadClientRequests.set(input.idempotencyKey, {
+      requestHash: input.requestHash,
+      thread: updated
+    });
     return updated;
   }
 
@@ -1211,7 +1278,10 @@ class InMemoryMessagingStore implements MessagingStore {
     this.#threads.set(updated.id, updated);
     this.createClientCommands.push(input);
     this.#activeClientUserIds.add("client-created");
-    this.#threadClientRequests.set(input.idempotencyKey, { requestHash: input.requestHash, thread: updated });
+    this.#threadClientRequests.set(input.idempotencyKey, {
+      requestHash: input.requestHash,
+      thread: updated
+    });
     return updated;
   }
 
@@ -1223,7 +1293,9 @@ class InMemoryMessagingStore implements MessagingStore {
     return { thread: updated, realtimeEvent: this.persistRealtimeEvent(input.realtimeEvent) };
   }
 
-  async appendRealtimeEvent(input: AppendMessagingRealtimeEventInput): Promise<MessagingRealtimeEvent> {
+  async appendRealtimeEvent(
+    input: AppendMessagingRealtimeEventInput
+  ): Promise<MessagingRealtimeEvent> {
     return this.persistRealtimeEvent(input);
   }
 

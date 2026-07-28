@@ -20,6 +20,12 @@ export class MessagingController {
     return this.service.startTelegramBusinessConnection(request);
   }
 
+  @Post("channel-connections/instagram/graph/start")
+  @RequireCsrf()
+  startInstagramGraphConnection(@Req() request: AstrologerSessionRequest) {
+    return this.service.startInstagramGraphConnection(request);
+  }
+
   @Post("channel-connections/telegram/mtproto/start")
   @RequireCsrf()
   startTelegramMtprotoConnection(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {

@@ -12,13 +12,23 @@ import {
   MessagingThreadParamsSchema,
   MessagingThreadResponseSchema,
   SendMessagingMessageRequestSchema,
+  StartInstagramGraphConnectionResponseSchema,
   StartTelegramBusinessConnectionResponseSchema,
+  StartTelegramMtprotoConnectionRequestSchema,
+  SubmitTelegramMtprotoCodeRequestSchema,
+  SubmitTelegramMtprotoPasswordRequestSchema,
+  TelegramMtprotoLoginResponseSchema,
   type CreateMessagingThreadClientRequest,
   type LinkMessagingThreadClientRequest,
   type MessagingChannelConnectionResponse,
   type MessagingMessageMediaSourceResponse,
   type MessagingMessageResponse,
+  type StartInstagramGraphConnectionResponse,
+  type StartTelegramMtprotoConnectionRequest,
+  type SubmitTelegramMtprotoCodeRequest,
+  type SubmitTelegramMtprotoPasswordRequest,
   type StartTelegramBusinessConnectionResponse,
+  type TelegramMtprotoLoginResponse,
   type MessagingThreadClientLinkResponse,
   type MessagingThreadDetailQuery,
   type MessagingThreadListQuery,
@@ -42,6 +52,47 @@ export async function startTelegramBusinessConnection(): Promise<StartTelegramBu
       undefined,
       { csrf: true }
     )
+  );
+}
+
+export async function startInstagramGraphConnection(): Promise<StartInstagramGraphConnectionResponse> {
+  return StartInstagramGraphConnectionResponseSchema.parse(
+    await application.http.post("/messaging/channel-connections/instagram/graph/start", undefined, {
+      csrf: true
+    })
+  );
+}
+
+export async function startTelegramMtprotoConnection(
+  request: StartTelegramMtprotoConnectionRequest
+): Promise<TelegramMtprotoLoginResponse> {
+  const body = StartTelegramMtprotoConnectionRequestSchema.parse(request);
+  return TelegramMtprotoLoginResponseSchema.parse(
+    await application.http.post("/messaging/channel-connections/telegram/mtproto/start", body, {
+      csrf: true
+    })
+  );
+}
+
+export async function submitTelegramMtprotoCode(
+  request: SubmitTelegramMtprotoCodeRequest
+): Promise<TelegramMtprotoLoginResponse> {
+  const body = SubmitTelegramMtprotoCodeRequestSchema.parse(request);
+  return TelegramMtprotoLoginResponseSchema.parse(
+    await application.http.post("/messaging/channel-connections/telegram/mtproto/code", body, {
+      csrf: true
+    })
+  );
+}
+
+export async function submitTelegramMtprotoPassword(
+  request: SubmitTelegramMtprotoPasswordRequest
+): Promise<TelegramMtprotoLoginResponse> {
+  const body = SubmitTelegramMtprotoPasswordRequestSchema.parse(request);
+  return TelegramMtprotoLoginResponseSchema.parse(
+    await application.http.post("/messaging/channel-connections/telegram/mtproto/password", body, {
+      csrf: true
+    })
   );
 }
 

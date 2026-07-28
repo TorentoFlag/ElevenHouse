@@ -19,7 +19,10 @@ const optionalTelegramBotUsernameSchema = z.preprocess(
     if (!trimmed) return undefined;
     return trimmed.replace(/^@/, "");
   },
-  z.string().regex(/^[A-Za-z0-9_]{5,32}$/).optional()
+  z
+    .string()
+    .regex(/^[A-Za-z0-9_]{5,32}$/)
+    .optional()
 );
 
 const astrologerApiRuntimeConfigSchema = z.object({
@@ -42,11 +45,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
   ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: optionalTrimmedNonEmptyStringSchema,
   ASTROLOGER_API_TELEGRAM_BOT_TOKEN: optionalTrimmedNonEmptyStringSchema,
-  ASTROLOGER_API_TELEGRAM_BOT_API_BASE_URL: z
-    .string()
-    .trim()
-    .url()
-    .optional(),
+  ASTROLOGER_API_TELEGRAM_BOT_API_BASE_URL: z.string().trim().url().optional(),
   ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: optionalTelegramBotUsernameSchema,
   ASTROLOGER_API_TELEGRAM_MTPROTO_ENABLED: z
     .enum(["true", "false"])
@@ -59,12 +58,24 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .regex(/^[a-f0-9]{32}$/i)
     .optional(),
   ASTROLOGER_API_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
-  NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: optionalTrimmedNonEmptyStringSchema,
-  NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: z
+  ASTROLOGER_API_INSTAGRAM_GRAPH_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  ASTROLOGER_API_INSTAGRAM_GRAPH_APP_ID: optionalTrimmedNonEmptyStringSchema,
+  ASTROLOGER_API_INSTAGRAM_GRAPH_APP_SECRET: optionalTrimmedNonEmptyStringSchema,
+  ASTROLOGER_API_INSTAGRAM_GRAPH_REDIRECT_URI: z.string().trim().url().optional(),
+  ASTROLOGER_API_INSTAGRAM_GRAPH_AUTH_BASE_URL: z
     .string()
     .trim()
     .url()
-    .optional(),
+    .default("https://www.facebook.com/v25.0/dialog/oauth"),
+  ASTROLOGER_API_INSTAGRAM_GRAPH_SCOPES: z
+    .string()
+    .trim()
+    .default("instagram_manage_messages,pages_manage_metadata,pages_show_list"),
+  NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: optionalTrimmedNonEmptyStringSchema,
+  NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: z.string().trim().url().optional(),
   ASTROLOGER_API_ALLOWED_ORIGINS: z.string().trim().optional(),
   CHART_ENGINE_BASE_URL: z.string().trim().url().default("http://localhost:8012"),
   ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
@@ -188,6 +199,14 @@ export type AstrologerApiRuntimeConfig = {
     readonly apiHash: string;
     readonly sessionEncryptionKey: Buffer;
   } | null;
+  readonly instagramGraph: {
+    readonly enabled: true;
+    readonly appId: string;
+    readonly appSecret: string;
+    readonly redirectUri: string;
+    readonly authBaseUrl: string;
+    readonly scopes: readonly string[];
+  } | null;
   readonly allowedOrigins: readonly string[];
   readonly chartEngineBaseUrl: string;
   readonly authCodeDeliveryEncryptionKey: Buffer;
@@ -307,6 +326,14 @@ export function createAstrologerApiRuntimeConfig(
     apiHash: config.ASTROLOGER_API_TELEGRAM_MTPROTO_API_HASH,
     sessionEncryptionKey: config.ASTROLOGER_API_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY
   });
+  const instagramGraph = toInstagramGraphConfig({
+    enabled: config.ASTROLOGER_API_INSTAGRAM_GRAPH_ENABLED,
+    appId: config.ASTROLOGER_API_INSTAGRAM_GRAPH_APP_ID,
+    appSecret: config.ASTROLOGER_API_INSTAGRAM_GRAPH_APP_SECRET,
+    redirectUri: config.ASTROLOGER_API_INSTAGRAM_GRAPH_REDIRECT_URI,
+    authBaseUrl: config.ASTROLOGER_API_INSTAGRAM_GRAPH_AUTH_BASE_URL,
+    scopes: config.ASTROLOGER_API_INSTAGRAM_GRAPH_SCOPES
+  });
 
   if (config.NODE_ENV === "production" && !config.ASTROLOGER_API_PASSWORDLESS_CODE_SECRET) {
     throw new Error("ASTROLOGER_API_PASSWORDLESS_CODE_SECRET is required in production");
@@ -366,6 +393,7 @@ export function createAstrologerApiRuntimeConfig(
       : null,
     telegramBusinessBotUsername: config.ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME ?? null,
     telegramMtproto,
+    instagramGraph,
     allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5174"],
     chartEngineBaseUrl: stripTrailingSlashes(config.CHART_ENGINE_BASE_URL),
     authCodeDeliveryEncryptionKey: parseBase64Aes256GcmKey(
@@ -472,5 +500,35 @@ function toTelegramMtprotoConfig(input: {
     apiId: input.apiId,
     apiHash: input.apiHash,
     sessionEncryptionKey: parseBase64Aes256GcmKey(input.sessionEncryptionKey)
+  };
+}
+
+function toInstagramGraphConfig(input: {
+  readonly enabled: boolean;
+  readonly appId: string | undefined;
+  readonly appSecret: string | undefined;
+  readonly redirectUri: string | undefined;
+  readonly authBaseUrl: string;
+  readonly scopes: string;
+}): AstrologerApiRuntimeConfig["instagramGraph"] {
+  if (!input.enabled) return null;
+  if (!input.appId || !input.appSecret || !input.redirectUri) {
+    throw new Error("Instagram Graph settings are required when Instagram Graph login is enabled");
+  }
+  const scopes = input.scopes
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+  if (scopes.length === 0) {
+    throw new Error("Instagram Graph scopes are required when Instagram Graph login is enabled");
+  }
+
+  return {
+    enabled: true,
+    appId: input.appId,
+    appSecret: input.appSecret,
+    redirectUri: input.redirectUri,
+    authBaseUrl: stripTrailingSlashes(input.authBaseUrl),
+    scopes
   };
 }

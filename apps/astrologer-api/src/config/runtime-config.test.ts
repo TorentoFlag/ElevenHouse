@@ -39,6 +39,7 @@ const defaultSecurityConfig = {
   telegramBusinessBotApi: null,
   telegramBusinessBotUsername: null,
   telegramMtproto: null,
+  instagramGraph: null,
   allowedOrigins: ["http://localhost:5174"],
   chartEngineBaseUrl: "http://localhost:8012",
   authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
@@ -302,6 +303,43 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_TELEGRAM_MTPROTO_API_HASH: "0123456789abcdef0123456789abcdef"
       })
     ).toThrow("Telegram MTProto settings are required when MTProto login is enabled");
+  });
+
+  it("parses Instagram Graph login settings from env", () => {
+    expect(
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_API_INSTAGRAM_GRAPH_ENABLED: "true",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_APP_ID: "instagram-app-id",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_APP_SECRET: "instagram-app-secret",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_REDIRECT_URI:
+          "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_AUTH_BASE_URL:
+          "https://www.facebook.com/v25.0/dialog/oauth/",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_SCOPES:
+          "instagram_manage_messages, pages_manage_metadata, pages_show_list"
+      })
+    ).toMatchObject({
+      instagramGraph: {
+        enabled: true,
+        appId: "instagram-app-id",
+        appSecret: "instagram-app-secret",
+        redirectUri: "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback",
+        authBaseUrl: "https://www.facebook.com/v25.0/dialog/oauth",
+        scopes: ["instagram_manage_messages", "pages_manage_metadata", "pages_show_list"]
+      }
+    });
+  });
+
+  it("requires complete Instagram Graph login settings when the login flow is enabled", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_API_INSTAGRAM_GRAPH_ENABLED: "true",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_APP_ID: "instagram-app-id",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_APP_SECRET: "instagram-app-secret"
+      })
+    ).toThrow("Instagram Graph settings are required when Instagram Graph login is enabled");
   });
 
   it("rejects __Host-prefixed astrologer session cookie names without Secure", () => {

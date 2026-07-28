@@ -152,7 +152,12 @@ export async function recordTelegramBusinessConnection(input: {
   readonly now: Date;
 }): Promise<RecordTelegramBusinessConnectionStoreResult> {
   return input.store.recordTelegramBusinessConnection({
-    businessConnectionId: bounded(input.businessConnectionId, 1, 200, "Telegram business connection id is required"),
+    businessConnectionId: bounded(
+      input.businessConnectionId,
+      1,
+      200,
+      "Telegram business connection id is required"
+    ),
     userId: bounded(input.userId, 1, 200, "Telegram business user id is required"),
     userChatId: bounded(input.userChatId, 1, 200, "Telegram business user chat id is required"),
     username: optionalSnapshot(input.username),
@@ -171,7 +176,26 @@ export async function startTelegramBusinessConnection(input: {
   readonly now: Date;
 }): Promise<{ readonly connectionId: string }> {
   return input.store.startTelegramBusinessConnection({
-    connectionId: identifier(input.idGenerator?.() ?? randomUUID(), "Channel connection id is required"),
+    connectionId: identifier(
+      input.idGenerator?.() ?? randomUUID(),
+      "Channel connection id is required"
+    ),
+    astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
+    now: input.now.toISOString()
+  });
+}
+
+export async function startInstagramGraphConnection(input: {
+  readonly store: MessagingStore;
+  readonly astrologerUserId: string;
+  readonly idGenerator?: () => string;
+  readonly now: Date;
+}): Promise<{ readonly connectionId: string }> {
+  return input.store.startInstagramGraphConnection({
+    connectionId: identifier(
+      input.idGenerator?.() ?? randomUUID(),
+      "Channel connection id is required"
+    ),
     astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
     now: input.now.toISOString()
   });
@@ -196,7 +220,10 @@ export async function startTelegramMtprotoConnection(input: {
     throw new MessagingValidationError("Telegram Account access consent is required");
   }
   return input.store.startTelegramMtprotoConnection({
-    connectionId: identifier(input.idGenerator?.() ?? randomUUID(), "Channel connection id is required"),
+    connectionId: identifier(
+      input.idGenerator?.() ?? randomUUID(),
+      "Channel connection id is required"
+    ),
     astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
     phoneNumberLast4: phoneLast4(input.phoneNumberLast4),
     maskedPhoneNumber: bounded(input.maskedPhoneNumber, 3, 32, "Masked phone number is invalid"),
@@ -293,7 +320,12 @@ export async function recordTelegramBusinessMessage(input: {
 }): Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }> {
   return input.store.recordTelegramBusinessMessage({
     updateId: bounded(input.updateId, 1, 200, "Telegram update id is required"),
-    businessConnectionId: bounded(input.businessConnectionId, 1, 200, "Telegram business connection id is required"),
+    businessConnectionId: bounded(
+      input.businessConnectionId,
+      1,
+      200,
+      "Telegram business connection id is required"
+    ),
     providerMessageId: bounded(input.providerMessageId, 1, 200, "Telegram message id is required"),
     providerChatId: bounded(input.providerChatId, 1, 200, "Telegram chat id is required"),
     providerUserId: optionalSnapshot(input.providerUserId),
@@ -356,7 +388,12 @@ export async function recordTelegramBusinessDeletedMessages(input: {
     throw new MessagingValidationError("Telegram deleted message ids are required");
   }
   return input.store.recordTelegramBusinessDeletedMessages({
-    businessConnectionId: bounded(input.businessConnectionId, 1, 200, "Telegram business connection id is required"),
+    businessConnectionId: bounded(
+      input.businessConnectionId,
+      1,
+      200,
+      "Telegram business connection id is required"
+    ),
     providerChatId: bounded(input.providerChatId, 1, 200, "Telegram chat id is required"),
     providerMessageIds: input.providerMessageIds.map((messageId) =>
       bounded(messageId, 1, 200, "Telegram message id is required")
@@ -378,7 +415,12 @@ export async function recordTelegramBusinessEditedMessage(input: {
 }) {
   return input.store.recordTelegramBusinessEditedMessage({
     updateId: bounded(input.updateId, 1, 200, "Telegram update id is required"),
-    businessConnectionId: bounded(input.businessConnectionId, 1, 200, "Telegram business connection id is required"),
+    businessConnectionId: bounded(
+      input.businessConnectionId,
+      1,
+      200,
+      "Telegram business connection id is required"
+    ),
     providerMessageId: bounded(input.providerMessageId, 1, 200, "Telegram message id is required"),
     providerChatId: bounded(input.providerChatId, 1, 200, "Telegram chat id is required"),
     text: bounded(input.text, 1, 4000, "Message text is invalid"),
@@ -616,8 +658,11 @@ function optional(value: string | null | undefined): string | undefined {
   return normalized || undefined;
 }
 
-function normalizeMessageContentType(value: MessagingMessageContentType): MessagingMessageContentType {
-  if (["text", "image", "file", "voice", "video_note", "video", "unsupported"].includes(value)) return value;
+function normalizeMessageContentType(
+  value: MessagingMessageContentType
+): MessagingMessageContentType {
+  if (["text", "image", "file", "voice", "video_note", "video", "unsupported"].includes(value))
+    return value;
   throw new MessagingValidationError("Message content type is unsupported");
 }
 
@@ -639,8 +684,12 @@ function normalizeTelegramMediaAttachment(
       value.durationSeconds === null
         ? null
         : nonNegativeInteger(value.durationSeconds, "Telegram media duration is invalid"),
-    width: value.width === null ? null : positiveInteger(value.width, "Telegram media width is invalid"),
-    height: value.height === null ? null : positiveInteger(value.height, "Telegram media height is invalid"),
+    width:
+      value.width === null ? null : positiveInteger(value.width, "Telegram media width is invalid"),
+    height:
+      value.height === null
+        ? null
+        : positiveInteger(value.height, "Telegram media height is invalid"),
     providerMimeType: optionalSnapshot(value.providerMimeType),
     providerSizeBytes:
       value.providerSizeBytes === null
@@ -649,8 +698,11 @@ function normalizeTelegramMediaAttachment(
   };
 }
 
-function normalizeTelegramMediaKind(value: TelegramBusinessMediaAttachment["kind"]): TelegramBusinessMediaAttachment["kind"] {
-  if (value === "voice" || value === "image" || value === "video_note" || value === "video") return value;
+function normalizeTelegramMediaKind(
+  value: TelegramBusinessMediaAttachment["kind"]
+): TelegramBusinessMediaAttachment["kind"] {
+  if (value === "voice" || value === "image" || value === "video_note" || value === "video")
+    return value;
   throw new MessagingValidationError("Telegram media kind is unsupported");
 }
 
@@ -666,7 +718,10 @@ function normalizeTelegramMtprotoCursor(
   return {
     pts: nullableNonNegativeInteger(value.pts ?? null, "Telegram MTProto pts cursor is invalid"),
     qts: nullableNonNegativeInteger(value.qts ?? null, "Telegram MTProto qts cursor is invalid"),
-    dateCursor: value.dateCursor === null || value.dateCursor === undefined ? null : normalizeIsoInstant(value.dateCursor),
+    dateCursor:
+      value.dateCursor === null || value.dateCursor === undefined
+        ? null
+        : normalizeIsoInstant(value.dateCursor),
     seq: nullableNonNegativeInteger(value.seq ?? null, "Telegram MTProto seq cursor is invalid")
   };
 }
@@ -717,7 +772,9 @@ function phoneLast4(value: string): string {
   return normalized;
 }
 
-function telegramMtprotoLoginStep(value: "password_required" | "connected"): "password_required" | "connected" {
+function telegramMtprotoLoginStep(
+  value: "password_required" | "connected"
+): "password_required" | "connected" {
   if (value === "password_required" || value === "connected") return value;
   throw new MessagingValidationError("Telegram Account login step is invalid");
 }

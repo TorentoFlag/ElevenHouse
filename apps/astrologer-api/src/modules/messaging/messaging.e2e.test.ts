@@ -1,7 +1,11 @@
 import type { INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
-import { createAes256GcmSecretCipher, hashSessionToken, type Aes256GcmSecretCipher } from "@elevenhouse/auth";
+import {
+  createAes256GcmSecretCipher,
+  hashSessionToken,
+  type Aes256GcmSecretCipher
+} from "@elevenhouse/auth";
 import {
   MessagingMessageMediaSourceResponseSchema,
   MessagingMessageResponseSchema,
@@ -303,7 +307,9 @@ describe("messaging HTTP routes", () => {
         status: "connecting"
       }
     });
-    expect(JSON.stringify(response.body)).not.toMatch(/777777|phoneCodeHash|session|partial-session/i);
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /777777|phoneCodeHash|session|partial-session/i
+    );
   });
 
   it("submits Telegram Account password with browser auth and CSRF", async () => {
@@ -388,7 +394,9 @@ describe("messaging HTTP routes", () => {
       expiresAt: "2026-07-22T10:05:00.000Z",
       mimeType: "audio/ogg"
     });
-    expect(JSON.stringify(response.body)).not.toMatch(/providerToken|file_id|business_connection_id/i);
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /providerToken|file_id|business_connection_id/i
+    );
   });
 
   it("does not leak cross-owner media source existence", async () => {
@@ -545,7 +553,10 @@ describe("messaging HTTP routes", () => {
   ) {
     const response = await fetch(`${baseUrl}${path}`, {
       method,
-      headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), ...headers },
+      headers: {
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...headers
+      },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
     return { status: response.status, body: (await response.json()) as Record<string, unknown> };
@@ -555,11 +566,12 @@ describe("messaging HTTP routes", () => {
 function createAuthStore(): AuthSessionAuthenticationStore {
   return {
     findByTokenHash: vi.fn(async (tokenHash: string) => {
-      const userId = tokenHash === hashSessionToken(sessionToken)
-        ? ownerUserId
-        : tokenHash === hashSessionToken(otherSessionToken)
-          ? otherOwnerUserId
-          : null;
+      const userId =
+        tokenHash === hashSessionToken(sessionToken)
+          ? ownerUserId
+          : tokenHash === hashSessionToken(otherSessionToken)
+            ? otherOwnerUserId
+            : null;
       if (!userId) return null;
       return {
         session: {
@@ -570,8 +582,20 @@ function createAuthStore(): AuthSessionAuthenticationStore {
           createdAt: now.toISOString(),
           expiresAt: "2026-07-25T00:00:00.000Z"
         },
-        user: { id: userId, status: "active" as const, createdAt: now.toISOString(), updatedAt: now.toISOString() },
-        roleAssignments: [{ id: "99999999-9999-4999-8999-999999999999", userId, role: "astrologer" as const, assignedAt: now.toISOString() }]
+        user: {
+          id: userId,
+          status: "active" as const,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString()
+        },
+        roleAssignments: [
+          {
+            id: "99999999-9999-4999-8999-999999999999",
+            userId,
+            role: "astrologer" as const,
+            assignedAt: now.toISOString()
+          }
+        ]
       };
     })
   };
@@ -584,7 +608,10 @@ function createStore(): MessagingStore {
     findThreadForAstrologer: vi.fn(async ({ astrologerUserId }) =>
       astrologerUserId === ownerUserId ? thread : null
     ),
-    findExternalIdentityForThread: vi.fn(async () => ({ id: identityId, channelConnectionId: connectionId })),
+    findExternalIdentityForThread: vi.fn(async () => ({
+      id: identityId,
+      channelConnectionId: connectionId
+    })),
     findOutboundMessageByIdempotencyKey: vi.fn(async () => null),
     createOutboundMessage: vi.fn(async (input) => ({
       id: messageId,
@@ -611,6 +638,7 @@ function createStore(): MessagingStore {
       startedTelegramBusinessConnectionId = connectionId;
       return { connectionId };
     }),
+    startInstagramGraphConnection: vi.fn(async () => ({ connectionId })),
     startTelegramMtprotoConnection: vi.fn(async () => {
       startedTelegramMtprotoConnectionId = connectionId;
       mtprotoLoginState = "code_required";
@@ -620,24 +648,26 @@ function createStore(): MessagingStore {
         maskedPhoneNumber: "+7******3535"
       };
     }),
-    findTelegramMtprotoLoginSession: vi.fn(async ({ astrologerUserId, connectionId: requestedConnectionId }) => {
-      if (astrologerUserId !== ownerUserId || requestedConnectionId !== connectionId) return null;
-      return {
-        connectionId,
-        loginState: mtprotoLoginState,
-        maskedPhoneNumber: "+7******3535",
-        encryptedPhoneNumber: encryptedMtprotoSecret(cipher, "phone_number", "+78005553535"),
-        encryptedPhoneCodeHash: encryptedMtprotoSecret(
-          cipher,
-          "phone_code_hash",
-          "telegram-phone-code-hash"
-        ),
-        encryptedSession:
-          mtprotoLoginState === "password_required"
-            ? encryptedMtprotoSecret(cipher, "session", "partial-session-string")
-            : null
-      };
-    }),
+    findTelegramMtprotoLoginSession: vi.fn(
+      async ({ astrologerUserId, connectionId: requestedConnectionId }) => {
+        if (astrologerUserId !== ownerUserId || requestedConnectionId !== connectionId) return null;
+        return {
+          connectionId,
+          loginState: mtprotoLoginState,
+          maskedPhoneNumber: "+7******3535",
+          encryptedPhoneNumber: encryptedMtprotoSecret(cipher, "phone_number", "+78005553535"),
+          encryptedPhoneCodeHash: encryptedMtprotoSecret(
+            cipher,
+            "phone_code_hash",
+            "telegram-phone-code-hash"
+          ),
+          encryptedSession:
+            mtprotoLoginState === "password_required"
+              ? encryptedMtprotoSecret(cipher, "session", "partial-session-string")
+              : null
+        };
+      }
+    ),
     recordTelegramMtprotoCodeResult: vi.fn(async (input) => {
       mtprotoLoginState = input.loginStep === "connected" ? "authorized" : "password_required";
       return {
@@ -693,7 +723,9 @@ function createReadStore(): MessagingReadStore {
     })),
     listTelegramBusinessConnectionReconciliationCandidates: vi.fn(async () => ({ candidates: [] })),
     listThreads: vi.fn(async ({ astrologerUserId }) =>
-      astrologerUserId === ownerUserId ? { threads: [readThread()], nextCursor: null } : { threads: [], nextCursor: null }
+      astrologerUserId === ownerUserId
+        ? { threads: [readThread()], nextCursor: null }
+        : { threads: [], nextCursor: null }
     ),
     getThread: vi.fn(async ({ astrologerUserId }) =>
       astrologerUserId === ownerUserId
@@ -703,20 +735,21 @@ function createReadStore(): MessagingReadStore {
     listRealtimeEvents: vi.fn(async (input) => {
       realtimeReadInputs.push(input);
       return {
-        events: input.astrologerUserId === ownerUserId
-          ? [
-              {
-                eventId: "42",
-                astrologerUserId: ownerUserId,
-                type: "message.received" as const,
-                occurredAt: now.toISOString(),
-                threadId,
-                messageId,
-                channelConnectionId: connectionId,
-                externalIdentityId: identityId
-              }
-            ]
-          : []
+        events:
+          input.astrologerUserId === ownerUserId
+            ? [
+                {
+                  eventId: "42",
+                  astrologerUserId: ownerUserId,
+                  type: "message.received" as const,
+                  occurredAt: now.toISOString(),
+                  threadId,
+                  messageId,
+                  channelConnectionId: connectionId,
+                  externalIdentityId: identityId
+                }
+              ]
+            : []
       };
     }),
     findMessageMediaSource: vi.fn(async (input) => {
@@ -776,8 +809,10 @@ function readChannelConnection() {
   return {
     id: connectionId,
     provider: "telegram" as const,
-    mode: startedTelegramMtprotoConnectionId ? "telegram_mtproto_account" as const : "telegram_business_bot" as const,
-    status: mtprotoLoginState === "authorized" ? "active" as const : "connecting" as const,
+    mode: startedTelegramMtprotoConnectionId
+      ? ("telegram_mtproto_account" as const)
+      : ("telegram_business_bot" as const),
+    status: mtprotoLoginState === "authorized" ? ("active" as const) : ("connecting" as const),
     displayName: null,
     username: null,
     capabilities: {
@@ -825,7 +860,7 @@ function readThread(clientUserId: string | null = null) {
       displayName: "Марина",
       avatarMediaId: null,
       linkedClientUserId: clientUserId,
-      linkStatus: clientUserId ? "linked" as const : "unlinked" as const,
+      linkStatus: clientUserId ? ("linked" as const) : ("unlinked" as const),
       firstSeenAt: now.toISOString(),
       lastSeenAt: now.toISOString()
     },

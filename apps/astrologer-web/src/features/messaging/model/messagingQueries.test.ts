@@ -7,7 +7,11 @@ import {
   listMessagingThreads,
   markMessagingThreadRead,
   sendMessagingMessage,
-  startTelegramBusinessConnection
+  startInstagramGraphConnection,
+  startTelegramBusinessConnection,
+  startTelegramMtprotoConnection,
+  submitTelegramMtprotoCode,
+  submitTelegramMtprotoPassword
 } from "../api/messagingApi";
 import {
   createMessagingThreadClientMutationOptions,
@@ -19,7 +23,11 @@ import {
   markMessagingThreadReadMutationOptions,
   messagingQueryKeys,
   sendMessagingMessageMutationOptions,
-  startTelegramBusinessConnectionMutationOptions
+  startInstagramGraphConnectionMutationOptions,
+  startTelegramBusinessConnectionMutationOptions,
+  startTelegramMtprotoConnectionMutationOptions,
+  submitTelegramMtprotoCodeMutationOptions,
+  submitTelegramMtprotoPasswordMutationOptions
 } from "./messagingQueries";
 
 vi.mock("../api/messagingApi", () => ({
@@ -40,6 +48,28 @@ vi.mock("../api/messagingApi", () => ({
     channelConnection: { id: "55555555-5555-4555-8555-555555555555" },
     telegramBotUsername: "ElevenHouseTestBot",
     telegramBotUrl: "https://t.me/ElevenHouseTestBot"
+  })),
+  startInstagramGraphConnection: vi.fn(async () => ({
+    channelConnection: { id: "55555555-5555-4555-8555-555555555555" },
+    authorizationUrl: "https://www.facebook.com/v25.0/dialog/oauth?client_id=123"
+  })),
+  startTelegramMtprotoConnection: vi.fn(async () => ({
+    channelConnection: { id: "55555555-5555-4555-8555-555555555555" },
+    loginStep: "code_required",
+    maskedPhoneNumber: "+7******3535",
+    retryAfterSeconds: null
+  })),
+  submitTelegramMtprotoCode: vi.fn(async () => ({
+    channelConnection: { id: "55555555-5555-4555-8555-555555555555" },
+    loginStep: "password_required",
+    maskedPhoneNumber: "+7******3535",
+    retryAfterSeconds: null
+  })),
+  submitTelegramMtprotoPassword: vi.fn(async () => ({
+    channelConnection: { id: "55555555-5555-4555-8555-555555555555" },
+    loginStep: "connected",
+    maskedPhoneNumber: "+7******3535",
+    retryAfterSeconds: null
   }))
 }));
 
@@ -50,9 +80,7 @@ describe("messagingQueries", () => {
     const detailOptions = getMessagingThreadQueryOptions("11111111-1111-4111-8111-111111111111");
 
     expect(connectionOptions.queryKey).toEqual(messagingQueryKeys.channelConnections());
-    expect(listOptions.queryKey).toEqual(
-      messagingQueryKeys.threadList({ limit: 30, offset: 10 })
-    );
+    expect(listOptions.queryKey).toEqual(messagingQueryKeys.threadList({ limit: 30, offset: 10 }));
     expect(detailOptions.queryKey).toEqual(
       messagingQueryKeys.threadDetail("11111111-1111-4111-8111-111111111111")
     );
@@ -110,9 +138,7 @@ describe("messagingQueries", () => {
       { displayName: "Марина Краснова" },
       "idem-1"
     );
-    expect(markMessagingThreadRead).toHaveBeenCalledWith(
-      "11111111-1111-4111-8111-111111111111"
-    );
+    expect(markMessagingThreadRead).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: messagingQueryKeys.threadDetail("11111111-1111-4111-8111-111111111111")
     });
@@ -131,6 +157,64 @@ describe("messagingQueries", () => {
     await options.onSuccess?.();
 
     expect(startTelegramBusinessConnection).toHaveBeenCalledWith();
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: messagingQueryKeys.channelConnections()
+    });
+  });
+
+  it("starts Instagram Graph connection and refreshes channel connections", async () => {
+    const queryClient = { invalidateQueries: vi.fn(async () => undefined) };
+    const options = startInstagramGraphConnectionMutationOptions(queryClient);
+
+    await expect(options.mutationFn()).resolves.toMatchObject({
+      authorizationUrl: "https://www.facebook.com/v25.0/dialog/oauth?client_id=123"
+    });
+    await options.onSuccess?.();
+
+    expect(startInstagramGraphConnection).toHaveBeenCalledWith();
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: messagingQueryKeys.channelConnections()
+    });
+  });
+
+  it("runs Telegram MTProto mutations and refreshes channel connections", async () => {
+    const queryClient = { invalidateQueries: vi.fn(async () => undefined) };
+    const startOptions = startTelegramMtprotoConnectionMutationOptions(queryClient);
+    const codeOptions = submitTelegramMtprotoCodeMutationOptions(queryClient);
+    const passwordOptions = submitTelegramMtprotoPasswordMutationOptions(queryClient);
+
+    await expect(
+      startOptions.mutationFn({ phoneNumber: "+78005553535", consentAccepted: true })
+    ).resolves.toMatchObject({ loginStep: "code_required" });
+    await startOptions.onSuccess?.();
+    await expect(
+      codeOptions.mutationFn({
+        channelConnectionId: "55555555-5555-4555-8555-555555555555",
+        code: "777777"
+      })
+    ).resolves.toMatchObject({ loginStep: "password_required" });
+    await codeOptions.onSuccess?.();
+    await expect(
+      passwordOptions.mutationFn({
+        channelConnectionId: "55555555-5555-4555-8555-555555555555",
+        password: "2fa-password"
+      })
+    ).resolves.toMatchObject({ loginStep: "connected" });
+    await passwordOptions.onSuccess?.();
+
+    expect(startTelegramMtprotoConnection).toHaveBeenCalledWith({
+      phoneNumber: "+78005553535",
+      consentAccepted: true
+    });
+    expect(submitTelegramMtprotoCode).toHaveBeenCalledWith({
+      channelConnectionId: "55555555-5555-4555-8555-555555555555",
+      code: "777777"
+    });
+    expect(submitTelegramMtprotoPassword).toHaveBeenCalledWith({
+      channelConnectionId: "55555555-5555-4555-8555-555555555555",
+      password: "2fa-password"
+    });
+    expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(3);
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: messagingQueryKeys.channelConnections()
     });

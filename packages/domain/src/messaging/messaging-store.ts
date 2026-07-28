@@ -83,6 +83,16 @@ export type StartTelegramBusinessConnectionStoreResult = {
   readonly connectionId: string;
 };
 
+export type StartInstagramGraphConnectionStoreInput = {
+  readonly connectionId: string;
+  readonly astrologerUserId: string;
+  readonly now: string;
+};
+
+export type StartInstagramGraphConnectionStoreResult = {
+  readonly connectionId: string;
+};
+
 export type StartTelegramMtprotoConnectionStoreInput = {
   readonly connectionId: string;
   readonly astrologerUserId: string;
@@ -102,7 +112,12 @@ export type StartTelegramMtprotoConnectionStoreResult = {
 
 export type TelegramMtprotoLoginSession = {
   readonly connectionId: string;
-  readonly loginState: "code_required" | "password_required" | "authorized" | "reauth_required" | "revoked";
+  readonly loginState:
+    | "code_required"
+    | "password_required"
+    | "authorized"
+    | "reauth_required"
+    | "revoked";
   readonly maskedPhoneNumber: string;
   readonly encryptedPhoneNumber: EncryptedMessagingSecret;
   readonly encryptedPhoneCodeHash: EncryptedMessagingSecret;
@@ -271,6 +286,9 @@ export type MessagingStore = {
   readonly startTelegramBusinessConnection: (
     input: StartTelegramBusinessConnectionStoreInput
   ) => Promise<StartTelegramBusinessConnectionStoreResult>;
+  readonly startInstagramGraphConnection: (
+    input: StartInstagramGraphConnectionStoreInput
+  ) => Promise<StartInstagramGraphConnectionStoreResult>;
   readonly startTelegramMtprotoConnection: (
     input: StartTelegramMtprotoConnectionStoreInput
   ) => Promise<StartTelegramMtprotoConnectionStoreResult>;

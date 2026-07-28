@@ -5,10 +5,7 @@ import {
   type MessagingStore,
   type MessagingThread
 } from "@elevenhouse/domain";
-import {
-  createAes256GcmSecretCipher,
-  type Aes256GcmSecretCipher
-} from "@elevenhouse/auth";
+import { createAes256GcmSecretCipher, type Aes256GcmSecretCipher } from "@elevenhouse/auth";
 import { describe, expect, it, vi } from "vitest";
 import { MessagingService } from "./messaging.service";
 
@@ -79,6 +76,65 @@ describe("MessagingService", () => {
     );
   });
 
+  it("starts Instagram Graph connection and returns the Meta authorization URL", async () => {
+    const store = createStore();
+    const service = createService({
+      store,
+      readStore: createReadStore({
+        provider: "instagram",
+        mode: "instagram_graph",
+        connectionStatus: "connecting"
+      }),
+      instagramGraph: {
+        enabled: true,
+        appId: "instagram-app-id",
+        appSecret: "instagram-app-secret",
+        redirectUri: "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback",
+        authBaseUrl: "https://www.facebook.com/v25.0/dialog/oauth",
+        scopes: ["instagram_manage_messages", "pages_manage_metadata", "pages_show_list"]
+      }
+    });
+
+    const response = await service.startInstagramGraphConnection(request());
+
+    expect(response).toMatchObject({
+      channelConnection: {
+        id: connectionId,
+        provider: "instagram",
+        mode: "instagram_graph",
+        status: "connecting"
+      },
+      authorizationUrl: expect.stringContaining("https://www.facebook.com/v25.0/dialog/oauth")
+    });
+    expect(store.startInstagramGraphConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        astrologerUserId,
+        now: now.toISOString()
+      })
+    );
+    const authorizationUrl = new URL(response.authorizationUrl);
+    expect(authorizationUrl.searchParams.get("client_id")).toBe("instagram-app-id");
+    expect(authorizationUrl.searchParams.get("redirect_uri")).toBe(
+      "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback"
+    );
+    expect(authorizationUrl.searchParams.get("scope")).toBe(
+      "instagram_manage_messages,pages_manage_metadata,pages_show_list"
+    );
+    expect(authorizationUrl.searchParams.get("state")).toBe(connectionId);
+    expect(JSON.stringify(response)).not.toMatch(/app-secret|accessToken|pageAccessToken/i);
+  });
+
+  it("returns a typed unavailable error when Instagram Graph login is not configured", async () => {
+    const store = createStore();
+    const service = createService({ store, instagramGraph: null });
+
+    await expect(service.startInstagramGraphConnection(request())).rejects.toMatchObject({
+      status: 503,
+      response: expect.objectContaining({ code: "instagram_graph_connection_unavailable" })
+    });
+    expect(store.startInstagramGraphConnection).not.toHaveBeenCalled();
+  });
+
   it("starts Telegram Account login with encrypted-only phone snapshots", async () => {
     const store = createStore();
     const mtprotoAuthProvider = {
@@ -100,7 +156,10 @@ describe("MessagingService", () => {
     };
     const service = createService({
       store,
-      readStore: createReadStore({ mode: "telegram_mtproto_account", connectionStatus: "connecting" }),
+      readStore: createReadStore({
+        mode: "telegram_mtproto_account",
+        connectionStatus: "connecting"
+      }),
       mtprotoAuthProvider
     });
 
@@ -138,12 +197,12 @@ describe("MessagingService", () => {
         })
       })
     );
-    expect(JSON.stringify((store.startTelegramMtprotoConnection as ReturnType<typeof vi.fn>).mock.calls)).not.toContain(
-      "+78005553535"
-    );
-    expect(JSON.stringify((store.startTelegramMtprotoConnection as ReturnType<typeof vi.fn>).mock.calls)).not.toContain(
-      "telegram-phone-code-hash"
-    );
+    expect(
+      JSON.stringify((store.startTelegramMtprotoConnection as ReturnType<typeof vi.fn>).mock.calls)
+    ).not.toContain("+78005553535");
+    expect(
+      JSON.stringify((store.startTelegramMtprotoConnection as ReturnType<typeof vi.fn>).mock.calls)
+    ).not.toContain("telegram-phone-code-hash");
     expect(JSON.stringify(response)).not.toMatch(/phoneCodeHash|session|\+78005553535/i);
   });
 
@@ -166,7 +225,10 @@ describe("MessagingService", () => {
   it("submits Telegram Account code and persists only an encrypted partial session when password is required", async () => {
     const store = createStore();
     const mtprotoAuthProvider = {
-      sendCode: vi.fn(async () => ({ phoneCodeHash: "telegram-phone-code-hash", isCodeViaApp: true })),
+      sendCode: vi.fn(async () => ({
+        phoneCodeHash: "telegram-phone-code-hash",
+        isCodeViaApp: true
+      })),
       signInWithCode: vi.fn(async () => ({
         loginStep: "password_required" as const,
         session: "partial-session-string"
@@ -175,7 +237,10 @@ describe("MessagingService", () => {
     };
     const service = createService({
       store,
-      readStore: createReadStore({ mode: "telegram_mtproto_account", connectionStatus: "connecting" }),
+      readStore: createReadStore({
+        mode: "telegram_mtproto_account",
+        connectionStatus: "connecting"
+      }),
       mtprotoAuthProvider
     });
 
@@ -207,15 +272,18 @@ describe("MessagingService", () => {
         telegramUserId: null
       })
     );
-    expect(JSON.stringify((store.recordTelegramMtprotoCodeResult as ReturnType<typeof vi.fn>).mock.calls)).not.toMatch(
-      /777777|partial-session-string/
-    );
+    expect(
+      JSON.stringify((store.recordTelegramMtprotoCodeResult as ReturnType<typeof vi.fn>).mock.calls)
+    ).not.toMatch(/777777|partial-session-string/);
   });
 
   it("submits Telegram Account password and activates the connection without storing the password", async () => {
     const store = createStore({ mtprotoLoginState: "password_required" });
     const mtprotoAuthProvider = {
-      sendCode: vi.fn(async () => ({ phoneCodeHash: "telegram-phone-code-hash", isCodeViaApp: true })),
+      sendCode: vi.fn(async () => ({
+        phoneCodeHash: "telegram-phone-code-hash",
+        isCodeViaApp: true
+      })),
       signInWithCode: vi.fn(),
       signInWithPassword: vi.fn(async () => ({
         loginStep: "connected" as const,
@@ -260,7 +328,9 @@ describe("MessagingService", () => {
       })
     );
     expect(
-      JSON.stringify((store.recordTelegramMtprotoPasswordResult as ReturnType<typeof vi.fn>).mock.calls)
+      JSON.stringify(
+        (store.recordTelegramMtprotoPasswordResult as ReturnType<typeof vi.fn>).mock.calls
+      )
     ).not.toMatch(/secret-password|final-session-string/);
   });
 
@@ -671,6 +741,14 @@ function createService(
     store?: MessagingStore;
     readStore?: MessagingReadStore;
     telegramBusinessBotUsername?: string | null;
+    instagramGraph?: {
+      readonly enabled: true;
+      readonly appId: string;
+      readonly appSecret: string;
+      readonly redirectUri: string;
+      readonly authBaseUrl: string;
+      readonly scopes: readonly string[];
+    } | null;
     connectionLookup?: ConstructorParameters<typeof MessagingService>[2];
     mtprotoAuthProvider?: ConstructorParameters<typeof MessagingService>[3];
   } = {}
@@ -680,9 +758,12 @@ function createService(
     overrides.readStore ?? createReadStore(),
     overrides.connectionLookup ?? null,
     Object.hasOwn(overrides, "mtprotoAuthProvider")
-      ? overrides.mtprotoAuthProvider ?? null
+      ? (overrides.mtprotoAuthProvider ?? null)
       : {
-          sendCode: vi.fn(async () => ({ phoneCodeHash: "telegram-phone-code-hash", isCodeViaApp: true })),
+          sendCode: vi.fn(async () => ({
+            phoneCodeHash: "telegram-phone-code-hash",
+            isCodeViaApp: true
+          })),
           signInWithCode: vi.fn(async () => ({
             loginStep: "password_required" as const,
             session: "partial-session-string"
@@ -695,15 +776,29 @@ function createService(
             displayName: "Alisa"
           }))
         },
-    { createPresignedDownload: vi.fn(async () => ({ url: "https://storage.example/voice.ogg", expiresAt: now.toISOString() })) },
+    {
+      createPresignedDownload: vi.fn(async () => ({
+        url: "https://storage.example/voice.ogg",
+        expiresAt: now.toISOString()
+      }))
+    },
     { now: () => now },
     {
       get: (key: string) =>
         key === "astrologerApi.telegramBusinessBotUsername"
           ? (overrides.telegramBusinessBotUsername ?? null)
-          : key === "astrologerApi.telegramMtproto"
-            ? { enabled: true, apiId: 12345, apiHash: "0123456789abcdef0123456789abcdef", sessionEncryptionKey: Buffer.alloc(32, 12) }
-          : undefined
+          : key === "astrologerApi.instagramGraph"
+            ? Object.hasOwn(overrides, "instagramGraph")
+              ? overrides.instagramGraph
+              : null
+            : key === "astrologerApi.telegramMtproto"
+              ? {
+                  enabled: true,
+                  apiId: 12345,
+                  apiHash: "0123456789abcdef0123456789abcdef",
+                  sessionEncryptionKey: Buffer.alloc(32, 12)
+                }
+              : undefined
     } as never
   );
 }
@@ -726,6 +821,7 @@ function createStore(
       message: domainMessage("inbound")
     })),
     recordTelegramBusinessConnection: vi.fn(async () => ({ kind: "recorded" as const })),
+    startInstagramGraphConnection: vi.fn(async () => ({ connectionId })),
     recordTelegramBusinessMessage: vi.fn(async () => ({
       kind: "created" as const,
       message: domainMessage("inbound")
@@ -734,8 +830,14 @@ function createStore(
       kind: "created" as const,
       message: domainMessage("inbound")
     })),
-    recordTelegramBusinessDeletedMessages: vi.fn(async () => ({ kind: "recorded" as const, deletedCount: 0 })),
-    recordTelegramBusinessEditedMessage: vi.fn(async () => ({ kind: "recorded" as const, updatedCount: 0 })),
+    recordTelegramBusinessDeletedMessages: vi.fn(async () => ({
+      kind: "recorded" as const,
+      deletedCount: 0
+    })),
+    recordTelegramBusinessEditedMessage: vi.fn(async () => ({
+      kind: "recorded" as const,
+      updatedCount: 0
+    })),
     startTelegramBusinessConnection: vi.fn(async () => ({ connectionId })),
     startTelegramMtprotoConnection: vi.fn(async () => ({
       connectionId,
@@ -744,7 +846,7 @@ function createStore(
     })),
     findTelegramMtprotoLoginSession: vi.fn(async () => ({
       connectionId,
-      loginState: options.mtprotoLoginState ?? "code_required" as const,
+      loginState: options.mtprotoLoginState ?? ("code_required" as const),
       maskedPhoneNumber: "+7******3535",
       encryptedPhoneNumber: encryptedMtprotoSecret(cipher, "phone_number", "+78005553535"),
       encryptedPhoneCodeHash: encryptedMtprotoSecret(
@@ -781,6 +883,7 @@ function createReadStore(
   overrides: {
     clientUserId?: string | null;
     connectionStatus?: ReturnType<typeof channelConnection>["status"];
+    provider?: ReturnType<typeof channelConnection>["provider"];
     mode?: ReturnType<typeof channelConnection>["mode"];
     reconciliationBusinessConnectionId?: string;
     unreadCount?: number;
@@ -788,7 +891,13 @@ function createReadStore(
 ): MessagingReadStore {
   return {
     listChannelConnections: vi.fn(async () => ({
-      channelConnections: [channelConnection({ status: overrides.connectionStatus, mode: overrides.mode })]
+      channelConnections: [
+        channelConnection({
+          status: overrides.connectionStatus,
+          provider: overrides.provider,
+          mode: overrides.mode
+        })
+      ]
     })),
     listTelegramBusinessConnectionReconciliationCandidates: vi.fn(async () => ({
       candidates: overrides.reconciliationBusinessConnectionId
@@ -842,15 +951,18 @@ function domainMessage(text: string): MessagingMessage {
   };
 }
 
-function channelConnection(overrides: {
-  status?: "connecting" | "active" | "revoked";
-  mode?: "telegram_business_bot" | "telegram_mtproto_account";
-} = {}) {
+function channelConnection(
+  overrides: {
+    status?: "connecting" | "active" | "revoked";
+    provider?: "telegram" | "instagram";
+    mode?: "telegram_business_bot" | "telegram_mtproto_account" | "instagram_graph";
+  } = {}
+) {
   return {
     id: connectionId,
-    provider: "telegram" as const,
-    mode: overrides.mode ?? "telegram_business_bot" as const,
-    status: overrides.status ?? "active" as const,
+    provider: overrides.provider ?? ("telegram" as const),
+    mode: overrides.mode ?? ("telegram_business_bot" as const),
+    status: overrides.status ?? ("active" as const),
     displayName: "Telegram",
     username: "telegram",
     capabilities: {

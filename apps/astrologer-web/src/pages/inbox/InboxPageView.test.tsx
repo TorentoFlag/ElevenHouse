@@ -28,7 +28,7 @@ describe("InboxPageView", () => {
 
     expect(markup).toContain("Подключить канал");
     expect(markup).toContain("Поиск по диалогам...");
-    expect(markup).toContain("Пока нет диалогов. Подключите Telegram Business.");
+    expect(markup).toContain("Пока нет диалогов. Подключите Telegram.");
     expect(markup).not.toContain("Telegram Account");
     expect(markup).not.toContain("Будет доступно позже");
     expect(markup).not.toContain("Подключить Instagram");
@@ -115,9 +115,31 @@ describe("InboxPageView", () => {
     expect(screen.getByText("Telegram")).toBeTruthy();
     expect(screen.getByText("Instagram")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Выбрать Telegram" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Выбрать Instagram" })).toBeTruthy();
+  });
+
+  it("opens Instagram guide and starts the Meta connection flow", () => {
+    const onStartInstagramGraphConnection = vi.fn();
+
+    renderWithClient(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[]}
+        isTelegramBusinessGuideOpen
+        onStartInstagramGraphConnection={onStartInstagramGraphConnection}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Instagram" }));
+
+    expect(screen.getByRole("dialog", { name: "Подключить Instagram" })).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Instagram скоро" }).getAttribute("disabled")
-    ).not.toBeNull();
+      screen.getByText("Instagram подключается через официальный Meta Graph API.")
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить в Meta" }));
+
+    expect(onStartInstagramGraphConnection).toHaveBeenCalledWith();
   });
 
   it("opens Telegram method selection before the Secretary bot guide", () => {
@@ -146,6 +168,70 @@ describe("InboxPageView", () => {
     expect(onStartTelegramBusinessConnection).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog", { name: "Подключить Telegram Business" })).toBeTruthy();
     expect(onOpenTelegramBusinessGuide).not.toHaveBeenCalled();
+  });
+
+  it("keeps the Telegram Account MTProto method visible but disabled for later", () => {
+    const onStartTelegramMtprotoConnection = vi.fn();
+
+    renderWithClient(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[]}
+        isTelegramBusinessGuideOpen
+        telegramMtprotoPhoneNumber="+78005553535"
+        isTelegramMtprotoConsentAccepted
+        onStartTelegramMtprotoConnection={onStartTelegramMtprotoConnection}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Telegram" }));
+    const mtprotoMethod = screen.getByRole("button", { name: "Telegram Account скоро" });
+
+    expect(mtprotoMethod.getAttribute("disabled")).not.toBeNull();
+    expect(screen.getByText("Будет доступно позже")).toBeTruthy();
+    fireEvent.click(mtprotoMethod);
+
+    expect(screen.getByRole("dialog", { name: "Telegram" })).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Подключить Telegram Account" })).toBeNull();
+    expect(screen.queryByLabelText("Номер телефона Telegram")).toBeNull();
+    expect(
+      screen.queryByText("MTProto подключает ElevenHouse как новый Telegram-клиент.")
+    ).toBeNull();
+    expect(onStartTelegramMtprotoConnection).not.toHaveBeenCalled();
+  });
+
+  it("enables composer through the selected thread MTProto connection", () => {
+    const mtprotoConnection = telegramConnection(
+      {},
+      {
+        id: "99999999-9999-4999-8999-999999999999",
+        mode: "telegram_mtproto_account",
+        displayName: "Личный Telegram",
+        username: null
+      }
+    );
+    const markup = renderStatic(
+      <InboxPageView
+        {...baseProps()}
+        channelConnections={[telegramConnection({}, { status: "revoked" }), mtprotoConnection]}
+        threads={[
+          threadFixture({
+            channelConnectionId: "99999999-9999-4999-8999-999999999999"
+          })
+        ]}
+        selectedThreadResponse={{
+          thread: threadFixture({
+            channelConnectionId: "99999999-9999-4999-8999-999999999999"
+          }),
+          messages: [inboundMessage()],
+          nextCursor: null
+        }}
+        draft="Ответ"
+      />
+    );
+
+    expect(markup).toContain("Ответить через Telegram...");
+    expect(markup).not.toContain("Нет прав на отправку");
   });
 
   it("starts the Secretary bot connection from the Telegram Business guide", () => {
@@ -585,9 +671,31 @@ function baseProps(): InboxPageViewProps {
     telegramBusinessBotUsername: null,
     isStartingTelegramBusinessConnection: false,
     telegramBusinessStartError: null,
+    isStartingInstagramGraphConnection: false,
+    instagramGraphStartError: null,
+    telegramMtprotoStep: "phone",
+    telegramMtprotoPhoneNumber: "",
+    telegramMtprotoCode: "",
+    telegramMtprotoPassword: "",
+    telegramMtprotoMaskedPhoneNumber: null,
+    telegramMtprotoRetryAfterSeconds: null,
+    isTelegramMtprotoConsentAccepted: false,
+    isStartingTelegramMtprotoConnection: false,
+    isSubmittingTelegramMtprotoCode: false,
+    isSubmittingTelegramMtprotoPassword: false,
+    telegramMtprotoError: null,
     onOpenTelegramBusinessGuide: vi.fn(),
     onCloseTelegramBusinessGuide: vi.fn(),
     onStartTelegramBusinessConnection: vi.fn(),
+    onStartInstagramGraphConnection: vi.fn(),
+    onTelegramMtprotoPhoneNumberChange: vi.fn(),
+    onTelegramMtprotoConsentAcceptedChange: vi.fn(),
+    onTelegramMtprotoCodeChange: vi.fn(),
+    onTelegramMtprotoPasswordChange: vi.fn(),
+    onStartTelegramMtprotoConnection: vi.fn(),
+    onSubmitTelegramMtprotoCode: vi.fn(),
+    onSubmitTelegramMtprotoPassword: vi.fn(),
+    onResetTelegramMtprotoConnection: vi.fn(),
     linkClientUserId: "",
     linkClient: null,
     createClientDisplayName: "",
@@ -673,6 +781,7 @@ function threadFixture(input: {
   readonly unreadCount?: number;
   readonly providerUserId?: string | null;
   readonly providerChatId?: string;
+  readonly channelConnectionId?: string;
   readonly username?: string | null;
   readonly lastMessage?: MessagingMessage;
 }): MessagingThread {
@@ -682,7 +791,7 @@ function threadFixture(input: {
     status: "open",
     primaryIdentity: {
       id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-      channelConnectionId: "11111111-1111-4111-8111-111111111111",
+      channelConnectionId: input.channelConnectionId ?? "11111111-1111-4111-8111-111111111111",
       provider: "telegram",
       providerUserId: input.providerUserId ?? "4242",
       providerChatId: input.providerChatId ?? "4242",

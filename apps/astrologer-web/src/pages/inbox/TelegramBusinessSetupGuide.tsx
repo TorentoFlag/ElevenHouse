@@ -1,26 +1,83 @@
 import type { MessagingChannelConnection } from "@elevenhouse/contracts";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import {
+  isTelegramMtprotoPhoneStepSubmittable,
+  type TelegramMtprotoWizardStep
+} from "../../features/messaging/model/telegramMtprotoConnectionWizard";
 import styles from "./InboxPage.module.css";
 
 export type ChannelConnectionDialogProps = {
   readonly connection: MessagingChannelConnection | undefined;
+  readonly mtprotoConnection: MessagingChannelConnection | undefined;
+  readonly instagramConnection: MessagingChannelConnection | undefined;
   readonly isStarting: boolean;
   readonly errorMessage: string | null;
+  readonly isStartingInstagramGraph: boolean;
+  readonly instagramGraphErrorMessage: string | null;
   readonly telegramBotUsername: string | null;
+  readonly mtprotoStep: TelegramMtprotoWizardStep;
+  readonly mtprotoPhoneNumber: string;
+  readonly mtprotoCode: string;
+  readonly mtprotoPassword: string;
+  readonly mtprotoMaskedPhoneNumber: string | null;
+  readonly mtprotoRetryAfterSeconds: number | null;
+  readonly isMtprotoConsentAccepted: boolean;
+  readonly isStartingMtproto: boolean;
+  readonly isSubmittingMtprotoCode: boolean;
+  readonly isSubmittingMtprotoPassword: boolean;
+  readonly mtprotoErrorMessage: string | null;
   readonly onStartConnection: () => void;
+  readonly onStartInstagramGraphConnection: () => void;
+  readonly onMtprotoPhoneNumberChange: (value: string) => void;
+  readonly onMtprotoConsentAcceptedChange: (value: boolean) => void;
+  readonly onMtprotoCodeChange: (value: string) => void;
+  readonly onMtprotoPasswordChange: (value: string) => void;
+  readonly onStartMtprotoConnection: () => void;
+  readonly onSubmitMtprotoCode: () => void;
+  readonly onSubmitMtprotoPassword: () => void;
+  readonly onResetMtprotoConnection: () => void;
   readonly onClose: () => void;
 };
 
-type ChannelConnectionStep = "channels" | "telegram-methods" | "telegram-business";
+type ChannelConnectionStep =
+  | "channels"
+  | "telegram-methods"
+  | "telegram-business"
+  | "telegram-mtproto"
+  | "instagram-graph";
 type TelegramGuideStepId = 1 | 2 | 3 | 4 | 5;
 
 export function ChannelConnectionDialog({
   connection,
+  mtprotoConnection,
+  instagramConnection,
   isStarting,
   errorMessage,
+  isStartingInstagramGraph,
+  instagramGraphErrorMessage,
   telegramBotUsername,
+  mtprotoStep,
+  mtprotoPhoneNumber,
+  mtprotoCode,
+  mtprotoPassword,
+  mtprotoMaskedPhoneNumber,
+  mtprotoRetryAfterSeconds,
+  isMtprotoConsentAccepted,
+  isStartingMtproto,
+  isSubmittingMtprotoCode,
+  isSubmittingMtprotoPassword,
+  mtprotoErrorMessage,
   onStartConnection,
+  onStartInstagramGraphConnection,
+  onMtprotoPhoneNumberChange,
+  onMtprotoConsentAcceptedChange,
+  onMtprotoCodeChange,
+  onMtprotoPasswordChange,
+  onStartMtprotoConnection,
+  onSubmitMtprotoCode,
+  onSubmitMtprotoPassword,
+  onResetMtprotoConnection,
   onClose
 }: ChannelConnectionDialogProps) {
   const [step, setStep] = useState<ChannelConnectionStep>("channels");
@@ -35,7 +92,9 @@ export function ChannelConnectionDialog({
     <div className={styles.channelSetupOverlay} role="presentation" onMouseDown={onClose}>
       <section
         className={
-          step === "telegram-business" ? styles.telegramGuideDialog : styles.channelSetupDialog
+          step === "telegram-business" || step === "telegram-mtproto" || step === "instagram-graph"
+            ? styles.telegramGuideDialog
+            : styles.channelSetupDialog
         }
         role="dialog"
         aria-modal="true"
@@ -45,7 +104,9 @@ export function ChannelConnectionDialog({
         {step === "channels" ? (
           <ChannelSelection
             connection={connection}
+            instagramConnection={instagramConnection}
             onClose={onClose}
+            onSelectInstagram={() => setStep("instagram-graph")}
             onSelectTelegram={() => setStep("telegram-methods")}
           />
         ) : null}
@@ -70,6 +131,42 @@ export function ChannelConnectionDialog({
             onStartConnection={onStartConnection}
           />
         ) : null}
+        {step === "telegram-mtproto" ? (
+          <TelegramMtprotoGuide
+            connection={mtprotoConnection}
+            errorMessage={mtprotoErrorMessage}
+            isConsentAccepted={isMtprotoConsentAccepted}
+            isStarting={isStartingMtproto}
+            isSubmittingCode={isSubmittingMtprotoCode}
+            isSubmittingPassword={isSubmittingMtprotoPassword}
+            maskedPhoneNumber={mtprotoMaskedPhoneNumber}
+            password={mtprotoPassword}
+            phoneNumber={mtprotoPhoneNumber}
+            code={mtprotoCode}
+            retryAfterSeconds={mtprotoRetryAfterSeconds}
+            step={mtprotoStep}
+            onBack={() => setStep("telegram-methods")}
+            onClose={onClose}
+            onCodeChange={onMtprotoCodeChange}
+            onConsentAcceptedChange={onMtprotoConsentAcceptedChange}
+            onPasswordChange={onMtprotoPasswordChange}
+            onPhoneNumberChange={onMtprotoPhoneNumberChange}
+            onReset={onResetMtprotoConnection}
+            onStartConnection={onStartMtprotoConnection}
+            onSubmitCode={onSubmitMtprotoCode}
+            onSubmitPassword={onSubmitMtprotoPassword}
+          />
+        ) : null}
+        {step === "instagram-graph" ? (
+          <InstagramGraphGuide
+            connection={instagramConnection}
+            errorMessage={instagramGraphErrorMessage}
+            isStarting={isStartingInstagramGraph}
+            onBack={() => setStep("channels")}
+            onClose={onClose}
+            onStartConnection={onStartInstagramGraphConnection}
+          />
+        ) : null}
       </section>
     </div>
   );
@@ -83,11 +180,15 @@ export function ChannelConnectionDialog({
 
 function ChannelSelection({
   connection,
+  instagramConnection,
   onClose,
+  onSelectInstagram,
   onSelectTelegram
 }: {
   readonly connection: MessagingChannelConnection | undefined;
+  readonly instagramConnection: MessagingChannelConnection | undefined;
   readonly onClose: () => void;
+  readonly onSelectInstagram: () => void;
   readonly onSelectTelegram: () => void;
 }) {
   return (
@@ -123,15 +224,15 @@ function ChannelSelection({
         <button
           className={styles.channelSetupRow}
           type="button"
-          aria-label="Instagram скоро"
-          disabled
+          aria-label="Выбрать Instagram"
+          onClick={onSelectInstagram}
         >
           <span className={styles.channelSetupBadgeInstagram}>I</span>
           <span className={styles.channelSetupRowText}>
             <strong>Instagram</strong>
-            <span>Следующий канал подключения</span>
+            <span>{instagramChannelStatusText(instagramConnection)}</span>
           </span>
-          <span className={styles.channelSetupRowAction}>Скоро</span>
+          <span className={styles.channelSetupRowAction}>Выбрать</span>
         </button>
       </div>
     </>
@@ -191,10 +292,326 @@ function TelegramMethodSelection({
           <span className={styles.channelSetupBadgeTelegramMuted}>T</span>
           <span>
             <strong>Telegram Account / MTProto</strong>
-            <span>Второй способ подключения Telegram аккаунта.</span>
+            <span>Подключение личного Telegram аккаунта через код входа.</span>
             <em>Будет доступно позже</em>
           </span>
         </button>
+      </div>
+    </>
+  );
+}
+
+function TelegramMtprotoGuide({
+  connection,
+  errorMessage,
+  isConsentAccepted,
+  isStarting,
+  isSubmittingCode,
+  isSubmittingPassword,
+  maskedPhoneNumber,
+  password,
+  phoneNumber,
+  code,
+  retryAfterSeconds,
+  step,
+  onBack,
+  onClose,
+  onCodeChange,
+  onConsentAcceptedChange,
+  onPasswordChange,
+  onPhoneNumberChange,
+  onReset,
+  onStartConnection,
+  onSubmitCode,
+  onSubmitPassword
+}: {
+  readonly connection: MessagingChannelConnection | undefined;
+  readonly errorMessage: string | null;
+  readonly isConsentAccepted: boolean;
+  readonly isStarting: boolean;
+  readonly isSubmittingCode: boolean;
+  readonly isSubmittingPassword: boolean;
+  readonly maskedPhoneNumber: string | null;
+  readonly password: string;
+  readonly phoneNumber: string;
+  readonly code: string;
+  readonly retryAfterSeconds: number | null;
+  readonly step: TelegramMtprotoWizardStep;
+  readonly onBack: () => void;
+  readonly onClose: () => void;
+  readonly onCodeChange: (value: string) => void;
+  readonly onConsentAcceptedChange: (value: boolean) => void;
+  readonly onPasswordChange: (value: string) => void;
+  readonly onPhoneNumberChange: (value: string) => void;
+  readonly onReset: () => void;
+  readonly onStartConnection: () => void;
+  readonly onSubmitCode: () => void;
+  readonly onSubmitPassword: () => void;
+}) {
+  const isActive = connection?.status === "active" || step === "connected";
+  const canStart = isTelegramMtprotoPhoneStepSubmittable(phoneNumber, isConsentAccepted);
+  const statusText = telegramMtprotoStatusText({
+    connection,
+    isActive,
+    maskedPhoneNumber,
+    retryAfterSeconds,
+    step
+  });
+
+  return (
+    <>
+      <header className={styles.telegramGuideHeader}>
+        <div>
+          <button className={styles.channelSetupBack} type="button" onClick={onBack}>
+            Telegram
+          </button>
+          <span className={styles.telegramGuideKicker}>Telegram Account</span>
+          <h2 id="telegram-mtproto-guide-title">Подключить Telegram Account</h2>
+          <p>Подключите личный Telegram аккаунт через код входа и optional 2FA пароль.</p>
+        </div>
+        <button
+          className={styles.telegramGuideClose}
+          type="button"
+          aria-label="Закрыть подключение Telegram Account"
+          onClick={onClose}
+        >
+          ×
+        </button>
+      </header>
+
+      <div className={styles.telegramMtprotoBody}>
+        <div className={styles.telegramGuideStatus} data-attention={errorMessage || undefined}>
+          <span>{telegramMtprotoStatusLabel(step, isActive)}</span>
+          <strong>{statusText}</strong>
+        </div>
+
+        {errorMessage ? (
+          <p className={styles.telegramGuideError} role="alert">
+            {errorMessage}
+          </p>
+        ) : null}
+
+        <section className={styles.telegramMtprotoNotice}>
+          <strong>MTProto подключает ElevenHouse как новый Telegram-клиент.</strong>
+          <p>
+            Используйте этот способ только если вы осознанно даёте доступ к личному аккаунту
+            астролога. Session хранится на backend в зашифрованном виде.
+          </p>
+        </section>
+
+        {step === "phone" ? (
+          <form
+            className={styles.telegramMtprotoForm}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (canStart && !isStarting) {
+                onStartConnection();
+              }
+            }}
+          >
+            <label>
+              <span>Номер телефона Telegram</span>
+              <input
+                id="telegram-mtproto-phone-number"
+                name="telegramMtprotoPhoneNumber"
+                value={phoneNumber}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="+7 800 555 35 35"
+                disabled={isStarting}
+                onChange={(event) => onPhoneNumberChange(event.currentTarget.value)}
+              />
+            </label>
+            <label className={styles.telegramMtprotoConsent}>
+              <input
+                type="checkbox"
+                checked={isConsentAccepted}
+                disabled={isStarting}
+                onChange={(event) => onConsentAcceptedChange(event.currentTarget.checked)}
+              />
+              <span>
+                Я понимаю, что ElevenHouse подключится к Telegram аккаунту как отдельный клиент.
+              </span>
+            </label>
+            <button
+              className={styles.telegramGuidePrimary}
+              type="submit"
+              disabled={!canStart || isStarting}
+            >
+              {isStarting ? "Отправляем код" : "Получить код"}
+            </button>
+          </form>
+        ) : null}
+
+        {step === "code" ? (
+          <form
+            className={styles.telegramMtprotoForm}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (code.trim() && !isSubmittingCode) {
+                onSubmitCode();
+              }
+            }}
+          >
+            <div className={styles.telegramMtprotoStepCopy}>
+              <h3>Введите код из Telegram</h3>
+              <p>{maskedPhoneNumber ?? "Код отправлен в Telegram аккаунт."}</p>
+            </div>
+            <label>
+              <span>Код Telegram</span>
+              <input
+                id="telegram-mtproto-code"
+                name="telegramMtprotoCode"
+                value={code}
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="777777"
+                disabled={isSubmittingCode}
+                onChange={(event) => onCodeChange(event.currentTarget.value)}
+              />
+            </label>
+            <button
+              className={styles.telegramGuidePrimary}
+              type="submit"
+              disabled={!code.trim() || isSubmittingCode}
+            >
+              {isSubmittingCode ? "Проверяем код" : "Подтвердить код"}
+            </button>
+          </form>
+        ) : null}
+
+        {step === "password" ? (
+          <form
+            className={styles.telegramMtprotoForm}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (password && !isSubmittingPassword) {
+                onSubmitPassword();
+              }
+            }}
+          >
+            <div className={styles.telegramMtprotoStepCopy}>
+              <h3>Введите пароль 2FA</h3>
+              <p>Telegram запросил cloud password для аккаунта {maskedPhoneNumber ?? ""}.</p>
+            </div>
+            <label>
+              <span>Пароль 2FA</span>
+              <input
+                id="telegram-mtproto-password"
+                name="telegramMtprotoPassword"
+                value={password}
+                type="password"
+                autoComplete="current-password"
+                disabled={isSubmittingPassword}
+                onChange={(event) => onPasswordChange(event.currentTarget.value)}
+              />
+            </label>
+            <button
+              className={styles.telegramGuidePrimary}
+              type="submit"
+              disabled={!password || isSubmittingPassword}
+            >
+              {isSubmittingPassword ? "Подключаем" : "Завершить подключение"}
+            </button>
+          </form>
+        ) : null}
+
+        {step === "connected" ? (
+          <div className={styles.telegramGuideActionStatus} role="status">
+            <span>Канал подключён</span>
+            <strong>Telegram Account готов к работе</strong>
+          </div>
+        ) : null}
+
+        {step !== "phone" && step !== "connected" ? (
+          <button className={styles.telegramMtprotoSecondary} type="button" onClick={onReset}>
+            Изменить номер
+          </button>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+function InstagramGraphGuide({
+  connection,
+  errorMessage,
+  isStarting,
+  onBack,
+  onClose,
+  onStartConnection
+}: {
+  readonly connection: MessagingChannelConnection | undefined;
+  readonly errorMessage: string | null;
+  readonly isStarting: boolean;
+  readonly onBack: () => void;
+  readonly onClose: () => void;
+  readonly onStartConnection: () => void;
+}) {
+  const isActive = connection?.status === "active";
+  const needsAttention =
+    connection?.status === "reauth_required" ||
+    connection?.status === "revoked" ||
+    connection?.status === "error";
+
+  return (
+    <>
+      <header className={styles.telegramGuideHeader}>
+        <div>
+          <button className={styles.channelSetupBack} type="button" onClick={onBack}>
+            Каналы
+          </button>
+          <span className={styles.telegramGuideKicker}>Instagram</span>
+          <h2 id="instagram-graph-guide-title">Подключить Instagram</h2>
+          <p>Подключите профессиональный Instagram аккаунт через Meta Business Login.</p>
+        </div>
+        <button
+          className={styles.telegramGuideClose}
+          type="button"
+          aria-label="Закрыть подключение Instagram"
+          onClick={onClose}
+        >
+          ×
+        </button>
+      </header>
+
+      <div className={styles.telegramMtprotoBody}>
+        <div className={styles.telegramGuideStatus} data-attention={needsAttention || undefined}>
+          <span>{instagramGraphStatusLabel(connection, isStarting)}</span>
+          <strong>{instagramGraphStatusText(connection)}</strong>
+        </div>
+
+        {errorMessage ? (
+          <p className={styles.telegramGuideError} role="alert">
+            {errorMessage}
+          </p>
+        ) : null}
+
+        <section className={styles.telegramMtprotoNotice}>
+          <strong>Instagram подключается через официальный Meta Graph API.</strong>
+          <p>
+            После перехода в Meta выберите профессиональный Instagram аккаунт и страницу Facebook, у
+            которой есть права на сообщения.
+          </p>
+        </section>
+
+        {isActive ? (
+          <div className={styles.telegramGuideActionStatus} role="status">
+            <span>Канал подключён</span>
+            <strong>Instagram готов к работе</strong>
+          </div>
+        ) : (
+          <button
+            className={styles.telegramGuidePrimary}
+            type="button"
+            disabled={isStarting}
+            onClick={() => onStartConnection()}
+          >
+            {isStarting ? "Открываем Meta" : "Продолжить в Meta"}
+          </button>
+        )}
       </div>
     </>
   );
@@ -577,6 +994,8 @@ function TelegramSettingsRow({
 function dialogTitleId(step: ChannelConnectionStep) {
   if (step === "channels") return "channel-connection-title";
   if (step === "telegram-methods") return "telegram-method-title";
+  if (step === "telegram-mtproto") return "telegram-mtproto-guide-title";
+  if (step === "instagram-graph") return "instagram-graph-guide-title";
 
   return "telegram-business-guide-title";
 }
@@ -597,6 +1016,70 @@ function telegramBusinessMethodStatusText(connection: MessagingChannelConnection
   if (connection.status === "connecting") return "Ожидаем Telegram";
 
   return "Можно настроить заново";
+}
+
+function instagramChannelStatusText(connection: MessagingChannelConnection | undefined) {
+  if (!connection) return "Не подключён";
+  if (connection.status === "active") return "Подключён";
+  if (connection.status === "connecting") return "Ожидает Meta";
+  if (connection.status === "reauth_required") return "Нужна повторная авторизация";
+  if (connection.status === "revoked") return "Отключён";
+
+  return "Требует внимания";
+}
+
+function instagramGraphStatusLabel(
+  connection: MessagingChannelConnection | undefined,
+  isStarting: boolean
+) {
+  if (isStarting) return "Открываем";
+  if (connection?.status === "active") return "Подключено";
+  if (connection?.status === "connecting") return "Ожидает Meta";
+  if (connection?.status === "reauth_required") return "Нужна авторизация";
+  if (connection?.status === "revoked") return "Отключено";
+
+  return "Не начато";
+}
+
+function instagramGraphStatusText(connection: MessagingChannelConnection | undefined) {
+  if (connection?.status === "active") return "Instagram уже подключён.";
+  if (connection?.status === "connecting") return "Завершите авторизацию в Meta.";
+  if (connection?.status === "reauth_required") return "Meta требует повторную авторизацию.";
+  if (connection?.status === "revoked") return "Канал отключён, подключите Instagram заново.";
+  if (connection?.status === "error") return "Последняя попытка подключения завершилась ошибкой.";
+
+  return "Начните подключение и завершите авторизацию на стороне Meta.";
+}
+
+function telegramMtprotoStatusLabel(step: TelegramMtprotoWizardStep, isActive: boolean) {
+  if (isActive) return "Подключено";
+  if (step === "code") return "Ждём код";
+  if (step === "password") return "Нужен 2FA";
+
+  return "Не начато";
+}
+
+function telegramMtprotoStatusText({
+  connection,
+  isActive,
+  maskedPhoneNumber,
+  retryAfterSeconds,
+  step
+}: {
+  readonly connection: MessagingChannelConnection | undefined;
+  readonly isActive: boolean;
+  readonly maskedPhoneNumber: string | null;
+  readonly retryAfterSeconds: number | null;
+  readonly step: TelegramMtprotoWizardStep;
+}) {
+  if (isActive) return "Telegram Account уже подключён.";
+  if (retryAfterSeconds) return `Telegram просит повторить через ${retryAfterSeconds} сек.`;
+  if (connection?.status === "reauth_required") return "Telegram просит повторить вход.";
+  if (connection?.status === "revoked") return "Session отключена, подключите аккаунт заново.";
+  if (step === "code") return `Код отправлен на ${maskedPhoneNumber ?? "указанный номер"}.`;
+  if (step === "password") return "Для завершения входа нужен cloud password аккаунта.";
+
+  return "Введите номер Telegram аккаунта и подтвердите осознанный доступ.";
 }
 
 function telegramBusinessActiveStep(

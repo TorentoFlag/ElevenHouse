@@ -71,6 +71,14 @@ export type StartTelegramBusinessConnectionResponse = z.infer<
   typeof StartTelegramBusinessConnectionResponseSchema
 >;
 
+export const StartInstagramGraphConnectionResponseSchema = z.strictObject({
+  channelConnection: MessagingChannelConnectionSchema,
+  authorizationUrl: z.string().trim().url()
+});
+export type StartInstagramGraphConnectionResponse = z.infer<
+  typeof StartInstagramGraphConnectionResponseSchema
+>;
+
 export const StartTelegramMtprotoConnectionRequestSchema = z.strictObject({
   phoneNumber: z
     .string()

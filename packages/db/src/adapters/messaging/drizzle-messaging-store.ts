@@ -31,6 +31,8 @@ import type {
   RecordTelegramMtprotoMessageStoreInput,
   RecordTelegramMtprotoCodeResultStoreInput,
   RecordTelegramMtprotoPasswordResultStoreInput,
+  StartInstagramGraphConnectionStoreInput,
+  StartInstagramGraphConnectionStoreResult,
   StartTelegramBusinessConnectionStoreInput,
   StartTelegramBusinessConnectionStoreResult,
   StartTelegramMtprotoConnectionStoreInput,
@@ -73,7 +75,8 @@ type ThreadProjection = {
 
 const inboundProviderDedupeConstraint = "messages_inbound_provider_dedupe_unique";
 const outboundIdempotencyConstraint = "messages_outbound_idempotency_unique";
-const threadIdentityExternalIdentityConstraint = "messaging_thread_identities_external_identity_unique";
+const threadIdentityExternalIdentityConstraint =
+  "messaging_thread_identities_external_identity_unique";
 const threadClientIdempotencyConstraint = "idempotency_commands_scope_key_unique";
 const astrologerApiSurface = "astrologer-api";
 const linkThreadClientScope = "messaging.threads.link-client";
@@ -89,6 +92,7 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     recordInboundProviderMessage: (input) => recordInboundProviderMessage(database, input),
     recordTelegramBusinessConnection: (input) => recordTelegramBusinessConnection(database, input),
     startTelegramBusinessConnection: (input) => startTelegramBusinessConnection(database, input),
+    startInstagramGraphConnection: (input) => startInstagramGraphConnection(database, input),
     startTelegramMtprotoConnection: (input) => startTelegramMtprotoConnection(database, input),
     findTelegramMtprotoLoginSession: (input) => findTelegramMtprotoLoginSession(database, input),
     recordTelegramMtprotoCodeResult: (input) => recordTelegramMtprotoCodeResult(database, input),
@@ -277,7 +281,8 @@ async function createOutboundMessage(
   }
 
   const existing = await findOutboundMessageByIdempotencyKey(database, input);
-  if (!existing) throw new Error("Expected existing messaging outbound message after idempotency conflict");
+  if (!existing)
+    throw new Error("Expected existing messaging outbound message after idempotency conflict");
   if (existing.requestHash !== input.requestHash) throw new MessagingIdempotencyConflictError();
   return existing;
 }
@@ -290,7 +295,10 @@ async function recordInboundProviderMessage(
     const message = await database.transaction(async (transaction) => {
       const thread = await requireOwnedThreadChannel(transaction, input);
       const externalIdentity = await findExternalIdentityForThread(transaction, input);
-      if (!externalIdentity || externalIdentity.channelConnectionId !== thread.channelConnectionId) {
+      if (
+        !externalIdentity ||
+        externalIdentity.channelConnectionId !== thread.channelConnectionId
+      ) {
         throw new Error("Messaging external identity is not owned by the thread");
       }
 
@@ -378,11 +386,13 @@ async function recordTelegramBusinessConnection(
       activeOnly: false
     });
     if (connections.length > 1) {
-      throw new Error("Telegram business connection is not uniquely bound to one channel connection");
+      throw new Error(
+        "Telegram business connection is not uniquely bound to one channel connection"
+      );
     }
-    const connection = connections[0] ?? (
-      input.enabled ? await findSinglePendingTelegramBusinessConnection(transaction) : null
-    );
+    const connection =
+      connections[0] ??
+      (input.enabled ? await findSinglePendingTelegramBusinessConnection(transaction) : null);
     if (!connection) return { kind: "unmatched" };
 
     const timestamp = new Date(input.now);
@@ -479,7 +489,66 @@ async function startTelegramBusinessConnection(
         updatedAt: timestamp
       })
       .returning({ id: messagingChannelConnections.id });
-    if (!row) throw new Error("Expected Telegram Business channel connection insert to return a row");
+    if (!row)
+      throw new Error("Expected Telegram Business channel connection insert to return a row");
+    return { connectionId: row.id };
+  });
+}
+
+async function startInstagramGraphConnection(
+  database: ElevenHouseDatabase,
+  input: StartInstagramGraphConnectionStoreInput
+): Promise<StartInstagramGraphConnectionStoreResult> {
+  return database.transaction(async (transaction) => {
+    await lockInstagramGraphConnectionStart(transaction, input);
+    const existing = await findInstagramGraphConnectionForAstrologer(transaction, input);
+    if (existing) {
+      if (["revoked", "paused", "error"].includes(existing.status)) {
+        const timestamp = new Date(input.now);
+        await transaction
+          .update(messagingChannelConnections)
+          .set({
+            status: "connecting",
+            externalAccountId: null,
+            externalOwnerUserId: null,
+            displayNameSnapshot: null,
+            usernameSnapshot: null,
+            capabilities: instagramGraphPendingCapabilities(),
+            connectedAt: null,
+            lastSyncedAt: null,
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            updatedAt: timestamp
+          })
+          .where(eq(messagingChannelConnections.id, existing.id));
+      }
+      return { connectionId: existing.id };
+    }
+
+    const timestamp = new Date(input.now);
+    const [row] = await transaction
+      .insert(messagingChannelConnections)
+      .values({
+        id: input.connectionId,
+        astrologerUserId: input.astrologerUserId,
+        provider: "instagram",
+        mode: "instagram_graph",
+        status: "connecting",
+        externalAccountId: null,
+        externalOwnerUserId: null,
+        displayNameSnapshot: null,
+        usernameSnapshot: null,
+        capabilities: instagramGraphPendingCapabilities(),
+        consentRecordId: null,
+        connectedAt: null,
+        lastSyncedAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      })
+      .returning({ id: messagingChannelConnections.id });
+    if (!row) throw new Error("Expected Instagram Graph channel connection insert to return a row");
     return { connectionId: row.id };
   });
 }
@@ -491,7 +560,12 @@ async function startTelegramMtprotoConnection(
   return database.transaction(async (transaction) => {
     await lockTelegramMtprotoConnectionStart(transaction, input);
     const existing = await findTelegramMtprotoConnectionForAstrologer(transaction, input);
-    if (existing) return { connectionId: existing.id, loginStep: "code_required", maskedPhoneNumber: input.maskedPhoneNumber };
+    if (existing)
+      return {
+        connectionId: existing.id,
+        loginStep: "code_required",
+        maskedPhoneNumber: input.maskedPhoneNumber
+      };
 
     const timestamp = new Date(input.now);
     const [row] = await transaction
@@ -516,7 +590,8 @@ async function startTelegramMtprotoConnection(
         updatedAt: timestamp
       })
       .returning({ id: messagingChannelConnections.id });
-    if (!row) throw new Error("Expected Telegram Account channel connection insert to return a row");
+    if (!row)
+      throw new Error("Expected Telegram Account channel connection insert to return a row");
 
     await transaction.insert(messagingTelegramMtprotoSessions).values({
       channelConnectionId: row.id,
@@ -670,6 +745,15 @@ async function lockTelegramMtprotoConnectionStart(
   );
 }
 
+async function lockInstagramGraphConnectionStart(
+  database: MessagingDatabase,
+  input: { readonly astrologerUserId: string }
+): Promise<void> {
+  await database.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`messaging:instagram_graph:${input.astrologerUserId}`}))`
+  );
+}
+
 async function findTelegramBusinessConnectionForAstrologer(
   database: MessagingDatabase,
   input: { readonly astrologerUserId: string }
@@ -685,6 +769,27 @@ async function findTelegramBusinessConnectionForAstrologer(
         eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
         eq(messagingChannelConnections.provider, "telegram"),
         eq(messagingChannelConnections.mode, "telegram_business_bot")
+      )
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+async function findInstagramGraphConnectionForAstrologer(
+  database: MessagingDatabase,
+  input: { readonly astrologerUserId: string }
+): Promise<{ readonly id: string; readonly status: string } | null> {
+  const [row] = await database
+    .select({
+      id: messagingChannelConnections.id,
+      status: messagingChannelConnections.status
+    })
+    .from(messagingChannelConnections)
+    .where(
+      and(
+        eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
+        eq(messagingChannelConnections.provider, "instagram"),
+        eq(messagingChannelConnections.mode, "instagram_graph")
       )
     )
     .limit(1);
@@ -738,7 +843,10 @@ async function findSinglePendingTelegramBusinessConnection(
 async function recordTelegramBusinessMessage(
   database: ElevenHouseDatabase,
   input: RecordTelegramBusinessMessageStoreInput
-): Promise<{ readonly kind: "created" | "duplicate"; readonly message: MessagingMessage } | { readonly kind: "unmatched" }> {
+): Promise<
+  | { readonly kind: "created" | "duplicate"; readonly message: MessagingMessage }
+  | { readonly kind: "unmatched" }
+> {
   try {
     return await database.transaction(async (transaction) => {
       const connections = await findTelegramBusinessConnections(transaction, {
@@ -746,7 +854,9 @@ async function recordTelegramBusinessMessage(
         activeOnly: true
       });
       if (connections.length > 1) {
-        throw new Error("Telegram business connection is not uniquely bound to one channel connection");
+        throw new Error(
+          "Telegram business connection is not uniquely bound to one channel connection"
+        );
       }
       const connection = connections[0];
       if (!connection) return { kind: "unmatched" as const };
@@ -855,14 +965,18 @@ async function recordTelegramBusinessMessage(
   }
 
   const existing = await findTelegramBusinessMessage(database, input);
-  if (!existing) throw new Error("Expected existing Telegram business message after duplicate conflict");
+  if (!existing)
+    throw new Error("Expected existing Telegram business message after duplicate conflict");
   return { kind: "duplicate", message: existing };
 }
 
 async function recordTelegramMtprotoMessage(
   database: ElevenHouseDatabase,
   input: RecordTelegramMtprotoMessageStoreInput
-): Promise<{ readonly kind: "created" | "duplicate"; readonly message: MessagingMessage } | { readonly kind: "unmatched" }> {
+): Promise<
+  | { readonly kind: "created" | "duplicate"; readonly message: MessagingMessage }
+  | { readonly kind: "unmatched" }
+> {
   try {
     return await database.transaction(async (transaction) => {
       const connection = await findTelegramMtprotoConnection(transaction, input);
@@ -900,7 +1014,9 @@ async function recordTelegramMtprotoMessage(
           mediaAssetId: null,
           status: input.isOutgoing ? "sent" : "received",
           failureCode: null,
-          idempotencyKey: input.isOutgoing ? telegramMtprotoObservedOutboundIdempotencyKey(input) : null,
+          idempotencyKey: input.isOutgoing
+            ? telegramMtprotoObservedOutboundIdempotencyKey(input)
+            : null,
           requestHash: input.isOutgoing ? hashTelegramMtprotoMessageRequest(input) : null,
           createdAt: timestamp,
           updatedAt: timestamp
@@ -949,7 +1065,8 @@ async function recordTelegramMtprotoMessage(
   }
 
   const existing = await findTelegramMtprotoMessage(database, input);
-  if (!existing) throw new Error("Expected existing Telegram MTProto message after duplicate conflict");
+  if (!existing)
+    throw new Error("Expected existing Telegram MTProto message after duplicate conflict");
   if (input.cursor) {
     await updateTelegramMtprotoCursors(database, input, new Date(input.now));
   }
@@ -966,7 +1083,9 @@ async function recordTelegramBusinessDeletedMessages(
       activeOnly: true
     });
     if (connections.length > 1) {
-      throw new Error("Telegram business connection is not uniquely bound to one channel connection");
+      throw new Error(
+        "Telegram business connection is not uniquely bound to one channel connection"
+      );
     }
     const connection = connections[0];
     if (!connection) return { kind: "unmatched" as const };
@@ -1003,7 +1122,9 @@ async function recordTelegramBusinessDeletedMessages(
       const deletedInboundCount = deletedRows.filter(
         (row) => row.threadId === threadId && row.direction === "inbound"
       ).length;
-      const latestVisibleMessage = await findLatestVisibleMessageForThread(transaction, { threadId });
+      const latestVisibleMessage = await findLatestVisibleMessageForThread(transaction, {
+        threadId
+      });
       const threadUpdate = {
         lastMessageId: latestVisibleMessage?.id ?? null,
         lastMessageAt: latestVisibleMessage ? new Date(latestVisibleMessage.messageAt) : null,
@@ -1053,7 +1174,9 @@ async function recordTelegramBusinessEditedMessage(
       activeOnly: true
     });
     if (connections.length > 1) {
-      throw new Error("Telegram business connection is not uniquely bound to one channel connection");
+      throw new Error(
+        "Telegram business connection is not uniquely bound to one channel connection"
+      );
     }
     const connection = connections[0];
     if (!connection) return { kind: "unmatched" as const };
@@ -1208,7 +1331,8 @@ async function executeIdempotentThreadClientCommand(input: {
           updatedAt: new Date(input.input.now)
         })
         .returning({ id: idempotencyCommands.id });
-      if (!command) throw new Error("Expected messaging idempotency command insert to return a row");
+      if (!command)
+        throw new Error("Expected messaging idempotency command insert to return a row");
 
       const thread = await input.create(transaction);
       if (!thread.clientUserId) throw new Error("Expected linked messaging thread client user id");
@@ -1243,7 +1367,8 @@ async function executeIdempotentThreadClientCommand(input: {
     )
     .limit(1);
   if (!command) throw new Error("Expected messaging idempotency command after unique conflict");
-  if (command.requestHash !== input.input.requestHash) throw new MessagingIdempotencyConflictError();
+  if (command.requestHash !== input.input.requestHash)
+    throw new MessagingIdempotencyConflictError();
   const result = readThreadClientIdempotencyResult(command.state, command.result);
   const thread = await findThreadForAstrologer(input.database, {
     astrologerUserId: input.input.astrologerUserId,
@@ -1403,11 +1528,13 @@ async function findTelegramExternalIdentityByChat(
 async function findTelegramBusinessConnections(
   database: MessagingDatabase,
   input: { readonly businessConnectionId: string; readonly activeOnly: boolean }
-): Promise<Array<{
-  readonly id: string;
-  readonly astrologerUserId: string;
-  readonly externalOwnerUserId: string | null;
-}>> {
+): Promise<
+  Array<{
+    readonly id: string;
+    readonly astrologerUserId: string;
+    readonly externalOwnerUserId: string | null;
+  }>
+> {
   const filters = [
     eq(messagingChannelConnections.provider, "telegram"),
     eq(messagingChannelConnections.mode, "telegram_business_bot"),
@@ -1613,7 +1740,9 @@ async function findLatestVisibleMessageForThread(
       messageAt
     })
     .from(messagingMessages)
-    .where(and(eq(messagingMessages.threadId, input.threadId), ne(messagingMessages.status, "deleted")))
+    .where(
+      and(eq(messagingMessages.threadId, input.threadId), ne(messagingMessages.status, "deleted"))
+    )
     .orderBy(desc(messageAt), desc(messagingMessages.createdAt), desc(messagingMessages.id))
     .limit(1);
   return row ?? null;
@@ -1738,6 +1867,18 @@ function telegramMtprotoPendingCapabilities(): Record<string, boolean> {
   };
 }
 
+function instagramGraphPendingCapabilities(): Record<string, boolean> {
+  return {
+    canSend: false,
+    canReceive: false,
+    canRead: false,
+    supportsHistoryImport: false,
+    supportsMessageEdits: false,
+    supportsMessageDeletes: false,
+    supportsAttachments: false
+  };
+}
+
 function telegramMtprotoActiveCapabilities(): Record<string, boolean> {
   return {
     canSend: true,
@@ -1773,7 +1914,9 @@ async function updateTelegramMtprotoConnectionAfterLoginStep(
       externalOwnerUserId: isActive ? input.telegramUserId : null,
       displayNameSnapshot: isActive ? input.displayName : null,
       usernameSnapshot: isActive ? input.username : null,
-      capabilities: isActive ? telegramMtprotoActiveCapabilities() : telegramMtprotoPendingCapabilities(),
+      capabilities: isActive
+        ? telegramMtprotoActiveCapabilities()
+        : telegramMtprotoPendingCapabilities(),
       connectedAt: isActive ? timestamp : null,
       lastSyncedAt: isActive ? timestamp : null,
       lastErrorCode: null,
@@ -1969,7 +2112,9 @@ function toMessagingMessage(row: MessagingMessageRow): MessagingMessage {
   };
 }
 
-function toMessagingMessageWithRequestHash(row: MessagingMessageRow): MessagingMessageWithRequestHash {
+function toMessagingMessageWithRequestHash(
+  row: MessagingMessageRow
+): MessagingMessageWithRequestHash {
   if (!row.requestHash) throw new Error("Outbound messaging message request hash is missing");
   return { ...toMessagingMessage(row), requestHash: row.requestHash as `sha256:${string}` };
 }

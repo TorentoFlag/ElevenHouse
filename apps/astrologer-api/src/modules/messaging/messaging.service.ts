@@ -1,4 +1,10 @@
-import { HttpException, Inject, Injectable, UnauthorizedException, type MessageEvent } from "@nestjs/common";
+import {
+  HttpException,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+  type MessageEvent
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createAes256GcmSecretCipher } from "@elevenhouse/auth";
 import type { Observable } from "rxjs";
@@ -18,6 +24,7 @@ import {
   recordTelegramMtprotoCodeResult,
   recordTelegramMtprotoPasswordResult,
   requireTelegramMtprotoLoginSession,
+  startInstagramGraphConnection,
   startTelegramBusinessConnection,
   startTelegramMtprotoConnection,
   type MessagingReadStore,
@@ -39,6 +46,7 @@ import {
   MessagingThreadResponseSchema,
   SendMessagingMessageRequestSchema,
   StartTelegramBusinessConnectionResponseSchema,
+  StartInstagramGraphConnectionResponseSchema,
   StartTelegramMtprotoConnectionRequestSchema,
   SubmitTelegramMtprotoCodeRequestSchema,
   SubmitTelegramMtprotoPasswordRequestSchema,
@@ -46,6 +54,7 @@ import {
   type MessagingChannelConnectionResponse,
   type MessagingMessageMediaSourceResponse,
   type MessagingMessageResponse,
+  type StartInstagramGraphConnectionResponse,
   type StartTelegramBusinessConnectionResponse,
   type TelegramMtprotoLoginResponse,
   type MessagingThreadClientLinkResponse,
@@ -78,7 +87,8 @@ export class MessagingService {
     private readonly telegramBusinessConnectionLookup: TelegramBusinessConnectionLookup | null,
     @Inject(TELEGRAM_MTPROTO_AUTH_PROVIDER)
     private readonly telegramMtprotoAuthProvider: TelegramMtprotoAuthProvider | null,
-    @Inject(MEDIA_PRIVATE_OBJECT_STORAGE) private readonly privateObjectStorage: PrivateObjectStoragePort,
+    @Inject(MEDIA_PRIVATE_OBJECT_STORAGE)
+    private readonly privateObjectStorage: PrivateObjectStoragePort,
     private readonly clock: SystemClock,
     private readonly configService: ConfigService
   ) {}
@@ -120,6 +130,46 @@ export class MessagingService {
     });
   }
 
+  async startInstagramGraphConnection(
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<StartInstagramGraphConnectionResponse> {
+    return mapMessagingErrors(async () => {
+      const instagramGraphConfig =
+        this.configService.get<InstagramGraphRuntimeConfig | null>(
+          "astrologerApi.instagramGraph"
+        ) ?? null;
+      if (!instagramGraphConfig) {
+        throw messagingHttpError(
+          503,
+          "instagram_graph_connection_unavailable",
+          "Instagram Graph login is not configured"
+        );
+      }
+
+      const astrologerUserId = requireAstrologerUserId(request);
+      const result = await startInstagramGraphConnection({
+        store: this.store,
+        astrologerUserId,
+        now: this.clock.now()
+      });
+      const connections = await this.readStore.listChannelConnections({ astrologerUserId });
+      const connection = connections.channelConnections.find(
+        (candidate) => candidate.id === result.connectionId
+      );
+      if (!connection) {
+        throw new Error("Started Instagram Graph connection was not available in the read model");
+      }
+
+      return StartInstagramGraphConnectionResponseSchema.parse({
+        channelConnection: connection,
+        authorizationUrl: instagramGraphAuthorizationUrl({
+          config: instagramGraphConfig,
+          state: result.connectionId
+        })
+      });
+    });
+  }
+
   async startTelegramMtprotoConnection(
     body: unknown,
     request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
@@ -153,14 +203,20 @@ export class MessagingService {
         astrologerUserId,
         phoneNumberLast4: phoneLast4(phoneNumber),
         maskedPhoneNumber: maskPhoneNumber(phoneNumber),
-        encryptedPhoneNumber: encryptedMessagingSecret("telegram_mtproto_v1", cipher.encrypt({
-          plaintext: phoneNumber,
-          aad: telegramMtprotoSecretAad(astrologerUserId, "phone_number")
-        })),
-        encryptedPhoneCodeHash: encryptedMessagingSecret("telegram_mtproto_v1", cipher.encrypt({
-          plaintext: codeResult.phoneCodeHash,
-          aad: telegramMtprotoSecretAad(astrologerUserId, "phone_code_hash")
-        })),
+        encryptedPhoneNumber: encryptedMessagingSecret(
+          "telegram_mtproto_v1",
+          cipher.encrypt({
+            plaintext: phoneNumber,
+            aad: telegramMtprotoSecretAad(astrologerUserId, "phone_number")
+          })
+        ),
+        encryptedPhoneCodeHash: encryptedMessagingSecret(
+          "telegram_mtproto_v1",
+          cipher.encrypt({
+            plaintext: codeResult.phoneCodeHash,
+            aad: telegramMtprotoSecretAad(astrologerUserId, "phone_code_hash")
+          })
+        ),
         consentAccepted: command.consentAccepted,
         now: this.clock.now()
       });
@@ -205,17 +261,21 @@ export class MessagingService {
         phoneCodeHash,
         code: command.code
       });
-      const encryptedSession = encryptedMessagingSecret("telegram_mtproto_v1", context.cipher.encrypt({
-        plaintext: providerResult.session,
-        aad: telegramMtprotoSecretAad(context.astrologerUserId, "session")
-      }));
+      const encryptedSession = encryptedMessagingSecret(
+        "telegram_mtproto_v1",
+        context.cipher.encrypt({
+          plaintext: providerResult.session,
+          aad: telegramMtprotoSecretAad(context.astrologerUserId, "session")
+        })
+      );
       const result = await recordTelegramMtprotoCodeResult({
         store: this.store,
         astrologerUserId: context.astrologerUserId,
         connectionId: command.channelConnectionId,
         loginStep: providerResult.loginStep,
         encryptedSession,
-        telegramUserId: providerResult.loginStep === "connected" ? providerResult.telegramUserId : null,
+        telegramUserId:
+          providerResult.loginStep === "connected" ? providerResult.telegramUserId : null,
         username: providerResult.loginStep === "connected" ? providerResult.username : null,
         displayName: providerResult.loginStep === "connected" ? providerResult.displayName : null,
         now: this.clock.now()
@@ -236,7 +296,11 @@ export class MessagingService {
         expectedLoginState: "password_required"
       });
       if (!context.session.encryptedSession) {
-        throw messagingHttpError(409, "telegram_mtproto_login_step_invalid", "Telegram Account login step is invalid");
+        throw messagingHttpError(
+          409,
+          "telegram_mtproto_login_step_invalid",
+          "Telegram Account login step is invalid"
+        );
       }
       const session = context.cipher.decrypt({
         encrypted: context.session.encryptedSession,
@@ -246,10 +310,13 @@ export class MessagingService {
         session,
         password: command.password
       });
-      const encryptedSession = encryptedMessagingSecret("telegram_mtproto_v1", context.cipher.encrypt({
-        plaintext: providerResult.session,
-        aad: telegramMtprotoSecretAad(context.astrologerUserId, "session")
-      }));
+      const encryptedSession = encryptedMessagingSecret(
+        "telegram_mtproto_v1",
+        context.cipher.encrypt({
+          plaintext: providerResult.session,
+          aad: telegramMtprotoSecretAad(context.astrologerUserId, "session")
+        })
+      );
       const result = await recordTelegramMtprotoPasswordResult({
         store: this.store,
         astrologerUserId: context.astrologerUserId,
@@ -287,7 +354,8 @@ export class MessagingService {
       threadId: params.threadId,
       ...parsedQuery
     });
-    if (!result) throw messagingHttpError(404, "messaging_thread_not_found", "Messaging thread was not found");
+    if (!result)
+      throw messagingHttpError(404, "messaging_thread_not_found", "Messaging thread was not found");
     return MessagingThreadResponseSchema.parse(result);
   }
 
@@ -354,7 +422,8 @@ export class MessagingService {
         idempotencyKey: idempotencyKey ?? "",
         now: this.clock.now()
       });
-      if (!thread.clientUserId) throw new Error("Expected created messaging client to be linked to the thread");
+      if (!thread.clientUserId)
+        throw new Error("Expected created messaging client to be linked to the thread");
       return MessagingThreadClientLinkResponseSchema.parse({
         thread: await this.requireThreadReadModel(thread.id, request),
         clientUserId: thread.clientUserId
@@ -513,7 +582,7 @@ export class MessagingService {
       const result = await this.recordTelegramBusinessMessage(update);
       if (
         result.kind === "unmatched" &&
-        await this.hydrateTelegramBusinessConnection(update.businessConnectionId)
+        (await this.hydrateTelegramBusinessConnection(update.businessConnectionId))
       ) {
         await this.recordTelegramBusinessMessage(update);
       }
@@ -556,7 +625,8 @@ export class MessagingService {
       limit: 1,
       offset: 0
     });
-    if (!result) throw messagingHttpError(404, "messaging_thread_not_found", "Messaging thread was not found");
+    if (!result)
+      throw messagingHttpError(404, "messaging_thread_not_found", "Messaging thread was not found");
     return result.thread;
   }
 
@@ -583,9 +653,8 @@ export class MessagingService {
   }
 
   private async hydrateTelegramBusinessConnection(businessConnectionId: string): Promise<boolean> {
-    const snapshot = await this.telegramBusinessConnectionLookup?.findBusinessConnection(
-      businessConnectionId
-    );
+    const snapshot =
+      await this.telegramBusinessConnectionLookup?.findBusinessConnection(businessConnectionId);
     if (!snapshot) return false;
     const result = await recordTelegramBusinessConnection({
       store: this.store,
@@ -598,16 +667,20 @@ export class MessagingService {
   private async reconcileTelegramBusinessConnections(astrologerUserId: string): Promise<void> {
     if (!this.telegramBusinessConnectionLookup) return;
 
-    const { candidates } = await this.readStore.listTelegramBusinessConnectionReconciliationCandidates({
-      astrologerUserId
-    });
-    await Promise.all(candidates.map((candidate) => this.reconcileTelegramBusinessConnection(candidate.businessConnectionId)));
+    const { candidates } =
+      await this.readStore.listTelegramBusinessConnectionReconciliationCandidates({
+        astrologerUserId
+      });
+    await Promise.all(
+      candidates.map((candidate) =>
+        this.reconcileTelegramBusinessConnection(candidate.businessConnectionId)
+      )
+    );
   }
 
   private async reconcileTelegramBusinessConnection(businessConnectionId: string): Promise<void> {
-    const snapshot = await this.telegramBusinessConnectionLookup?.findBusinessConnection(
-      businessConnectionId
-    );
+    const snapshot =
+      await this.telegramBusinessConnectionLookup?.findBusinessConnection(businessConnectionId);
     if (!snapshot) return;
     await recordTelegramBusinessConnection({
       store: this.store,
@@ -683,6 +756,28 @@ function normalizeTelegramBotUsername(value: string | null): string | null {
   return normalized || null;
 }
 
+type InstagramGraphRuntimeConfig = {
+  readonly enabled: true;
+  readonly appId: string;
+  readonly appSecret: string;
+  readonly redirectUri: string;
+  readonly authBaseUrl: string;
+  readonly scopes: readonly string[];
+};
+
+function instagramGraphAuthorizationUrl(input: {
+  readonly config: InstagramGraphRuntimeConfig;
+  readonly state: string;
+}): string {
+  const url = new URL(input.config.authBaseUrl);
+  url.searchParams.set("client_id", input.config.appId);
+  url.searchParams.set("redirect_uri", input.config.redirectUri);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", input.config.scopes.join(","));
+  url.searchParams.set("state", input.state);
+  return url.toString();
+}
+
 function normalizeTelegramPhoneNumber(value: string): string {
   const trimmed = value.trim();
   const digits = trimmed.replace(/\D/g, "");
@@ -737,7 +832,11 @@ async function mapMessagingErrors<T>(operation: () => Promise<T>): Promise<T> {
       throw messagingHttpError(404, error.code, "Messaging thread was not found");
     }
     if (error instanceof MessagingIdempotencyConflictError) {
-      throw messagingHttpError(409, error.code, "Messaging request conflicts with a previous request");
+      throw messagingHttpError(
+        409,
+        error.code,
+        "Messaging request conflicts with a previous request"
+      );
     }
     if (error instanceof MessagingClientRelationshipError) {
       throw messagingHttpError(422, error.code, "Client relationship is not active");

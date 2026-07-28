@@ -7,6 +7,7 @@ import type {
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import type { InboxThreadFilter } from "../../features/messaging/model/inboxThreadFilters";
+import type { TelegramMtprotoWizardStep } from "../../features/messaging/model/telegramMtprotoConnectionWizard";
 import styles from "./InboxPage.module.css";
 import { ChannelConnectionDialog } from "./TelegramBusinessSetupGuide";
 import { MessageMediaBubble } from "./MessageMediaBubble";
@@ -29,6 +30,19 @@ export type InboxPageViewProps = {
   readonly telegramBusinessBotUsername: string | null;
   readonly isStartingTelegramBusinessConnection: boolean;
   readonly telegramBusinessStartError: string | null;
+  readonly isStartingInstagramGraphConnection: boolean;
+  readonly instagramGraphStartError: string | null;
+  readonly telegramMtprotoStep: TelegramMtprotoWizardStep;
+  readonly telegramMtprotoPhoneNumber: string;
+  readonly telegramMtprotoCode: string;
+  readonly telegramMtprotoPassword: string;
+  readonly telegramMtprotoMaskedPhoneNumber: string | null;
+  readonly telegramMtprotoRetryAfterSeconds: number | null;
+  readonly isTelegramMtprotoConsentAccepted: boolean;
+  readonly isStartingTelegramMtprotoConnection: boolean;
+  readonly isSubmittingTelegramMtprotoCode: boolean;
+  readonly isSubmittingTelegramMtprotoPassword: boolean;
+  readonly telegramMtprotoError: string | null;
   readonly draft: string;
   readonly search: string;
   readonly activeThreadFilter: InboxThreadFilter;
@@ -45,6 +59,15 @@ export type InboxPageViewProps = {
   readonly onOpenTelegramBusinessGuide: () => void;
   readonly onCloseTelegramBusinessGuide: () => void;
   readonly onStartTelegramBusinessConnection: () => void;
+  readonly onStartInstagramGraphConnection: () => void;
+  readonly onTelegramMtprotoPhoneNumberChange: (value: string) => void;
+  readonly onTelegramMtprotoConsentAcceptedChange: (value: boolean) => void;
+  readonly onTelegramMtprotoCodeChange: (value: string) => void;
+  readonly onTelegramMtprotoPasswordChange: (value: string) => void;
+  readonly onStartTelegramMtprotoConnection: () => void;
+  readonly onSubmitTelegramMtprotoCode: () => void;
+  readonly onSubmitTelegramMtprotoPassword: () => void;
+  readonly onResetTelegramMtprotoConnection: () => void;
   readonly onSend: () => void;
   readonly onMarkRead: (threadId: string) => void;
   readonly onLinkClientSelect: (client: ClientSelectOption) => void;
@@ -74,6 +97,19 @@ export function InboxPageView({
   telegramBusinessBotUsername,
   isStartingTelegramBusinessConnection,
   telegramBusinessStartError,
+  isStartingInstagramGraphConnection,
+  instagramGraphStartError,
+  telegramMtprotoStep,
+  telegramMtprotoPhoneNumber,
+  telegramMtprotoCode,
+  telegramMtprotoPassword,
+  telegramMtprotoMaskedPhoneNumber,
+  telegramMtprotoRetryAfterSeconds,
+  isTelegramMtprotoConsentAccepted,
+  isStartingTelegramMtprotoConnection,
+  isSubmittingTelegramMtprotoCode,
+  isSubmittingTelegramMtprotoPassword,
+  telegramMtprotoError,
   draft,
   search,
   activeThreadFilter,
@@ -90,6 +126,15 @@ export function InboxPageView({
   onOpenTelegramBusinessGuide,
   onCloseTelegramBusinessGuide,
   onStartTelegramBusinessConnection,
+  onStartInstagramGraphConnection,
+  onTelegramMtprotoPhoneNumberChange,
+  onTelegramMtprotoConsentAcceptedChange,
+  onTelegramMtprotoCodeChange,
+  onTelegramMtprotoPasswordChange,
+  onStartTelegramMtprotoConnection,
+  onSubmitTelegramMtprotoCode,
+  onSubmitTelegramMtprotoPassword,
+  onResetTelegramMtprotoConnection,
   onSend,
   onMarkRead,
   onLinkClientSelect,
@@ -103,15 +148,30 @@ export function InboxPageView({
   const telegramBusiness = channelConnections.find(
     (connection) => connection.mode === "telegram_business_bot"
   );
-  const showTelegramBusinessSetup =
+  const telegramMtproto = channelConnections.find(
+    (connection) => connection.mode === "telegram_mtproto_account"
+  );
+  const instagramGraph = channelConnections.find(
+    (connection) => connection.mode === "instagram_graph"
+  );
+  const selectedChannelConnection = selectedIdentity
+    ? channelConnections.find(
+        (connection) => connection.id === selectedIdentity.channelConnectionId
+      )
+    : null;
+  const showTelegramSetup =
     isConnectionsLoading ||
-    !telegramBusiness ||
-    telegramBusiness.status !== "active" ||
+    !channelConnections.some(
+      (connection) => connection.provider === "telegram" && connection.status === "active"
+    ) ||
     Boolean(telegramBusinessStartError);
   const connectedChannelConnections = channelConnections.filter(
     (connection) => connection.status === "active"
   );
-  const canSend = telegramBusiness?.status === "active" && telegramBusiness.capabilities.canSend;
+  const availableThreadProviders = uniqueProviders(channelConnections);
+  const canSend =
+    selectedChannelConnection?.status === "active" &&
+    selectedChannelConnection.capabilities.canSend;
   const composerDisabled = !selectedThread || !canSend || isSending;
   const totalUnread = threads.reduce((sum, thread) => sum + thread.unreadCount, 0);
   const visibleMessages = selectedThreadResponse
@@ -145,7 +205,7 @@ export function InboxPageView({
 
       <div className={styles.body}>
         <aside className={styles.threadListPanel} aria-label="Диалоги">
-          {showTelegramBusinessSetup && telegramBusinessStartError ? (
+          {showTelegramSetup && telegramBusinessStartError ? (
             <p className={styles.connectionError} role="alert">
               {telegramBusinessStartError}
             </p>
@@ -171,19 +231,17 @@ export function InboxPageView({
             >
               Все
             </button>
-            {channelConnections.map((connection) => (
+            {availableThreadProviders.map((provider) => (
               <button
-                key={connection.id}
+                key={provider}
                 className={
-                  activeThreadFilter === connection.provider
-                    ? styles.filterChipActive
-                    : styles.filterChip
+                  activeThreadFilter === provider ? styles.filterChipActive : styles.filterChip
                 }
                 type="button"
-                aria-pressed={activeThreadFilter === connection.provider}
-                onClick={() => onThreadFilterChange(connection.provider)}
+                aria-pressed={activeThreadFilter === provider}
+                onClick={() => onThreadFilterChange(provider)}
               >
-                <ProviderPill provider={connection.provider} /> {providerLabel(connection.provider)}
+                <ProviderPill provider={provider} /> {providerLabel(provider)}
               </button>
             ))}
             <button
@@ -206,7 +264,7 @@ export function InboxPageView({
               </p>
             )}
             {!isThreadsLoading && !isThreadsError && threads.length === 0 && (
-              <p className={styles.stateText}>Пока нет диалогов. Подключите Telegram Business.</p>
+              <p className={styles.stateText}>Пока нет диалогов. Подключите Telegram.</p>
             )}
             {threads.map((thread) => (
               <button
@@ -423,10 +481,34 @@ export function InboxPageView({
       {isTelegramBusinessGuideOpen ? (
         <ChannelConnectionDialog
           connection={telegramBusiness}
+          mtprotoConnection={telegramMtproto}
+          instagramConnection={instagramGraph}
           isStarting={isStartingTelegramBusinessConnection}
           errorMessage={telegramBusinessStartError}
+          isStartingInstagramGraph={isStartingInstagramGraphConnection}
+          instagramGraphErrorMessage={instagramGraphStartError}
           telegramBotUsername={telegramBusinessBotUsername}
+          mtprotoStep={telegramMtprotoStep}
+          mtprotoPhoneNumber={telegramMtprotoPhoneNumber}
+          mtprotoCode={telegramMtprotoCode}
+          mtprotoPassword={telegramMtprotoPassword}
+          mtprotoMaskedPhoneNumber={telegramMtprotoMaskedPhoneNumber}
+          mtprotoRetryAfterSeconds={telegramMtprotoRetryAfterSeconds}
+          isMtprotoConsentAccepted={isTelegramMtprotoConsentAccepted}
+          isStartingMtproto={isStartingTelegramMtprotoConnection}
+          isSubmittingMtprotoCode={isSubmittingTelegramMtprotoCode}
+          isSubmittingMtprotoPassword={isSubmittingTelegramMtprotoPassword}
+          mtprotoErrorMessage={telegramMtprotoError}
           onStartConnection={onStartTelegramBusinessConnection}
+          onStartInstagramGraphConnection={onStartInstagramGraphConnection}
+          onMtprotoPhoneNumberChange={onTelegramMtprotoPhoneNumberChange}
+          onMtprotoConsentAcceptedChange={onTelegramMtprotoConsentAcceptedChange}
+          onMtprotoCodeChange={onTelegramMtprotoCodeChange}
+          onMtprotoPasswordChange={onTelegramMtprotoPasswordChange}
+          onStartMtprotoConnection={onStartTelegramMtprotoConnection}
+          onSubmitMtprotoCode={onSubmitTelegramMtprotoCode}
+          onSubmitMtprotoPassword={onSubmitTelegramMtprotoPassword}
+          onResetMtprotoConnection={onResetTelegramMtprotoConnection}
           onClose={onCloseTelegramBusinessGuide}
         />
       ) : null}
@@ -446,7 +528,9 @@ function compareMessagesByCreatedAt(left: MessagingMessage, right: MessagingMess
 function ChannelBadge({ connection }: { readonly connection: MessagingChannelConnection }) {
   return (
     <span
-      className={connection.provider === "telegram" ? styles.providerTelegram : styles.providerInstagram}
+      className={
+        connection.provider === "telegram" ? styles.providerTelegram : styles.providerInstagram
+      }
       title={connection.displayName ?? connection.mode}
       aria-label={`Подключен ${providerLabel(connection.provider)}: ${channelDisplayName(connection)}`}
     >
@@ -465,6 +549,16 @@ function ProviderPill({ provider }: { readonly provider: "telegram" | "instagram
 
 function providerLabel(provider: "telegram" | "instagram") {
   return provider === "telegram" ? "Telegram" : "Instagram";
+}
+
+function uniqueProviders(channelConnections: MessagingChannelConnection[]) {
+  const providers: Array<MessagingChannelConnection["provider"]> = [];
+  for (const connection of channelConnections) {
+    if (!providers.includes(connection.provider)) {
+      providers.push(connection.provider);
+    }
+  }
+  return providers;
 }
 
 function channelDisplayName(connection: MessagingChannelConnection) {
