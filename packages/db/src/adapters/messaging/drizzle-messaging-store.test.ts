@@ -1,13 +1,17 @@
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
-import type { CreateOutboundMessageStoreInput, StartTelegramMtprotoConnectionStoreInput } from "@elevenhouse/domain";
+import type {
+  CreateOutboundMessageStoreInput,
+  StartTelegramMtprotoConnectionStoreInput
+} from "@elevenhouse/domain";
 import {
   clientAstrologerRelationships,
   clientProfiles,
   idempotencyCommands,
   messagingChannelConnections,
   messagingExternalIdentities,
+  messagingInstagramGraphAccounts,
   messagingMessages,
   messagingRealtimeEvents,
   messagingTelegramMtprotoSessions,
@@ -152,7 +156,9 @@ describe("createDrizzleMessagingStore", () => {
       text: "Other chat body"
     });
     const fake = createDuplicateInboundDatabase([existing, otherChatMessage]);
-    const result = await createDrizzleMessagingStore(fake.database as never).recordInboundProviderMessage({
+    const result = await createDrizzleMessagingStore(
+      fake.database as never
+    ).recordInboundProviderMessage({
       messageId,
       astrologerUserId,
       threadId,
@@ -172,7 +178,10 @@ describe("createDrizzleMessagingStore", () => {
       }
     });
 
-    expect(result).toMatchObject({ kind: "duplicate", message: { id: messageId, text: "Test outbound body" } });
+    expect(result).toMatchObject({
+      kind: "duplicate",
+      message: { id: messageId, text: "Test outbound body" }
+    });
     expect(fake.insertCount).toBe(1);
     const duplicateLookup = fake.wheres
       .map(renderWhere)
@@ -182,14 +191,17 @@ describe("createDrizzleMessagingStore", () => {
   });
 
   it("normalizes inbound realtime references from the persisted message and thread", async () => {
-    const fake = createFakeDatabase([
-      messageRow({
-        direction: "inbound",
-        status: "received",
-        externalIdentityId,
-        providerMessageId: "provider-message-1"
-      })
-    ], [realtimeEventRow({ type: "message.received", messageId })]);
+    const fake = createFakeDatabase(
+      [
+        messageRow({
+          direction: "inbound",
+          status: "received",
+          externalIdentityId,
+          providerMessageId: "provider-message-1"
+        })
+      ],
+      [realtimeEventRow({ type: "message.received", messageId })]
+    );
 
     await createDrizzleMessagingStore(fake.database as never).recordInboundProviderMessage({
       messageId,
@@ -277,9 +289,11 @@ describe("createDrizzleMessagingStore", () => {
     const fake = createFakeDatabase([]);
     const store = createDrizzleMessagingStore(fake.database as never);
 
-    await (store as unknown as {
-      linkThreadToClient: (input: Record<string, unknown>) => Promise<unknown>;
-    }).linkThreadToClient({
+    await (
+      store as unknown as {
+        linkThreadToClient: (input: Record<string, unknown>) => Promise<unknown>;
+      }
+    ).linkThreadToClient({
       astrologerUserId,
       threadId,
       clientUserId: "00000000-0000-4000-8000-000000000010",
@@ -301,8 +315,17 @@ describe("createDrizzleMessagingStore", () => {
     );
     expect(fake.updates).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ table: messagingThreads, value: expect.objectContaining({ clientUserId: "00000000-0000-4000-8000-000000000010" }) }),
-        expect.objectContaining({ table: messagingExternalIdentities, value: { linkedClientUserId: "00000000-0000-4000-8000-000000000010", linkStatus: "linked" } })
+        expect.objectContaining({
+          table: messagingThreads,
+          value: expect.objectContaining({ clientUserId: "00000000-0000-4000-8000-000000000010" })
+        }),
+        expect.objectContaining({
+          table: messagingExternalIdentities,
+          value: {
+            linkedClientUserId: "00000000-0000-4000-8000-000000000010",
+            linkStatus: "linked"
+          }
+        })
       ])
     );
   });
@@ -311,9 +334,11 @@ describe("createDrizzleMessagingStore", () => {
     const fake = createFakeDatabase([]);
     const store = createDrizzleMessagingStore(fake.database as never);
 
-    await (store as unknown as {
-      createClientFromThread: (input: Record<string, unknown>) => Promise<unknown>;
-    }).createClientFromThread({
+    await (
+      store as unknown as {
+        createClientFromThread: (input: Record<string, unknown>) => Promise<unknown>;
+      }
+    ).createClientFromThread({
       astrologerUserId,
       threadId,
       displayName: "Telegram contact",
@@ -336,7 +361,10 @@ describe("createDrizzleMessagingStore", () => {
     expect(fake.updates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ table: messagingThreads }),
-        expect.objectContaining({ table: messagingExternalIdentities, value: expect.objectContaining({ linkStatus: "linked" }) })
+        expect.objectContaining({
+          table: messagingExternalIdentities,
+          value: expect.objectContaining({ linkStatus: "linked" })
+        })
       ])
     );
   });
@@ -355,7 +383,10 @@ describe("createDrizzleMessagingStore", () => {
         now: now.toISOString(),
         expiresAt: "2026-07-23T10:00:00.000Z"
       })
-    ).resolves.toMatchObject({ id: threadId, clientUserId: "00000000-0000-4000-8000-000000000010" });
+    ).resolves.toMatchObject({
+      id: threadId,
+      clientUserId: "00000000-0000-4000-8000-000000000010"
+    });
     expect(fake.userInsertCount).toBe(0);
     expect(fake.threadUpdateCount).toBe(0);
   });
@@ -517,11 +548,11 @@ describe("createDrizzleMessagingStore", () => {
       providerChatId: "777",
       providerUserId: "555",
       username: "marina",
-        displayName: "Marina",
-        chatUsername: "marina",
-        chatDisplayName: "Marina",
-        contentType: "text",
-        text: "Например на 12",
+      displayName: "Marina",
+      chatUsername: "marina",
+      chatDisplayName: "Marina",
+      contentType: "text",
+      text: "Например на 12",
       providerSentAt: now.toISOString(),
       now: now.toISOString()
     });
@@ -835,6 +866,70 @@ describe("createDrizzleMessagingStore", () => {
     );
   });
 
+  it("activates an Instagram Graph connection with encrypted credential persistence", async () => {
+    const fake = createCompleteInstagramGraphConnectionDatabase();
+
+    await expect(
+      createDrizzleMessagingStore(fake.database as never).completeInstagramGraphConnection({
+        astrologerUserId,
+        connectionId: channelConnectionId,
+        pageId: "page_123",
+        pageName: "Alisa Astrology",
+        instagramUserId: "ig_456",
+        instagramUsername: "alisa.astro",
+        instagramDisplayName: "Alisa Astro",
+        encryptedUserAccessToken: encryptedSecretSnapshot("user-token-ciphertext"),
+        encryptedPageAccessToken: encryptedSecretSnapshot("page-token-ciphertext"),
+        tokenExpiresAt: "2026-09-22T10:00:00.000Z",
+        now: now.toISOString()
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    expect(fake.transactionCount).toBe(1);
+    expect(fake.inserts).toEqual([
+      {
+        table: messagingInstagramGraphAccounts,
+        value: expect.objectContaining({
+          channelConnectionId,
+          pageId: "page_123",
+          instagramUserId: "ig_456",
+          instagramUsername: "alisa.astro",
+          userAccessTokenEncrypted: encryptedSecretSnapshot("user-token-ciphertext"),
+          pageAccessTokenEncrypted: encryptedSecretSnapshot("page-token-ciphertext"),
+          tokenExpiresAt: new Date("2026-09-22T10:00:00.000Z")
+        })
+      },
+      {
+        table: messagingRealtimeEvents,
+        value: expect.objectContaining({
+          astrologerUserId,
+          type: "channelConnection.updated",
+          channelConnectionId,
+          threadId: null,
+          messageId: null,
+          externalIdentityId: null
+        })
+      }
+    ]);
+    expect(fake.updates).toEqual([
+      {
+        table: messagingChannelConnections,
+        value: expect.objectContaining({
+          status: "active",
+          externalAccountId: "ig_456",
+          externalOwnerUserId: "page_123",
+          displayNameSnapshot: "Alisa Astro",
+          usernameSnapshot: "alisa.astro",
+          connectedAt: now,
+          lastSyncedAt: now
+        })
+      }
+    ]);
+    expect(fake.inserts.map((insert) => JSON.stringify(insert.value)).join("\n")).not.toContain(
+      "plain-user-token"
+    );
+  });
+
   it("reads and advances Telegram Account login state with encrypted-only session snapshots", async () => {
     const fake = createTelegramMtprotoLoginStateDatabase();
     const store = createDrizzleMessagingStore(fake.database as never);
@@ -980,7 +1075,9 @@ describe("createDrizzleMessagingStore", () => {
         providerSentAt: now.toISOString(),
         now: now.toISOString()
       })
-    ).rejects.toThrow("Telegram business connection is not uniquely bound to one channel connection");
+    ).rejects.toThrow(
+      "Telegram business connection is not uniquely bound to one channel connection"
+    );
   });
 });
 
@@ -1112,7 +1209,7 @@ function createFakeDatabase(
             ? [externalIdentityProjection()]
             : selection && "externalOwnerUserId" in selection
               ? [{ id: channelConnectionId, astrologerUserId, externalOwnerUserId: "987654321" }]
-            : [{}]
+              : [{}]
       ),
     transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => {
       transactionCount += 1;
@@ -1120,14 +1217,26 @@ function createFakeDatabase(
     }
   };
 
-  return { database, inserts, updates, get transactionCount() { return transactionCount; } };
+  return {
+    database,
+    inserts,
+    updates,
+    get transactionCount() {
+      return transactionCount;
+    }
+  };
 }
 
 function createDuplicateOutboundDatabase(existingMessage: Record<string, unknown>) {
   let insertCount = 0;
   let outboxInsertCount = 0;
   const database: {
-    insert: (table: unknown) => { values: () => { returning: () => Promise<never>; then: (resolve: (value: undefined) => unknown) => unknown } };
+    insert: (table: unknown) => {
+      values: () => {
+        returning: () => Promise<never>;
+        then: (resolve: (value: undefined) => unknown) => unknown;
+      };
+    };
     transaction: <T>(callback: (transaction: unknown) => Promise<T>) => Promise<T>;
     select: (selection?: Record<string, unknown>) => ReturnType<typeof selectChain>;
   } = {
@@ -1172,7 +1281,9 @@ function createDuplicateInboundDatabase(existingMessages: readonly Record<string
   let duplicateInput: Record<string, unknown> | null = null;
   const wheres: SQL[] = [];
   const database: {
-    insert: () => { values: (value: Record<string, unknown>) => { returning: () => Promise<never> } };
+    insert: () => {
+      values: (value: Record<string, unknown>) => { returning: () => Promise<never> };
+    };
     transaction: <T>(callback: (transaction: unknown) => Promise<T>) => Promise<T>;
     select: (selection?: Record<string, unknown>) => ReturnType<typeof selectChain>;
   } = {
@@ -1198,14 +1309,19 @@ function createDuplicateInboundDatabase(existingMessages: readonly Record<string
                   message.externalIdentityId === duplicateInput?.externalIdentityId &&
                   message.providerMessageId === duplicateInput?.providerMessageId &&
                   message.direction === "inbound"
-              )
-            ,
+              ),
         (where) => {
           wheres.push(where);
         }
       )
   };
-  return { database, get insertCount() { return insertCount; }, wheres };
+  return {
+    database,
+    get insertCount() {
+      return insertCount;
+    },
+    wheres
+  };
 }
 
 function createDuplicateThreadClientCommandDatabase(requestHash: string) {
@@ -1213,7 +1329,14 @@ function createDuplicateThreadClientCommandDatabase(requestHash: string) {
   let threadUpdateCount = 0;
   const database: {
     insert: (table: unknown) => { values: () => { returning: () => Promise<never> } };
-    update: (table: unknown) => { set: () => { where: () => { returning: () => Promise<readonly Record<string, unknown>[]>; then: (resolve: (value: undefined) => unknown) => unknown } } };
+    update: (table: unknown) => {
+      set: () => {
+        where: () => {
+          returning: () => Promise<readonly Record<string, unknown>[]>;
+          then: (resolve: (value: undefined) => unknown) => unknown;
+        };
+      };
+    };
     select: (selection?: Record<string, unknown>) => ReturnType<typeof selectChain>;
     transaction: <T>(callback: (transaction: unknown) => Promise<T>) => Promise<T>;
   } = {
@@ -1244,7 +1367,13 @@ function createDuplicateThreadClientCommandDatabase(requestHash: string) {
         selection && "thread" in selection
           ? [threadProjection()]
           : selection && "requestHash" in selection
-            ? [{ requestHash, state: "completed", result: { threadId, clientUserId: "00000000-0000-4000-8000-000000000010" } }]
+            ? [
+                {
+                  requestHash,
+                  state: "completed",
+                  result: { threadId, clientUserId: "00000000-0000-4000-8000-000000000010" }
+                }
+              ]
             : [{}]
       ),
     transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => callback(database)
@@ -1260,7 +1389,9 @@ function createDuplicateThreadClientCommandDatabase(requestHash: string) {
   };
 }
 
-function createTelegramBusinessMessageDatabase(input: { readonly externalOwnerUserId: string | null }) {
+function createTelegramBusinessMessageDatabase(input: {
+  readonly externalOwnerUserId: string | null;
+}) {
   const externalIdentityUpserts: Record<string, unknown>[] = [];
   const messageInserts: Record<string, unknown>[] = [];
   const threadUpdates: Record<string, unknown>[] = [];
@@ -1342,7 +1473,13 @@ function createTelegramBusinessMessageDatabase(input: { readonly externalOwnerUs
     }),
     select: (selection) => {
       if (selection && "externalOwnerUserId" in selection) {
-        return selectChain([{ id: channelConnectionId, astrologerUserId, externalOwnerUserId: input.externalOwnerUserId }]);
+        return selectChain([
+          {
+            id: channelConnectionId,
+            astrologerUserId,
+            externalOwnerUserId: input.externalOwnerUserId
+          }
+        ]);
       }
       if (selection && "thread" in selection) {
         return selectChain([threadProjection()]);
@@ -1441,7 +1578,9 @@ function createTelegramMtprotoMessageDatabase() {
           returning: async () => {
             if (table === messagingThreads) threadUpdates.push(value);
             if (table === messagingTelegramMtprotoSessions) sessionUpdates.push(value);
-            return [{ id: table === messagingTelegramMtprotoSessions ? channelConnectionId : threadId }];
+            return [
+              { id: table === messagingTelegramMtprotoSessions ? channelConnectionId : threadId }
+            ];
           }
         })
       })
@@ -1480,7 +1619,8 @@ function createPendingTelegramBusinessConnectionDatabase() {
       values: (value: Record<string, unknown>) => {
         if (table === messagingRealtimeEvents) realtimeEventInserts.push(value);
         return {
-          returning: async () => table === messagingRealtimeEvents ? [realtimeEventRow(value)] : []
+          returning: async () =>
+            table === messagingRealtimeEvents ? [realtimeEventRow(value)] : []
         };
       }
     }),
@@ -1493,9 +1633,7 @@ function createPendingTelegramBusinessConnectionDatabase() {
       })
     }),
     select: () => {
-      const rows = selectCount === 0
-        ? []
-        : [{ id: channelConnectionId, astrologerUserId }];
+      const rows = selectCount === 0 ? [] : [{ id: channelConnectionId, astrologerUserId }];
       selectCount += 1;
       return selectChain(rows);
     },
@@ -1592,6 +1730,57 @@ function createStartTelegramMtprotoConnectionDatabase() {
   };
 }
 
+function createCompleteInstagramGraphConnectionDatabase() {
+  const inserts: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  let transactionCount = 0;
+  const database = {
+    insert: (table: unknown) => ({
+      values: (value: Record<string, unknown>) => ({
+        onConflictDoUpdate: () => {
+          inserts.push({ table, value });
+          return Promise.resolve(undefined);
+        },
+        returning: async () => {
+          inserts.push({ table, value });
+          return [{ id: "00000000-0000-4000-8000-000000000032" }];
+        },
+        then: (resolve: (value: undefined) => unknown) => {
+          inserts.push({ table, value });
+          return resolve(undefined);
+        }
+      })
+    }),
+    update: (table: unknown) => ({
+      set: (value: Record<string, unknown>) => ({
+        where: () => {
+          updates.push({ table, value });
+          return { returning: async () => [{ id: channelConnectionId }] };
+        }
+      })
+    }),
+    select: () =>
+      selectChain([
+        {
+          id: channelConnectionId,
+          astrologerUserId
+        }
+      ]),
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => {
+      transactionCount += 1;
+      return callback(database);
+    }
+  };
+  return {
+    database,
+    inserts,
+    updates,
+    get transactionCount() {
+      return transactionCount;
+    }
+  };
+}
+
 function createTelegramMtprotoLoginStateDatabase() {
   const channelConnectionId = "00000000-0000-4000-8000-000000000031";
   const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
@@ -1613,23 +1802,24 @@ function createTelegramMtprotoLoginStateDatabase() {
       })
     }),
     select: () => {
-      const rows = selectCount === 0
-        ? [
-            {
-              connectionId: channelConnectionId,
-              loginState: "code_required",
-              phoneNumberLast4: "3535",
-              phoneNumberEncrypted: encryptedSecretSnapshot("phone"),
-              phoneCodeHashEncrypted: encryptedSecretSnapshot("phone-code-hash"),
-              sessionEncrypted: null
-            }
-          ]
-        : [
-            {
-              connectionId: channelConnectionId,
-              phoneNumberLast4: "3535"
-            }
-          ];
+      const rows =
+        selectCount === 0
+          ? [
+              {
+                connectionId: channelConnectionId,
+                loginState: "code_required",
+                phoneNumberLast4: "3535",
+                phoneNumberEncrypted: encryptedSecretSnapshot("phone"),
+                phoneCodeHashEncrypted: encryptedSecretSnapshot("phone-code-hash"),
+                sessionEncrypted: null
+              }
+            ]
+          : [
+              {
+                connectionId: channelConnectionId,
+                phoneNumberLast4: "3535"
+              }
+            ];
       selectCount += 1;
       return selectChain(rows);
     },

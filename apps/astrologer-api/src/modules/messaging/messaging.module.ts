@@ -13,13 +13,19 @@ import { SecurityModule } from "../security/security.module";
 import { MessagingController } from "./messaging.controller";
 import { MessagingEventsController } from "./messaging-events.controller";
 import { MessagingWebhooksController } from "./messaging-webhooks.controller";
+import { InstagramGraphOAuthController } from "./instagram-graph-oauth.controller";
 import { MessagingService } from "./messaging.service";
 import {
   MESSAGING_READ_STORE,
   MESSAGING_STORE,
+  INSTAGRAM_GRAPH_AUTH_PROVIDER,
   TELEGRAM_BUSINESS_CONNECTION_LOOKUP,
   TELEGRAM_MTPROTO_AUTH_PROVIDER
 } from "./messaging.tokens";
+import {
+  HttpInstagramGraphAuthProvider,
+  type InstagramGraphAuthProviderOptions
+} from "./instagram-graph-auth-provider";
 import {
   TelegramBusinessBotApiConnectionLookup,
   type TelegramBusinessConnectionLookupOptions
@@ -31,17 +37,24 @@ import {
 
 @Module({
   imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, MediaModule, SecurityModule],
-  controllers: [MessagingController, MessagingEventsController, MessagingWebhooksController],
+  controllers: [
+    MessagingController,
+    MessagingEventsController,
+    MessagingWebhooksController,
+    InstagramGraphOAuthController
+  ],
   providers: [
     MessagingService,
     {
       provide: MESSAGING_STORE,
-      useFactory: (runtime: PostgresRuntimeService) => createDrizzleMessagingStore(runtime.database),
+      useFactory: (runtime: PostgresRuntimeService) =>
+        createDrizzleMessagingStore(runtime.database),
       inject: [PostgresRuntimeService]
     },
     {
       provide: MESSAGING_READ_STORE,
-      useFactory: (runtime: PostgresRuntimeService) => createDrizzleMessagingReadStore(runtime.database),
+      useFactory: (runtime: PostgresRuntimeService) =>
+        createDrizzleMessagingReadStore(runtime.database),
       inject: [PostgresRuntimeService]
     },
     {
@@ -61,6 +74,16 @@ import {
           "astrologerApi.telegramMtproto"
         );
         return options ? new TeleprotoTelegramMtprotoAuthProvider(options) : null;
+      },
+      inject: [ConfigService]
+    },
+    {
+      provide: INSTAGRAM_GRAPH_AUTH_PROVIDER,
+      useFactory: (configService: ConfigService) => {
+        const options = configService.get<InstagramGraphAuthProviderOptions | null>(
+          "astrologerApi.instagramGraph"
+        );
+        return options ? new HttpInstagramGraphAuthProvider(options) : null;
       },
       inject: [ConfigService]
     }

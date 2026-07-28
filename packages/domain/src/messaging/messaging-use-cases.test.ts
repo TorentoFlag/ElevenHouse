@@ -17,6 +17,7 @@ import type {
   LinkThreadToClientStoreInput,
   MarkThreadReadStoreInput,
   MarkThreadReadStoreResult,
+  CompleteInstagramGraphConnectionStoreInput,
   MessagingStore,
   RecordTelegramMtprotoCodeResultStoreInput,
   RecordTelegramMtprotoPasswordResultStoreInput,
@@ -51,6 +52,7 @@ import {
   recordTelegramMtprotoCodeResult,
   recordTelegramMtprotoPasswordResult,
   requireTelegramMtprotoLoginSession,
+  completeInstagramGraphConnection,
   startInstagramGraphConnection,
   startTelegramBusinessConnection,
   startTelegramMtprotoConnection
@@ -459,6 +461,50 @@ describe("Messaging use cases", () => {
       {
         connectionId: "second-1",
         astrologerUserId,
+        now: now.toISOString()
+      }
+    ]);
+  });
+
+  it("completes Instagram Graph connection with encrypted token snapshots", async () => {
+    const store = new InMemoryMessagingStore();
+    const encryptedToken = encryptedSecretFixture("token-ciphertext");
+    await startInstagramGraphConnection({
+      store,
+      astrologerUserId,
+      idGenerator: createIdGenerator("instagram"),
+      now
+    });
+
+    await expect(
+      completeInstagramGraphConnection({
+        store,
+        astrologerUserId,
+        connectionId: "instagram-1",
+        pageId: " page-123 ",
+        pageName: " Alisa Astrology ",
+        instagramUserId: " ig-456 ",
+        instagramUsername: " alisa.astro ",
+        instagramDisplayName: " Alisa Astro ",
+        encryptedUserAccessToken: encryptedToken,
+        encryptedPageAccessToken: encryptedSecretFixture("page-token-ciphertext"),
+        tokenExpiresAt: "2026-09-22T10:00:00.000Z",
+        now
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    expect(store.completeInstagramGraphCommands).toEqual([
+      {
+        astrologerUserId,
+        connectionId: "instagram-1",
+        pageId: "page-123",
+        pageName: "Alisa Astrology",
+        instagramUserId: "ig-456",
+        instagramUsername: "alisa.astro",
+        instagramDisplayName: "Alisa Astro",
+        encryptedUserAccessToken: encryptedToken,
+        encryptedPageAccessToken: encryptedSecretFixture("page-token-ciphertext"),
+        tokenExpiresAt: "2026-09-22T10:00:00.000Z",
         now: now.toISOString()
       }
     ]);
@@ -997,6 +1043,7 @@ class InMemoryMessagingStore implements MessagingStore {
   }> = [];
   readonly startTelegramBusinessCommands: StartTelegramBusinessConnectionStoreInput[] = [];
   readonly startInstagramGraphCommands: StartInstagramGraphConnectionStoreInput[] = [];
+  readonly completeInstagramGraphCommands: CompleteInstagramGraphConnectionStoreInput[] = [];
   readonly startTelegramMtprotoCommands: StartTelegramMtprotoConnectionStoreInput[] = [];
   readonly telegramMtprotoCodeCommands: RecordTelegramMtprotoCodeResultStoreInput[] = [];
   readonly telegramMtprotoPasswordCommands: RecordTelegramMtprotoPasswordResultStoreInput[] = [];
@@ -1181,6 +1228,15 @@ class InMemoryMessagingStore implements MessagingStore {
     this.startInstagramGraphCommands.push(input);
     this.#instagramGraphConnectionId ??= input.connectionId;
     return { connectionId: this.#instagramGraphConnectionId };
+  }
+
+  async completeInstagramGraphConnection(
+    input: CompleteInstagramGraphConnectionStoreInput
+  ): Promise<{ readonly kind: "recorded" | "unmatched" }> {
+    this.completeInstagramGraphCommands.push(input);
+    return {
+      kind: this.#instagramGraphConnectionId === input.connectionId ? "recorded" : "unmatched"
+    };
   }
 
   async startTelegramMtprotoConnection(input: StartTelegramMtprotoConnectionStoreInput): Promise<{

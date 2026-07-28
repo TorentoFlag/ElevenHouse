@@ -90,7 +90,11 @@ describe("MessagingService", () => {
         appId: "instagram-app-id",
         appSecret: "instagram-app-secret",
         redirectUri: "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback",
+        tokenEncryptionKey: Buffer.alloc(32, 14),
+        callbackStateTtlSeconds: 900,
         authBaseUrl: "https://www.facebook.com/v25.0/dialog/oauth",
+        graphApiBaseUrl: "https://graph.facebook.com/v25.0",
+        astrologerWebBaseUrl: "https://app.elevenhouse.test",
         scopes: ["instagram_manage_messages", "pages_manage_metadata", "pages_show_list"]
       }
     });
@@ -120,8 +124,88 @@ describe("MessagingService", () => {
     expect(authorizationUrl.searchParams.get("scope")).toBe(
       "instagram_manage_messages,pages_manage_metadata,pages_show_list"
     );
-    expect(authorizationUrl.searchParams.get("state")).toBe(connectionId);
+    expect(authorizationUrl.searchParams.get("state")).not.toBe(connectionId);
+    expect(authorizationUrl.searchParams.get("state")).toMatch(/^v1\./);
     expect(JSON.stringify(response)).not.toMatch(/app-secret|accessToken|pageAccessToken/i);
+  });
+
+  it("exchanges an Instagram Graph callback and stores only encrypted tokens", async () => {
+    const store = createStore();
+    const instagramGraphAuthProvider = {
+      exchangeCode: vi.fn(async () => ({
+        accessToken: "plain-user-token",
+        tokenType: "bearer",
+        expiresInSeconds: 3600
+      })),
+      resolveConnectedAccount: vi.fn(async () => ({
+        pageId: "page_123",
+        pageName: "Alisa Astrology",
+        pageAccessToken: "plain-page-token",
+        instagramUserId: "ig_456",
+        instagramUsername: "alisa.astro",
+        instagramDisplayName: "Alisa Astro"
+      }))
+    };
+    const service = createService({
+      store,
+      instagramGraph: instagramGraphConfig(),
+      instagramGraphAuthProvider
+    });
+    const start = await service.startInstagramGraphConnection(request());
+    const state = new URL(start.authorizationUrl).searchParams.get("state");
+
+    await expect(
+      service.completeInstagramGraphConnectionCallback({ code: "meta-code", state })
+    ).resolves.toEqual({
+      redirectUrl: "https://app.elevenhouse.test/inbox?channel=instagram&status=connected"
+    });
+
+    expect(instagramGraphAuthProvider.exchangeCode).toHaveBeenCalledWith({
+      code: "meta-code",
+      redirectUri:
+        "https://api.elevenhouse.test/messaging/channel-connections/instagram/graph/callback"
+    });
+    expect(instagramGraphAuthProvider.resolveConnectedAccount).toHaveBeenCalledWith({
+      userAccessToken: "plain-user-token"
+    });
+    expect(store.completeInstagramGraphConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        astrologerUserId,
+        connectionId,
+        pageId: "page_123",
+        instagramUserId: "ig_456",
+        instagramUsername: "alisa.astro",
+        instagramDisplayName: "Alisa Astro",
+        encryptedUserAccessToken: expect.objectContaining({ algorithm: "aes-256-gcm" }),
+        encryptedPageAccessToken: expect.objectContaining({ algorithm: "aes-256-gcm" }),
+        tokenExpiresAt: "2026-07-22T11:00:00.000Z",
+        now: now.toISOString()
+      })
+    );
+    expect(
+      JSON.stringify(
+        (store.completeInstagramGraphConnection as ReturnType<typeof vi.fn>).mock.calls
+      )
+    ).not.toMatch(/plain-user-token|plain-page-token|meta-code/);
+  });
+
+  it("rejects tampered Instagram Graph callback state before calling Meta", async () => {
+    const instagramGraphAuthProvider = {
+      exchangeCode: vi.fn(),
+      resolveConnectedAccount: vi.fn()
+    };
+    const service = createService({
+      instagramGraph: instagramGraphConfig(),
+      instagramGraphAuthProvider
+    });
+
+    await expect(
+      service.completeInstagramGraphConnectionCallback({ code: "meta-code", state: "v1.bad.bad" })
+    ).resolves.toEqual({
+      redirectUrl:
+        "https://app.elevenhouse.test/inbox?channel=instagram&status=error&code=instagram_graph_state_invalid"
+    });
+    expect(instagramGraphAuthProvider.exchangeCode).not.toHaveBeenCalled();
   });
 
   it("returns a typed unavailable error when Instagram Graph login is not configured", async () => {
@@ -746,11 +830,16 @@ function createService(
       readonly appId: string;
       readonly appSecret: string;
       readonly redirectUri: string;
+      readonly tokenEncryptionKey: Buffer;
+      readonly callbackStateTtlSeconds: number;
       readonly authBaseUrl: string;
+      readonly graphApiBaseUrl: string;
+      readonly astrologerWebBaseUrl: string;
       readonly scopes: readonly string[];
     } | null;
     connectionLookup?: ConstructorParameters<typeof MessagingService>[2];
     mtprotoAuthProvider?: ConstructorParameters<typeof MessagingService>[3];
+    instagramGraphAuthProvider?: ConstructorParameters<typeof MessagingService>[4];
   } = {}
 ) {
   return new MessagingService(
@@ -776,6 +865,9 @@ function createService(
             displayName: "Alisa"
           }))
         },
+    Object.hasOwn(overrides, "instagramGraphAuthProvider")
+      ? (overrides.instagramGraphAuthProvider ?? null)
+      : null,
     {
       createPresignedDownload: vi.fn(async () => ({
         url: "https://storage.example/voice.ogg",
@@ -803,6 +895,22 @@ function createService(
   );
 }
 
+function instagramGraphConfig() {
+  return {
+    enabled: true as const,
+    appId: "instagram-app-id",
+    appSecret: "instagram-app-secret",
+    redirectUri:
+      "https://api.elevenhouse.test/messaging/channel-connections/instagram/graph/callback",
+    tokenEncryptionKey: Buffer.alloc(32, 14),
+    callbackStateTtlSeconds: 900,
+    authBaseUrl: "https://www.facebook.com/v25.0/dialog/oauth",
+    graphApiBaseUrl: "https://graph.facebook.com/v25.0",
+    astrologerWebBaseUrl: "https://app.elevenhouse.test",
+    scopes: ["instagram_manage_messages", "pages_manage_metadata", "pages_show_list"]
+  };
+}
+
 function createStore(
   options: { readonly mtprotoLoginState?: "code_required" | "password_required" } = {}
 ): MessagingStore {
@@ -822,6 +930,7 @@ function createStore(
     })),
     recordTelegramBusinessConnection: vi.fn(async () => ({ kind: "recorded" as const })),
     startInstagramGraphConnection: vi.fn(async () => ({ connectionId })),
+    completeInstagramGraphConnection: vi.fn(async () => ({ kind: "recorded" as const })),
     recordTelegramBusinessMessage: vi.fn(async () => ({
       kind: "created" as const,
       message: domainMessage("inbound")

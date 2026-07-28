@@ -9,6 +9,8 @@ import {
 } from "@elevenhouse/domain";
 import type {
   AppendMessagingRealtimeEventInput,
+  CompleteInstagramGraphConnectionStoreInput,
+  CompleteInstagramGraphConnectionStoreResult,
   CreateClientFromThreadStoreInput,
   CreateOutboundMessageStoreInput,
   LinkThreadToClientStoreInput,
@@ -47,6 +49,7 @@ import {
   idempotencyCommands,
   messagingChannelConnections,
   messagingExternalIdentities,
+  messagingInstagramGraphAccounts,
   messageMediaIngestions,
   messagingMessages,
   messagingRealtimeEvents,
@@ -93,6 +96,7 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     recordTelegramBusinessConnection: (input) => recordTelegramBusinessConnection(database, input),
     startTelegramBusinessConnection: (input) => startTelegramBusinessConnection(database, input),
     startInstagramGraphConnection: (input) => startInstagramGraphConnection(database, input),
+    completeInstagramGraphConnection: (input) => completeInstagramGraphConnection(database, input),
     startTelegramMtprotoConnection: (input) => startTelegramMtprotoConnection(database, input),
     findTelegramMtprotoLoginSession: (input) => findTelegramMtprotoLoginSession(database, input),
     recordTelegramMtprotoCodeResult: (input) => recordTelegramMtprotoCodeResult(database, input),
@@ -550,6 +554,99 @@ async function startInstagramGraphConnection(
       .returning({ id: messagingChannelConnections.id });
     if (!row) throw new Error("Expected Instagram Graph channel connection insert to return a row");
     return { connectionId: row.id };
+  });
+}
+
+async function completeInstagramGraphConnection(
+  database: ElevenHouseDatabase,
+  input: CompleteInstagramGraphConnectionStoreInput
+): Promise<CompleteInstagramGraphConnectionStoreResult> {
+  return database.transaction(async (transaction) => {
+    const [connection] = await transaction
+      .select({
+        id: messagingChannelConnections.id,
+        astrologerUserId: messagingChannelConnections.astrologerUserId
+      })
+      .from(messagingChannelConnections)
+      .where(
+        and(
+          eq(messagingChannelConnections.id, input.connectionId),
+          eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
+          eq(messagingChannelConnections.provider, "instagram"),
+          eq(messagingChannelConnections.mode, "instagram_graph")
+        )
+      )
+      .limit(1);
+    if (!connection) return { kind: "unmatched" };
+
+    const timestamp = new Date(input.now);
+    await transaction
+      .insert(messagingInstagramGraphAccounts)
+      .values({
+        channelConnectionId: connection.id,
+        pageId: input.pageId,
+        pageName: input.pageName,
+        instagramUserId: input.instagramUserId,
+        instagramUsername: input.instagramUsername,
+        instagramDisplayName: input.instagramDisplayName,
+        userAccessTokenEncrypted: input.encryptedUserAccessToken,
+        pageAccessTokenEncrypted: input.encryptedPageAccessToken,
+        tokenExpiresAt: input.tokenExpiresAt ? new Date(input.tokenExpiresAt) : null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      })
+      .onConflictDoUpdate({
+        target: messagingInstagramGraphAccounts.channelConnectionId,
+        set: {
+          pageId: input.pageId,
+          pageName: input.pageName,
+          instagramUserId: input.instagramUserId,
+          instagramUsername: input.instagramUsername,
+          instagramDisplayName: input.instagramDisplayName,
+          userAccessTokenEncrypted: input.encryptedUserAccessToken,
+          pageAccessTokenEncrypted: input.encryptedPageAccessToken,
+          tokenExpiresAt: input.tokenExpiresAt ? new Date(input.tokenExpiresAt) : null,
+          updatedAt: timestamp
+        }
+      });
+
+    const [updated] = await transaction
+      .update(messagingChannelConnections)
+      .set({
+        status: "active",
+        externalAccountId: input.instagramUserId,
+        externalOwnerUserId: input.pageId,
+        displayNameSnapshot: input.instagramDisplayName ?? input.pageName,
+        usernameSnapshot: input.instagramUsername,
+        capabilities: instagramGraphAuthorizedCapabilities(),
+        connectedAt: timestamp,
+        lastSyncedAt: timestamp,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        updatedAt: timestamp
+      })
+      .where(
+        and(
+          eq(messagingChannelConnections.id, connection.id),
+          eq(messagingChannelConnections.astrologerUserId, connection.astrologerUserId),
+          eq(messagingChannelConnections.provider, "instagram"),
+          eq(messagingChannelConnections.mode, "instagram_graph")
+        )
+      )
+      .returning({ id: messagingChannelConnections.id });
+    if (!updated) return { kind: "unmatched" };
+
+    await transaction.insert(messagingRealtimeEvents).values({
+      astrologerUserId: connection.astrologerUserId,
+      type: "channelConnection.updated",
+      threadId: null,
+      messageId: null,
+      channelConnectionId: connection.id,
+      externalIdentityId: null,
+      createdAt: timestamp
+    });
+
+    return { kind: "recorded" };
   });
 }
 
@@ -1868,6 +1965,18 @@ function telegramMtprotoPendingCapabilities(): Record<string, boolean> {
 }
 
 function instagramGraphPendingCapabilities(): Record<string, boolean> {
+  return {
+    canSend: false,
+    canReceive: false,
+    canRead: false,
+    supportsHistoryImport: false,
+    supportsMessageEdits: false,
+    supportsMessageDeletes: false,
+    supportsAttachments: false
+  };
+}
+
+function instagramGraphAuthorizedCapabilities(): Record<string, boolean> {
   return {
     canSend: false,
     canReceive: false,

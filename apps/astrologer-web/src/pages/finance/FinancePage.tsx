@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   AstrologerFinanceOverviewResponse,
   CreateManualBankTransferPayoutMethod,
@@ -23,11 +23,21 @@ type PayoutMethodForm = {
   readonly bik: string;
 };
 
+type OperationFilter = "all" | "open" | "processing" | "terminal";
+
+const operationFilters: readonly { readonly value: OperationFilter; readonly label: string }[] = [
+  { value: "all", label: "Все" },
+  { value: "open", label: "Открытые" },
+  { value: "processing", label: "В обработке" },
+  { value: "terminal", label: "Закрытые" }
+];
+
 export function FinancePage() {
   const { dictionary, locale } = useI18n<AstrologerCopy>();
   const financeQuery = useCurrentFinanceOverviewQuery();
   const payoutMethodMutation = useCreateManualPayoutMethodMutation();
   const payoutRequestMutation = useCreatePayoutRequestMutation();
+  const payoutPanelRef = useRef<HTMLElement | null>(null);
   const [methodForm, setMethodForm] = useState<PayoutMethodForm>({
     displayName: "",
     recipientName: "",
@@ -36,6 +46,8 @@ export function FinancePage() {
     bik: ""
   });
   const [payoutAmount, setPayoutAmount] = useState("");
+  const [operationFilter, setOperationFilter] = useState<OperationFilter>("all");
+  const [operationSearch, setOperationSearch] = useState("");
   const overview = financeQuery.data ?? null;
   const canSubmitPayout =
     Boolean(overview?.canRequestPayout) &&
@@ -75,16 +87,29 @@ export function FinancePage() {
     });
   };
 
+  const focusPayoutRequest = () => {
+    payoutPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    payoutPanelRef.current?.querySelector<HTMLInputElement>("input[name='amount']")?.focus();
+  };
+
   return (
     <section className={styles.financePage} aria-labelledby="finance-page-title">
       <header className={styles.toolbar}>
         <div className={styles.titleGroup}>
-          <span className={styles.titleIcon}>
-            <Icon iconName="wallet" width={18} height={18} aria-hidden="true" />
-          </span>
           <h1 id="finance-page-title" className={styles.title}>
             {dictionary.finance.title}
           </h1>
+        </div>
+        <div className={styles.toolbarMeta}>
+          <span>{formatPayoutMethodLine(overview)}</span>
+          <button className={styles.ghostButton} type="button" onClick={() => void financeQuery.refetch()}>
+            <Icon iconName="refresh" width={15} height={15} aria-hidden="true" />
+            Обновить
+          </button>
+          <button className={styles.primaryButton} type="button" onClick={focusPayoutRequest}>
+            <Icon iconName="wallet" width={15} height={15} aria-hidden="true" />
+            Вывести средства
+          </button>
         </div>
       </header>
 
@@ -111,64 +136,105 @@ export function FinancePage() {
         <BalanceStrip overview={overview} locale={locale} />
 
         <div className={styles.workspace}>
-          <section className={styles.panel} aria-label="Заявка на вывод">
-            <div className={styles.panelHeader}>
-              <span className={styles.panelIcon}>
-                <Icon iconName="wallet" width={18} height={18} aria-hidden="true" />
-              </span>
-              <div>
-                <h2>Вывод средств</h2>
-                <p>{resolvePayoutHelpText(overview)}</p>
+          <OperationsPanel
+            requests={overview?.recentPayoutRequests ?? []}
+            filter={operationFilter}
+            search={operationSearch}
+            locale={locale}
+            onFilterChange={setOperationFilter}
+            onSearchChange={setOperationSearch}
+          />
+
+          <aside className={styles.sideStack}>
+            <section className={styles.panel} aria-label="Выплаты" ref={payoutPanelRef}>
+              <div className={styles.panelHeader}>
+                <h2>Выплаты</h2>
               </div>
-            </div>
-            <form className={styles.form} onSubmit={handlePayoutSubmit}>
-              <label className={styles.field}>
-                <span>Сумма вывода</span>
-                <input
-                  id="finance-payout-amount"
-                  name="amount"
-                  inputMode="decimal"
-                  value={payoutAmount}
-                  placeholder="5000"
-                  onChange={(event) => setPayoutAmount(event.target.value)}
+              <div className={styles.payoutFacts}>
+                <PayoutFact
+                  icon="wallet"
+                  label="Метод"
+                  value={overview?.defaultPayoutMethod?.displayName ?? "не добавлен"}
                 />
-              </label>
-              <button className={styles.primaryButton} type="submit" disabled={!canSubmitPayout}>
-                {payoutRequestMutation.isPending ? "Отправляем" : "Создать заявку"}
-              </button>
-            </form>
-          </section>
+                <PayoutFact
+                  icon="clock"
+                  label="Обработка"
+                  value="заявка в админку"
+                />
+                <PayoutFact
+                  icon="calendar"
+                  label="Мин. сумма"
+                  value={overview ? formatMoneyMinor(
+                    overview.minimumPayoutAmount.amountMinor,
+                    overview.minimumPayoutAmount.currency,
+                    locale
+                  ) : "-"}
+                />
+                <PayoutFact
+                  icon="settings"
+                  label="Провайдер"
+                  value="банк вручную"
+                />
+              </div>
+              <form className={styles.form} onSubmit={handlePayoutSubmit}>
+                <label className={styles.field}>
+                  <span>Сумма</span>
+                  <div className={styles.amountInputWrap}>
+                    <input
+                      id="finance-payout-amount"
+                      name="amount"
+                      inputMode="decimal"
+                      value={payoutAmount}
+                      placeholder="5000"
+                      onChange={(event) => setPayoutAmount(event.target.value)}
+                    />
+                    <button
+                      className={styles.allAmountButton}
+                      type="button"
+                      disabled={!overview}
+                      onClick={() =>
+                        setPayoutAmount(
+                          overview ? String(Math.floor(overview.balance.available.amountMinor / 100)) : ""
+                        )
+                      }
+                    >
+                      Всё
+                    </button>
+                  </div>
+                </label>
+                <button className={styles.primaryButton} type="submit" disabled={!canSubmitPayout}>
+                  {payoutRequestMutation.isPending ? "Отправляем" : "Создать заявку"}
+                </button>
+              </form>
+              <p className={styles.panelHint}>{resolvePayoutHelpText(overview, locale)}</p>
+            </section>
 
-          <section className={styles.panel} aria-label="Реквизиты вывода">
-            <div className={styles.panelHeader}>
-              <span className={styles.panelIcon}>
-                <Icon iconName="settings" width={18} height={18} aria-hidden="true" />
-              </span>
-              <div>
+            <section className={styles.panel} aria-label="Реквизиты вывода">
+              <div className={styles.panelHeader}>
                 <h2>Реквизиты</h2>
-                <p>
-                  {overview?.defaultPayoutMethod?.displayName ?? "Добавьте счет для ручного вывода"}
-                </p>
               </div>
-            </div>
-            {overview?.defaultPayoutMethod ? (
-              <div className={styles.methodSummary}>
-                <strong>{overview.defaultPayoutMethod.displayName}</strong>
-                <span>Ручной банковский перевод</span>
-              </div>
-            ) : (
-              <PayoutMethodFormView
-                form={methodForm}
-                isPending={payoutMethodMutation.isPending}
-                isComplete={isMethodFormComplete}
-                onChange={setMethodForm}
-                onSubmit={handleMethodSubmit}
-              />
-            )}
-          </section>
+              {overview?.defaultPayoutMethod ? (
+                <div className={styles.methodSummary}>
+                  <span className={styles.methodIcon}>
+                    <Icon iconName="wallet" width={16} height={16} aria-hidden="true" />
+                  </span>
+                  <span>
+                    <strong>{overview.defaultPayoutMethod.displayName}</strong>
+                    <small>Ручной банковский перевод</small>
+                  </span>
+                </div>
+              ) : (
+                <PayoutMethodFormView
+                  form={methodForm}
+                  isPending={payoutMethodMutation.isPending}
+                  isComplete={isMethodFormComplete}
+                  onChange={setMethodForm}
+                  onSubmit={handleMethodSubmit}
+                />
+              )}
+            </section>
+          </aside>
         </div>
-
-        <PayoutRequestsTable requests={overview?.recentPayoutRequests ?? []} locale={locale} />
       </main>
     </section>
   );
@@ -183,10 +249,30 @@ function BalanceStrip({
 }) {
   const buckets = useMemo(
     () => [
-      { label: "Доступно", value: overview?.balance.available.amountMinor ?? 0 },
-      { label: "На холде", value: overview?.balance.pending.amountMinor ?? 0 },
-      { label: "Зарезервировано", value: overview?.balance.reserved.amountMinor ?? 0 },
-      { label: "В выводе", value: overview?.balance.payoutPending.amountMinor ?? 0 }
+      {
+        label: "Доступно к выводу",
+        value: overview?.balance.available.amountMinor ?? 0,
+        tone: "positive",
+        note: "можно вывести сейчас"
+      },
+      {
+        label: "В ожидании",
+        value: overview?.balance.pending.amountMinor ?? 0,
+        tone: "warning",
+        note: "окно возврата / сессии"
+      },
+      {
+        label: "Зарезервировано",
+        value: overview?.balance.reserved.amountMinor ?? 0,
+        tone: "neutral",
+        note: "споры и резервы"
+      },
+      {
+        label: "В выводе",
+        value: overview?.balance.payoutPending.amountMinor ?? 0,
+        tone: "accent",
+        note: "ручная обработка"
+      }
     ],
     [overview]
   );
@@ -196,7 +282,10 @@ function BalanceStrip({
       {buckets.map((bucket) => (
         <div className={styles.balanceMetric} key={bucket.label}>
           <span>{bucket.label}</span>
-          <strong>{formatMoneyMinor(bucket.value, "RUB", locale)}</strong>
+          <strong className={styles[`balanceMetric_${bucket.tone}`]}>
+            {formatMoneyMinor(bucket.value, "RUB", locale)}
+          </strong>
+          <small>{bucket.note}</small>
         </div>
       ))}
     </section>
@@ -290,28 +379,86 @@ function FinanceField({
   );
 }
 
-function PayoutRequestsTable({
+function OperationsPanel({
   requests,
-  locale
+  filter,
+  search,
+  locale,
+  onFilterChange,
+  onSearchChange
 }: {
   readonly requests: readonly PayoutRequestResponse[];
+  readonly filter: OperationFilter;
+  readonly search: string;
   readonly locale: "ru" | "en";
+  readonly onFilterChange: (filter: OperationFilter) => void;
+  readonly onSearchChange: (search: string) => void;
 }) {
+  const filteredRequests = requests.filter((request) => {
+    if (!matchesOperationFilter(request, filter)) return false;
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+    return `${request.id} ${request.status} ${request.method} ${request.externalReference ?? ""}`
+      .toLowerCase()
+      .includes(query);
+  });
+  const totalMinor = filteredRequests.reduce((sum, request) => sum - request.amount.amountMinor, 0);
+
   return (
-    <section className={styles.requestsPanel} aria-label="Последние заявки">
-      <div className={styles.requestsHeader}>
-        <h2>Последние заявки</h2>
-        <span>{requests.length}</span>
+    <section className={styles.operationsPanel} aria-label="История операций">
+      <div className={styles.operationsHeader}>
+        <h2>История операций</h2>
+        <div className={styles.operationControls}>
+          {operationFilters.map((option) => (
+            <button
+              key={option.value}
+              className={`${styles.chip} ${filter === option.value ? styles.chipActive : ""}`}
+              type="button"
+              aria-pressed={filter === option.value}
+              onClick={() => onFilterChange(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+          <input
+            className={styles.searchInput}
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Поиск..."
+            aria-label="Поиск операций"
+          />
+        </div>
       </div>
-      {requests.length === 0 ? (
-        <p className={styles.emptyState}>Заявок на вывод пока нет</p>
+      <div className={styles.operationTotals}>
+        <span>Итого · {filteredRequests.length} операций</span>
+        <strong>{formatSignedMoneyMinor(totalMinor, "RUB", locale)}</strong>
+      </div>
+      <div className={styles.operationTableHead}>
+        <span>Операция</span>
+        <span>Статус</span>
+        <span>Сумма</span>
+        <span>Дата</span>
+      </div>
+      {filteredRequests.length === 0 ? (
+        <p className={styles.emptyState}>Заявок на вывод по фильтру нет</p>
       ) : (
-        <div className={styles.requestsTable}>
-          {requests.map((request) => (
-            <div className={styles.requestRow} key={request.id}>
-              <span>{formatPayoutStatus(request.status)}</span>
-              <strong>
-                {formatMoneyMinor(request.amount.amountMinor, request.amount.currency, locale)}
+        <div className={styles.operationsTable}>
+          {filteredRequests.map((request) => (
+            <div className={styles.operationRow} key={request.id}>
+              <span className={styles.operationTitle}>
+                <span className={styles.operationIcon}>
+                  <Icon iconName="wallet" width={16} height={16} aria-hidden="true" />
+                </span>
+                <span>
+                  <strong>Выплата на {methodDisplayName(request)}</strong>
+                  <small>{shortId(request.id)} · {methodLabel(request.method)}</small>
+                </span>
+              </span>
+              <span className={`${styles.statusPill} ${styles[`statusPill_${statusTone(request.status)}`]}`}>
+                {formatPayoutStatus(request.status)}
+              </span>
+              <strong className={styles.operationAmount}>
+                {formatSignedMoneyMinor(-request.amount.amountMinor, request.amount.currency, locale)}
               </strong>
               <time dateTime={request.requestedAt}>{formatDate(request.requestedAt)}</time>
             </div>
@@ -319,6 +466,24 @@ function PayoutRequestsTable({
         </div>
       )}
     </section>
+  );
+}
+
+function PayoutFact({
+  icon,
+  label,
+  value
+}: {
+  readonly icon: "wallet" | "clock" | "calendar" | "settings";
+  readonly label: string;
+  readonly value: string;
+}) {
+  return (
+    <div className={styles.payoutFact}>
+      <Icon iconName={icon} width={15} height={15} aria-hidden="true" />
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
 
@@ -341,7 +506,10 @@ function StatusBanner({
   );
 }
 
-function resolvePayoutHelpText(overview: AstrologerFinanceOverviewResponse | null): string {
+function resolvePayoutHelpText(
+  overview: AstrologerFinanceOverviewResponse | null,
+  locale: "ru" | "en"
+): string {
   if (!overview) return "Данные загрузятся из финансового API";
   if (overview.payoutRequestUnavailableReason === "payout_method_required") {
     return "Сначала добавьте реквизиты для ручного перевода";
@@ -350,7 +518,7 @@ function resolvePayoutHelpText(overview: AstrologerFinanceOverviewResponse | nul
     return `Минимальная сумма ${formatMoneyMinor(
       overview.minimumPayoutAmount.amountMinor,
       overview.minimumPayoutAmount.currency,
-      "ru"
+      locale
     )}`;
   }
   return "Заявка попадет в админку для ручной выплаты";
@@ -392,6 +560,59 @@ function formatPayoutStatus(status: PayoutRequestResponse["status"]): string {
     case "cancelled":
       return "Отменена";
   }
+}
+
+function matchesOperationFilter(
+  request: PayoutRequestResponse,
+  filter: OperationFilter
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "open") {
+    return request.status === "requested" || request.status === "under_review" || request.status === "approved";
+  }
+  if (filter === "processing") {
+    return request.status === "processing_manual" || request.status === "processing_provider";
+  }
+  return (
+    request.status === "paid" ||
+    request.status === "failed" ||
+    request.status === "rejected" ||
+    request.status === "cancelled"
+  );
+}
+
+function formatSignedMoneyMinor(
+  amountMinor: number,
+  currency: "RUB",
+  locale: "ru" | "en"
+): string {
+  if (amountMinor === 0) return formatMoneyMinor(0, currency, locale);
+  const sign = amountMinor < 0 ? "-" : "+";
+  return `${sign}${formatMoneyMinor(Math.abs(amountMinor), currency, locale)}`;
+}
+
+function formatPayoutMethodLine(overview: AstrologerFinanceOverviewResponse | null): string {
+  const method = overview?.defaultPayoutMethod?.displayName ?? "реквизиты не добавлены";
+  return `Вывод · ${method}`;
+}
+
+function methodDisplayName(request: PayoutRequestResponse): string {
+  return request.method === "manual_bank_transfer" ? "ручной перевод" : "Arc Pay";
+}
+
+function methodLabel(method: PayoutRequestResponse["method"]): string {
+  return method === "manual_bank_transfer" ? "ручной банк" : "Arc Pay";
+}
+
+function statusTone(status: PayoutRequestResponse["status"]): "neutral" | "positive" | "warning" | "danger" {
+  if (status === "paid") return "positive";
+  if (status === "failed" || status === "rejected" || status === "cancelled") return "danger";
+  if (status === "processing_manual" || status === "processing_provider") return "warning";
+  return "neutral";
+}
+
+function shortId(value: string): string {
+  return `${value.slice(0, 8)}...${value.slice(-4)}`;
 }
 
 function formatDate(value: string): string {

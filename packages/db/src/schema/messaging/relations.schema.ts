@@ -3,6 +3,7 @@ import { users } from "../identity/accounts.schema";
 import { messagingChannelConnections } from "./channel-connections.schema";
 import { messageDeliveryAttempts } from "./message-delivery-attempts.schema";
 import { messagingExternalIdentities } from "./external-identities.schema";
+import { messagingInstagramGraphAccounts } from "./instagram-graph-accounts.schema";
 import { messagingMessages } from "./messages.schema";
 import { messagingRealtimeEvents } from "./realtime-events.schema";
 import { messagingThreadIdentities } from "./thread-identities.schema";
@@ -16,7 +17,18 @@ export const messagingChannelConnectionsRelations = relations(
       references: [users.id]
     }),
     externalIdentities: many(messagingExternalIdentities),
+    instagramGraphAccounts: many(messagingInstagramGraphAccounts),
     messages: many(messagingMessages)
+  })
+);
+
+export const messagingInstagramGraphAccountsRelations = relations(
+  messagingInstagramGraphAccounts,
+  ({ one }) => ({
+    channelConnection: one(messagingChannelConnections, {
+      fields: [messagingInstagramGraphAccounts.channelConnectionId],
+      references: [messagingChannelConnections.id]
+    })
   })
 );
 

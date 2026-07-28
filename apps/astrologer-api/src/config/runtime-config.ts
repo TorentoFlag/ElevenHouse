@@ -65,15 +65,27 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_API_INSTAGRAM_GRAPH_APP_ID: optionalTrimmedNonEmptyStringSchema,
   ASTROLOGER_API_INSTAGRAM_GRAPH_APP_SECRET: optionalTrimmedNonEmptyStringSchema,
   ASTROLOGER_API_INSTAGRAM_GRAPH_REDIRECT_URI: z.string().trim().url().optional(),
+  ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
+  ASTROLOGER_API_INSTAGRAM_GRAPH_CALLBACK_STATE_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(900),
   ASTROLOGER_API_INSTAGRAM_GRAPH_AUTH_BASE_URL: z
     .string()
     .trim()
     .url()
     .default("https://www.facebook.com/v25.0/dialog/oauth"),
+  ASTROLOGER_API_INSTAGRAM_GRAPH_API_BASE_URL: z
+    .string()
+    .trim()
+    .url()
+    .default("https://graph.facebook.com/v25.0"),
   ASTROLOGER_API_INSTAGRAM_GRAPH_SCOPES: z
     .string()
     .trim()
     .default("instagram_manage_messages,pages_manage_metadata,pages_show_list"),
+  ASTROLOGER_API_ASTROLOGER_WEB_BASE_URL: z.string().trim().url().default("http://localhost:5174"),
   NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: optionalTrimmedNonEmptyStringSchema,
   NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: z.string().trim().url().optional(),
   ASTROLOGER_API_ALLOWED_ORIGINS: z.string().trim().optional(),
@@ -204,7 +216,11 @@ export type AstrologerApiRuntimeConfig = {
     readonly appId: string;
     readonly appSecret: string;
     readonly redirectUri: string;
+    readonly tokenEncryptionKey: Buffer;
+    readonly callbackStateTtlSeconds: number;
     readonly authBaseUrl: string;
+    readonly graphApiBaseUrl: string;
+    readonly astrologerWebBaseUrl: string;
     readonly scopes: readonly string[];
   } | null;
   readonly allowedOrigins: readonly string[];
@@ -331,7 +347,11 @@ export function createAstrologerApiRuntimeConfig(
     appId: config.ASTROLOGER_API_INSTAGRAM_GRAPH_APP_ID,
     appSecret: config.ASTROLOGER_API_INSTAGRAM_GRAPH_APP_SECRET,
     redirectUri: config.ASTROLOGER_API_INSTAGRAM_GRAPH_REDIRECT_URI,
+    tokenEncryptionKey: config.ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY,
+    callbackStateTtlSeconds: config.ASTROLOGER_API_INSTAGRAM_GRAPH_CALLBACK_STATE_TTL_SECONDS,
     authBaseUrl: config.ASTROLOGER_API_INSTAGRAM_GRAPH_AUTH_BASE_URL,
+    graphApiBaseUrl: config.ASTROLOGER_API_INSTAGRAM_GRAPH_API_BASE_URL,
+    astrologerWebBaseUrl: config.ASTROLOGER_API_ASTROLOGER_WEB_BASE_URL,
     scopes: config.ASTROLOGER_API_INSTAGRAM_GRAPH_SCOPES
   });
 
@@ -508,11 +528,15 @@ function toInstagramGraphConfig(input: {
   readonly appId: string | undefined;
   readonly appSecret: string | undefined;
   readonly redirectUri: string | undefined;
+  readonly tokenEncryptionKey: string | undefined;
+  readonly callbackStateTtlSeconds: number;
   readonly authBaseUrl: string;
+  readonly graphApiBaseUrl: string;
+  readonly astrologerWebBaseUrl: string;
   readonly scopes: string;
 }): AstrologerApiRuntimeConfig["instagramGraph"] {
   if (!input.enabled) return null;
-  if (!input.appId || !input.appSecret || !input.redirectUri) {
+  if (!input.appId || !input.appSecret || !input.redirectUri || !input.tokenEncryptionKey) {
     throw new Error("Instagram Graph settings are required when Instagram Graph login is enabled");
   }
   const scopes = input.scopes
@@ -528,7 +552,11 @@ function toInstagramGraphConfig(input: {
     appId: input.appId,
     appSecret: input.appSecret,
     redirectUri: input.redirectUri,
+    tokenEncryptionKey: parseBase64Aes256GcmKey(input.tokenEncryptionKey),
+    callbackStateTtlSeconds: input.callbackStateTtlSeconds,
     authBaseUrl: stripTrailingSlashes(input.authBaseUrl),
+    graphApiBaseUrl: stripTrailingSlashes(input.graphApiBaseUrl),
+    astrologerWebBaseUrl: stripTrailingSlashes(input.astrologerWebBaseUrl),
     scopes
   };
 }

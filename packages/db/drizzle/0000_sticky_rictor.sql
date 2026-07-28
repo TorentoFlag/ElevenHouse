@@ -1189,6 +1189,27 @@ CREATE TABLE "message_delivery_attempts" (
 	CONSTRAINT "message_delivery_attempts_status_code_check" CHECK ("message_delivery_attempts"."provider_status_code" is null or "message_delivery_attempts"."provider_status_code" between 100 and 599)
 );
 --> statement-breakpoint
+CREATE TABLE "messaging_instagram_graph_accounts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"channel_connection_id" uuid NOT NULL,
+	"page_id" text NOT NULL,
+	"page_name" text,
+	"instagram_user_id" text NOT NULL,
+	"instagram_username" text,
+	"instagram_display_name" text,
+	"user_access_token_encrypted" jsonb NOT NULL,
+	"page_access_token_encrypted" jsonb NOT NULL,
+	"token_expires_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "messaging_instagram_graph_accounts_connection_unique" UNIQUE("channel_connection_id"),
+	CONSTRAINT "messaging_instagram_graph_accounts_instagram_user_unique" UNIQUE("instagram_user_id"),
+	CONSTRAINT "messaging_instagram_graph_accounts_page_id_length_check" CHECK (length(trim("messaging_instagram_graph_accounts"."page_id")) between 1 and 200),
+	CONSTRAINT "messaging_instagram_graph_accounts_instagram_user_id_length_check" CHECK (length(trim("messaging_instagram_graph_accounts"."instagram_user_id")) between 1 and 200),
+	CONSTRAINT "messaging_instagram_graph_accounts_user_token_object_check" CHECK (jsonb_typeof("messaging_instagram_graph_accounts"."user_access_token_encrypted") = 'object'),
+	CONSTRAINT "messaging_instagram_graph_accounts_page_token_object_check" CHECK (jsonb_typeof("messaging_instagram_graph_accounts"."page_access_token_encrypted") = 'object')
+);
+--> statement-breakpoint
 CREATE TABLE "messaging_telegram_mtproto_sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"channel_connection_id" uuid NOT NULL,
@@ -1645,6 +1666,7 @@ ALTER TABLE "message_media_ingestions" ADD CONSTRAINT "message_media_ingestions_
 ALTER TABLE "message_media_ingestions" ADD CONSTRAINT "message_media_ingestions_channel_connection_id_messaging_channel_connections_id_fk" FOREIGN KEY ("channel_connection_id") REFERENCES "public"."messaging_channel_connections"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message_media_ingestions" ADD CONSTRAINT "message_media_ingestions_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message_delivery_attempts" ADD CONSTRAINT "message_delivery_attempts_message_id_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messaging_instagram_graph_accounts" ADD CONSTRAINT "messaging_instagram_graph_accounts_channel_connection_id_messaging_channel_connections_id_fk" FOREIGN KEY ("channel_connection_id") REFERENCES "public"."messaging_channel_connections"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messaging_telegram_mtproto_sessions" ADD CONSTRAINT "messaging_telegram_mtproto_sessions_channel_connection_id_messaging_channel_connections_id_fk" FOREIGN KEY ("channel_connection_id") REFERENCES "public"."messaging_channel_connections"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messaging_realtime_events" ADD CONSTRAINT "messaging_realtime_events_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astrologer_risk_profiles" ADD CONSTRAINT "astrologer_risk_profiles_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

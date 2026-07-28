@@ -15,12 +15,12 @@ export type BaselineHistoryKind =
   | "unknown";
 
 export const currentBaseline = {
-  hash: "9502df7bc0155994014951df839fd556213d11e3c370cb5244d65a37a43d704e",
+  hash: "a38ad40eeb3418dedda1cb62b1a30be0f9c249dd137f73539b8ef89c9d13d112",
   createdAt: "1785010323027"
 } as const satisfies MigrationIdentity;
 
 export const previousBaseline = {
-  hash: "a867c769a612f24e02e5b1c08e41c2967a1052ad0ee124cf97ddeb63bbe12d46",
+  hash: "9502df7bc0155994014951df839fd556213d11e3c370cb5244d65a37a43d704e",
   createdAt: "1785010323027"
 } as const satisfies MigrationIdentity;
 

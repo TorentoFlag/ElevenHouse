@@ -10,6 +10,7 @@ import {
   messagingChannelConnections,
   messagingChannelModeValues,
   messagingExternalIdentities,
+  messagingInstagramGraphAccounts,
   messagingMtprotoLoginStateValues,
   messagingTelegramMtprotoSessions,
   messagingMessages,
@@ -34,8 +35,47 @@ describe("Messaging persistence schema", () => {
     expect(getTableName(messagingMessages)).toBe("messages");
     expect(getTableName(messageDeliveryAttempts)).toBe("message_delivery_attempts");
     expect(getTableName(messagingRealtimeEvents)).toBe("messaging_realtime_events");
+    expect(getTableName(messagingInstagramGraphAccounts)).toBe(
+      "messaging_instagram_graph_accounts"
+    );
     expect(getTableName(messagingTelegramMtprotoSessions)).toBe(
       "messaging_telegram_mtproto_sessions"
+    );
+  });
+
+  it("keeps Instagram Graph credentials separate from public channel snapshots", () => {
+    const accountColumns = Object.keys(getTableColumns(messagingInstagramGraphAccounts));
+    const accountConfig = getTableConfig(messagingInstagramGraphAccounts);
+
+    expect(accountColumns).toEqual(
+      expect.arrayContaining([
+        "channelConnectionId",
+        "pageId",
+        "pageName",
+        "instagramUserId",
+        "instagramUsername",
+        "instagramDisplayName",
+        "userAccessTokenEncrypted",
+        "pageAccessTokenEncrypted",
+        "tokenExpiresAt"
+      ])
+    );
+    expect(accountConfig.uniqueConstraints.map((constraint) => constraint.name)).toEqual(
+      expect.arrayContaining([
+        "messaging_instagram_graph_accounts_connection_unique",
+        "messaging_instagram_graph_accounts_instagram_user_unique"
+      ])
+    );
+    expect(accountConfig.foreignKeys.map((key) => key.getName())).toContain(
+      "messaging_instagram_graph_accounts_channel_connection_id_messaging_channel_connections_id_fk"
+    );
+    expect(accountConfig.checks.map((check) => check.name)).toEqual(
+      expect.arrayContaining([
+        "messaging_instagram_graph_accounts_page_id_length_check",
+        "messaging_instagram_graph_accounts_instagram_user_id_length_check",
+        "messaging_instagram_graph_accounts_user_token_object_check",
+        "messaging_instagram_graph_accounts_page_token_object_check"
+      ])
     );
   });
 
@@ -112,9 +152,7 @@ describe("Messaging persistence schema", () => {
       astrologerUserId: "30000000-0000-4000-8000-000000000004"
     };
 
-    expect(messagingMessageDeliveryRequestedEventType).toBe(
-      "messaging.message.delivery_requested"
-    );
+    expect(messagingMessageDeliveryRequestedEventType).toBe("messaging.message.delivery_requested");
     expect(payload).toEqual({
       messageId: "30000000-0000-4000-8000-000000000001",
       threadId: "30000000-0000-4000-8000-000000000002",
@@ -137,12 +175,12 @@ describe("Messaging persistence schema", () => {
       ])
     );
     expect(Object.keys(getTableColumns(messagingThreadIdentities))).toContain("provider");
-    expect(channelConnectionsConfig.uniqueConstraints.map((constraint) => constraint.name)).toContain(
-      "messaging_channel_connections_id_provider_unique"
-    );
-    expect(externalIdentitiesConfig.uniqueConstraints.map((constraint) => constraint.name)).toContain(
-      "messaging_external_identities_id_provider_unique"
-    );
+    expect(
+      channelConnectionsConfig.uniqueConstraints.map((constraint) => constraint.name)
+    ).toContain("messaging_channel_connections_id_provider_unique");
+    expect(
+      externalIdentitiesConfig.uniqueConstraints.map((constraint) => constraint.name)
+    ).toContain("messaging_external_identities_id_provider_unique");
     expect(externalIdentitiesConfig.foreignKeys.map((key) => key.getName())).toContain(
       "messaging_external_identities_connection_provider_fk"
     );
@@ -198,12 +236,19 @@ describe("Messaging persistence schema", () => {
       'CONSTRAINT "messaging_channel_connections_external_owner_id_length_check" CHECK ("messaging_channel_connections"."external_owner_user_id" is null or length(trim("messaging_channel_connections"."external_owner_user_id")) between 1 and 200)'
     );
     expect(migration).toContain('CREATE TABLE "messaging_telegram_mtproto_sessions"');
+    expect(migration).toContain('CREATE TABLE "messaging_instagram_graph_accounts"');
+    expect(migration).toContain('"user_access_token_encrypted" jsonb NOT NULL');
+    expect(migration).toContain('"page_access_token_encrypted" jsonb NOT NULL');
+    expect(migration).toContain(
+      'CONSTRAINT "messaging_instagram_graph_accounts_page_token_object_check" CHECK (jsonb_typeof("messaging_instagram_graph_accounts"."page_access_token_encrypted") = \'object\')'
+    );
     expect(migration).toContain('"phone_number_encrypted" jsonb NOT NULL');
     expect(migration).toContain('"phone_code_hash_encrypted" jsonb NOT NULL');
     expect(migration).toContain('"session_encrypted" jsonb');
     expect(migration).toContain(
       'CONSTRAINT "messaging_telegram_mtproto_sessions_update_cursors_check" CHECK (("messaging_telegram_mtproto_sessions"."pts" is null or "messaging_telegram_mtproto_sessions"."pts" >= 0) and ("messaging_telegram_mtproto_sessions"."qts" is null or "messaging_telegram_mtproto_sessions"."qts" >= 0) and ("messaging_telegram_mtproto_sessions"."seq" is null or "messaging_telegram_mtproto_sessions"."seq" >= 0))'
     );
+    expect(snapshot.tables).toHaveProperty("public.messaging_instagram_graph_accounts");
     expect(snapshot.tables).toHaveProperty("public.messaging_telegram_mtproto_sessions");
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "messaging_channel_connections_external_account_unique" ON "messaging_channel_connections" USING btree ("provider","external_account_id") WHERE "messaging_channel_connections"."external_account_id" is not null'

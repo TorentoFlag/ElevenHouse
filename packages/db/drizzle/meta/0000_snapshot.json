@@ -1,5 +1,5 @@
 {
-  "id": "4e7336d9-b80f-4fdf-ad19-e7d6a6d815aa",
+  "id": "fa48952c-8b1e-42e1-8315-5e4316fdd3fa",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -10768,6 +10768,140 @@
         "message_delivery_attempts_status_code_check": {
           "name": "message_delivery_attempts_status_code_check",
           "value": "\"message_delivery_attempts\".\"provider_status_code\" is null or \"message_delivery_attempts\".\"provider_status_code\" between 100 and 599"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.messaging_instagram_graph_accounts": {
+      "name": "messaging_instagram_graph_accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "channel_connection_id": {
+          "name": "channel_connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_id": {
+          "name": "page_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_name": {
+          "name": "page_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "instagram_user_id": {
+          "name": "instagram_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "instagram_username": {
+          "name": "instagram_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "instagram_display_name": {
+          "name": "instagram_display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_access_token_encrypted": {
+          "name": "user_access_token_encrypted",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_access_token_encrypted": {
+          "name": "page_access_token_encrypted",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_expires_at": {
+          "name": "token_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "messaging_instagram_graph_accounts_channel_connection_id_messaging_channel_connections_id_fk": {
+          "name": "messaging_instagram_graph_accounts_channel_connection_id_messaging_channel_connections_id_fk",
+          "tableFrom": "messaging_instagram_graph_accounts",
+          "tableTo": "messaging_channel_connections",
+          "columnsFrom": [
+            "channel_connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "messaging_instagram_graph_accounts_connection_unique": {
+          "name": "messaging_instagram_graph_accounts_connection_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "channel_connection_id"
+          ]
+        },
+        "messaging_instagram_graph_accounts_instagram_user_unique": {
+          "name": "messaging_instagram_graph_accounts_instagram_user_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "instagram_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "messaging_instagram_graph_accounts_page_id_length_check": {
+          "name": "messaging_instagram_graph_accounts_page_id_length_check",
+          "value": "length(trim(\"messaging_instagram_graph_accounts\".\"page_id\")) between 1 and 200"
+        },
+        "messaging_instagram_graph_accounts_instagram_user_id_length_check": {
+          "name": "messaging_instagram_graph_accounts_instagram_user_id_length_check",
+          "value": "length(trim(\"messaging_instagram_graph_accounts\".\"instagram_user_id\")) between 1 and 200"
+        },
+        "messaging_instagram_graph_accounts_user_token_object_check": {
+          "name": "messaging_instagram_graph_accounts_user_token_object_check",
+          "value": "jsonb_typeof(\"messaging_instagram_graph_accounts\".\"user_access_token_encrypted\") = 'object'"
+        },
+        "messaging_instagram_graph_accounts_page_token_object_check": {
+          "name": "messaging_instagram_graph_accounts_page_token_object_check",
+          "value": "jsonb_typeof(\"messaging_instagram_graph_accounts\".\"page_access_token_encrypted\") = 'object'"
         }
       },
       "isRLSEnabled": false

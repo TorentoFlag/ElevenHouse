@@ -93,6 +93,24 @@ export type StartInstagramGraphConnectionStoreResult = {
   readonly connectionId: string;
 };
 
+export type CompleteInstagramGraphConnectionStoreInput = {
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly pageId: string;
+  readonly pageName: string | null;
+  readonly instagramUserId: string;
+  readonly instagramUsername: string | null;
+  readonly instagramDisplayName: string | null;
+  readonly encryptedUserAccessToken: EncryptedMessagingSecret;
+  readonly encryptedPageAccessToken: EncryptedMessagingSecret;
+  readonly tokenExpiresAt: string | null;
+  readonly now: string;
+};
+
+export type CompleteInstagramGraphConnectionStoreResult = {
+  readonly kind: "recorded" | "unmatched";
+};
+
 export type StartTelegramMtprotoConnectionStoreInput = {
   readonly connectionId: string;
   readonly astrologerUserId: string;
@@ -289,6 +307,9 @@ export type MessagingStore = {
   readonly startInstagramGraphConnection: (
     input: StartInstagramGraphConnectionStoreInput
   ) => Promise<StartInstagramGraphConnectionStoreResult>;
+  readonly completeInstagramGraphConnection: (
+    input: CompleteInstagramGraphConnectionStoreInput
+  ) => Promise<CompleteInstagramGraphConnectionStoreResult>;
   readonly startTelegramMtprotoConnection: (
     input: StartTelegramMtprotoConnectionStoreInput
   ) => Promise<StartTelegramMtprotoConnectionStoreResult>;

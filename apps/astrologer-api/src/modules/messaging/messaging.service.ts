@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   HttpException,
   Inject,
@@ -13,6 +14,7 @@ import {
   MessagingIdempotencyConflictError,
   MessagingThreadNotFoundError,
   MessagingValidationError,
+  completeInstagramGraphConnection,
   createClientFromThread,
   createOutboundMessage,
   linkThreadToClient,
@@ -68,6 +70,7 @@ import type { AstrologerSessionRequest } from "../identity/session/identity-curr
 import { MEDIA_PRIVATE_OBJECT_STORAGE } from "../media/media.tokens";
 import { messagingHttpError } from "./messaging-http-errors";
 import {
+  INSTAGRAM_GRAPH_AUTH_PROVIDER,
   MESSAGING_READ_STORE,
   MESSAGING_STORE,
   TELEGRAM_BUSINESS_CONNECTION_LOOKUP,
@@ -75,8 +78,10 @@ import {
 } from "./messaging.tokens";
 import { createMessagingRealtimeEventStream } from "./realtime-event-stream";
 import type { TelegramBusinessConnectionLookup } from "./telegram-business-connection-lookup";
+import type { InstagramGraphAuthProvider } from "./instagram-graph-auth-provider";
 import type { ParsedTelegramBusinessWebhookUpdate } from "./telegram-business-webhook";
 import type { TelegramMtprotoAuthProvider } from "./telegram-mtproto-auth-provider";
+import { z } from "@elevenhouse/validation";
 
 @Injectable()
 export class MessagingService {
@@ -87,6 +92,8 @@ export class MessagingService {
     private readonly telegramBusinessConnectionLookup: TelegramBusinessConnectionLookup | null,
     @Inject(TELEGRAM_MTPROTO_AUTH_PROVIDER)
     private readonly telegramMtprotoAuthProvider: TelegramMtprotoAuthProvider | null,
+    @Inject(INSTAGRAM_GRAPH_AUTH_PROVIDER)
+    private readonly instagramGraphAuthProvider: InstagramGraphAuthProvider | null,
     @Inject(MEDIA_PRIVATE_OBJECT_STORAGE)
     private readonly privateObjectStorage: PrivateObjectStoragePort,
     private readonly clock: SystemClock,
@@ -164,9 +171,121 @@ export class MessagingService {
         channelConnection: connection,
         authorizationUrl: instagramGraphAuthorizationUrl({
           config: instagramGraphConfig,
-          state: result.connectionId
+          state: createInstagramGraphCallbackState({
+            config: instagramGraphConfig,
+            astrologerUserId,
+            connectionId: result.connectionId,
+            issuedAtSeconds: Math.floor(this.clock.now().getTime() / 1000)
+          })
         })
       });
+    });
+  }
+
+  async completeInstagramGraphConnectionCallback(
+    query: unknown
+  ): Promise<{ readonly redirectUrl: string }> {
+    const instagramGraphConfig =
+      this.configService.get<InstagramGraphRuntimeConfig | null>("astrologerApi.instagramGraph") ??
+      null;
+    if (!instagramGraphConfig) {
+      throw messagingHttpError(
+        503,
+        "instagram_graph_connection_unavailable",
+        "Instagram Graph login is not configured"
+      );
+    }
+
+    const parsed = parseContract(InstagramGraphCallbackQuerySchema, query);
+    if (parsed.error || !parsed.code || !parsed.state) {
+      return {
+        redirectUrl: instagramGraphRedirectUrl({
+          config: instagramGraphConfig,
+          status: "error",
+          code: parsed.error ?? "instagram_graph_callback_denied"
+        })
+      };
+    }
+
+    const authorizationCode = parsed.code;
+    const state = verifyInstagramGraphCallbackState({
+      config: instagramGraphConfig,
+      state: parsed.state,
+      nowSeconds: Math.floor(this.clock.now().getTime() / 1000)
+    });
+    if (!state) {
+      return {
+        redirectUrl: instagramGraphRedirectUrl({
+          config: instagramGraphConfig,
+          status: "error",
+          code: "instagram_graph_state_invalid"
+        })
+      };
+    }
+
+    const authProvider = this.instagramGraphAuthProvider;
+    if (!authProvider) {
+      throw messagingHttpError(
+        503,
+        "instagram_graph_connection_unavailable",
+        "Instagram Graph login is not configured"
+      );
+    }
+
+    return mapMessagingErrors(async () => {
+      const token = await authProvider.exchangeCode({
+        code: authorizationCode,
+        redirectUri: instagramGraphConfig.redirectUri
+      });
+      const account = await authProvider.resolveConnectedAccount({
+        userAccessToken: token.accessToken
+      });
+      const cipher = createAes256GcmSecretCipher(instagramGraphConfig.tokenEncryptionKey);
+      const tokenExpiresAt = token.expiresInSeconds
+        ? new Date(this.clock.now().getTime() + token.expiresInSeconds * 1000).toISOString()
+        : null;
+      const result = await completeInstagramGraphConnection({
+        store: this.store,
+        astrologerUserId: state.astrologerUserId,
+        connectionId: state.connectionId,
+        pageId: account.pageId,
+        pageName: account.pageName,
+        instagramUserId: account.instagramUserId,
+        instagramUsername: account.instagramUsername,
+        instagramDisplayName: account.instagramDisplayName,
+        encryptedUserAccessToken: encryptedMessagingSecret(
+          "instagram_graph_v1",
+          cipher.encrypt({
+            plaintext: token.accessToken,
+            aad: instagramGraphSecretAad(
+              state.astrologerUserId,
+              state.connectionId,
+              "user_access_token"
+            )
+          })
+        ),
+        encryptedPageAccessToken: encryptedMessagingSecret(
+          "instagram_graph_v1",
+          cipher.encrypt({
+            plaintext: account.pageAccessToken,
+            aad: instagramGraphSecretAad(
+              state.astrologerUserId,
+              state.connectionId,
+              "page_access_token"
+            )
+          })
+        ),
+        tokenExpiresAt,
+        now: this.clock.now()
+      });
+
+      return {
+        redirectUrl: instagramGraphRedirectUrl({
+          config: instagramGraphConfig,
+          status: result.kind === "recorded" ? "connected" : "error",
+          code: result.kind === "recorded" ? undefined : "instagram_graph_connection_not_found"
+        })
+      };
     });
   }
 
@@ -761,9 +880,28 @@ type InstagramGraphRuntimeConfig = {
   readonly appId: string;
   readonly appSecret: string;
   readonly redirectUri: string;
+  readonly tokenEncryptionKey: Buffer;
+  readonly callbackStateTtlSeconds: number;
   readonly authBaseUrl: string;
+  readonly graphApiBaseUrl: string;
+  readonly astrologerWebBaseUrl: string;
   readonly scopes: readonly string[];
 };
+
+const InstagramGraphCallbackQuerySchema = z.object({
+  code: z.string().trim().min(1).optional(),
+  state: z.string().trim().min(1).optional(),
+  error: z.string().trim().min(1).optional(),
+  error_description: z.string().trim().min(1).optional()
+});
+
+type InstagramGraphCallbackState = {
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly issuedAtSeconds: number;
+};
+
+const instagramGraphCallbackStateVersion = "v1";
 
 function instagramGraphAuthorizationUrl(input: {
   readonly config: InstagramGraphRuntimeConfig;
@@ -775,6 +913,86 @@ function instagramGraphAuthorizationUrl(input: {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", input.config.scopes.join(","));
   url.searchParams.set("state", input.state);
+  return url.toString();
+}
+
+function createInstagramGraphCallbackState(input: {
+  readonly config: InstagramGraphRuntimeConfig;
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly issuedAtSeconds: number;
+}): string {
+  const payload = Buffer.from(
+    JSON.stringify({
+      astrologerUserId: input.astrologerUserId,
+      connectionId: input.connectionId,
+      issuedAtSeconds: input.issuedAtSeconds
+    }),
+    "utf8"
+  ).toString("base64url");
+  return [
+    instagramGraphCallbackStateVersion,
+    payload,
+    signInstagramGraphCallbackState(input.config, payload)
+  ].join(".");
+}
+
+function verifyInstagramGraphCallbackState(input: {
+  readonly config: InstagramGraphRuntimeConfig;
+  readonly state: string;
+  readonly nowSeconds: number;
+}): InstagramGraphCallbackState | null {
+  const [version, payload, signature] = input.state.split(".");
+  if (version !== instagramGraphCallbackStateVersion || !payload || !signature) return null;
+  const expectedSignature = signInstagramGraphCallbackState(input.config, payload);
+  if (!constantTimeEqual(signature, expectedSignature)) return null;
+  const payloadJson = parseInstagramGraphStatePayload(payload);
+  if (!payloadJson) return null;
+  const parsed = InstagramGraphCallbackStateSchema.safeParse(payloadJson);
+  if (!parsed.success) return null;
+  if (input.nowSeconds - parsed.data.issuedAtSeconds > input.config.callbackStateTtlSeconds) {
+    return null;
+  }
+  if (parsed.data.issuedAtSeconds > input.nowSeconds + 60) return null;
+  return parsed.data;
+}
+
+const InstagramGraphCallbackStateSchema = z.object({
+  astrologerUserId: z.string().uuid(),
+  connectionId: z.string().uuid(),
+  issuedAtSeconds: z.number().int().positive()
+});
+
+function signInstagramGraphCallbackState(
+  config: InstagramGraphRuntimeConfig,
+  payload: string
+): string {
+  return createHmac("sha256", config.appSecret).update(payload).digest("base64url");
+}
+
+function constantTimeEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function parseInstagramGraphStatePayload(payload: string): unknown | null {
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function instagramGraphRedirectUrl(input: {
+  readonly config: InstagramGraphRuntimeConfig;
+  readonly status: "connected" | "error";
+  readonly code?: string;
+}): string {
+  const url = new URL("/inbox", input.config.astrologerWebBaseUrl);
+  url.searchParams.set("channel", "instagram");
+  url.searchParams.set("status", input.status);
+  if (input.code) url.searchParams.set("code", input.code);
   return url.toString();
 }
 
@@ -800,6 +1018,14 @@ function telegramMtprotoSecretAad(
   purpose: "phone_number" | "phone_code_hash" | "session"
 ): string {
   return `messaging:telegram_mtproto:${astrologerUserId}:${purpose}`;
+}
+
+function instagramGraphSecretAad(
+  astrologerUserId: string,
+  connectionId: string,
+  purpose: "user_access_token" | "page_access_token"
+): string {
+  return `messaging:instagram_graph:${astrologerUserId}:${connectionId}:${purpose}`;
 }
 
 function encryptedMessagingSecret(

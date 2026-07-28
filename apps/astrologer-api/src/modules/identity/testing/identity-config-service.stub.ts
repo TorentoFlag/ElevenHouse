@@ -13,6 +13,18 @@ export function createIdentityConfigServiceStub(input: {
     readonly apiHash: string;
     readonly sessionEncryptionKey: Buffer;
   } | null;
+  readonly instagramGraph?: {
+    readonly enabled: true;
+    readonly appId: string;
+    readonly appSecret: string;
+    readonly redirectUri: string;
+    readonly tokenEncryptionKey: Buffer;
+    readonly callbackStateTtlSeconds: number;
+    readonly authBaseUrl: string;
+    readonly graphApiBaseUrl: string;
+    readonly astrologerWebBaseUrl: string;
+    readonly scopes: readonly string[];
+  } | null;
   readonly passwordlessRateLimits: PasswordlessRateLimitOptions;
 }): Pick<ConfigService, "get" | "getOrThrow"> {
   const getOptional = (key: string): unknown => {
@@ -26,6 +38,10 @@ export function createIdentityConfigServiceStub(input: {
 
     if (key === "astrologerApi.telegramMtproto") {
       return input.telegramMtproto ?? null;
+    }
+
+    if (key === "astrologerApi.instagramGraph") {
+      return input.instagramGraph ?? null;
     }
 
     return undefined;

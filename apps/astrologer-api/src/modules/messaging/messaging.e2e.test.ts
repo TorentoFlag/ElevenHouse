@@ -9,6 +9,7 @@ import {
 import {
   MessagingMessageMediaSourceResponseSchema,
   MessagingMessageResponseSchema,
+  StartInstagramGraphConnectionResponseSchema,
   StartTelegramBusinessConnectionResponseSchema,
   TelegramMtprotoLoginResponseSchema,
   MessagingThreadClientLinkResponseSchema,
@@ -43,6 +44,7 @@ import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-tok
 import { MEDIA_PRIVATE_OBJECT_STORAGE } from "../media/media.tokens";
 import { MessagingModule } from "./messaging.module";
 import {
+  INSTAGRAM_GRAPH_AUTH_PROVIDER,
   MESSAGING_READ_STORE,
   MESSAGING_STORE,
   TELEGRAM_MTPROTO_AUTH_PROVIDER
@@ -66,11 +68,13 @@ let secondaryCsrfToken = "";
 let linkedClientUserId: string | null = null;
 let startedTelegramBusinessConnectionId: string | null = null;
 let startedTelegramMtprotoConnectionId: string | null = null;
+let startedInstagramGraphConnectionId: string | null = null;
 let mtprotoLoginState: "code_required" | "password_required" | "authorized" = "code_required";
 let inboundProviderMessageCount = 0;
 let businessConnectionUpdateCount = 0;
 let deletedBusinessMessageCount = 0;
 let editedBusinessMessageCount = 0;
+let instagramGraphConnectionCompleteCount = 0;
 let realtimeReadInputs: unknown[] = [];
 const limits = {
   requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
@@ -89,11 +93,13 @@ describe("messaging HTTP routes", () => {
     linkedClientUserId = null;
     startedTelegramBusinessConnectionId = null;
     startedTelegramMtprotoConnectionId = null;
+    startedInstagramGraphConnectionId = null;
     mtprotoLoginState = "code_required";
     inboundProviderMessageCount = 0;
     businessConnectionUpdateCount = 0;
     deletedBusinessMessageCount = 0;
     editedBusinessMessageCount = 0;
+    instagramGraphConnectionCompleteCount = 0;
     realtimeReadInputs = [];
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async () => raise("Unexpected passwordless auth call")
@@ -120,6 +126,19 @@ describe("messaging HTTP routes", () => {
             apiId: 12345,
             apiHash: "0123456789abcdef0123456789abcdef",
             sessionEncryptionKey: Buffer.alloc(32, 12)
+          },
+          instagramGraph: {
+            enabled: true,
+            appId: "instagram-app-id",
+            appSecret: "instagram-app-secret",
+            redirectUri:
+              "https://api.elevenhouse.test/messaging/channel-connections/instagram/graph/callback",
+            tokenEncryptionKey: Buffer.alloc(32, 14),
+            callbackStateTtlSeconds: 900,
+            authBaseUrl: "https://www.facebook.com/v25.0/dialog/oauth",
+            graphApiBaseUrl: "https://graph.facebook.com/v25.0",
+            astrologerWebBaseUrl: "https://app.elevenhouse.test",
+            scopes: ["instagram_manage_messages", "pages_manage_metadata", "pages_show_list"]
           },
           passwordlessRateLimits: limits
         })
@@ -160,6 +179,22 @@ describe("messaging HTTP routes", () => {
           telegramUserId: "987654321",
           username: "alisa_astro",
           displayName: "Alisa"
+        }))
+      })
+      .overrideProvider(INSTAGRAM_GRAPH_AUTH_PROVIDER)
+      .useValue({
+        exchangeCode: vi.fn(async () => ({
+          accessToken: "plain-user-token",
+          tokenType: "bearer",
+          expiresInSeconds: 3600
+        })),
+        resolveConnectedAccount: vi.fn(async () => ({
+          pageId: "page_123",
+          pageName: "Alisa Astrology",
+          pageAccessToken: "plain-page-token",
+          instagramUserId: "ig_456",
+          instagramUsername: "alisa.astro",
+          instagramDisplayName: "Alisa Astro"
         }))
       })
       .overrideProvider(MEDIA_PRIVATE_OBJECT_STORAGE)
@@ -277,6 +312,30 @@ describe("messaging HTTP routes", () => {
     expect(JSON.stringify(response.body)).not.toMatch(
       /phoneCodeHash|telegram-phone-code-hash|session|\+78005553535/i
     );
+  });
+
+  it("accepts Instagram Graph OAuth callback without browser auth after signed start state", async () => {
+    const startResponse = await requestJson(
+      "POST",
+      "/messaging/channel-connections/instagram/graph/start",
+      {},
+      csrfAuth()
+    );
+    expect(startResponse.status).toBe(201);
+    const startBody = StartInstagramGraphConnectionResponseSchema.parse(startResponse.body);
+    const state = new URL(startBody.authorizationUrl).searchParams.get("state");
+    expect(state).toMatch(/^v1\./);
+
+    const callbackResponse = await fetch(
+      `${baseUrl}/messaging/channel-connections/instagram/graph/callback?code=meta-code&state=${encodeURIComponent(state ?? "")}`,
+      { method: "GET", redirect: "manual" }
+    );
+
+    expect(callbackResponse.status).toBe(303);
+    expect(callbackResponse.headers.get("location")).toBe(
+      "https://app.elevenhouse.test/inbox?channel=instagram&status=connected"
+    );
+    expect(instagramGraphConnectionCompleteCount).toBe(1);
   });
 
   it("submits Telegram Account code with browser auth and CSRF", async () => {
@@ -638,7 +697,14 @@ function createStore(): MessagingStore {
       startedTelegramBusinessConnectionId = connectionId;
       return { connectionId };
     }),
-    startInstagramGraphConnection: vi.fn(async () => ({ connectionId })),
+    startInstagramGraphConnection: vi.fn(async () => {
+      startedInstagramGraphConnectionId = connectionId;
+      return { connectionId };
+    }),
+    completeInstagramGraphConnection: vi.fn(async () => {
+      instagramGraphConnectionCompleteCount += 1;
+      return { kind: "recorded" as const };
+    }),
     startTelegramMtprotoConnection: vi.fn(async () => {
       startedTelegramMtprotoConnectionId = connectionId;
       mtprotoLoginState = "code_required";
@@ -717,8 +783,19 @@ function createReadStore(): MessagingReadStore {
   return {
     listChannelConnections: vi.fn(async () => ({
       channelConnections:
-        startedTelegramBusinessConnectionId || startedTelegramMtprotoConnectionId
-          ? [readChannelConnection()]
+        startedTelegramBusinessConnectionId ||
+        startedTelegramMtprotoConnectionId ||
+        startedInstagramGraphConnectionId
+          ? [
+              readChannelConnection({
+                provider: startedInstagramGraphConnectionId ? "instagram" : "telegram",
+                mode: startedInstagramGraphConnectionId
+                  ? "instagram_graph"
+                  : startedTelegramMtprotoConnectionId
+                    ? "telegram_mtproto_account"
+                    : "telegram_business_bot"
+              })
+            ]
           : []
     })),
     listTelegramBusinessConnectionReconciliationCandidates: vi.fn(async () => ({ candidates: [] })),
@@ -805,14 +882,24 @@ function encryptedMtprotoSecret(
   };
 }
 
-function readChannelConnection() {
+function readChannelConnection(
+  overrides: {
+    readonly provider?: "telegram" | "instagram";
+    readonly mode?: "telegram_business_bot" | "telegram_mtproto_account" | "instagram_graph";
+    readonly status?: "connecting" | "active";
+  } = {}
+) {
   return {
     id: connectionId,
-    provider: "telegram" as const,
-    mode: startedTelegramMtprotoConnectionId
-      ? ("telegram_mtproto_account" as const)
-      : ("telegram_business_bot" as const),
-    status: mtprotoLoginState === "authorized" ? ("active" as const) : ("connecting" as const),
+    provider: overrides.provider ?? ("telegram" as const),
+    mode:
+      overrides.mode ??
+      (startedTelegramMtprotoConnectionId
+        ? ("telegram_mtproto_account" as const)
+        : ("telegram_business_bot" as const)),
+    status:
+      overrides.status ??
+      (mtprotoLoginState === "authorized" ? ("active" as const) : ("connecting" as const)),
     displayName: null,
     username: null,
     capabilities: {
