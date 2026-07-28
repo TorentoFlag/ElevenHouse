@@ -584,13 +584,10 @@ async function completeInstagramGraphConnection(
       .insert(messagingInstagramGraphAccounts)
       .values({
         channelConnectionId: connection.id,
-        pageId: input.pageId,
-        pageName: input.pageName,
         instagramUserId: input.instagramUserId,
         instagramUsername: input.instagramUsername,
         instagramDisplayName: input.instagramDisplayName,
-        userAccessTokenEncrypted: input.encryptedUserAccessToken,
-        pageAccessTokenEncrypted: input.encryptedPageAccessToken,
+        accessTokenEncrypted: input.encryptedAccessToken,
         tokenExpiresAt: input.tokenExpiresAt ? new Date(input.tokenExpiresAt) : null,
         createdAt: timestamp,
         updatedAt: timestamp
@@ -598,13 +595,10 @@ async function completeInstagramGraphConnection(
       .onConflictDoUpdate({
         target: messagingInstagramGraphAccounts.channelConnectionId,
         set: {
-          pageId: input.pageId,
-          pageName: input.pageName,
           instagramUserId: input.instagramUserId,
           instagramUsername: input.instagramUsername,
           instagramDisplayName: input.instagramDisplayName,
-          userAccessTokenEncrypted: input.encryptedUserAccessToken,
-          pageAccessTokenEncrypted: input.encryptedPageAccessToken,
+          accessTokenEncrypted: input.encryptedAccessToken,
           tokenExpiresAt: input.tokenExpiresAt ? new Date(input.tokenExpiresAt) : null,
           updatedAt: timestamp
         }
@@ -615,8 +609,8 @@ async function completeInstagramGraphConnection(
       .set({
         status: "active",
         externalAccountId: input.instagramUserId,
-        externalOwnerUserId: input.pageId,
-        displayNameSnapshot: input.instagramDisplayName ?? input.pageName,
+        externalOwnerUserId: input.instagramUserId,
+        displayNameSnapshot: input.instagramDisplayName,
         usernameSnapshot: input.instagramUsername,
         capabilities: instagramGraphAuthorizedCapabilities(),
         connectedAt: timestamp,

@@ -10789,18 +10789,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "page_id": {
-          "name": "page_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "page_name": {
-          "name": "page_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "instagram_user_id": {
           "name": "instagram_user_id",
           "type": "text",
@@ -10819,14 +10807,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "user_access_token_encrypted": {
-          "name": "user_access_token_encrypted",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "page_access_token_encrypted": {
-          "name": "page_access_token_encrypted",
+        "access_token_encrypted": {
+          "name": "access_token_encrypted",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true
@@ -10887,21 +10869,13 @@
       },
       "policies": {},
       "checkConstraints": {
-        "messaging_instagram_graph_accounts_page_id_length_check": {
-          "name": "messaging_instagram_graph_accounts_page_id_length_check",
-          "value": "length(trim(\"messaging_instagram_graph_accounts\".\"page_id\")) between 1 and 200"
-        },
         "messaging_instagram_graph_accounts_instagram_user_id_length_check": {
           "name": "messaging_instagram_graph_accounts_instagram_user_id_length_check",
           "value": "length(trim(\"messaging_instagram_graph_accounts\".\"instagram_user_id\")) between 1 and 200"
         },
-        "messaging_instagram_graph_accounts_user_token_object_check": {
-          "name": "messaging_instagram_graph_accounts_user_token_object_check",
-          "value": "jsonb_typeof(\"messaging_instagram_graph_accounts\".\"user_access_token_encrypted\") = 'object'"
-        },
-        "messaging_instagram_graph_accounts_page_token_object_check": {
-          "name": "messaging_instagram_graph_accounts_page_token_object_check",
-          "value": "jsonb_typeof(\"messaging_instagram_graph_accounts\".\"page_access_token_encrypted\") = 'object'"
+        "messaging_instagram_graph_accounts_access_token_object_check": {
+          "name": "messaging_instagram_graph_accounts_access_token_object_check",
+          "value": "jsonb_typeof(\"messaging_instagram_graph_accounts\".\"access_token_encrypted\") = 'object'"
         }
       },
       "isRLSEnabled": false

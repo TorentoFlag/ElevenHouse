@@ -21,6 +21,8 @@ export function createIdentityConfigServiceStub(input: {
     readonly tokenEncryptionKey: Buffer;
     readonly callbackStateTtlSeconds: number;
     readonly authBaseUrl: string;
+    readonly tokenExchangeBaseUrl: string;
+    readonly graphTokenBaseUrl: string;
     readonly graphApiBaseUrl: string;
     readonly astrologerWebBaseUrl: string;
     readonly scopes: readonly string[];

@@ -1192,22 +1192,17 @@ CREATE TABLE "message_delivery_attempts" (
 CREATE TABLE "messaging_instagram_graph_accounts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"channel_connection_id" uuid NOT NULL,
-	"page_id" text NOT NULL,
-	"page_name" text,
 	"instagram_user_id" text NOT NULL,
 	"instagram_username" text,
 	"instagram_display_name" text,
-	"user_access_token_encrypted" jsonb NOT NULL,
-	"page_access_token_encrypted" jsonb NOT NULL,
+	"access_token_encrypted" jsonb NOT NULL,
 	"token_expires_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "messaging_instagram_graph_accounts_connection_unique" UNIQUE("channel_connection_id"),
 	CONSTRAINT "messaging_instagram_graph_accounts_instagram_user_unique" UNIQUE("instagram_user_id"),
-	CONSTRAINT "messaging_instagram_graph_accounts_page_id_length_check" CHECK (length(trim("messaging_instagram_graph_accounts"."page_id")) between 1 and 200),
 	CONSTRAINT "messaging_instagram_graph_accounts_instagram_user_id_length_check" CHECK (length(trim("messaging_instagram_graph_accounts"."instagram_user_id")) between 1 and 200),
-	CONSTRAINT "messaging_instagram_graph_accounts_user_token_object_check" CHECK (jsonb_typeof("messaging_instagram_graph_accounts"."user_access_token_encrypted") = 'object'),
-	CONSTRAINT "messaging_instagram_graph_accounts_page_token_object_check" CHECK (jsonb_typeof("messaging_instagram_graph_accounts"."page_access_token_encrypted") = 'object')
+	CONSTRAINT "messaging_instagram_graph_accounts_access_token_object_check" CHECK (jsonb_typeof("messaging_instagram_graph_accounts"."access_token_encrypted") = 'object')
 );
 --> statement-breakpoint
 CREATE TABLE "messaging_telegram_mtproto_sessions" (

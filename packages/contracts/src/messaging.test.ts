@@ -130,12 +130,12 @@ describe("messaging contracts", () => {
         connectedAt: null
       },
       authorizationUrl:
-        "https://www.facebook.com/v25.0/dialog/oauth?client_id=123&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback&state=11111111-1111-4111-8111-111111111111"
+        "https://www.instagram.com/oauth/authorize?client_id=123&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback&state=11111111-1111-4111-8111-111111111111"
     });
 
     expect(response.channelConnection.provider).toBe("instagram");
     expect(response.channelConnection.mode).toBe("instagram_graph");
-    expect(response.authorizationUrl).toContain("dialog/oauth");
+    expect(response.authorizationUrl).toContain("instagram.com/oauth/authorize");
     expect(() =>
       StartInstagramGraphConnectionResponseSchema.parse({
         ...response,

@@ -51,7 +51,7 @@ vi.mock("../api/messagingApi", () => ({
   })),
   startInstagramGraphConnection: vi.fn(async () => ({
     channelConnection: { id: "55555555-5555-4555-8555-555555555555" },
-    authorizationUrl: "https://www.facebook.com/v25.0/dialog/oauth?client_id=123"
+    authorizationUrl: "https://www.instagram.com/oauth/authorize?client_id=123"
   })),
   startTelegramMtprotoConnection: vi.fn(async () => ({
     channelConnection: { id: "55555555-5555-4555-8555-555555555555" },
@@ -167,7 +167,7 @@ describe("messagingQueries", () => {
     const options = startInstagramGraphConnectionMutationOptions(queryClient);
 
     await expect(options.mutationFn()).resolves.toMatchObject({
-      authorizationUrl: "https://www.facebook.com/v25.0/dialog/oauth?client_id=123"
+      authorizationUrl: "https://www.instagram.com/oauth/authorize?client_id=123"
     });
     await options.onSuccess?.();
 

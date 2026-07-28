@@ -112,12 +112,12 @@ describe("messagingApi", () => {
         mode: "instagram_graph",
         status: "connecting"
       }),
-      authorizationUrl: "https://www.facebook.com/v25.0/dialog/oauth?client_id=123"
+      authorizationUrl: "https://www.instagram.com/oauth/authorize?client_id=123"
     });
 
     await expect(startInstagramGraphConnection()).resolves.toMatchObject({
       channelConnection: { id: connectionId, provider: "instagram", mode: "instagram_graph" },
-      authorizationUrl: "https://www.facebook.com/v25.0/dialog/oauth?client_id=123"
+      authorizationUrl: "https://www.instagram.com/oauth/authorize?client_id=123"
     });
 
     expect(post).toHaveBeenCalledWith(

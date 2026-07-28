@@ -481,13 +481,10 @@ describe("Messaging use cases", () => {
         store,
         astrologerUserId,
         connectionId: "instagram-1",
-        pageId: " page-123 ",
-        pageName: " Alisa Astrology ",
         instagramUserId: " ig-456 ",
         instagramUsername: " alisa.astro ",
         instagramDisplayName: " Alisa Astro ",
-        encryptedUserAccessToken: encryptedToken,
-        encryptedPageAccessToken: encryptedSecretFixture("page-token-ciphertext"),
+        encryptedAccessToken: encryptedToken,
         tokenExpiresAt: "2026-09-22T10:00:00.000Z",
         now
       })
@@ -497,13 +494,10 @@ describe("Messaging use cases", () => {
       {
         astrologerUserId,
         connectionId: "instagram-1",
-        pageId: "page-123",
-        pageName: "Alisa Astrology",
         instagramUserId: "ig-456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro",
-        encryptedUserAccessToken: encryptedToken,
-        encryptedPageAccessToken: encryptedSecretFixture("page-token-ciphertext"),
+        encryptedAccessToken: encryptedToken,
         tokenExpiresAt: "2026-09-22T10:00:00.000Z",
         now: now.toISOString()
       }

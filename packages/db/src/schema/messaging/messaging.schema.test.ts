@@ -50,13 +50,10 @@ describe("Messaging persistence schema", () => {
     expect(accountColumns).toEqual(
       expect.arrayContaining([
         "channelConnectionId",
-        "pageId",
-        "pageName",
         "instagramUserId",
         "instagramUsername",
         "instagramDisplayName",
-        "userAccessTokenEncrypted",
-        "pageAccessTokenEncrypted",
+        "accessTokenEncrypted",
         "tokenExpiresAt"
       ])
     );
@@ -71,10 +68,8 @@ describe("Messaging persistence schema", () => {
     );
     expect(accountConfig.checks.map((check) => check.name)).toEqual(
       expect.arrayContaining([
-        "messaging_instagram_graph_accounts_page_id_length_check",
         "messaging_instagram_graph_accounts_instagram_user_id_length_check",
-        "messaging_instagram_graph_accounts_user_token_object_check",
-        "messaging_instagram_graph_accounts_page_token_object_check"
+        "messaging_instagram_graph_accounts_access_token_object_check"
       ])
     );
   });
@@ -237,10 +232,13 @@ describe("Messaging persistence schema", () => {
     );
     expect(migration).toContain('CREATE TABLE "messaging_telegram_mtproto_sessions"');
     expect(migration).toContain('CREATE TABLE "messaging_instagram_graph_accounts"');
-    expect(migration).toContain('"user_access_token_encrypted" jsonb NOT NULL');
-    expect(migration).toContain('"page_access_token_encrypted" jsonb NOT NULL');
+    expect(migration).toContain('"access_token_encrypted" jsonb NOT NULL');
+    expect(migration).not.toContain('"page_id" text NOT NULL');
+    expect(migration).not.toContain('"page_name" text');
+    expect(migration).not.toContain('"user_access_token_encrypted" jsonb NOT NULL');
+    expect(migration).not.toContain('"page_access_token_encrypted" jsonb NOT NULL');
     expect(migration).toContain(
-      'CONSTRAINT "messaging_instagram_graph_accounts_page_token_object_check" CHECK (jsonb_typeof("messaging_instagram_graph_accounts"."page_access_token_encrypted") = \'object\')'
+      'CONSTRAINT "messaging_instagram_graph_accounts_access_token_object_check" CHECK (jsonb_typeof("messaging_instagram_graph_accounts"."access_token_encrypted") = \'object\')'
     );
     expect(migration).toContain('"phone_number_encrypted" jsonb NOT NULL');
     expect(migration).toContain('"phone_code_hash_encrypted" jsonb NOT NULL');

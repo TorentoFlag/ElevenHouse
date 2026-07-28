@@ -590,10 +590,10 @@ function InstagramGraphGuide({
         ) : null}
 
         <section className={styles.telegramMtprotoNotice}>
-          <strong>Instagram подключается через официальный Meta Graph API.</strong>
+          <strong>Instagram подключается через официальный Instagram Login.</strong>
           <p>
-            После перехода в Meta выберите профессиональный Instagram аккаунт и страницу Facebook, у
-            которой есть права на сообщения.
+            После перехода в Instagram выберите профессиональный аккаунт и подтвердите права на
+            сообщения.
           </p>
         </section>
 

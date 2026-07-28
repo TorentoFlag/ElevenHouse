@@ -76,7 +76,7 @@ describe("MessagingService", () => {
     );
   });
 
-  it("starts Instagram Graph connection and returns the Meta authorization URL", async () => {
+  it("starts Instagram Graph connection and returns the Instagram authorization URL", async () => {
     const store = createStore();
     const service = createService({
       store,
@@ -92,10 +92,12 @@ describe("MessagingService", () => {
         redirectUri: "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback",
         tokenEncryptionKey: Buffer.alloc(32, 14),
         callbackStateTtlSeconds: 900,
-        authBaseUrl: "https://www.facebook.com/v25.0/dialog/oauth",
-        graphApiBaseUrl: "https://graph.facebook.com/v25.0",
+        authBaseUrl: "https://www.instagram.com/oauth/authorize",
+        tokenExchangeBaseUrl: "https://api.instagram.com",
+        graphTokenBaseUrl: "https://graph.instagram.com",
+        graphApiBaseUrl: "https://graph.instagram.com/v25.0",
         astrologerWebBaseUrl: "https://app.elevenhouse.test",
-        scopes: ["instagram_manage_messages", "pages_manage_metadata", "pages_show_list"]
+        scopes: ["instagram_business_basic", "instagram_business_manage_messages"]
       }
     });
 
@@ -108,7 +110,7 @@ describe("MessagingService", () => {
         mode: "instagram_graph",
         status: "connecting"
       },
-      authorizationUrl: expect.stringContaining("https://www.facebook.com/v25.0/dialog/oauth")
+      authorizationUrl: expect.stringContaining("https://www.instagram.com/oauth/authorize")
     });
     expect(store.startInstagramGraphConnection).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -122,25 +124,28 @@ describe("MessagingService", () => {
       "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback"
     );
     expect(authorizationUrl.searchParams.get("scope")).toBe(
-      "instagram_manage_messages,pages_manage_metadata,pages_show_list"
+      "instagram_business_basic,instagram_business_manage_messages"
     );
+    expect(authorizationUrl.searchParams.get("enable_fb_login")).toBe("0");
     expect(authorizationUrl.searchParams.get("state")).not.toBe(connectionId);
     expect(authorizationUrl.searchParams.get("state")).toMatch(/^v1\./);
-    expect(JSON.stringify(response)).not.toMatch(/app-secret|accessToken|pageAccessToken/i);
+    expect(JSON.stringify(response)).not.toMatch(/app-secret|accessToken/i);
   });
 
   it("exchanges an Instagram Graph callback and stores only encrypted tokens", async () => {
     const store = createStore();
     const instagramGraphAuthProvider = {
       exchangeCode: vi.fn(async () => ({
-        accessToken: "plain-user-token",
+        accessToken: "plain-short-token",
+        instagramUserId: "ig_456",
+        grantedScopes: ["instagram_business_basic", "instagram_business_manage_messages"]
+      })),
+      exchangeLongLivedToken: vi.fn(async () => ({
+        accessToken: "plain-long-token",
         tokenType: "bearer",
         expiresInSeconds: 3600
       })),
       resolveConnectedAccount: vi.fn(async () => ({
-        pageId: "page_123",
-        pageName: "Alisa Astrology",
-        pageAccessToken: "plain-page-token",
         instagramUserId: "ig_456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro"
@@ -165,19 +170,21 @@ describe("MessagingService", () => {
       redirectUri:
         "https://api.elevenhouse.test/messaging/channel-connections/instagram/graph/callback"
     });
+    expect(instagramGraphAuthProvider.exchangeLongLivedToken).toHaveBeenCalledWith({
+      shortLivedAccessToken: "plain-short-token"
+    });
     expect(instagramGraphAuthProvider.resolveConnectedAccount).toHaveBeenCalledWith({
-      userAccessToken: "plain-user-token"
+      accessToken: "plain-long-token",
+      fallbackInstagramUserId: "ig_456"
     });
     expect(store.completeInstagramGraphConnection).toHaveBeenCalledWith(
       expect.objectContaining({
         astrologerUserId,
         connectionId,
-        pageId: "page_123",
         instagramUserId: "ig_456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro",
-        encryptedUserAccessToken: expect.objectContaining({ algorithm: "aes-256-gcm" }),
-        encryptedPageAccessToken: expect.objectContaining({ algorithm: "aes-256-gcm" }),
+        encryptedAccessToken: expect.objectContaining({ algorithm: "aes-256-gcm" }),
         tokenExpiresAt: "2026-07-22T11:00:00.000Z",
         now: now.toISOString()
       })
@@ -186,12 +193,13 @@ describe("MessagingService", () => {
       JSON.stringify(
         (store.completeInstagramGraphConnection as ReturnType<typeof vi.fn>).mock.calls
       )
-    ).not.toMatch(/plain-user-token|plain-page-token|meta-code/);
+    ).not.toMatch(/plain-short-token|plain-long-token|meta-code/);
   });
 
   it("rejects tampered Instagram Graph callback state before calling Meta", async () => {
     const instagramGraphAuthProvider = {
       exchangeCode: vi.fn(),
+      exchangeLongLivedToken: vi.fn(),
       resolveConnectedAccount: vi.fn()
     };
     const service = createService({
@@ -833,6 +841,8 @@ function createService(
       readonly tokenEncryptionKey: Buffer;
       readonly callbackStateTtlSeconds: number;
       readonly authBaseUrl: string;
+      readonly tokenExchangeBaseUrl: string;
+      readonly graphTokenBaseUrl: string;
       readonly graphApiBaseUrl: string;
       readonly astrologerWebBaseUrl: string;
       readonly scopes: readonly string[];
@@ -904,10 +914,12 @@ function instagramGraphConfig() {
       "https://api.elevenhouse.test/messaging/channel-connections/instagram/graph/callback",
     tokenEncryptionKey: Buffer.alloc(32, 14),
     callbackStateTtlSeconds: 900,
-    authBaseUrl: "https://www.facebook.com/v25.0/dialog/oauth",
-    graphApiBaseUrl: "https://graph.facebook.com/v25.0",
+    authBaseUrl: "https://www.instagram.com/oauth/authorize",
+    tokenExchangeBaseUrl: "https://api.instagram.com",
+    graphTokenBaseUrl: "https://graph.instagram.com",
+    graphApiBaseUrl: "https://graph.instagram.com/v25.0",
     astrologerWebBaseUrl: "https://app.elevenhouse.test",
-    scopes: ["instagram_manage_messages", "pages_manage_metadata", "pages_show_list"]
+    scopes: ["instagram_business_basic", "instagram_business_manage_messages"]
   };
 }
 

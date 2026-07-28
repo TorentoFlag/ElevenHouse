@@ -135,10 +135,12 @@ describe("messaging HTTP routes", () => {
               "https://api.elevenhouse.test/messaging/channel-connections/instagram/graph/callback",
             tokenEncryptionKey: Buffer.alloc(32, 14),
             callbackStateTtlSeconds: 900,
-            authBaseUrl: "https://www.facebook.com/v25.0/dialog/oauth",
-            graphApiBaseUrl: "https://graph.facebook.com/v25.0",
+            authBaseUrl: "https://www.instagram.com/oauth/authorize",
+            tokenExchangeBaseUrl: "https://api.instagram.com",
+            graphTokenBaseUrl: "https://graph.instagram.com",
+            graphApiBaseUrl: "https://graph.instagram.com/v25.0",
             astrologerWebBaseUrl: "https://app.elevenhouse.test",
-            scopes: ["instagram_manage_messages", "pages_manage_metadata", "pages_show_list"]
+            scopes: ["instagram_business_basic", "instagram_business_manage_messages"]
           },
           passwordlessRateLimits: limits
         })
@@ -184,14 +186,16 @@ describe("messaging HTTP routes", () => {
       .overrideProvider(INSTAGRAM_GRAPH_AUTH_PROVIDER)
       .useValue({
         exchangeCode: vi.fn(async () => ({
-          accessToken: "plain-user-token",
+          accessToken: "plain-short-token",
+          instagramUserId: "ig_456",
+          grantedScopes: ["instagram_business_basic", "instagram_business_manage_messages"]
+        })),
+        exchangeLongLivedToken: vi.fn(async () => ({
+          accessToken: "plain-long-token",
           tokenType: "bearer",
           expiresInSeconds: 3600
         })),
         resolveConnectedAccount: vi.fn(async () => ({
-          pageId: "page_123",
-          pageName: "Alisa Astrology",
-          pageAccessToken: "plain-page-token",
           instagramUserId: "ig_456",
           instagramUsername: "alisa.astro",
           instagramDisplayName: "Alisa Astro"

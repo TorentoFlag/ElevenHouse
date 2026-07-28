@@ -5,21 +5,28 @@ export type InstagramGraphAuthProvider = {
     readonly code: string;
     readonly redirectUri: string;
   }) => Promise<InstagramGraphTokenExchangeResult>;
+  readonly exchangeLongLivedToken: (input: {
+    readonly shortLivedAccessToken: string;
+  }) => Promise<InstagramGraphLongLivedTokenResult>;
   readonly resolveConnectedAccount: (input: {
-    readonly userAccessToken: string;
+    readonly accessToken: string;
+    readonly fallbackInstagramUserId: string | null;
   }) => Promise<InstagramGraphConnectedAccount>;
 };
 
 export type InstagramGraphTokenExchangeResult = {
   readonly accessToken: string;
+  readonly instagramUserId: string | null;
+  readonly grantedScopes: readonly string[];
+};
+
+export type InstagramGraphLongLivedTokenResult = {
+  readonly accessToken: string;
   readonly tokenType: string | null;
-  readonly expiresInSeconds: number | null;
+  readonly expiresInSeconds: number;
 };
 
 export type InstagramGraphConnectedAccount = {
-  readonly pageId: string;
-  readonly pageName: string | null;
-  readonly pageAccessToken: string;
   readonly instagramUserId: string;
   readonly instagramUsername: string | null;
   readonly instagramDisplayName: string | null;
@@ -28,30 +35,35 @@ export type InstagramGraphConnectedAccount = {
 export type InstagramGraphAuthProviderOptions = {
   readonly appId: string;
   readonly appSecret: string;
+  readonly tokenExchangeBaseUrl: string;
+  readonly graphTokenBaseUrl: string;
   readonly graphApiBaseUrl: string;
 };
 
-const tokenResponseSchema = z.object({
+const authorizationCodeTokenPayloadSchema = z.object({
   access_token: z.string().trim().min(1),
-  token_type: z.string().trim().min(1).optional(),
-  expires_in: z.number().int().positive().optional()
+  user_id: z.union([z.string().trim().min(1), z.number()]).optional(),
+  permissions: z.union([z.string(), z.array(z.string())]).optional()
 });
 
-const accountsResponseSchema = z.object({
-  data: z.array(
-    z.object({
-      id: z.string().trim().min(1),
-      name: z.string().trim().min(1).optional(),
-      access_token: z.string().trim().min(1).optional(),
-      instagram_business_account: z
-        .object({
-          id: z.string().trim().min(1),
-          username: z.string().trim().min(1).optional(),
-          name: z.string().trim().min(1).optional()
-        })
-        .optional()
-    })
-  )
+const authorizationCodeTokenResponseSchema = z.union([
+  authorizationCodeTokenPayloadSchema,
+  z.object({
+    data: z.array(authorizationCodeTokenPayloadSchema).min(1)
+  })
+]);
+
+const longLivedTokenResponseSchema = z.object({
+  access_token: z.string().trim().min(1),
+  token_type: z.string().trim().min(1).optional(),
+  expires_in: z.number().int().positive()
+});
+
+const profileResponseSchema = z.object({
+  user_id: z.union([z.string().trim().min(1), z.number()]).optional(),
+  id: z.union([z.string().trim().min(1), z.number()]).optional(),
+  username: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(1).optional()
 });
 
 export class HttpInstagramGraphAuthProvider implements InstagramGraphAuthProvider {
@@ -61,58 +73,90 @@ export class HttpInstagramGraphAuthProvider implements InstagramGraphAuthProvide
     readonly code: string;
     readonly redirectUri: string;
   }): Promise<InstagramGraphTokenExchangeResult> {
-    const url = new URL(`${this.options.graphApiBaseUrl}/oauth/access_token`);
-    url.searchParams.set("client_id", this.options.appId);
-    url.searchParams.set("redirect_uri", input.redirectUri);
+    const url = new URL(`${this.options.tokenExchangeBaseUrl}/oauth/access_token`);
+    const body = new URLSearchParams();
+    body.set("client_id", this.options.appId);
+    body.set("client_secret", this.options.appSecret);
+    body.set("grant_type", "authorization_code");
+    body.set("redirect_uri", input.redirectUri);
+    body.set("code", input.code);
+
+    const response = await fetch(url, {
+      method: "POST",
+      body,
+      headers: { "content-type": "application/x-www-form-urlencoded" }
+    });
+    const payload = await readGraphJson(response);
+    const parsed = authorizationCodeTokenResponseSchema.safeParse(payload);
+    if (!response.ok || !parsed.success) {
+      throw new Error("Instagram Graph authorization code exchange failed");
+    }
+    const tokenPayload = "data" in parsed.data ? parsed.data.data[0] : parsed.data;
+    if (!tokenPayload) {
+      throw new Error("Instagram Graph authorization code exchange returned no token");
+    }
+    return {
+      accessToken: tokenPayload.access_token,
+      instagramUserId: tokenPayload.user_id === undefined ? null : tokenPayload.user_id.toString(),
+      grantedScopes: parseGrantedScopes(tokenPayload.permissions)
+    };
+  }
+
+  async exchangeLongLivedToken(input: {
+    readonly shortLivedAccessToken: string;
+  }): Promise<InstagramGraphLongLivedTokenResult> {
+    const url = new URL(`${this.options.graphTokenBaseUrl}/access_token`);
+    url.searchParams.set("grant_type", "ig_exchange_token");
     url.searchParams.set("client_secret", this.options.appSecret);
-    url.searchParams.set("code", input.code);
+    url.searchParams.set("access_token", input.shortLivedAccessToken);
 
     const response = await fetch(url, { method: "GET" });
     const payload = await readGraphJson(response);
-    const parsed = tokenResponseSchema.safeParse(payload);
+    const parsed = longLivedTokenResponseSchema.safeParse(payload);
     if (!response.ok || !parsed.success) {
-      throw new Error("Instagram Graph authorization code exchange failed");
+      throw new Error("Instagram Graph long-lived token exchange failed");
     }
     return {
       accessToken: parsed.data.access_token,
       tokenType: parsed.data.token_type ?? null,
-      expiresInSeconds: parsed.data.expires_in ?? null
+      expiresInSeconds: parsed.data.expires_in
     };
   }
 
   async resolveConnectedAccount(input: {
-    readonly userAccessToken: string;
+    readonly accessToken: string;
+    readonly fallbackInstagramUserId: string | null;
   }): Promise<InstagramGraphConnectedAccount> {
-    const url = new URL(`${this.options.graphApiBaseUrl}/me/accounts`);
-    url.searchParams.set(
-      "fields",
-      "id,name,access_token,instagram_business_account{id,username,name}"
-    );
-    url.searchParams.set("access_token", input.userAccessToken);
+    const url = new URL(`${this.options.graphApiBaseUrl}/me`);
+    url.searchParams.set("fields", "user_id,username");
+    url.searchParams.set("access_token", input.accessToken);
 
     const response = await fetch(url, { method: "GET" });
     const payload = await readGraphJson(response);
-    const parsed = accountsResponseSchema.safeParse(payload);
+    const parsed = profileResponseSchema.safeParse(payload);
     if (!response.ok || !parsed.success) {
       throw new Error("Instagram Graph connected account lookup failed");
     }
-
-    const account = parsed.data.data.find(
-      (candidate) => candidate.access_token && candidate.instagram_business_account
-    );
-    if (!account?.access_token || !account.instagram_business_account) {
-      throw new Error("Instagram Graph account has no linked Instagram professional account");
-    }
+    const instagramUserId =
+      parsed.data.user_id?.toString() ??
+      parsed.data.id?.toString() ??
+      input.fallbackInstagramUserId;
+    if (!instagramUserId) throw new Error("Instagram Graph account id was not returned");
 
     return {
-      pageId: account.id,
-      pageName: account.name ?? null,
-      pageAccessToken: account.access_token,
-      instagramUserId: account.instagram_business_account.id,
-      instagramUsername: account.instagram_business_account.username ?? null,
-      instagramDisplayName: account.instagram_business_account.name ?? null
+      instagramUserId,
+      instagramUsername: parsed.data.username ?? null,
+      instagramDisplayName: parsed.data.name ?? null
     };
   }
+}
+
+function parseGrantedScopes(value: string | string[] | undefined): readonly string[] {
+  if (Array.isArray(value)) return value.map((scope: string) => scope.trim()).filter(Boolean);
+  return (value ?? "")
+    .split(/[,\s]+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
 }
 
 async function readGraphJson(response: Response): Promise<unknown> {

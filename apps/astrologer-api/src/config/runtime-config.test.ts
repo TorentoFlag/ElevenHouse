@@ -316,12 +316,13 @@ describe("createAstrologerApiRuntimeConfig", () => {
           "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback",
         ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY: testEncryptionKey,
         ASTROLOGER_API_INSTAGRAM_GRAPH_CALLBACK_STATE_TTL_SECONDS: "600",
-        ASTROLOGER_API_INSTAGRAM_GRAPH_AUTH_BASE_URL:
-          "https://www.facebook.com/v25.0/dialog/oauth/",
-        ASTROLOGER_API_INSTAGRAM_GRAPH_API_BASE_URL: "https://graph.facebook.com/v25.0/",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_AUTH_BASE_URL: "https://www.instagram.com/oauth/authorize/",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_EXCHANGE_BASE_URL: "https://api.instagram.com/",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_GRAPH_TOKEN_BASE_URL: "https://graph.instagram.com/",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_API_BASE_URL: "https://graph.instagram.com/v25.0/",
         ASTROLOGER_API_ASTROLOGER_WEB_BASE_URL: "https://app.elevenhouse.test/",
         ASTROLOGER_API_INSTAGRAM_GRAPH_SCOPES:
-          "instagram_manage_messages, pages_manage_metadata, pages_show_list"
+          "instagram_business_basic, instagram_business_manage_messages"
       })
     ).toMatchObject({
       instagramGraph: {
@@ -331,10 +332,12 @@ describe("createAstrologerApiRuntimeConfig", () => {
         redirectUri: "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback",
         tokenEncryptionKey: Buffer.alloc(32, 1),
         callbackStateTtlSeconds: 600,
-        authBaseUrl: "https://www.facebook.com/v25.0/dialog/oauth",
-        graphApiBaseUrl: "https://graph.facebook.com/v25.0",
+        authBaseUrl: "https://www.instagram.com/oauth/authorize",
+        tokenExchangeBaseUrl: "https://api.instagram.com",
+        graphTokenBaseUrl: "https://graph.instagram.com",
+        graphApiBaseUrl: "https://graph.instagram.com/v25.0",
         astrologerWebBaseUrl: "https://app.elevenhouse.test",
-        scopes: ["instagram_manage_messages", "pages_manage_metadata", "pages_show_list"]
+        scopes: ["instagram_business_basic", "instagram_business_manage_messages"]
       }
     });
   });

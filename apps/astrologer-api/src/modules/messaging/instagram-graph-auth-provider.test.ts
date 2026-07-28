@@ -6,13 +6,13 @@ describe("HttpInstagramGraphAuthProvider", () => {
     vi.unstubAllGlobals();
   });
 
-  it("exchanges the OAuth code through the Graph API token endpoint", async () => {
+  it("exchanges the OAuth code through the Instagram token endpoint", async () => {
     const fetchMock = vi.fn<(input: string | URL, init?: RequestInit) => Promise<Response>>(
       async () =>
         jsonResponse({
           access_token: "user-token",
-          token_type: "bearer",
-          expires_in: 3600
+          user_id: "ig_456",
+          permissions: "instagram_business_basic,instagram_business_manage_messages"
         })
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -26,59 +26,78 @@ describe("HttpInstagramGraphAuthProvider", () => {
       })
     ).resolves.toEqual({
       accessToken: "user-token",
-      tokenType: "bearer",
-      expiresInSeconds: 3600
+      instagramUserId: "ig_456",
+      grantedScopes: ["instagram_business_basic", "instagram_business_manage_messages"]
     });
 
     const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
-    expect(url.toString()).toContain("https://graph.facebook.test/v25.0/oauth/access_token");
-    expect(url.searchParams.get("client_id")).toBe("app-id");
-    expect(url.searchParams.get("redirect_uri")).toBe(
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(url.toString()).toBe("https://api.instagram.test/oauth/access_token");
+    expect(init?.method).toBe("POST");
+    expect(init?.headers).toEqual({ "content-type": "application/x-www-form-urlencoded" });
+    const body = init?.body as URLSearchParams;
+    expect(body.get("client_id")).toBe("app-id");
+    expect(body.get("redirect_uri")).toBe(
       "https://api.elevenhouse.test/messaging/channel-connections/instagram/graph/callback"
     );
-    expect(url.searchParams.get("client_secret")).toBe("app-secret");
-    expect(url.searchParams.get("code")).toBe("meta-code");
+    expect(body.get("client_secret")).toBe("app-secret");
+    expect(body.get("grant_type")).toBe("authorization_code");
+    expect(body.get("code")).toBe("meta-code");
   });
 
-  it("resolves the Page token and linked Instagram professional account", async () => {
+  it("exchanges a short-lived Instagram token for a long-lived token", async () => {
     const fetchMock = vi.fn<(input: string | URL, init?: RequestInit) => Promise<Response>>(
       async () =>
         jsonResponse({
-          data: [
-            { id: "page-without-instagram", name: "No IG", access_token: "unused-page-token" },
-            {
-              id: "page_123",
-              name: "Alisa Astrology",
-              access_token: "page-token",
-              instagram_business_account: {
-                id: "ig_456",
-                username: "alisa.astro",
-                name: "Alisa Astro"
-              }
-            }
-          ]
+          access_token: "long-lived-token",
+          token_type: "bearer",
+          expires_in: 5184000
         })
     );
     vi.stubGlobal("fetch", fetchMock);
     const provider = createProvider();
 
     await expect(
-      provider.resolveConnectedAccount({ userAccessToken: "user-token" })
+      provider.exchangeLongLivedToken({ shortLivedAccessToken: "short-lived-token" })
     ).resolves.toEqual({
-      pageId: "page_123",
-      pageName: "Alisa Astrology",
-      pageAccessToken: "page-token",
-      instagramUserId: "ig_456",
-      instagramUsername: "alisa.astro",
-      instagramDisplayName: "Alisa Astro"
+      accessToken: "long-lived-token",
+      tokenType: "bearer",
+      expiresInSeconds: 5184000
     });
 
     const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
-    expect(url.pathname).toBe("/v25.0/me/accounts");
-    expect(url.searchParams.get("fields")).toBe(
-      "id,name,access_token,instagram_business_account{id,username,name}"
+    expect(url.toString()).toContain("https://graph.instagram.test/access_token");
+    expect(url.searchParams.get("grant_type")).toBe("ig_exchange_token");
+    expect(url.searchParams.get("client_secret")).toBe("app-secret");
+    expect(url.searchParams.get("access_token")).toBe("short-lived-token");
+  });
+
+  it("resolves the connected Instagram professional account directly", async () => {
+    const fetchMock = vi.fn<(input: string | URL, init?: RequestInit) => Promise<Response>>(
+      async () =>
+        jsonResponse({
+          user_id: "ig_456",
+          username: "alisa.astro"
+        })
     );
-    expect(url.searchParams.get("access_token")).toBe("user-token");
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = createProvider();
+
+    await expect(
+      provider.resolveConnectedAccount({
+        accessToken: "long-lived-token",
+        fallbackInstagramUserId: null
+      })
+    ).resolves.toEqual({
+      instagramUserId: "ig_456",
+      instagramUsername: "alisa.astro",
+      instagramDisplayName: null
+    });
+
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(url.pathname).toBe("/v25.0/me");
+    expect(url.searchParams.get("fields")).toBe("user_id,username");
+    expect(url.searchParams.get("access_token")).toBe("long-lived-token");
   });
 });
 
@@ -86,7 +105,9 @@ function createProvider() {
   return new HttpInstagramGraphAuthProvider({
     appId: "app-id",
     appSecret: "app-secret",
-    graphApiBaseUrl: "https://graph.facebook.test/v25.0"
+    tokenExchangeBaseUrl: "https://api.instagram.test",
+    graphTokenBaseUrl: "https://graph.instagram.test",
+    graphApiBaseUrl: "https://graph.instagram.test/v25.0"
   });
 }
 

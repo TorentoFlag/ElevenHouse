@@ -75,16 +75,26 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .string()
     .trim()
     .url()
-    .default("https://www.facebook.com/v25.0/dialog/oauth"),
+    .default("https://www.instagram.com/oauth/authorize"),
+  ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_EXCHANGE_BASE_URL: z
+    .string()
+    .trim()
+    .url()
+    .default("https://api.instagram.com"),
+  ASTROLOGER_API_INSTAGRAM_GRAPH_GRAPH_TOKEN_BASE_URL: z
+    .string()
+    .trim()
+    .url()
+    .default("https://graph.instagram.com"),
   ASTROLOGER_API_INSTAGRAM_GRAPH_API_BASE_URL: z
     .string()
     .trim()
     .url()
-    .default("https://graph.facebook.com/v25.0"),
+    .default("https://graph.instagram.com/v25.0"),
   ASTROLOGER_API_INSTAGRAM_GRAPH_SCOPES: z
     .string()
     .trim()
-    .default("instagram_manage_messages,pages_manage_metadata,pages_show_list"),
+    .default("instagram_business_basic,instagram_business_manage_messages"),
   ASTROLOGER_API_ASTROLOGER_WEB_BASE_URL: z.string().trim().url().default("http://localhost:5174"),
   NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: optionalTrimmedNonEmptyStringSchema,
   NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: z.string().trim().url().optional(),
@@ -219,6 +229,8 @@ export type AstrologerApiRuntimeConfig = {
     readonly tokenEncryptionKey: Buffer;
     readonly callbackStateTtlSeconds: number;
     readonly authBaseUrl: string;
+    readonly tokenExchangeBaseUrl: string;
+    readonly graphTokenBaseUrl: string;
     readonly graphApiBaseUrl: string;
     readonly astrologerWebBaseUrl: string;
     readonly scopes: readonly string[];
@@ -350,6 +362,8 @@ export function createAstrologerApiRuntimeConfig(
     tokenEncryptionKey: config.ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY,
     callbackStateTtlSeconds: config.ASTROLOGER_API_INSTAGRAM_GRAPH_CALLBACK_STATE_TTL_SECONDS,
     authBaseUrl: config.ASTROLOGER_API_INSTAGRAM_GRAPH_AUTH_BASE_URL,
+    tokenExchangeBaseUrl: config.ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_EXCHANGE_BASE_URL,
+    graphTokenBaseUrl: config.ASTROLOGER_API_INSTAGRAM_GRAPH_GRAPH_TOKEN_BASE_URL,
     graphApiBaseUrl: config.ASTROLOGER_API_INSTAGRAM_GRAPH_API_BASE_URL,
     astrologerWebBaseUrl: config.ASTROLOGER_API_ASTROLOGER_WEB_BASE_URL,
     scopes: config.ASTROLOGER_API_INSTAGRAM_GRAPH_SCOPES
@@ -531,6 +545,8 @@ function toInstagramGraphConfig(input: {
   readonly tokenEncryptionKey: string | undefined;
   readonly callbackStateTtlSeconds: number;
   readonly authBaseUrl: string;
+  readonly tokenExchangeBaseUrl: string;
+  readonly graphTokenBaseUrl: string;
   readonly graphApiBaseUrl: string;
   readonly astrologerWebBaseUrl: string;
   readonly scopes: string;
@@ -555,6 +571,8 @@ function toInstagramGraphConfig(input: {
     tokenEncryptionKey: parseBase64Aes256GcmKey(input.tokenEncryptionKey),
     callbackStateTtlSeconds: input.callbackStateTtlSeconds,
     authBaseUrl: stripTrailingSlashes(input.authBaseUrl),
+    tokenExchangeBaseUrl: stripTrailingSlashes(input.tokenExchangeBaseUrl),
+    graphTokenBaseUrl: stripTrailingSlashes(input.graphTokenBaseUrl),
     graphApiBaseUrl: stripTrailingSlashes(input.graphApiBaseUrl),
     astrologerWebBaseUrl: stripTrailingSlashes(input.astrologerWebBaseUrl),
     scopes

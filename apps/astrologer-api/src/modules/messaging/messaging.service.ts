@@ -233,46 +233,33 @@ export class MessagingService {
     }
 
     return mapMessagingErrors(async () => {
-      const token = await authProvider.exchangeCode({
+      const shortLivedToken = await authProvider.exchangeCode({
         code: authorizationCode,
         redirectUri: instagramGraphConfig.redirectUri
       });
+      const longLivedToken = await authProvider.exchangeLongLivedToken({
+        shortLivedAccessToken: shortLivedToken.accessToken
+      });
       const account = await authProvider.resolveConnectedAccount({
-        userAccessToken: token.accessToken
+        accessToken: longLivedToken.accessToken,
+        fallbackInstagramUserId: shortLivedToken.instagramUserId
       });
       const cipher = createAes256GcmSecretCipher(instagramGraphConfig.tokenEncryptionKey);
-      const tokenExpiresAt = token.expiresInSeconds
-        ? new Date(this.clock.now().getTime() + token.expiresInSeconds * 1000).toISOString()
-        : null;
+      const tokenExpiresAt = new Date(
+        this.clock.now().getTime() + longLivedToken.expiresInSeconds * 1000
+      ).toISOString();
       const result = await completeInstagramGraphConnection({
         store: this.store,
         astrologerUserId: state.astrologerUserId,
         connectionId: state.connectionId,
-        pageId: account.pageId,
-        pageName: account.pageName,
         instagramUserId: account.instagramUserId,
         instagramUsername: account.instagramUsername,
         instagramDisplayName: account.instagramDisplayName,
-        encryptedUserAccessToken: encryptedMessagingSecret(
+        encryptedAccessToken: encryptedMessagingSecret(
           "instagram_graph_v1",
           cipher.encrypt({
-            plaintext: token.accessToken,
-            aad: instagramGraphSecretAad(
-              state.astrologerUserId,
-              state.connectionId,
-              "user_access_token"
-            )
-          })
-        ),
-        encryptedPageAccessToken: encryptedMessagingSecret(
-          "instagram_graph_v1",
-          cipher.encrypt({
-            plaintext: account.pageAccessToken,
-            aad: instagramGraphSecretAad(
-              state.astrologerUserId,
-              state.connectionId,
-              "page_access_token"
-            )
+            plaintext: longLivedToken.accessToken,
+            aad: instagramGraphSecretAad(state.astrologerUserId, state.connectionId, "access_token")
           })
         ),
         tokenExpiresAt,
@@ -883,6 +870,8 @@ type InstagramGraphRuntimeConfig = {
   readonly tokenEncryptionKey: Buffer;
   readonly callbackStateTtlSeconds: number;
   readonly authBaseUrl: string;
+  readonly tokenExchangeBaseUrl: string;
+  readonly graphTokenBaseUrl: string;
   readonly graphApiBaseUrl: string;
   readonly astrologerWebBaseUrl: string;
   readonly scopes: readonly string[];
@@ -913,6 +902,7 @@ function instagramGraphAuthorizationUrl(input: {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", input.config.scopes.join(","));
   url.searchParams.set("state", input.state);
+  url.searchParams.set("enable_fb_login", "0");
   return url.toString();
 }
 
@@ -1023,7 +1013,7 @@ function telegramMtprotoSecretAad(
 function instagramGraphSecretAad(
   astrologerUserId: string,
   connectionId: string,
-  purpose: "user_access_token" | "page_access_token"
+  purpose: "access_token"
 ): string {
   return `messaging:instagram_graph:${astrologerUserId}:${connectionId}:${purpose}`;
 }

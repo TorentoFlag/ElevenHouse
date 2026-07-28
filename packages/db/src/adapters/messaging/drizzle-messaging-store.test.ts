@@ -873,13 +873,10 @@ describe("createDrizzleMessagingStore", () => {
       createDrizzleMessagingStore(fake.database as never).completeInstagramGraphConnection({
         astrologerUserId,
         connectionId: channelConnectionId,
-        pageId: "page_123",
-        pageName: "Alisa Astrology",
         instagramUserId: "ig_456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro",
-        encryptedUserAccessToken: encryptedSecretSnapshot("user-token-ciphertext"),
-        encryptedPageAccessToken: encryptedSecretSnapshot("page-token-ciphertext"),
+        encryptedAccessToken: encryptedSecretSnapshot("access-token-ciphertext"),
         tokenExpiresAt: "2026-09-22T10:00:00.000Z",
         now: now.toISOString()
       })
@@ -891,11 +888,9 @@ describe("createDrizzleMessagingStore", () => {
         table: messagingInstagramGraphAccounts,
         value: expect.objectContaining({
           channelConnectionId,
-          pageId: "page_123",
           instagramUserId: "ig_456",
           instagramUsername: "alisa.astro",
-          userAccessTokenEncrypted: encryptedSecretSnapshot("user-token-ciphertext"),
-          pageAccessTokenEncrypted: encryptedSecretSnapshot("page-token-ciphertext"),
+          accessTokenEncrypted: encryptedSecretSnapshot("access-token-ciphertext"),
           tokenExpiresAt: new Date("2026-09-22T10:00:00.000Z")
         })
       },
@@ -917,7 +912,7 @@ describe("createDrizzleMessagingStore", () => {
         value: expect.objectContaining({
           status: "active",
           externalAccountId: "ig_456",
-          externalOwnerUserId: "page_123",
+          externalOwnerUserId: "ig_456",
           displayNameSnapshot: "Alisa Astro",
           usernameSnapshot: "alisa.astro",
           connectedAt: now,

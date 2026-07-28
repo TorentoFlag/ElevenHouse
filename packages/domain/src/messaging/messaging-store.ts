@@ -96,13 +96,10 @@ export type StartInstagramGraphConnectionStoreResult = {
 export type CompleteInstagramGraphConnectionStoreInput = {
   readonly astrologerUserId: string;
   readonly connectionId: string;
-  readonly pageId: string;
-  readonly pageName: string | null;
   readonly instagramUserId: string;
   readonly instagramUsername: string | null;
   readonly instagramDisplayName: string | null;
-  readonly encryptedUserAccessToken: EncryptedMessagingSecret;
-  readonly encryptedPageAccessToken: EncryptedMessagingSecret;
+  readonly encryptedAccessToken: EncryptedMessagingSecret;
   readonly tokenExpiresAt: string | null;
   readonly now: string;
 };

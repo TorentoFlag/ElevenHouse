@@ -206,26 +206,20 @@ export async function completeInstagramGraphConnection(input: {
   readonly store: MessagingStore;
   readonly astrologerUserId: string;
   readonly connectionId: string;
-  readonly pageId: string;
-  readonly pageName: string | null;
   readonly instagramUserId: string;
   readonly instagramUsername: string | null;
   readonly instagramDisplayName: string | null;
-  readonly encryptedUserAccessToken: EncryptedMessagingSecret;
-  readonly encryptedPageAccessToken: EncryptedMessagingSecret;
+  readonly encryptedAccessToken: EncryptedMessagingSecret;
   readonly tokenExpiresAt: string | null;
   readonly now: Date;
 }): Promise<CompleteInstagramGraphConnectionStoreResult> {
   return input.store.completeInstagramGraphConnection({
     astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
     connectionId: identifier(input.connectionId, "Channel connection id is required"),
-    pageId: bounded(input.pageId, 1, 200, "Instagram Page id is required"),
-    pageName: optionalSnapshot(input.pageName),
     instagramUserId: bounded(input.instagramUserId, 1, 200, "Instagram user id is required"),
     instagramUsername: optionalSnapshot(input.instagramUsername),
     instagramDisplayName: optionalSnapshot(input.instagramDisplayName),
-    encryptedUserAccessToken: encryptedSecret(input.encryptedUserAccessToken),
-    encryptedPageAccessToken: encryptedSecret(input.encryptedPageAccessToken),
+    encryptedAccessToken: encryptedSecret(input.encryptedAccessToken),
     tokenExpiresAt: input.tokenExpiresAt ? normalizeIsoInstant(input.tokenExpiresAt) : null,
     now: input.now.toISOString()
   });
