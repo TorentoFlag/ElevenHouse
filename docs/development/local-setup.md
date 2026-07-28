@@ -85,17 +85,19 @@ pnpm --filter @elevenhouse/db exec tsx scripts/seed-dev-admin-finance.ts
 ```
 
 Скрипт отказывается работать с production или non-local `DATABASE_URL`. Он
-создаёт deterministic local rows для admin user/session, astrologer/client,
-manual payout method, открытую заявку на вывод, заявку, отменённую из-за
-chargeback, balanced ledger transactions, wallet read model и reconciliation
-exception. Для предсказуемого сценария активная `manual_review` finance policy
-переключается на fixture policy с `48` часами hold и `1000` bps platform fee.
+создаёт deterministic local rows для admin user/session, CSRF token,
+astrologer/client, manual payout method, открытую заявку на вывод, заявку в
+`processing_manual`, заявку, отменённую из-за chargeback, balanced ledger
+transactions, wallet read model и reconciliation exception. Для
+предсказуемого сценария активная `manual_review` finance policy переключается
+на fixture policy с `48` часами hold и `1000` bps platform fee.
 
-После выполнения скрипт печатает `Session cookie` и browser helper. Открой
-`admin-web` на `http://127.0.0.1:5175`, выполни helper в консоли браузера и
-перезагрузи страницу. Дальше `/finance/payouts`, `/finance/reconciliation` и
-связанные admin finance API читают реальные строки из локальной БД через
-`admin-api`.
+После выполнения скрипт печатает `Session cookie`, `CSRF cookie`, `CSRF header`
+и browser helper. Открой `admin-web` на `http://localhost:5175`, выполни helper
+в консоли браузера и перезагрузи страницу. Дальше `/finance/payouts`,
+`/finance/reconciliation` и связанные admin finance API читают реальные строки
+из локальной БД через `admin-api`. Для `127.0.0.1` нужно добавить этот origin в
+`ADMIN_API_ALLOWED_ORIGINS`; default local CSRF origin — `http://localhost:5175`.
 
 For local passwordless auth development, set
 `NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE=dev_console`. In this mode the

@@ -30,11 +30,18 @@ describe("admin finance browser fixture", () => {
   }, 30_000);
 
   it("seeds an authenticated admin finance state for network-backed browser acceptance", async () => {
-    const first = await seedAdminFinanceBrowserFixture(runtime);
-    const second = await seedAdminFinanceBrowserFixture(runtime);
+    const csrfNow = new Date("2026-07-28T10:00:00.000Z");
+    const first = await seedAdminFinanceBrowserFixture(runtime, { csrfNow });
+    const second = await seedAdminFinanceBrowserFixture(runtime, { csrfNow });
 
     expect(second).toEqual(first);
     expect(first.sessionCookie).toBe(`elevenhouse_admin_session=${first.sessionToken}`);
+    expect(first.csrfCookieName).toBe("elevenhouse_admin_csrf");
+    expect(first.csrfHeaderName).toBe("x-csrf-token");
+    expect(first.csrfToken).toMatch(/^v1\.\d+\.elevenhouse-dev-admin-finance-csrf\./);
+    expect(first.csrfCookie).toBe(`elevenhouse_admin_csrf=${first.csrfToken}`);
+    expect(first.browserConsoleHelper).toContain(first.sessionCookie);
+    expect(first.browserConsoleHelper).toContain(first.csrfCookie);
 
     const session = await runtime.pool.query<{
       readonly status: string;
@@ -65,8 +72,9 @@ describe("admin finance browser fixture", () => {
       readonly status: string;
       readonly amount_minor: string;
       readonly failure_reason: string | null;
+      readonly external_reference: string | null;
     }>(
-      `select id, status, amount_minor::text, failure_reason
+      `select id, status, amount_minor::text, failure_reason, external_reference
        from payout_requests
        where astrologer_user_id = $1
        order by requested_at desc, id desc`,
@@ -77,13 +85,22 @@ describe("admin finance browser fixture", () => {
         id: first.chargebackBlockedPayoutRequestId,
         status: "cancelled",
         amount_minor: "45000",
-        failure_reason: "Provider chargeback blocked payout before paid confirmation"
+        failure_reason: "Provider chargeback blocked payout before paid confirmation",
+        external_reference: null
+      },
+      {
+        id: first.processingPayoutRequestId,
+        status: "processing_manual",
+        amount_minor: "1500000",
+        failure_reason: null,
+        external_reference: null
       },
       {
         id: first.openPayoutRequestId,
         status: "requested",
         amount_minor: "1000000",
-        failure_reason: null
+        failure_reason: null,
+        external_reference: null
       }
     ]);
 
@@ -119,6 +136,32 @@ describe("admin finance browser fixture", () => {
       [first.reconciliationExceptionId]
     );
     expect(reconciliation.rows).toEqual([{ status: "exception" }]);
+
+    await insertCompletedPayoutMutation(runtime, first);
+
+    const recovered = await seedAdminFinanceBrowserFixture(runtime, { csrfNow });
+    expect(recovered).toEqual(first);
+
+    const recoveredProcessingPayout = await runtime.pool.query<{
+      readonly status: string;
+      readonly external_reference: string | null;
+    }>("select status, external_reference from payout_requests where id = $1", [
+      first.processingPayoutRequestId
+    ]);
+    expect(recoveredProcessingPayout.rows).toEqual([
+      { status: "processing_manual", external_reference: null }
+    ]);
+
+    const leftoverMutationCommands = await runtime.pool.query<{ readonly count: string }>(
+      `select count(*)::text
+       from finance_idempotency_commands
+       where scope in (
+         'admin.finance.payout-status.terminal',
+         'admin.finance.payment-reversal-review'
+       )
+         and idempotency_key like '10000000-0000-4000-8000-0000000000%:%'`
+    );
+    expect(leftoverMutationCommands.rows[0]?.count).toBe("0");
   });
 });
 
@@ -131,4 +174,84 @@ function withDatabaseName(databaseUrl: string, databaseName: string): string {
   const url = new URL(databaseUrl);
   url.pathname = `/${databaseName}`;
   return url.toString();
+}
+
+async function insertCompletedPayoutMutation(
+  runtime: PostgresRuntime,
+  fixture: {
+    readonly adminUserId: string;
+    readonly astrologerUserId: string;
+    readonly processingPayoutRequestId: string;
+  }
+): Promise<void> {
+  const accounts = await runtime.pool.query<{ readonly id: string; readonly account_type: string }>(
+    `select id, account_type
+     from ledger_accounts
+     where currency = 'RUB'
+       and (
+         account_type = 'platform_clearing'
+         or (account_type = 'astrologer_payout_pending' and astrologer_user_id = $1)
+       )`,
+    [fixture.astrologerUserId]
+  );
+  const payoutPendingAccountId = accounts.rows.find(
+    (account) => account.account_type === "astrologer_payout_pending"
+  )?.id;
+  const platformClearingAccountId = accounts.rows.find(
+    (account) => account.account_type === "platform_clearing"
+  )?.id;
+  if (!payoutPendingAccountId || !platformClearingAccountId) {
+    throw new Error("Expected seeded ledger accounts before mutation simulation");
+  }
+
+  const mutationLedgerTransactionId = randomUUID();
+  await runtime.pool.query(
+    `insert into ledger_transactions
+       (id, operation_type, payout_request_id, occurred_at, posted_at, metadata)
+     values ($1, 'payout_paid', $2, '2026-07-28T10:30:00.000Z', '2026-07-28T10:30:00.000Z',
+       jsonb_build_object('source', 'admin-finance-fixture-reseed-test'))`,
+    [mutationLedgerTransactionId, fixture.processingPayoutRequestId]
+  );
+  await runtime.pool.query(
+    `insert into ledger_entries
+       (ledger_transaction_id, account_id, entry_side, amount_minor, currency, metadata, created_at)
+     values
+       ($1, $2, 'debit', 1500000, 'RUB',
+        jsonb_build_object('source', 'admin-finance-fixture-reseed-test'),
+        '2026-07-28T10:30:00.000Z'),
+       ($1, $3, 'credit', 1500000, 'RUB',
+        jsonb_build_object('source', 'admin-finance-fixture-reseed-test'),
+        '2026-07-28T10:30:00.000Z')`,
+    [mutationLedgerTransactionId, payoutPendingAccountId, platformClearingAccountId]
+  );
+  await runtime.pool.query(
+    `insert into finance_idempotency_commands
+       (scope, idempotency_key, actor_user_id, request_hash, state, result, expires_at, created_at, updated_at)
+     values (
+       'admin.finance.payout-status.terminal',
+       $1,
+       $2,
+       'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+       'completed',
+       jsonb_build_object('payoutRequestId', $3::text),
+       '2026-10-26T10:30:00.000Z',
+       '2026-07-28T10:30:00.000Z',
+       '2026-07-28T10:30:00.000Z'
+     )`,
+    [
+      `${fixture.processingPayoutRequestId}:terminal`,
+      fixture.adminUserId,
+      fixture.processingPayoutRequestId
+    ]
+  );
+  await runtime.pool.query(
+    `update payout_requests
+     set status = 'paid',
+         external_reference = 'bank-transfer-reseed-test',
+         transferred_at = '2026-07-28T10:30:00.000Z',
+         completed_at = '2026-07-28T10:30:00.000Z',
+         updated_at = '2026-07-28T10:30:00.000Z'
+     where id = $1`,
+    [fixture.processingPayoutRequestId]
+  );
 }

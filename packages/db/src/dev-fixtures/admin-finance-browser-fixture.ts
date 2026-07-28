@@ -1,15 +1,31 @@
+import { createHmac } from "node:crypto";
 import type { PoolClient, QueryResult, QueryResultRow } from "pg";
 import { hashSessionToken } from "@elevenhouse/auth";
 import type { PostgresRuntime } from "../runtime";
+
+export type AdminFinanceBrowserFixtureOptions = {
+  readonly sessionCookieName?: string;
+  readonly csrfCookieName?: string;
+  readonly csrfHeaderName?: string;
+  readonly csrfSecret?: string;
+  readonly csrfTokenTtlSeconds?: number;
+  readonly csrfNow?: Date;
+};
 
 export type AdminFinanceBrowserFixtureResult = {
   readonly adminUserId: string;
   readonly astrologerUserId: string;
   readonly sessionToken: string;
   readonly sessionTokenHash: string;
-  readonly sessionCookieName: "elevenhouse_admin_session";
+  readonly sessionCookieName: string;
   readonly sessionCookie: string;
+  readonly csrfCookieName: string;
+  readonly csrfHeaderName: string;
+  readonly csrfToken: string;
+  readonly csrfCookie: string;
+  readonly browserConsoleHelper: string;
   readonly openPayoutRequestId: string;
+  readonly processingPayoutRequestId: string;
   readonly chargebackBlockedPayoutRequestId: string;
   readonly chargebackProviderEventId: string;
   readonly reconciliationExceptionId: string;
@@ -35,18 +51,28 @@ const fixture = {
   blockedPayoutReservedLedgerTransactionId: "10000000-0000-4000-8000-000000000017",
   blockedPayoutFailedLedgerTransactionId: "10000000-0000-4000-8000-000000000018",
   chargebackLedgerTransactionId: "10000000-0000-4000-8000-000000000019",
+  processingPayoutRequestId: "10000000-0000-4000-8000-000000000020",
+  processingPayoutReservedLedgerTransactionId: "10000000-0000-4000-8000-000000000021",
   sessionToken: "elevenhouse-dev-admin-finance-session-token"
 } as const;
 
 const now = "2026-07-28T10:00:00.000Z";
 const sessionExpiresAt = "2099-01-01T00:00:00.000Z";
+const defaultSessionCookieName = "elevenhouse_admin_session";
+const defaultCsrfCookieName = "elevenhouse_admin_csrf";
+const defaultCsrfHeaderName = "x-csrf-token";
+const defaultCsrfSecret = "development-admin-csrf-secret-32-bytes-minimum";
+const defaultCsrfTokenTtlSeconds = 604_800;
+const defaultCsrfNonce = "elevenhouse-dev-admin-finance-csrf";
+const csrfTokenVersion = "v1";
 const chargebackBlockedFailureReason =
   "Provider chargeback blocked payout before paid confirmation";
 
 type Queryable = Pick<PoolClient, "query">;
 
 export async function seedAdminFinanceBrowserFixture(
-  runtime: PostgresRuntime
+  runtime: PostgresRuntime,
+  options: AdminFinanceBrowserFixtureOptions = {}
 ): Promise<AdminFinanceBrowserFixtureResult> {
   const client = await runtime.pool.connect();
   try {
@@ -67,14 +93,35 @@ export async function seedAdminFinanceBrowserFixture(
   }
 
   const sessionTokenHash = hashSessionToken(fixture.sessionToken);
+  const sessionCookieName = options.sessionCookieName ?? defaultSessionCookieName;
+  const csrfCookieName = options.csrfCookieName ?? defaultCsrfCookieName;
+  const csrfHeaderName = options.csrfHeaderName ?? defaultCsrfHeaderName;
+  const csrfToken = createCsrfToken({
+    sessionTokenHash,
+    csrfSecret: options.csrfSecret ?? defaultCsrfSecret,
+    ttlSeconds: options.csrfTokenTtlSeconds ?? defaultCsrfTokenTtlSeconds,
+    now: options.csrfNow ?? new Date()
+  });
+  const sessionCookie = `${sessionCookieName}=${fixture.sessionToken}`;
+  const csrfCookie = `${csrfCookieName}=${csrfToken}`;
   return {
     adminUserId: fixture.adminUserId,
     astrologerUserId: fixture.astrologerUserId,
     sessionToken: fixture.sessionToken,
     sessionTokenHash,
-    sessionCookieName: "elevenhouse_admin_session",
-    sessionCookie: `elevenhouse_admin_session=${fixture.sessionToken}`,
+    sessionCookieName,
+    sessionCookie,
+    csrfCookieName,
+    csrfHeaderName,
+    csrfToken,
+    csrfCookie,
+    browserConsoleHelper: [
+      `document.cookie = "${sessionCookie}; Path=/; SameSite=Lax"`,
+      `document.cookie = "${csrfCookie}; Path=/; SameSite=Lax"`,
+      "location.reload()"
+    ].join("; "),
     openPayoutRequestId: fixture.openPayoutRequestId,
+    processingPayoutRequestId: fixture.processingPayoutRequestId,
     chargebackBlockedPayoutRequestId: fixture.chargebackBlockedPayoutRequestId,
     chargebackProviderEventId: fixture.chargebackProviderEventId,
     reconciliationExceptionId: fixture.reconciliationExceptionId
@@ -292,13 +339,17 @@ async function seedPayouts(client: Queryable): Promise<void> {
        ($1, $3, $4, 'requested', 1000000, 'RUB', 'manual_bank_transfer', null, null,
         '2026-07-28T09:00:00.000Z', null, null, null, null, null, null, null, null,
         jsonb_build_object('source', 'seed-dev-admin-finance', 'scenario', 'open-manual-payout'),
-        $6, $6),
+        $7, $7),
        ($2, $3, $4, 'cancelled', 45000, 'RUB', 'manual_bank_transfer', null, null,
         '2026-07-28T09:05:00.000Z', $6, $6, null,
         'Blocked automatically by provider chargeback wh_dev_chargeback_1 for order 10000000-0000-4000-8000-000000000011',
         $5, null, null, null,
         jsonb_build_object('source', 'seed-dev-admin-finance', 'scenario', 'chargeback-blocked-payout'),
-        $6, $6)
+        $7, $7),
+       ($8, $3, $4, 'processing_manual', 1500000, 'RUB', 'manual_bank_transfer', null, null,
+        '2026-07-28T09:03:00.000Z', $6, null, $9, null, null, null, null, null,
+        jsonb_build_object('source', 'seed-dev-admin-finance', 'scenario', 'processing-manual-payout'),
+        $7, $7)
      on conflict (id) do update
      set status = excluded.status,
          amount_minor = excluded.amount_minor,
@@ -307,6 +358,9 @@ async function seedPayouts(client: Queryable): Promise<void> {
          admin_user_id = excluded.admin_user_id,
          admin_note = excluded.admin_note,
          failure_reason = excluded.failure_reason,
+         external_reference = excluded.external_reference,
+         transferred_at = excluded.transferred_at,
+         provider_payout_id = excluded.provider_payout_id,
          metadata = excluded.metadata,
          updated_at = excluded.updated_at`,
     [
@@ -315,25 +369,74 @@ async function seedPayouts(client: Queryable): Promise<void> {
       fixture.astrologerUserId,
       fixture.payoutMethodId,
       chargebackBlockedFailureReason,
-      now
+      now,
+      now,
+      fixture.processingPayoutRequestId,
+      fixture.adminUserId
     ]
   );
 }
 
 async function resetFixtureLedger(client: Queryable): Promise<void> {
-  const transactionIds = [
+  const fixtureTransactionIds = [
     fixture.fundingLedgerTransactionId,
     fixture.openPayoutReservedLedgerTransactionId,
+    fixture.processingPayoutReservedLedgerTransactionId,
     fixture.blockedPayoutReservedLedgerTransactionId,
     fixture.blockedPayoutFailedLedgerTransactionId,
     fixture.chargebackLedgerTransactionId
   ];
-  await query(client, "delete from ledger_entries where ledger_transaction_id = any($1::uuid[])", [
-    transactionIds
-  ]);
-  await query(client, "delete from ledger_transactions where id = any($1::uuid[])", [
-    transactionIds
-  ]);
+  const fixturePayoutRequestIds = [
+    fixture.openPayoutRequestId,
+    fixture.processingPayoutRequestId,
+    fixture.chargebackBlockedPayoutRequestId
+  ];
+  const transactionIds = await query<{ readonly id: string }>(
+    client,
+    `select id
+     from ledger_transactions
+     where id = any($1::uuid[])
+        or payout_request_id = any($2::uuid[])
+        or order_id = $3`,
+    [fixtureTransactionIds, fixturePayoutRequestIds, fixture.chargebackOrderId]
+  );
+  const ids = transactionIds.rows.map((row) => row.id);
+  if (ids.length > 0) {
+    await query(
+      client,
+      "delete from ledger_entries where ledger_transaction_id = any($1::uuid[])",
+      [ids]
+    );
+    await query(client, "delete from ledger_transactions where id = any($1::uuid[])", [ids]);
+  }
+  await query(
+    client,
+    `delete from finance_idempotency_commands
+     where (
+       scope = 'admin.finance.payout-status.terminal'
+       and idempotency_key = any($1::text[])
+     )
+       or (
+         scope = 'admin.finance.payment-reversal-review'
+         and idempotency_key = $2
+       )`,
+    [
+      fixturePayoutRequestIds.map((payoutRequestId) => `${payoutRequestId}:terminal`),
+      `${fixture.chargebackProviderEventId}:review`
+    ]
+  );
+  await query(
+    client,
+    `delete from audit_log_entries
+     where target_id = any($1::text[])`,
+    [
+      [
+        ...fixturePayoutRequestIds,
+        fixture.chargebackProviderEventId,
+        fixture.reconciliationExceptionId
+      ]
+    ]
+  );
   await query(client, "delete from wallet_balance_read_models where astrologer_user_id = $1", [
     fixture.astrologerUserId
   ]);
@@ -349,8 +452,8 @@ async function seedLedger(client: Queryable): Promise<void> {
     postedAt: "2026-07-28T08:50:00.000Z",
     metadata: { source: "seed-dev-admin-finance", reason: "dev_fixture_available_funding" },
     entries: [
-      entry("platform_clearing", null, "debit", 1_045_000),
-      entry("astrologer_available", fixture.astrologerUserId, "credit", 1_045_000)
+      entry("platform_clearing", null, "debit", 2_545_000),
+      entry("astrologer_available", fixture.astrologerUserId, "credit", 2_545_000)
     ]
   });
   await createLedgerTransaction(client, {
@@ -364,6 +467,19 @@ async function seedLedger(client: Queryable): Promise<void> {
     entries: [
       entry("astrologer_available", fixture.astrologerUserId, "debit", 1_000_000),
       entry("astrologer_payout_pending", fixture.astrologerUserId, "credit", 1_000_000)
+    ]
+  });
+  await createLedgerTransaction(client, {
+    id: fixture.processingPayoutReservedLedgerTransactionId,
+    operationType: "payout_reserved",
+    orderId: null,
+    payoutRequestId: fixture.processingPayoutRequestId,
+    occurredAt: "2026-07-28T09:03:00.000Z",
+    postedAt: "2026-07-28T09:03:00.000Z",
+    metadata: { source: "seed-dev-admin-finance", payoutMethodId: fixture.payoutMethodId },
+    entries: [
+      entry("astrologer_available", fixture.astrologerUserId, "debit", 1_500_000),
+      entry("astrologer_payout_pending", fixture.astrologerUserId, "credit", 1_500_000)
     ]
   });
   await createLedgerTransaction(client, {
@@ -651,6 +767,24 @@ function walletBucketForAccountType(accountType: string): string | null {
     default:
       return null;
   }
+}
+
+function createCsrfToken(input: {
+  readonly sessionTokenHash: string;
+  readonly csrfSecret: string;
+  readonly ttlSeconds: number;
+  readonly now: Date;
+}): string {
+  const expiresAtMs = Math.min(
+    input.now.getTime() + input.ttlSeconds * 1000,
+    new Date(sessionExpiresAt).getTime()
+  );
+  const signature = createHmac("sha256", input.csrfSecret)
+    .update(
+      [csrfTokenVersion, input.sessionTokenHash, expiresAtMs.toString(), defaultCsrfNonce].join("|")
+    )
+    .digest("base64url");
+  return [csrfTokenVersion, expiresAtMs.toString(), defaultCsrfNonce, signature].join(".");
 }
 
 async function query<T extends QueryResultRow = QueryResultRow>(
