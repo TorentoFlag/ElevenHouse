@@ -30,7 +30,10 @@ import type {
   AdminReconciliationExceptionQueueResponse,
   ReconciliationExceptionResolution
 } from "@elevenhouse/contracts/reconciliation";
-import type { AdminFinancePoliciesApi } from "../api/adminFinancePoliciesApi";
+import {
+  AdminFinancePoliciesApiError,
+  type AdminFinancePoliciesApi
+} from "../api/adminFinancePoliciesApi";
 import { createAdminFinancePoliciesApi } from "../api/adminFinancePoliciesApi";
 import {
   createInitialRiskProfileForm,
@@ -112,6 +115,15 @@ type ReversalActionForm = {
   readonly resolution: AdminPaymentReversalCaseReviewResolution;
   readonly adminNote: string;
 };
+
+type AdminFinanceErrorContext =
+  | "load"
+  | "policy"
+  | "risk"
+  | "payout_paid"
+  | "payout_rejected"
+  | "reversal_review"
+  | "reconciliation_resolution";
 
 const emptyPayoutQueue: AdminPayoutQueueResponse = {
   summary: {
@@ -273,7 +285,7 @@ export function FinancePoliciesPage({
         }));
       }
     } catch (error) {
-      setLoadState({ status: "error", message: errorMessage(error) });
+      setLoadState({ status: "error", message: errorMessage(error, "load") });
     }
   }
 
@@ -308,7 +320,7 @@ export function FinancePoliciesPage({
       setPolicyForm(policyToForm(policy));
       setStatusMessage("Стандартная политика 48 часов подтверждена и записана в аудит.");
     } catch (error) {
-      setSubmitError(errorMessage(error));
+      setSubmitError(errorMessage(error, "policy"));
     } finally {
       setSavingPolicy(false);
     }
@@ -325,7 +337,7 @@ export function FinancePoliciesPage({
       setPolicyForm(policyToForm(policy));
       setStatusMessage("Политика риска сохранена. Новые заказы получат новый snapshot.");
     } catch (error) {
-      setSubmitError(errorMessage(error));
+      setSubmitError(errorMessage(error, "policy"));
     } finally {
       setSavingPolicy(false);
     }
@@ -347,7 +359,7 @@ export function FinancePoliciesPage({
       setStatusMessage("Ручной риск астролога сохранен с причиной и audit evidence.");
       setRiskForm(createInitialRiskProfileForm());
     } catch (error) {
-      setSubmitError(errorMessage(error));
+      setSubmitError(errorMessage(error, "risk"));
     } finally {
       setSavingRisk(false);
     }
@@ -370,7 +382,7 @@ export function FinancePoliciesPage({
       setPayoutAction(emptyPayoutAction());
       await refreshFinance();
     } catch (error) {
-      setSubmitError(errorMessage(error));
+      setSubmitError(errorMessage(error, "payout_paid"));
     } finally {
       setSavingPayout(false);
     }
@@ -391,7 +403,7 @@ export function FinancePoliciesPage({
       setPayoutAction(emptyPayoutAction());
       await refreshFinance();
     } catch (error) {
-      setSubmitError(errorMessage(error));
+      setSubmitError(errorMessage(error, "payout_rejected"));
     } finally {
       setSavingPayout(false);
     }
@@ -419,7 +431,7 @@ export function FinancePoliciesPage({
       setReconciliationAction(emptyReconciliationAction());
       await refreshFinance();
     } catch (error) {
-      setSubmitError(errorMessage(error));
+      setSubmitError(errorMessage(error, "reconciliation_resolution"));
     } finally {
       setSavingReconciliation(false);
     }
@@ -443,7 +455,7 @@ export function FinancePoliciesPage({
       setReversalAction(emptyReversalAction());
       await refreshFinance();
     } catch (error) {
-      setSubmitError(errorMessage(error));
+      setSubmitError(errorMessage(error, "reversal_review"));
     } finally {
       setSavingReversal(false);
     }
@@ -583,7 +595,9 @@ export function FinancePoliciesPage({
 
         {loadState.status === "error" ? (
           <Card className="adminFinancePanel adminFinanceContentPanel" padding="medium">
-            <p className="adminFinanceErrorInline">{loadState.message}</p>
+            <p className="adminFinanceErrorInline" role="alert">
+              {loadState.message}
+            </p>
             <Button
               title="Повторить"
               variant="default"
@@ -683,8 +697,16 @@ export function FinancePoliciesPage({
           </>
         ) : null}
 
-        {statusMessage ? <p className="adminFinanceNotice">{statusMessage}</p> : null}
-        {submitError ? <p className="adminFinanceError">{submitError}</p> : null}
+        {statusMessage ? (
+          <p className="adminFinanceNotice" role="status" aria-live="polite">
+            {statusMessage}
+          </p>
+        ) : null}
+        {submitError ? (
+          <p className="adminFinanceError" role="alert">
+            {submitError}
+          </p>
+        ) : null}
       </main>
     </div>
   );
@@ -1948,6 +1970,78 @@ function reversalSeverityTone(
   return "neutral";
 }
 
-function errorMessage(error: unknown): string {
+function errorMessage(error: unknown, context: AdminFinanceErrorContext): string {
+  if (error instanceof AdminFinancePoliciesApiError) {
+    const providerMessage = backendMessage(error.responseBody);
+    const backendHint = backendCodeHint(providerMessage);
+    const suffix = backendHint ? ` ${backendHint}` : "";
+    if (error.status === 400) {
+      return `${actionLabel(context)} отклонено: проверьте подтверждение выплаты, обязательные поля и формат evidence. Для выплаты нужны External reference и Transferred at; для отказа нужна причина.${suffix}`;
+    }
+    if (error.status === 401 || error.status === 403) {
+      return `${actionLabel(context)} не выполнено: сессия администратора или CSRF-token недействительны. Обновите страницу, войдите заново при необходимости и повторите действие.`;
+    }
+    if (error.status === 404) {
+      return `${actionLabel(context)} не выполнено: запись больше не найдена в admin-api. Обновите очередь перед повторной операцией.${suffix}`;
+    }
+    if (error.status === 409) {
+      return `${actionLabel(context)} не выполнено: Состояние уже изменилось или команда уже выполняется. Обновите очередь и повторите действие только после сверки ledger/provider evidence.${suffix}`;
+    }
+    return `${actionLabel(context)} не выполнено: admin-api вернул ${error.status}. Обновите очередь и проверьте операционный лог.${suffix}`;
+  }
+  if (isClientValidationError(error)) {
+    return `${actionLabel(context)} не выполнено: проверьте обязательные поля и формат evidence перед отправкой. Для выплаты нужны External reference и Transferred at; для отказа нужна причина.`;
+  }
   return error instanceof Error ? error.message : "Unknown admin finance error";
+}
+
+function actionLabel(context: AdminFinanceErrorContext): string {
+  const labels: Record<AdminFinanceErrorContext, string> = {
+    load: "Загрузка финансов",
+    policy: "Сохранение политики",
+    risk: "Сохранение риска",
+    payout_paid: "Подтверждение ручной выплаты",
+    payout_rejected: "Отклонение заявки на вывод",
+    reversal_review: "Review refund/chargeback",
+    reconciliation_resolution: "Закрытие reconciliation exception"
+  };
+  return labels[context];
+}
+
+function backendMessage(responseBody: unknown): string | null {
+  if (typeof responseBody === "string") return responseBody;
+  if (!responseBody || typeof responseBody !== "object") return null;
+  const body = responseBody as { readonly message?: unknown; readonly error?: unknown };
+  if (Array.isArray(body.message)) {
+    const messages = body.message.filter((item): item is string => typeof item === "string");
+    return messages.length > 0 ? messages.join("; ") : null;
+  }
+  if (typeof body.message === "string") return body.message;
+  if (typeof body.error === "string") return body.error;
+  return null;
+}
+
+function backendCodeHint(message: string | null): string | null {
+  if (!message) return null;
+  const hints: Record<string, string> = {
+    payout_status_evidence_invalid:
+      "Backend отклонил payout evidence: проверьте банковский reference, дату перевода и причину отказа.",
+    payout_status_transition_invalid:
+      "Backend запретил переход статуса выплаты: локальный экран мог устареть.",
+    finance_idempotency_conflict:
+      "Idempotency-key уже связан с другой командой; не повторяйте операцию без проверки audit trail.",
+    finance_idempotency_key_reused_with_different_request:
+      "Idempotency-key уже связан с другой командой; обновите очередь и проверьте audit trail перед повтором.",
+    finance_idempotency_in_progress:
+      "Похожая финансовая команда уже выполняется; дождитесь результата и обновите очередь.",
+    finance_idempotency_failed:
+      "Предыдущая команда завершилась ошибкой; нужен ручной разбор перед повтором."
+  };
+  return hints[message] ?? message;
+}
+
+function isClientValidationError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const issues = (error as { readonly issues?: unknown }).issues;
+  return Array.isArray(issues);
 }

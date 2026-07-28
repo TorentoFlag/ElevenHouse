@@ -4,7 +4,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AdminPaymentReversalCase } from "@elevenhouse/contracts/payments";
-import type { AdminFinancePoliciesApi } from "../api/adminFinancePoliciesApi";
+import type {
+  AdminPayoutQueueResponse,
+  AdminPayoutRequestResponse
+} from "@elevenhouse/contracts/payouts";
+import {
+  AdminFinancePoliciesApiError,
+  type AdminFinancePoliciesApi
+} from "../api/adminFinancePoliciesApi";
 import { FinancePoliciesPage } from "./FinancePoliciesPage";
 
 describe("FinancePoliciesPage", () => {
@@ -173,7 +180,114 @@ describe("FinancePoliciesPage", () => {
     ).toBe(true);
     expect(api.updatePayoutRequestStatus).not.toHaveBeenCalled();
   });
+
+  it("shows an actionable CSRF/session error for protected finance mutations", async () => {
+    const api = apiStub();
+    vi.mocked(api.listPayoutRequests).mockResolvedValue(payoutQueue([payoutRequest()]));
+    vi.mocked(api.updatePayoutRequestStatus).mockRejectedValue(
+      new AdminFinancePoliciesApiError(403, {
+        message: "CSRF token is missing or invalid"
+      })
+    );
+
+    render(<FinancePoliciesPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
+    fireEvent.change(screen.getByLabelText("External reference"), {
+      target: { value: "bank-transfer-1001" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отметить оплаченной" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("CSRF");
+    expect(alert.textContent).toContain("Обновите страницу");
+  });
+
+  it("shows payout evidence guidance when a finance mutation is rejected as invalid", async () => {
+    const api = apiStub();
+    vi.mocked(api.listPayoutRequests).mockResolvedValue(payoutQueue([payoutRequest()]));
+    vi.mocked(api.updatePayoutRequestStatus).mockRejectedValue(
+      new AdminFinancePoliciesApiError(400, {
+        message: "payout_status_evidence_invalid"
+      })
+    );
+
+    render(<FinancePoliciesPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
+    fireEvent.change(screen.getByLabelText("External reference"), {
+      target: { value: "bank-transfer-1001" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отметить оплаченной" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("проверьте подтверждение выплаты");
+    expect(alert.textContent).toContain("External reference");
+  });
+
+  it("shows stale-state guidance when a payout mutation conflicts with backend state", async () => {
+    const api = apiStub();
+    vi.mocked(api.listPayoutRequests).mockResolvedValue(payoutQueue([payoutRequest()]));
+    vi.mocked(api.updatePayoutRequestStatus).mockRejectedValue(
+      new AdminFinancePoliciesApiError(409, {
+        message: "payout_status_transition_invalid"
+      })
+    );
+
+    render(<FinancePoliciesPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
+    fireEvent.change(screen.getByLabelText("External reference"), {
+      target: { value: "bank-transfer-1001" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отметить оплаченной" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Состояние уже изменилось");
+    expect(alert.textContent).toContain("Обновите очередь");
+  });
 });
+
+function payoutQueue(requests: AdminPayoutRequestResponse[]): AdminPayoutQueueResponse {
+  return {
+    summary: {
+      requestedCount: 0,
+      underReviewCount: 0,
+      processingCount: requests.length,
+      chargebackBlockedCount: 0,
+      readyToPayAmount: { amountMinor: 0, currency: "RUB" as const },
+      processingAmount: {
+        amountMinor: requests.reduce((sum, request) => sum + request.amount.amountMinor, 0),
+        currency: "RUB" as const
+      },
+      chargebackBlockedAmount: { amountMinor: 0, currency: "RUB" as const }
+    },
+    requests
+  };
+}
+
+function payoutRequest(
+  overrides: Partial<AdminPayoutRequestResponse> = {}
+): AdminPayoutRequestResponse {
+  return {
+    id: "11111111-1111-4111-8111-111111111111",
+    astrologerUserId: "55555555-5555-4555-8555-555555555555",
+    status: "processing_manual",
+    amount: { amountMinor: 45_000, currency: "RUB" },
+    method: "manual_bank_transfer",
+    requestedAt: "2026-07-24T10:00:00.000Z",
+    reviewedAt: "2026-07-24T10:01:00.000Z",
+    completedAt: null,
+    adminUserId: null,
+    adminNote: null,
+    failureReason: null,
+    externalReference: null,
+    transferredAt: null,
+    providerPayoutId: null,
+    blockedByChargeback: false,
+    ...overrides
+  };
+}
 
 function apiStub(): AdminFinancePoliciesApi {
   const reviewedReversalCase: AdminPaymentReversalCase = {
