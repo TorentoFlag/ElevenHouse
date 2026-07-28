@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  adminPaymentReversalCaseReviewRequestSchema,
+  adminPaymentReversalCaseReviewSchema,
   adminPaymentReversalCaseSchema,
   adminPaymentReversalQueueResponseSchema,
   createCheckoutRequestSchema,
@@ -103,6 +105,12 @@ describe("payment contracts", () => {
       refundStatus: null,
       ledgerOperationType: "chargeback_recorded",
       ledgerTransactionId: "66666666-6666-4666-8666-666666666666",
+      review: {
+        resolution: "provider_follow_up_required",
+        adminNote: "Evidence package requested from Arc Pay support",
+        reviewedByUserId: "77777777-7777-4777-8777-777777777777",
+        reviewedAt: "2026-07-24T10:03:00.000Z"
+      },
       walletBalance: {
         astrologerUserId: "55555555-5555-4555-8555-555555555555",
         pending: { amountMinor: 0, currency: "RUB" },
@@ -117,6 +125,9 @@ describe("payment contracts", () => {
     } as const;
 
     expect(adminPaymentReversalCaseSchema.parse(chargeback)).toEqual(chargeback);
+    expect(adminPaymentReversalCaseReviewSchema.parse(chargeback.review)).toEqual(
+      chargeback.review
+    );
     expect(
       adminPaymentReversalQueueResponseSchema.parse({
         summary: {
@@ -152,10 +163,36 @@ describe("payment contracts", () => {
         refundStatus: "succeeded",
         ledgerOperationType: "refund_recorded",
         ledgerTransactionId: "66666666-6666-4666-8666-666666666666",
+        review: null,
         walletBalance: null,
         occurredAt: "2026-07-24T10:00:00.000Z",
         receivedAt: "2026-07-24T10:01:00.000Z"
       })
     ).toThrow();
+  });
+
+  it("requires a durable admin note before an operator can review a reversal case", () => {
+    expect(
+      adminPaymentReversalCaseReviewRequestSchema.parse({
+        resolution: "ledger_verified",
+        adminNote: "Provider reversal and ElevenHouse ledger transaction are matched"
+      })
+    ).toEqual({
+      resolution: "ledger_verified",
+      adminNote: "Provider reversal and ElevenHouse ledger transaction are matched"
+    });
+
+    expect(
+      adminPaymentReversalCaseReviewRequestSchema.safeParse({
+        resolution: "ledger_verified",
+        adminNote: " "
+      }).success
+    ).toBe(false);
+    expect(
+      adminPaymentReversalCaseReviewRequestSchema.safeParse({
+        resolution: "provider_refund_succeeded",
+        adminNote: "Do not model provider success from admin review"
+      }).success
+    ).toBe(false);
   });
 });

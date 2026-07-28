@@ -550,6 +550,111 @@ describe("admin finance policy HTTP flow", () => {
     ).resolves.toMatchObject({ status: 400 });
   });
 
+  it("reviews payment reversal cases with CSRF, idempotency and audit evidence", async () => {
+    await expect(
+      putJson(
+        "/admin/finance/reversal-cases/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/review",
+        {
+          resolution: "provider_follow_up_required",
+          adminNote: "Chargeback evidence requested from Arc Pay support"
+        },
+        authCookie()
+      )
+    ).resolves.toMatchObject({ status: 403 });
+
+    await expect(
+      putJson(
+        "/admin/finance/reversal-cases/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/review",
+        { resolution: "ledger_verified", adminNote: " " },
+        authenticatedCookies(),
+        {
+          origin: "http://localhost:5175",
+          [csrfHeaderName]: csrfToken
+        }
+      )
+    ).resolves.toMatchObject({ status: 400 });
+
+    const reviewed = await putJson(
+      "/admin/finance/reversal-cases/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/review",
+      {
+        resolution: "provider_follow_up_required",
+        adminNote: "Chargeback evidence requested from Arc Pay support"
+      },
+      authenticatedCookies(),
+      {
+        origin: "http://localhost:5175",
+        [csrfHeaderName]: csrfToken
+      }
+    );
+
+    expect(reviewed).toMatchObject({
+      status: 200,
+      body: {
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        review: {
+          resolution: "provider_follow_up_required",
+          adminNote: "Chargeback evidence requested from Arc Pay support",
+          reviewedByUserId: adminUserId,
+          reviewedAt: now.toISOString()
+        }
+      }
+    });
+    expect(auditLogStore.createEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: adminUserId,
+        action: "payment_reversal_case.reviewed",
+        targetType: "payment_reversal_case",
+        targetId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        metadata: expect.objectContaining({
+          resolution: "provider_follow_up_required",
+          type: "chargeback",
+          providerWebhookId: "wh_chargeback_1"
+        })
+      })
+    );
+
+    const replayed = await putJson(
+      "/admin/finance/reversal-cases/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/review",
+      {
+        resolution: "provider_follow_up_required",
+        adminNote: "Chargeback evidence requested from Arc Pay support"
+      },
+      authenticatedCookies(),
+      {
+        origin: "http://localhost:5175",
+        [csrfHeaderName]: csrfToken
+      }
+    );
+    expect(replayed).toMatchObject({ status: 200, body: reviewed.body });
+    expect(auditLogStore.createEntry).toHaveBeenCalledTimes(1);
+
+    const persistedCase = await reversalCaseStore.findCaseById(
+      "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    );
+    expect(persistedCase).not.toBeNull();
+    vi.mocked(reversalCaseStore.findCaseById).mockResolvedValueOnce({
+      ...persistedCase!,
+      review: null
+    });
+    const inconsistentReplay = await putJson(
+      "/admin/finance/reversal-cases/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/review",
+      {
+        resolution: "provider_follow_up_required",
+        adminNote: "Chargeback evidence requested from Arc Pay support"
+      },
+      authenticatedCookies(),
+      {
+        origin: "http://localhost:5175",
+        [csrfHeaderName]: csrfToken
+      }
+    );
+    expect(inconsistentReplay).toMatchObject({
+      status: 409,
+      body: { message: "payment_reversal_review_replay_missing" }
+    });
+    expect(auditLogStore.createEntry).toHaveBeenCalledTimes(1);
+  });
+
   it("lists and resolves reconciliation exceptions with CSRF and audit evidence", async () => {
     await expect(getJson("/admin/finance/reconciliation/exceptions")).resolves.toMatchObject({
       status: 401
@@ -887,7 +992,7 @@ function createLedgerStore(): Pick<LedgerStore, "createTransaction" | "findWalle
 }
 
 function createReversalCaseStore(): AdminPaymentReversalCaseStore {
-  const cases: Awaited<ReturnType<AdminPaymentReversalCaseStore["listCases"]>> = [
+  let cases: Awaited<ReturnType<AdminPaymentReversalCaseStore["listCases"]>> = [
     {
       id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       type: "chargeback",
@@ -907,6 +1012,7 @@ function createReversalCaseStore(): AdminPaymentReversalCaseStore {
       refundStatus: null,
       ledgerOperationType: "chargeback_recorded",
       ledgerTransactionId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      review: null,
       walletBalance: {
         astrologerUserId,
         pending: { amountMinor: 0, currency: "RUB" },
@@ -938,6 +1044,7 @@ function createReversalCaseStore(): AdminPaymentReversalCaseStore {
       refundStatus: "succeeded",
       ledgerOperationType: "refund_recorded",
       ledgerTransactionId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeef",
+      review: null,
       walletBalance: {
         astrologerUserId,
         pending: { amountMinor: 0, currency: "RUB" },
@@ -953,13 +1060,36 @@ function createReversalCaseStore(): AdminPaymentReversalCaseStore {
   ];
 
   return {
+    findCaseById: vi.fn(
+      async (id) => cases.find((paymentReversalCase) => paymentReversalCase.id === id) ?? null
+    ),
     listCases: vi.fn(async (input) =>
       cases
         .filter((paymentReversalCase) =>
           input.types?.length ? input.types.includes(paymentReversalCase.type) : true
         )
+        .filter((paymentReversalCase) =>
+          input.reviewStatus === "all" ? true : paymentReversalCase.review === null
+        )
         .slice(0, input.limit)
-    )
+    ),
+    recordReview: vi.fn(async (input) => {
+      const existing = cases.find((paymentReversalCase) => paymentReversalCase.id === input.caseId);
+      if (!existing) return null;
+      const updated = {
+        ...existing,
+        review: {
+          resolution: input.resolution,
+          adminNote: input.adminNote,
+          reviewedByUserId: input.adminUserId,
+          reviewedAt: input.reviewedAt
+        }
+      };
+      cases = cases.map((paymentReversalCase) =>
+        paymentReversalCase.id === updated.id ? updated : paymentReversalCase
+      );
+      return updated;
+    })
   };
 }
 

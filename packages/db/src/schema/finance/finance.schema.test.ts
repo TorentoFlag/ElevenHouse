@@ -19,6 +19,8 @@ import {
   paymentAttemptStatusValues,
   paymentAttempts,
   paymentProviderEvents,
+  paymentReversalCaseReviewResolutionValues,
+  paymentReversalCaseReviews,
   payoutMethodValues,
   payoutMethods,
   payoutRequestStatusValues,
@@ -51,6 +53,7 @@ describe("Finance persistence schema", () => {
     expect(getTableName(orders)).toBe("orders");
     expect(getTableName(paymentAttempts)).toBe("payment_attempts");
     expect(getTableName(paymentProviderEvents)).toBe("payment_provider_events");
+    expect(getTableName(paymentReversalCaseReviews)).toBe("payment_reversal_case_reviews");
     expect(getTableName(ledgerAccounts)).toBe("ledger_accounts");
     expect(getTableName(ledgerTransactions)).toBe("ledger_transactions");
     expect(getTableName(ledgerEntries)).toBe("ledger_entries");
@@ -105,6 +108,11 @@ describe("Finance persistence schema", () => {
     expect(riskTierValues).toEqual(["low", "standard", "elevated", "high", "manual_review"]);
     expect(financePaymentProviderValues).toEqual(["arc_pay"]);
     expect(financePaymentProviderEnvironmentValues).toEqual(["sandbox", "live"]);
+    expect(paymentReversalCaseReviewResolutionValues).toEqual([
+      "ledger_verified",
+      "provider_follow_up_required",
+      "evidence_sent"
+    ]);
     expect(financeCurrencyValues).toEqual(["RUB"]);
     expect(ledgerEntrySideValues).toEqual(["debit", "credit"]);
   });
@@ -185,6 +193,30 @@ describe("Finance persistence schema", () => {
     );
     expect(tableIndexNames(refunds)).toEqual(
       expect.arrayContaining(["refunds_provider_refund_unique"])
+    );
+  });
+
+  it("stores one durable admin review per payment reversal provider event", () => {
+    expect(Object.keys(getTableColumns(paymentReversalCaseReviews))).toEqual(
+      expect.arrayContaining([
+        "providerEventId",
+        "resolution",
+        "adminUserId",
+        "adminNote",
+        "reviewedAt"
+      ])
+    );
+    expect(tableCheckNames(paymentReversalCaseReviews)).toEqual(
+      expect.arrayContaining([
+        "payment_reversal_case_reviews_resolution_check",
+        "payment_reversal_case_reviews_admin_note_check"
+      ])
+    );
+    expect(tableIndexNames(paymentReversalCaseReviews)).toEqual(
+      expect.arrayContaining([
+        "payment_reversal_case_reviews_provider_event_unique",
+        "payment_reversal_case_reviews_reviewed_at_idx"
+      ])
     );
   });
 
@@ -323,7 +355,7 @@ describe("Finance persistence schema", () => {
     }
 
     expect(migration).toContain('"gross_amount_minor" bigint NOT NULL');
-    expect(migration).toContain('"finance_policy_risk_tier" text DEFAULT \'standard\' NOT NULL');
+    expect(migration).toContain("\"finance_policy_risk_tier\" text DEFAULT 'standard' NOT NULL");
     expect(migration).toContain(
       'CONSTRAINT "orders_finance_policy_risk_tier_check" CHECK ("orders"."finance_policy_risk_tier" in'
     );

@@ -73,6 +73,7 @@ describe("admin payment reversal case Drizzle/PostgreSQL integration", () => {
       orderId: fixture.chargebackOrderId,
       amount: { amountMinor: 50_000, currency: "RUB" },
       ledgerOperationType: "chargeback_recorded",
+      review: null,
       walletBalance: {
         astrologerUserId: fixture.astrologerUserId,
         negativeBalance: { amountMinor: 45_000, currency: "RUB" }
@@ -86,10 +87,37 @@ describe("admin payment reversal case Drizzle/PostgreSQL integration", () => {
       orderId: fixture.refundOrderId,
       amount: { amountMinor: 50_000, currency: "RUB" },
       refundStatus: "succeeded",
-      ledgerOperationType: "refund_recorded"
+      ledgerOperationType: "refund_recorded",
+      review: null
     });
 
     await expect(store.listCases({ types: ["refund"], limit: 10 })).resolves.toEqual([cases[1]]);
+
+    const reviewed = await store.recordReview({
+      caseId: fixture.chargebackProviderEventId,
+      resolution: "provider_follow_up_required",
+      adminUserId: fixture.adminUserId,
+      adminNote: "Chargeback evidence requested from Arc Pay support",
+      reviewedAt: "2026-07-26T10:10:00.000Z"
+    });
+
+    expect(reviewed).toMatchObject({
+      id: fixture.chargebackProviderEventId,
+      review: {
+        resolution: "provider_follow_up_required",
+        adminNote: "Chargeback evidence requested from Arc Pay support",
+        reviewedByUserId: fixture.adminUserId,
+        reviewedAt: "2026-07-26T10:10:00.000Z"
+      }
+    });
+    await expect(store.findCaseById(fixture.chargebackProviderEventId)).resolves.toMatchObject({
+      review: {
+        resolution: "provider_follow_up_required",
+        reviewedByUserId: fixture.adminUserId
+      }
+    });
+    await expect(store.listCases({ limit: 10 })).resolves.toEqual([cases[1]]);
+    await expect(store.listCases({ reviewStatus: "all", limit: 10 })).resolves.toHaveLength(2);
   });
 });
 
@@ -105,9 +133,11 @@ async function createFixture(): Promise<{
   readonly refundProviderEventId: string;
   readonly chargebackProviderEventId: string;
   readonly providerRefundId: string;
+  readonly adminUserId: string;
 }> {
   const astrologerUserId = randomUUID();
   const clientUserId = randomUUID();
+  const adminUserId = randomUUID();
   const productId = randomUUID();
   const policyId = randomUUID();
   const refundOrderId = randomUUID();
@@ -120,9 +150,10 @@ async function createFixture(): Promise<{
   const chargebackProviderEventId = randomUUID();
   const providerRefundId = randomUUID();
 
-  await runtime.pool.query("insert into users (id) values ($1), ($2)", [
+  await runtime.pool.query("insert into users (id) values ($1), ($2), ($3)", [
     astrologerUserId,
-    clientUserId
+    clientUserId,
+    adminUserId
   ]);
   await runtime.pool.query(
     `insert into products
@@ -210,7 +241,8 @@ async function createFixture(): Promise<{
     chargebackProviderPaymentId,
     refundProviderEventId,
     chargebackProviderEventId,
-    providerRefundId
+    providerRefundId,
+    adminUserId
   };
 }
 

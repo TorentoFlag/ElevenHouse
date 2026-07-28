@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AdminPaymentReversalCase } from "@elevenhouse/contracts/payments";
 import type { AdminFinancePoliciesApi } from "../api/adminFinancePoliciesApi";
 import { FinancePoliciesPage } from "./FinancePoliciesPage";
 
@@ -52,9 +53,108 @@ describe("FinancePoliciesPage", () => {
       "true"
     );
   });
+
+  it("submits dispute review actions through the admin-api and refreshes the queue", async () => {
+    const api = apiStub();
+    vi.mocked(api.listPaymentReversalCases).mockResolvedValue({
+      summary: {
+        refundCount: 0,
+        chargebackCount: 1,
+        criticalCount: 1,
+        totalAmount: { amountMinor: 50_000, currency: "RUB" as const },
+        negativeBalanceAmount: { amountMinor: 45_000, currency: "RUB" as const }
+      },
+      cases: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          type: "chargeback",
+          severity: "critical",
+          provider: "arc_pay",
+          environment: "sandbox",
+          providerWebhookId: "wh_chargeback_1",
+          providerPaymentId: "arc-payment-1",
+          providerRefundId: null,
+          paymentAttemptId: "22222222-2222-4222-8222-222222222222",
+          orderId: "33333333-3333-4333-8333-333333333333",
+          clientUserId: "44444444-4444-4444-8444-444444444444",
+          astrologerUserId: "55555555-5555-4555-8555-555555555555",
+          orderStatus: "chargeback",
+          paymentAttemptStatus: "chargeback",
+          amount: { amountMinor: 50_000, currency: "RUB" as const },
+          refundStatus: null,
+          ledgerOperationType: "chargeback_recorded",
+          ledgerTransactionId: "66666666-6666-4666-8666-666666666666",
+          review: null,
+          walletBalance: {
+            astrologerUserId: "55555555-5555-4555-8555-555555555555",
+            pending: { amountMinor: 0, currency: "RUB" as const },
+            available: { amountMinor: 0, currency: "RUB" as const },
+            reserved: { amountMinor: 0, currency: "RUB" as const },
+            payoutPending: { amountMinor: 0, currency: "RUB" as const },
+            negativeBalance: { amountMinor: 45_000, currency: "RUB" as const },
+            updatedAt: "2026-07-24T10:02:00.000Z"
+          },
+          occurredAt: "2026-07-24T10:00:00.000Z",
+          receivedAt: "2026-07-24T10:01:00.000Z"
+        }
+      ]
+    });
+
+    render(<FinancePoliciesPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Споры" }));
+    await screen.findByText("Provider chargeback");
+    fireEvent.change(screen.getByLabelText("Решение оператора"), {
+      target: { value: "provider_follow_up_required" }
+    });
+    fireEvent.change(screen.getByLabelText("Комментарий оператора"), {
+      target: { value: "Chargeback evidence requested from Arc Pay support" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Зафиксировать review" }));
+
+    await waitFor(() =>
+      expect(api.reviewPaymentReversalCase).toHaveBeenCalledWith(
+        "11111111-1111-4111-8111-111111111111",
+        {
+          resolution: "provider_follow_up_required",
+          adminNote: "Chargeback evidence requested from Arc Pay support"
+        }
+      )
+    );
+    expect(api.listPaymentReversalCases).toHaveBeenCalledTimes(2);
+  });
 });
 
 function apiStub(): AdminFinancePoliciesApi {
+  const reviewedReversalCase: AdminPaymentReversalCase = {
+    id: "11111111-1111-4111-8111-111111111111",
+    type: "chargeback",
+    severity: "critical",
+    provider: "arc_pay",
+    environment: "sandbox",
+    providerWebhookId: "wh_chargeback_1",
+    providerPaymentId: "arc-payment-1",
+    providerRefundId: null,
+    paymentAttemptId: "22222222-2222-4222-8222-222222222222",
+    orderId: "33333333-3333-4333-8333-333333333333",
+    clientUserId: "44444444-4444-4444-8444-444444444444",
+    astrologerUserId: "55555555-5555-4555-8555-555555555555",
+    orderStatus: "chargeback",
+    paymentAttemptStatus: "chargeback",
+    amount: { amountMinor: 50_000, currency: "RUB" },
+    refundStatus: null,
+    ledgerOperationType: "chargeback_recorded",
+    ledgerTransactionId: "66666666-6666-4666-8666-666666666666",
+    review: {
+      resolution: "provider_follow_up_required",
+      adminNote: "Chargeback evidence requested from Arc Pay support",
+      reviewedByUserId: "77777777-7777-4777-8777-777777777777",
+      reviewedAt: "2026-07-24T10:03:00.000Z"
+    },
+    walletBalance: null,
+    occurredAt: "2026-07-24T10:00:00.000Z",
+    receivedAt: "2026-07-24T10:01:00.000Z"
+  };
   return {
     listPolicies: vi.fn(async () => ({ policies: [] })),
     ensureDefaultPolicy: vi.fn(),
@@ -80,6 +180,7 @@ function apiStub(): AdminFinancePoliciesApi {
       },
       cases: []
     })),
+    reviewPaymentReversalCase: vi.fn(async () => reviewedReversalCase),
     listReconciliationExceptions: vi.fn(async () => ({
       summary: {
         openCount: 0,

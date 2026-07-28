@@ -8,6 +8,17 @@ import type { WalletBalance } from "../wallet";
 
 export type AdminPaymentReversalCaseType = "refund" | "chargeback";
 export type AdminPaymentReversalCaseSeverity = "info" | "attention" | "critical";
+export type AdminPaymentReversalCaseReviewResolution =
+  | "ledger_verified"
+  | "provider_follow_up_required"
+  | "evidence_sent";
+
+export type AdminPaymentReversalCaseReview = {
+  readonly resolution: AdminPaymentReversalCaseReviewResolution;
+  readonly adminNote: string;
+  readonly reviewedByUserId: string | null;
+  readonly reviewedAt: string;
+};
 
 export type AdminPaymentReversalCaseRecord = {
   readonly id: string;
@@ -28,6 +39,7 @@ export type AdminPaymentReversalCaseRecord = {
   readonly refundStatus: "requested" | "processing" | "succeeded" | "failed" | null;
   readonly ledgerOperationType: "refund_recorded" | "chargeback_recorded" | null;
   readonly ledgerTransactionId: string | null;
+  readonly review: AdminPaymentReversalCaseReview | null;
   readonly walletBalance: WalletBalance | null;
   readonly occurredAt: string;
   readonly receivedAt: string;
@@ -35,11 +47,24 @@ export type AdminPaymentReversalCaseRecord = {
 
 export type AdminPaymentReversalCaseListInput = {
   readonly types?: readonly AdminPaymentReversalCaseType[];
+  readonly reviewStatus?: "open" | "reviewed" | "all";
   readonly limit: number;
 };
 
+export type RecordAdminPaymentReversalCaseReviewInput = {
+  readonly caseId: string;
+  readonly resolution: AdminPaymentReversalCaseReviewResolution;
+  readonly adminUserId: string;
+  readonly adminNote: string;
+  readonly reviewedAt: string;
+};
+
 export type AdminPaymentReversalCaseStore = {
+  readonly findCaseById: (caseId: string) => Promise<AdminPaymentReversalCaseRecord | null>;
   readonly listCases: (
     input: AdminPaymentReversalCaseListInput
   ) => Promise<readonly AdminPaymentReversalCaseRecord[]>;
+  readonly recordReview: (
+    input: RecordAdminPaymentReversalCaseReviewInput
+  ) => Promise<AdminPaymentReversalCaseRecord | null>;
 };

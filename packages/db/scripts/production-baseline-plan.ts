@@ -15,16 +15,20 @@ export type BaselineHistoryKind =
   | "unknown";
 
 export const currentBaseline = {
-  hash: "a867c769a612f24e02e5b1c08e41c2967a1052ad0ee124cf97ddeb63bbe12d46",
+  hash: "9502df7bc0155994014951df839fd556213d11e3c370cb5244d65a37a43d704e",
   createdAt: "1785010323027"
 } as const satisfies MigrationIdentity;
 
 export const previousBaseline = {
-  hash: "911332efe5ba14b352244a8176412cf637dccdb25141aa1792dcad35c63831de",
-  createdAt: "1784111509389"
+  hash: "a867c769a612f24e02e5b1c08e41c2967a1052ad0ee124cf97ddeb63bbe12d46",
+  createdAt: "1785010323027"
 } as const satisfies MigrationIdentity;
 
 export const approvedLegacyMigrations = [
+  {
+    hash: "911332efe5ba14b352244a8176412cf637dccdb25141aa1792dcad35c63831de",
+    createdAt: "1784111509389"
+  },
   {
     hash: "9a042354672db97fda448a68804c61952d81d2c39e4b67b8581de04984c3fff8",
     createdAt: "1782996784018"

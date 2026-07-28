@@ -11,7 +11,11 @@ import {
   type UpdateFinancePolicyRequest
 } from "@elevenhouse/contracts/finance-policies";
 import {
+  adminPaymentReversalCaseReviewRequestSchema,
+  adminPaymentReversalCaseSchema,
   adminPaymentReversalQueueResponseSchema,
+  type AdminPaymentReversalCase,
+  type AdminPaymentReversalCaseReviewRequest,
   type AdminPaymentReversalQueueResponse
 } from "@elevenhouse/contracts/payments";
 import {
@@ -49,6 +53,10 @@ export type AdminFinancePoliciesApi = {
   readonly listPaymentReversalCases: (
     type?: "all" | "refund" | "chargeback"
   ) => Promise<AdminPaymentReversalQueueResponse>;
+  readonly reviewPaymentReversalCase: (
+    reversalCaseId: string,
+    request: AdminPaymentReversalCaseReviewRequest
+  ) => Promise<AdminPaymentReversalCase>;
   readonly listReconciliationExceptions: (input?: {
     readonly evidence?: AdminReconciliationExceptionEvidenceFilter;
   }) => Promise<AdminReconciliationExceptionQueueResponse>;
@@ -125,6 +133,18 @@ export function createAdminFinancePoliciesApi(
       const search = type === "all" ? "" : `?type=${encodeURIComponent(type)}`;
       return adminPaymentReversalQueueResponseSchema.parse(
         await request(`/admin/finance/reversal-cases${search}`)
+      );
+    },
+    reviewPaymentReversalCase: async (reversalCaseId, rawRequest) => {
+      const parsed = adminPaymentReversalCaseReviewRequestSchema.parse(rawRequest);
+      return adminPaymentReversalCaseSchema.parse(
+        await request(
+          `/admin/finance/reversal-cases/${encodeURIComponent(reversalCaseId)}/review`,
+          {
+            method: "PUT",
+            body: JSON.stringify(parsed)
+          }
+        )
       );
     },
     listReconciliationExceptions: async (input = {}) =>

@@ -3,8 +3,9 @@
 ## Outcome
 
 Admin finance operators can narrow payout and reconciliation queues through
-server-backed filters without losing ledger/audit semantics or moving business
-filtering into the browser.
+server-backed filters and review refund/chargeback cases through audited
+admin-api mutations without losing ledger/audit semantics or moving business
+state into the browser.
 
 ## Scope
 
@@ -15,12 +16,15 @@ In scope:
 - `admin-api` query validation with `400` for unknown filter values.
 - DB adapter filtering for reconciliation evidence/provider/environment.
 - `admin-web` controls that reload real admin-api queue data.
+- Durable admin review for refund/chargeback cases with required operator note.
+- Idempotent CSRF-protected admin-api reversal review action and audit event.
 - Targeted contract, API, UI and HTTP flow tests.
 
 Out of scope:
 
 - Automatic provider payouts.
-- Refund write commands.
+- Provider refund write commands.
+- Provider chargeback evidence submission automation.
 - User search, verification, moderation and platform settings.
 - A new payment microservice boundary.
 
@@ -44,8 +48,24 @@ Out of scope:
 - Operators can filter reconciliation exceptions by evidence type:
   `all`, `payment`, `settlement`, `payout`, `provider_event`.
 - Bad query values fail observably instead of silently defaulting.
-- UI filter changes call admin-api-backed methods, not local array filtering.
+- UI filter and review changes call admin-api-backed methods, not local array filtering.
+- Reversal review records operator outcome and note durably, removes reviewed
+  cases from the default open queue, and does not mark provider refund success.
 - Tests cover contracts, admin-api HTTP behavior and admin-web API/UI behavior.
+
+## Progress
+
+- [x] 2026-07-28: Added server-backed payout/reconciliation queue filters.
+- [x] 2026-07-28: Added durable admin payment reversal review schema, store
+      overlay, CSRF/idempotent admin-api route, audit event and admin-web form.
+- [x] Run full affected typecheck/build/runtime browser verification for the
+      reversal review UI.
+
+## Decision Log
+
+- 2026-07-28: Reversal review is an internal operator action, not a provider
+  refund command. Provider refund/chargeback monetary state remains webhook and
+  ledger owned; admin review records evidence and queue resolution only.
 
 ## Verification
 

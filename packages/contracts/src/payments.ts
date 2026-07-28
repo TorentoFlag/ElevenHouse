@@ -128,6 +128,38 @@ export type AdminPaymentReversalCaseSeverity = z.infer<
   typeof adminPaymentReversalCaseSeveritySchema
 >;
 
+export const adminPaymentReversalCaseReviewResolutionValues = [
+  "ledger_verified",
+  "provider_follow_up_required",
+  "evidence_sent"
+] as const;
+export const adminPaymentReversalCaseReviewResolutionSchema = z.enum(
+  adminPaymentReversalCaseReviewResolutionValues
+);
+export type AdminPaymentReversalCaseReviewResolution = z.infer<
+  typeof adminPaymentReversalCaseReviewResolutionSchema
+>;
+
+export const adminPaymentReversalCaseReviewSchema = z
+  .object({
+    resolution: adminPaymentReversalCaseReviewResolutionSchema,
+    adminNote: z.string().trim().min(1).max(2_000),
+    reviewedByUserId: uuidSchema.nullable(),
+    reviewedAt: isoDateTimeSchema
+  })
+  .strict();
+export type AdminPaymentReversalCaseReview = z.infer<typeof adminPaymentReversalCaseReviewSchema>;
+
+export const adminPaymentReversalCaseReviewRequestSchema = z
+  .object({
+    resolution: adminPaymentReversalCaseReviewResolutionSchema,
+    adminNote: z.string().trim().min(1).max(2_000)
+  })
+  .strict();
+export type AdminPaymentReversalCaseReviewRequest = z.infer<
+  typeof adminPaymentReversalCaseReviewRequestSchema
+>;
+
 export const adminPaymentReversalCaseSchema = z
   .object({
     id: uuidSchema,
@@ -148,6 +180,7 @@ export const adminPaymentReversalCaseSchema = z
     refundStatus: z.enum(["requested", "processing", "succeeded", "failed"]).nullable(),
     ledgerOperationType: z.enum(["refund_recorded", "chargeback_recorded"]).nullable(),
     ledgerTransactionId: uuidSchema.nullable(),
+    review: adminPaymentReversalCaseReviewSchema.nullable(),
     walletBalance: walletBalanceResponseSchema.nullable(),
     occurredAt: isoDateTimeSchema,
     receivedAt: isoDateTimeSchema

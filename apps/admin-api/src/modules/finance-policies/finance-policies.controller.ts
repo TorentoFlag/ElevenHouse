@@ -13,6 +13,7 @@ import {
 } from "@nestjs/common";
 import type {
   AdminPaymentReversalQueueResponse,
+  AdminPaymentReversalCase,
   AdminReconciliationExceptionQueueResponse,
   AdminPayoutQueueResponse,
   ReconciliationRecordResponse,
@@ -81,6 +82,20 @@ export class FinancePoliciesController {
     @Query("type") type?: string
   ): Promise<AdminPaymentReversalQueueResponse> {
     return this.service.listPaymentReversalCases(type);
+  }
+
+  @Put("reversal-cases/:reversalCaseId/review")
+  @RequireCsrf()
+  reviewPaymentReversalCase(
+    @Req() request: AdminSessionRequest,
+    @Param("reversalCaseId") reversalCaseId: string,
+    @Body() body: unknown
+  ): Promise<AdminPaymentReversalCase> {
+    return this.service.reviewPaymentReversalCase(
+      requireAdminUserId(request),
+      reversalCaseId,
+      body
+    );
   }
 
   @Get("reconciliation/exceptions")

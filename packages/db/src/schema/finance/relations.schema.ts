@@ -10,6 +10,7 @@ import {
   walletBalanceReadModels
 } from "./ledger.schema";
 import { orders } from "./orders.schema";
+import { paymentReversalCaseReviews } from "./payment-reversal-case-reviews.schema";
 import { paymentAttempts, paymentProviderEvents, refunds } from "./payments.schema";
 import { astrologerRiskProfiles, financePolicies } from "./policies.schema";
 import { payoutMethods, payoutRequests } from "./payouts.schema";
@@ -44,8 +45,23 @@ export const paymentProviderEventsRelations = relations(paymentProviderEvents, (
     references: [paymentAttempts.id]
   }),
   refunds: many(refunds),
+  reversalCaseReviews: many(paymentReversalCaseReviews),
   reconciliationRecords: many(reconciliationRecords)
 }));
+
+export const paymentReversalCaseReviewsRelations = relations(
+  paymentReversalCaseReviews,
+  ({ one }) => ({
+    providerEvent: one(paymentProviderEvents, {
+      fields: [paymentReversalCaseReviews.providerEventId],
+      references: [paymentProviderEvents.id]
+    }),
+    admin: one(users, {
+      fields: [paymentReversalCaseReviews.adminUserId],
+      references: [users.id]
+    })
+  })
+);
 
 export const refundsRelations = relations(refunds, ({ one }) => ({
   order: one(orders, { fields: [refunds.orderId], references: [orders.id] }),
@@ -78,7 +94,10 @@ export const ledgerEntriesRelations = relations(ledgerEntries, ({ one }) => ({
     fields: [ledgerEntries.ledgerTransactionId],
     references: [ledgerTransactions.id]
   }),
-  account: one(ledgerAccounts, { fields: [ledgerEntries.accountId], references: [ledgerAccounts.id] })
+  account: one(ledgerAccounts, {
+    fields: [ledgerEntries.accountId],
+    references: [ledgerAccounts.id]
+  })
 }));
 
 export const walletBalanceReadModelsRelations = relations(walletBalanceReadModels, ({ one }) => ({

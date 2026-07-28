@@ -153,6 +153,7 @@ describe("createAdminFinancePoliciesApi", () => {
             refundStatus: null,
             ledgerOperationType: "chargeback_recorded",
             ledgerTransactionId: "66666666-6666-4666-8666-666666666666",
+            review: null,
             walletBalance: {
               astrologerUserId: "55555555-5555-4555-8555-555555555555",
               pending: { amountMinor: 0, currency: "RUB" },
@@ -181,6 +182,69 @@ describe("createAdminFinancePoliciesApi", () => {
       expect.objectContaining({
         credentials: "include",
         headers: expect.not.objectContaining({ "x-csrf-token": "csrf-token" })
+      })
+    );
+  });
+
+  it("reviews reversal cases through a CSRF protected admin-api mutation", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({
+        id: "11111111-1111-4111-8111-111111111111",
+        type: "chargeback",
+        severity: "critical",
+        provider: "arc_pay",
+        environment: "sandbox",
+        providerWebhookId: "wh_chargeback_1",
+        providerPaymentId: "arc-payment-1",
+        providerRefundId: null,
+        paymentAttemptId: "22222222-2222-4222-8222-222222222222",
+        orderId: "33333333-3333-4333-8333-333333333333",
+        clientUserId: "44444444-4444-4444-8444-444444444444",
+        astrologerUserId: "55555555-5555-4555-8555-555555555555",
+        orderStatus: "chargeback",
+        paymentAttemptStatus: "chargeback",
+        amount: { amountMinor: 50_000, currency: "RUB" },
+        refundStatus: null,
+        ledgerOperationType: "chargeback_recorded",
+        ledgerTransactionId: "66666666-6666-4666-8666-666666666666",
+        review: {
+          resolution: "provider_follow_up_required",
+          adminNote: "Chargeback evidence requested from Arc Pay support",
+          reviewedByUserId: "77777777-7777-4777-8777-777777777777",
+          reviewedAt: "2026-07-24T10:03:00.000Z"
+        },
+        walletBalance: null,
+        occurredAt: "2026-07-24T10:00:00.000Z",
+        receivedAt: "2026-07-24T10:01:00.000Z"
+      })
+    );
+    const api = createAdminFinancePoliciesApi({
+      fetcher,
+      csrfTokenReader: () => "csrf-token"
+    });
+
+    await expect(
+      api.reviewPaymentReversalCase("11111111-1111-4111-8111-111111111111", {
+        resolution: "provider_follow_up_required",
+        adminNote: "Chargeback evidence requested from Arc Pay support"
+      })
+    ).resolves.toMatchObject({
+      review: { resolution: "provider_follow_up_required" }
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/admin/finance/reversal-cases/11111111-1111-4111-8111-111111111111/review",
+      expect.objectContaining({
+        method: "PUT",
+        credentials: "include",
+        headers: expect.objectContaining({
+          "content-type": "application/json",
+          "x-csrf-token": "csrf-token"
+        }),
+        body: JSON.stringify({
+          resolution: "provider_follow_up_required",
+          adminNote: "Chargeback evidence requested from Arc Pay support"
+        })
       })
     );
   });

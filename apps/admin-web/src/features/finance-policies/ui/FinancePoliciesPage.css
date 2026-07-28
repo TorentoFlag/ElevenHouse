@@ -137,6 +137,14 @@
   opacity: 0.45;
 }
 
+.adminFinanceShell .ehButton:disabled {
+  background: #25213c;
+  box-shadow: none;
+  color: var(--admin-muted-2);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .adminFinanceRoleButtonActive {
   background: var(--admin-accent);
   color: #14111e;
@@ -434,6 +442,10 @@
   padding: 0;
 }
 
+.adminFinanceDisputeCardSelected {
+  border-color: rgba(244, 196, 48, 0.34);
+}
+
 .adminFinanceDisputeHead {
   border-bottom: 1px solid var(--admin-line);
   padding: 16px 20px 13px;
@@ -495,6 +507,15 @@
 
 .adminFinanceDisputeActions span {
   flex: 1;
+}
+
+.adminFinanceDisputeReviewForm {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.42fr) minmax(0, 1fr);
+  gap: 13px;
+  margin: 0 20px;
+  border-top: 1px solid var(--admin-line);
+  padding: 14px 0 18px;
 }
 
 .adminFinanceReconciliationKpis {
@@ -948,6 +969,7 @@
 
   .adminFinanceStatusGrid,
   .adminFinanceForm,
+  .adminFinanceDisputeReviewForm,
   .adminFinanceFactsCompact,
   .adminFinanceDisputeKpis,
   .adminFinanceDisputeFacts,

@@ -56,6 +56,12 @@ export const paymentProviderEventTypeValues = [
 
 export const refundStatusValues = ["requested", "processing", "succeeded", "failed"] as const;
 
+export const paymentReversalCaseReviewResolutionValues = [
+  "ledger_verified",
+  "provider_follow_up_required",
+  "evidence_sent"
+] as const;
+
 export const walletBalanceBucketValues = [
   "pending",
   "available",

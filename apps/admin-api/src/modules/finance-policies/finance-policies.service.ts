@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import {
+  adminPaymentReversalCaseReviewRequestSchema,
   adminPaymentReversalQueueResponseSchema,
   adminPayoutQueueStatusFilterSchema,
   adminReconciliationExceptionQueueResponseSchema,
@@ -18,6 +19,7 @@ import {
   reconciliationRecordResponseSchema,
   resolveReconciliationExceptionRequestSchema,
   type AdminPaymentReversalCase,
+  type AdminPaymentReversalCaseReviewRequest,
   type AdminPaymentReversalCaseType,
   type AdminPaymentReversalQueueResponse,
   type AdminPayoutQueueStatusFilter,
@@ -238,6 +240,62 @@ export class FinancePoliciesService {
     });
   }
 
+  async reviewPaymentReversalCase(
+    adminUserId: string,
+    reversalCaseId: string,
+    body: unknown
+  ): Promise<AdminPaymentReversalCase> {
+    const request = parseBody(adminPaymentReversalCaseReviewRequestSchema, body);
+    const now = this.clock.now();
+    try {
+      const reviewed = await this.unitOfWork.executeIdempotent({
+        command: createPaymentReversalReviewCommand({
+          adminUserId,
+          reversalCaseId,
+          request,
+          now
+        }),
+        create: async (context) => {
+          const paymentReversalCase = await reviewPaymentReversalCaseInContext({
+            ...context,
+            adminUserId,
+            reversalCaseId,
+            request,
+            now: now.toISOString()
+          });
+          return { result: { reversalCaseId: paymentReversalCase.id }, value: paymentReversalCase };
+        },
+        replay: async ({ reversalCaseStore }, result) => {
+          const replayReversalCaseId = result.reversalCaseId;
+          if (typeof replayReversalCaseId !== "string") {
+            throw new PaymentReversalReviewReplayMissingError();
+          }
+          const paymentReversalCase = await reversalCaseStore.findCaseById(replayReversalCaseId);
+          if (!paymentReversalCase?.review) {
+            throw new PaymentReversalReviewReplayMissingError();
+          }
+          return paymentReversalCase;
+        }
+      });
+      return toPaymentReversalCaseResponse(reviewed.value);
+    } catch (error) {
+      if (error instanceof PaymentReversalCaseNotFoundError) {
+        throw new NotFoundException(error.code);
+      }
+      if (error instanceof PaymentReversalReviewReplayMissingError) {
+        throw new ConflictException(error.code);
+      }
+      if (
+        error instanceof FinanceIdempotencyConflictError ||
+        error instanceof FinanceIdempotencyInProgressError ||
+        error instanceof FinanceIdempotencyFailedError
+      ) {
+        throw new ConflictException(error.code);
+      }
+      throw error;
+    }
+  }
+
   async listReconciliationExceptions(query: {
     readonly provider?: string;
     readonly environment?: string;
@@ -454,6 +512,44 @@ async function updatePayoutStatusInContext(
   return updated;
 }
 
+async function reviewPaymentReversalCaseInContext(
+  input: AdminFinancePolicyUnitOfWorkContext & {
+    readonly adminUserId: string;
+    readonly reversalCaseId: string;
+    readonly request: AdminPaymentReversalCaseReviewRequest;
+    readonly now: string;
+  }
+): Promise<AdminPaymentReversalCaseRecord> {
+  const reviewed = await input.reversalCaseStore.recordReview({
+    caseId: input.reversalCaseId,
+    resolution: input.request.resolution,
+    adminUserId: input.adminUserId,
+    adminNote: input.request.adminNote,
+    reviewedAt: input.now
+  });
+  if (!reviewed) throw new PaymentReversalCaseNotFoundError();
+  await input.auditSink.record({
+    actorUserId: input.adminUserId,
+    action: "payment_reversal_case.reviewed",
+    targetId: reviewed.id,
+    occurredAt: input.now,
+    metadata: {
+      resolution: input.request.resolution,
+      adminNote: input.request.adminNote,
+      type: reviewed.type,
+      provider: reviewed.provider,
+      environment: reviewed.environment,
+      providerWebhookId: reviewed.providerWebhookId,
+      providerPaymentId: reviewed.providerPaymentId,
+      providerRefundId: reviewed.providerRefundId,
+      orderId: reviewed.orderId,
+      ledgerTransactionId: reviewed.ledgerTransactionId,
+      negativeBalanceAmountMinor: reviewed.walletBalance?.negativeBalance.amountMinor ?? 0
+    }
+  });
+  return reviewed;
+}
+
 function parseBody<T>(schema: { parse: (value: unknown) => T }, value: unknown): T {
   try {
     return schema.parse(value);
@@ -497,6 +593,47 @@ function createTerminalPayoutStatusCommand(input: {
     now: input.now.toISOString(),
     expiresAt: new Date(input.now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
   };
+}
+
+function createPaymentReversalReviewCommand(input: {
+  readonly adminUserId: string;
+  readonly reversalCaseId: string;
+  readonly request: AdminPaymentReversalCaseReviewRequest;
+  readonly now: Date;
+}): FinanceIdempotentCommand {
+  return {
+    scope: "admin.finance.payment-reversal-review",
+    idempotencyKey: `${input.reversalCaseId}:review`,
+    actorUserId: input.adminUserId,
+    requestHash: `sha256:${createHash("sha256")
+      .update(
+        stableStringify({
+          reversalCaseId: input.reversalCaseId,
+          request: input.request
+        })
+      )
+      .digest("hex")}`,
+    now: input.now.toISOString(),
+    expiresAt: new Date(input.now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
+  };
+}
+
+class PaymentReversalCaseNotFoundError extends Error {
+  readonly code = "payment_reversal_case_not_found";
+
+  constructor() {
+    super("Payment reversal case was not found");
+    this.name = "PaymentReversalCaseNotFoundError";
+  }
+}
+
+class PaymentReversalReviewReplayMissingError extends Error {
+  readonly code = "payment_reversal_review_replay_missing";
+
+  constructor() {
+    super("Completed payment reversal review command is missing durable review evidence");
+    this.name = "PaymentReversalReviewReplayMissingError";
+  }
 }
 
 function isTerminalPayoutStatus(status: AdminPayoutStatusUpdate["status"]): boolean {

@@ -1,22 +1,24 @@
-import { sql, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import type {
   AdminPaymentReversalCaseRecord,
   AdminPaymentReversalCaseStore,
+  AdminPaymentReversalCaseReviewResolution,
   AdminPaymentReversalCaseType,
   FinancePaymentProvider,
   PaymentAttemptStatus,
   PaymentProviderEnvironment
 } from "@elevenhouse/domain";
 import type { Money, WalletBalance } from "@elevenhouse/domain";
-import type { ElevenHouseDatabase } from "../../runtime";
 import {
   ledgerTransactions,
   orders,
   paymentAttempts,
   paymentProviderEvents,
+  paymentReversalCaseReviews,
   refunds,
   walletBalanceReadModels
 } from "../../schema";
+import type { FinanceDatabase } from "./drizzle-finance-command-store";
 
 type ReversalCaseRow = {
   readonly id: string;
@@ -38,6 +40,10 @@ type ReversalCaseRow = {
   readonly refund_status: string | null;
   readonly ledger_operation_type: string | null;
   readonly ledger_transaction_id: string | null;
+  readonly review_resolution: string | null;
+  readonly review_admin_note: string | null;
+  readonly reviewed_by_user_id: string | null;
+  readonly reviewed_at: Date | string | null;
   readonly wallet_pending_amount_minor: string | number | null;
   readonly wallet_available_amount_minor: string | number | null;
   readonly wallet_reserved_amount_minor: string | number | null;
@@ -49,13 +55,71 @@ type ReversalCaseRow = {
 };
 
 export function createDrizzlePaymentReversalCaseStore(
-  database: ElevenHouseDatabase
+  database: FinanceDatabase
 ): AdminPaymentReversalCaseStore {
   return {
+    findCaseById: async (caseId) => {
+      const [paymentReversalCase] = await readCases(database, {
+        caseId,
+        reviewStatus: "all",
+        limit: 1
+      });
+      return paymentReversalCase ?? null;
+    },
     listCases: async (input) => {
-      assertLimit(input.limit);
-      const eventTypes = toProviderEventTypes(input.types);
-      const result = await database.execute(sql<ReversalCaseRow>`
+      return readCases(database, input);
+    },
+    recordReview: async (input) => {
+      const existing = await readCases(database, {
+        caseId: input.caseId,
+        reviewStatus: "all",
+        limit: 1
+      });
+      if (!existing[0]) return null;
+      if (existing[0].review) return existing[0];
+
+      await database
+        .insert(paymentReversalCaseReviews)
+        .values({
+          providerEventId: input.caseId,
+          resolution: input.resolution,
+          adminUserId: input.adminUserId,
+          adminNote: input.adminNote,
+          reviewedAt: new Date(input.reviewedAt)
+        })
+        .onConflictDoNothing({
+          target: paymentReversalCaseReviews.providerEventId
+        });
+
+      const [reviewed] = await readCases(database, {
+        caseId: input.caseId,
+        reviewStatus: "all",
+        limit: 1
+      });
+      return reviewed ?? null;
+    }
+  };
+}
+
+async function readCases(
+  database: FinanceDatabase,
+  input: {
+    readonly caseId?: string;
+    readonly types?: readonly AdminPaymentReversalCaseType[];
+    readonly reviewStatus?: "open" | "reviewed" | "all";
+    readonly limit: number;
+  }
+): Promise<readonly AdminPaymentReversalCaseRecord[]> {
+  assertLimit(input.limit);
+  const eventTypes = toProviderEventTypes(input.types);
+  const reviewStatus = input.reviewStatus ?? "open";
+  const predicates = [
+    sql`${paymentProviderEvents.type} in (${sql.join(eventTypes, sql`, `)})`,
+    input.caseId ? eq(paymentProviderEvents.id, input.caseId) : undefined,
+    reviewStatus === "open" ? sql`${paymentReversalCaseReviews.id} is null` : undefined,
+    reviewStatus === "reviewed" ? sql`${paymentReversalCaseReviews.id} is not null` : undefined
+  ].filter((predicate): predicate is SQL => Boolean(predicate));
+  const result = await database.execute(sql<ReversalCaseRow>`
         select
           ${paymentProviderEvents.id} as id,
           case
@@ -87,6 +151,10 @@ export function createDrizzlePaymentReversalCaseStore(
           ${refunds.status} as refund_status,
           reversal_ledger.operation_type as ledger_operation_type,
           reversal_ledger.id as ledger_transaction_id,
+          ${paymentReversalCaseReviews.resolution} as review_resolution,
+          ${paymentReversalCaseReviews.adminNote} as review_admin_note,
+          ${paymentReversalCaseReviews.adminUserId} as reviewed_by_user_id,
+          ${paymentReversalCaseReviews.reviewedAt} as reviewed_at,
           ${walletBalanceReadModels.pendingAmountMinor} as wallet_pending_amount_minor,
           ${walletBalanceReadModels.availableAmountMinor} as wallet_available_amount_minor,
           ${walletBalanceReadModels.reservedAmountMinor} as wallet_reserved_amount_minor,
@@ -102,6 +170,8 @@ export function createDrizzlePaymentReversalCaseStore(
           on ${orders.id} = ${paymentAttempts.orderId}
         left join ${refunds}
           on ${refunds.providerEventId} = ${paymentProviderEvents.id}
+        left join ${paymentReversalCaseReviews}
+          on ${paymentReversalCaseReviews.providerEventId} = ${paymentProviderEvents.id}
         left join lateral (
           select ${ledgerTransactions.id}, ${ledgerTransactions.operationType}, ${ledgerTransactions.metadata}
           from ${ledgerTransactions}
@@ -113,13 +183,11 @@ export function createDrizzlePaymentReversalCaseStore(
         ) as reversal_ledger on true
         left join ${walletBalanceReadModels}
           on ${walletBalanceReadModels.astrologerUserId} = ${orders.astrologerUserId}
-        where ${paymentProviderEvents.type} in (${sql.join(eventTypes, sql`, `)})
+        where ${sql.join(predicates, sql` and `)}
         order by ${paymentProviderEvents.receivedAt} desc, ${paymentProviderEvents.id} desc
         limit ${input.limit}
       `);
-      return (result.rows as ReversalCaseRow[]).map(toReversalCase);
-    }
-  };
+  return (result.rows as ReversalCaseRow[]).map(toReversalCase);
 }
 
 function toProviderEventTypes(types: readonly AdminPaymentReversalCaseType[] | undefined): SQL[] {
@@ -156,9 +224,20 @@ function toReversalCase(row: ReversalCaseRow): AdminPaymentReversalCaseRecord {
     ledgerOperationType:
       row.ledger_operation_type as AdminPaymentReversalCaseRecord["ledgerOperationType"],
     ledgerTransactionId: row.ledger_transaction_id,
+    review: toReview(row),
     walletBalance: toWalletBalance(row),
     occurredAt: toIso(row.occurred_at),
     receivedAt: toIso(row.received_at)
+  };
+}
+
+function toReview(row: ReversalCaseRow): AdminPaymentReversalCaseRecord["review"] {
+  if (!row.review_resolution || !row.review_admin_note || !row.reviewed_at) return null;
+  return {
+    resolution: row.review_resolution as AdminPaymentReversalCaseReviewResolution,
+    adminNote: row.review_admin_note,
+    reviewedByUserId: row.reviewed_by_user_id,
+    reviewedAt: toIso(row.reviewed_at)
   };
 }
 

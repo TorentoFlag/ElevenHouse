@@ -8,6 +8,7 @@ export type AdminFinancePolicyAuditEvent = {
     | "astrologer_risk_profile.updated"
     | "finance_policy.applied_to_order"
     | "payout_request.status_updated"
+    | "payment_reversal_case.reviewed"
     | "reconciliation_exception.resolved";
   readonly targetId: string;
   readonly occurredAt: string;
@@ -42,6 +43,9 @@ function targetTypeForAction(action: AdminFinancePolicyAuditEvent["action"]): st
   }
   if (action === "payout_request.status_updated") {
     return "payout_request";
+  }
+  if (action === "payment_reversal_case.reviewed") {
+    return "payment_reversal_case";
   }
   if (action === "reconciliation_exception.resolved") {
     return "reconciliation_record";

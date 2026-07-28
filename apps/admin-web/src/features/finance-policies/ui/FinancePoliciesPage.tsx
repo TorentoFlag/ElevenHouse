@@ -15,6 +15,7 @@ import type { FinancePolicyResponse, RiskTier } from "@elevenhouse/contracts/fin
 import type { Money } from "@elevenhouse/contracts/money";
 import type {
   AdminPaymentReversalCase,
+  AdminPaymentReversalCaseReviewResolution,
   AdminPaymentReversalQueueResponse
 } from "@elevenhouse/contracts/payments";
 import type {
@@ -71,6 +72,15 @@ const reconciliationEvidenceFilterOptions: readonly {
   { value: "provider_event", label: "Event" }
 ];
 
+const reversalResolutionOptions: readonly {
+  readonly value: AdminPaymentReversalCaseReviewResolution;
+  readonly label: string;
+}[] = [
+  { value: "ledger_verified", label: "Ledger verified" },
+  { value: "provider_follow_up_required", label: "Provider follow-up" },
+  { value: "evidence_sent", label: "Evidence sent" }
+];
+
 type LoadState =
   | { readonly status: "loading" }
   | { readonly status: "error"; readonly message: string }
@@ -93,6 +103,12 @@ type PayoutActionForm = {
 type ReconciliationActionForm = {
   readonly reconciliationRecordId: string;
   readonly resolution: ReconciliationExceptionResolution;
+  readonly adminNote: string;
+};
+
+type ReversalActionForm = {
+  readonly reversalCaseId: string;
+  readonly resolution: AdminPaymentReversalCaseReviewResolution;
   readonly adminNote: string;
 };
 
@@ -142,6 +158,9 @@ export function FinancePoliciesPage({
   const [reconciliationAction, setReconciliationAction] = useState<ReconciliationActionForm>(() =>
     emptyReconciliationAction()
   );
+  const [reversalAction, setReversalAction] = useState<ReversalActionForm>(() =>
+    emptyReversalAction()
+  );
   const [reconciliationEvidenceFilter, setReconciliationEvidenceFilter] =
     useState<AdminReconciliationExceptionEvidenceFilter>("all");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -149,6 +168,7 @@ export function FinancePoliciesPage({
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [savingRisk, setSavingRisk] = useState(false);
   const [savingPayout, setSavingPayout] = useState(false);
+  const [savingReversal, setSavingReversal] = useState(false);
   const [savingReconciliation, setSavingReconciliation] = useState(false);
 
   const policies = loadState.status === "ready" ? loadState.policies : [];
@@ -175,6 +195,15 @@ export function FinancePoliciesPage({
       reconciliationQueue.exceptions[0] ??
       null,
     [reconciliationAction.reconciliationRecordId, reconciliationQueue.exceptions]
+  );
+  const selectedReversalCase = useMemo(
+    () =>
+      reversalQueue.cases.find(
+        (paymentReversalCase) => paymentReversalCase.id === reversalAction.reversalCaseId
+      ) ??
+      reversalQueue.cases[0] ??
+      null,
+    [reversalAction.reversalCaseId, reversalQueue.cases]
   );
 
   async function refreshFinance(
@@ -228,6 +257,16 @@ export function FinancePoliciesPage({
         setReconciliationAction((previous) => ({
           ...previous,
           reconciliationRecordId: reconciliationResponse.exceptions[0]?.id ?? ""
+        }));
+      }
+      if (
+        !reversalResponse.cases.some(
+          (paymentReversalCase) => paymentReversalCase.id === reversalAction.reversalCaseId
+        )
+      ) {
+        setReversalAction((previous) => ({
+          ...previous,
+          reversalCaseId: reversalResponse.cases[0]?.id ?? ""
         }));
       }
     } catch (error) {
@@ -378,6 +417,30 @@ export function FinancePoliciesPage({
       setSubmitError(errorMessage(error));
     } finally {
       setSavingReconciliation(false);
+    }
+  }
+
+  async function handleReversalReviewSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedReversalCase) return;
+    if (!reversalAction.adminNote.trim()) {
+      setSubmitError("Добавьте комментарий оператора по refund/chargeback review.");
+      return;
+    }
+    setSavingReversal(true);
+    setSubmitError(null);
+    try {
+      await api.reviewPaymentReversalCase(selectedReversalCase.id, {
+        resolution: reversalAction.resolution,
+        adminNote: reversalAction.adminNote.trim()
+      });
+      setStatusMessage("Refund/chargeback review сохранен с audit evidence.");
+      setReversalAction(emptyReversalAction());
+      await refreshFinance();
+    } catch (error) {
+      setSubmitError(errorMessage(error));
+    } finally {
+      setSavingReversal(false);
     }
   }
 
@@ -552,7 +615,22 @@ export function FinancePoliciesPage({
                 onReject={() => void handlePayoutRejected()}
               />
             ) : null}
-            {tab === "disputes" ? <DisputesPanel reversalQueue={reversalQueue} /> : null}
+            {tab === "disputes" ? (
+              <DisputesPanel
+                reversalQueue={reversalQueue}
+                selectedCase={selectedReversalCase}
+                action={reversalAction}
+                saving={savingReversal}
+                onSelect={(paymentReversalCase) =>
+                  setReversalAction((previous) => ({
+                    ...previous,
+                    reversalCaseId: paymentReversalCase.id
+                  }))
+                }
+                onChange={setReversalAction}
+                onSubmit={handleReversalReviewSubmit}
+              />
+            ) : null}
             {tab === "reconciliation" ? (
               <ReconciliationPanel
                 reconciliationQueue={reconciliationQueue}
@@ -855,7 +933,15 @@ function PayoutsPanel(props: {
   );
 }
 
-function DisputesPanel(props: { readonly reversalQueue: AdminPaymentReversalQueueResponse }) {
+function DisputesPanel(props: {
+  readonly reversalQueue: AdminPaymentReversalQueueResponse;
+  readonly selectedCase: AdminPaymentReversalCase | null;
+  readonly action: ReversalActionForm;
+  readonly saving: boolean;
+  readonly onSelect: (paymentReversalCase: AdminPaymentReversalCase) => void;
+  readonly onChange: (next: ReversalActionForm) => void;
+  readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
   return (
     <div className="adminFinanceDisputesStack">
       <section className="adminFinanceDisputeKpis" aria-label="Dispute summary">
@@ -882,94 +968,158 @@ function DisputesPanel(props: { readonly reversalQueue: AdminPaymentReversalQueu
         </Card>
       ) : null}
 
-      {props.reversalQueue.cases.map((paymentReversalCase) => (
-        <Card
-          className="adminFinancePanel adminFinanceDisputeCard"
-          padding="medium"
-          key={paymentReversalCase.id}
-        >
-          <div className="adminFinanceDisputeHead">
-            <div>
-              <p className="adminFinanceKicker">
-                {paymentReversalCase.type === "chargeback"
-                  ? "Provider chargeback"
-                  : "Provider refund"}
-              </p>
-              <h2>{shortId(paymentReversalCase.orderId)}</h2>
+      {props.reversalQueue.cases.map((paymentReversalCase) => {
+        const isSelected = props.selectedCase?.id === paymentReversalCase.id;
+        return (
+          <Card
+            className={`adminFinancePanel adminFinanceDisputeCard${
+              isSelected ? " adminFinanceDisputeCardSelected" : ""
+            }`}
+            padding="medium"
+            key={paymentReversalCase.id}
+          >
+            <div className="adminFinanceDisputeHead">
+              <div>
+                <p className="adminFinanceKicker">
+                  {paymentReversalCase.type === "chargeback"
+                    ? "Provider chargeback"
+                    : "Provider refund"}
+                </p>
+                <h2>{shortId(paymentReversalCase.orderId)}</h2>
+              </div>
+              <strong className="adminFinanceDisputeAmount">
+                {formatMoney(paymentReversalCase.amount)}
+              </strong>
+              <ReversalSeverityPill severity={paymentReversalCase.severity} />
             </div>
-            <strong className="adminFinanceDisputeAmount">
-              {formatMoney(paymentReversalCase.amount)}
-            </strong>
-            <ReversalSeverityPill severity={paymentReversalCase.severity} />
-          </div>
 
-          <div className="adminFinanceDisputeParties">
-            <span className="adminFinanceUserCell">
-              <span className="adminFinanceAvatar">
-                {paymentReversalCase.clientUserId.slice(0, 2).toUpperCase()}
+            <div className="adminFinanceDisputeParties">
+              <span className="adminFinanceUserCell">
+                <span className="adminFinanceAvatar">
+                  {paymentReversalCase.clientUserId.slice(0, 2).toUpperCase()}
+                </span>
+                <span>{shortId(paymentReversalCase.clientUserId)}</span>
               </span>
-              <span>{shortId(paymentReversalCase.clientUserId)}</span>
-            </span>
-            <span className="adminFinanceDisputeArrow">→</span>
-            <span className="adminFinanceUserCell">
-              <span className="adminFinanceAvatar">
-                {paymentReversalCase.astrologerUserId.slice(0, 2).toUpperCase()}
+              <span className="adminFinanceDisputeArrow">→</span>
+              <span className="adminFinanceUserCell">
+                <span className="adminFinanceAvatar">
+                  {paymentReversalCase.astrologerUserId.slice(0, 2).toUpperCase()}
+                </span>
+                <span>{shortId(paymentReversalCase.astrologerUserId)}</span>
               </span>
-              <span>{shortId(paymentReversalCase.astrologerUserId)}</span>
-            </span>
-            <span className="adminFinanceDisputeSpacer" />
-            <ReversalTypePill paymentReversalCase={paymentReversalCase} />
-          </div>
+              <span className="adminFinanceDisputeSpacer" />
+              <ReversalTypePill paymentReversalCase={paymentReversalCase} />
+            </div>
 
-          <div className="adminFinanceDisputeFacts">
-            <Fact
-              label="Provider payment"
-              value={paymentReversalCase.providerPaymentId ?? "missing"}
-            />
-            <Fact
-              label="Webhook"
-              value={`${paymentReversalCase.providerWebhookId} · ${formatDate(paymentReversalCase.receivedAt)}`}
-            />
-            <Fact
-              label="Ledger"
-              value={
-                paymentReversalCase.ledgerOperationType
-                  ? `${paymentReversalCase.ledgerOperationType} · ${shortId(paymentReversalCase.ledgerTransactionId ?? "")}`
-                  : "missing"
-              }
-            />
-            <Fact
-              label="Negative balance"
-              value={formatMoney(
-                paymentReversalCase.walletBalance?.negativeBalance ?? {
-                  amountMinor: 0,
-                  currency: paymentReversalCase.amount.currency
+            <div className="adminFinanceDisputeFacts">
+              <Fact
+                label="Provider payment"
+                value={paymentReversalCase.providerPaymentId ?? "missing"}
+              />
+              <Fact
+                label="Webhook"
+                value={`${paymentReversalCase.providerWebhookId} · ${formatDate(paymentReversalCase.receivedAt)}`}
+              />
+              <Fact
+                label="Ledger"
+                value={
+                  paymentReversalCase.ledgerOperationType
+                    ? `${paymentReversalCase.ledgerOperationType} · ${shortId(paymentReversalCase.ledgerTransactionId ?? "")}`
+                    : "missing"
                 }
-              )}
-            />
-          </div>
+              />
+              <Fact
+                label="Negative balance"
+                value={formatMoney(
+                  paymentReversalCase.walletBalance?.negativeBalance ?? {
+                    amountMinor: 0,
+                    currency: paymentReversalCase.amount.currency
+                  }
+                )}
+              />
+            </div>
 
-          <div className="adminFinanceDisputeEvidence">
-            <span>Evidence:</span>
-            <Chip label={paymentReversalCase.provider} type="button" />
-            <Chip label={paymentReversalCase.environment} type="button" />
-            <Chip label={paymentReversalCase.orderStatus} type="button" />
-            {paymentReversalCase.refundStatus ? (
-              <Chip label={paymentReversalCase.refundStatus} type="button" />
-            ) : null}
-            {paymentReversalCase.providerRefundId ? (
-              <Chip label={paymentReversalCase.providerRefundId} type="button" />
-            ) : null}
-          </div>
+            <div className="adminFinanceDisputeEvidence">
+              <span>Evidence:</span>
+              <Chip label={paymentReversalCase.provider} type="button" />
+              <Chip label={paymentReversalCase.environment} type="button" />
+              <Chip label={paymentReversalCase.orderStatus} type="button" />
+              {paymentReversalCase.refundStatus ? (
+                <Chip label={paymentReversalCase.refundStatus} type="button" />
+              ) : null}
+              {paymentReversalCase.providerRefundId ? (
+                <Chip label={paymentReversalCase.providerRefundId} type="button" />
+              ) : null}
+            </div>
 
-          <div className="adminFinanceDisputeActions">
-            <Button title="Открыть заказ" variant="default" size="small" disabled />
-            <Button title="Ledger details" variant="default" size="small" disabled />
-            <span />
-            <small>Write-flow refunds will use provider commands, idempotency and audit.</small>
-          </div>
-        </Card>
-      ))}
+            <div className="adminFinanceDisputeActions">
+              <Button title="Открыть заказ" variant="default" size="small" disabled />
+              <Button title="Ledger details" variant="default" size="small" disabled />
+              <Button
+                title={isSelected ? "Выбран" : "Review"}
+                variant={isSelected ? "brand" : "default"}
+                size="small"
+                onClick={() => props.onSelect(paymentReversalCase)}
+              />
+              <span />
+              <small>
+                Review fixes operator evidence only; provider reversal remains webhook-owned.
+              </small>
+            </div>
+            {isSelected ? (
+              <form className="adminFinanceDisputeReviewForm" onSubmit={props.onSubmit}>
+                <label className="adminFinanceField">
+                  <span>Решение оператора</span>
+                  <select
+                    id={`reversal-review-resolution-${paymentReversalCase.id}`}
+                    name="resolution"
+                    value={props.action.resolution}
+                    onChange={(event) =>
+                      props.onChange({
+                        ...props.action,
+                        reversalCaseId: paymentReversalCase.id,
+                        resolution: event.target.value as AdminPaymentReversalCaseReviewResolution
+                      })
+                    }
+                  >
+                    {reversalResolutionOptions.map((option) => (
+                      <option value={option.value} key={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="adminFinanceField adminFinanceFieldWide">
+                  <span>Комментарий оператора</span>
+                  <textarea
+                    id={`reversal-review-note-${paymentReversalCase.id}`}
+                    name="adminNote"
+                    rows={3}
+                    value={props.action.adminNote}
+                    onChange={(event) =>
+                      props.onChange({
+                        ...props.action,
+                        reversalCaseId: paymentReversalCase.id,
+                        adminNote: event.target.value
+                      })
+                    }
+                    placeholder="Provider evidence, ledger check or chargeback follow-up"
+                  />
+                </label>
+                <div className="adminFinanceFormActions">
+                  <Button
+                    title={props.saving ? "Сохраняем..." : "Зафиксировать review"}
+                    variant="brand"
+                    size="medium"
+                    type="submit"
+                    disabled={props.saving || !props.action.adminNote.trim()}
+                  />
+                </div>
+              </form>
+            ) : null}
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -1650,6 +1800,14 @@ function emptyReconciliationAction(): ReconciliationActionForm {
   return {
     reconciliationRecordId: "",
     resolution: "resolved",
+    adminNote: ""
+  };
+}
+
+function emptyReversalAction(): ReversalActionForm {
+  return {
+    reversalCaseId: "",
+    resolution: "ledger_verified",
     adminNote: ""
   };
 }
