@@ -1,7 +1,7 @@
 import type { INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
-import { hashSessionToken } from "@elevenhouse/auth";
+import { createAes256GcmSecretCipher, hashSessionToken, type Aes256GcmSecretCipher } from "@elevenhouse/auth";
 import {
   MessagingMessageMediaSourceResponseSchema,
   MessagingMessageResponseSchema,
@@ -62,6 +62,7 @@ let secondaryCsrfToken = "";
 let linkedClientUserId: string | null = null;
 let startedTelegramBusinessConnectionId: string | null = null;
 let startedTelegramMtprotoConnectionId: string | null = null;
+let mtprotoLoginState: "code_required" | "password_required" | "authorized" = "code_required";
 let inboundProviderMessageCount = 0;
 let businessConnectionUpdateCount = 0;
 let deletedBusinessMessageCount = 0;
@@ -84,6 +85,7 @@ describe("messaging HTTP routes", () => {
     linkedClientUserId = null;
     startedTelegramBusinessConnectionId = null;
     startedTelegramMtprotoConnectionId = null;
+    mtprotoLoginState = "code_required";
     inboundProviderMessageCount = 0;
     businessConnectionUpdateCount = 0;
     deletedBusinessMessageCount = 0;
@@ -143,6 +145,17 @@ describe("messaging HTTP routes", () => {
         sendCode: vi.fn(async () => ({
           phoneCodeHash: "telegram-phone-code-hash",
           isCodeViaApp: true
+        })),
+        signInWithCode: vi.fn(async () => ({
+          loginStep: "password_required" as const,
+          session: "partial-session-string"
+        })),
+        signInWithPassword: vi.fn(async () => ({
+          loginStep: "connected" as const,
+          session: "final-session-string",
+          telegramUserId: "987654321",
+          username: "alisa_astro",
+          displayName: "Alisa"
         }))
       })
       .overrideProvider(MEDIA_PRIVATE_OBJECT_STORAGE)
@@ -260,6 +273,68 @@ describe("messaging HTTP routes", () => {
     expect(JSON.stringify(response.body)).not.toMatch(
       /phoneCodeHash|telegram-phone-code-hash|session|\+78005553535/i
     );
+  });
+
+  it("submits Telegram Account code with browser auth and CSRF", async () => {
+    startedTelegramMtprotoConnectionId = connectionId;
+    mtprotoLoginState = "code_required";
+    const withoutCsrf = await requestJson(
+      "POST",
+      "/messaging/channel-connections/telegram/mtproto/code",
+      { channelConnectionId: connectionId, code: "777777" },
+      auth()
+    );
+    const response = await requestJson(
+      "POST",
+      "/messaging/channel-connections/telegram/mtproto/code",
+      { channelConnectionId: connectionId, code: "777777" },
+      csrfAuth()
+    );
+
+    expect(withoutCsrf.status).toBe(403);
+    expect(response.status).toBe(201);
+    TelegramMtprotoLoginResponseSchema.parse(response.body);
+    expect(response.body).toMatchObject({
+      loginStep: "password_required",
+      maskedPhoneNumber: "+7******3535",
+      channelConnection: {
+        id: connectionId,
+        mode: "telegram_mtproto_account",
+        status: "connecting"
+      }
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(/777777|phoneCodeHash|session|partial-session/i);
+  });
+
+  it("submits Telegram Account password with browser auth and CSRF", async () => {
+    startedTelegramMtprotoConnectionId = connectionId;
+    mtprotoLoginState = "password_required";
+    const withoutCsrf = await requestJson(
+      "POST",
+      "/messaging/channel-connections/telegram/mtproto/password",
+      { channelConnectionId: connectionId, password: "secret-password" },
+      auth()
+    );
+    const response = await requestJson(
+      "POST",
+      "/messaging/channel-connections/telegram/mtproto/password",
+      { channelConnectionId: connectionId, password: "secret-password" },
+      csrfAuth()
+    );
+
+    expect(withoutCsrf.status).toBe(403);
+    expect(response.status).toBe(201);
+    TelegramMtprotoLoginResponseSchema.parse(response.body);
+    expect(response.body).toMatchObject({
+      loginStep: "connected",
+      maskedPhoneNumber: "+7******3535",
+      channelConnection: {
+        id: connectionId,
+        mode: "telegram_mtproto_account",
+        status: "active"
+      }
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(/secret-password|session|final-session/i);
   });
 
   it("returns safe 404 for a cross-owner thread", async () => {
@@ -504,6 +579,7 @@ function createAuthStore(): AuthSessionAuthenticationStore {
 
 function createStore(): MessagingStore {
   const thread = domainThread();
+  const cipher = testMtprotoCipher();
   return {
     findThreadForAstrologer: vi.fn(async ({ astrologerUserId }) =>
       astrologerUserId === ownerUserId ? thread : null
@@ -537,9 +613,44 @@ function createStore(): MessagingStore {
     }),
     startTelegramMtprotoConnection: vi.fn(async () => {
       startedTelegramMtprotoConnectionId = connectionId;
+      mtprotoLoginState = "code_required";
       return {
         connectionId,
         loginStep: "code_required" as const,
+        maskedPhoneNumber: "+7******3535"
+      };
+    }),
+    findTelegramMtprotoLoginSession: vi.fn(async ({ astrologerUserId, connectionId: requestedConnectionId }) => {
+      if (astrologerUserId !== ownerUserId || requestedConnectionId !== connectionId) return null;
+      return {
+        connectionId,
+        loginState: mtprotoLoginState,
+        maskedPhoneNumber: "+7******3535",
+        encryptedPhoneNumber: encryptedMtprotoSecret(cipher, "phone_number", "+78005553535"),
+        encryptedPhoneCodeHash: encryptedMtprotoSecret(
+          cipher,
+          "phone_code_hash",
+          "telegram-phone-code-hash"
+        ),
+        encryptedSession:
+          mtprotoLoginState === "password_required"
+            ? encryptedMtprotoSecret(cipher, "session", "partial-session-string")
+            : null
+      };
+    }),
+    recordTelegramMtprotoCodeResult: vi.fn(async (input) => {
+      mtprotoLoginState = input.loginStep === "connected" ? "authorized" : "password_required";
+      return {
+        connectionId: input.connectionId,
+        loginStep: input.loginStep,
+        maskedPhoneNumber: "+7******3535"
+      };
+    }),
+    recordTelegramMtprotoPasswordResult: vi.fn(async (input) => {
+      mtprotoLoginState = "authorized";
+      return {
+        connectionId: input.connectionId,
+        loginStep: "connected" as const,
         maskedPhoneNumber: "+7******3535"
       };
     }),
@@ -638,12 +749,31 @@ function createPrivateStorage() {
   };
 }
 
+function testMtprotoCipher(): Aes256GcmSecretCipher {
+  return createAes256GcmSecretCipher(Buffer.alloc(32, 12));
+}
+
+function encryptedMtprotoSecret(
+  cipher: Aes256GcmSecretCipher,
+  purpose: "phone_number" | "phone_code_hash" | "session",
+  plaintext: string
+) {
+  const encrypted = cipher.encrypt({
+    plaintext,
+    aad: `messaging:telegram_mtproto:${ownerUserId}:${purpose}`
+  });
+  return {
+    ...encrypted,
+    keyId: "telegram_mtproto_v1"
+  };
+}
+
 function readChannelConnection() {
   return {
     id: connectionId,
     provider: "telegram" as const,
     mode: startedTelegramMtprotoConnectionId ? "telegram_mtproto_account" as const : "telegram_business_bot" as const,
-    status: "connecting" as const,
+    status: mtprotoLoginState === "authorized" ? "active" as const : "connecting" as const,
     displayName: null,
     username: null,
     capabilities: {

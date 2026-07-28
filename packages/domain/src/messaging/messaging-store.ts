@@ -100,6 +100,42 @@ export type StartTelegramMtprotoConnectionStoreResult = {
   readonly maskedPhoneNumber: string;
 };
 
+export type TelegramMtprotoLoginSession = {
+  readonly connectionId: string;
+  readonly loginState: "code_required" | "password_required" | "authorized" | "reauth_required" | "revoked";
+  readonly maskedPhoneNumber: string;
+  readonly encryptedPhoneNumber: EncryptedMessagingSecret;
+  readonly encryptedPhoneCodeHash: EncryptedMessagingSecret;
+  readonly encryptedSession: EncryptedMessagingSecret | null;
+};
+
+export type RecordTelegramMtprotoCodeResultStoreInput = {
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly loginStep: "password_required" | "connected";
+  readonly encryptedSession: EncryptedMessagingSecret;
+  readonly telegramUserId: string | null;
+  readonly username: string | null;
+  readonly displayName: string | null;
+  readonly now: string;
+};
+
+export type RecordTelegramMtprotoPasswordResultStoreInput = {
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly encryptedSession: EncryptedMessagingSecret;
+  readonly telegramUserId: string;
+  readonly username: string | null;
+  readonly displayName: string | null;
+  readonly now: string;
+};
+
+export type TelegramMtprotoLoginResultStoreResult = {
+  readonly connectionId: string;
+  readonly loginStep: "password_required" | "connected";
+  readonly maskedPhoneNumber: string;
+};
+
 export type RecordTelegramBusinessMessageStoreInput = {
   readonly updateId: string;
   readonly businessConnectionId: string;
@@ -216,6 +252,16 @@ export type MessagingStore = {
   readonly startTelegramMtprotoConnection: (
     input: StartTelegramMtprotoConnectionStoreInput
   ) => Promise<StartTelegramMtprotoConnectionStoreResult>;
+  readonly findTelegramMtprotoLoginSession: (input: {
+    readonly astrologerUserId: string;
+    readonly connectionId: string;
+  }) => Promise<TelegramMtprotoLoginSession | null>;
+  readonly recordTelegramMtprotoCodeResult: (
+    input: RecordTelegramMtprotoCodeResultStoreInput
+  ) => Promise<TelegramMtprotoLoginResultStoreResult>;
+  readonly recordTelegramMtprotoPasswordResult: (
+    input: RecordTelegramMtprotoPasswordResultStoreInput
+  ) => Promise<TelegramMtprotoLoginResultStoreResult>;
   readonly recordTelegramBusinessMessage: (
     input: RecordTelegramBusinessMessageStoreInput
   ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;

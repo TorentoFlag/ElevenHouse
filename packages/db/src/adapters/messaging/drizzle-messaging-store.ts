@@ -28,10 +28,14 @@ import type {
   RecordTelegramBusinessEditedMessageStoreInput,
   RecordTelegramBusinessEditedMessageStoreResult,
   RecordTelegramBusinessMessageStoreInput,
+  RecordTelegramMtprotoCodeResultStoreInput,
+  RecordTelegramMtprotoPasswordResultStoreInput,
   StartTelegramBusinessConnectionStoreInput,
   StartTelegramBusinessConnectionStoreResult,
   StartTelegramMtprotoConnectionStoreInput,
-  StartTelegramMtprotoConnectionStoreResult
+  StartTelegramMtprotoConnectionStoreResult,
+  TelegramMtprotoLoginResultStoreResult,
+  TelegramMtprotoLoginSession
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
@@ -85,6 +89,10 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     recordTelegramBusinessConnection: (input) => recordTelegramBusinessConnection(database, input),
     startTelegramBusinessConnection: (input) => startTelegramBusinessConnection(database, input),
     startTelegramMtprotoConnection: (input) => startTelegramMtprotoConnection(database, input),
+    findTelegramMtprotoLoginSession: (input) => findTelegramMtprotoLoginSession(database, input),
+    recordTelegramMtprotoCodeResult: (input) => recordTelegramMtprotoCodeResult(database, input),
+    recordTelegramMtprotoPasswordResult: (input) =>
+      recordTelegramMtprotoPasswordResult(database, input),
     recordTelegramBusinessMessage: (input) => recordTelegramBusinessMessage(database, input),
     recordTelegramBusinessDeletedMessages: (input) =>
       recordTelegramBusinessDeletedMessages(database, input),
@@ -531,6 +539,113 @@ async function startTelegramMtprotoConnection(
       connectionId: row.id,
       loginStep: "code_required",
       maskedPhoneNumber: input.maskedPhoneNumber
+    };
+  });
+}
+
+async function findTelegramMtprotoLoginSession(
+  database: MessagingDatabase,
+  input: { readonly astrologerUserId: string; readonly connectionId: string }
+): Promise<TelegramMtprotoLoginSession | null> {
+  const [row] = await database
+    .select({
+      connectionId: messagingChannelConnections.id,
+      loginState: messagingTelegramMtprotoSessions.loginState,
+      phoneNumberLast4: messagingTelegramMtprotoSessions.phoneNumberLast4,
+      phoneNumberEncrypted: messagingTelegramMtprotoSessions.phoneNumberEncrypted,
+      phoneCodeHashEncrypted: messagingTelegramMtprotoSessions.phoneCodeHashEncrypted,
+      sessionEncrypted: messagingTelegramMtprotoSessions.sessionEncrypted
+    })
+    .from(messagingTelegramMtprotoSessions)
+    .innerJoin(
+      messagingChannelConnections,
+      and(
+        eq(messagingChannelConnections.id, messagingTelegramMtprotoSessions.channelConnectionId),
+        eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
+        eq(messagingChannelConnections.provider, "telegram"),
+        eq(messagingChannelConnections.mode, "telegram_mtproto_account")
+      )
+    )
+    .where(eq(messagingChannelConnections.id, input.connectionId))
+    .limit(1);
+
+  if (!row) return null;
+  return {
+    connectionId: row.connectionId,
+    loginState: row.loginState as TelegramMtprotoLoginSession["loginState"],
+    maskedPhoneNumber: maskLast4(row.phoneNumberLast4),
+    encryptedPhoneNumber: row.phoneNumberEncrypted,
+    encryptedPhoneCodeHash: row.phoneCodeHashEncrypted,
+    encryptedSession: row.sessionEncrypted ?? null
+  };
+}
+
+async function recordTelegramMtprotoCodeResult(
+  database: ElevenHouseDatabase,
+  input: RecordTelegramMtprotoCodeResultStoreInput
+): Promise<TelegramMtprotoLoginResultStoreResult> {
+  return database.transaction(async (transaction) => {
+    const existing = await findTelegramMtprotoLoginSession(transaction, input);
+    if (!existing) throw new Error("Telegram Account login session was not found");
+    const loginState = input.loginStep === "connected" ? "authorized" : "password_required";
+    const [sessionRow] = await transaction
+      .update(messagingTelegramMtprotoSessions)
+      .set({
+        loginState,
+        sessionEncrypted: input.encryptedSession,
+        telegramUserId: input.telegramUserId,
+        updatedAt: new Date(input.now)
+      })
+      .where(eq(messagingTelegramMtprotoSessions.channelConnectionId, input.connectionId))
+      .returning({
+        connectionId: messagingTelegramMtprotoSessions.channelConnectionId,
+        phoneNumberLast4: messagingTelegramMtprotoSessions.phoneNumberLast4
+      });
+    if (!sessionRow) throw new Error("Telegram Account login session was not found");
+
+    await updateTelegramMtprotoConnectionAfterLoginStep(transaction, {
+      ...input,
+      status: input.loginStep === "connected" ? "active" : "connecting"
+    });
+    return {
+      connectionId: sessionRow.connectionId,
+      loginStep: input.loginStep,
+      maskedPhoneNumber: existing.maskedPhoneNumber
+    };
+  });
+}
+
+async function recordTelegramMtprotoPasswordResult(
+  database: ElevenHouseDatabase,
+  input: RecordTelegramMtprotoPasswordResultStoreInput
+): Promise<TelegramMtprotoLoginResultStoreResult> {
+  return database.transaction(async (transaction) => {
+    const existing = await findTelegramMtprotoLoginSession(transaction, input);
+    if (!existing) throw new Error("Telegram Account login session was not found");
+    const [sessionRow] = await transaction
+      .update(messagingTelegramMtprotoSessions)
+      .set({
+        loginState: "authorized",
+        sessionEncrypted: input.encryptedSession,
+        telegramUserId: input.telegramUserId,
+        updatedAt: new Date(input.now)
+      })
+      .where(eq(messagingTelegramMtprotoSessions.channelConnectionId, input.connectionId))
+      .returning({
+        connectionId: messagingTelegramMtprotoSessions.channelConnectionId,
+        phoneNumberLast4: messagingTelegramMtprotoSessions.phoneNumberLast4
+      });
+    if (!sessionRow) throw new Error("Telegram Account login session was not found");
+
+    await updateTelegramMtprotoConnectionAfterLoginStep(transaction, {
+      ...input,
+      loginStep: "connected",
+      status: "active"
+    });
+    return {
+      connectionId: sessionRow.connectionId,
+      loginStep: "connected",
+      maskedPhoneNumber: existing.maskedPhoneNumber
     };
   });
 }
@@ -1403,6 +1518,64 @@ function telegramMtprotoPendingCapabilities(): Record<string, boolean> {
     supportsMessageDeletes: false,
     supportsAttachments: false
   };
+}
+
+function telegramMtprotoActiveCapabilities(): Record<string, boolean> {
+  return {
+    canSend: true,
+    canReceive: true,
+    canRead: true,
+    supportsHistoryImport: false,
+    supportsMessageEdits: true,
+    supportsMessageDeletes: true,
+    supportsAttachments: true
+  };
+}
+
+async function updateTelegramMtprotoConnectionAfterLoginStep(
+  database: MessagingDatabase,
+  input: {
+    readonly astrologerUserId: string;
+    readonly connectionId: string;
+    readonly loginStep: "password_required" | "connected";
+    readonly status: "connecting" | "active";
+    readonly telegramUserId: string | null;
+    readonly username: string | null;
+    readonly displayName: string | null;
+    readonly now: string;
+  }
+): Promise<void> {
+  const timestamp = new Date(input.now);
+  const isActive = input.status === "active";
+  const [updated] = await database
+    .update(messagingChannelConnections)
+    .set({
+      status: input.status,
+      externalAccountId: isActive ? input.telegramUserId : null,
+      externalOwnerUserId: isActive ? input.telegramUserId : null,
+      displayNameSnapshot: isActive ? input.displayName : null,
+      usernameSnapshot: isActive ? input.username : null,
+      capabilities: isActive ? telegramMtprotoActiveCapabilities() : telegramMtprotoPendingCapabilities(),
+      connectedAt: isActive ? timestamp : null,
+      lastSyncedAt: isActive ? timestamp : null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      updatedAt: timestamp
+    })
+    .where(
+      and(
+        eq(messagingChannelConnections.id, input.connectionId),
+        eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
+        eq(messagingChannelConnections.provider, "telegram"),
+        eq(messagingChannelConnections.mode, "telegram_mtproto_account")
+      )
+    )
+    .returning({ id: messagingChannelConnections.id });
+  if (!updated) throw new Error("Telegram Account channel connection was not found");
+}
+
+function maskLast4(value: string): string {
+  return `******${value}`;
 }
 
 async function markThreadRead(

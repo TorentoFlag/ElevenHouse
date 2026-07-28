@@ -15,6 +15,9 @@ import {
   recordTelegramBusinessDeletedMessages,
   recordTelegramBusinessEditedMessage,
   recordTelegramBusinessMessage,
+  recordTelegramMtprotoCodeResult,
+  recordTelegramMtprotoPasswordResult,
+  requireTelegramMtprotoLoginSession,
   startTelegramBusinessConnection,
   startTelegramMtprotoConnection,
   type MessagingReadStore,
@@ -37,6 +40,8 @@ import {
   SendMessagingMessageRequestSchema,
   StartTelegramBusinessConnectionResponseSchema,
   StartTelegramMtprotoConnectionRequestSchema,
+  SubmitTelegramMtprotoCodeRequestSchema,
+  SubmitTelegramMtprotoPasswordRequestSchema,
   TelegramMtprotoLoginResponseSchema,
   type MessagingChannelConnectionResponse,
   type MessagingMessageMediaSourceResponse,
@@ -173,6 +178,89 @@ export class MessagingService {
         maskedPhoneNumber: result.maskedPhoneNumber,
         retryAfterSeconds: null
       });
+    });
+  }
+
+  async submitTelegramMtprotoCode(
+    body: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<TelegramMtprotoLoginResponse> {
+    return mapMessagingErrors(async () => {
+      const command = parseContract(SubmitTelegramMtprotoCodeRequestSchema, body);
+      const context = await this.requireTelegramMtprotoLoginContext({
+        astrologerUserId: requireAstrologerUserId(request),
+        connectionId: command.channelConnectionId,
+        expectedLoginState: "code_required"
+      });
+      const phoneNumber = context.cipher.decrypt({
+        encrypted: context.session.encryptedPhoneNumber,
+        aad: telegramMtprotoSecretAad(context.astrologerUserId, "phone_number")
+      });
+      const phoneCodeHash = context.cipher.decrypt({
+        encrypted: context.session.encryptedPhoneCodeHash,
+        aad: telegramMtprotoSecretAad(context.astrologerUserId, "phone_code_hash")
+      });
+      const providerResult = await context.provider.signInWithCode({
+        phoneNumber,
+        phoneCodeHash,
+        code: command.code
+      });
+      const encryptedSession = encryptedMessagingSecret("telegram_mtproto_v1", context.cipher.encrypt({
+        plaintext: providerResult.session,
+        aad: telegramMtprotoSecretAad(context.astrologerUserId, "session")
+      }));
+      const result = await recordTelegramMtprotoCodeResult({
+        store: this.store,
+        astrologerUserId: context.astrologerUserId,
+        connectionId: command.channelConnectionId,
+        loginStep: providerResult.loginStep,
+        encryptedSession,
+        telegramUserId: providerResult.loginStep === "connected" ? providerResult.telegramUserId : null,
+        username: providerResult.loginStep === "connected" ? providerResult.username : null,
+        displayName: providerResult.loginStep === "connected" ? providerResult.displayName : null,
+        now: this.clock.now()
+      });
+      return this.telegramMtprotoLoginResponse(context.astrologerUserId, result);
+    });
+  }
+
+  async submitTelegramMtprotoPassword(
+    body: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<TelegramMtprotoLoginResponse> {
+    return mapMessagingErrors(async () => {
+      const command = parseContract(SubmitTelegramMtprotoPasswordRequestSchema, body);
+      const context = await this.requireTelegramMtprotoLoginContext({
+        astrologerUserId: requireAstrologerUserId(request),
+        connectionId: command.channelConnectionId,
+        expectedLoginState: "password_required"
+      });
+      if (!context.session.encryptedSession) {
+        throw messagingHttpError(409, "telegram_mtproto_login_step_invalid", "Telegram Account login step is invalid");
+      }
+      const session = context.cipher.decrypt({
+        encrypted: context.session.encryptedSession,
+        aad: telegramMtprotoSecretAad(context.astrologerUserId, "session")
+      });
+      const providerResult = await context.provider.signInWithPassword({
+        session,
+        password: command.password
+      });
+      const encryptedSession = encryptedMessagingSecret("telegram_mtproto_v1", context.cipher.encrypt({
+        plaintext: providerResult.session,
+        aad: telegramMtprotoSecretAad(context.astrologerUserId, "session")
+      }));
+      const result = await recordTelegramMtprotoPasswordResult({
+        store: this.store,
+        astrologerUserId: context.astrologerUserId,
+        connectionId: command.channelConnectionId,
+        encryptedSession,
+        telegramUserId: providerResult.telegramUserId,
+        username: providerResult.username,
+        displayName: providerResult.displayName,
+        now: this.clock.now()
+      });
+      return this.telegramMtprotoLoginResponse(context.astrologerUserId, result);
     });
   }
 
@@ -323,6 +411,65 @@ export class MessagingService {
         mimeType: source.mimeType as never
       })),
       mimeType: source.mimeType
+    });
+  }
+
+  private async requireTelegramMtprotoLoginContext(input: {
+    readonly astrologerUserId: string;
+    readonly connectionId: string;
+    readonly expectedLoginState: "code_required" | "password_required";
+  }) {
+    if (!this.telegramMtprotoAuthProvider) {
+      throw messagingHttpError(
+        503,
+        "telegram_mtproto_login_unavailable",
+        "Telegram Account login is not configured"
+      );
+    }
+    const mtprotoConfig = this.configService.get<{
+      readonly sessionEncryptionKey: Buffer;
+    } | null>("astrologerApi.telegramMtproto");
+    if (!mtprotoConfig?.sessionEncryptionKey) {
+      throw messagingHttpError(
+        503,
+        "telegram_mtproto_login_unavailable",
+        "Telegram Account login is not configured"
+      );
+    }
+
+    return {
+      astrologerUserId: input.astrologerUserId,
+      provider: this.telegramMtprotoAuthProvider,
+      cipher: createAes256GcmSecretCipher(mtprotoConfig.sessionEncryptionKey),
+      session: await requireTelegramMtprotoLoginSession({
+        store: this.store,
+        astrologerUserId: input.astrologerUserId,
+        connectionId: input.connectionId,
+        expectedLoginState: input.expectedLoginState
+      })
+    };
+  }
+
+  private async telegramMtprotoLoginResponse(
+    astrologerUserId: string,
+    result: {
+      readonly connectionId: string;
+      readonly loginStep: "password_required" | "connected";
+      readonly maskedPhoneNumber: string;
+    }
+  ): Promise<TelegramMtprotoLoginResponse> {
+    const connections = await this.readStore.listChannelConnections({ astrologerUserId });
+    const connection = connections.channelConnections.find(
+      (candidate) => candidate.id === result.connectionId
+    );
+    if (!connection) {
+      throw new Error("Telegram Account connection was not available in the read model");
+    }
+    return TelegramMtprotoLoginResponseSchema.parse({
+      channelConnection: connection,
+      loginStep: result.loginStep,
+      maskedPhoneNumber: result.maskedPhoneNumber,
+      retryAfterSeconds: null
     });
   }
 
@@ -555,7 +702,7 @@ function maskPhoneNumber(value: string): string {
 
 function telegramMtprotoSecretAad(
   astrologerUserId: string,
-  purpose: "phone_number" | "phone_code_hash"
+  purpose: "phone_number" | "phone_code_hash" | "session"
 ): string {
   return `messaging:telegram_mtproto:${astrologerUserId}:${purpose}`;
 }

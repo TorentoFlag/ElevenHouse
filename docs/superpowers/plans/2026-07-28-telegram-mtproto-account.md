@@ -43,6 +43,11 @@ and reauth state are higher-risk prerequisites.
   `phone_code_hash`, and returns a contract-safe `code_required` response.
   Submit code/password, exported session storage, worker listener and UI wizard
   remain pending slices.
+- 2026-07-28: Added MTProto code/password API state transitions. The code step
+  decrypts phone + `phone_code_hash`, submits the user code to Telegram, then
+  stores only an encrypted partial/final session. The password step decrypts
+  the partial session, submits the password without persisting it, activates
+  the channel connection and stores only the encrypted final session.
 
 ## Surprises & Discoveries
 
@@ -138,11 +143,11 @@ Current state:
 
 - `telegram_mtproto_account` exists in shared types and DB mode checks.
 - UI shows the Telegram Account / MTProto option but keeps it disabled.
-- `POST /messaging/channel-connections/telegram/mtproto/start` exists in
-  `astrologer-api` and starts the phone-code request with encrypted-only
-  persistence.
-- There are no submit-code/password routes, exported session storage, account
-  listener worker or UI wizard yet.
+- `POST /messaging/channel-connections/telegram/mtproto/start`,
+  `/code` and `/password` exist in `astrologer-api` with encrypted-only
+  persistence and CSRF protection.
+- There is no account listener worker, outbound MTProto delivery route or UI
+  wizard yet.
 
 ## Interfaces and Dependencies
 
@@ -202,7 +207,7 @@ Tasks:
 - Add MTProto login/session schema and Drizzle adapters. Completed for start
   persistence with encrypted phone and phone-code-hash snapshots.
 - Add domain use cases for start, submit code, submit password, reauth and
-  disconnect. Completed for start; code/password/reauth/disconnect remain
+  disconnect. Completed for start/code/password; reauth/disconnect remain
   pending.
 - Store no plaintext phone except masked/last4 display value; store no code,
   password or raw session.
@@ -217,7 +222,9 @@ Tasks:
 - Add controller routes and service methods.
 - Compose provider port and secret cipher.
 - Add e2e/service tests for owner scoping, CSRF, invalid code, password
-  required, flood wait and no sensitive errors.
+  required, flood wait and no sensitive errors. Completed for CSRF,
+  code/password happy states and no sensitive response/command leakage;
+  invalid code/flood wait provider mapping remains pending.
 
 ### Slice 3: Worker Listener And Outbound Delivery
 

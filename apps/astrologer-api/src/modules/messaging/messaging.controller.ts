@@ -26,6 +26,18 @@ export class MessagingController {
     return this.service.startTelegramMtprotoConnection(body, request);
   }
 
+  @Post("channel-connections/telegram/mtproto/code")
+  @RequireCsrf()
+  submitTelegramMtprotoCode(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.service.submitTelegramMtprotoCode(body, request);
+  }
+
+  @Post("channel-connections/telegram/mtproto/password")
+  @RequireCsrf()
+  submitTelegramMtprotoPassword(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.service.submitTelegramMtprotoPassword(body, request);
+  }
+
   @Get("threads")
   listThreads(@Query() query: unknown, @Req() request: AstrologerSessionRequest) {
     return this.service.listThreads(query, request);

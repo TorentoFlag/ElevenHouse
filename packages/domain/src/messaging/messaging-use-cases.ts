@@ -14,6 +14,8 @@ import {
 import type {
   InboundMessageRecordResult,
   MessagingStore,
+  TelegramMtprotoLoginSession,
+  TelegramMtprotoLoginResultStoreResult,
   RecordTelegramBusinessConnectionStoreResult,
   TelegramBusinessConnectionRights
 } from "./messaging-store";
@@ -201,6 +203,73 @@ export async function startTelegramMtprotoConnection(input: {
     encryptedPhoneNumber: encryptedSecret(input.encryptedPhoneNumber),
     encryptedPhoneCodeHash: encryptedSecret(input.encryptedPhoneCodeHash),
     consentAccepted: true,
+    now: input.now.toISOString()
+  });
+}
+
+export async function requireTelegramMtprotoLoginSession(input: {
+  readonly store: MessagingStore;
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly expectedLoginState: "code_required" | "password_required";
+}): Promise<TelegramMtprotoLoginSession> {
+  const session = await input.store.findTelegramMtprotoLoginSession({
+    astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
+    connectionId: identifier(input.connectionId, "Channel connection id is required")
+  });
+  if (!session) throw new MessagingThreadNotFoundError();
+  if (session.loginState !== input.expectedLoginState) {
+    throw new MessagingValidationError("Telegram Account login step is invalid");
+  }
+  return {
+    ...session,
+    maskedPhoneNumber: bounded(session.maskedPhoneNumber, 3, 32, "Masked phone number is invalid"),
+    encryptedPhoneNumber: encryptedSecret(session.encryptedPhoneNumber),
+    encryptedPhoneCodeHash: encryptedSecret(session.encryptedPhoneCodeHash),
+    encryptedSession: session.encryptedSession ? encryptedSecret(session.encryptedSession) : null
+  };
+}
+
+export async function recordTelegramMtprotoCodeResult(input: {
+  readonly store: MessagingStore;
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly loginStep: "password_required" | "connected";
+  readonly encryptedSession: EncryptedMessagingSecret;
+  readonly telegramUserId: string | null;
+  readonly username: string | null;
+  readonly displayName: string | null;
+  readonly now: Date;
+}): Promise<TelegramMtprotoLoginResultStoreResult> {
+  return input.store.recordTelegramMtprotoCodeResult({
+    astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
+    connectionId: identifier(input.connectionId, "Channel connection id is required"),
+    loginStep: telegramMtprotoLoginStep(input.loginStep),
+    encryptedSession: encryptedSecret(input.encryptedSession),
+    telegramUserId: optionalSnapshot(input.telegramUserId),
+    username: optionalSnapshot(input.username),
+    displayName: optionalSnapshot(input.displayName),
+    now: input.now.toISOString()
+  });
+}
+
+export async function recordTelegramMtprotoPasswordResult(input: {
+  readonly store: MessagingStore;
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly encryptedSession: EncryptedMessagingSecret;
+  readonly telegramUserId: string;
+  readonly username: string | null;
+  readonly displayName: string | null;
+  readonly now: Date;
+}): Promise<TelegramMtprotoLoginResultStoreResult> {
+  return input.store.recordTelegramMtprotoPasswordResult({
+    astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
+    connectionId: identifier(input.connectionId, "Channel connection id is required"),
+    encryptedSession: encryptedSecret(input.encryptedSession),
+    telegramUserId: bounded(input.telegramUserId, 1, 200, "Telegram user id is required"),
+    username: optionalSnapshot(input.username),
+    displayName: optionalSnapshot(input.displayName),
     now: input.now.toISOString()
   });
 }
@@ -587,6 +656,11 @@ function phoneLast4(value: string): string {
     throw new MessagingValidationError("Phone number last4 is invalid");
   }
   return normalized;
+}
+
+function telegramMtprotoLoginStep(value: "password_required" | "connected"): "password_required" | "connected" {
+  if (value === "password_required" || value === "connected") return value;
+  throw new MessagingValidationError("Telegram Account login step is invalid");
 }
 
 function encryptedSecret(value: EncryptedMessagingSecret): EncryptedMessagingSecret {

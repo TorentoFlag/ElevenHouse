@@ -725,6 +725,97 @@ describe("createDrizzleMessagingStore", () => {
     );
   });
 
+  it("reads and advances Telegram Account login state with encrypted-only session snapshots", async () => {
+    const fake = createTelegramMtprotoLoginStateDatabase();
+    const store = createDrizzleMessagingStore(fake.database as never);
+
+    await expect(
+      store.findTelegramMtprotoLoginSession({
+        astrologerUserId,
+        connectionId: "00000000-0000-4000-8000-000000000031"
+      })
+    ).resolves.toEqual({
+      connectionId: "00000000-0000-4000-8000-000000000031",
+      loginState: "code_required",
+      maskedPhoneNumber: "******3535",
+      encryptedPhoneNumber: encryptedSecretSnapshot("phone"),
+      encryptedPhoneCodeHash: encryptedSecretSnapshot("phone-code-hash"),
+      encryptedSession: null
+    });
+
+    await expect(
+      store.recordTelegramMtprotoCodeResult({
+        astrologerUserId,
+        connectionId: "00000000-0000-4000-8000-000000000031",
+        loginStep: "password_required",
+        encryptedSession: encryptedSecretSnapshot("partial-session"),
+        telegramUserId: null,
+        username: null,
+        displayName: null,
+        now: now.toISOString()
+      })
+    ).resolves.toEqual({
+      connectionId: "00000000-0000-4000-8000-000000000031",
+      loginStep: "password_required",
+      maskedPhoneNumber: "******3535"
+    });
+
+    await expect(
+      store.recordTelegramMtprotoPasswordResult({
+        astrologerUserId,
+        connectionId: "00000000-0000-4000-8000-000000000031",
+        encryptedSession: encryptedSecretSnapshot("final-session"),
+        telegramUserId: "987654321",
+        username: "alisa_astro",
+        displayName: "Alisa",
+        now: now.toISOString()
+      })
+    ).resolves.toEqual({
+      connectionId: "00000000-0000-4000-8000-000000000031",
+      loginStep: "connected",
+      maskedPhoneNumber: "******3535"
+    });
+
+    expect(fake.updates).toEqual([
+      {
+        table: messagingTelegramMtprotoSessions,
+        value: expect.objectContaining({
+          loginState: "password_required",
+          sessionEncrypted: encryptedSecretSnapshot("partial-session"),
+          telegramUserId: null
+        })
+      },
+      {
+        table: messagingChannelConnections,
+        value: expect.objectContaining({
+          status: "connecting",
+          connectedAt: null
+        })
+      },
+      {
+        table: messagingTelegramMtprotoSessions,
+        value: expect.objectContaining({
+          loginState: "authorized",
+          sessionEncrypted: encryptedSecretSnapshot("final-session"),
+          telegramUserId: "987654321"
+        })
+      },
+      {
+        table: messagingChannelConnections,
+        value: expect.objectContaining({
+          status: "active",
+          externalAccountId: "987654321",
+          externalOwnerUserId: "987654321",
+          displayNameSnapshot: "Alisa",
+          usernameSnapshot: "alisa_astro"
+        })
+      }
+    ]);
+    expect(fake.updates.map((update) => JSON.stringify(update.value)).join("\n")).not.toMatch(
+      /777777|secret-password|78005553535/
+    );
+  });
+
   it("does not claim a pending Telegram Business connection with an unmatched revoked update", async () => {
     const fake = createPendingTelegramBusinessConnectionDatabase();
 
@@ -1282,6 +1373,52 @@ function createStartTelegramMtprotoConnectionDatabase() {
       return transactionCount;
     }
   };
+}
+
+function createTelegramMtprotoLoginStateDatabase() {
+  const channelConnectionId = "00000000-0000-4000-8000-000000000031";
+  const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  let selectCount = 0;
+  const database = {
+    update: (table: unknown) => ({
+      set: (value: Record<string, unknown>) => ({
+        where: () => {
+          updates.push({ table, value });
+          return {
+            returning: async () => [
+              {
+                connectionId: channelConnectionId,
+                phoneNumberLast4: "3535"
+              }
+            ]
+          };
+        }
+      })
+    }),
+    select: () => {
+      const rows = selectCount === 0
+        ? [
+            {
+              connectionId: channelConnectionId,
+              loginState: "code_required",
+              phoneNumberLast4: "3535",
+              phoneNumberEncrypted: encryptedSecretSnapshot("phone"),
+              phoneCodeHashEncrypted: encryptedSecretSnapshot("phone-code-hash"),
+              sessionEncrypted: null
+            }
+          ]
+        : [
+            {
+              connectionId: channelConnectionId,
+              phoneNumberLast4: "3535"
+            }
+          ];
+      selectCount += 1;
+      return selectChain(rows);
+    },
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => callback(database)
+  };
+  return { database, updates };
 }
 
 function encryptedSecretSnapshot(

@@ -18,6 +18,8 @@ import type {
   MarkThreadReadStoreInput,
   MarkThreadReadStoreResult,
   MessagingStore,
+  RecordTelegramMtprotoCodeResultStoreInput,
+  RecordTelegramMtprotoPasswordResultStoreInput,
   RecordInboundProviderMessageStoreInput,
   RecordTelegramBusinessConnectionStoreInput,
   RecordTelegramBusinessDeletedMessagesStoreInput,
@@ -43,6 +45,9 @@ import {
   recordTelegramBusinessMessage,
   recordTelegramBusinessDeletedMessages,
   recordTelegramBusinessEditedMessage,
+  recordTelegramMtprotoCodeResult,
+  recordTelegramMtprotoPasswordResult,
+  requireTelegramMtprotoLoginSession,
   startTelegramBusinessConnection,
   startTelegramMtprotoConnection
 } from "./messaging-use-cases";
@@ -480,6 +485,115 @@ describe("Messaging use cases", () => {
     ]);
   });
 
+  it("reads a pending Telegram Account login session and records a password-required code result", async () => {
+    const store = new InMemoryMessagingStore();
+    const encryptedSecret = encryptedSecretFixture("phone-ciphertext");
+    await startTelegramMtprotoConnection({
+      store,
+      astrologerUserId,
+      idGenerator: createIdGenerator("mtproto-connection"),
+      phoneNumberLast4: "3535",
+      maskedPhoneNumber: "+7******3535",
+      encryptedPhoneNumber: encryptedSecret,
+      encryptedPhoneCodeHash: encryptedSecretFixture("phone-code-hash"),
+      consentAccepted: true,
+      now
+    });
+
+    await expect(
+      requireTelegramMtprotoLoginSession({
+        store,
+        astrologerUserId,
+        connectionId: "mtproto-connection-1",
+        expectedLoginState: "code_required"
+      })
+    ).resolves.toMatchObject({
+      connectionId: "mtproto-connection-1",
+      loginState: "code_required",
+      maskedPhoneNumber: "+7******3535",
+      encryptedPhoneNumber: encryptedSecret,
+      encryptedPhoneCodeHash: encryptedSecretFixture("phone-code-hash"),
+      encryptedSession: null
+    });
+
+    await expect(
+      recordTelegramMtprotoCodeResult({
+        store,
+        astrologerUserId,
+        connectionId: "mtproto-connection-1",
+        loginStep: "password_required",
+        encryptedSession: encryptedSecretFixture("partial-session"),
+        telegramUserId: null,
+        username: null,
+        displayName: null,
+        now
+      })
+    ).resolves.toEqual({
+      connectionId: "mtproto-connection-1",
+      loginStep: "password_required",
+      maskedPhoneNumber: "+7******3535"
+    });
+    expect(store.telegramMtprotoCodeCommands).toEqual([
+      expect.objectContaining({
+        connectionId: "mtproto-connection-1",
+        loginStep: "password_required",
+        encryptedSession: encryptedSecretFixture("partial-session")
+      })
+    ]);
+    expect(JSON.stringify(store.telegramMtprotoCodeCommands)).not.toMatch(/777777|phone-code-hash-plaintext/);
+  });
+
+  it("records Telegram Account password completion without plaintext password", async () => {
+    const store = new InMemoryMessagingStore();
+    await startTelegramMtprotoConnection({
+      store,
+      astrologerUserId,
+      idGenerator: createIdGenerator("mtproto-connection"),
+      phoneNumberLast4: "3535",
+      maskedPhoneNumber: "+7******3535",
+      encryptedPhoneNumber: encryptedSecretFixture("phone-ciphertext"),
+      encryptedPhoneCodeHash: encryptedSecretFixture("phone-code-hash"),
+      consentAccepted: true,
+      now
+    });
+    await recordTelegramMtprotoCodeResult({
+      store,
+      astrologerUserId,
+      connectionId: "mtproto-connection-1",
+      loginStep: "password_required",
+      encryptedSession: encryptedSecretFixture("partial-session"),
+      telegramUserId: null,
+      username: null,
+      displayName: null,
+      now
+    });
+
+    await expect(
+      recordTelegramMtprotoPasswordResult({
+        store,
+        astrologerUserId,
+        connectionId: "mtproto-connection-1",
+        encryptedSession: encryptedSecretFixture("final-session"),
+        telegramUserId: "987654321",
+        username: "alisa_astro",
+        displayName: "Alisa",
+        now
+      })
+    ).resolves.toEqual({
+      connectionId: "mtproto-connection-1",
+      loginStep: "connected",
+      maskedPhoneNumber: "+7******3535"
+    });
+    expect(store.telegramMtprotoPasswordCommands).toEqual([
+      expect.objectContaining({
+        connectionId: "mtproto-connection-1",
+        encryptedSession: encryptedSecretFixture("final-session"),
+        telegramUserId: "987654321"
+      })
+    ]);
+    expect(JSON.stringify(store.telegramMtprotoPasswordCommands)).not.toContain("secret-password");
+  });
+
   it("normalizes Telegram Business deleted message ids before passing them to the store", async () => {
     const store = new InMemoryMessagingStore();
 
@@ -764,6 +878,8 @@ class InMemoryMessagingStore implements MessagingStore {
   }> = [];
   readonly startTelegramBusinessCommands: StartTelegramBusinessConnectionStoreInput[] = [];
   readonly startTelegramMtprotoCommands: StartTelegramMtprotoConnectionStoreInput[] = [];
+  readonly telegramMtprotoCodeCommands: RecordTelegramMtprotoCodeResultStoreInput[] = [];
+  readonly telegramMtprotoPasswordCommands: RecordTelegramMtprotoPasswordResultStoreInput[] = [];
   readonly telegramBusinessMessageCommands: RecordTelegramBusinessMessageStoreInput[] = [];
   readonly telegramBusinessDeleteCommands: RecordTelegramBusinessDeletedMessagesStoreInput[] = [];
   readonly telegramBusinessEditCommands: RecordTelegramBusinessEditedMessageStoreInput[] = [];
@@ -778,6 +894,14 @@ class InMemoryMessagingStore implements MessagingStore {
   #nextRealtimeEventId = 1;
   #telegramBusinessConnectionId: string | null = null;
   #telegramMtprotoConnectionId: string | null = null;
+  #telegramMtprotoLoginSession: {
+    readonly connectionId: string;
+    readonly loginState: "code_required" | "password_required" | "authorized";
+    readonly maskedPhoneNumber: string;
+    readonly encryptedPhoneNumber: ReturnType<typeof encryptedSecretFixture>;
+    readonly encryptedPhoneCodeHash: ReturnType<typeof encryptedSecretFixture>;
+    readonly encryptedSession: ReturnType<typeof encryptedSecretFixture> | null;
+  } | null = null;
 
   thread(threadId: string): MessagingThread | undefined {
     return this.#threads.get(threadId);
@@ -904,10 +1028,61 @@ class InMemoryMessagingStore implements MessagingStore {
   }> {
     this.startTelegramMtprotoCommands.push(input);
     this.#telegramMtprotoConnectionId ??= input.connectionId;
+    this.#telegramMtprotoLoginSession ??= {
+      connectionId: this.#telegramMtprotoConnectionId,
+      loginState: "code_required",
+      maskedPhoneNumber: input.maskedPhoneNumber,
+      encryptedPhoneNumber: input.encryptedPhoneNumber,
+      encryptedPhoneCodeHash: input.encryptedPhoneCodeHash,
+      encryptedSession: null
+    };
     return {
       connectionId: this.#telegramMtprotoConnectionId,
       loginStep: "code_required",
       maskedPhoneNumber: input.maskedPhoneNumber
+    };
+  }
+
+  async findTelegramMtprotoLoginSession(input: {
+    readonly astrologerUserId: string;
+    readonly connectionId: string;
+  }) {
+    if (input.astrologerUserId !== astrologerUserId) return null;
+    if (this.#telegramMtprotoLoginSession?.connectionId !== input.connectionId) return null;
+    return this.#telegramMtprotoLoginSession;
+  }
+
+  async recordTelegramMtprotoCodeResult(input: RecordTelegramMtprotoCodeResultStoreInput) {
+    this.telegramMtprotoCodeCommands.push(input);
+    if (this.#telegramMtprotoLoginSession?.connectionId !== input.connectionId) {
+      throw new Error("Unexpected Telegram Account connection");
+    }
+    this.#telegramMtprotoLoginSession = {
+      ...this.#telegramMtprotoLoginSession,
+      loginState: input.loginStep === "connected" ? "authorized" : "password_required",
+      encryptedSession: input.encryptedSession
+    };
+    return {
+      connectionId: input.connectionId,
+      loginStep: input.loginStep,
+      maskedPhoneNumber: this.#telegramMtprotoLoginSession.maskedPhoneNumber
+    };
+  }
+
+  async recordTelegramMtprotoPasswordResult(input: RecordTelegramMtprotoPasswordResultStoreInput) {
+    this.telegramMtprotoPasswordCommands.push(input);
+    if (this.#telegramMtprotoLoginSession?.connectionId !== input.connectionId) {
+      throw new Error("Unexpected Telegram Account connection");
+    }
+    this.#telegramMtprotoLoginSession = {
+      ...this.#telegramMtprotoLoginSession,
+      loginState: "authorized",
+      encryptedSession: input.encryptedSession
+    };
+    return {
+      connectionId: input.connectionId,
+      loginStep: "connected" as const,
+      maskedPhoneNumber: this.#telegramMtprotoLoginSession.maskedPhoneNumber
     };
   }
 
@@ -1010,4 +1185,14 @@ function createMessage(overrides: Partial<MessagingMessage> = {}): MessagingMess
 function createIdGenerator(prefix = "id"): () => string {
   let index = 0;
   return () => `${prefix}-${++index}`;
+}
+
+function encryptedSecretFixture(ciphertext: string) {
+  return {
+    algorithm: "aes-256-gcm" as const,
+    keyId: "mtproto-key-1",
+    iv: "base64-iv",
+    authTag: "base64-tag",
+    ciphertext
+  };
 }
