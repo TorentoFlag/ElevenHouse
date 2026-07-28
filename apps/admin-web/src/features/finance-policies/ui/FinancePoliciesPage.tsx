@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactElement
+} from "react";
 import { Button } from "@elevenhouse/design-system/components/Button";
 import "@elevenhouse/design-system/components/Button.css";
 import { Card } from "@elevenhouse/design-system/components/Card";
@@ -157,9 +165,11 @@ const emptyReconciliationQueue: AdminReconciliationExceptionQueueResponse = {
   exceptions: []
 };
 
-export function FinancePoliciesPage({
-  api = createAdminFinancePoliciesApi()
-}: FinancePoliciesPageProps) {
+const emptyPolicies: readonly FinancePolicyResponse[] = [];
+
+export function FinancePoliciesPage({ api: providedApi }: FinancePoliciesPageProps) {
+  const defaultApi = useMemo(() => createAdminFinancePoliciesApi(), []);
+  const api = providedApi ?? defaultApi;
   const [tab, setTab] = useState<AdminFinanceTab>("overview");
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [selectedRiskTier, setSelectedRiskTier] = useState<RiskTier>("standard");
@@ -185,8 +195,16 @@ export function FinancePoliciesPage({
   const [savingPayout, setSavingPayout] = useState(false);
   const [savingReversal, setSavingReversal] = useState(false);
   const [savingReconciliation, setSavingReconciliation] = useState(false);
+  const selectedRiskTierRef = useRef<RiskTier>(selectedRiskTier);
+  const payoutActionRef = useRef<PayoutActionForm>(payoutAction);
+  const reversalActionRef = useRef<ReversalActionForm>(reversalAction);
+  const reconciliationActionRef = useRef<ReconciliationActionForm>(reconciliationAction);
+  const payoutStatusFilterRef = useRef<AdminPayoutQueueStatusFilter>(payoutStatusFilter);
+  const reconciliationEvidenceFilterRef = useRef<AdminReconciliationExceptionEvidenceFilter>(
+    reconciliationEvidenceFilter
+  );
 
-  const policies = loadState.status === "ready" ? loadState.policies : [];
+  const policies = loadState.status === "ready" ? loadState.policies : emptyPolicies;
   const payoutQueue = loadState.status === "ready" ? loadState.payoutQueue : emptyPayoutQueue;
   const reversalQueue = loadState.status === "ready" ? loadState.reversalQueue : emptyReversalQueue;
   const reconciliationQueue =
@@ -221,79 +239,126 @@ export function FinancePoliciesPage({
     [reversalAction.reversalCaseId, reversalQueue.cases]
   );
 
-  async function refreshFinance(
-    filters: {
-      readonly payoutStatus?: AdminPayoutQueueStatusFilter;
-      readonly reconciliationEvidence?: AdminReconciliationExceptionEvidenceFilter;
-    } = {}
-  ) {
-    setLoadState({ status: "loading" });
-    setSubmitError(null);
-    try {
-      const nextPayoutStatus = filters.payoutStatus ?? payoutStatusFilter;
-      const nextReconciliationEvidence =
-        filters.reconciliationEvidence ?? reconciliationEvidenceFilter;
-      const [policyResponse, payoutResponse, reversalResponse, reconciliationResponse] =
-        await Promise.all([
-          api.listPolicies(),
-          api.listPayoutRequests({ status: nextPayoutStatus }),
-          api.listPaymentReversalCases(),
-          api.listReconciliationExceptions({ evidence: nextReconciliationEvidence })
-        ]);
-      setLoadState({
-        status: "ready",
-        policies: policyResponse.policies,
-        payoutQueue: payoutResponse,
-        reversalQueue: reversalResponse,
-        reconciliationQueue: reconciliationResponse
-      });
-      const nextSelected = policyResponse.policies.find(
-        (policy) => policy.riskTier === selectedRiskTier
-      )
-        ? selectedRiskTier
-        : (policyResponse.policies[0]?.riskTier ?? "standard");
-      setSelectedRiskTier(nextSelected);
-      setPolicyForm(
-        policyToForm(
-          policyResponse.policies.find((policy) => policy.riskTier === nextSelected) ?? null
+  const refreshFinance = useCallback(
+    async (
+      filters: {
+        readonly payoutStatus?: AdminPayoutQueueStatusFilter;
+        readonly reconciliationEvidence?: AdminReconciliationExceptionEvidenceFilter;
+      } = {}
+    ) => {
+      setLoadState({ status: "loading" });
+      setSubmitError(null);
+      try {
+        const nextPayoutStatus = filters.payoutStatus ?? payoutStatusFilterRef.current;
+        const nextReconciliationEvidence =
+          filters.reconciliationEvidence ?? reconciliationEvidenceFilterRef.current;
+        const [policyResponse, payoutResponse, reversalResponse, reconciliationResponse] =
+          await Promise.all([
+            api.listPolicies(),
+            api.listPayoutRequests({ status: nextPayoutStatus }),
+            api.listPaymentReversalCases(),
+            api.listReconciliationExceptions({ evidence: nextReconciliationEvidence })
+          ]);
+        setLoadState({
+          status: "ready",
+          policies: policyResponse.policies,
+          payoutQueue: payoutResponse,
+          reversalQueue: reversalResponse,
+          reconciliationQueue: reconciliationResponse
+        });
+        const previousSelectedRiskTier = selectedRiskTierRef.current;
+        const nextSelected = policyResponse.policies.find(
+          (policy) => policy.riskTier === previousSelectedRiskTier
         )
-      );
-      if (!payoutResponse.requests.some((request) => request.id === payoutAction.payoutRequestId)) {
-        setPayoutAction((previous) => ({
-          ...previous,
-          payoutRequestId: payoutResponse.requests[0]?.id ?? ""
-        }));
+          ? previousSelectedRiskTier
+          : (policyResponse.policies[0]?.riskTier ?? "standard");
+        selectedRiskTierRef.current = nextSelected;
+        setSelectedRiskTier(nextSelected);
+        setPolicyForm(
+          policyToForm(
+            policyResponse.policies.find((policy) => policy.riskTier === nextSelected) ?? null
+          )
+        );
+        if (
+          !payoutResponse.requests.some(
+            (request) => request.id === payoutActionRef.current.payoutRequestId
+          )
+        ) {
+          setPayoutAction((previous) => {
+            const next = {
+              ...previous,
+              payoutRequestId: payoutResponse.requests[0]?.id ?? ""
+            };
+            payoutActionRef.current = next;
+            return next;
+          });
+        }
+        if (
+          !reconciliationResponse.exceptions.some(
+            (exception) => exception.id === reconciliationActionRef.current.reconciliationRecordId
+          )
+        ) {
+          setReconciliationAction((previous) => {
+            const next = {
+              ...previous,
+              reconciliationRecordId: reconciliationResponse.exceptions[0]?.id ?? ""
+            };
+            reconciliationActionRef.current = next;
+            return next;
+          });
+        }
+        if (
+          !reversalResponse.cases.some(
+            (paymentReversalCase) =>
+              paymentReversalCase.id === reversalActionRef.current.reversalCaseId
+          )
+        ) {
+          setReversalAction((previous) => {
+            const next = {
+              ...previous,
+              reversalCaseId: reversalResponse.cases[0]?.id ?? ""
+            };
+            reversalActionRef.current = next;
+            return next;
+          });
+        }
+      } catch (error) {
+        setLoadState({ status: "error", message: errorMessage(error, "load") });
       }
-      if (
-        !reconciliationResponse.exceptions.some(
-          (exception) => exception.id === reconciliationAction.reconciliationRecordId
-        )
-      ) {
-        setReconciliationAction((previous) => ({
-          ...previous,
-          reconciliationRecordId: reconciliationResponse.exceptions[0]?.id ?? ""
-        }));
-      }
-      if (
-        !reversalResponse.cases.some(
-          (paymentReversalCase) => paymentReversalCase.id === reversalAction.reversalCaseId
-        )
-      ) {
-        setReversalAction((previous) => ({
-          ...previous,
-          reversalCaseId: reversalResponse.cases[0]?.id ?? ""
-        }));
-      }
-    } catch (error) {
-      setLoadState({ status: "error", message: errorMessage(error, "load") });
-    }
-  }
+    },
+    [api]
+  );
 
   useEffect(() => {
     void refreshFinance();
-  }, []);
+  }, [refreshFinance]);
+
+  useEffect(() => {
+    selectedRiskTierRef.current = selectedRiskTier;
+  }, [selectedRiskTier]);
+
+  useEffect(() => {
+    payoutActionRef.current = payoutAction;
+  }, [payoutAction]);
+
+  useEffect(() => {
+    reversalActionRef.current = reversalAction;
+  }, [reversalAction]);
+
+  useEffect(() => {
+    reconciliationActionRef.current = reconciliationAction;
+  }, [reconciliationAction]);
+
+  useEffect(() => {
+    payoutStatusFilterRef.current = payoutStatusFilter;
+  }, [payoutStatusFilter]);
+
+  useEffect(() => {
+    reconciliationEvidenceFilterRef.current = reconciliationEvidenceFilter;
+  }, [reconciliationEvidenceFilter]);
 
   function selectRiskTier(riskTier: RiskTier) {
+    selectedRiskTierRef.current = riskTier;
     setSelectedRiskTier(riskTier);
     setPolicyForm(policyToForm(policies.find((policy) => policy.riskTier === riskTier) ?? null));
     setStatusMessage(null);
@@ -301,11 +366,13 @@ export function FinancePoliciesPage({
   }
 
   function selectPayoutStatusFilter(filter: AdminPayoutQueueStatusFilter) {
+    payoutStatusFilterRef.current = filter;
     setPayoutStatusFilter(filter);
     void refreshFinance({ payoutStatus: filter });
   }
 
   function selectReconciliationEvidenceFilter(filter: AdminReconciliationExceptionEvidenceFilter) {
+    reconciliationEvidenceFilterRef.current = filter;
     setReconciliationEvidenceFilter(filter);
     void refreshFinance({ reconciliationEvidence: filter });
   }
@@ -316,6 +383,7 @@ export function FinancePoliciesPage({
     try {
       const policy = await api.ensureDefaultPolicy();
       setLoadState((previous) => mergePolicy(previous, policy));
+      selectedRiskTierRef.current = policy.riskTier;
       setSelectedRiskTier(policy.riskTier);
       setPolicyForm(policyToForm(policy));
       setStatusMessage("Стандартная политика 48 часов подтверждена и записана в аудит.");
@@ -333,6 +401,7 @@ export function FinancePoliciesPage({
     try {
       const policy = await api.updateDefaultPolicy(policyFormToRequest(policyForm));
       setLoadState((previous) => mergePolicy(previous, policy));
+      selectedRiskTierRef.current = policy.riskTier;
       setSelectedRiskTier(policy.riskTier);
       setPolicyForm(policyToForm(policy));
       setStatusMessage("Политика риска сохранена. Новые заказы получат новый snapshot.");
@@ -379,7 +448,9 @@ export function FinancePoliciesPage({
         adminNote: payoutAction.adminNote.trim() || null
       });
       setStatusMessage("Выплата отмечена оплаченной. Ledger списал payout pending.");
-      setPayoutAction(emptyPayoutAction());
+      const nextPayoutAction = emptyPayoutAction();
+      payoutActionRef.current = nextPayoutAction;
+      setPayoutAction(nextPayoutAction);
       await refreshFinance();
     } catch (error) {
       setSubmitError(errorMessage(error, "payout_paid"));
@@ -400,7 +471,9 @@ export function FinancePoliciesPage({
         adminNote: payoutAction.adminNote.trim() || null
       });
       setStatusMessage("Заявка отклонена. Ledger вернул сумму в доступный баланс.");
-      setPayoutAction(emptyPayoutAction());
+      const nextPayoutAction = emptyPayoutAction();
+      payoutActionRef.current = nextPayoutAction;
+      setPayoutAction(nextPayoutAction);
       await refreshFinance();
     } catch (error) {
       setSubmitError(errorMessage(error, "payout_rejected"));
@@ -428,7 +501,9 @@ export function FinancePoliciesPage({
           ? "Exception закрыт как resolved. Холды смогут релизиться после matched evidence."
           : "Exception помечен как waived с audit evidence."
       );
-      setReconciliationAction(emptyReconciliationAction());
+      const nextReconciliationAction = emptyReconciliationAction();
+      reconciliationActionRef.current = nextReconciliationAction;
+      setReconciliationAction(nextReconciliationAction);
       await refreshFinance();
     } catch (error) {
       setSubmitError(errorMessage(error, "reconciliation_resolution"));
@@ -452,7 +527,9 @@ export function FinancePoliciesPage({
         adminNote: reversalAction.adminNote.trim()
       });
       setStatusMessage("Refund/chargeback review сохранен с audit evidence.");
-      setReversalAction(emptyReversalAction());
+      const nextReversalAction = emptyReversalAction();
+      reversalActionRef.current = nextReversalAction;
+      setReversalAction(nextReversalAction);
       await refreshFinance();
     } catch (error) {
       setSubmitError(errorMessage(error, "reversal_review"));
