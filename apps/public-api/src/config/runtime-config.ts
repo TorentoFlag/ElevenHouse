@@ -71,10 +71,6 @@ const publicApiRuntimeConfigSchema = z.object({
     .trim()
     .min(1)
     .default("elevenhouse:public-api"),
-  PUBLIC_API_ARC_PAY_ENABLED: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
   ARC_PAY_API_BASE_URL: z.string().url().default("https://api.arcpay.space"),
   ARC_PAY_SECRET: z.string().trim().min(1).optional(),
   ARC_PAY_ENVIRONMENT: z.enum(["sandbox", "live"]).default("sandbox"),
@@ -143,7 +139,6 @@ export type PublicApiRuntimeConfig = {
     };
   };
   readonly arcPay: {
-    readonly enabled: boolean;
     readonly apiBaseUrl: string;
     readonly secret: string | null;
     readonly environment: "sandbox" | "live";
@@ -189,9 +184,9 @@ export function createPublicApiRuntimeConfig(
     Boolean(config.ARC_PAY_SECRET) &&
     Boolean(config.ARC_PAY_CAPTURE_MODE) &&
     arcPayPaymentMethods.length > 0;
-  if (config.PUBLIC_API_ARC_PAY_ENABLED && !arcPayConfigured) {
+  if (config.NODE_ENV === "production" && !arcPayConfigured) {
     throw new Error(
-      "ARC_PAY_SECRET, ARC_PAY_CAPTURE_MODE and ARC_PAY_PAYMENT_METHODS are required when Arc Pay is enabled"
+      "ARC_PAY_SECRET, ARC_PAY_CAPTURE_MODE and ARC_PAY_PAYMENT_METHODS are required in production"
     );
   }
   if (new URL(config.ARC_PAY_API_BASE_URL).protocol !== "https:") {
@@ -248,7 +243,6 @@ export function createPublicApiRuntimeConfig(
       }
     },
     arcPay: {
-      enabled: config.PUBLIC_API_ARC_PAY_ENABLED,
       apiBaseUrl: config.ARC_PAY_API_BASE_URL,
       secret: config.ARC_PAY_SECRET ?? null,
       environment: config.ARC_PAY_ENVIRONMENT,

@@ -38,7 +38,6 @@ export class ArcPayCheckoutProvider implements PaymentProviderPort {
 
   async openCheckout(input: PaymentCheckoutRequest): Promise<PaymentCheckoutSession> {
     if (
-      !this.config.enabled ||
       !this.config.secret ||
       !this.config.captureMode ||
       this.config.paymentMethods.length === 0

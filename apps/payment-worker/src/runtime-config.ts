@@ -6,10 +6,6 @@ const runtimeConfigSchema = z.object({
   PAYMENT_WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3011),
   PAYMENT_WORKER_WEBHOOK_HOST: z.string().trim().min(1).default("0.0.0.0"),
   PAYMENT_WORKER_WEBHOOK_PORT: z.coerce.number().int().min(1).max(65535).default(3013),
-  PAYMENT_WORKER_ARC_PAY_ENABLED: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
   PAYMENT_WORKER_ARC_PAY_API_BASE_URL: z.string().url().default("https://api.arcpay.space"),
   PAYMENT_WORKER_ARC_PAY_API_SECRET: z.string().trim().min(1).optional(),
   PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET: z.string().trim().min(1).optional(),
@@ -55,7 +51,6 @@ export type PaymentWorkerRuntimeConfig = {
   readonly webhookHost: string;
   readonly webhookPort: number;
   readonly arcPay: {
-    readonly enabled: boolean;
     readonly apiBaseUrl: string;
     readonly apiSecret: string | null;
     readonly webhookSecret: string | null;
@@ -80,11 +75,11 @@ export function createPaymentWorkerRuntimeConfig(
 ): PaymentWorkerRuntimeConfig {
   const config = runtimeConfigSchema.parse(source);
   if (
-    config.PAYMENT_WORKER_ARC_PAY_ENABLED &&
+    config.NODE_ENV === "production" &&
     (!config.PAYMENT_WORKER_ARC_PAY_API_SECRET || !config.PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET)
   ) {
     throw new Error(
-      "PAYMENT_WORKER_ARC_PAY_API_SECRET and PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET are required when Arc Pay is enabled"
+      "PAYMENT_WORKER_ARC_PAY_API_SECRET and PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET are required in production"
     );
   }
   if (new URL(config.PAYMENT_WORKER_ARC_PAY_API_BASE_URL).protocol !== "https:") {
@@ -97,7 +92,6 @@ export function createPaymentWorkerRuntimeConfig(
     webhookHost: config.PAYMENT_WORKER_WEBHOOK_HOST,
     webhookPort: config.PAYMENT_WORKER_WEBHOOK_PORT,
     arcPay: {
-      enabled: config.PAYMENT_WORKER_ARC_PAY_ENABLED,
       apiBaseUrl: config.PAYMENT_WORKER_ARC_PAY_API_BASE_URL,
       apiSecret: config.PAYMENT_WORKER_ARC_PAY_API_SECRET ?? null,
       webhookSecret: config.PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET ?? null,
