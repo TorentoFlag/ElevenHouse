@@ -71,10 +71,14 @@ describe("production baseline transition plan", () => {
 
   it("contains the owner-safe scheduling DDL and overlap invariant", () => {
     expect(schedulingBaselineDdl).toContain("ADD CONSTRAINT products_id_owner_unique");
-    expect(schedulingBaselineDdl).toContain("CREATE TABLE availability_schedules");
-    expect(schedulingBaselineDdl).toContain("CREATE TABLE manual_calendar_blocks");
-    expect(schedulingBaselineDdl).toContain("CREATE TABLE bookings");
-    expect(schedulingBaselineDdl).toContain("CREATE TABLE idempotency_commands");
+    expect(schedulingBaselineDdl).toContain("CREATE TABLE IF NOT EXISTS availability_schedules");
+    expect(schedulingBaselineDdl).toContain("CREATE TABLE IF NOT EXISTS manual_calendar_blocks");
+    expect(schedulingBaselineDdl).toContain("CREATE TABLE IF NOT EXISTS bookings");
+    expect(schedulingBaselineDdl).toContain("CREATE TABLE IF NOT EXISTS idempotency_commands");
+    expect(schedulingBaselineDdl).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idempotency_commands_scope_key_unique"
+    );
+    expect(schedulingBaselineDdl).toContain("conname = 'products_id_owner_unique'");
     expect(schedulingBaselineDdl).toContain(
       "schedule_reservations_active_owner_range_exclude"
     );
