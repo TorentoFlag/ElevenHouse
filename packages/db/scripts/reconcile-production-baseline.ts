@@ -59,7 +59,9 @@ async function main(): Promise<void> {
 
       const history = classifyBaselineHistory(migrations);
       if (history === "unknown") {
-        throw new Error("Refusing to reconcile an unknown migration history");
+        throw new Error(
+          `Refusing to reconcile an unknown migration history: ${formatMigrationHistory(migrations)}`
+        );
       }
       if (history === "current") {
         await reconcileClientBirthDataDstOccurrenceIfPresent();
@@ -93,6 +95,13 @@ async function main(): Promise<void> {
   } finally {
     await client.end();
   }
+}
+
+function formatMigrationHistory(migrations: readonly MigrationLedgerRow[]): string {
+  if (migrations.length === 0) {
+    return "empty ledger";
+  }
+  return migrations.map((migration) => `${migration.created_at}:${migration.hash}`).join(", ");
 }
 
 async function relationExists(qualifiedName: string): Promise<boolean> {
