@@ -134,7 +134,7 @@ describe("InboxPageView", () => {
 
     expect(screen.getByRole("dialog", { name: "Подключить Instagram" })).toBeTruthy();
     expect(
-      screen.getByText("Instagram подключается через официальный Meta Graph API.")
+      screen.getByText("Instagram подключается через официальный Instagram Login.")
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Продолжить в Meta" }));
