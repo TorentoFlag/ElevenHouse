@@ -20,6 +20,7 @@ const defaultCsrfConfig = {
   csrfTokenTtlSeconds: 604800,
   allowedOrigins: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
   arcPay: {
+    enabled: false,
     apiBaseUrl: "https://api.arcpay.space",
     secret: null,
     environment: "sandbox",
@@ -224,9 +225,6 @@ describe("createPublicApiRuntimeConfig", () => {
         PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
         PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com",
-        ARC_PAY_SECRET: "arc-pay-secret",
-        ARC_PAY_CAPTURE_MODE: "one_stage",
-        ARC_PAY_PAYMENT_METHODS: '[{"method":"bank_card","paymentMode":"redirect"}]'
       })
     ).toThrow("PUBLIC_API_SESSION_COOKIE_SECURE=true is required in production");
   });
@@ -254,30 +252,8 @@ describe("createPublicApiRuntimeConfig", () => {
     ).toThrow("PUBLIC_API_ALLOWED_ORIGINS is required in production");
   });
 
-  it("uses the host-prefixed public session cookie when production security settings are complete", () => {
+  it("uses the host-prefixed public session cookie when production security settings are complete and Arc Pay is disabled", () => {
     expect(
-      createPublicApiRuntimeConfig({
-        ...requiredSecurityConfig,
-        NODE_ENV: "production",
-        PUBLIC_API_SESSION_COOKIE_SECURE: "true",
-        PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
-        PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
-        PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com",
-        ARC_PAY_SECRET: "arc-pay-secret",
-        ARC_PAY_CAPTURE_MODE: "one_stage",
-        ARC_PAY_PAYMENT_METHODS: '[{"method":"bank_card","paymentMode":"redirect"}]'
-      })
-    ).toMatchObject({
-      sessionCookieSecure: true,
-      sessionCookieName: publicSessionCookieName,
-      passwordlessCodeSecret: "configured-secret",
-      csrfSecret: "configured-csrf-secret-with-enough-entropy",
-      allowedOrigins: ["https://client.elevenhouse.com"]
-    });
-  });
-
-  it("requires configured credentials and discovered payment methods in production", () => {
-    expect(() =>
       createPublicApiRuntimeConfig({
         ...requiredSecurityConfig,
         NODE_ENV: "production",
@@ -286,7 +262,50 @@ describe("createPublicApiRuntimeConfig", () => {
         PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
         PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com"
       })
-    ).toThrow("ARC_PAY_SECRET, ARC_PAY_CAPTURE_MODE and ARC_PAY_PAYMENT_METHODS are required");
+    ).toMatchObject({
+      sessionCookieSecure: true,
+      sessionCookieName: publicSessionCookieName,
+      passwordlessCodeSecret: "configured-secret",
+      csrfSecret: "configured-csrf-secret-with-enough-entropy",
+      allowedOrigins: ["https://client.elevenhouse.com"],
+      arcPay: {
+        enabled: false,
+        secret: null,
+        captureMode: null,
+        paymentMethods: []
+      }
+    });
+  });
+
+  it("requires configured credentials and discovered payment methods when Arc Pay is enabled", () => {
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        PUBLIC_API_ARC_PAY_ENABLED: "true"
+      })
+    ).toThrow(
+      "ARC_PAY_SECRET, ARC_PAY_CAPTURE_MODE and ARC_PAY_PAYMENT_METHODS are required when Arc Pay is enabled"
+    );
+  });
+
+  it("parses Arc Pay checkout settings when explicitly enabled", () => {
+    expect(
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        PUBLIC_API_ARC_PAY_ENABLED: "true",
+        ARC_PAY_SECRET: "arc-pay-secret",
+        ARC_PAY_ENVIRONMENT: "live",
+        ARC_PAY_CAPTURE_MODE: "one_stage",
+        ARC_PAY_PAYMENT_METHODS: '[{"method":"bank_card","paymentMode":"redirect"}]'
+      }).arcPay
+    ).toEqual({
+      enabled: true,
+      apiBaseUrl: "https://api.arcpay.space",
+      secret: "arc-pay-secret",
+      environment: "live",
+      captureMode: "one_stage",
+      paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }]
+    });
   });
 
   it("rejects Arc Pay values outside the documented checkout enums", () => {

@@ -9,6 +9,7 @@ describe("payment worker runtime config", () => {
       webhookHost: "0.0.0.0",
       webhookPort: 3013,
       arcPay: {
+        enabled: false,
         apiBaseUrl: "https://api.arcpay.space",
         apiSecret: null,
         webhookSecret: null,
@@ -29,17 +30,29 @@ describe("payment worker runtime config", () => {
     });
   });
 
-  it("requires both Arc Pay credentials in production and rejects insecure API URLs", () => {
+  it("allows production startup when Arc Pay is disabled", () => {
+    expect(
+      createPaymentWorkerRuntimeConfig({
+        NODE_ENV: "production"
+      }).arcPay
+    ).toMatchObject({
+      enabled: false,
+      apiSecret: null,
+      webhookSecret: null
+    });
+  });
+
+  it("requires both Arc Pay credentials when enabled and rejects insecure API URLs", () => {
     expect(() =>
       createPaymentWorkerRuntimeConfig({
-        NODE_ENV: "production",
-        DATABASE_URL: "postgresql://local"
+        PAYMENT_WORKER_ARC_PAY_ENABLED: "true"
       })
     ).toThrow(
-      "PAYMENT_WORKER_ARC_PAY_API_SECRET and PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET are required in production"
+      "PAYMENT_WORKER_ARC_PAY_API_SECRET and PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET are required when Arc Pay is enabled"
     );
     expect(() =>
       createPaymentWorkerRuntimeConfig({
+        PAYMENT_WORKER_ARC_PAY_ENABLED: "true",
         PAYMENT_WORKER_ARC_PAY_API_BASE_URL: "http://arc-pay.internal",
         PAYMENT_WORKER_ARC_PAY_API_SECRET: "api-secret",
         PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET: "webhook-secret"

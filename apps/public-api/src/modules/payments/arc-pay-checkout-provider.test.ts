@@ -76,6 +76,7 @@ describe("ArcPayCheckoutProvider", () => {
 
 function config() {
   return {
+    enabled: true,
     apiBaseUrl: "https://api.arcpay.space",
     secret: "arc-pay-secret",
     environment: "sandbox" as const,

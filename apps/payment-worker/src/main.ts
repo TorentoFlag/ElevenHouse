@@ -81,7 +81,7 @@ async function startPaymentWorker(): Promise<void> {
       logger.error("captured sale holds release tick failed", { error: serializeError(error) });
     }
   });
-  if (config.arcPay.apiSecret) {
+  if (config.arcPay.enabled && config.arcPay.apiSecret) {
     startSettlementLedgerReconciliationInterval({
       processor: createSettlementLedgerReconciliationProcessor({
         client: createArcPaySettlementLedgerClient(config.arcPay),
@@ -114,7 +114,8 @@ async function startPaymentWorker(): Promise<void> {
     webhookPort: config.webhookPort,
     holdReleaseIntervalMs: config.holdRelease.intervalMs,
     holdReleaseBatchSize: config.holdRelease.batchSize,
-    reconciliationIntervalMs: config.arcPay.apiSecret ? config.reconciliation.intervalMs : 0,
+    reconciliationIntervalMs:
+      config.arcPay.enabled && config.arcPay.apiSecret ? config.reconciliation.intervalMs : 0,
     reconciliationLookbackMs: config.reconciliation.lookbackMs
   });
 }
