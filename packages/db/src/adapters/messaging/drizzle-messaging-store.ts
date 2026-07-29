@@ -23,6 +23,7 @@ import type {
   MessagingThread,
   MessagingThreadExternalIdentity,
   RecordInboundProviderMessageStoreInput,
+  RecordInstagramGraphMessageStoreInput,
   RecordTelegramBusinessConnectionStoreInput,
   RecordTelegramBusinessConnectionStoreResult,
   RecordTelegramBusinessDeletedMessagesStoreInput,
@@ -103,6 +104,7 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     recordTelegramMtprotoPasswordResult: (input) =>
       recordTelegramMtprotoPasswordResult(database, input),
     recordTelegramBusinessMessage: (input) => recordTelegramBusinessMessage(database, input),
+    recordInstagramGraphMessage: (input) => recordInstagramGraphMessage(database, input),
     recordTelegramMtprotoMessage: (input) => recordTelegramMtprotoMessage(database, input),
     recordTelegramBusinessDeletedMessages: (input) =>
       recordTelegramBusinessDeletedMessages(database, input),
@@ -507,7 +509,7 @@ async function startInstagramGraphConnection(
     await lockInstagramGraphConnectionStart(transaction, input);
     const existing = await findInstagramGraphConnectionForAstrologer(transaction, input);
     if (existing) {
-      if (["revoked", "paused", "error"].includes(existing.status)) {
+      if (["revoked", "paused", "error", "reauth_required"].includes(existing.status)) {
         const timestamp = new Date(input.now);
         await transaction
           .update(messagingChannelConnections)
@@ -608,7 +610,7 @@ async function completeInstagramGraphConnection(
       .update(messagingChannelConnections)
       .set({
         status: "active",
-        externalAccountId: input.instagramUserId,
+        externalAccountId: input.instagramAccountId,
         externalOwnerUserId: input.instagramUserId,
         displayNameSnapshot: input.instagramDisplayName,
         usernameSnapshot: input.instagramUsername,
@@ -1164,6 +1166,99 @@ async function recordTelegramMtprotoMessage(
   return { kind: "duplicate", message: existing };
 }
 
+async function recordInstagramGraphMessage(
+  database: ElevenHouseDatabase,
+  input: RecordInstagramGraphMessageStoreInput
+): Promise<
+  | { readonly kind: "created" | "duplicate"; readonly message: MessagingMessage }
+  | { readonly kind: "unmatched" }
+> {
+  try {
+    return await database.transaction(async (transaction) => {
+      const connection = await findInstagramGraphConnection(transaction, input);
+      if (!connection) return { kind: "unmatched" as const };
+
+      const isOwnerMessage = input.senderId === connection.externalOwnerUserId;
+      const otherPartyId = isOwnerMessage ? input.recipientId : input.senderId;
+      const timestamp = new Date(input.now);
+      const providerSentAt = new Date(input.providerSentAt);
+      const identity = await upsertInstagramExternalIdentity(transaction, {
+        channelConnectionId: connection.id,
+        providerUserId: otherPartyId,
+        providerChatId: otherPartyId,
+        now: timestamp
+      });
+      const thread = await findOrCreateInstagramThread(transaction, {
+        astrologerUserId: connection.astrologerUserId,
+        externalIdentityId: identity.id,
+        now: timestamp
+      });
+
+      const [row] = await transaction
+        .insert(messagingMessages)
+        .values({
+          threadId: thread.id,
+          channelConnectionId: connection.id,
+          externalIdentityId: identity.id,
+          direction: isOwnerMessage ? "outbound" : "inbound",
+          senderKind: isOwnerMessage ? "astrologer" : "client",
+          providerMessageId: input.providerMessageId,
+          providerUpdateId: null,
+          providerSentAt,
+          contentType: "text",
+          text: input.text,
+          mediaAssetId: null,
+          status: isOwnerMessage ? "sent" : "received",
+          failureCode: null,
+          idempotencyKey: isOwnerMessage ? instagramGraphObservedOutboundIdempotencyKey(input) : null,
+          requestHash: isOwnerMessage ? hashInstagramGraphMessageRequest(input) : null,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        })
+        .returning();
+      if (!row) throw new Error("Expected Instagram Graph message insert to return a row");
+
+      const [updatedThread] = await transaction
+        .update(messagingThreads)
+        .set({
+          lastMessageId: row.id,
+          lastMessageAt: providerSentAt,
+          ...(isOwnerMessage
+            ? {}
+            : { unreadAstrologerCount: sql`${messagingThreads.unreadAstrologerCount} + 1` }),
+          updatedAt: timestamp
+        })
+        .where(
+          and(
+            eq(messagingThreads.id, thread.id),
+            eq(messagingThreads.astrologerUserId, connection.astrologerUserId)
+          )
+        )
+        .returning({ id: messagingThreads.id });
+      if (!updatedThread) throw new Error("Messaging thread is not owned by the astrologer");
+
+      await appendRealtimeEvent(transaction, {
+        astrologerUserId: connection.astrologerUserId,
+        type: messagingMessageReceivedEventType,
+        occurredAt: input.now,
+        threadId: thread.id,
+        messageId: row.id,
+        channelConnectionId: connection.id,
+        externalIdentityId: identity.id
+      });
+
+      return { kind: "created" as const, message: toMessagingMessage(row) };
+    });
+  } catch (error) {
+    if (!isInboundProviderDedupeViolation(error)) throw error;
+  }
+
+  const existing = await findInstagramGraphMessage(database, input);
+  if (!existing)
+    throw new Error("Expected existing Instagram Graph message after duplicate conflict");
+  return { kind: "duplicate", message: existing };
+}
+
 async function recordTelegramBusinessDeletedMessages(
   database: ElevenHouseDatabase,
   input: RecordTelegramBusinessDeletedMessagesStoreInput
@@ -1598,6 +1693,45 @@ async function upsertTelegramExternalIdentity(
   return row;
 }
 
+async function upsertInstagramExternalIdentity(
+  database: MessagingTransaction,
+  input: {
+    readonly channelConnectionId: string;
+    readonly providerUserId: string;
+    readonly providerChatId: string;
+    readonly now: Date;
+  }
+): Promise<MessagingExternalIdentityRow> {
+  const [row] = await database
+    .insert(messagingExternalIdentities)
+    .values({
+      channelConnectionId: input.channelConnectionId,
+      provider: "instagram",
+      providerUserId: input.providerUserId,
+      providerChatId: input.providerChatId,
+      usernameSnapshot: null,
+      displayNameSnapshot: null,
+      avatarMediaId: null,
+      linkedClientUserId: null,
+      linkStatus: "unlinked",
+      firstSeenAt: input.now,
+      lastSeenAt: input.now
+    })
+    .onConflictDoUpdate({
+      target: [
+        messagingExternalIdentities.channelConnectionId,
+        messagingExternalIdentities.providerChatId
+      ],
+      set: {
+        providerUserId: input.providerUserId,
+        lastSeenAt: input.now
+      }
+    })
+    .returning();
+  if (!row) throw new Error("Expected Instagram external identity upsert to return a row");
+  return row;
+}
+
 async function findTelegramExternalIdentityByChat(
   database: MessagingDatabase,
   input: { readonly channelConnectionId: string; readonly providerChatId: string }
@@ -1677,6 +1811,37 @@ async function findTelegramMtprotoConnection(
   return row ?? null;
 }
 
+async function findInstagramGraphConnection(
+  database: MessagingDatabase,
+  input: RecordInstagramGraphMessageStoreInput
+): Promise<{
+  readonly id: string;
+  readonly astrologerUserId: string;
+  readonly externalOwnerUserId: string | null;
+} | null> {
+  const [row] = await database
+    .select({
+      id: messagingChannelConnections.id,
+      astrologerUserId: messagingChannelConnections.astrologerUserId,
+      externalOwnerUserId: messagingChannelConnections.externalOwnerUserId
+    })
+    .from(messagingChannelConnections)
+    .where(
+      and(
+        eq(messagingChannelConnections.provider, "instagram"),
+        eq(messagingChannelConnections.mode, "instagram_graph"),
+        eq(messagingChannelConnections.status, "active"),
+        eq(messagingChannelConnections.externalAccountId, input.instagramAccountId)
+      )
+    )
+    .limit(1);
+  if (!row) return null;
+  if (input.senderId !== row.externalOwnerUserId && input.recipientId !== row.externalOwnerUserId) {
+    return null;
+  }
+  return row;
+}
+
 async function findOrCreateTelegramThread(
   database: MessagingTransaction,
   input: {
@@ -1717,6 +1882,49 @@ async function findOrCreateTelegramThread(
 
   const created = await findThreadByExternalIdentity(database, input);
   if (!created) throw new Error("Expected Telegram messaging thread identity link");
+  return created;
+}
+
+async function findOrCreateInstagramThread(
+  database: MessagingTransaction,
+  input: {
+    readonly astrologerUserId: string;
+    readonly externalIdentityId: string;
+    readonly now: Date;
+  }
+): Promise<MessagingThread> {
+  const existing = await findThreadByExternalIdentity(database, input);
+  if (existing) return existing;
+
+  try {
+    const [thread] = await database
+      .insert(messagingThreads)
+      .values({
+        astrologerUserId: input.astrologerUserId,
+        clientUserId: null,
+        status: "open",
+        lastMessageId: null,
+        lastMessageAt: null,
+        unreadAstrologerCount: 0,
+        createdAt: input.now,
+        updatedAt: input.now
+      })
+      .returning({ id: messagingThreads.id });
+    if (!thread) throw new Error("Expected Instagram messaging thread insert to return a row");
+
+    await database.insert(messagingThreadIdentities).values({
+      threadId: thread.id,
+      externalIdentityId: input.externalIdentityId,
+      provider: "instagram",
+      isPrimary: true,
+      createdAt: input.now
+    });
+  } catch (error) {
+    if (!isThreadIdentityExternalIdentityViolation(error)) throw error;
+  }
+
+  const created = await findThreadByExternalIdentity(database, input);
+  if (!created) throw new Error("Expected Instagram messaging thread identity link");
   return created;
 }
 
@@ -1820,6 +2028,40 @@ async function findTelegramMtprotoMessage(
   return row ? toMessagingMessage(row.message) : null;
 }
 
+async function findInstagramGraphMessage(
+  database: MessagingDatabase,
+  input: RecordInstagramGraphMessageStoreInput
+): Promise<MessagingMessage | null> {
+  const connection = await findInstagramGraphConnection(database, input);
+  if (!connection) return null;
+  const isOwnerMessage = input.senderId === connection.externalOwnerUserId;
+  const providerChatId = isOwnerMessage ? input.recipientId : input.senderId;
+  const [row] = await database
+    .select({ message: messagingMessages })
+    .from(messagingMessages)
+    .innerJoin(
+      messagingChannelConnections,
+      eq(messagingChannelConnections.id, messagingMessages.channelConnectionId)
+    )
+    .innerJoin(
+      messagingExternalIdentities,
+      eq(messagingExternalIdentities.id, messagingMessages.externalIdentityId)
+    )
+    .where(
+      and(
+        eq(messagingChannelConnections.provider, "instagram"),
+        eq(messagingChannelConnections.mode, "instagram_graph"),
+        eq(messagingChannelConnections.id, connection.id),
+        eq(messagingExternalIdentities.providerChatId, providerChatId),
+        eq(messagingMessages.providerMessageId, input.providerMessageId),
+        eq(messagingMessages.direction, isOwnerMessage ? "outbound" : "inbound")
+      )
+    )
+    .limit(1);
+
+  return row ? toMessagingMessage(row.message) : null;
+}
+
 async function findLatestVisibleMessageForThread(
   database: MessagingDatabase,
   input: { readonly threadId: string }
@@ -1861,6 +2103,17 @@ function telegramMtprotoObservedOutboundIdempotencyKey(
   ].join(":");
 }
 
+function instagramGraphObservedOutboundIdempotencyKey(
+  input: RecordInstagramGraphMessageStoreInput
+): string {
+  return [
+    "instagram-graph",
+    input.instagramAccountId,
+    input.recipientId,
+    input.providerMessageId
+  ].join(":");
+}
+
 function hashTelegramBusinessMessageRequest(
   input: RecordTelegramBusinessMessageStoreInput
 ): `sha256:${string}` {
@@ -1886,6 +2139,23 @@ function hashTelegramMtprotoMessageRequest(
       JSON.stringify({
         channelConnectionId: input.channelConnectionId,
         providerChatId: input.providerChatId,
+        providerMessageId: input.providerMessageId,
+        text: input.text,
+        providerSentAt: input.providerSentAt
+      })
+    )
+    .digest("hex")}`;
+}
+
+function hashInstagramGraphMessageRequest(
+  input: RecordInstagramGraphMessageStoreInput
+): `sha256:${string}` {
+  return `sha256:${createHash("sha256")
+    .update(
+      JSON.stringify({
+        instagramAccountId: input.instagramAccountId,
+        senderId: input.senderId,
+        recipientId: input.recipientId,
         providerMessageId: input.providerMessageId,
         text: input.text,
         providerSentAt: input.providerSentAt
@@ -1972,9 +2242,9 @@ function instagramGraphPendingCapabilities(): Record<string, boolean> {
 
 function instagramGraphAuthorizedCapabilities(): Record<string, boolean> {
   return {
-    canSend: false,
-    canReceive: false,
-    canRead: false,
+    canSend: true,
+    canReceive: true,
+    canRead: true,
     supportsHistoryImport: false,
     supportsMessageEdits: false,
     supportsMessageDeletes: false,

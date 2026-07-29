@@ -12,6 +12,11 @@ export type InstagramGraphAuthProvider = {
     readonly accessToken: string;
     readonly fallbackInstagramUserId: string | null;
   }) => Promise<InstagramGraphConnectedAccount>;
+  readonly subscribeAccountToWebhooks: (input: {
+    readonly accessToken: string;
+    readonly instagramUserId: string;
+    readonly fields: readonly string[];
+  }) => Promise<void>;
 };
 
 export type InstagramGraphTokenExchangeResult = {
@@ -27,6 +32,7 @@ export type InstagramGraphLongLivedTokenResult = {
 };
 
 export type InstagramGraphConnectedAccount = {
+  readonly instagramAccountId: string;
   readonly instagramUserId: string;
   readonly instagramUsername: string | null;
   readonly instagramDisplayName: string | null;
@@ -64,6 +70,10 @@ const profileResponseSchema = z.object({
   id: z.union([z.string().trim().min(1), z.number()]).optional(),
   username: z.string().trim().min(1).optional(),
   name: z.string().trim().min(1).optional()
+});
+
+const subscribeAccountResponseSchema = z.object({
+  success: z.literal(true)
 });
 
 export class HttpInstagramGraphAuthProvider implements InstagramGraphAuthProvider {
@@ -128,7 +138,7 @@ export class HttpInstagramGraphAuthProvider implements InstagramGraphAuthProvide
     readonly fallbackInstagramUserId: string | null;
   }): Promise<InstagramGraphConnectedAccount> {
     const url = new URL(`${this.options.graphApiBaseUrl}/me`);
-    url.searchParams.set("fields", "user_id,username");
+    url.searchParams.set("fields", "id,user_id,username");
     url.searchParams.set("access_token", input.accessToken);
 
     const response = await fetch(url, { method: "GET" });
@@ -137,17 +147,40 @@ export class HttpInstagramGraphAuthProvider implements InstagramGraphAuthProvide
     if (!response.ok || !parsed.success) {
       throw new Error("Instagram Graph connected account lookup failed");
     }
+    const instagramAccountId = parsed.data.id?.toString() ?? input.fallbackInstagramUserId;
     const instagramUserId =
-      parsed.data.user_id?.toString() ??
-      parsed.data.id?.toString() ??
-      input.fallbackInstagramUserId;
+      parsed.data.user_id?.toString() ?? parsed.data.id?.toString() ?? input.fallbackInstagramUserId;
     if (!instagramUserId) throw new Error("Instagram Graph account id was not returned");
+    if (!instagramAccountId) throw new Error("Instagram Graph scoped account id was not returned");
 
     return {
+      instagramAccountId,
       instagramUserId,
       instagramUsername: parsed.data.username ?? null,
       instagramDisplayName: parsed.data.name ?? null
     };
+  }
+
+  async subscribeAccountToWebhooks(input: {
+    readonly accessToken: string;
+    readonly instagramUserId: string;
+    readonly fields: readonly string[];
+  }): Promise<void> {
+    const fields = input.fields.map((field) => field.trim()).filter(Boolean);
+    if (fields.length === 0) {
+      throw new Error("Instagram Graph webhook subscribed fields are required");
+    }
+
+    const url = new URL(`${this.options.graphApiBaseUrl}/${input.instagramUserId}/subscribed_apps`);
+    url.searchParams.set("subscribed_fields", fields.join(","));
+    url.searchParams.set("access_token", input.accessToken);
+
+    const response = await fetch(url, { method: "POST" });
+    const payload = await readGraphJson(response);
+    const parsed = subscribeAccountResponseSchema.safeParse(payload);
+    if (!response.ok || !parsed.success) {
+      throw new Error("Instagram Graph account webhook subscription failed");
+    }
   }
 }
 

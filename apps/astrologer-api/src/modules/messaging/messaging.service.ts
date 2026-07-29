@@ -3,6 +3,7 @@ import {
   HttpException,
   Inject,
   Injectable,
+  Logger,
   UnauthorizedException,
   type MessageEvent
 } from "@nestjs/common";
@@ -23,6 +24,7 @@ import {
   recordTelegramBusinessDeletedMessages,
   recordTelegramBusinessEditedMessage,
   recordTelegramBusinessMessage,
+  recordInstagramGraphMessage,
   recordTelegramMtprotoCodeResult,
   recordTelegramMtprotoPasswordResult,
   requireTelegramMtprotoLoginSession,
@@ -79,12 +81,15 @@ import {
 import { createMessagingRealtimeEventStream } from "./realtime-event-stream";
 import type { TelegramBusinessConnectionLookup } from "./telegram-business-connection-lookup";
 import type { InstagramGraphAuthProvider } from "./instagram-graph-auth-provider";
+import type { ParsedInstagramGraphWebhookUpdate } from "./instagram-graph-webhook";
 import type { ParsedTelegramBusinessWebhookUpdate } from "./telegram-business-webhook";
 import type { TelegramMtprotoAuthProvider } from "./telegram-mtproto-auth-provider";
 import { z } from "@elevenhouse/validation";
 
 @Injectable()
 export class MessagingService {
+  private readonly logger = new Logger(MessagingService.name);
+
   constructor(
     @Inject(MESSAGING_STORE) private readonly store: MessagingStore,
     @Inject(MESSAGING_READ_STORE) private readonly readStore: MessagingReadStore,
@@ -244,6 +249,11 @@ export class MessagingService {
         accessToken: longLivedToken.accessToken,
         fallbackInstagramUserId: shortLivedToken.instagramUserId
       });
+      await authProvider.subscribeAccountToWebhooks({
+        accessToken: longLivedToken.accessToken,
+        instagramUserId: account.instagramAccountId,
+        fields: ["messages"]
+      });
       const cipher = createAes256GcmSecretCipher(instagramGraphConfig.tokenEncryptionKey);
       const tokenExpiresAt = new Date(
         this.clock.now().getTime() + longLivedToken.expiresInSeconds * 1000
@@ -252,6 +262,7 @@ export class MessagingService {
         store: this.store,
         astrologerUserId: state.astrologerUserId,
         connectionId: state.connectionId,
+        instagramAccountId: account.instagramAccountId,
         instagramUserId: account.instagramUserId,
         instagramUsername: account.instagramUsername,
         instagramDisplayName: account.instagramDisplayName,
@@ -721,6 +732,32 @@ export class MessagingService {
     }
   }
 
+  async handleInstagramGraphWebhookUpdates(
+    updates: readonly ParsedInstagramGraphWebhookUpdate[]
+  ): Promise<void> {
+    for (const update of updates) {
+      const result = await recordInstagramGraphMessage({
+        store: this.store,
+        instagramAccountId: update.instagramAccountId,
+        providerMessageId: update.providerMessageId,
+        senderId: update.senderId,
+        recipientId: update.recipientId,
+        text: update.text,
+        providerSentAt: update.providerSentAt,
+        now: this.clock.now()
+      });
+      if (result.kind === "unmatched") {
+        this.logger.warn(
+          `Instagram Graph webhook message unmatched instagramAccountId=${update.instagramAccountId} senderId=${update.senderId} recipientId=${update.recipientId} providerMessageId=${update.providerMessageId}`
+        );
+      } else {
+        this.logger.log(
+          `Instagram Graph webhook message recorded kind=${result.kind} instagramAccountId=${update.instagramAccountId} providerMessageId=${update.providerMessageId}`
+        );
+      }
+    }
+  }
+
   private async requireThreadReadModel(
     threadId: string,
     request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
@@ -902,7 +939,7 @@ function instagramGraphAuthorizationUrl(input: {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", input.config.scopes.join(","));
   url.searchParams.set("state", input.state);
-  url.searchParams.set("enable_fb_login", "0");
+  url.searchParams.set("enable_fb_login", "false");
   return url.toString();
 }
 

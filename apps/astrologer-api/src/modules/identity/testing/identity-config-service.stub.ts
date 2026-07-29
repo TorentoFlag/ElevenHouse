@@ -19,6 +19,7 @@ export function createIdentityConfigServiceStub(input: {
     readonly appSecret: string;
     readonly redirectUri: string;
     readonly tokenEncryptionKey: Buffer;
+    readonly webhookVerifyToken: string | null;
     readonly callbackStateTtlSeconds: number;
     readonly authBaseUrl: string;
     readonly tokenExchangeBaseUrl: string;

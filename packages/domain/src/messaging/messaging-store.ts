@@ -96,6 +96,7 @@ export type StartInstagramGraphConnectionStoreResult = {
 export type CompleteInstagramGraphConnectionStoreInput = {
   readonly astrologerUserId: string;
   readonly connectionId: string;
+  readonly instagramAccountId: string;
   readonly instagramUserId: string;
   readonly instagramUsername: string | null;
   readonly instagramDisplayName: string | null;
@@ -179,6 +180,16 @@ export type RecordTelegramBusinessMessageStoreInput = {
   readonly contentType: MessagingMessageContentType;
   readonly text: string;
   readonly mediaAttachment?: TelegramBusinessMediaAttachment | undefined;
+  readonly providerSentAt: string;
+  readonly now: string;
+};
+
+export type RecordInstagramGraphMessageStoreInput = {
+  readonly instagramAccountId: string;
+  readonly providerMessageId: string;
+  readonly senderId: string;
+  readonly recipientId: string;
+  readonly text: string;
   readonly providerSentAt: string;
   readonly now: string;
 };
@@ -322,6 +333,9 @@ export type MessagingStore = {
   ) => Promise<TelegramMtprotoLoginResultStoreResult>;
   readonly recordTelegramBusinessMessage: (
     input: RecordTelegramBusinessMessageStoreInput
+  ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;
+  readonly recordInstagramGraphMessage: (
+    input: RecordInstagramGraphMessageStoreInput
   ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;
   readonly recordTelegramMtprotoMessage: (
     input: RecordTelegramMtprotoMessageStoreInput

@@ -66,6 +66,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_API_INSTAGRAM_GRAPH_APP_SECRET: optionalTrimmedNonEmptyStringSchema,
   ASTROLOGER_API_INSTAGRAM_GRAPH_REDIRECT_URI: z.string().trim().url().optional(),
   ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
+  ASTROLOGER_API_INSTAGRAM_GRAPH_WEBHOOK_VERIFY_TOKEN: optionalTrimmedNonEmptyStringSchema,
   ASTROLOGER_API_INSTAGRAM_GRAPH_CALLBACK_STATE_TTL_SECONDS: z.coerce
     .number()
     .int()
@@ -227,6 +228,7 @@ export type AstrologerApiRuntimeConfig = {
     readonly appSecret: string;
     readonly redirectUri: string;
     readonly tokenEncryptionKey: Buffer;
+    readonly webhookVerifyToken: string | null;
     readonly callbackStateTtlSeconds: number;
     readonly authBaseUrl: string;
     readonly tokenExchangeBaseUrl: string;
@@ -360,6 +362,7 @@ export function createAstrologerApiRuntimeConfig(
     appSecret: config.ASTROLOGER_API_INSTAGRAM_GRAPH_APP_SECRET,
     redirectUri: config.ASTROLOGER_API_INSTAGRAM_GRAPH_REDIRECT_URI,
     tokenEncryptionKey: config.ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY,
+    webhookVerifyToken: config.ASTROLOGER_API_INSTAGRAM_GRAPH_WEBHOOK_VERIFY_TOKEN,
     callbackStateTtlSeconds: config.ASTROLOGER_API_INSTAGRAM_GRAPH_CALLBACK_STATE_TTL_SECONDS,
     authBaseUrl: config.ASTROLOGER_API_INSTAGRAM_GRAPH_AUTH_BASE_URL,
     tokenExchangeBaseUrl: config.ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_EXCHANGE_BASE_URL,
@@ -543,6 +546,7 @@ function toInstagramGraphConfig(input: {
   readonly appSecret: string | undefined;
   readonly redirectUri: string | undefined;
   readonly tokenEncryptionKey: string | undefined;
+  readonly webhookVerifyToken: string | undefined;
   readonly callbackStateTtlSeconds: number;
   readonly authBaseUrl: string;
   readonly tokenExchangeBaseUrl: string;
@@ -569,6 +573,7 @@ function toInstagramGraphConfig(input: {
     appSecret: input.appSecret,
     redirectUri: input.redirectUri,
     tokenEncryptionKey: parseBase64Aes256GcmKey(input.tokenEncryptionKey),
+    webhookVerifyToken: input.webhookVerifyToken ?? null,
     callbackStateTtlSeconds: input.callbackStateTtlSeconds,
     authBaseUrl: stripTrailingSlashes(input.authBaseUrl),
     tokenExchangeBaseUrl: stripTrailingSlashes(input.tokenExchangeBaseUrl),

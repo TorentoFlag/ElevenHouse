@@ -8,7 +8,7 @@ import { configureAstrologerApiHttpSettings } from "./http-app-settings";
 
 async function bootstrap() {
   const logger = createLogger("astrologer-api");
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   const configService = app.get(ConfigService);
   const port = configService.getOrThrow<number>("astrologerApi.port");
 

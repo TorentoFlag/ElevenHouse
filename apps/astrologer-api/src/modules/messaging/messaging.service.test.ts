@@ -126,7 +126,8 @@ describe("MessagingService", () => {
     expect(authorizationUrl.searchParams.get("scope")).toBe(
       "instagram_business_basic,instagram_business_manage_messages"
     );
-    expect(authorizationUrl.searchParams.get("enable_fb_login")).toBe("0");
+    expect(authorizationUrl.searchParams.get("enable_fb_login")).toBe("false");
+    expect(authorizationUrl.searchParams.has("force_reauth")).toBe(false);
     expect(authorizationUrl.searchParams.get("state")).not.toBe(connectionId);
     expect(authorizationUrl.searchParams.get("state")).toMatch(/^v1\./);
     expect(JSON.stringify(response)).not.toMatch(/app-secret|accessToken/i);
@@ -146,10 +147,12 @@ describe("MessagingService", () => {
         expiresInSeconds: 3600
       })),
       resolveConnectedAccount: vi.fn(async () => ({
+        instagramAccountId: "ig_scoped_123",
         instagramUserId: "ig_456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro"
-      }))
+      })),
+      subscribeAccountToWebhooks: vi.fn(async () => undefined)
     };
     const service = createService({
       store,
@@ -177,10 +180,20 @@ describe("MessagingService", () => {
       accessToken: "plain-long-token",
       fallbackInstagramUserId: "ig_456"
     });
+    expect(instagramGraphAuthProvider.subscribeAccountToWebhooks).toHaveBeenCalledWith({
+      accessToken: "plain-long-token",
+      instagramUserId: "ig_scoped_123",
+      fields: ["messages"]
+    });
+    const completeInstagramGraphConnectionMock =
+      store.completeInstagramGraphConnection as ReturnType<typeof vi.fn>;
+    expect(instagramGraphAuthProvider.subscribeAccountToWebhooks.mock.invocationCallOrder[0])
+      .toBeLessThan(completeInstagramGraphConnectionMock.mock.invocationCallOrder[0] ?? 0);
     expect(store.completeInstagramGraphConnection).toHaveBeenCalledWith(
       expect.objectContaining({
         astrologerUserId,
         connectionId,
+        instagramAccountId: "ig_scoped_123",
         instagramUserId: "ig_456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro",
@@ -200,7 +213,8 @@ describe("MessagingService", () => {
     const instagramGraphAuthProvider = {
       exchangeCode: vi.fn(),
       exchangeLongLivedToken: vi.fn(),
-      resolveConnectedAccount: vi.fn()
+      resolveConnectedAccount: vi.fn(),
+      subscribeAccountToWebhooks: vi.fn()
     };
     const service = createService({
       instagramGraph: instagramGraphConfig(),
@@ -944,6 +958,10 @@ function createStore(
     startInstagramGraphConnection: vi.fn(async () => ({ connectionId })),
     completeInstagramGraphConnection: vi.fn(async () => ({ kind: "recorded" as const })),
     recordTelegramBusinessMessage: vi.fn(async () => ({
+      kind: "created" as const,
+      message: domainMessage("inbound")
+    })),
+    recordInstagramGraphMessage: vi.fn(async () => ({
       kind: "created" as const,
       message: domainMessage("inbound")
     })),

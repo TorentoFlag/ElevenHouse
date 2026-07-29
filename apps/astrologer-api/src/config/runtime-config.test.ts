@@ -315,6 +315,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_INSTAGRAM_GRAPH_REDIRECT_URI:
           "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback",
         ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY: testEncryptionKey,
+        ASTROLOGER_API_INSTAGRAM_GRAPH_WEBHOOK_VERIFY_TOKEN: "instagram-webhook-verify-token",
         ASTROLOGER_API_INSTAGRAM_GRAPH_CALLBACK_STATE_TTL_SECONDS: "600",
         ASTROLOGER_API_INSTAGRAM_GRAPH_AUTH_BASE_URL: "https://www.instagram.com/oauth/authorize/",
         ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_EXCHANGE_BASE_URL: "https://api.instagram.com/",
@@ -331,6 +332,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         appSecret: "instagram-app-secret",
         redirectUri: "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback",
         tokenEncryptionKey: Buffer.alloc(32, 1),
+        webhookVerifyToken: "instagram-webhook-verify-token",
         callbackStateTtlSeconds: 600,
         authBaseUrl: "https://www.instagram.com/oauth/authorize",
         tokenExchangeBaseUrl: "https://api.instagram.com",

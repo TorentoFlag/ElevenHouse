@@ -19,6 +19,7 @@ import type {
   MarkThreadReadStoreResult,
   CompleteInstagramGraphConnectionStoreInput,
   MessagingStore,
+  RecordInstagramGraphMessageStoreInput,
   RecordTelegramMtprotoCodeResultStoreInput,
   RecordTelegramMtprotoPasswordResultStoreInput,
   RecordInboundProviderMessageStoreInput,
@@ -45,6 +46,7 @@ import {
   markThreadRead,
   normalizeRealtimeEvent,
   recordInboundProviderMessage,
+  recordInstagramGraphMessage,
   recordTelegramBusinessMessage,
   recordTelegramBusinessDeletedMessages,
   recordTelegramBusinessEditedMessage,
@@ -481,6 +483,7 @@ describe("Messaging use cases", () => {
         store,
         astrologerUserId,
         connectionId: "instagram-1",
+        instagramAccountId: " ig-scoped-123 ",
         instagramUserId: " ig-456 ",
         instagramUsername: " alisa.astro ",
         instagramDisplayName: " Alisa Astro ",
@@ -494,6 +497,7 @@ describe("Messaging use cases", () => {
       {
         astrologerUserId,
         connectionId: "instagram-1",
+        instagramAccountId: "ig-scoped-123",
         instagramUserId: "ig-456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro",
@@ -1014,6 +1018,33 @@ describe("Messaging use cases", () => {
       }
     ]);
   });
+
+  it("normalizes Instagram Graph messages before passing them to the store", async () => {
+    const store = new InMemoryMessagingStore();
+
+    await recordInstagramGraphMessage({
+      store,
+      instagramAccountId: " ig-business-1 ",
+      providerMessageId: " ig-mid-1 ",
+      senderId: " ig-client-1 ",
+      recipientId: " ig-business-1 ",
+      text: "  Здравствуйте  ",
+      providerSentAt: "2026-07-22T06:01:00.000Z",
+      now
+    });
+
+    expect(store.instagramGraphMessageCommands).toEqual([
+      {
+        instagramAccountId: "ig-business-1",
+        providerMessageId: "ig-mid-1",
+        senderId: "ig-client-1",
+        recipientId: "ig-business-1",
+        text: "Здравствуйте",
+        providerSentAt: "2026-07-22T06:01:00.000Z",
+        now: now.toISOString()
+      }
+    ]);
+  });
 });
 
 class InMemoryMessagingStore implements MessagingStore {
@@ -1042,6 +1073,7 @@ class InMemoryMessagingStore implements MessagingStore {
   readonly telegramMtprotoCodeCommands: RecordTelegramMtprotoCodeResultStoreInput[] = [];
   readonly telegramMtprotoPasswordCommands: RecordTelegramMtprotoPasswordResultStoreInput[] = [];
   readonly telegramBusinessMessageCommands: RecordTelegramBusinessMessageStoreInput[] = [];
+  readonly instagramGraphMessageCommands: RecordInstagramGraphMessageStoreInput[] = [];
   readonly telegramMtprotoMessageCommands: RecordTelegramMtprotoMessageStoreInput[] = [];
   readonly telegramBusinessDeleteCommands: RecordTelegramBusinessDeletedMessagesStoreInput[] = [];
   readonly telegramBusinessEditCommands: RecordTelegramBusinessEditedMessageStoreInput[] = [];
@@ -1164,6 +1196,31 @@ class InMemoryMessagingStore implements MessagingStore {
         threadId: "thread-1",
         messageId: "message-telegram-business",
         channelConnectionId: "connection-1",
+        externalIdentityId: "identity-1"
+      }
+    });
+  }
+
+  async recordInstagramGraphMessage(
+    input: RecordInstagramGraphMessageStoreInput
+  ): Promise<InboundMessageRecordResult> {
+    this.instagramGraphMessageCommands.push(input);
+    return this.recordInboundProviderMessage({
+      messageId: "message-instagram-graph",
+      astrologerUserId,
+      threadId: "thread-1",
+      channelConnectionId: "connection-instagram",
+      externalIdentityId: "identity-1",
+      providerMessageId: input.providerMessageId,
+      text: input.text,
+      now: input.now,
+      receivedEvent: {
+        astrologerUserId,
+        type: messagingMessageReceivedEventType,
+        occurredAt: input.now,
+        threadId: "thread-1",
+        messageId: "message-instagram-graph",
+        channelConnectionId: "connection-instagram",
         externalIdentityId: "identity-1"
       }
     });

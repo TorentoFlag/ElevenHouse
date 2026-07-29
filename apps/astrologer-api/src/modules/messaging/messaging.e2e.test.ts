@@ -1,4 +1,5 @@
 import type { INestApplication } from "@nestjs/common";
+import { createHmac } from "node:crypto";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import {
@@ -134,6 +135,7 @@ describe("messaging HTTP routes", () => {
             redirectUri:
               "https://api.elevenhouse.test/messaging/channel-connections/instagram/graph/callback",
             tokenEncryptionKey: Buffer.alloc(32, 14),
+            webhookVerifyToken: "instagram-test-verify-token",
             callbackStateTtlSeconds: 900,
             authBaseUrl: "https://www.instagram.com/oauth/authorize",
             tokenExchangeBaseUrl: "https://api.instagram.com",
@@ -196,10 +198,12 @@ describe("messaging HTTP routes", () => {
           expiresInSeconds: 3600
         })),
         resolveConnectedAccount: vi.fn(async () => ({
+          instagramAccountId: "ig_scoped_123",
           instagramUserId: "ig_456",
           instagramUsername: "alisa.astro",
           instagramDisplayName: "Alisa Astro"
-        }))
+        })),
+        subscribeAccountToWebhooks: vi.fn(async () => undefined)
       })
       .overrideProvider(MEDIA_PRIVATE_OBJECT_STORAGE)
       .useValue(createPrivateStorage())
@@ -207,7 +211,7 @@ describe("messaging HTTP routes", () => {
     const csrf = moduleRef.get(AstrologerCsrfTokenService);
     primaryCsrfToken = createCsrfToken(csrf, sessionToken);
     secondaryCsrfToken = createCsrfToken(csrf, otherSessionToken);
-    app = moduleRef.createNestApplication();
+    app = moduleRef.createNestApplication({ rawBody: true });
     await app.listen(0);
     baseUrl = await app.getUrl();
   });
@@ -608,6 +612,39 @@ describe("messaging HTTP routes", () => {
     expect(businessConnectionUpdateCount).toBe(1);
   });
 
+  it("verifies Instagram Graph webhook challenge with provider verify token", async () => {
+    const response = await requestText(
+      "GET",
+      "/messaging/webhooks/instagram/graph?hub.mode=subscribe&hub.verify_token=instagram-test-verify-token&hub.challenge=instagram-challenge"
+    );
+    const wrongToken = await requestText(
+      "GET",
+      "/messaging/webhooks/instagram/graph?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=instagram-challenge"
+    );
+
+    expect(response).toEqual({ status: 200, body: "instagram-challenge" });
+    expect(wrongToken.status).toBe(401);
+  });
+
+  it("accepts signed Instagram Graph webhooks without browser auth or CSRF", async () => {
+    const payload = instagramGraphMessageWebhook();
+    const body = JSON.stringify(payload);
+    const signature = `sha256=${createHmac("sha256", "instagram-app-secret").update(body).digest("hex")}`;
+    const response = await requestRawJson("POST", "/messaging/webhooks/instagram/graph", body, {
+      "x-hub-signature-256": signature
+    });
+    const wrongSignature = await requestRawJson(
+      "POST",
+      "/messaging/webhooks/instagram/graph",
+      body,
+      { "x-hub-signature-256": "sha256=00" }
+    );
+
+    expect(response).toEqual({ status: 200, body: { ok: true } });
+    expect(wrongSignature.status).toBe(401);
+    expect(inboundProviderMessageCount).toBe(1);
+  });
+
   async function requestJson(
     method: string,
     path: string,
@@ -623,6 +660,32 @@ describe("messaging HTTP routes", () => {
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
     return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+  }
+
+  async function requestRawJson(
+    method: string,
+    path: string,
+    body: string,
+    headers: Record<string, string> = {}
+  ) {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers: {
+        "content-type": "application/json",
+        ...headers
+      },
+      body
+    });
+    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+  }
+
+  async function requestText(
+    method: string,
+    path: string,
+    headers: Record<string, string> = {}
+  ) {
+    const response = await fetch(`${baseUrl}${path}`, { method, headers });
+    return { status: response.status, body: await response.text() };
   }
 });
 
@@ -759,6 +822,10 @@ function createStore(): MessagingStore {
       return { kind: "created" as const, message: readDomainInboundMessage() };
     }),
     recordTelegramMtprotoMessage: vi.fn(async () => {
+      inboundProviderMessageCount += 1;
+      return { kind: "created" as const, message: readDomainInboundMessage() };
+    }),
+    recordInstagramGraphMessage: vi.fn(async () => {
       inboundProviderMessageCount += 1;
       return { kind: "created" as const, message: readDomainInboundMessage() };
     }),
@@ -1061,6 +1128,29 @@ function telegramBusinessEditedMessageUpdate() {
       edit_date: 1784700360,
       text: "Здравствуйте, исправлено"
     }
+  };
+}
+
+function instagramGraphMessageWebhook() {
+  return {
+    object: "instagram",
+    entry: [
+      {
+        id: "ig_456",
+        time: 1784700060,
+        messaging: [
+          {
+            sender: { id: "ig_client_1" },
+            recipient: { id: "ig_456" },
+            timestamp: 1784700060123,
+            message: {
+              mid: "ig_mid_1",
+              text: "Здравствуйте"
+            }
+          }
+        ]
+      }
+    ]
   };
 }
 

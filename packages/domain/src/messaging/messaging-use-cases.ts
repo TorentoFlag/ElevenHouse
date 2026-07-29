@@ -206,6 +206,7 @@ export async function completeInstagramGraphConnection(input: {
   readonly store: MessagingStore;
   readonly astrologerUserId: string;
   readonly connectionId: string;
+  readonly instagramAccountId: string;
   readonly instagramUserId: string;
   readonly instagramUsername: string | null;
   readonly instagramDisplayName: string | null;
@@ -216,6 +217,7 @@ export async function completeInstagramGraphConnection(input: {
   return input.store.completeInstagramGraphConnection({
     astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
     connectionId: identifier(input.connectionId, "Channel connection id is required"),
+    instagramAccountId: bounded(input.instagramAccountId, 1, 200, "Instagram account id is required"),
     instagramUserId: bounded(input.instagramUserId, 1, 200, "Instagram user id is required"),
     instagramUsername: optionalSnapshot(input.instagramUsername),
     instagramDisplayName: optionalSnapshot(input.instagramDisplayName),
@@ -360,6 +362,32 @@ export async function recordTelegramBusinessMessage(input: {
     contentType: normalizeMessageContentType(input.contentType ?? "text"),
     text: bounded(input.text, 1, 4000, "Message text is invalid"),
     mediaAttachment: normalizeTelegramMediaAttachment(input.mediaAttachment ?? null),
+    providerSentAt: normalizeIsoInstant(input.providerSentAt),
+    now: input.now.toISOString()
+  });
+}
+
+export async function recordInstagramGraphMessage(input: {
+  readonly store: MessagingStore;
+  readonly instagramAccountId: string;
+  readonly providerMessageId: string;
+  readonly senderId: string;
+  readonly recipientId: string;
+  readonly text: string;
+  readonly providerSentAt: string;
+  readonly now: Date;
+}): Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }> {
+  return input.store.recordInstagramGraphMessage({
+    instagramAccountId: bounded(
+      input.instagramAccountId,
+      1,
+      200,
+      "Instagram account id is required"
+    ),
+    providerMessageId: bounded(input.providerMessageId, 1, 200, "Instagram message id is required"),
+    senderId: bounded(input.senderId, 1, 200, "Instagram sender id is required"),
+    recipientId: bounded(input.recipientId, 1, 200, "Instagram recipient id is required"),
+    text: bounded(input.text, 1, 4000, "Message text is invalid"),
     providerSentAt: normalizeIsoInstant(input.providerSentAt),
     now: input.now.toISOString()
   });

@@ -574,6 +574,55 @@ describe("createDrizzleMessagingStore", () => {
     ]);
   });
 
+  it("records Instagram Graph client messages as inbound", async () => {
+    const fake = createTelegramBusinessMessageDatabase({
+      externalOwnerUserId: "ig_business_1"
+    });
+
+    await expect(
+      createDrizzleMessagingStore(fake.database as never).recordInstagramGraphMessage({
+        instagramAccountId: "ig_scoped_1",
+        providerMessageId: "ig_mid_1",
+        senderId: "ig_client_1",
+        recipientId: "ig_business_1",
+        text: "Здравствуйте",
+        providerSentAt: now.toISOString(),
+        now: now.toISOString()
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      message: {
+        direction: "inbound",
+        status: "received",
+        text: "Здравствуйте"
+      }
+    });
+
+    expect(fake.externalIdentityUpserts).toEqual([
+      expect.objectContaining({
+        provider: "instagram",
+        providerUserId: "ig_client_1",
+        providerChatId: "ig_client_1"
+      })
+    ]);
+    expect(fake.messageInserts).toEqual([
+      expect.objectContaining({
+        direction: "inbound",
+        senderKind: "client",
+        contentType: "text",
+        status: "received",
+        providerMessageId: "ig_mid_1",
+        idempotencyKey: null,
+        requestHash: null
+      })
+    ]);
+    expect(fake.threadUpdates).toEqual([
+      expect.objectContaining({
+        unreadAstrologerCount: expect.anything()
+      })
+    ]);
+  });
+
   it("records Telegram MTProto client messages as inbound and advances the leased cursor", async () => {
     const fake = createTelegramMtprotoMessageDatabase();
 
@@ -866,6 +915,34 @@ describe("createDrizzleMessagingStore", () => {
     );
   });
 
+  it("restarts an Instagram Graph connection that needs reauthorization", async () => {
+    const fake = createExistingInstagramGraphConnectionStartDatabase("reauth_required");
+
+    await expect(
+      createDrizzleMessagingStore(fake.database as never).startInstagramGraphConnection({
+        connectionId: "00000000-0000-4000-8000-000000000031",
+        astrologerUserId,
+        now: now.toISOString()
+      })
+    ).resolves.toEqual({ connectionId: channelConnectionId });
+
+    expect(fake.updates).toEqual([
+      {
+        table: messagingChannelConnections,
+        value: expect.objectContaining({
+          status: "connecting",
+          externalAccountId: null,
+          externalOwnerUserId: null,
+          displayNameSnapshot: null,
+          usernameSnapshot: null,
+          connectedAt: null,
+          lastErrorCode: null,
+          lastErrorMessage: null
+        })
+      }
+    ]);
+  });
+
   it("activates an Instagram Graph connection with encrypted credential persistence", async () => {
     const fake = createCompleteInstagramGraphConnectionDatabase();
 
@@ -873,6 +950,7 @@ describe("createDrizzleMessagingStore", () => {
       createDrizzleMessagingStore(fake.database as never).completeInstagramGraphConnection({
         astrologerUserId,
         connectionId: channelConnectionId,
+        instagramAccountId: "ig_scoped_123",
         instagramUserId: "ig_456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro",
@@ -911,7 +989,7 @@ describe("createDrizzleMessagingStore", () => {
         table: messagingChannelConnections,
         value: expect.objectContaining({
           status: "active",
-          externalAccountId: "ig_456",
+          externalAccountId: "ig_scoped_123",
           externalOwnerUserId: "ig_456",
           displayNameSnapshot: "Alisa Astro",
           usernameSnapshot: "alisa.astro",
@@ -1283,7 +1361,7 @@ function createDuplicateInboundDatabase(existingMessages: readonly Record<string
     select: (selection?: Record<string, unknown>) => ReturnType<typeof selectChain>;
   } = {
     insert: () => ({
-      values: (value) => ({
+      values: (value: Record<string, unknown>) => ({
         returning: async () => {
           insertCount += 1;
           duplicateInput = value;
@@ -1719,6 +1797,45 @@ function createStartTelegramMtprotoConnectionDatabase() {
   return {
     database,
     inserts,
+    get transactionCount() {
+      return transactionCount;
+    }
+  };
+}
+
+function createExistingInstagramGraphConnectionStartDatabase(status: string) {
+  const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  let transactionCount = 0;
+  const database = {
+    execute: async () => undefined,
+    insert: () => ({
+      values: (value: Record<string, unknown>) => ({
+        returning: async () => [{ id: value.id }]
+      })
+    }),
+    update: (table: unknown) => ({
+      set: (value: Record<string, unknown>) => ({
+        where: () => {
+          updates.push({ table, value });
+          return Promise.resolve(undefined);
+        }
+      })
+    }),
+    select: () =>
+      selectChain([
+        {
+          id: channelConnectionId,
+          status
+        }
+      ]),
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => {
+      transactionCount += 1;
+      return callback(database);
+    }
+  };
+  return {
+    database,
+    updates,
     get transactionCount() {
       return transactionCount;
     }

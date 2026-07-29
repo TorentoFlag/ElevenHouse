@@ -76,6 +76,7 @@ describe("HttpInstagramGraphAuthProvider", () => {
     const fetchMock = vi.fn<(input: string | URL, init?: RequestInit) => Promise<Response>>(
       async () =>
         jsonResponse({
+          id: "ig_scoped_123",
           user_id: "ig_456",
           username: "alisa.astro"
         })
@@ -89,6 +90,7 @@ describe("HttpInstagramGraphAuthProvider", () => {
         fallbackInstagramUserId: null
       })
     ).resolves.toEqual({
+      instagramAccountId: "ig_scoped_123",
       instagramUserId: "ig_456",
       instagramUsername: "alisa.astro",
       instagramDisplayName: null
@@ -96,8 +98,31 @@ describe("HttpInstagramGraphAuthProvider", () => {
 
     const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
     expect(url.pathname).toBe("/v25.0/me");
-    expect(url.searchParams.get("fields")).toBe("user_id,username");
+    expect(url.searchParams.get("fields")).toBe("id,user_id,username");
     expect(url.searchParams.get("access_token")).toBe("long-lived-token");
+  });
+
+  it("subscribes the connected Instagram account to message webhooks", async () => {
+    const fetchMock = vi.fn<(input: string | URL, init?: RequestInit) => Promise<Response>>(
+      async () => jsonResponse({ success: true })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = createProvider();
+
+    await expect(
+      provider.subscribeAccountToWebhooks({
+        accessToken: "long-lived-token",
+        instagramUserId: "ig_456",
+        fields: ["messages"]
+      })
+    ).resolves.toBeUndefined();
+
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(url.pathname).toBe("/v25.0/ig_456/subscribed_apps");
+    expect(url.searchParams.get("subscribed_fields")).toBe("messages");
+    expect(url.searchParams.get("access_token")).toBe("long-lived-token");
+    expect(init?.method).toBe("POST");
   });
 });
 
