@@ -457,7 +457,7 @@ export const landingCopy = {
       title: "Демонстрационный документ-шаблон",
       text:
         "Юридические тексты из дизайн-референса перенесены как визуальное состояние модального окна. Перед публикацией production-документы должны быть заменены утвержденной юридической редакцией.",
-      contacts: "Контакты: hello@elevenhouse.app · privacy@elevenhouse.app · support@elevenhouse.app",
+      contacts: "Контакты: hello@elevenhouse.ai · privacy@elevenhouse.ai · support@elevenhouse.ai",
       confirm: "Понятно"
     },
     footer: {
@@ -827,7 +827,7 @@ export const landingCopy = {
       title: "Demo document template",
       text:
         "Legal texts from the design reference are represented as the modal visual state. Before publication, production documents must be replaced with approved legal copy.",
-      contacts: "Contacts: hello@elevenhouse.app · privacy@elevenhouse.app · support@elevenhouse.app",
+      contacts: "Contacts: hello@elevenhouse.ai · privacy@elevenhouse.ai · support@elevenhouse.ai",
       confirm: "Got it"
     },
     footer: {

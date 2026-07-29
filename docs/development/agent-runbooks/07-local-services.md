@@ -26,6 +26,7 @@ dev-процессы без прямой явной команды пользо�
 - `client-web`: `5173`
 - `astrologer-web`: `5174`
 - `admin-web`: `5175`
+- `landing`: `5176`
 - `public-api`: `3001`
 - `astrologer-api`: `3002`
 - `admin-api`: `3003`

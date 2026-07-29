@@ -1794,6 +1794,123 @@ button {
   font-size: 12.5px;
 }
 
+.privacy-page {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(139, 92, 246, 0.24), transparent 34%),
+    radial-gradient(circle at 82% 12%, rgba(244, 196, 48, 0.12), transparent 32%),
+    linear-gradient(180deg, #0e0a2a 0%, #130c30 52%, #090715 100%);
+}
+
+.privacy-nav {
+  justify-content: space-between;
+}
+
+.privacy-nav > a:first-child {
+  display: inline-flex;
+}
+
+.privacy-nav__back {
+  padding: 11px 18px;
+  font-size: 13px;
+}
+
+.privacy-document {
+  width: min(980px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 62px 0 86px;
+}
+
+.privacy-hero {
+  padding: 44px 0 34px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.privacy-hero h1 {
+  max-width: 760px;
+  margin: 10px 0 18px;
+  color: var(--text-1);
+  font-size: clamp(42px, 7vw, 84px);
+  line-height: 0.95;
+}
+
+.privacy-hero p {
+  max-width: 760px;
+  margin: 0;
+  color: rgba(236, 232, 247, 0.74);
+  font-size: 18px;
+  line-height: 1.65;
+}
+
+.privacy-hero dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 30px 0 0;
+}
+
+.privacy-hero dl > div {
+  padding: 16px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.privacy-hero dt {
+  color: rgba(236, 232, 247, 0.46);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.privacy-hero dd {
+  margin: 8px 0 0;
+  color: var(--text-1);
+  font-size: 15px;
+}
+
+.privacy-hero a,
+.privacy-section a {
+  color: var(--gold);
+}
+
+.privacy-section-list {
+  display: grid;
+  gap: 0;
+}
+
+.privacy-section {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.45fr) minmax(0, 1fr);
+  gap: 36px;
+  padding: 34px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.privacy-section h2 {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+.privacy-section p,
+.privacy-section li {
+  color: rgba(236, 232, 247, 0.74);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.privacy-section p {
+  grid-column: 2;
+  margin: 0 0 14px;
+}
+
+.privacy-section ul {
+  grid-column: 2;
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+
 .legal-modal {
   position: fixed;
   inset: 0;
@@ -2130,6 +2247,20 @@ button {
   .landing-footer__grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .privacy-hero dl,
+  .privacy-section {
+    grid-template-columns: 1fr;
+  }
+
+  .privacy-section {
+    gap: 14px;
+  }
+
+  .privacy-section p,
+  .privacy-section ul {
+    grid-column: 1;
+  }
 }
 
 @media (max-width: 560px) {
@@ -2175,5 +2306,30 @@ button {
   .landing-footer__bottom {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .privacy-document {
+    width: min(100% - 28px, 980px);
+    padding: 38px 0 64px;
+  }
+
+  .privacy-hero {
+    padding: 34px 0 26px;
+  }
+
+  .privacy-hero h1 {
+    font-size: 44px;
+  }
+
+  .privacy-hero p {
+    font-size: 16px;
+  }
+
+  .privacy-section {
+    padding: 28px 0;
+  }
+
+  .privacy-nav__back {
+    padding: 10px 14px;
   }
 }

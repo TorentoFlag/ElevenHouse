@@ -1,8 +1,11 @@
 import { isValidElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { App } from "./App";
+import { App, resolveLandingRoute } from "./App";
 import { LANDING_APP_TITLE } from "./app-title";
 import { landingCopy, landingLanguages, landingSections, loginHref, primaryCtaHref } from "./content/landingContent";
+import { LandingPage } from "./pages/home/LandingPage";
+import { PrivacyPolicyPage } from "./pages/privacy/PrivacyPolicyPage";
+import { privacyContactEmail, privacyPolicySections } from "./pages/privacy/privacyPolicyContent";
 
 describe("landing app shell", () => {
   afterEach(() => {
@@ -47,6 +50,31 @@ describe("landing app shell", () => {
     expect(landingLanguages).toEqual(["ru", "en"]);
     expect(landingCopy.en.hero.title).toEqual(["Your stellar practice", "in one workspace"]);
     expect(landingCopy.en.navLinks.map((link) => link.label)).toEqual(["Features", "How it works", "Pricing"]);
+  });
+
+  it("routes /privacy to the public privacy policy page", () => {
+    expect(resolveLandingRoute("/privacy")).toBe("privacy");
+    expect(resolveLandingRoute("/privacy/")).toBe("privacy");
+    expect(resolveLandingRoute("/")).toBe("home");
+    expect(resolveLandingRoute("/pricing")).toBe("home");
+
+    const privacyElement = App({ pathname: "/privacy" });
+    const homeElement = App({ pathname: "/" });
+
+    expect(isValidElement(privacyElement) && privacyElement.type).toBe(PrivacyPolicyPage);
+    expect(isValidElement(homeElement) && homeElement.type).toBe(LandingPage);
+  });
+
+  it("publishes policy content for messaging integrations and data deletion requests", () => {
+    const policyText = privacyPolicySections
+      .flatMap((section) => [section.title, ...section.paragraphs, ...(section.bullets ?? [])])
+      .join("\n");
+
+    expect(privacyContactEmail).toBe("privacy@elevenhouse.ai");
+    expect(policyText).toContain("Instagram Direct");
+    expect(policyText).toContain("Telegram");
+    expect(policyText).toContain("To request access, correction, deletion or account-data removal");
+    expect(policyText).toContain("We do not sell Instagram, Telegram or other messaging data");
   });
 
   it("renders a React element", () => {

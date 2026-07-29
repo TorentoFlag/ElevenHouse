@@ -17,8 +17,8 @@ export function FooterSection({ copy, ctaHref, legalCopy, logoSub, onOpenLegal }
         <div>
           <Logo sub={logoSub} />
           <p>{copy.tagline}</p>
-          <a href="mailto:hello@elevenhouse.app">
-            <Icon name="chat" size={14} /> hello@elevenhouse.app
+          <a href="mailto:hello@elevenhouse.ai">
+            <Icon name="chat" size={14} /> hello@elevenhouse.ai
           </a>
         </div>
         <div>
@@ -30,9 +30,9 @@ export function FooterSection({ copy, ctaHref, legalCopy, logoSub, onOpenLegal }
         </div>
         <div>
           <b>{copy.documents}</b>
-          <button type="button" onClick={() => onOpenLegal("privacy")}>
+          <a href="/privacy">
             {legalCopy.privacy}
-          </button>
+          </a>
           <button type="button" onClick={() => onOpenLegal("offer")}>
             {legalCopy.offer}
           </button>
@@ -42,8 +42,8 @@ export function FooterSection({ copy, ctaHref, legalCopy, logoSub, onOpenLegal }
         </div>
         <div>
           <b>{copy.contacts}</b>
-          <a href="mailto:hello@elevenhouse.app">hello@elevenhouse.app</a>
-          <a href="mailto:support@elevenhouse.app">{copy.support}</a>
+          <a href="mailto:hello@elevenhouse.ai">hello@elevenhouse.ai</a>
+          <a href="mailto:support@elevenhouse.ai">{copy.support}</a>
           <a href="https://t.me/elevenhouse_support">Telegram</a>
         </div>
       </div>
