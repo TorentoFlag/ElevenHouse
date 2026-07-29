@@ -14,6 +14,11 @@ const priorBaseline = {
   createdAt: "1785010323027"
 } as const;
 
+const natalChartEngineBaseline = {
+  hash: "ab1e22a3e02a0c428dfa01e90e48b5f037e66509ecf51fa5674e5e3ab2889b57",
+  createdAt: "1784275401007"
+} as const;
+
 describe("production baseline transition plan", () => {
   it("matches the checked-in generated baseline hash and journal timestamp", () => {
     const migration = readFileSync("packages/db/drizzle/0000_sticky_rictor.sql");
@@ -37,6 +42,19 @@ describe("production baseline transition plan", () => {
     expect(classifyBaselineHistory([row(priorBaseline), row(previousBaseline)])).toBe(
       "previous_current"
     );
+    expect(
+      classifyBaselineHistory([
+        ...approvedLegacyMigrations.map(row),
+        row(natalChartEngineBaseline)
+      ])
+    ).toBe("previous_current");
+    expect(
+      classifyBaselineHistory([
+        ...approvedLegacyMigrations.map(row),
+        row(natalChartEngineBaseline),
+        row(currentBaseline)
+      ])
+    ).toBe("current");
     expect(
       classifyBaselineHistory([
         ...approvedLegacyMigrations.map(row),

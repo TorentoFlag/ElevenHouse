@@ -24,18 +24,22 @@ export const previousBaseline = {
   createdAt: "1785010323027"
 } as const satisfies MigrationIdentity;
 
+const natalChartEngineBaseline = {
+  hash: "ab1e22a3e02a0c428dfa01e90e48b5f037e66509ecf51fa5674e5e3ab2889b57",
+  createdAt: "1784275401007"
+} as const satisfies MigrationIdentity;
+
+const telegramMtprotoBaseline = {
+  hash: "9502df7bc0155994014951df839fd556213d11e3c370cb5244d65a37a43d704e",
+  createdAt: "1785010323027"
+} as const satisfies MigrationIdentity;
+
 const approvedPriorBaselines = [
-  {
-    hash: "9502df7bc0155994014951df839fd556213d11e3c370cb5244d65a37a43d704e",
-    createdAt: "1785010323027"
-  }
+  natalChartEngineBaseline,
+  telegramMtprotoBaseline
 ] as const satisfies readonly MigrationIdentity[];
 
 export const approvedLegacyMigrations = [
-  {
-    hash: "911332efe5ba14b352244a8176412cf637dccdb25141aa1792dcad35c63831de",
-    createdAt: "1784111509389"
-  },
   {
     hash: "9a042354672db97fda448a68804c61952d81d2c39e4b67b8581de04984c3fff8",
     createdAt: "1782996784018"
@@ -51,44 +55,38 @@ export const approvedLegacyMigrations = [
   {
     hash: "3d071b976aeeb1b5a4954aef46eadce7209a5ecef66a81e1680c3f3986694bd7",
     createdAt: "1783969326835"
+  },
+  {
+    hash: "911332efe5ba14b352244a8176412cf637dccdb25141aa1792dcad35c63831de",
+    createdAt: "1784111509389"
   }
 ] as const satisfies readonly MigrationIdentity[];
+
+const approvedPreviousCurrentHistories = [
+  [previousBaseline],
+  [telegramMtprotoBaseline, previousBaseline],
+  [...approvedLegacyMigrations, natalChartEngineBaseline],
+  [...approvedLegacyMigrations, previousBaseline],
+  [...approvedLegacyMigrations, telegramMtprotoBaseline, previousBaseline],
+  [...approvedLegacyMigrations, ...approvedPriorBaselines, previousBaseline]
+] as const satisfies readonly (readonly MigrationIdentity[])[];
 
 export function classifyBaselineHistory(
   migrations: readonly MigrationLedgerRow[]
 ): BaselineHistoryKind {
   if (
     matchesMigrationHistory(migrations, [currentBaseline]) ||
-    matchesMigrationHistory(migrations, [previousBaseline, currentBaseline]) ||
-    matchesMigrationHistory(migrations, [
-      ...approvedPriorBaselines,
-      previousBaseline,
-      currentBaseline
-    ]) ||
     matchesMigrationHistory(migrations, [...approvedLegacyMigrations, currentBaseline]) ||
-    matchesMigrationHistory(migrations, [
-      ...approvedLegacyMigrations,
-      previousBaseline,
-      currentBaseline
-    ]) ||
-    matchesMigrationHistory(migrations, [
-      ...approvedLegacyMigrations,
-      ...approvedPriorBaselines,
-      previousBaseline,
-      currentBaseline
-    ])
+    approvedPreviousCurrentHistories.some((history) =>
+      matchesMigrationHistory(migrations, [...history, currentBaseline])
+    )
   ) {
     return "current";
   }
   if (
-    matchesMigrationHistory(migrations, [previousBaseline]) ||
-    matchesMigrationHistory(migrations, [...approvedPriorBaselines, previousBaseline]) ||
-    matchesMigrationHistory(migrations, [...approvedLegacyMigrations, previousBaseline]) ||
-    matchesMigrationHistory(migrations, [
-      ...approvedLegacyMigrations,
-      ...approvedPriorBaselines,
-      previousBaseline
-    ])
+    approvedPreviousCurrentHistories.some((history) =>
+      matchesMigrationHistory(migrations, history)
+    )
   ) {
     return "previous_current";
   }
