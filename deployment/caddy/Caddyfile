@@ -26,6 +26,10 @@ app.elevenhouse.ai {
 		reverse_proxy public-api:3001
 	}
 
+	handle /webhooks/arc-pay {
+		reverse_proxy payment-worker:3013
+	}
+
 	handle {
 		reverse_proxy client-web:8080
 	}
