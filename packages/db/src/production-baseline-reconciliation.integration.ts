@@ -8,6 +8,7 @@ import {
 } from "@elevenhouse/domain";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { currentBaseline } from "../scripts/production-baseline-plan";
 
 const execFileAsync = promisify(execFile);
 const integrationDatabaseUrl = process.env.INTEGRATION_DATABASE_URL;
@@ -67,8 +68,8 @@ describeWithDatabase("production baseline reconciliation", () => {
       SELECT
         (SELECT count(*)::text
            FROM drizzle.__drizzle_migrations
-          WHERE hash = '6f57cc8ca0c825a1f6da1911970a0d202d34c4177886d6d08f38a6edf2eb0860'
-            AND created_at = 1784275401007) AS current_baseline_count,
+          WHERE hash = '${currentBaseline.hash}'
+            AND created_at = ${currentBaseline.createdAt}) AS current_baseline_count,
         to_regclass('public.calculation_versions')::text AS legacy_versions_table,
         to_regclass('public.calculation_pdf_jobs')::text AS pdf_jobs_table,
         to_regclass('public.matrix_notes')::text AS matrix_notes_table,
@@ -144,8 +145,8 @@ describeWithDatabase("production baseline reconciliation", () => {
         SELECT
           (SELECT count(*)::text
              FROM drizzle.__drizzle_migrations
-            WHERE hash = '6f57cc8ca0c825a1f6da1911970a0d202d34c4177886d6d08f38a6edf2eb0860'
-              AND created_at = 1784275401007) AS current_baseline_count,
+            WHERE hash = '${currentBaseline.hash}'
+              AND created_at = ${currentBaseline.createdAt}) AS current_baseline_count,
           (SELECT title FROM products WHERE id = '50000000-0000-0000-0000-000000000001') AS product_title,
           to_regclass('public.availability_schedules')::text AS schedule_table,
           (SELECT count(*)::text FROM pg_constraint

@@ -9,6 +9,11 @@ import {
   schedulingBaselineDdl
 } from "./production-baseline-plan";
 
+const priorBaseline = {
+  hash: "9502df7bc0155994014951df839fd556213d11e3c370cb5244d65a37a43d704e",
+  createdAt: "1785010323027"
+} as const;
+
 describe("production baseline transition plan", () => {
   it("matches the checked-in generated baseline hash and journal timestamp", () => {
     const migration = readFileSync("packages/db/drizzle/0000_sticky_rictor.sql");
@@ -22,7 +27,16 @@ describe("production baseline transition plan", () => {
 
   it("accepts only explicit fresh, previous and calculation-legacy histories", () => {
     expect(classifyBaselineHistory([row(currentBaseline)])).toBe("current");
+    expect(classifyBaselineHistory([row(previousBaseline), row(currentBaseline)])).toBe(
+      "current"
+    );
+    expect(
+      classifyBaselineHistory([row(priorBaseline), row(previousBaseline), row(currentBaseline)])
+    ).toBe("current");
     expect(classifyBaselineHistory([row(previousBaseline)])).toBe("previous_current");
+    expect(classifyBaselineHistory([row(priorBaseline), row(previousBaseline)])).toBe(
+      "previous_current"
+    );
     expect(
       classifyBaselineHistory([
         ...approvedLegacyMigrations.map(row),

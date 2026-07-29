@@ -20,9 +20,16 @@ export const currentBaseline = {
 } as const satisfies MigrationIdentity;
 
 export const previousBaseline = {
-  hash: "9502df7bc0155994014951df839fd556213d11e3c370cb5244d65a37a43d704e",
+  hash: "a38ad40eeb3418dedda1cb62b1a30be0f9c249dd137f73539b8ef89c9d13d112",
   createdAt: "1785010323027"
 } as const satisfies MigrationIdentity;
+
+const approvedPriorBaselines = [
+  {
+    hash: "9502df7bc0155994014951df839fd556213d11e3c370cb5244d65a37a43d704e",
+    createdAt: "1785010323027"
+  }
+] as const satisfies readonly MigrationIdentity[];
 
 export const approvedLegacyMigrations = [
   {
@@ -53,9 +60,20 @@ export function classifyBaselineHistory(
   if (
     matchesMigrationHistory(migrations, [currentBaseline]) ||
     matchesMigrationHistory(migrations, [previousBaseline, currentBaseline]) ||
+    matchesMigrationHistory(migrations, [
+      ...approvedPriorBaselines,
+      previousBaseline,
+      currentBaseline
+    ]) ||
     matchesMigrationHistory(migrations, [...approvedLegacyMigrations, currentBaseline]) ||
     matchesMigrationHistory(migrations, [
       ...approvedLegacyMigrations,
+      previousBaseline,
+      currentBaseline
+    ]) ||
+    matchesMigrationHistory(migrations, [
+      ...approvedLegacyMigrations,
+      ...approvedPriorBaselines,
       previousBaseline,
       currentBaseline
     ])
@@ -64,7 +82,13 @@ export function classifyBaselineHistory(
   }
   if (
     matchesMigrationHistory(migrations, [previousBaseline]) ||
-    matchesMigrationHistory(migrations, [...approvedLegacyMigrations, previousBaseline])
+    matchesMigrationHistory(migrations, [...approvedPriorBaselines, previousBaseline]) ||
+    matchesMigrationHistory(migrations, [...approvedLegacyMigrations, previousBaseline]) ||
+    matchesMigrationHistory(migrations, [
+      ...approvedLegacyMigrations,
+      ...approvedPriorBaselines,
+      previousBaseline
+    ])
   ) {
     return "previous_current";
   }
