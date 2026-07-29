@@ -284,7 +284,15 @@ services:
           "Statement": [
             {
               "Effect": "Allow",
-              "Action": ["s3:PutObject", "s3:GetObject"],
+              "Action": ["s3:ListBucket"],
+              "Resource": [
+                "arn:aws:s3:::$${MINIO_MEDIA_BUCKET}",
+                "arn:aws:s3:::$${MINIO_PRIVATE_BUCKET}"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
               "Resource": [
                 "arn:aws:s3:::$${MINIO_MEDIA_BUCKET}/*",
                 "arn:aws:s3:::$${MINIO_PRIVATE_BUCKET}/*"
