@@ -509,6 +509,86 @@
   text-align: right;
 }
 
+.balanceComposition {
+  margin: 2px 0 14px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--finance-line);
+}
+
+.balanceComposition h3 {
+  margin: 0 0 10px;
+  color: var(--finance-text);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.balanceCompositionList {
+  display: grid;
+  gap: 1px;
+}
+
+.balanceCompositionRow {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--finance-line);
+}
+
+.balanceCompositionRow:first-child {
+  border-top: 0;
+}
+
+.balanceCompositionRow span {
+  min-width: 0;
+}
+
+.balanceCompositionRow strong,
+.balanceCompositionRow small {
+  display: block;
+}
+
+.balanceCompositionRow strong {
+  color: var(--finance-text);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.balanceCompositionRow small {
+  margin-top: 3px;
+  color: var(--finance-muted-2);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.balanceCompositionRow b {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.balanceComposition_positive {
+  color: var(--finance-positive);
+}
+
+.balanceComposition_warning {
+  color: var(--finance-warning);
+}
+
+.balanceComposition_neutral {
+  color: var(--finance-text);
+}
+
+.balanceComposition_danger {
+  color: var(--finance-danger);
+}
+
 .panelHint {
   margin: 12px 0 0;
   font-size: 12.5px;
@@ -716,6 +796,21 @@
   margin-top: 3px;
   color: var(--finance-muted-2);
   font-size: 11.5px;
+}
+
+.payoutRequestDetails {
+  display: grid;
+  gap: 3px;
+  grid-column: 2 / -1;
+  margin-top: -4px;
+}
+
+.payoutRequestDetails small {
+  overflow: hidden;
+  color: var(--finance-muted-2);
+  font-size: 11.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .planCardHeader {

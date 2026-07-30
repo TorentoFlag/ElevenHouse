@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AstrologerFinanceOverviewResponse,
@@ -198,11 +198,107 @@ describe("FinancePage", () => {
 
     render(<FinancePage />);
 
-    expect(screen.getByText("Долг")).toBeTruthy();
-    expect(screen.getByText("450 ₽")).toBeTruthy();
+    expect(screen.getAllByText("Долг").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("450 ₽").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("region", { name: "Заявки на вывод" })).toBeTruthy();
     expect(screen.getByText("В ручной выплате")).toBeTruthy();
     expect(screen.getByText("Выплачено")).toBeTruthy();
+  });
+
+  it("explains which balance buckets are unavailable for a new payout", () => {
+    mocks.useCurrentFinanceOverviewQuery.mockReturnValue({
+      data: financeOverview({
+        balance: {
+          reserved: { amountMinor: 80_000, currency: "RUB" },
+          payoutPending: { amountMinor: 1_500_000, currency: "RUB" },
+          negativeBalance: { amountMinor: 45_000, currency: "RUB" }
+        }
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn()
+    });
+
+    render(<FinancePage />);
+
+    const composition = within(screen.getByRole("region", { name: "Состав баланса" }));
+    expect(composition.getByText("Доступно сейчас")).toBeTruthy();
+    expect(composition.getByText("16 230 ₽")).toBeTruthy();
+    expect(composition.getByText("В заявках на вывод")).toBeTruthy();
+    expect(composition.getByText("15 000 ₽")).toBeTruthy();
+    expect(composition.getByText("Резерв и холды")).toBeTruthy();
+    expect(composition.getByText("800 ₽")).toBeTruthy();
+    expect(composition.getByText("Долг")).toBeTruthy();
+    expect(composition.getByText("450 ₽")).toBeTruthy();
+  });
+
+  it("shows payout request next steps, failure reasons and transfer references", () => {
+    mocks.useCurrentFinanceOverviewQuery.mockReturnValue({
+      data: financeOverview({
+        recentPayoutRequests: [
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            astrologerUserId: "55555555-5555-4555-8555-555555555555",
+            status: "failed",
+            amount: { amountMinor: 500_000, currency: "RUB" },
+            method: "manual_bank_transfer",
+            requestedAt: "2026-07-27T10:00:00.000Z",
+            reviewedAt: "2026-07-27T10:30:00.000Z",
+            completedAt: "2026-07-27T11:00:00.000Z",
+            adminUserId: "77777777-7777-4777-8777-777777777777",
+            adminNote: "Проверьте реквизиты",
+            failureReason: "Банк отклонил перевод",
+            externalReference: null,
+            transferredAt: null,
+            providerPayoutId: null
+          },
+          {
+            id: "55555555-5555-4555-8555-555555555555",
+            astrologerUserId: "55555555-5555-4555-8555-555555555555",
+            status: "processing_manual",
+            amount: { amountMinor: 1_500_000, currency: "RUB" },
+            method: "manual_bank_transfer",
+            requestedAt: "2026-07-28T10:00:00.000Z",
+            reviewedAt: null,
+            completedAt: null,
+            adminUserId: null,
+            adminNote: "Переведем в ближайший банковский день",
+            failureReason: null,
+            externalReference: null,
+            transferredAt: null,
+            providerPayoutId: null
+          },
+          {
+            id: "66666666-6666-4666-8666-666666666666",
+            astrologerUserId: "55555555-5555-4555-8555-555555555555",
+            status: "paid",
+            amount: { amountMinor: 300_000, currency: "RUB" },
+            method: "manual_bank_transfer",
+            requestedAt: "2026-07-24T10:00:00.000Z",
+            reviewedAt: "2026-07-24T10:30:00.000Z",
+            completedAt: "2026-07-24T11:00:00.000Z",
+            adminUserId: "77777777-7777-4777-8777-777777777777",
+            adminNote: "Paid manually",
+            failureReason: null,
+            externalReference: "bank-1",
+            transferredAt: "2026-07-24T10:55:00.000Z",
+            providerPayoutId: null
+          }
+        ]
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn()
+    });
+
+    render(<FinancePage />);
+
+    expect(screen.getByText("Ошибка выплаты")).toBeTruthy();
+    expect(screen.getByText("Банк отклонил перевод")).toBeTruthy();
+    expect(screen.getByText("Проверьте реквизиты")).toBeTruthy();
+    expect(screen.getByText("Администратор готовит ручной перевод")).toBeTruthy();
+    expect(screen.getByText("Переведем в ближайший банковский день")).toBeTruthy();
+    expect(screen.getByText("Переведено 24.07.26 · bank-1")).toBeTruthy();
   });
 
   it("loads the next real ledger page when the operation history has a cursor", () => {

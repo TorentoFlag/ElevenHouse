@@ -234,6 +234,7 @@ export function FinancePage() {
                 />
                 <PayoutFact icon="settings" label="Провайдер" value="банк вручную" />
               </div>
+              <BalanceComposition overview={overview} locale={locale} />
               <form className={styles.form} onSubmit={handlePayoutSubmit}>
                 <label className={styles.field}>
                   <span>Сумма</span>
@@ -380,6 +381,60 @@ function BalanceStrip({
           <small>{bucket.note}</small>
         </div>
       ))}
+    </section>
+  );
+}
+
+function BalanceComposition({
+  overview,
+  locale
+}: {
+  readonly overview: AstrologerFinanceOverviewResponse | null;
+  readonly locale: "ru" | "en";
+}) {
+  const rows = [
+    {
+      label: "Доступно сейчас",
+      value: overview?.balance.available.amountMinor ?? 0,
+      tone: "positive",
+      note: "можно включить в новую заявку"
+    },
+    {
+      label: "В заявках на вывод",
+      value: overview?.balance.payoutPending.amountMinor ?? 0,
+      tone: "warning",
+      note: "уже зарезервировано под выплаты"
+    },
+    {
+      label: "Резерв и холды",
+      value: overview?.balance.reserved.amountMinor ?? 0,
+      tone: "neutral",
+      note: "не доступно до release"
+    },
+    {
+      label: "Долг",
+      value: overview?.balance.negativeBalance.amountMinor ?? 0,
+      tone: "danger",
+      note: "возвраты и chargeback спишутся первыми"
+    }
+  ] as const;
+
+  return (
+    <section className={styles.balanceComposition} aria-label="Состав баланса">
+      <h3>Состав баланса</h3>
+      <div className={styles.balanceCompositionList}>
+        {rows.map((row) => (
+          <div className={styles.balanceCompositionRow} key={row.label}>
+            <span>
+              <strong>{row.label}</strong>
+              <small>{row.note}</small>
+            </span>
+            <b className={styles[`balanceComposition_${row.tone}`]}>
+              {formatMoneyMinor(row.value, "RUB", locale)}
+            </b>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -692,6 +747,11 @@ function PayoutRequestsPanel({
               >
                 {payoutRequestStatusLabel(request.status)}
               </span>
+              <div className={styles.payoutRequestDetails}>
+                {payoutRequestDetailLines(request).map((line) => (
+                  <small key={line}>{line}</small>
+                ))}
+              </div>
             </article>
           ))}
         </div>
@@ -937,12 +997,60 @@ function payoutRequestStatusLabel(status: PayoutRequestResponse["status"]): stri
     case "paid":
       return "Выплачено";
     case "failed":
-      return "Ошибка";
+      return "Ошибка выплаты";
     case "rejected":
       return "Отклонено";
     case "cancelled":
       return "Отменено";
   }
+}
+
+function payoutRequestDetailLines(request: PayoutRequestResponse): readonly string[] {
+  const lines: string[] = [];
+
+  switch (request.status) {
+    case "requested":
+      lines.push("Ожидает проверки администратором");
+      break;
+    case "under_review":
+      lines.push("Администратор проверяет реквизиты и риски");
+      break;
+    case "approved":
+      lines.push("Одобрено, ожидает ручного перевода");
+      break;
+    case "processing_manual":
+      lines.push("Администратор готовит ручной перевод");
+      break;
+    case "processing_provider":
+      lines.push(
+        request.providerPayoutId
+          ? `Передано провайдеру · ${request.providerPayoutId}`
+          : "Передано провайдеру выплат"
+      );
+      break;
+    case "paid":
+      lines.push(
+        `Переведено ${formatDate(request.transferredAt ?? request.completedAt ?? request.requestedAt)} · ${
+          request.externalReference ?? "без банковской ссылки"
+        }`
+      );
+      break;
+    case "failed":
+      lines.push(request.failureReason ?? "Провести выплату не удалось");
+      break;
+    case "rejected":
+      lines.push(request.failureReason ?? "Заявка отклонена администратором");
+      break;
+    case "cancelled":
+      lines.push("Заявка отменена, сумма больше не зарезервирована");
+      break;
+  }
+
+  if (request.adminNote) {
+    lines.push(request.adminNote);
+  }
+
+  return lines;
 }
 
 function payoutRequestTone(
