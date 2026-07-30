@@ -181,6 +181,69 @@ describe("FinancePoliciesPage", () => {
     expect(api.updatePayoutRequestStatus).not.toHaveBeenCalled();
   });
 
+  it("lets operators move a new payout through review, approval and manual processing before paid", async () => {
+    const api = apiStub();
+    vi.mocked(api.listPayoutRequests)
+      .mockResolvedValueOnce(payoutQueue([payoutRequest({ status: "requested" })]))
+      .mockResolvedValueOnce(payoutQueue([payoutRequest({ status: "under_review" })]))
+      .mockResolvedValueOnce(payoutQueue([payoutRequest({ status: "approved" })]))
+      .mockResolvedValue(payoutQueue([payoutRequest({ status: "processing_manual" })]));
+
+    render(<FinancePoliciesPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Взять в проверку" }));
+    await waitFor(() =>
+      expect(api.updatePayoutRequestStatus).toHaveBeenCalledWith(
+        "11111111-1111-4111-8111-111111111111",
+        {
+          status: "under_review",
+          adminNote: null
+        }
+      )
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Одобрить" }));
+    await waitFor(() =>
+      expect(api.updatePayoutRequestStatus).toHaveBeenCalledWith(
+        "11111111-1111-4111-8111-111111111111",
+        {
+          status: "approved",
+          adminNote: null
+        }
+      )
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Передать в банк" }));
+    await waitFor(() =>
+      expect(api.updatePayoutRequestStatus).toHaveBeenCalledWith(
+        "11111111-1111-4111-8111-111111111111",
+        {
+          status: "processing_manual",
+          adminNote: null
+        }
+      )
+    );
+
+    fireEvent.change(screen.getByLabelText("External reference"), {
+      target: { value: "bank-transfer-1001" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отметить оплаченной" }));
+
+    await waitFor(() =>
+      expect(api.updatePayoutRequestStatus).toHaveBeenCalledWith(
+        "11111111-1111-4111-8111-111111111111",
+        {
+          status: "paid",
+          externalReference: "bank-transfer-1001",
+          transferredAt: expect.any(String),
+          adminNote: null
+        }
+      )
+    );
+  });
+
   it("shows an actionable CSRF/session error for protected finance mutations", async () => {
     const api = apiStub();
     vi.mocked(api.listPayoutRequests).mockResolvedValue(payoutQueue([payoutRequest()]));

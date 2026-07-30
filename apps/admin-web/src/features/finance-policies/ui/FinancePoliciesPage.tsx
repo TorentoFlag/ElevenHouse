@@ -128,6 +128,7 @@ type AdminFinanceErrorContext =
   | "load"
   | "policy"
   | "risk"
+  | "payout_status"
   | "payout_paid"
   | "payout_rejected"
   | "reversal_review"
@@ -459,18 +460,50 @@ export function FinancePoliciesPage({ api: providedApi }: FinancePoliciesPagePro
     }
   }
 
-  async function handlePayoutRejected() {
+  async function handlePayoutStatusUpdate(
+    status: "under_review" | "approved" | "processing_manual"
+  ) {
     if (!selectedPayout) return;
     if (isPayoutActionBlocked(selectedPayout)) return;
     setSavingPayout(true);
     setSubmitError(null);
     try {
       await api.updatePayoutRequestStatus(selectedPayout.id, {
-        status: "rejected",
-        failureReason: payoutAction.failureReason.trim() || "Manual payout rejected by admin",
+        status,
         adminNote: payoutAction.adminNote.trim() || null
       });
-      setStatusMessage("Заявка отклонена. Ledger вернул сумму в доступный баланс.");
+      setStatusMessage(payoutStatusMessage(status));
+      await refreshFinance();
+    } catch (error) {
+      setSubmitError(errorMessage(error, "payout_status"));
+    } finally {
+      setSavingPayout(false);
+    }
+  }
+
+  async function handlePayoutRejected() {
+    if (!selectedPayout) return;
+    if (isPayoutActionBlocked(selectedPayout)) return;
+    const status =
+      selectedPayout.status === "processing_manual" ||
+      selectedPayout.status === "processing_provider"
+        ? "failed"
+        : "rejected";
+    setSavingPayout(true);
+    setSubmitError(null);
+    try {
+      await api.updatePayoutRequestStatus(selectedPayout.id, {
+        status,
+        failureReason:
+          payoutAction.failureReason.trim() ||
+          (status === "failed" ? "Manual bank transfer failed" : "Manual payout rejected by admin"),
+        adminNote: payoutAction.adminNote.trim() || null
+      });
+      setStatusMessage(
+        status === "failed"
+          ? "Ошибка ручного перевода зафиксирована. Ledger вернул сумму в доступный баланс."
+          : "Заявка отклонена. Ledger вернул сумму в доступный баланс."
+      );
       const nextPayoutAction = emptyPayoutAction();
       payoutActionRef.current = nextPayoutAction;
       setPayoutAction(nextPayoutAction);
@@ -712,6 +745,7 @@ export function FinancePoliciesPage({ api: providedApi }: FinancePoliciesPagePro
                   }))
                 }
                 onChange={setPayoutAction}
+                onStatusUpdate={(status) => void handlePayoutStatusUpdate(status)}
                 onPaid={handlePayoutPaid}
                 onReject={() => void handlePayoutRejected()}
               />
@@ -895,11 +929,22 @@ function PayoutsPanel(props: {
   readonly onFilterChange: (filter: AdminPayoutQueueStatusFilter) => void;
   readonly onSelect: (request: AdminPayoutRequestResponse) => void;
   readonly onChange: (next: PayoutActionForm) => void;
+  readonly onStatusUpdate: (status: "under_review" | "approved" | "processing_manual") => void;
   readonly onPaid: (event: FormEvent<HTMLFormElement>) => void;
   readonly onReject: () => void;
 }) {
   const payoutActionDisabled =
     props.saving || !props.selectedPayout || isPayoutActionBlocked(props.selectedPayout);
+  const paidActionDisabled =
+    payoutActionDisabled ||
+    !props.selectedPayout ||
+    !canMarkPayoutPaid(props.selectedPayout.status);
+  const failureActionTitle =
+    props.selectedPayout &&
+    (props.selectedPayout.status === "processing_manual" ||
+      props.selectedPayout.status === "processing_provider")
+      ? "Зафиксировать ошибку"
+      : "Отклонить";
   return (
     <div className="adminFinancePayoutGrid">
       <Card className="adminFinancePanel adminFinancePayoutListPanel" padding="medium">
@@ -996,6 +1041,11 @@ function PayoutsPanel(props: {
                 <small>{props.selectedPayout.adminNote}</small>
               </div>
             ) : null}
+            <PayoutStageActions
+              request={props.selectedPayout}
+              saving={props.saving}
+              onStatusUpdate={props.onStatusUpdate}
+            />
             <form className="adminFinanceForm adminFinancePayoutForm" onSubmit={props.onPaid}>
               <label className="adminFinanceField adminFinanceFieldWide">
                 <span>External reference</span>
@@ -1010,7 +1060,7 @@ function PayoutsPanel(props: {
                   }
                   placeholder="bank-transfer-1001"
                   required
-                  disabled={payoutActionDisabled}
+                  disabled={paidActionDisabled}
                 />
               </label>
               <label className="adminFinanceField adminFinanceFieldWide">
@@ -1023,7 +1073,7 @@ function PayoutsPanel(props: {
                   }
                   placeholder="2026-07-25T10:00:00.000Z"
                   required
-                  disabled={payoutActionDisabled}
+                  disabled={paidActionDisabled}
                 />
               </label>
               <label className="adminFinanceField adminFinanceFieldWide">
@@ -1044,7 +1094,7 @@ function PayoutsPanel(props: {
                 type="submit"
                 size="medium"
                 startIcon={<Check />}
-                disabled={payoutActionDisabled}
+                disabled={paidActionDisabled}
               />
             </form>
             <div className="adminFinanceRejectBox">
@@ -1061,7 +1111,7 @@ function PayoutsPanel(props: {
                 />
               </label>
               <Button
-                title="Отклонить"
+                title={failureActionTitle}
                 variant="default"
                 size="medium"
                 disabled={payoutActionDisabled}
@@ -1073,6 +1123,30 @@ function PayoutsPanel(props: {
           <p className="adminFinanceMuted">Нет выбранной заявки.</p>
         )}
       </Card>
+    </div>
+  );
+}
+
+function PayoutStageActions(props: {
+  readonly request: AdminPayoutRequestResponse;
+  readonly saving: boolean;
+  readonly onStatusUpdate: (status: "under_review" | "approved" | "processing_manual") => void;
+}) {
+  if (isPayoutActionBlocked(props.request)) return null;
+  const actions = payoutStageActions(props.request.status);
+  if (actions.length === 0) return null;
+  return (
+    <div className="adminFinancePayoutStageActions" aria-label="Payout status actions">
+      {actions.map((action) => (
+        <Button
+          key={action.status}
+          title={action.label}
+          variant={action.variant}
+          size="small"
+          disabled={props.saving}
+          onClick={() => props.onStatusUpdate(action.status)}
+        />
+      ))}
     </div>
   );
 }
@@ -2199,6 +2273,41 @@ function isPayoutActionBlocked(request: AdminPayoutRequestResponse): boolean {
   return request.blockedByChargeback || isTerminalPayoutStatus(request.status);
 }
 
+function canMarkPayoutPaid(status: PayoutRequestResponse["status"]): boolean {
+  return status === "processing_manual" || status === "processing_provider";
+}
+
+function payoutStageActions(status: PayoutRequestResponse["status"]): readonly {
+  readonly status: "under_review" | "approved" | "processing_manual";
+  readonly label: string;
+  readonly variant: "brand" | "default";
+}[] {
+  switch (status) {
+    case "requested":
+      return [
+        { status: "under_review", label: "Взять в проверку", variant: "default" },
+        { status: "processing_manual", label: "Передать в банк", variant: "brand" }
+      ];
+    case "under_review":
+      return [{ status: "approved", label: "Одобрить", variant: "brand" }];
+    case "approved":
+      return [{ status: "processing_manual", label: "Передать в банк", variant: "brand" }];
+    default:
+      return [];
+  }
+}
+
+function payoutStatusMessage(status: "under_review" | "approved" | "processing_manual"): string {
+  switch (status) {
+    case "under_review":
+      return "Заявка взята в проверку. Баланс остается в payout pending.";
+    case "approved":
+      return "Заявка одобрена. Следующий шаг — ручной перевод из банковского кабинета.";
+    case "processing_manual":
+      return "Заявка передана в ручной банковский перевод.";
+  }
+}
+
 function payoutLedgerContext(status: PayoutRequestResponse["status"]): string {
   if (status === "paid") return "payout_paid posted";
   if (status === "failed" || status === "rejected" || status === "cancelled") {
@@ -2248,6 +2357,7 @@ function actionLabel(context: AdminFinanceErrorContext): string {
     load: "Загрузка финансов",
     policy: "Сохранение политики",
     risk: "Сохранение риска",
+    payout_status: "Смена статуса заявки на вывод",
     payout_paid: "Подтверждение ручной выплаты",
     payout_rejected: "Отклонение заявки на вывод",
     reversal_review: "Review refund/chargeback",

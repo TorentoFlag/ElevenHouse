@@ -792,6 +792,12 @@
   grid-template-columns: 1fr;
 }
 
+.adminFinancePayoutStageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .adminFinanceField,
 .adminFinanceToggle {
   display: grid;
