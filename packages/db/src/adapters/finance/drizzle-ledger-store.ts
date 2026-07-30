@@ -53,6 +53,9 @@ type LedgerOperationListRow = {
   readonly metadata: Record<string, unknown>;
   readonly amountMinor: number | string;
   readonly signedAmountMinor: number | string;
+  readonly grossAmountMinor: number | string | null;
+  readonly platformFeeAmountMinor: number | string | null;
+  readonly netAmountMinor: number | string;
   readonly balanceBucket: WalletBalanceBucket | null;
 };
 
@@ -472,6 +475,31 @@ async function listLedgerOperations(
     when ${ledgerEntries.side} = 'debit' then -${ledgerEntries.amountMinor}
     else 0
   end), 0)`;
+  const grossAmountExpression = sql<number | null>`case
+    when ${ledgerTransactions.operationType} = 'sale_captured' then (
+      select coalesce(sum(gross_entry.amount_minor), 0)
+      from ledger_entries gross_entry
+      inner join ledger_accounts gross_account on gross_account.id = gross_entry.account_id
+      where gross_entry.ledger_transaction_id = ${ledgerTransactions.id}
+        and gross_account.account_type = 'platform_clearing'
+        and gross_entry.entry_side = 'debit'
+    )
+    when ${ledgerTransactions.operationType} in ('refund_recorded', 'chargeback_recorded')
+      and ${ledgerTransactions.metadata}->>'reversalGrossAmountMinor' is not null
+      then -(${ledgerTransactions.metadata}->>'reversalGrossAmountMinor')::bigint
+    else null
+  end`;
+  const platformFeeAmountExpression = sql<number | null>`case
+    when ${ledgerTransactions.operationType} = 'sale_captured' then (
+      select nullif(coalesce(sum(fee_entry.amount_minor), 0), 0)
+      from ledger_entries fee_entry
+      inner join ledger_accounts fee_account on fee_account.id = fee_entry.account_id
+      where fee_entry.ledger_transaction_id = ${ledgerTransactions.id}
+        and fee_account.account_type = 'platform_revenue'
+        and fee_entry.entry_side = 'credit'
+    )
+    else null
+  end`;
   const filters: SQL[] = [
     eq(ledgerAccounts.astrologerUserId, input.astrologerUserId),
     eq(ledgerEntries.currency, "RUB")
@@ -497,6 +525,9 @@ async function listLedgerOperations(
       metadata: ledgerTransactions.metadata,
       signedAmountMinor: signedAmountExpression,
       amountMinor: sql<number>`greatest(abs(${signedAmountExpression}), coalesce(max(${ledgerEntries.amountMinor}), 0))`,
+      grossAmountMinor: grossAmountExpression,
+      platformFeeAmountMinor: platformFeeAmountExpression,
+      netAmountMinor: signedAmountExpression,
       balanceBucket: sql<WalletBalanceBucket | null>`case when count(distinct ${ledgerAccounts.balanceBucket}) = 1 then min(${ledgerAccounts.balanceBucket}) else null end`
     })
     .from(ledgerTransactions)
@@ -579,6 +610,12 @@ function toLedgerOperation(row: LedgerOperationListRow): LedgerOperation {
     direction: directionForSignedAmount(signedAmountMinor),
     amount: money(amountMinor, "RUB"),
     signedAmountMinor,
+    amountBreakdown: {
+      grossAmountMinor: toNullableSafeSignedMinorUnit(row.grossAmountMinor),
+      platformFeeAmountMinor: toNullableSafeSignedMinorUnit(row.platformFeeAmountMinor),
+      netAmountMinor: toSafeSignedMinorUnit(row.netAmountMinor),
+      currency: "RUB"
+    },
     balanceBucket: row.balanceBucket,
     orderId: row.orderId,
     payoutRequestId: row.payoutRequestId,
@@ -588,7 +625,9 @@ function toLedgerOperation(row: LedgerOperationListRow): LedgerOperation {
   };
 }
 
-function kindForLedgerOperation(operationType: LedgerOperation["operationType"]): FinanceOperationKind {
+function kindForLedgerOperation(
+  operationType: LedgerOperation["operationType"]
+): FinanceOperationKind {
   switch (operationType) {
     case "sale_captured":
     case "funds_released":
@@ -616,11 +655,17 @@ function directionForSignedAmount(signedAmountMinor: number): FinanceOperationDi
   return "neutral";
 }
 
-function createLedgerOperationsCursor(input: { readonly postedAt: string; readonly id: string }): string {
+function createLedgerOperationsCursor(input: {
+  readonly postedAt: string;
+  readonly id: string;
+}): string {
   return Buffer.from(JSON.stringify(input), "utf8").toString("base64url");
 }
 
-function parseLedgerOperationsCursor(cursor: string): { readonly postedAt: string; readonly id: string } {
+function parseLedgerOperationsCursor(cursor: string): {
+  readonly postedAt: string;
+  readonly id: string;
+} {
   const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
   if (
     !parsed ||
@@ -667,6 +712,11 @@ function toSafeSignedMinorUnit(value: number | string): number {
     throw new Error("Ledger operation query produced an invalid signed amount");
   }
   return amountMinor;
+}
+
+function toNullableSafeSignedMinorUnit(value: number | string | null): number | null {
+  if (value === null) return null;
+  return toSafeSignedMinorUnit(value);
 }
 
 function money(amountMinor: number, currency: string): Money {

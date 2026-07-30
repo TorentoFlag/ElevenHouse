@@ -173,6 +173,12 @@ describe("astrologer finance HTTP routes", () => {
           kind: "sale",
           direction: "inflow",
           signedAmountMinor: 5_000_00,
+          amountBreakdown: {
+            grossAmountMinor: 5_700_00,
+            platformFeeAmountMinor: 700_00,
+            netAmountMinor: 5_000_00,
+            currency: "RUB"
+          },
           amount: { amountMinor: 5_000_00, currency: "RUB" },
           orderId: "11111111-1111-4111-8111-111111111111"
         }
@@ -430,28 +436,36 @@ function createLedgerStore(): Pick<
 
   return {
     findWalletBalance: vi.fn(async (userId) => (userId === astrologerUserId ? balance : null)),
-    listOperations: vi.fn(async (input): Promise<LedgerOperationList> => ({
-      operations:
-        input.astrologerUserId === astrologerUserId
-          ? [
-              {
-                id: "99999999-9999-4999-8999-999999999999",
-                operationType: "sale_captured",
-                kind: "sale",
-                direction: "inflow",
-                amount: { amountMinor: 5_000_00, currency: "RUB" },
-                signedAmountMinor: 5_000_00,
-                balanceBucket: "pending",
-                orderId: "11111111-1111-4111-8111-111111111111",
-                payoutRequestId: null,
-                occurredAt: now.toISOString(),
-                postedAt: now.toISOString(),
-                metadata: { providerPaymentId: "arc-pay-1" }
-              }
-            ]
-          : [],
-      nextCursor: null
-    })),
+    listOperations: vi.fn(
+      async (input): Promise<LedgerOperationList> => ({
+        operations:
+          input.astrologerUserId === astrologerUserId
+            ? [
+                {
+                  id: "99999999-9999-4999-8999-999999999999",
+                  operationType: "sale_captured",
+                  kind: "sale",
+                  direction: "inflow",
+                  amount: { amountMinor: 5_000_00, currency: "RUB" },
+                  signedAmountMinor: 5_000_00,
+                  amountBreakdown: {
+                    grossAmountMinor: 5_700_00,
+                    platformFeeAmountMinor: 700_00,
+                    netAmountMinor: 5_000_00,
+                    currency: "RUB"
+                  },
+                  balanceBucket: "pending",
+                  orderId: "11111111-1111-4111-8111-111111111111",
+                  payoutRequestId: null,
+                  occurredAt: now.toISOString(),
+                  postedAt: now.toISOString(),
+                  metadata: { providerPaymentId: "arc-pay-1" }
+                }
+              ]
+            : [],
+        nextCursor: null
+      })
+    ),
     createTransaction: vi.fn(async (transaction: CreateLedgerTransactionInput) => ({
       ...transaction,
       id: "77777777-7777-4777-8777-777777777777",

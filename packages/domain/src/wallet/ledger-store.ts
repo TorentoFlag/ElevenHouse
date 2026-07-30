@@ -38,6 +38,13 @@ export type LedgerOperationType =
 export type FinanceOperationKind = "sale" | "payout" | "refund" | "adjustment";
 export type FinanceOperationDirection = "inflow" | "outflow" | "neutral";
 
+export type LedgerOperationAmountBreakdown = {
+  readonly grossAmountMinor: number | null;
+  readonly platformFeeAmountMinor: number | null;
+  readonly netAmountMinor: number;
+  readonly currency: Money["currency"];
+};
+
 export type LedgerAccountRef = {
   readonly accountType: LedgerAccountType;
   readonly astrologerUserId: string | null;
@@ -89,6 +96,7 @@ export type LedgerOperation = {
   readonly direction: FinanceOperationDirection;
   readonly amount: Money;
   readonly signedAmountMinor: number;
+  readonly amountBreakdown: LedgerOperationAmountBreakdown | null;
   readonly balanceBucket: WalletBalanceBucket | null;
   readonly orderId: string | null;
   readonly payoutRequestId: string | null;

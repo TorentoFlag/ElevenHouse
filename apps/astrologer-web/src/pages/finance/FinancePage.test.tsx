@@ -82,20 +82,54 @@ describe("FinancePage", () => {
     });
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   it("renders the finance wallet using reference balance, payout and operation sections", () => {
     render(<FinancePage />);
 
     expect(screen.getByRole("heading", { name: "Финансы" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Обновить" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Отчёт" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Вывести средства" })).toBeTruthy();
     expect(screen.getByText("Доступно к выводу")).toBeTruthy();
-    expect(screen.getByText("В ожидании")).toBeTruthy();
+    expect(screen.getAllByText("В ожидании").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("История операций")).toBeTruthy();
+    expect(screen.getByText("Брутто")).toBeTruthy();
+    expect(screen.getByText("Комиссия")).toBeTruthy();
+    expect(screen.getByText("Нетто")).toBeTruthy();
+    expect(screen.getByText("5 700 ₽")).toBeTruthy();
+    expect(screen.getAllByText("-700 ₽")).toHaveLength(2);
+    expect(screen.getByText("5 000 ₽")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Выплаты" })).toBeTruthy();
     expect(screen.getByText("Реквизиты")).toBeTruthy();
+    expect(screen.getAllByText("Основной счет")).toHaveLength(2);
     expect(screen.getByText("банк вручную")).toBeTruthy();
+  });
+
+  it("exports a finance report from loaded ledger operations and balances", async () => {
+    const createObjectURL = vi.fn<(blob: Blob) => string>(() => "blob:finance-report");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL,
+      revokeObjectURL
+    });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    render(<FinancePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Отчёт" }));
+
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:finance-report");
+    const blob = createObjectURL.mock.calls.at(0)?.[0];
+    if (!(blob instanceof Blob)) throw new Error("Expected finance report blob");
+    await expect(blob.text()).resolves.toContain("Дата,Операция,Брутто,Комиссия,Нетто");
+    await expect(blob.text()).resolves.toContain("Оплата консультации");
+    await expect(blob.text()).resolves.toContain("-700 ₽");
   });
 
   it("filters real ledger operation rows by operation kind", () => {
@@ -290,6 +324,12 @@ function financeOperations(
         direction: "inflow",
         amount: { amountMinor: 5_000_00, currency: "RUB" },
         signedAmountMinor: 5_000_00,
+        amountBreakdown: {
+          grossAmountMinor: 5_700_00,
+          platformFeeAmountMinor: 700_00,
+          netAmountMinor: 5_000_00,
+          currency: "RUB"
+        },
         balanceBucket: "pending",
         orderId: "66666666-6666-4666-8666-666666666666",
         payoutRequestId: null,
@@ -304,6 +344,12 @@ function financeOperations(
         direction: "outflow",
         amount: { amountMinor: 2_000_00, currency: "RUB" },
         signedAmountMinor: -2_000_00,
+        amountBreakdown: {
+          grossAmountMinor: -2_400_00,
+          platformFeeAmountMinor: null,
+          netAmountMinor: -2_000_00,
+          currency: "RUB"
+        },
         balanceBucket: "negative_balance",
         orderId: "77777777-7777-4777-8777-777777777777",
         payoutRequestId: null,
@@ -318,6 +364,12 @@ function financeOperations(
         direction: "outflow",
         amount: { amountMinor: 3_000_00, currency: "RUB" },
         signedAmountMinor: -3_000_00,
+        amountBreakdown: {
+          grossAmountMinor: null,
+          platformFeeAmountMinor: null,
+          netAmountMinor: -3_000_00,
+          currency: "RUB"
+        },
         balanceBucket: null,
         orderId: null,
         payoutRequestId: "33333333-3333-4333-8333-333333333333",

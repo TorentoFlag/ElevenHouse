@@ -1,5 +1,5 @@
 import { z } from "@elevenhouse/validation";
-import { moneySchema, nonZeroMoneySchema } from "./money";
+import { moneySchema, nonZeroMoneySchema, rubCurrencySchema } from "./money";
 
 const isoDateTimeSchema = z.string().datetime({ offset: true });
 const uuidSchema = z.string().uuid();
@@ -127,6 +127,16 @@ export const ledgerOperationListQuerySchema = z
   .strict();
 export type LedgerOperationListQuery = z.infer<typeof ledgerOperationListQuerySchema>;
 
+export const ledgerOperationAmountBreakdownSchema = z
+  .object({
+    grossAmountMinor: z.number().int().safe().nullable(),
+    platformFeeAmountMinor: z.number().int().safe().nullable(),
+    netAmountMinor: z.number().int().safe(),
+    currency: rubCurrencySchema
+  })
+  .strict();
+export type LedgerOperationAmountBreakdown = z.infer<typeof ledgerOperationAmountBreakdownSchema>;
+
 export const ledgerOperationSchema = z
   .object({
     id: uuidSchema,
@@ -135,6 +145,7 @@ export const ledgerOperationSchema = z
     direction: financeOperationDirectionSchema,
     amount: moneySchema,
     signedAmountMinor: z.number().int().safe(),
+    amountBreakdown: ledgerOperationAmountBreakdownSchema.nullable(),
     balanceBucket: walletBalanceBucketSchema.nullable(),
     orderId: uuidSchema.nullable(),
     payoutRequestId: uuidSchema.nullable(),

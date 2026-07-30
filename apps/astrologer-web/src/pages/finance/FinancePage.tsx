@@ -71,6 +71,7 @@ export function FinancePage() {
   const isMethodFormComplete = Object.values(methodForm).every((value) => value.trim().length > 0);
   const operationPages = operationsQuery.data?.pages ?? [];
   const operations = operationPages.flatMap((page) => page.operations);
+  const canDownloadReport = Boolean(overview) || operations.length > 0;
 
   useDocumentTitle(dictionary.finance.documentTitle);
 
@@ -108,6 +109,15 @@ export function FinancePage() {
     payoutPanelRef.current?.querySelector<HTMLInputElement>("input[name='amount']")?.focus();
   };
 
+  const downloadReport = () => {
+    if (!canDownloadReport) return;
+    downloadFinanceReportCsv({
+      overview,
+      operations,
+      locale
+    });
+  };
+
   return (
     <section className={styles.financePage} aria-labelledby="finance-page-title">
       <header className={styles.toolbar}>
@@ -118,6 +128,15 @@ export function FinancePage() {
         </div>
         <div className={styles.toolbarMeta}>
           <span>{formatPayoutMethodLine(overview)}</span>
+          <button
+            className={styles.ghostButton}
+            type="button"
+            disabled={!canDownloadReport}
+            onClick={downloadReport}
+          >
+            <Icon iconName="doc" width={15} height={15} aria-hidden="true" />
+            Отчёт
+          </button>
           <button
             className={styles.ghostButton}
             type="button"
@@ -467,9 +486,18 @@ function OperationsPanel({
       .toLowerCase()
       .includes(query);
   });
-  const totalMinor = filteredOperations.reduce(
-    (sum, operation) => sum + operation.signedAmountMinor,
-    0
+  const totals = filteredOperations.reduce(
+    (sum, operation) => {
+      const breakdown = operation.amountBreakdown;
+      return {
+        grossAmountMinor: sum.grossAmountMinor + (breakdown?.grossAmountMinor ?? 0),
+        platformFeeAmountMinor:
+          sum.platformFeeAmountMinor + (breakdown?.platformFeeAmountMinor ?? 0),
+        netAmountMinor:
+          sum.netAmountMinor + (breakdown?.netAmountMinor ?? operation.signedAmountMinor)
+      };
+    },
+    { grossAmountMinor: 0, platformFeeAmountMinor: 0, netAmountMinor: 0 }
   );
 
   return (
@@ -489,7 +517,9 @@ function OperationsPanel({
             </button>
           ))}
           <input
+            id="finance-operation-search"
             className={styles.searchInput}
+            name="operationSearch"
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Поиск..."
@@ -499,13 +529,19 @@ function OperationsPanel({
       </div>
       <div className={styles.operationTotals}>
         <span>Итого · {filteredOperations.length} операций</span>
-        <strong>{formatSignedMoneyMinor(totalMinor, "RUB", locale)}</strong>
+        <strong>{formatOptionalSignedMoneyMinor(totals.grossAmountMinor, "RUB", locale)}</strong>
+        <strong>
+          {totals.platformFeeAmountMinor > 0
+            ? `-${formatMoneyMinor(totals.platformFeeAmountMinor, "RUB", locale)}`
+            : "-"}
+        </strong>
+        <strong>{formatSignedMoneyMinor(totals.netAmountMinor, "RUB", locale)}</strong>
       </div>
       <div className={styles.operationTableHead}>
         <span>Операция</span>
-        <span>Статус</span>
-        <span>Сумма</span>
-        <span>Дата</span>
+        <span>Брутто</span>
+        <span>Комиссия</span>
+        <span>Нетто</span>
       </div>
       {filteredOperations.length === 0 ? (
         <p className={styles.emptyState}>
@@ -522,21 +558,36 @@ function OperationsPanel({
                 <span>
                   <strong>{operationTitle(operation)}</strong>
                   <small>
-                    {shortId(operation.id)} · {operationSubtitle(operation)}
+                    {formatDate(operation.postedAt)} · {operationSubtitle(operation)} ·{" "}
+                    <span className={styles.operationStatus}>
+                      {operationStatusLabel(operation)}
+                    </span>
                   </small>
                 </span>
               </span>
-              <span
-                className={`${styles.statusPill} ${
-                  styles[`statusPill_${operationTone(operation)}`]
-                }`}
-              >
-                {operationKindLabel(operation.kind)}
-              </span>
               <strong className={styles.operationAmount}>
-                {formatOperationAmount(operation, locale)}
+                {formatOptionalSignedMoneyMinor(
+                  operation.amountBreakdown?.grossAmountMinor ?? null,
+                  operation.amount.currency,
+                  locale
+                )}
               </strong>
-              <time dateTime={operation.postedAt}>{formatDate(operation.postedAt)}</time>
+              <strong className={styles.operationAmountMuted}>
+                {operation.amountBreakdown?.platformFeeAmountMinor
+                  ? `-${formatMoneyMinor(
+                      operation.amountBreakdown.platformFeeAmountMinor,
+                      operation.amount.currency,
+                      locale
+                    )}`
+                  : "-"}
+              </strong>
+              <strong className={styles.operationAmount}>
+                {formatSignedMoneyMinor(
+                  operation.amountBreakdown?.netAmountMinor ?? operation.signedAmountMinor,
+                  operation.amount.currency,
+                  locale
+                )}
+              </strong>
             </div>
           ))}
         </div>
@@ -678,8 +729,17 @@ function matchesOperationFilter(operation: LedgerOperation, filter: OperationFil
 
 function formatSignedMoneyMinor(amountMinor: number, currency: "RUB", locale: "ru" | "en"): string {
   if (amountMinor === 0) return formatMoneyMinor(0, currency, locale);
-  const sign = amountMinor < 0 ? "-" : "+";
+  const sign = amountMinor < 0 ? "-" : "";
   return `${sign}${formatMoneyMinor(Math.abs(amountMinor), currency, locale)}`;
+}
+
+function formatOptionalSignedMoneyMinor(
+  amountMinor: number | null,
+  currency: "RUB",
+  locale: "ru" | "en"
+): string {
+  if (amountMinor === null) return "-";
+  return formatSignedMoneyMinor(amountMinor, currency, locale);
 }
 
 function formatPayoutMethodLine(overview: AstrologerFinanceOverviewResponse | null): string {
@@ -741,11 +801,30 @@ function operationKindLabel(kind: LedgerOperation["kind"]): string {
   }
 }
 
-function operationTone(operation: LedgerOperation): "neutral" | "positive" | "warning" | "danger" {
-  if (operation.kind === "refund" || operation.signedAmountMinor < 0) return "danger";
-  if (operation.kind === "sale" && operation.direction === "inflow") return "positive";
-  if (operation.direction === "neutral") return "warning";
-  return "neutral";
+function operationStatusLabel(operation: LedgerOperation): string {
+  switch (operation.operationType) {
+    case "sale_captured":
+      return "В ожидании";
+    case "funds_released":
+      return "Доступно";
+    case "payout_reserved":
+      return "В выводе";
+    case "payout_paid":
+      return "Выплачено";
+    case "payout_failed":
+      return "Ошибка выплаты";
+    case "refund_recorded":
+      return "Возврат";
+    case "chargeback_recorded":
+      return "Оспорено";
+    case "platform_fee_recorded":
+    case "provider_fee_recorded":
+    case "hold_created":
+    case "reserve_created":
+    case "reserve_released":
+    case "manual_adjustment":
+      return operationKindLabel(operation.kind);
+  }
 }
 
 function payoutRequestStatusLabel(status: PayoutRequestResponse["status"]): string {
@@ -790,13 +869,6 @@ function payoutRequestTone(
   }
 }
 
-function formatOperationAmount(operation: LedgerOperation, locale: "ru" | "en"): string {
-  if (operation.direction === "neutral") {
-    return formatMoneyMinor(operation.amount.amountMinor, operation.amount.currency, locale);
-  }
-  return formatSignedMoneyMinor(operation.signedAmountMinor, operation.amount.currency, locale);
-}
-
 function balanceBucketLabel(bucket: NonNullable<LedgerOperation["balanceBucket"]>): string {
   switch (bucket) {
     case "pending":
@@ -827,4 +899,73 @@ function formatDate(value: string): string {
     month: "2-digit",
     year: "2-digit"
   }).format(new Date(value));
+}
+
+function downloadFinanceReportCsv({
+  overview,
+  operations,
+  locale
+}: {
+  readonly overview: AstrologerFinanceOverviewResponse | null;
+  readonly operations: readonly LedgerOperation[];
+  readonly locale: "ru" | "en";
+}): void {
+  const csv = buildFinanceReportCsv({ overview, operations, locale });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `elevenhouse-finance-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function buildFinanceReportCsv({
+  overview,
+  operations,
+  locale
+}: {
+  readonly overview: AstrologerFinanceOverviewResponse | null;
+  readonly operations: readonly LedgerOperation[];
+  readonly locale: "ru" | "en";
+}): string {
+  const rows: string[][] = [
+    ["Раздел", "Показатель", "Значение"],
+    ["Баланс", "Доступно к выводу", formatMoneyMinor(overview?.balance.available.amountMinor ?? 0, "RUB", locale)],
+    ["Баланс", "В ожидании", formatMoneyMinor(overview?.balance.pending.amountMinor ?? 0, "RUB", locale)],
+    ["Баланс", "Зарезервировано", formatMoneyMinor(overview?.balance.reserved.amountMinor ?? 0, "RUB", locale)],
+    ["Баланс", "В выводе", formatMoneyMinor(overview?.balance.payoutPending.amountMinor ?? 0, "RUB", locale)],
+    ["Баланс", "Долг", formatMoneyMinor(overview?.balance.negativeBalance.amountMinor ?? 0, "RUB", locale)],
+    [],
+    ["Дата", "Операция", "Брутто", "Комиссия", "Нетто", "Источник", "Статус"]
+  ];
+
+  for (const operation of operations) {
+    rows.push([
+      formatDate(operation.postedAt),
+      operationTitle(operation),
+      formatOptionalSignedMoneyMinor(
+        operation.amountBreakdown?.grossAmountMinor ?? null,
+        operation.amount.currency,
+        locale
+      ),
+      operation.amountBreakdown?.platformFeeAmountMinor
+        ? `-${formatMoneyMinor(operation.amountBreakdown.platformFeeAmountMinor, operation.amount.currency, locale)}`
+        : "-",
+      formatSignedMoneyMinor(
+        operation.amountBreakdown?.netAmountMinor ?? operation.signedAmountMinor,
+        operation.amount.currency,
+        locale
+      ),
+      operationSubtitle(operation),
+      operationStatusLabel(operation)
+    ]);
+  }
+
+  return `${rows.map((row) => row.map(escapeCsvCell).join(",")).join("\n")}\n`;
+}
+
+function escapeCsvCell(value: string): string {
+  if (!/[",\n\r]/.test(value)) return value;
+  return `"${value.replaceAll('"', '""')}"`;
 }

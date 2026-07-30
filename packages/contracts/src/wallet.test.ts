@@ -71,6 +71,12 @@ describe("wallet contracts", () => {
           direction: "inflow",
           amount: { amountMinor: 5_000_00, currency: "RUB" },
           signedAmountMinor: 5_000_00,
+          amountBreakdown: {
+            grossAmountMinor: 5_700_00,
+            platformFeeAmountMinor: 700_00,
+            netAmountMinor: 5_000_00,
+            currency: "RUB"
+          },
           balanceBucket: "pending",
           orderId: "33333333-3333-4333-8333-333333333333",
           payoutRequestId: null,
@@ -85,6 +91,12 @@ describe("wallet contracts", () => {
           direction: "outflow",
           amount: { amountMinor: 3_000_00, currency: "RUB" },
           signedAmountMinor: -3_000_00,
+          amountBreakdown: {
+            grossAmountMinor: null,
+            platformFeeAmountMinor: null,
+            netAmountMinor: -3_000_00,
+            currency: "RUB"
+          },
           balanceBucket: null,
           orderId: null,
           payoutRequestId: "44444444-4444-4444-8444-444444444444",

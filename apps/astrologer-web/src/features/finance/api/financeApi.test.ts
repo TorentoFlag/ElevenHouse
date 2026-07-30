@@ -35,6 +35,12 @@ const operations = {
       direction: "inflow",
       amount: { amountMinor: 5_000_00, currency: "RUB" },
       signedAmountMinor: 5_000_00,
+      amountBreakdown: {
+        grossAmountMinor: 5_700_00,
+        platformFeeAmountMinor: 700_00,
+        netAmountMinor: 5_000_00,
+        currency: "RUB"
+      },
       balanceBucket: "pending",
       orderId: "66666666-6666-4666-8666-666666666666",
       payoutRequestId: null,
