@@ -15,6 +15,7 @@ import {
   MessagingIdempotencyConflictError,
   MessagingThreadNotFoundError,
   MessagingValidationError,
+  bindTelegramBusinessConnectionUser,
   completeInstagramGraphConnection,
   createClientFromThread,
   createOutboundMessage,
@@ -137,7 +138,13 @@ export class MessagingService {
       return StartTelegramBusinessConnectionResponseSchema.parse({
         channelConnection: connection,
         telegramBotUsername,
-        telegramBotUrl: telegramBotUsername ? `https://t.me/${telegramBotUsername}` : null
+        telegramBotUrl: telegramBotUsername
+          ? telegramBusinessBotSetupUrl({
+              username: telegramBotUsername,
+              connectionId: result.connectionId,
+              secret: this.requireTelegramBotWebhookSecret()
+            })
+          : null
       });
     });
   }
@@ -675,6 +682,29 @@ export class MessagingService {
   async handleTelegramBusinessWebhookUpdate(
     update: ParsedTelegramBusinessWebhookUpdate
   ): Promise<void> {
+    if (update.kind === "business_setup_start") {
+      const connectionId = verifyTelegramBusinessSetupToken({
+        token: update.setupToken,
+        secret: this.requireTelegramBotWebhookSecret()
+      });
+      if (!connectionId) {
+        this.logger.warn(
+          `Ignored Telegram Business setup start with invalid token ${update.updateId}`
+        );
+        return;
+      }
+      await bindTelegramBusinessConnectionUser({
+        store: this.store,
+        connectionId,
+        telegramUserId: update.telegramUserId,
+        userChatId: update.userChatId,
+        username: update.username,
+        displayName: update.displayName,
+        now: this.clock.now()
+      });
+      return;
+    }
+
     if (update.kind === "business_connection") {
       await recordTelegramBusinessConnection({
         store: this.store,
@@ -831,6 +861,18 @@ export class MessagingService {
       now: this.clock.now()
     });
   }
+
+  private requireTelegramBotWebhookSecret(): string {
+    const secret = this.configService.get<string | null>("astrologerApi.telegramBotWebhookSecret");
+    if (!secret) {
+      throw messagingHttpError(
+        503,
+        "telegram_business_connection_unavailable",
+        "Telegram Business connection is not configured"
+      );
+    }
+    return secret;
+  }
 }
 
 function toMessageResponse(message: {
@@ -897,6 +939,62 @@ function parseContract<T>(schema: ZodType<T>, value: unknown): T {
 function normalizeTelegramBotUsername(value: string | null): string | null {
   const normalized = value?.trim().replace(/^@/, "");
   return normalized || null;
+}
+
+function telegramBusinessBotSetupUrl(input: {
+  readonly username: string;
+  readonly connectionId: string;
+  readonly secret: string;
+}): string {
+  const url = new URL(`https://t.me/${input.username}`);
+  url.searchParams.set("start", createTelegramBusinessSetupToken(input));
+  return url.toString();
+}
+
+const telegramBusinessSetupTokenVersion = "telegram_business_setup:v1";
+
+function createTelegramBusinessSetupToken(input: {
+  readonly connectionId: string;
+  readonly secret: string;
+}): string {
+  const connectionHex = input.connectionId.replaceAll("-", "").toLowerCase();
+  const signature = signTelegramBusinessSetupToken({
+    connectionHex,
+    secret: input.secret
+  });
+  return `${connectionHex}_${signature}`;
+}
+
+function verifyTelegramBusinessSetupToken(input: {
+  readonly token: string;
+  readonly secret: string;
+}): string | null {
+  const match = /^([a-f0-9]{32})_([A-Za-z0-9_-]{22})$/.exec(input.token);
+  if (!match) return null;
+  const [, connectionHex, signature] = match;
+  if (!connectionHex || !signature) return null;
+  const expectedSignature = signTelegramBusinessSetupToken({
+    connectionHex,
+    secret: input.secret
+  });
+  if (!constantTimeEqual(signature, expectedSignature)) return null;
+  return [
+    connectionHex.slice(0, 8),
+    connectionHex.slice(8, 12),
+    connectionHex.slice(12, 16),
+    connectionHex.slice(16, 20),
+    connectionHex.slice(20)
+  ].join("-");
+}
+
+function signTelegramBusinessSetupToken(input: {
+  readonly connectionHex: string;
+  readonly secret: string;
+}): string {
+  return createHmac("sha256", input.secret)
+    .update(`${telegramBusinessSetupTokenVersion}:${input.connectionHex}`)
+    .digest("base64url")
+    .slice(0, 22);
 }
 
 type InstagramGraphRuntimeConfig = {

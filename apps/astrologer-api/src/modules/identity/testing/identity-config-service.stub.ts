@@ -39,6 +39,10 @@ export function createIdentityConfigServiceStub(input: {
       return input.telegramBusinessBotUsername ?? null;
     }
 
+    if (key === "astrologerApi.telegramBotWebhookSecret") {
+      return input.telegramBotWebhookSecret ?? null;
+    }
+
     if (key === "astrologerApi.telegramMtproto") {
       return input.telegramMtproto ?? null;
     }

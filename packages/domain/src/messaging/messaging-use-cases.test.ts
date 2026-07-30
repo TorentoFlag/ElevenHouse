@@ -11,6 +11,7 @@ import {
 } from "./messaging-events";
 import type {
   AppendMessagingRealtimeEventInput,
+  BindTelegramBusinessConnectionUserStoreInput,
   CreateClientFromThreadStoreInput,
   CreateOutboundMessageStoreInput,
   InboundMessageRecordResult,
@@ -1067,6 +1068,8 @@ class InMemoryMessagingStore implements MessagingStore {
     readonly now: string;
   }> = [];
   readonly startTelegramBusinessCommands: StartTelegramBusinessConnectionStoreInput[] = [];
+  readonly bindTelegramBusinessConnectionUserCommands: BindTelegramBusinessConnectionUserStoreInput[] =
+    [];
   readonly startInstagramGraphCommands: StartInstagramGraphConnectionStoreInput[] = [];
   readonly completeInstagramGraphCommands: CompleteInstagramGraphConnectionStoreInput[] = [];
   readonly startTelegramMtprotoCommands: StartTelegramMtprotoConnectionStoreInput[] = [];
@@ -1173,6 +1176,13 @@ class InMemoryMessagingStore implements MessagingStore {
     input: RecordTelegramBusinessConnectionStoreInput
   ): Promise<{ readonly kind: "recorded" }> {
     void input;
+    return { kind: "recorded" };
+  }
+
+  async bindTelegramBusinessConnectionUser(
+    input: BindTelegramBusinessConnectionUserStoreInput
+  ): Promise<{ readonly kind: "recorded" }> {
+    this.bindTelegramBusinessConnectionUserCommands.push(input);
     return { kind: "recorded" };
   }
 

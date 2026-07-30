@@ -282,7 +282,8 @@ describe("messaging HTTP routes", () => {
         status: "connecting"
       },
       telegramBotUsername: "ElevenHouseTestBot",
-      telegramBotUrl: "https://t.me/ElevenHouseTestBot"
+      telegramBotUrl:
+        "https://t.me/ElevenHouseTestBot?start=55555555555545558555555555555555_dqM5cmTHiJ8MD3Qkd5A1yK"
     });
     expect(JSON.stringify(response.body)).not.toMatch(
       /providerToken|session|business_connection_id|rawPayload/i
@@ -760,6 +761,7 @@ function createStore(): MessagingStore {
       businessConnectionUpdateCount += 1;
       return { kind: "recorded" as const };
     }),
+    bindTelegramBusinessConnectionUser: vi.fn(async () => ({ kind: "recorded" as const })),
     startTelegramBusinessConnection: vi.fn(async () => {
       startedTelegramBusinessConnectionId = connectionId;
       return { connectionId };

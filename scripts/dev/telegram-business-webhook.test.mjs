@@ -46,6 +46,7 @@ test("builds Telegram Bot API webhook requests without exposing secrets in redac
     url: webhookUrl,
     secret_token: "webhook-secret",
     allowed_updates: [
+      "message",
       "business_connection",
       "business_message",
       "edited_business_message",

@@ -52,19 +52,25 @@ describe("MessagingService", () => {
     const service = createService({
       store,
       readStore: createReadStore({ connectionStatus: "connecting" }),
-      telegramBusinessBotUsername: "ElevenHouseTestBot"
+      telegramBusinessBotUsername: "ElevenHouseTestBot",
+      telegramBotWebhookSecret: "telegram-webhook-secret-for-tests"
     });
 
-    await expect(service.startTelegramBusinessConnection(request())).resolves.toMatchObject({
+    const response = await service.startTelegramBusinessConnection(request());
+
+    expect(response).toMatchObject({
       channelConnection: {
         id: connectionId,
         provider: "telegram",
         mode: "telegram_business_bot",
         status: "connecting"
       },
-      telegramBotUsername: "ElevenHouseTestBot",
-      telegramBotUrl: "https://t.me/ElevenHouseTestBot"
+      telegramBotUsername: "ElevenHouseTestBot"
     });
+    const telegramBotUrl = new URL(response.telegramBotUrl ?? "");
+    expect(telegramBotUrl.origin).toBe("https://t.me");
+    expect(telegramBotUrl.pathname).toBe("/ElevenHouseTestBot");
+    expect(telegramBotUrl.searchParams.get("start")).toMatch(/^[a-f0-9]{32}_[A-Za-z0-9_-]{22}$/);
     expect(
       (store as unknown as { startTelegramBusinessConnection: ReturnType<typeof vi.fn> })
         .startTelegramBusinessConnection
@@ -74,6 +80,34 @@ describe("MessagingService", () => {
         now: now.toISOString()
       })
     );
+  });
+
+  it("binds Telegram Business setup start updates to the pending connection", async () => {
+    const store = createStore();
+    const service = createService({
+      store,
+      telegramBotWebhookSecret: "telegram-webhook-secret-for-tests"
+    });
+
+    await service.handleTelegramBusinessWebhookUpdate({
+      kind: "business_setup_start",
+      updateId: "1002",
+      setupToken: "66666666666646668666666666666666_Q7wyO_SbPbfhqVzzv7BRup",
+      telegramUserId: "987654321",
+      userChatId: "123456789",
+      username: "alisa_astro",
+      displayName: "Alisa",
+      providerSentAt: now.toISOString()
+    } as never);
+
+    expect(store.bindTelegramBusinessConnectionUser).toHaveBeenCalledWith({
+      connectionId,
+      telegramUserId: "987654321",
+      userChatId: "123456789",
+      username: "alisa_astro",
+      displayName: "Alisa",
+      now: now.toISOString()
+    });
   });
 
   it("starts Instagram Graph connection and returns the Instagram authorization URL", async () => {
@@ -847,6 +881,7 @@ function createService(
     store?: MessagingStore;
     readStore?: MessagingReadStore;
     telegramBusinessBotUsername?: string | null;
+    telegramBotWebhookSecret?: string | null;
     instagramGraph?: {
       readonly enabled: true;
       readonly appId: string;
@@ -903,18 +938,20 @@ function createService(
       get: (key: string) =>
         key === "astrologerApi.telegramBusinessBotUsername"
           ? (overrides.telegramBusinessBotUsername ?? null)
-          : key === "astrologerApi.instagramGraph"
-            ? Object.hasOwn(overrides, "instagramGraph")
-              ? overrides.instagramGraph
-              : null
-            : key === "astrologerApi.telegramMtproto"
-              ? {
-                  enabled: true,
-                  apiId: 12345,
-                  apiHash: "0123456789abcdef0123456789abcdef",
-                  sessionEncryptionKey: Buffer.alloc(32, 12)
-                }
-              : undefined
+          : key === "astrologerApi.telegramBotWebhookSecret"
+            ? (overrides.telegramBotWebhookSecret ?? "telegram-webhook-secret-for-tests")
+            : key === "astrologerApi.instagramGraph"
+              ? Object.hasOwn(overrides, "instagramGraph")
+                ? overrides.instagramGraph
+                : null
+              : key === "astrologerApi.telegramMtproto"
+                ? {
+                    enabled: true,
+                    apiId: 12345,
+                    apiHash: "0123456789abcdef0123456789abcdef",
+                    sessionEncryptionKey: Buffer.alloc(32, 12)
+                  }
+                : undefined
     } as never
   );
 }
@@ -955,6 +992,7 @@ function createStore(
       message: domainMessage("inbound")
     })),
     recordTelegramBusinessConnection: vi.fn(async () => ({ kind: "recorded" as const })),
+    bindTelegramBusinessConnectionUser: vi.fn(async () => ({ kind: "recorded" as const })),
     startInstagramGraphConnection: vi.fn(async () => ({ connectionId })),
     completeInstagramGraphConnection: vi.fn(async () => ({ kind: "recorded" as const })),
     recordTelegramBusinessMessage: vi.fn(async () => ({

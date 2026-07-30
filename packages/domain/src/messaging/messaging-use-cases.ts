@@ -170,6 +170,25 @@ export async function recordTelegramBusinessConnection(input: {
   });
 }
 
+export async function bindTelegramBusinessConnectionUser(input: {
+  readonly store: MessagingStore;
+  readonly connectionId: string;
+  readonly telegramUserId: string;
+  readonly userChatId: string;
+  readonly username: string | null;
+  readonly displayName: string | null;
+  readonly now: Date;
+}): Promise<RecordTelegramBusinessConnectionStoreResult> {
+  return input.store.bindTelegramBusinessConnectionUser({
+    connectionId: identifier(input.connectionId, "Channel connection id is required"),
+    telegramUserId: bounded(input.telegramUserId, 1, 200, "Telegram user id is required"),
+    userChatId: bounded(input.userChatId, 1, 200, "Telegram user chat id is required"),
+    username: optionalSnapshot(input.username),
+    displayName: optionalSnapshot(input.displayName),
+    now: input.now.toISOString()
+  });
+}
+
 export async function startTelegramBusinessConnection(input: {
   readonly store: MessagingStore;
   readonly astrologerUserId: string;

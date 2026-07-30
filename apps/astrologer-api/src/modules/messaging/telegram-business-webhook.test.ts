@@ -53,6 +53,42 @@ describe("parseTelegramBusinessWebhookUpdate", () => {
     });
   });
 
+  it("accepts Telegram setup start messages with a deep-link token", () => {
+    expect(
+      parseTelegramBusinessWebhookUpdate({
+        update_id: 1002,
+        message: {
+          message_id: 11,
+          from: {
+            id: 987654321,
+            is_bot: false,
+            first_name: "Alisa",
+            last_name: "Star",
+            username: "alisa_astro"
+          },
+          chat: {
+            id: 123456789,
+            type: "private",
+            first_name: "Alisa",
+            last_name: "Star",
+            username: "alisa_astro"
+          },
+          date: 1784700060,
+          text: "/start 00000000000040008000000000000030_abcDEF123_-xyz"
+        }
+      })
+    ).toEqual({
+      kind: "business_setup_start",
+      updateId: "1002",
+      setupToken: "00000000000040008000000000000030_abcDEF123_-xyz",
+      telegramUserId: "987654321",
+      userChatId: "123456789",
+      username: "alisa_astro",
+      displayName: "Alisa Star",
+      providerSentAt: "2026-07-22T06:01:00.000Z"
+    });
+  });
+
   it("accepts business_message text updates", () => {
     expect(
       parseTelegramBusinessWebhookUpdate({

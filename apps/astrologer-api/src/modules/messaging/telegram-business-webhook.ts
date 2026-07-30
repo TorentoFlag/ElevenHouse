@@ -135,9 +135,20 @@ const TelegramBusinessMessagesDeletedSchema = z
   })
   .passthrough();
 
+const TelegramSetupMessageSchema = z
+  .object({
+    message_id: z.number().int(),
+    from: TelegramUserSchema.optional(),
+    chat: TelegramChatSchema,
+    date: z.number().int().nonnegative(),
+    text: z.string().optional()
+  })
+  .passthrough();
+
 const TelegramUpdateSchema = z
   .object({
     update_id: z.number().int(),
+    message: TelegramSetupMessageSchema.optional(),
     business_connection: TelegramBusinessConnectionSchema.optional(),
     business_message: TelegramBusinessMessageSchema.optional(),
     edited_business_message: TelegramBusinessMessageSchema.optional(),
@@ -157,6 +168,16 @@ export type ParsedTelegramBusinessWebhookUpdate =
       readonly connectedAt: string;
       readonly enabled: boolean;
       readonly rights: TelegramBusinessConnectionRights;
+    }
+  | {
+      readonly kind: "business_setup_start";
+      readonly updateId: string;
+      readonly setupToken: string;
+      readonly telegramUserId: string;
+      readonly userChatId: string;
+      readonly username: string | null;
+      readonly displayName: string | null;
+      readonly providerSentAt: string;
     }
   | {
       readonly kind: "business_message";
@@ -252,7 +273,32 @@ export function parseTelegramBusinessWebhookUpdate(
     });
   }
 
+  if (update.message) {
+    const setupToken = telegramStartToken(update.message.text);
+    if (setupToken && update.message.from) {
+      const sender = update.message.from;
+      return {
+        kind: "business_setup_start",
+        updateId,
+        setupToken,
+        telegramUserId: String(sender.id),
+        userChatId: String(update.message.chat.id),
+        username: sender.username ?? null,
+        displayName: telegramDisplayName(sender),
+        providerSentAt: telegramUnixSecondsToIso(update.message.date)
+      };
+    }
+  }
+
   return { kind: "unsupported_update", updateId };
+}
+
+function telegramStartToken(text: string | undefined): string | null {
+  const value = text?.trim() ?? "";
+  const match = /^\/start(?:@[A-Za-z0-9_]{5,32})?(?:\s+([A-Za-z0-9_-]{1,64}))?\s*$/.exec(
+    value
+  );
+  return match?.[1] ?? null;
 }
 
 function parseTelegramBusinessMessage(input: {

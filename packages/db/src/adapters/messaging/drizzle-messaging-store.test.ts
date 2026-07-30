@@ -763,7 +763,7 @@ describe("createDrizzleMessagingStore", () => {
     ]);
   });
 
-  it("claims a single pending Telegram Business connection when the first business connection id arrives", async () => {
+  it("claims an owner-bound pending Telegram Business connection when the business connection id arrives", async () => {
     const fake = createPendingTelegramBusinessConnectionDatabase();
 
     await expect(
@@ -804,6 +804,80 @@ describe("createDrizzleMessagingStore", () => {
         usernameSnapshot: "alisa_astro"
       })
     });
+    expect(fake.realtimeEventInserts).toEqual([
+      expect.objectContaining({
+        astrologerUserId,
+        type: "channelConnection.updated",
+        channelConnectionId,
+        threadId: null,
+        messageId: null,
+        externalIdentityId: null,
+        createdAt: now
+      })
+    ]);
+  });
+
+  it("does not claim an unbound pending Telegram Business connection", async () => {
+    const fake = createUnboundPendingTelegramBusinessConnectionDatabase();
+
+    await expect(
+      createDrizzleMessagingStore(fake.database as never).recordTelegramBusinessConnection({
+        businessConnectionId: "bc_real",
+        userId: "987654321",
+        userChatId: "123456789",
+        username: "alisa_astro",
+        displayName: "Alisa",
+        connectedAt: now.toISOString(),
+        enabled: true,
+        rights: {
+          canReply: true,
+          canReadMessages: true,
+          canDeleteSentMessages: false,
+          canDeleteAllMessages: false,
+          canEditName: false,
+          canEditBio: false,
+          canEditProfilePhoto: false,
+          canEditUsername: false,
+          canChangeGiftSettings: false,
+          canViewGiftsAndStars: false,
+          canConvertGiftsToStars: false,
+          canTransferAndUpgradeGifts: false,
+          canTransferStars: false,
+          canManageStories: false
+        },
+        now: now.toISOString()
+      })
+    ).resolves.toEqual({ kind: "unmatched" });
+
+    expect(fake.updates).toEqual([]);
+  });
+
+  it("binds a pending Telegram Business connection to the setup Telegram user", async () => {
+    const fake = createBindPendingTelegramBusinessConnectionDatabase();
+
+    await expect(
+      createDrizzleMessagingStore(fake.database as never).bindTelegramBusinessConnectionUser({
+        connectionId: channelConnectionId,
+        telegramUserId: "987654321",
+        userChatId: "123456789",
+        username: "alisa_astro",
+        displayName: "Alisa",
+        now: now.toISOString()
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    expect(fake.updates).toEqual([
+      {
+        table: messagingChannelConnections,
+        value: expect.objectContaining({
+          externalOwnerUserId: "987654321",
+          usernameSnapshot: "alisa_astro",
+          displayNameSnapshot: "Alisa",
+          lastSyncedAt: now,
+          updatedAt: now
+        })
+      }
+    ]);
     expect(fake.realtimeEventInserts).toEqual([
       expect.objectContaining({
         astrologerUserId,
@@ -1710,6 +1784,63 @@ function createPendingTelegramBusinessConnectionDatabase() {
       selectCount += 1;
       return selectChain(rows);
     },
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => callback(database)
+  };
+
+  return { database, updates, realtimeEventInserts };
+}
+
+function createUnboundPendingTelegramBusinessConnectionDatabase() {
+  const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  let selectCount = 0;
+  const database = {
+    insert: () => {
+      throw new Error("Unexpected insert for unbound Telegram Business connection");
+    },
+    update: (table: unknown) => ({
+      set: (value: Record<string, unknown>) => ({
+        where: () => {
+          updates.push({ table, value });
+          return { returning: async () => [{ id: channelConnectionId }] };
+        }
+      })
+    }),
+    select: () => {
+      selectCount += 1;
+      return selectChain([], (where) => {
+        const rendered = renderWhere(where);
+        if (selectCount === 2 && !rendered.sql.includes("external_owner_user_id")) {
+          throw new Error("Unbound Telegram Business pending lookup must use owner user id");
+        }
+      });
+    },
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => callback(database)
+  };
+
+  return { database, updates };
+}
+
+function createBindPendingTelegramBusinessConnectionDatabase() {
+  const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  const realtimeEventInserts: Record<string, unknown>[] = [];
+  const database = {
+    insert: (table: unknown) => ({
+      values: (value: Record<string, unknown>) => {
+        if (table === messagingRealtimeEvents) realtimeEventInserts.push(value);
+        return {
+          returning: async () =>
+            table === messagingRealtimeEvents ? [realtimeEventRow(value)] : []
+        };
+      }
+    }),
+    update: (table: unknown) => ({
+      set: (value: Record<string, unknown>) => ({
+        where: () => {
+          updates.push({ table, value });
+          return { returning: async () => [{ id: channelConnectionId, astrologerUserId }] };
+        }
+      })
+    }),
     transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => callback(database)
   };
 

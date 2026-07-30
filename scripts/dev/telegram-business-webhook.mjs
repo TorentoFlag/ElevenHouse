@@ -35,6 +35,7 @@ export function createTelegramSetWebhookRequest({
       url: createTelegramWebhookUrl(publicWebhookUrl),
       secret_token: secretToken,
       allowed_updates: [
+        "message",
         "business_connection",
         "business_message",
         "edited_business_message",

@@ -9,6 +9,8 @@ import {
 } from "@elevenhouse/domain";
 import type {
   AppendMessagingRealtimeEventInput,
+  BindTelegramBusinessConnectionUserStoreInput,
+  BindTelegramBusinessConnectionUserStoreResult,
   CompleteInstagramGraphConnectionStoreInput,
   CompleteInstagramGraphConnectionStoreResult,
   CreateClientFromThreadStoreInput,
@@ -95,6 +97,8 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     createOutboundMessage: (input) => createOutboundMessage(database, input),
     recordInboundProviderMessage: (input) => recordInboundProviderMessage(database, input),
     recordTelegramBusinessConnection: (input) => recordTelegramBusinessConnection(database, input),
+    bindTelegramBusinessConnectionUser: (input) =>
+      bindTelegramBusinessConnectionUser(database, input),
     startTelegramBusinessConnection: (input) => startTelegramBusinessConnection(database, input),
     startInstagramGraphConnection: (input) => startInstagramGraphConnection(database, input),
     completeInstagramGraphConnection: (input) => completeInstagramGraphConnection(database, input),
@@ -398,7 +402,9 @@ async function recordTelegramBusinessConnection(
     }
     const connection =
       connections[0] ??
-      (input.enabled ? await findSinglePendingTelegramBusinessConnection(transaction) : null);
+      (input.enabled
+        ? await findPendingTelegramBusinessConnectionByOwnerUserId(transaction, input.userId)
+        : null);
     if (!connection) return { kind: "unmatched" };
 
     const timestamp = new Date(input.now);
@@ -434,6 +440,52 @@ async function recordTelegramBusinessConnection(
       threadId: null,
       messageId: null,
       channelConnectionId: connection.id,
+      externalIdentityId: null,
+      createdAt: timestamp
+    });
+
+    return { kind: "recorded" };
+  });
+}
+
+async function bindTelegramBusinessConnectionUser(
+  database: ElevenHouseDatabase,
+  input: BindTelegramBusinessConnectionUserStoreInput
+): Promise<BindTelegramBusinessConnectionUserStoreResult> {
+  return database.transaction(async (transaction) => {
+    const timestamp = new Date(input.now);
+    const [row] = await transaction
+      .update(messagingChannelConnections)
+      .set({
+        externalOwnerUserId: input.telegramUserId,
+        displayNameSnapshot: input.displayName,
+        usernameSnapshot: input.username,
+        lastSyncedAt: timestamp,
+        updatedAt: timestamp
+      })
+      .where(
+        and(
+          eq(messagingChannelConnections.id, input.connectionId),
+          eq(messagingChannelConnections.provider, "telegram"),
+          eq(messagingChannelConnections.mode, "telegram_business_bot"),
+          eq(messagingChannelConnections.status, "connecting"),
+          isNull(messagingChannelConnections.externalAccountId),
+          sql`(${messagingChannelConnections.externalOwnerUserId} is null or ${messagingChannelConnections.externalOwnerUserId} = ${input.telegramUserId})`
+        )
+      )
+      .returning({
+        id: messagingChannelConnections.id,
+        astrologerUserId: messagingChannelConnections.astrologerUserId
+      });
+
+    if (!row) return { kind: "unmatched" };
+
+    await transaction.insert(messagingRealtimeEvents).values({
+      astrologerUserId: row.astrologerUserId,
+      type: "channelConnection.updated",
+      threadId: null,
+      messageId: null,
+      channelConnectionId: row.id,
       externalIdentityId: null,
       createdAt: timestamp
     });
@@ -910,8 +962,9 @@ async function findTelegramMtprotoConnectionForAstrologer(
   return row ?? null;
 }
 
-async function findSinglePendingTelegramBusinessConnection(
-  database: MessagingDatabase
+async function findPendingTelegramBusinessConnectionByOwnerUserId(
+  database: MessagingDatabase,
+  telegramUserId: string
 ): Promise<{ readonly id: string; readonly astrologerUserId: string } | null> {
   const rows = await database
     .select({
@@ -924,7 +977,8 @@ async function findSinglePendingTelegramBusinessConnection(
         eq(messagingChannelConnections.provider, "telegram"),
         eq(messagingChannelConnections.mode, "telegram_business_bot"),
         eq(messagingChannelConnections.status, "connecting"),
-        isNull(messagingChannelConnections.externalAccountId)
+        isNull(messagingChannelConnections.externalAccountId),
+        eq(messagingChannelConnections.externalOwnerUserId, telegramUserId)
       )
     )
     .limit(2);
