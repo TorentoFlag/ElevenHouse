@@ -204,7 +204,11 @@ export function FinancePage() {
           />
 
           <aside className={styles.sideStack}>
-            <section className={styles.panel} aria-label="Выплаты" ref={payoutPanelRef}>
+            <section
+              className={`${styles.panel} ${styles.payoutPanel}`}
+              aria-label="Выплаты"
+              ref={payoutPanelRef}
+            >
               <div className={styles.panelHeader}>
                 <h2>Выплаты</h2>
               </div>
@@ -282,7 +286,10 @@ export function FinancePage() {
 
             <PlanPanel overview={overview} locale={locale} />
 
-            <section className={styles.panel} aria-label="Реквизиты вывода">
+            <section
+              className={`${styles.panel} ${styles.payoutMethodPanel}`}
+              aria-label="Реквизиты вывода"
+            >
               <div className={styles.panelHeader}>
                 <h2>Реквизиты</h2>
               </div>
@@ -517,6 +524,17 @@ function OperationsPanel({
     },
     { grossAmountMinor: 0, platformFeeAmountMinor: 0, netAmountMinor: 0 }
   );
+  const hasAnyOperations = operations.length > 0;
+  const emptyStateTitle = isLoading
+    ? "Операции загружаются"
+    : hasAnyOperations
+      ? "Ничего не найдено"
+      : "Пока нет операций";
+  const emptyStateDescription = isLoading
+    ? "Финансовый ledger синхронизируется с API."
+    : hasAnyOperations
+      ? "Измените фильтр или поисковый запрос."
+      : "Здесь появятся продажи, возвраты, холды и выплаты после первой оплаты клиента.";
 
   return (
     <section className={styles.operationsPanel} aria-label="История операций">
@@ -562,9 +580,18 @@ function OperationsPanel({
         <span>Нетто</span>
       </div>
       {filteredOperations.length === 0 ? (
-        <p className={styles.emptyState}>
-          {isLoading ? "Операции загружаются" : "Операций по фильтру нет"}
-        </p>
+        <div className={styles.emptyState}>
+          <span className={styles.emptyStateIcon}>
+            <Icon iconName="wallet" width={16} height={16} aria-hidden="true" />
+          </span>
+          <strong>{emptyStateTitle}</strong>
+          <p>{emptyStateDescription}</p>
+          {!isLoading && !hasAnyOperations ? (
+            <a className={styles.secondaryButton} href="/products">
+              Открыть продукты
+            </a>
+          ) : null}
+        </div>
       ) : (
         <div className={styles.operationsTable}>
           {filteredOperations.map((operation) => (
@@ -634,7 +661,10 @@ function PayoutRequestsPanel({
   readonly locale: "ru" | "en";
 }) {
   return (
-    <section className={styles.panel} aria-label="Заявки на вывод">
+    <section
+      className={`${styles.panel} ${styles.payoutRequestsPanel}`}
+      aria-label="Заявки на вывод"
+    >
       <div className={styles.panelHeader}>
         <h2>Заявки на вывод</h2>
       </div>
@@ -680,7 +710,7 @@ function PlanPanel({
   const plan = overview?.currentPlan ?? null;
 
   return (
-    <section className={styles.panel} aria-label="Тариф">
+    <section className={`${styles.panel} ${styles.planPanel}`} aria-label="Тариф">
       <div className={styles.planCardHeader}>
         <h2>{plan ? `Тариф ${plan.name}` : "Тариф"}</h2>
         <span>{plan ? "активен" : "не выбран"}</span>

@@ -266,6 +266,40 @@ describe("FinancePage", () => {
 
     expect(mutate).not.toHaveBeenCalled();
   });
+
+  it("shows a product-linked empty state when the real ledger has no operations yet", () => {
+    mocks.useFinanceOperationsQuery.mockReturnValue({
+      data: financeOperationsInfinite({ operations: [] }),
+      isLoading: false,
+      isError: false,
+      isFetchingNextPage: false,
+      hasNextPage: false,
+      fetchNextPage: vi.fn(),
+      refetch: vi.fn()
+    });
+
+    render(<FinancePage />);
+
+    expect(screen.getByText("Пока нет операций")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Здесь появятся продажи, возвраты, холды и выплаты после первой оплаты клиента."
+      )
+    ).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Открыть продукты" }).getAttribute("href")).toBe(
+      "/products"
+    );
+  });
+
+  it("keeps filter empty states separate from a truly empty ledger", () => {
+    render(<FinancePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Корректировки" }));
+
+    expect(screen.getByText("Ничего не найдено")).toBeTruthy();
+    expect(screen.getByText("Измените фильтр или поисковый запрос.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Открыть продукты" })).toBeNull();
+  });
 });
 
 function financeOverview(

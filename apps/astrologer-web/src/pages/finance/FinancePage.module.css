@@ -430,15 +430,44 @@
 }
 
 .emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
   margin: 0;
-  padding: 14px 22px 18px;
+  padding: 26px 22px 28px;
+  border-bottom: 1px solid var(--finance-line);
+  color: var(--finance-muted);
   font-size: 12.5px;
   line-height: 1.45;
+  text-align: center;
 }
 
-.emptyState {
-  border-bottom: 1px solid var(--finance-line);
-  text-align: center;
+.emptyState strong {
+  color: var(--finance-text);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.emptyState p {
+  max-width: 420px;
+  margin: 0;
+  color: var(--finance-muted-2);
+}
+
+.emptyState .secondaryButton {
+  margin-top: 4px;
+  text-decoration: none;
+}
+
+.emptyStateIcon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--finance-line-strong);
+  border-radius: 10px;
+  background: var(--finance-surface-2);
+  color: var(--finance-positive);
 }
 
 .loadMoreRow {
@@ -780,6 +809,35 @@
 
   .content {
     padding: 16px 16px 28px;
+  }
+
+  .workspace {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sideStack {
+    display: contents;
+  }
+
+  .payoutPanel {
+    order: 1;
+  }
+
+  .operationsPanel {
+    order: 2;
+  }
+
+  .payoutRequestsPanel {
+    order: 3;
+  }
+
+  .planPanel {
+    order: 4;
+  }
+
+  .payoutMethodPanel {
+    order: 5;
   }
 
   .balanceStrip,
