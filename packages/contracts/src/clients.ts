@@ -197,6 +197,48 @@ export const clientBirthDataListResponseSchema = z
   });
 export type ClientBirthDataListResponse = z.infer<typeof clientBirthDataListResponseSchema>;
 
+export const clientBirthPlaceSearchQuerySchema = z
+  .object({
+    query: z
+      .string()
+      .trim()
+      .min(2)
+      .max(120)
+      .transform((value) => value.replace(/\s+/g, " ")),
+    limit: z.coerce.number().int().min(1).max(10).optional().default(5)
+  })
+  .strict();
+export type ClientBirthPlaceSearchQuery = z.infer<typeof clientBirthPlaceSearchQuerySchema>;
+
+export const clientBirthPlaceCandidateSchema = z
+  .object({
+    id: z.string().trim().min(1).max(200),
+    label: z.string().trim().min(1).max(500),
+    placeName: z.string().trim().min(1).max(500),
+    countryCode: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{2}$/)
+      .nullable(),
+    city: nullableResponseStringSchema,
+    region: nullableResponseStringSchema,
+    timezone: ianaTimeZoneSchema,
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    provider: z.enum(["nominatim"]),
+    providerPlaceId: z.string().trim().min(1).max(200)
+  })
+  .strict();
+export type ClientBirthPlaceCandidate = z.infer<typeof clientBirthPlaceCandidateSchema>;
+
+export const clientBirthPlaceSearchResponseSchema = z
+  .object({
+    candidates: z.array(clientBirthPlaceCandidateSchema)
+  })
+  .strict();
+export type ClientBirthPlaceSearchResponse = z.infer<typeof clientBirthPlaceSearchResponseSchema>;
+
 const relatedAstrologerResponseItemSchema = z
   .object({
     astrologerUserId: uuidSchema,

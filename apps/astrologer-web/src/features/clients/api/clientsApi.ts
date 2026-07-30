@@ -3,10 +3,14 @@ import {
   astrologerClientListResponseSchema,
   astrologerClientResponseSchema,
   astrologerClientParamsSchema,
+  clientBirthPlaceSearchQuerySchema,
+  clientBirthPlaceSearchResponseSchema,
   clientBirthDataUpsertRequestSchema,
   type AstrologerClientListQuery,
   type AstrologerClientListResponse,
   type AstrologerClientResponse,
+  type ClientBirthPlaceSearchQuery,
+  type ClientBirthPlaceSearchResponse,
   type ClientBirthDataUpsertRequest
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
@@ -31,6 +35,20 @@ export async function getAstrologerClient(clientUserId: string): Promise<Astrolo
 
   return astrologerClientResponseSchema.parse(
     await application.http.get(`/clients/${params.clientUserId}`)
+  );
+}
+
+export async function searchClientBirthPlaces(
+  query: ClientBirthPlaceSearchQuery
+): Promise<ClientBirthPlaceSearchResponse> {
+  const parsedQuery = clientBirthPlaceSearchQuerySchema.parse(query);
+  const searchParams = new URLSearchParams({
+    query: parsedQuery.query,
+    limit: String(parsedQuery.limit)
+  });
+
+  return clientBirthPlaceSearchResponseSchema.parse(
+    await application.http.get(`/clients/birth-places?${searchParams.toString()}`)
   );
 }
 

@@ -1,1 +1,2 @@
 export const CLIENT_STORE = Symbol("CLIENT_STORE");
+export const BIRTH_PLACE_SEARCH_PROVIDER = Symbol("BIRTH_PLACE_SEARCH_PROVIDER");

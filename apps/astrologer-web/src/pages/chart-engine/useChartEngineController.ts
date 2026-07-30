@@ -8,7 +8,11 @@ import type {
 } from "@elevenhouse/contracts";
 import { useI18n } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
-import { getAstrologerClient, updateClientBirthData } from "../../features/clients/api/clientsApi";
+import {
+  getAstrologerClient,
+  searchClientBirthPlaces,
+  updateClientBirthData
+} from "../../features/clients/api/clientsApi";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import {
   astrologerClientsQueryKeys,
@@ -444,9 +448,7 @@ export function useChartEngineController() {
       });
     },
     onError: (error) => {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Не удалось запустить астрокарту"
-      );
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить астрокарту");
     }
   });
 
@@ -473,6 +475,13 @@ export function useChartEngineController() {
       setErrorMessage(
         error instanceof Error ? error.message : "Не удалось сохранить данные рождения"
       );
+    }
+  });
+  const birthPlaceSearchMutation = useMutation({
+    mutationFn: async (query: string) => {
+      const response = await searchClientBirthPlaces({ query, limit: 5 });
+
+      return response.candidates;
     }
   });
 
@@ -578,7 +587,9 @@ export function useChartEngineController() {
   const pdfQuery = useQuery({
     queryKey: ["charts", "pdf", calculationId, pdfLocale],
     queryFn: () => getLatestChartPdf({ calculationId: calculationId ?? "", locale: pdfLocale }),
-    enabled: Boolean(calculationId && mode === "natal" && result?.method === "natal" && !isResultStale),
+    enabled: Boolean(
+      calculationId && mode === "natal" && result?.method === "natal" && !isResultStale
+    ),
     refetchInterval: (query: { state: { data?: { job: { status: string } | null } } }) => {
       const status = query.state.data?.job?.status;
       return status === "queued" || status === "processing" ? 1500 : false;
@@ -650,7 +661,8 @@ export function useChartEngineController() {
     currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
     job: pdfQuery.data?.job ?? null,
     isBusy,
-    isResultStale: isResultStale || mode !== "natal" || (result != null && result.method !== "natal")
+    isResultStale:
+      isResultStale || mode !== "natal" || (result != null && result.method !== "natal")
   });
 
   return {
@@ -723,6 +735,7 @@ export function useChartEngineController() {
     isSavingBirthData: birthDataMutation.isPending,
     birthDataError:
       birthDataMutation.error instanceof Error ? birthDataMutation.error.message : null,
+    onSearchBirthPlaces: async (query: string) => birthPlaceSearchMutation.mutateAsync(query),
     onSaveBirthData: async (data: Parameters<typeof updateClientBirthData>[1]) => {
       await birthDataMutation.mutateAsync(data);
     },
@@ -1195,7 +1208,11 @@ export function buildChartEngineSearch(search: string, state: ChartEngineUrlStat
   } else {
     params.delete("calculationId");
   }
-  if (state.mode === "child_chart" || state.mode === "horary" || state.mode === "astrocartography") {
+  if (
+    state.mode === "child_chart" ||
+    state.mode === "horary" ||
+    state.mode === "astrocartography"
+  ) {
     params.set("mode", state.mode);
   } else {
     params.delete("mode");

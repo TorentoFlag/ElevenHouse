@@ -97,6 +97,26 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .trim()
     .default("instagram_business_basic,instagram_business_manage_messages"),
   ASTROLOGER_API_ASTROLOGER_WEB_BASE_URL: z.string().trim().url().default("http://localhost:5174"),
+  ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  ASTROLOGER_API_NOMINATIM_BASE_URL: z
+    .string()
+    .trim()
+    .url()
+    .default("https://nominatim.openstreetmap.org"),
+  ASTROLOGER_API_NOMINATIM_USER_AGENT: z
+    .string()
+    .trim()
+    .min(12)
+    .default("ElevenHouse/1.0 (support@elevenhouse.ai)"),
+  ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(15000)
+    .default(5000),
   NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: optionalTrimmedNonEmptyStringSchema,
   NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: z.string().trim().url().optional(),
   ASTROLOGER_API_ALLOWED_ORIGINS: z.string().trim().optional(),
@@ -237,6 +257,13 @@ export type AstrologerApiRuntimeConfig = {
     readonly astrologerWebBaseUrl: string;
     readonly scopes: readonly string[];
   } | null;
+  readonly birthPlaceSearch: {
+    readonly enabled: boolean;
+    readonly provider: "nominatim";
+    readonly baseUrl: string;
+    readonly userAgent: string;
+    readonly timeoutMs: number;
+  };
   readonly allowedOrigins: readonly string[];
   readonly chartEngineBaseUrl: string;
   readonly authCodeDeliveryEncryptionKey: Buffer;
@@ -435,6 +462,13 @@ export function createAstrologerApiRuntimeConfig(
     telegramBusinessBotUsername: config.ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME ?? null,
     telegramMtproto,
     instagramGraph,
+    birthPlaceSearch: {
+      enabled: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED,
+      provider: "nominatim",
+      baseUrl: stripTrailingSlashes(config.ASTROLOGER_API_NOMINATIM_BASE_URL),
+      userAgent: config.ASTROLOGER_API_NOMINATIM_USER_AGENT,
+      timeoutMs: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS
+    },
     allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5174"],
     chartEngineBaseUrl: stripTrailingSlashes(config.CHART_ENGINE_BASE_URL),
     authCodeDeliveryEncryptionKey: parseBase64Aes256GcmKey(

@@ -8,7 +8,8 @@ import { IdentityModule } from "../identity/identity.module";
 import { SecurityModule } from "../security/security.module";
 import { ClientsController } from "./clients.controller";
 import { ClientsService } from "./clients.service";
-import { CLIENT_STORE } from "./clients.tokens";
+import { NominatimBirthPlaceSearchProvider } from "./nominatim-birth-place-search.provider";
+import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_STORE } from "./clients.tokens";
 
 @Module({
   imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, SecurityModule],
@@ -20,8 +21,12 @@ import { CLIENT_STORE } from "./clients.tokens";
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleClientStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
+    },
+    {
+      provide: BIRTH_PLACE_SEARCH_PROVIDER,
+      useClass: NominatimBirthPlaceSearchProvider
     }
   ],
-  exports: [CLIENT_STORE]
+  exports: [CLIENT_STORE, BIRTH_PLACE_SEARCH_PROVIDER]
 })
 export class ClientsModule {}

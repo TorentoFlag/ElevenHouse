@@ -17,19 +17,25 @@ import {
   astrologerClientParamsSchema,
   astrologerClientResponseSchema,
   clientBirthDataUpsertRequestSchema,
+  clientBirthPlaceSearchQuerySchema,
+  clientBirthPlaceSearchResponseSchema,
   type AstrologerClientListResponse,
-  type AstrologerClientResponse
+  type AstrologerClientResponse,
+  type ClientBirthPlaceSearchResponse
 } from "@elevenhouse/contracts";
 import type { ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
-import { CLIENT_STORE } from "./clients.tokens";
+import type { ClientBirthPlaceSearchProvider } from "./birth-place-search.provider";
+import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_STORE } from "./clients.tokens";
 
 @Injectable()
 export class ClientsService {
   constructor(
     @Inject(CLIENT_STORE) private readonly store: ClientStore,
-    private readonly clock: SystemClock
+    private readonly clock: SystemClock,
+    @Inject(BIRTH_PLACE_SEARCH_PROVIDER)
+    private readonly birthPlaceSearchProvider: ClientBirthPlaceSearchProvider
   ) {}
 
   async listClients(
@@ -66,6 +72,17 @@ export class ClientsService {
     }
 
     return astrologerClientResponseSchema.parse({ client });
+  }
+
+  async searchBirthPlaces(
+    query: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<ClientBirthPlaceSearchResponse> {
+    const parsedQuery = parseContract(clientBirthPlaceSearchQuerySchema, query);
+    requireAstrologerUserId(request);
+    const result = await this.birthPlaceSearchProvider.search(parsedQuery);
+
+    return clientBirthPlaceSearchResponseSchema.parse(result);
   }
 
   async updateBirthData(

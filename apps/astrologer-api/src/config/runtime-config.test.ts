@@ -40,6 +40,13 @@ const defaultSecurityConfig = {
   telegramBusinessBotUsername: null,
   telegramMtproto: null,
   instagramGraph: null,
+  birthPlaceSearch: {
+    enabled: true,
+    provider: "nominatim",
+    baseUrl: "https://nominatim.openstreetmap.org",
+    userAgent: "ElevenHouse/1.0 (support@elevenhouse.ai)",
+    timeoutMs: 5000
+  },
   allowedOrigins: ["http://localhost:5174"],
   chartEngineBaseUrl: "http://localhost:8012",
   authCodeDeliveryEncryptionKey: Buffer.alloc(32, 1),
@@ -157,6 +164,26 @@ describe("createAstrologerApiRuntimeConfig", () => {
       publicBaseUrl: "https://cdn.elevenhouse.com/media",
       uploadTtlSeconds: 600,
       downloadTtlSeconds: 120
+    });
+  });
+
+  it("parses birth-place search provider settings from env", () => {
+    expect(
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED: "false",
+        ASTROLOGER_API_NOMINATIM_BASE_URL: "https://nominatim.internal/",
+        ASTROLOGER_API_NOMINATIM_USER_AGENT: "ElevenHouse QA (qa@elevenhouse.ai)",
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS: "2500"
+      })
+    ).toMatchObject({
+      birthPlaceSearch: {
+        enabled: false,
+        provider: "nominatim",
+        baseUrl: "https://nominatim.internal",
+        userAgent: "ElevenHouse QA (qa@elevenhouse.ai)",
+        timeoutMs: 2500
+      }
     });
   });
 

@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import type { ClientBirthPlaceSearchResponse } from "@elevenhouse/contracts";
 import type {
   AstrologerClientList,
   AstrologerClientListItem,
@@ -7,10 +8,11 @@ import type {
   ClientJoinIntent,
   ClientStore,
   ClientStoreGetAstrologerClientInput,
-  ClientStoreListAstrologerClientsInput,
+  ClientStoreListAstrologerClientsInput
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import type { ClientBirthPlaceSearchProvider } from "./birth-place-search.provider";
 import { ClientsService } from "./clients.service";
 
 const astrologerUserId = "22222222-2222-4222-8222-222222222222";
@@ -148,10 +150,70 @@ describe("ClientsService", () => {
     ).rejects.toThrow(BadRequestException);
     await expect(service.listClients({}, {})).rejects.toThrow(UnauthorizedException);
   });
+
+  it("searches birth places only for authenticated astrologers", async () => {
+    const provider = createBirthPlaceSearchProvider();
+    const service = createService(createStore(), provider);
+
+    await expect(
+      service.searchBirthPlaces(
+        { query: "  Rome   Italy  ", limit: "3" },
+        createAuthenticatedRequest()
+      )
+    ).resolves.toEqual({
+      candidates: [
+        {
+          id: "nominatim:41485",
+          label: "Rome, Lazio, Italy",
+          placeName: "Rome, Italy",
+          countryCode: "IT",
+          city: "Rome",
+          region: "Lazio",
+          timezone: "Europe/Rome",
+          latitude: 41.8933,
+          longitude: 12.4829,
+          provider: "nominatim",
+          providerPlaceId: "41485"
+        }
+      ]
+    });
+
+    expect(provider.search).toHaveBeenCalledWith({ query: "Rome Italy", limit: 3 });
+    await expect(service.searchBirthPlaces({ query: "Rome" }, {})).rejects.toThrow(
+      UnauthorizedException
+    );
+  });
 });
 
-function createService(store: ClientStore): ClientsService {
-  return new ClientsService(store, { now: () => new Date(now) });
+function createService(
+  store: ClientStore,
+  birthPlaceSearchProvider: ClientBirthPlaceSearchProvider = createBirthPlaceSearchProvider()
+): ClientsService {
+  return new ClientsService(store, { now: () => new Date(now) }, birthPlaceSearchProvider);
+}
+
+function createBirthPlaceSearchProvider(): ClientBirthPlaceSearchProvider {
+  return {
+    search: vi.fn(
+      async (): Promise<ClientBirthPlaceSearchResponse> => ({
+        candidates: [
+          {
+            id: "nominatim:41485",
+            label: "Rome, Lazio, Italy",
+            placeName: "Rome, Italy",
+            countryCode: "IT",
+            city: "Rome",
+            region: "Lazio",
+            timezone: "Europe/Rome",
+            latitude: 41.8933,
+            longitude: 12.4829,
+            provider: "nominatim" as const,
+            providerPlaceId: "41485"
+          }
+        ]
+      })
+    )
+  };
 }
 
 function createStore(): ClientStore {

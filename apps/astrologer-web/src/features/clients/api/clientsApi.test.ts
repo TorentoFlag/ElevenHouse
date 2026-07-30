@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AstrologerClientResponse } from "@elevenhouse/contracts";
+import type {
+  AstrologerClientResponse,
+  ClientBirthPlaceSearchResponse
+} from "@elevenhouse/contracts";
 import { application } from "../../../Application";
-import { getAstrologerClient, updateClientBirthData } from "./clientsApi";
+import { getAstrologerClient, searchClientBirthPlaces, updateClientBirthData } from "./clientsApi";
 
 const clientUserId = "22222222-2222-4222-8222-222222222222";
 
@@ -69,7 +72,37 @@ describe("clientsApi", () => {
       { csrf: true }
     );
   });
+
+  it("searches provider-resolved birth places through the clients API", async () => {
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(placeSearchResponse());
+
+    await expect(searchClientBirthPlaces({ query: "  Rome   Italy  ", limit: 3 })).resolves.toEqual(
+      placeSearchResponse()
+    );
+
+    expect(get).toHaveBeenCalledWith("/clients/birth-places?query=Rome+Italy&limit=3");
+  });
 });
+
+function placeSearchResponse(): ClientBirthPlaceSearchResponse {
+  return {
+    candidates: [
+      {
+        id: "nominatim:41485",
+        label: "Rome, Lazio, Italy",
+        placeName: "Rome, Italy",
+        countryCode: "IT",
+        city: "Rome",
+        region: "Lazio",
+        timezone: "Europe/Rome",
+        latitude: 41.8933,
+        longitude: 12.4829,
+        provider: "nominatim",
+        providerPlaceId: "41485"
+      }
+    ]
+  };
+}
 
 function response(): AstrologerClientResponse {
   return {

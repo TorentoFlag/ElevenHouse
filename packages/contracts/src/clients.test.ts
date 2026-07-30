@@ -3,6 +3,8 @@ import {
   astrologerClientResponseSchema,
   astrologerClientListResponseSchema,
   clientBirthDataListResponseSchema,
+  clientBirthPlaceSearchQuerySchema,
+  clientBirthPlaceSearchResponseSchema,
   clientBirthDataUpsertRequestSchema,
   clientCabinetOverviewResponseSchema,
   createClientJoinIntentRequestSchema,
@@ -57,6 +59,43 @@ describe("client contracts", () => {
         birthTimezone: "Moscow"
       })
     ).toThrow();
+  });
+
+  it("normalizes birth-place search query and accepts provider-resolved candidates", () => {
+    expect(
+      clientBirthPlaceSearchQuerySchema.parse({ query: "  Rome   Italy  ", limit: "3" })
+    ).toEqual({
+      query: "Rome Italy",
+      limit: 3
+    });
+
+    expect(
+      clientBirthPlaceSearchResponseSchema.parse({
+        candidates: [
+          {
+            id: "nominatim:41485",
+            label: "Rome, Lazio, Italy",
+            placeName: "Rome, Italy",
+            countryCode: "IT",
+            city: "Rome",
+            region: "Lazio",
+            timezone: "Europe/Rome",
+            latitude: 41.8933,
+            longitude: 12.4829,
+            provider: "nominatim",
+            providerPlaceId: "41485"
+          }
+        ]
+      })
+    ).toMatchObject({
+      candidates: [
+        {
+          timezone: "Europe/Rome",
+          latitude: 41.8933,
+          longitude: 12.4829
+        }
+      ]
+    });
   });
 
   it("rejects invalid client list items", () => {

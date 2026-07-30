@@ -14,6 +14,11 @@ export class ClientsController {
     return this.clientsService.listClients(query, request);
   }
 
+  @Get("birth-places")
+  searchBirthPlaces(@Query() query: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.clientsService.searchBirthPlaces(query, request);
+  }
+
   @Get(":clientUserId")
   getClient(@Param("clientUserId") clientUserId: string, @Req() request: AstrologerSessionRequest) {
     return this.clientsService.getClient(clientUserId, request);

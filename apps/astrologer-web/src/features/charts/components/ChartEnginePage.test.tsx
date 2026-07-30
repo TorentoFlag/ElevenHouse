@@ -1487,6 +1487,7 @@ describe("ChartEnginePage", () => {
     await user.type(screen.getByLabelText(/^время рождения/i), "10:30");
     await user.clear(screen.getByLabelText(/место рождения/i));
     await user.type(screen.getByLabelText(/место рождения/i), "Рим, Италия");
+    await user.click(screen.getByText(/ввести координаты вручную/i));
     await user.clear(screen.getByLabelText(/часовой пояс/i));
     await user.type(screen.getByLabelText(/часовой пояс/i), "Europe/Rome");
     await user.clear(screen.getByLabelText(/широта/i));
@@ -1501,8 +1502,8 @@ describe("ChartEnginePage", () => {
       birthTime: "10:30",
       birthTimePrecision: "exact",
       birthPlaceText: "Рим, Италия",
-      birthCountryCode: "IT",
-      birthCity: "Рим",
+      birthCountryCode: null,
+      birthCity: null,
       birthRegion: null,
       birthTimezone: "Europe/Rome",
       birthTimeDstOccurrence: null,
@@ -1510,6 +1511,82 @@ describe("ChartEnginePage", () => {
       birthLongitude: 12.4964,
       isPrimary: true
     });
+  });
+
+  it("fills timezone and coordinates from birth-place search results", async () => {
+    const user = userEvent.setup();
+    const onSaveBirthData = vi.fn(async () => undefined);
+    const onSearchBirthPlaces = vi.fn(async () => [
+      {
+        id: "nominatim:41485",
+        label: "Rome, Lazio, Italy",
+        placeName: "Rome, Italy",
+        countryCode: "IT",
+        city: "Rome",
+        region: "Lazio",
+        timezone: "Europe/Rome",
+        latitude: 41.8933,
+        longitude: 12.4829,
+        provider: "nominatim" as const,
+        providerPlaceId: "41485"
+      }
+    ]);
+
+    render(
+      <ChartEnginePage
+        selectedClient={{
+          ...client,
+          birthDateDisplay: "—",
+          hasBirthDate: false,
+          birthData: {
+            ...client.birthData,
+            birthDate: null,
+            birthTime: null,
+            birthTimePrecision: "unknown",
+            birthPlaceText: null,
+            birthCountryCode: null,
+            birthCity: null,
+            birthRegion: null,
+            birthTimezone: null,
+            birthLatitude: null,
+            birthLongitude: null
+          }
+        }}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onSearchBirthPlaces={onSearchBirthPlaces}
+        onSaveBirthData={onSaveBirthData}
+        isSavingBirthData={false}
+        birthDataError={null}
+      />
+    );
+
+    await user.type(screen.getByLabelText(/место рождения/i), "Rome Italy");
+    await user.click(screen.getByRole("button", { name: /найти/i }));
+    await user.click(await screen.findByRole("option", { name: /rome, italy/i }));
+    await user.clear(screen.getByLabelText(/дата рождения/i));
+    await user.type(screen.getByLabelText(/дата рождения/i), "1990-07-15");
+    await user.selectOptions(screen.getByLabelText(/точность времени/i), "exact");
+    await user.type(screen.getByLabelText(/^время рождения/i), "10:30");
+    await user.click(screen.getByRole("button", { name: /сохранить данные рождения/i }));
+
+    expect(onSearchBirthPlaces).toHaveBeenCalledWith("Rome Italy");
+    expect(onSaveBirthData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        birthPlaceText: "Rome, Italy",
+        birthCountryCode: "IT",
+        birthCity: "Rome",
+        birthRegion: "Lazio",
+        birthTimezone: "Europe/Rome",
+        birthLatitude: 41.8933,
+        birthLongitude: 12.4829
+      })
+    );
   });
 });
 

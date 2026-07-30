@@ -4,11 +4,13 @@ import type {
   ChartHoraryQuestionSnapshot,
   ChartSettings,
   ClientBirthDataUpsertRequest,
+  ClientBirthPlaceCandidate,
   DictionaryLocale,
   StoredChartAstrocartographyCalculationPayload,
   StoredChartCalculationPayload
 } from "@elevenhouse/contracts";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
+import { toBirthPlaceDraftPatch } from "../../clients/model/birthPlaceModel";
 import { ClientSearchCombobox } from "../../clients/components/ClientSearchCombobox";
 import {
   getChartBirthDataReadiness,
@@ -85,6 +87,7 @@ export type ChartEnginePageProps = {
   readonly onSelectClient?: (client: ClientSelectOption) => void;
   readonly onSelectPartnerClient?: (client: ClientSelectOption) => void;
   readonly onSaveBirthData?: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
+  readonly onSearchBirthPlaces?: (query: string) => Promise<readonly ClientBirthPlaceCandidate[]>;
   readonly isSavingBirthData?: boolean;
   readonly birthDataError?: string | null;
   readonly pdfLabel?: string;
@@ -126,6 +129,7 @@ export function ChartEnginePage({
   onSelectClient,
   onSelectPartnerClient,
   onSaveBirthData,
+  onSearchBirthPlaces,
   isSavingBirthData = false,
   birthDataError = null,
   pdfLabel = "PDF",
@@ -500,6 +504,7 @@ export function ChartEnginePage({
                 errorMessage={birthDataError}
                 isSaving={isSavingBirthData}
                 onSave={onSaveBirthData}
+                onSearchBirthPlaces={onSearchBirthPlaces}
               />
             ) : null}
           </section>
@@ -1025,13 +1030,15 @@ function BirthDataEditor({
   disabled,
   errorMessage,
   isSaving,
-  onSave
+  onSave,
+  onSearchBirthPlaces
 }: {
   readonly client: ClientSelectOption;
   readonly disabled: boolean;
   readonly errorMessage: string | null;
   readonly isSaving: boolean;
   readonly onSave: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
+  readonly onSearchBirthPlaces?: (query: string) => Promise<readonly ClientBirthPlaceCandidate[]>;
 }) {
   const birthData = client.birthData;
   const [birthDate, setBirthDate] = useState(birthData?.birthDate ?? "");
@@ -1047,8 +1054,52 @@ function BirthDataEditor({
   const [birthLongitude, setBirthLongitude] = useState(
     birthData?.birthLongitude == null ? "" : String(birthData.birthLongitude)
   );
+  const [birthCountryCode, setBirthCountryCode] = useState(birthData?.birthCountryCode ?? null);
+  const [birthCity, setBirthCity] = useState(birthData?.birthCity ?? null);
+  const [birthRegion, setBirthRegion] = useState(birthData?.birthRegion ?? null);
+  const [placeCandidates, setPlaceCandidates] = useState<readonly ClientBirthPlaceCandidate[]>([]);
+  const [placeSearchError, setPlaceSearchError] = useState<string | null>(null);
+  const [isSearchingPlace, setIsSearchingPlace] = useState(false);
 
   const timeDisabled = disabled || birthTimePrecision === "unknown";
+  const canSearchPlace =
+    Boolean(onSearchBirthPlaces) &&
+    birthPlaceText.trim().length >= 2 &&
+    !disabled &&
+    !isSearchingPlace;
+
+  const searchPlace = async () => {
+    if (!onSearchBirthPlaces || birthPlaceText.trim().length < 2) return;
+    setIsSearchingPlace(true);
+    setPlaceSearchError(null);
+    try {
+      const candidates = await onSearchBirthPlaces(birthPlaceText);
+      setPlaceCandidates(candidates);
+      if (candidates.length === 0) {
+        setPlaceSearchError("Место не найдено. Уточните запрос или заполните вручную.");
+      }
+    } catch (error) {
+      setPlaceCandidates([]);
+      setPlaceSearchError(
+        error instanceof Error ? error.message : "Не удалось найти место. Заполните данные вручную."
+      );
+    } finally {
+      setIsSearchingPlace(false);
+    }
+  };
+
+  const selectPlaceCandidate = (candidate: ClientBirthPlaceCandidate) => {
+    const patch = toBirthPlaceDraftPatch(candidate);
+    setBirthPlaceText(patch.birthPlaceText ?? "");
+    setBirthCountryCode(patch.birthCountryCode);
+    setBirthCity(patch.birthCity);
+    setBirthRegion(patch.birthRegion);
+    setBirthTimezone(patch.birthTimezone ?? "");
+    setBirthLatitude(String(patch.birthLatitude ?? ""));
+    setBirthLongitude(String(patch.birthLongitude ?? ""));
+    setPlaceCandidates([]);
+    setPlaceSearchError(null);
+  };
 
   return (
     <form
@@ -1061,9 +1112,9 @@ function BirthDataEditor({
           birthTime: birthTimePrecision === "unknown" ? null : normalizeTextField(birthTime),
           birthTimePrecision,
           birthPlaceText: normalizeTextField(birthPlaceText),
-          birthCountryCode: birthData?.birthCountryCode ?? null,
-          birthCity: birthData?.birthCity ?? null,
-          birthRegion: birthData?.birthRegion ?? null,
+          birthCountryCode,
+          birthCity,
+          birthRegion,
           birthTimezone: normalizeTextField(birthTimezone),
           birthTimeDstOccurrence: birthData?.birthTimeDstOccurrence ?? null,
           birthLatitude: normalizeNumberField(birthLatitude),
@@ -1112,46 +1163,91 @@ function BirthDataEditor({
       </label>
       <label>
         <span>Место рождения</span>
-        <input
-          type="text"
-          value={birthPlaceText}
-          disabled={disabled}
-          placeholder="Москва, Россия"
-          onChange={(event) => setBirthPlaceText(event.target.value)}
-        />
-      </label>
-      <label>
-        <span>Часовой пояс</span>
-        <input
-          type="text"
-          value={birthTimezone}
-          disabled={disabled}
-          placeholder="Europe/Moscow"
-          onChange={(event) => setBirthTimezone(event.target.value)}
-        />
-      </label>
-      <div className={styles.birthDataGrid}>
-        <label>
-          <span>Широта</span>
+        <div className={styles.birthPlaceSearchRow}>
           <input
-            type="number"
-            step="0.0001"
-            value={birthLatitude}
+            type="text"
+            value={birthPlaceText}
             disabled={disabled}
-            onChange={(event) => setBirthLatitude(event.target.value)}
+            placeholder="Москва, Россия"
+            onChange={(event) => {
+              setBirthPlaceText(event.target.value);
+              setBirthCountryCode(null);
+              setBirthCity(null);
+              setBirthRegion(null);
+              setBirthTimezone("");
+              setBirthLatitude("");
+              setBirthLongitude("");
+              setPlaceCandidates([]);
+              setPlaceSearchError(null);
+            }}
+          />
+          <button
+            className={styles.birthPlaceSearchButton}
+            type="button"
+            disabled={!canSearchPlace}
+            onClick={() => void searchPlace()}
+          >
+            {isSearchingPlace ? "Ищем..." : "Найти"}
+          </button>
+        </div>
+      </label>
+      {placeCandidates.length > 0 ? (
+        <div className={styles.birthPlaceCandidates} role="listbox" aria-label="Варианты места">
+          {placeCandidates.map((candidate) => (
+            <button
+              key={candidate.id}
+              type="button"
+              role="option"
+              onClick={() => selectPlaceCandidate(candidate)}
+              disabled={disabled}
+            >
+              <strong>{candidate.placeName}</strong>
+              <span>{[candidate.region, candidate.timezone].filter(Boolean).join(" · ")}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {placeSearchError ? <p className={styles.birthDataError}>{placeSearchError}</p> : null}
+      {birthTimezone && birthLatitude && birthLongitude ? (
+        <p className={styles.birthPlaceResolved}>
+          {birthTimezone} · {birthLatitude}, {birthLongitude}
+        </p>
+      ) : null}
+      <details className={styles.birthDataManualFields}>
+        <summary>Ввести координаты вручную</summary>
+        <label>
+          <span>Часовой пояс</span>
+          <input
+            type="text"
+            value={birthTimezone}
+            disabled={disabled}
+            placeholder="Europe/Moscow"
+            onChange={(event) => setBirthTimezone(event.target.value)}
           />
         </label>
-        <label>
-          <span>Долгота</span>
-          <input
-            type="number"
-            step="0.0001"
-            value={birthLongitude}
-            disabled={disabled}
-            onChange={(event) => setBirthLongitude(event.target.value)}
-          />
-        </label>
-      </div>
+        <div className={styles.birthDataGrid}>
+          <label>
+            <span>Широта</span>
+            <input
+              type="number"
+              step="0.0001"
+              value={birthLatitude}
+              disabled={disabled}
+              onChange={(event) => setBirthLatitude(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Долгота</span>
+            <input
+              type="number"
+              step="0.0001"
+              value={birthLongitude}
+              disabled={disabled}
+              onChange={(event) => setBirthLongitude(event.target.value)}
+            />
+          </label>
+        </div>
+      </details>
       {errorMessage ? <p className={styles.birthDataError}>{errorMessage}</p> : null}
       <button className={styles.birthDataSaveButton} type="submit" disabled={disabled}>
         {isSaving ? "Сохраняем…" : "Сохранить данные рождения"}

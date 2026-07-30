@@ -398,6 +398,82 @@
 .birthDataCard input {
   padding: 0 9px;
 }
+.birthPlaceSearchRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+.birthPlaceSearchButton {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgb(246 210 102 / 0.26);
+  border-radius: 10px;
+  background: rgb(246 210 102 / 0.16);
+  color: var(--chart-gold);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 780;
+}
+.birthPlaceSearchButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+.birthPlaceCandidates {
+  display: grid;
+  max-height: 178px;
+  gap: 6px;
+  overflow-y: auto;
+}
+.birthPlaceCandidates button {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 10px;
+  background: rgb(13 12 32 / 0.64);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.birthPlaceCandidates button:hover,
+.birthPlaceCandidates button:focus-visible {
+  border-color: rgb(246 210 102 / 0.36);
+  outline: none;
+}
+.birthPlaceCandidates strong {
+  margin: 0;
+  overflow: hidden;
+  color: rgb(229 225 244 / 0.92);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.birthPlaceCandidates span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.birthPlaceResolved {
+  margin: 0;
+  color: rgb(143 224 192 / 0.9);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.birthDataManualFields {
+  display: grid;
+  gap: 8px;
+}
+.birthDataManualFields summary {
+  color: rgb(186 178 218 / 0.78);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 760;
+}
+.birthDataManualFields[open] {
+  padding-top: 2px;
+}
 .birthDataGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
