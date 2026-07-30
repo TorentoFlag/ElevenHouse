@@ -2,12 +2,17 @@ import type {
   FinanceIdempotentCommand,
   FinanceIdempotentCommandResult,
   LedgerStore,
+  PlatformBillingStore,
   PayoutStore
 } from "@elevenhouse/domain";
 
 export type AstrologerFinanceUnitOfWorkContext = {
   readonly payoutStore: PayoutStore;
-  readonly ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance" | "listOperations">;
+  readonly ledgerStore: Pick<
+    LedgerStore,
+    "createTransaction" | "findWalletBalance" | "summarizePeriod" | "listOperations"
+  >;
+  readonly platformBillingStore: PlatformBillingStore;
 };
 
 export type AstrologerFinanceUnitOfWork = {
@@ -28,4 +33,5 @@ export type AstrologerFinanceUnitOfWork = {
 
 export type AstrologerFinanceOptions = {
   readonly minimumPayoutAmountMinor: number;
+  readonly platformBillingProviderConfigured: boolean;
 };

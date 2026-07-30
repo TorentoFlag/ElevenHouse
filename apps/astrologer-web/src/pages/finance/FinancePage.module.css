@@ -689,6 +689,66 @@
   font-size: 11.5px;
 }
 
+.planCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.planCardHeader h2 {
+  margin: 0;
+  color: var(--finance-text);
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.planCardHeader span {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--finance-accent-line);
+  border-radius: 999px;
+  background: var(--finance-accent-soft);
+  color: var(--finance-accent-text);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.planFeeRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--finance-line);
+}
+
+.planFeeRow span {
+  color: var(--finance-muted);
+  font-size: 13px;
+}
+
+.planFeeRow strong {
+  color: var(--finance-warning);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.planPrice {
+  display: block;
+  margin-top: 16px;
+  color: var(--finance-muted-2);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
 @media (max-width: 1180px) {
   .balanceStrip {
     grid-template-columns: repeat(2, minmax(0, 1fr));

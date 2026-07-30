@@ -1,11 +1,12 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import {
   createDrizzleLedgerTransactionStore,
   createDrizzlePayoutStore,
   executeIdempotentFinanceCommand
 } from "@elevenhouse/db/finance";
 import type { FinanceTransaction } from "@elevenhouse/db/finance";
+import { createDrizzlePlatformBillingStore } from "@elevenhouse/db/platform-billing";
 import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
@@ -20,10 +21,6 @@ import type {
   AstrologerFinanceUnitOfWorkContext
 } from "./finance.unit-of-work";
 
-const financeOptions: AstrologerFinanceOptions = {
-  minimumPayoutAmountMinor: 1_000_00
-};
-
 @Module({
   imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, SecurityModule],
   controllers: [FinanceController],
@@ -31,7 +28,13 @@ const financeOptions: AstrologerFinanceOptions = {
     FinanceService,
     {
       provide: ASTROLOGER_FINANCE_OPTIONS,
-      useValue: financeOptions
+      useFactory: (configService: ConfigService): AstrologerFinanceOptions => ({
+        minimumPayoutAmountMinor: 1_000_00,
+        platformBillingProviderConfigured: configService.getOrThrow<boolean>(
+          "astrologerApi.billing.arcPayConfigured"
+        )
+      }),
+      inject: [ConfigService]
     },
     {
       provide: ASTROLOGER_FINANCE_UNIT_OF_WORK,
@@ -62,6 +65,7 @@ function createUnitOfWorkContext(
 ): AstrologerFinanceUnitOfWorkContext {
   return {
     payoutStore: createDrizzlePayoutStore(transaction),
-    ledgerStore: createDrizzleLedgerTransactionStore(transaction)
+    ledgerStore: createDrizzleLedgerTransactionStore(transaction),
+    platformBillingStore: createDrizzlePlatformBillingStore(transaction)
   };
 }

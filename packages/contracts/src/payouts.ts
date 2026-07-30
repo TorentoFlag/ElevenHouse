@@ -1,5 +1,6 @@
 import { z } from "@elevenhouse/validation";
 import { moneySchema, nonZeroMoneySchema } from "./money";
+import { billingCycleSchema, billingCurrentPlanSourceSchema } from "./platform-billing";
 
 const isoDateTimeSchema = z.string().datetime({ offset: true });
 const uuidSchema = z.string().uuid();
@@ -124,6 +125,37 @@ export type CreateManualBankTransferPayoutMethod = z.infer<
   typeof createManualBankTransferPayoutMethodSchema
 >;
 
+export const astrologerFinancePeriodSummarySchema = z
+  .object({
+    periodStart: isoDateTimeSchema,
+    periodEndExclusive: isoDateTimeSchema,
+    grossSalesAmount: moneySchema,
+    platformFeeAmount: moneySchema,
+    netSalesAmount: moneySchema,
+    refundsAmount: moneySchema,
+    payoutsAmount: moneySchema,
+    saleCount: z.number().int().min(0),
+    refundCount: z.number().int().min(0),
+    payoutCount: z.number().int().min(0),
+    recurringRevenueAmount: moneySchema.nullable(),
+    recurringRevenueUnavailableReason: z.enum(["client_subscriptions_not_implemented"]).nullable()
+  })
+  .strict();
+export type AstrologerFinancePeriodSummary = z.infer<typeof astrologerFinancePeriodSummarySchema>;
+
+export const astrologerFinanceCurrentPlanSchema = z
+  .object({
+    planId: z.string().min(1).max(80),
+    code: z.string().min(1).max(80),
+    name: z.string().min(1).max(120),
+    monthlyPrice: moneySchema,
+    platformFeeBps: z.number().int().min(0).max(10_000),
+    billingCycle: billingCycleSchema,
+    source: billingCurrentPlanSourceSchema
+  })
+  .strict();
+export type AstrologerFinanceCurrentPlan = z.infer<typeof astrologerFinanceCurrentPlanSchema>;
+
 export const astrologerFinanceOverviewResponseSchema = z
   .object({
     balance: z
@@ -143,7 +175,9 @@ export const astrologerFinanceOverviewResponseSchema = z
     minimumPayoutAmount: moneySchema,
     payoutRequestUnavailableReason: z
       .enum(["payout_method_required", "insufficient_available_balance"])
-      .nullable()
+      .nullable(),
+    periodSummary: astrologerFinancePeriodSummarySchema,
+    currentPlan: astrologerFinanceCurrentPlanSchema.nullable()
   })
   .strict();
 export type AstrologerFinanceOverviewResponse = z.infer<

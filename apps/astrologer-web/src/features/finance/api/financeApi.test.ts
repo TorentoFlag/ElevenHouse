@@ -23,7 +23,30 @@ const overview = {
   recentPayoutRequests: [],
   canRequestPayout: false,
   minimumPayoutAmount: { amountMinor: 1_000_00, currency: "RUB" },
-  payoutRequestUnavailableReason: "payout_method_required"
+  payoutRequestUnavailableReason: "payout_method_required",
+  periodSummary: {
+    periodStart: "2026-07-01T00:00:00.000Z",
+    periodEndExclusive: "2026-08-01T00:00:00.000Z",
+    grossSalesAmount: { amountMinor: 28_450_00, currency: "RUB" },
+    platformFeeAmount: { amountMinor: 2_560_50, currency: "RUB" },
+    netSalesAmount: { amountMinor: 25_889_50, currency: "RUB" },
+    refundsAmount: { amountMinor: 1_600_00, currency: "RUB" },
+    payoutsAmount: { amountMinor: 45_000_00, currency: "RUB" },
+    saleCount: 9,
+    refundCount: 1,
+    payoutCount: 1,
+    recurringRevenueAmount: null,
+    recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
+  },
+  currentPlan: {
+    planId: "pro",
+    code: "pro",
+    name: "Pro",
+    monthlyPrice: { amountMinor: 199_000, currency: "RUB" },
+    platformFeeBps: 400,
+    billingCycle: "month",
+    source: "subscription"
+  }
 } satisfies AstrologerFinanceOverviewResponse;
 
 const operations = {

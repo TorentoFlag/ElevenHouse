@@ -29,7 +29,7 @@ type OperationFilter = "all" | LedgerOperation["kind"];
 type BalanceMetricTone = "positive" | "warning" | "neutral" | "accent" | "danger";
 type BalanceMetricViewModel = {
   readonly label: string;
-  readonly value: number;
+  readonly value: number | null;
   readonly tone: BalanceMetricTone;
   readonly note: string;
 };
@@ -127,7 +127,7 @@ export function FinancePage() {
           </h1>
         </div>
         <div className={styles.toolbarMeta}>
-          <span>{formatPayoutMethodLine(overview)}</span>
+          <span>{formatFinanceToolbarMeta(overview)}</span>
           <button
             className={styles.ghostButton}
             type="button"
@@ -266,6 +266,8 @@ export function FinancePage() {
 
             <PayoutRequestsPanel requests={overview?.recentPayoutRequests ?? []} locale={locale} />
 
+            <PlanPanel overview={overview} locale={locale} />
+
             <section className={styles.panel} aria-label="Реквизиты вывода">
               <div className={styles.panelHeader}>
                 <h2>Реквизиты</h2>
@@ -319,16 +321,18 @@ function BalanceStrip({
         note: "окно возврата / сессии"
       },
       {
-        label: "Зарезервировано",
-        value: overview?.balance.reserved.amountMinor ?? 0,
+        label: "Всего за месяц",
+        value: overview?.periodSummary.netSalesAmount.amountMinor ?? 0,
         tone: "neutral",
-        note: "споры и резервы"
+        note: "нетто после комиссии"
       },
       {
-        label: "В выводе",
-        value: overview?.balance.payoutPending.amountMinor ?? 0,
+        label: "MRR (подписки)",
+        value: overview?.periodSummary.recurringRevenueAmount?.amountMinor ?? null,
         tone: "accent",
-        note: "ручная обработка"
+        note: overview?.periodSummary.recurringRevenueUnavailableReason
+          ? "контур подписок не подключен"
+          : "рекуррентно"
       }
     ];
     const debtMinor = overview?.balance.negativeBalance.amountMinor ?? 0;
@@ -350,7 +354,7 @@ function BalanceStrip({
         <div className={styles.balanceMetric} key={bucket.label}>
           <span>{bucket.label}</span>
           <strong className={styles[`balanceMetric_${bucket.tone}`]}>
-            {formatMoneyMinor(bucket.value, "RUB", locale)}
+            {bucket.value === null ? "-" : formatMoneyMinor(bucket.value, "RUB", locale)}
           </strong>
           <small>{bucket.note}</small>
         </div>
@@ -652,6 +656,37 @@ function PayoutRequestsPanel({
   );
 }
 
+function PlanPanel({
+  overview,
+  locale
+}: {
+  readonly overview: AstrologerFinanceOverviewResponse | null;
+  readonly locale: "ru" | "en";
+}) {
+  const plan = overview?.currentPlan ?? null;
+
+  return (
+    <section className={styles.panel} aria-label="Тариф">
+      <div className={styles.planCardHeader}>
+        <h2>{plan ? `Тариф ${plan.name}` : "Тариф"}</h2>
+        <span>{plan ? "активен" : "не выбран"}</span>
+      </div>
+      <div className={styles.planFeeRow}>
+        <span>Комиссия платформы</span>
+        <strong>{plan ? formatFeeBps(plan.platformFeeBps) : "-"}</strong>
+      </div>
+      <p className={styles.panelHint}>
+        Тариф определяет комиссию, которая вычитается из продаж перед зачислением нетто на баланс.
+      </p>
+      <small className={styles.planPrice}>
+        {plan
+          ? `${formatMoneyMinor(plan.monthlyPrice.amountMinor, plan.monthlyPrice.currency, locale)}/мес`
+          : "план появится после настройки тарифа"}
+      </small>
+    </section>
+  );
+}
+
 function PayoutFact({
   icon,
   label,
@@ -742,9 +777,16 @@ function formatOptionalSignedMoneyMinor(
   return formatSignedMoneyMinor(amountMinor, currency, locale);
 }
 
-function formatPayoutMethodLine(overview: AstrologerFinanceOverviewResponse | null): string {
-  const method = overview?.defaultPayoutMethod?.displayName ?? "реквизиты не добавлены";
-  return `Вывод · ${method}`;
+function formatFinanceToolbarMeta(overview: AstrologerFinanceOverviewResponse | null): string {
+  const plan = overview?.currentPlan?.name;
+  const fee = overview?.currentPlan ? formatFeeBps(overview.currentPlan.platformFeeBps) : null;
+  if (plan && fee) return `Тариф ${plan} · комиссия ${fee}`;
+  return "Тариф не выбран";
+}
+
+function formatFeeBps(value: number): string {
+  if (value % 100 === 0) return `${value / 100}%`;
+  return `${(value / 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 })}%`;
 }
 
 function operationTitle(operation: LedgerOperation): string {
@@ -931,11 +973,62 @@ function buildFinanceReportCsv({
 }): string {
   const rows: string[][] = [
     ["Раздел", "Показатель", "Значение"],
-    ["Баланс", "Доступно к выводу", formatMoneyMinor(overview?.balance.available.amountMinor ?? 0, "RUB", locale)],
-    ["Баланс", "В ожидании", formatMoneyMinor(overview?.balance.pending.amountMinor ?? 0, "RUB", locale)],
-    ["Баланс", "Зарезервировано", formatMoneyMinor(overview?.balance.reserved.amountMinor ?? 0, "RUB", locale)],
-    ["Баланс", "В выводе", formatMoneyMinor(overview?.balance.payoutPending.amountMinor ?? 0, "RUB", locale)],
-    ["Баланс", "Долг", formatMoneyMinor(overview?.balance.negativeBalance.amountMinor ?? 0, "RUB", locale)],
+    [
+      "Баланс",
+      "Доступно к выводу",
+      formatMoneyMinor(overview?.balance.available.amountMinor ?? 0, "RUB", locale)
+    ],
+    [
+      "Баланс",
+      "В ожидании",
+      formatMoneyMinor(overview?.balance.pending.amountMinor ?? 0, "RUB", locale)
+    ],
+    [
+      "Баланс",
+      "Зарезервировано",
+      formatMoneyMinor(overview?.balance.reserved.amountMinor ?? 0, "RUB", locale)
+    ],
+    [
+      "Баланс",
+      "В выводе",
+      formatMoneyMinor(overview?.balance.payoutPending.amountMinor ?? 0, "RUB", locale)
+    ],
+    [
+      "Баланс",
+      "Долг",
+      formatMoneyMinor(overview?.balance.negativeBalance.amountMinor ?? 0, "RUB", locale)
+    ],
+    [
+      "Период",
+      "Всего за месяц",
+      formatMoneyMinor(overview?.periodSummary.netSalesAmount.amountMinor ?? 0, "RUB", locale)
+    ],
+    [
+      "Период",
+      "Брутто продаж",
+      formatMoneyMinor(overview?.periodSummary.grossSalesAmount.amountMinor ?? 0, "RUB", locale)
+    ],
+    [
+      "Период",
+      "Комиссия платформы",
+      formatMoneyMinor(overview?.periodSummary.platformFeeAmount.amountMinor ?? 0, "RUB", locale)
+    ],
+    [
+      "Период",
+      "MRR",
+      overview?.periodSummary.recurringRevenueAmount
+        ? formatMoneyMinor(
+            overview.periodSummary.recurringRevenueAmount.amountMinor,
+            overview.periodSummary.recurringRevenueAmount.currency,
+            locale
+          )
+        : "-"
+    ],
+    [
+      "Тариф",
+      overview?.currentPlan ? overview.currentPlan.name : "не определен",
+      overview?.currentPlan ? formatFeeBps(overview.currentPlan.platformFeeBps) : "-"
+    ],
     [],
     ["Дата", "Операция", "Брутто", "Комиссия", "Нетто", "Источник", "Статус"]
   ];

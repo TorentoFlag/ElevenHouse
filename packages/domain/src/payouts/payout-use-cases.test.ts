@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   approvePayoutStatusUpdate,
   createManualPayoutMethod,
@@ -10,11 +10,12 @@ import {
   requestAstrologerPayout,
   releaseAstrologerFundsFromHold,
   type PayoutCommandStore,
+  type AstrologerPayoutReadStore,
   type PayoutMethodRecord,
   type PayoutRequestRecord
 } from "./payout-use-cases";
 import type { PayoutStore } from "./payout-store";
-import type { CreateLedgerTransactionInput, WalletBalance } from "../wallet";
+import type { CreateLedgerTransactionInput, FinancePeriodSummary, WalletBalance } from "../wallet";
 
 const now = "2026-07-25T10:00:00.000Z";
 const astrologerUserId = "22222222-2222-4222-8222-222222222222";
@@ -45,7 +46,26 @@ describe("payout use cases", () => {
       defaultPayoutMethod: { id: payoutMethodId, method: "manual_bank_transfer" },
       recentPayoutRequests: [expect.objectContaining({ id: payoutRequestId })],
       canRequestPayout: true,
-      payoutRequestUnavailableReason: null
+      payoutRequestUnavailableReason: null,
+      periodSummary: {
+        periodStart: "2026-07-01T00:00:00.000Z",
+        periodEndExclusive: "2026-08-01T00:00:00.000Z",
+        grossSalesAmount: { amountMinor: 28_450_00, currency: "RUB" },
+        platformFeeAmount: { amountMinor: 2_560_50, currency: "RUB" },
+        netSalesAmount: { amountMinor: 25_889_50, currency: "RUB" },
+        refundsAmount: { amountMinor: 1_600_00, currency: "RUB" },
+        payoutsAmount: { amountMinor: 45_000_00, currency: "RUB" },
+        saleCount: 9,
+        refundCount: 1,
+        payoutCount: 1,
+        recurringRevenueAmount: null,
+        recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
+      }
+    });
+    expect(store.summarizePeriod).toHaveBeenCalledWith({
+      astrologerUserId,
+      periodStart: "2026-07-01T00:00:00.000Z",
+      periodEndExclusive: "2026-08-01T00:00:00.000Z"
     });
   });
 
@@ -425,11 +445,11 @@ describe("payout use cases", () => {
   });
 });
 
-type TestPayoutStore = PayoutCommandStore & {
-  readonly createMethod: PayoutStore["createMethod"];
-  readonly listRequests: PayoutStore["listRequests"];
-  readonly ledgerTransactions: CreateLedgerTransactionInput[];
-};
+type TestPayoutStore = PayoutCommandStore &
+  AstrologerPayoutReadStore & {
+    readonly createMethod: PayoutStore["createMethod"];
+    readonly ledgerTransactions: CreateLedgerTransactionInput[];
+  };
 
 function createStore(input: {
   readonly availableAmountMinor: number;
@@ -460,6 +480,7 @@ function createStore(input: {
       return method;
     },
     findWalletBalance: async () => balance(input.availableAmountMinor),
+    summarizePeriod: vi.fn(async (): Promise<FinancePeriodSummary> => financePeriodSummary()),
     listRequests: async () => (request ? [request] : []),
     createRequest: async (createInput) => {
       request = payoutRequest({
@@ -500,6 +521,23 @@ function createStore(input: {
         }))
       };
     }
+  };
+}
+
+function financePeriodSummary(): FinancePeriodSummary {
+  return {
+    periodStart: "2026-07-01T00:00:00.000Z",
+    periodEndExclusive: "2026-08-01T00:00:00.000Z",
+    grossSalesAmount: { amountMinor: 28_450_00, currency: "RUB" },
+    platformFeeAmount: { amountMinor: 2_560_50, currency: "RUB" },
+    netSalesAmount: { amountMinor: 25_889_50, currency: "RUB" },
+    refundsAmount: { amountMinor: 1_600_00, currency: "RUB" },
+    payoutsAmount: { amountMinor: 45_000_00, currency: "RUB" },
+    saleCount: 9,
+    refundCount: 1,
+    payoutCount: 1,
+    recurringRevenueAmount: null,
+    recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
   };
 }
 

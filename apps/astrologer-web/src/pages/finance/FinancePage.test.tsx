@@ -96,6 +96,12 @@ describe("FinancePage", () => {
     expect(screen.getByRole("button", { name: "Вывести средства" })).toBeTruthy();
     expect(screen.getByText("Доступно к выводу")).toBeTruthy();
     expect(screen.getAllByText("В ожидании").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Всего за месяц")).toBeTruthy();
+    expect(screen.getByText("MRR (подписки)")).toBeTruthy();
+    expect(screen.getByText("25 890 ₽")).toBeTruthy();
+    expect(screen.getByText("Тариф Pro")).toBeTruthy();
+    expect(screen.getByText("Комиссия платформы")).toBeTruthy();
+    expect(screen.getByText("4%")).toBeTruthy();
     expect(screen.getByText("История операций")).toBeTruthy();
     expect(screen.getByText("Брутто")).toBeTruthy();
     expect(screen.getByText("Комиссия")).toBeTruthy();
@@ -117,7 +123,9 @@ describe("FinancePage", () => {
       createObjectURL,
       revokeObjectURL
     });
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
 
     render(<FinancePage />);
 
@@ -299,7 +307,30 @@ function financeOverview(
     ],
     canRequestPayout: true,
     minimumPayoutAmount: { amountMinor: 100_000, currency: "RUB" },
-    payoutRequestUnavailableReason: null
+    payoutRequestUnavailableReason: null,
+    periodSummary: {
+      periodStart: "2026-07-01T00:00:00.000Z",
+      periodEndExclusive: "2026-08-01T00:00:00.000Z",
+      grossSalesAmount: { amountMinor: 28_450_00, currency: "RUB" },
+      platformFeeAmount: { amountMinor: 2_560_50, currency: "RUB" },
+      netSalesAmount: { amountMinor: 25_889_50, currency: "RUB" },
+      refundsAmount: { amountMinor: 1_600_00, currency: "RUB" },
+      payoutsAmount: { amountMinor: 45_000_00, currency: "RUB" },
+      saleCount: 9,
+      refundCount: 1,
+      payoutCount: 1,
+      recurringRevenueAmount: null,
+      recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
+    },
+    currentPlan: {
+      planId: "pro",
+      code: "pro",
+      name: "Pro",
+      monthlyPrice: { amountMinor: 199_000, currency: "RUB" },
+      platformFeeBps: 400,
+      billingCycle: "month",
+      source: "subscription"
+    }
   };
 
   return {

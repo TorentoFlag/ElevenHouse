@@ -297,11 +297,60 @@ describe("captured sale hold release Drizzle/PostgreSQL integration", () => {
       nextCursor: null
     });
   });
+
+  it("summarizes owner ledger activity for the selected period", async () => {
+    const fixture = await createFixture({ providerSettlementRequired: false });
+    const ledger = createDrizzleLedgerStore(runtime.database);
+
+    await ledger.createTransaction(
+      saleCapturedTransaction({
+        orderId: fixture.dueOrderId,
+        astrologerUserId: fixture.astrologerUserId,
+        holdReleaseAt: "2026-07-26T12:00:00.000Z",
+        providerPaymentId: randomUUID(),
+        postedAt: "2026-07-24T12:00:00.000Z"
+      })
+    );
+    await ledger.createTransaction(
+      manualAdjustmentTransaction({
+        astrologerUserId: fixture.astrologerUserId,
+        postedAt: "2026-07-25T13:00:00.000Z"
+      })
+    );
+    await ledger.createTransaction(
+      saleCapturedTransaction({
+        orderId: fixture.futureOrderId,
+        astrologerUserId: fixture.astrologerUserId,
+        holdReleaseAt: "2026-08-26T12:00:00.000Z",
+        providerPaymentId: randomUUID(),
+        postedAt: "2026-08-02T12:00:00.000Z"
+      })
+    );
+
+    await expect(
+      ledger.summarizePeriod({
+        astrologerUserId: fixture.astrologerUserId,
+        periodStart: "2026-07-01T00:00:00.000Z",
+        periodEndExclusive: "2026-08-01T00:00:00.000Z"
+      })
+    ).resolves.toEqual({
+      periodStart: "2026-07-01T00:00:00.000Z",
+      periodEndExclusive: "2026-08-01T00:00:00.000Z",
+      grossSalesAmount: { amountMinor: 50_000, currency: "RUB" },
+      platformFeeAmount: { amountMinor: 7_000, currency: "RUB" },
+      netSalesAmount: { amountMinor: 43_000, currency: "RUB" },
+      refundsAmount: { amountMinor: 0, currency: "RUB" },
+      payoutsAmount: { amountMinor: 0, currency: "RUB" },
+      saleCount: 1,
+      refundCount: 0,
+      payoutCount: 0,
+      recurringRevenueAmount: null,
+      recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
+    });
+  });
 });
 
-async function createFixture(input?: {
-  readonly providerSettlementRequired?: boolean;
-}): Promise<{
+async function createFixture(input?: { readonly providerSettlementRequired?: boolean }): Promise<{
   readonly astrologerUserId: string;
   readonly dueOrderId: string;
   readonly futureOrderId: string;
@@ -429,7 +478,11 @@ function manualAdjustmentTransaction(input: {
     metadata: { reason: "integration_test_adjustment" },
     entries: [
       {
-        account: { accountType: "astrologer_pending", astrologerUserId: input.astrologerUserId, currency: "RUB" },
+        account: {
+          accountType: "astrologer_pending",
+          astrologerUserId: input.astrologerUserId,
+          currency: "RUB"
+        },
         side: "debit",
         amount: { amountMinor: 1_000, currency: "RUB" },
         metadata: {}

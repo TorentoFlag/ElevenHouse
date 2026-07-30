@@ -10,13 +10,17 @@ import {
 } from "@elevenhouse/contracts";
 import {
   FinanceIdempotencyConflictError,
+  platformPlanSeedData,
   type AuthSessionAuthenticationStore,
   type AuthSessionRevocationUnitOfWork,
   type CreateLedgerTransactionInput,
+  type FinancePeriodSummary,
   type LedgerOperationList,
   type LedgerStore,
   type PasswordlessAuthUnitOfWork,
   type PasswordlessCustomerAccountRegistrationSessionUnitOfWork,
+  type PlatformBillingStore,
+  type PlatformSubscription,
   type PayoutMethodRecord,
   type PayoutRequestRecord,
   type PayoutStore,
@@ -65,12 +69,17 @@ describe("astrologer finance HTTP routes", () => {
   let moduleRef: TestingModule;
   let baseUrl: string;
   let payoutStore: PayoutStore;
-  let ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance" | "listOperations">;
+  let ledgerStore: Pick<
+    LedgerStore,
+    "createTransaction" | "findWalletBalance" | "summarizePeriod" | "listOperations"
+  >;
+  let platformBillingStore: PlatformBillingStore;
 
   beforeEach(async () => {
     payoutStore = createPayoutStore();
     ledgerStore = createLedgerStore();
-    const unitOfWork = createFinanceUnitOfWork(payoutStore, ledgerStore);
+    platformBillingStore = createPlatformBillingStore();
+    const unitOfWork = createFinanceUnitOfWork(payoutStore, ledgerStore, platformBillingStore);
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async () => raise("Unexpected passwordless auth unit of work call")
     };
@@ -121,7 +130,10 @@ describe("astrologer finance HTTP routes", () => {
       .overrideProvider(ASTROLOGER_FINANCE_UNIT_OF_WORK)
       .useValue(unitOfWork)
       .overrideProvider(ASTROLOGER_FINANCE_OPTIONS)
-      .useValue({ minimumPayoutAmountMinor: 1_000_00 })
+      .useValue({
+        minimumPayoutAmountMinor: 1_000_00,
+        platformBillingProviderConfigured: true
+      })
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -154,7 +166,30 @@ describe("astrologer finance HTTP routes", () => {
       },
       defaultPayoutMethod: null,
       canRequestPayout: false,
-      payoutRequestUnavailableReason: "payout_method_required"
+      payoutRequestUnavailableReason: "payout_method_required",
+      periodSummary: {
+        periodStart: "2026-07-01T00:00:00.000Z",
+        periodEndExclusive: "2026-08-01T00:00:00.000Z",
+        grossSalesAmount: { amountMinor: 28_450_00, currency: "RUB" },
+        platformFeeAmount: { amountMinor: 2_560_50, currency: "RUB" },
+        netSalesAmount: { amountMinor: 25_889_50, currency: "RUB" },
+        refundsAmount: { amountMinor: 1_600_00, currency: "RUB" },
+        payoutsAmount: { amountMinor: 45_000_00, currency: "RUB" },
+        saleCount: 9,
+        refundCount: 1,
+        payoutCount: 1,
+        recurringRevenueAmount: null,
+        recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
+      },
+      currentPlan: {
+        planId: "pro",
+        code: "pro",
+        name: "Pro",
+        monthlyPrice: { amountMinor: 199_000, currency: "RUB" },
+        platformFeeBps: 400,
+        billingCycle: "month",
+        source: "subscription"
+      }
     });
   });
 
@@ -343,13 +378,19 @@ function createAuthStore(): AuthSessionAuthenticationStore {
 
 function createFinanceUnitOfWork(
   payoutStore: PayoutStore,
-  ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance" | "listOperations">
+  ledgerStore: Pick<
+    LedgerStore,
+    "createTransaction" | "findWalletBalance" | "summarizePeriod" | "listOperations"
+  >,
+  platformBillingStore: PlatformBillingStore
 ): AstrologerFinanceUnitOfWork {
   const completedFinanceCommands = new Map<string, Record<string, unknown>>();
   const financeCommandHashes = new Map<string, string>();
 
   return {
-    execute: vi.fn(async (operation) => operation({ payoutStore, ledgerStore })),
+    execute: vi.fn(async (operation) =>
+      operation({ payoutStore, ledgerStore, platformBillingStore })
+    ),
     executeIdempotent: async (input) => {
       const key = `${input.command.scope}:${input.command.idempotencyKey}`;
       const existingHash = financeCommandHashes.get(key);
@@ -359,13 +400,16 @@ function createFinanceUnitOfWork(
         }
         const result = completedFinanceCommands.get(key);
         if (!result) throw new Error("Expected completed finance command result");
-        const value = await input.replay({ payoutStore, ledgerStore }, result);
+        const value = await input.replay(
+          { payoutStore, ledgerStore, platformBillingStore },
+          result
+        );
         if (!value) throw new Error("Expected finance command replay value");
         return { kind: "replayed" as const, value };
       }
 
       financeCommandHashes.set(key, input.command.requestHash);
-      const created = await input.create({ payoutStore, ledgerStore });
+      const created = await input.create({ payoutStore, ledgerStore, platformBillingStore });
       completedFinanceCommands.set(key, created.result);
       return { kind: "created" as const, value: created.value };
     }
@@ -422,7 +466,7 @@ function createPayoutStore(): PayoutStore {
 
 function createLedgerStore(): Pick<
   LedgerStore,
-  "createTransaction" | "findWalletBalance" | "listOperations"
+  "createTransaction" | "findWalletBalance" | "summarizePeriod" | "listOperations"
 > {
   const balance: WalletBalance = {
     astrologerUserId,
@@ -436,6 +480,22 @@ function createLedgerStore(): Pick<
 
   return {
     findWalletBalance: vi.fn(async (userId) => (userId === astrologerUserId ? balance : null)),
+    summarizePeriod: vi.fn(
+      async (input): Promise<FinancePeriodSummary> => ({
+        periodStart: input.periodStart,
+        periodEndExclusive: input.periodEndExclusive,
+        grossSalesAmount: { amountMinor: 28_450_00, currency: "RUB" },
+        platformFeeAmount: { amountMinor: 2_560_50, currency: "RUB" },
+        netSalesAmount: { amountMinor: 25_889_50, currency: "RUB" },
+        refundsAmount: { amountMinor: 1_600_00, currency: "RUB" },
+        payoutsAmount: { amountMinor: 45_000_00, currency: "RUB" },
+        saleCount: 9,
+        refundCount: 1,
+        payoutCount: 1,
+        recurringRevenueAmount: null,
+        recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
+      })
+    ),
     listOperations: vi.fn(
       async (input): Promise<LedgerOperationList> => ({
         operations:
@@ -475,6 +535,27 @@ function createLedgerStore(): Pick<
         ledgerAccountId: `99999999-9999-4999-8999-99999999999${index}`
       }))
     }))
+  };
+}
+
+function createPlatformBillingStore(): PlatformBillingStore {
+  return {
+    listActivePlans: vi.fn(async () => [...platformPlanSeedData]),
+    findCurrentSubscription: vi.fn(
+      async (): Promise<PlatformSubscription | null> => ({
+        id: "12121212-1212-4121-8121-121212121212",
+        ownerUserId: astrologerUserId,
+        planId: "pro",
+        status: "active",
+        billingCycle: "month",
+        currentPeriodEndsAt: "2026-08-26T10:00:00.000Z",
+        cancelAtPeriodEnd: false,
+        createdAt: "2026-07-01T10:00:00.000Z",
+        updatedAt: "2026-07-01T10:00:00.000Z"
+      })
+    ),
+    findDefaultPaymentMethod: vi.fn(async () => null),
+    listRecentInvoices: vi.fn(async () => [])
   };
 }
 

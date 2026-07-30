@@ -21,9 +21,10 @@ type PlatformPlanFeatureRow = typeof platformPlanFeatures.$inferSelect;
 type PlatformSubscriptionRow = typeof platformSubscriptions.$inferSelect;
 type BillingPaymentMethodRow = typeof billingPaymentMethods.$inferSelect;
 type BillingInvoiceRow = typeof billingInvoices.$inferSelect;
+type PlatformBillingDatabase = Pick<ElevenHouseDatabase, "select">;
 
 export function createDrizzlePlatformBillingStore(
-  database: ElevenHouseDatabase
+  database: PlatformBillingDatabase
 ): PlatformBillingStore {
   return {
     listActivePlans: async () => {

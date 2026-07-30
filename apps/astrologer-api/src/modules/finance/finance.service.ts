@@ -12,6 +12,7 @@ import {
   createPayoutRequestSchema,
   ledgerOperationListQuerySchema,
   ledgerOperationListResponseSchema,
+  type AstrologerFinanceCurrentPlan,
   payoutMethodResponseSchema,
   payoutRequestResponseSchema,
   type AstrologerFinanceOverviewResponse,
@@ -27,11 +28,13 @@ import {
   FinanceIdempotencyFailedError,
   FinanceIdempotencyInProgressError,
   getAstrologerFinanceOverview,
+  getPlatformBillingOverview,
   PayoutInsufficientAvailableBalanceError,
   PayoutMethodAlreadyConfiguredError,
   PayoutMethodMismatchError,
   PayoutMethodMissingError,
   requestAstrologerPayout,
+  type BillingOverview,
   type FinanceIdempotentCommand,
   type PayoutMethodRecord,
   type PayoutRequestRecord
@@ -57,16 +60,26 @@ export class FinanceService {
   ): Promise<AstrologerFinanceOverviewResponse> {
     const astrologerUserId = requireAstrologerUserId(request);
     const now = this.clock.now().toISOString();
-    const overview = await this.unitOfWork.execute(({ payoutStore, ledgerStore }) =>
-      getAstrologerFinanceOverview({
-        store: { ...payoutStore, ...ledgerStore },
-        astrologerUserId,
-        minimumPayoutAmount: {
-          amountMinor: this.options.minimumPayoutAmountMinor,
-          currency: "RUB"
-        },
-        now
-      })
+    const { overview, billing } = await this.unitOfWork.execute(
+      async ({ payoutStore, ledgerStore, platformBillingStore }) => {
+        const [financeOverview, billingOverview] = await Promise.all([
+          getAstrologerFinanceOverview({
+            store: { ...payoutStore, ...ledgerStore },
+            astrologerUserId,
+            minimumPayoutAmount: {
+              amountMinor: this.options.minimumPayoutAmountMinor,
+              currency: "RUB"
+            },
+            now
+          }),
+          getPlatformBillingOverview({
+            store: platformBillingStore,
+            ownerUserId: astrologerUserId,
+            providerConfigured: this.options.platformBillingProviderConfigured
+          })
+        ]);
+        return { overview: financeOverview, billing: billingOverview };
+      }
     );
 
     return astrologerFinanceOverviewResponseSchema.parse({
@@ -74,7 +87,8 @@ export class FinanceService {
       defaultPayoutMethod: overview.defaultPayoutMethod
         ? toPayoutMethodResponse(overview.defaultPayoutMethod)
         : null,
-      recentPayoutRequests: overview.recentPayoutRequests.map(toPayoutRequestResponse)
+      recentPayoutRequests: overview.recentPayoutRequests.map(toPayoutRequestResponse),
+      currentPlan: toFinanceCurrentPlanResponse(billing)
     });
   }
 
@@ -249,6 +263,24 @@ function toPayoutRequestResponse(request: PayoutRequestRecord): PayoutRequestRes
     transferredAt: request.transferredAt,
     providerPayoutId: request.providerPayoutId
   });
+}
+
+function toFinanceCurrentPlanResponse(
+  billing: BillingOverview
+): AstrologerFinanceCurrentPlan | null {
+  if (!billing.currentPlan) return null;
+  return {
+    planId: billing.currentPlan.id,
+    code: billing.currentPlan.code,
+    name: billing.currentPlan.name,
+    monthlyPrice: {
+      amountMinor: billing.currentPlan.monthlyPriceMinor,
+      currency: billing.currentPlan.currency
+    },
+    platformFeeBps: billing.currentPlan.platformFeeBps,
+    billingCycle: billing.billingCycle,
+    source: billing.currentPlanSource
+  };
 }
 
 function parseFinanceBody<T>(schema: { parse: (value: unknown) => T }, value: unknown): T {

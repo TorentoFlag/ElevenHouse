@@ -1,6 +1,7 @@
 import type { Money } from "../money";
 import type {
   CreateLedgerTransactionInput,
+  FinancePeriodSummary,
   LedgerStore,
   LedgerTransactionRecord,
   WalletBalance
@@ -22,7 +23,7 @@ export type PayoutCommandStore = Pick<
   Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
 
 export type AstrologerPayoutReadStore = Pick<PayoutStore, "findDefaultMethod" | "listRequests"> &
-  Pick<LedgerStore, "findWalletBalance">;
+  Pick<LedgerStore, "findWalletBalance" | "summarizePeriod">;
 
 export type PayoutMethodCommandStore = Pick<PayoutStore, "createMethod" | "findDefaultMethod">;
 
@@ -36,6 +37,7 @@ export type AstrologerFinanceOverview = {
   readonly balance: WalletBalance;
   readonly defaultPayoutMethod: PayoutMethodRecord | null;
   readonly recentPayoutRequests: readonly PayoutRequestRecord[];
+  readonly periodSummary: FinancePeriodSummary;
   readonly canRequestPayout: boolean;
   readonly minimumPayoutAmount: Money;
   readonly payoutRequestUnavailableReason:
@@ -177,10 +179,16 @@ export async function getAstrologerFinanceOverview(
 ): Promise<AstrologerFinanceOverview> {
   assertPositiveRubMoney(input.minimumPayoutAmount);
 
-  const [balance, defaultPayoutMethod, recentPayoutRequests] = await Promise.all([
+  const period = resolveCurrentUtcMonth(input.now);
+  const [balance, defaultPayoutMethod, recentPayoutRequests, periodSummary] = await Promise.all([
     input.store.findWalletBalance(input.astrologerUserId),
     input.store.findDefaultMethod(input.astrologerUserId),
-    input.store.listRequests({ astrologerUserId: input.astrologerUserId, limit: 10 })
+    input.store.listRequests({ astrologerUserId: input.astrologerUserId, limit: 10 }),
+    input.store.summarizePeriod({
+      astrologerUserId: input.astrologerUserId,
+      periodStart: period.periodStart,
+      periodEndExclusive: period.periodEndExclusive
+    })
   ]);
   const resolvedBalance = balance ?? emptyWalletBalance(input.astrologerUserId, input.now);
   const payoutRequestUnavailableReason = resolvePayoutUnavailableReason({
@@ -193,9 +201,24 @@ export async function getAstrologerFinanceOverview(
     balance: resolvedBalance,
     defaultPayoutMethod,
     recentPayoutRequests,
+    periodSummary,
     canRequestPayout: payoutRequestUnavailableReason === null,
     minimumPayoutAmount: input.minimumPayoutAmount,
     payoutRequestUnavailableReason
+  };
+}
+
+function resolveCurrentUtcMonth(now: string): {
+  readonly periodStart: string;
+  readonly periodEndExclusive: string;
+} {
+  const date = new Date(now);
+  if (Number.isNaN(date.getTime())) throw new Error("Invalid finance overview timestamp");
+  const periodStart = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+  const periodEndExclusive = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
+  return {
+    periodStart: periodStart.toISOString(),
+    periodEndExclusive: periodEndExclusive.toISOString()
   };
 }
 

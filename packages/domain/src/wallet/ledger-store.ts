@@ -89,6 +89,27 @@ export type WalletBalance = {
   readonly updatedAt: string;
 };
 
+export type FinancePeriodSummary = {
+  readonly periodStart: string;
+  readonly periodEndExclusive: string;
+  readonly grossSalesAmount: Money;
+  readonly platformFeeAmount: Money;
+  readonly netSalesAmount: Money;
+  readonly refundsAmount: Money;
+  readonly payoutsAmount: Money;
+  readonly saleCount: number;
+  readonly refundCount: number;
+  readonly payoutCount: number;
+  readonly recurringRevenueAmount: Money | null;
+  readonly recurringRevenueUnavailableReason: "client_subscriptions_not_implemented" | null;
+};
+
+export type SummarizeLedgerPeriodInput = {
+  readonly astrologerUserId: string;
+  readonly periodStart: string;
+  readonly periodEndExclusive: string;
+};
+
 export type LedgerOperation = {
   readonly id: string;
   readonly operationType: LedgerOperationType;
@@ -148,5 +169,6 @@ export type LedgerStore = {
     input: CreateLedgerTransactionInput
   ) => Promise<LedgerTransactionRecord>;
   readonly findWalletBalance: (astrologerUserId: string) => Promise<WalletBalance | null>;
+  readonly summarizePeriod: (input: SummarizeLedgerPeriodInput) => Promise<FinancePeriodSummary>;
   readonly listOperations: (input: ListLedgerOperationsInput) => Promise<LedgerOperationList>;
 };

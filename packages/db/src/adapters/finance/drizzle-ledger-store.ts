@@ -7,6 +7,7 @@ import {
   type CreateLedgerEntryInput,
   type CreateLedgerTransactionInput,
   type FinanceIdempotentCommand,
+  type FinancePeriodSummary,
   type FinanceOperationDirection,
   type FinanceOperationKind,
   type HoldReleaseStore,
@@ -19,6 +20,7 @@ import {
   type ListLedgerOperationsInput,
   type Money,
   type ReleasableCapturedSaleHold,
+  type SummarizeLedgerPeriodInput,
   type WalletBalance,
   type WalletBalanceBucket
 } from "@elevenhouse/domain";
@@ -59,6 +61,17 @@ type LedgerOperationListRow = {
   readonly balanceBucket: WalletBalanceBucket | null;
 };
 
+type FinancePeriodSummaryRow = {
+  readonly grossSalesAmountMinor: number | string;
+  readonly platformFeeAmountMinor: number | string;
+  readonly netSalesAmountMinor: number | string;
+  readonly refundsAmountMinor: number | string;
+  readonly payoutsAmountMinor: number | string;
+  readonly saleCount: number | string;
+  readonly refundCount: number | string;
+  readonly payoutCount: number | string;
+};
+
 type EntryRowWithAccount = {
   readonly entry: LedgerEntryRow;
   readonly account: LedgerAccountRow;
@@ -69,16 +82,21 @@ export function createDrizzleLedgerStore(database: ElevenHouseDatabase): LedgerS
     createTransaction: (input) =>
       database.transaction((transaction) => createLedgerTransaction(transaction, input)),
     findWalletBalance: (astrologerUserId) => findWalletBalance(database, astrologerUserId),
+    summarizePeriod: (input) => summarizeLedgerPeriod(database, input),
     listOperations: (input) => listLedgerOperations(database, input)
   };
 }
 
 export function createDrizzleLedgerTransactionStore(
   database: FinanceTransaction
-): Pick<LedgerStore, "createTransaction" | "findWalletBalance" | "listOperations"> {
+): Pick<
+  LedgerStore,
+  "createTransaction" | "findWalletBalance" | "summarizePeriod" | "listOperations"
+> {
   return {
     createTransaction: (input) => createLedgerTransaction(database, input),
     findWalletBalance: (astrologerUserId) => findWalletBalance(database, astrologerUserId),
+    summarizePeriod: (input) => summarizeLedgerPeriod(database, input),
     listOperations: (input) => listLedgerOperations(database, input)
   };
 }
@@ -462,6 +480,116 @@ async function findWalletBalance(
   return row ? toWalletBalance(row) : null;
 }
 
+async function summarizeLedgerPeriod(
+  database: FinanceDatabase,
+  input: SummarizeLedgerPeriodInput
+): Promise<FinancePeriodSummary> {
+  const result = await database.execute(sql<FinancePeriodSummaryRow>`
+    with owner_transactions as (
+      select distinct tx.id, tx.operation_type
+      from ledger_transactions tx
+      inner join ledger_entries owner_entry on owner_entry.ledger_transaction_id = tx.id
+      inner join ledger_accounts owner_account on owner_account.id = owner_entry.account_id
+      where owner_account.astrologer_user_id = ${input.astrologerUserId}::uuid
+        and owner_entry.currency = 'RUB'
+        and tx.posted_at >= ${new Date(input.periodStart)}
+        and tx.posted_at < ${new Date(input.periodEndExclusive)}
+    ),
+    transaction_amounts as (
+      select
+        owner_transactions.id,
+        owner_transactions.operation_type,
+        case
+          when owner_transactions.operation_type = 'sale_captured' then (
+            select coalesce(sum(gross_entry.amount_minor), 0)
+            from ledger_entries gross_entry
+            inner join ledger_accounts gross_account on gross_account.id = gross_entry.account_id
+            where gross_entry.ledger_transaction_id = owner_transactions.id
+              and gross_account.account_type = 'platform_clearing'
+              and gross_entry.entry_side = 'debit'
+              and gross_entry.currency = 'RUB'
+          )
+          else 0
+        end as gross_sales_amount_minor,
+        case
+          when owner_transactions.operation_type = 'sale_captured' then (
+            select coalesce(sum(fee_entry.amount_minor), 0)
+            from ledger_entries fee_entry
+            inner join ledger_accounts fee_account on fee_account.id = fee_entry.account_id
+            where fee_entry.ledger_transaction_id = owner_transactions.id
+              and fee_account.account_type = 'platform_revenue'
+              and fee_entry.entry_side = 'credit'
+              and fee_entry.currency = 'RUB'
+          )
+          else 0
+        end as platform_fee_amount_minor,
+        case
+          when owner_transactions.operation_type = 'sale_captured' then (
+            select coalesce(sum(net_entry.amount_minor), 0)
+            from ledger_entries net_entry
+            inner join ledger_accounts net_account on net_account.id = net_entry.account_id
+            where net_entry.ledger_transaction_id = owner_transactions.id
+              and net_account.astrologer_user_id = ${input.astrologerUserId}::uuid
+              and net_entry.entry_side = 'credit'
+              and net_entry.currency = 'RUB'
+          )
+          else 0
+        end as net_sales_amount_minor,
+        case
+          when owner_transactions.operation_type in ('refund_recorded', 'chargeback_recorded') then (
+            select coalesce(sum(reversal_entry.amount_minor), 0)
+            from ledger_entries reversal_entry
+            inner join ledger_accounts reversal_account on reversal_account.id = reversal_entry.account_id
+            where reversal_entry.ledger_transaction_id = owner_transactions.id
+              and reversal_account.astrologer_user_id = ${input.astrologerUserId}::uuid
+              and reversal_entry.entry_side = 'debit'
+              and reversal_entry.currency = 'RUB'
+          )
+          else 0
+        end as refunds_amount_minor,
+        case
+          when owner_transactions.operation_type = 'payout_paid' then (
+            select coalesce(sum(payout_entry.amount_minor), 0)
+            from ledger_entries payout_entry
+            inner join ledger_accounts payout_account on payout_account.id = payout_entry.account_id
+            where payout_entry.ledger_transaction_id = owner_transactions.id
+              and payout_account.astrologer_user_id = ${input.astrologerUserId}::uuid
+              and payout_entry.entry_side = 'debit'
+              and payout_entry.currency = 'RUB'
+          )
+          else 0
+        end as payouts_amount_minor
+      from owner_transactions
+    )
+    select
+      coalesce(sum(gross_sales_amount_minor), 0)::text as "grossSalesAmountMinor",
+      coalesce(sum(platform_fee_amount_minor), 0)::text as "platformFeeAmountMinor",
+      coalesce(sum(net_sales_amount_minor), 0)::text as "netSalesAmountMinor",
+      coalesce(sum(refunds_amount_minor), 0)::text as "refundsAmountMinor",
+      coalesce(sum(payouts_amount_minor), 0)::text as "payoutsAmountMinor",
+      count(*) filter (where operation_type = 'sale_captured')::text as "saleCount",
+      count(*) filter (where operation_type in ('refund_recorded', 'chargeback_recorded'))::text as "refundCount",
+      count(*) filter (where operation_type = 'payout_paid')::text as "payoutCount"
+    from transaction_amounts
+  `);
+  const [row] = result.rows as unknown as readonly FinancePeriodSummaryRow[];
+
+  return {
+    periodStart: new Date(input.periodStart).toISOString(),
+    periodEndExclusive: new Date(input.periodEndExclusive).toISOString(),
+    grossSalesAmount: money(toSafeMinorUnit(row?.grossSalesAmountMinor ?? 0), "RUB"),
+    platformFeeAmount: money(toSafeMinorUnit(row?.platformFeeAmountMinor ?? 0), "RUB"),
+    netSalesAmount: money(toSafeMinorUnit(row?.netSalesAmountMinor ?? 0), "RUB"),
+    refundsAmount: money(toSafeMinorUnit(row?.refundsAmountMinor ?? 0), "RUB"),
+    payoutsAmount: money(toSafeMinorUnit(row?.payoutsAmountMinor ?? 0), "RUB"),
+    saleCount: toSafeCount(row?.saleCount ?? 0),
+    refundCount: toSafeCount(row?.refundCount ?? 0),
+    payoutCount: toSafeCount(row?.payoutCount ?? 0),
+    recurringRevenueAmount: null,
+    recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
+  };
+}
+
 async function listLedgerOperations(
   database: FinanceDatabase,
   input: ListLedgerOperationsInput
@@ -717,6 +845,14 @@ function toSafeSignedMinorUnit(value: number | string): number {
 function toNullableSafeSignedMinorUnit(value: number | string | null): number | null {
   if (value === null) return null;
   return toSafeSignedMinorUnit(value);
+}
+
+function toSafeCount(value: number | string): number {
+  const count = Number(value);
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new Error("Finance period summary query produced an invalid count");
+  }
+  return count;
 }
 
 function money(amountMinor: number, currency: string): Money {
