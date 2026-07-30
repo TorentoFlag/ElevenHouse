@@ -68,6 +68,7 @@ export type RequestAstrologerPayoutInput = {
   readonly store: PayoutCommandStore;
   readonly astrologerUserId: string;
   readonly amount: Money;
+  readonly minimumPayoutAmount: Money;
   readonly method: PayoutMethodRecord["method"];
   readonly metadata: Record<string, unknown>;
   readonly now: string;
@@ -132,6 +133,15 @@ export class PayoutInsufficientAvailableBalanceError extends Error {
   constructor() {
     super("Payout request amount exceeds available wallet balance");
     this.name = "PayoutInsufficientAvailableBalanceError";
+  }
+}
+
+export class PayoutMinimumAmountError extends Error {
+  readonly code = "payout_amount_below_minimum";
+
+  constructor() {
+    super("Payout request amount is below the configured minimum");
+    this.name = "PayoutMinimumAmountError";
   }
 }
 
@@ -235,6 +245,7 @@ export async function requestAstrologerPayout(
   input: RequestAstrologerPayoutInput
 ): Promise<PayoutRequestRecord> {
   assertPositiveRubMoney(input.amount);
+  assertPositiveRubMoney(input.minimumPayoutAmount);
 
   const [method, balance] = await Promise.all([
     input.store.findDefaultMethod(input.astrologerUserId),
@@ -242,6 +253,9 @@ export async function requestAstrologerPayout(
   ]);
   if (!method) throw new PayoutMethodMissingError();
   if (method.method !== input.method) throw new PayoutMethodMismatchError();
+  if (input.amount.amountMinor < input.minimumPayoutAmount.amountMinor) {
+    throw new PayoutMinimumAmountError();
+  }
   if ((balance?.available.amountMinor ?? 0) < input.amount.amountMinor) {
     throw new PayoutInsufficientAvailableBalanceError();
   }

@@ -96,13 +96,15 @@ describe("FinancePage", () => {
     expect(screen.getByRole("button", { name: "Вывести средства" })).toBeTruthy();
     expect(screen.getByText("Доступно к выводу")).toBeTruthy();
     expect(screen.getAllByText("В ожидании").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Всего за месяц")).toBeTruthy();
+    expect(screen.getByText("Продажи за месяц")).toBeTruthy();
+    expect(screen.getByText("нетто до возвратов")).toBeTruthy();
     expect(screen.getByText("MRR (подписки)")).toBeTruthy();
     expect(screen.getByText("25 890 ₽")).toBeTruthy();
     expect(screen.getByText("Тариф Pro")).toBeTruthy();
     expect(screen.getByText("Комиссия платформы")).toBeTruthy();
     expect(screen.getByText("4%")).toBeTruthy();
     expect(screen.getByText("История операций")).toBeTruthy();
+    expect(screen.getByText("Итого по фильтру · 3 операции")).toBeTruthy();
     expect(screen.getByText("Брутто")).toBeTruthy();
     expect(screen.getByText("Комиссия")).toBeTruthy();
     expect(screen.getByText("Нетто")).toBeTruthy();
@@ -239,6 +241,26 @@ describe("FinancePage", () => {
     fireEvent.change(screen.getByLabelText("Сумма"), { target: { value: "20000" } });
 
     expect(screen.getByText("Больше доступного остатка")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Создать заявку" })).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("button", { name: "Создать заявку" }));
+
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it("does not submit payout requests below the configured minimum amount", () => {
+    const mutate = vi.fn();
+    mocks.useCreatePayoutRequestMutation.mockReturnValue({
+      mutate,
+      isPending: false,
+      isError: false,
+      isSuccess: false
+    });
+
+    render(<FinancePage />);
+
+    fireEvent.change(screen.getByLabelText("Сумма"), { target: { value: "999" } });
+
+    expect(screen.getByText("Минимальная сумма вывода 1 000 ₽")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Создать заявку" })).toHaveProperty("disabled", true);
     fireEvent.click(screen.getByRole("button", { name: "Создать заявку" }));
 

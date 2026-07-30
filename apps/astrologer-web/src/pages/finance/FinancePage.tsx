@@ -62,11 +62,15 @@ export function FinancePage() {
   const overview = financeQuery.data ?? null;
   const payoutAmountMinor = toAmountMinor(payoutAmount);
   const availablePayoutMinor = overview?.balance.available.amountMinor ?? 0;
+  const minimumPayoutMinor = overview?.minimumPayoutAmount.amountMinor ?? 0;
   const isPayoutAmountAboveAvailable = payoutAmountMinor > availablePayoutMinor;
+  const isPayoutAmountBelowMinimum =
+    payoutAmountMinor > 0 && minimumPayoutMinor > 0 && payoutAmountMinor < minimumPayoutMinor;
   const canSubmitPayout =
     Boolean(overview?.canRequestPayout) &&
     payoutAmountMinor > 0 &&
     !isPayoutAmountAboveAvailable &&
+    !isPayoutAmountBelowMinimum &&
     !payoutRequestMutation.isPending;
   const isMethodFormComplete = Object.values(methodForm).every((value) => value.trim().length > 0);
   const operationPages = operationsQuery.data?.pages ?? [];
@@ -256,6 +260,16 @@ export function FinancePage() {
                   {isPayoutAmountAboveAvailable ? (
                     <small className={styles.fieldError}>Больше доступного остатка</small>
                   ) : null}
+                  {isPayoutAmountBelowMinimum && overview ? (
+                    <small className={styles.fieldError}>
+                      Минимальная сумма вывода{" "}
+                      {formatMoneyMinor(
+                        overview.minimumPayoutAmount.amountMinor,
+                        overview.minimumPayoutAmount.currency,
+                        locale
+                      )}
+                    </small>
+                  ) : null}
                 </label>
                 <button className={styles.primaryButton} type="submit" disabled={!canSubmitPayout}>
                   {payoutRequestMutation.isPending ? "Отправляем" : "Создать заявку"}
@@ -321,10 +335,10 @@ function BalanceStrip({
         note: "окно возврата / сессии"
       },
       {
-        label: "Всего за месяц",
+        label: "Продажи за месяц",
         value: overview?.periodSummary.netSalesAmount.amountMinor ?? 0,
         tone: "neutral",
-        note: "нетто после комиссии"
+        note: "нетто до возвратов"
       },
       {
         label: "MRR (подписки)",
@@ -532,7 +546,7 @@ function OperationsPanel({
         </div>
       </div>
       <div className={styles.operationTotals}>
-        <span>Итого · {filteredOperations.length} операций</span>
+        <span>Итого по фильтру · {formatOperationCountLabel(filteredOperations.length)}</span>
         <strong>{formatOptionalSignedMoneyMinor(totals.grossAmountMinor, "RUB", locale)}</strong>
         <strong>
           {totals.platformFeeAmountMinor > 0
@@ -782,6 +796,15 @@ function formatFinanceToolbarMeta(overview: AstrologerFinanceOverviewResponse | 
   const fee = overview?.currentPlan ? formatFeeBps(overview.currentPlan.platformFeeBps) : null;
   if (plan && fee) return `Тариф ${plan} · комиссия ${fee}`;
   return "Тариф не выбран";
+}
+
+function formatOperationCountLabel(count: number): string {
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  if (mod100 >= 11 && mod100 <= 14) return `${count} операций`;
+  if (mod10 === 1) return `${count} операция`;
+  if (mod10 >= 2 && mod10 <= 4) return `${count} операции`;
+  return `${count} операций`;
 }
 
 function formatFeeBps(value: number): string {

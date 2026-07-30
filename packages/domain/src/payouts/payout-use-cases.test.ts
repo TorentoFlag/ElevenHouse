@@ -4,6 +4,7 @@ import {
   createManualPayoutMethod,
   getAstrologerFinanceOverview,
   PayoutInsufficientAvailableBalanceError,
+  PayoutMinimumAmountError,
   PayoutMethodAlreadyConfiguredError,
   PayoutMethodMismatchError,
   PayoutMethodMissingError,
@@ -146,6 +147,7 @@ describe("payout use cases", () => {
       store,
       astrologerUserId,
       amount: { amountMinor: 10_000_00, currency: "RUB" },
+      minimumPayoutAmount: { amountMinor: 1_000_00, currency: "RUB" },
       method: "manual_bank_transfer",
       metadata: { source: "astrologer_finance" },
       now
@@ -183,12 +185,13 @@ describe("payout use cases", () => {
     ]);
   });
 
-  it("rejects payout creation without method or enough available balance", async () => {
+  it("rejects payout creation without method, minimum amount or enough available balance", async () => {
     await expect(
       requestAstrologerPayout({
         store: createStore({ availableAmountMinor: 25_000_00, method: null }),
         astrologerUserId,
         amount: { amountMinor: 10_000_00, currency: "RUB" },
+        minimumPayoutAmount: { amountMinor: 1_000_00, currency: "RUB" },
         method: "manual_bank_transfer",
         metadata: {},
         now
@@ -197,9 +200,22 @@ describe("payout use cases", () => {
 
     await expect(
       requestAstrologerPayout({
+        store: createStore({ availableAmountMinor: 25_000_00, method: defaultMethod() }),
+        astrologerUserId,
+        amount: { amountMinor: 999_99, currency: "RUB" },
+        minimumPayoutAmount: { amountMinor: 1_000_00, currency: "RUB" },
+        method: "manual_bank_transfer",
+        metadata: {},
+        now
+      })
+    ).rejects.toBeInstanceOf(PayoutMinimumAmountError);
+
+    await expect(
+      requestAstrologerPayout({
         store: createStore({ availableAmountMinor: 9_999_99, method: defaultMethod() }),
         astrologerUserId,
         amount: { amountMinor: 10_000_00, currency: "RUB" },
+        minimumPayoutAmount: { amountMinor: 1_000_00, currency: "RUB" },
         method: "manual_bank_transfer",
         metadata: {},
         now
@@ -213,6 +229,7 @@ describe("payout use cases", () => {
         store: createStore({ availableAmountMinor: 25_000_00, method: defaultMethod() }),
         astrologerUserId,
         amount: { amountMinor: 10_000_00, currency: "RUB" },
+        minimumPayoutAmount: { amountMinor: 1_000_00, currency: "RUB" },
         method: "arc_pay_provider",
         metadata: {},
         now

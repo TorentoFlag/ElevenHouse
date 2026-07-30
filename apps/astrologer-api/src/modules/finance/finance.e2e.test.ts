@@ -286,6 +286,33 @@ describe("astrologer finance HTTP routes", () => {
       })
     );
   });
+
+  it("rejects payout requests below the configured minimum amount", async () => {
+    const method = await postJson(
+      baseUrl,
+      "/finance/payout-methods/manual-bank-transfer",
+      validPayoutMethodBody(),
+      csrfHeaders("finance-method-minimum")
+    );
+    expect(method.status).toBe(201);
+
+    const payout = await postJson(
+      baseUrl,
+      "/finance/payout-requests",
+      {
+        ...validPayoutRequestBody(),
+        amount: { amountMinor: 999_99, currency: "RUB" },
+        idempotencyKey: "finance-request-below-minimum"
+      },
+      csrfHeaders("finance-request-below-minimum")
+    );
+
+    expect(payout).toMatchObject({
+      status: 409,
+      body: { message: "payout_amount_below_minimum" }
+    });
+    expect(ledgerStore.createTransaction).not.toHaveBeenCalled();
+  });
 });
 
 type HttpJsonResponse = {

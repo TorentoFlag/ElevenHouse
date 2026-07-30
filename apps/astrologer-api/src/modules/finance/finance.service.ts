@@ -30,6 +30,7 @@ import {
   getAstrologerFinanceOverview,
   getPlatformBillingOverview,
   PayoutInsufficientAvailableBalanceError,
+  PayoutMinimumAmountError,
   PayoutMethodAlreadyConfiguredError,
   PayoutMethodMismatchError,
   PayoutMethodMissingError,
@@ -181,6 +182,10 @@ export class FinanceService {
             store: { ...payoutStore, ...ledgerStore },
             astrologerUserId,
             amount: parsedBody.amount,
+            minimumPayoutAmount: {
+              amountMinor: this.options.minimumPayoutAmountMinor,
+              currency: "RUB"
+            },
             method: parsedBody.method,
             metadata: { source: "astrologer_finance" },
             now: now.toISOString()
@@ -199,6 +204,7 @@ export class FinanceService {
     } catch (error) {
       if (
         error instanceof PayoutMethodMissingError ||
+        error instanceof PayoutMinimumAmountError ||
         error instanceof PayoutInsufficientAvailableBalanceError ||
         error instanceof PayoutMethodMismatchError
       ) {
