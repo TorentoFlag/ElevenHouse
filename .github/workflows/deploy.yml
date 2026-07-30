@@ -1,7 +1,11 @@
 name: Deploy Production
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
     branches:
       - main
   workflow_dispatch:
@@ -13,41 +17,26 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAMESPACE: ghcr.io/torentoflag
-  IMAGE_TAG: ${{ github.sha }}
+  IMAGE_TAG: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
-  verify:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10.30.3
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Verify
-        run: pnpm verify
-
   build-and-push:
     runs-on: ubuntu-latest
+    if: >-
+      ${{
+        (
+          github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/main'
+        ) ||
+        (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main'
+        )
+      }}
     permissions:
       contents: read
       packages: write
-    needs:
-      - verify
     strategy:
       fail-fast: false
       matrix:
@@ -121,6 +110,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ env.IMAGE_TAG }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -159,6 +150,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ env.IMAGE_TAG }}
 
       - name: Prepare SSH
         env:
