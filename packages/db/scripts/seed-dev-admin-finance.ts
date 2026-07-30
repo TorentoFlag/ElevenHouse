@@ -22,6 +22,7 @@ async function main(): Promise<void> {
   try {
     const result = await seedAdminFinanceBrowserFixture(runtime, {
       sessionCookieName: process.env.ADMIN_API_SESSION_COOKIE_NAME,
+      astrologerSessionCookieName: process.env.ASTROLOGER_API_SESSION_COOKIE_NAME,
       csrfCookieName: process.env.ADMIN_API_CSRF_COOKIE_NAME,
       csrfHeaderName: process.env.ADMIN_API_CSRF_HEADER_NAME,
       csrfSecret: process.env.ADMIN_API_CSRF_SECRET,
@@ -32,9 +33,11 @@ async function main(): Promise<void> {
     console.log(`Admin user: ${result.adminUserId}`);
     console.log(`Astrologer user: ${result.astrologerUserId}`);
     console.log(`Session cookie: ${result.sessionCookie}`);
+    console.log(`Astrologer session cookie: ${result.astrologerSessionCookie}`);
     console.log(`CSRF cookie: ${result.csrfCookie}`);
     console.log(`CSRF header: ${result.csrfHeaderName}: ${result.csrfToken}`);
     console.log(`Browser console helper: ${result.browserConsoleHelper}`);
+    console.log(`Astrologer browser console helper: ${result.astrologerBrowserConsoleHelper}`);
   } finally {
     await runtime.close();
   }

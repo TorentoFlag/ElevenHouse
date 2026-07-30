@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { assertDevelopmentDatabaseUrl } from "../connection";
+import { createDrizzleLedgerStore } from "../adapters/finance/drizzle-ledger-store";
 import { createPostgresRuntime, type PostgresRuntime } from "../runtime";
 import { seedAdminFinanceBrowserFixture } from "./admin-finance-browser-fixture";
 
@@ -36,12 +37,16 @@ describe("admin finance browser fixture", () => {
 
     expect(second).toEqual(first);
     expect(first.sessionCookie).toBe(`elevenhouse_admin_session=${first.sessionToken}`);
+    expect(first.astrologerSessionCookie).toBe(
+      `elevenhouse_astrologer_session=${first.astrologerSessionToken}`
+    );
     expect(first.csrfCookieName).toBe("elevenhouse_admin_csrf");
     expect(first.csrfHeaderName).toBe("x-csrf-token");
     expect(first.csrfToken).toMatch(/^v1\.\d+\.elevenhouse-dev-admin-finance-csrf\./);
     expect(first.csrfCookie).toBe(`elevenhouse_admin_csrf=${first.csrfToken}`);
     expect(first.browserConsoleHelper).toContain(first.sessionCookie);
     expect(first.browserConsoleHelper).toContain(first.csrfCookie);
+    expect(first.astrologerBrowserConsoleHelper).toContain(first.astrologerSessionCookie);
 
     const session = await runtime.pool.query<{
       readonly status: string;
@@ -62,10 +67,73 @@ describe("admin finance browser fixture", () => {
       }
     ]);
 
+    const astrologerSession = await runtime.pool.query<{
+      readonly status: string;
+      readonly role: string;
+      readonly token_hash: string;
+    }>(
+      `select sessions.status, roles.role, sessions.token_hash
+       from user_sessions sessions
+       inner join user_role_assignments roles on roles.user_id = sessions.user_id
+       where sessions.user_id = $1`,
+      [first.astrologerUserId]
+    );
+    expect(astrologerSession.rows).toEqual([
+      {
+        status: "active",
+        role: "astrologer",
+        token_hash: first.astrologerSessionTokenHash
+      }
+    ]);
+
     const policies = await runtime.pool.query<{ readonly count: string }>(
       "select count(*)::text from finance_policies where is_active = true and risk_tier = 'manual_review'"
     );
     expect(policies.rows[0]?.count).toBe("1");
+
+    const ledgerStore = createDrizzleLedgerStore(runtime.database);
+    await expect(
+      ledgerStore.summarizePeriod({
+        astrologerUserId: first.astrologerUserId,
+        periodStart: "2026-07-01T00:00:00.000Z",
+        periodEndExclusive: "2026-08-01T00:00:00.000Z"
+      })
+    ).resolves.toMatchObject({
+      grossSalesAmount: { amountMinor: 28_450_000, currency: "RUB" },
+      platformFeeAmount: { amountMinor: 2_276_000, currency: "RUB" },
+      netSalesAmount: { amountMinor: 26_174_000, currency: "RUB" },
+      refundsAmount: { amountMinor: 46_000, currency: "RUB" },
+      payoutsAmount: { amountMinor: 0, currency: "RUB" },
+      saleCount: 3,
+      refundCount: 1,
+      payoutCount: 0
+    });
+
+    const wallet = await runtime.pool.query<{
+      readonly pending_amount_minor: string;
+      readonly available_amount_minor: string;
+      readonly reserved_amount_minor: string;
+      readonly payout_pending_amount_minor: string;
+      readonly negative_balance_amount_minor: string;
+    }>(
+      `select pending_amount_minor::text,
+              available_amount_minor::text,
+              reserved_amount_minor::text,
+              payout_pending_amount_minor::text,
+              negative_balance_amount_minor::text
+       from wallet_balance_read_models
+       where astrologer_user_id = $1`,
+      [first.astrologerUserId]
+    );
+    expect(wallet.rows).toEqual([
+      {
+        pending_amount_minor: "4094000",
+        available_amount_minor: "19534000",
+        reserved_amount_minor: "0",
+        payout_pending_amount_minor: "2500000",
+        negative_balance_amount_minor: "0"
+      }
+    ]);
 
     const payouts = await runtime.pool.query<{
       readonly id: string;
@@ -84,7 +152,7 @@ describe("admin finance browser fixture", () => {
       {
         id: first.chargebackBlockedPayoutRequestId,
         status: "cancelled",
-        amount_minor: "45000",
+        amount_minor: "46000",
         failure_reason: "Provider chargeback blocked payout before paid confirmation",
         external_reference: null
       },
