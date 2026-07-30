@@ -168,6 +168,7 @@ export function InboxPage() {
       sendError={sendError}
       isTelegramBusinessGuideOpen={isTelegramBusinessGuideOpen}
       telegramBusinessBotUsername={telegramBusinessStartGuide?.telegramBotUsername ?? null}
+      telegramBusinessBotUrl={telegramBusinessStartGuide?.telegramBotUrl ?? null}
       isStartingTelegramBusinessConnection={startTelegramBusinessMutation.isPending}
       telegramBusinessStartError={telegramBusinessStartError}
       isStartingInstagramGraphConnection={startInstagramGraphMutation.isPending}

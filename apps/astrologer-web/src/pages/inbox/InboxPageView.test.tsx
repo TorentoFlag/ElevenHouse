@@ -269,6 +269,7 @@ describe("InboxPageView", () => {
         channelConnections={[]}
         isTelegramBusinessGuideOpen
         telegramBusinessBotUsername="elevenhouse_test_bot"
+        telegramBusinessBotUrl="https://t.me/elevenhouse_test_bot?start=setup-token"
       />
     );
 
@@ -276,15 +277,17 @@ describe("InboxPageView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Настроить Telegram Business" }));
 
     expect(
-      screen.getByRole("button", { name: "Шаг 2: Открыть Telegram" }).getAttribute("aria-pressed")
+      screen.getByRole("button", { name: "Шаг 2: Открыть бота" }).getAttribute("aria-pressed")
     ).toBe("true");
-    expect(screen.getByText("Откройте настройки Telegram Business")).toBeTruthy();
-    expect(screen.getByText("Чат-боты")).toBeTruthy();
+    expect(screen.getByText("Откройте бота по ссылке")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Открыть бота" }).getAttribute("href")).toBe(
+      "https://t.me/elevenhouse_test_bot?start=setup-token"
+    );
     expect(screen.getAllByText("@elevenhouse_test_bot").length).toBeGreaterThanOrEqual(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Шаг 3: Найти бота" }));
+    fireEvent.click(screen.getByRole("button", { name: "Шаг 3: Добавить бота" }));
 
-    expect(screen.getByText("Введите username бота в Telegram")).toBeTruthy();
+    expect(screen.getByText("Добавьте бота в Telegram Business")).toBeTruthy();
     expect(screen.getAllByText("@elevenhouse_test_bot").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("ДОБАВИТЬ")).toBeTruthy();
 
@@ -293,9 +296,9 @@ describe("InboxPageView", () => {
     expect(screen.getByText("Выберите доступные чаты")).toBeTruthy();
     expect(screen.getByText("Доступные чаты")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Шаг 2: Открыть Telegram" }));
+    fireEvent.click(screen.getByRole("button", { name: "Шаг 2: Открыть бота" }));
 
-    expect(screen.getByText("Откройте настройки Telegram Business")).toBeTruthy();
+    expect(screen.getByText("Откройте бота по ссылке")).toBeTruthy();
   });
 
   it("shows a prepared connection state instead of repeated guide actions", () => {
@@ -311,6 +314,7 @@ describe("InboxPageView", () => {
         channelConnections={[]}
         isTelegramBusinessGuideOpen
         telegramBusinessBotUsername="elevenhouse_test_bot"
+        telegramBusinessBotUrl="https://t.me/elevenhouse_test_bot?start=setup-token"
       />
     );
 
@@ -324,7 +328,9 @@ describe("InboxPageView", () => {
     expect(screen.queryByText("Продолжайте настройку в Telegram")).toBeNull();
     expect(screen.getByRole("button", { name: "Закрыть инструкцию" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Скопировать username" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Открыть бота" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Открыть бота" }).getAttribute("href")).toBe(
+      "https://t.me/elevenhouse_test_bot?start=setup-token"
+    );
     expect(screen.getByText("@elevenhouse_test_bot")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Скопировать username бота" }));
@@ -669,6 +675,7 @@ function baseProps(): InboxPageViewProps {
     onMarkRead: vi.fn(),
     isTelegramBusinessGuideOpen: false,
     telegramBusinessBotUsername: null,
+    telegramBusinessBotUrl: null,
     isStartingTelegramBusinessConnection: false,
     telegramBusinessStartError: null,
     isStartingInstagramGraphConnection: false,

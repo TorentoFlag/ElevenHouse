@@ -8,7 +8,7 @@ import {
 } from "@elevenhouse/domain";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { currentBaseline } from "../scripts/production-baseline-plan";
+import { currentBaseline, previousBaseline } from "../scripts/production-baseline-plan";
 
 const execFileAsync = promisify(execFile);
 const integrationDatabaseUrl = process.env.INTEGRATION_DATABASE_URL;
@@ -141,6 +141,13 @@ describeWithDatabase("production baseline reconciliation", () => {
         product_title: string;
         schedule_table: string | null;
         exclusion_count: string;
+        birth_primary_count: string;
+        birth_primary_unique_count: string;
+        birth_old_unique_count: string;
+        booking_shape_column_count: string;
+        booking_state_check_count: string;
+        booking_source_check_count: string;
+        booking_hold_expiry_check_count: string;
       }>(`
         SELECT
           (SELECT count(*)::text
@@ -151,13 +158,100 @@ describeWithDatabase("production baseline reconciliation", () => {
           to_regclass('public.availability_schedules')::text AS schedule_table,
           (SELECT count(*)::text FROM pg_constraint
             WHERE conname = 'schedule_reservations_active_owner_range_exclude'
-              AND contype = 'x') AS exclusion_count
+              AND contype = 'x') AS exclusion_count,
+          (SELECT count(*)::text FROM client_birth_data WHERE is_primary = true) AS birth_primary_count,
+          (SELECT count(*)::text FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename = 'client_birth_data'
+              AND indexname = 'client_birth_data_primary_unique') AS birth_primary_unique_count,
+          (SELECT count(*)::text FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename = 'client_birth_data'
+              AND indexname = 'client_birth_data_client_unique') AS birth_old_unique_count,
+          (SELECT count(*)::text
+             FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'bookings'
+              AND column_name IN ('source', 'hold_expires_at')) AS booking_shape_column_count,
+          (SELECT count(*)::text
+             FROM pg_constraint
+            WHERE conrelid = 'bookings'::regclass
+              AND conname = 'bookings_state_check'
+              AND pg_get_constraintdef(oid) LIKE '%pending_payment%'
+              AND pg_get_constraintdef(oid) LIKE '%expired%') AS booking_state_check_count,
+          (SELECT count(*)::text
+             FROM pg_constraint
+            WHERE conrelid = 'bookings'::regclass
+              AND conname = 'bookings_source_check'
+              AND pg_get_constraintdef(oid) LIKE '%client_paid%') AS booking_source_check_count,
+          (SELECT count(*)::text
+             FROM pg_constraint
+            WHERE conrelid = 'bookings'::regclass
+              AND conname = 'bookings_hold_expiry_check'
+              AND pg_get_constraintdef(oid) LIKE '%hold_expires_at%') AS booking_hold_expiry_check_count
       `);
       expect(state.rows[0]).toEqual({
         current_baseline_count: "1",
         product_title: "Persisted product",
         schedule_table: "availability_schedules",
-        exclusion_count: "1"
+        exclusion_count: "1",
+        birth_primary_count: "1",
+        birth_primary_unique_count: "1",
+        birth_old_unique_count: "0",
+        booking_shape_column_count: "2",
+        booking_state_check_count: "1",
+        booking_source_check_count: "1",
+        booking_hold_expiry_check_count: "1"
+      });
+
+      await previousClient.query(`
+        ALTER TABLE bookings DROP CONSTRAINT bookings_hold_expiry_check;
+        ALTER TABLE bookings DROP CONSTRAINT bookings_source_check;
+        ALTER TABLE bookings DROP CONSTRAINT bookings_state_check;
+        ALTER TABLE bookings DROP COLUMN hold_expires_at;
+        ALTER TABLE bookings DROP COLUMN source;
+        ALTER TABLE bookings
+          ADD CONSTRAINT bookings_state_check CHECK (state IN ('confirmed', 'cancelled'));
+      `);
+
+      const currentRun = await runReconciler(previousUrl.toString());
+      expect(currentRun, currentRun.output).toMatchObject({ exitCode: 0 });
+      expect(currentRun.output).toContain("Current production baseline is already recorded");
+
+      const reconciledBookingState = await previousClient.query<{
+        shape_column_count: string;
+        state_check_count: string;
+        source_check_count: string;
+        hold_expiry_check_count: string;
+      }>(`
+        SELECT
+          (SELECT count(*)::text
+             FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'bookings'
+              AND column_name IN ('source', 'hold_expires_at')) AS shape_column_count,
+          (SELECT count(*)::text
+             FROM pg_constraint
+            WHERE conrelid = 'bookings'::regclass
+              AND conname = 'bookings_state_check'
+              AND pg_get_constraintdef(oid) LIKE '%pending_payment%'
+              AND pg_get_constraintdef(oid) LIKE '%expired%') AS state_check_count,
+          (SELECT count(*)::text
+             FROM pg_constraint
+            WHERE conrelid = 'bookings'::regclass
+              AND conname = 'bookings_source_check'
+              AND pg_get_constraintdef(oid) LIKE '%client_paid%') AS source_check_count,
+          (SELECT count(*)::text
+             FROM pg_constraint
+            WHERE conrelid = 'bookings'::regclass
+              AND conname = 'bookings_hold_expiry_check'
+              AND pg_get_constraintdef(oid) LIKE '%hold_expires_at%') AS hold_expiry_check_count
+      `);
+      expect(reconciledBookingState.rows[0]).toEqual({
+        shape_column_count: "2",
+        state_check_count: "1",
+        source_check_count: "1",
+        hold_expiry_check_count: "1"
       });
     } finally {
       await previousClient?.end();
@@ -337,7 +431,8 @@ function legacyProductionFixtureSql(): string {
       ('9a042354672db97fda448a68804c61952d81d2c39e4b67b8581de04984c3fff8', 1782996784018),
       ('9cfb3eebacfd55d703748c65b7a6210c8037cb881f66c3d7bf110d1489357baa', 1783327724152),
       ('c52a5a3cc5c9acd8e50b32643661dbe8f922844711ad08a8e30b22d72eb09829', 1783335783810),
-      ('3d071b976aeeb1b5a4954aef46eadce7209a5ecef66a81e1680c3f3986694bd7', 1783969326835);
+      ('3d071b976aeeb1b5a4954aef46eadce7209a5ecef66a81e1680c3f3986694bd7', 1783969326835),
+      ('911332efe5ba14b352244a8176412cf637dccdb25141aa1792dcad35c63831de', 1784111509389);
 
     CREATE TABLE users (id uuid PRIMARY KEY);
     CREATE TABLE products (
@@ -497,9 +592,32 @@ function previousProductionFixtureSql(): string {
       created_at bigint
     );
     INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES
-      ('911332efe5ba14b352244a8176412cf637dccdb25141aa1792dcad35c63831de', 1784111509389);
+      ('${previousBaseline.hash}', ${previousBaseline.createdAt});
 
     CREATE TABLE users (id uuid PRIMARY KEY);
+    CREATE TABLE client_birth_data (
+      id uuid PRIMARY KEY,
+      client_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      label text,
+      birth_date text,
+      birth_time text,
+      birth_time_precision text DEFAULT 'unknown' NOT NULL,
+      birth_place_text text,
+      birth_country_code text,
+      birth_city text,
+      birth_region text,
+      birth_timezone text,
+      birth_latitude double precision,
+      birth_longitude double precision,
+      source text DEFAULT 'client_profile' NOT NULL,
+      created_at timestamptz DEFAULT now() NOT NULL,
+      updated_at timestamptz DEFAULT now() NOT NULL,
+      birth_time_dst_occurrence text,
+      CONSTRAINT client_birth_data_time_precision_check CHECK (birth_time_precision in ('exact', 'approximate', 'unknown')),
+      CONSTRAINT client_birth_data_source_check CHECK (source in ('client_profile', 'booking', 'import', 'manual'))
+    );
+    CREATE UNIQUE INDEX client_birth_data_client_unique ON client_birth_data (client_user_id);
+    CREATE INDEX client_birth_data_client_idx ON client_birth_data (client_user_id);
     CREATE TABLE products (
       id uuid PRIMARY KEY,
       owner_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -521,6 +639,17 @@ function previousProductionFixtureSql(): string {
     CREATE TABLE matrix_report_drafts (id uuid PRIMARY KEY);
 
     INSERT INTO users (id) VALUES ('00000000-0000-0000-0000-000000000001');
+    INSERT INTO client_birth_data (
+      id, client_user_id, label, birth_date, birth_time, birth_time_precision, source
+    ) VALUES (
+      '40000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000001',
+      'Legacy birth profile',
+      '1990-01-02',
+      '12:30',
+      'exact',
+      'client_profile'
+    );
     INSERT INTO products (id, owner_user_id, title) VALUES (
       '50000000-0000-0000-0000-000000000001',
       '00000000-0000-0000-0000-000000000001',

@@ -64,7 +64,8 @@ async function main(): Promise<void> {
         );
       }
       if (history === "current") {
-        await reconcileClientBirthDataDstOccurrenceIfPresent();
+        await reconcileClientBirthDataShapeIfPresent();
+        await reconcileBookingsShapeIfPresent();
         await reconcileChartCalculationJobsIfPrerequisitesExist();
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
@@ -77,7 +78,8 @@ async function main(): Promise<void> {
         }
         await assertPreSchedulingSchemaShape();
         await client.query(schedulingBaselineDdl);
-        await reconcileClientBirthDataDstOccurrenceIfPresent();
+        await reconcileClientBirthDataShapeIfPresent();
+        await reconcileBookingsShapeIfPresent();
         await reconcileChartCalculationJobsIfPrerequisitesExist();
         await recordCurrentBaseline();
         await assertCurrentSchemaShape();
@@ -434,7 +436,10 @@ function assertCanonicalObject(
 async function assertCurrentSchemaShape(): Promise<void> {
   await assertPreSchedulingSchemaShape();
   if (await relationExists("public.client_birth_data")) {
-    await assertClientBirthDataDstOccurrence();
+    await assertClientBirthDataShape();
+  }
+  if (await relationExists("public.bookings")) {
+    await assertBookingsShape();
   }
   if (await relationExists("public.chart_calculation_jobs")) {
     await assertChartCalculationJobs();
@@ -595,12 +600,30 @@ async function assertChartCalculationJobs(): Promise<void> {
   }
 }
 
-async function reconcileClientBirthDataDstOccurrenceIfPresent(): Promise<void> {
+async function reconcileClientBirthDataShapeIfPresent(): Promise<void> {
   if (!(await relationExists("public.client_birth_data"))) return;
 
   await client.query(`
     ALTER TABLE client_birth_data
+      ADD COLUMN IF NOT EXISTS is_primary boolean,
       ADD COLUMN IF NOT EXISTS birth_time_dst_occurrence text;
+
+    UPDATE client_birth_data
+       SET is_primary = true
+     WHERE is_primary IS NULL;
+
+    ALTER TABLE client_birth_data
+      ALTER COLUMN is_primary SET DEFAULT false,
+      ALTER COLUMN is_primary SET NOT NULL;
+
+    DROP INDEX IF EXISTS client_birth_data_client_unique;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS client_birth_data_primary_unique
+      ON client_birth_data USING btree (client_user_id)
+      WHERE is_primary = true;
+
+    CREATE INDEX IF NOT EXISTS client_birth_data_client_idx
+      ON client_birth_data USING btree (client_user_id);
 
     DO $$
     BEGIN
@@ -622,25 +645,135 @@ async function reconcileClientBirthDataDstOccurrenceIfPresent(): Promise<void> {
   `);
 }
 
-async function assertClientBirthDataDstOccurrence(): Promise<void> {
+async function reconcileBookingsShapeIfPresent(): Promise<void> {
+  if (!(await relationExists("public.bookings"))) return;
+
+  await client.query(`
+    ALTER TABLE bookings
+      ADD COLUMN IF NOT EXISTS source text,
+      ADD COLUMN IF NOT EXISTS hold_expires_at timestamp with time zone;
+
+    UPDATE bookings
+       SET source = 'manual'
+     WHERE source IS NULL;
+
+    ALTER TABLE bookings
+      ALTER COLUMN source SET DEFAULT 'manual',
+      ALTER COLUMN source SET NOT NULL;
+
+    ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_state_check;
+    ALTER TABLE bookings
+      ADD CONSTRAINT bookings_state_check
+      CHECK (state in ('hold', 'pending_payment', 'confirmed', 'completed', 'cancelled', 'no_show', 'expired'));
+
+    ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_source_check;
+    ALTER TABLE bookings
+      ADD CONSTRAINT bookings_source_check
+      CHECK (source in ('manual', 'client_paid'));
+
+    ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_hold_expiry_check;
+    ALTER TABLE bookings
+      ADD CONSTRAINT bookings_hold_expiry_check
+      CHECK (
+        (state = 'hold' and hold_expires_at is not null)
+        or (state <> 'hold' and hold_expires_at is null)
+      );
+  `);
+}
+
+async function assertClientBirthDataShape(): Promise<void> {
   const result = await client.query<{
-    column_count: string;
+    required_column_count: string;
     constraint_count: string;
+    primary_unique_count: string;
+    old_unique_count: string;
   }>(`
     SELECT
       (SELECT count(*)::text
          FROM information_schema.columns
         WHERE table_schema = 'public'
           AND table_name = 'client_birth_data'
-          AND column_name = 'birth_time_dst_occurrence') AS column_count,
+          AND column_name IN ('is_primary', 'birth_time_dst_occurrence')) AS required_column_count,
       (SELECT count(*)::text
          FROM pg_constraint
         WHERE conrelid = 'client_birth_data'::regclass
           AND conname = 'client_birth_data_time_dst_occurrence_check'
-          AND contype = 'c') AS constraint_count
+          AND contype = 'c') AS constraint_count,
+      (SELECT count(*)::text
+         FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND tablename = 'client_birth_data'
+          AND indexname = 'client_birth_data_primary_unique'
+          AND indexdef LIKE '%WHERE (is_primary = true)%') AS primary_unique_count,
+      (SELECT count(*)::text
+         FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND tablename = 'client_birth_data'
+          AND indexname = 'client_birth_data_client_unique') AS old_unique_count
   `);
-  if (result.rows[0]?.column_count !== "1" || result.rows[0]?.constraint_count !== "1") {
-    throw new Error("Current production schema is missing client birth-data DST occurrence");
+  if (
+    result.rows[0]?.required_column_count !== "2" ||
+    result.rows[0]?.constraint_count !== "1" ||
+    result.rows[0]?.primary_unique_count !== "1" ||
+    result.rows[0]?.old_unique_count !== "0"
+  ) {
+    throw new Error("Current production schema is missing client birth-data primary shape");
+  }
+}
+
+async function assertBookingsShape(): Promise<void> {
+  const result = await client.query<{
+    required_column_count: string;
+    source_required_count: string;
+    state_check_count: string;
+    source_check_count: string;
+    hold_expiry_check_count: string;
+  }>(`
+    SELECT
+      (SELECT count(*)::text
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'bookings'
+          AND column_name IN ('source', 'hold_expires_at')) AS required_column_count,
+      (SELECT count(*)::text
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'bookings'
+          AND column_name = 'source'
+          AND is_nullable = 'NO'
+          AND column_default = '''manual''::text') AS source_required_count,
+      (SELECT count(*)::text
+         FROM pg_constraint
+        WHERE conrelid = 'bookings'::regclass
+          AND conname = 'bookings_state_check'
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%hold%'
+          AND pg_get_constraintdef(oid) LIKE '%pending_payment%'
+          AND pg_get_constraintdef(oid) LIKE '%completed%'
+          AND pg_get_constraintdef(oid) LIKE '%no_show%'
+          AND pg_get_constraintdef(oid) LIKE '%expired%') AS state_check_count,
+      (SELECT count(*)::text
+         FROM pg_constraint
+        WHERE conrelid = 'bookings'::regclass
+          AND conname = 'bookings_source_check'
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%manual%'
+          AND pg_get_constraintdef(oid) LIKE '%client_paid%') AS source_check_count,
+      (SELECT count(*)::text
+         FROM pg_constraint
+        WHERE conrelid = 'bookings'::regclass
+          AND conname = 'bookings_hold_expiry_check'
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%hold_expires_at%') AS hold_expiry_check_count
+  `);
+  if (
+    result.rows[0]?.required_column_count !== "2" ||
+    result.rows[0]?.source_required_count !== "1" ||
+    result.rows[0]?.state_check_count !== "1" ||
+    result.rows[0]?.source_check_count !== "1" ||
+    result.rows[0]?.hold_expiry_check_count !== "1"
+  ) {
+    throw new Error("Current production schema is missing bookings hold/source shape");
   }
 }
 

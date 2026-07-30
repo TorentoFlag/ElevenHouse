@@ -28,6 +28,7 @@ export type InboxPageViewProps = {
   readonly sendError: string | null;
   readonly isTelegramBusinessGuideOpen: boolean;
   readonly telegramBusinessBotUsername: string | null;
+  readonly telegramBusinessBotUrl: string | null;
   readonly isStartingTelegramBusinessConnection: boolean;
   readonly telegramBusinessStartError: string | null;
   readonly isStartingInstagramGraphConnection: boolean;
@@ -95,6 +96,7 @@ export function InboxPageView({
   sendError,
   isTelegramBusinessGuideOpen,
   telegramBusinessBotUsername,
+  telegramBusinessBotUrl,
   isStartingTelegramBusinessConnection,
   telegramBusinessStartError,
   isStartingInstagramGraphConnection,
@@ -488,6 +490,7 @@ export function InboxPageView({
           isStartingInstagramGraph={isStartingInstagramGraphConnection}
           instagramGraphErrorMessage={instagramGraphStartError}
           telegramBotUsername={telegramBusinessBotUsername}
+          telegramBotUrl={telegramBusinessBotUrl}
           mtprotoStep={telegramMtprotoStep}
           mtprotoPhoneNumber={telegramMtprotoPhoneNumber}
           mtprotoCode={telegramMtprotoCode}

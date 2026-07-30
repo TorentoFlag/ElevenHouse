@@ -16,6 +16,7 @@ export type ChannelConnectionDialogProps = {
   readonly isStartingInstagramGraph: boolean;
   readonly instagramGraphErrorMessage: string | null;
   readonly telegramBotUsername: string | null;
+  readonly telegramBotUrl: string | null;
   readonly mtprotoStep: TelegramMtprotoWizardStep;
   readonly mtprotoPhoneNumber: string;
   readonly mtprotoCode: string;
@@ -57,6 +58,7 @@ export function ChannelConnectionDialog({
   isStartingInstagramGraph,
   instagramGraphErrorMessage,
   telegramBotUsername,
+  telegramBotUrl,
   mtprotoStep,
   mtprotoPhoneNumber,
   mtprotoCode,
@@ -126,6 +128,7 @@ export function ChannelConnectionDialog({
             isActive={isActive}
             isStarting={isStarting}
             needsAttention={needsAttention}
+            botUrl={telegramBotUrl}
             onBack={() => setStep("telegram-methods")}
             onClose={onClose}
             onStartConnection={onStartConnection}
@@ -619,6 +622,7 @@ function InstagramGraphGuide({
 
 function TelegramBusinessGuide({
   botHandle,
+  botUrl,
   connection,
   errorMessage,
   isActive,
@@ -629,6 +633,7 @@ function TelegramBusinessGuide({
   onStartConnection
 }: {
   readonly botHandle: string | null;
+  readonly botUrl: string | null;
   readonly connection: MessagingChannelConnection | undefined;
   readonly errorMessage: string | null;
   readonly isActive: boolean;
@@ -685,7 +690,19 @@ function TelegramBusinessGuide({
 
           <div className={styles.telegramGuideActions}>
             {botHandle ? (
-              <TelegramBotHandleBlock botHandle={botHandle} />
+              <>
+                {botUrl ? (
+                  <a
+                    className={styles.telegramGuidePrimary}
+                    href={botUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Открыть бота
+                  </a>
+                ) : null}
+                <TelegramBotHandleBlock botHandle={botHandle} />
+              </>
             ) : hasPreparedConnection ? (
               <div className={styles.telegramGuideActionStatus} role="status">
                 <span>Канал подключён</span>
@@ -739,8 +756,8 @@ function TelegramBusinessGuide({
 
 const telegramGuideStepList: Array<{ readonly id: TelegramGuideStepId; readonly label: string }> = [
   { id: 1, label: "Создать" },
-  { id: 2, label: "Открыть Telegram" },
-  { id: 3, label: "Найти бота" },
+  { id: 2, label: "Открыть бота" },
+  { id: 3, label: "Добавить бота" },
   { id: 4, label: "Выбрать чаты" },
   { id: 5, label: "Подтвердить" }
 ];
@@ -771,17 +788,17 @@ function telegramGuideStepCopy(step: TelegramGuideStepId, botHandle: string | nu
 
   if (step === 2) {
     return {
-      title: "Откройте настройки Telegram Business",
-      body: "На телефоне откройте Telegram с вашим Business аккаунтом и перейдите в раздел чат-ботов."
+      title: "Откройте бота по ссылке",
+      body: "Нажмите «Открыть бота» и запустите чат, чтобы ElevenHouse привязал заявку к вашему Telegram аккаунту."
     };
   }
 
   if (step === 3) {
     return {
-      title: "Введите username бота в Telegram",
+      title: "Добавьте бота в Telegram Business",
       body: botHandle
-        ? `Найдите ${botHandle}, выберите его в списке и нажмите «ДОБАВИТЬ».`
-        : "После создания подключения здесь появится username бота, который нужно добавить в Telegram."
+        ? `Откройте настройки Telegram Business, найдите ${botHandle}, выберите его в списке и нажмите «ДОБАВИТЬ».`
+        : "После создания подключения здесь появится username бота, который нужно добавить в Telegram Business."
     };
   }
 

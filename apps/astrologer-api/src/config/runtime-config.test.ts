@@ -396,6 +396,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
         ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
         ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+        ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret"
       })
     ).toThrow("ASTROLOGER_API_ALLOWED_ORIGINS is required in production");
@@ -410,6 +411,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
         ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
         ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+        ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
         ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com"
       })
     ).toThrow("ASTROLOGER_API_PASSWORDLESS_CODE_SECRET is required in production");
@@ -438,6 +440,19 @@ describe("createAstrologerApiRuntimeConfig", () => {
     ).toThrow("ASTROLOGER_API_TELEGRAM_BOT_TOKEN is required in production");
   });
 
+  it("requires the Telegram Business bot username in production", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
+        ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
+        ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token"
+      })
+    ).toThrow("ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME is required in production");
+  });
+
   it("uses host-prefixed astrologer session cookies when production security settings are complete", () => {
     expect(
       createAstrologerApiRuntimeConfig({
@@ -447,6 +462,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
         ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
         ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+        ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
         CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
@@ -470,6 +486,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
         ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
         ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+        ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
         CHART_ENGINE_BASE_URL: "http://localhost:8012"
@@ -564,6 +581,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
         ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
         ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+        ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
         ASTROLOGER_AI_ENABLED: "true",

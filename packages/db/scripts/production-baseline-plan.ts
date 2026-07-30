@@ -287,7 +287,9 @@ export const schedulingBaselineDdl = `
     client_user_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     product_id uuid NOT NULL,
     reservation_id uuid NOT NULL,
+    source text DEFAULT 'manual' NOT NULL,
     state text DEFAULT 'confirmed' NOT NULL,
+    hold_expires_at timestamptz,
     service_start_at timestamptz NOT NULL,
     service_end_at timestamptz NOT NULL,
     product_title_snapshot text NOT NULL,
@@ -300,7 +302,12 @@ export const schedulingBaselineDdl = `
     created_at timestamptz DEFAULT now() NOT NULL,
     updated_at timestamptz DEFAULT now() NOT NULL,
     CONSTRAINT bookings_reservation_unique UNIQUE (reservation_id),
-    CONSTRAINT bookings_state_check CHECK (state IN ('confirmed', 'cancelled')),
+    CONSTRAINT bookings_state_check CHECK (state IN ('hold', 'pending_payment', 'confirmed', 'completed', 'cancelled', 'no_show', 'expired')),
+    CONSTRAINT bookings_source_check CHECK (source IN ('manual', 'client_paid')),
+    CONSTRAINT bookings_hold_expiry_check CHECK (
+      (state = 'hold' AND hold_expires_at IS NOT NULL)
+      OR (state <> 'hold' AND hold_expires_at IS NULL)
+    ),
     CONSTRAINT bookings_service_range_check CHECK (service_start_at < service_end_at),
     CONSTRAINT bookings_product_title_length_check CHECK (length(trim(product_title_snapshot)) BETWEEN 1 AND 200),
     CONSTRAINT bookings_duration_check CHECK (duration_minutes_snapshot BETWEEN 1 AND 1440),

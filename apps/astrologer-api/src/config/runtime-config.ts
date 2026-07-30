@@ -350,6 +350,10 @@ export function createAstrologerApiRuntimeConfig(
     throw new Error("ASTROLOGER_API_TELEGRAM_BOT_TOKEN is required in production");
   }
 
+  if (config.NODE_ENV === "production" && !config.ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME) {
+    throw new Error("ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME is required in production");
+  }
+
   const telegramMtproto = toTelegramMtprotoConfig({
     enabled: config.ASTROLOGER_API_TELEGRAM_MTPROTO_ENABLED,
     apiId: config.ASTROLOGER_API_TELEGRAM_MTPROTO_API_ID,
