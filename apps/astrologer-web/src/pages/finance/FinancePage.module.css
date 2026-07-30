@@ -8,8 +8,12 @@
   --finance-text: #f4f2fb;
   --finance-muted: #a7a2c8;
   --finance-muted-2: #7e789e;
-  --finance-accent: #b79cfb;
-  --finance-accent-soft: rgb(183 156 251 / 0.14);
+  --finance-accent: #f4c430;
+  --finance-accent-soft: rgb(244 196 48 / 0.14);
+  --finance-accent-line: rgb(244 196 48 / 0.42);
+  --finance-accent-text: #f6d266;
+  --finance-accent-glow: rgb(244 196 48 / 0.4);
+  --finance-text-on-accent: #1a1606;
   --finance-positive: #4ec8a0;
   --finance-warning: #f4c430;
   --finance-danger: #f47a7a;
@@ -245,9 +249,9 @@
 }
 
 .chipActive {
-  border-color: rgb(183 156 251 / 0.5);
-  background: var(--finance-accent);
-  color: #14111e;
+  border-color: var(--finance-accent-line);
+  background: var(--finance-accent-soft);
+  color: var(--finance-accent-text);
 }
 
 .searchInput {
@@ -512,7 +516,7 @@
 .ghostButton:focus-visible,
 .secondaryButton:focus-visible,
 .allAmountButton:focus-visible {
-  outline: 2px solid rgb(183 156 251 / 0.78);
+  outline: 2px solid var(--finance-accent-line);
   outline-offset: 2px;
 }
 
@@ -537,7 +541,7 @@
   border: 0;
   border-radius: 7px;
   background: var(--finance-accent-soft);
-  color: var(--finance-accent);
+  color: var(--finance-accent-text);
   cursor: pointer;
   font: inherit;
   font-size: 11.5px;
@@ -570,9 +574,12 @@
 }
 
 .primaryButton {
-  border: 1px solid rgb(183 156 251 / 0.25);
+  border: 1px solid var(--finance-accent-line);
   background: var(--finance-accent);
-  color: #14111e;
+  color: var(--finance-text-on-accent);
+  box-shadow:
+    0 0 0 1px var(--finance-accent-line),
+    0 10px 26px -10px var(--finance-accent-glow);
 }
 
 .ghostButton,
