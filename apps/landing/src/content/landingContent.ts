@@ -451,6 +451,7 @@ export const landingCopy = {
     },
     legal: {
       privacy: "Политика конфиденциальности",
+      personalDataProcessing: "Политика сбора и обработки персональных данных",
       offer: "Публичная оферта",
       legal: "Юридические данные",
       close: "Закрыть",
@@ -821,6 +822,7 @@ export const landingCopy = {
     },
     legal: {
       privacy: "Privacy policy",
+      personalDataProcessing: "Personal data processing policy",
       offer: "Public offer",
       legal: "Legal details",
       close: "Close",

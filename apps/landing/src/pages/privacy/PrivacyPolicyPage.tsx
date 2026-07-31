@@ -20,19 +20,19 @@ export function PrivacyPolicyPage() {
       </header>
       <article className="privacy-document">
         <header className="privacy-hero">
-          <span className="l-kick">Privacy</span>
-          <h1>Privacy Policy</h1>
+          <span className="l-kick">сервис ElevenHouse</span>
+          <h1>Политика конфиденциальности</h1>
           <p>
-            This policy describes how ElevenHouse processes personal data for its websites,
-            astrologer workspace, CRM, booking, calculation, payment and messaging features.
+            Настоящая Политика конфиденциальности определяет порядок сбора, обработки, хранения и
+            защиты персональных данных пользователей интернет-приложение Asteria.
           </p>
           <dl>
             <div>
-              <dt>Effective date</dt>
+              <dt>Редакция</dt>
               <dd>{privacyPolicyUpdatedAt}</dd>
             </div>
             <div>
-              <dt>Privacy contact</dt>
+              <dt>Контакты</dt>
               <dd>
                 <a href={`mailto:${privacyContactEmail}`}>{privacyContactEmail}</a>
               </dd>
@@ -44,16 +44,23 @@ export function PrivacyPolicyPage() {
           {privacyPolicySections.map((section) => (
             <section className="privacy-section" key={section.title}>
               <h2>{section.title}</h2>
-              {section.paragraphs.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
-              {section.bullets ? (
-                <ul>
-                  {section.bullets.map((bullet) => (
-                    <li key={bullet}>{bullet}</li>
-                  ))}
-                </ul>
-              ) : null}
+              {section.blocks.map((block) => {
+                if (block.kind === "subheading") {
+                  return <h3 key={block.text}>{block.text}</h3>;
+                }
+
+                if (block.kind === "list") {
+                  return (
+                    <ul key={block.items.join("|")}>
+                      {block.items.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  );
+                }
+
+                return <p key={block.text}>{block.text}</p>;
+              })}
             </section>
           ))}
         </div>

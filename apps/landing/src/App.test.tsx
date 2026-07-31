@@ -4,6 +4,12 @@ import { App, resolveLandingRoute } from "./App";
 import { LANDING_APP_TITLE } from "./app-title";
 import { landingCopy, landingLanguages, landingSections, loginHref, primaryCtaHref } from "./content/landingContent";
 import { LandingPage } from "./pages/home/LandingPage";
+import { PersonalDataProcessingPolicyPage } from "./pages/personal-data-processing/PersonalDataProcessingPolicyPage";
+import {
+  personalDataProcessingContactEmail,
+  personalDataProcessingPolicyEn,
+  personalDataProcessingPolicyRu
+} from "./pages/personal-data-processing/personalDataProcessingPolicyContent";
 import { PrivacyPolicyPage } from "./pages/privacy/PrivacyPolicyPage";
 import { privacyContactEmail, privacyPolicySections } from "./pages/privacy/privacyPolicyContent";
 
@@ -55,26 +61,64 @@ describe("landing app shell", () => {
   it("routes /privacy to the public privacy policy page", () => {
     expect(resolveLandingRoute("/privacy")).toBe("privacy");
     expect(resolveLandingRoute("/privacy/")).toBe("privacy");
+    expect(resolveLandingRoute("/personal-data-processing")).toBe("personalDataProcessing");
+    expect(resolveLandingRoute("/personal-data-processing/")).toBe("personalDataProcessing");
     expect(resolveLandingRoute("/")).toBe("home");
     expect(resolveLandingRoute("/pricing")).toBe("home");
 
     const privacyElement = App({ pathname: "/privacy" });
+    const personalDataProcessingElement = App({ pathname: "/personal-data-processing" });
     const homeElement = App({ pathname: "/" });
 
     expect(isValidElement(privacyElement) && privacyElement.type).toBe(PrivacyPolicyPage);
+    expect(
+      isValidElement(personalDataProcessingElement) && personalDataProcessingElement.type
+    ).toBe(PersonalDataProcessingPolicyPage);
     expect(isValidElement(homeElement) && homeElement.type).toBe(LandingPage);
   });
 
-  it("publishes policy content for messaging integrations and data deletion requests", () => {
+  it("links the standalone personal data processing policy from the footer copy", () => {
+    expect(landingCopy.ru.legal.personalDataProcessing).toBe(
+      "Политика сбора и обработки персональных данных"
+    );
+    expect(landingCopy.en.legal.personalDataProcessing).toBe("Personal data processing policy");
+  });
+
+  it("publishes the Kyrgyz Republic privacy policy content and contact", () => {
     const policyText = privacyPolicySections
-      .flatMap((section) => [section.title, ...section.paragraphs, ...(section.bullets ?? [])])
+      .flatMap((section) => [
+        section.title,
+        ...section.blocks.flatMap((block) => {
+          if (block.kind === "list") {
+            return block.items;
+          }
+
+          return block.text;
+        })
+      ])
       .join("\n");
 
-    expect(privacyContactEmail).toBe("privacy@elevenhouse.ai");
-    expect(policyText).toContain("Instagram Direct");
-    expect(policyText).toContain("Telegram");
-    expect(policyText).toContain("To request access, correction, deletion or account-data removal");
-    expect(policyText).toContain("We do not sell Instagram, Telegram or other messaging data");
+    expect(privacyContactEmail).toBe("info@kyulchoro.kg");
+    expect(policyText).toContain("Общество с ограниченной ответственностью «Кюльчоро»");
+    expect(policyText).toContain("Законом Кыргызской Республики «О персональных данных»");
+    expect(policyText).toContain("требованиями Google Play Developer Policy");
+    expect(policyText).toContain("Email: info@kyulchoro.kg");
+  });
+
+  it("publishes the standalone personal data processing policy in Russian and English", () => {
+    expect(personalDataProcessingContactEmail).toBe("support@elevenhouse.ai");
+    expect(personalDataProcessingPolicyRu).toContain(
+      "Политика сбора и обработки персональных данных"
+    );
+    expect(personalDataProcessingPolicyRu).toContain("ОсОО «Кюльчоро»");
+    expect(personalDataProcessingPolicyRu).toContain("Цифрового кодекса Кыргызской Республики");
+    expect(personalDataProcessingPolicyRu).toContain("Инциденты и уведомления");
+    expect(personalDataProcessingPolicyEn).toContain(
+      "Personal Data Collection and Processing Policy"
+    );
+    expect(personalDataProcessingPolicyEn).toContain("Kyulchoro LLC");
+    expect(personalDataProcessingPolicyEn).toContain("Digital Code of the Kyrgyz Republic");
+    expect(personalDataProcessingPolicyEn).toContain("Incidents and Notifications");
   });
 
   it("renders a React element", () => {

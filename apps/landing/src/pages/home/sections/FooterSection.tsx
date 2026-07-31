@@ -10,7 +10,13 @@ type FooterSectionProps = {
   readonly onOpenLegal: (kind: string) => void;
 };
 
-export function FooterSection({ copy, ctaHref, legalCopy, logoSub, onOpenLegal }: FooterSectionProps) {
+export function FooterSection({
+  copy,
+  ctaHref,
+  legalCopy,
+  logoSub,
+  onOpenLegal
+}: FooterSectionProps) {
   return (
     <footer className="landing-footer" id="footer">
       <div className="landing-footer__grid">
@@ -30,9 +36,8 @@ export function FooterSection({ copy, ctaHref, legalCopy, logoSub, onOpenLegal }
         </div>
         <div>
           <b>{copy.documents}</b>
-          <a href="/privacy">
-            {legalCopy.privacy}
-          </a>
+          <a href="/privacy">{legalCopy.privacy}</a>
+          <a href="/personal-data-processing">{legalCopy.personalDataProcessing}</a>
           <button type="button" onClick={() => onOpenLegal("offer")}>
             {legalCopy.offer}
           </button>
