@@ -45,3 +45,17 @@ auth/permissions и audit boundaries.
 - `workers`: scheduled jobs, analytics ingestion, cleanup tasks.
 
 Workers должны быть idempotent. Повтор job не должен создавать дубли payments, notifications, bookings или ledger entries.
+
+## Production Docker artifact retention
+
+Production deploy stores one rollback image set on the VPS and removes older
+unused Docker artifacts only after the deploy has passed Compose health waiting
+and external smoke checks. Before switching `IMAGE_TAG`, the workflow captures
+image IDs from the currently running `elevenhouse` Compose project. After a
+successful deploy, `deployment/server/cleanup-docker-retention.sh` removes
+stopped containers, unused images not referenced by current containers or that
+single rollback set, build cache and unused networks.
+
+The cleanup step intentionally does not prune Docker volumes. PostgreSQL, Redis
+and MinIO data live in Docker volumes, so volume deletion is a separate
+destructive operation and is never part of routine deploy cleanup.

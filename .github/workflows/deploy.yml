@@ -175,6 +175,7 @@ jobs:
           scp "${SSH_OPTS[@]}" deployment/caddy/Caddyfile "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/caddy/Caddyfile"
           scp "${SSH_OPTS[@]}" deployment/server/backup-postgres.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/backup-postgres.sh"
           scp "${SSH_OPTS[@]}" deployment/server/restore-postgres.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/restore-postgres.sh"
+          scp "${SSH_OPTS[@]}" deployment/server/cleanup-docker-retention.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/cleanup-docker-retention.sh"
 
       - name: Deploy over SSH
         env:
@@ -192,10 +193,11 @@ jobs:
             'bash -s' <<'REMOTE'
           set -euo pipefail
           cd /opt/elevenhouse
-          chmod +x backup-postgres.sh restore-postgres.sh
+          chmod +x backup-postgres.sh restore-postgres.sh cleanup-docker-retention.sh
           test -f env/.env.production
           test "$(stat -c '%a' env/.env.production)" = "600"
           install -d -m 0700 env backups/postgres
+          ./cleanup-docker-retention.sh capture-rollback-set
           umask 077
           cat > env/.env.deploy <<EOF
           IMAGE_NAMESPACE=${IMAGE_NAMESPACE}
@@ -225,3 +227,12 @@ jobs:
           curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://astrologer.elevenhouse.ai/api/health
           curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://admin.elevenhouse.ai >/dev/null
           curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://admin.elevenhouse.ai/api/health
+
+      - name: Cleanup production Docker artifacts
+        if: success()
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
+          ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" 'cd /opt/elevenhouse && ./cleanup-docker-retention.sh cleanup-after-success'

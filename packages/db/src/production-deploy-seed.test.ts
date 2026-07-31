@@ -40,4 +40,22 @@ describe("production database seed deployment", () => {
       deployWorkflow.lastIndexOf("docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps")
     );
   });
+
+  it("cleans production Docker artifacts only after successful smoke checks while retaining one rollback set", () => {
+    const uploadCleanupScript = "deployment/server/cleanup-docker-retention.sh";
+    const captureRollbackSet = "./cleanup-docker-retention.sh capture-rollback-set";
+    const smokeCheck = "https://admin.elevenhouse.ai/api/health";
+    const cleanupAfterSuccess = "./cleanup-docker-retention.sh cleanup-after-success";
+
+    expect(deployWorkflow).toContain(uploadCleanupScript);
+    expect(deployWorkflow).toContain(captureRollbackSet);
+    expect(deployWorkflow).toContain("if: success()");
+    expect(deployWorkflow).toContain(cleanupAfterSuccess);
+    expect(deployWorkflow.indexOf(captureRollbackSet)).toBeLessThan(
+      deployWorkflow.indexOf("docker compose --env-file env/.env.deploy -f compose/compose.production.yml pull")
+    );
+    expect(deployWorkflow.lastIndexOf(smokeCheck)).toBeLessThan(
+      deployWorkflow.indexOf(cleanupAfterSuccess)
+    );
+  });
 });
