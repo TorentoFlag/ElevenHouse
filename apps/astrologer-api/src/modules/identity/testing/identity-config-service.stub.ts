@@ -117,6 +117,25 @@ export function createIdentityConfigServiceStub(input: {
         return input.passwordlessRateLimits;
       }
 
+      if (key === "astrologerApi.birthPlaceSearch") {
+        return {
+          enabled: false,
+          provider: "geoapify",
+          baseUrl: "https://api.geoapify.com",
+          userAgent: "ElevenHouse tests",
+          timeoutMs: 1_000,
+          cacheSuccessTtlSeconds: 86_400,
+          cacheEmptyTtlSeconds: 3_600,
+          lockTtlMs: 5_000,
+          rateLimitRedisKeyPrefix: "test:birth-place-search",
+          rateLimits: {
+            userPerMinute: { limit: 60, windowSeconds: 60 },
+            globalPerMinute: { limit: 600, windowSeconds: 60 },
+            globalPerDay: { limit: 10_000, windowSeconds: 86_400 }
+          }
+        };
+      }
+
       if (key === "astrologerApi.mediaStorage") {
         return {
           endpoint: "http://localhost:9000",
