@@ -228,6 +228,26 @@ describe("FlowsService", () => {
     expect(runtimeStore.createEvent).not.toHaveBeenCalled();
   });
 
+  it("rejects runtime commands for flows without a published version", async () => {
+    const runtimeStore = createRuntimeStore();
+    const service = createService({
+      store: createFlowStore({
+        findByOwnerAndId: vi.fn(async () => flow({ status: "draft", publishedVersionId: null }))
+      }),
+      runtimeStore
+    });
+
+    await expect(service.simulateFlow(flowId, runtimeRequest(), request())).rejects.toMatchObject({
+      response: expect.objectContaining({ code: "FLOW_RUNTIME_VERSION_REQUIRED" })
+    });
+    await expect(service.createManualRun(flowId, runtimeRequest(), request())).rejects.toMatchObject({
+      response: expect.objectContaining({ code: "FLOW_RUNTIME_VERSION_REQUIRED" })
+    });
+
+    expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
+    expect(runtimeStore.createEvent).not.toHaveBeenCalled();
+  });
+
   it("fails closed for client subjects without an owner relationship", async () => {
     const runtimeStore = createRuntimeStore({
       createRunForEventDedupe: vi.fn(async (input) => ({

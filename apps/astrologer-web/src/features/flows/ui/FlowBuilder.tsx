@@ -68,6 +68,7 @@ export function FlowBuilder({
   const [draftGraph, setDraftGraph] = useState(flow.draftGraph);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(flow.draftGraph.nodes[0]?.id ?? null);
   const selectedNode = draftGraph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const canRunPublishedVersion = flow.publishedVersionId !== null;
 
   useEffect(() => {
     setDraftGraph(flow.draftGraph);
@@ -93,7 +94,7 @@ export function FlowBuilder({
           <button
             className={classNames?.builderTestRunButton ?? ""}
             type="button"
-            disabled={!onSimulate || isSimulating}
+            disabled={!canRunPublishedVersion || !onSimulate || isSimulating}
             onClick={() => onSimulate?.(flow.id)}
           >
             {isSimulating ? "Проверяем" : "Тестовый прогон"}
@@ -146,13 +147,22 @@ export function FlowBuilder({
           />
           <FlowRuntimePanel
             runs={runs}
-            simulation={simulation}
-            onSimulate={onSimulate ? () => onSimulate(flow.id) : undefined}
-            onCreateManualRun={onCreateManualRun ? () => onCreateManualRun(flow.id) : undefined}
+            simulation={canRunPublishedVersion ? simulation : null}
+            onSimulate={
+              canRunPublishedVersion && onSimulate ? () => onSimulate(flow.id) : undefined
+            }
+            onCreateManualRun={
+              canRunPublishedVersion && onCreateManualRun ? () => onCreateManualRun(flow.id) : undefined
+            }
             isLoadingRuns={isLoadingRuns}
             isSimulating={isSimulating}
             isCreatingManualRun={isCreatingManualRun}
-            error={runtimeError}
+            error={canRunPublishedVersion ? runtimeError : null}
+            unavailableReason={
+              canRunPublishedVersion
+                ? null
+                : "Опубликуйте воронку, чтобы запускать тесты и ручные запуски."
+            }
             classNames={classNames}
           />
           <FlowApprovalQueue

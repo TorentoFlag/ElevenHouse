@@ -100,4 +100,18 @@ describe("FlowRuntimePanel", () => {
     expect(screen.getByText("Загружаем запуски")).toBeTruthy();
     expect(screen.queryByText("Запусков пока нет")).toBeNull();
   });
+
+  it("shows unavailable runtime state instead of stale transport errors", () => {
+    render(
+      <FlowRuntimePanel
+        runs={[]}
+        simulation={null}
+        error={new Error("HTTP request failed with status 404")}
+        unavailableReason="Опубликуйте воронку"
+      />
+    );
+
+    expect(screen.getByText("Опубликуйте воронку")).toBeTruthy();
+    expect(screen.queryByText("HTTP request failed with status 404")).toBeNull();
+  });
 });

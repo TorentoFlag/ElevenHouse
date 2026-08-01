@@ -13,6 +13,7 @@ export type FlowRuntimePanelProps = {
   readonly isSimulating?: boolean;
   readonly isCreatingManualRun?: boolean;
   readonly error?: Error | null;
+  readonly unavailableReason?: string | null;
   readonly classNames?: Readonly<Record<string, string>>;
 };
 
@@ -45,6 +46,7 @@ export function FlowRuntimePanel({
   isSimulating = false,
   isCreatingManualRun = false,
   error = null,
+  unavailableReason = null,
   classNames
 }: FlowRuntimePanelProps) {
   const className = (name: string) => classNames?.[name] ?? "";
@@ -68,7 +70,13 @@ export function FlowRuntimePanel({
         </div>
       </header>
 
-      {error ? <p className={className("runtimeError")} role="alert">{error.message}</p> : null}
+      {unavailableReason ? (
+        <p className={className("runtimeEmpty")}>{unavailableReason}</p>
+      ) : null}
+
+      {!unavailableReason && error ? (
+        <p className={className("runtimeError")} role="alert">{error.message}</p>
+      ) : null}
 
       {simulation ? (
         <div className={className("runtimeBlock")}>

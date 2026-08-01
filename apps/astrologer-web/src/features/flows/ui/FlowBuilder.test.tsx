@@ -77,6 +77,72 @@ describe("FlowBuilder", () => {
     expect(screen.queryByText("Черновик")).toBeNull();
   });
 
+  it("keeps runtime commands unavailable until the flow has a published version", () => {
+    const onSimulate = vi.fn();
+    const onCreateManualRun = vi.fn();
+
+    render(
+      <FlowBuilder
+        flow={flow}
+        onBack={vi.fn()}
+        onUpdateDraft={vi.fn()}
+        onPublish={vi.fn()}
+        onSimulate={onSimulate}
+        onCreateManualRun={onCreateManualRun}
+      />
+    );
+
+    const testRunButtons = screen.getAllByRole("button", { name: "Тестовый прогон" });
+    expect(testRunButtons).toHaveLength(2);
+    expect(testRunButtons[0]).toHaveProperty("disabled", true);
+    expect(testRunButtons[1]).toHaveProperty("disabled", true);
+    expect(screen.queryByRole("button", { name: "Создать запуск" })).toBeNull();
+    expect(
+      screen.getByText("Опубликуйте воронку, чтобы запускать тесты и ручные запуски.")
+    ).toBeTruthy();
+
+    fireEvent.click(testRunButtons[0] ?? raise("Expected header test run button"));
+    fireEvent.click(testRunButtons[1] ?? raise("Expected runtime test run button"));
+
+    expect(onSimulate).not.toHaveBeenCalled();
+    expect(onCreateManualRun).not.toHaveBeenCalled();
+  });
+
+  it("enables runtime commands for a published flow version", () => {
+    const onSimulate = vi.fn();
+    const onCreateManualRun = vi.fn();
+    const publishedFlow = {
+      ...flow,
+      status: "published",
+      publishedVersionId: "33333333-3333-4333-8333-333333333333",
+      publishedVersion: 1,
+      publishedAt: "2026-07-28T08:30:00.000Z"
+    } satisfies FlowResponse;
+
+    render(
+      <FlowBuilder
+        flow={publishedFlow}
+        onBack={vi.fn()}
+        onUpdateDraft={vi.fn()}
+        onPublish={vi.fn()}
+        onSimulate={onSimulate}
+        onCreateManualRun={onCreateManualRun}
+      />
+    );
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Тестовый прогон" })[0] ??
+        raise("Expected test button")
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Создать запуск" }));
+
+    expect(onSimulate).toHaveBeenCalledWith(flow.id);
+    expect(onCreateManualRun).toHaveBeenCalledWith(flow.id);
+    expect(
+      screen.queryByText("Опубликуйте воронку, чтобы запускать тесты и ручные запуски.")
+    ).toBeNull();
+  });
+
   it("publishes the selected flow", () => {
     const onPublish = vi.fn();
     render(<FlowBuilder flow={flow} onBack={vi.fn()} onUpdateDraft={vi.fn()} onPublish={onPublish} />);
@@ -162,3 +228,7 @@ describe("FlowBuilder", () => {
     expect(onPublish).toHaveBeenCalledWith(flow.id, flow.draftGraph);
   });
 });
+
+function raise(message: string): never {
+  throw new Error(message);
+}

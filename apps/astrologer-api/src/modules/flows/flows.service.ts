@@ -229,6 +229,7 @@ export class FlowsService {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     const parsedBody = parseContract(simulateFlowRunRequestSchema, body);
+    await requirePublishedRuntimeVersion(this.store, ownerUserId, parsedFlowId);
     const result = await simulateFlowRun({
       flowStore: this.store,
       runtimeStore: this.runtimeStore,
@@ -250,6 +251,7 @@ export class FlowsService {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     const parsedBody = parseContract(simulateFlowRunRequestSchema, body);
+    await requirePublishedRuntimeVersion(this.store, ownerUserId, parsedFlowId);
     const result = await createManualFlowRun({
       flowStore: this.store,
       runtimeStore: this.runtimeStore,
@@ -387,6 +389,18 @@ async function requireFlowOwnedByCurrentAstrologer(
   if (!flow) throw flowNotFound();
 }
 
+async function requirePublishedRuntimeVersion(
+  store: FlowStore,
+  ownerUserId: string,
+  flowId: string
+): Promise<void> {
+  const flow = await getFlow({ store, ownerUserId, flowId });
+  if (!flow) throw flowNotFound();
+  if (!flow.publishedVersionId) {
+    throw flowRuntimeVersionRequired();
+  }
+}
+
 function requireOwnerUserId(request: AstrologerSessionRequest): string {
   const ownerUserId = request.currentAstrologerAccount?.account.id;
   if (!ownerUserId) {
@@ -415,6 +429,15 @@ function flowNotFound(): NotFoundException {
     error: "FLOW_NOT_FOUND",
     code: "FLOW_NOT_FOUND",
     message: "Flow was not found"
+  });
+}
+
+function flowRuntimeVersionRequired(): BadRequestException {
+  return new BadRequestException({
+    statusCode: 400,
+    error: "FLOW_RUNTIME_VERSION_REQUIRED",
+    code: "FLOW_RUNTIME_VERSION_REQUIRED",
+    message: "Publish the flow before running runtime commands"
   });
 }
 
