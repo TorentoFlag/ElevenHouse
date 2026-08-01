@@ -84,6 +84,7 @@ incomplete contours.
 - `dictionary`
 - `dictionary-ai`
 - `finance`
+- `flows`
 - `health`
 - `human-design`
 - `identity`
@@ -126,6 +127,10 @@ belong in future `admin-api` feature modules, not in `public-api` or
 - `Orders`: purchase lifecycle независимо от деталей payment provider.
 - `Payments/Billing`: payment attempts, webhooks, refunds, provider adapters.
 - `Wallet/Ledger`: баланс астролога, ledger entries, payouts, adjustments.
+- `Flows`: Flows owns automation definitions, versions, runtime runs and approvals.
+  It orchestrates module use cases through explicit ports/jobs and must not
+  implement payment, booking, messaging delivery or chart calculation logic
+  inside controllers or app-local scripts.
 - `Subscriptions`: recurring client subscriptions и platform plans для астрологов.
 - `BirthData`: дата, время, место рождения и правила consented sharing.
 - `Calculations`: owner-scoped current calculation result, participants, client

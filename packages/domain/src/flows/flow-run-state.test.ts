@@ -4,7 +4,7 @@ import { advanceFlowRunStatus, createFlowRunSnapshot } from "./flow-run-state";
 
 const snapshotInput = {
   flowVersionId: "11111111-1111-4111-8111-111111111111",
-  sourceEventId: "booking-222",
+  sourceEventId: "booking:222",
   subjectType: "client",
   subjectId: "22222222-2222-4222-8222-222222222222",
   occurredAt: "2026-07-26T10:00:00.000Z",

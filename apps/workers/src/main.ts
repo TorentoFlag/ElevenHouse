@@ -1,4 +1,5 @@
 import { createLogger } from "@elevenhouse/observability";
+import { createDrizzleFlowRuntimeStore, createDrizzleFlowStore } from "@elevenhouse/db";
 import {
   createDrizzleCalculationPdfCleanupStore,
   createDrizzleCalculationPdfJobStore,
@@ -9,6 +10,7 @@ import { createDrizzleMediaAssetStore } from "@elevenhouse/db/media";
 import { createDrizzleMatrixReportStore } from "@elevenhouse/db/matrix";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
+import { dispatchFlowRuntimeEvent } from "@elevenhouse/domain";
 import { UnrecoverableError } from "bullmq";
 import { processCalculationPdfCleanup } from "./calculation-pdf/calculation-pdf.cleanup";
 import {
@@ -34,6 +36,7 @@ import { createMatrixPdfSource } from "./calculation-pdf/matrix-pdf.source";
 import { createNumerologyPdfRenderer } from "./calculation-pdf/numerology-pdf.renderer";
 import { createNumerologyPdfSource } from "./calculation-pdf/numerology-pdf.source";
 import { createWorkerReadiness, createWorkerReadinessServer } from "./readiness";
+import { relayPendingFlowRuntimeDispatchEvents } from "./flows/flow-runtime.outbox-relay";
 import { createWorkersRuntimeConfig } from "./runtime-config";
 
 const service = "workers";
@@ -42,6 +45,8 @@ const config = createWorkersRuntimeConfig();
 const postgres = createPostgresRuntime();
 const outboxStore = createDrizzleOutboxRelayStore(postgres.database);
 const calculationStore = createDrizzleCalculationStore(postgres.database);
+const flowStore = createDrizzleFlowStore(postgres.database);
+const flowRuntimeStore = createDrizzleFlowRuntimeStore(postgres.database);
 const dictionaryStore = createDrizzleDictionaryStore(postgres.database);
 const pdfJobStore = createDrizzleCalculationPdfJobStore(postgres.database);
 const pdfCleanupStore = createDrizzleCalculationPdfCleanupStore(postgres.database);
@@ -128,10 +133,11 @@ const healthServer = createWorkerReadinessServer({
 const relay = createCalculationPdfOutboxRelay({
   intervalMs: config.outboxRelayIntervalMs,
   relayOnce: async () => {
+    const now = new Date();
     await relayPendingCalculationPdfEvents({
       store: outboxStore,
       queue,
-      now: new Date(),
+      now,
       batchSize: config.outboxRelayBatchSize,
       publishingLockTimeoutMs: config.outboxLockTimeoutMs,
       queueOptions: {
@@ -139,6 +145,19 @@ const relay = createCalculationPdfOutboxRelay({
         backoffMs: config.calculationPdfBackoffMs,
         jitter: config.calculationPdfJitter
       },
+      logger
+    });
+    await relayPendingFlowRuntimeDispatchEvents({
+      store: outboxStore,
+      dispatch: (event) =>
+        dispatchFlowRuntimeEvent({
+          flowStore,
+          runtimeStore: flowRuntimeStore,
+          ...event
+        }),
+      now,
+      batchSize: config.outboxRelayBatchSize,
+      publishingLockTimeoutMs: config.outboxLockTimeoutMs,
       logger
     });
   },

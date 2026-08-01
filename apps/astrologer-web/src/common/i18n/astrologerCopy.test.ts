@@ -71,6 +71,16 @@ describe("astrologerCopy", () => {
       title: "Calendar",
       href: "/calendar"
     });
+    expect(astrologerCopyByLocale.ru.appShell.navigation.items).toContainEqual({
+      id: "funnels",
+      title: "Воронки",
+      href: "/flows"
+    });
+    expect(astrologerCopyByLocale.en.appShell.navigation.items).toContainEqual({
+      id: "funnels",
+      title: "Flows",
+      href: "/flows"
+    });
     expect(astrologerCopyByLocale.ru.calendar.views).toEqual({
       day: "День",
       week: "Неделя",

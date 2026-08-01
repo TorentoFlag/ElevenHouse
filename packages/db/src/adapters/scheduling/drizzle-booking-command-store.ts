@@ -2,14 +2,16 @@ import { randomUUID } from "node:crypto";
 import { and, eq, gt, inArray, lt, lte } from "drizzle-orm";
 import {
   SlotNoLongerAvailableError,
+  FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
   type Booking,
   type BookingCommandStore,
   type BookingPolicySnapshot,
   type ManualBookingClaim,
-  type PaidBookingHoldClaim
+  type PaidBookingHoldClaim,
+  createBookingConfirmedFlowRuntimeDispatchPayload
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
-import { bookings, scheduleReservations } from "../../schema";
+import { bookings, outboxEvents, scheduleReservations } from "../../schema";
 import {
   executeIdempotentSchedulingCommand,
   isActiveReservationExclusionViolation,
@@ -78,7 +80,23 @@ export function createDrizzleBookingCommandStore(
               })
               .returning();
             if (!row) throw new Error("Expected manual booking insert");
-            return { aggregateId: bookingId, value: toBooking(row) };
+            const booking = toBooking(row);
+            await transaction
+              .insert(outboxEvents)
+              .values({
+                eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+                aggregateId: booking.id,
+                payload: createBookingConfirmedFlowRuntimeDispatchPayload(booking),
+                status: "pending",
+                attempts: 0,
+                availableAt: new Date(command.now),
+                createdAt: new Date(command.now),
+                updatedAt: new Date(command.now)
+              })
+              .onConflictDoNothing({
+                target: [outboxEvents.eventType, outboxEvents.aggregateId]
+              });
+            return { aggregateId: bookingId, value: booking };
           },
           replay: (bookingId) => findOwnedBooking(database, command.actorUserId, bookingId)
         });

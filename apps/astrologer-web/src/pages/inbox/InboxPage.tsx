@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { createMessagingRealtimeClient } from "../../features/messaging/realtime/messagingRealtimeClient";
 import { getMessagingMessageMediaSource } from "../../features/messaging/api/messagingApi";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import type { StartTelegramBusinessConnectionResponse } from "@elevenhouse/contracts";
+import { buildInboxFlowContexts } from "../../features/flows/model/inboxFlowContexts";
+import { flowRunsQueryOptions } from "../../features/flows/model/flowsQueryOptions";
+import { useFlowListQuery } from "../../features/flows/model/useFlowListQuery";
 import {
   filterInboxThreads,
   type InboxThreadFilter
@@ -51,6 +54,13 @@ export function InboxPage() {
   const channelConnectionsQuery = useQuery(listMessagingChannelConnectionsQueryOptions());
   const threadsQuery = useQuery(listMessagingThreadsQueryOptions({ limit: 50, offset: 0 }));
   const threadQuery = useQuery(getMessagingThreadQueryOptions(selectedThreadId));
+  const flowsQuery = useFlowListQuery({ status: "all", limit: 50, offset: 0 });
+  const flowRunsQueries = useQueries({
+    queries: (flowsQuery.data?.flows ?? []).map((flow) => ({
+      ...flowRunsQueryOptions(flow.id, { status: "all", limit: 100, offset: 0 }),
+      enabled: flowsQuery.isSuccess
+    }))
+  });
   const startTelegramBusinessMutation = useMutation(
     startTelegramBusinessConnectionMutationOptions(queryClient)
   );
@@ -83,6 +93,21 @@ export function InboxPage() {
       activeFilter: activeThreadFilter
     });
   }, [activeThreadFilter, search, threadsQuery.data?.threads]);
+  const flowContexts = useMemo(() => {
+    const flows = flowsQuery.data?.flows ?? [];
+    const runsByFlowId = Object.fromEntries(
+      flows.map((flow, index) => [flow.id, flowRunsQueries[index]?.data?.runs ?? []])
+    );
+
+    return buildInboxFlowContexts({ threads, flows, runsByFlowId });
+  }, [flowRunsQueries, flowsQuery.data?.flows, threads]);
+  const flowContextStatus =
+    flowsQuery.isError || flowRunsQueries.some((query) => query.isError)
+      ? "error"
+      : flowsQuery.isLoading ||
+          flowRunsQueries.some((query) => query.isLoading || query.isFetching)
+        ? "loading"
+        : "ready";
 
   useDocumentTitle("ElevenHouse | Сообщения");
 
@@ -159,6 +184,8 @@ export function InboxPage() {
       threads={threads}
       selectedThreadId={selectedThreadId}
       selectedThreadResponse={threadQuery.data ?? null}
+      flowContexts={flowContexts}
+      flowContextStatus={flowContextStatus}
       isConnectionsLoading={channelConnectionsQuery.isLoading}
       isThreadsLoading={threadsQuery.isLoading}
       isThreadsError={threadsQuery.isError}

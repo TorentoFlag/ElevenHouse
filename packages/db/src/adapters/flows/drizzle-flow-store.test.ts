@@ -151,6 +151,121 @@ describe("createDrizzleFlowStore", () => {
     });
   });
 
+  it("loads the current published immutable version by owner and flow", async () => {
+    const fake = createFakeDatabase({
+      selectRows: [[{ publishedVersionId: versionId }], [versionRow()]]
+    });
+
+    await expect(
+      createDrizzleFlowStore(fake.database).findPublishedVersionByFlowId({
+        ownerUserId,
+        flowId
+      })
+    ).resolves.toMatchObject({
+      id: versionId,
+      flowId,
+      version: 1,
+      graph
+    });
+
+    expect(renderWhere(fake.wheres[0])).toMatchObject({
+      sql: expect.stringContaining('"owner_user_id" = $1'),
+      params: [ownerUserId, flowId]
+    });
+    expect(renderWhere(fake.wheres[1])).toMatchObject({
+      sql: expect.stringContaining('"owner_user_id" = $1'),
+      params: [ownerUserId, flowId, versionId]
+    });
+  });
+
+  it("transitions only owned flows from allowed source statuses", async () => {
+    const fake = createFakeDatabase({
+      updateRows: [
+        flowRow({
+          status: "active",
+          publishedVersionId: versionId,
+          publishedAt: now
+        })
+      ],
+      selectRows: [[versionRow()]]
+    });
+
+    await expect(
+      createDrizzleFlowStore(fake.database).transitionStatus({
+        ownerUserId,
+        flowId,
+        fromStatuses: ["published", "paused"],
+        toStatus: "active",
+        now: now.toISOString()
+      })
+    ).resolves.toMatchObject({
+      id: flowId,
+      status: "active",
+      publishedVersion: 1
+    });
+
+    expect(fake.updates).toEqual([
+      {
+        table: flows,
+        value: {
+          status: "active",
+          updatedAt: now
+        }
+      }
+    ]);
+    expect(renderWhere(fake.wheres[0])).toMatchObject({
+      sql: expect.stringContaining('"owner_user_id" = $1'),
+      params: [ownerUserId, flowId, "published", "paused"]
+    });
+  });
+
+  it("loads active owner flows by trigger kind from the published immutable graph", async () => {
+    const bookingVersionId = "00000000-0000-4000-8000-000000000004";
+    const bookingGraph: FlowGraph = {
+      ...graph,
+      nodes: [
+        {
+          id: "booking-confirmed",
+          category: "trigger",
+          kind: "booking_confirmed",
+          title: "Запись подтверждена",
+          config: {}
+        },
+        ...graph.nodes.slice(1)
+      ]
+    };
+    const fake = createFakeDatabase({
+      selectRows: [
+        [
+          flowRow({
+            status: "active",
+            publishedVersionId: versionId,
+            publishedAt: now
+          }),
+          flowRow({
+            id: "00000000-0000-4000-8000-000000000005",
+            status: "active",
+            publishedVersionId: bookingVersionId,
+            publishedAt: now
+          })
+        ],
+        [versionRow(), versionRow({ id: bookingVersionId, graph: bookingGraph })]
+      ]
+    });
+
+    await expect(
+      createDrizzleFlowStore(fake.database).listActiveByTriggerKind({
+        ownerUserId,
+        triggerKind: "lead_created"
+      })
+    ).resolves.toMatchObject([{ id: flowId, status: "active", publishedVersion: 1 }]);
+
+    expect(renderWhere(fake.wheres[0])).toMatchObject({
+      sql: expect.stringContaining('"owner_user_id" = $1'),
+      params: [ownerUserId, "active"]
+    });
+  });
+
   it("does not expose rows from another owner", async () => {
     const fake = createFakeDatabase({
       selectRows: [[flowRow()]],

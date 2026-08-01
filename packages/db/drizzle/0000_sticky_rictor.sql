@@ -749,6 +749,7 @@ CREATE TABLE "flows" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"published_at" timestamp with time zone,
+	CONSTRAINT "flows_id_owner_unique" UNIQUE("id","owner_user_id"),
 	CONSTRAINT "flows_name_length_check" CHECK (length(trim("flows"."name")) between 1 and 180),
 	CONSTRAINT "flows_status_check" CHECK ("flows"."status" in ('draft', 'published', 'active', 'paused', 'archived')),
 	CONSTRAINT "flows_approval_mode_check" CHECK ("flows"."approval_mode" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
@@ -763,9 +764,136 @@ CREATE TABLE "flow_versions" (
 	"approval_mode" text NOT NULL,
 	"graph" jsonb NOT NULL,
 	"published_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "flow_versions_id_owner_unique" UNIQUE("id","owner_user_id"),
+	CONSTRAINT "flow_versions_flow_id_id_owner_unique" UNIQUE("flow_id","id","owner_user_id"),
 	CONSTRAINT "flow_versions_positive_version_check" CHECK ("flow_versions"."version" > 0),
 	CONSTRAINT "flow_versions_approval_mode_check" CHECK ("flow_versions"."approval_mode" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
 	CONSTRAINT "flow_versions_graph_object_check" CHECK (jsonb_typeof("flow_versions"."graph") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "flow_approvals" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"flow_run_id" uuid NOT NULL,
+	"flow_step_run_id" uuid,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"kind" text NOT NULL,
+	"title" text NOT NULL,
+	"preview" text NOT NULL,
+	"decision_note" text,
+	"decided_by_user_id" uuid,
+	"snoozed_until" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"decided_at" timestamp with time zone,
+	CONSTRAINT "flow_approvals_status_check" CHECK ("flow_approvals"."status" in ('pending', 'approved', 'rejected', 'snoozed', 'expired')),
+	CONSTRAINT "flow_approvals_kind_check" CHECK ("flow_approvals"."kind" in ('message', 'ai_output', 'delivery', 'payment_offer', 'manual_task')),
+	CONSTRAINT "flow_approvals_title_length_check" CHECK (length(trim("flow_approvals"."title")) between 1 and 180),
+	CONSTRAINT "flow_approvals_preview_length_check" CHECK (length(trim("flow_approvals"."preview")) between 1 and 1000),
+	CONSTRAINT "flow_approvals_decision_note_length_check" CHECK ("flow_approvals"."decision_note" is null or length(trim("flow_approvals"."decision_note")) between 1 and 1000),
+	CONSTRAINT "flow_approvals_pending_decision_check" CHECK ("flow_approvals"."status" <> 'pending' or ("flow_approvals"."decided_at" is null and "flow_approvals"."decided_by_user_id" is null and "flow_approvals"."snoozed_until" is null)),
+	CONSTRAINT "flow_approvals_decided_status_check" CHECK ("flow_approvals"."status" in ('pending', 'expired') or ("flow_approvals"."decided_at" is not null and "flow_approvals"."decided_by_user_id" is not null)),
+	CONSTRAINT "flow_approvals_snoozed_until_check" CHECK ("flow_approvals"."status" <> 'snoozed' or "flow_approvals"."snoozed_until" is not null)
+);
+--> statement-breakpoint
+CREATE TABLE "flow_delivery_attempts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"flow_run_id" uuid NOT NULL,
+	"flow_step_run_id" uuid NOT NULL,
+	"idempotency_key" text NOT NULL,
+	"attempt_number" integer NOT NULL,
+	"provider" text,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"provider_request_payload" jsonb,
+	"provider_response_payload" jsonb,
+	"error_code" text,
+	"error_message" text,
+	"attempted_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "flow_delivery_attempts_status_check" CHECK ("flow_delivery_attempts"."status" in ('pending', 'sent', 'failed', 'unknown')),
+	CONSTRAINT "flow_delivery_attempts_idempotency_key_length_check" CHECK (length(trim("flow_delivery_attempts"."idempotency_key")) between 1 and 240),
+	CONSTRAINT "flow_delivery_attempts_number_check" CHECK ("flow_delivery_attempts"."attempt_number" > 0),
+	CONSTRAINT "flow_delivery_attempts_provider_length_check" CHECK ("flow_delivery_attempts"."provider" is null or length(trim("flow_delivery_attempts"."provider")) between 1 and 120),
+	CONSTRAINT "flow_delivery_attempts_request_payload_object_check" CHECK ("flow_delivery_attempts"."provider_request_payload" is null or jsonb_typeof("flow_delivery_attempts"."provider_request_payload") = 'object'),
+	CONSTRAINT "flow_delivery_attempts_response_payload_object_check" CHECK ("flow_delivery_attempts"."provider_response_payload" is null or jsonb_typeof("flow_delivery_attempts"."provider_response_payload") = 'object'),
+	CONSTRAINT "flow_delivery_attempts_error_code_length_check" CHECK ("flow_delivery_attempts"."error_code" is null or length(trim("flow_delivery_attempts"."error_code")) between 1 and 120),
+	CONSTRAINT "flow_delivery_attempts_error_message_length_check" CHECK ("flow_delivery_attempts"."error_message" is null or length(trim("flow_delivery_attempts"."error_message")) between 1 and 1000)
+);
+--> statement-breakpoint
+CREATE TABLE "flow_runs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"flow_id" uuid NOT NULL,
+	"flow_version_id" uuid NOT NULL,
+	"runtime_event_id" uuid NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"snapshot" jsonb NOT NULL,
+	"current_node_id" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "flow_runs_id_owner_unique" UNIQUE("id","owner_user_id"),
+	CONSTRAINT "flow_runs_id_event_owner_unique" UNIQUE("id","runtime_event_id","owner_user_id"),
+	CONSTRAINT "flow_runs_id_flow_event_owner_unique" UNIQUE("id","flow_id","runtime_event_id","owner_user_id"),
+	CONSTRAINT "flow_runs_status_check" CHECK ("flow_runs"."status" in ('pending', 'running', 'waiting', 'approval_required', 'completed', 'skipped', 'failed_retryable', 'failed_terminal', 'suppressed', 'expired', 'canceled')),
+	CONSTRAINT "flow_runs_snapshot_object_check" CHECK (jsonb_typeof("flow_runs"."snapshot") = 'object'),
+	CONSTRAINT "flow_runs_current_node_id_length_check" CHECK ("flow_runs"."current_node_id" is null or length(trim("flow_runs"."current_node_id")) between 1 and 160)
+);
+--> statement-breakpoint
+CREATE TABLE "flow_runtime_events" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"source" text NOT NULL,
+	"source_event_id" text NOT NULL,
+	"dedupe_key" text NOT NULL,
+	"subject_type" text NOT NULL,
+	"subject_id" text NOT NULL,
+	"occurred_at" timestamp with time zone NOT NULL,
+	"payload" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "flow_runtime_events_id_owner_unique" UNIQUE("id","owner_user_id"),
+	CONSTRAINT "flow_runtime_events_source_check" CHECK ("flow_runtime_events"."source" in ('crm', 'product', 'order', 'booking', 'message', 'chart', 'astro_calendar', 'manual')),
+	CONSTRAINT "flow_runtime_events_subject_type_check" CHECK ("flow_runtime_events"."subject_type" in ('client', 'segment', 'order', 'booking', 'global_event', 'manual')),
+	CONSTRAINT "flow_runtime_events_source_event_id_length_check" CHECK (length(trim("flow_runtime_events"."source_event_id")) between 1 and 180),
+	CONSTRAINT "flow_runtime_events_dedupe_key_length_check" CHECK (length(trim("flow_runtime_events"."dedupe_key")) between 1 and 240),
+	CONSTRAINT "flow_runtime_events_subject_id_length_check" CHECK (length(trim("flow_runtime_events"."subject_id")) between 1 and 180),
+	CONSTRAINT "flow_runtime_events_payload_object_check" CHECK (jsonb_typeof("flow_runtime_events"."payload") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "flow_step_runs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"flow_run_id" uuid NOT NULL,
+	"node_id" text NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"input_snapshot" jsonb NOT NULL,
+	"output_snapshot" jsonb,
+	"error_code" text,
+	"error_message" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "flow_step_runs_id_owner_unique" UNIQUE("id","owner_user_id"),
+	CONSTRAINT "flow_step_runs_id_run_owner_unique" UNIQUE("id","flow_run_id","owner_user_id"),
+	CONSTRAINT "flow_step_runs_status_check" CHECK ("flow_step_runs"."status" in ('pending', 'running', 'waiting', 'approval_required', 'completed', 'skipped', 'failed_retryable', 'failed_terminal', 'suppressed', 'expired', 'canceled')),
+	CONSTRAINT "flow_step_runs_node_id_length_check" CHECK (length(trim("flow_step_runs"."node_id")) between 1 and 160),
+	CONSTRAINT "flow_step_runs_input_snapshot_object_check" CHECK (jsonb_typeof("flow_step_runs"."input_snapshot") = 'object'),
+	CONSTRAINT "flow_step_runs_output_snapshot_object_check" CHECK ("flow_step_runs"."output_snapshot" is null or jsonb_typeof("flow_step_runs"."output_snapshot") = 'object'),
+	CONSTRAINT "flow_step_runs_error_code_length_check" CHECK ("flow_step_runs"."error_code" is null or length(trim("flow_step_runs"."error_code")) between 1 and 120),
+	CONSTRAINT "flow_step_runs_error_message_length_check" CHECK ("flow_step_runs"."error_message" is null or length(trim("flow_step_runs"."error_message")) between 1 and 1000)
+);
+--> statement-breakpoint
+CREATE TABLE "flow_suppressions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"flow_id" uuid NOT NULL,
+	"runtime_event_id" uuid NOT NULL,
+	"flow_run_id" uuid,
+	"reason" text NOT NULL,
+	"details" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "flow_suppressions_reason_check" CHECK ("flow_suppressions"."reason" in ('FLOW_NOT_PUBLISHED', 'FLOW_NOT_ACTIVE', 'OWNER_RELATIONSHIP_REQUIRED', 'CHANNEL_CONSENT_REQUIRED', 'QUIET_HOURS_HOLD', 'FREQUENCY_CAP_HOLD', 'PLAN_LIMIT_REACHED', 'AUTO_SEND_DISABLED')),
+	CONSTRAINT "flow_suppressions_details_object_check" CHECK (jsonb_typeof("flow_suppressions"."details") = 'object')
 );
 --> statement-breakpoint
 CREATE TABLE "client_profiles" (
@@ -1624,8 +1752,27 @@ ALTER TABLE "astro_calendar_generations" ADD CONSTRAINT "astro_calendar_generati
 ALTER TABLE "astro_calendar_events" ADD CONSTRAINT "astro_calendar_events_generation_id_astro_calendar_generations_id_fk" FOREIGN KEY ("generation_id") REFERENCES "public"."astro_calendar_generations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astro_calendar_events" ADD CONSTRAINT "astro_calendar_events_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flows" ADD CONSTRAINT "flows_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "flow_versions" ADD CONSTRAINT "flow_versions_flow_id_flows_id_fk" FOREIGN KEY ("flow_id") REFERENCES "public"."flows"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flows" ADD CONSTRAINT "flows_published_version_owner_fk" FOREIGN KEY ("id","published_version_id","owner_user_id") REFERENCES "public"."flow_versions"("flow_id","id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_versions" ADD CONSTRAINT "flow_versions_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_versions" ADD CONSTRAINT "flow_versions_flow_owner_fk" FOREIGN KEY ("flow_id","owner_user_id") REFERENCES "public"."flows"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_approvals" ADD CONSTRAINT "flow_approvals_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_approvals" ADD CONSTRAINT "flow_approvals_decided_by_user_id_users_id_fk" FOREIGN KEY ("decided_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_approvals" ADD CONSTRAINT "flow_approvals_run_owner_fk" FOREIGN KEY ("flow_run_id","owner_user_id") REFERENCES "public"."flow_runs"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_approvals" ADD CONSTRAINT "flow_approvals_step_run_owner_fk" FOREIGN KEY ("flow_step_run_id","flow_run_id","owner_user_id") REFERENCES "public"."flow_step_runs"("id","flow_run_id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_delivery_attempts" ADD CONSTRAINT "flow_delivery_attempts_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_delivery_attempts" ADD CONSTRAINT "flow_delivery_attempts_run_owner_fk" FOREIGN KEY ("flow_run_id","owner_user_id") REFERENCES "public"."flow_runs"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_delivery_attempts" ADD CONSTRAINT "flow_delivery_attempts_step_run_owner_fk" FOREIGN KEY ("flow_step_run_id","flow_run_id","owner_user_id") REFERENCES "public"."flow_step_runs"("id","flow_run_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_runs" ADD CONSTRAINT "flow_runs_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_runs" ADD CONSTRAINT "flow_runs_flow_owner_fk" FOREIGN KEY ("flow_id","owner_user_id") REFERENCES "public"."flows"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_runs" ADD CONSTRAINT "flow_runs_flow_version_owner_fk" FOREIGN KEY ("flow_id","flow_version_id","owner_user_id") REFERENCES "public"."flow_versions"("flow_id","id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_runs" ADD CONSTRAINT "flow_runs_runtime_event_owner_fk" FOREIGN KEY ("runtime_event_id","owner_user_id") REFERENCES "public"."flow_runtime_events"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_runtime_events" ADD CONSTRAINT "flow_runtime_events_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_step_runs" ADD CONSTRAINT "flow_step_runs_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_step_runs" ADD CONSTRAINT "flow_step_runs_run_owner_fk" FOREIGN KEY ("flow_run_id","owner_user_id") REFERENCES "public"."flow_runs"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_suppressions" ADD CONSTRAINT "flow_suppressions_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_suppressions" ADD CONSTRAINT "flow_suppressions_flow_owner_fk" FOREIGN KEY ("flow_id","owner_user_id") REFERENCES "public"."flows"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_suppressions" ADD CONSTRAINT "flow_suppressions_runtime_event_owner_fk" FOREIGN KEY ("runtime_event_id","owner_user_id") REFERENCES "public"."flow_runtime_events"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_suppressions" ADD CONSTRAINT "flow_suppressions_run_event_owner_fk" FOREIGN KEY ("flow_run_id","flow_id","runtime_event_id","owner_user_id") REFERENCES "public"."flow_runs"("id","flow_id","runtime_event_id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_profiles" ADD CONSTRAINT "client_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_birth_data" ADD CONSTRAINT "client_birth_data_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1789,6 +1936,21 @@ CREATE INDEX "flows_owner_status_updated_idx" ON "flows" USING btree ("owner_use
 CREATE INDEX "flows_owner_name_idx" ON "flows" USING btree ("owner_user_id","name");--> statement-breakpoint
 CREATE INDEX "flow_versions_owner_published_idx" ON "flow_versions" USING btree ("owner_user_id","published_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "flow_versions_flow_version_unique" ON "flow_versions" USING btree ("flow_id","version");--> statement-breakpoint
+CREATE INDEX "flow_approvals_owner_status_created_idx" ON "flow_approvals" USING btree ("owner_user_id","status","created_at");--> statement-breakpoint
+CREATE INDEX "flow_approvals_run_created_idx" ON "flow_approvals" USING btree ("flow_run_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_delivery_attempts_owner_idempotency_unique" ON "flow_delivery_attempts" USING btree ("owner_user_id","idempotency_key");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_delivery_attempts_step_attempt_unique" ON "flow_delivery_attempts" USING btree ("flow_step_run_id","attempt_number");--> statement-breakpoint
+CREATE INDEX "flow_delivery_attempts_owner_status_created_idx" ON "flow_delivery_attempts" USING btree ("owner_user_id","status","created_at");--> statement-breakpoint
+CREATE INDEX "flow_runs_owner_status_updated_idx" ON "flow_runs" USING btree ("owner_user_id","status","updated_at");--> statement-breakpoint
+CREATE INDEX "flow_runs_flow_created_idx" ON "flow_runs" USING btree ("flow_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "flow_runs_runtime_event_idx" ON "flow_runs" USING btree ("runtime_event_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_runs_owner_flow_event_unique" ON "flow_runs" USING btree ("owner_user_id","flow_id","runtime_event_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_runtime_events_owner_dedupe_unique" ON "flow_runtime_events" USING btree ("owner_user_id","dedupe_key");--> statement-breakpoint
+CREATE INDEX "flow_runtime_events_owner_occurred_idx" ON "flow_runtime_events" USING btree ("owner_user_id","occurred_at","id");--> statement-breakpoint
+CREATE INDEX "flow_step_runs_owner_run_created_idx" ON "flow_step_runs" USING btree ("owner_user_id","flow_run_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_suppressions_owner_flow_event_reason_unique" ON "flow_suppressions" USING btree ("owner_user_id","flow_id","runtime_event_id","reason");--> statement-breakpoint
+CREATE INDEX "flow_suppressions_owner_created_idx" ON "flow_suppressions" USING btree ("owner_user_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "flow_suppressions_runtime_event_idx" ON "flow_suppressions" USING btree ("runtime_event_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "client_birth_data_primary_unique" ON "client_birth_data" USING btree ("client_user_id") WHERE "client_birth_data"."is_primary" = true;--> statement-breakpoint
 CREATE INDEX "client_birth_data_client_idx" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "client_astrologer_relationships_unique" ON "client_astrologer_relationships" USING btree ("client_user_id","astrologer_user_id");--> statement-breakpoint

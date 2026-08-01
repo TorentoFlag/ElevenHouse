@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { FlowGraphValidationError } from "./flow-validation";
 import {
+  activateFlow,
   createFlowDraft,
   listFlows,
+  pauseFlow,
   publishFlow,
   updateFlowDraft
 } from "./flow-use-cases";
@@ -159,6 +161,61 @@ describe("flow use cases", () => {
     );
     expect(store.publishDraft).not.toHaveBeenCalled();
   });
+
+  it("activates a published flow and pauses an active flow through explicit owner-scoped transitions", async () => {
+    const activeRecord = flowRecord({
+      status: "active",
+      publishedVersionId: "33333333-3333-4333-8333-333333333333",
+      publishedVersion: 1,
+      publishedAt: now
+    });
+    const pausedRecord = flowRecord({
+      status: "paused",
+      publishedVersionId: "33333333-3333-4333-8333-333333333333",
+      publishedVersion: 1,
+      publishedAt: now
+    });
+    const transitionStatus = vi
+      .fn()
+      .mockResolvedValueOnce(activeRecord)
+      .mockResolvedValueOnce(pausedRecord);
+    const findByOwnerAndId = vi
+      .fn()
+      .mockResolvedValueOnce(
+        flowRecord({
+          status: "published",
+          publishedVersionId: "33333333-3333-4333-8333-333333333333",
+          publishedVersion: 1,
+          publishedAt: now
+        })
+      )
+      .mockResolvedValueOnce(activeRecord);
+    const store = createStore({
+      findByOwnerAndId,
+      transitionStatus
+    } as Partial<FlowStore>);
+    await expect(activateFlow({ store, ownerUserId, flowId, now })).resolves.toEqual(
+      activeRecord
+    );
+    await expect(pauseFlow({ store, ownerUserId, flowId, now })).resolves.toEqual(
+      pausedRecord
+    );
+
+    expect(transitionStatus).toHaveBeenNthCalledWith(1, {
+      ownerUserId,
+      flowId,
+      fromStatuses: ["published", "paused"],
+      toStatus: "active",
+      now
+    });
+    expect(transitionStatus).toHaveBeenNthCalledWith(2, {
+      ownerUserId,
+      flowId,
+      fromStatuses: ["active"],
+      toStatus: "paused",
+      now
+    });
+  });
 });
 
 function createStore(overrides: Partial<FlowStore> = {}): FlowStore {
@@ -166,10 +223,17 @@ function createStore(overrides: Partial<FlowStore> = {}): FlowStore {
     createDraft: vi.fn(async () => record),
     listByOwner: vi.fn(async () => ({ flows: [record], total: 1 })),
     findByOwnerAndId: vi.fn(async () => record),
+    findPublishedVersionByFlowId: vi.fn(async () => publishResult.version),
+    listActiveByTriggerKind: vi.fn(async () => [record]),
+    transitionStatus: vi.fn(async () => record),
     updateDraft: vi.fn(async () => record),
     publishDraft: vi.fn(async () => publishResult),
     ...overrides
   };
+}
+
+function flowRecord(overrides: Partial<FlowRecord> = {}): FlowRecord {
+  return { ...record, ...overrides };
 }
 
 const publishResult = {

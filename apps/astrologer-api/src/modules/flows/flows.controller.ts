@@ -64,4 +64,48 @@ export class FlowsController {
   publishFlow(@Param("flowId") flowId: string, @Req() request: AstrologerSessionRequest) {
     return this.service.publishFlow(flowId, request);
   }
+
+  @Post(":flowId/activate")
+  @HttpCode(HttpStatus.OK)
+  @RequireCsrf()
+  activateFlow(@Param("flowId") flowId: string, @Req() request: AstrologerSessionRequest) {
+    return this.service.activateFlow(flowId, request);
+  }
+
+  @Post(":flowId/pause")
+  @HttpCode(HttpStatus.OK)
+  @RequireCsrf()
+  pauseFlow(@Param("flowId") flowId: string, @Req() request: AstrologerSessionRequest) {
+    return this.service.pauseFlow(flowId, request);
+  }
+
+  @Post(":flowId/simulate")
+  @HttpCode(HttpStatus.OK)
+  @RequireCsrf()
+  simulateFlow(
+    @Param("flowId") flowId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.simulateFlow(flowId, body, request);
+  }
+
+  @Post(":flowId/manual-runs")
+  @RequireCsrf()
+  createManualRun(
+    @Param("flowId") flowId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.createManualRun(flowId, body, request);
+  }
+
+  @Get(":flowId/runs")
+  listFlowRuns(
+    @Param("flowId") flowId: string,
+    @Query() query: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.listFlowRuns(flowId, query, request);
+  }
 }

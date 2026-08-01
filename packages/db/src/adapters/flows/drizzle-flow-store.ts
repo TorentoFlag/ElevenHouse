@@ -60,6 +60,77 @@ export function createDrizzleFlowStore(database: ElevenHouseDatabase): FlowStore
       const [flow] = await hydrateFlows(database, [row]);
       return flow ?? null;
     },
+    findPublishedVersionByFlowId: async (input) => {
+      const [flow] = await database
+        .select({ publishedVersionId: flows.publishedVersionId })
+        .from(flows)
+        .where(and(eq(flows.ownerUserId, input.ownerUserId), eq(flows.id, input.flowId)))
+        .limit(1);
+      if (!flow?.publishedVersionId) return null;
+
+      const [version] = await database
+        .select()
+        .from(flowVersions)
+        .where(
+          and(
+            eq(flowVersions.ownerUserId, input.ownerUserId),
+            eq(flowVersions.flowId, input.flowId),
+            eq(flowVersions.id, flow.publishedVersionId)
+          )
+        )
+        .limit(1);
+      return version ? toFlowVersion(version) : null;
+    },
+    listActiveByTriggerKind: async (input) => {
+      const rows = await database
+        .select()
+        .from(flows)
+        .where(and(eq(flows.ownerUserId, input.ownerUserId), eq(flows.status, "active")))
+        .orderBy(desc(flows.updatedAt), desc(flows.id))
+        .limit(500);
+      const publishedVersionIds = rows
+        .map((row) => row.publishedVersionId)
+        .filter((value): value is string => value !== null);
+      if (publishedVersionIds.length === 0) return [];
+
+      const versionRows = await database
+        .select()
+        .from(flowVersions)
+        .where(
+          and(
+            eq(flowVersions.ownerUserId, input.ownerUserId),
+            inArray(flowVersions.id, publishedVersionIds)
+          )
+        );
+      const versionById = new Map(versionRows.map((row) => [row.id, row]));
+
+      return rows.flatMap((row) => {
+        const version = row.publishedVersionId ? versionById.get(row.publishedVersionId) : undefined;
+        if (!version) return [];
+        const graph = version.graph as FlowGraph;
+        const trigger = graph.nodes.find((node) => node.category === "trigger");
+        return trigger?.kind === input.triggerKind ? [toFlowRecord(row, version.version)] : [];
+      });
+    },
+    transitionStatus: async (input) => {
+      const [row] = await database
+        .update(flows)
+        .set({
+          status: input.toStatus,
+          updatedAt: new Date(input.now)
+        })
+        .where(
+          and(
+            eq(flows.ownerUserId, input.ownerUserId),
+            eq(flows.id, input.flowId),
+            inArray(flows.status, input.fromStatuses)
+          )
+        )
+        .returning();
+      if (!row) return null;
+      const [flow] = await hydrateFlows(database, [row]);
+      return flow ?? null;
+    },
     updateDraft: async (input) => {
       const patch: Partial<typeof flows.$inferInsert> = {
         updatedAt: new Date(input.now)

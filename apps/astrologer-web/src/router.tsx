@@ -15,6 +15,7 @@ import { ChartEngineRoute } from "./pages/chart-engine/ChartEngineRoute";
 import { HumanDesignPage } from "./pages/human-design/HumanDesignPage";
 import { InboxPage } from "./pages/inbox/InboxPage";
 import { AstroCalendarPage } from "./pages/astro-calendar/AstroCalendarPage";
+import { FlowsPage } from "./pages/flows/FlowsPage";
 
 export const astrologerRoutes = [
   {
@@ -42,6 +43,10 @@ export const astrologerRoutes = [
           {
             path: "/finance",
             element: <FinancePage />
+          },
+          {
+            path: "/flows",
+            element: <FlowsPage />
           },
           {
             path: "/products",

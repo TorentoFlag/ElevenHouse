@@ -5,6 +5,7 @@ import {
   IdempotencyKeyReuseError,
   ManualCalendarBlockConflictError,
   SlotNoLongerAvailableError,
+  FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
   type ManualBookingClaim,
   type ManualBookingCommand,
   type ManualCalendarBlockClaim,
@@ -62,17 +63,21 @@ describe("scheduling command stores Drizzle/PostgreSQL integration", () => {
     expect(rejected).toMatchObject({ reason: expect.any(SlotNoLongerAvailableError) });
 
     await expect(
-      store.executeManualBooking(bookingCommand(fixture.ownerUserId, "booking-adjacent", "c"), async () =>
-        bookingClaim(fixture, "2026-05-29T11:00:00Z", "2026-05-29T12:00:00Z")
+      store.executeManualBooking(
+        bookingCommand(fixture.ownerUserId, "booking-adjacent", "c"),
+        async () => bookingClaim(fixture, "2026-05-29T11:00:00Z", "2026-05-29T12:00:00Z")
       )
     ).resolves.toMatchObject({ kind: "created" });
 
     const reservationCountBeforeFailure = await activeReservationCount(fixture.ownerUserId);
     await expect(
-      store.executeManualBooking(bookingCommand(fixture.ownerUserId, "booking-invalid", "d"), async () => ({
-        ...bookingClaim(fixture, "2026-05-29T12:00:00Z", "2026-05-29T13:00:00Z"),
-        productId: randomUUID()
-      }))
+      store.executeManualBooking(
+        bookingCommand(fixture.ownerUserId, "booking-invalid", "d"),
+        async () => ({
+          ...bookingClaim(fixture, "2026-05-29T12:00:00Z", "2026-05-29T13:00:00Z"),
+          productId: randomUUID()
+        })
+      )
     ).rejects.toThrow();
     await expect(activeReservationCount(fixture.ownerUserId)).resolves.toBe(
       reservationCountBeforeFailure
@@ -93,6 +98,40 @@ describe("scheduling command stores Drizzle/PostgreSQL integration", () => {
     expect(results.map((result) => result.kind).sort()).toEqual(["created", "replayed"]);
     expect(results[0]?.booking.id).toBe(results[1]?.booking.id);
     expect(createClaim).toHaveBeenCalledTimes(1);
+    const outbox = await runtime.pool.query<{
+      event_type: string;
+      aggregate_id: string;
+      status: string;
+      payload: {
+        ownerUserId: string;
+        triggerKind: string;
+        sourceEventId: string;
+        subjectType: string;
+        subjectId: string;
+        payload: { bookingId: string; clientUserId: string; productId: string };
+      };
+    }>(
+      "select event_type, aggregate_id, status, payload from outbox_events where aggregate_id = $1",
+      [results[0]?.booking.id]
+    );
+    expect(outbox.rows).toHaveLength(1);
+    expect(outbox.rows[0]).toMatchObject({
+      event_type: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+      aggregate_id: results[0]?.booking.id,
+      status: "pending",
+      payload: {
+        ownerUserId: fixture.ownerUserId,
+        triggerKind: "booking_confirmed",
+        sourceEventId: `booking:${results[0]?.booking.id}:confirmed`,
+        subjectType: "booking",
+        subjectId: results[0]?.booking.id,
+        payload: {
+          bookingId: results[0]?.booking.id,
+          clientUserId: fixture.clientUserId,
+          productId: fixture.productId
+        }
+      }
+    });
 
     await expect(
       store.executeManualBooking({ ...command, requestHash: digest("f") }, async () => claim)
@@ -153,11 +192,7 @@ describe("scheduling command stores Drizzle/PostgreSQL integration", () => {
     const fixture = await createFixture();
     const bookingStore = createDrizzleBookingCommandStore(runtime.database);
     const blockStore = createDrizzleManualBlockCommandStore(runtime.database);
-    const claim = manualBlockClaim(
-      fixture,
-      "2026-05-31T10:00:00Z",
-      "2026-05-31T12:00:00Z"
-    );
+    const claim = manualBlockClaim(fixture, "2026-05-31T10:00:00Z", "2026-05-31T12:00:00Z");
     const command = manualBlockCommand(fixture.ownerUserId, "manual-block-key", "1");
     const created = await blockStore.executeCreate(command, async () => claim);
 
@@ -175,8 +210,9 @@ describe("scheduling command stores Drizzle/PostgreSQL integration", () => {
       )
     ).rejects.toBeInstanceOf(ManualCalendarBlockConflictError);
     await expect(
-      bookingStore.executeManualBooking(bookingCommand(fixture.ownerUserId, "booking-blocked", "4"), async () =>
-        bookingClaim(fixture, claim.startAt, "2026-05-31T11:00:00Z")
+      bookingStore.executeManualBooking(
+        bookingCommand(fixture.ownerUserId, "booking-blocked", "4"),
+        async () => bookingClaim(fixture, claim.startAt, "2026-05-31T11:00:00Z")
       )
     ).rejects.toBeInstanceOf(SlotNoLongerAvailableError);
 
@@ -200,8 +236,9 @@ describe("scheduling command stores Drizzle/PostgreSQL integration", () => {
       })
     ).resolves.toEqual(released);
     await expect(
-      bookingStore.executeManualBooking(bookingCommand(fixture.ownerUserId, "booking-after-release", "5"), async () =>
-        bookingClaim(fixture, claim.startAt, "2026-05-31T11:00:00Z")
+      bookingStore.executeManualBooking(
+        bookingCommand(fixture.ownerUserId, "booking-after-release", "5"),
+        async () => bookingClaim(fixture, claim.startAt, "2026-05-31T11:00:00Z")
       )
     ).resolves.toMatchObject({ kind: "created" });
   });
@@ -211,11 +248,13 @@ describe("scheduling command stores Drizzle/PostgreSQL integration", () => {
     const bookingStore = createDrizzleBookingCommandStore(runtime.database);
     const blockStore = createDrizzleManualBlockCommandStore(runtime.database);
     const readStore = createDrizzleCalendarReadStore(runtime.database);
-    await bookingStore.executeManualBooking(bookingCommand(fixture.ownerUserId, "calendar-booking", "6"), async () =>
-      bookingClaim(fixture, "2026-06-01T10:00:00Z", "2026-06-01T11:00:00Z")
+    await bookingStore.executeManualBooking(
+      bookingCommand(fixture.ownerUserId, "calendar-booking", "6"),
+      async () => bookingClaim(fixture, "2026-06-01T10:00:00Z", "2026-06-01T11:00:00Z")
     );
-    await blockStore.executeCreate(manualBlockCommand(fixture.ownerUserId, "calendar-block", "7"), async () =>
-      manualBlockClaim(fixture, "2026-06-01T12:00:00Z", "2026-06-01T14:00:00Z")
+    await blockStore.executeCreate(
+      manualBlockCommand(fixture.ownerUserId, "calendar-block", "7"),
+      async () => manualBlockClaim(fixture, "2026-06-01T12:00:00Z", "2026-06-01T14:00:00Z")
     );
 
     await expect(

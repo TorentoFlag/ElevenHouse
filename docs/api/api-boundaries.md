@@ -97,7 +97,8 @@ PDF export, canonical Pythagorean numerology, canonical Ladini 22 Matrix
 calculations with private notes and a versioned interpretation catalog, Human
 Design individual/compatibility/transit/AI/PDF contours, provider-neutral
 Messaging commands/webhook/SSE freshness and provider-neutral AI generation
-through OpenAI. Messaging architecture is recorded in
+through OpenAI, and the Flows templates/draft CRUD/immutable publish foundation.
+Messaging architecture is recorded in
 `docs/decisions/0010-messaging-channel-architecture.md`.
 
 Ответственности:
@@ -110,6 +111,7 @@ through OpenAI. Messaging architecture is recorded in
 - Messaging commands, provider webhook ingestion and realtime freshness.
 - Sessions и materials.
 - Wallet/finance views.
+- Flows templates, draft CRUD and immutable publish.
 - Analytics.
 - Verification submission and current verification status for the signed-in
   astrologer.
@@ -205,6 +207,31 @@ POST /messaging/threads/:threadId/create-client
 POST /messaging/threads/:threadId/read
 POST /messaging/webhooks/telegram/bot
 GET  /messaging/events
+```
+
+Flows shipped endpoints:
+
+```text
+Current:
+GET /flow-templates
+GET /flows
+POST /flows
+GET /flows/:flowId
+PATCH /flows/:flowId/draft
+POST /flows/:flowId/publish
+```
+
+Flows planned runtime endpoints:
+
+```text
+Planned runtime:
+POST /flows/:flowId/simulate
+POST /flows/:flowId/manual-runs
+GET /flows/:flowId/runs
+GET /flow-runs/:runId
+POST /flow-runs/:runId/cancel
+GET /flow-approvals
+POST /flow-approvals/:approvalId/decision
 ```
 
 Availability, calendar and manual-booking routes are authenticated and owner

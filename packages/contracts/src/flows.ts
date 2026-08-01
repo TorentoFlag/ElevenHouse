@@ -145,6 +145,54 @@ export const flowStepRunStatusValues = [
 export const flowStepRunStatusSchema = z.enum(flowStepRunStatusValues);
 export type FlowStepRunStatus = z.infer<typeof flowStepRunStatusSchema>;
 
+export const flowRuntimeEventSourceValues = [
+  "crm",
+  "product",
+  "order",
+  "booking",
+  "message",
+  "chart",
+  "astro_calendar",
+  "manual"
+] as const;
+export const flowRuntimeEventSourceSchema = z.enum(flowRuntimeEventSourceValues);
+export type FlowRuntimeEventSource = z.infer<typeof flowRuntimeEventSourceSchema>;
+
+export const flowRunSubjectTypeValues = [
+  "client",
+  "segment",
+  "order",
+  "booking",
+  "global_event",
+  "manual"
+] as const;
+export const flowRunSubjectTypeSchema = z.enum(flowRunSubjectTypeValues);
+export type FlowRunSubjectType = z.infer<typeof flowRunSubjectTypeSchema>;
+
+export const flowApprovalStatusValues = [
+  "pending",
+  "approved",
+  "rejected",
+  "snoozed",
+  "expired"
+] as const;
+export const flowApprovalStatusSchema = z.enum(flowApprovalStatusValues);
+export type FlowApprovalStatus = z.infer<typeof flowApprovalStatusSchema>;
+
+export const flowApprovalDecisionValues = ["approved", "rejected", "snoozed"] as const;
+export const flowApprovalDecisionSchema = z.enum(flowApprovalDecisionValues);
+export type FlowApprovalDecision = z.infer<typeof flowApprovalDecisionSchema>;
+
+export const flowApprovalKindValues = [
+  "message",
+  "ai_output",
+  "delivery",
+  "payment_offer",
+  "manual_task"
+] as const;
+export const flowApprovalKindSchema = z.enum(flowApprovalKindValues);
+export type FlowApprovalKind = z.infer<typeof flowApprovalKindSchema>;
+
 export const flowTemplateCategoryValues = [
   "sales",
   "service_delivery",
@@ -328,8 +376,8 @@ export const flowRunSnapshotSchema = z
   .object({
     schemaVersion: z.literal("flow-run-snapshot.v1"),
     flowVersionId: uuidSchema,
-    sourceEventId: stableIdSchema,
-    subjectType: z.enum(["client", "segment", "order", "booking", "global_event", "manual"]),
+    sourceEventId: z.string().trim().min(1).max(180),
+    subjectType: flowRunSubjectTypeSchema,
     subjectId: z.string().trim().min(1).max(180),
     occurredAt: instantSchema,
     timeZone: z.string().trim().min(1).max(120),
@@ -355,13 +403,28 @@ export const flowRunSchema = z
   .strict();
 export type FlowRun = z.infer<typeof flowRunSchema>;
 
+export const flowRuntimeEventSchema = z
+  .object({
+    id: uuidSchema,
+    ownerUserId: uuidSchema,
+    source: flowRuntimeEventSourceSchema,
+    sourceEventId: z.string().trim().min(1).max(180),
+    dedupeKey: z.string().trim().min(1).max(240),
+    subjectType: flowRunSubjectTypeSchema,
+    subjectId: z.string().trim().min(1).max(180),
+    occurredAt: instantSchema,
+    payload: recordSchema.default({})
+  })
+  .strict();
+export type FlowRuntimeEvent = z.infer<typeof flowRuntimeEventSchema>;
+
 export const flowApprovalSchema = z
   .object({
     id: uuidSchema,
     flowRunId: uuidSchema,
     stepRunId: uuidSchema.nullable(),
-    status: z.enum(["pending", "approved", "rejected", "snoozed", "expired"]),
-    kind: z.enum(["message", "ai_output", "delivery", "payment_offer", "manual_task"]),
+    status: flowApprovalStatusSchema,
+    kind: flowApprovalKindSchema,
     title: titleSchema,
     preview: descriptionSchema,
     createdAt: instantSchema,
@@ -369,6 +432,40 @@ export const flowApprovalSchema = z
   })
   .strict();
 export type FlowApproval = z.infer<typeof flowApprovalSchema>;
+
+export const flowStepRunResponseSchema = z
+  .object({
+    id: uuidSchema,
+    flowRunId: uuidSchema,
+    nodeId: stableIdSchema,
+    status: flowStepRunStatusSchema,
+    inputSnapshot: recordSchema,
+    outputSnapshot: recordSchema.nullable(),
+    errorCode: z.string().trim().min(1).max(120).nullable(),
+    errorMessage: z.string().trim().min(1).max(1_000).nullable(),
+    createdAt: instantSchema,
+    updatedAt: instantSchema,
+    completedAt: instantSchema.nullable()
+  })
+  .strict();
+export type FlowStepRunResponse = z.infer<typeof flowStepRunResponseSchema>;
+
+export const flowRunResponseSchema = z
+  .object({
+    id: uuidSchema,
+    flowId: uuidSchema,
+    flowVersionId: uuidSchema,
+    ownerUserId: uuidSchema,
+    sourceEventId: z.string().trim().min(1).max(180),
+    status: flowRunStatusSchema,
+    snapshot: flowRunSnapshotSchema,
+    currentNodeId: stableIdSchema.nullable(),
+    createdAt: instantSchema,
+    updatedAt: instantSchema,
+    completedAt: instantSchema.nullable()
+  })
+  .strict();
+export type FlowRunResponse = z.infer<typeof flowRunResponseSchema>;
 
 export const flowTemplateSchema = z
   .object({
@@ -449,6 +546,123 @@ export const listFlowsResponseSchema = z
   })
   .strict();
 export type ListFlowsResponse = z.infer<typeof listFlowsResponseSchema>;
+
+export const simulateFlowRunRequestSchema = z
+  .object({
+    source: flowRuntimeEventSourceSchema,
+    subjectType: flowRunSubjectTypeSchema,
+    subjectId: z.string().trim().min(1).max(180),
+    occurredAt: instantSchema,
+    timeZone: z.string().trim().min(1).max(120),
+    payload: recordSchema.default({})
+  })
+  .strict();
+export type SimulateFlowRunRequestInput = z.input<typeof simulateFlowRunRequestSchema>;
+export type SimulateFlowRunRequest = z.infer<typeof simulateFlowRunRequestSchema>;
+
+export const listFlowRunsQuerySchema = z
+  .object({
+    status: z.enum(["all", ...flowRunStatusValues]).optional().default("all"),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+    offset: z.coerce.number().int().min(0).max(10_000).optional().default(0)
+  })
+  .strict();
+export type ListFlowRunsQueryInput = z.input<typeof listFlowRunsQuerySchema>;
+export type ListFlowRunsQuery = z.infer<typeof listFlowRunsQuerySchema>;
+
+export const listFlowRunsResponseSchema = z
+  .object({
+    runs: z.array(flowRunResponseSchema).max(100),
+    total: z.number().int().min(0)
+  })
+  .strict();
+export type ListFlowRunsResponse = z.infer<typeof listFlowRunsResponseSchema>;
+
+export const getFlowRunResponseSchema = z
+  .object({
+    run: flowRunResponseSchema
+  })
+  .strict();
+export type GetFlowRunResponse = z.infer<typeof getFlowRunResponseSchema>;
+
+export const cancelFlowRunResponseSchema = z
+  .object({
+    run: flowRunResponseSchema
+  })
+  .strict();
+export type CancelFlowRunResponse = z.infer<typeof cancelFlowRunResponseSchema>;
+
+export const listFlowApprovalsQuerySchema = z
+  .object({
+    status: z.enum(["all", ...flowApprovalStatusValues]).optional().default("pending"),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+    offset: z.coerce.number().int().min(0).max(10_000).optional().default(0)
+  })
+  .strict();
+export type ListFlowApprovalsQueryInput = z.input<typeof listFlowApprovalsQuerySchema>;
+export type ListFlowApprovalsQuery = z.infer<typeof listFlowApprovalsQuerySchema>;
+
+export const listFlowApprovalsResponseSchema = z
+  .object({
+    approvals: z.array(flowApprovalSchema).max(100),
+    total: z.number().int().min(0)
+  })
+  .strict();
+export type ListFlowApprovalsResponse = z.infer<typeof listFlowApprovalsResponseSchema>;
+
+export const decideFlowApprovalRequestSchema = z
+  .object({
+    decision: flowApprovalDecisionSchema,
+    note: z.string().trim().min(1).max(1_000).optional()
+  })
+  .strict();
+export type DecideFlowApprovalRequest = z.infer<typeof decideFlowApprovalRequestSchema>;
+
+export const decideFlowApprovalResponseSchema = z
+  .object({
+    approval: flowApprovalSchema
+  })
+  .strict();
+export type DecideFlowApprovalResponse = z.infer<typeof decideFlowApprovalResponseSchema>;
+
+export const flowSimulationStepSchema = z
+  .object({
+    nodeId: stableIdSchema,
+    status: z.enum(["planned", "approval_required", "blocked"]),
+    reason: z.string().trim().min(1).max(240).nullable()
+  })
+  .strict();
+export type FlowSimulationStep = z.infer<typeof flowSimulationStepSchema>;
+
+export const simulateFlowRunResponseSchema = z
+  .object({
+    flowId: uuidSchema,
+    flowVersionId: uuidSchema,
+    plannedSteps: z.array(flowSimulationStepSchema).max(100),
+    warnings: z.array(z.string().trim().min(1).max(240)).max(100)
+  })
+  .strict();
+export type SimulateFlowRunResponse = z.infer<typeof simulateFlowRunResponseSchema>;
+
+export const manualFlowRunResponseSchema = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.enum(["created", "duplicate"]),
+      event: flowRuntimeEventSchema,
+      run: flowRunResponseSchema,
+      stepRuns: z.array(flowStepRunResponseSchema).max(100),
+      approvals: z.array(flowApprovalSchema).max(100)
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("suppressed"),
+      event: flowRuntimeEventSchema,
+      reason: z.string().trim().min(1).max(240)
+    })
+    .strict()
+]);
+export type ManualFlowRunResponse = z.infer<typeof manualFlowRunResponseSchema>;
 
 export const publishFlowResponseSchema = z
   .object({

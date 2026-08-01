@@ -80,7 +80,9 @@ describe("BookingsService", () => {
     await expect(service.getBooking(bookingId, request())).resolves.toMatchObject({
       booking: { id: bookingId }
     });
-    await expect(service.getBooking("not-a-uuid", request())).rejects.toMatchObject({ status: 400 });
+    await expect(service.getBooking("not-a-uuid", request())).rejects.toMatchObject({
+      status: 400
+    });
   });
 
   it("projects contract-safe slots for an owner-scoped product", async () => {
@@ -130,8 +132,7 @@ describe("BookingsService", () => {
       (error: unknown) =>
         error instanceof HttpException &&
         error.getStatus() === 422 &&
-        (error.getResponse() as { code: string }).code ===
-          new ProductNotBookableError().code
+        (error.getResponse() as { code: string }).code === new ProductNotBookableError().code
     );
   });
 
@@ -172,25 +173,29 @@ function request() {
 }
 
 function createService(
-  overrides: { store?: BookingCommandStore; productReader?: BookingProductReader } = {}
+  overrides: {
+    store?: BookingCommandStore;
+    productReader?: BookingProductReader;
+  } = {}
 ) {
   return new BookingsService(
     overrides.store ?? createCommandStore(),
     createAvailabilityStore(),
     { hasActiveRelationship: vi.fn(async () => true) } satisfies BookingClientReader,
-    overrides.productReader ?? {
-      findByOwnerAndId: vi.fn(async () => ({
-        id: productId,
-        title: booking.productTitle,
-        status: "active" as const,
-        executionMode: "live" as const,
-        participantMode: "solo" as const,
-        durationMinutes: 60,
-        deliveryFormats: ["video" as const],
-        priceMinor: booking.priceMinor,
-        currency: "RUB" as const
-      }))
-    } satisfies BookingProductReader,
+    overrides.productReader ??
+      ({
+        findByOwnerAndId: vi.fn(async () => ({
+          id: productId,
+          title: booking.productTitle,
+          status: "active" as const,
+          executionMode: "live" as const,
+          participantMode: "solo" as const,
+          durationMinutes: 60,
+          deliveryFormats: ["video" as const],
+          priceMinor: booking.priceMinor,
+          currency: "RUB" as const
+        }))
+      } satisfies BookingProductReader),
     { now: () => new Date("2026-07-17T09:00:00.000Z") }
   );
 }

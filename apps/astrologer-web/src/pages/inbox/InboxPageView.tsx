@@ -6,6 +6,7 @@ import type {
 } from "@elevenhouse/contracts";
 import { ClientSearchCombobox } from "../../features/clients/components/ClientSearchCombobox";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
+import type { FlowInboxContext } from "../../features/flows/model/inboxFlowContexts";
 import type { InboxThreadFilter } from "../../features/messaging/model/inboxThreadFilters";
 import type { TelegramMtprotoWizardStep } from "../../features/messaging/model/telegramMtprotoConnectionWizard";
 import styles from "./InboxPage.module.css";
@@ -14,11 +15,15 @@ import { MessageMediaBubble } from "./MessageMediaBubble";
 
 export type { InboxThreadFilter };
 
+export type InboxFlowContext = FlowInboxContext;
+
 export type InboxPageViewProps = {
   readonly channelConnections: MessagingChannelConnection[];
   readonly threads: MessagingThread[];
   readonly selectedThreadId: string | null;
   readonly selectedThreadResponse: MessagingThreadResponse | null;
+  readonly flowContexts?: readonly InboxFlowContext[];
+  readonly flowContextStatus?: "ready" | "loading" | "error";
   readonly isConnectionsLoading: boolean;
   readonly isThreadsLoading: boolean;
   readonly isThreadsError: boolean;
@@ -87,6 +92,8 @@ export function InboxPageView({
   threads,
   selectedThreadId,
   selectedThreadResponse,
+  flowContexts = [],
+  flowContextStatus = "ready",
   isConnectionsLoading,
   isThreadsLoading,
   isThreadsError,
@@ -179,6 +186,9 @@ export function InboxPageView({
   const visibleMessages = selectedThreadResponse
     ? [...selectedThreadResponse.messages].sort(compareMessagesByCreatedAt)
     : [];
+  const selectedFlowContext = selectedThread
+    ? flowContexts.find((flowContext) => flowContext.threadId === selectedThread.id) ?? null
+    : null;
 
   return (
     <section className={styles.inboxPage} aria-labelledby="inbox-title">
@@ -399,6 +409,28 @@ export function InboxPageView({
                   </div>
                 </div>
               </section>
+              {flowContextStatus === "loading" ? (
+                <section className={styles.contextSection} aria-label="Активная воронка клиента">
+                  <div className={styles.contextSectionTitle}>Воронка</div>
+                  <p className={styles.contextMuted}>Проверяем активные воронки</p>
+                </section>
+              ) : flowContextStatus === "error" ? (
+                <section className={styles.contextSection} aria-label="Активная воронка клиента">
+                  <div className={styles.contextSectionTitle}>Воронка</div>
+                  <p className={styles.contextError} role="alert">
+                    Не удалось загрузить контекст воронки
+                  </p>
+                </section>
+              ) : selectedFlowContext ? (
+                <section className={styles.contextSection} aria-label="Активная воронка клиента">
+                  <div className={styles.contextSectionTitle}>Воронка</div>
+                  <div className={styles.flowContextCard}>
+                    <h3>{selectedFlowContext.flowName}</h3>
+                    <p>{selectedFlowContext.currentStepTitle}</p>
+                    <a href="/flows">Открыть воронки</a>
+                  </div>
+                </section>
+              ) : null}
               <div className={styles.contextActions}>
                 {!selectedThread.clientUserId && (
                   <>

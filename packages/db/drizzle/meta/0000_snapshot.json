@@ -1,5 +1,5 @@
 {
-  "id": "fa48952c-8b1e-42e1-8315-5e4316fdd3fa",
+  "id": "e7e25ffc-9ef9-4791-9d76-aa6753f02fc5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -6815,10 +6815,36 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "flows_published_version_owner_fk": {
+          "name": "flows_published_version_owner_fk",
+          "tableFrom": "flows",
+          "tableTo": "flow_versions",
+          "columnsFrom": [
+            "id",
+            "published_version_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "flow_id",
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "flows_id_owner_unique": {
+          "name": "flows_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_user_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "flows_name_length_check": {
@@ -6933,19 +6959,6 @@
         }
       },
       "foreignKeys": {
-        "flow_versions_flow_id_flows_id_fk": {
-          "name": "flow_versions_flow_id_flows_id_fk",
-          "tableFrom": "flow_versions",
-          "tableTo": "flows",
-          "columnsFrom": [
-            "flow_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "flow_versions_owner_user_id_users_id_fk": {
           "name": "flow_versions_owner_user_id_users_id_fk",
           "tableFrom": "flow_versions",
@@ -6958,10 +6971,43 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "flow_versions_flow_owner_fk": {
+          "name": "flow_versions_flow_owner_fk",
+          "tableFrom": "flow_versions",
+          "tableTo": "flows",
+          "columnsFrom": [
+            "flow_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "flow_versions_id_owner_unique": {
+          "name": "flow_versions_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_user_id"
+          ]
+        },
+        "flow_versions_flow_id_id_owner_unique": {
+          "name": "flow_versions_flow_id_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "flow_id",
+            "id",
+            "owner_user_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "flow_versions_positive_version_check": {
@@ -6975,6 +7021,1344 @@
         "flow_versions_graph_object_check": {
           "name": "flow_versions_graph_object_check",
           "value": "jsonb_typeof(\"flow_versions\".\"graph\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.flow_approvals": {
+      "name": "flow_approvals",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_run_id": {
+          "name": "flow_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_step_run_id": {
+          "name": "flow_step_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "preview": {
+          "name": "preview",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision_note": {
+          "name": "decision_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_by_user_id": {
+          "name": "decided_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "snoozed_until": {
+          "name": "snoozed_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "flow_approvals_owner_status_created_idx": {
+          "name": "flow_approvals_owner_status_created_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_approvals_run_created_idx": {
+          "name": "flow_approvals_run_created_idx",
+          "columns": [
+            {
+              "expression": "flow_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_approvals_owner_user_id_users_id_fk": {
+          "name": "flow_approvals_owner_user_id_users_id_fk",
+          "tableFrom": "flow_approvals",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_approvals_decided_by_user_id_users_id_fk": {
+          "name": "flow_approvals_decided_by_user_id_users_id_fk",
+          "tableFrom": "flow_approvals",
+          "tableTo": "users",
+          "columnsFrom": [
+            "decided_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "flow_approvals_run_owner_fk": {
+          "name": "flow_approvals_run_owner_fk",
+          "tableFrom": "flow_approvals",
+          "tableTo": "flow_runs",
+          "columnsFrom": [
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_approvals_step_run_owner_fk": {
+          "name": "flow_approvals_step_run_owner_fk",
+          "tableFrom": "flow_approvals",
+          "tableTo": "flow_step_runs",
+          "columnsFrom": [
+            "flow_step_run_id",
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "flow_approvals_status_check": {
+          "name": "flow_approvals_status_check",
+          "value": "\"flow_approvals\".\"status\" in ('pending', 'approved', 'rejected', 'snoozed', 'expired')"
+        },
+        "flow_approvals_kind_check": {
+          "name": "flow_approvals_kind_check",
+          "value": "\"flow_approvals\".\"kind\" in ('message', 'ai_output', 'delivery', 'payment_offer', 'manual_task')"
+        },
+        "flow_approvals_title_length_check": {
+          "name": "flow_approvals_title_length_check",
+          "value": "length(trim(\"flow_approvals\".\"title\")) between 1 and 180"
+        },
+        "flow_approvals_preview_length_check": {
+          "name": "flow_approvals_preview_length_check",
+          "value": "length(trim(\"flow_approvals\".\"preview\")) between 1 and 1000"
+        },
+        "flow_approvals_decision_note_length_check": {
+          "name": "flow_approvals_decision_note_length_check",
+          "value": "\"flow_approvals\".\"decision_note\" is null or length(trim(\"flow_approvals\".\"decision_note\")) between 1 and 1000"
+        },
+        "flow_approvals_pending_decision_check": {
+          "name": "flow_approvals_pending_decision_check",
+          "value": "\"flow_approvals\".\"status\" <> 'pending' or (\"flow_approvals\".\"decided_at\" is null and \"flow_approvals\".\"decided_by_user_id\" is null and \"flow_approvals\".\"snoozed_until\" is null)"
+        },
+        "flow_approvals_decided_status_check": {
+          "name": "flow_approvals_decided_status_check",
+          "value": "\"flow_approvals\".\"status\" in ('pending', 'expired') or (\"flow_approvals\".\"decided_at\" is not null and \"flow_approvals\".\"decided_by_user_id\" is not null)"
+        },
+        "flow_approvals_snoozed_until_check": {
+          "name": "flow_approvals_snoozed_until_check",
+          "value": "\"flow_approvals\".\"status\" <> 'snoozed' or \"flow_approvals\".\"snoozed_until\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.flow_delivery_attempts": {
+      "name": "flow_delivery_attempts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_run_id": {
+          "name": "flow_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_step_run_id": {
+          "name": "flow_step_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempt_number": {
+          "name": "attempt_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "provider_request_payload": {
+          "name": "provider_request_payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_response_payload": {
+          "name": "provider_response_payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempted_at": {
+          "name": "attempted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "flow_delivery_attempts_owner_idempotency_unique": {
+          "name": "flow_delivery_attempts_owner_idempotency_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_delivery_attempts_step_attempt_unique": {
+          "name": "flow_delivery_attempts_step_attempt_unique",
+          "columns": [
+            {
+              "expression": "flow_step_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "attempt_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_delivery_attempts_owner_status_created_idx": {
+          "name": "flow_delivery_attempts_owner_status_created_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_delivery_attempts_owner_user_id_users_id_fk": {
+          "name": "flow_delivery_attempts_owner_user_id_users_id_fk",
+          "tableFrom": "flow_delivery_attempts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_delivery_attempts_run_owner_fk": {
+          "name": "flow_delivery_attempts_run_owner_fk",
+          "tableFrom": "flow_delivery_attempts",
+          "tableTo": "flow_runs",
+          "columnsFrom": [
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_delivery_attempts_step_run_owner_fk": {
+          "name": "flow_delivery_attempts_step_run_owner_fk",
+          "tableFrom": "flow_delivery_attempts",
+          "tableTo": "flow_step_runs",
+          "columnsFrom": [
+            "flow_step_run_id",
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "flow_delivery_attempts_status_check": {
+          "name": "flow_delivery_attempts_status_check",
+          "value": "\"flow_delivery_attempts\".\"status\" in ('pending', 'sent', 'failed', 'unknown')"
+        },
+        "flow_delivery_attempts_idempotency_key_length_check": {
+          "name": "flow_delivery_attempts_idempotency_key_length_check",
+          "value": "length(trim(\"flow_delivery_attempts\".\"idempotency_key\")) between 1 and 240"
+        },
+        "flow_delivery_attempts_number_check": {
+          "name": "flow_delivery_attempts_number_check",
+          "value": "\"flow_delivery_attempts\".\"attempt_number\" > 0"
+        },
+        "flow_delivery_attempts_provider_length_check": {
+          "name": "flow_delivery_attempts_provider_length_check",
+          "value": "\"flow_delivery_attempts\".\"provider\" is null or length(trim(\"flow_delivery_attempts\".\"provider\")) between 1 and 120"
+        },
+        "flow_delivery_attempts_request_payload_object_check": {
+          "name": "flow_delivery_attempts_request_payload_object_check",
+          "value": "\"flow_delivery_attempts\".\"provider_request_payload\" is null or jsonb_typeof(\"flow_delivery_attempts\".\"provider_request_payload\") = 'object'"
+        },
+        "flow_delivery_attempts_response_payload_object_check": {
+          "name": "flow_delivery_attempts_response_payload_object_check",
+          "value": "\"flow_delivery_attempts\".\"provider_response_payload\" is null or jsonb_typeof(\"flow_delivery_attempts\".\"provider_response_payload\") = 'object'"
+        },
+        "flow_delivery_attempts_error_code_length_check": {
+          "name": "flow_delivery_attempts_error_code_length_check",
+          "value": "\"flow_delivery_attempts\".\"error_code\" is null or length(trim(\"flow_delivery_attempts\".\"error_code\")) between 1 and 120"
+        },
+        "flow_delivery_attempts_error_message_length_check": {
+          "name": "flow_delivery_attempts_error_message_length_check",
+          "value": "\"flow_delivery_attempts\".\"error_message\" is null or length(trim(\"flow_delivery_attempts\".\"error_message\")) between 1 and 1000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.flow_runs": {
+      "name": "flow_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_id": {
+          "name": "flow_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_version_id": {
+          "name": "flow_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "runtime_event_id": {
+          "name": "runtime_event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "snapshot": {
+          "name": "snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "current_node_id": {
+          "name": "current_node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "flow_runs_owner_flow_event_unique": {
+          "name": "flow_runs_owner_flow_event_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "flow_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "runtime_event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_runs_owner_status_updated_idx": {
+          "name": "flow_runs_owner_status_updated_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_runs_flow_created_idx": {
+          "name": "flow_runs_flow_created_idx",
+          "columns": [
+            {
+              "expression": "flow_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_runs_runtime_event_idx": {
+          "name": "flow_runs_runtime_event_idx",
+          "columns": [
+            {
+              "expression": "runtime_event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_runs_owner_user_id_users_id_fk": {
+          "name": "flow_runs_owner_user_id_users_id_fk",
+          "tableFrom": "flow_runs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_runs_flow_owner_fk": {
+          "name": "flow_runs_flow_owner_fk",
+          "tableFrom": "flow_runs",
+          "tableTo": "flows",
+          "columnsFrom": [
+            "flow_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "flow_runs_flow_version_owner_fk": {
+          "name": "flow_runs_flow_version_owner_fk",
+          "tableFrom": "flow_runs",
+          "tableTo": "flow_versions",
+          "columnsFrom": [
+            "flow_id",
+            "flow_version_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "flow_id",
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "flow_runs_runtime_event_owner_fk": {
+          "name": "flow_runs_runtime_event_owner_fk",
+          "tableFrom": "flow_runs",
+          "tableTo": "flow_runtime_events",
+          "columnsFrom": [
+            "runtime_event_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "flow_runs_id_owner_unique": {
+          "name": "flow_runs_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_user_id"
+          ]
+        },
+        "flow_runs_id_event_owner_unique": {
+          "name": "flow_runs_id_event_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "runtime_event_id",
+            "owner_user_id"
+          ]
+        },
+        "flow_runs_id_flow_event_owner_unique": {
+          "name": "flow_runs_id_flow_event_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "flow_id",
+            "runtime_event_id",
+            "owner_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "flow_runs_status_check": {
+          "name": "flow_runs_status_check",
+          "value": "\"flow_runs\".\"status\" in ('pending', 'running', 'waiting', 'approval_required', 'completed', 'skipped', 'failed_retryable', 'failed_terminal', 'suppressed', 'expired', 'canceled')"
+        },
+        "flow_runs_snapshot_object_check": {
+          "name": "flow_runs_snapshot_object_check",
+          "value": "jsonb_typeof(\"flow_runs\".\"snapshot\") = 'object'"
+        },
+        "flow_runs_current_node_id_length_check": {
+          "name": "flow_runs_current_node_id_length_check",
+          "value": "\"flow_runs\".\"current_node_id\" is null or length(trim(\"flow_runs\".\"current_node_id\")) between 1 and 160"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.flow_runtime_events": {
+      "name": "flow_runtime_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_event_id": {
+          "name": "source_event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dedupe_key": {
+          "name": "dedupe_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_type": {
+          "name": "subject_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "flow_runtime_events_owner_dedupe_unique": {
+          "name": "flow_runtime_events_owner_dedupe_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dedupe_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_runtime_events_owner_occurred_idx": {
+          "name": "flow_runtime_events_owner_occurred_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_runtime_events_owner_user_id_users_id_fk": {
+          "name": "flow_runtime_events_owner_user_id_users_id_fk",
+          "tableFrom": "flow_runtime_events",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "flow_runtime_events_id_owner_unique": {
+          "name": "flow_runtime_events_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "flow_runtime_events_source_check": {
+          "name": "flow_runtime_events_source_check",
+          "value": "\"flow_runtime_events\".\"source\" in ('crm', 'product', 'order', 'booking', 'message', 'chart', 'astro_calendar', 'manual')"
+        },
+        "flow_runtime_events_subject_type_check": {
+          "name": "flow_runtime_events_subject_type_check",
+          "value": "\"flow_runtime_events\".\"subject_type\" in ('client', 'segment', 'order', 'booking', 'global_event', 'manual')"
+        },
+        "flow_runtime_events_source_event_id_length_check": {
+          "name": "flow_runtime_events_source_event_id_length_check",
+          "value": "length(trim(\"flow_runtime_events\".\"source_event_id\")) between 1 and 180"
+        },
+        "flow_runtime_events_dedupe_key_length_check": {
+          "name": "flow_runtime_events_dedupe_key_length_check",
+          "value": "length(trim(\"flow_runtime_events\".\"dedupe_key\")) between 1 and 240"
+        },
+        "flow_runtime_events_subject_id_length_check": {
+          "name": "flow_runtime_events_subject_id_length_check",
+          "value": "length(trim(\"flow_runtime_events\".\"subject_id\")) between 1 and 180"
+        },
+        "flow_runtime_events_payload_object_check": {
+          "name": "flow_runtime_events_payload_object_check",
+          "value": "jsonb_typeof(\"flow_runtime_events\".\"payload\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.flow_step_runs": {
+      "name": "flow_step_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_run_id": {
+          "name": "flow_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_id": {
+          "name": "node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "input_snapshot": {
+          "name": "input_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "output_snapshot": {
+          "name": "output_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "flow_step_runs_owner_run_created_idx": {
+          "name": "flow_step_runs_owner_run_created_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "flow_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_step_runs_owner_user_id_users_id_fk": {
+          "name": "flow_step_runs_owner_user_id_users_id_fk",
+          "tableFrom": "flow_step_runs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_step_runs_run_owner_fk": {
+          "name": "flow_step_runs_run_owner_fk",
+          "tableFrom": "flow_step_runs",
+          "tableTo": "flow_runs",
+          "columnsFrom": [
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "flow_step_runs_id_owner_unique": {
+          "name": "flow_step_runs_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_user_id"
+          ]
+        },
+        "flow_step_runs_id_run_owner_unique": {
+          "name": "flow_step_runs_id_run_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "flow_run_id",
+            "owner_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "flow_step_runs_status_check": {
+          "name": "flow_step_runs_status_check",
+          "value": "\"flow_step_runs\".\"status\" in ('pending', 'running', 'waiting', 'approval_required', 'completed', 'skipped', 'failed_retryable', 'failed_terminal', 'suppressed', 'expired', 'canceled')"
+        },
+        "flow_step_runs_node_id_length_check": {
+          "name": "flow_step_runs_node_id_length_check",
+          "value": "length(trim(\"flow_step_runs\".\"node_id\")) between 1 and 160"
+        },
+        "flow_step_runs_input_snapshot_object_check": {
+          "name": "flow_step_runs_input_snapshot_object_check",
+          "value": "jsonb_typeof(\"flow_step_runs\".\"input_snapshot\") = 'object'"
+        },
+        "flow_step_runs_output_snapshot_object_check": {
+          "name": "flow_step_runs_output_snapshot_object_check",
+          "value": "\"flow_step_runs\".\"output_snapshot\" is null or jsonb_typeof(\"flow_step_runs\".\"output_snapshot\") = 'object'"
+        },
+        "flow_step_runs_error_code_length_check": {
+          "name": "flow_step_runs_error_code_length_check",
+          "value": "\"flow_step_runs\".\"error_code\" is null or length(trim(\"flow_step_runs\".\"error_code\")) between 1 and 120"
+        },
+        "flow_step_runs_error_message_length_check": {
+          "name": "flow_step_runs_error_message_length_check",
+          "value": "\"flow_step_runs\".\"error_message\" is null or length(trim(\"flow_step_runs\".\"error_message\")) between 1 and 1000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.flow_suppressions": {
+      "name": "flow_suppressions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_id": {
+          "name": "flow_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "runtime_event_id": {
+          "name": "runtime_event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_run_id": {
+          "name": "flow_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "details": {
+          "name": "details",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "flow_suppressions_owner_flow_event_reason_unique": {
+          "name": "flow_suppressions_owner_flow_event_reason_unique",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "flow_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "runtime_event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reason",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_suppressions_owner_created_idx": {
+          "name": "flow_suppressions_owner_created_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_suppressions_runtime_event_idx": {
+          "name": "flow_suppressions_runtime_event_idx",
+          "columns": [
+            {
+              "expression": "runtime_event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_suppressions_owner_user_id_users_id_fk": {
+          "name": "flow_suppressions_owner_user_id_users_id_fk",
+          "tableFrom": "flow_suppressions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_suppressions_flow_owner_fk": {
+          "name": "flow_suppressions_flow_owner_fk",
+          "tableFrom": "flow_suppressions",
+          "tableTo": "flows",
+          "columnsFrom": [
+            "flow_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_suppressions_runtime_event_owner_fk": {
+          "name": "flow_suppressions_runtime_event_owner_fk",
+          "tableFrom": "flow_suppressions",
+          "tableTo": "flow_runtime_events",
+          "columnsFrom": [
+            "runtime_event_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_suppressions_run_event_owner_fk": {
+          "name": "flow_suppressions_run_event_owner_fk",
+          "tableFrom": "flow_suppressions",
+          "tableTo": "flow_runs",
+          "columnsFrom": [
+            "flow_run_id",
+            "flow_id",
+            "runtime_event_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "flow_id",
+            "runtime_event_id",
+            "owner_user_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "flow_suppressions_reason_check": {
+          "name": "flow_suppressions_reason_check",
+          "value": "\"flow_suppressions\".\"reason\" in ('FLOW_NOT_PUBLISHED', 'FLOW_NOT_ACTIVE', 'OWNER_RELATIONSHIP_REQUIRED', 'CHANNEL_CONSENT_REQUIRED', 'QUIET_HOURS_HOLD', 'FREQUENCY_CAP_HOLD', 'PLAN_LIMIT_REACHED', 'AUTO_SEND_DISABLED')"
+        },
+        "flow_suppressions_details_object_check": {
+          "name": "flow_suppressions_details_object_check",
+          "value": "jsonb_typeof(\"flow_suppressions\".\"details\") = 'object'"
         }
       },
       "isRLSEnabled": false

@@ -2,11 +2,21 @@ import { describe, expect, it } from "vitest";
 
 import {
   flowApprovalModeSchema,
+  flowRuntimeEventSchema,
   flowGraphSchema,
   createFlowRequestSchema,
+  decideFlowApprovalRequestSchema,
+  getFlowRunResponseSchema,
   flowResponseSchema,
+  flowRunResponseSchema,
+  flowStepRunResponseSchema,
+  manualFlowRunResponseSchema,
+  cancelFlowRunResponseSchema,
+  listFlowApprovalsResponseSchema,
   listFlowsResponseSchema,
+  listFlowRunsResponseSchema,
   publishFlowResponseSchema,
+  simulateFlowRunRequestSchema,
   updateFlowDraftRequestSchema,
   listFlowTemplatesResponseSchema,
   flowTemplateSchema,
@@ -91,6 +101,156 @@ describe("flow contracts", () => {
 
   it("keeps auto_send explicit as a future policy value", () => {
     expect(flowApprovalModeSchema.parse("auto_send")).toBe("auto_send");
+  });
+
+  it("requires a dedupe key for persisted runtime events", () => {
+    const result = flowRuntimeEventSchema.safeParse({
+      id: "55555555-5555-4555-8555-555555555555",
+      ownerUserId: "66666666-6666-4666-8666-666666666666",
+      source: "manual",
+      sourceEventId: "manual:client-1:flow-1",
+      subjectType: "manual",
+      subjectId: "manual-subject-1",
+      occurredAt: "2026-07-28T10:00:00.000Z",
+      payload: {}
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((issue) => issue.path.join(".") === "dedupeKey")).toBe(true);
+  });
+
+  it("parses a manual simulation payload", () => {
+    const request = {
+      source: "manual",
+      subjectType: "manual",
+      subjectId: "manual-subject-1",
+      occurredAt: "2026-07-28T10:00:00.000Z",
+      timeZone: "Europe/Moscow",
+      payload: {
+        note: "Проверить подготовку к консультации"
+      }
+    };
+
+    expect(simulateFlowRunRequestSchema.parse(request)).toEqual(request);
+  });
+
+  it("accepts only explicit approval decisions", () => {
+    for (const decision of ["approved", "rejected", "snoozed"]) {
+      expect(decideFlowApprovalRequestSchema.parse({ decision })).toEqual({ decision });
+    }
+
+    expect(decideFlowApprovalRequestSchema.safeParse({ decision: "pending" }).success).toBe(false);
+    expect(decideFlowApprovalRequestSchema.safeParse({ decision: "expired" }).success).toBe(false);
+  });
+
+  it("caps runtime list response arrays at one hundred entries", () => {
+    const stepRun = {
+      id: "77777777-7777-4777-8777-777777777777",
+      flowRunId: "88888888-8888-4888-8888-888888888888",
+      nodeId: "request-data",
+      status: "pending",
+      inputSnapshot: {},
+      outputSnapshot: null,
+      errorCode: null,
+      errorMessage: null,
+      createdAt: "2026-07-28T10:00:00.000Z",
+      updatedAt: "2026-07-28T10:00:00.000Z",
+      completedAt: null
+    };
+    const run = {
+      id: "88888888-8888-4888-8888-888888888888",
+      flowId: "99999999-9999-4999-8999-999999999999",
+      flowVersionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      ownerUserId: "66666666-6666-4666-8666-666666666666",
+      sourceEventId: "manual-event-1",
+      status: "pending",
+      snapshot: {
+        schemaVersion: "flow-run-snapshot.v1",
+        flowVersionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        sourceEventId: "manual:client-1:flow-1",
+        subjectType: "manual",
+        subjectId: "manual-subject-1",
+        occurredAt: "2026-07-28T10:00:00.000Z",
+        timeZone: "Europe/Moscow",
+        consent: {},
+        channels: {},
+        payload: {}
+      },
+      currentNodeId: "request-data",
+      createdAt: "2026-07-28T10:00:00.000Z",
+      updatedAt: "2026-07-28T10:00:00.000Z",
+      completedAt: null
+    };
+    const approval = {
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      flowRunId: run.id,
+      stepRunId: stepRun.id,
+      status: "pending",
+      kind: "message",
+      title: "Проверить сообщение",
+      preview: "Черновик сообщения для клиента",
+      createdAt: "2026-07-28T10:00:00.000Z",
+      decidedAt: null
+    };
+
+    expect(flowStepRunResponseSchema.parse(stepRun)).toEqual(stepRun);
+    expect(flowRunResponseSchema.parse(run)).toEqual(run);
+    expect(listFlowRunsResponseSchema.safeParse({ runs: Array(101).fill(run), total: 101 }).success).toBe(
+      false
+    );
+    expect(
+      listFlowApprovalsResponseSchema.safeParse({ approvals: Array(101).fill(approval), total: 101 })
+        .success
+    ).toBe(false);
+  });
+
+  it("parses runtime run command response envelopes", () => {
+    const run = {
+      id: "88888888-8888-4888-8888-888888888888",
+      flowId: "99999999-9999-4999-8999-999999999999",
+      flowVersionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      ownerUserId: "66666666-6666-4666-8666-666666666666",
+      sourceEventId: "manual:client-1:flow-1",
+      status: "suppressed",
+      snapshot: {
+        schemaVersion: "flow-run-snapshot.v1",
+        flowVersionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        sourceEventId: "manual:client-1:flow-1",
+        subjectType: "client",
+        subjectId: "manual-subject-1",
+        occurredAt: "2026-07-28T10:00:00.000Z",
+        timeZone: "Europe/Moscow",
+        consent: {},
+        channels: {},
+        payload: {}
+      },
+      currentNodeId: null,
+      createdAt: "2026-07-28T10:00:00.000Z",
+      updatedAt: "2026-07-28T10:00:00.000Z",
+      completedAt: "2026-07-28T10:00:00.000Z"
+    };
+
+    expect(getFlowRunResponseSchema.parse({ run })).toEqual({ run });
+    expect(cancelFlowRunResponseSchema.parse({ run: { ...run, status: "canceled" } })).toEqual({
+      run: { ...run, status: "canceled" }
+    });
+    expect(
+      manualFlowRunResponseSchema.parse({
+        status: "suppressed",
+        event: {
+          id: "55555555-5555-4555-8555-555555555555",
+          ownerUserId: "66666666-6666-4666-8666-666666666666",
+          source: "manual",
+          sourceEventId: "manual:client-1:flow-1",
+          dedupeKey: "manual:client-1:flow-1",
+          subjectType: "client",
+          subjectId: "manual-subject-1",
+          occurredAt: "2026-07-28T10:00:00.000Z",
+          payload: {}
+        },
+        reason: "QUIET_HOURS_HOLD"
+      })
+    ).toMatchObject({ status: "suppressed", reason: "QUIET_HOURS_HOLD" });
   });
 
   it("parses deterministic built-in template payloads", () => {
