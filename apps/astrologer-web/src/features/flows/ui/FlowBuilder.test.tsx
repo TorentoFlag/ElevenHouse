@@ -64,17 +64,24 @@ describe("FlowBuilder", () => {
   });
 
   it("renders the persisted flow status instead of hard-coded draft copy", () => {
+    const onPublish = vi.fn();
     render(
       <FlowBuilder
         flow={{ ...flow, status: "published" }}
         onBack={vi.fn()}
         onUpdateDraft={vi.fn()}
-        onPublish={vi.fn()}
+        onPublish={onPublish}
       />
     );
 
-    expect(screen.getByText("Опубликована")).toBeTruthy();
+    expect(screen.getAllByText("Опубликована").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("Черновик")).toBeNull();
+    const publishButton = screen.getByRole("button", { name: "Опубликована" });
+    expect(publishButton).toHaveProperty("disabled", true);
+
+    fireEvent.click(publishButton);
+
+    expect(onPublish).not.toHaveBeenCalled();
   });
 
   it("keeps runtime commands unavailable until the flow has a published version", () => {

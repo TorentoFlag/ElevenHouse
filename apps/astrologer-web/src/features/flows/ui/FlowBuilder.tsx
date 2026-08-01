@@ -69,6 +69,7 @@ export function FlowBuilder({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(flow.draftGraph.nodes[0]?.id ?? null);
   const selectedNode = draftGraph.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const canRunPublishedVersion = flow.publishedVersionId !== null;
+  const canPublishDraft = flow.status === "draft";
 
   useEffect(() => {
     setDraftGraph(flow.draftGraph);
@@ -102,10 +103,10 @@ export function FlowBuilder({
           <button
             className={classNames?.builderPublishButton ?? ""}
             type="button"
-            disabled={isPublishing || isUpdatingDraft}
+            disabled={!canPublishDraft || isPublishing || isUpdatingDraft}
             onClick={() => onPublish(flow.id, draftGraph)}
           >
-            {isPublishing ? "Публикуем" : "Опубликовать"}
+            {isPublishing ? "Публикуем" : canPublishDraft ? "Опубликовать" : "Опубликована"}
           </button>
         </div>
       </header>
