@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -453,7 +453,7 @@ function manualBlockCommand(
 }
 
 function digest(character: string): `sha256:${string}` {
-  return `sha256:${character.repeat(64)}`;
+  return `sha256:${createHash("sha256").update(character).digest("hex")}`;
 }
 
 function getIntegrationDatabaseUrl(value: string | undefined): string {
