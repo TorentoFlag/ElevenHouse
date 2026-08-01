@@ -1,20 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   FlowApproval,
   FlowApprovalDecision,
   FlowGraph,
+  FlowNode,
   FlowRunResponse,
   SimulateFlowRunResponse,
   FlowResponse
 } from "@elevenhouse/contracts";
-import { moveFlowNode, renameFlowNode, updateFlowNodeConfig } from "../model/flowDraftEditor";
+import {
+  appendFlowNodeFromPalette,
+  moveFlowNode,
+  renameFlowNode,
+  updateFlowNodeConfig,
+  type FlowPaletteNodeId
+} from "../model/flowDraftEditor";
 import { flowStatusLabelRu } from "../model/flowDisplay";
 import { FlowApprovalQueue } from "./FlowApprovalQueue";
 import { FlowBuilderCanvas } from "./FlowBuilderCanvas";
 import { FlowBuilderInspector } from "./FlowBuilderInspector";
+import { FlowNodePalette } from "./FlowNodePalette";
 import { FlowRuntimePanel } from "./FlowRuntimePanel";
-
-const paletteCategories = ["Триггеры", "Действия", "AI-узлы", "Логика", "Человек"] as const;
 
 export type FlowBuilderProps = {
   readonly flow: FlowResponse;
@@ -67,18 +73,40 @@ export function FlowBuilder({
 }: FlowBuilderProps) {
   const [draftGraph, setDraftGraph] = useState(flow.draftGraph);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(flow.draftGraph.nodes[0]?.id ?? null);
+  const currentFlowId = useRef(flow.id);
   const selectedNode = draftGraph.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const canRunPublishedVersion = flow.publishedVersionId !== null;
   const canPublishDraft = flow.status === "draft";
 
   useEffect(() => {
+    const isSameFlow = currentFlowId.current === flow.id;
+
+    currentFlowId.current = flow.id;
     setDraftGraph(flow.draftGraph);
-    setSelectedNodeId(flow.draftGraph.nodes[0]?.id ?? null);
+    setSelectedNodeId((currentSelectedNodeId) => {
+      if (
+        isSameFlow &&
+        currentSelectedNodeId &&
+        flow.draftGraph.nodes.some((node) => node.id === currentSelectedNodeId)
+      ) {
+        return currentSelectedNodeId;
+      }
+
+      return flow.draftGraph.nodes[0]?.id ?? null;
+    });
   }, [flow.id, flow.draftGraph]);
 
   const updateDraft = (graph: FlowGraph) => {
     setDraftGraph(graph);
     onUpdateDraft(flow.id, graph);
+  };
+  const addPaletteNode = (paletteNodeId: FlowPaletteNodeId) => {
+    const updated = appendFlowNodeFromPalette(draftGraph, { selectedNodeId, paletteNodeId });
+    const addedNode = findAddedNode(draftGraph.nodes, updated.nodes);
+
+    setDraftGraph(updated);
+    setSelectedNodeId(addedNode?.id ?? null);
+    onUpdateDraft(flow.id, updated);
   };
 
   return (
@@ -123,12 +151,11 @@ export function FlowBuilder({
         </div>
       ) : null}
       <section className={classNames?.builder ?? ""}>
-        <aside className={classNames?.builderPalette ?? ""} aria-label="Палитра узлов">
-          <h2>Узлы</h2>
-          <ul>
-            {paletteCategories.map((category) => <li key={category}>{category}</li>)}
-          </ul>
-        </aside>
+        <FlowNodePalette
+          onAddNode={addPaletteNode}
+          isDisabled={!canPublishDraft || isUpdatingDraft}
+          classNames={classNames}
+        />
         <FlowBuilderCanvas
           graph={draftGraph}
           selectedNodeId={selectedNodeId}
@@ -178,4 +205,8 @@ export function FlowBuilder({
       </section>
     </section>
   );
+}
+
+function findAddedNode(previousNodes: readonly FlowNode[], nextNodes: readonly FlowNode[]): FlowNode | null {
+  return nextNodes.find((node) => !previousNodes.some((previousNode) => previousNode.id === node.id)) ?? null;
 }

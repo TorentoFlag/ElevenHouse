@@ -65,11 +65,12 @@ describe("FlowBuilder", () => {
 
   it("renders the persisted flow status instead of hard-coded draft copy", () => {
     const onPublish = vi.fn();
+    const onUpdateDraft = vi.fn();
     render(
       <FlowBuilder
         flow={{ ...flow, status: "published" }}
         onBack={vi.fn()}
-        onUpdateDraft={vi.fn()}
+        onUpdateDraft={onUpdateDraft}
         onPublish={onPublish}
       />
     );
@@ -82,6 +83,12 @@ describe("FlowBuilder", () => {
     fireEvent.click(publishButton);
 
     expect(onPublish).not.toHaveBeenCalled();
+    const addNodeButton = screen.getByRole("button", { name: "Добавить узел: Запросить данные" });
+    expect(addNodeButton).toHaveProperty("disabled", true);
+
+    fireEvent.click(addNodeButton);
+
+    expect(onUpdateDraft).not.toHaveBeenCalled();
   });
 
   it("keeps runtime commands unavailable until the flow has a published version", () => {
@@ -210,6 +217,63 @@ describe("FlowBuilder", () => {
         ])
       })
     );
+  });
+
+  it("adds a palette action node to the selected draft path and opens it in the inspector", () => {
+    const onUpdateDraft = vi.fn();
+    render(<FlowBuilder flow={flow} onBack={vi.fn()} onUpdateDraft={onUpdateDraft} onPublish={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Добавить узел: Запросить данные" }));
+
+    expect(onUpdateDraft).toHaveBeenCalledWith(
+      flow.id,
+      expect.objectContaining({
+        nodes: [
+          flow.draftGraph.nodes[0],
+          expect.objectContaining({
+            id: "request_birth_data",
+            category: "action",
+            kind: "request_birth_data",
+            title: "Запросить данные",
+            approvalMode: "manual_approve"
+          }),
+          { ...flow.draftGraph.nodes[1], position: { x: 600, y: 120 } }
+        ],
+        edges: [
+          {
+            id: "lead_created-to-request_birth_data",
+            fromNodeId: "lead_created",
+            toNodeId: "request_birth_data"
+          },
+          {
+            id: "request_birth_data-to-ai_interpretation",
+            fromNodeId: "request_birth_data",
+            toNodeId: "ai_interpretation"
+          }
+        ]
+      })
+    );
+    expect((screen.getByLabelText("Название узла") as HTMLInputElement).value).toBe("Запросить данные");
+  });
+
+  it("keeps the selected palette node after the same flow refetches with the saved graph", () => {
+    const onUpdateDraft = vi.fn();
+    const { rerender } = render(
+      <FlowBuilder flow={flow} onBack={vi.fn()} onUpdateDraft={onUpdateDraft} onPublish={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Добавить узел: Запросить данные" }));
+    const savedGraph = onUpdateDraft.mock.calls.at(-1)?.[1];
+    rerender(
+      <FlowBuilder
+        flow={{ ...flow, draftGraph: savedGraph }}
+        onBack={vi.fn()}
+        onUpdateDraft={onUpdateDraft}
+        onPublish={vi.fn()}
+      />
+    );
+
+    expect((screen.getByLabelText("Название узла") as HTMLInputElement).value).toBe("Запросить данные");
   });
 
   it("shows mutation failures and retries the relevant operation", () => {
