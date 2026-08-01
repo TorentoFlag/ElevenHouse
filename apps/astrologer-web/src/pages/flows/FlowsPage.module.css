@@ -689,10 +689,68 @@
   margin-top: 4px;
 }
 
+.builderInspectorHeader {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 11px;
+  align-items: start;
+}
+
+.builderInspectorIcon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--flows-gold-line);
+  border-radius: 10px;
+  background: var(--flows-gold-soft);
+  color: var(--flows-gold);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+}
+
 .builderInspectorId {
   margin-top: 6px;
   font-family: var(--eh-font-mono);
   text-transform: none;
+}
+
+.builderInspectorFacts {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+.builderInspectorFacts div {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--flows-line);
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: rgb(19 17 43 / 0.58);
+}
+
+.builderInspectorFacts dt,
+.builderInspectorFacts dd {
+  margin: 0;
+}
+
+.builderInspectorFacts dt {
+  color: var(--flows-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.builderInspectorFacts dd {
+  overflow: hidden;
+  color: var(--eh-color-moon-120);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .builderField {

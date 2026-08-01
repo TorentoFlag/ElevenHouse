@@ -165,6 +165,7 @@ export function FlowBuilder({
         />
         <aside className={classNames?.builderInspector ?? ""}>
           <FlowBuilderInspector
+            graph={draftGraph}
             selectedNode={selectedNode}
             onTitleChange={(nodeId, title) =>
               setDraftGraph((graph) => renameFlowNode(graph, nodeId, title))

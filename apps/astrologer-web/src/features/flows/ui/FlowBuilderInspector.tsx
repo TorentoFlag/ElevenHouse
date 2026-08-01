@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FlowGraph } from "@elevenhouse/contracts";
 
 export type FlowBuilderInspectorProps = {
+  readonly graph: FlowGraph;
   readonly selectedNode: FlowGraph["nodes"][number] | null;
   readonly onTitleChange: (nodeId: string, title: string) => void;
   readonly onCommitTitle: (nodeId: string, title: string) => void;
@@ -10,6 +11,7 @@ export type FlowBuilderInspectorProps = {
 };
 
 export function FlowBuilderInspector({
+  graph,
   selectedNode,
   onTitleChange,
   onCommitTitle,
@@ -32,12 +34,43 @@ export function FlowBuilderInspector({
 
   const titleInputId = `flow-node-${selectedNode.id}-title`;
   const configInputId = `flow-node-${selectedNode.id}-config`;
+  const incomingCount = graph.edges.filter((edge) => edge.toNodeId === selectedNode.id).length;
+  const outgoingCount = graph.edges.filter((edge) => edge.fromNodeId === selectedNode.id).length;
+  const approvalMode = "approvalMode" in selectedNode ? selectedNode.approvalMode : null;
 
   return (
     <div className={classNames?.builderInspectorSection ?? ""} aria-label="Настройки узла">
-      <p className={classNames?.builderInspectorCategory ?? ""}>{selectedNode.category}</p>
-      <h2>{selectedNode.title}</h2>
-      <p className={classNames?.builderInspectorId ?? ""}>id: {selectedNode.id}</p>
+      <div className={classNames?.builderInspectorHeader ?? ""}>
+        <span className={classNames?.builderInspectorIcon ?? ""} aria-hidden="true">
+          {categoryInitial[selectedNode.category]}
+        </span>
+        <div>
+          <p className={classNames?.builderInspectorCategory ?? ""}>
+            {flowNodeCategoryLabelRu[selectedNode.category]}
+          </p>
+          <h2>{selectedNode.title}</h2>
+          <p className={classNames?.builderInspectorId ?? ""}>id: {selectedNode.id}</p>
+        </div>
+      </div>
+      <dl className={classNames?.builderInspectorFacts ?? ""}>
+        <div>
+          <dt>Тип</dt>
+          <dd>{selectedNode.kind}</dd>
+        </div>
+        {approvalMode ? (
+          <div>
+            <dt>Режим</dt>
+            <dd>{flowApprovalModeLabelRu[approvalMode] ?? approvalMode}</dd>
+          </div>
+        ) : null}
+        <div>
+          <dt>Связи</dt>
+          <dd>
+            {formatConnectionCount(incomingCount, "вход", "входа", "входов")} ·{" "}
+            {formatConnectionCount(outgoingCount, "выход", "выхода", "выходов")}
+          </dd>
+        </div>
+      </dl>
       <label className={classNames?.builderField ?? ""}>
         <span>Название узла</span>
         <input
@@ -77,6 +110,33 @@ export function FlowBuilderInspector({
   );
 }
 
+const flowNodeCategoryLabelRu = {
+  trigger: "Триггер",
+  action: "Действие",
+  ai: "AI-узел",
+  condition: "Логика",
+  delay: "Пауза",
+  terminal: "Финал",
+  handoff: "Человек"
+} satisfies Record<FlowGraph["nodes"][number]["category"], string>;
+
+const categoryInitial = {
+  trigger: "T",
+  action: "A",
+  ai: "AI",
+  condition: "?",
+  delay: "D",
+  terminal: "F",
+  handoff: "H"
+} satisfies Record<FlowGraph["nodes"][number]["category"], string>;
+
+const flowApprovalModeLabelRu = {
+  draft_only: "Только черновик",
+  manual_approve: "Требует подтверждения",
+  auto_internal: "Автоматически внутри",
+  auto_send: "Автоотправка"
+} satisfies Record<string, string>;
+
 function parseConfig(value: string): Record<string, unknown> | null {
   try {
     const parsed: unknown = JSON.parse(value);
@@ -87,4 +147,19 @@ function parseConfig(value: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function formatConnectionCount(count: number, one: string, few: string, many: string): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${count} ${one}`;
+  }
+
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return `${count} ${few}`;
+  }
+
+  return `${count} ${many}`;
 }
