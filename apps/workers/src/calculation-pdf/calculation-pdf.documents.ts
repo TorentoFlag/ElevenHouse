@@ -28,6 +28,7 @@ export type ChartPdfDocument = {
   readonly createdAt: string;
   readonly calculationTitle: string;
   readonly result: StoredChartNatalCalculationPayload;
+  readonly approvedInterpretation: string | null;
   readonly interpretations: readonly ChartPdfInterpretation[];
 };
 

@@ -1,20 +1,30 @@
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
+import { chartInterpretationDraftPromptV1, renderChartInterpretationText } from "@elevenhouse/ai";
 import {
   assertChartBirthDataReady,
   createChartJobAndRequestCalculation,
   createNatalChartJobAndRequestCalculation,
+  getCalculation,
+  listDictionaryEntriesByCodes,
+  saveCalculationInterpretation,
   sha256CanonicalJson,
+  type AstrologerProfileStore,
   type CanonicalJson,
+  type CalculationRecord,
+  type CalculationStore,
   type ChartCalculationCommandStore,
   type ChartCalculationJob,
   type ChartCalculationJobStore,
   type ChartReadyBirthData,
-  type ClientStore
+  type ClientStore,
+  type DictionaryStore
 } from "@elevenhouse/domain";
 import {
   chartAstrocartographyJobCreateRequestSchema,
   chartCalculationResponseSchema,
   chartCompositeJobCreateRequestSchema,
+  createChartAiDraftRequestSchema,
   chartHoraryJobCreateRequestSchema,
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
@@ -23,7 +33,10 @@ import {
   chartSolarReturnJobCreateRequestSchema,
   chartSynastryJobCreateRequestSchema,
   chartTransitJobCreateRequestSchema,
+  storedChartNatalCalculationPayloadSchema,
   storedChartCalculationPayloadSchema,
+  type CalculationRecordResponse,
+  type CreateChartAiDraftRequest,
   type ChartNatalJobCreateRequest,
   type ChartAstrocartographyJobCreateRequest,
   type ChartCalculationResponse,
@@ -37,10 +50,16 @@ import {
   type ChartTransitJobCreateRequest
 } from "@elevenhouse/contracts";
 import { z } from "@elevenhouse/validation";
+import { AiGenerationService } from "../ai/ai-generation.service";
+import { ASTROLOGER_PROFILE_STORE } from "../astrologer-profile/astrologer-profile.tokens";
+import { toCalculationResponse } from "../calculations/calculations.service";
+import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import { SystemClock } from "../clock/system-clock.service";
 import { CLIENT_STORE } from "../clients/clients.tokens";
+import { DICTIONARY_STORE } from "../dictionary/dictionary.tokens";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { chartHttpError, mapChartError } from "./chart-http-errors";
+import { buildNatalChartAiContext, getNatalChartAiDictionaryCodes } from "./chart-ai-context";
 import { CHART_COMMAND_STORE, CHART_JOB_STORE } from "./charts.tokens";
 
 const calculationIdParamSchema = z.object({ calculationId: z.string().uuid() }).strict();
@@ -53,7 +72,12 @@ export class ChartsService {
     @Inject(CLIENT_STORE) private readonly clientStore: ClientStore,
     @Inject(CHART_COMMAND_STORE) private readonly commandStore: ChartCalculationCommandStore,
     @Inject(CHART_JOB_STORE) private readonly jobStore: ChartCalculationJobStore,
-    private readonly clock: SystemClock
+    @Inject(CALCULATION_STORE) private readonly calculationStore: CalculationStore,
+    @Inject(DICTIONARY_STORE) private readonly dictionaryStore: DictionaryStore,
+    @Inject(ASTROLOGER_PROFILE_STORE)
+    private readonly profileStore: AstrologerProfileStore,
+    private readonly clock: SystemClock,
+    private readonly aiGeneration: AiGenerationService
   ) {}
 
   async createNatalJob(
@@ -658,6 +682,67 @@ export class ChartsService {
     parseChartContract<{ calculationId: string }>(calculationIdParamSchema, { calculationId });
     return this.createNatalJob(body, request);
   }
+
+  async createAiDraft(
+    calculationId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<CalculationRecordResponse> {
+    const params = parseChartContract<{ calculationId: string }>(calculationIdParamSchema, {
+      calculationId
+    });
+    const parsedBody = parseChartContract<CreateChartAiDraftRequest>(
+      createChartAiDraftRequestSchema,
+      body
+    );
+    const ownerUserId = requireOwnerUserId(request);
+    return mapChartError(async () => {
+      const calculation = await getCalculation({
+        store: this.calculationStore,
+        ownerUserId,
+        calculationId: params.calculationId
+      });
+      const result = assertNatalChartAiCalculation(calculation);
+      if (calculation.resultChecksum !== parsedBody.expectedResultChecksum) {
+        throw chartHttpError(409, "CHART_RESULT_CHANGED", "Chart result changed; reload and retry");
+      }
+
+      const profile = await this.profileStore.findByOwnerUserId({ ownerUserId });
+      const locale = profile?.locale === "en" ? "en" : "ru";
+      const dictionary = await listDictionaryEntriesByCodes({
+        store: this.dictionaryStore,
+        ownerUserId,
+        locale,
+        codes: getNatalChartAiDictionaryCodes(result)
+      });
+      const generated = await this.aiGeneration.generate({
+        prompt: chartInterpretationDraftPromptV1,
+        input: chartInterpretationDraftPromptV1.inputSchema.parse(
+          buildNatalChartAiContext({
+            locale,
+            result,
+            resultChecksum: calculation.resultChecksum,
+            dictionaryEntries: dictionary.entries
+          })
+        ),
+        ownerUserId,
+        feature: "chart.interpretationDraft"
+      });
+      const saved = await saveCalculationInterpretation({
+        store: this.calculationStore,
+        ownerUserId,
+        calculationId: calculation.id,
+        expectedResultChecksum: parsedBody.expectedResultChecksum,
+        source: "ai",
+        text: renderChartInterpretationText(generated.output, locale),
+        modelId: generated.model,
+        promptVersion: `${chartInterpretationDraftPromptV1.id}@${chartInterpretationDraftPromptV1.version}`,
+        interpretationIdGenerator: randomUUID,
+        now: this.clock.now()
+      });
+      return toCalculationResponse(saved);
+    });
+  }
 }
 
 function toJobResponse(job: ChartCalculationJob): ChartJobResponse {
@@ -699,4 +784,26 @@ function requireOwnerUserId(request: AstrologerSessionRequest): string {
     throw new UnauthorizedException("Valid astrologer session is required");
   }
   return ownerUserId;
+}
+
+function assertNatalChartAiCalculation(calculation: CalculationRecord) {
+  if (calculation.module !== "chart") {
+    throw chartHttpError(409, "CHART_CALCULATION_MISMATCH", "Calculation is not a chart result");
+  }
+  if (calculation.methodCode !== "natal") {
+    throw chartHttpError(
+      409,
+      "CHART_UNSUPPORTED_AI_METHOD",
+      "AI draft is available for natal chart calculations first"
+    );
+  }
+  const parsed = storedChartNatalCalculationPayloadSchema.safeParse(calculation.resultData);
+  if (!parsed.success) {
+    throw chartHttpError(
+      409,
+      "CHART_CALCULATION_MISMATCH",
+      "Stored chart calculation result is invalid"
+    );
+  }
+  return parsed.data;
 }

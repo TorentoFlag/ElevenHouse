@@ -1,5 +1,10 @@
 import { storedChartNatalCalculationPayloadSchema } from "@elevenhouse/contracts";
-import type { CalculationPdfJob, CalculationStore, DictionaryStore } from "@elevenhouse/domain";
+import {
+  selectCurrentApprovedCalculationInterpretation,
+  type CalculationPdfJob,
+  type CalculationStore,
+  type DictionaryStore
+} from "@elevenhouse/domain";
 import type { ChartPdfDocument } from "./calculation-pdf.documents";
 import {
   buildChartPdfInterpretationCodes,
@@ -20,7 +25,7 @@ export function createChartPdfSource(
       if (
         job.module !== "chart" ||
         job.methodCode !== "natal" ||
-        job.sourceLocator.kind !== "calculation_result"
+        job.sourceLocator.kind !== "approved_interpretation"
       ) {
         throw staleSource();
       }
@@ -41,6 +46,12 @@ export function createChartPdfSource(
       if (!result.success) {
         throw new CalculationPdfPermanentError("invalid_source", "Chart PDF source result is invalid");
       }
+      const approvedInterpretation = selectCurrentApprovedCalculationInterpretation(
+        calculation.interpretations
+      );
+      if ((approvedInterpretation?.id ?? null) !== job.sourceLocator.interpretationId) {
+        throw staleSource();
+      }
       const codes = buildChartPdfInterpretationCodes(result.data);
       const dictionaryEntries =
         codes.length === 0
@@ -59,6 +70,7 @@ export function createChartPdfSource(
         createdAt: job.createdAt,
         calculationTitle: calculation.title,
         result: result.data,
+        approvedInterpretation: approvedInterpretation?.text ?? null,
         interpretations: buildChartPdfInterpretations({
           result: result.data,
           entries: dictionaryEntries

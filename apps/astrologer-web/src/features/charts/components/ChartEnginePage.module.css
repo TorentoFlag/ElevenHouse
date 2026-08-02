@@ -102,11 +102,13 @@
   font-size: 11px;
 }
 .modeTabs {
+  position: relative;
   display: inline-flex;
   flex: 0 1 auto;
+  align-items: center;
   max-width: 100%;
   gap: 2px;
-  overflow: hidden;
+  overflow: visible;
   padding: 3px;
   border: 1px solid var(--chart-line-strong);
   border-radius: 999px;
@@ -115,7 +117,10 @@
 .modeActive,
 .modeButton,
 .modeDisabled {
+  display: inline-flex;
   flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
   min-height: 32px;
   padding: 0 clamp(10px, 0.7vw, 14px);
   border: 0;
@@ -125,6 +130,11 @@
   font: inherit;
   font-size: 13px;
   font-weight: 700;
+  line-height: 1;
+}
+.modeTabLabel {
+  display: inline-block;
+  transform: translateY(-2px);
 }
 .modeButton {
   cursor: pointer;
@@ -137,59 +147,68 @@
   cursor: not-allowed;
   opacity: 0.48;
 }
-.stateSummary {
-  box-sizing: border-box;
+.modeOverflow {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+.modeOverflowDots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transform: translateY(-2px);
+}
+.modeOverflowDots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentcolor;
+}
+.modeOverflowMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
   display: grid;
-  flex: 0 2 260px;
-  min-width: 180px;
-  max-width: 320px;
-  gap: 2px;
-  padding: 7px 12px;
+  min-width: 190px;
+  gap: 4px;
+  padding: 7px;
   border: 1px solid var(--chart-line-strong);
   border-radius: 14px;
-  background: rgb(30 27 62 / 0.74);
+  background: rgb(20 17 48 / 0.98);
+  box-shadow:
+    0 18px 36px rgb(0 0 0 / 0.35),
+    inset 0 1px 0 rgb(255 255 255 / 0.04);
 }
-.stateSummary strong {
-  overflow: hidden;
-  color: rgb(229 225 244 / 0.92);
-  font-size: 12px;
-  font-weight: 820;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.modeOverflowItem,
+.modeOverflowItemActive {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: rgb(229 225 244 / 0.76);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1;
+  text-align: left;
 }
-.stateSummary span {
-  overflow: hidden;
-  color: rgb(186 178 218 / 0.66);
-  font-size: 10.5px;
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.modeOverflowItem:hover,
+.modeOverflowItem:focus-visible {
+  background: rgb(111 96 172 / 0.18);
+  color: var(--eh-color-moon-120);
+  outline: none;
 }
-.stateSummary[data-tone="ready"],
-.stateSummary[data-tone="success"] {
-  border-color: rgb(110 214 173 / 0.26);
-  background: rgb(29 69 67 / 0.42);
-}
-.stateSummary[data-tone="ready"] strong,
-.stateSummary[data-tone="success"] strong {
-  color: #8fe0c0;
-}
-.stateSummary[data-tone="warning"],
-.stateSummary[data-tone="busy"] {
-  border-color: rgb(246 210 102 / 0.28);
-  background: rgb(68 54 34 / 0.42);
-}
-.stateSummary[data-tone="warning"] strong,
-.stateSummary[data-tone="busy"] strong {
+.modeOverflowItemActive {
+  background: rgb(246 210 102 / 0.16);
   color: var(--chart-gold);
-}
-.stateSummary[data-tone="error"] {
-  border-color: rgb(255 120 120 / 0.32);
-  background: rgb(82 38 50 / 0.42);
-}
-.stateSummary[data-tone="error"] strong {
-  color: #ff9c9c;
 }
 .toolbarSpacer {
   min-width: 8px;
@@ -308,6 +327,43 @@
   flex: 1;
   grid-template-columns: minmax(190px, 218px) minmax(360px, 1fr) minmax(300px, 340px);
 }
+.emptyClientState {
+  display: grid;
+  min-height: 0;
+  grid-column: 1 / -1;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: clamp(44px, 9vh, 96px) 24px;
+  background: linear-gradient(180deg, rgb(25 22 54 / 0.54), rgb(13 12 32 / 0.86)), #0b0a20;
+  text-align: center;
+}
+.emptyClientGlyph {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border: 1px solid rgb(246 210 102 / 0.28);
+  border-radius: 999px;
+  background: rgb(246 210 102 / 0.12);
+  color: var(--chart-gold);
+  font-size: 29px;
+  box-shadow: 0 18px 42px rgb(0 0 0 / 0.28);
+}
+.emptyClientState h2 {
+  margin: 8px 0 0;
+  color: var(--eh-color-moon-120);
+  font-size: clamp(24px, 3vw, 38px);
+  font-weight: 820;
+  line-height: 1.05;
+}
+.emptyClientState p {
+  max-width: 460px;
+  margin: 0;
+  color: rgb(186 178 218 / 0.78);
+  font-size: 15px;
+  line-height: 1.5;
+}
 .rail,
 .panel {
   min-height: 0;
@@ -369,70 +425,279 @@
   border-radius: 14px;
   background: rgb(30 27 62 / 0.72);
 }
+.birthDataWorkspaceForm {
+  box-sizing: border-box;
+  display: grid;
+  width: min(720px, 100%);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: clamp(20px, 2.4vw, 26px);
+  border: 1px solid var(--chart-line);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgb(22 20 47 / 0.96), rgb(18 16 39 / 0.98));
+  box-shadow:
+    0 18px 40px -24px rgb(0 0 0 / 0.8),
+    inset 0 1px 0 rgb(255 255 255 / 0.03);
+}
+.birthDataFormHeader,
+.birthDataPlaceField,
+.birthDataWorkspaceForm > .birthDataError,
+.birthDataWorkspaceForm > .birthPlaceResolved,
+.birthDataWorkspaceForm > .birthDataManualFields,
+.birthDataWorkspaceForm > .birthDataSaveButton {
+  grid-column: 1 / -1;
+}
 .birthDataCard strong {
   display: block;
   margin-bottom: 4px;
   color: var(--chart-gold);
   font-size: 13px;
 }
+.birthDataFormHeader {
+  display: grid;
+  gap: 7px;
+  padding-bottom: 4px;
+}
+.birthDataFormHeader > strong {
+  color: var(--chart-gold);
+  font-size: clamp(24px, 2.2vw, 32px);
+  font-weight: 820;
+  line-height: 1.1;
+}
 .birthDataCard span {
   color: rgb(186 178 218 / 0.74);
   font-size: 11px;
   line-height: 1.35;
 }
+.birthDataFormHeader > span:last-child {
+  max-width: 520px;
+  color: rgb(186 178 218 / 0.84);
+  font-size: 14px;
+  line-height: 1.45;
+}
 .birthDataCard label {
   display: grid;
   gap: 5px;
 }
+.birthDataSelectField,
+.birthDataPickerField,
+.birthDataPlaceField,
+.birthDataManualFields label {
+  display: grid;
+  gap: 8px;
+}
+.birthDataPickerField,
+.birthDataPlaceField {
+  position: relative;
+}
+.birthDataLabel {
+  color: rgb(167 162 200 / 0.96);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+}
 .birthDataCard input,
-.birthDataCard select {
+.birthDataCard select,
+.birthDataWorkspaceForm input,
+.birthDataWorkspaceForm select {
+  box-sizing: border-box;
   min-height: 34px;
+  width: 100%;
   min-width: 0;
   border: 1px solid var(--chart-line-strong);
-  border-radius: 10px;
-  background: rgb(13 12 32 / 0.74);
+  border-radius: 14px;
+  background: rgb(22 20 47 / 0.94);
   color: var(--eh-color-moon-120);
   font: inherit;
   font-size: 12px;
 }
+.birthDataWorkspaceForm input::placeholder {
+  color: rgb(111 106 147 / 0.95);
+}
+.birthDataWorkspaceForm input:focus,
+.birthDataWorkspaceForm select:focus,
+.birthDataPickerButton:focus-visible {
+  border-color: rgb(246 210 102 / 0.42);
+  box-shadow: 0 0 0 3px rgb(246 210 102 / 0.14);
+  outline: none;
+}
+.birthDataWorkspaceForm input,
+.birthDataWorkspaceForm select {
+  min-height: 48px;
+  font-size: 15px;
+}
 .birthDataCard input {
   padding: 0 9px;
 }
-.birthPlaceSearchRow {
+.birthDataWorkspaceForm input,
+.birthDataWorkspaceForm select {
+  padding: 0 14px;
+}
+.birthDataCard select,
+.birthDataWorkspaceForm select {
+  padding-right: 44px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 18 18' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.5 6.75L9 11.25L13.5 6.75' stroke='%23D8D4EC' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 18px center;
+  background-size: 18px 18px;
+}
+.birthDataPickerButton {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 48px;
+  width: 100%;
+  align-content: center;
+  gap: 3px;
+  padding: 6px 14px;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 14px;
+  background: rgb(22 20 47 / 0.94);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.birthDataPickerButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.birthDataPickerButton strong {
+  color: var(--eh-color-moon-120);
+  font-size: 15px;
+  font-weight: 720;
+  line-height: 1.15;
+}
+.birthDataPickerButton small {
+  color: rgb(111 106 147 / 0.92);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.1;
+}
+.birthDatePopover,
+.birthTimePopover,
+.birthPlaceCandidates {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 48px));
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 14px;
+  background: rgb(22 20 47 / 0.98);
+  box-shadow: 0 22px 50px -18px rgb(0 0 0 / 0.85);
+}
+.birthDatePopover,
+.birthTimePopover {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+.birthPickerControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 8px;
+}
+.birthPickerControls label {
+  display: grid;
   gap: 6px;
 }
-.birthPlaceSearchButton {
-  min-height: 34px;
-  padding: 0 11px;
-  border: 1px solid rgb(246 210 102 / 0.26);
+.birthPickerControls span,
+.birthTimeSection > span {
+  color: rgb(167 162 200 / 0.7);
+  font-size: 11px;
+  font-weight: 760;
+}
+.birthPickerControls select {
+  min-height: 36px;
   border-radius: 10px;
-  background: rgb(246 210 102 / 0.16);
-  color: var(--chart-gold);
+  font-size: 13px;
+}
+.birthDateWeekdays,
+.birthDateGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.birthDateWeekdays span {
+  color: rgb(111 106 147 / 0.9);
+  font-size: 10.5px;
+  font-weight: 720;
+  text-align: center;
+}
+.birthDateDay,
+.birthDateDayActive,
+.birthTimeOption,
+.birthTimeOptionActive {
+  min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: rgb(17 15 38 / 0.72);
+  color: rgb(236 234 247 / 0.84);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
-  font-weight: 780;
+  font-weight: 680;
 }
-.birthPlaceSearchButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.48;
+.birthDateDay:hover,
+.birthDateDay:focus-visible,
+.birthTimeOption:hover,
+.birthTimeOption:focus-visible {
+  border-color: rgb(246 210 102 / 0.32);
+  outline: none;
+}
+.birthDateDayActive,
+.birthTimeOptionActive {
+  border-color: var(--chart-gold);
+  background: var(--chart-gold);
+  color: #2a1b0b;
+}
+.birthTimePopover {
+  width: min(420px, calc(100vw - 48px));
+}
+.birthTimeSection {
+  display: grid;
+  gap: 7px;
+}
+.birthTimeGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+}
+.birthMinuteGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+}
+.birthPlaceAutocomplete {
+  position: relative;
+}
+.birthPlaceSearchState {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  color: rgb(167 162 200 / 0.7);
+  font-size: 12px;
+  pointer-events: none;
 }
 .birthPlaceCandidates {
+  right: 0;
   display: grid;
+  width: auto;
   max-height: 178px;
-  gap: 6px;
+  gap: 4px;
+  padding: 6px;
   overflow-y: auto;
 }
 .birthPlaceCandidates button {
   display: grid;
   gap: 3px;
   min-width: 0;
-  padding: 8px 9px;
-  border: 1px solid var(--chart-line-strong);
-  border-radius: 10px;
-  background: rgb(13 12 32 / 0.64);
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
@@ -440,18 +705,22 @@
 }
 .birthPlaceCandidates button:hover,
 .birthPlaceCandidates button:focus-visible {
-  border-color: rgb(246 210 102 / 0.36);
+  background: rgb(30 27 62 / 0.72);
   outline: none;
 }
 .birthPlaceCandidates strong {
   margin: 0;
   overflow: hidden;
   color: rgb(229 225 244 / 0.92);
+  font-size: 13.5px;
+  font-weight: 720;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .birthPlaceCandidates span {
   overflow: hidden;
+  color: rgb(111 106 147 / 0.95);
+  font-size: 11.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -464,6 +733,10 @@
 .birthDataManualFields {
   display: grid;
   gap: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--chart-line);
+  border-radius: 12px;
+  background: rgb(17 15 38 / 0.5);
 }
 .birthDataManualFields summary {
   color: rgb(186 178 218 / 0.78);
@@ -487,14 +760,23 @@
 }
 .birthDataSaveButton {
   min-height: 34px;
-  border: 1px solid rgb(246 210 102 / 0.28);
-  border-radius: 11px;
+  border: 1px solid transparent;
+  border-radius: 14px;
   background: var(--chart-gold);
   color: #2e2342;
   cursor: pointer;
   font: inherit;
   font-size: 12px;
-  font-weight: 780;
+  font-weight: 820;
+  box-shadow:
+    0 0 0 1px rgb(246 210 102 / 0.42),
+    0 10px 26px -10px rgb(246 210 102 / 0.4);
+}
+.birthDataWorkspaceForm > .birthDataSaveButton {
+  min-height: 50px;
+  margin-top: 2px;
+  border-radius: 14px;
+  font-size: 15px;
 }
 .birthDataSaveButton:disabled {
   cursor: not-allowed;
@@ -669,6 +951,18 @@
     radial-gradient(560px 380px at 50% 22%, rgb(70 52 145 / 0.16), transparent 72%),
     radial-gradient(1px 1px at 18% 22%, rgb(255 255 255 / 0.36), transparent 100%),
     radial-gradient(1px 1px at 76% 62%, rgb(255 255 255 / 0.28), transparent 100%), #0b0a20;
+}
+.workspaceBirthDataMode {
+  grid-column: 2 / -1;
+}
+.birthDataWorkspace {
+  box-sizing: border-box;
+  display: grid;
+  min-height: min(650px, calc(100dvh - var(--astrologer-app-header-height, 68px) - 128px));
+  flex: 1 0 auto;
+  align-content: center;
+  justify-items: center;
+  padding: clamp(28px, 5vw, 70px) clamp(22px, 4vw, 56px);
 }
 .wheelStage {
   display: flex;
@@ -1349,70 +1643,133 @@
   outline: 2px solid rgb(131 180 255 / 0.88);
   outline-offset: 2px;
 }
-.interpretationAiPanel {
+.chartAiPanel {
+  box-sizing: border-box;
   display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid rgb(246 210 102 / 0.22);
-  border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgb(30 27 62 / 0.92), rgb(20 18 43 / 0.92)), rgb(30 27 62 / 0.76);
-  box-shadow: 0 16px 40px rgb(0 0 0 / 0.18);
+  align-content: start;
+  gap: 16px;
+  min-height: 100%;
+  min-width: 0;
+  padding: 18px 20px 32px;
 }
-.interpretationAiHeader {
+.chartAiHeader {
   display: flex;
-  align-items: start;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
+  min-width: 0;
 }
-.interpretationAiHeader div {
+.chartAiHeader div {
   display: grid;
-  gap: 5px;
+  gap: 7px;
+  min-width: 0;
 }
-.interpretationAiHeader span {
-  color: rgb(186 178 218 / 0.58);
-  font-size: 10px;
-  font-weight: 820;
-  letter-spacing: 0.14em;
+.chartAiHeader span {
+  color: rgb(246 210 102 / 0.82);
+  font-size: 18px;
+  font-weight: 860;
+  line-height: 1;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
-.interpretationAiHeader strong {
-  color: rgb(229 225 244 / 0.9);
-  font-size: 13px;
-  line-height: 1.3;
+.chartAiHeader h2,
+.chartAiHeader p {
+  margin: 0;
 }
-.interpretationAiHeader b {
-  padding: 4px 8px;
-  border: 1px solid rgb(246 210 102 / 0.26);
+.chartAiHeader h2 {
+  color: rgb(255 244 197 / 0.96);
+  font-size: 20px;
+  font-weight: 860;
+  line-height: 1.1;
+}
+.chartAiHeader p {
+  max-width: 42ch;
+  color: rgb(216 212 236 / 0.68);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.chartAiHeader b {
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid rgb(246 210 102 / 0.24);
   border-radius: 999px;
   background: rgb(246 210 102 / 0.12);
   color: var(--chart-gold);
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 820;
 }
-.interpretationAiPanel p,
-.interpretationAiPanel small {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
+.chartAiToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
 }
-.interpretationAiPanel p {
-  color: rgb(229 225 244 / 0.72);
-}
-.interpretationAiPanel small {
-  color: rgb(186 178 218 / 0.58);
-}
-.interpretationAiPanel button {
-  justify-self: start;
-  min-height: 34px;
-  padding: 0 13px;
-  border: 1px solid rgb(216 212 236 / 0.12);
-  border-radius: 10px;
-  background: rgb(216 212 236 / 0.07);
-  color: rgb(186 178 218 / 0.56);
-  cursor: not-allowed;
+.chartAiPrimaryButton,
+.chartAiSecondaryButton {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 12px;
   font: inherit;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 820;
+}
+.chartAiPrimaryButton {
+  border: 1px solid rgb(246 210 102 / 0.56);
+  background: linear-gradient(180deg, rgb(246 210 102), rgb(226 190 78));
+  color: rgb(26 22 52);
+  box-shadow: 0 12px 30px rgb(246 210 102 / 0.18);
+}
+.chartAiSecondaryButton {
+  border: 1px solid rgb(216 212 236 / 0.14);
+  background: rgb(216 212 236 / 0.08);
+  color: rgb(229 225 244 / 0.86);
+}
+.chartAiPrimaryButton:disabled,
+.chartAiSecondaryButton:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+.chartAiEditor {
+  box-sizing: border-box;
+  min-height: 430px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  overflow-x: hidden;
+  resize: vertical;
+  padding: 16px;
+  border: 1px solid rgb(216 212 236 / 0.16);
+  border-radius: 14px;
+  background: rgb(11 10 30 / 0.62);
+  color: rgb(242 239 255 / 0.94);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.chartAiEditor::placeholder {
+  color: rgb(186 178 218 / 0.46);
+}
+.chartAiEditor:focus {
+  border-color: rgb(246 210 102 / 0.52);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(246 210 102 / 0.12);
+}
+.chartAiEmpty,
+.chartAiError {
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.chartAiEmpty {
+  border: 1px solid rgb(216 212 236 / 0.12);
+  background: rgb(216 212 236 / 0.06);
+  color: rgb(216 212 236 / 0.68);
+}
+.chartAiError {
+  border: 1px solid rgb(255 136 136 / 0.28);
+  background: rgb(255 92 92 / 0.1);
+  color: rgb(255 172 172);
 }
 .panelEmpty {
   padding: 18px 22px;
@@ -1507,18 +1864,15 @@
   }
   .modeTabs {
     width: 100%;
-    overflow-x: auto;
+    overflow: visible;
   }
   .modeActive,
+  .modeButton,
   .modeDisabled {
     flex: 1 0 auto;
   }
   .toolbarSpacer {
     display: none;
-  }
-  .stateSummary {
-    width: 100%;
-    max-width: none;
   }
   .calculateButton,
   .toolButton,
@@ -1548,6 +1902,28 @@
   .wheelSvg {
     width: min(100%, 300px);
     max-height: 300px;
+  }
+  .workspaceBirthDataMode {
+    grid-column: auto;
+  }
+  .birthDataWorkspace {
+    min-height: 0;
+    padding: 24px 18px;
+  }
+  .birthDataWorkspaceForm {
+    grid-template-columns: 1fr;
+    padding: 20px;
+  }
+  .birthDataFormHeader > strong {
+    font-size: clamp(24px, 7vw, 30px);
+  }
+  .birthDatePopover,
+  .birthTimePopover {
+    width: 100%;
+  }
+  .birthTimeGrid,
+  .birthMinuteGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .hoverDetailSlot {
     min-height: 64px;
@@ -1587,18 +1963,15 @@
   }
   .modeTabs {
     width: 100%;
-    overflow-x: auto;
+    overflow: visible;
   }
   .modeActive,
+  .modeButton,
   .modeDisabled {
     flex: 1 0 auto;
   }
   .toolbarSpacer {
     display: none;
-  }
-  .stateSummary {
-    width: 100%;
-    max-width: none;
   }
   .calculateButton,
   .toolButton,
@@ -1628,6 +2001,28 @@
   .wheelSvg {
     width: min(100%, 300px);
     max-height: 300px;
+  }
+  .workspaceBirthDataMode {
+    grid-column: auto;
+  }
+  .birthDataWorkspace {
+    min-height: 0;
+    padding: 24px 18px;
+  }
+  .birthDataWorkspaceForm {
+    grid-template-columns: 1fr;
+    padding: 20px;
+  }
+  .birthDataFormHeader > strong {
+    font-size: clamp(24px, 7vw, 30px);
+  }
+  .birthDatePopover,
+  .birthTimePopover {
+    width: 100%;
+  }
+  .birthTimeGrid,
+  .birthMinuteGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .hoverDetailSlot {
     min-height: 64px;

@@ -33,6 +33,21 @@ type CalculationMediaStorageConfig = {
   readonly privateBucket: string;
 };
 
+type LatestCalculationPdfInput = {
+  readonly ownerUserId: string;
+  readonly calculationId: string;
+  readonly locale: CalculationPdfLocale;
+} & (
+  | {
+      readonly sourceLocator?: undefined;
+      readonly renderContract?: undefined;
+    }
+  | {
+      readonly sourceLocator: CalculationPdfSourceLocator;
+      readonly renderContract: string;
+    }
+);
+
 @Injectable()
 export class CalculationPdfService {
   constructor(
@@ -46,11 +61,7 @@ export class CalculationPdfService {
     @Inject(CALCULATION_PDF_ID_GENERATOR) private readonly idGenerator: () => string
   ) {}
 
-  async latest(input: {
-    readonly ownerUserId: string;
-    readonly calculationId: string;
-    readonly locale: CalculationPdfLocale;
-  }): Promise<CalculationPdfJobResponse> {
+  async latest(input: LatestCalculationPdfInput): Promise<CalculationPdfJobResponse> {
     const { calculation, job } = await this.latestJob(input);
     return calculationPdfJobResponseSchema.parse({
       job: job ? toCalculationPdfJobResponse(job) : null,
@@ -58,16 +69,23 @@ export class CalculationPdfService {
     });
   }
 
-  async latestJob(input: {
-    readonly ownerUserId: string;
-    readonly calculationId: string;
-    readonly locale: CalculationPdfLocale;
-  }): Promise<{ readonly calculation: CalculationRecord; readonly job: CalculationPdfJob | null }> {
+  async latestJob(
+    input: LatestCalculationPdfInput
+  ): Promise<{ readonly calculation: CalculationRecord; readonly job: CalculationPdfJob | null }> {
     const calculation = await this.currentCalculation(input.ownerUserId, input.calculationId);
-    const job = await this.pdfJobStore.findLatestByCalculation(input);
+    const job = await this.pdfJobStore.findLatestByCalculation({
+      ownerUserId: input.ownerUserId,
+      calculationId: input.calculationId,
+      locale: input.locale
+    });
+    const expectedDocumentFingerprint = this.expectedDocumentFingerprint(input, calculation);
     return {
       calculation,
-      job: job?.resultChecksum === calculation.resultChecksum ? job : null
+      job:
+        job?.resultChecksum === calculation.resultChecksum &&
+        (expectedDocumentFingerprint === null || job.documentFingerprint === expectedDocumentFingerprint)
+          ? job
+          : null
     };
   }
 
@@ -176,6 +194,19 @@ export class CalculationPdfService {
       throw new CalculationPdfNotFoundError();
     }
     return calculation;
+  }
+
+  private expectedDocumentFingerprint(
+    input: LatestCalculationPdfInput,
+    calculation: CalculationRecord
+  ): `sha256:${string}` | null {
+    if (!input.sourceLocator) return null;
+    return calculationPdfDocumentFingerprint({
+      resultChecksum: calculation.resultChecksum,
+      locale: input.locale,
+      sourceLocator: input.sourceLocator,
+      renderContract: input.renderContract
+    });
   }
 }
 

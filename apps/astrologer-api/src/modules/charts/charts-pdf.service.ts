@@ -9,7 +9,12 @@ import {
   type CalculationPdfLatestQuery,
   type RequestCalculationPdf
 } from "@elevenhouse/contracts";
-import type { CalculationRecord, CalculationStore } from "@elevenhouse/domain";
+import {
+  selectCurrentApprovedCalculationInterpretation,
+  type CalculationPdfSourceLocator,
+  type CalculationRecord,
+  type CalculationStore
+} from "@elevenhouse/domain";
 import { requireOwnerUserId } from "../calculations/calculations.service";
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import {
@@ -37,11 +42,13 @@ export class ChartsPdfService {
     const parsedQuery = parseLatestQuery(query);
     const ownerUserId = requireOwnerUserId(request);
     return mapChartPdfErrors(async () => {
-      await this.ownedNatalChart(ownerUserId, params.calculationId);
+      const calculation = await this.ownedNatalChart(ownerUserId, params.calculationId);
       return this.calculationPdf.latest({
         ownerUserId,
         calculationId: params.calculationId,
-        locale: parsedQuery.locale
+        locale: parsedQuery.locale,
+        sourceLocator: chartPdfSourceLocator(calculation),
+        renderContract: "chart-natal-v1"
       });
     });
   }
@@ -61,7 +68,7 @@ export class ChartsPdfService {
         calculationId: calculation.id,
         expectedResultChecksum: parsedBody.expectedResultChecksum,
         locale: parsedBody.locale,
-        sourceLocator: { kind: "calculation_result" },
+        sourceLocator: chartPdfSourceLocator(calculation),
         renderContract: "chart-natal-v1",
         originalFileName: parsedBody.locale === "ru" ? "Натальная карта.pdf" : "Natal chart.pdf"
       });
@@ -112,6 +119,14 @@ export class ChartsPdfService {
     }
     return calculation;
   }
+}
+
+function chartPdfSourceLocator(calculation: CalculationRecord): CalculationPdfSourceLocator {
+  const interpretation = selectCurrentApprovedCalculationInterpretation(calculation.interpretations);
+  return {
+    kind: "approved_interpretation",
+    interpretationId: interpretation?.id ?? null
+  };
 }
 
 function parseCalculationId(calculationId: string): { readonly calculationId: string } {

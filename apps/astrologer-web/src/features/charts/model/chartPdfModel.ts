@@ -13,6 +13,13 @@ export type ChartPdfAction = {
   readonly errorMessage: string | null;
 };
 
+export type ChartPdfDownloadWindow = {
+  readonly close: () => void;
+  readonly location: {
+    href: string;
+  };
+};
+
 export function buildChartPdfAction(input: {
   readonly calculationId: string | null;
   readonly currentResultChecksum: string | null;
@@ -106,6 +113,38 @@ export async function executeChartPdfAction(input: {
   }
 
   return "skipped";
+}
+
+export function reserveChartPdfDownloadWindow(input: {
+  readonly kind: ChartPdfAction["kind"];
+  readonly openWindow: (url: string, target: string) => ChartPdfDownloadWindow | null;
+}): ChartPdfDownloadWindow | null {
+  if (input.kind !== "download") return null;
+  const downloadWindow = input.openWindow("about:blank", "_blank");
+  if (downloadWindow) {
+    downloadWindow.location.href = "about:blank";
+  }
+  return downloadWindow;
+}
+
+export function openChartPdfDownloadUrl(input: {
+  readonly url: string;
+  readonly downloadWindow: ChartPdfDownloadWindow | null;
+  readonly navigateCurrentWindow: (url: string) => void;
+}): "reserved-window" | "current-window" {
+  if (input.downloadWindow) {
+    input.downloadWindow.location.href = input.url;
+    return "reserved-window";
+  }
+
+  input.navigateCurrentWindow(input.url);
+  return "current-window";
+}
+
+export function closeReservedChartPdfWindow(input: {
+  readonly downloadWindow: ChartPdfDownloadWindow | null;
+}): void {
+  input.downloadWindow?.close();
 }
 
 function action(

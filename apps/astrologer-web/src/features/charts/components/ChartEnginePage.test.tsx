@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { HttpError } from "../../../common/http/HttpError";
 import type {
+  CalculationInterpretationResponse,
   ChartRenderResult,
   ChartSettings,
   DictionaryEntriesResponse,
@@ -47,6 +49,8 @@ const client = {
     updatedAt: "2026-07-20T12:00:00.000Z"
   }
 } satisfies ClientSelectOption;
+const calculationId = "44444444-4444-4444-8444-444444444444";
+const checksum = `sha256:${"a".repeat(64)}`;
 
 const partnerClient = {
   ...client,
@@ -93,9 +97,15 @@ describe("ChartEnginePage", () => {
     );
 
     expect(screen.getByRole("button", { name: /транзиты/i })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /прогрессии/i })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /синастрия/i })).toBeEnabled();
-    expect(screen.getByText(/вводить дату рождения вручную не нужно/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /прогрессии/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /синастрия/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /остальные типы карт/i }));
+    expect(screen.getByRole("menuitem", { name: /прогрессии/i })).toBeEnabled();
+    expect(screen.getByRole("menuitem", { name: /синастрия/i })).toBeEnabled();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menuitem", { name: /прогрессии/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/вводить дату рождения вручную не нужно/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Клиент" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /рассчитать/i }));
 
     expect(onCreateNatalJob).toHaveBeenCalledOnce();
@@ -120,10 +130,47 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: "Детская" }));
 
     expect(screen.getByText("Детская карта")).toBeInTheDocument();
-    expect(screen.getByText(/трактовки откроются в мягком детском режиме/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Рассчитать детскую/i }));
 
     expect(onCreateNatalJob).toHaveBeenCalledOnce();
+  });
+
+  it("does not render a separate ready-status card before natal calculation", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Готово к расчёту натала")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Выберите клиента с полной датой, временем, часовым поясом и координатами рождения."
+      )
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /рассчитать/i })).toBeEnabled();
+  });
+
+  it("shows only a centered empty state when no client is selected", () => {
+    renderChartEnginePage({ selectedClient: null });
+
+    const emptyState = screen.getByRole("status", { name: "Выберите клиента" });
+    expect(within(emptyState).getByText("Выберите клиента")).toBeInTheDocument();
+    expect(
+      within(emptyState).getByText(/карта и данные расчёта появятся после выбора клиента/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Сводка карты" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Данные карты" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Натальная карта")).not.toBeInTheDocument();
+    expect(screen.queryByText(/вводить дату рождения вручную не нужно/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Большая тройка")).not.toBeInTheDocument();
   });
 
   it("switches to transit mode and submits the transit calculation", async () => {
@@ -174,7 +221,8 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: /синастрия/i }));
+    await user.click(screen.getByRole("button", { name: /остальные типы карт/i }));
+    await user.click(screen.getByRole("menuitem", { name: /синастрия/i }));
 
     expect(screen.getByText(/Партнёр · 11\.08\.1992/)).toBeInTheDocument();
     expect(screen.getByText("Алексей Петров")).toBeInTheDocument();
@@ -231,7 +279,7 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByTestId("chart-transit-point-mars")).toBeInTheDocument();
     expect(screen.getByTestId("chart-transit-aspect-opposition")).toBeInTheDocument();
-    expect(screen.getByText(/Транзитная карта рассчитана/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Транзитная карта рассчитана/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Аспекты" }));
 
@@ -258,7 +306,7 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByTestId("chart-solar-return-point-mars")).toBeInTheDocument();
     expect(screen.getByTestId("chart-solar-return-aspect-opposition")).toBeInTheDocument();
-    expect(screen.getByText("Соляр рассчитан")).toBeInTheDocument();
+    expect(screen.queryByText("Соляр рассчитан")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Аспекты" }));
 
@@ -287,7 +335,8 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: /прогрессии/i }));
+    await user.click(screen.getByRole("button", { name: /остальные типы карт/i }));
+    await user.click(screen.getByRole("menuitem", { name: /прогрессии/i }));
 
     expect(screen.getByRole("button", { name: /рассчитать прогрессии/i })).toBeEnabled();
     expect(screen.getByLabelText("Дата прогрессии")).toHaveValue("2026-07-23");
@@ -317,7 +366,7 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByTestId("chart-progression-point-mars")).toBeInTheDocument();
     expect(screen.getByTestId("chart-progression-aspect-opposition")).toBeInTheDocument();
-    expect(screen.getByText("Прогрессии рассчитаны")).toBeInTheDocument();
+    expect(screen.queryByText("Прогрессии рассчитаны")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Аспекты" }));
 
@@ -361,7 +410,8 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "Хорар" }));
+    await user.click(screen.getByRole("button", { name: /остальные типы карт/i }));
+    await user.click(screen.getByRole("menuitem", { name: "Хорар" }));
 
     expect(screen.getAllByText("Готово к хорару").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Вопрос хорара")).toHaveValue("");
@@ -411,8 +461,7 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    expect(screen.getAllByText("Хорар рассчитан").length).toBeGreaterThan(0);
-    expect(screen.getByText(/автоматический ответ не подключён/i)).toBeInTheDocument();
+    expect(screen.queryByText("Хорар рассчитан")).not.toBeInTheDocument();
     expect(screen.getByTestId("chart-point-sun")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
   });
@@ -435,7 +484,8 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "Астрокарта" }));
+    await user.click(screen.getByRole("button", { name: /остальные типы карт/i }));
+    await user.click(screen.getByRole("menuitem", { name: "Астрокарта" }));
 
     expect(screen.getByText("Астрокартография")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Рассчитать линии" })).toBeEnabled();
@@ -485,7 +535,7 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    expect(screen.getAllByText("Астрокарта рассчитана").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Астрокарта рассчитана")).not.toBeInTheDocument();
     expect(screen.getByTestId("astrocartography-map")).toBeInTheDocument();
     expect(screen.getByTestId("astrocartography-line-sun_mc")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
@@ -528,11 +578,131 @@ describe("ChartEnginePage", () => {
         name: "Создать трактовку horary.sun.cancer в справочнике"
       })
     ).toHaveAttribute("href", expect.stringContaining("create=horary.sun.cancer"));
-    expect(within(interpretationsPanel).getByText("AI-трактовка · хорар")).toBeInTheDocument();
+    expect(within(interpretationsPanel).queryByText(/AI-трактовка/u)).not.toBeInTheDocument();
     expect(get).toHaveBeenCalledWith(
       "/dictionary/entries/by-codes?locale=ru&codes=horary.question.career%2Chorary.sun.cancer%2Chorary.sun.house.10%2Chorary.house.1"
     );
     expect(get.mock.calls[0]?.[0]).not.toContain("sun_cancer");
+  });
+
+  it("generates chart AI draft from a dedicated AI tab", async () => {
+    const user = userEvent.setup();
+    const initialRecord = calculationRecordResponse([]);
+    const generatedRecord = calculationRecordResponse([
+      {
+        id: "66666666-6666-4666-8666-666666666666",
+        status: "draft",
+        text: "OVERVIEW\nGenerated draft"
+      }
+    ]);
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(initialRecord);
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(generatedRecord);
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        calculationId={calculationId}
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "AI" }));
+    expect(await screen.findByRole("heading", { name: "Черновик трактовки" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeEnabled()
+    );
+    await user.click(screen.getByRole("button", { name: "Сгенерировать" }));
+
+    expect(post).toHaveBeenCalledWith(
+      `/charts/calculations/${calculationId}/ai-draft`,
+      { expectedResultChecksum: checksum },
+      { csrf: true }
+    );
+    expect(get).toHaveBeenCalledWith(`/calculations/${calculationId}`);
+    await waitFor(() =>
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toContain(
+        "Generated draft"
+      )
+    );
+  });
+
+  it("keeps chart AI generation disabled when the calculation record cannot be loaded", async () => {
+    const user = userEvent.setup();
+    const get = vi
+      .spyOn(application.http, "get")
+      .mockRejectedValue(new Error("Calculation fetch failed"));
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(calculationRecordResponse([]));
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        calculationId={calculationId}
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "AI" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Не удалось загрузить расчёт карты. Обновите страницу и повторите"
+    );
+    expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Сгенерировать" }));
+
+    expect(get).toHaveBeenCalledWith(`/calculations/${calculationId}`);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("shows chart AI generation failures next to controls", async () => {
+    const user = userEvent.setup();
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(calculationRecordResponse([]));
+    const post = vi.spyOn(application.http, "post").mockRejectedValue(new HttpError(503, null));
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        calculationId={calculationId}
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "AI" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeEnabled()
+    );
+    await user.click(screen.getByRole("button", { name: "Сгенерировать" }));
+
+    const alert = await screen.findByRole("alert");
+    const textbox = screen.getByRole("textbox");
+
+    expect(alert).toHaveTextContent("AI временно недоступен. Повторите позже");
+    expect(Boolean(alert.compareDocumentPosition(textbox) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(
+      true
+    );
+    expect(post).toHaveBeenCalledWith(
+      `/charts/calculations/${calculationId}/ai-draft`,
+      { expectedResultChecksum: checksum },
+      { csrf: true }
+    );
+    expect(get).toHaveBeenCalledWith(`/calculations/${calculationId}`);
   });
 
   it("loads astrocartography-specific dictionary anchors without natal fallback", async () => {
@@ -598,7 +768,7 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByTestId("chart-partner-point-mars")).toBeInTheDocument();
     expect(screen.getByTestId("chart-synastry-aspect-opposition")).toBeInTheDocument();
-    expect(screen.getAllByText(/Синастрия рассчитана/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Синастрия рассчитана/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Аспекты" }));
 
@@ -734,22 +904,17 @@ describe("ChartEnginePage", () => {
       action: "Актуальна",
       enabled: false
     }
-  ])(
-    "renders explicit chart state matrix for $name",
-    ({ action, detail, enabled, props, status }) => {
-      renderChartEnginePage(props);
+  ])("renders explicit chart state matrix for $name", ({ action, enabled, props }) => {
+    renderChartEnginePage(props);
 
-      const stateSummary = screen.getByLabelText("Состояние карты");
-      expect(within(stateSummary).getByText(status)).toBeInTheDocument();
-      expect(within(stateSummary).getByText(detail)).toBeInTheDocument();
-      const actionButton = screen.getByRole("button", { name: action });
-      if (enabled) {
-        expect(actionButton).toBeEnabled();
-      } else {
-        expect(actionButton).toBeDisabled();
-      }
+    expect(screen.queryByLabelText("Состояние карты")).not.toBeInTheDocument();
+    const actionButton = screen.getByRole("button", { name: action });
+    if (enabled) {
+      expect(actionButton).toBeEnabled();
+    } else {
+      expect(actionButton).toBeDisabled();
     }
-  );
+  });
 
   it("shows calculating without queue wording and renders canonical result tables", async () => {
     const user = userEvent.setup();
@@ -1135,9 +1300,7 @@ describe("ChartEnginePage", () => {
     expect(get).toHaveBeenCalledWith(
       "/dictionary/entries/by-codes?locale=ru&codes=sun_cancer%2Csun_house_11%2Cmoon_aries%2Cmoon_house_8%2Cpluto_scorpio%2Cpluto_house_7%2Chouse_1%2Chouse_7%2Csquare%2Ctrine%2Csun_moon%2Cmoon_pluto"
     );
-    expect(
-      within(interpretationsPanel).getByRole("button", { name: /AI-черновик недоступен/i })
-    ).toBeDisabled();
+    expect(within(interpretationsPanel).queryByText(/AI-черновик/u)).not.toBeInTheDocument();
     expect(
       within(interpretationsPanel).queryByText(/интерпретационный контур не подключён/i)
     ).not.toBeInTheDocument();
@@ -1203,10 +1366,7 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    expect(screen.getByText("Детская карта рассчитана")).toBeInTheDocument();
-    expect(
-      screen.getByText(/трактовки адаптированы для родительского чтения/i)
-    ).toBeInTheDocument();
+    expect(screen.queryByText("Детская карта рассчитана")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "Трактовки" }));
@@ -1360,18 +1520,20 @@ describe("ChartEnginePage", () => {
     );
 
     expect(screen.getByText(/не хватает: время рождения/i)).toBeInTheDocument();
-    expect(screen.getByText(/нужны данные рождения/i)).toBeInTheDocument();
+    expect(screen.queryByText(/нужны данные рождения/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /добавьте время/i })).toBeDisabled();
     expect(screen.queryByRole("button", { name: /солнце на карте/i })).not.toBeInTheDocument();
 
-    const chartDataPanel = screen.getByRole("complementary", { name: "Данные карты" });
-    expect(within(chartDataPanel).queryByText("Солнце")).not.toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Данные карты" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Солнце")).not.toBeInTheDocument();
     expect(screen.getByText(/появится после расчёта/i)).toBeInTheDocument();
 
-    expect(screen.getByLabelText(/^время рождения/i)).toBeDisabled();
+    expect(screen.getByRole("button", { name: /время рождения/i })).toBeDisabled();
     await user.selectOptions(screen.getByLabelText(/точность времени/i), "approximate");
-    expect(screen.getByLabelText(/^время рождения/i)).toBeEnabled();
-    await user.type(screen.getByLabelText(/^время рождения/i), "10:30");
+    expect(screen.getByRole("button", { name: /время рождения/i })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: /время рождения/i }));
+    await user.click(screen.getByRole("button", { name: "10:00" }));
+    await user.click(screen.getByRole("button", { name: "30 минут" }));
     await user.click(screen.getByRole("button", { name: /сохранить данные рождения/i }));
 
     expect(onSaveBirthData).toHaveBeenCalledWith(
@@ -1380,6 +1542,40 @@ describe("ChartEnginePage", () => {
         birthTimePrecision: "approximate"
       })
     );
+  });
+
+  it("moves missing birth data editing out of the rail into the workspace", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={{
+          ...client,
+          birthData: null
+        }}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onSaveBirthData={vi.fn()}
+      />
+    );
+
+    const rail = screen.getByRole("complementary", { name: "Сводка карты" });
+    expect(within(rail).getByText(/не хватает:/i)).toBeInTheDocument();
+    expect(within(rail).queryByText("Заполните данные рождения")).not.toBeInTheDocument();
+    expect(within(rail).queryByLabelText("Дата рождения")).not.toBeInTheDocument();
+
+    const birthDataWorkspace = screen.getByRole("region", {
+      name: "Заполнение данных рождения"
+    });
+    expect(within(birthDataWorkspace).getByText("Заполните данные рождения")).toBeInTheDocument();
+    expect(
+      within(birthDataWorkspace).getByRole("button", { name: /дата рождения/i })
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Натальная карта")).not.toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Данные карты" })).not.toBeInTheDocument();
   });
 
   it("keeps an already calculated current result as a disabled terminal action", () => {
@@ -1396,7 +1592,8 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    expect(screen.getAllByText(/натальная карта рассчитана/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/натальная карта рассчитана/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Провайдер:/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /актуальна/i })).toBeDisabled();
   });
 
@@ -1480,11 +1677,14 @@ describe("ChartEnginePage", () => {
     expect(screen.getByText(/заполните данные рождения/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /добавьте дату/i })).toBeDisabled();
 
-    await user.clear(screen.getByLabelText(/дата рождения/i));
-    await user.type(screen.getByLabelText(/дата рождения/i), "1990-07-15");
+    await user.click(screen.getByRole("button", { name: /дата рождения/i }));
+    await user.selectOptions(screen.getByLabelText("Год рождения"), "1990");
+    await user.selectOptions(screen.getByLabelText("Месяц рождения"), "07");
+    await user.click(screen.getByRole("button", { name: "15 июля 1990" }));
     await user.selectOptions(screen.getByLabelText(/точность времени/i), "exact");
-    await user.clear(screen.getByLabelText(/^время рождения/i));
-    await user.type(screen.getByLabelText(/^время рождения/i), "10:30");
+    await user.click(screen.getByRole("button", { name: /время рождения/i }));
+    await user.click(screen.getByRole("button", { name: "10:00" }));
+    await user.click(screen.getByRole("button", { name: "30 минут" }));
     await user.clear(screen.getByLabelText(/место рождения/i));
     await user.type(screen.getByLabelText(/место рождения/i), "Рим, Италия");
     await user.click(screen.getByText(/ввести координаты вручную/i));
@@ -1513,12 +1713,12 @@ describe("ChartEnginePage", () => {
     });
   });
 
-  it("fills timezone and coordinates from birth-place search results", async () => {
+  it("fills timezone and coordinates from debounced birth-place autocomplete", async () => {
     const user = userEvent.setup();
     const onSaveBirthData = vi.fn(async () => undefined);
     const onSearchBirthPlaces = vi.fn(async () => [
       {
-        id: "nominatim:41485",
+        id: "geoapify:41485",
         label: "Rome, Lazio, Italy",
         placeName: "Rome, Italy",
         countryCode: "IT",
@@ -1527,7 +1727,7 @@ describe("ChartEnginePage", () => {
         timezone: "Europe/Rome",
         latitude: 41.8933,
         longitude: 12.4829,
-        provider: "nominatim" as const,
+        provider: "geoapify" as const,
         providerPlaceId: "41485"
       }
     ]);
@@ -1566,16 +1766,24 @@ describe("ChartEnginePage", () => {
       />
     );
 
+    expect(screen.queryByRole("button", { name: /найти/i })).not.toBeInTheDocument();
+
     await user.type(screen.getByLabelText(/место рождения/i), "Rome Italy");
-    await user.click(screen.getByRole("button", { name: /найти/i }));
+    await waitFor(() => expect(onSearchBirthPlaces).toHaveBeenCalledWith("Rome Italy"));
+    expect(onSearchBirthPlaces).toHaveBeenCalledTimes(1);
     await user.click(await screen.findByRole("option", { name: /rome, italy/i }));
-    await user.clear(screen.getByLabelText(/дата рождения/i));
-    await user.type(screen.getByLabelText(/дата рождения/i), "1990-07-15");
+    await user.click(screen.getByRole("button", { name: /дата рождения/i }));
+    await user.selectOptions(screen.getByLabelText("Год рождения"), "1990");
+    await user.selectOptions(screen.getByLabelText("Месяц рождения"), "07");
+    await user.click(screen.getByRole("button", { name: "15 июля 1990" }));
     await user.selectOptions(screen.getByLabelText(/точность времени/i), "exact");
-    await user.type(screen.getByLabelText(/^время рождения/i), "10:30");
+    await user.click(screen.getByRole("button", { name: /время рождения/i }));
+    await user.click(screen.getByRole("button", { name: "10:00" }));
+    await user.click(screen.getByRole("button", { name: "30 минут" }));
     await user.click(screen.getByRole("button", { name: /сохранить данные рождения/i }));
 
     expect(onSearchBirthPlaces).toHaveBeenCalledWith("Rome Italy");
+    expect(onSearchBirthPlaces).toHaveBeenCalledTimes(1);
     expect(onSaveBirthData).toHaveBeenCalledWith(
       expect.objectContaining({
         birthPlaceText: "Rome, Italy",
@@ -1587,6 +1795,98 @@ describe("ChartEnginePage", () => {
         birthLongitude: 12.4829
       })
     );
+  });
+
+  it("does not search birth places until the query has at least three characters", async () => {
+    const user = userEvent.setup();
+    const onSearchBirthPlaces = vi.fn(async () => []);
+
+    render(
+      <ChartEnginePage
+        selectedClient={{
+          ...client,
+          birthDateDisplay: "—",
+          hasBirthDate: false,
+          birthData: {
+            ...client.birthData,
+            birthDate: null,
+            birthTime: null,
+            birthTimePrecision: "unknown",
+            birthPlaceText: null,
+            birthCountryCode: null,
+            birthCity: null,
+            birthRegion: null,
+            birthTimezone: null,
+            birthLatitude: null,
+            birthLongitude: null
+          }
+        }}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onSearchBirthPlaces={onSearchBirthPlaces}
+        onSaveBirthData={vi.fn()}
+        isSavingBirthData={false}
+        birthDataError={null}
+      />
+    );
+
+    await user.type(screen.getByLabelText(/место рождения/i), "Ри");
+
+    await new Promise((resolve) => window.setTimeout(resolve, 900));
+    expect(onSearchBirthPlaces).not.toHaveBeenCalled();
+  });
+
+  it("shows a friendly birth-place provider error instead of a raw HTTP message", async () => {
+    const user = userEvent.setup();
+    const onSearchBirthPlaces = vi.fn(async () => {
+      throw new Error("HTTP request failed with status 503");
+    });
+
+    render(
+      <ChartEnginePage
+        selectedClient={{
+          ...client,
+          birthDateDisplay: "—",
+          hasBirthDate: false,
+          birthData: {
+            ...client.birthData,
+            birthDate: null,
+            birthTime: null,
+            birthTimePrecision: "unknown",
+            birthPlaceText: null,
+            birthCountryCode: null,
+            birthCity: null,
+            birthRegion: null,
+            birthTimezone: null,
+            birthLatitude: null,
+            birthLongitude: null
+          }
+        }}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onSearchBirthPlaces={onSearchBirthPlaces}
+        onSaveBirthData={vi.fn()}
+        isSavingBirthData={false}
+        birthDataError={null}
+      />
+    );
+
+    await user.type(screen.getByLabelText(/место рождения/i), "Рим");
+
+    expect(
+      await screen.findByText("Не удалось найти место. Попробуйте уточнить запрос позже.")
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/HTTP request failed/i)).not.toBeInTheDocument();
   });
 });
 
@@ -1746,6 +2046,38 @@ function chartResult(
       warnings: [],
       ...overrides
     }
+  };
+}
+
+function calculationRecordResponse(
+  interpretations: readonly CalculationInterpretationResponse[]
+) {
+  return {
+    id: calculationId,
+    ownerUserId: "11111111-1111-4111-8111-111111111111",
+    module: "chart",
+    mode: "individual",
+    methodCode: "natal",
+    title: "QA Natal",
+    status: "calculated",
+    requestFingerprint: `sha256:${"b".repeat(64)}`,
+    inputData: { method: "natal" },
+    resultData: chartResult(),
+    resultSummary: { method: "natal" },
+    resultChecksum: checksum,
+    participants: [
+      {
+        role: "subject",
+        source: "crm_client",
+        clientId: client.value,
+        displayName: client.label
+      }
+    ],
+    links: [],
+    interpretations,
+    artifacts: [],
+    createdAt: "2026-07-20T12:00:00.000Z",
+    updatedAt: "2026-07-20T12:00:00.000Z"
   };
 }
 

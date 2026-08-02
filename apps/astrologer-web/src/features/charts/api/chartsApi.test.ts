@@ -5,6 +5,7 @@ import {
   createAstrocartographyChartJob,
   createHoraryChartJob,
   createCompositeChartJob,
+  createChartAiDraft,
   createNatalChartJob,
   createProgressionChartJob,
   createSolarReturnChartJob,
@@ -64,6 +65,24 @@ describe("chartsApi", () => {
       { csrf: true }
     );
     expect(JSON.stringify(post.mock.calls[0]?.[1])).not.toContain("birthDate");
+  });
+
+  it("creates chart AI drafts with checksum only and CSRF protection", async () => {
+    const response = calculationRecordResponse();
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(response);
+
+    await expect(
+      createChartAiDraft({
+        calculationId,
+        body: { expectedResultChecksum: checksum }
+      })
+    ).resolves.toEqual(response);
+
+    expect(post).toHaveBeenCalledWith(
+      `/charts/calculations/${calculationId}/ai-draft`,
+      { expectedResultChecksum: checksum },
+      { csrf: true }
+    );
   });
 
   it("does not expose a child chart job endpoint because child chart reuses natal calculations", () => {
@@ -464,6 +483,42 @@ function chartPayload() {
         warnings: []
       }
     }
+  };
+}
+
+function calculationRecordResponse() {
+  return {
+    id: calculationId,
+    ownerUserId: "11111111-1111-4111-8111-111111111111",
+    module: "chart",
+    mode: "individual",
+    methodCode: "natal",
+    title: "QA Natal",
+    status: "calculated",
+    requestFingerprint: `sha256:${"b".repeat(64)}`,
+    inputData: { method: "natal" },
+    resultData: chartPayload().result,
+    resultSummary: { method: "natal" },
+    resultChecksum: checksum,
+    participants: [
+      {
+        role: "subject",
+        source: "crm_client",
+        clientId,
+        displayName: "QA Missing Birth Data"
+      }
+    ],
+    links: [],
+    interpretations: [
+      {
+        id: "66666666-6666-4666-8666-666666666666",
+        status: "draft",
+        text: "OVERVIEW\nDraft"
+      }
+    ],
+    artifacts: [],
+    createdAt: now,
+    updatedAt: now
   };
 }
 

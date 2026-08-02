@@ -41,7 +41,10 @@ import {
 } from "../../features/charts/model/chartEngineState";
 import {
   buildChartPdfAction,
-  executeChartPdfAction
+  closeReservedChartPdfWindow,
+  executeChartPdfAction,
+  openChartPdfDownloadUrl,
+  reserveChartPdfDownloadWindow
 } from "../../features/charts/model/chartPdfModel";
 import type {
   ChartEngineMode,
@@ -669,6 +672,7 @@ export function useChartEngineController() {
     selectedClient,
     selectedPartnerClient,
     jobState,
+    calculationId,
     result,
     isResultStale,
     errorMessage:
@@ -936,6 +940,10 @@ export function useChartEngineController() {
       });
     },
     onPdf: async () => {
+      const downloadWindow = reserveChartPdfDownloadWindow({
+        kind: pdfAction.kind,
+        openWindow: (url, target) => window.open(url, target)
+      });
       try {
         setErrorMessage(null);
         await executeChartPdfAction({
@@ -946,9 +954,15 @@ export function useChartEngineController() {
           job: pdfQuery.data?.job ?? null,
           enqueue: (input) => enqueuePdfMutation.mutateAsync(input),
           download: (input) => downloadPdfMutation.mutateAsync(input),
-          openUrl: (url) => window.open(url, "_blank", "noopener,noreferrer")
+          openUrl: (url) =>
+            openChartPdfDownloadUrl({
+              url,
+              downloadWindow,
+              navigateCurrentWindow: (nextUrl) => window.location.assign(nextUrl)
+            })
         });
       } catch (error) {
+        closeReservedChartPdfWindow({ downloadWindow });
         setErrorMessage(
           error instanceof Error ? error.message : "Не удалось выполнить PDF-действие"
         );

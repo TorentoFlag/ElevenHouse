@@ -16,7 +16,13 @@ import {
   CreateOrReuseNatalJobResult
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
-import { calculationRecords, chartCalculationJobs, outboxEvents } from "../../schema";
+import {
+  calculationParticipants,
+  calculationRecords,
+  chartCalculationJobs,
+  clientProfiles,
+  outboxEvents
+} from "../../schema";
 
 type ChartCalculationJobRow = typeof chartCalculationJobs.$inferSelect;
 type ChartTransaction = Parameters<Parameters<ElevenHouseDatabase["transaction"]>[0]>[0];
@@ -267,7 +273,14 @@ async function completeChartJob(
       .where(eq(chartCalculationJobs.id, input.jobId))
       .limit(1);
     if (!job) return false;
-    if (job.status === "succeeded" && job.resultCalculationId) return true;
+    if (job.status === "succeeded" && job.resultCalculationId) {
+      await ensureChartCalculationSubjectParticipant(transaction, {
+        calculationId: job.resultCalculationId,
+        clientId: job.clientId,
+        now: input.now
+      });
+      return true;
+    }
 
     const [calculation] = await transaction
       .insert(calculationRecords)
@@ -305,6 +318,12 @@ async function completeChartJob(
       .returning();
     if (!calculation) return false;
 
+    await ensureChartCalculationSubjectParticipant(transaction, {
+      calculationId: calculation.id,
+      clientId: job.clientId,
+      now: input.now
+    });
+
     const [updated] = await transaction
       .update(chartCalculationJobs)
       .set({
@@ -320,6 +339,51 @@ async function completeChartJob(
 
     return Boolean(updated);
   });
+}
+
+async function ensureChartCalculationSubjectParticipant(
+  transaction: ChartTransaction,
+  input: { readonly calculationId: string; readonly clientId: string; readonly now: string }
+): Promise<void> {
+  const [existing] = await transaction
+    .select({ id: calculationParticipants.id })
+    .from(calculationParticipants)
+    .where(
+      and(
+        eq(calculationParticipants.calculationId, input.calculationId),
+        eq(calculationParticipants.order, 0)
+      )
+    )
+    .limit(1);
+  if (existing) return;
+
+  const [profile] = await transaction
+    .select({ displayNameSnapshot: clientProfiles.displayNameSnapshot })
+    .from(clientProfiles)
+    .where(eq(clientProfiles.userId, input.clientId))
+    .limit(1);
+
+  await transaction.insert(calculationParticipants).values({
+    calculationId: input.calculationId,
+    role: "subject",
+    source: "crm_client",
+    clientId: input.clientId,
+    displayName: buildChartCalculationParticipantDisplayName(
+      profile?.displayNameSnapshot,
+      input.clientId
+    ),
+    order: 0,
+    createdAt: new Date(input.now),
+    updatedAt: new Date(input.now)
+  });
+}
+
+function buildChartCalculationParticipantDisplayName(
+  displayNameSnapshot: string | null | undefined,
+  clientId: string
+): string {
+  const displayName = displayNameSnapshot?.trim();
+  return displayName && displayName.length > 0 ? displayName : `Client ${clientId.slice(0, 8)}`;
 }
 
 function buildChartResultSummary(result: StoredChartCalculationPayload) {

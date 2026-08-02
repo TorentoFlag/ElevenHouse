@@ -1,7 +1,14 @@
 import type { CalculationPdfJob } from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { HttpError } from "../../../common/http/HttpError";
-import { buildChartPdfAction, executeChartPdfAction } from "./chartPdfModel";
+import {
+  buildChartPdfAction,
+  closeReservedChartPdfWindow,
+  executeChartPdfAction,
+  openChartPdfDownloadUrl,
+  reserveChartPdfDownloadWindow,
+  type ChartPdfDownloadWindow
+} from "./chartPdfModel";
 
 const calculationId = "00000000-0000-4000-8000-000000000001";
 const jobId = "00000000-0000-4000-8000-000000000002";
@@ -115,6 +122,62 @@ describe("executeChartPdfAction", () => {
         openUrl: () => undefined
       })
     ).rejects.toThrow("Карта изменилась. Пересчитайте её и сформируйте PDF заново");
+  });
+});
+
+describe("chart PDF download window", () => {
+  it("reserves a browser window before the async download URL request resolves", () => {
+    const downloadWindow = {
+      close: vi.fn(),
+      location: { href: "" }
+    } satisfies ChartPdfDownloadWindow;
+    const openWindow = vi.fn(() => downloadWindow);
+    const navigateCurrentWindow = vi.fn();
+
+    const reserved = reserveChartPdfDownloadWindow({ kind: "download", openWindow });
+    const outcome = openChartPdfDownloadUrl({
+      url: "https://objects.example.test/chart.pdf?signature=signed",
+      downloadWindow: reserved,
+      navigateCurrentWindow
+    });
+
+    expect(openWindow).toHaveBeenCalledWith("about:blank", "_blank");
+    expect(outcome).toBe("reserved-window");
+    expect(downloadWindow.location.href).toBe(
+      "https://objects.example.test/chart.pdf?signature=signed"
+    );
+    expect(navigateCurrentWindow).not.toHaveBeenCalled();
+    expect(downloadWindow.close).not.toHaveBeenCalled();
+  });
+
+  it("falls back to current-window navigation when popup creation is blocked", () => {
+    const navigateCurrentWindow = vi.fn();
+    const reserved = reserveChartPdfDownloadWindow({
+      kind: "download",
+      openWindow: vi.fn(() => null)
+    });
+
+    expect(
+      openChartPdfDownloadUrl({
+        url: "https://objects.example.test/chart.pdf?signature=signed",
+        downloadWindow: reserved,
+        navigateCurrentWindow
+      })
+    ).toBe("current-window");
+    expect(navigateCurrentWindow).toHaveBeenCalledWith(
+      "https://objects.example.test/chart.pdf?signature=signed"
+    );
+  });
+
+  it("closes a reserved blank window when the download action fails", () => {
+    const downloadWindow = {
+      close: vi.fn(),
+      location: { href: "about:blank" }
+    } satisfies ChartPdfDownloadWindow;
+
+    closeReservedChartPdfWindow({ downloadWindow });
+
+    expect(downloadWindow.close).toHaveBeenCalledOnce();
   });
 });
 

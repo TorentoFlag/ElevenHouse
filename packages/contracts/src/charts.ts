@@ -1,4 +1,5 @@
 import { z } from "@elevenhouse/validation";
+import { sha256DigestSchema } from "./calculations";
 
 const uuidSchema = z.string().uuid();
 
@@ -147,6 +148,13 @@ export const chartCalculationResponseSchema = z
   })
   .strict();
 export type ChartCalculationResponse = z.infer<typeof chartCalculationResponseSchema>;
+
+export const createChartAiDraftRequestSchema = z
+  .object({
+    expectedResultChecksum: sha256DigestSchema
+  })
+  .strict();
+export type CreateChartAiDraftRequest = z.infer<typeof createChartAiDraftRequestSchema>;
 
 export const chartNatalJobCreateResponseSchema = z.discriminatedUnion("status", [
   z

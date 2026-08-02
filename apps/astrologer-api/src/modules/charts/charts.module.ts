@@ -5,9 +5,12 @@ import {
   createDrizzleChartCalculationJobStore
 } from "@elevenhouse/db/charts";
 import { ClockModule } from "../clock/clock.module";
+import { AiModule } from "../ai/ai.module";
+import { AstrologerProfileModule } from "../astrologer-profile/astrologer-profile.module";
 import { CalculationsModule } from "../calculations/calculations.module";
 import { ClientsModule } from "../clients/clients.module";
 import { DatabaseModule } from "../database/database.module";
+import { DictionaryStoreModule } from "../dictionary/dictionary-store.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
 import { SecurityModule } from "../security/security.module";
@@ -19,11 +22,14 @@ import { CHART_COMMAND_STORE, CHART_JOB_STORE } from "./charts.tokens";
 
 @Module({
   imports: [
+    AiModule,
+    AstrologerProfileModule,
     CalculationsModule,
     ConfigModule,
     ClockModule,
     ClientsModule,
     DatabaseModule,
+    DictionaryStoreModule,
     IdentityModule,
     SecurityModule
   ],

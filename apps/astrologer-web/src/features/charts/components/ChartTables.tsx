@@ -33,7 +33,7 @@ import {
 } from "../model/chartInterpretations";
 import styles from "./ChartEnginePage.module.css";
 
-export type ChartPanelTab = "planets" | "aspects" | "houses" | "interpretations";
+export type ChartPanelTab = "planets" | "aspects" | "houses" | "interpretations" | "ai";
 
 export type ChartTablesProps = {
   readonly result: StoredChartCalculationPayload | null;
@@ -627,62 +627,42 @@ function InterpretationSummary({
   return (
     <section className={styles.tableSection} aria-labelledby="chart-interpretations-heading">
       <h2 id="chart-interpretations-heading">Трактовки</h2>
-      <div className={styles.interpretationStack}>
-        <div>
-          <div className={styles.interpretationKicker}>{interpretationCopy.kicker}</div>
-          <div className={styles.interpretationGroupStack}>
-            {anchorGroups.map((group) => (
-              <section className={styles.interpretationGroup} key={group.id}>
-                <h3 className={styles.interpretationGroupTitle}>{group.title}</h3>
-                <div className={styles.interpretationAnchorStack}>
-                  {group.anchors.map((anchor) => {
-                    const entry = dictionaryEntriesByCode.get(anchor.code);
-                    const isMissingEntry = isDictionaryInterpretationMissing({
-                      entry,
-                      state: dictionaryState
-                    });
+      <div>
+        <div className={styles.interpretationKicker}>{interpretationCopy.kicker}</div>
+        <div className={styles.interpretationGroupStack}>
+          {anchorGroups.map((group) => (
+            <section className={styles.interpretationGroup} key={group.id}>
+              <h3 className={styles.interpretationGroupTitle}>{group.title}</h3>
+              <div className={styles.interpretationAnchorStack}>
+                {group.anchors.map((anchor) => {
+                  const entry = dictionaryEntriesByCode.get(anchor.code);
+                  const isMissingEntry = isDictionaryInterpretationMissing({
+                    entry,
+                    state: dictionaryState
+                  });
 
-                    return (
-                      <div className={styles.interpretationAnchorCard} key={anchor.id}>
-                        <strong>{anchor.label}</strong>
-                        <small>{anchor.meta}</small>
-                        <span>{anchor.position}</span>
-                        <p>{getDictionaryInterpretationText({ anchor, entry }, dictionaryState)}</p>
-                        {entry ? <em>Справочник · {entry.source}</em> : null}
-                        {isMissingEntry ? (
-                          <a
-                            aria-label={`Создать трактовку ${anchor.code} в справочнике`}
-                            className={styles.interpretationMissingAction}
-                            href={getReferenceCreateInterpretationHref(anchor)}
-                          >
-                            Создать трактовку
-                          </a>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-          </div>
-        </div>
-
-        <div className={styles.interpretationAiPanel}>
-          <div className={styles.interpretationAiHeader}>
-            <div>
-              <span>{interpretationCopy.aiLabel}</span>
-              <strong>Черновик появится после подключения production-контура</strong>
-            </div>
-            <b>позже</b>
-          </div>
-          <p>{interpretationCopy.aiDescription}</p>
-          <button type="button" disabled>
-            AI-черновик недоступен
-          </button>
-          <small>
-            Будущая трактовка будет черновиком поверх детерминированного расчёта; астролог проверит
-            текст перед отправкой клиенту.
-          </small>
+                  return (
+                    <div className={styles.interpretationAnchorCard} key={anchor.id}>
+                      <strong>{anchor.label}</strong>
+                      <small>{anchor.meta}</small>
+                      <span>{anchor.position}</span>
+                      <p>{getDictionaryInterpretationText({ anchor, entry }, dictionaryState)}</p>
+                      {entry ? <em>Справочник · {entry.source}</em> : null}
+                      {isMissingEntry ? (
+                        <a
+                          aria-label={`Создать трактовку ${anchor.code} в справочнике`}
+                          className={styles.interpretationMissingAction}
+                          href={getReferenceCreateInterpretationHref(anchor)}
+                        >
+                          Создать трактовку
+                        </a>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       </div>
     </section>
@@ -698,36 +678,24 @@ function getInterpretationCopy({
 }) {
   if (interpretationMode === "child") {
     return {
-      kicker: "Детские трактовки · библиотека",
-      aiLabel: "AI-трактовка · детская карта",
-      aiDescription:
-        "AI-контур для детской карты ещё не подключён. Пока показываем только детерминированные опорные положения из canonical result."
+      kicker: "Детские трактовки · библиотека"
     };
   }
 
   if (result.method === "horary") {
     return {
-      kicker: "Хорар · библиотека",
-      aiLabel: "AI-трактовка · хорар",
-      aiDescription:
-        "AI-контур и автоматический ответ для хорара ещё не подключены. Пока показываем только детерминированные опорные положения из canonical result."
+      kicker: "Хорар · библиотека"
     };
   }
 
   if (result.method === "astrocartography") {
     return {
-      kicker: "Астрокартография · библиотека",
-      aiLabel: "AI-трактовка · астрокартография",
-      aiDescription:
-        "AI-контур для астрокартографии ещё не подключён. Пока показываем только детерминированные линии планет из canonical result."
+      kicker: "Астрокартография · библиотека"
     };
   }
 
   return {
-    kicker: "Опорные положения · библиотека",
-    aiLabel: "AI-трактовка · натальная карта",
-    aiDescription:
-      "AI-контур для карт ещё не подключён. Пока показываем только детерминированные опорные положения из canonical result."
+    kicker: "Опорные положения · библиотека"
   };
 }
 

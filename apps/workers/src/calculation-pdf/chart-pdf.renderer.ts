@@ -147,6 +147,14 @@ export function buildChartPdfContent(document: ChartPdfDocument): readonly Chart
     }
   ];
   const interpretationRows = buildInterpretationRows(document.interpretations, labels);
+  const approvedInterpretation = document.approvedInterpretation?.trim();
+  if (approvedInterpretation) {
+    blocks.push({
+      kind: "section",
+      heading: labels.aiInterpretation,
+      text: approvedInterpretation
+    });
+  }
   if (interpretationRows.length > 0) {
     blocks.push({
       kind: "table",
@@ -512,6 +520,7 @@ type Labels = {
   readonly orb: string;
   readonly strength: string;
   readonly distributions: string;
+  readonly aiInterpretation: string;
   readonly factor: string;
   readonly value: string;
   readonly warnings: string;
@@ -578,6 +587,7 @@ const ru: Labels = {
   orb: "Орб",
   strength: "Сила",
   distributions: "Распределения",
+  aiInterpretation: "AI-трактовка",
   factor: "Фактор",
   value: "Значение",
   warnings: "Предупреждения",
@@ -686,6 +696,7 @@ const en: Labels = {
   orb: "Orb",
   strength: "Strength",
   distributions: "Distributions",
+  aiInterpretation: "AI interpretation",
   factor: "Factor",
   value: "Value",
   warnings: "Warnings",

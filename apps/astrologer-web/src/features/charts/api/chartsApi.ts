@@ -1,5 +1,7 @@
 import {
   calculationIdParamSchema,
+  calculationRecordResponseSchema,
+  createChartAiDraftRequestSchema,
   calculationPdfDownloadResponseSchema,
   calculationPdfJobIdParamSchema,
   calculationPdfJobResponseSchema,
@@ -18,6 +20,8 @@ import {
   requestCalculationPdfSchema,
   storedChartCalculationPayloadSchema,
   type CalculationPdfDownloadResponse,
+  type CalculationRecordResponse,
+  type CreateChartAiDraftRequest,
   type CalculationPdfJobResponse,
   type CalculationPdfLocale,
   type ChartJobResponse,
@@ -216,6 +220,20 @@ export async function recalculateChart(input: {
 
   return chartNatalJobCreateResponseSchema.parse(
     await application.http.post(`/charts/calculations/${params.calculationId}/recalculate`, body, {
+      csrf: true
+    })
+  );
+}
+
+export async function createChartAiDraft(input: {
+  readonly calculationId: string;
+  readonly body: CreateChartAiDraftRequest;
+}): Promise<CalculationRecordResponse> {
+  const params = calculationIdParamSchema.parse({ calculationId: input.calculationId });
+  const body = createChartAiDraftRequestSchema.parse(input.body);
+
+  return calculationRecordResponseSchema.parse(
+    await application.http.post(`/charts/calculations/${params.calculationId}/ai-draft`, body, {
       csrf: true
     })
   );

@@ -79,4 +79,14 @@ export class ChartsController {
   ) {
     return this.service.recalculate(calculationId, body, request);
   }
+
+  @Post("calculations/:calculationId/ai-draft")
+  @RequireCsrf()
+  createAiDraft(
+    @Param("calculationId") calculationId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.createAiDraft(calculationId, body, request);
+  }
 }

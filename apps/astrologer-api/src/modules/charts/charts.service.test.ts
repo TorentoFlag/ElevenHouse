@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
+  AstrologerProfileStore,
+  CalculationRecord,
+  CalculationStore,
   ChartCalculationCommandStore,
   ChartCalculationJobStore,
   ClientBirthData,
-  ClientStore
+  ClientStore,
+  DictionaryStore
 } from "@elevenhouse/domain";
+import type { AiGenerationService } from "../ai/ai-generation.service";
 import type { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { ChartsService } from "./charts.service";
@@ -517,6 +522,101 @@ describe("ChartsService", () => {
       failureMessage: "CHART_ENGINE_HTTP_503"
     });
   });
+
+  it("generates and saves a checksum-bound natal chart AI draft", async () => {
+    const calculation = chartCalculationRecord();
+    const calculationStore = createCalculationStore(calculation);
+    const dictionaryStore = createDictionaryStore();
+    const aiGeneration = createAiGenerationService();
+    const service = createService({
+      calculationStore,
+      dictionaryStore,
+      aiGeneration,
+      locale: "en"
+    });
+
+    const response = await service.createAiDraft(
+      calculation.id,
+      { expectedResultChecksum: calculation.resultChecksum },
+      request()
+    );
+
+    expect(response.interpretations[0]).toMatchObject({
+      status: "draft",
+      text: expect.stringContaining("OVERVIEW")
+    });
+    expect(response.interpretations[0]?.text).not.toContain("IMPORTANT");
+    expect(response.interpretations[0]?.text).not.toContain("ВАЖНО");
+    expect(dictionaryStore.listEntriesByCodes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerUserId,
+        locale: "en",
+        codes: expect.arrayContaining(["sun_aries", "moon_house_2", "house_1"])
+      })
+    );
+    expect(aiGeneration.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feature: "chart.interpretationDraft",
+        ownerUserId,
+        input: expect.objectContaining({
+          locale: "en",
+          methodCode: "natal",
+          resultChecksum: calculation.resultChecksum
+        })
+      })
+    );
+    expect(JSON.stringify(vi.mocked(aiGeneration.generate).mock.calls[0]?.[0].input)).not.toContain(
+      "birthDate"
+    );
+    expect(calculationStore.saveInterpretation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedResultChecksum: calculation.resultChecksum,
+        source: "ai",
+        modelId: "gpt-test",
+        promptVersion: "chart.interpretationDraft@2"
+      })
+    );
+  });
+
+  it("rejects stale chart AI draft requests before calling the provider", async () => {
+    const calculation = chartCalculationRecord();
+    const aiGeneration = createAiGenerationService();
+    const service = createService({
+      calculationStore: createCalculationStore(calculation),
+      aiGeneration
+    });
+
+    await expect(
+      service.createAiDraft(
+        calculation.id,
+        { expectedResultChecksum: `sha256:${"f".repeat(64)}` },
+        request()
+      )
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: "CHART_RESULT_CHANGED" })
+    });
+    expect(aiGeneration.generate).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported chart AI methods without calling the provider", async () => {
+    const calculation = chartCalculationRecord({ methodCode: "transit" });
+    const aiGeneration = createAiGenerationService();
+    const service = createService({
+      calculationStore: createCalculationStore(calculation),
+      aiGeneration
+    });
+
+    await expect(
+      service.createAiDraft(
+        calculation.id,
+        { expectedResultChecksum: calculation.resultChecksum },
+        request()
+      )
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: "CHART_UNSUPPORTED_AI_METHOD" })
+    });
+    expect(aiGeneration.generate).not.toHaveBeenCalled();
+  });
 });
 
 function createService(
@@ -524,14 +624,140 @@ function createService(
     readonly clientStore?: ClientStore;
     readonly commandStore?: ChartCalculationCommandStore;
     readonly jobStore?: ChartCalculationJobStore;
+    readonly calculationStore?: CalculationStore;
+    readonly dictionaryStore?: DictionaryStore;
+    readonly profileStore?: AstrologerProfileStore;
+    readonly aiGeneration?: AiGenerationService;
+    readonly locale?: "ru" | "en";
   } = {}
 ): ChartsService {
   return new ChartsService(
     input.clientStore ?? createClientStore(),
     input.commandStore ?? createCommandStore(),
     input.jobStore ?? createJobStore(),
-    { now: () => now } as SystemClock
+    input.calculationStore ?? createCalculationStore(null),
+    input.dictionaryStore ?? createDictionaryStore(),
+    input.profileStore ?? createProfileStore(input.locale ?? "ru"),
+    { now: () => now } as SystemClock,
+    input.aiGeneration ?? createAiGenerationService()
   );
+}
+
+function createCalculationStore(record: CalculationRecord | null): CalculationStore {
+  return {
+    listByOwner: vi.fn(async () => ({ calculations: record ? [record] : [], total: record ? 1 : 0 })),
+    findByOwnerAndId: vi.fn(async (input) => {
+      if (!record) return null;
+      return record.ownerUserId === input.ownerUserId && record.id === input.calculationId
+        ? record
+        : null;
+    }),
+    findExact: vi.fn(async () => null),
+    create: vi.fn(async () => raise()),
+    replaceResult: vi.fn(async () => ({ status: "not_found" as const })),
+    ensureClientLinks: vi.fn(async () => null),
+    linkClient: vi.fn(async () => null),
+    publishClientLink: vi.fn(async () => null),
+    saveInterpretation: vi.fn(async (input) => {
+      if (!record || input.expectedResultChecksum !== record.resultChecksum) return null;
+      return {
+        ...record,
+        interpretations: [
+          {
+            id: input.interpretationIdGenerator(),
+            source: input.source,
+            status: "draft" as const,
+            text: input.text,
+            modelId: input.modelId,
+            promptVersion: input.promptVersion,
+            approvedAt: null,
+            updatedAt: input.now
+          }
+        ],
+        updatedAt: input.now
+      };
+    }),
+    approveInterpretation: vi.fn(async () => null),
+    archive: vi.fn(async () => null)
+  };
+}
+
+function createDictionaryStore(): DictionaryStore {
+  return {
+    listCategories: vi.fn(async () => ({ categories: [], total: 0 })),
+    listEntries: vi.fn(async () => ({ entries: [], total: 0, counts: sourceCounts() })),
+    listEntriesByCodes: vi.fn(async (query) => ({
+      entries: query.codes.slice(0, 4).map((code: string) => ({
+        id: `entry-${code}`,
+        categoryId: "category-chart",
+        categoryCode: code.startsWith("house_") ? "house_meanings" : "planets_in_signs",
+        code,
+        locale: query.locale,
+        source: "platform" as const,
+        title: code,
+        content: `Grounding for ${code}`,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
+      })),
+      total: query.codes.length,
+      counts: sourceCounts()
+    })),
+    createCustomEntry: vi.fn(async () => raise()),
+    updateCustomEntry: vi.fn(async () => raise()),
+    upsertPlatformEntryOverride: vi.fn(async () => raise()),
+    deleteAstrologerEntry: vi.fn(async () => raise()),
+    resetAstrologerEntries: vi.fn(async () => raise()),
+    resetPlatformEntryOverride: vi.fn(async () => raise())
+  };
+}
+
+function sourceCounts() {
+  return { sources: { all: 0, platform: 0, modified: 0, custom: 0 } };
+}
+
+function createProfileStore(locale: "ru" | "en"): AstrologerProfileStore {
+  return {
+    findByOwnerUserId: vi.fn(async () => ({
+      ownerUserId,
+      publicHandle: "qa",
+      publicName: "QA",
+      headline: null,
+      bio: null,
+      timezone: "Europe/Moscow",
+      locale,
+      avatarMediaId: null,
+      coverMediaId: null,
+      consultationLanguages: [locale],
+      visibilityStatus: "draft" as const,
+      professionalExperienceYears: null,
+      professionalSchool: null,
+      specializations: [],
+      methods: [],
+      socialLinks: { telegram: null, instagram: null, whatsapp: null, website: null },
+      ownBirthData: { date: null, time: null, place: null, showOnPublicPage: false },
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    })),
+    upsert: vi.fn(async () => raise())
+  };
+}
+
+function createAiGenerationService(): AiGenerationService {
+  return {
+    generate: vi.fn(async () => ({
+      provider: "openai" as const,
+      model: "gpt-test",
+      finishReason: "stop" as const,
+      output: {
+        overview: "Overview.",
+        coreThemes: "Core themes.",
+        strengths: "Strengths.",
+        growthEdges: "Growth edges.",
+        sessionFocus: "Session focus.",
+        reflectionQuestions: ["Question one?", "Question two?", "Question three?"]
+      }
+    }))
+  } as unknown as AiGenerationService;
 }
 
 function createCommandStore(
@@ -641,6 +867,77 @@ function horaryQuestion() {
     timezone: "Europe/Moscow",
     latitude: 55.7558,
     longitude: 37.6173
+  };
+}
+
+function chartCalculationRecord(
+  input: Partial<Pick<CalculationRecord, "methodCode" | "resultData">> = {}
+): CalculationRecord {
+  const resultData = input.resultData ?? natalChartResult();
+  return {
+    id: "99999999-9999-4999-8999-999999999999",
+    ownerUserId,
+    module: "chart",
+    mode: "individual",
+    methodCode: input.methodCode ?? "natal",
+    title: "QA Natal",
+    status: "calculated",
+    participants: [
+      {
+        role: "subject",
+        source: "crm_client",
+        clientId,
+        displayName: "QA Missing Birth Data"
+      }
+    ],
+    links: [],
+    interpretations: [],
+    artifacts: [],
+    requestFingerprint: `sha256:${"e".repeat(64)}`,
+    inputData: { method: "natal" },
+    resultData,
+    resultSummary: { method: "natal" },
+    resultChecksum: `sha256:${"d".repeat(64)}`,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString()
+  };
+}
+
+function natalChartResult() {
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "natal",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: { zodiac: "tropical" as const, ...settings() },
+    inputSnapshot: {
+      birthDate: "1991-07-10",
+      birthTime: "13:10",
+      timezone: "Europe/Saratov",
+      latitude: 51.499947,
+      longitude: 44.484581,
+      birthTimePrecision: "exact" as const
+    },
+    result: {
+      points: completePoints(),
+      houses: completeHouses(),
+      aspects: [
+        {
+          pointA: "sun",
+          pointB: "moon",
+          type: "trine",
+          angle: 120,
+          orb: 1.2,
+          applying: true,
+          strength: 0.9
+        }
+      ],
+      distributions: {
+        elements: { fire: 2, earth: 2, air: 4, water: 6 },
+        modalities: { cardinal: 4, fixed: 5, mutable: 5 },
+        polarity: { masculine: 6, feminine: 8 }
+      },
+      warnings: []
+    }
   };
 }
 

@@ -10,8 +10,23 @@ const jobId = "00000000-0000-4000-8000-000000000003";
 const checksum = `sha256:${"a".repeat(64)}`;
 
 describe("ChartsPdfService", () => {
-  it("requests a current natal chart PDF from the deterministic calculation result", async () => {
-    const harness = createHarness();
+  it("requests a current natal chart PDF with the newest approved AI interpretation", async () => {
+    const harness = createHarness({
+      calculation: calculation({
+        interpretations: [
+          interpretation({
+            id: "00000000-0000-4000-8000-000000000006",
+            status: "draft",
+            approvedAt: null
+          }),
+          interpretation({
+            id: "00000000-0000-4000-8000-000000000007",
+            status: "approved",
+            approvedAt: "2026-07-22T12:03:00.000Z"
+          })
+        ]
+      })
+    });
 
     await expect(
       harness.service.enqueue(
@@ -26,21 +41,67 @@ describe("ChartsPdfService", () => {
       calculationId,
       expectedResultChecksum: checksum,
       locale: "ru",
-      sourceLocator: { kind: "calculation_result" },
+      sourceLocator: {
+        kind: "approved_interpretation",
+        interpretationId: "00000000-0000-4000-8000-000000000007"
+      },
       renderContract: "chart-natal-v1",
       originalFileName: "Натальная карта.pdf"
     });
   });
 
+  it("allows deterministic chart export when only drafts exist", async () => {
+    const harness = createHarness({
+      calculation: calculation({
+        interpretations: [
+          interpretation({
+            id: "00000000-0000-4000-8000-000000000006",
+            status: "draft",
+            approvedAt: null
+          })
+        ]
+      })
+    });
+
+    await harness.service.enqueue(
+      calculationId,
+      { expectedResultChecksum: checksum, locale: "en" },
+      request()
+    );
+
+    expect(harness.calculationPdf.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        locale: "en",
+        sourceLocator: { kind: "approved_interpretation", interpretationId: null },
+        originalFileName: "Natal chart.pdf"
+      })
+    );
+  });
+
   it("restores latest locale-specific PDF state only for an owned natal chart", async () => {
-    const harness = createHarness();
+    const harness = createHarness({
+      calculation: calculation({
+        interpretations: [
+          interpretation({
+            id: "00000000-0000-4000-8000-000000000007",
+            status: "approved",
+            approvedAt: "2026-07-22T12:03:00.000Z"
+          })
+        ]
+      })
+    });
 
     await harness.service.latest(calculationId, { locale: "en" }, request());
 
     expect(harness.calculationPdf.latest).toHaveBeenCalledWith({
       ownerUserId,
       calculationId,
-      locale: "en"
+      locale: "en",
+      sourceLocator: {
+        kind: "approved_interpretation",
+        interpretationId: "00000000-0000-4000-8000-000000000007"
+      },
+      renderContract: "chart-natal-v1"
     });
   });
 
@@ -103,7 +164,7 @@ function createHarness(input: { readonly calculation?: CalculationRecord } = {})
   return { service, calculationPdf };
 }
 
-function calculation(): CalculationRecord {
+function calculation(overrides: Partial<CalculationRecord> = {}): CalculationRecord {
   return {
     id: calculationId,
     ownerUserId,
@@ -122,7 +183,24 @@ function calculation(): CalculationRecord {
     interpretations: [],
     artifacts: [],
     createdAt: "2026-07-22T12:00:00.000Z",
-    updatedAt: "2026-07-22T12:00:00.000Z"
+    updatedAt: "2026-07-22T12:00:00.000Z",
+    ...overrides
+  };
+}
+
+function interpretation(
+  overrides: Partial<CalculationRecord["interpretations"][number]> = {}
+): CalculationRecord["interpretations"][number] {
+  return {
+    id: "00000000-0000-4000-8000-000000000006",
+    source: "ai",
+    status: "approved",
+    text: "Approved chart interpretation",
+    modelId: "gpt-5.5",
+    promptVersion: "chart.interpretationDraft@2",
+    approvedAt: "2026-07-22T12:02:00.000Z",
+    updatedAt: "2026-07-22T12:02:00.000Z",
+    ...overrides
   };
 }
 

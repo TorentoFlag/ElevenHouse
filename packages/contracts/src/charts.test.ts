@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   chartAstrocartographyJobCreateRequestSchema,
   chartCompositeJobCreateRequestSchema,
+  createChartAiDraftRequestSchema,
   chartHoraryJobCreateRequestSchema,
   chartAstrocartographyCalculationRequestSchema,
   chartPlanetaryPositionsRequestSchema,
@@ -41,6 +42,21 @@ describe("chart contracts", () => {
           aspectPreset: "major",
           orbMultiplier: 1
         }
+      })
+    ).toThrow();
+  });
+
+  it("accepts chart AI draft request only for the current result checksum", () => {
+    expect(
+      createChartAiDraftRequestSchema.parse({
+        expectedResultChecksum: `sha256:${"a".repeat(64)}`
+      })
+    ).toEqual({ expectedResultChecksum: `sha256:${"a".repeat(64)}` });
+
+    expect(() =>
+      createChartAiDraftRequestSchema.parse({
+        expectedResultChecksum: `sha256:${"a".repeat(64)}`,
+        birthDate: "1991-07-10"
       })
     ).toThrow();
   });

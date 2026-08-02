@@ -85,6 +85,18 @@ describe("Chart PDF renderer", () => {
     ]);
   });
 
+  it("renders the approved AI interpretation as a separate PDF section", () => {
+    const content = buildChartPdfContent(
+      document("ru", {
+        approvedInterpretation: "Главный акцент карты: сильная связка Луны и Асцендента."
+      })
+    );
+
+    expect(section(content, "AI-трактовка")).toMatchObject({
+      text: "Главный акцент карты: сильная связка Луны и Асцендента."
+    });
+  });
+
   it("renders deterministic RU and EN PDFs", async () => {
     const renderer = createChartPdfRenderer();
     const first = await renderer.render(document());
@@ -114,6 +126,7 @@ function document(
     createdAt: "2026-07-22T12:00:00.000Z",
     calculationTitle: "Natal chart",
     result: storedChartNatalCalculationPayloadSchema.parse(chartResult()),
+    approvedInterpretation: null,
     interpretations: [],
     ...overrides
   };
@@ -200,5 +213,11 @@ function keyValues(content: ReturnType<typeof buildChartPdfContent>, heading: st
 function table(content: ReturnType<typeof buildChartPdfContent>, heading: string) {
   const block = content.find((item) => item.kind === "table" && item.heading === heading);
   if (!block || block.kind !== "table") throw new Error(`Missing ${heading}`);
+  return block;
+}
+
+function section(content: ReturnType<typeof buildChartPdfContent>, heading: string) {
+  const block = content.find((item) => item.kind === "section" && item.heading === heading);
+  if (!block || block.kind !== "section") throw new Error(`Missing ${heading}`);
   return block;
 }

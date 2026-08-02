@@ -3,7 +3,12 @@ import { eq } from "drizzle-orm";
 import { CHART_CALCULATION_REQUESTED_EVENT } from "@elevenhouse/domain";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import { createPostgresRuntime } from "../../runtime";
-import { calculationRecords, chartCalculationJobs, outboxEvents } from "../../schema";
+import {
+  calculationParticipants,
+  calculationRecords,
+  chartCalculationJobs,
+  outboxEvents
+} from "../../schema";
 import {
   createDrizzleChartCalculationCommandStore,
   createDrizzleChartCalculationJobStore,
@@ -125,6 +130,42 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
     });
     expect(row?.status).toBe("succeeded");
     expect(row?.resultCalculationId).toEqual(expect.any(String));
+    const participants = await runtime.database
+      .select()
+      .from(calculationParticipants)
+      .where(
+        eq(
+          calculationParticipants.calculationId,
+          row?.resultCalculationId ?? raise("Expected result calculation id")
+        )
+      )
+      .orderBy(calculationParticipants.order);
+    expect(participants).toHaveLength(1);
+    expect(participants[0]).toMatchObject({
+      role: "subject",
+      source: "crm_client",
+      clientId: ownerUserId,
+      displayName: "Chart Client",
+      order: 0
+    });
+    await expect(
+      workerStore.complete({
+        jobId: created.jobId,
+        result: chartResult(),
+        resultChecksum: digest("b"),
+        now: "2026-07-20T12:00:10.000Z"
+      })
+    ).resolves.toBe(true);
+    const participantsAfterRetry = await runtime.database
+      .select()
+      .from(calculationParticipants)
+      .where(
+        eq(
+          calculationParticipants.calculationId,
+          row?.resultCalculationId ?? raise("Expected result calculation id")
+        )
+      );
+    expect(participantsAfterRetry).toHaveLength(1);
     await expect(
       jobStore.getOwnerScopedResult({
         ownerUserId,
@@ -304,7 +345,7 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
     );
     const userId = result.rows[0]?.id ?? raise("Expected user insert to return id");
     await runtime.pool.query(
-      "insert into client_profiles (user_id, created_at, updated_at) values ($1, now(), now())",
+      "insert into client_profiles (user_id, display_name_snapshot, created_at, updated_at) values ($1, 'Chart Client', now(), now())",
       [userId]
     );
     return userId;

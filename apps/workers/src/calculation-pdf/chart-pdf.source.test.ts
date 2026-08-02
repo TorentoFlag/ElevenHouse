@@ -5,7 +5,7 @@ import { CalculationPdfPermanentError } from "./calculation-pdf.registry";
 import { createChartPdfSource } from "./chart-pdf.source";
 
 describe("Chart PDF source", () => {
-  it("loads the current deterministic natal calculation result", async () => {
+  it("loads the current deterministic natal calculation result with approved AI interpretation", async () => {
     const current = calculation();
     const source = createChartPdfSource({
       findByOwnerAndId: vi.fn(async () => current)
@@ -16,11 +16,29 @@ describe("Chart PDF source", () => {
       locale: "ru",
       createdAt: pdfJob().createdAt,
       calculationTitle: "Natal chart",
+      approvedInterpretation: "Approved chart interpretation",
       result: {
         schemaVersion: "chart-result.v1",
         method: "natal",
         provider: { name: "kerykeion" }
       }
+    });
+  });
+
+  it("allows deterministic natal PDF without an approved AI interpretation", async () => {
+    const current = calculation({ interpretations: [] });
+    const source = createChartPdfSource({
+      findByOwnerAndId: vi.fn(async () => current)
+    } as never, dictionaryStore());
+
+    await expect(
+      source.load(
+        pdfJob({
+          sourceLocator: { kind: "approved_interpretation", interpretationId: null }
+        })
+      )
+    ).resolves.toMatchObject({
+      approvedInterpretation: null
     });
   });
 
@@ -79,7 +97,13 @@ describe("Chart PDF source", () => {
   });
 
   it.each([
-    { sourceLocator: { kind: "approved_interpretation" as const, interpretationId: null } },
+    { sourceLocator: { kind: "calculation_result" as const } },
+    {
+      sourceLocator: {
+        kind: "approved_interpretation" as const,
+        interpretationId: "00000000-0000-4000-8000-000000000099"
+      }
+    },
     { module: "numerology" as const },
     { methodCode: "transits" },
     { resultChecksum: `sha256:${"e".repeat(64)}` }
@@ -120,7 +144,10 @@ function pdfJob(overrides: Partial<CalculationPdfJob> = {}): CalculationPdfJob {
     methodCode: "natal",
     resultChecksum: `sha256:${"a".repeat(64)}`,
     locale: "ru",
-    sourceLocator: { kind: "calculation_result" },
+    sourceLocator: {
+      kind: "approved_interpretation",
+      interpretationId: "00000000-0000-4000-8000-000000000004"
+    },
     documentFingerprint: `sha256:${"b".repeat(64)}`,
     status: "processing",
     artifactId: "00000000-0000-4000-8000-000000000005",
@@ -176,10 +203,26 @@ function calculation(overrides: Partial<CalculationRecord> = {}): CalculationRec
     resultSummary: {},
     resultChecksum: pdfJob().resultChecksum,
     links: [],
-    interpretations: [],
+    interpretations: [interpretation()],
     artifacts: [],
     createdAt: pdfJob().createdAt,
     updatedAt: pdfJob().updatedAt,
+    ...overrides
+  };
+}
+
+function interpretation(
+  overrides: Partial<CalculationRecord["interpretations"][number]> = {}
+): CalculationRecord["interpretations"][number] {
+  return {
+    id: "00000000-0000-4000-8000-000000000004",
+    source: "ai",
+    status: "approved",
+    text: "Approved chart interpretation",
+    modelId: "gpt-5.5",
+    promptVersion: "chart.interpretationDraft@2",
+    approvedAt: "2026-07-22T12:03:00.000Z",
+    updatedAt: "2026-07-22T12:03:00.000Z",
     ...overrides
   };
 }

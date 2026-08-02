@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   CalculationPdfJob,
   CalculationPdfJobStore,
+  CalculationPdfSourceLocator,
   CalculationRecord,
   CalculationStore,
   MediaAssetStore,
   PrivateObjectStoragePort
 } from "@elevenhouse/domain";
+import { calculationPdfDocumentFingerprint } from "@elevenhouse/domain";
 import type { SystemClock } from "../../clock/system-clock.service";
 import {
   CalculationPdfNotFoundError,
@@ -44,6 +46,47 @@ describe("CalculationPdfService", () => {
       job: {
         sourceLocator: { kind: "approved_interpretation", interpretationId: null }
       }
+    });
+  });
+
+  it("ignores latest jobs with a stale document fingerprint for the requested source", async () => {
+    const oldSourceLocator = { kind: "calculation_result" } as const;
+    const currentSourceLocator = {
+      kind: "approved_interpretation",
+      interpretationId: "00000000-0000-4000-8000-000000000010"
+    } as const;
+    const renderContract = "chart-natal-v1";
+    const harness = createHarness({
+      job: {
+        ...pdfJob(),
+        sourceLocator: oldSourceLocator,
+        documentFingerprint: fingerprint(oldSourceLocator, renderContract)
+      }
+    });
+
+    await expect(
+      harness.service.latest({
+        ownerUserId,
+        calculationId,
+        locale: "ru",
+        sourceLocator: currentSourceLocator,
+        renderContract
+      })
+    ).resolves.toMatchObject({
+      currentResultChecksum: checksum,
+      job: null
+    });
+    await expect(
+      harness.service.latestJob({
+        ownerUserId,
+        calculationId,
+        locale: "ru",
+        sourceLocator: currentSourceLocator,
+        renderContract
+      })
+    ).resolves.toMatchObject({
+      calculation: { id: calculationId },
+      job: null
     });
   });
 
@@ -255,4 +298,13 @@ function pdfJob(): CalculationPdfJob {
     createdAt: now.toISOString(),
     updatedAt: now.toISOString()
   };
+}
+
+function fingerprint(sourceLocator: CalculationPdfSourceLocator, renderContract: string): `sha256:${string}` {
+  return calculationPdfDocumentFingerprint({
+    resultChecksum: checksum,
+    locale: "ru",
+    sourceLocator,
+    renderContract
+  });
 }

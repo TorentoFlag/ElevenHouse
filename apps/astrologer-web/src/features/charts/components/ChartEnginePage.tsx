@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   ChartHoraryQuestionCategory,
   ChartHoraryQuestionSnapshot,
@@ -27,6 +27,7 @@ import {
 } from "../model/chartDisplay";
 import { ChartSettingsPanel } from "./ChartSettingsPanel";
 import { ChartTables, type ChartPanelTab } from "./ChartTables";
+import { ChartAiPanel } from "./ChartAiPanel";
 import { AstrocartographyMap } from "./AstrocartographyMap";
 import { ChartWheel } from "./ChartWheel";
 import styles from "./ChartEnginePage.module.css";
@@ -59,6 +60,7 @@ export type ChartEnginePageProps = {
   readonly selectedClient: ClientSelectOption | null;
   readonly selectedPartnerClient?: ClientSelectOption | null;
   readonly jobState: ChartEnginePageJobState;
+  readonly calculationId?: string | null;
   readonly result: StoredChartCalculationPayload | null;
   readonly errorMessage: string | null;
   readonly isBusy: boolean;
@@ -97,10 +99,26 @@ export type ChartEnginePageProps = {
   readonly onPdf?: () => void | Promise<void>;
 };
 
+const primaryChartModeTabs: ReadonlyArray<{ mode: ChartEngineMode; label: string }> = [
+  { mode: "natal", label: "Натал" },
+  { mode: "child_chart", label: "Детская" },
+  { mode: "transit", label: "Транзиты" }
+];
+
+const overflowChartModeTabs: ReadonlyArray<{ mode: ChartEngineMode; label: string }> = [
+  { mode: "progression", label: "Прогрессии" },
+  { mode: "synastry", label: "Синастрия" },
+  { mode: "composite", label: "Композит" },
+  { mode: "solar_return", label: "Соляр" },
+  { mode: "horary", label: "Хорар" },
+  { mode: "astrocartography", label: "Астрокарта" }
+];
+
 export function ChartEnginePage({
   selectedClient,
   selectedPartnerClient = null,
   jobState,
+  calculationId = null,
   result,
   errorMessage,
   isBusy,
@@ -151,6 +169,7 @@ export function ChartEnginePage({
     horaryQuestion ?? getEmptyHoraryQuestion()
   );
   const activeMode = onModeChange ? mode : localMode;
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const activeTransitMoment = transitMoment ?? localTransitMoment;
   const activeSolarReturnYear = solarReturnYear ?? new Date().getFullYear();
   const activeProgressionTargetDate = progressionTargetDate ?? localProgressionTargetDate;
@@ -179,6 +198,9 @@ export function ChartEnginePage({
   const isCurrentResultCalculated = Boolean(
     displayResult && !isResultStale && jobState === "succeeded"
   );
+  const shouldShowBirthDataEditor = Boolean(
+    needsBirthData && selectedClient && !readiness.ready && onSaveBirthData
+  );
   const chartViewState = getChartViewState({
     selectedClient,
     readiness,
@@ -198,6 +220,14 @@ export function ChartEnginePage({
   const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
   const visiblePanelTabs = isAstrocartographyMode ? astrocartographyPanelTabs : panelTabs;
   const visiblePanelTab = isAstrocartographyMode ? "interpretations" : activePanelTab;
+  const isOverflowModeActive = overflowChartModeTabs.some((tab) => tab.mode === activeMode);
+  const selectChartMode = (nextMode: ChartEngineMode) => {
+    setChartMode({
+      mode: nextMode,
+      onModeChange,
+      setLocalMode
+    });
+  };
 
   return (
     <main className={styles.page}>
@@ -254,132 +284,67 @@ export function ChartEnginePage({
           </div>
         ) : null}
         <nav className={styles.modeTabs} aria-label="Тип карты">
-          <button
-            className={activeMode === "natal" ? styles.modeActive : styles.modeButton}
-            type="button"
-            onClick={() =>
-              setChartMode({
-                mode: "natal",
-                onModeChange,
-                setLocalMode
-              })
-            }
+          {primaryChartModeTabs.map((tab) => (
+            <button
+              key={tab.mode}
+              className={activeMode === tab.mode ? styles.modeActive : styles.modeButton}
+              type="button"
+              onClick={() => selectChartMode(tab.mode)}
+            >
+              <span className={styles.modeTabLabel}>{tab.label}</span>
+            </button>
+          ))}
+          <div
+            className={styles.modeOverflow}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                setIsModeMenuOpen(false);
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setIsModeMenuOpen(false);
+              }
+            }}
           >
-            Натал
-          </button>
-          <button
-            className={activeMode === "child_chart" ? styles.modeActive : styles.modeButton}
-            type="button"
-            onClick={() =>
-              setChartMode({
-                mode: "child_chart",
-                onModeChange,
-                setLocalMode
-              })
-            }
-          >
-            Детская
-          </button>
-          <button
-            className={activeMode === "transit" ? styles.modeActive : styles.modeButton}
-            type="button"
-            onClick={() =>
-              setChartMode({
-                mode: "transit",
-                onModeChange,
-                setLocalMode
-              })
-            }
-          >
-            Транзиты
-          </button>
-          <button
-            className={activeMode === "progression" ? styles.modeActive : styles.modeButton}
-            type="button"
-            onClick={() =>
-              setChartMode({
-                mode: "progression",
-                onModeChange,
-                setLocalMode
-              })
-            }
-          >
-            Прогрессии
-          </button>
-          <button
-            className={activeMode === "synastry" ? styles.modeActive : styles.modeButton}
-            type="button"
-            onClick={() =>
-              setChartMode({
-                mode: "synastry",
-                onModeChange,
-                setLocalMode
-              })
-            }
-          >
-            Синастрия
-          </button>
-          <button
-            className={activeMode === "composite" ? styles.modeActive : styles.modeButton}
-            type="button"
-            onClick={() =>
-              setChartMode({
-                mode: "composite",
-                onModeChange,
-                setLocalMode
-              })
-            }
-          >
-            Композит
-          </button>
-          <button
-            className={activeMode === "solar_return" ? styles.modeActive : styles.modeButton}
-            type="button"
-            onClick={() =>
-              setChartMode({
-                mode: "solar_return",
-                onModeChange,
-                setLocalMode
-              })
-            }
-          >
-            Соляр
-          </button>
-          <button
-            className={activeMode === "horary" ? styles.modeActive : styles.modeButton}
-            type="button"
-            onClick={() =>
-              setChartMode({
-                mode: "horary",
-                onModeChange,
-                setLocalMode
-              })
-            }
-          >
-            Хорар
-          </button>
-          <button
-            className={activeMode === "astrocartography" ? styles.modeActive : styles.modeButton}
-            type="button"
-            onClick={() =>
-              setChartMode({
-                mode: "astrocartography",
-                onModeChange,
-                setLocalMode
-              })
-            }
-          >
-            Астрокарта
-          </button>
+            <button
+              className={isOverflowModeActive ? styles.modeActive : styles.modeButton}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={isModeMenuOpen}
+              aria-label="Открыть остальные типы карт"
+              onClick={() => setIsModeMenuOpen((isOpen) => !isOpen)}
+            >
+              <span className={styles.modeOverflowDots} aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+            </button>
+            {isModeMenuOpen ? (
+              <div className={styles.modeOverflowMenu} role="menu" aria-label="Другие типы карт">
+                {overflowChartModeTabs.map((tab) => (
+                  <button
+                    key={tab.mode}
+                    className={
+                      activeMode === tab.mode
+                        ? styles.modeOverflowItemActive
+                        : styles.modeOverflowItem
+                    }
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      selectChartMode(tab.mode);
+                      setIsModeMenuOpen(false);
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </nav>
-        <div
-          aria-label="Состояние карты"
-          className={styles.stateSummary}
-          data-tone={chartViewState.tone}
-        >
-          <strong>{chartViewState.status}</strong>
-          <span>{chartViewState.detail}</span>
-        </div>
         <div className={styles.toolbarSpacer} />
         {activeMode === "transit" ? (
           <TransitMomentFields
@@ -465,7 +430,7 @@ export function ChartEnginePage({
                 ? "PDF для хорара будет отдельным контуром"
                 : activeMode !== "natal"
                   ? "PDF для этого метода будет отдельным контуром"
-                  : pdfTitle
+                  : (pdfErrorMessage ?? pdfTitle)
           }
           onClick={() => void onPdf?.()}
         >
@@ -483,171 +448,201 @@ export function ChartEnginePage({
       </header>
 
       <section className={styles.body}>
-        <aside className={styles.rail} aria-label="Сводка карты">
-          <section className={styles.railGroup}>
-            <h2>Клиент</h2>
-            <p className={styles.helpText}>
-              {activeMode === "horary"
-                ? "Клиент нужен как CRM-контекст; расчёт берёт момент и место вопроса из формы хорара."
-                : "Вводить дату рождения вручную не нужно: расчёт берёт birth data из карточки клиента."}
-            </p>
-            {!selectedClient ? (
-              <p className={styles.warningText}>Выберите клиента из CRM.</p>
-            ) : null}
-            {needsBirthData && selectedClient && !readiness.ready ? (
-              <p className={styles.warningText}>Не хватает: {readiness.missing.join(", ")}.</p>
-            ) : null}
-            {needsBirthData && selectedClient && !readiness.ready && onSaveBirthData ? (
-              <BirthDataEditor
-                client={selectedClient}
-                disabled={isBusy || isSavingBirthData}
-                errorMessage={birthDataError}
-                isSaving={isSavingBirthData}
-                onSave={onSaveBirthData}
-                onSearchBirthPlaces={onSearchBirthPlaces}
-              />
-            ) : null}
+        {!selectedClient ? (
+          <section className={styles.emptyClientState} role="status" aria-label="Выберите клиента">
+            <span className={styles.emptyClientGlyph} aria-hidden="true">
+              ☉
+            </span>
+            <h2>Выберите клиента</h2>
+            <p>Карта и данные расчёта появятся после выбора клиента из CRM.</p>
           </section>
-          {displayResult && getChartWarnings(displayResult).length ? (
-            <section className={styles.railGroup}>
-              <h2>Предупреждения</h2>
-              <div className={styles.warningStack}>
-                {getChartWarnings(displayResult).map((warning) => (
-                  <div className={styles.chartWarning} key={warning.code}>
-                    {formatChartWarning(warning)}
+        ) : (
+          <>
+            <aside className={styles.rail} aria-label="Сводка карты">
+              {needsBirthData && !readiness.ready ? (
+                <section className={styles.railGroup}>
+                  <h2>Данные рождения</h2>
+                  <p className={styles.warningText}>Не хватает: {readiness.missing.join(", ")}.</p>
+                </section>
+              ) : null}
+              {displayResult && getChartWarnings(displayResult).length ? (
+                <section className={styles.railGroup}>
+                  <h2>Предупреждения</h2>
+                  <div className={styles.warningStack}>
+                    {getChartWarnings(displayResult).map((warning) => (
+                      <div className={styles.chartWarning} key={warning.code}>
+                        {formatChartWarning(warning)}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-          <section className={styles.railGroup}>
-            <h2>{isAstrocartographyMode ? "Астрокарта" : "Большая тройка"}</h2>
-            {astrocartographyResult ? (
-              getAstrocartographySummary(astrocartographyResult).map((item) => (
-                <div className={styles.summaryCard} key={item.label}>
-                  <span className={styles.summaryGlyph} aria-hidden="true">
-                    {item.symbol}
-                  </span>
-                  <div>
-                    <strong>{item.label}</strong>
-                    <span>{item.value}</span>
-                  </div>
-                </div>
-              ))
-            ) : wheelResult ? (
-              getBigThree(wheelResult).map((item) => (
-                <div className={styles.summaryCard} key={item.label}>
-                  <span className={styles.summaryGlyph} aria-hidden="true">
-                    {item.symbol}
-                  </span>
-                  <div>
-                    <strong>{item.label}</strong>
-                    <span>{item.value}</span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className={styles.muted}>
-                {isAstrocartographyMode
-                  ? "Появится после расчёта линий."
-                  : "Появится после расчёта."}
-              </p>
-            )}
-          </section>
-          {wheelResult ? <DistributionSummary result={wheelResult} /> : null}
-          {wheelResult ? <DominantsSummary result={wheelResult} /> : null}
-          {wheelResult ? (
-            <section className={styles.railGroup}>
-              <h2>Ретроградные</h2>
-              {getPrimaryChartRenderResult(wheelResult).points.filter((point) => point.retrograde)
-                .length ? (
-                getPrimaryChartRenderResult(wheelResult)
-                  .points.filter((point) => point.retrograde)
-                  .map((point) => (
-                    <div className={styles.retroPill} key={point.id}>
-                      {getChartPointDisplayLabel(point.id, point.label)} R
+                </section>
+              ) : null}
+              <section className={styles.railGroup}>
+                <h2>{isAstrocartographyMode ? "Астрокарта" : "Большая тройка"}</h2>
+                {astrocartographyResult ? (
+                  getAstrocartographySummary(astrocartographyResult).map((item) => (
+                    <div className={styles.summaryCard} key={item.label}>
+                      <span className={styles.summaryGlyph} aria-hidden="true">
+                        {item.symbol}
+                      </span>
+                      <div>
+                        <strong>{item.label}</strong>
+                        <span>{item.value}</span>
+                      </div>
                     </div>
                   ))
-              ) : (
-                <p className={styles.muted}>Нет в текущем результате.</p>
-              )}
-            </section>
-          ) : null}
-        </aside>
+                ) : wheelResult ? (
+                  getBigThree(wheelResult).map((item) => (
+                    <div className={styles.summaryCard} key={item.label}>
+                      <span className={styles.summaryGlyph} aria-hidden="true">
+                        {item.symbol}
+                      </span>
+                      <div>
+                        <strong>{item.label}</strong>
+                        <span>{item.value}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className={styles.muted}>
+                    {isAstrocartographyMode
+                      ? "Появится после расчёта линий."
+                      : "Появится после расчёта."}
+                  </p>
+                )}
+              </section>
+              {wheelResult ? <DistributionSummary result={wheelResult} /> : null}
+              {wheelResult ? <DominantsSummary result={wheelResult} /> : null}
+              {wheelResult ? (
+                <section className={styles.railGroup}>
+                  <h2>Ретроградные</h2>
+                  {getPrimaryChartRenderResult(wheelResult).points.filter(
+                    (point) => point.retrograde
+                  ).length ? (
+                    getPrimaryChartRenderResult(wheelResult)
+                      .points.filter((point) => point.retrograde)
+                      .map((point) => (
+                        <div className={styles.retroPill} key={point.id}>
+                          {getChartPointDisplayLabel(point.id, point.label)} R
+                        </div>
+                      ))
+                  ) : (
+                    <p className={styles.muted}>Нет в текущем результате.</p>
+                  )}
+                </section>
+              ) : null}
+            </aside>
 
-        <section className={styles.workspace}>
-          {isAstrocartographyMode ? (
-            <AstrocartographyMap result={astrocartographyResult} />
-          ) : (
-            <ChartWheel
-              result={wheelResult}
-              hoveredPointId={hoveredPointId}
-              onHoverPoint={setHoveredPointId}
-            />
-          )}
-          <StatusCard
-            jobState={jobState}
-            errorMessage={errorMessage}
-            result={displayResult}
-            isResultStale={isResultStale}
-            mode={activeMode}
-            selectedPartnerClient={selectedPartnerClient}
-            missingBirthData={isBirthDataBlocked && !readiness.ready ? readiness.missing : []}
-            missingPartnerBirthData={
-              isPartnerBirthDataBlocked && !partnerReadiness.ready ? partnerReadiness.missing : []
-            }
-            pdfErrorMessage={pdfErrorMessage}
-          />
-        </section>
-
-        <aside className={styles.panel} aria-label="Данные карты">
-          {isSettingsPanelOpen ? (
-            <>
-              <div className={styles.panelSettingsHeader}>
-                <strong>Настройки расчёта</strong>
-                <button
-                  aria-label="Закрыть настройки расчёта"
-                  className={styles.panelCloseButton}
-                  type="button"
-                  onClick={() => setIsSettingsPanelOpen(false)}
+            <section
+              className={
+                shouldShowBirthDataEditor
+                  ? `${styles.workspace} ${styles.workspaceBirthDataMode}`
+                  : styles.workspace
+              }
+            >
+              {shouldShowBirthDataEditor && onSaveBirthData ? (
+                <section
+                  className={styles.birthDataWorkspace}
+                  aria-label="Заполнение данных рождения"
                 >
-                  +
-                </button>
-              </div>
-              <div className={styles.panelSettings}>
-                <ChartSettingsPanel
-                  settings={settings}
-                  disabled={isBusy}
-                  onChange={onSettingsChange}
+                  <BirthDataEditor
+                    client={selectedClient}
+                    disabled={isBusy || isSavingBirthData}
+                    errorMessage={birthDataError}
+                    isSaving={isSavingBirthData}
+                    layout="workspace"
+                    onSave={onSaveBirthData}
+                    onSearchBirthPlaces={onSearchBirthPlaces}
+                  />
+                </section>
+              ) : isAstrocartographyMode ? (
+                <AstrocartographyMap result={astrocartographyResult} />
+              ) : (
+                <ChartWheel
+                  result={wheelResult}
+                  hoveredPointId={hoveredPointId}
+                  onHoverPoint={setHoveredPointId}
                 />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className={styles.panelTabs}>
-                {visiblePanelTabs.map((tab) => (
-                  <button
-                    aria-pressed={visiblePanelTab === tab.id}
-                    className={visiblePanelTab === tab.id ? styles.panelTabActive : styles.panelTab}
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActivePanelTab(tab.id)}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <ChartTables
-                activeTab={visiblePanelTab}
-                hoveredPointId={hoveredPointId}
-                interpretationMode={activeMode === "child_chart" ? "child" : "default"}
-                locale={locale}
-                onHoverPoint={setHoveredPointId}
+              )}
+              <StatusCard
+                jobState={jobState}
+                errorMessage={errorMessage}
                 result={displayResult}
+                isResultStale={isResultStale}
+                mode={activeMode}
+                selectedPartnerClient={selectedPartnerClient}
+                missingBirthData={isBirthDataBlocked && !readiness.ready ? readiness.missing : []}
+                missingPartnerBirthData={
+                  isPartnerBirthDataBlocked && !partnerReadiness.ready
+                    ? partnerReadiness.missing
+                    : []
+                }
               />
-            </>
-          )}
-        </aside>
+            </section>
+
+            {shouldShowBirthDataEditor ? null : (
+              <aside className={styles.panel} aria-label="Данные карты">
+                {isSettingsPanelOpen ? (
+                  <>
+                    <div className={styles.panelSettingsHeader}>
+                      <strong>Настройки расчёта</strong>
+                      <button
+                        aria-label="Закрыть настройки расчёта"
+                        className={styles.panelCloseButton}
+                        type="button"
+                        onClick={() => setIsSettingsPanelOpen(false)}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className={styles.panelSettings}>
+                      <ChartSettingsPanel
+                        settings={settings}
+                        disabled={isBusy}
+                        onChange={onSettingsChange}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className={styles.panelTabs}>
+                      {visiblePanelTabs.map((tab) => (
+                        <button
+                          aria-pressed={visiblePanelTab === tab.id}
+                          className={
+                            visiblePanelTab === tab.id ? styles.panelTabActive : styles.panelTab
+                          }
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setActivePanelTab(tab.id)}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                    {visiblePanelTab === "ai" ? (
+                      <ChartAiPanel
+                        calculationId={calculationId}
+                        isBusy={isBusy}
+                        isResultStale={isResultStale}
+                        result={displayResult}
+                      />
+                    ) : (
+                      <ChartTables
+                        activeTab={visiblePanelTab}
+                        hoveredPointId={hoveredPointId}
+                        interpretationMode={activeMode === "child_chart" ? "child" : "default"}
+                        locale={locale}
+                        onHoverPoint={setHoveredPointId}
+                        result={displayResult}
+                      />
+                    )}
+                  </>
+                )}
+              </aside>
+            )}
+          </>
+        )}
       </section>
     </main>
   );
@@ -1030,6 +1025,7 @@ function BirthDataEditor({
   disabled,
   errorMessage,
   isSaving,
+  layout = "rail",
   onSave,
   onSearchBirthPlaces
 }: {
@@ -1037,6 +1033,7 @@ function BirthDataEditor({
   readonly disabled: boolean;
   readonly errorMessage: string | null;
   readonly isSaving: boolean;
+  readonly layout?: "rail" | "workspace";
   readonly onSave: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
   readonly onSearchBirthPlaces?: (query: string) => Promise<readonly ClientBirthPlaceCandidate[]>;
 }) {
@@ -1060,37 +1057,63 @@ function BirthDataEditor({
   const [placeCandidates, setPlaceCandidates] = useState<readonly ClientBirthPlaceCandidate[]>([]);
   const [placeSearchError, setPlaceSearchError] = useState<string | null>(null);
   const [isSearchingPlace, setIsSearchingPlace] = useState(false);
+  const [selectedPlaceText, setSelectedPlaceText] = useState(birthData?.birthPlaceText ?? "");
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
+  const searchBirthPlacesRef = useRef(onSearchBirthPlaces);
 
   const timeDisabled = disabled || birthTimePrecision === "unknown";
-  const canSearchPlace =
-    Boolean(onSearchBirthPlaces) &&
-    birthPlaceText.trim().length >= 2 &&
-    !disabled &&
-    !isSearchingPlace;
 
-  const searchPlace = async () => {
-    if (!onSearchBirthPlaces || birthPlaceText.trim().length < 2) return;
+  useEffect(() => {
+    searchBirthPlacesRef.current = onSearchBirthPlaces;
+  }, [onSearchBirthPlaces]);
+
+  useEffect(() => {
+    const query = birthPlaceText.trim();
+    const searchBirthPlaces = searchBirthPlacesRef.current;
+    if (!searchBirthPlaces || disabled || query.length < 3 || query === selectedPlaceText) {
+      setIsSearchingPlace(false);
+      if (query.length < 3) {
+        setPlaceCandidates([]);
+        setPlaceSearchError(null);
+      }
+      return;
+    }
+
+    let isCancelled = false;
     setIsSearchingPlace(true);
     setPlaceSearchError(null);
-    try {
-      const candidates = await onSearchBirthPlaces(birthPlaceText);
-      setPlaceCandidates(candidates);
-      if (candidates.length === 0) {
-        setPlaceSearchError("Место не найдено. Уточните запрос или заполните вручную.");
-      }
-    } catch (error) {
-      setPlaceCandidates([]);
-      setPlaceSearchError(
-        error instanceof Error ? error.message : "Не удалось найти место. Заполните данные вручную."
-      );
-    } finally {
-      setIsSearchingPlace(false);
-    }
-  };
+    const timeoutId = window.setTimeout(() => {
+      void searchBirthPlaces(query)
+        .then((candidates) => {
+          if (isCancelled) return;
+          setPlaceCandidates(candidates);
+          setPlaceSearchError(
+            candidates.length === 0
+              ? "Место не найдено. Уточните запрос или заполните координаты вручную."
+              : null
+          );
+        })
+        .catch((error) => {
+          if (isCancelled) return;
+          setPlaceCandidates([]);
+          setPlaceSearchError(formatBirthPlaceSearchError(error));
+        })
+        .finally(() => {
+          if (!isCancelled) setIsSearchingPlace(false);
+        });
+    }, 800);
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [birthPlaceText, disabled, selectedPlaceText]);
 
   const selectPlaceCandidate = (candidate: ClientBirthPlaceCandidate) => {
     const patch = toBirthPlaceDraftPatch(candidate);
     setBirthPlaceText(patch.birthPlaceText ?? "");
+    setSelectedPlaceText(patch.birthPlaceText ?? "");
     setBirthCountryCode(patch.birthCountryCode);
     setBirthCity(patch.birthCity);
     setBirthRegion(patch.birthRegion);
@@ -1103,7 +1126,13 @@ function BirthDataEditor({
 
   return (
     <form
-      className={styles.birthDataCard}
+      className={layout === "workspace" ? styles.birthDataWorkspaceForm : styles.birthDataCard}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setIsDatePickerOpen(false);
+          setIsTimePickerOpen(false);
+        }
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         void onSave({
@@ -1123,22 +1152,43 @@ function BirthDataEditor({
         });
       }}
     >
-      <div>
+      <div className={styles.birthDataFormHeader}>
         <strong>Заполните данные рождения</strong>
         <span>Сохраним в карточку клиента и сразу разблокируем расчёт натала.</span>
       </div>
-      <label>
-        <span>Дата рождения</span>
-        <input
-          type="date"
-          value={birthDate}
+      <div className={styles.birthDataPickerField}>
+        <span className={styles.birthDataLabel}>Дата рождения</span>
+        <button
+          className={styles.birthDataPickerButton}
+          name="birthDatePicker"
+          type="button"
+          aria-label={`Дата рождения: ${formatBirthDateButtonLabel(birthDate)}`}
+          aria-expanded={isDatePickerOpen}
           disabled={disabled}
-          onChange={(event) => setBirthDate(event.target.value)}
-        />
-      </label>
-      <label>
-        <span>Точность времени</span>
+          onClick={() => {
+            setIsDatePickerOpen((isOpen) => !isOpen);
+            setIsTimePickerOpen(false);
+          }}
+        >
+          <strong>{formatBirthDateButtonLabel(birthDate)}</strong>
+          <small>Открыть календарь</small>
+        </button>
+        <input name="birthDate" type="hidden" value={birthDate} />
+        {isDatePickerOpen ? (
+          <BirthDatePicker
+            value={birthDate}
+            disabled={disabled}
+            onChange={(nextDate) => {
+              setBirthDate(nextDate);
+              setIsDatePickerOpen(false);
+            }}
+          />
+        ) : null}
+      </div>
+      <label className={styles.birthDataSelectField}>
+        <span className={styles.birthDataLabel}>Точность времени</span>
         <select
+          name="birthTimePrecision"
           value={birthTimePrecision}
           disabled={disabled}
           onChange={(event) =>
@@ -1152,25 +1202,50 @@ function BirthDataEditor({
           <option value="exact">Точно</option>
         </select>
       </label>
-      <label>
-        <span>Время рождения</span>
-        <input
-          type="time"
-          value={birthTime}
+      <div className={styles.birthDataPickerField}>
+        <span className={styles.birthDataLabel}>Время рождения</span>
+        <button
+          className={styles.birthDataPickerButton}
+          name="birthTimePicker"
+          type="button"
+          aria-label={`Время рождения: ${birthTime || "не выбрано"}`}
+          aria-expanded={isTimePickerOpen}
           disabled={timeDisabled}
-          onChange={(event) => setBirthTime(event.target.value)}
-        />
-      </label>
-      <label>
-        <span>Место рождения</span>
-        <div className={styles.birthPlaceSearchRow}>
+          onClick={() => {
+            setIsTimePickerOpen((isOpen) => !isOpen);
+            setIsDatePickerOpen(false);
+          }}
+        >
+          <strong>{birthTime || "Выберите время"}</strong>
+          <small>
+            {birthTimePrecision === "unknown" ? "Сначала выберите точность" : "Открыть часы"}
+          </small>
+        </button>
+        <input name="birthTime" type="hidden" value={birthTime} />
+        {isTimePickerOpen ? (
+          <BirthTimePicker
+            value={birthTime}
+            disabled={timeDisabled}
+            onChange={(nextTime) => {
+              setBirthTime(nextTime);
+              setIsTimePickerOpen(false);
+            }}
+          />
+        ) : null}
+      </div>
+      <label className={styles.birthDataPlaceField}>
+        <span className={styles.birthDataLabel}>Место рождения</span>
+        <div className={styles.birthPlaceAutocomplete}>
           <input
+            name="birthPlaceText"
             type="text"
             value={birthPlaceText}
             disabled={disabled}
             placeholder="Москва, Россия"
+            autoComplete="off"
             onChange={(event) => {
               setBirthPlaceText(event.target.value);
+              setSelectedPlaceText("");
               setBirthCountryCode(null);
               setBirthCity(null);
               setBirthRegion(null);
@@ -1181,32 +1256,30 @@ function BirthDataEditor({
               setPlaceSearchError(null);
             }}
           />
-          <button
-            className={styles.birthPlaceSearchButton}
-            type="button"
-            disabled={!canSearchPlace}
-            onClick={() => void searchPlace()}
-          >
-            {isSearchingPlace ? "Ищем..." : "Найти"}
-          </button>
+          {isSearchingPlace ? (
+            <span className={styles.birthPlaceSearchState} role="status">
+              Ищем место…
+            </span>
+          ) : null}
+          {placeCandidates.length > 0 ? (
+            <div className={styles.birthPlaceCandidates} role="listbox" aria-label="Варианты места">
+              {placeCandidates.map((candidate) => (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  role="option"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectPlaceCandidate(candidate)}
+                  disabled={disabled}
+                >
+                  <strong>{candidate.placeName}</strong>
+                  <span>{[candidate.region, candidate.timezone].filter(Boolean).join(" · ")}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </label>
-      {placeCandidates.length > 0 ? (
-        <div className={styles.birthPlaceCandidates} role="listbox" aria-label="Варианты места">
-          {placeCandidates.map((candidate) => (
-            <button
-              key={candidate.id}
-              type="button"
-              role="option"
-              onClick={() => selectPlaceCandidate(candidate)}
-              disabled={disabled}
-            >
-              <strong>{candidate.placeName}</strong>
-              <span>{[candidate.region, candidate.timezone].filter(Boolean).join(" · ")}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
       {placeSearchError ? <p className={styles.birthDataError}>{placeSearchError}</p> : null}
       {birthTimezone && birthLatitude && birthLongitude ? (
         <p className={styles.birthPlaceResolved}>
@@ -1218,6 +1291,7 @@ function BirthDataEditor({
         <label>
           <span>Часовой пояс</span>
           <input
+            name="birthTimezone"
             type="text"
             value={birthTimezone}
             disabled={disabled}
@@ -1229,6 +1303,7 @@ function BirthDataEditor({
           <label>
             <span>Широта</span>
             <input
+              name="birthLatitude"
               type="number"
               step="0.0001"
               value={birthLatitude}
@@ -1239,6 +1314,7 @@ function BirthDataEditor({
           <label>
             <span>Долгота</span>
             <input
+              name="birthLongitude"
               type="number"
               step="0.0001"
               value={birthLongitude}
@@ -1256,9 +1332,242 @@ function BirthDataEditor({
   );
 }
 
+function BirthDatePicker({
+  disabled,
+  onChange,
+  value
+}: {
+  readonly disabled: boolean;
+  readonly onChange: (value: string) => void;
+  readonly value: string;
+}) {
+  const selectedDate = parseBirthDateValue(value);
+  const [viewYear, setViewYear] = useState(selectedDate?.year ?? getDefaultBirthDatePickerYear());
+  const [viewMonth, setViewMonth] = useState(selectedDate?.month ?? new Date().getMonth() + 1);
+  const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+
+  return (
+    <div className={styles.birthDatePopover}>
+      <div className={styles.birthPickerControls}>
+        <label>
+          <span>Месяц</span>
+          <select
+            aria-label="Месяц рождения"
+            name="birthMonthPicker"
+            value={padDatePart(viewMonth)}
+            disabled={disabled}
+            onChange={(event) => setViewMonth(Number(event.target.value))}
+          >
+            {birthMonthLabels.map((month, index) => (
+              <option key={month} value={padDatePart(index + 1)}>
+                {month}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Год</span>
+          <select
+            aria-label="Год рождения"
+            name="birthYearPicker"
+            value={String(viewYear)}
+            disabled={disabled}
+            onChange={(event) => setViewYear(Number(event.target.value))}
+          >
+            {getBirthYearOptions().map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className={styles.birthDateWeekdays} aria-hidden="true">
+        {birthWeekdayLabels.map((weekday) => (
+          <span key={weekday}>{weekday}</span>
+        ))}
+      </div>
+      <div className={styles.birthDateGrid}>
+        {Array.from({ length: getBirthDateLeadingOffset(viewYear, viewMonth) }, (_, index) => (
+          <span key={`empty-${index}`} aria-hidden="true" />
+        ))}
+        {Array.from({ length: daysInMonth }, (_, index) => {
+          const day = index + 1;
+          const dateValue = `${viewYear}-${padDatePart(viewMonth)}-${padDatePart(day)}`;
+          const isSelected = value === dateValue;
+          return (
+            <button
+              key={dateValue}
+              className={isSelected ? styles.birthDateDayActive : styles.birthDateDay}
+              type="button"
+              aria-label={`${day} ${birthMonthLabelsGenitive[viewMonth - 1]} ${viewYear}`}
+              aria-pressed={isSelected}
+              disabled={disabled}
+              onClick={() => onChange(dateValue)}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BirthTimePicker({
+  disabled,
+  onChange,
+  value
+}: {
+  readonly disabled: boolean;
+  readonly onChange: (value: string) => void;
+  readonly value: string;
+}) {
+  const parsedTime = parseBirthTimeValue(value);
+  const [selectedHour, setSelectedHour] = useState(parsedTime?.hour ?? "12");
+
+  return (
+    <div className={styles.birthTimePopover}>
+      <div className={styles.birthTimeSection}>
+        <span>Часы</span>
+        <div className={styles.birthTimeGrid}>
+          {birthHourOptions.map((hour) => (
+            <button
+              key={hour}
+              className={
+                selectedHour === hour ? styles.birthTimeOptionActive : styles.birthTimeOption
+              }
+              type="button"
+              aria-label={`${hour}:00`}
+              aria-pressed={selectedHour === hour}
+              disabled={disabled}
+              onClick={() => setSelectedHour(hour)}
+            >
+              {hour}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className={styles.birthTimeSection}>
+        <span>Минуты</span>
+        <div className={styles.birthMinuteGrid}>
+          {birthMinuteOptions.map((minute) => (
+            <button
+              key={minute}
+              className={
+                parsedTime?.minute === minute
+                  ? styles.birthTimeOptionActive
+                  : styles.birthTimeOption
+              }
+              type="button"
+              aria-label={`${minute} минут`}
+              aria-pressed={parsedTime?.minute === minute}
+              disabled={disabled}
+              onClick={() => onChange(`${selectedHour}:${minute}`)}
+            >
+              {minute}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const birthMonthLabels = [
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь"
+] as const;
+
+const birthMonthLabelsGenitive = [
+  "января",
+  "февраля",
+  "марта",
+  "апреля",
+  "мая",
+  "июня",
+  "июля",
+  "августа",
+  "сентября",
+  "октября",
+  "ноября",
+  "декабря"
+] as const;
+
+const birthWeekdayLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] as const;
+const birthHourOptions = Array.from({ length: 24 }, (_, hour) => padDatePart(hour));
+const birthMinuteOptions = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+
+function getBirthYearOptions(): readonly number[] {
+  const currentYear = new Date().getFullYear();
+  return Array.from({ length: currentYear - 1899 }, (_, index) => 1900 + index).reverse();
+}
+
+function getDefaultBirthDatePickerYear(): number {
+  return new Date().getFullYear() - 35;
+}
+
+function parseBirthDateValue(
+  value: string
+): { readonly year: number; readonly month: number; readonly day: number } | null {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3])
+  };
+}
+
+function parseBirthTimeValue(
+  value: string
+): { readonly hour: string; readonly minute: string } | null {
+  const match = value.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const [, hour, minute] = match;
+  if (!hour || !minute) return null;
+  return { hour, minute };
+}
+
+function formatBirthDateButtonLabel(value: string): string {
+  const parsed = parseBirthDateValue(value);
+  if (!parsed) return "Выберите дату";
+  return `${padDatePart(parsed.day)}.${padDatePart(parsed.month)}.${parsed.year}`;
+}
+
+function getBirthDateLeadingOffset(year: number, month: number): number {
+  const jsDay = new Date(year, month - 1, 1).getDay();
+  return jsDay === 0 ? 6 : jsDay - 1;
+}
+
+function padDatePart(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
 function normalizeTextField(value: string): string | null {
   const normalized = value.trim();
   return normalized ? normalized : null;
+}
+
+function formatBirthPlaceSearchError(error: unknown): string {
+  if (
+    error instanceof Error &&
+    !/HTTP request failed|status\s+(?:429|5\d\d)/i.test(error.message)
+  ) {
+    return error.message;
+  }
+
+  return "Не удалось найти место. Попробуйте уточнить запрос позже.";
 }
 
 function normalizeNumberField(value: string): number | null {
@@ -1276,8 +1585,7 @@ function StatusCard({
   mode,
   selectedPartnerClient,
   result,
-  isResultStale,
-  pdfErrorMessage
+  isResultStale
 }: {
   readonly jobState: ChartEnginePageJobState;
   readonly errorMessage: string | null;
@@ -1287,7 +1595,6 @@ function StatusCard({
   readonly selectedPartnerClient: ClientSelectOption | null;
   readonly result: StoredChartCalculationPayload | null;
   readonly isResultStale: boolean;
-  readonly pdfErrorMessage: string | null;
 }) {
   if (jobState === "calculating") {
     return (
@@ -1322,14 +1629,7 @@ function StatusCard({
     );
   }
   if (missingBirthData.length > 0) {
-    return (
-      <div className={styles.statusCard} role="status">
-        <strong>Нужны данные рождения</strong>
-        <span>
-          Добавьте {missingBirthData.join(", ")}, чтобы рассчитать натал без имитации домов и углов.
-        </span>
-      </div>
-    );
+    return null;
   }
   if ((mode === "synastry" || mode === "composite") && !selectedPartnerClient) {
     return (
@@ -1351,6 +1651,8 @@ function StatusCard({
     );
   }
   if (!result) {
+    if (mode === "natal") return null;
+
     return (
       <div className={styles.statusCard}>
         <strong>{getEmptyResultLabel(mode)}</strong>
@@ -1403,15 +1705,7 @@ function StatusCard({
     );
   }
 
-  return (
-    <div className={styles.statusCard}>
-      <strong>{getSucceededLabel(mode)}</strong>
-      <span>
-        Провайдер: {result.provider.name} · {result.provider.ephemeris}
-      </span>
-      {pdfErrorMessage ? <span className={styles.warningText}>{pdfErrorMessage}</span> : null}
-    </div>
-  );
+  return null;
 }
 
 function getBigThree(result: StoredChartCalculationPayload): readonly {
@@ -1527,7 +1821,8 @@ const panelTabs: readonly { readonly id: ChartPanelTab; readonly label: string }
   { id: "planets", label: "Планеты" },
   { id: "aspects", label: "Аспекты" },
   { id: "houses", label: "Дома" },
-  { id: "interpretations", label: "Трактовки" }
+  { id: "interpretations", label: "Трактовки" },
+  { id: "ai", label: "AI" }
 ];
 
 const astrocartographyPanelTabs: readonly { readonly id: ChartPanelTab; readonly label: string }[] =
@@ -1567,18 +1862,6 @@ function getEmptyResultLabel(mode: ChartEngineMode): string {
   if (mode === "horary") return "Готово к хорару";
   if (mode === "astrocartography") return "Готово к расчёту астрокарты";
   return "Готово к расчёту натала";
-}
-
-function getSucceededLabel(mode: ChartEngineMode): string {
-  if (mode === "child_chart") return "Детская карта рассчитана";
-  if (mode === "transit") return "Транзитная карта рассчитана";
-  if (mode === "progression") return "Прогрессии рассчитаны";
-  if (mode === "synastry") return "Синастрия рассчитана";
-  if (mode === "composite") return "Композит рассчитан";
-  if (mode === "solar_return") return "Соляр рассчитан";
-  if (mode === "horary") return "Хорар рассчитан";
-  if (mode === "astrocartography") return "Астрокарта рассчитана";
-  return "Натальная карта рассчитана";
 }
 
 function runChartCalculationAction({
