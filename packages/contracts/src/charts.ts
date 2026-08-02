@@ -1052,12 +1052,38 @@ const legacyChartProgressionRenderResultSchema = z
   })
   .strict();
 
+const legacyChartAstrocartographyLineSchema = z
+  .object({
+    id: z.string().trim().min(1).max(120),
+    point: chartAstrocartographyPointSchema,
+    angle: chartAstrocartographyAngleSchema,
+    label: z.string().trim().min(1).max(120),
+    path: z.array(chartAstrocartographyPathPointSchema).min(2)
+  })
+  .strict();
+
+const legacyChartAstrocartographyRenderResultSchema = z
+  .object({
+    lines: z.array(legacyChartAstrocartographyLineSchema),
+    warnings: z.array(chartWarningSchema)
+  })
+  .strict();
+
+const legacyChartSynastryHouseOverlaySchema = z
+  .object({
+    owner: z.enum(["primary", "partner"]),
+    point: z.string().trim().min(1).max(80),
+    projectedHouseOwner: z.enum(["primary", "partner"]),
+    projectedHouse: z.number().int().min(1).max(12)
+  })
+  .strict();
+
 const legacyChartSynastryRenderResultSchema = z
   .object({
     primary: legacyChartRenderResultSchema,
     partner: legacyChartRenderResultSchema,
     aspectsBetween: z.array(chartSynastryAspectSchema),
-    houseOverlays: z.array(chartSynastryHouseOverlaySchema),
+    houseOverlays: z.array(legacyChartSynastryHouseOverlaySchema),
     relationshipScore: chartSynastryRelationshipScoreSchema.optional(),
     warnings: z.array(chartWarningSchema)
   })
@@ -1084,7 +1110,7 @@ export const storedChartAstrocartographyCalculationPayloadSchema = z
     provider: chartProviderMetadataSchema,
     settings: chartSettingsSchema,
     inputSnapshot: legacyChartInputSnapshotSchema,
-    result: chartAstrocartographyRenderResultSchema
+    result: legacyChartAstrocartographyRenderResultSchema
   })
   .strict();
 export type StoredChartAstrocartographyCalculationPayload = z.infer<
@@ -1219,7 +1245,8 @@ export const chartNatalResultV2Schema = storedChartNatalCalculationPayloadSchema
 export const chartAstrocartographyResultV2Schema = storedChartAstrocartographyCalculationPayloadSchema.extend({
   ...reproducibleChartResultFields,
   methodVersion: z.literal(chartMethodVersions.astrocartography),
-  inputSnapshot: chartInputSnapshotSchema
+  inputSnapshot: chartInputSnapshotSchema,
+  result: chartAstrocartographyRenderResultSchema
 });
 export const chartTransitResultV2Schema = storedChartTransitCalculationPayloadSchema.extend({
   ...reproducibleChartResultFields,

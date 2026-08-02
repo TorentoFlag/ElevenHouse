@@ -23,6 +23,23 @@ import {
 } from "./charts";
 
 describe("chart contracts", () => {
+  it("keeps historical v1 astrocartography line relationships frozen", () => {
+    const payload = completeV1AstrocartographyPayload();
+    payload.result.lines[0] = { ...payload.result.lines[0]!, id: "legacy-sun-meridian" };
+
+    expect(storedChartCalculationPayloadSchema.parse(payload)).toEqual(payload);
+  });
+
+  it("keeps historical v1 synastry same-owner overlays frozen", () => {
+    const payload = completeV1SynastryPayload();
+    payload.result.houseOverlays[0] = {
+      ...payload.result.houseOverlays[0]!,
+      projectedHouseOwner: "primary"
+    };
+
+    expect(storedChartCalculationPayloadSchema.parse(payload)).toEqual(payload);
+  });
+
   it("keeps historical v1 civil and render payloads frozen while v2 remains strict", () => {
     const historical = {
       schemaVersion: "chart-result.v1" as const,
@@ -1415,5 +1432,45 @@ function completeV2NatalPayload() {
     settings: completeSettings(),
     inputSnapshot: completeInputSnapshot(),
     result: completeRenderResult()
+  };
+}
+
+function completeV1AstrocartographyPayload() {
+  return {
+    schemaVersion: "chart-result.v1" as const,
+    method: "astrocartography" as const,
+    provider: { name: "kerykeion" as const, version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: completeSettings(),
+    inputSnapshot: completeInputSnapshot(),
+    result: { lines: completeAstrocartographyLines(), warnings: [] }
+  };
+}
+
+function completeV1SynastryPayload() {
+  return {
+    schemaVersion: "chart-result.v1" as const,
+    method: "synastry" as const,
+    provider: { name: "kerykeion" as const, version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: completeSettings(),
+    inputSnapshot: completeInputSnapshot(),
+    partnerInputSnapshot: completeInputSnapshot(),
+    relationshipSnapshot: {
+      primaryClientId: "00000000-0000-4000-8000-000000000001",
+      partnerClientId: "00000000-0000-4000-8000-000000000002"
+    },
+    result: {
+      primary: completeRenderResult(),
+      partner: completeRenderResult(),
+      aspectsBetween: [],
+      houseOverlays: [
+        {
+          owner: "primary" as const,
+          point: "sun",
+          projectedHouseOwner: "partner" as "primary" | "partner",
+          projectedHouse: 7
+        }
+      ],
+      warnings: []
+    }
   };
 }
