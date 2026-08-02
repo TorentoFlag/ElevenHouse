@@ -67,6 +67,13 @@ does not reduce the Definition of Done in the design spec.
   contract hardening: 32 test files / 171 tests, focused ESLint, contracts,
   domain, API and workers typecheck/build, web build, authenticated browser
   smoke and CSRF-protected cancel `409` all produced expected evidence.
+- [x] 2026-08-02 21:49 MSK: Milestone 1 behavior group 1 added strict V2/read
+  contracts, separate presentation state, deterministic graph compilation,
+  handle/topology validation, requirement manifests and bounded compiler
+  policy. Fresh verification passed 9 files / 67 tests, contracts/domain
+  typecheck/build, ESLint and documentation gates; independent re-review found
+  no blocker/high/medium findings and returned GO. Persistence, API validation,
+  draft CAS and publish remain later groups.
 - [x] Milestone 0: fail current unsupported runtime closed.
 - [ ] Milestone 1: ship graph v2 definition control plane.
 - [ ] Milestone 2: ship durable token runtime and recovery foundation.
@@ -126,6 +133,11 @@ blocked.
   `enabled` runtime can expose only `durable_execution` history, while `canary`
   cannot claim `legacy_preview`; contract tests now reject both contradictory
   combinations.
+- 2026-08-02: a normalized graph must canonicalize every semantically unordered
+  collection and cannot use locale-dependent sorting. V2 sorts stable ids with
+  binary string comparison and canonicalizes booking `productIds` without
+  mutating input. Duplicate node/edge ids are ambiguous and are excluded from
+  topology analysis rather than resolving to the first array element.
 - 2026-08-02: the repository-wide astrologer-web typecheck is currently blocked
   outside this milestone by a concurrent ChartEngine fixture that still returns
   provider `nominatim` after the shared contract moved to `geoapify`. Flows
@@ -154,6 +166,28 @@ changes later steps.
   with exactly one condition branch and no implicit fan-out/fan-in. Repetition
   is a bounded typed composite. Rationale: deterministic semantics before broad
   canvas expressiveness.
+- **2026-08-02, graph matrix:** V2 rejects every unknown kind/config field and
+  treats any node with `in-degree > 1` as unsupported fan-in, including
+  reconvergence of mutually exclusive branches. Initial handles are exact:
+  triggers emit `next`, `birth_data_available` emits `true` and `false`, a work
+  item emits `success`, approval emits `approved` and `rejected` plus `timeout`
+  only when configured with expiry, and terminal nodes emit nothing. Rationale:
+  no merge or outcome semantics may be inferred from canvas shape.
+- **2026-08-02, compatibility:** reads accept V1 or V2, but the target write and
+  publish path accepts only V2. V1 definitions remain readable/exportable and
+  require explicit deterministic migration; unresolved nodes become blockers.
+  Existing V1 templates remain unavailable until their owning capabilities
+  have strict V2 contracts.
+- **2026-08-02, aggregate:** published state belongs to immutable versions;
+  enrollment state comes from activation epochs; archive is aggregate
+  lifecycle. Drafts carry `revision` and `baseVersionId`, publish stores a
+  compiled snapshot from an exact source revision, and `create-next-draft` is
+  explicit and idempotent.
+- **2026-08-02, readiness:** the compiler manifest declares required executor
+  contracts but is not deployment evidence. Static unsupported capabilities
+  block publish; mutable resource and exact executor-version readiness block
+  activation. Until Milestone 2 provides an authoritative versioned registry,
+  activation remains typed fail-closed and must not create an epoch.
 - **2026-08-02, versioning:** publish creates an immutable version but does not
   activate it. Activation creates an effective-time epoch; pause closes
   enrollment while existing runs continue by default.
@@ -347,9 +381,34 @@ type FlowEdgeV2 = {
 };
 ```
 
+Initial V2 nodes use strict config and handle contracts:
+
+| Kind | Strict config | Required source handles |
+| --- | --- | --- |
+| `booking_confirmed` | non-empty unique `productIds` | `next` |
+| `manual_client` | empty object | `next` |
+| `birth_data_available` | purpose `service_preparation` | `true`, `false` |
+| `astrologer_work_item` | task kind, title, optional instructions and priority | `success` |
+| `astrologer_approval` | approval kind/title and optional expiry | `approved`, `rejected`; `timeout` iff expiry exists |
+| `completed` | stable `goalKey` | none |
+| `suppressed` | stable `reasonCode` | none |
+| `failed` | stable `errorCode` | none |
+
+Every node also pins `configSchemaVersion: 1` and
+`executorContractVersion: 1`. Presentation positions, viewport, collapsed and
+selection state live in `flow-presentation.v1`, never in the executable graph
+or compiler hash. `repeat_until`, back-edges, arbitrary outcome handles and
+branch reconvergence are unavailable in this schema version.
+
+The request contract enforces hard structural safety caps of 200 nodes and 400
+edges. The compiler separately accepts validated caller policy limits at or
+below those caps, so plan/tenant policy can be stricter without changing graph
+semantics or weakening the transport boundary.
+
 The compiler returns a normalized graph, validation issues and capability
 manifest. Publish persists the exact result. Activation revalidates referenced
-mutable resources and current executor/capability availability.
+mutable resources and current executor/capability availability. The manifest
+is a requirement declaration, not proof that an executor is deployed.
 
 ### Definition use cases
 
@@ -550,9 +609,11 @@ definition behavior stays green.
 ### Milestone 1: Graph V2 Definition Control Plane
 
 **Observable outcome:** two astrologer tabs cannot overwrite each other; a
-strict v2 graph validates, publishes immutably, and activates only through an
-explicit supported-capability command. A published version is read-only and a
-new version does not switch active enrollment.
+strict v2 graph validates and publishes immutably. A published version is
+read-only and a new version does not switch active enrollment. Milestone 1 may
+prepare epoch persistence and CAS contracts, but production activation remains
+typed fail-closed until Milestone 2 supplies authoritative versioned executor
+readiness; no unsupported command may create an epoch.
 
 **Owned paths:**
 
@@ -568,9 +629,11 @@ new version does not switch active enrollment.
 - canonical architecture/API/product docs that become stale.
 
 **Behavior sequence:** strict discriminated node schemas -> graph compiler and
-handle matrix -> optimistic draft revision -> immutable publish snapshot ->
-activation epoch CAS -> pause/stop/archive -> template migration and
-published-read-only UI -> conflict recovery.
+handle matrix -> read-only validate surface -> optimistic draft revision ->
+immutable publish snapshot -> activation epoch data/CAS contract without
+opening execution -> pause/stop/archive -> template migration and
+published-read-only UI -> conflict recovery -> Milestone 2 readiness-backed
+activation enablement.
 
 **Acceptance:** unknown config is rejected; every path terminates; v1 remains
 readable/non-activatable; same revision has one winner; publish replay returns

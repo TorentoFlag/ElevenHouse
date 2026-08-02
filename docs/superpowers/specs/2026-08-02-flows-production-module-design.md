@@ -266,6 +266,26 @@ Initial executable kinds:
 - wait/human: `astrologer_work_item`, `astrologer_approval`;
 - terminal: `completed`, `suppressed`, `failed`.
 
+The V2 configuration and outcome matrix is closed, not extensible by unknown
+JSON fields:
+
+| Kind | `configSchemaVersion` | Strict config | Outgoing handles |
+| --- | --- | --- | --- |
+| `booking_confirmed` | `1` | one or more unique owner-scoped product UUIDs | exactly one `next` |
+| `manual_client` | `1` | empty object | exactly one `next` |
+| `birth_data_available` | `1` | purpose fixed to `service_preparation` | exactly one `true` and one `false` |
+| `astrologer_work_item` | `1` | `consultation_preparation` task, executable title, optional instructions and priority | exactly one `success` |
+| `astrologer_approval` | `1` | approval kind/title and optional bounded expiry | exactly one `approved` and one `rejected`; exactly one `timeout` iff expiry is configured |
+| `completed` | `1` | stable analytics `goalKey` | none |
+| `suppressed` | `1` | stable `reasonCode` | none |
+| `failed` | `1` | stable `errorCode` | none |
+
+All initial nodes pin `executorContractVersion: 1`. A compiler capability
+manifest states which exact executor contracts and owning-module capabilities
+the graph requires; it does not claim those executors are deployed or ready.
+Static unknown capability blocks publish. Exact deployed-version, resource,
+consent-purpose and provider readiness is mutable activation evidence.
+
 Next capability slices add:
 
 - waits: `delay_for`, `wait_until`, `wait_for_event`;
@@ -297,16 +317,29 @@ define those outcomes.
 - one execution token per run;
 - a condition chooses exactly one branch;
 - no implicit parallel fan-out;
-- no fan-in merge;
+- no fan-in merge: any `in-degree > 1` is invalid, including reconvergence of
+  mutually exclusive condition branches;
 - no cycles;
 - all reachable non-terminal paths end at a terminal node;
 - configurable graph/node/edge limits are validated before publish.
+
+The V2 transport schema has hard safety caps of 200 nodes and 400 edges. The
+compiler also receives validated policy limits at or below those caps; a
+stricter plan/tenant limit is a publish blocker, not a parser relaxation.
 
 Parallel split/join and arbitrary graph cycles require a future graph schema
 with formal token and join semantics. They are not inferred from multiple
 edges. Repeated reminders/data checks use the typed `repeat_until` composite,
 whose internal attempt counter, wait policy, maximum duration and terminal
 outcome are explicit; users cannot draw an unbounded back edge.
+
+V1 remains a read/export legacy format. New create/update/publish commands
+target V2 only after the control-plane migration reaches that command surface.
+V1 drafts require explicit deterministic migration; a node without a lossless
+mapping is a visible blocker, never a guessed conversion. Existing published
+V1 stays readable and non-activatable. Existing broad V1 templates remain
+versioned but unavailable until their owning capabilities have strict V2
+contracts.
 
 ### Reference capability traceability
 
@@ -1400,6 +1433,7 @@ Accessed 2026-08-02:
 - [React Flow performance guidance](https://reactflow.dev/learn/advanced-use/performance)
 - [W3C WCAG 2.2 dragging movements](https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html)
 - [PostgreSQL SELECT locking clauses](https://www.postgresql.org/docs/current/sql-select.html)
+- [Zod strict objects and discriminated unions](https://zod.dev/api)
 
 Repository evidence:
 
