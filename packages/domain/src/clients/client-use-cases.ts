@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { inspectChartCivilTime } from "../charts/chart-civil-time";
 import { normalizeRequiredString } from "../shared";
 import { BirthDataValidationError, ClientJoinIntentError } from "./client-errors";
 import type { ClientJoinIntentClaimStore, ClientStore } from "./client-store";
@@ -36,22 +37,29 @@ export function normalizeClientBirthDataInput(
 ): NormalizedClientBirthDataInput {
   const birthTime = normalizeOptionalToNull(input.birthTime);
   const birthTimePrecision = normalizeBirthTimePrecision(input.birthTimePrecision, birthTime);
-  const birthTimeDstOccurrence = normalizeBirthTimeDstOccurrence(input.birthTimeDstOccurrence);
+  const birthDate = normalizeBirthDate(input.birthDate);
+  const birthTimezone = normalizeOptionalToNull(input.birthTimezone);
+  const birthTimeDstOccurrence = normalizeRelevantBirthTimeDstOccurrence({
+    birthDate,
+    birthTime,
+    birthTimezone,
+    occurrence: normalizeBirthTimeDstOccurrence(input.birthTimeDstOccurrence)
+  });
   if (birthTimePrecision === "unknown" && birthTime !== null) {
     throw new BirthDataValidationError("Birth time must be empty when precision is unknown");
   }
 
   return {
     label: normalizeOptionalToNull(input.label),
-    birthDate: normalizeBirthDate(input.birthDate),
+    birthDate,
     birthTime: normalizeBirthTime(birthTime),
     birthTimePrecision,
     birthPlaceText: normalizeOptionalToNull(input.birthPlaceText),
     birthCountryCode: normalizeCountryCode(input.birthCountryCode),
     birthCity: normalizeOptionalToNull(input.birthCity),
     birthRegion: normalizeOptionalToNull(input.birthRegion),
-    birthTimezone: normalizeOptionalToNull(input.birthTimezone),
-    birthTimeDstOccurrence: birthTime === null ? null : birthTimeDstOccurrence,
+    birthTimezone,
+    birthTimeDstOccurrence,
     birthLatitude: normalizeCoordinate(input.birthLatitude, -90, 90, "Birth latitude is invalid"),
     birthLongitude: normalizeCoordinate(
       input.birthLongitude,
@@ -75,6 +83,28 @@ function normalizeBirthTimeDstOccurrence(
     throw new BirthDataValidationError("Birth time DST occurrence is invalid");
   }
   return normalized as ClientBirthTimeDstOccurrence;
+}
+
+function normalizeRelevantBirthTimeDstOccurrence(input: {
+  readonly birthDate: string | null;
+  readonly birthTime: string | null;
+  readonly birthTimezone: string | null;
+  readonly occurrence: ClientBirthTimeDstOccurrence | null;
+}): ClientBirthTimeDstOccurrence | null {
+  if (!input.birthDate || !input.birthTime || !input.birthTimezone || !input.occurrence) {
+    return null;
+  }
+  try {
+    return inspectChartCivilTime({
+      date: input.birthDate,
+      time: input.birthTime,
+      timeZone: input.birthTimezone
+    }).kind === "ambiguous"
+      ? input.occurrence
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function createClientJoinIntent(input: {

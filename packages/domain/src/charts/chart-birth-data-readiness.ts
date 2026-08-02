@@ -37,7 +37,16 @@ export function assertChartBirthDataReady(input: ChartBirthDataInput): ChartRead
   if (!parsedTimezone.success) {
     throw new ChartBirthDataReadinessError("CHART_BIRTH_TIMEZONE_INVALID");
   }
-  if (input.birthLatitude === null || input.birthLongitude === null) {
+  if (
+    input.birthLatitude === null ||
+    input.birthLongitude === null ||
+    !Number.isFinite(input.birthLatitude) ||
+    !Number.isFinite(input.birthLongitude) ||
+    input.birthLatitude < -90 ||
+    input.birthLatitude > 90 ||
+    input.birthLongitude < -180 ||
+    input.birthLongitude > 180
+  ) {
     throw new ChartBirthDataReadinessError("CHART_BIRTH_COORDINATES_REQUIRED");
   }
 

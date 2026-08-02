@@ -10,6 +10,8 @@ import {
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalCalculationRequestSchema,
+  chartSolarReturnCalculationRequestSchema,
+  chartProgressionResultV2Schema,
   chartProgressionJobCreateRequestSchema,
   chartSolarReturnJobCreateRequestSchema,
   chartSynastryJobCreateRequestSchema,
@@ -21,6 +23,107 @@ import {
 } from "./charts";
 
 describe("chart contracts", () => {
+  it("keeps historical v1 civil and render payloads frozen while v2 remains strict", () => {
+    const historical = {
+      schemaVersion: "chart-result.v1" as const,
+      method: "natal" as const,
+      provider: { name: "kerykeion" as const, version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: completeSettings(),
+      inputSnapshot: {
+        ...completeInputSnapshot(),
+        birthDate: "2026-02-31",
+        birthTime: "24:00",
+        timezone: "Not/AZone"
+      },
+      result: {
+        ...completeRenderResult(),
+        points: [...completeRenderResult().points, completeRenderResult().points[0]!],
+        aspects: [{ pointA: "sun", pointB: "sun", type: "conjunction", angle: 0, orb: 0 }],
+        distributions: {
+          elements: { fire: 10, earth: 0, air: 0, water: 1 },
+          modalities: { cardinal: 10, fixed: 0, mutable: 1 },
+          polarity: { masculine: 10, feminine: 1 }
+        }
+      }
+    };
+
+    expect(storedChartCalculationPayloadSchema.parse(historical)).toEqual(historical);
+    expect(() => chartResultSchema.parse({ ...completeV2NatalPayload(), result: historical.result })).toThrow();
+  });
+
+  it("rejects Placidus v2 calculation requests outside the Kerykeion latitude range", () => {
+    expect(
+      chartNatalCalculationRequestSchema.parse({
+        ...completeV2NatalRequest(),
+        inputSnapshot: { ...completeInputSnapshot(), latitude: 66 }
+      }).inputSnapshot.latitude
+    ).toBe(66);
+    expect(
+      chartNatalCalculationRequestSchema.parse({
+        ...completeV2NatalRequest(),
+        inputSnapshot: { ...completeInputSnapshot(), latitude: -66 }
+      }).inputSnapshot.latitude
+    ).toBe(-66);
+    for (const latitude of [66.000001, -66.000001]) {
+      expect(() =>
+        chartNatalCalculationRequestSchema.parse({
+          ...completeV2NatalRequest(),
+          inputSnapshot: { ...completeInputSnapshot(), latitude }
+        })
+      ).toThrow("CHART_KERYKEION_PLACIDUS_LATITUDE_UNSUPPORTED");
+    }
+  });
+
+  it("requires an IANA solar return location timezone in v2 requests", () => {
+    expect(() =>
+      chartSolarReturnCalculationRequestSchema.parse({
+        schemaVersion: "chart-request.v2",
+        method: "solar_return",
+        methodVersion: chartMethodVersions.solar_return,
+        executionProfile: localExecutionProfile(),
+        settings: completeSettings(),
+        inputSnapshot: completeInputSnapshot(),
+        solarReturnSnapshot: {
+          year: 2026,
+          returnType: "solar",
+          location: { timezone: "Not/AZone", latitude: 41.9028, longitude: 12.4964 }
+        }
+      })
+    ).toThrow();
+  });
+
+  it("accepts fractional elapsed life days in a v2 progression basis", () => {
+    expect(
+      chartProgressionResultV2Schema.parse({
+        schemaVersion: "chart-result.v2",
+        method: "progression",
+        methodVersion: chartMethodVersions.progression,
+        provider: completeV2NatalPayload().provider,
+        reproducibilityFingerprint: `sha256:${"b".repeat(64)}`,
+        settings: completeSettings(),
+        inputSnapshot: completeInputSnapshot(),
+        progressionSnapshot: {
+          targetDate: "2026-07-23",
+          progressionType: "secondary",
+          calculationBasis: { symbolicDate: "1990-08-20", ageDays: 36, dayForYearRatio: 1 }
+        },
+        calculationBasis: {
+          symbolicInstant: "1990-08-20T10:30:00Z",
+          elapsedLifeDays: 36.5,
+          elapsedYears: 0.1,
+          yearLengthDays: 365.24219,
+          dayForYearRatio: 1
+        },
+        result: {
+          natal: completeRenderResult(),
+          progressed: completeRenderResult(),
+          aspectsToNatal: [],
+          warnings: []
+        }
+      }).calculationBasis.elapsedLifeDays
+    ).toBe(36.5);
+  });
+
   it("rejects lexically valid but impossible civil chart inputs", () => {
     expect(() =>
       chartNatalCalculationRequestSchema.parse({

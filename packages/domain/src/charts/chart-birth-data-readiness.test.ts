@@ -77,4 +77,21 @@ describe("assertChartBirthDataReady", () => {
       "CHART_BIRTH_TIME_INVALID"
     );
   });
+
+  it("rejects non-finite and out-of-range coordinates while preserving zero", () => {
+    for (const input of [
+      { birthLatitude: Number.NaN, birthLongitude: 10 },
+      { birthLatitude: Number.POSITIVE_INFINITY, birthLongitude: 10 },
+      { birthLatitude: Number.NEGATIVE_INFINITY, birthLongitude: 10 },
+      { birthLatitude: 90.000001, birthLongitude: 10 },
+      { birthLatitude: 10, birthLongitude: 180.000001 }
+    ]) {
+      expect(() => assertChartBirthDataReady({ ...base, ...input })).toThrow(
+        "CHART_BIRTH_COORDINATES_REQUIRED"
+      );
+    }
+    expect(
+      assertChartBirthDataReady({ ...base, birthLatitude: 0, birthLongitude: 0 })
+    ).toMatchObject({ birthLatitude: 0, birthLongitude: 0 });
+  });
 });

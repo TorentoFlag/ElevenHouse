@@ -21,12 +21,42 @@ describe("client birth-data normalization", () => {
     ).toThrow(BirthDataValidationError);
   });
 
-  it("drops a DST occurrence when no civil time exists", () => {
+  it("preserves DST occurrence only for a genuine fold", () => {
     expect(
       normalizeClientBirthDataInput({
         birthDate: "2026-02-28",
         birthTime: null,
         birthTimePrecision: "unknown",
+        birthTimeDstOccurrence: "first",
+        source: "client_profile"
+      })
+    ).toMatchObject({ birthTimeDstOccurrence: null });
+    expect(
+      normalizeClientBirthDataInput({
+        birthDate: "2024-10-27",
+        birthTime: "02:30",
+        birthTimePrecision: "exact",
+        birthTimezone: "Europe/Berlin",
+        birthTimeDstOccurrence: "first",
+        source: "client_profile"
+      })
+    ).toMatchObject({ birthTimeDstOccurrence: "first" });
+    expect(
+      normalizeClientBirthDataInput({
+        birthDate: "2024-10-27",
+        birthTime: "02:30",
+        birthTimePrecision: "exact",
+        birthTimezone: "Europe/Berlin",
+        birthTimeDstOccurrence: "second",
+        source: "client_profile"
+      })
+    ).toMatchObject({ birthTimeDstOccurrence: "second" });
+    expect(
+      normalizeClientBirthDataInput({
+        birthDate: "2026-02-28",
+        birthTime: "10:30",
+        birthTimePrecision: "exact",
+        birthTimezone: "Europe/Rome",
         birthTimeDstOccurrence: "first",
         source: "client_profile"
       })
