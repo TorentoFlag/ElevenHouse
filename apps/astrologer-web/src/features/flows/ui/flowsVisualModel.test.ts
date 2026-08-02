@@ -53,7 +53,6 @@ describe("flows visual model", () => {
       completedRuns: null,
       conversionRate: null
     });
-    expect(card.automationStateLabel).toBe("Автоматизация не запущена");
     expect(card.pathPreview).toEqual(["Новый лид", "Черновик ответа"]);
   });
 

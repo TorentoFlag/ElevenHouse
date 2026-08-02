@@ -539,10 +539,64 @@ export const listFlowsQuerySchema = z
 export type ListFlowsQueryInput = z.input<typeof listFlowsQuerySchema>;
 export type ListFlowsQuery = z.infer<typeof listFlowsQuerySchema>;
 
+export const flowRuntimeAvailabilitySchema = z
+  .object({
+    mode: z.enum(["definition_only", "canary", "enabled"]),
+    executionAvailable: z.boolean(),
+    reasonCode: z.literal("FLOW_RUNTIME_EXECUTION_UNAVAILABLE").nullable(),
+    historySemantics: z.enum(["legacy_preview", "mixed", "durable_execution"])
+  })
+  .strict()
+  .superRefine((availability, context) => {
+    if (
+      availability.mode === "definition_only" &&
+      (availability.executionAvailable ||
+        availability.reasonCode !== "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" ||
+        availability.historySemantics !== "legacy_preview")
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Definition-only flow runtime must fail closed with legacy-preview history"
+      });
+    }
+    if (availability.executionAvailable === (availability.reasonCode !== null)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Flow runtime availability and reason code are inconsistent"
+      });
+    }
+    if (availability.mode === "enabled" && !availability.executionAvailable) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enabled flow runtime must be executable"
+      });
+    }
+    if (
+      availability.mode === "enabled" &&
+      availability.historySemantics !== "durable_execution"
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enabled flow runtime must expose durable execution history"
+      });
+    }
+    if (
+      availability.mode === "canary" &&
+      availability.historySemantics === "legacy_preview"
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Canary flow runtime must distinguish rollout history"
+      });
+    }
+  });
+export type FlowRuntimeAvailability = z.infer<typeof flowRuntimeAvailabilitySchema>;
+
 export const listFlowsResponseSchema = z
   .object({
     flows: z.array(flowResponseSchema).max(100),
-    total: z.number().int().min(0)
+    total: z.number().int().min(0),
+    runtime: flowRuntimeAvailabilitySchema
   })
   .strict();
 export type ListFlowsResponse = z.infer<typeof listFlowsResponseSchema>;
@@ -573,14 +627,16 @@ export type ListFlowRunsQuery = z.infer<typeof listFlowRunsQuerySchema>;
 export const listFlowRunsResponseSchema = z
   .object({
     runs: z.array(flowRunResponseSchema).max(100),
-    total: z.number().int().min(0)
+    total: z.number().int().min(0),
+    runtime: flowRuntimeAvailabilitySchema
   })
   .strict();
 export type ListFlowRunsResponse = z.infer<typeof listFlowRunsResponseSchema>;
 
 export const getFlowRunResponseSchema = z
   .object({
-    run: flowRunResponseSchema
+    run: flowRunResponseSchema,
+    runtime: flowRuntimeAvailabilitySchema
   })
   .strict();
 export type GetFlowRunResponse = z.infer<typeof getFlowRunResponseSchema>;
@@ -605,7 +661,8 @@ export type ListFlowApprovalsQuery = z.infer<typeof listFlowApprovalsQuerySchema
 export const listFlowApprovalsResponseSchema = z
   .object({
     approvals: z.array(flowApprovalSchema).max(100),
-    total: z.number().int().min(0)
+    total: z.number().int().min(0),
+    runtime: flowRuntimeAvailabilitySchema
   })
   .strict();
 export type ListFlowApprovalsResponse = z.infer<typeof listFlowApprovalsResponseSchema>;

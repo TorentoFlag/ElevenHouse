@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
+import type { FlowRuntimeAvailability } from "@elevenhouse/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardPage } from "./DashboardPage";
 
@@ -35,7 +36,7 @@ describe("DashboardPage", () => {
       }
     });
     mocks.useFlowApprovalsQuery.mockReturnValue({
-      data: { approvals: [approval], total: 1 },
+      data: { approvals: [approval], total: 1, runtime: definitionOnlyRuntime },
       isLoading: false,
       error: null
     });
@@ -43,17 +44,36 @@ describe("DashboardPage", () => {
 
   afterEach(() => cleanup());
 
-  it("renders pending flow approvals as dashboard tasks linked to flows", () => {
+  it("does not present legacy preview approvals as live dashboard tasks", () => {
     render(<DashboardPage />);
 
     expect(screen.getByText("Задачи из воронок")).toBeTruthy();
-    expect(screen.getByText("Проверить AI-черновик")).toBeTruthy();
-    expect(screen.getByText("Сообщение клиенту ожидает подтверждения.")).toBeTruthy();
+    expect(screen.queryByText("Проверить AI-черновик")).toBeNull();
+    expect(screen.queryByText("Сообщение клиенту ожидает подтверждения.")).toBeNull();
+    expect(
+      screen.getByText(
+        "Исполнение воронок пока недоступно. Архивные подтверждения не показаны как рабочие задачи."
+      )
+    ).toBeTruthy();
     expect(screen.getByRole("link", { name: "Открыть воронки" })).toHaveProperty(
       "pathname",
       "/flows"
     );
     expect(screen.queryByText("Сообщение отправлено")).toBeNull();
+  });
+
+  it("renders approvals only when the server confirms durable execution history", () => {
+    mocks.useFlowApprovalsQuery.mockReturnValue({
+      data: { approvals: [approval], total: 1, runtime: durableRuntime },
+      isLoading: false,
+      isError: false,
+      error: null
+    });
+
+    render(<DashboardPage />);
+
+    expect(screen.getByText("Проверить AI-черновик")).toBeTruthy();
+    expect(screen.getByText("Сообщение клиенту ожидает подтверждения.")).toBeTruthy();
   });
 
   it("shows an explicit alert when pending flow approvals fail to load", () => {
@@ -84,3 +104,17 @@ const approval = {
   createdAt: "2026-07-28T08:01:00.000Z",
   decidedAt: null
 };
+
+const definitionOnlyRuntime = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} satisfies FlowRuntimeAvailability;
+
+const durableRuntime = {
+  mode: "enabled",
+  executionAvailable: true,
+  reasonCode: null,
+  historySemantics: "durable_execution"
+} satisfies FlowRuntimeAvailability;

@@ -1,7 +1,18 @@
-import type { FlowApproval, FlowApprovalDecision } from "@elevenhouse/contracts";
+import type {
+  FlowApproval,
+  FlowApprovalDecision,
+  FlowRuntimeAvailability
+} from "@elevenhouse/contracts";
+import {
+  buildFlowRuntimePresentation,
+  canProjectLiveFlowRuntime,
+  flowApprovalDecisionUnavailableMessageRu,
+  flowApprovalMixedHistoryMessageRu
+} from "../model/flowRuntimePresentation";
 
 export type FlowApprovalQueueProps = {
   readonly approvals: readonly FlowApproval[];
+  readonly runtimeAvailability?: FlowRuntimeAvailability | null;
   readonly onDecision?: (approvalId: string, decision: FlowApprovalDecision) => void;
   readonly isLoading?: boolean;
   readonly isDeciding?: boolean;
@@ -19,6 +30,7 @@ const approvalKindLabel = {
 
 export function FlowApprovalQueue({
   approvals,
+  runtimeAvailability = null,
   onDecision,
   isLoading = false,
   isDeciding = false,
@@ -27,6 +39,13 @@ export function FlowApprovalQueue({
 }: FlowApprovalQueueProps) {
   const className = (name: string) => classNames?.[name] ?? "";
   const pendingApprovals = approvals.filter((approval) => approval.status === "pending");
+  const runtime = buildFlowRuntimePresentation(runtimeAvailability);
+  const canDecide = canProjectLiveFlowRuntime(runtimeAvailability);
+  const decisionUnavailableReason = runtime.historyIsLegacyPreview
+    ? flowApprovalDecisionUnavailableMessageRu
+    : runtimeAvailability?.historySemantics === "mixed"
+      ? flowApprovalMixedHistoryMessageRu
+      : runtime.unavailableReason;
 
   return (
     <section className={className("approvalQueue")} aria-label="Подтверждения воронок">
@@ -35,6 +54,11 @@ export function FlowApprovalQueue({
         <h2>Ожидает подтверждения</h2>
       </header>
       {error ? <p className={className("runtimeError")} role="alert">{error.message}</p> : null}
+      {!isLoading && pendingApprovals.length > 0 && !canDecide ? (
+        <p className={className("runtimeNotice")} role="status">
+          {decisionUnavailableReason}
+        </p>
+      ) : null}
       {isLoading ? (
         <p className={className("runtimeEmpty")}>Загружаем подтверждения</p>
       ) : pendingApprovals.length === 0 ? (
@@ -49,22 +73,28 @@ export function FlowApprovalQueue({
               <div className={className("approvalActions")}>
                 <button
                   type="button"
-                  disabled={!onDecision || isDeciding}
-                  onClick={() => onDecision?.(approval.id, "approved")}
+                  disabled={!canDecide || !onDecision || isDeciding}
+                  onClick={() => {
+                    if (canDecide) onDecision?.(approval.id, "approved");
+                  }}
                 >
                   Утвердить
                 </button>
                 <button
                   type="button"
-                  disabled={!onDecision || isDeciding}
-                  onClick={() => onDecision?.(approval.id, "rejected")}
+                  disabled={!canDecide || !onDecision || isDeciding}
+                  onClick={() => {
+                    if (canDecide) onDecision?.(approval.id, "rejected");
+                  }}
                 >
                   Отклонить
                 </button>
                 <button
                   type="button"
-                  disabled={!onDecision || isDeciding}
-                  onClick={() => onDecision?.(approval.id, "snoozed")}
+                  disabled={!canDecide || !onDecision || isDeciding}
+                  onClick={() => {
+                    if (canDecide) onDecision?.(approval.id, "snoozed");
+                  }}
                 >
                   Отложить
                 </button>

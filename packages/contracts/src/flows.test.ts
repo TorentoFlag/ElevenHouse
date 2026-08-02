@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   flowApprovalModeSchema,
+  flowRuntimeAvailabilitySchema,
   flowRuntimeEventSchema,
   flowGraphSchema,
   createFlowRequestSchema,
@@ -63,6 +64,13 @@ const baseGraph = {
     }
   ]
 } satisfies FlowGraph;
+
+const runtimeAvailability = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} as const;
 
 describe("flow contracts", () => {
   it("parses a safe graph with one trigger and an internal action", () => {
@@ -195,12 +203,48 @@ describe("flow contracts", () => {
 
     expect(flowStepRunResponseSchema.parse(stepRun)).toEqual(stepRun);
     expect(flowRunResponseSchema.parse(run)).toEqual(run);
-    expect(listFlowRunsResponseSchema.safeParse({ runs: Array(101).fill(run), total: 101 }).success).toBe(
-      false
-    );
+    expect(flowRuntimeAvailabilitySchema.parse(runtimeAvailability)).toEqual(runtimeAvailability);
     expect(
-      listFlowApprovalsResponseSchema.safeParse({ approvals: Array(101).fill(approval), total: 101 })
-        .success
+      flowRuntimeAvailabilitySchema.safeParse({
+        ...runtimeAvailability,
+        executionAvailable: true
+      }).success
+    ).toBe(false);
+    expect(
+      listFlowRunsResponseSchema.safeParse({
+        runs: Array(101).fill(run),
+        total: 101,
+        runtime: runtimeAvailability
+      }).success
+    ).toBe(false);
+    expect(
+      listFlowApprovalsResponseSchema.safeParse({
+        approvals: Array(101).fill(approval),
+        total: 101,
+        runtime: runtimeAvailability
+      }).success
+    ).toBe(false);
+  });
+
+  it("rejects enabled runtime metadata with non-durable history semantics", () => {
+    expect(
+      flowRuntimeAvailabilitySchema.safeParse({
+        mode: "enabled",
+        executionAvailable: true,
+        reasonCode: null,
+        historySemantics: "legacy_preview"
+      }).success
+    ).toBe(false);
+  });
+
+  it("rejects canary runtime metadata with legacy-only history semantics", () => {
+    expect(
+      flowRuntimeAvailabilitySchema.safeParse({
+        mode: "canary",
+        executionAvailable: true,
+        reasonCode: null,
+        historySemantics: "legacy_preview"
+      }).success
     ).toBe(false);
   });
 
@@ -230,7 +274,10 @@ describe("flow contracts", () => {
       completedAt: "2026-07-28T10:00:00.000Z"
     };
 
-    expect(getFlowRunResponseSchema.parse({ run })).toEqual({ run });
+    expect(getFlowRunResponseSchema.parse({ run, runtime: runtimeAvailability })).toEqual({
+      run,
+      runtime: runtimeAvailability
+    });
     expect(cancelFlowRunResponseSchema.parse({ run: { ...run, status: "canceled" } })).toEqual({
       run: { ...run, status: "canceled" }
     });
@@ -292,9 +339,16 @@ describe("flow contracts", () => {
       name: "Новая воронка"
     });
     expect(flowResponseSchema.parse(flowResponse)).toEqual(flowResponse);
-    expect(listFlowsResponseSchema.parse({ flows: [flowResponse], total: 1 })).toEqual({
+    expect(
+      listFlowsResponseSchema.parse({
+        flows: [flowResponse],
+        total: 1,
+        runtime: runtimeAvailability
+      })
+    ).toEqual({
       flows: [flowResponse],
-      total: 1
+      total: 1,
+      runtime: runtimeAvailability
     });
     expect(publishFlowResponseSchema.parse({ flow: flowResponse, version: null })).toEqual({
       flow: flowResponse,

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { FlowApproval } from "@elevenhouse/contracts";
+import type { FlowApproval, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowApprovalQueue } from "./FlowApprovalQueue";
@@ -25,6 +25,27 @@ const approvedApproval = {
   decidedAt: "2026-07-28T08:04:00.000Z"
 } satisfies FlowApproval;
 
+const definitionOnlyRuntime = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} satisfies FlowRuntimeAvailability;
+
+const mixedCanaryRuntime = {
+  mode: "canary",
+  executionAvailable: true,
+  reasonCode: null,
+  historySemantics: "mixed"
+} satisfies FlowRuntimeAvailability;
+
+const durableRuntime = {
+  mode: "enabled",
+  executionAvailable: true,
+  reasonCode: null,
+  historySemantics: "durable_execution"
+} satisfies FlowRuntimeAvailability;
+
 describe("FlowApprovalQueue", () => {
   afterEach(() => cleanup());
 
@@ -36,9 +57,64 @@ describe("FlowApprovalQueue", () => {
     expect(screen.queryByText("Уже утверждено")).toBeNull();
   });
 
-  it("calls approve, reject, and snooze handlers", () => {
+  it("keeps legacy approval decisions read-only without invoking callbacks", () => {
     const onDecision = vi.fn();
-    render(<FlowApprovalQueue approvals={[pendingApproval]} onDecision={onDecision} />);
+    render(
+      <FlowApprovalQueue
+        approvals={[pendingApproval]}
+        runtimeAvailability={definitionOnlyRuntime}
+        onDecision={onDecision}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        "Архивные подтверждения доступны только для просмотра; решения по ним не выполняются."
+      )
+    ).toBeTruthy();
+
+    const approveButton = screen.getByRole("button", { name: "Утвердить" });
+    const rejectButton = screen.getByRole("button", { name: "Отклонить" });
+    const snoozeButton = screen.getByRole("button", { name: "Отложить" });
+    expect(approveButton).toHaveProperty("disabled", true);
+    expect(rejectButton).toHaveProperty("disabled", true);
+    expect(snoozeButton).toHaveProperty("disabled", true);
+
+    fireEvent.click(approveButton);
+    fireEvent.click(rejectButton);
+    fireEvent.click(snoozeButton);
+
+    expect(onDecision).not.toHaveBeenCalled();
+  });
+
+  it("keeps mixed canary approvals read-only until rows have durable provenance", () => {
+    const onDecision = vi.fn();
+    render(
+      <FlowApprovalQueue
+        approvals={[pendingApproval]}
+        runtimeAvailability={mixedCanaryRuntime}
+        onDecision={onDecision}
+      />
+    );
+
+    expect(
+      screen.getByText("Подтверждения из переходной истории доступны только для просмотра.")
+    ).toBeTruthy();
+    const approveButton = screen.getByRole("button", { name: "Утвердить" });
+    expect(approveButton).toHaveProperty("disabled", true);
+    fireEvent.click(approveButton);
+    expect(onDecision).not.toHaveBeenCalled();
+  });
+
+  it("dispatches decisions only for durable execution history", () => {
+    const onDecision = vi.fn();
+    render(
+      <FlowApprovalQueue
+        approvals={[pendingApproval]}
+        runtimeAvailability={durableRuntime}
+        onDecision={onDecision}
+      />
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Утвердить" }));
     fireEvent.click(screen.getByRole("button", { name: "Отклонить" }));

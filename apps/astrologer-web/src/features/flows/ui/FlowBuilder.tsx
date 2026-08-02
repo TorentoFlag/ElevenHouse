@@ -5,6 +5,7 @@ import type {
   FlowGraph,
   FlowNode,
   FlowRunResponse,
+  FlowRuntimeAvailability,
   SimulateFlowRunResponse,
   FlowResponse
 } from "@elevenhouse/contracts";
@@ -16,6 +17,7 @@ import {
   type FlowPaletteNodeId
 } from "../model/flowDraftEditor";
 import { flowStatusLabelRu } from "../model/flowDisplay";
+import { buildFlowRuntimePresentation } from "../model/flowRuntimePresentation";
 import { FlowApprovalQueue } from "./FlowApprovalQueue";
 import { FlowBuilderCanvas } from "./FlowBuilderCanvas";
 import { FlowBuilderInspector } from "./FlowBuilderInspector";
@@ -30,6 +32,8 @@ export type FlowBuilderProps = {
   readonly runs?: readonly FlowRunResponse[];
   readonly approvals?: readonly FlowApproval[];
   readonly simulation?: SimulateFlowRunResponse | null;
+  readonly runtimeAvailability?: FlowRuntimeAvailability | null;
+  readonly approvalRuntimeAvailability?: FlowRuntimeAvailability | null;
   readonly onSimulate?: (flowId: string) => void;
   readonly onCreateManualRun?: (flowId: string) => void;
   readonly onApprovalDecision?: (approvalId: string, decision: FlowApprovalDecision) => void;
@@ -55,6 +59,8 @@ export function FlowBuilder({
   runs = [],
   approvals = [],
   simulation = null,
+  runtimeAvailability = null,
+  approvalRuntimeAvailability = null,
   onSimulate,
   onCreateManualRun,
   onApprovalDecision,
@@ -75,7 +81,9 @@ export function FlowBuilder({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(flow.draftGraph.nodes[0]?.id ?? null);
   const currentFlowId = useRef(flow.id);
   const selectedNode = draftGraph.nodes.find((node) => node.id === selectedNodeId) ?? null;
-  const canRunPublishedVersion = flow.publishedVersionId !== null;
+  const hasPublishedVersion = flow.publishedVersionId !== null;
+  const runtime = buildFlowRuntimePresentation(runtimeAvailability);
+  const canRunPublishedVersion = hasPublishedVersion && runtime.executionAvailable;
   const canPublishDraft = flow.status === "draft";
 
   useEffect(() => {
@@ -124,7 +132,9 @@ export function FlowBuilder({
             className={classNames?.builderTestRunButton ?? ""}
             type="button"
             disabled={!canRunPublishedVersion || !onSimulate || isSimulating}
-            onClick={() => onSimulate?.(flow.id)}
+            onClick={() => {
+              if (canRunPublishedVersion) onSimulate?.(flow.id);
+            }}
           >
             {isSimulating ? "Проверяем" : "Тестовый прогон"}
           </button>
@@ -177,18 +187,19 @@ export function FlowBuilder({
           <FlowRuntimePanel
             runs={runs}
             simulation={canRunPublishedVersion ? simulation : null}
+            runtimeAvailability={runtimeAvailability}
             onSimulate={
-              canRunPublishedVersion && onSimulate ? () => onSimulate(flow.id) : undefined
+              hasPublishedVersion && onSimulate ? () => onSimulate(flow.id) : undefined
             }
             onCreateManualRun={
-              canRunPublishedVersion && onCreateManualRun ? () => onCreateManualRun(flow.id) : undefined
+              hasPublishedVersion && onCreateManualRun ? () => onCreateManualRun(flow.id) : undefined
             }
             isLoadingRuns={isLoadingRuns}
             isSimulating={isSimulating}
             isCreatingManualRun={isCreatingManualRun}
-            error={canRunPublishedVersion ? runtimeError : null}
+            error={hasPublishedVersion ? runtimeError : null}
             unavailableReason={
-              canRunPublishedVersion
+              hasPublishedVersion
                 ? null
                 : "Опубликуйте воронку, чтобы запускать тесты и ручные запуски."
             }
@@ -196,6 +207,7 @@ export function FlowBuilder({
           />
           <FlowApprovalQueue
             approvals={approvals}
+            runtimeAvailability={approvalRuntimeAvailability}
             onDecision={onApprovalDecision}
             isLoading={isLoadingApprovals}
             isDeciding={isDecidingApproval}

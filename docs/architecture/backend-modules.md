@@ -130,7 +130,11 @@ belong in future `admin-api` feature modules, not in `public-api` or
 - `Flows`: Flows owns automation definitions, versions, runtime runs and approvals.
   It orchestrates module use cases through explicit ports/jobs and must not
   implement payment, booking, messaging delivery or chart calculation logic
-  inside controllers or app-local scripts.
+  inside controllers or app-local scripts. The current deployable surface is
+  `definition_only`: legacy runtime history remains readable and explicitly
+  marked `legacy_preview`, while activation, simulation, enrollment, manual
+  execution, run cancellation and approval decisions fail closed until the
+  PostgreSQL durable `flow-graph.v2` interpreter is available.
 - `Subscriptions`: recurring client subscriptions и platform plans для астрологов.
 - `BirthData`: дата, время, место рождения и правила consented sharing.
 - `Calculations`: owner-scoped current calculation result, participants, client

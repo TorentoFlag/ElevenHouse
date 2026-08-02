@@ -1,4 +1,9 @@
-import type { FlowResponse, FlowRunResponse, MessagingThread } from "@elevenhouse/contracts";
+import type {
+  FlowResponse,
+  FlowRunResponse,
+  FlowRuntimeAvailability,
+  MessagingThread
+} from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
 import { buildInboxFlowContexts } from "./inboxFlowContexts";
 
@@ -8,6 +13,7 @@ describe("buildInboxFlowContexts", () => {
       buildInboxFlowContexts({
         threads: [thread],
         flows: [flow],
+        runtimeAvailability: durableRuntime,
         runsByFlowId: {
           [flow.id]: [
             {
@@ -37,6 +43,7 @@ describe("buildInboxFlowContexts", () => {
       buildInboxFlowContexts({
         threads: [thread],
         flows: [flow],
+        runtimeAvailability: durableRuntime,
         runsByFlowId: {
           [flow.id]: [
             {
@@ -64,7 +71,43 @@ describe("buildInboxFlowContexts", () => {
       })
     ).toEqual([]);
   });
+
+  it("does not project legacy preview runs as live inbox context", () => {
+    expect(
+      buildInboxFlowContexts({
+        threads: [thread],
+        flows: [flow],
+        runtimeAvailability: definitionOnlyRuntime,
+        runsByFlowId: {
+          [flow.id]: [
+            {
+              ...run,
+              snapshot: {
+                ...run.snapshot,
+                subjectType: "client",
+                subjectId: thread.clientUserId
+              }
+            }
+          ]
+        }
+      })
+    ).toEqual([]);
+  });
 });
+
+const definitionOnlyRuntime = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} satisfies FlowRuntimeAvailability;
+
+const durableRuntime = {
+  mode: "enabled",
+  executionAvailable: true,
+  reasonCode: null,
+  historySemantics: "durable_execution"
+} satisfies FlowRuntimeAvailability;
 
 const thread = {
   id: "11111111-1111-4111-8111-111111111111",

@@ -2,6 +2,7 @@ import type {
   CreateFlowRequest,
   FlowResponse,
   FlowRunResponse,
+  FlowRuntimeAvailability,
   FlowApproval,
   FlowTemplate,
   ListFlowApprovalsResponse,
@@ -28,6 +29,13 @@ import { updateFlowDraft } from "./updateFlowDraft";
 
 const flowId = "11111111-1111-4111-8111-111111111111";
 const ownerUserId = "22222222-2222-4222-8222-222222222222";
+
+const definitionOnlyRuntime = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} satisfies FlowRuntimeAvailability;
 
 const graph = {
   schemaVersion: "flow-graph.v1",
@@ -127,7 +135,11 @@ describe("flows API", () => {
   });
 
   it("loads flows with serialized filters through the shared response contract", async () => {
-    const response = { flows: [flowResponse], total: 1 } satisfies ListFlowsResponse;
+    const response = {
+      flows: [flowResponse],
+      total: 1,
+      runtime: definitionOnlyRuntime
+    } satisfies ListFlowsResponse;
     const get = vi.spyOn(application.http, "get").mockResolvedValue(response);
 
     await expect(listFlows({ status: "draft", limit: 20, offset: 40 })).resolves.toEqual(
@@ -264,8 +276,16 @@ describe("flows API", () => {
   });
 
   it("loads runtime runs and approvals through shared response contracts", async () => {
-    const runsResponse = { runs: [run], total: 1 } satisfies ListFlowRunsResponse;
-    const approvalsResponse = { approvals: [approval], total: 1 } satisfies ListFlowApprovalsResponse;
+    const runsResponse = {
+      runs: [run],
+      total: 1,
+      runtime: definitionOnlyRuntime
+    } satisfies ListFlowRunsResponse;
+    const approvalsResponse = {
+      approvals: [approval],
+      total: 1,
+      runtime: definitionOnlyRuntime
+    } satisfies ListFlowApprovalsResponse;
     const get = vi
       .spyOn(application.http, "get")
       .mockResolvedValueOnce(runsResponse)

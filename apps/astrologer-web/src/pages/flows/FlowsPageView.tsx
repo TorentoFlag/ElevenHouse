@@ -4,6 +4,7 @@ import type {
   FlowGraph,
   FlowResponse,
   FlowRunResponse,
+  FlowRuntimeAvailability,
   FlowTemplate,
   SimulateFlowRunResponse
 } from "@elevenhouse/contracts";
@@ -28,6 +29,9 @@ export type FlowsPageViewProps = {
   readonly runs?: readonly FlowRunResponse[];
   readonly approvals?: readonly FlowApproval[];
   readonly simulation?: SimulateFlowRunResponse | null;
+  readonly runtimeAvailability?: FlowRuntimeAvailability | null;
+  readonly runRuntimeAvailability?: FlowRuntimeAvailability | null;
+  readonly approvalRuntimeAvailability?: FlowRuntimeAvailability | null;
   readonly onSimulate?: (flowId: string) => void;
   readonly onCreateManualRun?: (flowId: string) => void;
   readonly onApprovalDecision?: (approvalId: string, decision: FlowApprovalDecision) => void;
@@ -63,6 +67,9 @@ export function FlowsPageView({
   runs = [],
   approvals = [],
   simulation = null,
+  runtimeAvailability = null,
+  runRuntimeAvailability = null,
+  approvalRuntimeAvailability = null,
   onSimulate,
   onCreateManualRun,
   onApprovalDecision,
@@ -93,6 +100,8 @@ export function FlowsPageView({
         runs={runs}
         approvals={approvals}
         simulation={simulation}
+        runtimeAvailability={runRuntimeAvailability}
+        approvalRuntimeAvailability={approvalRuntimeAvailability}
         onSimulate={onSimulate}
         onCreateManualRun={onCreateManualRun}
         onApprovalDecision={onApprovalDecision}
@@ -131,6 +140,7 @@ export function FlowsPageView({
           <FlowGallery
             flows={flows}
             templates={templates}
+            runtimeAvailability={runtimeAvailability}
             onCreateFlow={onCreateFlow}
             isCreating={isCreating}
             onOpenFlow={onOpenFlow}
@@ -140,6 +150,7 @@ export function FlowsPageView({
           />
           <FlowsMobileList
             flows={flows}
+            runtimeAvailability={runtimeAvailability}
             onOpenFlow={onOpenFlow}
             onAutomationToggle={onAutomationToggle}
             isTogglingAutomation={isTogglingAutomation}

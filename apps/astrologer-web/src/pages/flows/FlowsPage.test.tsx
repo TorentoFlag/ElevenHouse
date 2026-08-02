@@ -20,6 +20,13 @@ const mocks = vi.hoisted(() => ({
   useSimulateFlowRunMutation: vi.fn()
 }));
 
+const definitionOnlyRuntime = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} as const;
+
 vi.mock("../../common/hooks/useDocumentTitle", () => ({
   useDocumentTitle: mocks.useDocumentTitle
 }));
@@ -77,7 +84,7 @@ describe("FlowsPage", () => {
     vi.clearAllMocks();
     window.history.replaceState(null, "", "/flows");
     mocks.useFlowListQuery.mockReturnValue({
-      data: { flows: [flow], total: 1 },
+      data: { flows: [flow], total: 1, runtime: definitionOnlyRuntime },
       isLoading: false,
       isError: false
     });
@@ -87,12 +94,12 @@ describe("FlowsPage", () => {
       isError: false
     });
     mocks.useFlowRunsQuery.mockReturnValue({
-      data: { runs: [], total: 0 },
+      data: { runs: [], total: 0, runtime: definitionOnlyRuntime },
       isLoading: false,
       error: null
     });
     mocks.useFlowApprovalsQuery.mockReturnValue({
-      data: { approvals: [], total: 0 },
+      data: { approvals: [], total: 0, runtime: definitionOnlyRuntime },
       isLoading: false,
       error: null
     });
@@ -211,7 +218,7 @@ describe("FlowsPage", () => {
     expect(screen.queryByText("Черновик")).toBeNull();
   });
 
-  it("toggles published flow automation through activation commands", () => {
+  it("blocks activation from definition-only metadata but still pauses an active flow", () => {
     const activate = vi.fn();
     const pause = vi.fn();
     mocks.useFlowListQuery.mockReturnValue({
@@ -232,7 +239,8 @@ describe("FlowsPage", () => {
             publishedAt: "2026-07-30T14:45:00.000Z"
           }
         ],
-        total: 2
+        total: 2,
+        runtime: definitionOnlyRuntime
       },
       isLoading: false,
       isError: false
@@ -242,17 +250,28 @@ describe("FlowsPage", () => {
 
     render(<FlowsPage />);
 
-    fireEvent.click(screen.getAllByRole("switch", { name: "Включить автоматизацию" })[0]!);
-    fireEvent.click(screen.getAllByRole("switch", { name: "Автоматизация активна" })[0]!);
+    const unavailableToggles = screen.getAllByRole("switch", {
+      name: "Исполнение этой версии воронки недоступно"
+    });
+    expect(unavailableToggles).toHaveLength(2);
+    expect(unavailableToggles[0]).toHaveProperty("disabled", true);
+    expect(unavailableToggles[1]).toHaveProperty("disabled", true);
+    unavailableToggles.forEach((toggle) => fireEvent.click(toggle));
+    expect(screen.getAllByText("Исполнение отключено")).toHaveLength(2);
+    fireEvent.click(
+      screen.getAllByRole("switch", {
+        name: "Исполнение отключено; сохраненную активацию можно поставить на паузу"
+      })[0]!
+    );
 
-    expect(activate).toHaveBeenCalledWith(flow.id);
+    expect(activate).not.toHaveBeenCalled();
     expect(pause).toHaveBeenCalledWith(otherFlow.id);
   });
 
   it("does not keep a simulation result when another flow is opened", () => {
     const resetSimulation = vi.fn();
     mocks.useFlowListQuery.mockReturnValue({
-      data: { flows: [flow, otherFlow], total: 2 },
+      data: { flows: [flow, otherFlow], total: 2, runtime: definitionOnlyRuntime },
       isLoading: false,
       isError: false
     });

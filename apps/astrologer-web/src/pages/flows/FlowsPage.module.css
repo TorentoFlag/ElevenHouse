@@ -917,6 +917,7 @@
 .runtimeRunList em,
 .runtimeWarnings li,
 .runtimeEmpty,
+.runtimeNotice,
 .runtimeError,
 .approvalList p {
   margin: 0;
@@ -925,6 +926,14 @@
   font-style: normal;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.runtimeNotice {
+  border-left: 2px solid var(--flows-gold-line);
+  padding: 8px 10px;
+  border-radius: 0 8px 8px 0;
+  background: var(--flows-gold-soft);
+  color: var(--eh-color-moon-120);
 }
 
 .runtimeWarnings li {

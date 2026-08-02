@@ -69,20 +69,24 @@ export function FlowsPage() {
   };
 
   const simulateFlow = (flowId: string) => {
+    if (runsQuery.data?.runtime.executionAvailable !== true) return;
     simulateMutation.mutate({ flowId, body: createManualRuntimeRequest(flowId) });
   };
 
   const createManualRun = (flowId: string) => {
+    if (runsQuery.data?.runtime.executionAvailable !== true) return;
     manualRunMutation.mutate({ flowId, body: createManualRuntimeRequest(flowId) });
   };
 
   const decideApproval = (approvalId: string, decision: FlowApprovalDecision) => {
+    if (approvalsQuery.data?.runtime.executionAvailable !== true) return;
     decideApprovalMutation.mutate({ approvalId, body: { decision } });
   };
 
   const toggleAutomation = (flowId: string, activate: boolean) => {
     simulateMutation.reset();
     if (activate) {
+      if (flowsQuery.data?.runtime.executionAvailable !== true) return;
       activateFlowMutation.mutate(flowId);
     } else {
       pauseFlowMutation.mutate(flowId);
@@ -120,6 +124,9 @@ export function FlowsPage() {
       runs={runsQuery.data?.runs ?? []}
       approvals={approvalsQuery.data?.approvals ?? []}
       simulation={simulation}
+      runtimeAvailability={flowsQuery.data?.runtime ?? null}
+      runRuntimeAvailability={runsQuery.data?.runtime ?? null}
+      approvalRuntimeAvailability={approvalsQuery.data?.runtime ?? null}
       onSimulate={simulateFlow}
       onCreateManualRun={createManualRun}
       onApprovalDecision={decideApproval}

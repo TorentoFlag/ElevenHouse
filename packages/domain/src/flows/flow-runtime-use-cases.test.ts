@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FlowStore } from "./flow-store";
 import type { FlowRuntimeStore } from "./flow-runtime-store";
 import {
+  cancelFlowRun,
   createManualFlowRun,
   decideFlowApproval,
   dispatchFlowRuntimeEvent,
@@ -87,7 +88,7 @@ const version = {
 } satisfies FlowVersion;
 
 describe("flow runtime use cases", () => {
-  it("simulates a published flow without writing runtime records", async () => {
+  it("blocks the legacy simulation before any runtime-store access", async () => {
     const runtimeStore = createRuntimeStore();
 
     await expect(
@@ -109,22 +110,15 @@ describe("flow runtime use cases", () => {
           hasChannelConsent: true
         }
       })
-    ).resolves.toEqual({
-      flowId,
-      flowVersionId: versionId,
-      plannedSteps: [
-        { nodeId: "manual-trigger", status: "planned", reason: null },
-        { nodeId: "draft-reply", status: "approval_required", reason: "manual_approve" },
-        { nodeId: "create-task", status: "planned", reason: null }
-      ],
-      warnings: []
-    });
+    ).rejects.toMatchObject({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" });
 
     expect(runtimeStore.createEvent).not.toHaveBeenCalled();
     expect(runtimeStore.createRun).not.toHaveBeenCalled();
+    expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
+    expect(runtimeStore.findEventByDedupeKey).not.toHaveBeenCalled();
   });
 
-  it("stores a manual runtime event and creates pending approvals for manual review nodes", async () => {
+  it("blocks manual execution before replay or runtime persistence", async () => {
     const runtimeStore = createRuntimeStore();
 
     await expect(
@@ -148,174 +142,44 @@ describe("flow runtime use cases", () => {
         },
         now
       })
-    ).resolves.toMatchObject({
-      status: "created",
-      run: { id: runId, status: "approval_required" },
-      approvals: [{ id: approvalId, status: "pending", kind: "ai_output" }]
-    });
+    ).rejects.toMatchObject({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" });
 
-    expect(runtimeStore.createRunForEventDedupe).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: {
-          ownerUserId,
-          source: "manual",
-          sourceEventId: "manual:client-1:flow-1",
-          dedupeKey: "manual:client-1:flow-1",
-          subjectType: "client",
-          subjectId: "client-1",
-          occurredAt: now,
-          payload: {}
-        },
-        run: expect.objectContaining({
-          flowId,
-          flowVersionId: versionId,
-          status: "approval_required",
-          currentNodeId: "draft-reply",
-          stepRuns: expect.arrayContaining([
-            expect.objectContaining({ nodeId: "draft-reply", status: "approval_required" }),
-            expect.objectContaining({ nodeId: "create-task", status: "completed" })
-          ]),
-          approvals: [
-            expect.objectContaining({
-              kind: "ai_output",
-              title: "Черновик ответа",
-              preview: "Черновик ответа"
-            })
-          ]
-        })
-      })
-    );
-  });
-
-  it("returns the existing run for a duplicate manual event dedupe key", async () => {
-    const runtimeStore = createRuntimeStore({
-      createRunForEventDedupe: vi.fn(async () => ({
-        status: "duplicate" as const,
-        event: runtimeEvent,
-        run,
-        stepRuns: [],
-        approvals: []
-      }))
-    });
-
-    await expect(
-      createManualFlowRun({
-        flowStore: createFlowStore(),
-        runtimeStore,
-        ownerUserId,
-        flowId,
-        dedupeKey: "manual:client-1:flow-1",
-        request: {
-          source: "manual",
-          subjectType: "client",
-          subjectId: "client-1",
-          occurredAt: now,
-          timeZone: "Europe/Moscow",
-          payload: {}
-        },
-        gates: {
-          hasOwnerRelationship: true,
-          hasChannelConsent: true
-        },
-        now
-      })
-    ).resolves.toEqual({
-      status: "duplicate",
-      event: runtimeEvent,
-      run,
-      stepRuns: [],
-      approvals: []
-    });
-
-    expect(runtimeStore.createEvent).not.toHaveBeenCalled();
-    expect(runtimeStore.createRun).not.toHaveBeenCalled();
-    expect(runtimeStore.findEventByDedupeKey).toHaveBeenCalledWith({
-      ownerUserId,
-      dedupeKey: "manual:client-1:flow-1"
-    });
-    expect(runtimeStore.findRunByEventAndFlow).not.toHaveBeenCalled();
-  });
-
-  it("replays an existing allowed decision before evaluating mutable gates", async () => {
-    const runtimeStore = createRuntimeStore({
-      findEventByDedupeKey: vi.fn(async () => runtimeEvent),
-      findRunByEventAndFlow: vi.fn(async () => run)
-    });
-
-    await expect(
-      createManualFlowRun({
-        flowStore: createFlowStore(),
-        runtimeStore,
-        ownerUserId,
-        flowId,
-        dedupeKey: "manual:client-1:flow-1",
-        request: {
-          source: "manual",
-          subjectType: "client",
-          subjectId: "client-1",
-          occurredAt: now,
-          timeZone: "Europe/Moscow",
-          payload: {}
-        },
-        gates: {
-          hasOwnerRelationship: true,
-          hasChannelConsent: true,
-          isQuietHours: true
-        },
-        now
-      })
-    ).resolves.toEqual({
-      status: "duplicate",
-      event: runtimeEvent,
-      run,
-      stepRuns: [],
-      approvals: []
-    });
-
-    expect(runtimeStore.createSuppression).not.toHaveBeenCalled();
+    expect(runtimeStore.findEventByDedupeKey).not.toHaveBeenCalled();
     expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
   });
 
-  it("replays an existing suppressed decision before creating an allowed run", async () => {
-    const suppressedRun = { ...run, status: "suppressed" as const, currentNodeId: null };
-    const runtimeStore = createRuntimeStore({
-      findEventByDedupeKey: vi.fn(async () => runtimeEvent),
-      findRunByEventAndFlow: vi.fn(async () => suppressedRun),
-      findSuppressionByRun: vi.fn(async () => suppression)
+  it("acknowledges an event when no active flow matches", async () => {
+    const runtimeStore = createRuntimeStore();
+    const flowStore = createFlowStore({
+      listActiveByTriggerKind: vi.fn(async () => [])
     });
 
     await expect(
-      createManualFlowRun({
-        flowStore: createFlowStore(),
+      dispatchFlowRuntimeEvent({
+        flowStore,
         runtimeStore,
         ownerUserId,
-        flowId,
-        dedupeKey: "manual:client-1:flow-1",
-        request: {
-          source: "manual",
-          subjectType: "client",
-          subjectId: "client-1",
-          occurredAt: now,
-          timeZone: "Europe/Moscow",
-          payload: {}
-        },
-        gates: {
-          hasOwnerRelationship: true,
-          hasChannelConsent: true
-        },
+        triggerKind: "lead_created",
+        source: "crm",
+        sourceEventId: "crm:lead:client-1",
+        subjectType: "client",
+        subjectId: "client-1",
+        occurredAt: now,
+        timeZone: "Europe/Moscow",
+        payload: { source: "crm" },
         now
       })
     ).resolves.toEqual({
-      status: "suppressed",
-      event: runtimeEvent,
-      reason: "QUIET_HOURS_HOLD"
+      status: "no_matching_flow",
+      matchedFlows: 0,
+      total: 0,
+      results: []
     });
 
-    expect(runtimeStore.createSuppression).not.toHaveBeenCalled();
     expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
   });
 
-  it("dispatches a CRM event only to active flows with a matching trigger kind", async () => {
+  it("consumes a matching event with an explicit unavailable disposition and no runtime record", async () => {
     const matchingFlow = flow;
     const listActiveByTriggerKind = vi.fn(async () => [matchingFlow]);
     const runtimeStore = createRuntimeStore();
@@ -342,35 +206,23 @@ describe("flow runtime use cases", () => {
         },
         now
       })
-    ).resolves.toMatchObject({
-      total: 1,
-      results: [
-        {
-          flowId,
-          status: "created",
-          run: { id: runId, status: "approval_required" }
-        }
-      ]
+    ).resolves.toEqual({
+      status: "execution_unavailable",
+      matchedFlows: 1,
+      reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+      total: 0,
+      results: []
     });
 
     expect(listActiveByTriggerKind).toHaveBeenCalledWith({
       ownerUserId,
       triggerKind: "lead_created"
     });
-    expect(runtimeStore.createRunForEventDedupe).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: expect.objectContaining({
-          source: "crm",
-          sourceEventId: `crm:lead:client-1:${flowId}`,
-          dedupeKey: `crm:lead:client-1:${flowId}`,
-          subjectType: "client",
-          subjectId: "client-1"
-        })
-      })
-    );
+    expect(runtimeStore.findEventByDedupeKey).not.toHaveBeenCalled();
+    expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
   });
 
-  it("delegates run, approval list and approval decisions through owner-scoped store methods", async () => {
+  it("keeps history reads available but blocks legacy approval decisions", async () => {
     const runtimeStore = createRuntimeStore();
 
     await expect(
@@ -397,7 +249,7 @@ describe("flow runtime use cases", () => {
         request: { decision: "approved", note: "ok" },
         now
       })
-    ).resolves.toEqual(approval);
+    ).rejects.toMatchObject({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" });
 
     expect(runtimeStore.listRuns).toHaveBeenCalledWith({
       ownerUserId,
@@ -412,14 +264,23 @@ describe("flow runtime use cases", () => {
       limit: 20,
       offset: 0
     });
-    expect(runtimeStore.decideApproval).toHaveBeenCalledWith({
-      ownerUserId,
-      approvalId,
-      decidedByUserId: ownerUserId,
-      decision: "approved",
-      note: "ok",
-      now
-    });
+    expect(runtimeStore.decideApproval).not.toHaveBeenCalled();
+  });
+
+  it("blocks legacy run cancellation before runtime-store access", async () => {
+    const runtimeStore = createRuntimeStore();
+
+    await expect(
+      cancelFlowRun({
+        runtimeStore,
+        ownerUserId,
+        runId,
+        now
+      })
+    ).rejects.toMatchObject({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" });
+
+    expect(runtimeStore.findRunById).not.toHaveBeenCalled();
+    expect(runtimeStore.cancelRun).not.toHaveBeenCalled();
   });
 });
 
@@ -512,17 +373,6 @@ const stepRun = {
   updatedAt: now,
   completedAt: null
 } satisfies FlowStepRunResponse;
-
-const suppression = {
-  id: "88888888-8888-4888-8888-888888888888",
-  ownerUserId,
-  flowId,
-  runtimeEventId: eventId,
-  flowRunId: runId,
-  reason: "QUIET_HOURS_HOLD",
-  details: { flowId },
-  createdAt: now
-} as const;
 
 const approval = {
   id: approvalId,

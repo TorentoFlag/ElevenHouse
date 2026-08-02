@@ -57,7 +57,17 @@ does not reduce the Definition of Done in the design spec.
 - [x] 2026-08-02 19:23 MSK: committed the design spec and PostgreSQL execution
   authority ADR as `974296f` after `docs:check:test`, `docs:check` and diff
   checks passed.
-- [ ] Milestone 0: fail current unsupported runtime closed.
+- [x] 2026-08-02 19:52 MSK: completed the initial Milestone 0 domain/API/worker
+  integrity gate and targeted backend verification.
+- [x] 2026-08-02 20:40 MSK: Milestone 0 implementation, affected tests,
+  package gates and authenticated browser/DB evidence completed; independent
+  re-review found no blocker/high findings and returned GO for an exact-path
+  milestone commit.
+- [x] 2026-08-02 21:00 MSK: fresh pre-commit verification completed after
+  contract hardening: 32 test files / 171 tests, focused ESLint, contracts,
+  domain, API and workers typecheck/build, web build, authenticated browser
+  smoke and CSRF-protected cancel `409` all produced expected evidence.
+- [x] Milestone 0: fail current unsupported runtime closed.
 - [ ] Milestone 1: ship graph v2 definition control plane.
 - [ ] Milestone 2: ship durable token runtime and recovery foundation.
 - [ ] Milestone 3: ship booking enrollment and human work semantics.
@@ -83,13 +93,44 @@ blocked.
   last-write-wins and runtime context can be resolved against a mutable draft.
 - Existing booking outbox production and Flows outbox relay are useful
   foundations, but queue acceptance currently cannot be treated as execution.
+- 2026-08-02: retrying a matching legacy event as an error would retain an
+  unbounded outbox backlog and could replay stale events after v2 activation.
+  Definition-only dispatch therefore consumes it with explicit
+  `execution_unavailable`, matched-flow count, no runtime writes and a sanitized
+  ignored-event log.
 - The reference prototype is visually broad but uses timed fake traversal,
   static AI samples and hidden mobile overlays; these are evidence for visual
   states, not production behavior.
-- The exact reference browser tab was available during research, but the
-  reference and production listeners later stopped. Browser acceptance remains
-  blocked until the already designated services are running under explicit
-  lifecycle authority; no process may be started by this plan.
+- 2026-08-02: after explicit user lifecycle authority and authenticated login,
+  the reference, astrologer-web and astrologer-api surfaces were available for
+  real browser evidence. Desktop/mobile screenshots and measured geometry are
+  stored under `.design-qa/flows/milestone-0/`.
+- 2026-08-02: the local compiled API watcher does not rebuild upstream workspace
+  package distributions atomically. Cleaning/rebuilding contracts or domain can
+  briefly remove their `dist` entrypoints; build dependency packages first and
+  rebuild the API before browser acceptance. The final listener and HTTP
+  behavior were rechecked after this recovery.
+- 2026-08-02: current local persistence has four draft flows, one paused legacy
+  flow, one completed preview run, no approvals and no unpublished Flows outbox
+  backlog. Slice 0 performs no silent status/history rewrite.
+- 2026-08-02: response-level `historySemantics=mixed` cannot identify durable
+  rows individually. Mixed or missing provenance therefore remains read-only
+  and cannot display a completed run as durable success; row-level provenance
+  is required before canary history projection.
+- 2026-08-02: malformed payload and aggregate-mismatch outbox events are
+  deterministic failures but the generic outbox schema has no durable terminal
+  failure disposition. Do not overload `published` as a fake success; add a
+  queryable terminal/quarantine state with alerting before durable runtime
+  enrollment in Milestone 2.
+- 2026-08-02: rollout metadata also requires cross-field invariants. An
+  `enabled` runtime can expose only `durable_execution` history, while `canary`
+  cannot claim `legacy_preview`; contract tests now reject both contradictory
+  combinations.
+- 2026-08-02: the repository-wide astrologer-web typecheck is currently blocked
+  outside this milestone by a concurrent ChartEngine fixture that still returns
+  provider `nominatim` after the shared contract moved to `geoapify`. Flows
+  focused tests, lint and production build are green; do not mix that foreign
+  migration into this commit.
 - The shared worktree contains unrelated Clients/BirthPlace, AstroCalendar,
   package/lockfile and design-QA work. Those changes are valid and must not be
   reverted or mixed into Flows commits.
@@ -125,15 +166,32 @@ changes later steps.
 
 ## Outcomes & Retrospective
 
-No production milestone is complete yet. The current achieved outcome is a
-reviewed target-state contract and ADR in commit `974296f`. At each milestone,
-record:
+Milestone 0 is complete. The current production surface is an explicit
+definition/control plane, not a false runtime:
 
-- observable behavior delivered;
-- exact tests and browser/runtime evidence;
-- intentional deviations from the reference;
-- remaining product/architecture gaps;
-- operational lesson affecting later milestones.
+- create, edit, publish, pause and owner-scoped history reads remain available;
+- activation, simulation, manual execution, approval decisions and run
+  cancellation fail with typed HTTP `409` before runtime mutation;
+- booking outbox delivery is consumed as explicit `execution_unavailable` when
+  a legacy active definition matches, with no run/effect record and no payload
+  logging;
+- legacy, mixed or missing-provenance history cannot appear as durable
+  completion or live Dashboard/Inbox work;
+- authenticated browser evidence covers gallery, runtime history, Dashboard and
+  Inbox, including the absence of per-flow Inbox run queries while history is
+  legacy-only; screenshots and measurements live under
+  `.design-qa/flows/milestone-0/`.
+
+Fresh pre-commit evidence is 32 test files / 171 tests, focused ESLint,
+contracts/domain/API/workers typecheck and build, astrologer-web production
+build, API health, empty browser warn/error logs and a CSRF-protected cancel
+response with `FLOW_RUNTIME_EXECUTION_UNAVAILABLE`. Repository-wide
+astrologer-web typecheck remains blocked only by the unrelated concurrent
+Nominatim/Geoapify test fixture recorded above.
+
+The broader production module is not complete. Milestone 1 must add the strict
+v2 definition control plane; no durable execution, canary enrollment or
+external effects are enabled by this outcome.
 
 Do not rewrite incomplete work as achieved. At program completion, reconcile
 this section against every `Implement` row and the Definition of Done in the
@@ -437,6 +495,7 @@ interpreter can select one truthful path.
 
 **Owned paths:**
 
+- `packages/contracts/src/flows.ts` and test
 - new `packages/domain/src/flows/flow-runtime-availability.ts` and test
 - `packages/domain/src/flows/flow-runtime-use-cases.ts`
 - `packages/domain/src/flows/flow-runtime-use-cases.test.ts`
@@ -450,6 +509,11 @@ interpreter can select one truthful path.
 - only the affected Flows API/model/UI files under
   `apps/astrologer-web/src/features/flows/` and
   `apps/astrologer-web/src/pages/flows/`
+- runtime-projection changes in
+  `apps/astrologer-web/src/pages/dashboard/DashboardPage*`,
+  `apps/astrologer-web/src/pages/inbox/InboxPage*` and
+  `apps/astrologer-web/src/features/flows/model/inboxFlowContexts*`
+- `.design-qa/flows/milestone-0/` browser evidence
 - this plan's Progress/Discoveries sections
 
 **Behavior sequence:**
@@ -458,23 +522,25 @@ interpreter can select one truthful path.
    condition, approval or terminal step rows before execution.
 2. Add a domain error with stable code
    `FLOW_RUNTIME_EXECUTION_UNAVAILABLE`. Before runtime-store writes, block v1
-   activation, simulation, manual run, matching event dispatch and approval
-   decision. Event dispatch with no matching active flow remains a successful
-   zero-result no-op.
+   activation, simulation, manual run and approval decision. Event dispatch
+   returns `no_matching_flow` or terminal `execution_unavailable` with a
+   matched-flow count; neither disposition creates a run/effect.
 3. Map the domain error to typed HTTP `409`. Preserve create/edit/publish and
-   read-only history. Existing active flows can still pause enrollment; cancel
-   remains available for an existing non-terminal row.
+   read-only history. Existing active flows can still pause enrollment; legacy
+   run cancellation is blocked until v2 has durable cancellation semantics.
 4. Remove or isolate the precompletion planner from command paths. Do not add a
    feature flag that silently returns success.
-5. Verify the outbox relay records a failed dispatch and never `markPublished`
-   when a matching active flow is blocked. Do not log event payload content.
+5. Verify the outbox relay consumes `execution_unavailable`, logs only ids,
+   matched-flow count and reason, and does not retain the event for retry or log
+   payload content. A consumed outbox event is not a business execution result.
 6. Update frontend state so activation, simulation, manual run and approval
    decisions are unavailable with the exact reason; keep list, edit, publish,
    pause and history usable. Render v1 placeholder completion as legacy
    non-execution and exclude it from success metrics.
 7. Inventory active flows, pending approvals and v1 runtime rows before rollout.
-   Any persisted status reconciliation is a separate fail-closed, idempotent,
-   audited operation; Slice 0 does not rewrite history silently.
+   Server-backed availability prevents execution regardless of legacy status;
+   any persisted status reconciliation remains a separate fail-closed,
+   idempotent, audited operation and Slice 0 does not rewrite history silently.
 
 **Acceptance:** focused tests observe typed error and absence of store writes;
 the production UI cannot issue a runtime command as if supported; existing
@@ -531,12 +597,14 @@ ordered pinned-version trace without precompleted future work.
 **Behavior sequence:** token/attempt/trace schema -> claim lease/fence -> pure
 condition/terminal executors -> finalize CAS -> timer/signal inbox -> retry and
 recovery sweeper -> cancellation/redrive -> effect state and owning-command
-outbox boundary -> run-detail projection.
+outbox boundary -> durable terminal/quarantine disposition for malformed or
+aggregate-invalid outbox events -> run-detail projection.
 
 **Acceptance:** real PostgreSQL tests cover concurrent claims, stale finalize,
 transition+trace+outbox atomicity, early/duplicate signal, queue-wake loss,
 lease recovery, cancellation races, unknown external outcomes and pinned
-executor readiness. Fake query builders are supplementary only.
+executor readiness. Permanent outbox failures are queryable, alerted and never
+retried indefinitely. Fake query builders are supplementary only.
 
 ### Milestone 3: Booking Enrollment and Human Work
 

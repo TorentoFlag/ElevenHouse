@@ -1,12 +1,30 @@
 // @vitest-environment jsdom
 
-import type { FlowRunResponse, SimulateFlowRunResponse } from "@elevenhouse/contracts";
+import type {
+  FlowRunResponse,
+  FlowRuntimeAvailability,
+  SimulateFlowRunResponse
+} from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowRuntimePanel } from "./FlowRuntimePanel";
 
 const flowId = "11111111-1111-4111-8111-111111111111";
 const flowVersionId = "33333333-3333-4333-8333-333333333333";
+
+const definitionOnlyRuntime = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} satisfies FlowRuntimeAvailability;
+
+const mixedRuntime = {
+  mode: "canary",
+  executionAvailable: true,
+  reasonCode: null,
+  historySemantics: "mixed"
+} satisfies FlowRuntimeAvailability;
 
 const simulation = {
   flowId,
@@ -47,33 +65,41 @@ const run = {
 describe("FlowRuntimePanel", () => {
   afterEach(() => cleanup());
 
-  it("renders simulation result with planned step states and warnings", () => {
+  it("does not present a legacy simulation plan as executable runtime", () => {
     render(
       <FlowRuntimePanel
         runs={[]}
         simulation={simulation}
+        runtimeAvailability={definitionOnlyRuntime}
         onSimulate={vi.fn()}
         onCreateManualRun={vi.fn()}
       />
     );
 
     expect(screen.getByRole("button", { name: "Тестовый прогон" })).toBeTruthy();
-    expect(screen.getByText("lead_created")).toBeTruthy();
-    expect(screen.getAllByText("Ожидает подтверждения")).toHaveLength(2);
-    expect(screen.getByText("Нет согласия на канал")).toBeTruthy();
-    expect(screen.getByText("Автоматическая отправка отключена")).toBeTruthy();
+    expect(screen.queryByText("План выполнения")).toBeNull();
+    expect(screen.queryByText("lead_created")).toBeNull();
+    expect(screen.queryByText("Автоматическая отправка отключена")).toBeNull();
   });
 
   it("renders persisted run history and failure or suppression reason text", () => {
-    render(<FlowRuntimePanel runs={[run]} simulation={null} onSimulate={vi.fn()} />);
+    render(
+      <FlowRuntimePanel
+        runs={[run]}
+        simulation={null}
+        runtimeAvailability={definitionOnlyRuntime}
+        onSimulate={vi.fn()}
+      />
+    );
 
     expect(screen.getByText("История запусков")).toBeTruthy();
-    expect(screen.getByText("Подавлен")).toBeTruthy();
+    expect(screen.getByText("Архивный предпросмотр")).toBeTruthy();
     expect(screen.getByText("manual:test")).toBeTruthy();
     expect(screen.getByText("Частотный лимит")).toBeTruthy();
+    expect(screen.getByText("Фактическое выполнение действий не подтверждено.")).toBeTruthy();
   });
 
-  it("shows an honest empty history state and dispatches runtime commands", () => {
+  it("keeps definition-only runtime commands disabled without invoking callbacks", () => {
     const onSimulate = vi.fn();
     const onCreateManualRun = vi.fn();
 
@@ -81,17 +107,82 @@ describe("FlowRuntimePanel", () => {
       <FlowRuntimePanel
         runs={[]}
         simulation={null}
+        runtimeAvailability={definitionOnlyRuntime}
         onSimulate={onSimulate}
         onCreateManualRun={onCreateManualRun}
       />
     );
 
     expect(screen.getByText("Запусков пока нет")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Тестовый прогон" }));
-    fireEvent.click(screen.getByRole("button", { name: "Создать запуск" }));
+    expect(
+      screen.getByText(
+        "Исполнение воронки пока недоступно. Сценарий можно редактировать и публиковать."
+      )
+    ).toBeTruthy();
+    const simulationButton = screen.getByRole("button", { name: "Тестовый прогон" });
+    const manualRunButton = screen.getByRole("button", { name: "Создать запуск" });
+    expect(simulationButton).toHaveProperty("disabled", true);
+    expect(manualRunButton).toHaveProperty("disabled", true);
 
-    expect(onSimulate).toHaveBeenCalledTimes(1);
-    expect(onCreateManualRun).toHaveBeenCalledTimes(1);
+    fireEvent.click(simulationButton);
+    fireEvent.click(manualRunButton);
+
+    expect(onSimulate).not.toHaveBeenCalled();
+    expect(onCreateManualRun).not.toHaveBeenCalled();
+  });
+
+  it("marks a completed legacy preview as non-execution history", () => {
+    const completedPreview = {
+      ...run,
+      status: "completed",
+      snapshot: { ...run.snapshot, payload: {} }
+    } satisfies FlowRunResponse;
+
+    render(
+      <FlowRuntimePanel
+        runs={[completedPreview]}
+        simulation={null}
+        runtimeAvailability={definitionOnlyRuntime}
+      />
+    );
+
+    expect(screen.getByText("Архивный предпросмотр")).toBeTruthy();
+    expect(screen.getByText("Фактическое выполнение действий не подтверждено.")).toBeTruthy();
+    expect(screen.queryByText("Завершен")).toBeNull();
+  });
+
+  it("does not present mixed-provenance runs as durable completion", () => {
+    const completedRun = {
+      ...run,
+      status: "completed",
+      snapshot: { ...run.snapshot, payload: {} }
+    } satisfies FlowRunResponse;
+
+    render(
+      <FlowRuntimePanel
+        runs={[completedRun]}
+        simulation={null}
+        runtimeAvailability={mixedRuntime}
+      />
+    );
+
+    expect(screen.getByText("Переходная история")).toBeTruthy();
+    expect(screen.getByText("Тип исполнения запуска не подтвержден.")).toBeTruthy();
+    expect(screen.queryByText("Завершен")).toBeNull();
+  });
+
+  it("fails closed when completed history has no server runtime provenance", () => {
+    const completedRun = {
+      ...run,
+      status: "completed",
+      snapshot: { ...run.snapshot, payload: {} }
+    } satisfies FlowRunResponse;
+
+    render(<FlowRuntimePanel runs={[completedRun]} simulation={null} />);
+
+    expect(screen.getByText("Неподтвержденная история")).toBeTruthy();
+    expect(screen.getByText("Источник исполнения не подтвержден сервером.")).toBeTruthy();
+    expect(screen.queryByText("Завершен")).toBeNull();
   });
 
   it("shows loading state instead of a false empty history", () => {

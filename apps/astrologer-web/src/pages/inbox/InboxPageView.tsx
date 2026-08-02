@@ -23,7 +23,7 @@ export type InboxPageViewProps = {
   readonly selectedThreadId: string | null;
   readonly selectedThreadResponse: MessagingThreadResponse | null;
   readonly flowContexts?: readonly InboxFlowContext[];
-  readonly flowContextStatus?: "ready" | "loading" | "error";
+  readonly flowContextStatus?: "ready" | "loading" | "error" | "unavailable";
   readonly isConnectionsLoading: boolean;
   readonly isThreadsLoading: boolean;
   readonly isThreadsError: boolean;
@@ -419,6 +419,13 @@ export function InboxPageView({
                   <div className={styles.contextSectionTitle}>Воронка</div>
                   <p className={styles.contextError} role="alert">
                     Не удалось загрузить контекст воронки
+                  </p>
+                </section>
+              ) : flowContextStatus === "unavailable" ? (
+                <section className={styles.contextSection} aria-label="Активная воронка клиента">
+                  <div className={styles.contextSectionTitle}>Воронка</div>
+                  <p className={styles.contextMuted}>
+                    Активный контекст появится после запуска исполнения воронок
                   </p>
                 </section>
               ) : selectedFlowContext ? (

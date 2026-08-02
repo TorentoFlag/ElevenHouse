@@ -162,7 +162,36 @@ describe("flow use cases", () => {
     expect(store.publishDraft).not.toHaveBeenCalled();
   });
 
-  it("activates a published flow and pauses an active flow through explicit owner-scoped transitions", async () => {
+  it("blocks activation while the durable executor is unavailable", async () => {
+    const activeRecord = flowRecord({
+      status: "active",
+      publishedVersionId: "33333333-3333-4333-8333-333333333333",
+      publishedVersion: 1,
+      publishedAt: now
+    });
+    const transitionStatus = vi.fn();
+    const findByOwnerAndId = vi.fn(async () =>
+      flowRecord({
+        status: "published",
+        publishedVersionId: "33333333-3333-4333-8333-333333333333",
+        publishedVersion: 1,
+        publishedAt: now
+      })
+    );
+    const store = createStore({
+      findByOwnerAndId,
+      transitionStatus
+    } as Partial<FlowStore>);
+
+    await expect(activateFlow({ store, ownerUserId, flowId, now })).rejects.toMatchObject({
+      code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE"
+    });
+
+    expect(transitionStatus).not.toHaveBeenCalled();
+    expect(activeRecord.status).toBe("active");
+  });
+
+  it("keeps pause available for an already active flow", async () => {
     const activeRecord = flowRecord({
       status: "active",
       publishedVersionId: "33333333-3333-4333-8333-333333333333",
@@ -171,44 +200,21 @@ describe("flow use cases", () => {
     });
     const pausedRecord = flowRecord({
       status: "paused",
-      publishedVersionId: "33333333-3333-4333-8333-333333333333",
-      publishedVersion: 1,
-      publishedAt: now
+      publishedVersionId: activeRecord.publishedVersionId,
+      publishedVersion: activeRecord.publishedVersion,
+      publishedAt: activeRecord.publishedAt
     });
-    const transitionStatus = vi
-      .fn()
-      .mockResolvedValueOnce(activeRecord)
-      .mockResolvedValueOnce(pausedRecord);
-    const findByOwnerAndId = vi
-      .fn()
-      .mockResolvedValueOnce(
-        flowRecord({
-          status: "published",
-          publishedVersionId: "33333333-3333-4333-8333-333333333333",
-          publishedVersion: 1,
-          publishedAt: now
-        })
-      )
-      .mockResolvedValueOnce(activeRecord);
+    const transitionStatus = vi.fn(async () => pausedRecord);
     const store = createStore({
-      findByOwnerAndId,
+      findByOwnerAndId: vi.fn(async () => activeRecord),
       transitionStatus
-    } as Partial<FlowStore>);
-    await expect(activateFlow({ store, ownerUserId, flowId, now })).resolves.toEqual(
-      activeRecord
-    );
+    });
+
     await expect(pauseFlow({ store, ownerUserId, flowId, now })).resolves.toEqual(
       pausedRecord
     );
 
-    expect(transitionStatus).toHaveBeenNthCalledWith(1, {
-      ownerUserId,
-      flowId,
-      fromStatuses: ["published", "paused"],
-      toStatus: "active",
-      now
-    });
-    expect(transitionStatus).toHaveBeenNthCalledWith(2, {
+    expect(transitionStatus).toHaveBeenCalledWith({
       ownerUserId,
       flowId,
       fromStatuses: ["active"],

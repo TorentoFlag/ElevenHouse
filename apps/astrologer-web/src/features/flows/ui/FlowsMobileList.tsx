@@ -1,9 +1,11 @@
-import type { FlowResponse } from "@elevenhouse/contracts";
+import type { FlowResponse, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import { buildFlowAutomationControl } from "../model/flowRuntimePresentation";
 import { buildFlowGalleryCard } from "./flowsVisualModel";
 
 export type FlowsMobileListProps = {
   readonly flows: readonly FlowResponse[];
+  readonly runtimeAvailability?: FlowRuntimeAvailability | null;
   readonly onOpenFlow?: (flowId: string) => void;
   readonly onAutomationToggle?: (flowId: string, activate: boolean) => void;
   readonly isTogglingAutomation?: boolean;
@@ -14,6 +16,7 @@ export type FlowsMobileListClassNames = Readonly<Record<string, string>>;
 
 export function FlowsMobileList({
   flows,
+  runtimeAvailability = null,
   onOpenFlow,
   onAutomationToggle,
   isTogglingAutomation = false,
@@ -21,8 +24,7 @@ export function FlowsMobileList({
 }: FlowsMobileListProps) {
   const cards = flows.map((flow) => ({
     card: buildFlowGalleryCard(flow),
-    isAutomationActive: flow.status === "active",
-    canToggleAutomation: flow.publishedVersionId !== null && ["published", "active", "paused"].includes(flow.status)
+    automation: buildFlowAutomationControl(flow, runtimeAvailability)
   }));
   const className = (name: keyof FlowsMobileListClassNames) => classNames?.[name] ?? "";
 
@@ -33,22 +35,28 @@ export function FlowsMobileList({
           Воронки <span className={className("count")}>{flows.length}</span>
         </h1>
       </header>
-      {cards.map(({ card, isAutomationActive, canToggleAutomation }) => (
+      {cards.map(({ card, automation }) => (
         <article key={card.id} className={className("mobileCard")}>
           <div className={className("mobileTitleRow")}>
             <div>
               <h2 className={className("mobileTitle")}>{card.title}</h2>
-              <span className={className("statusChip")}>{card.statusLabel}</span>
+              <span className={className("statusChip")}>
+                {automation.statusLabel ?? card.statusLabel}
+              </span>
             </div>
             <button
               className={className("automationToggle")}
               type="button"
               role="switch"
-              aria-checked={isAutomationActive}
-              aria-label={card.automationStateLabel}
-              disabled={!onAutomationToggle || !canToggleAutomation || isTogglingAutomation}
-              title={canToggleAutomation ? card.automationStateLabel : "Сначала опубликуйте воронку"}
-              onClick={() => onAutomationToggle?.(card.id, !isAutomationActive)}
+              aria-checked={automation.checked}
+              aria-label={automation.accessibleLabel}
+              disabled={!onAutomationToggle || !automation.canToggle || isTogglingAutomation}
+              title={automation.title}
+              onClick={() => {
+                if (automation.canToggle) {
+                  onAutomationToggle?.(card.id, automation.nextActive);
+                }
+              }}
             >
               <span aria-hidden="true" />
             </button>

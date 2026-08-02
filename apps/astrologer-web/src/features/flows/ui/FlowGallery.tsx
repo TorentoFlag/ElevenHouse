@@ -1,10 +1,12 @@
-import type { FlowResponse, FlowTemplate } from "@elevenhouse/contracts";
+import type { FlowResponse, FlowRuntimeAvailability, FlowTemplate } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import { buildFlowAutomationControl } from "../model/flowRuntimePresentation";
 import { buildFlowGalleryCard, buildFlowTemplateCard } from "./flowsVisualModel";
 
 export type FlowGalleryProps = {
   readonly flows: readonly FlowResponse[];
   readonly templates?: readonly FlowTemplate[];
+  readonly runtimeAvailability?: FlowRuntimeAvailability | null;
   readonly onCreateFlow?: () => void;
   readonly isCreating?: boolean;
   readonly onOpenFlow?: (flowId: string) => void;
@@ -18,6 +20,7 @@ export type FlowGalleryClassNames = Readonly<Record<string, string>>;
 export function FlowGallery({
   flows,
   templates = [],
+  runtimeAvailability = null,
   onCreateFlow,
   isCreating = false,
   onOpenFlow,
@@ -27,8 +30,7 @@ export function FlowGallery({
 }: FlowGalleryProps) {
   const cards = flows.map((flow) => ({
     card: buildFlowGalleryCard(flow),
-    isAutomationActive: flow.status === "active",
-    canToggleAutomation: flow.publishedVersionId !== null && ["published", "active", "paused"].includes(flow.status)
+    automation: buildFlowAutomationControl(flow, runtimeAvailability)
   }));
   const templateCards = templates.map(buildFlowTemplateCard);
   const className = (name: keyof FlowGalleryClassNames) => classNames?.[name] ?? "";
@@ -57,7 +59,7 @@ export function FlowGallery({
       </header>
 
       <div className={className("galleryGrid")} aria-label="Воронки">
-        {cards.map(({ card, isAutomationActive, canToggleAutomation }) => (
+        {cards.map(({ card, automation }) => (
           <article key={card.id} className={className("flowCard")}>
             <button
               className={className("graphPreview")}
@@ -79,7 +81,9 @@ export function FlowGallery({
                 <h2 className={className("cardTitle")}>{card.title}</h2>
               </div>
               <div className={className("chipRow")}>
-                <span className={className("statusChip")}>{card.statusLabel}</span>
+                <span className={className("statusChip")}>
+                  {automation.statusLabel ?? card.statusLabel}
+                </span>
                 <span className={className("approvalChip")}>{card.approvalModeLabel}</span>
               </div>
             </div>
@@ -94,11 +98,15 @@ export function FlowGallery({
                 className={className("automationToggle")}
                 type="button"
                 role="switch"
-                aria-checked={isAutomationActive}
-                aria-label={card.automationStateLabel}
-                disabled={!onAutomationToggle || !canToggleAutomation || isTogglingAutomation}
-                title={canToggleAutomation ? card.automationStateLabel : "Сначала опубликуйте воронку"}
-                onClick={() => onAutomationToggle?.(card.id, !isAutomationActive)}
+                aria-checked={automation.checked}
+                aria-label={automation.accessibleLabel}
+                disabled={!onAutomationToggle || !automation.canToggle || isTogglingAutomation}
+                title={automation.title}
+                onClick={() => {
+                  if (automation.canToggle) {
+                    onAutomationToggle?.(card.id, automation.nextActive);
+                  }
+                }}
               >
                 <span aria-hidden="true" />
               </button>

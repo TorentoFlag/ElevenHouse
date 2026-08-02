@@ -6,6 +6,7 @@ import {
 } from "@elevenhouse/contracts";
 import {
   FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+  type DispatchFlowRuntimeEventResult,
   type FlowRuntimeDispatchRequestedPayload
 } from "@elevenhouse/domain";
 import type { Logger } from "@elevenhouse/observability";
@@ -13,7 +14,7 @@ import { z } from "@elevenhouse/validation";
 
 export type FlowRuntimeOutboxDispatcher = (
   input: FlowRuntimeDispatchRequestedPayload & { readonly now: string }
-) => Promise<unknown>;
+) => Promise<DispatchFlowRuntimeEventResult>;
 
 const payloadSchema = z
   .object({
@@ -55,13 +56,23 @@ export async function relayPendingFlowRuntimeDispatchEvents(input: {
         throw new Error("Flow runtime dispatch aggregate does not match booking subject");
       }
 
-      await input.dispatch({ ...payload, now: input.now.toISOString() });
+      const dispatchResult = await input.dispatch({ ...payload, now: input.now.toISOString() });
       await input.store.markPublished({ eventId: event.id, publishedAt: input.now });
-      input.logger?.info("flow runtime dispatch outbox event published", {
-        outboxEventId: event.id,
-        eventType: event.eventType,
-        aggregateId: event.aggregateId
-      });
+      if (dispatchResult.status === "execution_unavailable") {
+        input.logger?.info("flow runtime dispatch outbox event ignored", {
+          outboxEventId: event.id,
+          eventType: event.eventType,
+          aggregateId: event.aggregateId,
+          matchedFlows: dispatchResult.matchedFlows,
+          reasonCode: dispatchResult.reasonCode
+        });
+      } else {
+        input.logger?.info("flow runtime dispatch outbox event published", {
+          outboxEventId: event.id,
+          eventType: event.eventType,
+          aggregateId: event.aggregateId
+        });
+      }
     } catch (error) {
       const errorMessage = normalizeErrorMessage(error);
       await input.store.markPublishFailed({

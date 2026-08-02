@@ -6,6 +6,7 @@ import type {
 } from "@elevenhouse/contracts";
 
 import type { FlowRecord, FlowStore, FlowStorePublishResult } from "./flow-store";
+import { throwFlowRuntimeExecutionUnavailable } from "./flow-runtime-availability";
 import { assertFlowGraphPublishable } from "./flow-validation";
 
 export type CreateFlowDraftInput = {
@@ -107,17 +108,12 @@ export async function activateFlow(input: FlowStatusCommandInput): Promise<FlowR
     flowId: input.flowId
   });
   if (!current) return null;
-  if (current.status === "active") return current;
+  if (current.status === "active") {
+    throwFlowRuntimeExecutionUnavailable();
+  }
 
   assertCanActivateFlow(current);
-
-  return input.store.transitionStatus({
-    ownerUserId: input.ownerUserId,
-    flowId: input.flowId,
-    fromStatuses: ["published", "paused"],
-    toStatus: "active",
-    now: input.now
-  });
+  throwFlowRuntimeExecutionUnavailable();
 }
 
 export async function pauseFlow(input: FlowStatusCommandInput): Promise<FlowRecord | null> {

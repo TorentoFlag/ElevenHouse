@@ -97,7 +97,9 @@ PDF export, canonical Pythagorean numerology, canonical Ladini 22 Matrix
 calculations with private notes and a versioned interpretation catalog, Human
 Design individual/compatibility/transit/AI/PDF contours, provider-neutral
 Messaging commands/webhook/SSE freshness and provider-neutral AI generation
-through OpenAI, and the Flows templates/draft CRUD/immutable publish foundation.
+through OpenAI, and the Flows templates/draft CRUD/immutable publish plus
+definition-only runtime read surface. Flows execution is currently fail-closed
+until the durable `flow-graph.v2` interpreter is implemented.
 Messaging architecture is recorded in
 `docs/decisions/0010-messaging-channel-architecture.md`.
 
@@ -111,7 +113,8 @@ Messaging architecture is recorded in
 - Messaging commands, provider webhook ingestion and realtime freshness.
 - Sessions и materials.
 - Wallet/finance views.
-- Flows templates, draft CRUD and immutable publish.
+- Flows templates, draft CRUD, immutable publish and definition-only runtime
+  history/availability projection.
 - Analytics.
 - Verification submission and current verification status for the signed-in
   astrologer.
@@ -212,19 +215,14 @@ GET  /messaging/events
 Flows shipped endpoints:
 
 ```text
-Current:
 GET /flow-templates
 GET /flows
 POST /flows
 GET /flows/:flowId
 PATCH /flows/:flowId/draft
 POST /flows/:flowId/publish
-```
-
-Flows planned runtime endpoints:
-
-```text
-Planned runtime:
+POST /flows/:flowId/activate
+POST /flows/:flowId/pause
 POST /flows/:flowId/simulate
 POST /flows/:flowId/manual-runs
 GET /flows/:flowId/runs
@@ -233,6 +231,26 @@ POST /flow-runs/:runId/cancel
 GET /flow-approvals
 POST /flow-approvals/:approvalId/decision
 ```
+
+`GET /flows`, run reads and approval reads include server-backed runtime
+metadata. The current value is `mode=definition_only`,
+`executionAvailable=false`, reason
+`FLOW_RUNTIME_EXECUTION_UNAVAILABLE` and
+`historySemantics=legacy_preview`. This metadata is the frontend authority for
+disabled execution controls and for excluding legacy traversal rows from
+business completion metrics.
+
+Create/edit/publish, read-only history and pausing an already active legacy flow
+remain available. Activation, simulation, manual run creation, run cancellation
+and approval decision fail before runtime-store mutation; authenticated HTTP
+commands return typed
+`409 FLOW_RUNTIME_EXECUTION_UNAVAILABLE`. Internal event dispatch never enrolls
+a legacy active flow: it returns the terminal disposition
+`execution_unavailable` with a matched-flow count, creates no run/effect and
+lets the outbox relay consume the event with a sanitized ignored-event log.
+This prevents an unbounded payload backlog and prevents stale events from being
+replayed after v2 activation. The durable v2 runtime and activation epochs are
+defined in ADR 0011 and the current Flows production-module spec.
 
 Availability, calendar and manual-booking routes are authenticated and owner
 scoped. Availability and calendar reads are side-effect free. Their mutations

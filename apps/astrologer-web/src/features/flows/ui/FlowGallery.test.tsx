@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { FlowResponse } from "@elevenhouse/contracts";
+import type { FlowResponse, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowGallery } from "./FlowGallery";
@@ -33,6 +33,13 @@ const flow = {
   publishedAt: null
 } satisfies FlowResponse;
 
+const definitionOnlyRuntime = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} satisfies FlowRuntimeAvailability;
+
 describe("FlowGallery", () => {
   afterEach(() => cleanup());
 
@@ -55,7 +62,7 @@ describe("FlowGallery", () => {
     );
   });
 
-  it("reflects an active API flow in the automation switch state", () => {
+  it("labels a persisted active flow as unavailable while preserving the pause action", () => {
     const onAutomationToggle = vi.fn();
     render(
       <FlowGallery
@@ -66,11 +73,16 @@ describe("FlowGallery", () => {
           publishedVersion: 1,
           publishedAt: "2026-07-30T14:45:00.000Z"
         }]}
+        runtimeAvailability={definitionOnlyRuntime}
         onAutomationToggle={onAutomationToggle}
       />
     );
 
-    const toggle = screen.getByRole("switch", { name: "Автоматизация активна" });
+    expect(screen.getByText("Исполнение отключено")).toBeTruthy();
+    expect(screen.queryByText("Активна")).toBeNull();
+    const toggle = screen.getByRole("switch", {
+      name: "Исполнение отключено; сохраненную активацию можно поставить на паузу"
+    });
 
     expect(toggle).toHaveProperty("disabled", false);
     expect(toggle.getAttribute("aria-checked")).toBe("true");
@@ -78,7 +90,7 @@ describe("FlowGallery", () => {
     expect(onAutomationToggle).toHaveBeenCalledWith(flow.id, false);
   });
 
-  it("enables automation from a published flow without enabling drafts", () => {
+  it("does not activate published or paused flows while runtime is definition-only", () => {
     const onAutomationToggle = vi.fn();
     render(
       <FlowGallery
@@ -91,8 +103,17 @@ describe("FlowGallery", () => {
             publishedVersionId: "44444444-4444-4444-8444-444444444444",
             publishedVersion: 1,
             publishedAt: "2026-07-30T14:45:00.000Z"
+          },
+          {
+            ...flow,
+            id: "55555555-5555-4555-8555-555555555555",
+            status: "paused",
+            publishedVersionId: "66666666-6666-4666-8666-666666666666",
+            publishedVersion: 1,
+            publishedAt: "2026-07-30T14:45:00.000Z"
           }
         ]}
+        runtimeAvailability={definitionOnlyRuntime}
         onAutomationToggle={onAutomationToggle}
       />
     );
@@ -101,11 +122,16 @@ describe("FlowGallery", () => {
       "disabled",
       true
     );
-    const publishedToggle = screen.getByRole("switch", { name: "Включить автоматизацию" });
+    const unavailableToggles = screen.getAllByRole("switch", {
+      name: "Исполнение этой версии воронки недоступно"
+    });
 
-    expect(publishedToggle).toHaveProperty("disabled", false);
-    fireEvent.click(publishedToggle);
-    expect(onAutomationToggle).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333", true);
+    expect(unavailableToggles).toHaveLength(2);
+    expect(unavailableToggles[0]).toHaveProperty("disabled", true);
+    expect(unavailableToggles[1]).toHaveProperty("disabled", true);
+    fireEvent.click(unavailableToggles[0]!);
+    fireEvent.click(unavailableToggles[1]!);
+    expect(onAutomationToggle).not.toHaveBeenCalled();
   });
 
   it("enables gallery actions only when callbacks are supplied", () => {

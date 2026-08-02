@@ -8,9 +8,7 @@ import {
   listFlowTemplatesResponseSchema,
   listFlowsResponseSchema,
   listFlowRunsResponseSchema,
-  manualFlowRunResponseSchema,
   publishFlowResponseSchema,
-  simulateFlowRunResponseSchema,
   type FlowApproval,
   type FlowGraph,
   type FlowRuntimeEvent,
@@ -18,14 +16,8 @@ import {
   type FlowStepRunResponse
 } from "@elevenhouse/contracts";
 import type {
-  AstrologerClientList,
-  AstrologerClientListItem,
   AuthSessionAuthenticationStore,
   AuthSessionRevocationUnitOfWork,
-  ClientAstrologerRelationship,
-  ClientBirthData,
-  ClientJoinIntent,
-  ClientStore,
   FlowRecord,
   FlowRuntimeStore,
   FlowStore,
@@ -34,7 +26,6 @@ import type {
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SystemClock } from "../clock/system-clock.service";
-import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_STORE } from "../clients/clients.tokens";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import {
   AUTH_SESSION_AUTHENTICATION_STORE,
@@ -63,6 +54,8 @@ const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
 const clientUserId = "42fd8c6f-1178-4657-a4b5-4f5cd8568743";
 const runtimeFlowId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c111";
 const runtimeVersionId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c112";
+const legacyApprovalId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c113";
+const legacyRunId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c114";
 let currentCsrfToken = "";
 const defaultPasswordlessRateLimits = {
   requestCodeIdentifier: { limit: 5, windowSeconds: 3600 },
@@ -133,12 +126,6 @@ describe("flows HTTP routes", () => {
       .useValue(flowStore)
       .overrideProvider(FLOW_RUNTIME_STORE)
       .useValue(runtimeStore)
-      .overrideProvider(CLIENT_STORE)
-      .useValue(createClientStore())
-      .overrideProvider(BIRTH_PLACE_SEARCH_PROVIDER)
-      .useValue({
-        search: vi.fn(async () => ({ candidates: [] }))
-      })
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -192,7 +179,7 @@ describe("flows HTTP routes", () => {
       cookie: sessionCookieHeader()
     });
     const activateResponse = await postJson(`/flows/${flowId}/activate`, {}, csrfHeaders());
-    const pauseResponse = await postJson(`/flows/${flowId}/pause`, {}, csrfHeaders());
+    const pauseResponse = await postJson(`/flows/${runtimeFlowId}/pause`, {}, csrfHeaders());
 
     expect(missingCsrf.status).toBe(403);
     expect(createResponse.status).toBe(201);
@@ -223,15 +210,14 @@ describe("flows HTTP routes", () => {
       }
     });
     expect(missingActivateCsrf.status).toBe(403);
-    expect(activateResponse.status).toBe(200);
-    flowResponseSchema.parse(activateResponse.body);
-    expect(activateResponse.body).toMatchObject({ id: flowId, status: "active" });
+    expect(activateResponse.status).toBe(409);
+    expect(activateResponse.body).toMatchObject({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" });
     expect(pauseResponse.status).toBe(200);
     flowResponseSchema.parse(pauseResponse.body);
-    expect(pauseResponse.body).toMatchObject({ id: flowId, status: "paused" });
+    expect(pauseResponse.body).toMatchObject({ id: runtimeFlowId, status: "paused" });
   });
 
-  it("simulates and starts runtime runs with CSRF protection", async () => {
+  it("blocks runtime mutations with conflict while preserving CSRF and empty reads", async () => {
     const missingSimulateCsrf = await postJson(
       `/flows/${runtimeFlowId}/simulate`,
       runtimeBody(),
@@ -255,39 +241,50 @@ describe("flows HTTP routes", () => {
     );
     const runsResponse = await getJson(`/flows/${runtimeFlowId}/runs`);
     const approvalsResponse = await getJson("/flow-approvals?status=pending");
-    const approvalItems = approvalsResponse.body.approvals as Array<{ readonly id: string }> | undefined;
     const missingDecisionCsrf = await postJson(
-      `/flow-approvals/${String(approvalItems?.[0]?.id)}/decision`,
+      `/flow-approvals/${legacyApprovalId}/decision`,
       { decision: "approved" },
       { cookie: sessionCookieHeader() }
     );
+    const decisionResponse = await postJson(
+      `/flow-approvals/${legacyApprovalId}/decision`,
+      { decision: "approved" },
+      csrfHeaders()
+    );
+    const missingCancelCsrf = await postJson(
+      `/flow-runs/${legacyRunId}/cancel`,
+      {},
+      { cookie: sessionCookieHeader() }
+    );
+    const cancelResponse = await postJson(
+      `/flow-runs/${legacyRunId}/cancel`,
+      {},
+      csrfHeaders()
+    );
 
     expect(missingSimulateCsrf.status).toBe(403);
-    expect(simulateResponse.status).toBe(200);
-    simulateFlowRunResponseSchema.parse(simulateResponse.body);
-    expect(simulateResponse.body).toMatchObject({
-      flowId: runtimeFlowId,
-      plannedSteps: [
-        { nodeId: "lead-created", status: "planned" },
-        { nodeId: "draft-reply", status: "approval_required" }
-      ]
-    });
+    expect(simulateResponse.status).toBe(409);
+    expect(simulateResponse.body).toMatchObject({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" });
     expect(runsBeforeManualResponse.status).toBe(200);
     expect(runsBeforeManualResponse.body).toMatchObject({ total: 0 });
     expect(missingManualCsrf.status).toBe(403);
-    expect(manualRunResponse.status).toBe(201);
-    manualFlowRunResponseSchema.parse(manualRunResponse.body);
-    expect(manualRunResponse.body).toMatchObject({
-      status: "created",
-      run: { flowId: runtimeFlowId, status: "approval_required" }
-    });
+    expect(manualRunResponse.status).toBe(409);
+    expect(manualRunResponse.body).toMatchObject({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" });
     expect(runsResponse.status).toBe(200);
     listFlowRunsResponseSchema.parse(runsResponse.body);
-    expect(runsResponse.body).toMatchObject({ total: 1 });
+    expect(runsResponse.body).toMatchObject({ total: 0 });
     expect(approvalsResponse.status).toBe(200);
     listFlowApprovalsResponseSchema.parse(approvalsResponse.body);
-    expect(approvalsResponse.body.approvals).toHaveLength(1);
+    expect(approvalsResponse.body.approvals).toHaveLength(0);
     expect(missingDecisionCsrf.status).toBe(403);
+    expect(decisionResponse.status).toBe(409);
+    expect(decisionResponse.body).toMatchObject({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" });
+    expect(missingCancelCsrf.status).toBe(403);
+    expect(cancelResponse.status).toBe(409);
+    expect(cancelResponse.body).toMatchObject({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" });
+    expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
+    expect(runtimeStore.decideApproval).not.toHaveBeenCalled();
+    expect(runtimeStore.cancelRun).not.toHaveBeenCalled();
   });
 
   async function getJson(path: string): Promise<HttpJsonResponse> {
@@ -745,41 +742,6 @@ function createRuntimeStore(): FlowRuntimeStore {
       approvals[index] = decided;
       return stripOwnerUserId(decided);
     })
-  };
-}
-
-function createClientStore(): ClientStore {
-  const client: AstrologerClientListItem = {
-    clientUserId,
-    displayName: "Марина Краснова",
-    relationshipStatus: "active",
-    firstLinkedAt: now.toISOString(),
-    lastLinkedAt: now.toISOString(),
-    birthData: null
-  };
-
-  return {
-    createJoinIntent: vi.fn(async (): Promise<ClientJoinIntent> => raise("Unexpected join intent call")),
-    findJoinIntentByTokenHash: vi.fn(async () => null),
-    markJoinIntentClaimed: vi.fn(async () => null),
-    ensureRelationship: vi.fn(
-      async (): Promise<ClientAstrologerRelationship> => raise("Unexpected ensure relationship call")
-    ),
-    upsertClientProfile: vi.fn(async (): Promise<void> => undefined),
-    upsertClientBirthData: vi.fn(
-      async (): Promise<ClientBirthData> => raise("Unexpected upsert birth data call")
-    ),
-    listClientBirthDataProfiles: vi.fn(async () => []),
-    createClientBirthDataProfile: vi.fn(
-      async (): Promise<ClientBirthData> => raise("Unexpected create birth data call")
-    ),
-    updateClientBirthDataProfile: vi.fn(
-      async (): Promise<ClientBirthData | null> => raise("Unexpected update birth data call")
-    ),
-    listAstrologerClients: vi.fn(async (): Promise<AstrologerClientList> => ({ clients: [client], total: 1 })),
-    getAstrologerClient: vi.fn(async (input) =>
-      input.astrologerUserId === ownerUserId && input.clientUserId === client.clientUserId ? client : null
-    )
   };
 }
 

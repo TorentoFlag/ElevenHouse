@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { FlowResponse } from "@elevenhouse/contracts";
+import type { FlowResponse, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowBuilder } from "./FlowBuilder";
@@ -42,6 +42,13 @@ const flow = {
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null
 } satisfies FlowResponse;
+
+const definitionOnlyRuntime = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} satisfies FlowRuntimeAvailability;
 
 describe("FlowBuilder", () => {
   afterEach(() => cleanup());
@@ -122,7 +129,7 @@ describe("FlowBuilder", () => {
     expect(onCreateManualRun).not.toHaveBeenCalled();
   });
 
-  it("enables runtime commands for a published flow version", () => {
+  it("keeps runtime commands unavailable for a published definition-only flow", () => {
     const onSimulate = vi.fn();
     const onCreateManualRun = vi.fn();
     const publishedFlow = {
@@ -141,20 +148,29 @@ describe("FlowBuilder", () => {
         onPublish={vi.fn()}
         onSimulate={onSimulate}
         onCreateManualRun={onCreateManualRun}
+        runtimeAvailability={definitionOnlyRuntime}
       />
     );
 
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "Тестовый прогон" })[0] ??
-        raise("Expected test button")
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Создать запуск" }));
+    const testRunButtons = screen.getAllByRole("button", { name: "Тестовый прогон" });
+    const manualRunButton = screen.getByRole("button", { name: "Создать запуск" });
 
-    expect(onSimulate).toHaveBeenCalledWith(flow.id);
-    expect(onCreateManualRun).toHaveBeenCalledWith(flow.id);
+    expect(testRunButtons).toHaveLength(2);
+    expect(testRunButtons[0]).toHaveProperty("disabled", true);
+    expect(testRunButtons[1]).toHaveProperty("disabled", true);
+    expect(manualRunButton).toHaveProperty("disabled", true);
     expect(
-      screen.queryByText("Опубликуйте воронку, чтобы запускать тесты и ручные запуски.")
-    ).toBeNull();
+      screen.getByText(
+        "Исполнение воронки пока недоступно. Сценарий можно редактировать и публиковать."
+      )
+    ).toBeTruthy();
+
+    fireEvent.click(testRunButtons[0] ?? raise("Expected header test button"));
+    fireEvent.click(testRunButtons[1] ?? raise("Expected runtime test button"));
+    fireEvent.click(manualRunButton);
+
+    expect(onSimulate).not.toHaveBeenCalled();
+    expect(onCreateManualRun).not.toHaveBeenCalled();
   });
 
   it("publishes the selected flow", () => {

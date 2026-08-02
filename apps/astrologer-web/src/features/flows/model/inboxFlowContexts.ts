@@ -1,4 +1,10 @@
-import type { FlowResponse, FlowRunResponse, MessagingThread } from "@elevenhouse/contracts";
+import type {
+  FlowResponse,
+  FlowRunResponse,
+  FlowRuntimeAvailability,
+  MessagingThread
+} from "@elevenhouse/contracts";
+import { canProjectLiveFlowRuntime } from "./flowRuntimePresentation";
 
 export type FlowInboxContext = {
   readonly threadId: string;
@@ -9,6 +15,7 @@ export type FlowInboxContext = {
 type BuildInboxFlowContextsInput = {
   readonly threads: readonly MessagingThread[];
   readonly flows: readonly FlowResponse[];
+  readonly runtimeAvailability: FlowRuntimeAvailability | null | undefined;
   readonly runsByFlowId: Readonly<Record<string, readonly FlowRunResponse[]>>;
 };
 
@@ -24,8 +31,13 @@ const terminalRunStatuses = new Set([
 export function buildInboxFlowContexts({
   threads,
   flows,
+  runtimeAvailability,
   runsByFlowId
 }: BuildInboxFlowContextsInput): FlowInboxContext[] {
+  if (!canProjectLiveFlowRuntime(runtimeAvailability)) {
+    return [];
+  }
+
   const flowsById = new Map(flows.map((flow) => [flow.id, flow]));
   const activeRuns = Object.values(runsByFlowId)
     .flat()

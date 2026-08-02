@@ -1,12 +1,15 @@
 import type {
   FlowRunResponse,
   FlowRunStatus,
+  FlowRuntimeAvailability,
   SimulateFlowRunResponse
 } from "@elevenhouse/contracts";
+import { buildFlowRuntimePresentation } from "../model/flowRuntimePresentation";
 
 export type FlowRuntimePanelProps = {
   readonly runs: readonly FlowRunResponse[];
   readonly simulation: SimulateFlowRunResponse | null;
+  readonly runtimeAvailability?: FlowRuntimeAvailability | null;
   readonly onSimulate?: () => void;
   readonly onCreateManualRun?: () => void;
   readonly isLoadingRuns?: boolean;
@@ -40,6 +43,7 @@ const simulationStatusLabel = {
 export function FlowRuntimePanel({
   runs,
   simulation,
+  runtimeAvailability = null,
   onSimulate,
   onCreateManualRun,
   isLoadingRuns = false,
@@ -50,6 +54,10 @@ export function FlowRuntimePanel({
   classNames
 }: FlowRuntimePanelProps) {
   const className = (name: string) => classNames?.[name] ?? "";
+  const runtime = buildFlowRuntimePresentation(runtimeAvailability);
+  const commandUnavailableReason = unavailableReason ?? runtime.unavailableReason;
+  const canRunCommands = runtime.executionAvailable;
+  const unverifiedHistory = runtimeHistoryPresentation(runtime.historySemantics);
 
   return (
     <section className={className("runtimePanel")} aria-label="Запуски воронки">
@@ -59,26 +67,38 @@ export function FlowRuntimePanel({
           <h2>Тестовый прогон</h2>
         </div>
         <div className={className("runtimeActions")}>
-          <button type="button" onClick={onSimulate} disabled={!onSimulate || isSimulating}>
+          <button
+            type="button"
+            onClick={() => {
+              if (canRunCommands) onSimulate?.();
+            }}
+            disabled={!canRunCommands || !onSimulate || isSimulating}
+          >
             {isSimulating ? "Проверяем" : "Тестовый прогон"}
           </button>
           {onCreateManualRun ? (
-            <button type="button" onClick={onCreateManualRun} disabled={isCreatingManualRun}>
+            <button
+              type="button"
+              onClick={() => {
+                if (canRunCommands) onCreateManualRun();
+              }}
+              disabled={!canRunCommands || isCreatingManualRun}
+            >
               {isCreatingManualRun ? "Создаем" : "Создать запуск"}
             </button>
           ) : null}
         </div>
       </header>
 
-      {unavailableReason ? (
-        <p className={className("runtimeEmpty")}>{unavailableReason}</p>
+      {commandUnavailableReason ? (
+        <p className={className("runtimeNotice")} role="status">{commandUnavailableReason}</p>
       ) : null}
 
       {!unavailableReason && error ? (
         <p className={className("runtimeError")} role="alert">{error.message}</p>
       ) : null}
 
-      {simulation ? (
+      {canRunCommands && simulation ? (
         <div className={className("runtimeBlock")}>
           <h3>План выполнения</h3>
           <ol className={className("runtimeStepList")}>
@@ -106,19 +126,48 @@ export function FlowRuntimePanel({
           <p className={className("runtimeEmpty")}>Запусков пока нет</p>
         ) : (
           <ul className={className("runtimeRunList")}>
-            {runs.map((run) => (
-              <li key={run.id}>
-                <span>{runStatusLabel[run.status]}</span>
-                <strong>{run.sourceEventId}</strong>
-                <small>{formatRuntimeDate(run.updatedAt)}</small>
-                {runtimeReason(run) ? <em>{runtimeReason(run)}</em> : null}
-              </li>
-            ))}
+            {runs.map((run) => {
+              const reason = runtimeReason(run);
+
+              return (
+                <li key={run.id}>
+                  <span>
+                    {unverifiedHistory?.label ?? runStatusLabel[run.status]}
+                  </span>
+                  <strong>{run.sourceEventId}</strong>
+                  <small>{formatRuntimeDate(run.updatedAt)}</small>
+                  {unverifiedHistory ? <em>{unverifiedHistory.notice}</em> : null}
+                  {reason ? <em>{reason}</em> : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
     </section>
   );
+}
+
+function runtimeHistoryPresentation(
+  semantics: FlowRuntimeAvailability["historySemantics"] | "unverified"
+): { readonly label: string; readonly notice: string } | null {
+  if (semantics === "durable_execution") return null;
+  if (semantics === "legacy_preview") {
+    return {
+      label: "Архивный предпросмотр",
+      notice: "Фактическое выполнение действий не подтверждено."
+    };
+  }
+  if (semantics === "mixed") {
+    return {
+      label: "Переходная история",
+      notice: "Тип исполнения запуска не подтвержден."
+    };
+  }
+  return {
+    label: "Неподтвержденная история",
+    notice: "Источник исполнения не подтвержден сервером."
+  };
 }
 
 function runtimeReason(run: FlowRunResponse): string | null {

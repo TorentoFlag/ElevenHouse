@@ -7,3 +7,4 @@ export * from "./flow-use-cases";
 export * from "./flow-runtime-store";
 export * from "./flow-runtime-use-cases";
 export * from "./flow-runtime-outbox";
+export * from "./flow-runtime-availability";

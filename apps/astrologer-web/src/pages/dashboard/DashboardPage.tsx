@@ -2,6 +2,7 @@ import type { FlowApprovalKind } from "@elevenhouse/contracts";
 import { useI18n } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
+import { canProjectLiveFlowRuntime } from "../../features/flows/model/flowRuntimePresentation";
 import { useFlowApprovalsQuery } from "../../features/flows/model/useFlowApprovalsQuery";
 import styles from "./DashboardPage.module.css";
 
@@ -13,6 +14,7 @@ export function DashboardPage() {
     offset: 0
   });
   const pendingApprovals = flowApprovalsQuery.data?.approvals ?? [];
+  const liveApprovalsAvailable = canProjectLiveFlowRuntime(flowApprovalsQuery.data?.runtime);
 
   useDocumentTitle(dictionary.dashboard.documentTitle);
 
@@ -41,6 +43,11 @@ export function DashboardPage() {
         ) : flowApprovalsQuery.isError ? (
           <p className={styles.errorText} role="alert">
             Не удалось загрузить задачи из воронок
+          </p>
+        ) : !liveApprovalsAvailable ? (
+          <p className={styles.stateText}>
+            Исполнение воронок пока недоступно. Архивные подтверждения не показаны как рабочие
+            задачи.
           </p>
         ) : pendingApprovals.length > 0 ? (
           <div className={styles.approvalList}>

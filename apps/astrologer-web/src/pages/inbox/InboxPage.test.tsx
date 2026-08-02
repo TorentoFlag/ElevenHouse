@@ -29,6 +29,9 @@ describe("InboxPage", () => {
     expect(source).toContain("flowRunsQueryOptions");
     expect(source).toContain('limit: 100');
     expect(source).toContain("buildInboxFlowContexts");
+    expect(source).toContain("canProjectLiveFlowRuntime");
+    expect(source).toContain("enabled: liveFlowRuntimeAvailable");
+    expect(source).toContain("runtimeAvailability: flowsQuery.data?.runtime");
     expect(source).toContain("flowContextStatus=");
     expect(source).not.toContain("flowContexts={[]}");
     expect(source).not.toContain('<h1 id="inbox-title">Сообщения</h1>');
@@ -64,6 +67,15 @@ describe("InboxPage", () => {
 
     expect(loadingMarkup).toContain("Проверяем активные воронки");
     expect(errorMarkup).toContain("Не удалось загрузить контекст воронки");
+  });
+
+  it("shows an explicit unavailable state instead of projecting legacy preview history", () => {
+    const markup = renderToStaticMarkup(
+      <InboxPageView {...baseInboxProps()} flowContextStatus="unavailable" />
+    );
+
+    expect(markup).toContain("Активный контекст появится после запуска исполнения воронок");
+    expect(markup).not.toContain("AI-черновик ответа");
   });
 });
 

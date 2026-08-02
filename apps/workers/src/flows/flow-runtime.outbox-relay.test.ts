@@ -1,5 +1,9 @@
 import type { OutboxRelayStore } from "@elevenhouse/db/outbox";
-import { FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT } from "@elevenhouse/domain";
+import {
+  FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+  FLOW_RUNTIME_EXECUTION_UNAVAILABLE_CODE
+} from "@elevenhouse/domain";
+import type { Logger } from "@elevenhouse/observability";
 import { describe, expect, it, vi } from "vitest";
 import {
   relayPendingFlowRuntimeDispatchEvents,
@@ -25,6 +29,12 @@ describe("relayPendingFlowRuntimeDispatchEvents", () => {
     const calls: string[] = [];
     const dispatch = vi.fn(async () => {
       calls.push("dispatch");
+      return {
+        status: "no_matching_flow" as const,
+        matchedFlows: 0 as const,
+        total: 0 as const,
+        results: [] as const
+      };
     }) satisfies FlowRuntimeOutboxDispatcher;
     vi.mocked(store.markPublished).mockImplementationOnce(async () => {
       calls.push("published");
@@ -56,7 +66,12 @@ describe("relayPendingFlowRuntimeDispatchEvents", () => {
       },
       attempts: 2
     });
-    const dispatch = vi.fn(async () => undefined) satisfies FlowRuntimeOutboxDispatcher;
+    const dispatch = vi.fn(async () => ({
+      status: "no_matching_flow" as const,
+      matchedFlows: 0 as const,
+      total: 0 as const,
+      results: [] as const
+    })) satisfies FlowRuntimeOutboxDispatcher;
 
     await relayPendingFlowRuntimeDispatchEvents(relayInput(store, dispatch));
 
@@ -72,6 +87,42 @@ describe("relayPendingFlowRuntimeDispatchEvents", () => {
     expect(JSON.stringify(vi.mocked(store.markPublishFailed).mock.calls)).not.toContain(
       "do-not-log"
     );
+  });
+
+  it("consumes an unavailable matching dispatch without retaining payload for retry", async () => {
+    const store = createStore({
+      id: eventId,
+      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+      aggregateId: bookingId,
+      payload: {
+        ...validPayload(),
+        payload: { ...validPayload().payload, secret: "do-not-log" }
+      },
+      attempts: 1
+    });
+    const dispatch = vi.fn(async () => ({
+      status: "execution_unavailable" as const,
+      matchedFlows: 1,
+      reasonCode: FLOW_RUNTIME_EXECUTION_UNAVAILABLE_CODE,
+      total: 0 as const,
+      results: [] as const
+    })) satisfies FlowRuntimeOutboxDispatcher;
+    const logger = createLogger();
+
+    await expect(
+      relayPendingFlowRuntimeDispatchEvents({ ...relayInput(store, dispatch), logger })
+    ).resolves.toBe(1);
+
+    expect(store.markPublished).toHaveBeenCalledWith({ eventId, publishedAt: now });
+    expect(store.markPublishFailed).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith("flow runtime dispatch outbox event ignored", {
+      outboxEventId: eventId,
+      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+      aggregateId: bookingId,
+      matchedFlows: 1,
+      reasonCode: FLOW_RUNTIME_EXECUTION_UNAVAILABLE_CODE
+    });
+    expect(JSON.stringify(vi.mocked(logger.info).mock.calls)).not.toContain("do-not-log");
   });
 });
 
@@ -111,4 +162,13 @@ function createStore(event: Awaited<ReturnType<OutboxRelayStore["claimPending"]>
     markPublished: vi.fn(async () => undefined),
     markPublishFailed: vi.fn(async () => undefined)
   } satisfies OutboxRelayStore;
+}
+
+function createLogger(): Logger {
+  return {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  };
 }

@@ -5,6 +5,7 @@ import { createMessagingRealtimeClient } from "../../features/messaging/realtime
 import { getMessagingMessageMediaSource } from "../../features/messaging/api/messagingApi";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import type { StartTelegramBusinessConnectionResponse } from "@elevenhouse/contracts";
+import { canProjectLiveFlowRuntime } from "../../features/flows/model/flowRuntimePresentation";
 import { buildInboxFlowContexts } from "../../features/flows/model/inboxFlowContexts";
 import { flowRunsQueryOptions } from "../../features/flows/model/flowsQueryOptions";
 import { useFlowListQuery } from "../../features/flows/model/useFlowListQuery";
@@ -55,10 +56,11 @@ export function InboxPage() {
   const threadsQuery = useQuery(listMessagingThreadsQueryOptions({ limit: 50, offset: 0 }));
   const threadQuery = useQuery(getMessagingThreadQueryOptions(selectedThreadId));
   const flowsQuery = useFlowListQuery({ status: "all", limit: 50, offset: 0 });
+  const liveFlowRuntimeAvailable = canProjectLiveFlowRuntime(flowsQuery.data?.runtime);
   const flowRunsQueries = useQueries({
     queries: (flowsQuery.data?.flows ?? []).map((flow) => ({
       ...flowRunsQueryOptions(flow.id, { status: "all", limit: 100, offset: 0 }),
-      enabled: flowsQuery.isSuccess
+      enabled: liveFlowRuntimeAvailable
     }))
   });
   const startTelegramBusinessMutation = useMutation(
@@ -99,15 +101,25 @@ export function InboxPage() {
       flows.map((flow, index) => [flow.id, flowRunsQueries[index]?.data?.runs ?? []])
     );
 
-    return buildInboxFlowContexts({ threads, flows, runsByFlowId });
-  }, [flowRunsQueries, flowsQuery.data?.flows, threads]);
+    return buildInboxFlowContexts({
+      threads,
+      flows,
+      runtimeAvailability: flowsQuery.data?.runtime,
+      runsByFlowId
+    });
+  }, [flowRunsQueries, flowsQuery.data?.flows, flowsQuery.data?.runtime, threads]);
   const flowContextStatus =
-    flowsQuery.isError || flowRunsQueries.some((query) => query.isError)
+    flowsQuery.isError
       ? "error"
-      : flowsQuery.isLoading ||
-          flowRunsQueries.some((query) => query.isLoading || query.isFetching)
+      : flowsQuery.isLoading
         ? "loading"
-        : "ready";
+        : !liveFlowRuntimeAvailable
+          ? "unavailable"
+          : flowRunsQueries.some((query) => query.isError)
+            ? "error"
+            : flowRunsQueries.some((query) => query.isLoading || query.isFetching)
+              ? "loading"
+              : "ready";
 
   useDocumentTitle("ElevenHouse | Сообщения");
 

@@ -21,7 +21,6 @@ export type FlowGalleryCardModel = {
     readonly completedRuns: FlowRuntimeMetricValue;
     readonly conversionRate: FlowRuntimeMetricValue;
   };
-  readonly automationStateLabel: string;
 };
 
 export type FlowTemplateCardModel = {
@@ -43,8 +42,7 @@ export function buildFlowGalleryCard(flow: FlowResponse): FlowGalleryCardModel {
     approvalModeLabel: flowApprovalModeLabelRu[flow.approvalMode],
     triggerTitle: graph.triggerTitle,
     pathPreview: graph.pathPreview,
-    metrics: emptyRuntimeMetrics(),
-    automationStateLabel: automationStateLabel(flow.status)
+    metrics: emptyRuntimeMetrics()
   };
 }
 
@@ -68,11 +66,6 @@ function emptyRuntimeMetrics(): FlowGalleryCardModel["metrics"] {
     completedRuns: null,
     conversionRate: null
   };
-}
-
-function automationStateLabel(status: FlowResponse["status"]): string {
-  if (status === "published" || status === "paused") return "Включить автоматизацию";
-  return status === "active" ? "Автоматизация активна" : "Автоматизация не запущена";
 }
 
 export type { FlowGraphSummary };

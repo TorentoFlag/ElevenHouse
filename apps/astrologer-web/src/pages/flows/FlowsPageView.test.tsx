@@ -31,6 +31,13 @@ const flows = [
   }
 ] satisfies FlowResponse[];
 
+const definitionOnlyRuntime = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} as const;
+
 describe("FlowsPageView", () => {
   it("shows the production loading state", () => {
     expect(render({ isLoading: true })).toContain("Загружаем воронки");
@@ -61,6 +68,25 @@ describe("FlowsPageView", () => {
 
     expect(markup).toContain('aria-label="Открыть схему: Запись на консультацию"');
     expect(markup.match(/disabled=""/g)).toHaveLength(6);
+  });
+
+  it("passes definition-only capability to gallery automation controls", () => {
+    const publishedFlow = {
+      ...flows[0]!,
+      status: "published",
+      publishedVersionId: "33333333-3333-4333-8333-333333333333",
+      publishedVersion: 1,
+      publishedAt: "2026-07-28T09:00:00.000Z"
+    } as const;
+    const markup = render({
+      flows: [publishedFlow],
+      runtimeAvailability: definitionOnlyRuntime,
+      onAutomationToggle: () => undefined
+    });
+
+    expect(markup).toContain('aria-label="Исполнение этой версии воронки недоступно"');
+    expect(markup).toContain('role="switch"');
+    expect(markup).toContain('disabled=""');
   });
 });
 

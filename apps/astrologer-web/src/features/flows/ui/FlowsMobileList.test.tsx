@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { FlowResponse } from "@elevenhouse/contracts";
+import type { FlowResponse, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowsMobileList } from "./FlowsMobileList";
@@ -23,6 +23,13 @@ const flow = {
   publishedAt: null
 } satisfies FlowResponse;
 
+const definitionOnlyRuntime = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} satisfies FlowRuntimeAvailability;
+
 describe("FlowsMobileList", () => {
   afterEach(() => cleanup());
 
@@ -39,7 +46,7 @@ describe("FlowsMobileList", () => {
     expect(screen.getByRole("button", { name: "Открыть схему" })).toHaveProperty("disabled", true);
   });
 
-  it("reflects an active API flow in the mobile switch state", () => {
+  it("labels a persisted active flow as unavailable on mobile while preserving pause", () => {
     const onAutomationToggle = vi.fn();
     render(
       <FlowsMobileList
@@ -50,15 +57,44 @@ describe("FlowsMobileList", () => {
           publishedVersion: 1,
           publishedAt: "2026-07-30T14:45:00.000Z"
         }]}
+        runtimeAvailability={definitionOnlyRuntime}
         onAutomationToggle={onAutomationToggle}
       />
     );
 
-    const toggle = screen.getByRole("switch", { name: "Автоматизация активна" });
+    expect(screen.getByText("Исполнение отключено")).toBeTruthy();
+    expect(screen.queryByText("Активна")).toBeNull();
+    const toggle = screen.getByRole("switch", {
+      name: "Исполнение отключено; сохраненную активацию можно поставить на паузу"
+    });
 
     expect(toggle).toHaveProperty("disabled", false);
     expect(toggle.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(toggle);
     expect(onAutomationToggle).toHaveBeenCalledWith(flow.id, false);
+  });
+
+  it("keeps a published definition-only flow disabled on mobile", () => {
+    const onAutomationToggle = vi.fn();
+    render(
+      <FlowsMobileList
+        flows={[{
+          ...flow,
+          status: "published",
+          publishedVersionId: "44444444-4444-4444-8444-444444444444",
+          publishedVersion: 1,
+          publishedAt: "2026-07-30T14:45:00.000Z"
+        }]}
+        runtimeAvailability={definitionOnlyRuntime}
+        onAutomationToggle={onAutomationToggle}
+      />
+    );
+
+    const toggle = screen.getByRole("switch", {
+      name: "Исполнение этой версии воронки недоступно"
+    });
+    expect(toggle).toHaveProperty("disabled", true);
+    fireEvent.click(toggle);
+    expect(onAutomationToggle).not.toHaveBeenCalled();
   });
 });

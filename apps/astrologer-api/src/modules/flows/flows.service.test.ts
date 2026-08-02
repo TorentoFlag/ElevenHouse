@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
-import type { AstrologerClientListItem, ClientStore, FlowRuntimeStore, FlowStore } from "@elevenhouse/domain";
+import type { FlowRuntimeStore, FlowStore } from "@elevenhouse/domain";
 import type { FlowApproval, FlowGraph, FlowRuntimeEvent, FlowRunResponse } from "@elevenhouse/contracts";
 import type { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
@@ -15,6 +15,12 @@ const flowId = "00000000-0000-4000-8000-000000000002";
 const versionId = "00000000-0000-4000-8000-000000000003";
 const clientUserId = "00000000-0000-4000-8000-000000000009";
 const now = "2026-07-26T12:00:00.000Z";
+const runtimeAvailability = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "legacy_preview"
+} as const;
 
 const graph: FlowGraph = {
   schemaVersion: "flow-graph.v1",
@@ -65,6 +71,7 @@ describe("FlowsService", () => {
       status: "draft"
     });
     expect(listed.total).toBe(1);
+    expect(listed.runtime).toEqual(runtimeAvailability);
     expect(store.createDraft).toHaveBeenCalledWith({
       ownerUserId,
       name: "Welcome funnel",
@@ -109,7 +116,7 @@ describe("FlowsService", () => {
     expect(store.publishDraft).toHaveBeenCalledWith({ ownerUserId, flowId, now });
   });
 
-  it("activates and pauses published flow automation through CSRF-protected commands", async () => {
+  it("maps unavailable activation to conflict and keeps pause available", async () => {
     const activeFlow = flow({
       status: "active",
       publishedVersionId: versionId,
@@ -122,7 +129,7 @@ describe("FlowsService", () => {
       publishedVersion: 1,
       publishedAt: now
     });
-    const transitionStatus = vi.fn().mockResolvedValueOnce(activeFlow).mockResolvedValueOnce(pausedFlow);
+    const transitionStatus = vi.fn(async () => pausedFlow);
     const findByOwnerAndId = vi
       .fn()
       .mockResolvedValueOnce(
@@ -135,17 +142,14 @@ describe("FlowsService", () => {
     } as Partial<FlowStore>);
     const service = createService({ store });
 
-    await expect(service.activateFlow(flowId, request())).resolves.toEqual(activeFlow);
+    await expect(service.activateFlow(flowId, request())).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" })
+    });
     await expect(service.pauseFlow(flowId, request())).resolves.toEqual(pausedFlow);
 
-    expect(transitionStatus).toHaveBeenNthCalledWith(1, {
-      ownerUserId,
-      flowId,
-      fromStatuses: ["published", "paused"],
-      toStatus: "active",
-      now
-    });
-    expect(transitionStatus).toHaveBeenNthCalledWith(2, {
+    expect(transitionStatus).toHaveBeenCalledTimes(1);
+    expect(transitionStatus).toHaveBeenCalledWith({
       ownerUserId,
       flowId,
       fromStatuses: ["active"],
@@ -203,7 +207,7 @@ describe("FlowsService", () => {
     );
   });
 
-  it("simulates a flow without persisting a run", async () => {
+  it("maps unavailable simulation to conflict without runtime persistence", async () => {
     const runtimeStore = createRuntimeStore();
     const service = createService({
       store: createFlowStore({
@@ -214,14 +218,9 @@ describe("FlowsService", () => {
       runtimeStore
     });
 
-    await expect(service.simulateFlow(flowId, runtimeRequest(), request())).resolves.toEqual({
-      flowId,
-      flowVersionId: versionId,
-      plannedSteps: [
-        { nodeId: "lead-created", status: "planned", reason: null },
-        { nodeId: "draft-reply", status: "approval_required", reason: "manual_approve" }
-      ],
-      warnings: []
+    await expect(service.simulateFlow(flowId, runtimeRequest(), request())).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" })
     });
 
     expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
@@ -248,65 +247,27 @@ describe("FlowsService", () => {
     expect(runtimeStore.createEvent).not.toHaveBeenCalled();
   });
 
-  it("fails closed for client subjects without an owner relationship", async () => {
-    const runtimeStore = createRuntimeStore({
-      createRunForEventDedupe: vi.fn(async (input) => ({
-        status: "created" as const,
-        event: runtimeEvent,
-        run: { ...run, status: "suppressed" as const, currentNodeId: null, completedAt: now },
-        stepRuns: [],
-        approvals: [],
-        suppression: {
-          ...suppression,
-          reason: input.suppression?.reason ?? suppression.reason
-        }
-      }))
-    });
+  it("does not resolve client gates while execution is unavailable", async () => {
+    const runtimeStore = createRuntimeStore();
     const service = createService({
       store: createFlowStore({
         findByOwnerAndId: vi.fn(async () =>
           flow({ status: "active", publishedVersionId: versionId, publishedVersion: 1, publishedAt: now })
         )
       }),
-      runtimeStore,
-      clientStore: createClientStore({ related: false })
+      runtimeStore
     });
 
-    await expect(service.simulateFlow(flowId, runtimeRequest(), request())).resolves.toMatchObject({
-      warnings: ["OWNER_RELATIONSHIP_REQUIRED"],
-      plannedSteps: [
-        { nodeId: "lead-created", status: "blocked", reason: "OWNER_RELATIONSHIP_REQUIRED" },
-        { nodeId: "draft-reply", status: "blocked", reason: "OWNER_RELATIONSHIP_REQUIRED" }
-      ]
+    await expect(service.simulateFlow(flowId, runtimeRequest(), request())).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" })
     });
-    await expect(service.createManualRun(flowId, runtimeRequest(), request())).resolves.toMatchObject({
-      status: "suppressed",
-      reason: "OWNER_RELATIONSHIP_REQUIRED"
+    await expect(service.createManualRun(flowId, runtimeRequest(), request())).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" })
     });
 
-    expect(runtimeStore.createRunForEventDedupe).toHaveBeenCalledWith(
-      expect.objectContaining({
-        suppression: expect.objectContaining({ reason: "OWNER_RELATIONSHIP_REQUIRED" })
-      })
-    );
-  });
-
-  it("rejects malformed client subject ids before calling the client store", async () => {
-    const clientStore = createClientStore();
-    const service = createService({
-      store: createFlowStore({
-        findByOwnerAndId: vi.fn(async () =>
-          flow({ status: "active", publishedVersionId: versionId, publishedVersion: 1, publishedAt: now })
-        )
-      }),
-      clientStore
-    });
-
-    await expect(
-      service.simulateFlow(flowId, { ...runtimeRequest(), subjectId: "client-1" }, request())
-    ).rejects.toBeInstanceOf(BadRequestException);
-
-    expect(clientStore.getAstrologerClient).not.toHaveBeenCalled();
+    expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
   });
 
   it("maps invalid simulation bodies and missing runtime records to flow API errors", async () => {
@@ -322,10 +283,13 @@ describe("FlowsService", () => {
     await expect(service.getFlowRun(runId, request())).rejects.toBeInstanceOf(NotFoundException);
     await expect(
       service.decideFlowApproval(approvalId, { decision: "approved" }, request())
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" })
+    });
   });
 
-  it("creates manual runs and exposes owner-scoped runtime read models", async () => {
+  it("blocks manual execution and approval decisions while keeping runtime reads available", async () => {
     const runtimeStore = createRuntimeStore();
     const service = createService({
       store: createFlowStore({
@@ -336,26 +300,34 @@ describe("FlowsService", () => {
       runtimeStore
     });
 
-    await expect(service.createManualRun(flowId, runtimeRequest(), request())).resolves.toMatchObject({
-      status: "created",
-      run: { id: runId, status: "approval_required" },
-      approvals: [{ id: approvalId, status: "pending" }]
+    await expect(service.createManualRun(flowId, runtimeRequest(), request())).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" })
     });
     await expect(service.listFlowRuns(flowId, { status: "all" }, request())).resolves.toEqual({
       runs: [run],
-      total: 1
+      total: 1,
+      runtime: runtimeAvailability
     });
-    await expect(service.getFlowRun(runId, request())).resolves.toEqual({ run });
-    await expect(service.cancelFlowRun(runId, request())).resolves.toEqual({
-      run: { ...run, status: "canceled", currentNodeId: null, completedAt: now }
+    await expect(service.getFlowRun(runId, request())).resolves.toEqual({
+      run,
+      runtime: runtimeAvailability
+    });
+    await expect(service.cancelFlowRun(runId, request())).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" })
     });
     await expect(service.listFlowApprovals({ status: "pending" }, request())).resolves.toEqual({
       approvals: [approval],
-      total: 1
+      total: 1,
+      runtime: runtimeAvailability
     });
     await expect(
       service.decideFlowApproval(approvalId, { decision: "approved", note: "ok" }, request())
-    ).resolves.toEqual({ approval });
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" })
+    });
 
     expect(runtimeStore.listRuns).toHaveBeenCalledWith({
       ownerUserId,
@@ -364,10 +336,10 @@ describe("FlowsService", () => {
       limit: 50,
       offset: 0
     });
-    expect(runtimeStore.cancelRun).toHaveBeenCalledWith({ ownerUserId, runId, now });
+    expect(runtimeStore.cancelRun).not.toHaveBeenCalled();
   });
 
-  it("dispatches module runtime events to matching active flows through client relationship gates", async () => {
+  it("consumes matching module events as unavailable without runtime persistence", async () => {
     const listActiveByTriggerKind = vi.fn(async () => [
       flow({
         status: "active",
@@ -389,8 +361,7 @@ describe("FlowsService", () => {
           })
         )
       }),
-      runtimeStore,
-      clientStore: createClientStore({ related: true })
+      runtimeStore
     });
 
     await expect(
@@ -405,24 +376,19 @@ describe("FlowsService", () => {
         timeZone: "Europe/Moscow",
         payload: { clientUserId }
       })
-    ).resolves.toMatchObject({
-      total: 1,
-      results: [{ flowId, status: "created", run: { id: runId } }]
+    ).resolves.toEqual({
+      status: "execution_unavailable",
+      matchedFlows: 1,
+      reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+      total: 0,
+      results: []
     });
 
     expect(listActiveByTriggerKind).toHaveBeenCalledWith({
       ownerUserId,
       triggerKind: "lead_created"
     });
-    expect(runtimeStore.createRunForEventDedupe).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: expect.objectContaining({
-          source: "crm",
-          sourceEventId: `crm:lead:client-1:${flowId}`,
-          subjectId: clientUserId
-        })
-      })
-    );
+    expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
   });
 });
 
@@ -456,14 +422,12 @@ function createService(
   overrides: {
     readonly store?: FlowStore;
     readonly runtimeStore?: FlowRuntimeStore;
-    readonly clientStore?: ClientStore;
     readonly clock?: SystemClock;
   } = {}
 ) {
   return new FlowsService(
     overrides.store ?? createFlowStore(),
     overrides.runtimeStore ?? createRuntimeStore(),
-    overrides.clientStore ?? createClientStore(),
     overrides.clock ?? ({ now: () => new Date(now) } as SystemClock)
   );
 }
@@ -547,32 +511,6 @@ function createRuntimeStore(overrides: Partial<FlowRuntimeStore> = {}): FlowRunt
     listApprovals: vi.fn(async () => ({ approvals: [approval], total: 1 })),
     decideApproval: vi.fn(async () => approval),
     ...overrides
-  };
-}
-
-function createClientStore(input: { readonly related?: boolean } = {}): ClientStore {
-  const related = input.related ?? true;
-  const client: AstrologerClientListItem = {
-    clientUserId,
-    displayName: "Марина Краснова",
-    relationshipStatus: "active",
-    firstLinkedAt: now,
-    lastLinkedAt: now,
-    birthData: null
-  };
-
-  return {
-    createJoinIntent: vi.fn(async () => raise("Unexpected client join intent call")),
-    findJoinIntentByTokenHash: vi.fn(async () => null),
-    markJoinIntentClaimed: vi.fn(async () => null),
-    ensureRelationship: vi.fn(async () => raise("Unexpected ensure relationship call")),
-    upsertClientProfile: vi.fn(async () => undefined),
-    upsertClientBirthData: vi.fn(async () => raise("Unexpected upsert birth data call")),
-    listClientBirthDataProfiles: vi.fn(async () => []),
-    createClientBirthDataProfile: vi.fn(async () => raise("Unexpected create birth data call")),
-    updateClientBirthDataProfile: vi.fn(async () => raise("Unexpected update birth data call")),
-    listAstrologerClients: vi.fn(async () => ({ clients: related ? [client] : [], total: related ? 1 : 0 })),
-    getAstrologerClient: vi.fn(async () => (related ? client : null))
   };
 }
 
@@ -677,8 +615,4 @@ function request(): AstrologerSessionRequest {
       }
     }
   };
-}
-
-function raise(message: string): never {
-  throw new Error(message);
 }

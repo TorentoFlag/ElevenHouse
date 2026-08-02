@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -38,13 +39,15 @@ import {
 } from "@elevenhouse/contracts";
 import {
   activateFlow,
+  cancelFlowRun as cancelFlowRunUseCase,
   createFlowDraft,
   dispatchFlowRuntimeEvent,
   createManualFlowRun,
   decideFlowApproval as decideFlowApprovalUseCase,
+  FLOW_RUNTIME_AVAILABILITY,
   FlowGraphValidationError,
+  FlowRuntimeExecutionUnavailableError,
   FlowStatusTransitionError,
-  getAstrologerClient,
   getBuiltInFlowTemplates,
   getFlow,
   listFlowApprovals,
@@ -54,7 +57,6 @@ import {
   publishFlow,
   simulateFlowRun,
   updateFlowDraft,
-  type ClientStore,
   type DispatchFlowRuntimeEventInput,
   type DispatchFlowRuntimeEventResult,
   type FlowRuntimeStore,
@@ -62,12 +64,10 @@ import {
 } from "@elevenhouse/domain";
 import { z, type ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
-import { CLIENT_STORE } from "../clients/clients.tokens";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { FLOW_RUNTIME_STORE, FLOW_STORE } from "./flows.tokens";
 
 const flowIdParamSchema = z.string().uuid();
-const clientSubjectIdSchema = z.string().uuid();
 type DispatchRuntimeEventServiceInput = Omit<
   DispatchFlowRuntimeEventInput,
   "flowStore" | "runtimeStore" | "gates" | "now"
@@ -78,7 +78,6 @@ export class FlowsService {
   constructor(
     @Inject(FLOW_STORE) private readonly store: FlowStore,
     @Inject(FLOW_RUNTIME_STORE) private readonly runtimeStore: FlowRuntimeStore,
-    @Inject(CLIENT_STORE) private readonly clientStore: ClientStore,
     private readonly clock: SystemClock
   ) {}
 
@@ -99,7 +98,8 @@ export class FlowsService {
 
     return listFlowsResponseSchema.parse({
       flows: result.flows,
-      total: result.total
+      total: result.total,
+      runtime: FLOW_RUNTIME_AVAILABILITY
     });
   }
 
@@ -196,6 +196,9 @@ export class FlowsService {
       if (error instanceof FlowStatusTransitionError) {
         throw flowStatusTransitionBadRequest(error);
       }
+      if (error instanceof FlowRuntimeExecutionUnavailableError) {
+        throw flowRuntimeExecutionUnavailableConflict(error);
+      }
       throw error;
     }
   }
@@ -230,14 +233,15 @@ export class FlowsService {
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     const parsedBody = parseContract(simulateFlowRunRequestSchema, body);
     await requirePublishedRuntimeVersion(this.store, ownerUserId, parsedFlowId);
-    const result = await simulateFlowRun({
-      flowStore: this.store,
-      runtimeStore: this.runtimeStore,
-      ownerUserId,
-      flowId: parsedFlowId,
-      request: parsedBody,
-      gates: await this.deriveRuntimeGates(ownerUserId, parsedBody)
-    });
+    const result = await mapRuntimeExecutionUnavailable(() =>
+      simulateFlowRun({
+        flowStore: this.store,
+        runtimeStore: this.runtimeStore,
+        ownerUserId,
+        flowId: parsedFlowId,
+        request: parsedBody
+      })
+    );
     if (!result) throw flowNotFound();
 
     return simulateFlowRunResponseSchema.parse(result);
@@ -252,16 +256,17 @@ export class FlowsService {
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     const parsedBody = parseContract(simulateFlowRunRequestSchema, body);
     await requirePublishedRuntimeVersion(this.store, ownerUserId, parsedFlowId);
-    const result = await createManualFlowRun({
-      flowStore: this.store,
-      runtimeStore: this.runtimeStore,
-      ownerUserId,
-      flowId: parsedFlowId,
-      dedupeKey: `manual:${parsedBody.subjectType}:${parsedBody.subjectId}:${parsedFlowId}:${parsedBody.occurredAt}`,
-      request: parsedBody,
-      gates: await this.deriveRuntimeGates(ownerUserId, parsedBody),
-      now: this.clock.now().toISOString()
-    });
+    const result = await mapRuntimeExecutionUnavailable(() =>
+      createManualFlowRun({
+        flowStore: this.store,
+        runtimeStore: this.runtimeStore,
+        ownerUserId,
+        flowId: parsedFlowId,
+        dedupeKey: `manual:${parsedBody.subjectType}:${parsedBody.subjectId}:${parsedFlowId}:${parsedBody.occurredAt}`,
+        request: parsedBody,
+        now: this.clock.now().toISOString()
+      })
+    );
     if (!result) throw flowNotFound();
 
     return manualFlowRunResponseSchema.parse(result);
@@ -270,13 +275,14 @@ export class FlowsService {
   async dispatchRuntimeEvent(
     input: DispatchRuntimeEventServiceInput
   ): Promise<DispatchFlowRuntimeEventResult> {
-    return dispatchFlowRuntimeEvent({
-      flowStore: this.store,
-      runtimeStore: this.runtimeStore,
-      ...input,
-      gates: await this.deriveRuntimeGates(input.ownerUserId, input),
-      now: this.clock.now().toISOString()
-    });
+    return mapRuntimeExecutionUnavailable(() =>
+      dispatchFlowRuntimeEvent({
+        flowStore: this.store,
+        runtimeStore: this.runtimeStore,
+        ...input,
+        now: this.clock.now().toISOString()
+      })
+    );
   }
 
   async listFlowRuns(
@@ -295,7 +301,10 @@ export class FlowsService {
       query: parsedQuery
     });
 
-    return listFlowRunsResponseSchema.parse(result);
+    return listFlowRunsResponseSchema.parse({
+      ...result,
+      runtime: FLOW_RUNTIME_AVAILABILITY
+    });
   }
 
   async getFlowRun(runId: string, request: AstrologerSessionRequest): Promise<GetFlowRunResponse> {
@@ -304,7 +313,7 @@ export class FlowsService {
     const run = await this.runtimeStore.findRunById({ ownerUserId, runId: parsedRunId });
     if (!run) throw flowNotFound();
 
-    return getFlowRunResponseSchema.parse({ run });
+    return getFlowRunResponseSchema.parse({ run, runtime: FLOW_RUNTIME_AVAILABILITY });
   }
 
   async cancelFlowRun(
@@ -313,11 +322,14 @@ export class FlowsService {
   ): Promise<CancelFlowRunResponse> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedRunId = parseContract(flowIdParamSchema, runId);
-    const run = await this.runtimeStore.cancelRun({
-      ownerUserId,
-      runId: parsedRunId,
-      now: this.clock.now().toISOString()
-    });
+    const run = await mapRuntimeExecutionUnavailable(() =>
+      cancelFlowRunUseCase({
+        runtimeStore: this.runtimeStore,
+        ownerUserId,
+        runId: parsedRunId,
+        now: this.clock.now().toISOString()
+      })
+    );
     if (!run) throw flowNotFound();
 
     return cancelFlowRunResponseSchema.parse({ run });
@@ -335,7 +347,10 @@ export class FlowsService {
       query: parsedQuery
     });
 
-    return listFlowApprovalsResponseSchema.parse(result);
+    return listFlowApprovalsResponseSchema.parse({
+      ...result,
+      runtime: FLOW_RUNTIME_AVAILABILITY
+    });
   }
 
   async decideFlowApproval(
@@ -346,37 +361,19 @@ export class FlowsService {
     const ownerUserId = requireOwnerUserId(request);
     const parsedApprovalId = parseContract(flowIdParamSchema, approvalId);
     const parsedBody = parseContract(decideFlowApprovalRequestSchema, body);
-    const approval = await decideFlowApprovalUseCase({
-      runtimeStore: this.runtimeStore,
-      ownerUserId,
-      approvalId: parsedApprovalId,
-      decidedByUserId: ownerUserId,
-      request: parsedBody,
-      now: this.clock.now().toISOString()
-    });
+    const approval = await mapRuntimeExecutionUnavailable(() =>
+      decideFlowApprovalUseCase({
+        runtimeStore: this.runtimeStore,
+        ownerUserId,
+        approvalId: parsedApprovalId,
+        decidedByUserId: ownerUserId,
+        request: parsedBody,
+        now: this.clock.now().toISOString()
+      })
+    );
     if (!approval) throw flowNotFound();
 
     return decideFlowApprovalResponseSchema.parse({ approval });
-  }
-
-  private async deriveRuntimeGates(
-    ownerUserId: string,
-    request: { readonly subjectType: string; readonly subjectId: string }
-  ) {
-    if (request.subjectType !== "client") {
-      return {};
-    }
-
-    const clientUserId = parseContract(clientSubjectIdSchema, request.subjectId);
-    const client = await getAstrologerClient({
-      store: this.clientStore,
-      astrologerUserId: ownerUserId,
-      clientUserId
-    });
-
-    return {
-      hasOwnerRelationship: client !== null
-    };
   }
 }
 
@@ -444,6 +441,28 @@ function flowRuntimeVersionRequired(): BadRequestException {
 function flowStatusTransitionBadRequest(error: FlowStatusTransitionError): BadRequestException {
   return new BadRequestException({
     statusCode: 400,
+    error: error.code,
+    code: error.code,
+    message: error.message
+  });
+}
+
+async function mapRuntimeExecutionUnavailable<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof FlowRuntimeExecutionUnavailableError) {
+      throw flowRuntimeExecutionUnavailableConflict(error);
+    }
+    throw error;
+  }
+}
+
+function flowRuntimeExecutionUnavailableConflict(
+  error: FlowRuntimeExecutionUnavailableError
+): ConflictException {
+  return new ConflictException({
+    statusCode: 409,
     error: error.code,
     code: error.code,
     message: error.message
