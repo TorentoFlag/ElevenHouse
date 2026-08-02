@@ -64,6 +64,8 @@ export type ChartEnginePageProps = {
   readonly result: StoredChartCalculationPayload | null;
   readonly errorMessage: string | null;
   readonly isBusy: boolean;
+  readonly isCalculationLinked?: boolean;
+  readonly linkDisabled?: boolean;
   readonly isResultStale?: boolean;
   readonly locale?: DictionaryLocale;
   readonly settings: ChartSettings;
@@ -96,6 +98,7 @@ export type ChartEnginePageProps = {
   readonly pdfDisabled?: boolean;
   readonly pdfTitle?: string;
   readonly pdfErrorMessage?: string | null;
+  readonly onLink?: () => void | Promise<void>;
   readonly onPdf?: () => void | Promise<void>;
 };
 
@@ -122,6 +125,8 @@ export function ChartEnginePage({
   result,
   errorMessage,
   isBusy,
+  isCalculationLinked = false,
+  linkDisabled = true,
   isResultStale = false,
   locale = "ru",
   settings,
@@ -154,6 +159,7 @@ export function ChartEnginePage({
   pdfDisabled = true,
   pdfTitle = "PDF доступен после расчёта карты",
   pdfErrorMessage = null,
+  onLink,
   onPdf
 }: ChartEnginePageProps) {
   const readiness = getChartBirthDataReadiness(selectedClient?.birthData);
@@ -416,8 +422,13 @@ export function ChartEnginePage({
         <button className={styles.toolButton} type="button" disabled>
           ↗
         </button>
-        <button className={styles.toolButton} type="button" disabled>
-          {displayResult && selectedClient ? "✓ Привязана" : "Привязать"}
+        <button
+          className={styles.toolButton}
+          type="button"
+          disabled={isCalculationLinked || linkDisabled}
+          onClick={() => void onLink?.()}
+        >
+          {isCalculationLinked ? "✓ Привязана" : "Привязать"}
         </button>
         <button
           className={styles.toolButton}

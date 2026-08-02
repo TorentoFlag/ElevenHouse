@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  CalculationRecordResponse,
   ChartHoraryQuestionSnapshot,
   ChartSettings,
   ChartTransitMoment,
@@ -46,6 +47,11 @@ import {
   openChartPdfDownloadUrl,
   reserveChartPdfDownloadWindow
 } from "../../features/charts/model/chartPdfModel";
+import {
+  getCalculation as getSavedCalculation,
+  linkCalculationClient
+} from "../../features/calculations/api/calculationsApi";
+import { isCalculationLinked } from "../../features/calculations/model/calculationStatus";
 import type {
   ChartEngineMode,
   ChartEnginePageJobState,
@@ -529,6 +535,22 @@ export function useChartEngineController() {
     queryFn: () => getChartCalculation(calculationId ?? ""),
     enabled: Boolean(calculationId && !immediateResult)
   });
+  const savedCalculationQuery = useQuery({
+    queryKey: ["calculations", calculationId],
+    queryFn: () => getSavedCalculation(calculationId ?? ""),
+    enabled: Boolean(calculationId)
+  });
+  const linkCalculationMutation = useMutation({
+    mutationFn: linkCalculationClient,
+    onSuccess: async (calculation) => {
+      setErrorMessage(null);
+      queryClient.setQueryData(["calculations", calculation.id], calculation);
+      await queryClient.invalidateQueries({ queryKey: ["calculations"] });
+    },
+    onError: (error) => {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось привязать расчёт");
+    }
+  });
 
   useEffect(() => {
     const response = restoredClientQuery.data;
@@ -572,6 +594,9 @@ export function useChartEngineController() {
   }, [calculationQuery.data, mode]);
 
   const result = immediateResult ?? calculationQuery.data ?? null;
+  const savedCalculation = savedCalculationQuery.data ?? null;
+  const isCurrentCalculationLinked = isCalculationLinked(savedCalculation);
+  const linkableClientId = getChartLinkableClientId(savedCalculation, selectedClient?.value ?? null);
   const isResultStale = Boolean(
     result &&
     (hasResultStaleIntent ||
@@ -654,6 +679,7 @@ export function useChartEngineController() {
     horaryCalculationMutation.isPending ||
     astrocartographyCalculationMutation.isPending ||
     birthDataMutation.isPending ||
+    linkCalculationMutation.isPending ||
     enqueuePdfMutation.isPending ||
     downloadPdfMutation.isPending ||
     Boolean(jobId) ||
@@ -675,6 +701,14 @@ export function useChartEngineController() {
     calculationId,
     result,
     isResultStale,
+    isCalculationLinked: isCurrentCalculationLinked,
+    linkDisabled:
+      isBusy ||
+      !calculationId ||
+      !result ||
+      isResultStale ||
+      isCurrentCalculationLinked ||
+      !linkableClientId,
     errorMessage:
       errorMessage ??
       (calculationQuery.error instanceof Error ? calculationQuery.error.message : null) ??
@@ -742,6 +776,17 @@ export function useChartEngineController() {
     onSearchBirthPlaces: async (query: string) => birthPlaceSearchMutation.mutateAsync(query),
     onSaveBirthData: async (data: Parameters<typeof updateClientBirthData>[1]) => {
       await birthDataMutation.mutateAsync(data);
+    },
+    onLink: async () => {
+      if (!calculationId || !linkableClientId || isCurrentCalculationLinked) return;
+      try {
+        await linkCalculationMutation.mutateAsync({
+          calculationId,
+          body: { clientId: linkableClientId }
+        });
+      } catch {
+        // The mutation onError handler owns the visible error message.
+      }
     },
     onSelectClient: (client: ClientSelectOption) => {
       setSelectedClient(client);
@@ -969,6 +1014,17 @@ export function useChartEngineController() {
       }
     }
   };
+}
+
+export function getChartLinkableClientId(
+  calculation: Pick<CalculationRecordResponse, "participants"> | null,
+  selectedClientId: string | null
+) {
+  return (
+    calculation?.participants.find(
+      (participant) => participant.source === "crm_client" && participant.clientId
+    )?.clientId ?? selectedClientId
+  );
 }
 
 export async function submitChartCalculation({
