@@ -1,5 +1,6 @@
 export * from "./flow-validation";
 export * from "./flow-graph-v2-compiler";
+export * from "./flow-definition-validation";
 export * from "./flow-eligibility";
 export * from "./flow-run-state";
 export * from "./flow-templates";

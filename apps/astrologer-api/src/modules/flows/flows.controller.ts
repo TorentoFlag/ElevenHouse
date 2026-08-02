@@ -48,6 +48,17 @@ export class FlowsController {
     return this.service.getFlow(flowId, request);
   }
 
+  @Post(":flowId/validate")
+  @HttpCode(HttpStatus.OK)
+  @RequireCsrf()
+  validateFlowDefinition(
+    @Param("flowId") flowId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.validateFlowDefinition(flowId, body, request);
+  }
+
   @Patch(":flowId/draft")
   @RequireCsrf()
   updateFlowDraft(

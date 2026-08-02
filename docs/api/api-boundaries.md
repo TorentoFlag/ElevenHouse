@@ -97,9 +97,10 @@ PDF export, canonical Pythagorean numerology, canonical Ladini 22 Matrix
 calculations with private notes and a versioned interpretation catalog, Human
 Design individual/compatibility/transit/AI/PDF contours, provider-neutral
 Messaging commands/webhook/SSE freshness and provider-neutral AI generation
-through OpenAI, and the Flows templates/draft CRUD/immutable publish plus
-definition-only runtime read surface. Flows execution is currently fail-closed
-until the durable `flow-graph.v2` interpreter is implemented.
+through OpenAI, and the Flows templates/draft CRUD/immutable publish,
+owner-scoped definition validation and definition-only runtime read surface.
+Flows execution is currently fail-closed until the durable `flow-graph.v2`
+interpreter is implemented.
 Messaging architecture is recorded in
 `docs/decisions/0010-messaging-channel-architecture.md`.
 
@@ -113,8 +114,8 @@ Messaging architecture is recorded in
 - Messaging commands, provider webhook ingestion and realtime freshness.
 - Sessions и materials.
 - Wallet/finance views.
-- Flows templates, draft CRUD, immutable publish and definition-only runtime
-  history/availability projection.
+- Flows templates, draft CRUD, owner-scoped read-only definition validation,
+  immutable publish and definition-only runtime history/availability projection.
 - Analytics.
 - Verification submission and current verification status for the signed-in
   astrologer.
@@ -219,6 +220,7 @@ GET /flow-templates
 GET /flows
 POST /flows
 GET /flows/:flowId
+POST /flows/:flowId/validate
 PATCH /flows/:flowId/draft
 POST /flows/:flowId/publish
 POST /flows/:flowId/activate
@@ -239,6 +241,14 @@ metadata. The current value is `mode=definition_only`,
 `historySemantics=legacy_preview`. This metadata is the frontend authority for
 disabled execution controls and for excluding legacy traversal rows from
 business completion metrics.
+
+`POST /flows/:flowId/validate` is an owner-scoped, CSRF-protected read-only
+operation. It accepts readable v1 or strict v2 graphs through shared contracts,
+returns explicit publishability issues, a canonical v2 graph and capability
+requirements when compilation succeeds, and reports activation blockers
+separately. A valid graph remains `activatable=false` with
+`FLOW_RUNTIME_EXECUTION_UNAVAILABLE` until the versioned runtime readiness
+authority exists. Validation does not mutate the flow, runtime or outbox.
 
 Create/edit/publish, read-only history and pausing an already active legacy flow
 remain available. Activation, simulation, manual run creation, run cancellation

@@ -2,54 +2,26 @@ import {
   FLOW_GRAPH_V2_MAX_EDGES,
   FLOW_GRAPH_V2_MAX_NODES,
   flowGraphV2Schema,
+  type FlowCapabilityManifestV1,
+  type FlowCapabilityRequirement,
+  type FlowDefinitionValidationIssue,
   type FlowGraphV2,
+  type FlowGraphV2CompileIssueCode,
   type FlowNodeKindV2,
+  type FlowNodeExecutorRequirement,
   type FlowNodeV2,
   type FlowSourceHandleV2
 } from "@elevenhouse/contracts";
 
-export type FlowGraphV2CompileIssueCode =
-  | "duplicate_node_id"
-  | "duplicate_edge_id"
-  | "node_limit_exceeded"
-  | "edge_limit_exceeded"
-  | "invalid_trigger_count"
-  | "missing_edge_endpoint"
-  | "invalid_source_handle"
-  | "duplicate_source_handle"
-  | "missing_required_source_handle"
-  | "implicit_fan_out"
-  | "implicit_fan_in"
-  | "trigger_has_incoming_edge"
-  | "terminal_has_outgoing_edge"
-  | "cycle_detected"
-  | "unreachable_node"
-  | "unterminated_path";
+export type {
+  FlowCapabilityManifestV1,
+  FlowCapabilityRequirement,
+  FlowGraphV2CompileIssueCode,
+  FlowNodeExecutorRequirement
+} from "@elevenhouse/contracts";
 
-export type FlowGraphV2CompileIssue = {
+export type FlowGraphV2CompileIssue = Omit<FlowDefinitionValidationIssue, "code"> & {
   readonly code: FlowGraphV2CompileIssueCode;
-  readonly severity: "error";
-  readonly blocking: true;
-  readonly path: string;
-  readonly message: string;
-};
-
-export type FlowNodeExecutorRequirement = {
-  readonly kind: FlowNodeKindV2;
-  readonly configSchemaVersion: 1;
-  readonly executorContractVersion: 1;
-};
-
-export type FlowCapabilityRequirement =
-  | "bookings.events.booking_confirmed"
-  | "clients.birth_data.read.service_preparation"
-  | "products.read";
-
-export type FlowCapabilityManifestV1 = {
-  readonly schemaVersion: "flow-capability-manifest.v1";
-  readonly executionSemanticsVersion: "flow-interpreter.v1";
-  readonly nodeExecutors: readonly FlowNodeExecutorRequirement[];
-  readonly requiredCapabilities: readonly FlowCapabilityRequirement[];
 };
 
 export type FlowGraphV2CompileResult = {

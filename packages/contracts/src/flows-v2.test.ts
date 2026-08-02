@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { flowGraphSchema } from "./flows";
 import {
+  flowCapabilityManifestV1Schema,
   flowGraphReadSchema,
   flowGraphV2Schema,
   flowPresentationV1Schema,
+  validateFlowDefinitionRequestSchema,
+  validateFlowDefinitionResponseSchema,
   type FlowGraphV2
 } from "./flows-v2";
 
@@ -245,6 +248,163 @@ describe("flow presentation v1 contracts", () => {
     expect(flowPresentationV1Schema.parse(presentation)).toEqual(presentation);
     expect(
       flowPresentationV1Schema.safeParse({ ...presentation, selectedNodeId: "completed" }).success
+    ).toBe(false);
+  });
+});
+
+describe("flow definition validation contracts", () => {
+  const capabilityManifest = {
+    schemaVersion: "flow-capability-manifest.v1",
+    executionSemanticsVersion: "flow-interpreter.v1",
+    nodeExecutors: [
+      { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 },
+      { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
+    ],
+    requiredCapabilities: []
+  } as const;
+
+  it("accepts either readable graph version as validation input", () => {
+    expect(validateFlowDefinitionRequestSchema.parse({ graph: legacyGraph })).toEqual({
+      graph: legacyGraph
+    });
+    expect(validateFlowDefinitionRequestSchema.parse({ graph: manualClientGraph })).toEqual({
+      graph: manualClientGraph
+    });
+  });
+
+  it("parses a publishable v2 result that remains activation-blocked", () => {
+    const response = {
+      schemaVersion: "flow-definition-validation.v1",
+      graphSchemaVersion: "flow-graph.v2",
+      publishable: true,
+      activatable: false,
+      issues: [],
+      activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"],
+      normalizedGraph: manualClientGraph,
+      capabilityManifest
+    } as const;
+
+    expect(flowCapabilityManifestV1Schema.parse(capabilityManifest)).toEqual(capabilityManifest);
+    expect(validateFlowDefinitionResponseSchema.parse(response)).toEqual(response);
+  });
+
+  it("parses an explicit v1 migration blocker", () => {
+    const response = {
+      schemaVersion: "flow-definition-validation.v1",
+      graphSchemaVersion: "flow-graph.v1",
+      publishable: false,
+      activatable: false,
+      issues: [
+        {
+          code: "migration_required",
+          severity: "error",
+          blocking: true,
+          path: "schemaVersion",
+          message: "Flow graph v1 requires explicit migration before publishing."
+        }
+      ],
+      activationBlockers: ["FLOW_GRAPH_MIGRATION_REQUIRED", "FLOW_RUNTIME_EXECUTION_UNAVAILABLE"],
+      normalizedGraph: null,
+      capabilityManifest: null
+    } as const;
+
+    expect(validateFlowDefinitionResponseSchema.parse(response)).toEqual(response);
+  });
+
+  it("rejects contradictory publish and activation claims", () => {
+    const missingCompiledSnapshot = {
+      schemaVersion: "flow-definition-validation.v1",
+      graphSchemaVersion: "flow-graph.v2",
+      publishable: true,
+      activatable: false,
+      issues: [],
+      activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"],
+      normalizedGraph: null,
+      capabilityManifest: null
+    };
+    expect(validateFlowDefinitionResponseSchema.safeParse(missingCompiledSnapshot).success).toBe(
+      false
+    );
+
+    expect(
+      validateFlowDefinitionResponseSchema.safeParse({
+        ...missingCompiledSnapshot,
+        normalizedGraph: manualClientGraph,
+        capabilityManifest,
+        activatable: true
+      }).success
+    ).toBe(false);
+  });
+
+  it("rejects partial compile artifacts and version-specific blocker contradictions", () => {
+    const compilerIssue = {
+      code: "missing_required_source_handle",
+      severity: "error",
+      blocking: true,
+      path: "nodes.manual",
+      message: "Manual trigger requires a next edge."
+    } as const;
+    const migrationIssue = {
+      code: "migration_required",
+      severity: "error",
+      blocking: true,
+      path: "schemaVersion",
+      message: "Migration required."
+    } as const;
+    const invalidV2 = {
+      schemaVersion: "flow-definition-validation.v1",
+      graphSchemaVersion: "flow-graph.v2",
+      publishable: false,
+      activatable: false,
+      issues: [compilerIssue],
+      activationBlockers: ["FLOW_GRAPH_NOT_PUBLISHABLE"],
+      normalizedGraph: null,
+      capabilityManifest: null
+    } as const;
+
+    expect(
+      validateFlowDefinitionResponseSchema.safeParse({
+        ...invalidV2,
+        normalizedGraph: manualClientGraph
+      }).success
+    ).toBe(false);
+    expect(
+      validateFlowDefinitionResponseSchema.safeParse({
+        ...invalidV2,
+        activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"]
+      }).success
+    ).toBe(false);
+    expect(
+      validateFlowDefinitionResponseSchema.safeParse({
+        ...invalidV2,
+        issues: [migrationIssue],
+        activationBlockers: ["FLOW_GRAPH_MIGRATION_REQUIRED"]
+      }).success
+    ).toBe(false);
+
+    const validV1 = {
+      ...invalidV2,
+      graphSchemaVersion: "flow-graph.v1",
+      issues: [migrationIssue],
+      activationBlockers: ["FLOW_GRAPH_MIGRATION_REQUIRED"]
+    } as const;
+    expect(
+      validateFlowDefinitionResponseSchema.safeParse({
+        ...validV1,
+        activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"]
+      }).success
+    ).toBe(false);
+    expect(
+      validateFlowDefinitionResponseSchema.safeParse({
+        ...validV1,
+        issues: [compilerIssue]
+      }).success
+    ).toBe(false);
+    expect(
+      validateFlowDefinitionResponseSchema.safeParse({
+        ...validV1,
+        capabilityManifest
+      }).success
     ).toBe(false);
   });
 });

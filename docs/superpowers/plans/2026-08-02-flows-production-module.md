@@ -74,6 +74,19 @@ does not reduce the Definition of Done in the design spec.
   typecheck/build, ESLint and documentation gates; independent re-review found
   no blocker/high/medium findings and returned GO. Persistence, API validation,
   draft CAS and publish remain later groups.
+- [x] 2026-08-02 22:19 MSK: Milestone 1 behavior group 2 added owner-scoped,
+  CSRF-protected, read-only definition validation from shared contracts through
+  domain compilation, API and frontend adapter. Valid V2 returns a canonical
+  graph and requirements while activation remains explicitly blocked; invalid
+  V2, V1 migration, malformed input, foreign ownership and no-write behavior
+  are covered. Independent review exposed a cross-field artifact/blocker gap;
+  negative tests reproduced it, the contract and blocker ordering were
+  hardened, and re-review returned GO with no blocker/high/medium findings.
+  Fresh affected-surface verification passed 26 files / 162 tests, focused
+  ESLint, contracts/domain/API typecheck and contracts/domain/API/web builds.
+  An authenticated live request returned HTTP 200, `publishable=true`,
+  `activatable=false` and `FLOW_RUNTIME_EXECUTION_UNAVAILABLE`. Draft CAS,
+  immutable V2 publish and persistence remain later groups.
 - [x] Milestone 0: fail current unsupported runtime closed.
 - [ ] Milestone 1: ship graph v2 definition control plane.
 - [ ] Milestone 2: ship durable token runtime and recovery foundation.
@@ -143,6 +156,11 @@ blocked.
   provider `nominatim` after the shared contract moved to `geoapify`. Flows
   focused tests, lint and production build are green; do not mix that foreign
   migration into this commit.
+- 2026-08-02: a capability manifest is a compile-time requirements declaration,
+  not evidence that matching executors or resources are deployed. The validate
+  response therefore separates `publishable` from `activatable`; the live local
+  API correctly kept a valid V2 graph activation-blocked without creating any
+  flow, run, event or outbox write.
 - The shared worktree contains unrelated Clients/BirthPlace, AstroCalendar,
   package/lockfile and design-QA work. Those changes are valid and must not be
   reverted or mixed into Flows commits.
@@ -226,6 +244,12 @@ Nominatim/Geoapify test fixture recorded above.
 The broader production module is not complete. Milestone 1 must add the strict
 v2 definition control plane; no durable execution, canary enrollment or
 external effects are enabled by this outcome.
+
+Milestone 1 is now partially implemented through strict graph compilation and
+an owner-scoped read-only validation boundary. Validation is available to the
+frontend through a shared-contract adapter, but the existing draft and publish
+commands still use the legacy persistence model. No schema, draft revision,
+immutable V2 version or activation epoch was added in this behavior group.
 
 Do not rewrite incomplete work as achieved. At program completion, reconcile
 this section against every `Implement` row and the Definition of Done in the

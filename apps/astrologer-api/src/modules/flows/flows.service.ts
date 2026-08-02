@@ -25,6 +25,8 @@ import {
   simulateFlowRunRequestSchema,
   simulateFlowRunResponseSchema,
   updateFlowDraftRequestSchema,
+  validateFlowDefinitionRequestSchema,
+  validateFlowDefinitionResponseSchema,
   type CancelFlowRunResponse,
   type DecideFlowApprovalResponse,
   type FlowResponse,
@@ -35,7 +37,8 @@ import {
   type ListFlowRunsResponse,
   type ManualFlowRunResponse,
   type PublishFlowResponse,
-  type SimulateFlowRunResponse
+  type SimulateFlowRunResponse,
+  type ValidateFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 import {
   activateFlow,
@@ -57,6 +60,7 @@ import {
   publishFlow,
   simulateFlowRun,
   updateFlowDraft,
+  validateFlowDefinition as validateFlowDefinitionUseCase,
   type DispatchFlowRuntimeEventInput,
   type DispatchFlowRuntimeEventResult,
   type FlowRuntimeStore,
@@ -127,6 +131,32 @@ export class FlowsService {
     if (!flow) throw flowNotFound();
 
     return flowResponseSchema.parse(flow);
+  }
+
+  async validateFlowDefinition(
+    flowId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<ValidateFlowDefinitionResponse> {
+    const ownerUserId = requireOwnerUserId(request);
+    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
+    const flow = await getFlow({
+      store: this.store,
+      ownerUserId,
+      flowId: parsedFlowId
+    });
+    if (!flow) throw flowNotFound();
+
+    const parsedBody = parseContract(validateFlowDefinitionRequestSchema, body);
+    const activationBlockers = FLOW_RUNTIME_AVAILABILITY.executionAvailable
+      ? []
+      : [FLOW_RUNTIME_AVAILABILITY.reasonCode];
+    return validateFlowDefinitionResponseSchema.parse(
+      validateFlowDefinitionUseCase({
+        graph: parsedBody.graph,
+        activationBlockers
+      })
+    );
   }
 
   async updateFlowDraft(

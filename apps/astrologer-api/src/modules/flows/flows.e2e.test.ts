@@ -9,8 +9,10 @@ import {
   listFlowsResponseSchema,
   listFlowRunsResponseSchema,
   publishFlowResponseSchema,
+  validateFlowDefinitionResponseSchema,
   type FlowApproval,
   type FlowGraph,
+  type FlowGraphV2,
   type FlowRuntimeEvent,
   type FlowRunResponse,
   type FlowStepRunResponse
@@ -54,6 +56,8 @@ const ownerUserId = "8e14390f-3db1-4d1c-9344-55679c778427";
 const clientUserId = "42fd8c6f-1178-4657-a4b5-4f5cd8568743";
 const runtimeFlowId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c111";
 const runtimeVersionId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c112";
+const foreignFlowId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c119";
+const foreignOwnerUserId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c120";
 const legacyApprovalId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c113";
 const legacyRunId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c114";
 let currentCsrfToken = "";
@@ -175,9 +179,13 @@ describe("flows HTTP routes", () => {
     );
     const invalidUpdateResponse = await patchJson(`/flows/${flowId}/draft`, {}, csrfHeaders());
     const publishResponse = await postJson(`/flows/${flowId}/publish`, {}, csrfHeaders());
-    const missingActivateCsrf = await postJson(`/flows/${flowId}/activate`, {}, {
-      cookie: sessionCookieHeader()
-    });
+    const missingActivateCsrf = await postJson(
+      `/flows/${flowId}/activate`,
+      {},
+      {
+        cookie: sessionCookieHeader()
+      }
+    );
     const activateResponse = await postJson(`/flows/${flowId}/activate`, {}, csrfHeaders());
     const pauseResponse = await postJson(`/flows/${runtimeFlowId}/pause`, {}, csrfHeaders());
 
@@ -217,23 +225,100 @@ describe("flows HTTP routes", () => {
     expect(pauseResponse.body).toMatchObject({ id: runtimeFlowId, status: "paused" });
   });
 
-  it("blocks runtime mutations with conflict while preserving CSRF and empty reads", async () => {
-    const missingSimulateCsrf = await postJson(
-      `/flows/${runtimeFlowId}/simulate`,
-      runtimeBody(),
+  it("validates owner-scoped definitions without writes or activation claims", async () => {
+    const v2Graph = validGraphV2();
+    const missingCsrf = await postJson(
+      `/flows/${runtimeFlowId}/validate`,
+      { graph: v2Graph },
       { cookie: sessionCookieHeader() }
     );
+    const validV2 = await postJson(
+      `/flows/${runtimeFlowId}/validate`,
+      { graph: v2Graph },
+      csrfHeaders()
+    );
+    const invalidV2 = await postJson(
+      `/flows/${runtimeFlowId}/validate`,
+      { graph: { ...v2Graph, edges: [] } },
+      csrfHeaders()
+    );
+    const legacyV1 = await postJson(
+      `/flows/${runtimeFlowId}/validate`,
+      { graph: validGraph() },
+      csrfHeaders()
+    );
+    const malformed = await postJson(
+      `/flows/${runtimeFlowId}/validate`,
+      { graph: { ...v2Graph, unexpected: true } },
+      csrfHeaders()
+    );
+    const foreign = await postJson(
+      `/flows/${foreignFlowId}/validate`,
+      { graph: v2Graph },
+      csrfHeaders()
+    );
+    const malformedForeign = await postJson(
+      `/flows/${foreignFlowId}/validate`,
+      { graph: { unexpected: true } },
+      csrfHeaders()
+    );
+    const unknown = await postJson(
+      "/flows/12d75c8b-d7b9-4f3d-b6fd-42d0c333c121/validate",
+      { graph: v2Graph },
+      csrfHeaders()
+    );
+
+    expect(missingCsrf.status).toBe(403);
+    expect(validV2.status).toBe(200);
+    validateFlowDefinitionResponseSchema.parse(validV2.body);
+    expect(validV2.body).toMatchObject({
+      graphSchemaVersion: "flow-graph.v2",
+      publishable: true,
+      activatable: false,
+      activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"]
+    });
+    expect(invalidV2.status).toBe(200);
+    validateFlowDefinitionResponseSchema.parse(invalidV2.body);
+    expect(invalidV2.body).toMatchObject({
+      publishable: false,
+      activatable: false,
+      activationBlockers: expect.arrayContaining([
+        "FLOW_GRAPH_NOT_PUBLISHABLE",
+        "FLOW_RUNTIME_EXECUTION_UNAVAILABLE"
+      ])
+    });
+    expect(legacyV1.status).toBe(200);
+    validateFlowDefinitionResponseSchema.parse(legacyV1.body);
+    expect(legacyV1.body).toMatchObject({
+      graphSchemaVersion: "flow-graph.v1",
+      publishable: false,
+      issues: [expect.objectContaining({ code: "migration_required" })]
+    });
+    expect(malformed.status).toBe(400);
+    expect(foreign.status).toBe(404);
+    expect(malformedForeign.status).toBe(404);
+    expect(unknown.status).toBe(404);
+    expect(flowStore.createDraft).not.toHaveBeenCalled();
+    expect(flowStore.updateDraft).not.toHaveBeenCalled();
+    expect(flowStore.publishDraft).not.toHaveBeenCalled();
+    expect(flowStore.transitionStatus).not.toHaveBeenCalled();
+    expect(runtimeStore.createEvent).not.toHaveBeenCalled();
+    expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
+  });
+
+  it("blocks runtime mutations with conflict while preserving CSRF and empty reads", async () => {
+    const missingSimulateCsrf = await postJson(`/flows/${runtimeFlowId}/simulate`, runtimeBody(), {
+      cookie: sessionCookieHeader()
+    });
     const simulateResponse = await postJson(
       `/flows/${runtimeFlowId}/simulate`,
       runtimeBody(),
       csrfHeaders()
     );
     const runsBeforeManualResponse = await getJson(`/flows/${runtimeFlowId}/runs`);
-    const missingManualCsrf = await postJson(
-      `/flows/${runtimeFlowId}/manual-runs`,
-      runtimeBody(),
-      { cookie: sessionCookieHeader() }
-    );
+    const missingManualCsrf = await postJson(`/flows/${runtimeFlowId}/manual-runs`, runtimeBody(), {
+      cookie: sessionCookieHeader()
+    });
     const manualRunResponse = await postJson(
       `/flows/${runtimeFlowId}/manual-runs`,
       runtimeBody(),
@@ -256,11 +341,7 @@ describe("flows HTTP routes", () => {
       {},
       { cookie: sessionCookieHeader() }
     );
-    const cancelResponse = await postJson(
-      `/flow-runs/${legacyRunId}/cancel`,
-      {},
-      csrfHeaders()
-    );
+    const cancelResponse = await postJson(`/flow-runs/${legacyRunId}/cancel`, {}, csrfHeaders());
 
     expect(missingSimulateCsrf.status).toBe(403);
     expect(simulateResponse.status).toBe(409);
@@ -409,7 +490,14 @@ function createFlowStore(): FlowStore {
     publishedVersion: 1,
     publishedAt: now.toISOString()
   };
-  const flows: FlowRecord[] = [runtimeFlow];
+  const foreignFlow = toFlow(foreignFlowId, {
+    ownerUserId: foreignOwnerUserId,
+    name: "Foreign flow",
+    approvalMode: "manual_approve",
+    draftGraph: validGraph(),
+    now: now.toISOString()
+  });
+  const flows: FlowRecord[] = [runtimeFlow, foreignFlow];
   const versions: Array<Awaited<ReturnType<FlowStore["findPublishedVersionByFlowId"]>>> = [
     {
       id: runtimeVersionId,
@@ -451,8 +539,7 @@ function createFlowStore(): FlowStore {
         null
     ),
     findPublishedVersionByFlowId: vi.fn(
-      async (input) =>
-        versions.find((version) => version?.flowId === input.flowId) ?? null
+      async (input) => versions.find((version) => version?.flowId === input.flowId) ?? null
     ),
     listActiveByTriggerKind: vi.fn(async (input) =>
       flows.filter((flow) => {
@@ -611,94 +698,97 @@ function createRuntimeStore(): FlowRuntimeStore {
     createRun: vi.fn(async () => raise("Use createRunForEventDedupe in HTTP runtime tests")),
     createRunForEventDedupe: vi.fn(
       async (input: Parameters<FlowRuntimeStore["createRunForEventDedupe"]>[0]) => {
-      let event = events.find(
-        (candidate) =>
-          candidate.ownerUserId === input.event.ownerUserId &&
-          candidate.dedupeKey === input.event.dedupeKey
-      );
-      if (!event) {
-        event = {
-          id: "aa000000-0000-4000-8000-000000000001",
+        let event = events.find(
+          (candidate) =>
+            candidate.ownerUserId === input.event.ownerUserId &&
+            candidate.dedupeKey === input.event.dedupeKey
+        );
+        if (!event) {
+          event = {
+            id: "aa000000-0000-4000-8000-000000000001",
+            ownerUserId: input.event.ownerUserId,
+            source: input.event.source,
+            sourceEventId: input.event.sourceEventId,
+            dedupeKey: input.event.dedupeKey,
+            subjectType: input.event.subjectType,
+            subjectId: input.event.subjectId,
+            occurredAt: input.event.occurredAt,
+            payload: input.event.payload
+          };
+          events.push(event);
+        }
+
+        const existing = runs.find(
+          (run) =>
+            run.ownerUserId === input.event.ownerUserId &&
+            run.flowId === input.run.flowId &&
+            run.runtimeEventId === event.id
+        );
+        if (existing) {
+          return {
+            status: "duplicate" as const,
+            event,
+            run: toRunResponse(existing),
+            stepRuns: [],
+            approvals: []
+          };
+        }
+
+        const run: StoredRun = {
+          id: "aa000000-0000-4000-8000-000000000002",
           ownerUserId: input.event.ownerUserId,
-          source: input.event.source,
-          sourceEventId: input.event.sourceEventId,
-          dedupeKey: input.event.dedupeKey,
-          subjectType: input.event.subjectType,
-          subjectId: input.event.subjectId,
-          occurredAt: input.event.occurredAt,
-          payload: input.event.payload
+          flowId: input.run.flowId,
+          flowVersionId: input.run.flowVersionId,
+          runtimeEventId: event.id,
+          sourceEventId: event.sourceEventId,
+          status: input.run.status,
+          snapshot: input.run.snapshot,
+          currentNodeId: input.run.currentNodeId,
+          createdAt: input.run.now,
+          updatedAt: input.run.now,
+          completedAt: input.run.status === "suppressed" ? input.run.now : null
         };
-        events.push(event);
-      }
+        runs.push(run);
+        const stepRuns: FlowStepRunResponse[] = input.run.stepRuns.map((step, index) => ({
+          id: `aa000000-0000-4000-8000-00000000000${index + 3}`,
+          flowRunId: run.id,
+          nodeId: step.nodeId,
+          status: step.status,
+          inputSnapshot: step.inputSnapshot,
+          outputSnapshot: step.outputSnapshot,
+          errorCode: step.errorCode,
+          errorMessage: step.errorMessage,
+          createdAt: input.run.now,
+          updatedAt: input.run.now,
+          completedAt:
+            step.status === "completed" || step.status === "failed_terminal" ? input.run.now : null
+        }));
+        const createdApprovals: StoredApproval[] = input.run.approvals.map((approval, index) => ({
+          id: `bb000000-0000-4000-8000-00000000000${index + 1}`,
+          ownerUserId: input.event.ownerUserId,
+          flowRunId: run.id,
+          stepRunId: stepRuns.find((step) => step.nodeId === approval.stepNodeId)?.id ?? null,
+          status: "pending",
+          kind: approval.kind,
+          title: approval.title,
+          preview: approval.preview,
+          createdAt: input.run.now,
+          decidedAt: null
+        }));
+        approvals.push(...createdApprovals);
 
-      const existing = runs.find(
-        (run) =>
-          run.ownerUserId === input.event.ownerUserId &&
-          run.flowId === input.run.flowId &&
-          run.runtimeEventId === event.id
-      );
-      if (existing) {
         return {
-          status: "duplicate" as const,
+          status: "created" as const,
           event,
-          run: toRunResponse(existing),
-          stepRuns: [],
-          approvals: []
+          run: toRunResponse(run),
+          stepRuns,
+          approvals: createdApprovals.map(stripOwnerUserId)
         };
-      }
-
-      const run: StoredRun = {
-        id: "aa000000-0000-4000-8000-000000000002",
-        ownerUserId: input.event.ownerUserId,
-        flowId: input.run.flowId,
-        flowVersionId: input.run.flowVersionId,
-        runtimeEventId: event.id,
-        sourceEventId: event.sourceEventId,
-        status: input.run.status,
-        snapshot: input.run.snapshot,
-        currentNodeId: input.run.currentNodeId,
-        createdAt: input.run.now,
-        updatedAt: input.run.now,
-        completedAt: input.run.status === "suppressed" ? input.run.now : null
-      };
-      runs.push(run);
-      const stepRuns: FlowStepRunResponse[] = input.run.stepRuns.map((step, index) => ({
-        id: `aa000000-0000-4000-8000-00000000000${index + 3}`,
-        flowRunId: run.id,
-        nodeId: step.nodeId,
-        status: step.status,
-        inputSnapshot: step.inputSnapshot,
-        outputSnapshot: step.outputSnapshot,
-        errorCode: step.errorCode,
-        errorMessage: step.errorMessage,
-        createdAt: input.run.now,
-        updatedAt: input.run.now,
-        completedAt: step.status === "completed" || step.status === "failed_terminal" ? input.run.now : null
-      }));
-      const createdApprovals: StoredApproval[] = input.run.approvals.map((approval, index) => ({
-        id: `bb000000-0000-4000-8000-00000000000${index + 1}`,
-        ownerUserId: input.event.ownerUserId,
-        flowRunId: run.id,
-        stepRunId: stepRuns.find((step) => step.nodeId === approval.stepNodeId)?.id ?? null,
-        status: "pending",
-        kind: approval.kind,
-        title: approval.title,
-        preview: approval.preview,
-        createdAt: input.run.now,
-        decidedAt: null
-      }));
-      approvals.push(...createdApprovals);
-
-      return {
-        status: "created" as const,
-        event,
-        run: toRunResponse(run),
-        stepRuns,
-        approvals: createdApprovals.map(stripOwnerUserId)
-      };
       }
     ),
-    createSuppression: vi.fn(async () => raise("Suppressions are created through createRunForEventDedupe")),
+    createSuppression: vi.fn(async () =>
+      raise("Suppressions are created through createRunForEventDedupe")
+    ),
     findSuppressionByRun: vi.fn(async () => null),
     createDeliveryAttempt: vi.fn(async () => undefined),
     listRuns: vi.fn(async (input: Parameters<FlowRuntimeStore["listRuns"]>[0]) => {
@@ -832,6 +922,38 @@ function validGraph(): FlowGraph {
       }
     ],
     edges: [{ id: "edge-1", fromNodeId: "lead-created", toNodeId: "draft-reply" }]
+  };
+}
+
+function validGraphV2(): FlowGraphV2 {
+  return {
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "manual",
+        kind: "manual_client",
+        displayTitle: "Клиент выбран вручную",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {}
+      },
+      {
+        id: "completed",
+        kind: "completed",
+        displayTitle: "Подготовка завершена",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "consultation_prepared" }
+      }
+    ],
+    edges: [
+      {
+        id: "manual-to-completed",
+        sourceNodeId: "manual",
+        targetNodeId: "completed",
+        sourceHandle: "next"
+      }
+    ]
   };
 }
 

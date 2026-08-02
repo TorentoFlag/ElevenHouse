@@ -1,16 +1,19 @@
-import type {
-  CreateFlowRequest,
-  FlowResponse,
-  FlowRunResponse,
-  FlowRuntimeAvailability,
-  FlowApproval,
-  FlowTemplate,
-  ListFlowApprovalsResponse,
-  ListFlowRunsResponse,
-  ListFlowTemplatesResponse,
-  ListFlowsResponse,
-  ManualFlowRunResponse,
-  PublishFlowResponse
+import {
+  flowGraphV2Schema,
+  type CreateFlowRequest,
+  type FlowResponse,
+  type FlowRunResponse,
+  type FlowRuntimeAvailability,
+  type FlowApproval,
+  type FlowGraphV2,
+  type FlowTemplate,
+  type ListFlowApprovalsResponse,
+  type ListFlowRunsResponse,
+  type ListFlowTemplatesResponse,
+  type ListFlowsResponse,
+  type ManualFlowRunResponse,
+  type PublishFlowResponse,
+  type ValidateFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { application } from "../../../Application";
@@ -26,6 +29,7 @@ import { pauseFlow } from "./pauseFlow";
 import { publishFlow } from "./publishFlow";
 import { simulateFlowRun } from "./simulateFlowRun";
 import { updateFlowDraft } from "./updateFlowDraft";
+import { validateFlowDefinition } from "./validateFlowDefinition";
 
 const flowId = "11111111-1111-4111-8111-111111111111";
 const ownerUserId = "22222222-2222-4222-8222-222222222222";
@@ -58,6 +62,36 @@ const graph = {
   ],
   edges: [{ id: "edge-1", fromNodeId: "lead-created", toNodeId: "draft-reply" }]
 } satisfies CreateFlowRequest["graph"];
+
+const graphV2: FlowGraphV2 = {
+  schemaVersion: "flow-graph.v2",
+  nodes: [
+    {
+      id: "manual",
+      kind: "manual_client",
+      displayTitle: "Клиент выбран вручную",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {}
+    },
+    {
+      id: "completed",
+      kind: "completed",
+      displayTitle: "Подготовка завершена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { goalKey: "consultation_prepared" }
+    }
+  ],
+  edges: [
+    {
+      id: "manual-to-completed",
+      sourceNodeId: "manual",
+      targetNodeId: "completed",
+      sourceHandle: "next"
+    }
+  ]
+};
 
 const flowResponse = {
   id: flowId,
@@ -142,9 +176,7 @@ describe("flows API", () => {
     } satisfies ListFlowsResponse;
     const get = vi.spyOn(application.http, "get").mockResolvedValue(response);
 
-    await expect(listFlows({ status: "draft", limit: 20, offset: 40 })).resolves.toEqual(
-      response
-    );
+    await expect(listFlows({ status: "draft", limit: 20, offset: 40 })).resolves.toEqual(response);
 
     expect(get).toHaveBeenCalledWith("/flows?status=draft&limit=20&offset=40");
   });
@@ -191,15 +223,57 @@ describe("flows API", () => {
     });
     await expect(publishFlow(flowId)).resolves.toEqual(publishResponse);
 
-    expect(post).toHaveBeenNthCalledWith(1, "/flows", { ...createRequest, name: "Лид-магнит" }, {
-      csrf: true
-    });
-    expect(patch).toHaveBeenCalledWith(`/flows/${flowId}/draft`, { name: "Лид-магнит 2" }, {
-      csrf: true
-    });
+    expect(post).toHaveBeenNthCalledWith(
+      1,
+      "/flows",
+      { ...createRequest, name: "Лид-магнит" },
+      {
+        csrf: true
+      }
+    );
+    expect(patch).toHaveBeenCalledWith(
+      `/flows/${flowId}/draft`,
+      { name: "Лид-магнит 2" },
+      {
+        csrf: true
+      }
+    );
     expect(post).toHaveBeenNthCalledWith(2, `/flows/${flowId}/publish`, undefined, {
       csrf: true
     });
+  });
+
+  it("validates a v2 definition through the shared fail-closed contract", async () => {
+    const response = {
+      schemaVersion: "flow-definition-validation.v1",
+      graphSchemaVersion: "flow-graph.v2",
+      publishable: true,
+      activatable: false,
+      issues: [],
+      activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"],
+      normalizedGraph: flowGraphV2Schema.parse({
+        ...graphV2,
+        nodes: [...graphV2.nodes].reverse()
+      }),
+      capabilityManifest: {
+        schemaVersion: "flow-capability-manifest.v1",
+        executionSemanticsVersion: "flow-interpreter.v1",
+        nodeExecutors: [
+          { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 },
+          { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
+        ],
+        requiredCapabilities: []
+      }
+    } satisfies ValidateFlowDefinitionResponse;
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(response);
+
+    await expect(validateFlowDefinition({ flowId, graph: graphV2 })).resolves.toEqual(response);
+
+    expect(post).toHaveBeenCalledWith(
+      `/flows/${flowId}/validate`,
+      { graph: graphV2 },
+      { csrf: true }
+    );
   });
 
   it("activates and pauses flow automation through CSRF-protected endpoints", async () => {
@@ -291,9 +365,9 @@ describe("flows API", () => {
       .mockResolvedValueOnce(runsResponse)
       .mockResolvedValueOnce(approvalsResponse);
 
-    await expect(listFlowRuns({ flowId, query: { status: "all", limit: 20, offset: 0 } })).resolves.toEqual(
-      runsResponse
-    );
+    await expect(
+      listFlowRuns({ flowId, query: { status: "all", limit: 20, offset: 0 } })
+    ).resolves.toEqual(runsResponse);
     await expect(listFlowApprovals({ status: "pending", limit: 50, offset: 0 })).resolves.toEqual(
       approvalsResponse
     );
@@ -303,7 +377,9 @@ describe("flows API", () => {
   });
 
   it("posts approval decisions with CSRF and validates the response", async () => {
-    const response = { approval: { ...approval, status: "approved", decidedAt: "2026-07-28T08:02:00.000Z" } };
+    const response = {
+      approval: { ...approval, status: "approved", decidedAt: "2026-07-28T08:02:00.000Z" }
+    };
     const post = vi.spyOn(application.http, "post").mockResolvedValue(response);
 
     await expect(
