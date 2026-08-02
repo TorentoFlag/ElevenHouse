@@ -1718,7 +1718,7 @@ describe("ChartEnginePage", () => {
     const onSaveBirthData = vi.fn(async () => undefined);
     const onSearchBirthPlaces = vi.fn(async () => [
       {
-        id: "geoapify:41485",
+        id: "nominatim:41485",
         label: "Rome, Lazio, Italy",
         placeName: "Rome, Italy",
         countryCode: "IT",
@@ -1727,7 +1727,7 @@ describe("ChartEnginePage", () => {
         timezone: "Europe/Rome",
         latitude: 41.8933,
         longitude: 12.4829,
-        provider: "geoapify" as const,
+        provider: "nominatim" as const,
         providerPlaceId: "41485"
       }
     ]);
