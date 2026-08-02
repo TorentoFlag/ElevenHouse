@@ -15,11 +15,16 @@ export type BaselineHistoryKind =
   | "unknown";
 
 export const currentBaseline = {
-  hash: "8b8e765327792e8946a232199cd3627a68ed14b2419fb62581f8c66482a6a917",
+  hash: "ed87993e6e473fbeee9cbeb7db2166df31161f401b9725e8bb2ad3240628bf39",
   createdAt: "1785010323027"
 } as const satisfies MigrationIdentity;
 
 export const previousBaseline = {
+  hash: "8b8e765327792e8946a232199cd3627a68ed14b2419fb62581f8c66482a6a917",
+  createdAt: "1785010323027"
+} as const satisfies MigrationIdentity;
+
+const preFlowRuntimeBaseline = {
   hash: "a38ad40eeb3418dedda1cb62b1a30be0f9c249dd137f73539b8ef89c9d13d112",
   createdAt: "1785010323027"
 } as const satisfies MigrationIdentity;
@@ -65,10 +70,14 @@ export const approvedLegacyMigrations = [
 const approvedPreviousCurrentHistories = [
   [previousBaseline],
   [telegramMtprotoBaseline, previousBaseline],
+  [preFlowRuntimeBaseline],
+  [telegramMtprotoBaseline, preFlowRuntimeBaseline],
   [...approvedLegacyMigrations, natalChartEngineBaseline],
+  [...approvedLegacyMigrations, natalChartEngineBaseline, previousBaseline],
   [...approvedLegacyMigrations, previousBaseline],
-  [...approvedLegacyMigrations, telegramMtprotoBaseline, previousBaseline],
-  [...approvedLegacyMigrations, ...approvedPriorBaselines, previousBaseline]
+  [...approvedLegacyMigrations, preFlowRuntimeBaseline],
+  [...approvedLegacyMigrations, telegramMtprotoBaseline, preFlowRuntimeBaseline],
+  [...approvedLegacyMigrations, ...approvedPriorBaselines, preFlowRuntimeBaseline]
 ] as const satisfies readonly (readonly MigrationIdentity[])[];
 
 export function classifyBaselineHistory(

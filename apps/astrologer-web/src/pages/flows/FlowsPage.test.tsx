@@ -207,7 +207,7 @@ describe("FlowsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Опубликовать" }));
 
-    expect(screen.getByText("Опубликована")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Опубликована" })).toBeTruthy();
     expect(screen.queryByText("Черновик")).toBeNull();
   });
 
