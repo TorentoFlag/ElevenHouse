@@ -126,8 +126,14 @@ and separately reviewed deliverable.
       PostgreSQL/Redis/MinIO were healthy and `3012`/`8012` were closed. Fresh
       baseline passed 18/18 Python and 22-file/250-test Vitest checks; web
       typecheck retained only the recorded Nominatim-to-Geoapify fixture red.
+- [x] 2026-08-03: Task 2 shipped in `aefe835`, `22f6027` and `29f06c3` after
+      two review/fix rounds. Fresh verification passed 5 files/57 tests,
+      contracts typecheck/build and domain build. Domain full typecheck remains
+      externally blocked only by the unowned Flow mock mismatch at
+      `flow-definition-control-plane.test.ts:360` and is carried to the next
+      shared/repository gate.
 - [x] Task 1: synchronize shared main and capture executable baseline.
-- [ ] Task 2: strict contracts, method versions and civil-time domain.
+- [x] Task 2: strict contracts, method versions and civil-time domain.
 - [ ] Task 3: strict Python ingress, DST, provider runtime and readiness.
 - [ ] Task 4: numerical method repair and golden fixtures.
 - [ ] Task 5: abortable chart-engine client and failure taxonomy.
@@ -189,6 +195,10 @@ acceptance and the exact commit range.
   provenance fields globally required would either break historical reads or
   fabricate facts. The rollout therefore needs an explicit legacy-read/current-
   capability split and a recalculation-required state.
+- The first Task 2 review proved that additive v2 strictness can still break
+  legacy reads when v1 and v2 reuse nested schemas. Frozen v1 civil-time,
+  render, astrocartography and synastry shapes are now separate; every future
+  v2 refinement must preserve that boundary explicitly.
 - After the baseline fetch, `main` is six commits ahead/two behind with a clean
   shared index. Ports 3002/3012/8012 are closed; web 5174 is listening;
   PostgreSQL/Redis/MinIO are healthy on documented local ports.
@@ -621,7 +631,7 @@ Use `apply_patch` for the plan update, stage this plan only, run
 - Produces: `inspectChartCivilTime` and `resolveChartCivilTime`.
 - Consumes: `Temporal` from existing `@js-temporal/polyfill@0.5.1`.
 
-- [ ] **Step 1: Write strict failing contract tests**
+- [x] **Step 1: Write strict failing contract tests**
 
 Add literal cases that reject `2026-02-31`, `24:00`, `Not/AZone`, unknown
 fields, duplicate point IDs/houses, self-aspects, duplicate normalized pairs,
@@ -639,14 +649,14 @@ vectors proving request/dedup and post-execution reproducibility fingerprints
 are distinct, key ordering is normalized, and any actual backend/flag/data
 revision change alters the latter.
 
-- [ ] **Step 2: Run RED contracts**
+- [x] **Step 2: Run RED contracts**
 
 Run: `pnpm test packages/contracts/src/charts.test.ts`
 
 Expected: FAIL because lexical dates/times and relationally invalid results are
 currently accepted and provenance/methodVersion are missing.
 
-- [ ] **Step 3: Write civil-time/readiness failing tests**
+- [x] **Step 3: Write civil-time/readiness failing tests**
 
 Use literal Europe/Berlin cases:
 
@@ -681,7 +691,7 @@ unknown backend/data revision, require `CHART_ENGINE_EXPECTED_EPHEMERIS` in
 production, and permit the verified local Moshier profile only outside
 production.
 
-- [ ] **Step 4: Run RED domain tests**
+- [x] **Step 4: Run RED domain tests**
 
 Run:
 
@@ -694,7 +704,7 @@ pnpm test packages/domain/src/charts/chart-civil-time.test.ts \
 
 Expected: FAIL because the resolver and strict readiness behavior do not exist.
 
-- [ ] **Step 5: Implement the minimal shared behavior**
+- [x] **Step 5: Implement the minimal shared behavior**
 
 Reuse the two-disambiguation candidate algorithm from
 `availability/slot-projection.ts`:
@@ -712,7 +722,7 @@ resolve the requested occurrence. Add Zod refinements for syntax and
 cross-reference invariants; do not compute expectations with the same helper
 used by tests.
 
-- [ ] **Step 6: Run GREEN and package gates**
+- [x] **Step 6: Run GREEN and package gates**
 
 Run:
 
@@ -729,7 +739,7 @@ pnpm --filter @elevenhouse/domain build
 
 Expected: all commands exit zero with no warnings.
 
-- [ ] **Step 7: Commit exact paths**
+- [x] **Step 7: Commit exact paths**
 
 Commit subject: `fix: enforce canonical chart inputs and outputs`.
 
