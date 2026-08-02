@@ -9,14 +9,182 @@ import {
   chartPlanetaryPositionsResponseSchema,
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
+  chartNatalCalculationRequestSchema,
   chartProgressionJobCreateRequestSchema,
   chartSolarReturnJobCreateRequestSchema,
   chartSynastryJobCreateRequestSchema,
   chartTransitJobCreateRequestSchema,
+  chartResultSchema,
+  chartMethodVersions,
+  isReproducibleChartResult,
   storedChartCalculationPayloadSchema
 } from "./charts";
 
 describe("chart contracts", () => {
+  it("rejects lexically valid but impossible civil chart inputs", () => {
+    expect(() =>
+      chartNatalCalculationRequestSchema.parse({
+        schemaVersion: "chart-request.v2",
+        method: "natal",
+        methodVersion: chartMethodVersions.natal,
+        executionProfile: localExecutionProfile(),
+        settings: completeSettings(),
+        inputSnapshot: {
+          ...completeInputSnapshot(),
+          birthDate: "2026-02-31"
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      chartNatalCalculationRequestSchema.parse({
+        schemaVersion: "chart-request.v2",
+        method: "natal",
+        methodVersion: chartMethodVersions.natal,
+        executionProfile: localExecutionProfile(),
+        settings: completeSettings(),
+        inputSnapshot: {
+          ...completeInputSnapshot(),
+          birthTime: "24:00"
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      chartNatalCalculationRequestSchema.parse({
+        schemaVersion: "chart-request.v2",
+        method: "natal",
+        methodVersion: chartMethodVersions.natal,
+        executionProfile: localExecutionProfile(),
+        settings: completeSettings(),
+        inputSnapshot: {
+          ...completeInputSnapshot(),
+          timezone: "Not/AZone"
+        }
+      })
+    ).toThrow();
+  });
+
+  it("rejects unknown fields and relationally invalid render results", () => {
+    const valid = completeRenderResult();
+    expect(() =>
+      chartResultSchema.parse({
+        ...completeV2NatalPayload(),
+        unexpected: true
+      })
+    ).toThrow();
+    expect(() =>
+      chartResultSchema.parse({
+        ...completeV2NatalPayload(),
+        result: {
+          ...valid,
+          points: [...valid.points, valid.points[0]]
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      chartResultSchema.parse({
+        ...completeV2NatalPayload(),
+        result: {
+          ...valid,
+          houses: [...valid.houses.slice(0, -1), valid.houses[0]]
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      chartResultSchema.parse({
+        ...completeV2NatalPayload(),
+        result: {
+          ...valid,
+          aspects: [
+            { pointA: "sun", pointB: "sun", type: "conjunction", angle: 0, orb: 0 }
+          ]
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      chartResultSchema.parse({
+        ...completeV2NatalPayload(),
+        result: {
+          ...valid,
+          aspects: [
+            { pointA: "sun", pointB: "moon", type: "square", angle: 90, orb: 1 },
+            { pointA: "moon", pointB: "sun", type: "square", angle: 90, orb: 1 }
+          ]
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      chartResultSchema.parse({
+        ...completeV2NatalPayload(),
+        result: {
+          ...valid,
+          aspects: [
+            { pointA: "sun", pointB: "not-a-point", type: "square", angle: 90, orb: 1 }
+          ]
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      chartResultSchema.parse({
+        ...completeV2NatalPayload(),
+        result: {
+          ...valid,
+          distributions: {
+            ...valid.distributions,
+            elements: { fire: 3, earth: 2, air: 3, water: 3 }
+          }
+        }
+      })
+    ).toThrow();
+  });
+
+  it("keeps v1 read compatibility without synthesizing reproducibility provenance", () => {
+    const historical = {
+      schemaVersion: "chart-result.v1",
+      method: "natal",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: completeSettings(),
+      inputSnapshot: completeInputSnapshot(),
+      result: completeRenderResult()
+    };
+
+    const parsed = chartResultSchema.parse(historical);
+    expect(parsed).toEqual(historical);
+    expect(parsed).not.toHaveProperty("methodVersion");
+    expect(isReproducibleChartResult(parsed)).toBe(false);
+    expect(isReproducibleChartResult(chartResultSchema.parse(completeV2NatalPayload()))).toBe(true);
+  });
+
+  it("requires matching method versions, complete execution profile and provenance in v2", () => {
+    expect(chartNatalCalculationRequestSchema.parse(completeV2NatalRequest())).toMatchObject({
+      schemaVersion: "chart-request.v2",
+      methodVersion: chartMethodVersions.natal,
+      executionProfile: localExecutionProfile()
+    });
+    expect(() =>
+      chartNatalCalculationRequestSchema.parse({
+        ...completeV2NatalRequest(),
+        methodVersion: chartMethodVersions.transit
+      })
+    ).toThrow();
+    expect(() =>
+      chartResultSchema.parse({
+        ...completeV2NatalPayload(),
+        provider: { name: "kerykeion", version: "5.12.9", ephemeris: "moshier" }
+      })
+    ).toThrow();
+    expect(() =>
+      chartResultSchema.parse({
+        ...completeV2NatalPayload(),
+        calculationBasis: {
+          symbolicInstant: "1990-08-20T10:30:00Z",
+          elapsedLifeDays: 36,
+          elapsedYears: 0.1,
+          yearLengthDays: 365.24219,
+          dayForYearRatio: 1
+        }
+      })
+    ).toThrow();
+  });
   it("accepts natal job request by client id and settings only", () => {
     expect(
       chartNatalJobCreateRequestSchema.parse({
@@ -878,8 +1046,10 @@ describe("chart contracts", () => {
 
     expect(
       chartAstrocartographyCalculationRequestSchema.parse({
-        schemaVersion: "chart-request.v1",
+        schemaVersion: "chart-request.v2",
         method: "astrocartography",
+        methodVersion: chartMethodVersions.astrocartography,
+        executionProfile: localExecutionProfile(),
         settings: {
           zodiac: "tropical",
           houseSystem: "placidus",
@@ -1079,5 +1249,68 @@ function completeRenderResult() {
       polarity: { masculine: 6, feminine: 4 }
     },
     warnings: []
+  };
+}
+
+function completeSettings() {
+  return {
+    zodiac: "tropical" as const,
+    houseSystem: "placidus" as const,
+    nodeType: "true" as const,
+    aspectPreset: "major" as const,
+    orbMultiplier: 1
+  };
+}
+
+function completeInputSnapshot() {
+  return {
+    birthDate: "1990-07-15",
+    birthTime: "10:30",
+    timezone: "Europe/Rome",
+    latitude: 41.9028,
+    longitude: 12.4964,
+    birthTimePrecision: "exact" as const
+  };
+}
+
+function localExecutionProfile() {
+  return {
+    provider: "kerykeion" as const,
+    kerykeionVersion: "5.12.9" as const,
+    pyswissephVersion: "2.10.3.2" as const,
+    expectedEphemeris: "moshier" as const,
+    expectedEphemerisFlags: ["FLG_MOSEPH"],
+    expectedEphemerisDataRevision: null
+  };
+}
+
+function completeV2NatalRequest() {
+  return {
+    schemaVersion: "chart-request.v2" as const,
+    method: "natal" as const,
+    methodVersion: chartMethodVersions.natal,
+    executionProfile: localExecutionProfile(),
+    settings: completeSettings(),
+    inputSnapshot: completeInputSnapshot()
+  };
+}
+
+function completeV2NatalPayload() {
+  return {
+    schemaVersion: "chart-result.v2" as const,
+    method: "natal" as const,
+    methodVersion: chartMethodVersions.natal,
+    provider: {
+      name: "kerykeion" as const,
+      version: "5.12.9",
+      ephemeris: "moshier" as const,
+      pyswissephVersion: "2.10.3.2",
+      ephemerisFlags: ["FLG_MOSEPH"],
+      ephemerisDataRevision: null
+    },
+    reproducibilityFingerprint: `sha256:${"a".repeat(64)}`,
+    settings: completeSettings(),
+    inputSnapshot: completeInputSnapshot(),
+    result: completeRenderResult()
   };
 }

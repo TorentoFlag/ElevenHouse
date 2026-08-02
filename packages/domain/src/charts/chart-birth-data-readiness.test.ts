@@ -39,4 +39,42 @@ describe("assertChartBirthDataReady", () => {
       "CHART_BIRTH_TIMEZONE_INVALID"
     );
   });
+
+  it("requires an occurrence for a DST fold and preserves zero coordinates", () => {
+    expect(() =>
+      assertChartBirthDataReady({
+        ...base,
+        birthDate: "2024-10-27",
+        birthTime: "02:30",
+        birthTimezone: "Europe/Berlin"
+      })
+    ).toThrow("CHART_BIRTH_TIME_DST_OCCURRENCE_REQUIRED");
+    expect(
+      assertChartBirthDataReady({
+        ...base,
+        birthDate: "2024-10-27",
+        birthTime: "02:30",
+        birthTimezone: "Europe/Berlin",
+        birthTimeDstOccurrence: "second",
+        birthLatitude: 0,
+        birthLongitude: 0
+      })
+    ).toMatchObject({
+      birthTimeDstOccurrence: "second",
+      birthLatitude: 0,
+      birthLongitude: 0
+    });
+  });
+
+  it("normalizes a non-fold occurrence and rejects invalid calendar and time values", () => {
+    expect(
+      assertChartBirthDataReady({ ...base, birthTimeDstOccurrence: "first" })
+    ).toMatchObject({ birthTimeDstOccurrence: null });
+    expect(() => assertChartBirthDataReady({ ...base, birthDate: "2026-02-31" })).toThrow(
+      "CHART_BIRTH_DATE_INVALID"
+    );
+    expect(() => assertChartBirthDataReady({ ...base, birthTime: "24:00" })).toThrow(
+      "CHART_BIRTH_TIME_INVALID"
+    );
+  });
 });

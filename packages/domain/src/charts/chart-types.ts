@@ -1,12 +1,5 @@
-export type ChartCalculationMethod =
-  | "natal"
-  | "astrocartography"
-  | "transit"
-  | "synastry"
-  | "composite"
-  | "solar_return"
-  | "progression"
-  | "horary";
+import type { ChartCalculationMethod } from "@elevenhouse/contracts";
+export type { ChartCalculationMethod } from "@elevenhouse/contracts";
 export type ChartJobStatus = "queued" | "processing" | "succeeded" | "failed";
 export const CHART_CALCULATION_REQUESTED_EVENT = "chart.calculation.requested.v1";
 

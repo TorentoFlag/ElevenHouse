@@ -1,4 +1,5 @@
 import { ianaTimeZoneSchema } from "@elevenhouse/validation";
+import { resolveChartCivilTime } from "./chart-civil-time";
 import { ChartBirthDataReadinessError } from "./chart-errors";
 
 export type ChartBirthDataInput = {
@@ -40,6 +41,13 @@ export function assertChartBirthDataReady(input: ChartBirthDataInput): ChartRead
     throw new ChartBirthDataReadinessError("CHART_BIRTH_COORDINATES_REQUIRED");
   }
 
+  const civilTime = resolveChartCivilTime({
+    date: input.birthDate,
+    time: input.birthTime,
+    timeZone: parsedTimezone.data,
+    dstOccurrence: input.birthTimeDstOccurrence
+  });
+
   return {
     birthDate: input.birthDate,
     birthTime: input.birthTime,
@@ -47,6 +55,6 @@ export function assertChartBirthDataReady(input: ChartBirthDataInput): ChartRead
     birthTimezone: parsedTimezone.data,
     birthLatitude: input.birthLatitude,
     birthLongitude: input.birthLongitude,
-    birthTimeDstOccurrence: input.birthTimeDstOccurrence
+    birthTimeDstOccurrence: civilTime.dstOccurrence
   };
 }

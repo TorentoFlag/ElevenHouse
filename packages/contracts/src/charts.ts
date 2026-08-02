@@ -5,6 +5,81 @@ const uuidSchema = z.string().uuid();
 
 const chartJsonRecordSchema = z.record(z.string(), z.unknown());
 
+export const chartMethodVersions = {
+  natal: "chart.natal.kerykeion-5.12.v2",
+  astrocartography: "chart.astrocartography.swisseph.v2",
+  transit: "chart.transit.kerykeion-5.12.v2",
+  synastry: "chart.synastry.kerykeion-5.12.v2",
+  composite: "chart.composite.kerykeion-5.12.v2",
+  solar_return: "chart.solar-return.kerykeion-5.12.v2",
+  progression: "chart.progression.secondary-tropical-year.v2",
+  horary: "chart.horary.kerykeion-5.12.v2"
+} as const;
+export type ChartCalculationMethod = keyof typeof chartMethodVersions;
+export type ChartMethodVersion = (typeof chartMethodVersions)[ChartCalculationMethod];
+
+const chartDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).superRefine((value, context) => {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year!, month! - 1, day!));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month! - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid calendar date" });
+  }
+});
+
+const chartTimeSchema = z.string().regex(/^\d{2}:\d{2}$/).superRefine((value, context) => {
+  const [hours, minutes] = value.split(":").map(Number);
+  if (hours! > 23 || minutes! > 59) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid clock time" });
+  }
+});
+
+const chartIanaTimeZoneSchema = z.string().trim().min(1).max(100).superRefine((value, context) => {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: value });
+  } catch {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid IANA time zone" });
+  }
+});
+
+export const chartExecutionProfileSchema = z
+  .object({
+    provider: z.literal("kerykeion"),
+    kerykeionVersion: z.literal("5.12.9"),
+    pyswissephVersion: z.literal("2.10.3.2"),
+    expectedEphemeris: z.enum(["swiss-ephemeris", "moshier"]),
+    expectedEphemerisFlags: z.array(z.string().trim().min(1).max(100)).min(1),
+    expectedEphemerisDataRevision: z.string().trim().min(1).max(100).nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.expectedEphemerisFlags).size !== value.expectedEphemerisFlags.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["expectedEphemerisFlags"],
+        message: "Expected ephemeris flags must be unique"
+      });
+    }
+    if (value.expectedEphemeris === "moshier" && value.expectedEphemerisDataRevision !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["expectedEphemerisDataRevision"],
+        message: "Moshier profiles must not declare ephemeris data revision"
+      });
+    }
+    if (value.expectedEphemeris === "swiss-ephemeris" && value.expectedEphemerisDataRevision === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["expectedEphemerisDataRevision"],
+        message: "Swiss Ephemeris profiles require a data revision"
+      });
+    }
+  });
+export type ChartExecutionProfile = z.infer<typeof chartExecutionProfileSchema>;
+
 export const chartSettingsSchema = z
   .object({
     zodiac: z.literal("tropical").optional().default("tropical"),
@@ -36,9 +111,9 @@ export type ChartAstrocartographyJobCreateRequest = z.infer<
 
 export const chartTransitMomentSchema = z
   .object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    time: z.string().regex(/^\d{2}:\d{2}$/),
-    timezone: z.string().trim().min(1).max(100).optional(),
+    date: chartDateSchema,
+    time: chartTimeSchema,
+    timezone: chartIanaTimeZoneSchema.optional(),
     latitude: z.number().min(-90).max(90).optional(),
     longitude: z.number().min(-180).max(180).optional()
   })
@@ -86,7 +161,7 @@ export type ChartSolarReturnJobCreateRequest = z.infer<
 export const chartProgressionJobCreateRequestSchema = z
   .object({
     clientId: uuidSchema,
-    targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    targetDate: chartDateSchema,
     settings: chartSettingsSchema
   })
   .strict();
@@ -109,9 +184,9 @@ export const chartHoraryQuestionSnapshotSchema = z
   .object({
     question: z.string().trim().min(1).max(500),
     category: chartHoraryQuestionCategorySchema.optional().default("other"),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    time: z.string().regex(/^\d{2}:\d{2}$/),
-    timezone: z.string().trim().min(1).max(100),
+    date: chartDateSchema,
+    time: chartTimeSchema,
+    timezone: chartIanaTimeZoneSchema,
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180)
   })
@@ -180,13 +255,54 @@ export const chartProviderMetadataSchema = z
     ephemeris: z.string().trim().min(1).max(100)
   })
   .strict();
-export type ChartProviderMetadata = z.infer<typeof chartProviderMetadataSchema>;
+export type LegacyChartProviderMetadata = z.infer<typeof chartProviderMetadataSchema>;
+
+export const chartProviderMetadataV2Schema = z
+  .object({
+    name: z.literal("kerykeion"),
+    version: z.string().trim().min(1).max(100),
+    ephemeris: z.enum(["swiss-ephemeris", "moshier"]),
+    pyswissephVersion: z.string().trim().min(1).max(100),
+    ephemerisFlags: z.array(z.string().trim().min(1).max(100)),
+    ephemerisDataRevision: z.string().trim().min(1).max(100).nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.ephemerisFlags).size !== value.ephemerisFlags.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ephemerisFlags"],
+        message: "Ephemeris flags must be unique"
+      });
+    }
+    if (value.ephemeris === "moshier" && value.ephemerisDataRevision !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ephemerisDataRevision"],
+        message: "Moshier results must not declare ephemeris data revision"
+      });
+    }
+  });
+export type ChartProviderMetadata = z.infer<typeof chartProviderMetadataV2Schema>;
+
+export const chartProgressionCalculationBasisSchema = z
+  .object({
+    symbolicInstant: z.string().datetime(),
+    elapsedLifeDays: z.number().int().min(0),
+    elapsedYears: z.number().min(0),
+    yearLengthDays: z.literal(365.24219),
+    dayForYearRatio: z.literal(1)
+  })
+  .strict();
+export type ChartProgressionCalculationBasis = z.infer<
+  typeof chartProgressionCalculationBasisSchema
+>;
 
 export const chartInputSnapshotSchema = z
   .object({
-    birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    birthTime: z.string().regex(/^\d{2}:\d{2}$/),
-    timezone: z.string().trim().min(1).max(100),
+    birthDate: chartDateSchema,
+    birthTime: chartTimeSchema,
+    timezone: chartIanaTimeZoneSchema,
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
     birthTimePrecision: z.enum(["exact", "approximate"]),
@@ -197,9 +313,9 @@ export type ChartInputSnapshot = z.infer<typeof chartInputSnapshotSchema>;
 
 export const chartTransitSnapshotSchema = z
   .object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    time: z.string().regex(/^\d{2}:\d{2}$/),
-    timezone: z.string().trim().min(1).max(100),
+    date: chartDateSchema,
+    time: chartTimeSchema,
+    timezone: chartIanaTimeZoneSchema,
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180)
   })
@@ -212,7 +328,7 @@ export const chartSolarReturnSnapshotSchema = z
     returnType: z.literal("solar"),
     location: z
       .object({
-        timezone: z.string().trim().min(1).max(100),
+        timezone: chartIanaTimeZoneSchema,
         latitude: z.number().min(-90).max(90),
         longitude: z.number().min(-180).max(180)
       })
@@ -224,7 +340,7 @@ export type ChartSolarReturnSnapshot = z.infer<typeof chartSolarReturnSnapshotSc
 
 export const chartProgressionRequestSnapshotSchema = z
   .object({
-    targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    targetDate: chartDateSchema,
     progressionType: z.literal("secondary")
   })
   .strict();
@@ -245,8 +361,10 @@ export type ChartProgressionSnapshot = z.infer<typeof chartProgressionSnapshotSc
 
 export const chartNatalCalculationRequestSchema = z
   .object({
-    schemaVersion: z.literal("chart-request.v1"),
+    schemaVersion: z.literal("chart-request.v2"),
     method: z.literal("natal"),
+    methodVersion: z.literal(chartMethodVersions.natal),
+    executionProfile: chartExecutionProfileSchema,
     settings: chartSettingsSchema,
     inputSnapshot: chartInputSnapshotSchema
   })
@@ -256,8 +374,10 @@ export type ChartNatalCalculationRequest = z.infer<typeof chartNatalCalculationR
 
 export const chartAstrocartographyCalculationRequestSchema = z
   .object({
-    schemaVersion: z.literal("chart-request.v1"),
+    schemaVersion: z.literal("chart-request.v2"),
     method: z.literal("astrocartography"),
+    methodVersion: z.literal(chartMethodVersions.astrocartography),
+    executionProfile: chartExecutionProfileSchema,
     settings: chartSettingsSchema,
     inputSnapshot: chartInputSnapshotSchema
   })
@@ -271,8 +391,10 @@ export type ChartAstrocartographyCalculationRequest = z.infer<
 
 export const chartTransitCalculationRequestSchema = z
   .object({
-    schemaVersion: z.literal("chart-request.v1"),
+    schemaVersion: z.literal("chart-request.v2"),
     method: z.literal("transit"),
+    methodVersion: z.literal(chartMethodVersions.transit),
+    executionProfile: chartExecutionProfileSchema,
     settings: chartSettingsSchema,
     inputSnapshot: chartInputSnapshotSchema,
     transitSnapshot: chartTransitSnapshotSchema
@@ -285,8 +407,10 @@ export type ChartTransitCalculationRequest = z.infer<typeof chartTransitCalculat
 
 export const chartSynastryCalculationRequestSchema = z
   .object({
-    schemaVersion: z.literal("chart-request.v1"),
+    schemaVersion: z.literal("chart-request.v2"),
     method: z.literal("synastry"),
+    methodVersion: z.literal(chartMethodVersions.synastry),
+    executionProfile: chartExecutionProfileSchema,
     settings: chartSettingsSchema,
     inputSnapshot: chartInputSnapshotSchema,
     partnerInputSnapshot: chartInputSnapshotSchema,
@@ -305,8 +429,10 @@ export type ChartSynastryCalculationRequest = z.infer<typeof chartSynastryCalcul
 
 export const chartCompositeCalculationRequestSchema = z
   .object({
-    schemaVersion: z.literal("chart-request.v1"),
+    schemaVersion: z.literal("chart-request.v2"),
     method: z.literal("composite"),
+    methodVersion: z.literal(chartMethodVersions.composite),
+    executionProfile: chartExecutionProfileSchema,
     settings: chartSettingsSchema,
     inputSnapshot: chartInputSnapshotSchema,
     partnerInputSnapshot: chartInputSnapshotSchema,
@@ -327,8 +453,10 @@ export type ChartCompositeCalculationRequest = z.infer<
 
 export const chartSolarReturnCalculationRequestSchema = z
   .object({
-    schemaVersion: z.literal("chart-request.v1"),
+    schemaVersion: z.literal("chart-request.v2"),
     method: z.literal("solar_return"),
+    methodVersion: z.literal(chartMethodVersions.solar_return),
+    executionProfile: chartExecutionProfileSchema,
     settings: chartSettingsSchema,
     inputSnapshot: chartInputSnapshotSchema,
     solarReturnSnapshot: z
@@ -355,8 +483,10 @@ export type ChartSolarReturnCalculationRequest = z.infer<
 
 export const chartProgressionCalculationRequestSchema = z
   .object({
-    schemaVersion: z.literal("chart-request.v1"),
+    schemaVersion: z.literal("chart-request.v2"),
     method: z.literal("progression"),
+    methodVersion: z.literal(chartMethodVersions.progression),
+    executionProfile: chartExecutionProfileSchema,
     settings: chartSettingsSchema,
     inputSnapshot: chartInputSnapshotSchema,
     progressionSnapshot: chartProgressionRequestSnapshotSchema
@@ -371,8 +501,10 @@ export type ChartProgressionCalculationRequest = z.infer<
 
 export const chartHoraryCalculationRequestSchema = z
   .object({
-    schemaVersion: z.literal("chart-request.v1"),
+    schemaVersion: z.literal("chart-request.v2"),
     method: z.literal("horary"),
+    methodVersion: z.literal(chartMethodVersions.horary),
+    executionProfile: chartExecutionProfileSchema,
     settings: chartSettingsSchema,
     questionSnapshot: chartHoraryQuestionSnapshotSchema
   })
@@ -480,6 +612,13 @@ export const chartRenderResultSchema = z
       "south_node"
     ];
     const pointIds = new Set(value.points.map((point) => point.id));
+    if (pointIds.size !== value.points.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["points"],
+        message: "Chart point ids must be unique"
+      });
+    }
     for (const pointId of requiredPoints) {
       if (!pointIds.has(pointId)) {
         context.addIssue({
@@ -491,6 +630,13 @@ export const chartRenderResultSchema = z
     }
 
     const houseNumbers = new Set(value.houses.map((house) => house.number));
+    if (houseNumbers.size !== value.houses.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["houses"],
+        message: "Chart house numbers must be unique"
+      });
+    }
     for (let houseNumber = 1; houseNumber <= 12; houseNumber += 1) {
       if (!houseNumbers.has(houseNumber)) {
         context.addIssue({
@@ -499,6 +645,46 @@ export const chartRenderResultSchema = z
           message: `Missing house ${houseNumber}`
         });
       }
+    }
+
+    const normalizedAspectPairs = new Set<string>();
+    for (const [index, aspect] of value.aspects.entries()) {
+      if (!pointIds.has(aspect.pointA) || !pointIds.has(aspect.pointB)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["aspects", index],
+          message: "Chart aspect must reference known points"
+        });
+      }
+      if (aspect.pointA === aspect.pointB) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["aspects", index],
+          message: "Chart aspect cannot reference itself"
+        });
+      }
+      const pair = [aspect.pointA, aspect.pointB].sort().join("|");
+      if (normalizedAspectPairs.has(pair)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["aspects", index],
+          message: "Chart aspects must not duplicate normalized point pairs"
+        });
+      }
+      normalizedAspectPairs.add(pair);
+    }
+
+    const distributionTotals = [
+      Object.values(value.distributions.elements),
+      Object.values(value.distributions.modalities),
+      Object.values(value.distributions.polarity)
+    ].map((counts) => counts.reduce((total, count) => total + count, 0));
+    if (distributionTotals.some((total) => total !== 10)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["distributions"],
+        message: "Chart distributions must each total ten planetary points"
+      });
     }
   });
 export type ChartRenderResult = z.infer<typeof chartRenderResultSchema>;
@@ -845,6 +1031,75 @@ export const storedChartCalculationPayloadSchema = z.discriminatedUnion("method"
   storedChartHoraryCalculationPayloadSchema
 ]);
 export type StoredChartCalculationPayload = z.infer<typeof storedChartCalculationPayloadSchema>;
+
+const reproducibleChartResultFields = {
+  schemaVersion: z.literal("chart-result.v2"),
+  provider: chartProviderMetadataV2Schema,
+  reproducibilityFingerprint: sha256DigestSchema
+} as const;
+
+export const chartNatalResultV2Schema = storedChartNatalCalculationPayloadSchema.extend({
+  ...reproducibleChartResultFields,
+  methodVersion: z.literal(chartMethodVersions.natal)
+});
+export const chartAstrocartographyResultV2Schema = storedChartAstrocartographyCalculationPayloadSchema.extend({
+  ...reproducibleChartResultFields,
+  methodVersion: z.literal(chartMethodVersions.astrocartography)
+});
+export const chartTransitResultV2Schema = storedChartTransitCalculationPayloadSchema.extend({
+  ...reproducibleChartResultFields,
+  methodVersion: z.literal(chartMethodVersions.transit)
+});
+export const chartSynastryResultV2Schema = storedChartSynastryCalculationPayloadSchema.extend({
+  ...reproducibleChartResultFields,
+  methodVersion: z.literal(chartMethodVersions.synastry)
+});
+export const chartCompositeResultV2Schema = storedChartCompositeCalculationPayloadSchema.extend({
+  ...reproducibleChartResultFields,
+  methodVersion: z.literal(chartMethodVersions.composite)
+});
+export const chartSolarReturnResultV2Schema = storedChartSolarReturnCalculationPayloadSchema.extend({
+  ...reproducibleChartResultFields,
+  methodVersion: z.literal(chartMethodVersions.solar_return)
+});
+export const chartProgressionResultV2Schema = storedChartProgressionCalculationPayloadSchema.extend({
+  ...reproducibleChartResultFields,
+  methodVersion: z.literal(chartMethodVersions.progression),
+  calculationBasis: chartProgressionCalculationBasisSchema
+});
+export const chartHoraryResultV2Schema = storedChartHoraryCalculationPayloadSchema.extend({
+  ...reproducibleChartResultFields,
+  methodVersion: z.literal(chartMethodVersions.horary)
+});
+
+export const reproducibleChartResultSchema = z.union([
+  chartNatalResultV2Schema,
+  chartAstrocartographyResultV2Schema,
+  chartTransitResultV2Schema,
+  chartSynastryResultV2Schema,
+  chartCompositeResultV2Schema,
+  chartSolarReturnResultV2Schema,
+  chartProgressionResultV2Schema,
+  chartHoraryResultV2Schema
+]);
+
+export type ReproducibleChartResult = {
+  readonly schemaVersion: "chart-result.v2";
+  readonly methodVersion: ChartMethodVersion;
+  readonly provider: ChartProviderMetadata;
+  readonly reproducibilityFingerprint: `sha256:${string}`;
+  readonly calculationBasis?: ChartProgressionCalculationBasis;
+};
+
+export const chartResultSchema = z.union([
+  storedChartCalculationPayloadSchema,
+  reproducibleChartResultSchema
+]);
+export type ChartResult = z.infer<typeof chartResultSchema>;
+
+export function isReproducibleChartResult(value: unknown): value is ReproducibleChartResult {
+  return reproducibleChartResultSchema.safeParse(value).success;
+}
 
 export const chartCalculationResultRecordSchema = chartJsonRecordSchema;
 

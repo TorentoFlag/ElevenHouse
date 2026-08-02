@@ -36,6 +36,7 @@ export function normalizeClientBirthDataInput(
 ): NormalizedClientBirthDataInput {
   const birthTime = normalizeOptionalToNull(input.birthTime);
   const birthTimePrecision = normalizeBirthTimePrecision(input.birthTimePrecision, birthTime);
+  const birthTimeDstOccurrence = normalizeBirthTimeDstOccurrence(input.birthTimeDstOccurrence);
   if (birthTimePrecision === "unknown" && birthTime !== null) {
     throw new BirthDataValidationError("Birth time must be empty when precision is unknown");
   }
@@ -50,7 +51,7 @@ export function normalizeClientBirthDataInput(
     birthCity: normalizeOptionalToNull(input.birthCity),
     birthRegion: normalizeOptionalToNull(input.birthRegion),
     birthTimezone: normalizeOptionalToNull(input.birthTimezone),
-    birthTimeDstOccurrence: normalizeBirthTimeDstOccurrence(input.birthTimeDstOccurrence),
+    birthTimeDstOccurrence: birthTime === null ? null : birthTimeDstOccurrence,
     birthLatitude: normalizeCoordinate(input.birthLatitude, -90, 90, "Birth latitude is invalid"),
     birthLongitude: normalizeCoordinate(
       input.birthLongitude,
