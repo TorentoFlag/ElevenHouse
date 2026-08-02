@@ -1,12 +1,15 @@
 from fastapi.testclient import TestClient
 
 from chart_engine.main import app
+from test_request_validation import execution_profile
 
 
 def _solar_return_payload():
     return {
-        "schemaVersion": "chart-request.v1",
+        "schemaVersion": "chart-request.v2",
         "method": "solar_return",
+        "methodVersion": "chart.solar-return.kerykeion-5.12.v2",
+        "executionProfile": execution_profile(),
         "settings": {
             "zodiac": "tropical",
             "houseSystem": "placidus",
@@ -42,7 +45,7 @@ def test_solar_return_returns_canonical_dual_wheel_shape():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["schemaVersion"] == "chart-result.v1"
+    assert data["schemaVersion"] == "chart-result.v2"
     assert data["method"] == "solar_return"
     assert data["provider"]["name"] == "kerykeion"
     assert data["settings"] == payload["settings"]

@@ -1,12 +1,15 @@
 from fastapi.testclient import TestClient
 
 from chart_engine.main import app
+from test_request_validation import execution_profile
 
 
 def _natal_payload():
     return {
-        "schemaVersion": "chart-request.v1",
+        "schemaVersion": "chart-request.v2",
         "method": "natal",
+        "methodVersion": "chart.natal.kerykeion-5.12.v2",
+        "executionProfile": execution_profile(),
         "settings": {
             "zodiac": "tropical",
             "houseSystem": "placidus",
@@ -33,7 +36,7 @@ def test_natal_returns_canonical_shape():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["schemaVersion"] == "chart-result.v1"
+    assert data["schemaVersion"] == "chart-result.v2"
     assert data["method"] == "natal"
     assert data["provider"]["name"] == "kerykeion"
     assert data["settings"] == payload["settings"]

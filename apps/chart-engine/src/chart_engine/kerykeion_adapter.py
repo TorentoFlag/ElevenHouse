@@ -2,7 +2,6 @@ import hashlib
 import json
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
-from importlib.metadata import version
 from math import ceil
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -14,6 +13,11 @@ from kerykeion.ephemeris_data_factory import EphemerisDataFactory
 from kerykeion.planetary_return_factory import PlanetaryReturnFactory
 from kerykeion.transits_time_range_factory import TransitsTimeRangeFactory
 
+from chart_engine.canonical_validation import (
+    build_reproducibility_fingerprint,
+    fingerprint_input_for_request,
+    validate_calculation_result,
+)
 from chart_engine.schemas import (
     AstrocartographyRequest,
     AstroCalendarDateRange,
@@ -31,6 +35,7 @@ from chart_engine.schemas import (
     ChartDistributions,
     ChartHouse,
     ChartPoint,
+    ChartProgressionCalculationBasis,
     ChartProgressionAspect,
     ChartProgressionRenderResult,
     ChartSolarReturnAspect,
@@ -46,6 +51,7 @@ from chart_engine.schemas import (
     ChartWarning,
     CompositeRequest,
     HoraryRequest,
+    LegacyProviderMetadata,
     NatalRequest,
     PlanetaryPosition,
     PlanetaryPositionsPayload,
@@ -359,7 +365,10 @@ ASTRO_CALENDAR_SIGN_NAMES = [
 ]
 
 
-def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
+def calculate_natal(
+    request: NatalRequest,
+    provider: ProviderMetadata,
+) -> StoredChartCalculationPayload:
     active_points = _active_points(request.settings.nodeType)
     subject = _create_subject(
         name="subject",
@@ -370,6 +379,7 @@ def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
         longitude=request.inputSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=request.inputSnapshot.dstOccurrence,
     )
 
     result = _map_render_result(
@@ -381,22 +391,21 @@ def calculate_natal(request: NatalRequest) -> StoredChartCalculationPayload:
         _map_warnings(request),
     )
 
-    return StoredChartCalculationPayload(
-        schemaVersion="chart-result.v1",
+    return _validated_payload(StoredChartCalculationPayload(
+        schemaVersion="chart-result.v2",
         method="natal",
-        provider=ProviderMetadata(
-            name="kerykeion",
-            version=version("kerykeion"),
-            ephemeris="swiss-ephemeris",
-        ),
+        methodVersion=request.methodVersion,
+        provider=provider,
+        reproducibilityFingerprint=_result_fingerprint(request, provider),
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
         result=result,
-    )
+    ))
 
 
 def calculate_astrocartography(
     request: AstrocartographyRequest,
+    provider: ProviderMetadata,
 ) -> StoredChartAstrocartographyCalculationPayload:
     active_points = _active_points(request.settings.nodeType)
     subject = _create_subject(
@@ -408,6 +417,7 @@ def calculate_astrocartography(
         longitude=request.inputSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=request.inputSnapshot.dstOccurrence,
     )
     warnings = [
         *_map_warnings(request),
@@ -417,14 +427,12 @@ def calculate_astrocartography(
         ),
     ]
 
-    return StoredChartAstrocartographyCalculationPayload(
-        schemaVersion="chart-result.v1",
+    return _validated_payload(StoredChartAstrocartographyCalculationPayload(
+        schemaVersion="chart-result.v2",
         method="astrocartography",
-        provider=ProviderMetadata(
-            name="kerykeion",
-            version=version("kerykeion"),
-            ephemeris="swiss-ephemeris",
-        ),
+        methodVersion=request.methodVersion,
+        provider=provider,
+        reproducibilityFingerprint=_result_fingerprint(request, provider),
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
         result=ChartAstrocartographyRenderResult(
@@ -434,10 +442,13 @@ def calculate_astrocartography(
             ),
             warnings=warnings,
         ),
-    )
+    ))
 
 
-def calculate_astro_calendar_range(request: AstroCalendarRequest) -> AstroCalendarRangeResponse:
+def calculate_astro_calendar_range(
+    request: AstroCalendarRequest,
+    provider: ProviderMetadata,
+) -> AstroCalendarRangeResponse:
     requested_types = set(request.eventTypes)
     supported_types = (
         ASTRO_CALENDAR_GLOBAL_EVENT_TYPES
@@ -486,11 +497,7 @@ def calculate_astro_calendar_range(request: AstroCalendarRequest) -> AstroCalend
             generationId=None,
             fingerprint=_astro_calendar_fingerprint(request),
             generatedAt=_utc_now_string(),
-            provider=ProviderMetadata(
-                name="kerykeion",
-                version=version("kerykeion"),
-                ephemeris="swiss-ephemeris",
-            ),
+            provider=_legacy_provider(provider),
         ),
         events=events,
         readiness=_astro_calendar_readiness(request),
@@ -506,7 +513,10 @@ def calculate_astro_calendar_range(request: AstroCalendarRequest) -> AstroCalend
     )
 
 
-def calculate_transit(request: TransitRequest) -> StoredChartTransitCalculationPayload:
+def calculate_transit(
+    request: TransitRequest,
+    provider: ProviderMetadata,
+) -> StoredChartTransitCalculationPayload:
     active_points = _active_points(request.settings.nodeType)
     natal_subject = _create_subject(
         name="natal",
@@ -517,6 +527,7 @@ def calculate_transit(request: TransitRequest) -> StoredChartTransitCalculationP
         longitude=request.inputSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=request.inputSnapshot.dstOccurrence,
     )
     transit_subject = _create_subject(
         name="transit",
@@ -527,6 +538,7 @@ def calculate_transit(request: TransitRequest) -> StoredChartTransitCalculationP
         longitude=request.transitSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=None,
     )
     allowed_aspects = (
         MAJOR_ASPECTS
@@ -542,14 +554,12 @@ def calculate_transit(request: TransitRequest) -> StoredChartTransitCalculationP
     )
     warnings = _map_warnings(request)
 
-    return StoredChartTransitCalculationPayload(
-        schemaVersion="chart-result.v1",
+    return _validated_payload(StoredChartTransitCalculationPayload(
+        schemaVersion="chart-result.v2",
         method="transit",
-        provider=ProviderMetadata(
-            name="kerykeion",
-            version=version("kerykeion"),
-            ephemeris="swiss-ephemeris",
-        ),
+        methodVersion=request.methodVersion,
+        provider=provider,
+        reproducibilityFingerprint=_result_fingerprint(request, provider),
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
         transitSnapshot=request.transitSnapshot,
@@ -577,10 +587,13 @@ def calculate_transit(request: TransitRequest) -> StoredChartTransitCalculationP
             ),
             warnings=warnings,
         ),
-    )
+    ))
 
 
-def calculate_synastry(request: SynastryRequest) -> StoredChartSynastryCalculationPayload:
+def calculate_synastry(
+    request: SynastryRequest,
+    provider: ProviderMetadata,
+) -> StoredChartSynastryCalculationPayload:
     active_points = _active_points(request.settings.nodeType)
     primary_subject = _create_subject(
         name="primary",
@@ -591,6 +604,7 @@ def calculate_synastry(request: SynastryRequest) -> StoredChartSynastryCalculati
         longitude=request.inputSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=request.inputSnapshot.dstOccurrence,
     )
     partner_subject = _create_subject(
         name="partner",
@@ -601,6 +615,7 @@ def calculate_synastry(request: SynastryRequest) -> StoredChartSynastryCalculati
         longitude=request.partnerInputSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=request.partnerInputSnapshot.dstOccurrence,
     )
     allowed_aspects = (
         MAJOR_ASPECTS
@@ -618,14 +633,12 @@ def calculate_synastry(request: SynastryRequest) -> StoredChartSynastryCalculati
     )
     warnings = _map_warnings(request)
 
-    return StoredChartSynastryCalculationPayload(
-        schemaVersion="chart-result.v1",
+    return _validated_payload(StoredChartSynastryCalculationPayload(
+        schemaVersion="chart-result.v2",
         method="synastry",
-        provider=ProviderMetadata(
-            name="kerykeion",
-            version=version("kerykeion"),
-            ephemeris="swiss-ephemeris",
-        ),
+        methodVersion=request.methodVersion,
+        provider=provider,
+        reproducibilityFingerprint=_result_fingerprint(request, provider),
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
         partnerInputSnapshot=request.partnerInputSnapshot,
@@ -656,10 +669,13 @@ def calculate_synastry(request: SynastryRequest) -> StoredChartSynastryCalculati
             relationshipScore=_map_relationship_score(synastry_data.relationship_score),
             warnings=warnings,
         ),
-    )
+    ))
 
 
-def calculate_composite(request: CompositeRequest) -> StoredChartCompositeCalculationPayload:
+def calculate_composite(
+    request: CompositeRequest,
+    provider: ProviderMetadata,
+) -> StoredChartCompositeCalculationPayload:
     active_points = _active_points(request.settings.nodeType)
     primary_subject = _create_subject(
         name="primary",
@@ -670,6 +686,7 @@ def calculate_composite(request: CompositeRequest) -> StoredChartCompositeCalcul
         longitude=request.inputSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=request.inputSnapshot.dstOccurrence,
     )
     partner_subject = _create_subject(
         name="partner",
@@ -680,6 +697,7 @@ def calculate_composite(request: CompositeRequest) -> StoredChartCompositeCalcul
         longitude=request.partnerInputSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=request.partnerInputSnapshot.dstOccurrence,
     )
     composite_subject = CompositeSubjectFactory(
         primary_subject,
@@ -688,14 +706,12 @@ def calculate_composite(request: CompositeRequest) -> StoredChartCompositeCalcul
     ).get_midpoint_composite_subject_model()
     warnings = _map_warnings(request)
 
-    return StoredChartCompositeCalculationPayload(
-        schemaVersion="chart-result.v1",
+    return _validated_payload(StoredChartCompositeCalculationPayload(
+        schemaVersion="chart-result.v2",
         method="composite",
-        provider=ProviderMetadata(
-            name="kerykeion",
-            version=version("kerykeion"),
-            ephemeris="swiss-ephemeris",
-        ),
+        methodVersion=request.methodVersion,
+        provider=provider,
+        reproducibilityFingerprint=_result_fingerprint(request, provider),
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
         partnerInputSnapshot=request.partnerInputSnapshot,
@@ -708,11 +724,12 @@ def calculate_composite(request: CompositeRequest) -> StoredChartCompositeCalcul
             active_points,
             warnings,
         ),
-    )
+    ))
 
 
 def calculate_solar_return(
     request: SolarReturnRequest,
+    provider: ProviderMetadata,
 ) -> StoredChartSolarReturnCalculationPayload:
     active_points = _active_points(request.settings.nodeType)
     natal_subject = _create_subject(
@@ -724,6 +741,7 @@ def calculate_solar_return(
         longitude=request.inputSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=request.inputSnapshot.dstOccurrence,
     )
     return_factory = PlanetaryReturnFactory(
         natal_subject,
@@ -752,14 +770,12 @@ def calculate_solar_return(
     )
     warnings = _map_warnings(request)
 
-    return StoredChartSolarReturnCalculationPayload(
-        schemaVersion="chart-result.v1",
+    return _validated_payload(StoredChartSolarReturnCalculationPayload(
+        schemaVersion="chart-result.v2",
         method="solar_return",
-        provider=ProviderMetadata(
-            name="kerykeion",
-            version=version("kerykeion"),
-            ephemeris="swiss-ephemeris",
-        ),
+        methodVersion=request.methodVersion,
+        provider=provider,
+        reproducibilityFingerprint=_result_fingerprint(request, provider),
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
         solarReturnSnapshot=SolarReturnSnapshot(
@@ -792,10 +808,13 @@ def calculate_solar_return(
             ),
             warnings=warnings,
         ),
-    )
+    ))
 
 
-def calculate_progression(request: ProgressionRequest) -> StoredChartProgressionCalculationPayload:
+def calculate_progression(
+    request: ProgressionRequest,
+    provider: ProviderMetadata,
+) -> StoredChartProgressionCalculationPayload:
     active_points = _active_points(request.settings.nodeType)
     natal_subject = _create_subject(
         name="natal",
@@ -806,6 +825,7 @@ def calculate_progression(request: ProgressionRequest) -> StoredChartProgression
         longitude=request.inputSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=request.inputSnapshot.dstOccurrence,
     )
     calculation_basis = _progression_basis(
         request.inputSnapshot.birthDate,
@@ -820,7 +840,9 @@ def calculate_progression(request: ProgressionRequest) -> StoredChartProgression
         longitude=request.inputSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=None,
     )
+    reproducibility_basis = _progression_reproducibility_basis(request, progressed_subject)
     allowed_aspects = (
         MAJOR_ASPECTS
         if request.settings.aspectPreset == "major"
@@ -835,13 +857,15 @@ def calculate_progression(request: ProgressionRequest) -> StoredChartProgression
     )
     warnings = _map_warnings(request)
 
-    return StoredChartProgressionCalculationPayload(
-        schemaVersion="chart-result.v1",
+    return _validated_payload(StoredChartProgressionCalculationPayload(
+        schemaVersion="chart-result.v2",
         method="progression",
-        provider=ProviderMetadata(
-            name="kerykeion",
-            version=version("kerykeion"),
-            ephemeris="swiss-ephemeris",
+        methodVersion=request.methodVersion,
+        provider=provider,
+        reproducibilityFingerprint=_result_fingerprint(
+            request,
+            provider,
+            calculation_basis=reproducibility_basis,
         ),
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
@@ -850,6 +874,7 @@ def calculate_progression(request: ProgressionRequest) -> StoredChartProgression
             progressionType="secondary",
             calculationBasis=calculation_basis,
         ),
+        calculationBasis=reproducibility_basis,
         result=ChartProgressionRenderResult(
             natal=_map_render_result(
                 natal_subject,
@@ -874,10 +899,13 @@ def calculate_progression(request: ProgressionRequest) -> StoredChartProgression
             ),
             warnings=warnings,
         ),
-    )
+    ))
 
 
-def calculate_horary(request: HoraryRequest) -> StoredChartHoraryCalculationPayload:
+def calculate_horary(
+    request: HoraryRequest,
+    provider: ProviderMetadata,
+) -> StoredChartHoraryCalculationPayload:
     active_points = _active_points(request.settings.nodeType)
     subject = _create_subject(
         name="horary",
@@ -888,16 +916,15 @@ def calculate_horary(request: HoraryRequest) -> StoredChartHoraryCalculationPayl
         longitude=request.questionSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
+        dst_occurrence=None,
     )
 
-    return StoredChartHoraryCalculationPayload(
-        schemaVersion="chart-result.v1",
+    return _validated_payload(StoredChartHoraryCalculationPayload(
+        schemaVersion="chart-result.v2",
         method="horary",
-        provider=ProviderMetadata(
-            name="kerykeion",
-            version=version("kerykeion"),
-            ephemeris="swiss-ephemeris",
-        ),
+        methodVersion=request.methodVersion,
+        provider=provider,
+        reproducibilityFingerprint=_result_fingerprint(request, provider),
         settings=request.settings,
         questionSnapshot=request.questionSnapshot,
         result=_map_render_result(
@@ -908,10 +935,13 @@ def calculate_horary(request: HoraryRequest) -> StoredChartHoraryCalculationPayl
             active_points,
             [],
         ),
-    )
+    ))
 
 
-def calculate_planetary_positions(request: PlanetaryPositionsRequest) -> PlanetaryPositionsPayload:
+def calculate_planetary_positions(
+    request: PlanetaryPositionsRequest,
+    provider: ProviderMetadata,
+) -> PlanetaryPositionsPayload:
     year, month, day = [int(part) for part in request.inputSnapshot.birthDate.split("-")]
     hour, minute = [int(part) for part in request.inputSnapshot.birthTime.split(":")]
     active_points = _active_points(request.settings.nodeType)
@@ -930,6 +960,7 @@ def calculate_planetary_positions(request: PlanetaryPositionsRequest) -> Planeta
         zodiac_type="Tropical",
         houses_system_identifier="P",
         active_points=active_points,
+        is_dst=_dst_occurrence_value(request.inputSnapshot.dstOccurrence),
         suppress_geonames_warning=True,
     )
 
@@ -943,11 +974,7 @@ def calculate_planetary_positions(request: PlanetaryPositionsRequest) -> Planeta
     return PlanetaryPositionsPayload(
         schemaVersion="chart-positions-result.v1",
         method="planetary_positions",
-        provider=ProviderMetadata(
-            name="kerykeion",
-            version=version("kerykeion"),
-            ephemeris="swiss-ephemeris",
-        ),
+        provider=_legacy_provider(provider),
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
         positions=positions,
@@ -1122,6 +1149,7 @@ def _client_transit_aspect_events(request: AstroCalendarRequest) -> list[AstroCa
             longitude=client.birthLongitude,
             house_system=request.settings.houseSystem,
             active_points=active_points,
+            dst_occurrence=None,
         )
         ephemeris_points = EphemerisDataFactory(
             start_datetime,
@@ -1829,6 +1857,7 @@ def _create_subject(
     longitude: float,
     house_system: str,
     active_points: list[str],
+    dst_occurrence: str | None,
 ) -> Any:
     year, month, day = [int(part) for part in date.split("-")]
     hour, minute = [int(part) for part in time.split(":")]
@@ -1846,6 +1875,7 @@ def _create_subject(
         zodiac_type="Tropical",
         houses_system_identifier=HOUSE_SYSTEMS[house_system],
         active_points=active_points,
+        is_dst=_dst_occurrence_value(dst_occurrence),
         suppress_geonames_warning=True,
     )
 
@@ -2279,3 +2309,56 @@ def _progression_basis(birth_date: str, target_date: str) -> ProgressionCalculat
         ageDays=age_days,
         dayForYearRatio=1,
     )
+
+
+def _progression_reproducibility_basis(
+    request: ProgressionRequest,
+    progressed_subject: Any,
+) -> ChartProgressionCalculationBasis:
+    born = date.fromisoformat(request.inputSnapshot.birthDate)
+    target = date.fromisoformat(request.progressionSnapshot.targetDate)
+    elapsed_life_days = float((target - born).days)
+    return ChartProgressionCalculationBasis(
+        symbolicInstant=_utc_datetime_string(progressed_subject.iso_formatted_utc_datetime),
+        elapsedLifeDays=elapsed_life_days,
+        elapsedYears=elapsed_life_days / 365.24219,
+        yearLengthDays=365.24219,
+        dayForYearRatio=1,
+    )
+
+
+def _dst_occurrence_value(value: str | None) -> bool | None:
+    if value == "first":
+        return True
+    if value == "second":
+        return False
+    return None
+
+
+def _legacy_provider(provider: ProviderMetadata) -> LegacyProviderMetadata:
+    return LegacyProviderMetadata(
+        name=provider.name,
+        version=provider.version,
+        ephemeris=provider.ephemeris,
+    )
+
+
+def _result_fingerprint(
+    request: Any,
+    provider: ProviderMetadata,
+    *,
+    calculation_basis: ChartProgressionCalculationBasis | None = None,
+) -> str:
+    return build_reproducibility_fingerprint(
+        method=request.method,
+        method_version=request.methodVersion,
+        provider=provider,
+        settings=request.settings,
+        input_snapshot=fingerprint_input_for_request(request),
+        calculation_basis=calculation_basis,
+    )
+
+
+def _validated_payload(payload: Any) -> Any:
+    validate_calculation_result(payload)
+    return payload

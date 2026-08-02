@@ -4,14 +4,18 @@ Private Python/FastAPI runtime for provider-backed chart calculations.
 
 ## First provider
 
-- Provider: Kerykeion 5.12.x
+- Provider: Kerykeion 5.12.9 with PySwissEph 2.10.3.2
 - Runtime: Python >=3.10; local spike verified on Python 3.12.13
-- Public service endpoints inside the private backend network: `/live`, `/ready`, `/v1/natal`
+- Public service endpoints inside the private backend network: `/live`, `/ready`, calculation routes under `/v1/*`
 - Network exposure: private backend network only; Caddy must not route this service
 
 ## Provider boundary
 
-The service returns ElevenHouse canonical chart JSON. It does not return raw Kerykeion models, provider SVG, client names, phone numbers, CRM notes, frontend layout coordinates, or style metadata.
+The service accepts strict `chart-request.v2` payloads for chart calculations and
+returns validated `chart-result.v2` payloads with exact method versions, actual
+provider provenance and a reproducibility fingerprint. It does not return raw
+Kerykeion models, provider SVG, client names, phone numbers, CRM notes, frontend
+layout coordinates, or style metadata.
 
 The canonical payload has two separate data layers:
 
@@ -55,4 +59,26 @@ infer missing houses, points or distributions from private birth input.
 
 ## Concurrency
 
-Kerykeion/Swiss Ephemeris calculations are treated as process-isolated work. Increase throughput with Uvicorn worker processes or service replicas after benchmark evidence.
+Every Kerykeion/Swiss Ephemeris operation, including planetary positions,
+AstroCalendar and the readiness sentinel, enters one process-local provider
+lock. Increase throughput with Uvicorn worker processes or service replicas
+after benchmark evidence.
+
+## Provider readiness and ephemeris data
+
+`/ready` runs a bounded canonical natal sentinel and returns the exact provider
+versions, actual backend detected from Swiss Ephemeris return flags, normalized
+flags, data revision and supported capabilities. A requested Swiss Ephemeris
+calculation can transparently fall back to Moshier when data files are absent;
+the runtime reports that actual fallback and fails readiness when it does not
+match the configured deployment profile.
+
+Production requires all three profile values and passes them consistently to
+`astrologer-api`, `chart-worker` and `chart-engine`:
+
+- `CHART_ENGINE_EXPECTED_EPHEMERIS`;
+- `CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS`;
+- `CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION` when packaged Swiss data is expected.
+
+The image does not download or package `.se1` files. Adding ephemeris data or
+making licensing claims requires separate authority and legal review.

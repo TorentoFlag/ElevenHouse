@@ -21,4 +21,7 @@ ENV CHART_ENGINE_WORKERS=2
 
 EXPOSE 8012
 
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8012/ready || exit 1
+
 CMD ["sh", "-c", "uvicorn chart_engine.main:app --host ${CHART_ENGINE_HOST} --port ${CHART_ENGINE_PORT} --workers ${CHART_ENGINE_WORKERS}"]

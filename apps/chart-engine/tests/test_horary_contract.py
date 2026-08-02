@@ -1,12 +1,15 @@
 from fastapi.testclient import TestClient
 
 from chart_engine.main import app
+from test_request_validation import execution_profile
 
 
 def _horary_payload():
     return {
-        "schemaVersion": "chart-request.v1",
+        "schemaVersion": "chart-request.v2",
         "method": "horary",
+        "methodVersion": "chart.horary.kerykeion-5.12.v2",
+        "executionProfile": execution_profile(),
         "settings": {
             "houseSystem": "regiomontanus",
             "nodeType": "true",

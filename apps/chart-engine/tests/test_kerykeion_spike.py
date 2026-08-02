@@ -1,11 +1,21 @@
 from chart_engine.kerykeion_adapter import calculate_natal
+from chart_engine.main import provider_runtime
 from chart_engine.schemas import NatalInputSnapshot, NatalRequest, NatalSettings
+from test_request_validation import execution_profile
+
+
+def _calculate(request: NatalRequest):
+    return provider_runtime.calculate(
+        lambda: calculate_natal(request, provider_runtime.metadata())
+    )
 
 
 def test_kerykeion_spike_maps_real_subject_points_and_houses():
     request = NatalRequest(
-        schemaVersion="chart-request.v1",
+        schemaVersion="chart-request.v2",
         method="natal",
+        methodVersion="chart.natal.kerykeion-5.12.v2",
+        executionProfile=execution_profile(),
         settings=NatalSettings(
             houseSystem="placidus",
             nodeType="mean",
@@ -22,11 +32,11 @@ def test_kerykeion_spike_maps_real_subject_points_and_houses():
         ),
     )
 
-    result = calculate_natal(request)
+    result = _calculate(request)
 
     assert result.provider.name == "kerykeion"
     assert result.provider.version
-    assert result.provider.ephemeris == "swiss-ephemeris"
+    assert result.provider.ephemeris == "moshier"
     assert result.result.houses[0].number == 1
     assert len(result.result.houses) == 12
     point_by_id = {point.id: point for point in result.result.points}
@@ -39,10 +49,12 @@ def test_kerykeion_spike_maps_real_subject_points_and_houses():
 
 
 def test_orb_multiplier_changes_natal_aspect_inclusion():
-    narrow = calculate_natal(
+    narrow = _calculate(
         NatalRequest(
-            schemaVersion="chart-request.v1",
+            schemaVersion="chart-request.v2",
             method="natal",
+            methodVersion="chart.natal.kerykeion-5.12.v2",
+            executionProfile=execution_profile(),
             settings=NatalSettings(
                 houseSystem="placidus",
                 nodeType="true",
@@ -59,10 +71,12 @@ def test_orb_multiplier_changes_natal_aspect_inclusion():
             ),
         )
     )
-    wide = calculate_natal(
+    wide = _calculate(
         NatalRequest(
-            schemaVersion="chart-request.v1",
+            schemaVersion="chart-request.v2",
             method="natal",
+            methodVersion="chart.natal.kerykeion-5.12.v2",
+            executionProfile=execution_profile(),
             settings=NatalSettings(
                 houseSystem="placidus",
                 nodeType="true",

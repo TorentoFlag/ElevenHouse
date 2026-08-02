@@ -47,7 +47,7 @@ def test_astro_calendar_range_returns_provider_backed_global_events():
     assert data["generation"]["status"] == "ready"
     assert data["generation"]["generationId"] is None
     assert data["generation"]["provider"]["name"] == "kerykeion"
-    assert data["generation"]["provider"]["ephemeris"] == "swiss-ephemeris"
+    assert data["generation"]["provider"]["ephemeris"] == "moshier"
     assert data["readiness"]["clientsTotal"] == 0
     assert data["events"]
     assert {"global.moon_phase", "global.ingress"}.issubset(
