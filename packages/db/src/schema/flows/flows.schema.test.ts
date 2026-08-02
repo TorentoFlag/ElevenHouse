@@ -186,7 +186,7 @@ describe("Flows persistence schema", () => {
       "flow_delivery_attempts",
       "flow_suppressions"
     ]) {
-      expect(migration).toContain(`CREATE TABLE \"${table}\"`);
+      expect(migration).toContain(`CREATE TABLE "${table}"`);
     }
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "flow_runtime_events_owner_dedupe_unique" ON "flow_runtime_events" USING btree ("owner_user_id","dedupe_key")'

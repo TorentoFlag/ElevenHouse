@@ -789,12 +789,14 @@ function stripRuntimeEventId(run: StoredRun | null): FlowRunResponse | null {
 }
 
 function toRunResponse(run: StoredRun): FlowRunResponse {
-  const { runtimeEventId: _runtimeEventId, ...response } = run;
+  const { runtimeEventId, ...response } = run;
+  void runtimeEventId;
   return response;
 }
 
 function stripOwnerUserId(approval: StoredApproval): FlowApproval {
-  const { ownerUserId: _ownerUserId, ...response } = approval;
+  const { ownerUserId, ...response } = approval;
+  void ownerUserId;
   return response;
 }
 

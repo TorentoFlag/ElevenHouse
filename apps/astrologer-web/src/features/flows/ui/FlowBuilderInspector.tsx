@@ -26,7 +26,7 @@ export function FlowBuilderInspector({
     setTitle(selectedNode?.title ?? "");
     setConfigText(selectedNode ? JSON.stringify(selectedNode.config, null, 2) : "{}");
     setConfigError(null);
-  }, [selectedNode?.id, selectedNode?.title, selectedNode?.config]);
+  }, [selectedNode]);
 
   if (!selectedNode) {
     return <div className={classNames?.builderInspectorSection ?? ""}>Выберите узел на схеме</div>;

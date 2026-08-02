@@ -5,7 +5,6 @@ import type { FlowRunSnapshot } from "@elevenhouse/contracts";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
   flowApprovals,
-  flowDeliveryAttempts,
   flowRuntimeEvents,
   flowRuns,
   flowStepRuns,
