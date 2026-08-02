@@ -64,6 +64,7 @@ export type ChartEnginePageProps = {
   readonly result: StoredChartCalculationPayload | null;
   readonly errorMessage: string | null;
   readonly isBusy: boolean;
+  readonly isCalculationLinked?: boolean;
   readonly isResultStale?: boolean;
   readonly locale?: DictionaryLocale;
   readonly settings: ChartSettings;
@@ -122,6 +123,7 @@ export function ChartEnginePage({
   result,
   errorMessage,
   isBusy,
+  isCalculationLinked = false,
   isResultStale = false,
   locale = "ru",
   settings,
@@ -417,7 +419,7 @@ export function ChartEnginePage({
           ↗
         </button>
         <button className={styles.toolButton} type="button" disabled>
-          {displayResult && selectedClient ? "✓ Привязана" : "Привязать"}
+          {isCalculationLinked ? "✓ Привязана" : "Привязать"}
         </button>
         <button
           className={styles.toolButton}

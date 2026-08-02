@@ -158,6 +158,26 @@ describe("ChartEnginePage", () => {
     expect(screen.getByRole("button", { name: /рассчитать/i })).toBeEnabled();
   });
 
+  it("does not mark a freshly calculated CRM chart as linked before a client link exists", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        calculationId={calculationId}
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        isCalculationLinked={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Привязать" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "✓ Привязана" })).not.toBeInTheDocument();
+  });
+
   it("shows only a centered empty state when no client is selected", () => {
     renderChartEnginePage({ selectedClient: null });
 

@@ -46,6 +46,8 @@ import {
   openChartPdfDownloadUrl,
   reserveChartPdfDownloadWindow
 } from "../../features/charts/model/chartPdfModel";
+import { getCalculation as getSavedCalculation } from "../../features/calculations/api/calculationsApi";
+import { isCalculationLinked } from "../../features/calculations/model/calculationStatus";
 import type {
   ChartEngineMode,
   ChartEnginePageJobState,
@@ -529,6 +531,11 @@ export function useChartEngineController() {
     queryFn: () => getChartCalculation(calculationId ?? ""),
     enabled: Boolean(calculationId && !immediateResult)
   });
+  const savedCalculationQuery = useQuery({
+    queryKey: ["calculations", calculationId],
+    queryFn: () => getSavedCalculation(calculationId ?? ""),
+    enabled: Boolean(calculationId)
+  });
 
   useEffect(() => {
     const response = restoredClientQuery.data;
@@ -675,6 +682,7 @@ export function useChartEngineController() {
     calculationId,
     result,
     isResultStale,
+    isCalculationLinked: isCalculationLinked(savedCalculationQuery.data ?? null),
     errorMessage:
       errorMessage ??
       (calculationQuery.error instanceof Error ? calculationQuery.error.message : null) ??
