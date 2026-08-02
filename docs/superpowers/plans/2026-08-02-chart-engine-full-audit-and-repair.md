@@ -120,7 +120,13 @@ and separately reviewed deliverable.
 - [x] 2026-08-02: fresh baseline rerun passed 18 Python tests and 250 focused
       Vitest tests; astrologer-web typecheck reproduced only the known stale
       Nominatim fixture failure.
-- [ ] Task 1: synchronize shared main and capture executable baseline.
+- [x] 2026-08-03: merged the two remote chart-linking commits into shared
+      `main` as `dabc511` after exact blob verification. Post-merge runtime had
+      web `5174` and astrologer API `3002` listening, `/health` returned `ok`,
+      PostgreSQL/Redis/MinIO were healthy and `3012`/`8012` were closed. Fresh
+      baseline passed 18/18 Python and 22-file/250-test Vitest checks; web
+      typecheck retained only the recorded Nominatim-to-Geoapify fixture red.
+- [x] Task 1: synchronize shared main and capture executable baseline.
 - [ ] Task 2: strict contracts, method versions and civil-time domain.
 - [ ] Task 3: strict Python ingress, DST, provider runtime and readiness.
 - [ ] Task 4: numerical method repair and golden fixtures.
@@ -159,6 +165,11 @@ acceptance and the exact commit range.
 - The shared checkout initially had remote chart-linking commits represented as
   local modifications while `main` was behind `origin/main`; they must become
   baseline history before owned frontend edits are staged.
+- Git's merge preflight rejected those four tracked paths even though every
+  worktree blob matched `origin/main`. After re-verifying the only remote diff,
+  the merge used temporary `skip-worktree` flags on exactly those four paths;
+  the flags were removed immediately and every post-merge worktree blob was
+  checked against `HEAD` before continuing.
 - The active design reference contains desktop `EngineView`; its prototype
   `MobileEngine` branch is disabled. The approved mobile contract therefore
   combines the app-shell mobile navigation reference with the exact desktop
@@ -510,7 +521,7 @@ shared-main sync
   linking commits without staging their existing worktree representation.
 - Produces: confirmed local listeners and dependency endpoints.
 
-- [ ] **Step 1: Verify the shared index and remote-equivalent chart paths**
+- [x] **Step 1: Verify the shared index and remote-equivalent chart paths**
 
 Run:
 
@@ -529,14 +540,14 @@ Expected: branch is `main`, cached diff is empty, and the four paths are
 byte-equivalent to `origin/main`. If any differs, do not merge or stage it;
 record the exact path as a shared semantic conflict.
 
-- [ ] **Step 2: Merge remote history without rebase/stash**
+- [x] **Step 2: Merge remote history without rebase/stash**
 
 Run: `git merge --no-edit origin/main`
 
 Expected: merge succeeds and preserves all unrelated dirty files. Confirm with
 `git status --short --branch` and `git diff --cached --name-status`.
 
-- [ ] **Step 3: Capture read-only runtime state**
+- [x] **Step 3: Capture read-only runtime state**
 
 Run:
 
@@ -551,7 +562,7 @@ docker compose ps postgres redis minio
 
 Expected: record actual listeners; do not infer health from an old process.
 
-- [ ] **Step 4: Record baseline tests and current known failures**
+- [x] **Step 4: Record baseline tests and current known failures**
 
 Run:
 
@@ -576,7 +587,7 @@ the only accepted baseline red and remains red until Task 12 updates that chart
 fixture against the already-accepted shared contract; any other failure is a
 new discovery that must be diagnosed before implementation advances.
 
-- [ ] **Step 5: Update and commit plan progress if the merge did not already create a commit**
+- [x] **Step 5: Update and commit plan progress if the merge did not already create a commit**
 
 Use `apply_patch` for the plan update, stage this plan only, run
 `git diff --check -- <plan>` and commit `docs: record chart engine execution baseline`.
