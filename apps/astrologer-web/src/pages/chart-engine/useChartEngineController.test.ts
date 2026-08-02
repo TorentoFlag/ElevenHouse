@@ -21,6 +21,7 @@ import {
   submitChartCalculation,
   submitAstrocartographyCalculation,
   submitCompositeCalculation,
+  getChartLinkableClientId,
   submitHoraryCalculation,
   submitProgressionCalculation,
   submitSolarReturnCalculation,
@@ -36,6 +37,28 @@ const calculatingResponse = {
 } satisfies ChartNatalJobCreateResponse;
 
 describe("chart engine controller submission", () => {
+  it("uses the saved CRM participant as the link target when one is loaded", () => {
+    expect(
+      getChartLinkableClientId(
+        {
+          participants: [
+            {
+              role: "subject",
+              source: "crm_client",
+              clientId,
+              displayName: "Марина Краснова"
+            }
+          ]
+        },
+        "55555555-5555-4555-8555-555555555555"
+      )
+    ).toBe(clientId);
+  });
+
+  it("falls back to the selected CRM client while the saved calculation is still loading", () => {
+    expect(getChartLinkableClientId(null, clientId)).toBe(clientId);
+  });
+
   it("recalculates an existing stale result instead of creating a separate natal job", async () => {
     const create = vi.fn(async () => calculatingResponse);
     const recalculate = vi.fn(async () => calculatingResponse);

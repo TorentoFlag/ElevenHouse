@@ -158,7 +158,10 @@ describe("ChartEnginePage", () => {
     expect(screen.getByRole("button", { name: /рассчитать/i })).toBeEnabled();
   });
 
-  it("does not mark a freshly calculated CRM chart as linked before a client link exists", () => {
+  it("allows linking a freshly calculated CRM chart before a client link exists", async () => {
+    const user = userEvent.setup();
+    const onLink = vi.fn();
+
     render(
       <ChartEnginePage
         selectedClient={client}
@@ -168,13 +171,17 @@ describe("ChartEnginePage", () => {
         errorMessage={null}
         isBusy={false}
         isCalculationLinked={false}
+        linkDisabled={false}
         settings={settings()}
         onSettingsChange={vi.fn()}
         onCreateNatalJob={vi.fn()}
+        onLink={onLink}
       />
     );
 
-    expect(screen.getByRole("button", { name: "Привязать" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Привязать" }));
+
+    expect(onLink).toHaveBeenCalledOnce();
     expect(screen.queryByRole("button", { name: "✓ Привязана" })).not.toBeInTheDocument();
   });
 
