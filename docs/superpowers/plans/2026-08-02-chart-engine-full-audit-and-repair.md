@@ -914,6 +914,7 @@ Commit subject: `fix: harden chart provider runtime`.
 
 **Files:**
 
+- Modify: `apps/chart-engine/src/chart_engine/canonical_validation.py`
 - Modify: `apps/chart-engine/src/chart_engine/kerykeion_adapter.py`
 - Modify: `apps/chart-engine/src/chart_engine/schemas.py`
 - Modify: `apps/chart-engine/tests/test_progression_contract.py`
@@ -923,16 +924,21 @@ Commit subject: `fix: harden chart provider runtime`.
 - Modify: `apps/chart-engine/tests/test_composite_contract.py`
 - Modify: `apps/chart-engine/tests/test_horary_contract.py`
 - Modify: `apps/chart-engine/tests/test_astrocartography_contract.py`
+- Modify: `apps/chart-engine/tests/test_output_invariants.py`
 - Create: `apps/chart-engine/tests/test_numeric_fixtures.py`
+- Modify: `packages/contracts/src/charts.ts`
 - Modify: `packages/contracts/src/charts.test.ts`
+- Modify: `packages/domain/src/charts/chart-execution-profile.ts`
+- Modify: `packages/domain/src/charts/chart-execution-profile.test.ts`
 - Modify result summaries: `packages/db/src/adapters/charts/drizzle-chart-calculation-job-store.ts`
+- Modify: `packages/db/src/adapters/charts/drizzle-chart-calculation-job-store.integration.ts`
 
 **Interfaces:**
 
 - Produces: progression basis and tolerances from Global Constraints.
 - Preserves: existing canonical method union and layer naming.
 
-- [ ] **Step 1: Write RED progression/solar tests**
+- [x] **Step 1: Write RED progression/solar tests**
 
 Use one birth snapshot and target dates `2026-07-15`, `2026-07-23` and
 `2026-12-31`; assert distinct Moon/fast-point longitude and increasing
@@ -940,21 +946,21 @@ Use one birth snapshot and target dates `2026-07-15`, `2026-07-23` and
 birth fails, zero coordinates succeed, and angular difference between natal
 and return Sun is `<= 0.0001` degrees.
 
-- [ ] **Step 2: Write RED all-mode numeric/invariant fixtures**
+- [x] **Step 2: Write RED all-mode numeric/invariant fixtures**
 
 Add literal expected values/tolerances for northern/southern hemispheres, normal
 and DST-fold births, transit layers, ordered relationship IDs, composite
 participant preservation, horary independence and complete astrocartography
 line types. Record fixture provenance beside each literal.
 
-- [ ] **Step 3: Run RED numeric tests**
+- [x] **Step 3: Run RED numeric tests**
 
 Run: `cd apps/chart-engine && .venv/bin/python -m pytest tests/test_progression_contract.py tests/test_solar_return_contract.py tests/test_numeric_fixtures.py -q`
 
 Expected: current integer progression, pre-birth coercion and zero-coordinate
 return behavior fail.
 
-- [ ] **Step 4: Implement continuous progression**
+- [x] **Step 4: Implement continuous progression**
 
 Calculate:
 
@@ -967,14 +973,14 @@ symbolic_instant = birth_instant + timedelta(days=elapsed_years)
 Create the progressed subject with Kerykeion's UTC-ISO factory so fractional
 time is not truncated. Persist all progression-basis fields exactly.
 
-- [ ] **Step 5: Implement deterministic solar-return solver**
+- [x] **Step 5: Implement deterministic solar-return solver**
 
 Use Swiss primitives to bracket/bisect the signed Sun-longitude difference,
 then build the return subject at the resolved UTC instant. Use the same path for
 all coordinates, including zero; do not epsilon-shift coordinates. Reject a
 result outside `0.0001` degrees before serialization.
 
-- [ ] **Step 6: Run GREEN all-mode provider/contract tests**
+- [x] **Step 6: Run GREEN all-mode provider/contract tests**
 
 Run:
 
@@ -986,14 +992,31 @@ pnpm test packages/contracts/src/charts.test.ts
 Expected: all nine UI modes' underlying provider methods pass with stable
 literal fixtures.
 
-- [ ] **Step 7: Commit exact paths**
+- [x] **Step 7: Commit exact paths**
 
 Commit subject: `fix: correct chart calculation methods`.
+
+Completion evidence: commits `6148781`, `c41a7c2` and `8234ad0`; independent
+review approved after the astrocartography job-snapshot binding fix. Fresh final
+checks: 105 Python tests, 54 focused contract/domain tests, 14 real-PostgreSQL
+integration tests, exact ESLint, compileall, domain build and DB typecheck.
 
 ### Task 5: Abortable Chart-Engine Client and Failure Taxonomy
 
 **Files:**
 
+- Modify: `packages/contracts/src/charts.ts`
+- Modify: `packages/contracts/src/charts.test.ts`
+- Modify: `packages/domain/src/charts/chart-execution-profile.ts`
+- Modify: `packages/domain/src/charts/chart-execution-profile.test.ts`
+- Modify: `apps/chart-engine/src/chart_engine/schemas.py`
+- Modify: `apps/chart-engine/src/chart_engine/settings.py`
+- Modify: `apps/chart-engine/src/chart_engine/provider_runtime.py`
+- Modify: `apps/chart-engine/tests/test_provider_runtime.py`
+- Modify: `apps/chart-engine/tests/test_request_validation.py`
+- Modify: `apps/chart-engine/tests/test_health.py`
+- Modify: `apps/chart-engine/tests/test_output_invariants.py`
+- Modify: `apps/chart-engine/README.md`
 - Modify: `packages/chart-engine-client/src/chart-engine-client.ts`
 - Modify: `packages/chart-engine-client/src/chart-engine-client.test.ts`
 - Modify: `packages/chart-engine-client/src/index.ts`
@@ -1012,39 +1035,87 @@ export class ChartEngineCancelledError extends Error {}
 export class ChartEnginePermanentError extends Error {}
 ```
 
-Every calculation method accepts optional `ChartEngineRequestOptions`;
-`checkReady()` returns the strict Task 3 readiness response.
+Every calculation method, AstroCalendar, positions and `checkReady()` accept
+optional `ChartEngineRequestOptions`. `checkReady()` returns a shared strict
+`chartEngineReadinessResponseSchema` value rather than discarding the body.
+The only canonical provider-flag vocabulary is the actual Swiss API flag name
+set: Moshier is `FLG_MOSEPH + FLG_SPEED`; packaged Swiss data is
+`FLG_SWIEPH + FLG_SPEED`. The separate `ephemeris` field remains
+`moshier | swiss-ephemeris`, and Swiss artifact revisions are SHA-256 digests.
 
-- [ ] **Step 1: Write RED client tests**
+- [ ] **Step 1: Write RED provider-vocabulary and readiness-contract tests**
 
-Test caller abort, internal timeout, 4xx permanent input, invalid JSON/valid JSON
-with invalid schema as permanent contract, eligible 5xx/network as transient,
-readiness mismatch as configuration, bounded diagnostic body and signal
-propagation through every endpoint.
+Add shared TypeScript and Python vectors for exact backend-appropriate flag
+sets, order-insensitive comparison/canonical hashing, unsupported/missing flag
+rejection, SHA-256 Swiss revision validation and the complete unique capability
+set. Prove the current semantic Python flag tokens and incomplete TypeScript
+expected flags disagree.
 
-- [ ] **Step 2: Run RED**
+- [ ] **Step 2: Write RED real-HTTP client tests**
 
-Run: `pnpm test packages/chart-engine-client/src/chart-engine-client.test.ts`
+Use a test-owned `node:http` listener on `127.0.0.1:0` and native `fetch`, not
+an injected fetch mock. Test every endpoint's method/path/body and signal,
+caller abort, internal timeout, dropped connection, 4xx permanent input,
+invalid JSON/valid JSON with invalid schema as permanent contract, eligible
+5xx/network as transient, readiness mismatch as configuration and v2 response
+parsing for all eight chart methods. Read at most 2,048 response characters for
+diagnosis, but never expose or persist an arbitrary raw provider body; prove an
+echoed secret is absent from the thrown error.
 
-Expected: failures show no abort/timeout and generic retryable errors.
-
-- [ ] **Step 3: Implement one shared request helper**
-
-Combine caller signal with an internal `AbortController`, clear its timer in
-`finally`, cap diagnostic text at 2,048 characters, and classify before parsing
-the endpoint schema. Do not duplicate fetch/error logic per method.
-
-- [ ] **Step 4: Run GREEN and package gates**
+- [ ] **Step 3: Run RED**
 
 Run:
 
 ```bash
-pnpm test packages/chart-engine-client/src/chart-engine-client.test.ts
+cd apps/chart-engine && .venv/bin/python -m pytest \
+  tests/test_provider_runtime.py tests/test_health.py tests/test_output_invariants.py -q
+cd ../..
+pnpm test packages/contracts/src/charts.test.ts \
+  packages/domain/src/charts/chart-execution-profile.test.ts \
+  packages/chart-engine-client/src/chart-engine-client.test.ts
+```
+
+Expected: failures show provider-vocabulary drift, no shared readiness parser,
+stale v1 client fixtures, no abort/timeout and generic errors.
+
+- [ ] **Step 4: Normalize the shared provider/readiness contract**
+
+Translate returned Swiss bit masks to canonical `FLG_*` names in Python,
+compare normalized sets, make both execution-profile schemas require the exact
+backend-specific set, and use a SHA-256 schema for packaged-data revision.
+Export one strict readiness response schema/type from contracts and parse the
+same literal vectors in Python and TypeScript. A pre-existing result with a
+different v2 flag vocabulary is non-reproducible and must not have its digest
+rewritten in place.
+
+- [ ] **Step 5: Implement one shared request helper**
+
+Combine caller signal with an internal `AbortController`, clear its timer in
+`finally`, remove abort listeners, bound response reading, and classify before
+parsing the endpoint schema. Remove the unused public `fetchFn` mock seam. Wrap
+local request-schema failures as permanent; make successful malformed payloads
+permanent; make calculation 5xx/network failures transient; and make readiness
+HTTP/profile/schema mismatch configuration errors. Do not duplicate fetch/error
+logic per method and do not treat legacy v1 chart output as v2 success.
+
+- [ ] **Step 6: Run GREEN and package gates**
+
+Run:
+
+```bash
+cd apps/chart-engine && .venv/bin/python -m pytest -q
+cd ../..
+pnpm test packages/contracts/src/charts.test.ts \
+  packages/domain/src/charts/chart-execution-profile.test.ts \
+  packages/chart-engine-client/src/chart-engine-client.test.ts
+pnpm --filter @elevenhouse/contracts typecheck
+pnpm --filter @elevenhouse/contracts build
+pnpm --filter @elevenhouse/domain build
 pnpm --filter @elevenhouse/chart-engine-client typecheck
 pnpm --filter @elevenhouse/chart-engine-client build
 ```
 
-- [ ] **Step 5: Commit exact paths**
+- [ ] **Step 7: Commit exact paths**
 
 Commit subject: `fix: bound chart provider requests`.
 
@@ -1074,6 +1145,7 @@ Commit subject: `fix: bound chart provider requests`.
 - Produces: participant/lease/job interfaces defined above.
 - Adds columns: `participant_snapshot jsonb not null`,
   `target_calculation_id uuid null`, `expected_source_checksum text null`,
+  `method_version text not null`, `execution_profile jsonb not null`,
   `lease_generation integer not null default 0`,
   `result_reproducibility_fingerprint text null`.
 - Changes `schema_version` default to `chart-result.v2` while allowing both
@@ -1084,7 +1156,8 @@ Commit subject: `fix: bound chart provider requests`.
 
 - [ ] **Step 1: Write RED domain and schema tests**
 
-Assert every job creation receives ordered participants and maxAttempts; a
+Assert every job creation receives ordered participants, maxAttempts, the exact
+immutable method version and execution profile used to build its fingerprint; a
 replacement requires both target ID and expected checksum; schema checks reject
 invalid participant JSON, negative generation and invalid checksum. Assert new
 jobs carry `chart-result.v2`, legacy succeeded v1 jobs are readable but not
@@ -1137,7 +1210,9 @@ Join succeeded jobs to `calculation_records.status <> 'archived'`. Initial
 individual results get one subject; synastry/composite get subject+partner and
 compatibility mode. Replacement jobs never reuse an old succeeded job.
 Inject the chart execution profile into every API-created v2 snapshot before
-request fingerprinting. On completion, recompute the result reproducibility
+request fingerprinting and persist that exact method version/profile on the
+job; never reconstruct a queued job's authority from the later process
+environment. On completion, recompute the result reproducibility
 fingerprint from canonical actual metadata and compare it with the result field;
 persist it on the job and calculation payload in the same transaction. A
 succeeded result is reusable only when its request fingerprint, v2
@@ -1565,6 +1640,8 @@ Commit subject: `feat: require client consent for chart AI`.
 
 **Files:**
 
+- Modify: `packages/contracts/src/charts.ts`
+- Modify: `packages/contracts/src/charts.test.ts`
 - Modify: `apps/chart-worker/src/chart-jobs.processor.ts`
 - Modify: `apps/chart-worker/src/chart-jobs.processor.test.ts`
 - Modify: `apps/chart-worker/src/chart-jobs.queue.ts`
@@ -1583,12 +1660,18 @@ Commit subject: `feat: require client consent for chart AI`.
 
 - Consumes: Task 5 error classes and Task 6 lease store.
 - Produces: worker execution that never writes after lease loss.
+- Consumes the exact persisted `methodVersion + executionProfile`; it never
+  resolves a replacement profile from current worker environment.
 
 - [ ] **Step 1: Write RED processor tests**
 
-Assert timeout is recorded once, permanent input/contract/config errors do not
-retry, transient failures stop at claim `maxAttempts`, heartbeat loss aborts the
-provider request, and old execution cannot complete/fail newer state.
+Assert the processor module loads without invoking `.pick()` on a refined Zod
+schema. Assert all eight methods reconstruct strict v2 requests from dedicated
+job-snapshot schemas plus the persisted method version/profile, and a readiness
+profile mismatch fails before the calculation HTTP request. Assert timeout is
+recorded once, permanent input/contract/config errors do not retry, transient
+failures stop at claim `maxAttempts`, heartbeat loss aborts the provider
+request, and old execution cannot complete/fail newer state.
 
 - [ ] **Step 2: Write RED queue/relay/readiness tests**
 
@@ -1618,7 +1701,9 @@ new behavior.
 Generate a stable process worker ID plus per-claim lease generation. Start an
 `AbortController`, extend at less than half the lease duration, abort on timeout,
 shutdown or failed extension, and pass its signal to the client. Only the
-current fence may complete/fail.
+current fence may complete/fail. Export/compose dedicated unrefined
+job-snapshot schemas in contracts; never call `.pick()` on a refined public
+request schema.
 
 - [ ] **Step 5: Make DB attempts the only retry source**
 
@@ -1992,7 +2077,10 @@ Use the approved independent states/retries; do not add fallback copy.
 Download/verify Natural Earth 1:110m land GeoJSON from the official source,
 commit the bounded asset and public-domain provenance, render polygons through
 the existing projection, and render the complete ordered line list for keyboard/
-screen reader use. No live tile/network dependency is introduced.
+screen reader use. Split every astrocartography polyline at antimeridian jumps
+before SVG rendering so a correct `+180/-180` crossing cannot draw a false
+world-spanning chord. Add a deterministic renderer test for both crossing
+directions. No live tile/network dependency is introduced.
 
 - [ ] **Step 6: Implement mobile/reference/a11y CSS**
 
@@ -2199,7 +2287,11 @@ affected/repository gates after the merge.
 
 Run fresh commands proving every push claim, inspect `git diff --cached`, task
 commit list and unowned status. Do not push if any required gate is red or a
-combined commit contains unowned changes.
+combined commit contains unowned changes. Before treating the finalized v2
+provider vocabulary as deployable, run a read-only production inventory of
+existing chart-result.v2 rows and fingerprints. If any row uses an earlier
+external v2 vocabulary/profile, stop and add a versioned migration/recalculation
+path; never silently reinterpret or rewrite its digest.
 
 - [ ] **Step 3: Push main and observe deployment**
 
