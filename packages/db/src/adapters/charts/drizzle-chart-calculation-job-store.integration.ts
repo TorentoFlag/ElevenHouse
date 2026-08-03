@@ -301,6 +301,85 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
     });
   });
 
+  it("persists a v2 astrocartography result for the API-shaped wrapped job snapshot", async () => {
+    const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
+    const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+    const created = await jobStore.createOrReuseChartJob(createAstrocartographyInput(ownerUserId));
+    if (created.kind !== "active_job") throw new Error("Expected active job");
+    await workerStore.claimForProcessing({
+      jobId: created.jobId,
+      now: "2026-07-20T12:00:00.000Z"
+    });
+    const result = astrocartographyV2ChartResult();
+
+    await expect(
+      workerStore.complete({
+        jobId: created.jobId,
+        result,
+        resultChecksum: digest("5"),
+        now: "2026-07-20T12:00:05.000Z"
+      })
+    ).resolves.toBe(true);
+
+    const job = await runtime.database.query.chartCalculationJobs.findFirst({
+      where: eq(chartCalculationJobs.id, created.jobId)
+    });
+    const calculation = await runtime.database.query.calculationRecords.findFirst({
+      where: eq(
+        calculationRecords.id,
+        job?.resultCalculationId ?? raise("Expected result calculation id")
+      )
+    });
+    expect(job).toMatchObject({ status: "succeeded" });
+    expect(calculation).toMatchObject({
+      methodCode: "astrocartography",
+      title: "Astrocartography map",
+      resultData: result,
+      resultSummary: {
+        provider: "kerykeion",
+        lineCount: 40,
+        pointCount: 10,
+        angleCount: 4
+      }
+    });
+  });
+
+  it("rejects a v2 astrocartography result for a foreign wrapped job snapshot", async () => {
+    const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
+    const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+    const foreignInput = createAstrocartographyInput(ownerUserId);
+    foreignInput.inputFingerprint = digest("4");
+    foreignInput.inputSnapshot.inputSnapshot.latitude = 40;
+    const created = await jobStore.createOrReuseChartJob(foreignInput);
+    if (created.kind !== "active_job") throw new Error("Expected active job");
+    await workerStore.claimForProcessing({
+      jobId: created.jobId,
+      now: "2026-07-20T12:00:00.000Z"
+    });
+
+    await expect(
+      workerStore.complete({
+        jobId: created.jobId,
+        result: astrocartographyV2ChartResult(),
+        resultChecksum: digest("5"),
+        now: "2026-07-20T12:00:05.000Z"
+      })
+    ).rejects.toThrow("CHART_RESULT_JOB_BINDING_MISMATCH");
+
+    const job = await runtime.database.query.chartCalculationJobs.findFirst({
+      where: eq(chartCalculationJobs.id, created.jobId)
+    });
+    const calculations = await runtime.database.query.calculationRecords.findMany({
+      where: eq(calculationRecords.ownerUserId, ownerUserId)
+    });
+    expect(job).toMatchObject({ status: "processing", resultCalculationId: null });
+    expect(calculations).toEqual([]);
+  });
+
   it("rejects a false v2 fingerprint before persisting result or summary", async () => {
     const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
     const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
@@ -506,6 +585,18 @@ function createSolarReturnInput(ownerUserId: string) {
   };
 }
 
+function createAstrocartographyInput(ownerUserId: string) {
+  const input = createInput(ownerUserId);
+  return {
+    ...input,
+    method: "astrocartography" as const,
+    inputFingerprint: digest("5"),
+    inputSnapshot: {
+      inputSnapshot: input.inputSnapshot
+    }
+  };
+}
+
 function createCompositeInput(ownerUserId: string) {
   const input = createInput(ownerUserId);
   return {
@@ -694,6 +785,31 @@ function progressionV2ChartResult() {
   };
 }
 
+function astrocartographyV2ChartResult() {
+  const natal = chartResult();
+  return {
+    schemaVersion: "chart-result.v2",
+    method: "astrocartography",
+    methodVersion: "chart.astrocartography.swisseph.v2",
+    provider: {
+      name: "kerykeion",
+      version: "5.12.9",
+      ephemeris: "moshier",
+      pyswissephVersion: "2.10.3.2",
+      ephemerisFlags: ["moshier", "speed"],
+      ephemerisDataRevision: null
+    },
+    reproducibilityFingerprint:
+      "sha256:c65efdd03703d75547195084a194227a502c23f30a0d980a9bfd0014bf992260",
+    settings: natal.settings,
+    inputSnapshot: natal.inputSnapshot,
+    result: {
+      lines: completeAstrocartographyLines(),
+      warnings: []
+    }
+  };
+}
+
 function horaryChartResult() {
   const natal = chartResult();
   return {
@@ -752,6 +868,35 @@ function completeHouses() {
     sign: "aries",
     signDegree: 0
   }));
+}
+
+function completeAstrocartographyLines() {
+  const points = [
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ];
+  const angles = ["mc", "ic", "asc", "dsc"];
+  return points.flatMap((point, pointIndex) =>
+    angles.map((angle, angleIndex) => ({
+      id: `${point}_${angle}`,
+      point,
+      angle,
+      label: `${point} ${angle}`,
+      path: [
+        { latitude: -66, longitude: -100 + pointIndex * 8 + angleIndex },
+        { latitude: 0, longitude: -100 + pointIndex * 8 + angleIndex },
+        { latitude: 66, longitude: -100 + pointIndex * 8 + angleIndex }
+      ]
+    }))
+  );
 }
 
 function getIntegrationDatabaseUrl(value: string | undefined): string {

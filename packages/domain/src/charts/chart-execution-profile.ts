@@ -106,8 +106,11 @@ export function buildChartResultReproducibilityFingerprint(
 }
 
 export function buildChartJobInputSnapshotForResult(result: ChartResult): CanonicalJson {
-  if (result.method === "natal" || result.method === "astrocartography") {
+  if (result.method === "natal") {
     return result.inputSnapshot as CanonicalJson;
+  }
+  if (result.method === "astrocartography") {
+    return { inputSnapshot: result.inputSnapshot as CanonicalJson };
   }
   if (result.method === "transit") {
     return {
