@@ -1,7 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { chartResultSchema, type ChartResult } from "@elevenhouse/contracts";
 import {
+  chartResultSchema,
+  isReproducibleChartResult,
+  type ChartResult
+} from "@elevenhouse/contracts";
+import {
+  buildChartJobInputSnapshotForResult,
+  buildChartResultReproducibilityFingerprint,
   CHART_CALCULATION_REQUESTED_EVENT,
   type ChartCalculationCommandStore,
   ChartCalculationJob,
@@ -10,7 +16,9 @@ import {
   ChartJobProcessingStore,
   CreateOrReuseChartJobInput,
   CreateOrReuseChartJobResult,
-  CreateOrReuseNatalJobResult
+  CreateOrReuseNatalJobResult,
+  stableJson,
+  type CanonicalJson
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
@@ -54,10 +62,10 @@ export function createDrizzleChartWorkerJobStore(
   return {
     findByJobId: (jobId) => findChartJobById(database, jobId),
     claimForProcessing: (input) => claimChartJobForProcessing(database, input),
-    complete: (input) =>
+    complete: async (input) =>
       completeChartJob(database, {
         ...input,
-        result: chartResultSchema.parse(input.result)
+        result: parseChartWorkerResult(input.result)
       }),
     fail: (input) => failChartJob(database, input)
   };
@@ -270,6 +278,7 @@ async function completeChartJob(
       .where(eq(chartCalculationJobs.id, input.jobId))
       .limit(1);
     if (!job) return false;
+    assertChartResultMatchesJob(job, input.result);
     if (job.status === "succeeded" && job.resultCalculationId) {
       await ensureChartCalculationSubjectParticipant(transaction, {
         calculationId: job.resultCalculationId,
@@ -336,6 +345,29 @@ async function completeChartJob(
 
     return Boolean(updated);
   });
+}
+
+function parseChartWorkerResult(value: unknown): ChartResult {
+  const result = chartResultSchema.parse(value);
+  if (
+    isReproducibleChartResult(result) &&
+    result.reproducibilityFingerprint !== buildChartResultReproducibilityFingerprint(result)
+  ) {
+    throw new Error("CHART_RESULT_REPRODUCIBILITY_FINGERPRINT_MISMATCH");
+  }
+  return result;
+}
+
+function assertChartResultMatchesJob(job: ChartCalculationJobRow, result: ChartResult): void {
+  if (
+    result.method !== job.method ||
+    stableJson(result.settings as CanonicalJson) !==
+      stableJson(job.settingsSnapshot as CanonicalJson) ||
+    stableJson(buildChartJobInputSnapshotForResult(result)) !==
+      stableJson(job.inputSnapshot as CanonicalJson)
+  ) {
+    throw new Error("CHART_RESULT_JOB_BINDING_MISMATCH");
+  }
 }
 
 async function ensureChartCalculationSubjectParticipant(

@@ -289,11 +289,22 @@ export const chartProgressionCalculationBasisSchema = z
   .object({
     symbolicInstant: z.string().datetime(),
     elapsedLifeDays: z.number().finite().min(0),
-    elapsedYears: z.number().min(0),
+    elapsedYears: z.number().finite().min(0),
     yearLengthDays: z.literal(365.24219),
     dayForYearRatio: z.literal(1)
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      !Number.isInteger(value.elapsedLifeDays) ||
+      Math.abs(value.elapsedYears - value.elapsedLifeDays / value.yearLengthDays) > 1e-12
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "CHART_PROGRESSION_BASIS_INCONSISTENT"
+      });
+    }
+  });
 export type ChartProgressionCalculationBasis = z.infer<
   typeof chartProgressionCalculationBasisSchema
 >;
@@ -1276,14 +1287,42 @@ export const chartSolarReturnResultV2Schema = storedChartSolarReturnCalculationP
   solarReturnSnapshot: chartSolarReturnSnapshotSchema,
   result: chartSolarReturnRenderResultSchema
 });
-export const chartProgressionResultV2Schema = storedChartProgressionCalculationPayloadSchema.extend({
-  ...reproducibleChartResultFields,
-  methodVersion: z.literal(chartMethodVersions.progression),
-  inputSnapshot: chartInputSnapshotSchema,
-  progressionSnapshot: chartProgressionSnapshotSchema,
-  result: chartProgressionRenderResultSchema,
-  calculationBasis: chartProgressionCalculationBasisSchema
-});
+export const chartProgressionResultV2Schema = storedChartProgressionCalculationPayloadSchema
+  .extend({
+    ...reproducibleChartResultFields,
+    methodVersion: z.literal(chartMethodVersions.progression),
+    inputSnapshot: chartInputSnapshotSchema,
+    progressionSnapshot: chartProgressionSnapshotSchema,
+    result: chartProgressionRenderResultSchema,
+    calculationBasis: chartProgressionCalculationBasisSchema
+  })
+  .superRefine((value, context) => {
+    const bornAt = resolveChartCivilInstant(value.inputSnapshot);
+    const bornDate = Date.parse(`${value.inputSnapshot.birthDate}T00:00:00Z`);
+    const targetDate = Date.parse(`${value.progressionSnapshot.targetDate}T00:00:00Z`);
+    const expectedElapsedLifeDays = (targetDate - bornDate) / 86_400_000;
+    const providerSymbolicInstant = Date.parse(value.calculationBasis.symbolicInstant);
+    const expectedSymbolicInstant =
+      bornAt === null ? Number.NaN : bornAt + value.calculationBasis.elapsedYears * 86_400_000;
+    const legacyBasis = value.progressionSnapshot.calculationBasis;
+    const providerSymbolicDate = Number.isFinite(providerSymbolicInstant)
+      ? new Date(providerSymbolicInstant).toISOString().slice(0, 10)
+      : null;
+    if (
+      bornAt === null ||
+      value.calculationBasis.elapsedLifeDays !== expectedElapsedLifeDays ||
+      !Number.isFinite(expectedSymbolicInstant) ||
+      Math.abs(providerSymbolicInstant - expectedSymbolicInstant) >= 1_000 ||
+      legacyBasis.symbolicDate !== providerSymbolicDate ||
+      legacyBasis.ageDays !== Math.trunc(value.calculationBasis.elapsedYears) ||
+      legacyBasis.dayForYearRatio !== value.calculationBasis.dayForYearRatio
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "CHART_PROGRESSION_BASIS_INCONSISTENT"
+      });
+    }
+  });
 export const chartHoraryResultV2Schema = storedChartHoraryCalculationPayloadSchema.extend({
   ...reproducibleChartResultFields,
   methodVersion: z.literal(chartMethodVersions.horary),
@@ -1302,13 +1341,7 @@ export const reproducibleChartResultSchema = z.union([
   chartHoraryResultV2Schema
 ]);
 
-export type ReproducibleChartResult = {
-  readonly schemaVersion: "chart-result.v2";
-  readonly methodVersion: ChartMethodVersion;
-  readonly provider: ChartProviderMetadata;
-  readonly reproducibilityFingerprint: `sha256:${string}`;
-  readonly calculationBasis?: ChartProgressionCalculationBasis;
-};
+export type ReproducibleChartResult = z.infer<typeof reproducibleChartResultSchema>;
 
 export const chartResultSchema = z.union([
   storedChartCalculationPayloadSchema,
@@ -1318,6 +1351,65 @@ export type ChartResult = z.infer<typeof chartResultSchema>;
 
 export function isReproducibleChartResult(value: unknown): value is ReproducibleChartResult {
   return reproducibleChartResultSchema.safeParse(value).success;
+}
+
+function resolveChartCivilInstant(input: ChartInputSnapshot): number | null {
+  const [year, month, day] = input.birthDate.split("-").map(Number);
+  const [hour, minute] = input.birthTime.split(":").map(Number);
+  const requestedUtc = Date.UTC(year!, month! - 1, day!, hour!, minute!);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: input.timezone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  const requestedParts = { year: year!, month: month!, day: day!, hour: hour!, minute: minute! };
+  const offsets = new Set<number>();
+  for (const probe of [requestedUtc - 86_400_000, requestedUtc, requestedUtc + 86_400_000]) {
+    const parts = civilParts(formatter, probe);
+    offsets.add(
+      Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) -
+        probe
+    );
+  }
+  const candidates = [...offsets]
+    .map((offset) => requestedUtc - offset)
+    .filter((candidate) => {
+      const parts = civilParts(formatter, candidate);
+      return (
+        parts.year === requestedParts.year &&
+        parts.month === requestedParts.month &&
+        parts.day === requestedParts.day &&
+        parts.hour === requestedParts.hour &&
+        parts.minute === requestedParts.minute
+      );
+    })
+    .filter((candidate, index, values) => values.indexOf(candidate) === index)
+    .sort((left, right) => left - right);
+  if (candidates.length === 1) return candidates[0]!;
+  if (candidates.length !== 2 || input.dstOccurrence === undefined) return null;
+  return input.dstOccurrence === "first" ? candidates[0]! : candidates[1]!;
+}
+
+function civilParts(formatter: Intl.DateTimeFormat, instant: number) {
+  const values = Object.fromEntries(
+    formatter
+      .formatToParts(instant)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)])
+  );
+  return {
+    year: values.year!,
+    month: values.month!,
+    day: values.day!,
+    hour: values.hour!,
+    minute: values.minute!,
+    second: values.second!
+  };
 }
 
 export const chartCalculationResultRecordSchema = chartJsonRecordSchema;

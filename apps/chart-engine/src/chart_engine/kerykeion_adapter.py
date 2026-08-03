@@ -2,7 +2,7 @@ import hashlib
 import json
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
-from math import ceil
+from math import acos, ceil, degrees, radians, tan
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -274,6 +274,8 @@ ASTRO_CALENDAR_TRANSIT_POINTS = {
 }
 ASTRO_CALENDAR_TRANSIT_ORB_LIMIT = 1.0
 ASTRO_CALENDAR_MAX_TRANSIT_EVENTS_PER_CLIENT = 80
+ASTROCARTOGRAPHY_HORIZON_TOLERANCE_DEGREES = 0.00001
+ASTROCARTOGRAPHY_CIRCUMPOLAR_EPSILON = 0.000000000001
 PROGRESSION_YEAR_LENGTH_DAYS = 365.24219
 SOLAR_RETURN_ANGULAR_TOLERANCE_DEGREES = 0.0001
 SOLAR_RETURN_SOLVER_TOLERANCE_DEGREES = 0.000001
@@ -438,10 +440,7 @@ def calculate_astrocartography(
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
         result=ChartAstrocartographyRenderResult(
-            lines=_astrocartography_lines(
-                julian_day=float(subject.julian_day),
-                house_system=request.settings.houseSystem,
-            ),
+            lines=_astrocartography_lines(julian_day=float(subject.julian_day)),
             warnings=warnings,
         ),
     ))
@@ -858,13 +857,18 @@ def calculate_progression(
         house_system=request.settings.houseSystem,
         active_points=active_points,
     )
+    provider_symbolic_instant = _parse_kerykeion_utc_datetime(
+        progressed_subject.iso_formatted_utc_datetime
+    )
+    if abs((provider_symbolic_instant - symbolic_instant).total_seconds()) >= 1:
+        raise RuntimeError("CHART_PROGRESSION_PROVIDER_QUANTIZATION_EXCEEDED")
     calculation_basis = ProgressionCalculationBasis(
-        symbolicDate=symbolic_instant.date().isoformat(),
+        symbolicDate=provider_symbolic_instant.date().isoformat(),
         ageDays=int(elapsed_years),
         dayForYearRatio=1,
     )
     reproducibility_basis = ChartProgressionCalculationBasis(
-        symbolicInstant=_utc_datetime_string(progressed_subject.iso_formatted_utc_datetime),
+        symbolicInstant=_utc_datetime_string(provider_symbolic_instant.isoformat()),
         elapsedLifeDays=float(elapsed_life_days),
         elapsedYears=elapsed_years,
         yearLengthDays=PROGRESSION_YEAR_LENGTH_DAYS,
@@ -1705,15 +1709,20 @@ def _utc_now_string() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def _astrocartography_lines(julian_day: float, house_system: str) -> list[ChartAstrocartographyLine]:
+def _astrocartography_lines(julian_day: float) -> list[ChartAstrocartographyLine]:
     lines: list[ChartAstrocartographyLine] = []
     greenwich_sidereal_degrees = float(swe.sidtime(julian_day)) * 15.0
-    house_system_identifier = HOUSE_SYSTEMS[house_system].encode("ascii")
 
     for point_id, (point_label, body_id) in ASTROCARTOGRAPHY_PLANETS.items():
-        ecliptic_longitude = float(swe.calc_ut(julian_day, body_id, swe.FLG_SWIEPH)[0][0])
-        right_ascension = float(
-            swe.calc_ut(julian_day, body_id, swe.FLG_SWIEPH | swe.FLG_EQUATORIAL)[0][0]
+        equatorial = swe.calc_ut(
+            julian_day,
+            body_id,
+            swe.FLG_SWIEPH | swe.FLG_EQUATORIAL,
+        )[0]
+        right_ascension, declination, distance = (
+            float(equatorial[0]),
+            float(equatorial[1]),
+            float(equatorial[2]),
         )
         mc_longitude = _normalize_longitude(right_ascension - greenwich_sidereal_degrees)
         ic_longitude = _normalize_longitude(mc_longitude + 180.0)
@@ -1747,9 +1756,10 @@ def _astrocartography_lines(julian_day: float, house_system: str) -> list[ChartA
                 angle="asc",
                 path=_sample_ascendant_descendant_line(
                     julian_day,
-                    ecliptic_longitude,
+                    right_ascension,
+                    declination,
+                    distance,
                     "asc",
-                    house_system_identifier,
                 ),
             )
         )
@@ -1760,9 +1770,10 @@ def _astrocartography_lines(julian_day: float, house_system: str) -> list[ChartA
                 angle="dsc",
                 path=_sample_ascendant_descendant_line(
                     julian_day,
-                    ecliptic_longitude,
+                    right_ascension,
+                    declination,
+                    distance,
                     "dsc",
-                    house_system_identifier,
                 ),
             )
         )
@@ -1788,115 +1799,50 @@ def _astrocartography_line(
 
 def _sample_ascendant_descendant_line(
     julian_day: float,
-    ecliptic_longitude: float,
+    right_ascension: float,
+    declination: float,
+    distance: float,
     angle: str,
-    house_system_identifier: bytes,
 ) -> list[ChartAstrocartographyPathPoint]:
     path: list[ChartAstrocartographyPathPoint] = []
-    for longitude in [float(value) for value in range(-180, 181, 5)]:
-        latitude = _solve_angular_latitude(
+    greenwich_sidereal_degrees = float(swe.sidtime(julian_day)) * 15.0
+    for latitude in [float(value) for value in range(-66, 67, 3)]:
+        cosine_hour_angle = -tan(radians(latitude)) * tan(radians(declination))
+        if abs(cosine_hour_angle) > 1.0 + ASTROCARTOGRAPHY_CIRCUMPOLAR_EPSILON:
+            continue
+        hour_angle = degrees(acos(max(-1.0, min(1.0, cosine_hour_angle))))
+        if angle == "asc":
+            hour_angle = -hour_angle
+        longitude = _normalize_longitude(
+            right_ascension + hour_angle - greenwich_sidereal_degrees
+        )
+        _, true_altitude, _ = swe.azalt(
             julian_day,
-            ecliptic_longitude,
-            angle,
-            longitude,
-            house_system_identifier,
+            swe.EQU2HOR,
+            (longitude, latitude, 0.0),
+            0.0,
+            0.0,
+            (right_ascension, declination, distance),
         )
-        if latitude is not None:
-            path.append(
-                ChartAstrocartographyPathPoint(
-                    latitude=latitude,
-                    longitude=_normalize_longitude(longitude),
-                )
-            )
-    if len(path) >= 2:
-        return path
-
-    # Keep the payload observable instead of silently omitting a required line.
-    fallback_longitude = _normalize_longitude(ecliptic_longitude)
-    return [
-        ChartAstrocartographyPathPoint(latitude=-1.0, longitude=fallback_longitude),
-        ChartAstrocartographyPathPoint(latitude=1.0, longitude=fallback_longitude),
-    ]
-
-
-def _solve_angular_latitude(
-    julian_day: float,
-    ecliptic_longitude: float,
-    angle: str,
-    longitude: float,
-    house_system_identifier: bytes,
-) -> float | None:
-    previous_latitude = -66.0
-    previous_difference = _angle_difference(
-        _local_angle_longitude(julian_day, previous_latitude, longitude, angle, house_system_identifier),
-        ecliptic_longitude,
-    )
-
-    for latitude in [float(value) for value in range(-63, 67, 3)]:
-        current_difference = _angle_difference(
-            _local_angle_longitude(julian_day, latitude, longitude, angle, house_system_identifier),
-            ecliptic_longitude,
+        actual_hour_angle = _angle_difference(
+            greenwich_sidereal_degrees + longitude,
+            right_ascension,
         )
-        if abs(current_difference) < 0.000001:
-            return latitude
-        if previous_difference == 0 or (previous_difference < 0 < current_difference) or (
-            previous_difference > 0 > current_difference
+        branch_is_valid = actual_hour_angle < 0 if angle == "asc" else actual_hour_angle > 0
+        if (
+            abs(true_altitude) > ASTROCARTOGRAPHY_HORIZON_TOLERANCE_DEGREES
+            or not branch_is_valid
         ):
-            return _bisect_angular_latitude(
-                julian_day,
-                ecliptic_longitude,
-                angle,
-                longitude,
-                previous_latitude,
-                latitude,
-                house_system_identifier,
+            raise RuntimeError("CHART_ASTROCARTOGRAPHY_HORIZON_POSTCONDITION_FAILED")
+        path.append(
+            ChartAstrocartographyPathPoint(
+                latitude=latitude,
+                longitude=longitude,
             )
-        previous_latitude = latitude
-        previous_difference = current_difference
-    return None
-
-
-def _bisect_angular_latitude(
-    julian_day: float,
-    ecliptic_longitude: float,
-    angle: str,
-    longitude: float,
-    low: float,
-    high: float,
-    house_system_identifier: bytes,
-) -> float:
-    low_difference = _angle_difference(
-        _local_angle_longitude(julian_day, low, longitude, angle, house_system_identifier),
-        ecliptic_longitude,
-    )
-    for _ in range(24):
-        midpoint = (low + high) / 2.0
-        midpoint_difference = _angle_difference(
-            _local_angle_longitude(julian_day, midpoint, longitude, angle, house_system_identifier),
-            ecliptic_longitude,
         )
-        if abs(midpoint_difference) < 0.000001:
-            return round(midpoint, 6)
-        if (low_difference < 0 < midpoint_difference) or (low_difference > 0 > midpoint_difference):
-            high = midpoint
-        else:
-            low = midpoint
-            low_difference = midpoint_difference
-    return round((low + high) / 2.0, 6)
-
-
-def _local_angle_longitude(
-    julian_day: float,
-    latitude: float,
-    longitude: float,
-    angle: str,
-    house_system_identifier: bytes,
-) -> float:
-    _, ascmc = swe.houses_ex(julian_day, latitude, longitude, house_system_identifier)
-    ascendant = float(ascmc[0])
-    if angle == "asc":
-        return ascendant
-    return _normalize_degrees(ascendant + 180.0)
+    if len(path) < 2:
+        raise RuntimeError("CHART_ASTROCARTOGRAPHY_LINE_UNRESOLVED")
+    return path
 
 
 def _angle_difference(value: float, target: float) -> float:

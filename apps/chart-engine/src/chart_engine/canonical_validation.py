@@ -2,6 +2,7 @@ import hashlib
 import json
 import math
 from collections.abc import Mapping, Sequence
+from decimal import Decimal
 from typing import Any
 
 
@@ -301,11 +302,7 @@ def _stable_json(value: Any) -> str:
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
-        if not math.isfinite(value):
-            raise CanonicalValidationError("CHART_CANONICAL_NUMBER_NON_FINITE")
-        if value.is_integer():
-            return str(int(value))
-        return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+        return _ecmascript_number_json(value)
     if isinstance(value, list):
         return f"[{','.join(_stable_json(item) for item in value)}]"
     if isinstance(value, Mapping):
@@ -315,3 +312,26 @@ def _stable_json(value: Any) -> str:
         )
         return f"{{{','.join(fields)}}}"
     raise CanonicalValidationError("CHART_CANONICAL_VALUE_UNSUPPORTED")
+
+
+def _ecmascript_number_json(value: float) -> str:
+    if not math.isfinite(value):
+        raise CanonicalValidationError("CHART_CANONICAL_NUMBER_NON_FINITE")
+    if value == 0:
+        return "0"
+
+    source = repr(value).lower()
+    absolute = abs(value)
+    if 1e-6 <= absolute < 1e21:
+        fixed = format(Decimal(source), "f")
+        if "." in fixed:
+            fixed = fixed.rstrip("0").rstrip(".")
+        return fixed
+
+    if "e" not in source:
+        source = format(value, ".17e")
+    coefficient, exponent_text = source.split("e")
+    coefficient = coefficient.rstrip("0").rstrip(".")
+    exponent = int(exponent_text)
+    exponent_sign = "+" if exponent >= 0 else ""
+    return f"{coefficient}e{exponent_sign}{exponent}"

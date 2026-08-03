@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from chart_engine.canonical_validation import (
     CanonicalValidationError,
+    build_reproducibility_fingerprint,
     reproducibility_fingerprint_for_result,
     validate_calculation_result,
     validate_chart_render_result,
@@ -61,6 +62,36 @@ def test_natal_result_is_v2_with_verified_actual_metadata_fingerprint() -> None:
     parsed_payload = StoredChartCalculationPayload.model_validate(payload)
     assert payload["reproducibilityFingerprint"] == reproducibility_fingerprint_for_result(
         parsed_payload
+    )
+
+
+def test_chart_fingerprint_uses_ecmascript_number_serialization_vector() -> None:
+    assert build_reproducibility_fingerprint(
+        method="natal",
+        method_version="chart.natal.kerykeion-5.12.v2",
+        provider={
+            "name": "kerykeion",
+            "version": "5.12.9",
+            "ephemeris": "moshier",
+            "pyswissephVersion": "2.10.3.2",
+            "ephemerisFlags": ["moshier", "speed"],
+            "ephemerisDataRevision": None,
+        },
+        settings={},
+        input_snapshot={"numbers": [-0.0, 1e-7, 1e-6, 1e21, 1e20]},
+    ) == "sha256:9abc50e10859afdbbc124daadcaa2b291bf0cbb451d89f1cdabe01794033c076"
+
+
+def test_small_coordinate_python_result_matches_typescript_fingerprint_vector() -> None:
+    request = request_payload("natal")
+    request["inputSnapshot"]["latitude"] = 1e-7
+    request["inputSnapshot"]["longitude"] = -0.0
+
+    response = TestClient(app).post("/v1/natal", json=request)
+
+    assert response.status_code == 200
+    assert response.json()["reproducibilityFingerprint"] == (
+        "sha256:633a49a4add9689ec0365a8bd6f4f5eb213bf2a126c7cdf088ad56f326af47ba"
     )
 
 

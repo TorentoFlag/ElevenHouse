@@ -1,4 +1,5 @@
-from datetime import datetime
+import copy
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -68,6 +69,13 @@ def test_progression_returns_canonical_dual_wheel_shape():
     parsed = StoredChartProgressionCalculationPayload.model_validate(data)
     assert data["reproducibilityFingerprint"] == reproducibility_fingerprint_for_result(data)
     assert data["reproducibilityFingerprint"] == reproducibility_fingerprint_for_result(parsed)
+    raw_symbolic_instant = datetime(1990, 7, 15, 8, 30, tzinfo=timezone.utc) + timedelta(
+        days=data["calculationBasis"]["elapsedYears"]
+    )
+    provider_symbolic_instant = datetime.fromisoformat(
+        data["calculationBasis"]["symbolicInstant"].replace("Z", "+00:00")
+    )
+    assert 0 <= (raw_symbolic_instant - provider_symbolic_instant).total_seconds() < 1
 
 
 def test_progression_uses_continuous_tropical_year_numeric_fixtures():
@@ -157,6 +165,33 @@ def test_progression_basis_rejects_inconsistent_elapsed_years():
             yearLengthDays=365.24219,
             dayForYearRatio=1,
         )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda payload: payload["calculationBasis"].update(
+            elapsedLifeDays=13157.5,
+            elapsedYears=13157.5 / 365.24219,
+        ),
+        lambda payload: payload["progressionSnapshot"].update(targetDate="2026-07-24"),
+        lambda payload: payload["progressionSnapshot"]["calculationBasis"].update(
+            symbolicDate="1990-08-21"
+        ),
+        lambda payload: payload["progressionSnapshot"]["calculationBasis"].update(ageDays=35),
+        lambda payload: payload["calculationBasis"].update(
+            symbolicInstant="1990-08-20T09:02:37Z"
+        ),
+    ],
+)
+def test_progression_result_rejects_cross_field_basis_drift(mutation):
+    response = TestClient(app).post("/v1/progressions", json=_progression_payload())
+    assert response.status_code == 200
+    payload = copy.deepcopy(response.json())
+    mutation(payload)
+
+    with pytest.raises(ValidationError, match="CHART_PROGRESSION_BASIS_INCONSISTENT"):
+        StoredChartProgressionCalculationPayload.model_validate(payload)
 
 
 def _point_longitude(payload: dict, point_id: str) -> float:

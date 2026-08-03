@@ -4,8 +4,10 @@ import {
   chartProviderMetadataV2Schema,
   type ChartCalculationMethod,
   type ChartExecutionProfile,
+  type ChartResult,
   type ChartMethodVersion,
-  type ChartProviderMetadata
+  type ChartProviderMetadata,
+  type ReproducibleChartResult
 } from "@elevenhouse/contracts";
 import { sha256CanonicalJson, type CanonicalJson } from "../calculations/canonical-json";
 import { ChartExecutionProfileError } from "./chart-errors";
@@ -87,6 +89,88 @@ export function buildChartReproducibilityFingerprint(input: {
     inputSnapshot: input.inputSnapshot,
     calculationBasis: input.calculationBasis ?? null
   });
+}
+
+export function buildChartResultReproducibilityFingerprint(
+  result: ReproducibleChartResult
+): `sha256:${string}` {
+  return buildChartReproducibilityFingerprint({
+    method: result.method,
+    methodVersion: result.methodVersion,
+    provider: result.provider,
+    settings: result.settings as CanonicalJson,
+    inputSnapshot: chartResultFingerprintInput(result),
+    calculationBasis:
+      result.method === "progression" ? (result.calculationBasis as CanonicalJson) : undefined
+  });
+}
+
+export function buildChartJobInputSnapshotForResult(result: ChartResult): CanonicalJson {
+  if (result.method === "natal" || result.method === "astrocartography") {
+    return result.inputSnapshot as CanonicalJson;
+  }
+  if (result.method === "transit") {
+    return {
+      inputSnapshot: result.inputSnapshot as CanonicalJson,
+      transitSnapshot: result.transitSnapshot as CanonicalJson
+    };
+  }
+  if (result.method === "synastry" || result.method === "composite") {
+    return {
+      inputSnapshot: result.inputSnapshot as CanonicalJson,
+      partnerInputSnapshot: result.partnerInputSnapshot as CanonicalJson,
+      relationshipSnapshot: result.relationshipSnapshot as CanonicalJson
+    };
+  }
+  if (result.method === "solar_return") {
+    return {
+      inputSnapshot: result.inputSnapshot as CanonicalJson,
+      solarReturnSnapshot: omitSnapshotKey(result.solarReturnSnapshot, "resolvedAt")
+    };
+  }
+  if (result.method === "progression") {
+    return {
+      inputSnapshot: result.inputSnapshot as CanonicalJson,
+      progressionSnapshot: omitSnapshotKey(result.progressionSnapshot, "calculationBasis")
+    };
+  }
+  return { questionSnapshot: result.questionSnapshot as CanonicalJson };
+}
+
+function chartResultFingerprintInput(result: ReproducibleChartResult): CanonicalJson {
+  if (
+    result.method === "natal" ||
+    result.method === "astrocartography" ||
+    result.method === "progression"
+  ) {
+    return result.inputSnapshot as CanonicalJson;
+  }
+  if (result.method === "transit") {
+    return {
+      inputSnapshot: result.inputSnapshot as CanonicalJson,
+      transitSnapshot: result.transitSnapshot as CanonicalJson
+    };
+  }
+  if (result.method === "synastry" || result.method === "composite") {
+    return {
+      inputSnapshot: result.inputSnapshot as CanonicalJson,
+      partnerInputSnapshot: result.partnerInputSnapshot as CanonicalJson,
+      relationshipSnapshot: result.relationshipSnapshot as CanonicalJson
+    };
+  }
+  if (result.method === "solar_return") {
+    return {
+      inputSnapshot: result.inputSnapshot as CanonicalJson,
+      solarReturnSnapshot: result.solarReturnSnapshot as CanonicalJson
+    };
+  }
+  return result.questionSnapshot as CanonicalJson;
+}
+
+function omitSnapshotKey(value: object, omittedKey: string): CanonicalJson {
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => key !== omittedKey)
+  ) as CanonicalJson;
 }
 
 function assertMethodVersion(method: ChartCalculationMethod, methodVersion: ChartMethodVersion): void {

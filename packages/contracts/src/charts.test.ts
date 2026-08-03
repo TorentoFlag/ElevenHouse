@@ -11,6 +11,7 @@ import {
   chartNatalJobCreateRequestSchema,
   chartNatalCalculationRequestSchema,
   chartSolarReturnCalculationRequestSchema,
+  chartProgressionCalculationBasisSchema,
   chartProgressionResultV2Schema,
   chartProgressionJobCreateRequestSchema,
   chartSolarReturnJobCreateRequestSchema,
@@ -110,33 +111,7 @@ describe("chart contracts", () => {
   });
 
   it("accepts the exact continuous tropical-year progression basis", () => {
-    const payload = chartProgressionResultV2Schema.parse({
-      schemaVersion: "chart-result.v2",
-      method: "progression",
-      methodVersion: chartMethodVersions.progression,
-      provider: completeV2NatalPayload().provider,
-      reproducibilityFingerprint: `sha256:${"b".repeat(64)}`,
-      settings: completeSettings(),
-      inputSnapshot: completeInputSnapshot(),
-      progressionSnapshot: {
-        targetDate: "2026-07-23",
-        progressionType: "secondary",
-        calculationBasis: { symbolicDate: "1990-08-20", ageDays: 36, dayForYearRatio: 1 }
-      },
-      calculationBasis: {
-        symbolicInstant: "1990-08-20T09:02:38Z",
-        elapsedLifeDays: 13157,
-        elapsedYears: 36.02267306523378,
-        yearLengthDays: 365.24219,
-        dayForYearRatio: 1
-      },
-      result: {
-        natal: completeRenderResult(),
-        progressed: completeRenderResult(),
-        aspectsToNatal: [],
-        warnings: []
-      }
-    });
+    const payload = chartProgressionResultV2Schema.parse(completeV2ProgressionPayload());
 
     expect(payload.calculationBasis).toEqual({
       symbolicInstant: "1990-08-20T09:02:38Z",
@@ -145,6 +120,59 @@ describe("chart contracts", () => {
       yearLengthDays: 365.24219,
       dayForYearRatio: 1
     });
+  });
+
+  it("rejects internally inconsistent progression basis values", () => {
+    expect(() =>
+      chartProgressionCalculationBasisSchema.parse({
+        symbolicInstant: "1990-08-20T09:02:38Z",
+        elapsedLifeDays: 13157,
+        elapsedYears: 36,
+        yearLengthDays: 365.24219,
+        dayForYearRatio: 1
+      })
+    ).toThrow("CHART_PROGRESSION_BASIS_INCONSISTENT");
+  });
+
+  it.each([
+    [
+      "fractional elapsed life day",
+      (payload: ReturnType<typeof completeV2ProgressionPayload>) => {
+        payload.calculationBasis.elapsedLifeDays = 13157.5;
+        payload.calculationBasis.elapsedYears = 13157.5 / 365.24219;
+      }
+    ],
+    [
+      "target-date day count",
+      (payload: ReturnType<typeof completeV2ProgressionPayload>) => {
+        payload.progressionSnapshot.targetDate = "2026-07-24";
+      }
+    ],
+    [
+      "legacy symbolic date",
+      (payload: ReturnType<typeof completeV2ProgressionPayload>) => {
+        payload.progressionSnapshot.calculationBasis.symbolicDate = "1990-08-21";
+      }
+    ],
+    [
+      "legacy symbolic age",
+      (payload: ReturnType<typeof completeV2ProgressionPayload>) => {
+        payload.progressionSnapshot.calculationBasis.ageDays = 35;
+      }
+    ],
+    [
+      "provider instant drift",
+      (payload: ReturnType<typeof completeV2ProgressionPayload>) => {
+        payload.calculationBasis.symbolicInstant = "1990-08-20T09:02:37Z";
+      }
+    ]
+  ])("rejects progression result %s inconsistency", (_label, mutate) => {
+    const payload = completeV2ProgressionPayload();
+    mutate(payload);
+
+    expect(() => chartProgressionResultV2Schema.parse(payload)).toThrow(
+      "CHART_PROGRESSION_BASIS_INCONSISTENT"
+    );
   });
 
   it("rejects lexically valid but impossible civil chart inputs", () => {
@@ -1438,6 +1466,40 @@ function completeV2NatalPayload() {
     settings: completeSettings(),
     inputSnapshot: completeInputSnapshot(),
     result: completeRenderResult()
+  };
+}
+
+function completeV2ProgressionPayload() {
+  return {
+    schemaVersion: "chart-result.v2" as const,
+    method: "progression" as const,
+    methodVersion: chartMethodVersions.progression,
+    provider: completeV2NatalPayload().provider,
+    reproducibilityFingerprint: `sha256:${"b".repeat(64)}`,
+    settings: completeSettings(),
+    inputSnapshot: completeInputSnapshot(),
+    progressionSnapshot: {
+      targetDate: "2026-07-23",
+      progressionType: "secondary" as const,
+      calculationBasis: {
+        symbolicDate: "1990-08-20",
+        ageDays: 36,
+        dayForYearRatio: 1 as const
+      }
+    },
+    calculationBasis: {
+      symbolicInstant: "1990-08-20T09:02:38Z",
+      elapsedLifeDays: 13157,
+      elapsedYears: 36.02267306523378,
+      yearLengthDays: 365.24219 as const,
+      dayForYearRatio: 1 as const
+    },
+    result: {
+      natal: completeRenderResult(),
+      progressed: completeRenderResult(),
+      aspectsToNatal: [],
+      warnings: []
+    }
   };
 }
 

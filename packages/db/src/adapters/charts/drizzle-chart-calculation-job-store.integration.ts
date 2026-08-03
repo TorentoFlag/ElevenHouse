@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { CHART_CALCULATION_REQUESTED_EVENT } from "@elevenhouse/domain";
+import {
+  buildChartResultReproducibilityFingerprint,
+  CHART_CALCULATION_REQUESTED_EVENT
+} from "@elevenhouse/domain";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import { createPostgresRuntime } from "../../runtime";
 import {
@@ -225,7 +228,7 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
     await expect(
       workerStore.complete({
         jobId: created.jobId,
-        result: compositeChartResult(),
+        result: compositeChartResult(ownerUserId),
         resultChecksum: digest("9"),
         now: "2026-07-20T12:00:05.000Z"
       })
@@ -297,6 +300,110 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
       }
     });
   });
+
+  it("rejects a false v2 fingerprint before persisting result or summary", async () => {
+    const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
+    const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+    const created = await jobStore.createOrReuseChartJob(createProgressionInput(ownerUserId));
+    if (created.kind !== "active_job") throw new Error("Expected active job");
+    await workerStore.claimForProcessing({
+      jobId: created.jobId,
+      now: "2026-07-20T12:00:00.000Z"
+    });
+    const result = progressionV2ChartResult();
+    result.reproducibilityFingerprint = digest("0");
+
+    await expect(
+      workerStore.complete({
+        jobId: created.jobId,
+        result,
+        resultChecksum: digest("0"),
+        now: "2026-07-20T12:00:05.000Z"
+      })
+    ).rejects.toThrow("CHART_RESULT_REPRODUCIBILITY_FINGERPRINT_MISMATCH");
+
+    const job = await runtime.database.query.chartCalculationJobs.findFirst({
+      where: eq(chartCalculationJobs.id, created.jobId)
+    });
+    const calculations = await runtime.database.query.calculationRecords.findMany({
+      where: eq(calculationRecords.ownerUserId, ownerUserId)
+    });
+    expect(job).toMatchObject({ status: "processing", resultCalculationId: null });
+    expect(calculations).toEqual([]);
+  });
+
+  it("rejects a genuine v2 result calculated for a different job method", async () => {
+    const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
+    const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
+    const ownerUserId = await createClientUser();
+    ownerUserIds.push(ownerUserId);
+    const created = await jobStore.createOrReuseNatalJob(createInput(ownerUserId));
+    if (created.kind !== "active_job") throw new Error("Expected active job");
+    await workerStore.claimForProcessing({
+      jobId: created.jobId,
+      now: "2026-07-20T12:00:00.000Z"
+    });
+
+    await expect(
+      workerStore.complete({
+        jobId: created.jobId,
+        result: progressionV2ChartResult(),
+        resultChecksum: digest("1"),
+        now: "2026-07-20T12:00:05.000Z"
+      })
+    ).rejects.toThrow("CHART_RESULT_JOB_BINDING_MISMATCH");
+
+    const job = await runtime.database.query.chartCalculationJobs.findFirst({
+      where: eq(chartCalculationJobs.id, created.jobId)
+    });
+    const calculations = await runtime.database.query.calculationRecords.findMany({
+      where: eq(calculationRecords.ownerUserId, ownerUserId)
+    });
+    expect(job).toMatchObject({ status: "processing", resultCalculationId: null });
+    expect(calculations).toEqual([]);
+  });
+
+  it.each(["input", "settings"] as const)(
+    "rejects a self-consistent v2 fingerprint for mismatched job %s",
+    async (mismatch) => {
+      const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
+      const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
+      const ownerUserId = await createClientUser();
+      ownerUserIds.push(ownerUserId);
+      const created = await jobStore.createOrReuseChartJob(createProgressionInput(ownerUserId));
+      if (created.kind !== "active_job") throw new Error("Expected active job");
+      await workerStore.claimForProcessing({
+        jobId: created.jobId,
+        now: "2026-07-20T12:00:00.000Z"
+      });
+      const result = progressionV2ChartResult();
+      if (mismatch === "input") result.inputSnapshot.latitude = 40;
+      else result.settings.orbMultiplier = 1.25;
+      result.reproducibilityFingerprint = buildChartResultReproducibilityFingerprint(
+        result as never
+      );
+
+      await expect(
+        workerStore.complete({
+          jobId: created.jobId,
+          result,
+          resultChecksum: digest("2"),
+          now: "2026-07-20T12:00:05.000Z"
+        })
+      ).rejects.toThrow("CHART_RESULT_JOB_BINDING_MISMATCH");
+
+      const job = await runtime.database.query.chartCalculationJobs.findFirst({
+        where: eq(chartCalculationJobs.id, created.jobId)
+      });
+      const calculations = await runtime.database.query.calculationRecords.findMany({
+        where: eq(calculationRecords.ownerUserId, ownerUserId)
+      });
+      expect(job).toMatchObject({ status: "processing", resultCalculationId: null });
+      expect(calculations).toEqual([]);
+    }
+  );
 
   it("persists horary calculation records with question summary", async () => {
     const jobStore = createDrizzleChartCalculationJobStore(runtime.database);
@@ -512,7 +619,7 @@ function solarReturnChartResult() {
   };
 }
 
-function compositeChartResult() {
+function compositeChartResult(participantId: string) {
   const natal = chartResult();
   return {
     schemaVersion: "chart-result.v1",
@@ -529,8 +636,8 @@ function compositeChartResult() {
       birthTimePrecision: "exact"
     },
     relationshipSnapshot: {
-      primaryClientId: "00000000-0000-4000-8000-000000000001",
-      partnerClientId: "00000000-0000-4000-8000-000000000002"
+      primaryClientId: participantId,
+      partnerClientId: participantId
     },
     result: natal.result
   };
@@ -558,7 +665,8 @@ function progressionV2ChartResult() {
       ephemerisFlags: ["moshier", "speed"],
       ephemerisDataRevision: null
     },
-    reproducibilityFingerprint: digest("f"),
+    reproducibilityFingerprint:
+      "sha256:b1ba983ce93fd061065380c467ba49e495bd2cb5535617e126e034ea3fc21a52",
     settings: natal.settings,
     inputSnapshot: natal.inputSnapshot,
     progressionSnapshot: {

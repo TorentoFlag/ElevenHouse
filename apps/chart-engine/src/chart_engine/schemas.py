@@ -1,4 +1,4 @@
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -292,6 +292,8 @@ class ChartProgressionCalculationBasis(BaseModel):
 
     @model_validator(mode="after")
     def validate_elapsed_years(self):
+        if not self.elapsedLifeDays.is_integer():
+            raise ValueError("CHART_PROGRESSION_BASIS_INCONSISTENT")
         expected_elapsed_years = self.elapsedLifeDays / self.yearLengthDays
         if abs(self.elapsedYears - expected_elapsed_years) > 0.000000000001:
             raise ValueError("CHART_PROGRESSION_BASIS_INCONSISTENT")
@@ -855,6 +857,43 @@ class StoredChartProgressionCalculationPayload(BaseModel):
     progressionSnapshot: ProgressionSnapshot
     calculationBasis: ChartProgressionCalculationBasis
     result: ChartProgressionRenderResult
+
+    @model_validator(mode="after")
+    def validate_progression_basis(self):
+        born = date.fromisoformat(self.inputSnapshot.birthDate)
+        target = date.fromisoformat(self.progressionSnapshot.targetDate)
+        expected_life_days = float((target - born).days)
+        basis = self.calculationBasis
+        legacy_basis = self.progressionSnapshot.calculationBasis
+        if basis.elapsedLifeDays != expected_life_days:
+            raise ValueError("CHART_PROGRESSION_BASIS_INCONSISTENT")
+
+        try:
+            provider_symbolic_instant = datetime.fromisoformat(
+                basis.symbolicInstant.replace("Z", "+00:00")
+            )
+        except ValueError as error:
+            raise ValueError("CHART_PROGRESSION_BASIS_INCONSISTENT") from error
+        if provider_symbolic_instant.tzinfo is None:
+            raise ValueError("CHART_PROGRESSION_BASIS_INCONSISTENT")
+        provider_symbolic_instant = provider_symbolic_instant.astimezone(timezone.utc)
+        resolved_birth = resolve_civil_time(
+            self.inputSnapshot.birthDate,
+            self.inputSnapshot.birthTime,
+            self.inputSnapshot.timezone,
+            self.inputSnapshot.dstOccurrence,
+        )
+        birth_instant = datetime.fromisoformat(resolved_birth.instant).astimezone(timezone.utc)
+        expected_symbolic_instant = birth_instant + timedelta(days=basis.elapsedYears)
+        if abs((provider_symbolic_instant - expected_symbolic_instant).total_seconds()) >= 1:
+            raise ValueError("CHART_PROGRESSION_BASIS_INCONSISTENT")
+        if (
+            legacy_basis.symbolicDate != provider_symbolic_instant.date().isoformat()
+            or legacy_basis.ageDays != int(basis.elapsedYears)
+            or legacy_basis.dayForYearRatio != basis.dayForYearRatio
+        ):
+            raise ValueError("CHART_PROGRESSION_BASIS_INCONSISTENT")
+        return self
 
 
 class StoredChartHoraryCalculationPayload(BaseModel):

@@ -96,7 +96,53 @@ def test_dst_fold_occurrences_are_distinct_provider_instants():
     assert results[0]["reproducibilityFingerprint"] != results[1]["reproducibilityFingerprint"]
 
 
+@pytest.mark.parametrize(
+    ("latitude", "ascendant", "midheaven", "second_house"),
+    [
+        (33.9249, 118.812658944095, 17.849702762454, 140.777382813557),
+        (-33.9249, 89.547600857705, 17.849702762454, 125.193292506516),
+    ],
+)
+def test_mirrored_latitudes_use_independent_house_geometry_fixtures(
+    latitude: float,
+    ascendant: float,
+    midheaven: float,
+    second_house: float,
+):
+    # Provenance: direct swe.houses_ex at 2026-03-20T12:00:00Z,
+    # longitude 18.4241, Placidus. Same instant/longitude isolates latitude.
+    payload = deepcopy(_natal_payload())
+    payload["inputSnapshot"] = {
+        "birthDate": "2026-03-20",
+        "birthTime": "12:00",
+        "timezone": "UTC",
+        "latitude": latitude,
+        "longitude": 18.4241,
+        "birthTimePrecision": "exact",
+    }
+
+    response = TestClient(app).post("/v1/natal", json=payload)
+
+    assert response.status_code == 200
+    result = response.json()["result"]
+    assert _point_longitude({"result": result}, "ascendant") == pytest.approx(
+        ascendant,
+        abs=0.000001,
+    )
+    assert _point_longitude({"result": result}, "midheaven") == pytest.approx(
+        midheaven,
+        abs=0.000001,
+    )
+    assert _house_longitude(result, 2) == pytest.approx(second_house, abs=0.000001)
+
+
 def _point_longitude(payload: dict, point_id: str) -> float:
     return next(
         point["longitude"] for point in payload["result"]["points"] if point["id"] == point_id
+    )
+
+
+def _house_longitude(result: dict, house_number: int) -> float:
+    return next(
+        house["longitude"] for house in result["houses"] if house["number"] == house_number
     )
