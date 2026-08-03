@@ -1,10 +1,10 @@
-import type { FlowResponse } from "@elevenhouse/contracts";
+import type { FlowDefinitionV2 } from "@elevenhouse/contracts";
 import { useMutation, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import type { UpdateFlowDraftInput } from "../api/updateFlowDraft";
 import { updateFlowDraftMutationOptions } from "./flowsQueryOptions";
 
 export function useUpdateFlowDraftMutation(): UseMutationResult<
-  FlowResponse,
+  FlowDefinitionV2,
   Error,
   UpdateFlowDraftInput
 > {

@@ -1,37 +1,29 @@
 // @vitest-environment jsdom
 
-import type { FlowResponse, FlowRuntimeAvailability } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummaryV2, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowGallery } from "./FlowGallery";
 
 const flow = {
+  schemaVersion: "flow-definition-summary.v2",
   id: "11111111-1111-4111-8111-111111111111",
   ownerUserId: "22222222-2222-4222-8222-222222222222",
-  name: "Запись на консультацию",
-  status: "draft",
+  name: "Подготовка консультации",
+  state: "draft",
+  runtimeStatus: "draft",
   approvalMode: "manual_approve",
-  draftGraph: {
-    schemaVersion: "flow-graph.v1",
-    nodes: [
-      { id: "lead", category: "trigger", kind: "lead_created", title: "Новый лид", config: {} },
-      {
-        id: "reply",
-        category: "ai",
-        kind: "reply_draft",
-        approvalMode: "manual_approve",
-        title: "Черновик ответа",
-        config: {}
-      }
-    ],
-    edges: [{ id: "lead-reply", fromNodeId: "lead", toNodeId: "reply" }]
-  },
-  publishedVersionId: null,
-  publishedVersion: null,
+  revision: 3,
+  draftBaseVersionId: null,
+  latestPublishedVersionId: null,
+  latestPublishedVersion: null,
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
-  publishedAt: null
-} satisfies FlowResponse;
+  publishedAt: null,
+  graphSchemaVersion: "flow-graph.v2",
+  origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
+  migrationRequired: false
+} satisfies FlowDefinitionSummaryV2;
 
 const definitionOnlyRuntime = {
   mode: "definition_only",
@@ -43,73 +35,47 @@ const definitionOnlyRuntime = {
 describe("FlowGallery", () => {
   afterEach(() => cleanup());
 
-  it("renders honest flow cards and marks unavailable gallery actions as disabled", () => {
-    render(<FlowGallery flows={[flow]} />);
+  it("renders only server-backed definition facts from a lightweight summary", () => {
+    render(<FlowGallery flows={[flow]} locale="ru" />);
 
     expect(screen.getByRole("heading", { name: /^Воронки/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Новая воронка" })).toHaveProperty("disabled", true);
-    expect(screen.getByText("Запись на консультацию")).toBeTruthy();
-    expect(screen.getByText("Новый лид")).toBeTruthy();
-    expect(screen.getByText("Черновик ответа")).toBeTruthy();
-    expect(screen.getAllByText("-")).toHaveLength(4);
-    expect(screen.getByRole("button", { name: "Открыть схему: Запись на консультацию" })).toHaveProperty(
-      "disabled",
-      true
-    );
-    expect(screen.getByRole("switch", { name: "Автоматизация не запущена" })).toHaveProperty(
-      "disabled",
-      true
-    );
+    expect(screen.getByText("Подготовка консультации")).toBeTruthy();
+    expect(screen.getByText("Схема V2")).toBeTruthy();
+    expect(screen.getByText("Редакция 3")).toBeTruthy();
+    expect(screen.getAllByText("Не опубликована")).toHaveLength(3);
+    expect(screen.queryByText("Конверсия")).toBeNull();
+    expect(screen.queryByText("В работе")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Открыть схему: Подготовка консультации" })
+    ).toHaveProperty("disabled", true);
   });
 
-  it("labels a persisted active flow as unavailable while preserving the pause action", () => {
-    const onAutomationToggle = vi.fn();
+  it("surfaces legacy migration instead of pretending the graph is editable V2", () => {
     render(
       <FlowGallery
-        flows={[{
-          ...flow,
-          status: "active",
-          publishedVersionId: "44444444-4444-4444-8444-444444444444",
-          publishedVersion: 1,
-          publishedAt: "2026-07-30T14:45:00.000Z"
-        }]}
-        runtimeAvailability={definitionOnlyRuntime}
-        onAutomationToggle={onAutomationToggle}
+        locale="ru"
+        flows={[
+          { ...flow, graphSchemaVersion: "flow-graph.v1", origin: null, migrationRequired: true }
+        ]}
       />
     );
 
-    expect(screen.getByText("Исполнение отключено")).toBeTruthy();
-    expect(screen.queryByText("Активна")).toBeNull();
-    const toggle = screen.getByRole("switch", {
-      name: "Исполнение отключено; сохраненную активацию можно поставить на паузу"
-    });
-
-    expect(toggle).toHaveProperty("disabled", false);
-    expect(toggle.getAttribute("aria-checked")).toBe("true");
-    fireEvent.click(toggle);
-    expect(onAutomationToggle).toHaveBeenCalledWith(flow.id, false);
+    expect(screen.getByText("Legacy V1")).toBeTruthy();
+    expect(screen.getByText("Требуется миграция")).toBeTruthy();
   });
 
-  it("does not activate published or paused flows while runtime is definition-only", () => {
+  it("preserves a fail-closed pause action for a persisted active definition", () => {
     const onAutomationToggle = vi.fn();
     render(
       <FlowGallery
+        locale="ru"
         flows={[
-          flow,
           {
             ...flow,
-            id: "33333333-3333-4333-8333-333333333333",
-            status: "published",
-            publishedVersionId: "44444444-4444-4444-8444-444444444444",
-            publishedVersion: 1,
-            publishedAt: "2026-07-30T14:45:00.000Z"
-          },
-          {
-            ...flow,
-            id: "55555555-5555-4555-8555-555555555555",
-            status: "paused",
-            publishedVersionId: "66666666-6666-4666-8666-666666666666",
-            publishedVersion: 1,
+            state: "versioned",
+            runtimeStatus: "active",
+            latestPublishedVersionId: "44444444-4444-4444-8444-444444444444",
+            latestPublishedVersion: 1,
             publishedAt: "2026-07-30T14:45:00.000Z"
           }
         ]}
@@ -118,34 +84,25 @@ describe("FlowGallery", () => {
       />
     );
 
-    expect(screen.getByRole("switch", { name: "Автоматизация не запущена" })).toHaveProperty(
-      "disabled",
-      true
-    );
-    const unavailableToggles = screen.getAllByRole("switch", {
-      name: "Исполнение этой версии воронки недоступно"
+    const toggle = screen.getByRole("switch", {
+      name: "Исполнение отключено; сохраненную активацию можно поставить на паузу"
     });
-
-    expect(unavailableToggles).toHaveLength(2);
-    expect(unavailableToggles[0]).toHaveProperty("disabled", true);
-    expect(unavailableToggles[1]).toHaveProperty("disabled", true);
-    fireEvent.click(unavailableToggles[0]!);
-    fireEvent.click(unavailableToggles[1]!);
-    expect(onAutomationToggle).not.toHaveBeenCalled();
+    expect(screen.queryByText("Активна")).toBeNull();
+    expect(screen.getAllByText("Исполнение недоступно")).toHaveLength(2);
+    expect(toggle).toHaveProperty("disabled", false);
+    fireEvent.click(toggle);
+    expect(onAutomationToggle).toHaveBeenCalledWith(flow.id, false);
   });
 
-  it("enables gallery actions only when callbacks are supplied", () => {
+  it("enables create and open commands only when callbacks are supplied", () => {
     const onCreateFlow = vi.fn();
     const onOpenFlow = vi.fn();
-    render(<FlowGallery flows={[flow]} onCreateFlow={onCreateFlow} onOpenFlow={onOpenFlow} />);
+    render(
+      <FlowGallery flows={[flow]} locale="en" onCreateFlow={onCreateFlow} onOpenFlow={onOpenFlow} />
+    );
 
-    const createButton = screen.getAllByRole("button", { name: "Новая воронка" })[0]!;
-    const openButton = screen.getByRole("button", { name: "Открыть схему: Запись на консультацию" });
-
-    expect(createButton).toHaveProperty("disabled", false);
-    expect(openButton).toHaveProperty("disabled", false);
-    fireEvent.click(createButton);
-    fireEvent.click(openButton);
+    fireEvent.click(screen.getAllByRole("button", { name: "New flow" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Open flow: Подготовка консультации" }));
     expect(onCreateFlow).toHaveBeenCalledOnce();
     expect(onOpenFlow).toHaveBeenCalledWith(flow.id);
   });

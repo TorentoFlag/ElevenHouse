@@ -8,9 +8,22 @@ import {
   type NumerologyParticipantInput
 } from "@elevenhouse/domain";
 import { Client, type QueryResultRow } from "pg";
+import { flowsIntegritySql } from "./augment-flows-baseline";
+import {
+  canonicalFlowColumnSignatures,
+  canonicalFlowConstraints,
+  canonicalFlowIndexes,
+  canonicalFlowTriggers,
+  predecessorFlowColumnSignatures,
+  predecessorFlowConstraints,
+  predecessorFlowIndexes,
+  previousCanonicalFlowIndexes,
+  type CatalogDefinitionManifest
+} from "./flow-definition-schema-manifest";
 import {
   classifyBaselineHistory,
   currentBaseline,
+  flowDefinitionControlBaselineDdl,
   schedulingBaselineDdl,
   type MigrationLedgerRow
 } from "./production-baseline-plan";
@@ -64,12 +77,19 @@ async function main(): Promise<void> {
         );
       }
       if (history === "current") {
-        await reconcileClientBirthDataShapeIfPresent();
-        await reconcileBookingsShapeIfPresent();
-        await reconcileChartCalculationJobsIfPrerequisitesExist();
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
         console.log("Current production baseline is already recorded");
+      } else if (history === "previous_flow_definition_control") {
+        await assertCurrentSchemaShape(previousCanonicalFlowIndexes);
+        await client.query(`
+          CREATE INDEX flows_owner_definition_state_updated_idx
+            ON flows (owner_user_id, definition_state, updated_at, id)
+        `);
+        await recordCurrentBaseline();
+        await assertCurrentSchemaShape();
+        await client.query("COMMIT");
+        console.log("Previous Flows control baseline reconciled to the current baseline");
       } else {
         if (history === "legacy_calculations") {
           await assertLegacySchemaAndData();
@@ -81,6 +101,7 @@ async function main(): Promise<void> {
         await reconcileClientBirthDataShapeIfPresent();
         await reconcileBookingsShapeIfPresent();
         await reconcileChartCalculationJobsIfPrerequisitesExist();
+        await reconcileFlowDefinitionControl();
         await recordCurrentBaseline();
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
@@ -433,8 +454,11 @@ function assertCanonicalObject(
   }
 }
 
-async function assertCurrentSchemaShape(): Promise<void> {
+async function assertCurrentSchemaShape(
+  flowIndexes: CatalogDefinitionManifest = canonicalFlowIndexes
+): Promise<void> {
   await assertPreSchedulingSchemaShape();
+  await assertFlowDefinitionControlShape(flowIndexes);
   if (await relationExists("public.client_birth_data")) {
     await assertClientBirthDataShape();
   }
@@ -484,6 +508,447 @@ async function assertCurrentSchemaShape(): Promise<void> {
     schedulingInvariants.rows[0]?.product_owner_unique_count !== "1"
   ) {
     throw new Error("Current production schema is missing scheduling invariants");
+  }
+}
+
+async function reconcileFlowDefinitionControl(): Promise<void> {
+  const relationState = new Map<string, boolean>();
+  for (const relation of flowDefinitionRelations) {
+    relationState.set(relation, await relationExists(`public.${relation}`));
+  }
+
+  const flowsExist = relationState.get("flows") === true;
+  const versionsExist = relationState.get("flow_versions") === true;
+  if (flowsExist !== versionsExist) {
+    throw new Error("Refusing to reconcile an incomplete flow definition persistence contour");
+  }
+
+  for (const relation of flowDefinitionControlRelations) {
+    if (relationState.get(relation)) {
+      throw new Error(
+        `Refusing to reconcile a partial or unrecorded Flows control plane: ${relation}`
+      );
+    }
+  }
+
+  if (flowsExist) {
+    await assertPredecessorFlowDefinitionShape();
+  }
+  await client.query(flowDefinitionControlBaselineDdl);
+}
+
+async function assertFlowDefinitionControlShape(
+  flowIndexes: CatalogDefinitionManifest = canonicalFlowIndexes
+): Promise<void> {
+  for (const relation of flowDefinitionRelations) {
+    if (!(await relationExists(`public.${relation}`))) {
+      throw new Error(`Current production relation is missing: public.${relation}`);
+    }
+  }
+
+  await assertColumnSignatures(
+    flowDefinitionRelations,
+    canonicalFlowColumnSignatures,
+    "current Flows columns"
+  );
+  await assertConstraintManifest(
+    flowDefinitionRelations,
+    canonicalFlowConstraints,
+    "current Flows constraints"
+  );
+  await assertIndexManifest(flowDefinitionRelations, flowIndexes, "current Flows indexes");
+  await assertTriggerManifest(canonicalFlowTriggers);
+  await assertFlowIntegrityFunctions();
+  await assertCanonicalFlowData();
+}
+
+const flowDefinitionRelations = [
+  "flows",
+  "flow_versions",
+  "flow_definition_commands",
+  "flow_definition_command_outcomes",
+  "flow_definition_migrations"
+] as const;
+
+const flowDefinitionControlRelations = [
+  "flow_definition_commands",
+  "flow_definition_command_outcomes",
+  "flow_definition_migrations"
+] as const;
+
+async function assertPredecessorFlowDefinitionShape(): Promise<void> {
+  const predecessorRelations = ["flows", "flow_versions"] as const;
+  await assertColumnSignatures(
+    predecessorRelations,
+    predecessorFlowColumnSignatures,
+    "approved predecessor Flows columns"
+  );
+  await assertConstraintManifest(
+    predecessorRelations,
+    predecessorFlowConstraints,
+    "approved predecessor Flows constraints"
+  );
+  await assertIndexManifest(
+    predecessorRelations,
+    predecessorFlowIndexes,
+    "approved predecessor Flows indexes"
+  );
+
+  const triggerCount = await client.query<{ count: string }>(`
+    SELECT count(*)::text AS count
+      FROM pg_trigger t
+      JOIN pg_class r ON r.oid = t.tgrelid
+      JOIN pg_namespace n ON n.oid = r.relnamespace
+     WHERE n.nspname = 'public'
+       AND r.relname IN ('flows', 'flow_versions')
+       AND NOT t.tgisinternal
+  `);
+  if (triggerCount.rows[0]?.count !== "0") {
+    throw new Error("Approved predecessor Flows tables contain unrecognized triggers");
+  }
+
+  const data = await client.query<{
+    invalid_flow_count: string;
+    invalid_version_count: string;
+  }>(`
+    WITH latest_versions AS (
+      SELECT DISTINCT ON (flow_id)
+        flow_id,
+        id,
+        published_at
+      FROM flow_versions
+      ORDER BY flow_id, version DESC
+    )
+    SELECT
+      (SELECT count(*)::text
+         FROM flows f
+         LEFT JOIN latest_versions latest ON latest.flow_id = f.id
+        WHERE (
+          f.draft_graph ? 'schemaVersion'
+          AND f.draft_graph->>'schemaVersion' IS DISTINCT FROM 'flow-graph.v1'
+        )
+        OR (
+          latest.id IS NULL
+          AND (
+            f.published_version_id IS NOT NULL
+            OR f.published_at IS NOT NULL
+          )
+        )
+        OR (
+          latest.id IS NOT NULL
+          AND (
+            f.published_version_id IS DISTINCT FROM latest.id
+            OR f.published_at IS DISTINCT FROM latest.published_at
+          )
+        )
+        OR (
+          f.status IN ('published', 'active', 'paused')
+          AND f.published_version_id IS NULL
+        )
+        OR (
+          f.status = 'draft'
+          AND f.published_version_id IS NOT NULL
+        )) AS invalid_flow_count,
+      (SELECT count(*)::text
+         FROM flow_versions v
+        WHERE v.graph ? 'schemaVersion'
+          AND v.graph->>'schemaVersion' IS DISTINCT FROM 'flow-graph.v1')
+        AS invalid_version_count
+  `);
+  if (data.rows[0]?.invalid_flow_count !== "0" || data.rows[0]?.invalid_version_count !== "0") {
+    throw new Error("Approved predecessor Flows data is not losslessly reconcilable");
+  }
+}
+
+async function assertColumnSignatures(
+  relations: readonly string[],
+  expected: readonly string[],
+  label: string
+): Promise<void> {
+  const result = await client.query<{
+    table_name: string;
+    column_name: string;
+    udt_name: string;
+    is_nullable: string;
+    column_default: string | null;
+  }>(
+    `
+      SELECT table_name, column_name, udt_name, is_nullable, column_default
+        FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = ANY($1::text[])
+    `,
+    [relations]
+  );
+  const actual = result.rows.map(
+    (row) =>
+      `${row.table_name}.${row.column_name}|${row.udt_name}|${row.is_nullable}|${row.column_default ?? ""}`
+  );
+  assertExactStringSet(label, actual, expected);
+}
+
+async function assertConstraintManifest(
+  relations: readonly string[],
+  expected: CatalogDefinitionManifest,
+  label: string
+): Promise<void> {
+  const result = await client.query<{
+    relation_name: string;
+    object_name: string;
+    definition: string;
+  }>(
+    `
+      SELECT
+        r.relname AS relation_name,
+        c.conname AS object_name,
+        pg_get_constraintdef(c.oid, false) AS definition
+      FROM pg_constraint c
+      JOIN pg_class r ON r.oid = c.conrelid
+      JOIN pg_namespace n ON n.oid = r.relnamespace
+      WHERE n.nspname = 'public'
+        AND r.relname = ANY($1::text[])
+        AND c.contype <> 't'
+    `,
+    [relations]
+  );
+  assertDefinitionManifest(label, result.rows, expected);
+}
+
+async function assertIndexManifest(
+  relations: readonly string[],
+  expected: CatalogDefinitionManifest,
+  label: string
+): Promise<void> {
+  const result = await client.query<{
+    relation_name: string;
+    object_name: string;
+    definition: string;
+  }>(
+    `
+      SELECT
+        tablename AS relation_name,
+        indexname AS object_name,
+        indexdef AS definition
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = ANY($1::text[])
+    `,
+    [relations]
+  );
+  assertDefinitionManifest(label, result.rows, expected);
+}
+
+async function assertTriggerManifest(expected: CatalogDefinitionManifest): Promise<void> {
+  const result = await client.query<{
+    relation_name: string;
+    object_name: string;
+    definition: string;
+  }>(
+    `
+      SELECT
+        r.relname AS relation_name,
+        t.tgname AS object_name,
+        pg_get_triggerdef(t.oid, false) AS definition
+      FROM pg_trigger t
+      JOIN pg_class r ON r.oid = t.tgrelid
+      JOIN pg_namespace n ON n.oid = r.relnamespace
+      WHERE n.nspname = 'public'
+        AND r.relname = ANY($1::text[])
+        AND NOT t.tgisinternal
+    `,
+    [flowDefinitionRelations]
+  );
+  assertDefinitionManifest("current Flows triggers", result.rows, expected);
+}
+
+function assertDefinitionManifest(
+  label: string,
+  actualRows: readonly {
+    readonly relation_name: string;
+    readonly object_name: string;
+    readonly definition: string;
+  }[],
+  expected: CatalogDefinitionManifest
+): void {
+  const actual = actualRows.map(
+    (row) => `${row.relation_name}.${row.object_name}|${normalizeCatalogDefinition(row.definition)}`
+  );
+  const expectedRows = Object.entries(expected).map(
+    ([identity, definition]) => `${identity}|${normalizeCatalogDefinition(definition)}`
+  );
+  assertExactStringSet(label, actual, expectedRows);
+}
+
+function assertExactStringSet(
+  label: string,
+  actualValues: readonly string[],
+  expectedValues: readonly string[]
+): void {
+  const actual = [...actualValues].sort();
+  const expected = [...expectedValues].sort();
+  if (JSON.stringify(actual) === JSON.stringify(expected)) return;
+
+  const missing = expected.filter((value) => !actual.includes(value));
+  const unexpected = actual.filter((value) => !expected.includes(value));
+  throw new Error(
+    `${label} drifted; missing=${JSON.stringify(missing)} unexpected=${JSON.stringify(unexpected)}`
+  );
+}
+
+function normalizeCatalogDefinition(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+async function assertFlowIntegrityFunctions(): Promise<void> {
+  const expectedBodies = extractFlowIntegrityFunctionBodies();
+  const result = await client.query<{
+    function_name: string;
+    language_name: string;
+    result_type: string;
+    security_definer: boolean;
+    volatility: string;
+    source: string;
+  }>(
+    `
+      SELECT
+        p.proname AS function_name,
+        l.lanname AS language_name,
+        pg_get_function_result(p.oid) AS result_type,
+        p.prosecdef AS security_definer,
+        p.provolatile AS volatility,
+        p.prosrc AS source
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      JOIN pg_language l ON l.oid = p.prolang
+      WHERE n.nspname = 'public'
+        AND p.pronargs = 0
+        AND p.proname = ANY($1::text[])
+    `,
+    [Object.keys(expectedBodies)]
+  );
+
+  const actual = result.rows.map(
+    (row) =>
+      `${row.function_name}|${row.language_name}|${row.result_type}|${row.security_definer}|${row.volatility}|${normalizeCatalogDefinition(row.source)}`
+  );
+  const expected = Object.entries(expectedBodies).map(
+    ([name, body]) => `${name}|plpgsql|trigger|false|v|${normalizeCatalogDefinition(body)}`
+  );
+  assertExactStringSet("current Flows integrity functions", actual, expected);
+}
+
+function extractFlowIntegrityFunctionBodies(): Readonly<Record<string, string>> {
+  const bodies: Record<string, string> = {};
+  const pattern =
+    /CREATE OR REPLACE FUNCTION ([a-z0-9_]+)\(\)\s+RETURNS trigger\s+LANGUAGE plpgsql\s+AS \$([a-z0-9_]+)\$\n([\s\S]*?)\n\$\2\$;/g;
+  for (const match of flowsIntegritySql.matchAll(pattern)) {
+    const name = match[1];
+    const body = match[3];
+    if (name && body) bodies[name] = body;
+  }
+  if (Object.keys(bodies).length !== 6) {
+    throw new Error("Canonical Flows integrity SQL does not expose six trigger functions");
+  }
+  return bodies;
+}
+
+async function assertCanonicalFlowData(): Promise<void> {
+  const result = await client.query<{
+    invalid_flow_count: string;
+    invalid_version_count: string;
+    invalid_command_count: string;
+  }>(`
+    WITH latest_versions AS (
+      SELECT DISTINCT ON (flow_id)
+        flow_id,
+        id,
+        published_at
+      FROM flow_versions
+      ORDER BY flow_id, version DESC
+    )
+    SELECT
+      (SELECT count(*)::text
+         FROM flows f
+         LEFT JOIN latest_versions latest ON latest.flow_id = f.id
+        WHERE (
+          latest.id IS NULL
+          AND (
+            f.published_version_id IS NOT NULL
+            OR f.published_at IS NOT NULL
+          )
+        )
+        OR (
+          latest.id IS NOT NULL
+          AND (
+            f.published_version_id IS DISTINCT FROM latest.id
+            OR f.published_at IS DISTINCT FROM latest.published_at
+          )
+        )
+        OR (
+          f.draft_graph->>'schemaVersion' = 'flow-graph.v1'
+          AND (
+            f.origin IS NOT NULL
+            OR f.draft_presentation IS NOT NULL
+          )
+        )
+        OR (
+          f.draft_graph->>'schemaVersion' = 'flow-graph.v2'
+          AND (
+            jsonb_typeof(f.origin) IS DISTINCT FROM 'object'
+            OR f.origin->>'schemaVersion' IS DISTINCT FROM 'flow-definition-origin.v1'
+          )
+        )) AS invalid_flow_count,
+      (SELECT count(*)::text
+         FROM flow_versions v
+        WHERE (
+          v.graph->>'schemaVersion' = 'flow-graph.v1'
+          AND (
+            v.source_revision IS NOT NULL
+            OR v.graph_schema_version IS NOT NULL
+            OR v.presentation IS NOT NULL
+            OR v.capability_manifest IS NOT NULL
+          )
+        )
+        OR (
+          v.graph_schema_version = 'flow-graph.v2'
+          AND v.graph->>'schemaVersion' IS DISTINCT FROM 'flow-graph.v2'
+        )) AS invalid_version_count,
+      (SELECT count(*)::text
+         FROM flow_definition_commands cmd
+         LEFT JOIN flow_definition_command_outcomes outcome
+           ON outcome.command_id = cmd.id
+        WHERE (
+          cmd.state = 'processing'
+          AND outcome.command_id IS NOT NULL
+        )
+        OR (
+          cmd.state IN ('succeeded', 'failed')
+          AND transaction_timestamp() < cmd.replay_until
+          AND outcome.command_id IS NULL
+        )
+        OR (
+          outcome.command_id IS NOT NULL
+          AND (
+            outcome.created_at < cmd.created_at
+            OR outcome.created_at > cmd.replay_until
+            OR outcome.created_at IS DISTINCT FROM cmd.completed_at
+            OR (
+              cmd.state = 'succeeded'
+              AND outcome.response_status NOT IN (200, 201)
+            )
+            OR (
+              cmd.state = 'failed'
+              AND outcome.response_status NOT BETWEEN 400 AND 499
+            )
+          )
+        )) AS invalid_command_count
+  `);
+  if (
+    result.rows[0]?.invalid_flow_count !== "0" ||
+    result.rows[0]?.invalid_version_count !== "0" ||
+    result.rows[0]?.invalid_command_count !== "0"
+  ) {
+    throw new Error("Current production Flows data violates canonical invariants");
   }
 }
 

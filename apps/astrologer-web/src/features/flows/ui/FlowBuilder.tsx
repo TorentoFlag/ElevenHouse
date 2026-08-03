@@ -1,225 +1,643 @@
-import { useEffect, useRef, useState } from "react";
-import type {
-  FlowApproval,
-  FlowApprovalDecision,
-  FlowGraph,
-  FlowNode,
-  FlowRunResponse,
-  FlowRuntimeAvailability,
-  SimulateFlowRunResponse,
-  FlowResponse
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  updateFlowDefinitionDraftV2RequestSchema,
+  type FlowDefinitionDetailV2,
+  type FlowDefinitionValidationIssue,
+  type FlowGraphV2,
+  type FlowPresentationV1
 } from "@elevenhouse/contracts";
 import {
   appendFlowNodeFromPalette,
-  moveFlowNode,
-  renameFlowNode,
-  updateFlowNodeConfig,
+  getAvailableSourceHandles,
+  moveFlowNodePresentation,
+  replaceFlowNode,
   type FlowPaletteNodeId
 } from "../model/flowDraftEditor";
-import { flowStatusLabelRu } from "../model/flowDisplay";
+import { flowDefinitionStateLabel, flowSourceHandleLabel } from "../model/flowDisplay";
+import { describeFlowDefinitionError } from "../model/flowsPageModel";
 import { buildFlowRuntimePresentation } from "../model/flowRuntimePresentation";
-import { FlowApprovalQueue } from "./FlowApprovalQueue";
-import { FlowBuilderCanvas } from "./FlowBuilderCanvas";
+import { buildFlowValidationIssuePresentation } from "../model/flowValidationPresentation";
+import { FlowBuilderCanvas, type FlowConnectionSource } from "./FlowBuilderCanvas";
 import { FlowBuilderInspector } from "./FlowBuilderInspector";
 import { FlowNodePalette } from "./FlowNodePalette";
-import { FlowRuntimePanel } from "./FlowRuntimePanel";
+
+export type CurrentFlowDefinitionDetail = Extract<
+  FlowDefinitionDetailV2,
+  { graphSchemaVersion: "flow-graph.v2" }
+>;
+
+export type FlowDraftCommandPayload = {
+  readonly flowId: string;
+  readonly expectedRevision: number;
+  readonly graph: FlowGraphV2;
+  readonly presentation: FlowPresentationV1;
+};
+
+export type FlowPublishCommandPayload = FlowDraftCommandPayload & {
+  readonly saveBeforePublish: boolean;
+};
+
+export type FlowNextDraftCommandPayload = {
+  readonly flowId: string;
+  readonly expectedRevision: number;
+  readonly baseVersionId: string;
+};
+
+export type FlowRevisionConflict = {
+  readonly operation: "save" | "publish";
+  readonly expectedRevision: number;
+  readonly currentRevision: number;
+};
 
 export type FlowBuilderProps = {
-  readonly flow: FlowResponse;
+  readonly flow: CurrentFlowDefinitionDetail;
+  readonly locale: "ru" | "en";
   readonly onBack: () => void;
-  readonly onUpdateDraft: (flowId: string, graph: FlowGraph) => void;
-  readonly onPublish: (flowId: string, graph: FlowGraph) => void;
-  readonly runs?: readonly FlowRunResponse[];
-  readonly approvals?: readonly FlowApproval[];
-  readonly simulation?: SimulateFlowRunResponse | null;
-  readonly runtimeAvailability?: FlowRuntimeAvailability | null;
-  readonly approvalRuntimeAvailability?: FlowRuntimeAvailability | null;
+  readonly onSaveDraft: (input: FlowDraftCommandPayload) => void;
+  readonly onPublish: (input: FlowPublishCommandPayload) => void;
+  readonly onCreateNextDraft?: (input: FlowNextDraftCommandPayload) => void;
+  readonly runtimeAvailability?: Parameters<typeof buildFlowRuntimePresentation>[0];
   readonly onSimulate?: (flowId: string) => void;
-  readonly onCreateManualRun?: (flowId: string) => void;
-  readonly onApprovalDecision?: (approvalId: string, decision: FlowApprovalDecision) => void;
-  readonly isLoadingRuns?: boolean;
-  readonly isLoadingApprovals?: boolean;
-  readonly isUpdatingDraft?: boolean;
+  readonly isSaving?: boolean;
   readonly isPublishing?: boolean;
+  readonly isCreatingNextDraft?: boolean;
   readonly isSimulating?: boolean;
-  readonly isCreatingManualRun?: boolean;
-  readonly isDecidingApproval?: boolean;
-  readonly draftUpdateError?: Error | null;
+  readonly isValidating?: boolean;
+  readonly saveError?: Error | null;
   readonly publishError?: Error | null;
-  readonly runtimeError?: Error | null;
-  readonly approvalsError?: Error | null;
+  readonly nextDraftError?: Error | null;
+  readonly revisionConflict?: FlowRevisionConflict | null;
+  readonly onReloadServer?: () => Promise<CurrentFlowDefinitionDetail | null>;
+  readonly validationIssues?: readonly FlowDefinitionValidationIssue[];
+  readonly validationError?: Error | null;
   readonly classNames?: Readonly<Record<string, string>>;
 };
 
 export function FlowBuilder({
   flow,
+  locale,
   onBack,
-  onUpdateDraft,
+  onSaveDraft,
   onPublish,
-  runs = [],
-  approvals = [],
-  simulation = null,
+  onCreateNextDraft,
   runtimeAvailability = null,
-  approvalRuntimeAvailability = null,
   onSimulate,
-  onCreateManualRun,
-  onApprovalDecision,
-  isLoadingRuns = false,
-  isLoadingApprovals = false,
-  isUpdatingDraft = false,
+  isSaving = false,
   isPublishing = false,
+  isCreatingNextDraft = false,
   isSimulating = false,
-  isCreatingManualRun = false,
-  isDecidingApproval = false,
-  draftUpdateError = null,
+  isValidating = false,
+  saveError = null,
   publishError = null,
-  runtimeError = null,
-  approvalsError = null,
+  nextDraftError = null,
+  revisionConflict = null,
+  onReloadServer,
+  validationIssues = emptyValidationIssues,
+  validationError = null,
   classNames
 }: FlowBuilderProps) {
+  const initialPresentation = useMemo(
+    () => ensurePresentation(flow.draftGraph, flow.draftPresentation),
+    [flow.draftGraph, flow.draftPresentation]
+  );
   const [draftGraph, setDraftGraph] = useState(flow.draftGraph);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(flow.draftGraph.nodes[0]?.id ?? null);
+  const [draftPresentation, setDraftPresentation] = useState(initialPresentation);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(
+    flow.draftGraph.nodes[0]?.id ?? null
+  );
+  const [connectionSource, setConnectionSource] = useState<FlowConnectionSource | null>(() =>
+    firstAvailableConnection(flow.draftGraph, flow.draftGraph.nodes[0]?.id ?? null)
+  );
+  const [dirty, setDirty] = useState(false);
+  const [draftBaseRevision, setDraftBaseRevision] = useState(flow.revision);
+  const [observedServerRevision, setObservedServerRevision] = useState<number | null>(null);
+  const [isReloadingServer, setIsReloadingServer] = useState(false);
+  const [reloadError, setReloadError] = useState<Error | null>(null);
+  const [exitConfirmationVisible, setExitConfirmationVisible] = useState(false);
+  const [visibleValidationIssues, setVisibleValidationIssues] = useState(validationIssues);
   const currentFlowId = useRef(flow.id);
+  const isMobileViewport = useIsMobileFlowViewport();
+  const editable = flow.state === "draft";
+  const interactionLocked =
+    isSaving || isPublishing || isCreatingNextDraft || isReloadingServer || isValidating;
   const selectedNode = draftGraph.nodes.find((node) => node.id === selectedNodeId) ?? null;
-  const hasPublishedVersion = flow.publishedVersionId !== null;
-  const runtime = buildFlowRuntimePresentation(runtimeAvailability);
-  const canRunPublishedVersion = hasPublishedVersion && runtime.executionAvailable;
-  const canPublishDraft = flow.status === "draft";
+  const runtime = buildFlowRuntimePresentation(runtimeAvailability, locale);
+  const canRunPublishedVersion =
+    flow.latestPublishedVersionId !== null && runtime.executionAvailable && Boolean(onSimulate);
+  const transportValidation = updateFlowDefinitionDraftV2RequestSchema.safeParse({
+    expectedRevision: draftBaseRevision,
+    graph: draftGraph,
+    presentation: draftPresentation
+  });
+  const copy = builderCopy[locale];
+  const effectiveConflict =
+    revisionConflict ??
+    (observedServerRevision === null
+      ? null
+      : {
+          operation: "save" as const,
+          expectedRevision: draftBaseRevision,
+          currentRevision: observedServerRevision
+        });
+  const structuralEditingEnabled =
+    editable && !isMobileViewport && !interactionLocked && !effectiveConflict;
+  const presentedValidationIssues = buildFlowValidationIssuePresentation(
+    visibleValidationIssues,
+    locale
+  );
 
   useEffect(() => {
-    const isSameFlow = currentFlowId.current === flow.id;
+    setVisibleValidationIssues(validationIssues);
+  }, [flow.id, validationIssues]);
+
+  useEffect(() => {
+    setReloadError(null);
+    setExitConfirmationVisible(false);
+  }, [flow.id]);
+
+  useEffect(() => {
+    if (!dirty || typeof window === "undefined") return;
+    const preventUnsavedExit = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", preventUnsavedExit);
+    return () => window.removeEventListener("beforeunload", preventUnsavedExit);
+  }, [dirty]);
+
+  useEffect(() => {
+    const flowChanged = currentFlowId.current !== flow.id;
+    if (!flowChanged && draftBaseRevision === flow.revision) return;
+
+    const nextPresentation = ensurePresentation(flow.draftGraph, flow.draftPresentation);
+    if (
+      !flowChanged &&
+      dirty &&
+      !sameDraft(flow.draftGraph, nextPresentation, draftGraph, draftPresentation)
+    ) {
+      setObservedServerRevision(flow.revision);
+      return;
+    }
 
     currentFlowId.current = flow.id;
     setDraftGraph(flow.draftGraph);
-    setSelectedNodeId((currentSelectedNodeId) => {
-      if (
-        isSameFlow &&
-        currentSelectedNodeId &&
-        flow.draftGraph.nodes.some((node) => node.id === currentSelectedNodeId)
-      ) {
-        return currentSelectedNodeId;
-      }
+    setDraftPresentation(nextPresentation);
+    setDraftBaseRevision(flow.revision);
+    setObservedServerRevision(null);
+    setDirty(false);
+    setExitConfirmationVisible(false);
+    setSelectedNodeId((current) =>
+      current && flow.draftGraph.nodes.some((node) => node.id === current)
+        ? current
+        : (flow.draftGraph.nodes[0]?.id ?? null)
+    );
+    setConnectionSource(
+      firstAvailableConnection(flow.draftGraph, flow.draftGraph.nodes[0]?.id ?? null)
+    );
+  }, [
+    draftBaseRevision,
+    draftGraph,
+    draftPresentation,
+    dirty,
+    flow.draftGraph,
+    flow.draftPresentation,
+    flow.id,
+    flow.revision
+  ]);
 
-      return flow.draftGraph.nodes[0]?.id ?? null;
-    });
-  }, [flow.id, flow.draftGraph]);
-
-  const updateDraft = (graph: FlowGraph) => {
-    setDraftGraph(graph);
-    onUpdateDraft(flow.id, graph);
+  const selectNode = (nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setConnectionSource(firstAvailableConnection(draftGraph, nodeId));
   };
-  const addPaletteNode = (paletteNodeId: FlowPaletteNodeId) => {
-    const updated = appendFlowNodeFromPalette(draftGraph, { selectedNodeId, paletteNodeId });
-    const addedNode = findAddedNode(draftGraph.nodes, updated.nodes);
 
-    setDraftGraph(updated);
-    setSelectedNodeId(addedNode?.id ?? null);
-    onUpdateDraft(flow.id, updated);
+  const addPaletteNode = (paletteNodeId: FlowPaletteNodeId) => {
+    if (!editable || !connectionSource) return;
+    const updated = appendFlowNodeFromPalette(draftGraph, draftPresentation, {
+      sourceNodeId: connectionSource.nodeId,
+      sourceHandle: connectionSource.handle,
+      paletteNodeId,
+      locale
+    });
+    setDraftGraph(updated.graph);
+    setDraftPresentation(updated.presentation);
+    setSelectedNodeId(updated.addedNodeId);
+    setConnectionSource(firstAvailableConnection(updated.graph, updated.addedNodeId));
+    markDraftDirty();
+  };
+
+  const markDraftDirty = () => {
+    setDirty(true);
+    setVisibleValidationIssues(emptyValidationIssues);
+  };
+
+  const commandPayload = (expectedRevision = draftBaseRevision): FlowDraftCommandPayload => ({
+    flowId: flow.id,
+    expectedRevision,
+    graph: draftGraph,
+    presentation: draftPresentation
+  });
+
+  const reloadServerDraft = async () => {
+    if (!onReloadServer) return;
+    setReloadError(null);
+    setIsReloadingServer(true);
+    try {
+      const refreshed = await onReloadServer();
+      if (!refreshed) {
+        setReloadError(new Error(copy.serverRevisionUnavailable));
+        return;
+      }
+      const nextPresentation = ensurePresentation(
+        refreshed.draftGraph,
+        refreshed.draftPresentation
+      );
+      currentFlowId.current = refreshed.id;
+      setDraftGraph(refreshed.draftGraph);
+      setDraftPresentation(nextPresentation);
+      setDraftBaseRevision(refreshed.revision);
+      setObservedServerRevision(null);
+      setDirty(false);
+      setExitConfirmationVisible(false);
+      setSelectedNodeId(refreshed.draftGraph.nodes[0]?.id ?? null);
+      setConnectionSource(
+        firstAvailableConnection(refreshed.draftGraph, refreshed.draftGraph.nodes[0]?.id ?? null)
+      );
+    } catch (error) {
+      setReloadError(describeFlowDefinitionError(error, locale));
+    } finally {
+      setIsReloadingServer(false);
+    }
   };
 
   return (
-    <section className={classNames?.builderPage ?? ""} aria-label="Конструктор воронки">
+    <section
+      className={`${classNames?.page ?? ""} ${classNames?.builderPage ?? ""}`.trim()}
+      aria-label={copy.builder}
+    >
       <header className={classNames?.builderHeader ?? ""}>
-        <button className={classNames?.builderBackButton ?? ""} type="button" onClick={onBack}>
-          Все воронки
+        <button
+          className={classNames?.builderBackButton ?? ""}
+          type="button"
+          disabled={interactionLocked}
+          onClick={() => {
+            if (dirty) {
+              setExitConfirmationVisible(true);
+              return;
+            }
+            onBack();
+          }}
+        >
+          {copy.allFlows}
         </button>
         <div className={classNames?.builderTitleGroup ?? ""}>
-          <p>{flowStatusLabelRu[flow.status]}</p>
+          <p>
+            {flowDefinitionStateLabel(flow.state, locale)} · {copy.revision} {flow.revision}
+            {flow.latestPublishedVersion ? ` · ${copy.version} ${flow.latestPublishedVersion}` : ""}
+          </p>
           <h1>{flow.name}</h1>
         </div>
         <div className={classNames?.builderActions ?? ""}>
           <button
             className={classNames?.builderTestRunButton ?? ""}
             type="button"
-            disabled={!canRunPublishedVersion || !onSimulate || isSimulating}
+            disabled={!canRunPublishedVersion || isSimulating}
+            title={runtime.unavailableReason ?? undefined}
             onClick={() => {
               if (canRunPublishedVersion) onSimulate?.(flow.id);
             }}
           >
-            {isSimulating ? "Проверяем" : "Тестовый прогон"}
+            {isSimulating ? copy.simulating : copy.testRun}
           </button>
-          <button
-            className={classNames?.builderPublishButton ?? ""}
-            type="button"
-            disabled={!canPublishDraft || isPublishing || isUpdatingDraft}
-            onClick={() => onPublish(flow.id, draftGraph)}
-          >
-            {isPublishing ? "Публикуем" : canPublishDraft ? "Опубликовать" : "Опубликована"}
-          </button>
+          {editable ? (
+            <>
+              <button
+                className={classNames?.builderSaveButton ?? classNames?.builderBackButton ?? ""}
+                type="button"
+                disabled={
+                  !dirty ||
+                  !transportValidation.success ||
+                  interactionLocked ||
+                  Boolean(effectiveConflict)
+                }
+                onClick={() => onSaveDraft(commandPayload())}
+              >
+                {isSaving ? copy.saving : copy.save}
+              </button>
+              <button
+                className={classNames?.builderPublishButton ?? ""}
+                type="button"
+                disabled={
+                  !transportValidation.success || interactionLocked || Boolean(effectiveConflict)
+                }
+                onClick={() => onPublish({ ...commandPayload(), saveBeforePublish: dirty })}
+              >
+                {isValidating ? copy.validating : isPublishing ? copy.publishing : copy.publish}
+              </button>
+            </>
+          ) : flow.state === "versioned" && flow.latestPublishedVersionId && onCreateNextDraft ? (
+            <button
+              className={classNames?.builderPublishButton ?? ""}
+              type="button"
+              disabled={isCreatingNextDraft}
+              onClick={() => {
+                const baseVersionId = flow.latestPublishedVersionId;
+                if (!baseVersionId) return;
+                onCreateNextDraft({
+                  flowId: flow.id,
+                  expectedRevision: flow.revision,
+                  baseVersionId
+                });
+              }}
+            >
+              {isCreatingNextDraft ? copy.creatingVersion : copy.createVersion}
+            </button>
+          ) : null}
         </div>
       </header>
-      {draftUpdateError ? (
+
+      <div className={classNames?.builderSaveState ?? ""} role="status">
+        {editable ? (dirty ? copy.unsaved : copy.saved) : copy.readOnly}
+      </div>
+      {exitConfirmationVisible ? (
+        <section
+          className={classNames?.builderExitConfirmation ?? ""}
+          role="group"
+          aria-label={copy.unsavedExitTitle}
+        >
+          <p>{copy.unsavedExitMessage}</p>
+          <div className={classNames?.builderExitActions ?? ""}>
+            <button type="button" onClick={() => setExitConfirmationVisible(false)}>
+              {copy.stay}
+            </button>
+            <button type="button" onClick={onBack}>
+              {copy.discardAndExit}
+            </button>
+          </div>
+        </section>
+      ) : null}
+      {!transportValidation.success ? (
         <div className={classNames?.builderMutationError ?? ""} role="alert">
-          <span>{draftUpdateError.message}</span>
-          <button type="button" onClick={() => onUpdateDraft(flow.id, draftGraph)}>Повторить сохранение</button>
+          {copy.invalidFields}
         </div>
       ) : null}
-      {publishError ? (
+      {effectiveConflict ? (
         <div className={classNames?.builderMutationError ?? ""} role="alert">
-          <span>{publishError.message}</span>
-          <button type="button" onClick={() => onPublish(flow.id, draftGraph)}>Повторить публикацию</button>
+          <p>
+            {copy.revisionConflict.replace("{revision}", String(effectiveConflict.currentRevision))}
+          </p>
+          <div className={classNames?.builderConflictActions ?? ""}>
+            {onReloadServer ? (
+              <button type="button" disabled={interactionLocked} onClick={reloadServerDraft}>
+                {isReloadingServer ? copy.reloadingServer : copy.loadServerRevision}
+              </button>
+            ) : null}
+            {effectiveConflict.operation === "save" ? (
+              <button
+                type="button"
+                disabled={interactionLocked || !transportValidation.success}
+                onClick={() => onSaveDraft(commandPayload(effectiveConflict.currentRevision))}
+              >
+                {copy.retryOverRevision.replace(
+                  "{revision}",
+                  String(effectiveConflict.currentRevision)
+                )}
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
-      <section className={classNames?.builder ?? ""}>
-        <FlowNodePalette
-          onAddNode={addPaletteNode}
-          isDisabled={!canPublishDraft || isUpdatingDraft}
-          classNames={classNames}
-        />
+      {presentedValidationIssues.length > 0 ? (
+        <section
+          className={classNames?.builderValidationIssues ?? classNames?.builderMutationError ?? ""}
+          role="alert"
+          aria-label={copy.validation}
+        >
+          <h2>{copy.validation}</h2>
+          <ul>
+            {presentedValidationIssues.map((issue) => (
+              <li key={`${issue.code}:${issue.path}`}>
+                <p>{issue.message}</p>
+                <code>
+                  {issue.code} · {issue.path}
+                </code>
+                {issue.nodeId && draftGraph.nodes.some((node) => node.id === issue.nodeId) ? (
+                  <button type="button" onClick={() => selectNode(issue.nodeId!)}>
+                    {copy.showIssueNode}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {[
+        effectiveConflict?.operation === "save" ? null : saveError,
+        effectiveConflict?.operation === "publish" || presentedValidationIssues.length > 0
+          ? null
+          : publishError,
+        reloadError,
+        nextDraftError,
+        validationError
+      ]
+        .filter(Boolean)
+        .map((error, index) => (
+          <div
+            key={`${error?.message}:${index}`}
+            className={classNames?.builderMutationError ?? ""}
+            role="alert"
+          >
+            {error?.message}
+          </div>
+        ))}
+
+      <section
+        className={`${classNames?.builder ?? ""} ${
+          isMobileViewport ? (classNames?.builderMobileReadOnly ?? "") : ""
+        }`.trim()}
+      >
+        {isMobileViewport ? (
+          <p className={classNames?.builderMobileNotice ?? ""} role="status">
+            {copy.desktopEditingOnly}
+          </p>
+        ) : (
+          <FlowNodePalette
+            locale={locale}
+            connectionLabel={connectionLabel(draftGraph, connectionSource, locale)}
+            onAddNode={addPaletteNode}
+            isDisabled={!structuralEditingEnabled}
+            classNames={classNames}
+          />
+        )}
         <FlowBuilderCanvas
           graph={draftGraph}
+          presentation={draftPresentation}
+          locale={locale}
+          editable={structuralEditingEnabled}
           selectedNodeId={selectedNodeId}
-          onSelectNode={setSelectedNodeId}
-          onMoveNode={(nodeId, position) => updateDraft(moveFlowNode(draftGraph, nodeId, position))}
+          connectionSource={connectionSource}
+          onSelectNode={selectNode}
+          onSelectSourceHandle={(nodeId, handle) => {
+            setSelectedNodeId(nodeId);
+            setConnectionSource({ nodeId, handle });
+          }}
+          onMoveNode={(nodeId, position) => {
+            setDraftPresentation((current) => moveFlowNodePresentation(current, nodeId, position));
+            markDraftDirty();
+          }}
           classNames={classNames}
         />
-        <aside className={classNames?.builderInspector ?? ""}>
-          <FlowBuilderInspector
-            graph={draftGraph}
-            selectedNode={selectedNode}
-            onTitleChange={(nodeId, title) =>
-              setDraftGraph((graph) => renameFlowNode(graph, nodeId, title))
-            }
-            onCommitTitle={(nodeId, title) => updateDraft(renameFlowNode(draftGraph, nodeId, title))}
-            onUpdateConfig={(nodeId, config) => updateDraft(updateFlowNodeConfig(draftGraph, nodeId, config))}
-            classNames={classNames}
-          />
-          <FlowRuntimePanel
-            runs={runs}
-            simulation={canRunPublishedVersion ? simulation : null}
-            runtimeAvailability={runtimeAvailability}
-            onSimulate={
-              hasPublishedVersion && onSimulate ? () => onSimulate(flow.id) : undefined
-            }
-            onCreateManualRun={
-              hasPublishedVersion && onCreateManualRun ? () => onCreateManualRun(flow.id) : undefined
-            }
-            isLoadingRuns={isLoadingRuns}
-            isSimulating={isSimulating}
-            isCreatingManualRun={isCreatingManualRun}
-            error={hasPublishedVersion ? runtimeError : null}
-            unavailableReason={
-              hasPublishedVersion
-                ? null
-                : "Опубликуйте воронку, чтобы запускать тесты и ручные запуски."
-            }
-            classNames={classNames}
-          />
-          <FlowApprovalQueue
-            approvals={approvals}
-            runtimeAvailability={approvalRuntimeAvailability}
-            onDecision={onApprovalDecision}
-            isLoading={isLoadingApprovals}
-            isDeciding={isDecidingApproval}
-            error={approvalsError}
-            classNames={classNames}
-          />
-        </aside>
+        {!isMobileViewport ? (
+          <aside className={classNames?.builderInspector ?? ""}>
+            <FlowBuilderInspector
+              graph={draftGraph}
+              selectedNode={selectedNode}
+              locale={locale}
+              editable={structuralEditingEnabled}
+              onChangeNode={(node) => {
+                setDraftGraph((current) => replaceFlowNode(current, node));
+                markDraftDirty();
+              }}
+              classNames={classNames}
+            />
+            {!runtime.executionAvailable ? (
+              <div className={classNames?.runtimeNotice ?? ""}>{runtime.unavailableReason}</div>
+            ) : null}
+          </aside>
+        ) : null}
       </section>
     </section>
   );
 }
 
-function findAddedNode(previousNodes: readonly FlowNode[], nextNodes: readonly FlowNode[]): FlowNode | null {
-  return nextNodes.find((node) => !previousNodes.some((previousNode) => previousNode.id === node.id)) ?? null;
+function ensurePresentation(
+  graph: FlowGraphV2,
+  presentation: FlowPresentationV1 | null
+): FlowPresentationV1 {
+  if (presentation) return presentation;
+  return {
+    schemaVersion: "flow-presentation.v1",
+    nodes: graph.nodes.map((node, index) => ({
+      nodeId: node.id,
+      position: { x: 80 + index * 320, y: 120 }
+    })),
+    viewport: { x: 0, y: 0, zoom: 1 }
+  };
 }
+
+function sameDraft(
+  serverGraph: FlowGraphV2,
+  serverPresentation: FlowPresentationV1,
+  localGraph: FlowGraphV2,
+  localPresentation: FlowPresentationV1
+): boolean {
+  return (
+    JSON.stringify(serverGraph) === JSON.stringify(localGraph) &&
+    JSON.stringify(serverPresentation) === JSON.stringify(localPresentation)
+  );
+}
+
+const emptyValidationIssues: readonly FlowDefinitionValidationIssue[] = [];
+
+function useIsMobileFlowViewport(): boolean {
+  const mediaQuery = "(max-width: 760px)";
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia?.(mediaQuery).matches === true
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia(mediaQuery);
+    const onChange = (event: MediaQueryListEvent) => setMatches(event.matches);
+    setMatches(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  return matches;
+}
+
+function firstAvailableConnection(
+  graph: FlowGraphV2,
+  nodeId: string | null
+): FlowConnectionSource | null {
+  if (!nodeId) return null;
+  const handle = getAvailableSourceHandles(graph, nodeId)[0];
+  return handle ? { nodeId, handle } : null;
+}
+
+function connectionLabel(
+  graph: FlowGraphV2,
+  source: FlowConnectionSource | null,
+  locale: "ru" | "en"
+): string | null {
+  if (!source) return null;
+  const node = graph.nodes.find((candidate) => candidate.id === source.nodeId);
+  return node ? `${node.displayTitle} · ${flowSourceHandleLabel(source.handle, locale)}` : null;
+}
+
+const builderCopy = {
+  ru: {
+    builder: "Конструктор воронки",
+    allFlows: "Все воронки",
+    revision: "редакция",
+    version: "версия",
+    testRun: "Тестовый прогон",
+    simulating: "Проверяем",
+    save: "Сохранить",
+    saving: "Сохраняем",
+    publish: "Опубликовать",
+    publishing: "Публикуем",
+    validating: "Проверяем",
+    createVersion: "Создать новую версию",
+    creatingVersion: "Создаём версию",
+    saved: "Изменения сохранены",
+    unsaved: "Есть несохранённые изменения",
+    unsavedExitTitle: "Несохранённые изменения",
+    unsavedExitMessage: "Если выйти сейчас, изменения схемы в этой вкладке будут потеряны.",
+    stay: "Остаться",
+    discardAndExit: "Выйти без сохранения",
+    readOnly: "Опубликованная версия доступна только для чтения",
+    invalidFields: "Исправьте обязательные поля перед сохранением.",
+    revisionConflict:
+      "На сервере уже есть редакция {revision}. Локальные изменения сохранены только в этой вкладке.",
+    loadServerRevision: "Загрузить серверную версию",
+    reloadingServer: "Загружаем серверную версию",
+    serverRevisionUnavailable: "Серверная версия воронки недоступна.",
+    retryOverRevision: "Повторить поверх редакции {revision}",
+    validation: "Проверка схемы",
+    showIssueNode: "Показать узел с проблемой",
+    desktopEditingOnly: "Редактирование схемы доступно на компьютере."
+  },
+  en: {
+    builder: "Flow builder",
+    allFlows: "All flows",
+    revision: "revision",
+    version: "version",
+    testRun: "Test run",
+    simulating: "Checking",
+    save: "Save",
+    saving: "Saving",
+    publish: "Publish",
+    publishing: "Publishing",
+    validating: "Validating",
+    createVersion: "Create new version",
+    creatingVersion: "Creating version",
+    saved: "Changes saved",
+    unsaved: "Unsaved changes",
+    unsavedExitTitle: "Unsaved changes",
+    unsavedExitMessage: "Leaving now will discard the graph changes in this tab.",
+    stay: "Stay",
+    discardAndExit: "Leave without saving",
+    readOnly: "The published version is read-only",
+    invalidFields: "Fix required fields before saving.",
+    revisionConflict:
+      "Server revision {revision} is newer. Your local changes remain in this tab only.",
+    loadServerRevision: "Load server version",
+    reloadingServer: "Loading server version",
+    serverRevisionUnavailable: "The server flow version is unavailable.",
+    retryOverRevision: "Retry over revision {revision}",
+    validation: "Graph validation",
+    showIssueNode: "Show affected node",
+    desktopEditingOnly: "Graph editing is available on desktop."
+  }
+} as const;

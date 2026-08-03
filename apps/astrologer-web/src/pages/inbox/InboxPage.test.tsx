@@ -26,6 +26,10 @@ describe("InboxPage", () => {
     expect(source).toContain("startTelegramMtprotoConnectionMutationOptions");
     expect(source).toContain("deriveTelegramMtprotoWizardState(result)");
     expect(source).toContain("useFlowListQuery");
+    expect(source).toContain(
+      'useFlowListQuery({ state: "all", runtimeStatus: "all", limit: 50, offset: 0 })'
+    );
+    expect(source).not.toContain('useFlowListQuery({ status: "all"');
     expect(source).toContain("flowRunsQueryOptions");
     expect(source).toContain('limit: 100');
     expect(source).toContain("buildInboxFlowContexts");

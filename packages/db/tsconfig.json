@@ -7,6 +7,7 @@
   },
   "include": [
     "src",
+    "scripts/augment-flows-baseline.ts",
     "scripts/augment-scheduling-baseline.ts",
     "scripts/reconcile-production-baseline.ts",
     "scripts/seed-dev-admin-finance.ts"

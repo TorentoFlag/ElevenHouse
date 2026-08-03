@@ -1,165 +1,363 @@
-import { useEffect, useState } from "react";
-import type { FlowGraph } from "@elevenhouse/contracts";
+import type { FlowGraphV2, FlowNodeV2 } from "@elevenhouse/contracts";
+import { flowNodeKindLabel } from "../model/flowDisplay";
 
 export type FlowBuilderInspectorProps = {
-  readonly graph: FlowGraph;
-  readonly selectedNode: FlowGraph["nodes"][number] | null;
-  readonly onTitleChange: (nodeId: string, title: string) => void;
-  readonly onCommitTitle: (nodeId: string, title: string) => void;
-  readonly onUpdateConfig: (nodeId: string, config: Record<string, unknown>) => void;
+  readonly graph: FlowGraphV2;
+  readonly selectedNode: FlowNodeV2 | null;
+  readonly locale: "ru" | "en";
+  readonly editable: boolean;
+  readonly onChangeNode: (node: FlowNodeV2) => void;
   readonly classNames?: Readonly<Record<string, string>>;
 };
 
 export function FlowBuilderInspector({
   graph,
   selectedNode,
-  onTitleChange,
-  onCommitTitle,
-  onUpdateConfig,
+  locale,
+  editable,
+  onChangeNode,
   classNames
 }: FlowBuilderInspectorProps) {
-  const [title, setTitle] = useState(selectedNode?.title ?? "");
-  const [configText, setConfigText] = useState(selectedNode ? JSON.stringify(selectedNode.config, null, 2) : "{}");
-  const [configError, setConfigError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setTitle(selectedNode?.title ?? "");
-    setConfigText(selectedNode ? JSON.stringify(selectedNode.config, null, 2) : "{}");
-    setConfigError(null);
-  }, [selectedNode]);
+  const copy = inspectorCopy[locale];
 
   if (!selectedNode) {
-    return <div className={classNames?.builderInspectorSection ?? ""}>Выберите узел на схеме</div>;
+    return <div className={classNames?.builderInspectorSection ?? ""}>{copy.selectNode}</div>;
   }
 
-  const titleInputId = `flow-node-${selectedNode.id}-title`;
-  const configInputId = `flow-node-${selectedNode.id}-config`;
-  const incomingCount = graph.edges.filter((edge) => edge.toNodeId === selectedNode.id).length;
-  const outgoingCount = graph.edges.filter((edge) => edge.fromNodeId === selectedNode.id).length;
-  const approvalMode = "approvalMode" in selectedNode ? selectedNode.approvalMode : null;
+  const incomingCount = graph.edges.filter((edge) => edge.targetNodeId === selectedNode.id).length;
+  const outgoingCount = graph.edges.filter((edge) => edge.sourceNodeId === selectedNode.id).length;
 
   return (
-    <div className={classNames?.builderInspectorSection ?? ""} aria-label="Настройки узла">
+    <div className={classNames?.builderInspectorSection ?? ""} aria-label={copy.settings}>
       <div className={classNames?.builderInspectorHeader ?? ""}>
         <span className={classNames?.builderInspectorIcon ?? ""} aria-hidden="true">
-          {categoryInitial[selectedNode.category]}
+          {nodeInitial[selectedNode.kind]}
         </span>
         <div>
           <p className={classNames?.builderInspectorCategory ?? ""}>
-            {flowNodeCategoryLabelRu[selectedNode.category]}
+            {flowNodeKindLabel(selectedNode.kind, locale)}
           </p>
-          <h2>{selectedNode.title}</h2>
+          <h2>{selectedNode.displayTitle}</h2>
           <p className={classNames?.builderInspectorId ?? ""}>id: {selectedNode.id}</p>
         </div>
       </div>
       <dl className={classNames?.builderInspectorFacts ?? ""}>
         <div>
-          <dt>Тип</dt>
+          <dt>{copy.kind}</dt>
           <dd>{selectedNode.kind}</dd>
         </div>
-        {approvalMode ? (
-          <div>
-            <dt>Режим</dt>
-            <dd>{flowApprovalModeLabelRu[approvalMode] ?? approvalMode}</dd>
-          </div>
-        ) : null}
         <div>
-          <dt>Связи</dt>
+          <dt>{copy.contract}</dt>
           <dd>
-            {formatConnectionCount(incomingCount, "вход", "входа", "входов")} ·{" "}
-            {formatConnectionCount(outgoingCount, "выход", "выхода", "выходов")}
+            config v{selectedNode.configSchemaVersion} · executor v
+            {selectedNode.executorContractVersion}
           </dd>
+        </div>
+        <div>
+          <dt>{copy.connections}</dt>
+          <dd>{formatConnections(incomingCount, outgoingCount, locale)}</dd>
         </div>
       </dl>
       <label className={classNames?.builderField ?? ""}>
-        <span>Название узла</span>
+        <span>{copy.title}</span>
         <input
-          id={titleInputId}
           name="flowNodeTitle"
-          value={title}
-          onChange={(event) => {
-            setTitle(event.target.value);
-            onTitleChange(selectedNode.id, event.target.value);
-          }}
-          onBlur={() => onCommitTitle(selectedNode.id, title)}
+          value={selectedNode.displayTitle}
+          disabled={!editable}
+          maxLength={180}
+          onChange={(event) => onChangeNode({ ...selectedNode, displayTitle: event.target.value })}
         />
       </label>
-      <label className={classNames?.builderField ?? ""}>
-        <span>Конфигурация</span>
-        <textarea
-          id={configInputId}
-          name="flowNodeConfig"
-          value={configText}
-          onChange={(event) => {
-            setConfigText(event.target.value);
-            setConfigError(null);
-          }}
-          onBlur={() => {
-            const config = parseConfig(configText);
-
-            if (config) {
-              onUpdateConfig(selectedNode.id, config);
-            } else {
-              setConfigError("Конфигурация должна быть JSON-объектом.");
-            }
-          }}
-        />
-      </label>
-      {configError ? <p role="alert">{configError}</p> : null}
+      <NodeConfigFields
+        node={selectedNode}
+        locale={locale}
+        editable={editable}
+        onChangeNode={onChangeNode}
+        className={classNames?.builderField ?? ""}
+      />
     </div>
   );
 }
 
-const flowNodeCategoryLabelRu = {
-  trigger: "Триггер",
-  action: "Действие",
-  ai: "AI-узел",
-  condition: "Логика",
-  delay: "Пауза",
-  terminal: "Финал",
-  handoff: "Человек"
-} satisfies Record<FlowGraph["nodes"][number]["category"], string>;
+function NodeConfigFields({
+  node,
+  locale,
+  editable,
+  onChangeNode,
+  className
+}: {
+  readonly node: FlowNodeV2;
+  readonly locale: "ru" | "en";
+  readonly editable: boolean;
+  readonly onChangeNode: (node: FlowNodeV2) => void;
+  readonly className: string;
+}) {
+  const copy = inspectorCopy[locale];
 
-const categoryInitial = {
-  trigger: "T",
-  action: "A",
-  ai: "AI",
-  condition: "?",
-  delay: "D",
-  terminal: "F",
-  handoff: "H"
-} satisfies Record<FlowGraph["nodes"][number]["category"], string>;
-
-const flowApprovalModeLabelRu = {
-  draft_only: "Только черновик",
-  manual_approve: "Требует подтверждения",
-  auto_internal: "Автоматически внутри",
-  auto_send: "Автоотправка"
-} satisfies Record<string, string>;
-
-function parseConfig(value: string): Record<string, unknown> | null {
-  try {
-    const parsed: unknown = JSON.parse(value);
-
-    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
+  if (node.kind === "booking_confirmed") {
+    return (
+      <label className={className}>
+        <span>{copy.productIds}</span>
+        <textarea
+          name="flowProductIds"
+          value={node.config.productIds.join("\n")}
+          disabled={!editable}
+          onChange={(event) =>
+            onChangeNode({
+              ...node,
+              config: {
+                productIds: event.target.value
+                  .split(/\s+/)
+                  .map((value) => value.trim())
+                  .filter(Boolean)
+              }
+            })
+          }
+        />
+      </label>
+    );
   }
+  if (node.kind === "manual_client") {
+    return <p className={className}>{copy.manualTrigger}</p>;
+  }
+  if (node.kind === "birth_data_available") {
+    return (
+      <label className={className}>
+        <span>{copy.purpose}</span>
+        <input value={copy.servicePreparation} disabled readOnly />
+      </label>
+    );
+  }
+  if (node.kind === "astrologer_work_item") {
+    return (
+      <>
+        <label className={className}>
+          <span>{copy.taskTitle}</span>
+          <input
+            value={node.config.taskTitle}
+            disabled={!editable}
+            maxLength={180}
+            onChange={(event) =>
+              onChangeNode({ ...node, config: { ...node.config, taskTitle: event.target.value } })
+            }
+          />
+        </label>
+        <label className={className}>
+          <span>{copy.instructions}</span>
+          <textarea
+            value={node.config.instructions ?? ""}
+            disabled={!editable}
+            maxLength={4000}
+            onChange={(event) => {
+              const configWithoutInstructions = { ...node.config };
+              delete configWithoutInstructions.instructions;
+              onChangeNode({
+                ...node,
+                config: event.target.value
+                  ? { ...node.config, instructions: event.target.value }
+                  : configWithoutInstructions
+              });
+            }}
+          />
+        </label>
+        <label className={className}>
+          <span>{copy.priority}</span>
+          <select
+            value={node.config.priority}
+            disabled={!editable}
+            onChange={(event) =>
+              onChangeNode({
+                ...node,
+                config: {
+                  ...node.config,
+                  priority: event.target.value as typeof node.config.priority
+                }
+              })
+            }
+          >
+            <option value="low">{copy.priorityLow}</option>
+            <option value="normal">{copy.priorityNormal}</option>
+            <option value="high">{copy.priorityHigh}</option>
+            <option value="urgent">{copy.priorityUrgent}</option>
+          </select>
+        </label>
+      </>
+    );
+  }
+  if (node.kind === "astrologer_approval") {
+    return (
+      <>
+        <label className={className}>
+          <span>{copy.approvalTitle}</span>
+          <input
+            value={node.config.approvalTitle}
+            disabled={!editable}
+            onChange={(event) =>
+              onChangeNode({
+                ...node,
+                config: { ...node.config, approvalTitle: event.target.value }
+              })
+            }
+          />
+        </label>
+        <label className={className}>
+          <span>{copy.approvalKind}</span>
+          <select
+            value={node.config.approvalKind}
+            disabled={!editable}
+            onChange={(event) =>
+              onChangeNode({
+                ...node,
+                config: {
+                  ...node.config,
+                  approvalKind: event.target.value as typeof node.config.approvalKind
+                }
+              })
+            }
+          >
+            <option value="manual_task">{copy.manualTask}</option>
+            <option value="ai_output">{copy.aiOutput}</option>
+          </select>
+        </label>
+        <label className={className}>
+          <span>{copy.expires}</span>
+          <input
+            type="number"
+            min={1}
+            max={525600}
+            value={node.config.expiresAfterMinutes ?? ""}
+            disabled={!editable}
+            onChange={(event) => {
+              const parsed = event.target.value ? Number(event.target.value) : undefined;
+              const configWithoutExpiry = { ...node.config };
+              delete configWithoutExpiry.expiresAfterMinutes;
+              onChangeNode({
+                ...node,
+                config:
+                  parsed === undefined
+                    ? configWithoutExpiry
+                    : { ...node.config, expiresAfterMinutes: parsed }
+              });
+            }}
+          />
+        </label>
+      </>
+    );
+  }
+
+  const label =
+    node.kind === "completed"
+      ? copy.goalKey
+      : node.kind === "suppressed"
+        ? copy.reasonCode
+        : copy.errorCode;
+  const value =
+    node.kind === "completed"
+      ? node.config.goalKey
+      : node.kind === "suppressed"
+        ? node.config.reasonCode
+        : node.config.errorCode;
+  return (
+    <label className={className}>
+      <span>{label}</span>
+      <input
+        value={value}
+        disabled={!editable}
+        pattern="[a-z0-9][a-z0-9_-]*"
+        onChange={(event) => {
+          const value = event.target.value;
+          if (node.kind === "completed") onChangeNode({ ...node, config: { goalKey: value } });
+          else if (node.kind === "suppressed")
+            onChangeNode({ ...node, config: { reasonCode: value } });
+          else onChangeNode({ ...node, config: { errorCode: value } });
+        }}
+      />
+    </label>
+  );
 }
 
-function formatConnectionCount(count: number, one: string, few: string, many: string): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-
-  if (mod10 === 1 && mod100 !== 11) {
-    return `${count} ${one}`;
-  }
-
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
-    return `${count} ${few}`;
-  }
-
-  return `${count} ${many}`;
+function formatConnections(incoming: number, outgoing: number, locale: "ru" | "en"): string {
+  if (locale === "en") return `${incoming} input · ${outgoing} output`;
+  return `${incoming} ${pluralRu(incoming, "вход", "входа", "входов")} · ${outgoing} ${pluralRu(
+    outgoing,
+    "выход",
+    "выхода",
+    "выходов"
+  )}`;
 }
+
+function pluralRu(value: number, one: string, few: string, many: string): string {
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+const nodeInitial = {
+  booking_confirmed: "B",
+  manual_client: "M",
+  birth_data_available: "?",
+  astrologer_work_item: "T",
+  astrologer_approval: "A",
+  completed: "✓",
+  suppressed: "S",
+  failed: "!"
+} satisfies Record<FlowNodeV2["kind"], string>;
+
+const inspectorCopy = {
+  ru: {
+    selectNode: "Выберите узел на схеме",
+    settings: "Настройки узла",
+    kind: "Тип",
+    contract: "Контракт",
+    connections: "Связи",
+    title: "Название узла",
+    productIds: "Продукты записи",
+    manualTrigger: "Ручной запуск получает выбранного астрологом клиента.",
+    purpose: "Назначение данных",
+    servicePreparation: "Подготовка услуги",
+    taskTitle: "Название задачи",
+    instructions: "Инструкции",
+    priority: "Приоритет",
+    priorityLow: "Низкий",
+    priorityNormal: "Обычный",
+    priorityHigh: "Высокий",
+    priorityUrgent: "Срочный",
+    approvalTitle: "Название решения",
+    approvalKind: "Тип решения",
+    manualTask: "Ручная проверка",
+    aiOutput: "Проверка AI-результата",
+    expires: "Срок решения, минут",
+    goalKey: "Ключ результата",
+    reasonCode: "Код причины",
+    errorCode: "Код ошибки"
+  },
+  en: {
+    selectNode: "Select a node on the graph",
+    settings: "Node settings",
+    kind: "Kind",
+    contract: "Contract",
+    connections: "Connections",
+    title: "Node title",
+    productIds: "Booking products",
+    manualTrigger: "A manual start receives a client selected by the astrologer.",
+    purpose: "Data purpose",
+    servicePreparation: "Service preparation",
+    taskTitle: "Task title",
+    instructions: "Instructions",
+    priority: "Priority",
+    priorityLow: "Low",
+    priorityNormal: "Normal",
+    priorityHigh: "High",
+    priorityUrgent: "Urgent",
+    approvalTitle: "Approval title",
+    approvalKind: "Approval kind",
+    manualTask: "Manual review",
+    aiOutput: "AI output review",
+    expires: "Decision deadline, minutes",
+    goalKey: "Goal key",
+    reasonCode: "Reason code",
+    errorCode: "Error code"
+  }
+} as const;

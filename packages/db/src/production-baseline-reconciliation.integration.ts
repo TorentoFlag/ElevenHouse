@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { promisify } from "node:util";
 import {
   calculateNumerologyCompatibility,
@@ -8,7 +9,11 @@ import {
 } from "@elevenhouse/domain";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { currentBaseline, previousBaseline } from "../scripts/production-baseline-plan";
+import {
+  currentBaseline,
+  previousBaseline,
+  previousFlowDefinitionControlBaseline
+} from "../scripts/production-baseline-plan";
 
 const execFileAsync = promisify(execFile);
 const integrationDatabaseUrl = process.env.INTEGRATION_DATABASE_URL;
@@ -148,6 +153,28 @@ describeWithDatabase("production baseline reconciliation", () => {
         booking_state_check_count: string;
         booking_source_check_count: string;
         booking_hold_expiry_check_count: string;
+        flow_definition_commands_table: string | null;
+        flow_definition_command_outcomes_table: string | null;
+        flow_definition_migrations_table: string | null;
+        published_flow_definition_state: string;
+        published_flow_revision: number;
+        published_flow_draft_base_version_id: string | null;
+        published_flow_draft_presentation: unknown | null;
+        published_flow_origin: unknown | null;
+        published_flow_graph_schema_version: string;
+        draft_flow_definition_state: string;
+        draft_flow_revision: number;
+        draft_flow_graph_schema_version: string;
+        flow_version_source_revision: number | null;
+        flow_version_graph_schema_version: string | null;
+        flow_version_embedded_schema_version: string;
+        flow_version_presentation: unknown | null;
+        flow_version_capability_manifest: unknown | null;
+        flow_lifecycle_constraint_count: string;
+        flow_source_revision_unique_count: string;
+        flow_definition_state_index_count: string;
+        canonical_publication_fk_count: string;
+        flow_integrity_trigger_count: string;
       }>(`
         SELECT
           (SELECT count(*)::text
@@ -188,7 +215,74 @@ describeWithDatabase("production baseline reconciliation", () => {
              FROM pg_constraint
             WHERE conrelid = 'bookings'::regclass
               AND conname = 'bookings_hold_expiry_check'
-              AND pg_get_constraintdef(oid) LIKE '%hold_expires_at%') AS booking_hold_expiry_check_count
+              AND pg_get_constraintdef(oid) LIKE '%hold_expires_at%') AS booking_hold_expiry_check_count,
+          to_regclass('public.flow_definition_commands')::text AS flow_definition_commands_table,
+          to_regclass('public.flow_definition_command_outcomes')::text AS flow_definition_command_outcomes_table,
+          to_regclass('public.flow_definition_migrations')::text AS flow_definition_migrations_table,
+          (SELECT definition_state FROM flows
+            WHERE id = '60000000-0000-0000-0000-000000000001') AS published_flow_definition_state,
+          (SELECT revision FROM flows
+            WHERE id = '60000000-0000-0000-0000-000000000001') AS published_flow_revision,
+          (SELECT draft_base_version_id FROM flows
+            WHERE id = '60000000-0000-0000-0000-000000000001') AS published_flow_draft_base_version_id,
+          (SELECT draft_presentation FROM flows
+            WHERE id = '60000000-0000-0000-0000-000000000001') AS published_flow_draft_presentation,
+          (SELECT origin FROM flows
+            WHERE id = '60000000-0000-0000-0000-000000000001') AS published_flow_origin,
+          (SELECT draft_graph->>'schemaVersion' FROM flows
+            WHERE id = '60000000-0000-0000-0000-000000000001') AS published_flow_graph_schema_version,
+          (SELECT definition_state FROM flows
+            WHERE id = '60000000-0000-0000-0000-000000000002') AS draft_flow_definition_state,
+          (SELECT revision FROM flows
+            WHERE id = '60000000-0000-0000-0000-000000000002') AS draft_flow_revision,
+          (SELECT draft_graph->>'schemaVersion' FROM flows
+            WHERE id = '60000000-0000-0000-0000-000000000002') AS draft_flow_graph_schema_version,
+          (SELECT source_revision FROM flow_versions
+            WHERE id = '70000000-0000-0000-0000-000000000001') AS flow_version_source_revision,
+          (SELECT graph_schema_version FROM flow_versions
+            WHERE id = '70000000-0000-0000-0000-000000000001') AS flow_version_graph_schema_version,
+          (SELECT graph->>'schemaVersion' FROM flow_versions
+            WHERE id = '70000000-0000-0000-0000-000000000001') AS flow_version_embedded_schema_version,
+          (SELECT presentation FROM flow_versions
+            WHERE id = '70000000-0000-0000-0000-000000000001') AS flow_version_presentation,
+          (SELECT capability_manifest FROM flow_versions
+            WHERE id = '70000000-0000-0000-0000-000000000001') AS flow_version_capability_manifest,
+          (SELECT count(*)::text FROM pg_constraint
+            WHERE conrelid = 'flows'::regclass
+              AND conname = 'flows_definition_lifecycle_check') AS flow_lifecycle_constraint_count,
+          (SELECT count(*)::text FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename = 'flow_versions'
+              AND indexname = 'flow_versions_flow_source_revision_unique') AS flow_source_revision_unique_count,
+          (SELECT count(*)::text FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename = 'flows'
+              AND indexname = 'flows_owner_definition_state_updated_idx') AS flow_definition_state_index_count,
+          (SELECT count(*)::text FROM pg_constraint
+            WHERE conrelid = 'flows'::regclass
+              AND conname = 'flows_published_version_owner_fk'
+              AND pg_get_constraintdef(oid) =
+                'FOREIGN KEY (id, published_version_id, owner_user_id, published_at) REFERENCES flow_versions(flow_id, id, owner_user_id, published_at) ON DELETE RESTRICT') AS canonical_publication_fk_count,
+          (SELECT count(*)::text FROM pg_trigger
+            WHERE NOT tgisinternal
+              AND tgrelid IN (
+                'flows'::regclass,
+                'flow_versions'::regclass,
+                'flow_definition_commands'::regclass,
+                'flow_definition_command_outcomes'::regclass,
+                'flow_definition_migrations'::regclass
+              )
+              AND tgname IN (
+                'flow_versions_immutable_update',
+                'flow_versions_delete_with_aggregate_only',
+                'flow_publication_pointer_consistency',
+                'flow_version_pointer_consistency',
+                'flow_definition_commands_immutable_identity',
+                'flow_definition_command_outcomes_retention',
+                'flow_definition_command_outcome_consistency',
+                'flow_definition_outcome_command_consistency',
+                'flow_definition_migrations_immutable'
+              )) AS flow_integrity_trigger_count
       `);
       expect(state.rows[0]).toEqual({
         current_baseline_count: "1",
@@ -201,61 +295,164 @@ describeWithDatabase("production baseline reconciliation", () => {
         booking_shape_column_count: "2",
         booking_state_check_count: "1",
         booking_source_check_count: "1",
-        booking_hold_expiry_check_count: "1"
+        booking_hold_expiry_check_count: "1",
+        flow_definition_commands_table: "flow_definition_commands",
+        flow_definition_command_outcomes_table: "flow_definition_command_outcomes",
+        flow_definition_migrations_table: "flow_definition_migrations",
+        published_flow_definition_state: "versioned",
+        published_flow_revision: 1,
+        published_flow_draft_base_version_id: null,
+        published_flow_draft_presentation: null,
+        published_flow_origin: null,
+        published_flow_graph_schema_version: "flow-graph.v1",
+        draft_flow_definition_state: "draft",
+        draft_flow_revision: 1,
+        draft_flow_graph_schema_version: "flow-graph.v1",
+        flow_version_source_revision: null,
+        flow_version_graph_schema_version: null,
+        flow_version_embedded_schema_version: "flow-graph.v1",
+        flow_version_presentation: null,
+        flow_version_capability_manifest: null,
+        flow_lifecycle_constraint_count: "1",
+        flow_source_revision_unique_count: "1",
+        flow_definition_state_index_count: "1",
+        canonical_publication_fk_count: "1",
+        flow_integrity_trigger_count: "9"
       });
 
       await previousClient.query(`
-        ALTER TABLE bookings DROP CONSTRAINT bookings_hold_expiry_check;
-        ALTER TABLE bookings DROP CONSTRAINT bookings_source_check;
-        ALTER TABLE bookings DROP CONSTRAINT bookings_state_check;
-        ALTER TABLE bookings DROP COLUMN hold_expires_at;
-        ALTER TABLE bookings DROP COLUMN source;
-        ALTER TABLE bookings
-          ADD CONSTRAINT bookings_state_check CHECK (state IN ('confirmed', 'cancelled'));
+        ALTER TABLE flows DROP CONSTRAINT flows_definition_lifecycle_check;
+        ALTER TABLE flows
+          ADD CONSTRAINT flows_definition_lifecycle_check CHECK (revision > 0);
+      `);
+      const driftedConstraint = await previousClient.query<{ definition: string }>(`
+        SELECT pg_get_constraintdef(oid) AS definition
+          FROM pg_constraint
+         WHERE conrelid = 'flows'::regclass
+           AND conname = 'flows_definition_lifecycle_check'
       `);
 
       const currentRun = await runReconciler(previousUrl.toString());
-      expect(currentRun, currentRun.output).toMatchObject({ exitCode: 0 });
-      expect(currentRun.output).toContain("Current production baseline is already recorded");
+      expect(currentRun.exitCode).not.toBe(0);
 
-      const reconciledBookingState = await previousClient.query<{
-        shape_column_count: string;
-        state_check_count: string;
-        source_check_count: string;
-        hold_expiry_check_count: string;
+      const driftedState = await previousClient.query<{
+        current_baseline_count: string;
+        definition: string;
       }>(`
         SELECT
           (SELECT count(*)::text
-             FROM information_schema.columns
-            WHERE table_schema = 'public'
-              AND table_name = 'bookings'
-              AND column_name IN ('source', 'hold_expires_at')) AS shape_column_count,
-          (SELECT count(*)::text
-             FROM pg_constraint
-            WHERE conrelid = 'bookings'::regclass
-              AND conname = 'bookings_state_check'
-              AND pg_get_constraintdef(oid) LIKE '%pending_payment%'
-              AND pg_get_constraintdef(oid) LIKE '%expired%') AS state_check_count,
-          (SELECT count(*)::text
-             FROM pg_constraint
-            WHERE conrelid = 'bookings'::regclass
-              AND conname = 'bookings_source_check'
-              AND pg_get_constraintdef(oid) LIKE '%client_paid%') AS source_check_count,
-          (SELECT count(*)::text
-             FROM pg_constraint
-            WHERE conrelid = 'bookings'::regclass
-              AND conname = 'bookings_hold_expiry_check'
-              AND pg_get_constraintdef(oid) LIKE '%hold_expires_at%') AS hold_expiry_check_count
+             FROM drizzle.__drizzle_migrations
+            WHERE hash = '${currentBaseline.hash}'
+              AND created_at = ${currentBaseline.createdAt}) AS current_baseline_count,
+          pg_get_constraintdef(oid) AS definition
+        FROM pg_constraint
+        WHERE conrelid = 'flows'::regclass
+          AND conname = 'flows_definition_lifecycle_check'
       `);
-      expect(reconciledBookingState.rows[0]).toEqual({
-        shape_column_count: "2",
-        state_check_count: "1",
-        source_check_count: "1",
-        hold_expiry_check_count: "1"
+      expect(driftedState.rows[0]).toEqual({
+        current_baseline_count: "1",
+        definition: driftedConstraint.rows[0]?.definition
       });
     } finally {
       await previousClient?.end();
       await adminClient.query(`DROP DATABASE IF EXISTS ${previousDatabaseName} WITH (FORCE)`);
+    }
+  }, 60_000);
+
+  it("adds the definition-state read index to the exact prior Flows control baseline", async () => {
+    const priorDatabaseName = `elevenhouse_previous_flows_${randomUUID().replaceAll("-", "")}`;
+    const priorUrl = new URL(integrationDatabaseUrl!);
+    priorUrl.pathname = `/${priorDatabaseName}`;
+    let priorClient: Client | undefined;
+
+    try {
+      await adminClient.query(`CREATE DATABASE ${priorDatabaseName}`);
+      priorClient = new Client({ connectionString: priorUrl.toString() });
+      await priorClient.connect();
+      await priorClient.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+      await priorClient.query("DROP INDEX flows_owner_definition_state_updated_idx");
+      await priorClient.query(`
+        CREATE SCHEMA drizzle;
+        CREATE TABLE drizzle.__drizzle_migrations (
+          id serial PRIMARY KEY,
+          hash text NOT NULL,
+          created_at bigint
+        );
+        INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+        VALUES (
+          '${previousFlowDefinitionControlBaseline.hash}',
+          ${previousFlowDefinitionControlBaseline.createdAt}
+        );
+      `);
+
+      const run = await runReconciler(priorUrl.toString());
+      expect(run, run.output).toMatchObject({ exitCode: 0 });
+      expect(run.output).toContain("Previous Flows control baseline reconciled");
+
+      const state = await priorClient.query<{
+        current_baseline_count: string;
+        previous_baseline_count: string;
+        definition_state_index_count: string;
+      }>(`
+        SELECT
+          (SELECT count(*)::text FROM drizzle.__drizzle_migrations
+            WHERE hash = '${currentBaseline.hash}'
+              AND created_at = ${currentBaseline.createdAt}) AS current_baseline_count,
+          (SELECT count(*)::text FROM drizzle.__drizzle_migrations
+            WHERE hash = '${previousFlowDefinitionControlBaseline.hash}'
+              AND created_at = ${previousFlowDefinitionControlBaseline.createdAt}) AS previous_baseline_count,
+          (SELECT count(*)::text FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename = 'flows'
+              AND indexname = 'flows_owner_definition_state_updated_idx') AS definition_state_index_count
+      `);
+      expect(state.rows[0]).toEqual({
+        current_baseline_count: "1",
+        previous_baseline_count: "1",
+        definition_state_index_count: "1"
+      });
+
+      const secondRun = await runReconciler(priorUrl.toString());
+      expect(secondRun.exitCode).toBe(0);
+      expect(secondRun.output).toContain("Current production baseline is already recorded");
+    } finally {
+      await priorClient?.end();
+      await adminClient.query(`DROP DATABASE IF EXISTS ${priorDatabaseName} WITH (FORCE)`);
+    }
+  }, 60_000);
+
+  it("rejects a predecessor with a misleading same-name publication constraint", async () => {
+    const databaseName = `elevenhouse_wrong_flows_${randomUUID().replaceAll("-", "")}`;
+    const databaseUrl = new URL(integrationDatabaseUrl!);
+    databaseUrl.pathname = `/${databaseName}`;
+    let databaseClient: Client | undefined;
+
+    try {
+      await adminClient.query(`CREATE DATABASE ${databaseName}`);
+      databaseClient = new Client({ connectionString: databaseUrl.toString() });
+      await databaseClient.connect();
+      await databaseClient.query(previousProductionFixtureSql());
+      await databaseClient.query(`
+        ALTER TABLE flows DROP CONSTRAINT flows_published_version_owner_fk;
+        ALTER TABLE flows
+          ADD CONSTRAINT flows_published_version_owner_fk
+          FOREIGN KEY (id, published_version_id, owner_user_id)
+          REFERENCES flow_versions(flow_id, id, owner_user_id) ON DELETE CASCADE;
+      `);
+
+      const run = await runReconciler(databaseUrl.toString());
+      expect(run.exitCode).not.toBe(0);
+
+      const ledger = await databaseClient.query<{ current_baseline_count: string }>(`
+        SELECT count(*)::text AS current_baseline_count
+          FROM drizzle.__drizzle_migrations
+         WHERE hash = '${currentBaseline.hash}'
+           AND created_at = ${currentBaseline.createdAt}
+      `);
+      expect(ledger.rows[0]?.current_baseline_count).toBe("0");
+    } finally {
+      await databaseClient?.end();
+      await adminClient.query(`DROP DATABASE IF EXISTS ${databaseName} WITH (FORCE)`);
     }
   }, 30_000);
 
@@ -637,6 +834,51 @@ function previousProductionFixtureSql(): string {
     );
     CREATE TABLE matrix_notes (id uuid PRIMARY KEY);
     CREATE TABLE matrix_report_drafts (id uuid PRIMARY KEY);
+    CREATE TABLE flows (
+      id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      owner_user_id uuid NOT NULL,
+      name text NOT NULL,
+      status text DEFAULT 'draft' NOT NULL,
+      approval_mode text DEFAULT 'manual_approve' NOT NULL,
+      draft_graph jsonb NOT NULL,
+      published_version_id uuid,
+      created_at timestamptz DEFAULT now() NOT NULL,
+      updated_at timestamptz DEFAULT now() NOT NULL,
+      published_at timestamptz,
+      CONSTRAINT flows_id_owner_unique UNIQUE (id, owner_user_id),
+      CONSTRAINT flows_name_length_check CHECK (length(trim(name)) BETWEEN 1 AND 180),
+      CONSTRAINT flows_status_check CHECK (status IN ('draft', 'published', 'active', 'paused', 'archived')),
+      CONSTRAINT flows_approval_mode_check CHECK (approval_mode IN ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
+      CONSTRAINT flows_draft_graph_object_check CHECK (jsonb_typeof(draft_graph) = 'object'),
+      CONSTRAINT flows_owner_user_id_users_id_fk
+        FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE TABLE flow_versions (
+      id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      flow_id uuid NOT NULL,
+      owner_user_id uuid NOT NULL,
+      version integer NOT NULL,
+      approval_mode text NOT NULL,
+      graph jsonb NOT NULL,
+      published_at timestamptz NOT NULL,
+      CONSTRAINT flow_versions_id_owner_unique UNIQUE (id, owner_user_id),
+      CONSTRAINT flow_versions_flow_id_id_owner_unique UNIQUE (flow_id, id, owner_user_id),
+      CONSTRAINT flow_versions_positive_version_check CHECK (version > 0),
+      CONSTRAINT flow_versions_approval_mode_check CHECK (approval_mode IN ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
+      CONSTRAINT flow_versions_graph_object_check CHECK (jsonb_typeof(graph) = 'object'),
+      CONSTRAINT flow_versions_owner_user_id_users_id_fk
+        FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      CONSTRAINT flow_versions_flow_owner_fk FOREIGN KEY (flow_id, owner_user_id)
+        REFERENCES flows(id, owner_user_id) ON DELETE CASCADE
+    );
+    ALTER TABLE flows
+      ADD CONSTRAINT flows_published_version_owner_fk
+      FOREIGN KEY (id, published_version_id, owner_user_id)
+      REFERENCES flow_versions(flow_id, id, owner_user_id) ON DELETE RESTRICT;
+    CREATE INDEX flows_owner_status_updated_idx ON flows (owner_user_id, status, updated_at);
+    CREATE INDEX flows_owner_name_idx ON flows (owner_user_id, name);
+    CREATE INDEX flow_versions_owner_published_idx ON flow_versions (owner_user_id, published_at);
+    CREATE UNIQUE INDEX flow_versions_flow_version_unique ON flow_versions (flow_id, version);
 
     INSERT INTO users (id) VALUES ('00000000-0000-0000-0000-000000000001');
     INSERT INTO client_birth_data (
@@ -655,5 +897,45 @@ function previousProductionFixtureSql(): string {
       '00000000-0000-0000-0000-000000000001',
       'Persisted product'
     );
+    INSERT INTO flows (
+      id, owner_user_id, name, status, approval_mode, draft_graph,
+      created_at, updated_at, published_at
+    ) VALUES
+    (
+      '60000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000001',
+      'Persisted published flow',
+      'active',
+      'manual_approve',
+      '{"nodes": [], "edges": []}',
+      '2026-07-28T10:00:00.000Z',
+      '2026-07-28T11:00:00.000Z',
+      '2026-07-28T11:00:00.000Z'
+    ),
+    (
+      '60000000-0000-0000-0000-000000000002',
+      '00000000-0000-0000-0000-000000000001',
+      'Persisted draft flow',
+      'draft',
+      'manual_approve',
+      '{"nodes": [], "edges": []}',
+      '2026-07-28T12:00:00.000Z',
+      '2026-07-28T12:00:00.000Z',
+      NULL
+    );
+    INSERT INTO flow_versions (
+      id, flow_id, owner_user_id, version, approval_mode, graph, published_at
+    ) VALUES (
+      '70000000-0000-0000-0000-000000000001',
+      '60000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000001',
+      1,
+      'manual_approve',
+      '{"nodes": [], "edges": []}',
+      '2026-07-28T11:00:00.000Z'
+    );
+    UPDATE flows
+       SET published_version_id = '70000000-0000-0000-0000-000000000001'
+     WHERE id = '60000000-0000-0000-0000-000000000001';
   `;
 }

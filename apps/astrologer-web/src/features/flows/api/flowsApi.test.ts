@@ -1,4 +1,9 @@
 import {
+  type CreateFlowDefinitionV2Request,
+  type FlowDefinitionDetailV2,
+  type FlowDefinitionSummaryV2,
+  type FlowDefinitionTemplateDescriptorV2,
+  type FlowDefinitionV2,
   flowGraphV2Schema,
   type CreateFlowRequest,
   type FlowResponse,
@@ -6,13 +11,13 @@ import {
   type FlowRuntimeAvailability,
   type FlowApproval,
   type FlowGraphV2,
-  type FlowTemplate,
   type ListFlowApprovalsResponse,
+  type ListFlowDefinitionTemplatesV2Response,
+  type ListFlowDefinitionsV2Response,
   type ListFlowRunsResponse,
-  type ListFlowTemplatesResponse,
-  type ListFlowsResponse,
   type ManualFlowRunResponse,
-  type PublishFlowResponse,
+  type MigrateFlowDefinitionV2Response,
+  type PublishFlowDefinitionV2Response,
   type ValidateFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -21,10 +26,13 @@ import { activateFlow } from "./activateFlow";
 import { createFlow } from "./createFlow";
 import { createManualFlowRun } from "./createManualFlowRun";
 import { decideFlowApproval } from "./decideFlowApproval";
+import { createNextFlowDraft } from "./createNextFlowDraft";
+import { getFlowDefinition } from "./getFlowDefinition";
 import { listFlowApprovals } from "./listFlowApprovals";
 import { listFlowRuns } from "./listFlowRuns";
 import { listFlowTemplates } from "./listFlowTemplates";
 import { listFlows } from "./listFlows";
+import { migrateFlowDefinition } from "./migrateFlowDefinition";
 import { pauseFlow } from "./pauseFlow";
 import { publishFlow } from "./publishFlow";
 import { simulateFlowRun } from "./simulateFlowRun";
@@ -93,6 +101,52 @@ const graphV2: FlowGraphV2 = {
   ]
 };
 
+const definitionSummary = {
+  schemaVersion: "flow-definition-summary.v2",
+  id: flowId,
+  ownerUserId,
+  name: "Подготовка консультации",
+  state: "draft",
+  runtimeStatus: "draft",
+  approvalMode: "manual_approve",
+  revision: 1,
+  draftBaseVersionId: null,
+  latestPublishedVersionId: null,
+  latestPublishedVersion: null,
+  createdAt: "2026-07-28T08:00:00.000Z",
+  updatedAt: "2026-07-28T08:00:00.000Z",
+  publishedAt: null,
+  graphSchemaVersion: "flow-graph.v2",
+  origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
+  migrationRequired: false
+} satisfies FlowDefinitionSummaryV2;
+
+const definition = {
+  schemaVersion: "flow-definition.v2",
+  id: flowId,
+  ownerUserId,
+  name: definitionSummary.name,
+  origin: definitionSummary.origin,
+  state: "draft",
+  approvalMode: "manual_approve",
+  revision: 1,
+  draftBaseVersionId: null,
+  draftGraph: graphV2,
+  draftPresentation: null,
+  latestPublishedVersionId: null,
+  latestPublishedVersion: null,
+  createdAt: definitionSummary.createdAt,
+  updatedAt: definitionSummary.updatedAt,
+  publishedAt: null
+} satisfies FlowDefinitionV2;
+
+const definitionDetail = {
+  ...definitionSummary,
+  schemaVersion: "flow-definition-detail.v2",
+  draftGraph: graphV2,
+  draftPresentation: null
+} satisfies FlowDefinitionDetailV2;
+
 const flowResponse = {
   id: flowId,
   ownerUserId,
@@ -108,14 +162,18 @@ const flowResponse = {
 } satisfies FlowResponse;
 
 const template = {
-  key: "session-prep",
-  name: "Подготовка к сессии",
-  description: "Собрать данные и подготовить AI-бриф до консультации.",
+  schemaVersion: "flow-definition-template.v2",
+  key: "manual-consultation-preparation",
+  version: 1,
+  name: "Подготовка консультации вручную",
+  description: "Создать внутреннюю задачу подготовки и завершить её вручную.",
   category: "service_delivery",
+  availability: "available",
   recommendedApprovalMode: "manual_approve",
-  requiredCapabilities: ["booking_confirmed", "request_birth_data"],
-  graph
-} satisfies FlowTemplate;
+  parameters: [],
+  requiredCapabilities: [],
+  blockerCode: null
+} satisfies FlowDefinitionTemplateDescriptorV2;
 
 const run = {
   id: "44444444-4444-4444-8444-444444444444",
@@ -159,88 +217,234 @@ describe("flows API", () => {
     vi.restoreAllMocks();
   });
 
-  it("loads flow templates and validates the shared response contract", async () => {
-    const response = { templates: [template] } satisfies ListFlowTemplatesResponse;
+  it("loads the localized V2 template catalog without embedding executable graphs", async () => {
+    const response = {
+      schemaVersion: "flow-definition-template-catalog.v2",
+      catalogVersion: 1,
+      locale: "ru",
+      templates: [template]
+    } satisfies ListFlowDefinitionTemplatesV2Response;
     const get = vi.spyOn(application.http, "get").mockResolvedValue(response);
 
-    await expect(listFlowTemplates()).resolves.toEqual(response);
+    await expect(listFlowTemplates("ru")).resolves.toEqual(response);
 
-    expect(get).toHaveBeenCalledWith("/flow-templates");
+    expect(get).toHaveBeenCalledWith("/flow-templates?locale=ru");
   });
 
-  it("loads flows with serialized filters through the shared response contract", async () => {
+  it("loads lightweight V2 definitions and a selected detail through shared contracts", async () => {
     const response = {
-      flows: [flowResponse],
+      schemaVersion: "flow-definition-list.v2",
+      flows: [definitionSummary],
       total: 1,
       runtime: definitionOnlyRuntime
-    } satisfies ListFlowsResponse;
-    const get = vi.spyOn(application.http, "get").mockResolvedValue(response);
+    } satisfies ListFlowDefinitionsV2Response;
+    const get = vi
+      .spyOn(application.http, "get")
+      .mockResolvedValueOnce(response)
+      .mockResolvedValueOnce(definitionDetail);
 
-    await expect(listFlows({ status: "draft", limit: 20, offset: 40 })).resolves.toEqual(response);
+    await expect(
+      listFlows({ state: "draft", runtimeStatus: "all", limit: 20, offset: 40 })
+    ).resolves.toEqual(response);
+    await expect(getFlowDefinition(flowId)).resolves.toEqual(definitionDetail);
 
-    expect(get).toHaveBeenCalledWith("/flows?status=draft&limit=20&offset=40");
+    expect(get).toHaveBeenNthCalledWith(
+      1,
+      "/flows?state=draft&runtimeStatus=all&limit=20&offset=40"
+    );
+    expect(get).toHaveBeenNthCalledWith(2, `/flows/${flowId}`);
   });
 
   it("rejects flow API responses that do not match shared contracts", async () => {
     vi.spyOn(application.http, "get").mockResolvedValue({ flows: [{ id: "not-a-uuid" }] });
 
-    await expect(listFlows({ status: "all", limit: 50, offset: 0 })).rejects.toThrow();
+    await expect(
+      listFlows({ state: "all", runtimeStatus: "all", limit: 50, offset: 0 })
+    ).rejects.toThrow();
   });
 
-  it("creates, updates and publishes flows through CSRF-protected endpoints", async () => {
+  it("creates, updates, publishes and opens the next draft with revision and idempotency", async () => {
     const createRequest = {
-      name: " Лид-магнит ",
+      schemaVersion: "flow-definition-create.v2",
+      name: " Подготовка консультации ",
+      locale: "ru",
       approvalMode: "manual_approve",
-      graph
-    } satisfies CreateFlowRequest;
+      source: {
+        type: "template",
+        templateKey: template.key,
+        templateVersion: template.version,
+        parameters: {}
+      }
+    } satisfies CreateFlowDefinitionV2Request;
+    const publishedFlow = {
+      ...definition,
+      state: "versioned",
+      revision: 2,
+      latestPublishedVersionId: "33333333-3333-4333-8333-333333333333",
+      latestPublishedVersion: 1,
+      updatedAt: "2026-07-28T08:10:00.000Z",
+      publishedAt: "2026-07-28T08:10:00.000Z"
+    } satisfies FlowDefinitionV2;
     const publishResponse = {
-      flow: { ...flowResponse, status: "published", publishedVersion: 1 },
+      flow: publishedFlow,
       version: {
+        schemaVersion: "flow-published-version.v2",
         id: "33333333-3333-4333-8333-333333333333",
         flowId,
         version: 1,
+        sourceRevision: 1,
         status: "published",
         approvalMode: "manual_approve",
-        graph,
+        graph: graphV2,
+        presentation: null,
+        capabilityManifest: {
+          schemaVersion: "flow-capability-manifest.v1",
+          executionSemanticsVersion: "flow-interpreter.v1",
+          nodeExecutors: [
+            { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 },
+            { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
+          ],
+          requiredCapabilities: []
+        },
         publishedAt: "2026-07-28T08:10:00.000Z"
       }
-    } satisfies PublishFlowResponse;
+    } satisfies PublishFlowDefinitionV2Response;
+    const nextDraft = {
+      ...publishedFlow,
+      state: "draft",
+      revision: 3,
+      draftBaseVersionId: publishedFlow.latestPublishedVersionId,
+      updatedAt: "2026-07-28T08:11:00.000Z"
+    } satisfies FlowDefinitionV2;
     const post = vi
       .spyOn(application.http, "post")
-      .mockResolvedValueOnce(flowResponse)
-      .mockResolvedValueOnce(publishResponse);
+      .mockResolvedValueOnce(definition)
+      .mockResolvedValueOnce(publishResponse)
+      .mockResolvedValueOnce(nextDraft);
     const patch = vi.spyOn(application.http, "patch").mockResolvedValue({
-      ...flowResponse,
-      name: "Лид-магнит 2"
+      ...definition,
+      revision: 2,
+      name: "Подготовка консультации 2"
     });
 
-    await expect(createFlow(createRequest)).resolves.toEqual(flowResponse);
     await expect(
-      updateFlowDraft({ flowId, body: { name: " Лид-магнит 2 " } })
+      createFlow({ body: createRequest, idempotencyKey: "flow-create-1" })
+    ).resolves.toEqual(definition);
+    await expect(
+      updateFlowDraft({
+        flowId,
+        body: { expectedRevision: 1, name: " Подготовка консультации 2 " },
+        idempotencyKey: "flow-update-1"
+      })
     ).resolves.toMatchObject({
       id: flowId,
-      name: "Лид-магнит 2"
+      revision: 2,
+      name: "Подготовка консультации 2"
     });
-    await expect(publishFlow(flowId)).resolves.toEqual(publishResponse);
+    await expect(
+      publishFlow({
+        flowId,
+        body: { expectedRevision: 1 },
+        idempotencyKey: "flow-publish-1"
+      })
+    ).resolves.toEqual(publishResponse);
+    await expect(
+      createNextFlowDraft({
+        flowId,
+        body: {
+          expectedRevision: 2,
+          baseVersionId: publishedFlow.latestPublishedVersionId
+        },
+        idempotencyKey: "flow-next-draft-1"
+      })
+    ).resolves.toEqual(nextDraft);
 
     expect(post).toHaveBeenNthCalledWith(
       1,
       "/flows",
-      { ...createRequest, name: "Лид-магнит" },
+      { ...createRequest, name: "Подготовка консультации" },
       {
-        csrf: true
+        csrf: true,
+        headers: { "idempotency-key": "flow-create-1" }
       }
     );
     expect(patch).toHaveBeenCalledWith(
       `/flows/${flowId}/draft`,
-      { name: "Лид-магнит 2" },
+      { expectedRevision: 1, name: "Подготовка консультации 2" },
       {
-        csrf: true
+        csrf: true,
+        headers: { "idempotency-key": "flow-update-1" }
       }
     );
-    expect(post).toHaveBeenNthCalledWith(2, `/flows/${flowId}/publish`, undefined, {
-      csrf: true
-    });
+    expect(post).toHaveBeenNthCalledWith(
+      2,
+      `/flows/${flowId}/publish`,
+      { expectedRevision: 1 },
+      {
+        csrf: true,
+        headers: { "idempotency-key": "flow-publish-1" }
+      }
+    );
+    expect(post).toHaveBeenNthCalledWith(
+      3,
+      `/flows/${flowId}/next-draft`,
+      { expectedRevision: 2, baseVersionId: publishedFlow.latestPublishedVersionId },
+      {
+        csrf: true,
+        headers: { "idempotency-key": "flow-next-draft-1" }
+      }
+    );
+  });
+
+  it("migrates a legacy definition explicitly and validates migration evidence", async () => {
+    const migrated = {
+      flow: {
+        ...definition,
+        revision: 2,
+        origin: {
+          schemaVersion: "flow-definition-origin.v1",
+          type: "migration",
+          sourceGraphSchemaVersion: "flow-graph.v1",
+          sourceVersionId: null
+        },
+        updatedAt: "2026-07-28T08:12:00.000Z"
+      },
+      migration: {
+        schemaVersion: "flow-definition-migration.v1",
+        sourceGraphSchemaVersion: "flow-graph.v1",
+        targetGraphSchemaVersion: "flow-graph.v2",
+        sourceVersionId: null,
+        sourceRevision: 1,
+        sourceGraphHash: `sha256:${"a".repeat(64)}`,
+        migratedAt: "2026-07-28T08:12:00.000Z"
+      }
+    } satisfies MigrateFlowDefinitionV2Response;
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(migrated);
+
+    await expect(
+      migrateFlowDefinition({
+        flowId,
+        body: {
+          schemaVersion: "flow-definition-migrate.v2",
+          expectedRevision: 1,
+          targetGraphSchemaVersion: "flow-graph.v2"
+        },
+        idempotencyKey: "flow-migrate-1"
+      })
+    ).resolves.toEqual(migrated);
+
+    expect(post).toHaveBeenCalledWith(
+      `/flows/${flowId}/migrations/v2`,
+      {
+        schemaVersion: "flow-definition-migrate.v2",
+        expectedRevision: 1,
+        targetGraphSchemaVersion: "flow-graph.v2"
+      },
+      {
+        csrf: true,
+        headers: { "idempotency-key": "flow-migrate-1" }
+      }
+    );
   });
 
   it("validates a v2 definition through the shared fail-closed contract", async () => {

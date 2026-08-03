@@ -3,16 +3,26 @@ import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
 import {
+  flowDefinitionDetailV2Schema,
+  flowDefinitionSummaryV2Schema,
+  flowDefinitionV2Schema,
   flowResponseSchema,
   listFlowApprovalsResponseSchema,
-  listFlowTemplatesResponseSchema,
-  listFlowsResponseSchema,
+  listFlowDefinitionTemplatesV2ResponseSchema,
+  listFlowDefinitionsV2ResponseSchema,
   listFlowRunsResponseSchema,
-  publishFlowResponseSchema,
+  migrateFlowDefinitionV2ResponseSchema,
+  publishFlowDefinitionV2ResponseSchema,
   validateFlowDefinitionResponseSchema,
   type FlowApproval,
+  type FlowDefinitionDetailV2,
+  type FlowDefinitionCommandRejectionResponse,
+  type FlowDefinitionSummaryV2,
+  type FlowDefinitionV2,
   type FlowGraph,
   type FlowGraphV2,
+  type FlowPresentationV1,
+  type FlowPublishedVersionV2,
   type FlowRuntimeEvent,
   type FlowRunResponse,
   type FlowStepRunResponse
@@ -20,6 +30,10 @@ import {
 import type {
   AuthSessionAuthenticationStore,
   AuthSessionRevocationUnitOfWork,
+  FlowDefinitionControlRecord,
+  FlowDefinitionControlStore,
+  FlowDefinitionPublishedVersionRecord,
+  FlowDefinitionQueryStore,
   FlowRecord,
   FlowRuntimeStore,
   FlowStore,
@@ -45,7 +59,12 @@ import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordle
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { FlowsModule } from "./flows.module";
-import { FLOW_RUNTIME_STORE, FLOW_STORE } from "./flows.tokens";
+import {
+  FLOW_DEFINITION_CONTROL_STORE,
+  FLOW_DEFINITION_QUERY_STORE,
+  FLOW_RUNTIME_STORE,
+  FLOW_STORE
+} from "./flows.tokens";
 
 const now = new Date("2026-07-27T06:00:00.000Z");
 const sessionCookieName = "elevenhouse_astrologer_session";
@@ -58,6 +77,11 @@ const runtimeFlowId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c111";
 const runtimeVersionId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c112";
 const foreignFlowId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c119";
 const foreignOwnerUserId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c120";
+const activationFlowId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c121";
+const migratableFlowId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c122";
+const createdFlowId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c123";
+const createdVersionId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c124";
+const activationVersionId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c125";
 const legacyApprovalId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c113";
 const legacyRunId = "12d75c8b-d7b9-4f3d-b6fd-42d0c333c114";
 let currentCsrfToken = "";
@@ -74,10 +98,15 @@ describe("flows HTTP routes", () => {
   let moduleRef: TestingModule;
   let baseUrl: string;
   let flowStore: FlowStore;
+  let definitionControlStore: FlowDefinitionControlStore;
+  let definitionQueryStore: FlowDefinitionQueryStore;
   let runtimeStore: FlowRuntimeStore;
 
   beforeEach(async () => {
     flowStore = createFlowStore();
+    const definitionStores = createFlowDefinitionStores();
+    definitionControlStore = definitionStores.controlStore;
+    definitionQueryStore = definitionStores.queryStore;
     runtimeStore = createRuntimeStore();
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async () => raise("Unexpected passwordless auth unit of work call")
@@ -128,6 +157,10 @@ describe("flows HTTP routes", () => {
       })
       .overrideProvider(FLOW_STORE)
       .useValue(flowStore)
+      .overrideProvider(FLOW_DEFINITION_CONTROL_STORE)
+      .useValue(definitionControlStore)
+      .overrideProvider(FLOW_DEFINITION_QUERY_STORE)
+      .useValue(definitionQueryStore)
       .overrideProvider(FLOW_RUNTIME_STORE)
       .useValue(runtimeStore)
       .compile();
@@ -150,72 +183,136 @@ describe("flows HTTP routes", () => {
 
   it("requires authentication for flow templates and returns the built-in catalog", async () => {
     const unauthenticatedResponse = await fetch(`${baseUrl}/flow-templates`);
-    const authenticatedResponse = await getJson("/flow-templates");
+    const authenticatedResponse = await getJson("/flow-templates?locale=en");
 
     expect(unauthenticatedResponse.status).toBe(401);
     expect(authenticatedResponse.status).toBe(200);
-    listFlowTemplatesResponseSchema.parse(authenticatedResponse.body);
+    listFlowDefinitionTemplatesV2ResponseSchema.parse(authenticatedResponse.body);
+    expect(authenticatedResponse.body).toMatchObject({
+      schemaVersion: "flow-definition-template-catalog.v2",
+      locale: "en"
+    });
     expect(authenticatedResponse.body.templates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           key: "session-prep",
-          graph: expect.objectContaining({ schemaVersion: "flow-graph.v1" })
+          availability: "legacy_read_only"
         })
       ])
     );
+    expect(
+      (authenticatedResponse.body.templates as Array<Record<string, unknown>>).every(
+        (template) => !("graph" in template)
+      )
+    ).toBe(true);
   });
 
-  it("creates, lists, updates and publishes flows with CSRF protection", async () => {
+  it("creates, reads, updates, publishes and versions V2 definitions with route protection", async () => {
     const missingCsrf = await postJson("/flows", validCreateBody(), {
-      cookie: sessionCookieHeader()
+      cookie: sessionCookieHeader(),
+      "idempotency-key": "flow-create-missing-csrf"
     });
-    const createResponse = await postJson("/flows", validCreateBody(), csrfHeaders());
+    const missingIdempotency = await postJson("/flows", validCreateBody(), csrfHeaders());
+    const createResponse = await postJson(
+      "/flows",
+      validCreateBody(),
+      idempotencyHeaders("flow-create-http-1")
+    );
     const flowId = String(createResponse.body.id);
-    const listResponse = await getJson("/flows?status=draft&limit=10&offset=0");
+    const listResponse = await getJson("/flows?state=draft&runtimeStatus=draft&limit=10&offset=0");
+    const getResponse = await getJson(`/flows/${flowId}`);
     const updateResponse = await patchJson(
       `/flows/${flowId}/draft`,
-      { name: "После покупки" },
-      csrfHeaders()
+      {
+        expectedRevision: 1,
+        name: "После покупки",
+        graph: validGraphV2(),
+        presentation: validPresentationV1()
+      },
+      idempotencyHeaders("flow-update-http-1")
     );
-    const invalidUpdateResponse = await patchJson(`/flows/${flowId}/draft`, {}, csrfHeaders());
-    const publishResponse = await postJson(`/flows/${flowId}/publish`, {}, csrfHeaders());
+    const invalidUpdateResponse = await patchJson(
+      `/flows/${flowId}/draft`,
+      {},
+      idempotencyHeaders("flow-update-http-invalid")
+    );
+    const publishResponse = await postJson(
+      `/flows/${flowId}/publish`,
+      { expectedRevision: 2 },
+      idempotencyHeaders("flow-publish-http-1")
+    );
+    const nextDraftResponse = await postJson(
+      `/flows/${flowId}/next-draft`,
+      {
+        expectedRevision: 3,
+        baseVersionId: (publishResponse.body.version as Record<string, unknown>).id
+      },
+      idempotencyHeaders("flow-next-draft-http-1")
+    );
     const missingActivateCsrf = await postJson(
-      `/flows/${flowId}/activate`,
+      `/flows/${activationFlowId}/activate`,
       {},
       {
         cookie: sessionCookieHeader()
       }
     );
-    const activateResponse = await postJson(`/flows/${flowId}/activate`, {}, csrfHeaders());
+    const activateResponse = await postJson(
+      `/flows/${activationFlowId}/activate`,
+      {},
+      csrfHeaders()
+    );
     const pauseResponse = await postJson(`/flows/${runtimeFlowId}/pause`, {}, csrfHeaders());
 
     expect(missingCsrf.status).toBe(403);
+    expect(missingIdempotency.status).toBe(400);
     expect(createResponse.status).toBe(201);
-    flowResponseSchema.parse(createResponse.body);
+    flowDefinitionV2Schema.parse(createResponse.body);
     expect(createResponse.body).toMatchObject({
+      id: createdFlowId,
       ownerUserId,
       name: "Welcome flow",
-      status: "draft"
+      state: "draft",
+      revision: 1,
+      origin: { type: "blank" }
     });
     expect(listResponse.status).toBe(200);
-    listFlowsResponseSchema.parse(listResponse.body);
-    expect(listResponse.body).toMatchObject({ total: 1 });
+    listFlowDefinitionsV2ResponseSchema.parse(listResponse.body);
+    expect(listResponse.body.flows).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: createdFlowId })])
+    );
+    expect(getResponse.status).toBe(200);
+    flowDefinitionDetailV2Schema.parse(getResponse.body);
+    expect(getResponse.body).toMatchObject({ id: createdFlowId, migrationRequired: false });
     expect(updateResponse.status).toBe(200);
-    expect(updateResponse.body).toMatchObject({ id: flowId, name: "После покупки" });
+    expect(updateResponse.body).toMatchObject({
+      id: flowId,
+      name: "После покупки",
+      revision: 2
+    });
     expect(invalidUpdateResponse.status).toBe(400);
     expect(publishResponse.status).toBe(200);
-    publishFlowResponseSchema.parse(publishResponse.body);
+    publishFlowDefinitionV2ResponseSchema.parse(publishResponse.body);
     expect(publishResponse.body).toMatchObject({
       flow: {
         id: flowId,
-        status: "published",
-        publishedVersion: 1
+        state: "versioned",
+        revision: 3,
+        latestPublishedVersion: 1
       },
       version: {
         flowId,
         version: 1,
+        sourceRevision: 2,
         status: "published"
       }
+    });
+    expect(nextDraftResponse.status).toBe(200);
+    flowDefinitionV2Schema.parse(nextDraftResponse.body);
+    expect(nextDraftResponse.body).toMatchObject({
+      id: flowId,
+      state: "draft",
+      revision: 4,
+      draftBaseVersionId: createdVersionId
     });
     expect(missingActivateCsrf.status).toBe(403);
     expect(activateResponse.status).toBe(409);
@@ -223,6 +320,47 @@ describe("flows HTTP routes", () => {
     expect(pauseResponse.status).toBe(200);
     flowResponseSchema.parse(pauseResponse.body);
     expect(pauseResponse.body).toMatchObject({ id: runtimeFlowId, status: "paused" });
+    expect(flowStore.createDraft).not.toHaveBeenCalled();
+    expect(flowStore.listByOwner).not.toHaveBeenCalled();
+    expect(flowStore.updateDraft).not.toHaveBeenCalled();
+    expect(flowStore.publishDraft).not.toHaveBeenCalled();
+  });
+
+  it("migrates an owner-scoped legacy definition explicitly and exposes migration evidence", async () => {
+    const missingIdempotency = await postJson(
+      `/flows/${migratableFlowId}/migrations/v2`,
+      validMigrationBody(),
+      csrfHeaders()
+    );
+    const migrationResponse = await postJson(
+      `/flows/${migratableFlowId}/migrations/v2`,
+      validMigrationBody(),
+      idempotencyHeaders("flow-migrate-http-1")
+    );
+    const detailResponse = await getJson(`/flows/${migratableFlowId}`);
+
+    expect(missingIdempotency.status).toBe(400);
+    expect(migrationResponse.status).toBe(200);
+    migrateFlowDefinitionV2ResponseSchema.parse(migrationResponse.body);
+    expect(migrationResponse.body).toMatchObject({
+      flow: {
+        id: migratableFlowId,
+        state: "draft",
+        revision: 2,
+        origin: { type: "migration", sourceGraphSchemaVersion: "flow-graph.v1" }
+      },
+      migration: {
+        sourceRevision: 1,
+        sourceGraphSchemaVersion: "flow-graph.v1",
+        targetGraphSchemaVersion: "flow-graph.v2"
+      }
+    });
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body).toMatchObject({
+      id: migratableFlowId,
+      graphSchemaVersion: "flow-graph.v2",
+      migrationRequired: false
+    });
   });
 
   it("validates owner-scoped definitions without writes or activation claims", async () => {
@@ -263,7 +401,7 @@ describe("flows HTTP routes", () => {
       csrfHeaders()
     );
     const unknown = await postJson(
-      "/flows/12d75c8b-d7b9-4f3d-b6fd-42d0c333c121/validate",
+      "/flows/12d75c8b-d7b9-4f3d-b6fd-42d0c333c129/validate",
       { graph: v2Graph },
       csrfHeaders()
     );
@@ -441,6 +579,10 @@ function csrfHeaders(): Record<string, string> {
   };
 }
 
+function idempotencyHeaders(key: string): Record<string, string> {
+  return { ...csrfHeaders(), "idempotency-key": key };
+}
+
 function createAuthStore(): AuthSessionAuthenticationStore {
   const tokenHash = hashSessionToken(sessionToken);
 
@@ -476,6 +618,293 @@ function createAuthStore(): AuthSessionAuthenticationStore {
   };
 }
 
+function createFlowDefinitionStores(): {
+  readonly controlStore: FlowDefinitionControlStore;
+  readonly queryStore: FlowDefinitionQueryStore;
+} {
+  const definitions: FlowDefinitionControlRecord[] = [
+    legacyVersionedDefinition(runtimeFlowId, "Runtime flow", runtimeVersionId),
+    legacyVersionedDefinition(activationFlowId, "Activation flow", activationVersionId),
+    {
+      id: migratableFlowId,
+      ownerUserId,
+      name: "Legacy manual draft",
+      origin: null,
+      state: "draft",
+      approvalMode: "manual_approve",
+      revision: 1,
+      draftBaseVersionId: null,
+      draftGraph: migratableGraph(),
+      draftPresentation: null,
+      latestPublishedVersionId: null,
+      latestPublishedVersion: null,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      publishedAt: null
+    },
+    {
+      id: foreignFlowId,
+      ownerUserId: foreignOwnerUserId,
+      name: "Foreign flow",
+      origin: null,
+      state: "draft",
+      approvalMode: "manual_approve",
+      revision: 1,
+      draftBaseVersionId: null,
+      draftGraph: validGraph(),
+      draftPresentation: null,
+      latestPublishedVersionId: null,
+      latestPublishedVersion: null,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      publishedAt: null
+    }
+  ];
+  const publishedVersions: FlowDefinitionPublishedVersionRecord[] = [
+    legacyPublishedVersion(runtimeFlowId, runtimeVersionId),
+    legacyPublishedVersion(activationFlowId, activationVersionId)
+  ];
+  const runtimeStatuses = new Map<string, FlowDefinitionSummaryV2["runtimeStatus"]>([
+    [runtimeFlowId, "active"],
+    [activationFlowId, "published"],
+    [migratableFlowId, "draft"],
+    [foreignFlowId, "draft"]
+  ]);
+
+  const findOwnedDefinition = (ownerId: string, flowId: string) =>
+    definitions.find(
+      (definition) => definition.ownerUserId === ownerId && definition.id === flowId
+    ) ?? null;
+  const replaceDefinition = (definition: FlowDefinitionV2) => {
+    const index = definitions.findIndex((candidate) => candidate.id === definition.id);
+    if (index === -1) raise("Expected V2 definition to exist before replacement");
+    definitions[index] = toControlRecord(definition);
+  };
+  const findLatestVersion = (definition: FlowDefinitionControlRecord) =>
+    definition.latestPublishedVersionId
+      ? (publishedVersions.find(
+          (version) =>
+            version.flowId === definition.id && version.id === definition.latestPublishedVersionId
+        ) ?? null)
+      : null;
+
+  const controlStore: FlowDefinitionControlStore = {
+    executeCreate: vi.fn(async ({ command, prepare }) => {
+      const prepared = prepare();
+      if (prepared.kind === "rejected") return rejectedCommand(prepared.response);
+      const flow = flowDefinitionV2Schema.parse({
+        schemaVersion: "flow-definition.v2",
+        id: createdFlowId,
+        ownerUserId: command.ownerUserId,
+        name: prepared.value.name,
+        origin: prepared.value.origin,
+        state: "draft",
+        approvalMode: prepared.value.approvalMode,
+        revision: 1,
+        draftBaseVersionId: null,
+        draftGraph: prepared.value.graph,
+        draftPresentation: prepared.value.presentation,
+        latestPublishedVersionId: null,
+        latestPublishedVersion: null,
+        createdAt: command.now,
+        updatedAt: command.now,
+        publishedAt: null
+      });
+      definitions.unshift(toControlRecord(flow));
+      runtimeStatuses.set(flow.id, "draft");
+      return succeededCommand(201, flow);
+    }),
+    executeDraftUpdate: vi.fn(async ({ command, prepare }) => {
+      const current = findOwnedDefinition(command.ownerUserId, command.resourceId);
+      if (!current) return flowDefinitionNotFoundCommand();
+      const prepared = prepare(current);
+      if (prepared.kind === "rejected") return rejectedCommand(prepared.response);
+      replaceDefinition(prepared.value);
+      return succeededCommand(200, prepared.value);
+    }),
+    executePublish: vi.fn(async ({ command, prepare }) => {
+      const current = findOwnedDefinition(command.ownerUserId, command.resourceId);
+      if (!current) return flowDefinitionNotFoundCommand();
+      const prepared = prepare(current);
+      if (prepared.kind === "rejected") return rejectedCommand(prepared.response);
+      if (!current.origin) raise("V2 publication requires a persisted origin");
+
+      const version = {
+        schemaVersion: "flow-published-version.v2",
+        id: createdVersionId,
+        flowId: current.id,
+        version: (current.latestPublishedVersion ?? 0) + 1,
+        sourceRevision: prepared.value.sourceRevision,
+        status: "published",
+        approvalMode: prepared.value.approvalMode,
+        graph: prepared.value.graph,
+        presentation: prepared.value.presentation,
+        capabilityManifest: prepared.value.capabilityManifest,
+        publishedAt: command.now
+      } satisfies FlowPublishedVersionV2;
+      const flow = flowDefinitionV2Schema.parse({
+        schemaVersion: "flow-definition.v2",
+        ...current,
+        origin: current.origin,
+        state: "versioned",
+        revision: current.revision + 1,
+        draftBaseVersionId: null,
+        draftGraph: version.graph,
+        draftPresentation: version.presentation,
+        latestPublishedVersionId: version.id,
+        latestPublishedVersion: version.version,
+        updatedAt: command.now,
+        publishedAt: command.now
+      });
+      const { schemaVersion: _schemaVersion, status: _status, ...versionRecord } = version;
+      void _schemaVersion;
+      void _status;
+      publishedVersions.push(versionRecord);
+      replaceDefinition(flow);
+      runtimeStatuses.set(flow.id, "published");
+      return succeededCommand(200, { flow, version });
+    }),
+    executeCreateNextDraft: vi.fn(async ({ command, prepare }) => {
+      const current = findOwnedDefinition(command.ownerUserId, command.resourceId);
+      if (!current) return flowDefinitionNotFoundCommand();
+      const prepared = prepare(current, findLatestVersion(current));
+      if (prepared.kind === "rejected") return rejectedCommand(prepared.response);
+      replaceDefinition(prepared.value);
+      return succeededCommand(200, prepared.value);
+    }),
+    executeMigration: vi.fn(async ({ command, prepare }) => {
+      const current = findOwnedDefinition(command.ownerUserId, command.resourceId);
+      if (!current) return flowDefinitionNotFoundCommand();
+      const prepared = prepare(current, findLatestVersion(current));
+      if (prepared.kind === "rejected") return rejectedCommand(prepared.response);
+      replaceDefinition(prepared.value.flow);
+      return succeededCommand(200, prepared.value);
+    })
+  };
+
+  const queryStore: FlowDefinitionQueryStore = {
+    listByOwner: vi.fn(async ({ ownerUserId: ownerId, query }) => {
+      const filtered = definitions
+        .filter((definition) => definition.ownerUserId === ownerId)
+        .filter((definition) => query.state === "all" || definition.state === query.state)
+        .filter(
+          (definition) =>
+            query.runtimeStatus === "all" ||
+            runtimeStatuses.get(definition.id) === query.runtimeStatus
+        )
+        .sort(
+          (left, right) =>
+            right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id)
+        );
+      return {
+        flows: filtered
+          .slice(query.offset, query.offset + query.limit)
+          .map((definition) => toDefinitionSummary(definition, runtimeStatuses)),
+        total: filtered.length
+      };
+    }),
+    getByOwner: vi.fn(async ({ ownerUserId: ownerId, flowId }) => {
+      const definition = findOwnedDefinition(ownerId, flowId);
+      return definition ? toDefinitionDetail(definition, runtimeStatuses) : null;
+    })
+  };
+
+  return { controlStore, queryStore };
+}
+
+function legacyVersionedDefinition(
+  id: string,
+  name: string,
+  publishedVersionId: string
+): FlowDefinitionControlRecord {
+  return {
+    id,
+    ownerUserId,
+    name,
+    origin: null,
+    state: "versioned",
+    approvalMode: "manual_approve",
+    revision: 1,
+    draftBaseVersionId: null,
+    draftGraph: validGraph(),
+    draftPresentation: null,
+    latestPublishedVersionId: publishedVersionId,
+    latestPublishedVersion: 1,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    publishedAt: now.toISOString()
+  };
+}
+
+function legacyPublishedVersion(flowId: string, id: string): FlowDefinitionPublishedVersionRecord {
+  return {
+    id,
+    flowId,
+    version: 1,
+    sourceRevision: null,
+    approvalMode: "manual_approve",
+    graph: validGraph(),
+    presentation: null,
+    capabilityManifest: null,
+    publishedAt: now.toISOString()
+  };
+}
+
+function toControlRecord(definition: FlowDefinitionV2): FlowDefinitionControlRecord {
+  const { schemaVersion, ...record } = definition;
+  void schemaVersion;
+  return record;
+}
+
+function toDefinitionSummary(
+  definition: FlowDefinitionControlRecord,
+  runtimeStatuses: ReadonlyMap<string, FlowDefinitionSummaryV2["runtimeStatus"]>
+): FlowDefinitionSummaryV2 {
+  const { draftGraph, draftPresentation: _draftPresentation, ...common } = definition;
+  void _draftPresentation;
+  return flowDefinitionSummaryV2Schema.parse({
+    schemaVersion: "flow-definition-summary.v2",
+    ...common,
+    runtimeStatus: runtimeStatuses.get(definition.id) ?? "draft",
+    graphSchemaVersion: draftGraph.schemaVersion,
+    migrationRequired: draftGraph.schemaVersion === "flow-graph.v1"
+  });
+}
+
+function toDefinitionDetail(
+  definition: FlowDefinitionControlRecord,
+  runtimeStatuses: ReadonlyMap<string, FlowDefinitionSummaryV2["runtimeStatus"]>
+): FlowDefinitionDetailV2 {
+  return flowDefinitionDetailV2Schema.parse({
+    schemaVersion: "flow-definition-detail.v2",
+    ...definition,
+    runtimeStatus: runtimeStatuses.get(definition.id) ?? "draft",
+    graphSchemaVersion: definition.draftGraph.schemaVersion,
+    migrationRequired: definition.draftGraph.schemaVersion === "flow-graph.v1"
+  });
+}
+
+function succeededCommand<T>(statusCode: 200 | 201, body: T) {
+  return {
+    kind: "created" as const,
+    outcome: {
+      kind: "succeeded" as const,
+      response: { statusCode, body }
+    }
+  };
+}
+
+function rejectedCommand(response: FlowDefinitionCommandRejectionResponse) {
+  return { kind: "created" as const, outcome: { kind: "rejected" as const, response } };
+}
+
+function flowDefinitionNotFoundCommand() {
+  return rejectedCommand({
+    statusCode: 404,
+    body: { code: "FLOW_DEFINITION_NOT_FOUND" }
+  });
+}
+
 function createFlowStore(): FlowStore {
   const runtimeFlow: FlowRecord = {
     ...toFlow(runtimeFlowId, {
@@ -497,11 +926,33 @@ function createFlowStore(): FlowStore {
     draftGraph: validGraph(),
     now: now.toISOString()
   });
-  const flows: FlowRecord[] = [runtimeFlow, foreignFlow];
+  const activationFlow: FlowRecord = {
+    ...toFlow(activationFlowId, {
+      ownerUserId,
+      name: "Activation flow",
+      approvalMode: "manual_approve",
+      draftGraph: validGraph(),
+      now: now.toISOString()
+    }),
+    status: "published",
+    publishedVersionId: activationVersionId,
+    publishedVersion: 1,
+    publishedAt: now.toISOString()
+  };
+  const flows: FlowRecord[] = [runtimeFlow, activationFlow, foreignFlow];
   const versions: Array<Awaited<ReturnType<FlowStore["findPublishedVersionByFlowId"]>>> = [
     {
       id: runtimeVersionId,
       flowId: runtimeFlowId,
+      version: 1,
+      status: "published" as const,
+      approvalMode: "manual_approve" as const,
+      graph: validGraph(),
+      publishedAt: now.toISOString()
+    },
+    {
+      id: activationVersionId,
+      flowId: activationFlowId,
       version: 1,
       status: "published" as const,
       approvalMode: "manual_approve" as const,
@@ -883,10 +1334,20 @@ function nextFlowId(index: number): string {
     : "a47d6537-720b-47e4-a1ef-ed7ba82bb2f0";
 }
 
-function validCreateBody(): { readonly name: string; readonly graph: FlowGraph } {
+function validCreateBody() {
   return {
+    schemaVersion: "flow-definition-create.v2",
     name: "Welcome flow",
-    graph: validGraph()
+    locale: "ru",
+    source: { type: "blank" }
+  };
+}
+
+function validMigrationBody() {
+  return {
+    schemaVersion: "flow-definition-migrate.v2",
+    expectedRevision: 1,
+    targetGraphSchemaVersion: "flow-graph.v2"
   };
 }
 
@@ -925,6 +1386,23 @@ function validGraph(): FlowGraph {
   };
 }
 
+function migratableGraph(): FlowGraph {
+  return {
+    schemaVersion: "flow-graph.v1",
+    nodes: [
+      {
+        id: "manual",
+        category: "trigger",
+        kind: "manual",
+        title: "Клиент выбран вручную",
+        position: { x: 80, y: 120 },
+        config: {}
+      }
+    ],
+    edges: []
+  };
+}
+
 function validGraphV2(): FlowGraphV2 {
   return {
     schemaVersion: "flow-graph.v2",
@@ -954,6 +1432,17 @@ function validGraphV2(): FlowGraphV2 {
         sourceHandle: "next"
       }
     ]
+  };
+}
+
+function validPresentationV1(): FlowPresentationV1 {
+  return {
+    schemaVersion: "flow-presentation.v1",
+    nodes: [
+      { nodeId: "manual", position: { x: 80, y: 120 } },
+      { nodeId: "completed", position: { x: 400, y: 120 } }
+    ],
+    viewport: { x: 0, y: 0, zoom: 1 }
   };
 }
 

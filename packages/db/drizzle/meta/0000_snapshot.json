@@ -1,5 +1,5 @@
 {
-  "id": "e7e25ffc-9ef9-4791-9d76-aa6753f02fc5",
+  "id": "4daa9e61-dece-4c8a-ba29-58aebd0e0ec1",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -6682,6 +6682,233 @@
       },
       "isRLSEnabled": false
     },
+    "public.flow_versions": {
+      "name": "flow_versions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "flow_id": {
+          "name": "flow_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_revision": {
+          "name": "source_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approval_mode": {
+          "name": "approval_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "graph_schema_version": {
+          "name": "graph_schema_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "graph": {
+          "name": "graph",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "presentation": {
+          "name": "presentation",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "capability_manifest": {
+          "name": "capability_manifest",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "flow_versions_owner_published_idx": {
+          "name": "flow_versions_owner_published_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "published_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_versions_flow_version_unique": {
+          "name": "flow_versions_flow_version_unique",
+          "columns": [
+            {
+              "expression": "flow_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_versions_flow_source_revision_unique": {
+          "name": "flow_versions_flow_source_revision_unique",
+          "columns": [
+            {
+              "expression": "flow_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_revision",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"flow_versions\".\"source_revision\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_versions_owner_user_id_users_id_fk": {
+          "name": "flow_versions_owner_user_id_users_id_fk",
+          "tableFrom": "flow_versions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_versions_flow_owner_fk": {
+          "name": "flow_versions_flow_owner_fk",
+          "tableFrom": "flow_versions",
+          "tableTo": "flows",
+          "columnsFrom": [
+            "flow_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "flow_versions_id_owner_unique": {
+          "name": "flow_versions_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "owner_user_id"
+          ]
+        },
+        "flow_versions_flow_id_id_owner_unique": {
+          "name": "flow_versions_flow_id_id_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "flow_id",
+            "id",
+            "owner_user_id"
+          ]
+        },
+        "flow_versions_flow_id_id_owner_published_unique": {
+          "name": "flow_versions_flow_id_id_owner_published_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "flow_id",
+            "id",
+            "owner_user_id",
+            "published_at"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "flow_versions_positive_version_check": {
+          "name": "flow_versions_positive_version_check",
+          "value": "\"flow_versions\".\"version\" > 0"
+        },
+        "flow_versions_source_revision_check": {
+          "name": "flow_versions_source_revision_check",
+          "value": "\"flow_versions\".\"source_revision\" is null or \"flow_versions\".\"source_revision\" > 0"
+        },
+        "flow_versions_approval_mode_check": {
+          "name": "flow_versions_approval_mode_check",
+          "value": "\"flow_versions\".\"approval_mode\" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')"
+        },
+        "flow_versions_graph_object_check": {
+          "name": "flow_versions_graph_object_check",
+          "value": "jsonb_typeof(\"flow_versions\".\"graph\") = 'object'"
+        },
+        "flow_versions_presentation_object_check": {
+          "name": "flow_versions_presentation_object_check",
+          "value": "\"flow_versions\".\"presentation\" is null or jsonb_typeof(\"flow_versions\".\"presentation\") = 'object'"
+        },
+        "flow_versions_v2_metadata_check": {
+          "name": "flow_versions_v2_metadata_check",
+          "value": "(\n        \"flow_versions\".\"source_revision\" is null\n        and \"flow_versions\".\"graph_schema_version\" is null\n        and \"flow_versions\".\"capability_manifest\" is null\n      ) or (\n        \"flow_versions\".\"source_revision\" > 0\n        and \"flow_versions\".\"graph_schema_version\" = 'flow-graph.v2'\n        and \"flow_versions\".\"graph\"->>'schemaVersion' = 'flow-graph.v2'\n        and jsonb_typeof(\"flow_versions\".\"capability_manifest\") = 'object'\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.flows": {
       "name": "flows",
       "schema": "",
@@ -6705,8 +6932,21 @@
           "primaryKey": false,
           "notNull": true
         },
+        "origin": {
+          "name": "origin",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "status": {
           "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "definition_state": {
+          "name": "definition_state",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -6719,11 +6959,30 @@
           "notNull": true,
           "default": "'manual_approve'"
         },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "draft_base_version_id": {
+          "name": "draft_base_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "draft_graph": {
           "name": "draft_graph",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true
+        },
+        "draft_presentation": {
+          "name": "draft_presentation",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "published_version_id": {
           "name": "published_version_id",
@@ -6780,6 +7039,39 @@
           "method": "btree",
           "with": {}
         },
+        "flows_owner_definition_state_updated_idx": {
+          "name": "flows_owner_definition_state_updated_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "definition_state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "flows_owner_name_idx": {
           "name": "flows_owner_name_idx",
           "columns": [
@@ -6823,6 +7115,25 @@
           "columnsFrom": [
             "id",
             "published_version_id",
+            "owner_user_id",
+            "published_at"
+          ],
+          "columnsTo": [
+            "flow_id",
+            "id",
+            "owner_user_id",
+            "published_at"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "flows_draft_base_version_owner_fk": {
+          "name": "flows_draft_base_version_owner_fk",
+          "tableFrom": "flows",
+          "tableTo": "flow_versions",
+          "columnsFrom": [
+            "id",
+            "draft_base_version_id",
             "owner_user_id"
           ],
           "columnsTo": [
@@ -6855,6 +7166,18 @@
           "name": "flows_status_check",
           "value": "\"flows\".\"status\" in ('draft', 'published', 'active', 'paused', 'archived')"
         },
+        "flows_definition_state_check": {
+          "name": "flows_definition_state_check",
+          "value": "\"flows\".\"definition_state\" in ('draft', 'versioned', 'archived')"
+        },
+        "flows_revision_check": {
+          "name": "flows_revision_check",
+          "value": "\"flows\".\"revision\" > 0"
+        },
+        "flows_definition_lifecycle_check": {
+          "name": "flows_definition_lifecycle_check",
+          "value": "(\n          \"flows\".\"definition_state\" = 'draft'\n          and (\n            (\n              \"flows\".\"published_version_id\" is null\n              and \"flows\".\"published_at\" is null\n              and \"flows\".\"draft_base_version_id\" is null\n            ) or (\n              \"flows\".\"published_version_id\" is not null\n              and \"flows\".\"published_at\" is not null\n              and \"flows\".\"draft_base_version_id\" = \"flows\".\"published_version_id\"\n            )\n          )\n        ) or (\n          \"flows\".\"definition_state\" = 'versioned'\n          and \"flows\".\"published_version_id\" is not null\n          and \"flows\".\"published_at\" is not null\n          and \"flows\".\"draft_base_version_id\" is null\n        ) or (\n          \"flows\".\"definition_state\" = 'archived'\n          and (\n            (\n              \"flows\".\"published_version_id\" is null\n              and \"flows\".\"published_at\" is null\n              and \"flows\".\"draft_base_version_id\" is null\n            ) or (\n              \"flows\".\"published_version_id\" is not null\n              and \"flows\".\"published_at\" is not null\n              and (\n                \"flows\".\"draft_base_version_id\" is null\n                or \"flows\".\"draft_base_version_id\" = \"flows\".\"published_version_id\"\n              )\n            )\n          )\n        )"
+        },
         "flows_approval_mode_check": {
           "name": "flows_approval_mode_check",
           "value": "\"flows\".\"approval_mode\" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')"
@@ -6862,12 +7185,348 @@
         "flows_draft_graph_object_check": {
           "name": "flows_draft_graph_object_check",
           "value": "jsonb_typeof(\"flows\".\"draft_graph\") = 'object'"
+        },
+        "flows_graph_origin_check": {
+          "name": "flows_graph_origin_check",
+          "value": "(\n          \"flows\".\"draft_graph\"->>'schemaVersion' = 'flow-graph.v1'\n          and \"flows\".\"origin\" is null\n          and \"flows\".\"draft_presentation\" is null\n        ) or (\n          \"flows\".\"draft_graph\"->>'schemaVersion' = 'flow-graph.v2'\n          and jsonb_typeof(\"flows\".\"origin\") = 'object'\n          and \"flows\".\"origin\"->>'schemaVersion' = 'flow-definition-origin.v1'\n          and \"flows\".\"origin\"->>'type' in ('blank', 'template', 'migration')\n        )"
+        },
+        "flows_draft_presentation_object_check": {
+          "name": "flows_draft_presentation_object_check",
+          "value": "\"flows\".\"draft_presentation\" is null or jsonb_typeof(\"flows\".\"draft_presentation\") = 'object'"
         }
       },
       "isRLSEnabled": false
     },
-    "public.flow_versions": {
-      "name": "flow_versions",
+    "public.flow_definition_command_outcomes": {
+      "name": "flow_definition_command_outcomes",
+      "schema": "",
+      "columns": {
+        "command_id": {
+          "name": "command_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "response_status": {
+          "name": "response_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "response_body": {
+          "name": "response_body",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "flow_definition_command_outcomes_created_idx": {
+          "name": "flow_definition_command_outcomes_created_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_definition_command_outcomes_command_fk": {
+          "name": "flow_definition_command_outcomes_command_fk",
+          "tableFrom": "flow_definition_command_outcomes",
+          "tableTo": "flow_definition_commands",
+          "columnsFrom": [
+            "command_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "flow_definition_command_outcomes_response_check": {
+          "name": "flow_definition_command_outcomes_response_check",
+          "value": "(\n        \"flow_definition_command_outcomes\".\"response_status\" in (200, 201)\n        or \"flow_definition_command_outcomes\".\"response_status\" between 400 and 499\n      ) and jsonb_typeof(\"flow_definition_command_outcomes\".\"response_body\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.flow_definition_commands": {
+      "name": "flow_definition_commands",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "api_surface": {
+          "name": "api_surface",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "route_template": {
+          "name": "route_template",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resource_id": {
+          "name": "resource_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command_scope": {
+          "name": "command_scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'processing'"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "replay_until": {
+          "name": "replay_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "flow_definition_commands_scope_key_unique": {
+          "name": "flow_definition_commands_scope_key_unique",
+          "columns": [
+            {
+              "expression": "api_surface",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "route_template",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "resource_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_definition_commands_replay_until_idx": {
+          "name": "flow_definition_commands_replay_until_idx",
+          "columns": [
+            {
+              "expression": "replay_until",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_definition_commands_owner_resource_created_idx": {
+          "name": "flow_definition_commands_owner_resource_created_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "resource_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_definition_commands_actor_user_id_users_id_fk": {
+          "name": "flow_definition_commands_actor_user_id_users_id_fk",
+          "tableFrom": "flow_definition_commands",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_definition_commands_owner_user_id_users_id_fk": {
+          "name": "flow_definition_commands_owner_user_id_users_id_fk",
+          "tableFrom": "flow_definition_commands",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "flow_definition_commands_id_resource_owner_unique": {
+          "name": "flow_definition_commands_id_resource_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "resource_id",
+            "owner_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "flow_definition_commands_scope_check": {
+          "name": "flow_definition_commands_scope_check",
+          "value": "\"flow_definition_commands\".\"api_surface\" = 'astrologer-api'\n        and \"flow_definition_commands\".\"command_scope\" in ('flows.definition.create.v2', 'flows.definition.update-draft.v2', 'flows.definition.publish.v2', 'flows.definition.create-next-draft.v2', 'flows.definition.migrate.v2')\n        and (\n          (\n            \"flow_definition_commands\".\"route_template\" = '/flows'\n            and \"flow_definition_commands\".\"command_scope\" = 'flows.definition.create.v2'\n            and \"flow_definition_commands\".\"resource_id\" = \"flow_definition_commands\".\"owner_user_id\"\n          )\n          or (\"flow_definition_commands\".\"route_template\" = '/flows/:flowId/draft' and \"flow_definition_commands\".\"command_scope\" = 'flows.definition.update-draft.v2')\n          or (\"flow_definition_commands\".\"route_template\" = '/flows/:flowId/publish' and \"flow_definition_commands\".\"command_scope\" = 'flows.definition.publish.v2')\n          or (\"flow_definition_commands\".\"route_template\" = '/flows/:flowId/next-draft' and \"flow_definition_commands\".\"command_scope\" = 'flows.definition.create-next-draft.v2')\n          or (\"flow_definition_commands\".\"route_template\" = '/flows/:flowId/migrations/v2' and \"flow_definition_commands\".\"command_scope\" = 'flows.definition.migrate.v2')\n        )"
+        },
+        "flow_definition_commands_key_check": {
+          "name": "flow_definition_commands_key_check",
+          "value": "length(\"flow_definition_commands\".\"idempotency_key\") between 8 and 128\n        and \"flow_definition_commands\".\"idempotency_key\" ~ '^[A-Za-z0-9._:-]+$'"
+        },
+        "flow_definition_commands_request_hash_check": {
+          "name": "flow_definition_commands_request_hash_check",
+          "value": "\"flow_definition_commands\".\"request_hash\" ~ '^sha256:[a-f0-9]{64}$'"
+        },
+        "flow_definition_commands_state_check": {
+          "name": "flow_definition_commands_state_check",
+          "value": "\"flow_definition_commands\".\"state\" in ('processing', 'succeeded', 'failed')"
+        },
+        "flow_definition_commands_terminal_state_check": {
+          "name": "flow_definition_commands_terminal_state_check",
+          "value": "(\n        \"flow_definition_commands\".\"state\" = 'processing'\n        and \"flow_definition_commands\".\"completed_at\" is null\n      ) or (\n        \"flow_definition_commands\".\"state\" in ('succeeded', 'failed')\n        and \"flow_definition_commands\".\"completed_at\" is not null\n      )"
+        },
+        "flow_definition_commands_replay_window_check": {
+          "name": "flow_definition_commands_replay_window_check",
+          "value": "\"flow_definition_commands\".\"replay_until\" = \"flow_definition_commands\".\"created_at\" + interval '24 hours'"
+        },
+        "flow_definition_commands_completion_check": {
+          "name": "flow_definition_commands_completion_check",
+          "value": "\"flow_definition_commands\".\"completed_at\" is null or \"flow_definition_commands\".\"completed_at\" >= \"flow_definition_commands\".\"created_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.flow_definition_migrations": {
+      "name": "flow_definition_migrations",
       "schema": "",
       "columns": {
         "id": {
@@ -6889,64 +7548,61 @@
           "primaryKey": false,
           "notNull": true
         },
-        "version": {
-          "name": "version",
-          "type": "integer",
+        "command_id": {
+          "name": "command_id",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "approval_mode": {
-          "name": "approval_mode",
+        "source_graph_schema_version": {
+          "name": "source_graph_schema_version",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "graph": {
-          "name": "graph",
-          "type": "jsonb",
+        "target_graph_schema_version": {
+          "name": "target_graph_schema_version",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "published_at": {
-          "name": "published_at",
+        "source_version_id": {
+          "name": "source_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_revision": {
+          "name": "source_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_graph_hash": {
+          "name": "source_graph_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_revision": {
+          "name": "target_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "migrated_at": {
+          "name": "migrated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         }
       },
       "indexes": {
-        "flow_versions_owner_published_idx": {
-          "name": "flow_versions_owner_published_idx",
+        "flow_definition_migrations_command_unique": {
+          "name": "flow_definition_migrations_command_unique",
           "columns": [
             {
-              "expression": "owner_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "published_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "flow_versions_flow_version_unique": {
-          "name": "flow_versions_flow_version_unique",
-          "columns": [
-            {
-              "expression": "flow_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "version",
+              "expression": "command_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6956,25 +7612,54 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "flow_definition_migrations_flow_target_revision_unique": {
+          "name": "flow_definition_migrations_flow_target_revision_unique",
+          "columns": [
+            {
+              "expression": "flow_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "target_revision",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_definition_migrations_owner_migrated_idx": {
+          "name": "flow_definition_migrations_owner_migrated_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "migrated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
-        "flow_versions_owner_user_id_users_id_fk": {
-          "name": "flow_versions_owner_user_id_users_id_fk",
-          "tableFrom": "flow_versions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "owner_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "flow_versions_flow_owner_fk": {
-          "name": "flow_versions_flow_owner_fk",
-          "tableFrom": "flow_versions",
+        "flow_definition_migrations_flow_owner_fk": {
+          "name": "flow_definition_migrations_flow_owner_fk",
+          "tableFrom": "flow_definition_migrations",
           "tableTo": "flows",
           "columnsFrom": [
             "flow_id",
@@ -6986,41 +7671,57 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "flow_versions_id_owner_unique": {
-          "name": "flow_versions_id_owner_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "owner_user_id"
-          ]
         },
-        "flow_versions_flow_id_id_owner_unique": {
-          "name": "flow_versions_flow_id_id_owner_unique",
-          "nullsNotDistinct": false,
-          "columns": [
+        "flow_definition_migrations_source_version_owner_fk": {
+          "name": "flow_definition_migrations_source_version_owner_fk",
+          "tableFrom": "flow_definition_migrations",
+          "tableTo": "flow_versions",
+          "columnsFrom": [
+            "flow_id",
+            "source_version_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
             "flow_id",
             "id",
             "owner_user_id"
-          ]
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_definition_migrations_command_resource_owner_fk": {
+          "name": "flow_definition_migrations_command_resource_owner_fk",
+          "tableFrom": "flow_definition_migrations",
+          "tableTo": "flow_definition_commands",
+          "columnsFrom": [
+            "command_id",
+            "flow_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "resource_id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "flow_versions_positive_version_check": {
-          "name": "flow_versions_positive_version_check",
-          "value": "\"flow_versions\".\"version\" > 0"
+        "flow_definition_migrations_schema_versions_check": {
+          "name": "flow_definition_migrations_schema_versions_check",
+          "value": "\"flow_definition_migrations\".\"source_graph_schema_version\" = 'flow-graph.v1'\n        and \"flow_definition_migrations\".\"target_graph_schema_version\" = 'flow-graph.v2'"
         },
-        "flow_versions_approval_mode_check": {
-          "name": "flow_versions_approval_mode_check",
-          "value": "\"flow_versions\".\"approval_mode\" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')"
+        "flow_definition_migrations_revision_check": {
+          "name": "flow_definition_migrations_revision_check",
+          "value": "\"flow_definition_migrations\".\"source_revision\" > 0\n        and \"flow_definition_migrations\".\"target_revision\" = \"flow_definition_migrations\".\"source_revision\" + 1"
         },
-        "flow_versions_graph_object_check": {
-          "name": "flow_versions_graph_object_check",
-          "value": "jsonb_typeof(\"flow_versions\".\"graph\") = 'object'"
+        "flow_definition_migrations_graph_hash_check": {
+          "name": "flow_definition_migrations_graph_hash_check",
+          "value": "\"flow_definition_migrations\".\"source_graph_hash\" ~ '^sha256:[a-f0-9]{64}$'"
         }
       },
       "isRLSEnabled": false

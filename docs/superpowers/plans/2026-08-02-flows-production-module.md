@@ -51,42 +51,77 @@ does not reduce the Definition of Done in the design spec.
 ## Progress
 
 - [x] 2026-08-02 19:23 MSK: audited reference desktop/mobile states, current
-  code, DB/API/worker/frontend contour and prior Flows history.
+      code, DB/API/worker/frontend contour and prior Flows history.
 - [x] 2026-08-02 19:23 MSK: completed product and architecture research,
-  independent product/architecture/QA-security review and target-state design.
+      independent product/architecture/QA-security review and target-state design.
 - [x] 2026-08-02 19:23 MSK: committed the design spec and PostgreSQL execution
-  authority ADR as `974296f` after `docs:check:test`, `docs:check` and diff
-  checks passed.
+      authority ADR as `974296f` after `docs:check:test`, `docs:check` and diff
+      checks passed.
 - [x] 2026-08-02 19:52 MSK: completed the initial Milestone 0 domain/API/worker
-  integrity gate and targeted backend verification.
+      integrity gate and targeted backend verification.
 - [x] 2026-08-02 20:40 MSK: Milestone 0 implementation, affected tests,
-  package gates and authenticated browser/DB evidence completed; independent
-  re-review found no blocker/high findings and returned GO for an exact-path
-  milestone commit.
+      package gates and authenticated browser/DB evidence completed; independent
+      re-review found no blocker/high findings and returned GO for an exact-path
+      milestone commit.
 - [x] 2026-08-02 21:00 MSK: fresh pre-commit verification completed after
-  contract hardening: 32 test files / 171 tests, focused ESLint, contracts,
-  domain, API and workers typecheck/build, web build, authenticated browser
-  smoke and CSRF-protected cancel `409` all produced expected evidence.
+      contract hardening: 32 test files / 171 tests, focused ESLint, contracts,
+      domain, API and workers typecheck/build, web build, authenticated browser
+      smoke and CSRF-protected cancel `409` all produced expected evidence.
 - [x] 2026-08-02 21:49 MSK: Milestone 1 behavior group 1 added strict V2/read
-  contracts, separate presentation state, deterministic graph compilation,
-  handle/topology validation, requirement manifests and bounded compiler
-  policy. Fresh verification passed 9 files / 67 tests, contracts/domain
-  typecheck/build, ESLint and documentation gates; independent re-review found
-  no blocker/high/medium findings and returned GO. Persistence, API validation,
-  draft CAS and publish remain later groups.
+      contracts, separate presentation state, deterministic graph compilation,
+      handle/topology validation, requirement manifests and bounded compiler
+      policy. Fresh verification passed 9 files / 67 tests, contracts/domain
+      typecheck/build, ESLint and documentation gates; independent re-review found
+      no blocker/high/medium findings and returned GO. Persistence, API validation,
+      draft CAS and publish remain later groups.
 - [x] 2026-08-02 22:19 MSK: Milestone 1 behavior group 2 added owner-scoped,
-  CSRF-protected, read-only definition validation from shared contracts through
-  domain compilation, API and frontend adapter. Valid V2 returns a canonical
-  graph and requirements while activation remains explicitly blocked; invalid
-  V2, V1 migration, malformed input, foreign ownership and no-write behavior
-  are covered. Independent review exposed a cross-field artifact/blocker gap;
-  negative tests reproduced it, the contract and blocker ordering were
-  hardened, and re-review returned GO with no blocker/high/medium findings.
-  Fresh affected-surface verification passed 26 files / 162 tests, focused
-  ESLint, contracts/domain/API typecheck and contracts/domain/API/web builds.
-  An authenticated live request returned HTTP 200, `publishable=true`,
-  `activatable=false` and `FLOW_RUNTIME_EXECUTION_UNAVAILABLE`. Draft CAS,
-  immutable V2 publish and persistence remain later groups.
+      CSRF-protected, read-only definition validation from shared contracts through
+      domain compilation, API and frontend adapter. Valid V2 returns a canonical
+      graph and requirements while activation remains explicitly blocked; invalid
+      V2, V1 migration, malformed input, foreign ownership and no-write behavior
+      are covered. Independent review exposed a cross-field artifact/blocker gap;
+      negative tests reproduced it, the contract and blocker ordering were
+      hardened, and re-review returned GO with no blocker/high/medium findings.
+      Fresh affected-surface verification passed 26 files / 162 tests, focused
+      ESLint, contracts/domain/API typecheck and contracts/domain/API/web builds.
+      An authenticated live request returned HTTP 200, `publishable=true`,
+      `activatable=false` and `FLOW_RUNTIME_EXECUTION_UNAVAILABLE`. Draft CAS,
+      immutable V2 publish and persistence remain later groups.
+- [x] 2026-08-03 13:38 MSK: Milestone 1 definition control-plane implementation
+      now spans strict V2 create/templates/detail, optimistic draft update,
+      immutable publish, exact command replay, explicit next-version draft and
+      fail-closed V1 migration. PostgreSQL owns command/outcome replay, definition
+      lifecycle, immutable versions and migration evidence; the single local
+      baseline was reset and seeded successfully, then both adapters passed 19/19
+      integration tests against the clean schema.
+- [x] 2026-08-03 13:38 MSK: frontend cutover now uses only server V2 state,
+      validates before publish, preserves exact issue code/path, blocks every
+      structural control during mutations, retains local candidates across
+      revision conflicts and offers explicit reload or retry-over-current-revision.
+      V1 is readable before migration, template loading/error/retry is honest,
+      definition-only runtime cannot claim active execution, and mobile structure
+      editing is read-only. Affected verification passed 38 files / 253 tests,
+      focused ESLint, contracts/domain builds, DB typecheck, 12 DB baseline tests,
+      19 post-reset PostgreSQL integration tests and the astrologer-web production
+      build.
+- [x] 2026-08-03 14:02 MSK: independent pre-commit review found two release
+      blockers and three migration/navigation risks. Later successful create and
+      migration replays now preserve their original timestamps, unresolved
+      frontend command signatures retain independent idempotency keys, dirty
+      builder exit requires an explicit discard decision and browser unload is
+      guarded, and V1 keeps its complete node payload readable with an exact JSON
+      export. Save conflicts already retained the local candidate and exposed an
+      explicit retry over the current server revision; that path remains covered.
+      Fresh affected verification passed 45 files / 283 tests, both PostgreSQL
+      definition adapters passed 19/19 with delayed replays, focused ESLint and
+      domain/web production builds passed. Independent re-review returned GO for
+      the scoped commit with no remaining blocker, high or medium findings.
+- [ ] 2026-08-03 13:38 MSK: Milestone 1 network-backed browser acceptance is
+      pending because neither `astrologer-web:5174` nor `astrologer-api:3002` is
+      currently listening. Process policy forbids starting them without direct
+      lifecycle authority; reference geometry is captured, but production desktop,
+      mobile, auth, console and network evidence must still be recorded before the
+      milestone checkbox can close.
 - [x] Milestone 0: fail current unsupported runtime closed.
 - [ ] Milestone 1: ship graph v2 definition control plane.
 - [ ] Milestone 2: ship durable token runtime and recovery foundation.
@@ -96,7 +131,7 @@ does not reduce the Definition of Done in the design spec.
 - [ ] Milestone 6: ship reviewed AI and the first complete product E2E.
 - [ ] Milestone 7: ship messaging-safe delivery.
 - [ ] Milestone 8: ship remaining accepted reference capabilities and rollout
-  evidence.
+      evidence.
 
 Update this section after every verified behavior group, not only at milestone
 completion. Record partial state explicitly when an external acceptance remains
@@ -161,6 +196,18 @@ blocked.
   response therefore separates `publishable` from `activatable`; the live local
   API correctly kept a valid V2 graph activation-blocked without creating any
   flow, run, event or outbox write.
+- 2026-08-03: a React Query retry is not the same logical command unless its
+  idempotency key is retained until success. The frontend now keys unresolved
+  create/update/publish/next-draft/migrate attempts by canonical command
+  content and rotates the key only after acknowledgement.
+- 2026-08-03: successful query invalidation can overwrite edits made while a
+  mutation is in flight. Structural editing is now locked for the complete
+  command window, and a newer mismatching server revision is held as an
+  explicit conflict while the local candidate remains in memory.
+- 2026-08-03: persisted `runtimeStatus=active` is historical configuration, not
+  execution evidence when runtime availability is `definition_only`. Gallery
+  and mobile summaries therefore suppress active-count claims and label the
+  persisted state as execution-unavailable while still permitting pause.
 - The shared worktree contains unrelated Clients/BirthPlace, AstroCalendar,
   package/lockfile and design-QA work. Those changes are valid and must not be
   reverted or mixed into Flows commits.
@@ -288,7 +335,7 @@ Composition/runtime:
 - `apps/astrologer-api/src/modules/flows/`
 - `apps/workers/src/flows/flow-runtime.outbox-relay.ts`
 - Booking outbox producer/relay paths discovered by `rg -n
-  "booking.*confirmed|flow.runtime" apps packages`
+"booking.*confirmed|flow.runtime" apps packages`
 
 Astrologer UI:
 
@@ -407,16 +454,16 @@ type FlowEdgeV2 = {
 
 Initial V2 nodes use strict config and handle contracts:
 
-| Kind | Strict config | Required source handles |
-| --- | --- | --- |
-| `booking_confirmed` | non-empty unique `productIds` | `next` |
-| `manual_client` | empty object | `next` |
-| `birth_data_available` | purpose `service_preparation` | `true`, `false` |
-| `astrologer_work_item` | task kind, title, optional instructions and priority | `success` |
-| `astrologer_approval` | approval kind/title and optional expiry | `approved`, `rejected`; `timeout` iff expiry exists |
-| `completed` | stable `goalKey` | none |
-| `suppressed` | stable `reasonCode` | none |
-| `failed` | stable `errorCode` | none |
+| Kind                   | Strict config                                        | Required source handles                             |
+| ---------------------- | ---------------------------------------------------- | --------------------------------------------------- |
+| `booking_confirmed`    | non-empty unique `productIds`                        | `next`                                              |
+| `manual_client`        | empty object                                         | `next`                                              |
+| `birth_data_available` | purpose `service_preparation`                        | `true`, `false`                                     |
+| `astrologer_work_item` | task kind, title, optional instructions and priority | `success`                                           |
+| `astrologer_approval`  | approval kind/title and optional expiry              | `approved`, `rejected`; `timeout` iff expiry exists |
+| `completed`            | stable `goalKey`                                     | none                                                |
+| `suppressed`           | stable `reasonCode`                                  | none                                                |
+| `failed`               | stable `errorCode`                                   | none                                                |
 
 Every node also pins `configSchemaVersion: 1` and
 `executorContractVersion: 1`. Presentation positions, viewport, collapsed and
@@ -440,12 +487,18 @@ Domain ports expose owner-scoped compare-and-swap operations. Exact names may
 follow current repository naming, but behavior and parameters are mandatory:
 
 ```ts
-updateDraft({ ownerUserId, flowId, expectedRevision, graph, presentation })
-publishFlow({ ownerUserId, flowId, expectedRevision, idempotency })
-activateFlow({ ownerUserId, flowId, versionId, expectedActiveVersionId,
-  expectedRevision, idempotency })
-pauseEnrollment({ ownerUserId, flowId, expectedRevision, idempotency })
-stopActiveRuns({ ownerUserId, flowId, policy, idempotency })
+updateDraft({ ownerUserId, flowId, expectedRevision, graph, presentation });
+publishFlow({ ownerUserId, flowId, expectedRevision, idempotency });
+activateFlow({
+  ownerUserId,
+  flowId,
+  versionId,
+  expectedActiveVersionId,
+  expectedRevision,
+  idempotency
+});
+pauseEnrollment({ ownerUserId, flowId, expectedRevision, idempotency });
+stopActiveRuns({ ownerUserId, flowId, policy, idempotency });
 ```
 
 Mutation idempotency is scoped to API surface, actor, owner, route, resource and
@@ -972,17 +1025,17 @@ network data and reload; component fixtures are not browser acceptance.
 
 ### Evidence matrix
 
-| Claim | Minimum proof |
-| --- | --- |
-| strict graph/lifecycle | contract + domain property tests + API conflict tests |
-| token correctness | real PostgreSQL concurrency/failpoint integration |
-| worker recovery | crash-window tests + persisted state inspection |
-| owner/security boundary | API no-leak/CSRF/idempotency + cross-owner integration |
-| cross-module effect | owning adapter/worker result + duplicate/reconciliation E2E |
-| frontend state | component behavior + real network-backed browser reload |
-| design parity | exact reference/production screenshots and computed measurements |
-| accessibility | semantics/scan plus keyboard, focus and VoiceOver exercise |
-| program completion | every design-spec `Implement` row + first product E2E + `pnpm verify` |
+| Claim                   | Minimum proof                                                         |
+| ----------------------- | --------------------------------------------------------------------- |
+| strict graph/lifecycle  | contract + domain property tests + API conflict tests                 |
+| token correctness       | real PostgreSQL concurrency/failpoint integration                     |
+| worker recovery         | crash-window tests + persisted state inspection                       |
+| owner/security boundary | API no-leak/CSRF/idempotency + cross-owner integration                |
+| cross-module effect     | owning adapter/worker result + duplicate/reconciliation E2E           |
+| frontend state          | component behavior + real network-backed browser reload               |
+| design parity           | exact reference/production screenshots and computed measurements      |
+| accessibility           | semantics/scan plus keyboard, focus and VoiceOver exercise            |
+| program completion      | every design-spec `Implement` row + first product E2E + `pnpm verify` |
 
 ### First product E2E acceptance
 

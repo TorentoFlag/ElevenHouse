@@ -1,5 +1,5 @@
 import type {
-  FlowResponse,
+  FlowDefinitionSummaryV2,
   FlowRunResponse,
   FlowRuntimeAvailability,
   MessagingThread
@@ -14,7 +14,7 @@ export type FlowInboxContext = {
 
 type BuildInboxFlowContextsInput = {
   readonly threads: readonly MessagingThread[];
-  readonly flows: readonly FlowResponse[];
+  readonly flows: readonly FlowDefinitionSummaryV2[];
   readonly runtimeAvailability: FlowRuntimeAvailability | null | undefined;
   readonly runsByFlowId: Readonly<Record<string, readonly FlowRunResponse[]>>;
 };
@@ -58,19 +58,10 @@ export function buildInboxFlowContexts({
       {
         threadId: thread.id,
         flowName: flow.name,
-        currentStepTitle: currentStepTitle(flow, run)
+        currentStepTitle: flowRunStatusLabel(run.status)
       }
     ];
   });
-}
-
-function currentStepTitle(flow: FlowResponse, run: FlowRunResponse): string {
-  const currentNodeId = run.currentNodeId;
-  const node = currentNodeId
-    ? flow.draftGraph.nodes.find((candidate) => candidate.id === currentNodeId)
-    : null;
-
-  return node?.title ?? flowRunStatusLabel(run.status);
 }
 
 function flowRunStatusLabel(status: FlowRunResponse["status"]): string {

@@ -1,6 +1,14 @@
 import { z } from "@elevenhouse/validation";
 
-import { flowGraphSchema, type FlowGraph } from "./flows";
+import {
+  flowApprovalModeSchema,
+  flowGraphSchema,
+  flowRuntimeAvailabilitySchema,
+  flowStatusSchema,
+  flowStatusValues,
+  flowTemplateCategorySchema,
+  type FlowGraph
+} from "./flows";
 
 const uuidSchema = z.string().uuid();
 const stableIdSchema = z
@@ -10,8 +18,18 @@ const stableIdSchema = z
   .max(160)
   .regex(/^[a-z0-9][a-z0-9_-]*$/);
 const displayTitleSchema = z.string().trim().min(1).max(180);
+const descriptionSchema = z.string().trim().min(1).max(1_000);
 const instructionsSchema = z.string().trim().min(1).max(4_000);
+const instantSchema = z.string().datetime({ offset: true });
 const versionOneSchema = z.literal(1);
+const positiveRevisionSchema = z.number().int().positive();
+const flowLocaleSchema = z.enum(["ru", "en"]);
+const capabilityKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(180)
+  .regex(/^[a-z0-9][a-z0-9._:-]*$/);
 
 export const FLOW_GRAPH_V2_MAX_NODES = 200;
 export const FLOW_GRAPH_V2_MAX_EDGES = 400;
@@ -458,3 +476,753 @@ export const flowPresentationV1Schema = z
     });
   });
 export type FlowPresentationV1 = z.infer<typeof flowPresentationV1Schema>;
+
+export const flowDefinitionStateSchema = z.enum(["draft", "versioned", "archived"]);
+export type FlowDefinitionState = z.infer<typeof flowDefinitionStateSchema>;
+
+export const flowDefinitionOriginV1Schema = z.discriminatedUnion("type", [
+  z
+    .object({
+      schemaVersion: z.literal("flow-definition-origin.v1"),
+      type: z.literal("blank")
+    })
+    .strict(),
+  z
+    .object({
+      schemaVersion: z.literal("flow-definition-origin.v1"),
+      type: z.literal("template"),
+      templateKey: stableIdSchema,
+      templateVersion: positiveRevisionSchema
+    })
+    .strict(),
+  z
+    .object({
+      schemaVersion: z.literal("flow-definition-origin.v1"),
+      type: z.literal("migration"),
+      sourceGraphSchemaVersion: z.literal("flow-graph.v1"),
+      sourceVersionId: uuidSchema.nullable()
+    })
+    .strict()
+]);
+export type FlowDefinitionOriginV1 = z.infer<typeof flowDefinitionOriginV1Schema>;
+
+export const flowDefinitionV2Schema = z
+  .object({
+    schemaVersion: z.literal("flow-definition.v2"),
+    id: uuidSchema,
+    ownerUserId: uuidSchema,
+    name: displayTitleSchema,
+    origin: flowDefinitionOriginV1Schema,
+    state: flowDefinitionStateSchema,
+    approvalMode: flowApprovalModeSchema,
+    revision: positiveRevisionSchema,
+    draftBaseVersionId: uuidSchema.nullable(),
+    draftGraph: flowGraphV2Schema,
+    draftPresentation: flowPresentationV1Schema.nullable(),
+    latestPublishedVersionId: uuidSchema.nullable(),
+    latestPublishedVersion: z.number().int().positive().nullable(),
+    createdAt: instantSchema,
+    updatedAt: instantSchema,
+    publishedAt: instantSchema.nullable()
+  })
+  .strict()
+  .superRefine((definition, context) => {
+    const publicationPointerCount = [
+      definition.latestPublishedVersionId,
+      definition.latestPublishedVersion,
+      definition.publishedAt
+    ].filter((value) => value !== null).length;
+    if (publicationPointerCount !== 0 && publicationPointerCount !== 3) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["latestPublishedVersionId"],
+        message: "Latest published version pointers must be returned together"
+      });
+    }
+    if (definition.state === "versioned" && publicationPointerCount !== 3) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["state"],
+        message: "A versioned flow definition requires a complete published-version pointer"
+      });
+    }
+    if (definition.draftBaseVersionId !== null && definition.latestPublishedVersionId === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["draftBaseVersionId"],
+        message: "A draft base version requires a published version"
+      });
+    }
+    if (
+      definition.state === "draft" &&
+      publicationPointerCount === 3 &&
+      definition.draftBaseVersionId !== definition.latestPublishedVersionId
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["draftBaseVersionId"],
+        message: "A next-version draft must use the latest immutable version as its base"
+      });
+    }
+    if (definition.state === "versioned" && definition.draftBaseVersionId !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["draftBaseVersionId"],
+        message: "A versioned definition cannot expose an editable draft base"
+      });
+    }
+    if (
+      definition.draftPresentation &&
+      !presentationMatchesGraph(definition.draftGraph, definition.draftPresentation)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["draftPresentation", "nodes"],
+        message: "Flow presentation node ids must exactly match the draft graph"
+      });
+    }
+  });
+export type FlowDefinitionV2 = z.infer<typeof flowDefinitionV2Schema>;
+
+const flowDefinitionReadCommonShape = {
+  id: uuidSchema,
+  ownerUserId: uuidSchema,
+  name: displayTitleSchema,
+  state: flowDefinitionStateSchema,
+  runtimeStatus: flowStatusSchema,
+  approvalMode: flowApprovalModeSchema,
+  revision: positiveRevisionSchema,
+  draftBaseVersionId: uuidSchema.nullable(),
+  latestPublishedVersionId: uuidSchema.nullable(),
+  latestPublishedVersion: z.number().int().positive().nullable(),
+  createdAt: instantSchema,
+  updatedAt: instantSchema,
+  publishedAt: instantSchema.nullable()
+} as const;
+
+const legacyFlowDefinitionSummaryV2Schema = z
+  .object({
+    schemaVersion: z.literal("flow-definition-summary.v2"),
+    ...flowDefinitionReadCommonShape,
+    graphSchemaVersion: z.literal("flow-graph.v1"),
+    origin: z.null(),
+    migrationRequired: z.literal(true)
+  })
+  .strict();
+
+const currentFlowDefinitionSummaryV2Schema = z
+  .object({
+    schemaVersion: z.literal("flow-definition-summary.v2"),
+    ...flowDefinitionReadCommonShape,
+    graphSchemaVersion: z.literal("flow-graph.v2"),
+    origin: flowDefinitionOriginV1Schema,
+    migrationRequired: z.literal(false)
+  })
+  .strict();
+
+export const flowDefinitionSummaryV2Schema = z
+  .discriminatedUnion("graphSchemaVersion", [
+    legacyFlowDefinitionSummaryV2Schema,
+    currentFlowDefinitionSummaryV2Schema
+  ])
+  .superRefine(refineFlowDefinitionReadLifecycle);
+export type FlowDefinitionSummaryV2 = z.infer<typeof flowDefinitionSummaryV2Schema>;
+
+const legacyFlowDefinitionDetailV2Schema = z
+  .object({
+    schemaVersion: z.literal("flow-definition-detail.v2"),
+    ...flowDefinitionReadCommonShape,
+    graphSchemaVersion: z.literal("flow-graph.v1"),
+    origin: z.null(),
+    migrationRequired: z.literal(true),
+    draftGraph: flowGraphSchema,
+    draftPresentation: z.null()
+  })
+  .strict();
+
+const currentFlowDefinitionDetailV2Schema = z
+  .object({
+    schemaVersion: z.literal("flow-definition-detail.v2"),
+    ...flowDefinitionReadCommonShape,
+    graphSchemaVersion: z.literal("flow-graph.v2"),
+    origin: flowDefinitionOriginV1Schema,
+    migrationRequired: z.literal(false),
+    draftGraph: flowGraphV2Schema,
+    draftPresentation: flowPresentationV1Schema.nullable()
+  })
+  .strict();
+
+export const flowDefinitionDetailV2Schema = z
+  .discriminatedUnion("graphSchemaVersion", [
+    legacyFlowDefinitionDetailV2Schema,
+    currentFlowDefinitionDetailV2Schema
+  ])
+  .superRefine((definition, context) => {
+    refineFlowDefinitionReadLifecycle(definition, context);
+    if (
+      definition.graphSchemaVersion === "flow-graph.v2" &&
+      definition.draftPresentation &&
+      !presentationMatchesGraph(definition.draftGraph, definition.draftPresentation)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["draftPresentation", "nodes"],
+        message: "Flow presentation node ids must exactly match the draft graph"
+      });
+    }
+  });
+export type FlowDefinitionDetailV2 = z.infer<typeof flowDefinitionDetailV2Schema>;
+
+export const listFlowDefinitionsV2QuerySchema = z
+  .object({
+    state: z.enum(["all", "draft", "versioned", "archived"]).optional().default("all"),
+    runtimeStatus: z
+      .enum(["all", ...flowStatusValues])
+      .optional()
+      .default("all"),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+    offset: z.coerce.number().int().min(0).max(10_000).optional().default(0)
+  })
+  .strict();
+export type ListFlowDefinitionsV2QueryInput = z.input<typeof listFlowDefinitionsV2QuerySchema>;
+export type ListFlowDefinitionsV2Query = z.infer<typeof listFlowDefinitionsV2QuerySchema>;
+
+export const listFlowDefinitionsV2ResponseSchema = z
+  .object({
+    schemaVersion: z.literal("flow-definition-list.v2"),
+    flows: z.array(flowDefinitionSummaryV2Schema).max(100),
+    total: z.number().int().min(0),
+    runtime: flowRuntimeAvailabilitySchema
+  })
+  .strict()
+  .superRefine((response, context) => {
+    if (response.total < response.flows.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["total"],
+        message: "Flow definition list total cannot be smaller than the returned page"
+      });
+    }
+    const flowIds = response.flows.map((flow) => flow.id);
+    if (new Set(flowIds).size !== flowIds.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["flows"],
+        message: "Flow definition list cannot contain duplicate definitions"
+      });
+    }
+  });
+export type ListFlowDefinitionsV2Response = z.infer<typeof listFlowDefinitionsV2ResponseSchema>;
+
+export const flowDefinitionTemplateAvailabilityValues = [
+  "available",
+  "unavailable",
+  "legacy_read_only"
+] as const;
+export const flowDefinitionTemplateAvailabilitySchema = z.enum(
+  flowDefinitionTemplateAvailabilityValues
+);
+export type FlowDefinitionTemplateAvailability = z.infer<
+  typeof flowDefinitionTemplateAvailabilitySchema
+>;
+
+export const flowDefinitionTemplateBlockerCodeValues = [
+  "FLOW_TEMPLATE_CAPABILITY_UNAVAILABLE",
+  "FLOW_TEMPLATE_LEGACY_GRAPH_ONLY"
+] as const;
+export const flowDefinitionTemplateBlockerCodeSchema = z.enum(
+  flowDefinitionTemplateBlockerCodeValues
+);
+export type FlowDefinitionTemplateBlockerCode = z.infer<
+  typeof flowDefinitionTemplateBlockerCodeSchema
+>;
+
+export const flowDefinitionTemplateParameterV2Schema = z
+  .object({
+    key: stableIdSchema,
+    kind: z.literal("product_ids"),
+    required: z.boolean(),
+    minimumItems: z.number().int().min(0).max(100),
+    maximumItems: z.number().int().min(1).max(100)
+  })
+  .strict()
+  .superRefine((parameter, context) => {
+    if (parameter.minimumItems > parameter.maximumItems) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["minimumItems"],
+        message: "Template parameter minimum cannot exceed its maximum"
+      });
+    }
+  });
+export type FlowDefinitionTemplateParameterV2 = z.infer<
+  typeof flowDefinitionTemplateParameterV2Schema
+>;
+
+export const flowDefinitionTemplateDescriptorV2Schema = z
+  .object({
+    schemaVersion: z.literal("flow-definition-template.v2"),
+    key: stableIdSchema,
+    version: positiveRevisionSchema,
+    name: displayTitleSchema,
+    description: descriptionSchema,
+    category: flowTemplateCategorySchema,
+    availability: flowDefinitionTemplateAvailabilitySchema,
+    recommendedApprovalMode: flowApprovalModeSchema,
+    parameters: z.array(flowDefinitionTemplateParameterV2Schema).max(20),
+    requiredCapabilities: z.array(capabilityKeySchema).max(50),
+    blockerCode: flowDefinitionTemplateBlockerCodeSchema.nullable()
+  })
+  .strict()
+  .superRefine((template, context) => {
+    if ((template.availability === "available") !== (template.blockerCode === null)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["blockerCode"],
+        message: "Template availability and blocker must agree"
+      });
+    }
+    if (new Set(template.requiredCapabilities).size !== template.requiredCapabilities.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["requiredCapabilities"],
+        message: "Template capability requirements must be unique"
+      });
+    }
+  });
+export type FlowDefinitionTemplateDescriptorV2 = z.infer<
+  typeof flowDefinitionTemplateDescriptorV2Schema
+>;
+
+export const listFlowDefinitionTemplatesV2QuerySchema = z
+  .object({ locale: flowLocaleSchema.optional().default("ru") })
+  .strict();
+export type ListFlowDefinitionTemplatesV2QueryInput = z.input<
+  typeof listFlowDefinitionTemplatesV2QuerySchema
+>;
+export type ListFlowDefinitionTemplatesV2Query = z.infer<
+  typeof listFlowDefinitionTemplatesV2QuerySchema
+>;
+
+export const listFlowDefinitionTemplatesV2ResponseSchema = z
+  .object({
+    schemaVersion: z.literal("flow-definition-template-catalog.v2"),
+    catalogVersion: positiveRevisionSchema,
+    locale: flowLocaleSchema,
+    templates: z.array(flowDefinitionTemplateDescriptorV2Schema).max(100)
+  })
+  .strict()
+  .superRefine((catalog, context) => {
+    const identities = catalog.templates.map((template) => `${template.key}:${template.version}`);
+    if (new Set(identities).size !== identities.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["templates"],
+        message: "Template catalog identities must be unique"
+      });
+    }
+  });
+export type ListFlowDefinitionTemplatesV2Response = z.infer<
+  typeof listFlowDefinitionTemplatesV2ResponseSchema
+>;
+
+const flowDefinitionTemplateParameterValueSchema = z.union([
+  z.string().trim().min(1).max(500),
+  z.number().finite(),
+  z.boolean(),
+  z.array(z.string().trim().min(1).max(500)).max(100)
+]);
+const flowDefinitionTemplateParametersSchema = z
+  .record(stableIdSchema, flowDefinitionTemplateParameterValueSchema)
+  .superRefine((parameters, context) => {
+    if (Object.keys(parameters).length > 50) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Flow template parameters exceed the supported limit"
+      });
+    }
+  });
+
+export const createFlowDefinitionV2RequestSchema = z
+  .object({
+    schemaVersion: z.literal("flow-definition-create.v2"),
+    name: displayTitleSchema,
+    locale: flowLocaleSchema,
+    approvalMode: flowApprovalModeSchema.optional().default("manual_approve"),
+    source: z.discriminatedUnion("type", [
+      z.object({ type: z.literal("blank") }).strict(),
+      z
+        .object({
+          type: z.literal("template"),
+          templateKey: stableIdSchema,
+          templateVersion: positiveRevisionSchema,
+          parameters: flowDefinitionTemplateParametersSchema
+        })
+        .strict()
+    ])
+  })
+  .strict();
+export type CreateFlowDefinitionV2RequestInput = z.input<
+  typeof createFlowDefinitionV2RequestSchema
+>;
+export type CreateFlowDefinitionV2Request = z.infer<typeof createFlowDefinitionV2RequestSchema>;
+
+export const migrateFlowDefinitionV2RequestSchema = z
+  .object({
+    schemaVersion: z.literal("flow-definition-migrate.v2"),
+    expectedRevision: positiveRevisionSchema,
+    targetGraphSchemaVersion: z.literal("flow-graph.v2")
+  })
+  .strict();
+export type MigrateFlowDefinitionV2Request = z.infer<typeof migrateFlowDefinitionV2RequestSchema>;
+
+export const flowDefinitionMigrationIssueSchema = z
+  .object({
+    code: z.enum(["unsupported_node", "unsupported_edge", "invalid_legacy_graph"]),
+    path: z.string().trim().min(1).max(500),
+    message: z.string().trim().min(1).max(1_000)
+  })
+  .strict();
+export type FlowDefinitionMigrationIssue = z.infer<typeof flowDefinitionMigrationIssueSchema>;
+
+export const flowDefinitionMigrationEvidenceV1Schema = z
+  .object({
+    schemaVersion: z.literal("flow-definition-migration.v1"),
+    sourceGraphSchemaVersion: z.literal("flow-graph.v1"),
+    targetGraphSchemaVersion: z.literal("flow-graph.v2"),
+    sourceVersionId: uuidSchema.nullable(),
+    sourceRevision: positiveRevisionSchema,
+    sourceGraphHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    migratedAt: instantSchema
+  })
+  .strict();
+export type FlowDefinitionMigrationEvidenceV1 = z.infer<
+  typeof flowDefinitionMigrationEvidenceV1Schema
+>;
+
+export const migrateFlowDefinitionV2ResponseSchema = z
+  .object({
+    flow: flowDefinitionV2Schema,
+    migration: flowDefinitionMigrationEvidenceV1Schema
+  })
+  .strict()
+  .superRefine((response, context) => {
+    const sourceVersionMatches =
+      response.migration.sourceVersionId === null
+        ? response.flow.draftBaseVersionId === null &&
+          response.flow.latestPublishedVersionId === null
+        : response.flow.draftBaseVersionId === response.migration.sourceVersionId &&
+          response.flow.latestPublishedVersionId === response.migration.sourceVersionId;
+    if (
+      response.flow.state !== "draft" ||
+      response.flow.revision !== response.migration.sourceRevision + 1 ||
+      response.flow.origin.type !== "migration" ||
+      response.flow.origin.sourceVersionId !== response.migration.sourceVersionId ||
+      !sourceVersionMatches ||
+      response.flow.updatedAt !== response.migration.migratedAt
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["migration"],
+        message: "Migration evidence must match the migrated V2 draft"
+      });
+    }
+  });
+export type MigrateFlowDefinitionV2Response = z.infer<typeof migrateFlowDefinitionV2ResponseSchema>;
+
+export const updateFlowDefinitionDraftV2RequestSchema = z
+  .object({
+    expectedRevision: positiveRevisionSchema,
+    name: displayTitleSchema.optional(),
+    approvalMode: flowApprovalModeSchema.optional(),
+    graph: flowGraphV2Schema.optional(),
+    presentation: flowPresentationV1Schema.nullable().optional()
+  })
+  .strict()
+  .superRefine((request, context) => {
+    if (
+      request.name === undefined &&
+      request.approvalMode === undefined &&
+      request.graph === undefined &&
+      request.presentation === undefined
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Flow draft update requires at least one mutation field"
+      });
+    }
+    if (
+      request.graph &&
+      request.presentation &&
+      !presentationMatchesGraph(request.graph, request.presentation)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["presentation", "nodes"],
+        message: "Flow presentation node ids must exactly match the request graph"
+      });
+    }
+  });
+export type UpdateFlowDefinitionDraftV2Request = z.infer<
+  typeof updateFlowDefinitionDraftV2RequestSchema
+>;
+
+export const publishFlowDefinitionV2RequestSchema = z
+  .object({
+    expectedRevision: positiveRevisionSchema
+  })
+  .strict();
+export type PublishFlowDefinitionV2Request = z.infer<typeof publishFlowDefinitionV2RequestSchema>;
+
+export const createNextFlowDraftV2RequestSchema = z
+  .object({
+    expectedRevision: positiveRevisionSchema,
+    baseVersionId: uuidSchema
+  })
+  .strict();
+export type CreateNextFlowDraftV2Request = z.infer<typeof createNextFlowDraftV2RequestSchema>;
+
+export const flowGraphV2CompileIssueSchema = flowDefinitionValidationIssueSchema
+  .extend({ code: flowGraphV2CompileIssueCodeSchema })
+  .strict();
+export type FlowGraphV2CompileIssue = z.infer<typeof flowGraphV2CompileIssueSchema>;
+
+export const flowDefinitionCommandRejectionSchema = z.discriminatedUnion("code", [
+  z.object({ code: z.literal("FLOW_DEFINITION_NOT_FOUND") }).strict(),
+  z
+    .object({
+      code: z.literal("FLOW_TEMPLATE_NOT_FOUND"),
+      templateKey: stableIdSchema
+    })
+    .strict(),
+  z
+    .object({
+      code: z.literal("FLOW_DRAFT_REVISION_CONFLICT"),
+      expectedRevision: positiveRevisionSchema,
+      currentRevision: positiveRevisionSchema
+    })
+    .strict(),
+  z
+    .object({
+      code: z.literal("FLOW_DRAFT_NOT_EDITABLE"),
+      state: flowDefinitionStateSchema
+    })
+    .strict(),
+  z
+    .object({
+      code: z.literal("FLOW_NEXT_DRAFT_NOT_AVAILABLE"),
+      state: flowDefinitionStateSchema
+    })
+    .strict(),
+  z
+    .object({
+      code: z.literal("FLOW_NEXT_DRAFT_BASE_CONFLICT"),
+      expectedBaseVersionId: uuidSchema,
+      currentBaseVersionId: uuidSchema
+    })
+    .strict(),
+  z.object({ code: z.literal("FLOW_GRAPH_MIGRATION_REQUIRED") }).strict(),
+  z.object({ code: z.literal("FLOW_GRAPH_ALREADY_V2") }).strict(),
+  z
+    .object({
+      code: z.literal("FLOW_DEFINITION_MIGRATION_NOT_ALLOWED"),
+      state: flowDefinitionStateSchema
+    })
+    .strict(),
+  z.object({ code: z.literal("FLOW_IDEMPOTENCY_KEY_INVALID") }).strict(),
+  z.object({ code: z.literal("FLOW_IDEMPOTENCY_KEY_REUSED") }).strict(),
+  z.object({ code: z.literal("FLOW_IDEMPOTENCY_KEY_EXPIRED") }).strict(),
+  z
+    .object({
+      code: z.literal("FLOW_TEMPLATE_VERSION_CONFLICT"),
+      templateKey: stableIdSchema,
+      requestedVersion: positiveRevisionSchema,
+      currentVersion: positiveRevisionSchema
+    })
+    .strict(),
+  z
+    .object({
+      code: z.literal("FLOW_TEMPLATE_NOT_AVAILABLE"),
+      templateKey: stableIdSchema,
+      reasonCode: flowDefinitionTemplateBlockerCodeSchema
+    })
+    .strict(),
+  z
+    .object({
+      code: z.literal("FLOW_TEMPLATE_PARAMETERS_INVALID"),
+      templateKey: stableIdSchema,
+      parameterPaths: z.array(stableIdSchema).min(1).max(50)
+    })
+    .strict(),
+  z
+    .object({
+      code: z.literal("FLOW_GRAPH_MIGRATION_BLOCKED"),
+      issues: z.array(flowDefinitionMigrationIssueSchema).min(1).max(2_000).readonly()
+    })
+    .strict(),
+  z.object({ code: z.literal("FLOW_DRAFT_MUTATION_INVALID") }).strict(),
+  z
+    .object({
+      code: z.literal("FLOW_GRAPH_NOT_PUBLISHABLE"),
+      issues: z.array(flowGraphV2CompileIssueSchema).max(2_000).readonly()
+    })
+    .strict()
+]);
+export type FlowDefinitionCommandRejection = z.infer<typeof flowDefinitionCommandRejectionSchema>;
+
+export const flowDefinitionCommandRejectionResponseSchema = z
+  .object({
+    statusCode: z.union([z.literal(400), z.literal(404), z.literal(409), z.literal(422)]),
+    body: flowDefinitionCommandRejectionSchema
+  })
+  .strict()
+  .superRefine((response, context) => {
+    const expectedStatus =
+      response.body.code === "FLOW_IDEMPOTENCY_KEY_INVALID"
+        ? 400
+        : response.body.code === "FLOW_DEFINITION_NOT_FOUND" ||
+            response.body.code === "FLOW_TEMPLATE_NOT_FOUND"
+          ? 404
+          : response.body.code === "FLOW_GRAPH_NOT_PUBLISHABLE" ||
+              response.body.code === "FLOW_GRAPH_MIGRATION_BLOCKED" ||
+              response.body.code === "FLOW_TEMPLATE_PARAMETERS_INVALID"
+            ? 422
+            : 409;
+    if (response.statusCode !== expectedStatus) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["statusCode"],
+        message: "Flow definition rejection code and response status must agree"
+      });
+    }
+  });
+export type FlowDefinitionCommandRejectionResponse = z.infer<
+  typeof flowDefinitionCommandRejectionResponseSchema
+>;
+
+export const flowPublishedVersionV2Schema = z
+  .object({
+    schemaVersion: z.literal("flow-published-version.v2"),
+    id: uuidSchema,
+    flowId: uuidSchema,
+    version: z.number().int().positive(),
+    sourceRevision: positiveRevisionSchema,
+    status: z.literal("published"),
+    approvalMode: flowApprovalModeSchema,
+    graph: flowGraphV2Schema,
+    presentation: flowPresentationV1Schema.nullable(),
+    capabilityManifest: flowCapabilityManifestV1Schema,
+    publishedAt: instantSchema
+  })
+  .strict()
+  .superRefine((version, context) => {
+    if (version.presentation && !presentationMatchesGraph(version.graph, version.presentation)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["presentation", "nodes"],
+        message: "Published presentation node ids must exactly match the version graph"
+      });
+    }
+  });
+export type FlowPublishedVersionV2 = z.infer<typeof flowPublishedVersionV2Schema>;
+
+export const publishFlowDefinitionV2ResponseSchema = z
+  .object({
+    flow: flowDefinitionV2Schema,
+    version: flowPublishedVersionV2Schema
+  })
+  .strict()
+  .superRefine((response, context) => {
+    if (
+      response.flow.id !== response.version.flowId ||
+      response.flow.latestPublishedVersionId !== response.version.id ||
+      response.flow.latestPublishedVersion !== response.version.version ||
+      response.flow.publishedAt !== response.version.publishedAt
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["version"],
+        message: "Published version must match the flow latest-version pointers"
+      });
+    }
+    if (
+      response.flow.state !== "versioned" ||
+      response.flow.revision !== response.version.sourceRevision + 1 ||
+      response.flow.approvalMode !== response.version.approvalMode ||
+      !jsonValuesEqual(response.flow.draftGraph, response.version.graph) ||
+      !jsonValuesEqual(response.flow.draftPresentation, response.version.presentation)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["version"],
+        message: "Published version must be the exact immutable source-revision snapshot"
+      });
+    }
+  });
+export type PublishFlowDefinitionV2Response = z.infer<typeof publishFlowDefinitionV2ResponseSchema>;
+
+function refineFlowDefinitionReadLifecycle(
+  definition: {
+    state: FlowDefinitionState;
+    draftBaseVersionId: string | null;
+    latestPublishedVersionId: string | null;
+    latestPublishedVersion: number | null;
+    publishedAt: string | null;
+  },
+  context: z.RefinementCtx
+): void {
+  const publicationPointerCount = [
+    definition.latestPublishedVersionId,
+    definition.latestPublishedVersion,
+    definition.publishedAt
+  ].filter((value) => value !== null).length;
+  if (publicationPointerCount !== 0 && publicationPointerCount !== 3) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["latestPublishedVersionId"],
+      message: "Latest published version pointers must be returned together"
+    });
+  }
+  if (definition.state === "versioned" && publicationPointerCount !== 3) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["state"],
+      message: "A versioned flow definition requires a complete published-version pointer"
+    });
+  }
+  if (definition.draftBaseVersionId !== null && definition.latestPublishedVersionId === null) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["draftBaseVersionId"],
+      message: "A draft base version requires a published version"
+    });
+  }
+  if (
+    definition.state === "draft" &&
+    publicationPointerCount === 3 &&
+    definition.draftBaseVersionId !== definition.latestPublishedVersionId
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["draftBaseVersionId"],
+      message: "A next-version draft must use the latest immutable version as its base"
+    });
+  }
+  if (definition.state === "versioned" && definition.draftBaseVersionId !== null) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["draftBaseVersionId"],
+      message: "A versioned definition cannot expose an editable draft base"
+    });
+  }
+}
+
+function presentationMatchesGraph(graph: FlowGraphV2, presentation: FlowPresentationV1): boolean {
+  if (graph.nodes.length !== presentation.nodes.length) return false;
+  const graphNodeIds = new Set(graph.nodes.map((node) => node.id));
+  return presentation.nodes.every((node) => graphNodeIds.has(node.nodeId));
+}
+
+function jsonValuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}

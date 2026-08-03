@@ -1,71 +1,61 @@
-import type { FlowResponse, FlowTemplate } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummaryV2 } from "@elevenhouse/contracts";
 import {
-  flowApprovalModeLabelRu,
-  flowStatusLabelRu,
-  summarizeFlowGraph,
-  type FlowGraphSummary
+  flowApprovalModeLabel,
+  flowDefinitionStateLabel,
+  flowRuntimeStatusLabel,
+  type FlowDisplayLocale
 } from "../model/flowDisplay";
-
-export type FlowRuntimeMetricValue = number | null;
 
 export type FlowGalleryCardModel = {
   readonly id: string;
   readonly title: string;
-  readonly statusLabel: string;
+  readonly definitionStateLabel: string;
+  readonly runtimeStatusLabel: string;
   readonly approvalModeLabel: string;
-  readonly triggerTitle: string | null;
-  readonly pathPreview: readonly string[];
-  readonly metrics: {
-    readonly activeRuns: FlowRuntimeMetricValue;
-    readonly waitingApprovals: FlowRuntimeMetricValue;
-    readonly completedRuns: FlowRuntimeMetricValue;
-    readonly conversionRate: FlowRuntimeMetricValue;
-  };
+  readonly graphSchemaLabel: string;
+  readonly originLabel: string;
+  readonly revisionLabel: string;
+  readonly publishedVersionLabel: string;
+  readonly migrationRequired: boolean;
 };
 
-export type FlowTemplateCardModel = {
-  readonly key: string;
-  readonly title: string;
-  readonly description: string;
-  readonly approvalModeLabel: string;
-  readonly triggerTitle: string | null;
-  readonly pathPreview: readonly string[];
-};
-
-export function buildFlowGalleryCard(flow: FlowResponse): FlowGalleryCardModel {
-  const graph = summarizeFlowGraph(flow.draftGraph);
-
+export function buildFlowGalleryCard(
+  flow: FlowDefinitionSummaryV2,
+  locale: FlowDisplayLocale
+): FlowGalleryCardModel {
   return {
     id: flow.id,
     title: flow.name,
-    statusLabel: flowStatusLabelRu[flow.status],
-    approvalModeLabel: flowApprovalModeLabelRu[flow.approvalMode],
-    triggerTitle: graph.triggerTitle,
-    pathPreview: graph.pathPreview,
-    metrics: emptyRuntimeMetrics()
+    definitionStateLabel: flowDefinitionStateLabel(flow.state, locale),
+    runtimeStatusLabel: flowRuntimeStatusLabel(flow.runtimeStatus, locale),
+    approvalModeLabel: flowApprovalModeLabel(flow.approvalMode, locale),
+    graphSchemaLabel:
+      flow.graphSchemaVersion === "flow-graph.v2"
+        ? locale === "ru"
+          ? "Схема V2"
+          : "V2 graph"
+        : locale === "ru"
+          ? "Legacy V1"
+          : "Legacy V1",
+    originLabel: originLabel(flow, locale),
+    revisionLabel: locale === "ru" ? `Редакция ${flow.revision}` : `Revision ${flow.revision}`,
+    publishedVersionLabel:
+      flow.latestPublishedVersion === null
+        ? locale === "ru"
+          ? "Не опубликована"
+          : "Not published"
+        : locale === "ru"
+          ? `Версия ${flow.latestPublishedVersion}`
+          : `Version ${flow.latestPublishedVersion}`,
+    migrationRequired: flow.migrationRequired
   };
 }
 
-export function buildFlowTemplateCard(template: FlowTemplate): FlowTemplateCardModel {
-  const graph = summarizeFlowGraph(template.graph);
-
-  return {
-    key: template.key,
-    title: template.name,
-    description: template.description,
-    approvalModeLabel: flowApprovalModeLabelRu[template.recommendedApprovalMode],
-    triggerTitle: graph.triggerTitle,
-    pathPreview: graph.pathPreview
-  };
+function originLabel(flow: FlowDefinitionSummaryV2, locale: FlowDisplayLocale): string {
+  if (flow.graphSchemaVersion === "flow-graph.v1") {
+    return locale === "ru" ? "Legacy-определение" : "Legacy definition";
+  }
+  if (flow.origin.type === "template") return locale === "ru" ? "Из шаблона" : "From template";
+  if (flow.origin.type === "migration") return locale === "ru" ? "После миграции" : "Migrated";
+  return locale === "ru" ? "С нуля" : "Blank";
 }
-
-function emptyRuntimeMetrics(): FlowGalleryCardModel["metrics"] {
-  return {
-    activeRuns: null,
-    waitingApprovals: null,
-    completedRuns: null,
-    conversionRate: null
-  };
-}
-
-export type { FlowGraphSummary };

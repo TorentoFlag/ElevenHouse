@@ -1,47 +1,48 @@
 // @vitest-environment jsdom
 
-import type { FlowResponse, FlowRuntimeAvailability } from "@elevenhouse/contracts";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { FlowDefinitionDetailV2, FlowRuntimeAvailability } from "@elevenhouse/contracts";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowBuilder } from "./FlowBuilder";
 
 const flow = {
+  schemaVersion: "flow-definition-detail.v2",
   id: "11111111-1111-4111-8111-111111111111",
   ownerUserId: "22222222-2222-4222-8222-222222222222",
-  name: "Запись на консультацию",
-  status: "draft",
+  name: "Подготовка консультации",
+  state: "draft",
+  runtimeStatus: "draft",
   approvalMode: "manual_approve",
-  draftGraph: {
-    schemaVersion: "flow-graph.v1",
-    nodes: [
-      {
-        id: "lead_created",
-        category: "trigger",
-        kind: "lead_created",
-        title: "Новый лид",
-        config: {},
-        position: { x: 80, y: 120 }
-      },
-      {
-        id: "ai_interpretation",
-        category: "ai",
-        kind: "reply_draft",
-        approvalMode: "manual_approve",
-        title: "AI-интерпретация",
-        config: {},
-        position: { x: 360, y: 120 }
-      }
-    ],
-    edges: [
-      { id: "lead-to-ai", fromNodeId: "lead_created", toNodeId: "ai_interpretation" }
-    ]
-  },
-  publishedVersionId: null,
-  publishedVersion: null,
+  revision: 4,
+  draftBaseVersionId: null,
+  latestPublishedVersionId: null,
+  latestPublishedVersion: null,
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
-  publishedAt: null
-} satisfies FlowResponse;
+  publishedAt: null,
+  graphSchemaVersion: "flow-graph.v2",
+  origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
+  migrationRequired: false,
+  draftGraph: {
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "manual-client",
+        kind: "manual_client",
+        displayTitle: "Клиент выбран вручную",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {}
+      }
+    ],
+    edges: []
+  },
+  draftPresentation: {
+    schemaVersion: "flow-presentation.v1",
+    nodes: [{ nodeId: "manual-client", position: { x: 80, y: 120 } }],
+    viewport: { x: 0, y: 0, zoom: 1 }
+  }
+} satisfies FlowDefinitionDetailV2;
 
 const definitionOnlyRuntime = {
   mode: "definition_only",
@@ -53,269 +54,322 @@ const definitionOnlyRuntime = {
 describe("FlowBuilder", () => {
   afterEach(() => cleanup());
 
-  it("renders the selected flow, palette, unavailable test run, and inspector details", () => {
-    render(<FlowBuilder flow={flow} onBack={vi.fn()} onUpdateDraft={vi.fn()} onPublish={vi.fn()} />);
+  it("renders only supported V2 palette kinds and a typed inspector", () => {
+    renderBuilder();
 
-    expect(screen.getByRole("button", { name: "Все воронки" })).toBeTruthy();
-    expect(screen.getByText("Черновик")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Запись на консультацию" })).toBeTruthy();
-    expect(screen.getByText("Триггеры")).toBeTruthy();
-    expect(screen.getByText("Действия")).toBeTruthy();
-    expect(screen.getByText("AI-узлы")).toBeTruthy();
-    expect(screen.getByText("Логика")).toBeTruthy();
-    expect(screen.getByText("Человек")).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Тестовый прогон" })[0]).toHaveProperty("disabled", true);
-    expect(screen.getByText("Запусков пока нет")).toBeTruthy();
-    expect(screen.getByText("Ожидает подтверждения")).toBeTruthy();
-    expect((screen.getByLabelText("Название узла") as HTMLInputElement).value).toBe("Новый лид");
-  });
-
-  it("renders the persisted flow status instead of hard-coded draft copy", () => {
-    const onPublish = vi.fn();
-    const onUpdateDraft = vi.fn();
-    render(
-      <FlowBuilder
-        flow={{ ...flow, status: "published" }}
-        onBack={vi.fn()}
-        onUpdateDraft={onUpdateDraft}
-        onPublish={onPublish}
-      />
-    );
-
-    expect(screen.getAllByText("Опубликована").length).toBeGreaterThanOrEqual(1);
-    expect(screen.queryByText("Черновик")).toBeNull();
-    const publishButton = screen.getByRole("button", { name: "Опубликована" });
-    expect(publishButton).toHaveProperty("disabled", true);
-
-    fireEvent.click(publishButton);
-
-    expect(onPublish).not.toHaveBeenCalled();
-    const addNodeButton = screen.getByRole("button", { name: "Добавить узел: Запросить данные" });
-    expect(addNodeButton).toHaveProperty("disabled", true);
-
-    fireEvent.click(addNodeButton);
-
-    expect(onUpdateDraft).not.toHaveBeenCalled();
-  });
-
-  it("keeps runtime commands unavailable until the flow has a published version", () => {
-    const onSimulate = vi.fn();
-    const onCreateManualRun = vi.fn();
-
-    render(
-      <FlowBuilder
-        flow={flow}
-        onBack={vi.fn()}
-        onUpdateDraft={vi.fn()}
-        onPublish={vi.fn()}
-        onSimulate={onSimulate}
-        onCreateManualRun={onCreateManualRun}
-      />
-    );
-
-    const testRunButtons = screen.getAllByRole("button", { name: "Тестовый прогон" });
-    expect(testRunButtons).toHaveLength(2);
-    expect(testRunButtons[0]).toHaveProperty("disabled", true);
-    expect(testRunButtons[1]).toHaveProperty("disabled", true);
-    expect(screen.queryByRole("button", { name: "Создать запуск" })).toBeNull();
-    expect(
-      screen.getByText("Опубликуйте воронку, чтобы запускать тесты и ручные запуски.")
-    ).toBeTruthy();
-
-    fireEvent.click(testRunButtons[0] ?? raise("Expected header test run button"));
-    fireEvent.click(testRunButtons[1] ?? raise("Expected runtime test run button"));
-
-    expect(onSimulate).not.toHaveBeenCalled();
-    expect(onCreateManualRun).not.toHaveBeenCalled();
-  });
-
-  it("keeps runtime commands unavailable for a published definition-only flow", () => {
-    const onSimulate = vi.fn();
-    const onCreateManualRun = vi.fn();
-    const publishedFlow = {
-      ...flow,
-      status: "published",
-      publishedVersionId: "33333333-3333-4333-8333-333333333333",
-      publishedVersion: 1,
-      publishedAt: "2026-07-28T08:30:00.000Z"
-    } satisfies FlowResponse;
-
-    render(
-      <FlowBuilder
-        flow={publishedFlow}
-        onBack={vi.fn()}
-        onUpdateDraft={vi.fn()}
-        onPublish={vi.fn()}
-        onSimulate={onSimulate}
-        onCreateManualRun={onCreateManualRun}
-        runtimeAvailability={definitionOnlyRuntime}
-      />
-    );
-
-    const testRunButtons = screen.getAllByRole("button", { name: "Тестовый прогон" });
-    const manualRunButton = screen.getByRole("button", { name: "Создать запуск" });
-
-    expect(testRunButtons).toHaveLength(2);
-    expect(testRunButtons[0]).toHaveProperty("disabled", true);
-    expect(testRunButtons[1]).toHaveProperty("disabled", true);
-    expect(manualRunButton).toHaveProperty("disabled", true);
+    expect(screen.getByRole("heading", { name: flow.name })).toBeTruthy();
     expect(
       screen.getByText(
-        "Исполнение воронки пока недоступно. Сценарий можно редактировать и публиковать."
+        (_, element) =>
+          element?.tagName === "P" && element.textContent?.startsWith("Черновик") === true
       )
     ).toBeTruthy();
-
-    fireEvent.click(testRunButtons[0] ?? raise("Expected header test button"));
-    fireEvent.click(testRunButtons[1] ?? raise("Expected runtime test button"));
-    fireEvent.click(manualRunButton);
-
-    expect(onSimulate).not.toHaveBeenCalled();
-    expect(onCreateManualRun).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "Логика" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Работа астролога" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Результаты" })).toBeTruthy();
+    expect(screen.queryByText("AI-узлы")).toBeNull();
+    expect(screen.queryByText("Отправить сообщение")).toBeNull();
+    expect(screen.queryByText("birth_data_available")).toBeNull();
+    expect(screen.queryByLabelText("Конфигурация")).toBeNull();
+    expect(screen.getByLabelText("Название узла")).toBeTruthy();
   });
 
-  it("publishes the selected flow", () => {
-    const onPublish = vi.fn();
-    render(<FlowBuilder flow={flow} onBack={vi.fn()} onUpdateDraft={vi.fn()} onPublish={onPublish} />);
+  it("keeps edits local and saves graph plus presentation with optimistic revision", () => {
+    const onSaveDraft = vi.fn();
+    renderBuilder({ onSaveDraft });
 
-    fireEvent.click(screen.getByRole("button", { name: "Опубликовать" }));
+    fireEvent.change(screen.getByLabelText("Название узла"), {
+      target: { value: "Выбрать клиента" }
+    });
+    expect(onSaveDraft).not.toHaveBeenCalled();
+    expect(screen.getByText("Есть несохранённые изменения")).toBeTruthy();
 
-    expect(onPublish).toHaveBeenCalledWith(flow.id, flow.draftGraph);
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(onSaveDraft).toHaveBeenCalledWith({
+      flowId: flow.id,
+      expectedRevision: 4,
+      graph: expect.objectContaining({
+        nodes: [expect.objectContaining({ id: "manual-client", displayTitle: "Выбрать клиента" })]
+      }),
+      presentation: flow.draftPresentation
+    });
   });
 
-  it("keeps a node title local until blur, then persists the completed draft", () => {
-    const onUpdateDraft = vi.fn();
-    render(<FlowBuilder flow={flow} onBack={vi.fn()} onUpdateDraft={onUpdateDraft} onPublish={vi.fn()} />);
+  it("adds a node only through the selected free semantic handle", () => {
+    renderBuilder();
 
-    const title = screen.getByLabelText("Название узла");
-    fireEvent.change(title, { target: { value: "Новый клиент" } });
-
-    expect((title as HTMLInputElement).value).toBe("Новый клиент");
-    expect(onUpdateDraft).not.toHaveBeenCalled();
-
-    fireEvent.blur(title);
-
-    expect(onUpdateDraft).toHaveBeenCalledWith(
-      flow.id,
-      expect.objectContaining({
-        nodes: expect.arrayContaining([expect.objectContaining({ id: "lead_created", title: "Новый клиент" })])
-      })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Добавить узел: Данные рождения заполнены?" })
     );
+
+    expect((screen.getByLabelText("Название узла") as HTMLInputElement).value).toBe(
+      "Данные рождения заполнены?"
+    );
+    expect(screen.getByLabelText("Связи воронки").textContent).toContain(
+      "Клиент выбран вручную — Далее → Данные рождения заполнены?"
+    );
+    expect(screen.getByText("Есть несохранённые изменения")).toBeTruthy();
   });
 
-  it("publishes the current local draft graph without waiting for a blur save", () => {
-    const onUpdateDraft = vi.fn();
+  it("publishes the exact local draft and tells the controller whether a save is required", () => {
     const onPublish = vi.fn();
-    render(<FlowBuilder flow={flow} onBack={vi.fn()} onUpdateDraft={onUpdateDraft} onPublish={onPublish} />);
+    renderBuilder({ onPublish });
 
-    fireEvent.change(screen.getByLabelText("Название узла"), { target: { value: "Новый клиент" } });
+    fireEvent.change(screen.getByLabelText("Название узла"), {
+      target: { value: "Выбрать клиента" }
+    });
     fireEvent.click(screen.getByRole("button", { name: "Опубликовать" }));
 
-    expect(onUpdateDraft).not.toHaveBeenCalled();
     expect(onPublish).toHaveBeenCalledWith(
-      flow.id,
       expect.objectContaining({
-        nodes: expect.arrayContaining([expect.objectContaining({ id: "lead_created", title: "Новый клиент" })])
+        flowId: flow.id,
+        expectedRevision: 4,
+        saveBeforePublish: true,
+        graph: expect.objectContaining({
+          nodes: [expect.objectContaining({ displayTitle: "Выбрать клиента" })]
+        })
       })
     );
   });
 
-  it("persists an explicit canvas move through the draft callback", () => {
-    const onUpdateDraft = vi.fn();
-    render(<FlowBuilder flow={flow} onBack={vi.fn()} onUpdateDraft={onUpdateDraft} onPublish={vi.fn()} />);
+  it("renders exact server validation evidence and focuses the affected node", () => {
+    renderBuilder({
+      validationIssues: [
+        {
+          code: "missing_required_source_handle",
+          severity: "error",
+          blocking: true,
+          path: "nodes.manual-client.next",
+          message: "Node manual_client requires exactly one next edge."
+        }
+      ]
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Сместить вправо: Новый лид" }));
-
-    expect(onUpdateDraft).toHaveBeenCalledWith(
-      flow.id,
-      expect.objectContaining({
-        nodes: expect.arrayContaining([
-          expect.objectContaining({ id: "lead_created", position: { x: 120, y: 120 } })
-        ])
-      })
-    );
+    const issue = screen.getByRole("alert", { name: "Проверка схемы" });
+    expect(issue.textContent).toContain("Добавьте обязательное продолжение");
+    expect(issue.textContent).toContain("missing_required_source_handle");
+    expect(issue.textContent).toContain("nodes.manual-client.next");
+    fireEvent.click(screen.getByRole("button", { name: "Показать узел с проблемой" }));
+    expect(screen.getByLabelText("Название узла")).toBeTruthy();
   });
 
-  it("adds a palette action node to the selected draft path and opens it in the inspector", () => {
-    const onUpdateDraft = vi.fn();
-    render(<FlowBuilder flow={flow} onBack={vi.fn()} onUpdateDraft={onUpdateDraft} onPublish={vi.fn()} />);
+  it("locks every structural editing surface while a definition command is pending", () => {
+    renderBuilder({ isSaving: true });
 
-    fireEvent.click(screen.getByRole("button", { name: "Добавить узел: Запросить данные" }));
-
-    expect(onUpdateDraft).toHaveBeenCalledWith(
-      flow.id,
-      expect.objectContaining({
-        nodes: [
-          flow.draftGraph.nodes[0],
-          expect.objectContaining({
-            id: "request_birth_data",
-            category: "action",
-            kind: "request_birth_data",
-            title: "Запросить данные",
-            approvalMode: "manual_approve"
-          }),
-          { ...flow.draftGraph.nodes[1], position: { x: 600, y: 120 } }
-        ],
-        edges: [
-          {
-            id: "lead_created-to-request_birth_data",
-            fromNodeId: "lead_created",
-            toNodeId: "request_birth_data"
-          },
-          {
-            id: "request_birth_data-to-ai_interpretation",
-            fromNodeId: "request_birth_data",
-            toNodeId: "ai_interpretation"
-          }
-        ]
-      })
-    );
-    expect((screen.getByLabelText("Название узла") as HTMLInputElement).value).toBe("Запросить данные");
+    expect(screen.getByLabelText("Название узла")).toHaveProperty("disabled", true);
+    expect(
+      screen.getByRole("button", { name: "Добавить узел: Данные рождения заполнены?" })
+    ).toHaveProperty("disabled", true);
+    expect(screen.queryByRole("button", { name: /Сместить вправо/ })).toBeNull();
   });
 
-  it("keeps the selected palette node after the same flow refetches with the saved graph", () => {
-    const onUpdateDraft = vi.fn();
-    const { rerender } = render(
-      <FlowBuilder flow={flow} onBack={vi.fn()} onUpdateDraft={onUpdateDraft} onPublish={vi.fn()} />
-    );
+  it("renders the graph read-only on a mobile viewport", () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === "(max-width: 760px)",
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      }))
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Добавить узел: Запросить данные" }));
-    const savedGraph = onUpdateDraft.mock.calls.at(-1)?.[1];
-    rerender(
+    try {
+      renderBuilder();
+
+      expect(screen.getByText("Редактирование схемы доступно на компьютере.")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Добавить узел/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Сместить вправо/ })).toBeNull();
+      expect(screen.queryByLabelText("Название узла")).toBeNull();
+      expect(screen.getByRole("region", { name: "Схема воронки" })).toBeTruthy();
+    } finally {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: originalMatchMedia
+      });
+    }
+  });
+
+  it("preserves a local candidate when a newer server revision arrives", () => {
+    const onSaveDraft = vi.fn();
+    const rendered = renderBuilder({ onSaveDraft });
+
+    fireEvent.change(screen.getByLabelText("Название узла"), {
+      target: { value: "Локальное название" }
+    });
+    rendered.rerender(
       <FlowBuilder
-        flow={{ ...flow, draftGraph: savedGraph }}
+        flow={{
+          ...flow,
+          revision: 7,
+          draftGraph: {
+            ...flow.draftGraph,
+            nodes: [{ ...flow.draftGraph.nodes[0]!, displayTitle: "Серверное название" }]
+          }
+        }}
+        locale="ru"
         onBack={vi.fn()}
-        onUpdateDraft={onUpdateDraft}
+        onSaveDraft={onSaveDraft}
         onPublish={vi.fn()}
       />
     );
 
-    expect((screen.getByLabelText("Название узла") as HTMLInputElement).value).toBe("Запросить данные");
+    expect((screen.getByLabelText("Название узла") as HTMLInputElement).value).toBe(
+      "Локальное название"
+    );
+    expect(screen.getByRole("alert").textContent).toContain("редакция 7");
+
+    fireEvent.click(screen.getByRole("button", { name: "Повторить поверх редакции 7" }));
+    expect(onSaveDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedRevision: 7,
+        graph: expect.objectContaining({
+          nodes: [expect.objectContaining({ displayTitle: "Локальное название" })]
+        })
+      })
+    );
   });
 
-  it("shows mutation failures and retries the relevant operation", () => {
-    const onUpdateDraft = vi.fn();
-    const onPublish = vi.fn();
-    render(
+  it("does not duplicate a revision conflict with the generic command error", () => {
+    renderBuilder({
+      revisionConflict: {
+        operation: "save",
+        expectedRevision: 4,
+        currentRevision: 7
+      },
+      saveError: new Error("Черновик изменился в другой вкладке")
+    });
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByRole("alert").textContent).toContain("редакция 7");
+    expect(screen.queryByText("Черновик изменился в другой вкладке")).toBeNull();
+  });
+
+  it("keeps local edits and surfaces a failed server-version reload", async () => {
+    const onReloadServer = vi.fn().mockRejectedValue(new Error("Серверная версия недоступна"));
+    const rendered = renderBuilder();
+
+    fireEvent.change(screen.getByLabelText("Название узла"), {
+      target: { value: "Локальное название" }
+    });
+    rendered.rerender(
       <FlowBuilder
-        flow={flow}
+        flow={{ ...flow, revision: 7 }}
+        locale="ru"
         onBack={vi.fn()}
-        onUpdateDraft={onUpdateDraft}
-        onPublish={onPublish}
-        draftUpdateError={new Error("Не удалось сохранить черновик")}
-        publishError={new Error("Не удалось опубликовать воронку")}
+        onSaveDraft={vi.fn()}
+        onPublish={vi.fn()}
+        onReloadServer={onReloadServer}
       />
     );
 
-    expect(screen.getByText("Не удалось сохранить черновик")).toBeTruthy();
-    expect(screen.getByText("Не удалось опубликовать воронку")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Повторить сохранение" }));
-    fireEvent.click(screen.getByRole("button", { name: "Повторить публикацию" }));
+    fireEvent.click(screen.getByRole("button", { name: "Загрузить серверную версию" }));
 
-    expect(onUpdateDraft).toHaveBeenCalledWith(flow.id, flow.draftGraph);
-    expect(onPublish).toHaveBeenCalledWith(flow.id, flow.draftGraph);
+    await waitFor(() => {
+      expect(screen.getByText("Серверная версия недоступна")).toBeTruthy();
+    });
+    expect((screen.getByLabelText("Название узла") as HTMLInputElement).value).toBe(
+      "Локальное название"
+    );
+  });
+
+  it("requires explicit confirmation before leaving with unsaved edits", () => {
+    const onBack = vi.fn();
+    renderBuilder({ onBack });
+
+    fireEvent.change(screen.getByLabelText("Название узла"), {
+      target: { value: "Локальное название" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Все воронки" }));
+
+    expect(onBack).not.toHaveBeenCalled();
+    expect(screen.getByRole("group", { name: "Несохранённые изменения" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Остаться" }));
+    expect(onBack).not.toHaveBeenCalled();
+    expect(screen.queryByRole("group", { name: "Несохранённые изменения" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Все воронки" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выйти без сохранения" }));
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it("guards a browser unload while the local draft is dirty", () => {
+    renderBuilder();
+    fireEvent.change(screen.getByLabelText("Название узла"), {
+      target: { value: "Локальное название" }
+    });
+
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("keeps a published definition immutable and offers an explicit next draft", () => {
+    const onCreateNextDraft = vi.fn();
+    const versioned = {
+      ...flow,
+      state: "versioned",
+      runtimeStatus: "published",
+      revision: 5,
+      latestPublishedVersionId: "33333333-3333-4333-8333-333333333333",
+      latestPublishedVersion: 1,
+      publishedAt: "2026-07-28T08:30:00.000Z"
+    } satisfies FlowDefinitionDetailV2;
+    renderBuilder({ flow: versioned, onCreateNextDraft });
+
+    expect(screen.getByLabelText("Название узла")).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Создать новую версию" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Опубликовать" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Создать новую версию" }));
+    expect(onCreateNextDraft).toHaveBeenCalledWith({
+      flowId: flow.id,
+      expectedRevision: 5,
+      baseVersionId: versioned.latestPublishedVersionId
+    });
+  });
+
+  it("does not offer a new draft for an archived definition", () => {
+    const archived = {
+      ...flow,
+      state: "archived",
+      runtimeStatus: "archived",
+      revision: 6,
+      latestPublishedVersionId: "33333333-3333-4333-8333-333333333333",
+      latestPublishedVersion: 1,
+      publishedAt: "2026-07-28T08:30:00.000Z"
+    } satisfies FlowDefinitionDetailV2;
+
+    renderBuilder({ flow: archived, onCreateNextDraft: vi.fn() });
+
+    expect(screen.queryByRole("button", { name: "Создать новую версию" })).toBeNull();
+  });
+
+  it("keeps test execution disabled from server runtime evidence", () => {
+    const onSimulate = vi.fn();
+    renderBuilder({ runtimeAvailability: definitionOnlyRuntime, onSimulate });
+
+    const testRun = screen.getByRole("button", { name: "Тестовый прогон" });
+    expect(testRun).toHaveProperty("disabled", true);
+    fireEvent.click(testRun);
+    expect(onSimulate).not.toHaveBeenCalled();
   });
 });
 
-function raise(message: string): never {
-  throw new Error(message);
+function renderBuilder(overrides: Partial<Parameters<typeof FlowBuilder>[0]> = {}) {
+  return render(
+    <FlowBuilder
+      flow={flow}
+      locale="ru"
+      onBack={vi.fn()}
+      onSaveDraft={vi.fn()}
+      onPublish={vi.fn()}
+      {...overrides}
+    />
+  );
 }

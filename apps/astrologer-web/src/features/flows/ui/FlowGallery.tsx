@@ -1,11 +1,11 @@
-import type { FlowResponse, FlowRuntimeAvailability, FlowTemplate } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummaryV2, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { buildFlowAutomationControl } from "../model/flowRuntimePresentation";
-import { buildFlowGalleryCard, buildFlowTemplateCard } from "./flowsVisualModel";
+import { buildFlowGalleryCard } from "./flowsVisualModel";
 
 export type FlowGalleryProps = {
-  readonly flows: readonly FlowResponse[];
-  readonly templates?: readonly FlowTemplate[];
+  readonly flows: readonly FlowDefinitionSummaryV2[];
+  readonly locale: "ru" | "en";
   readonly runtimeAvailability?: FlowRuntimeAvailability | null;
   readonly onCreateFlow?: () => void;
   readonly isCreating?: boolean;
@@ -19,7 +19,7 @@ export type FlowGalleryClassNames = Readonly<Record<string, string>>;
 
 export function FlowGallery({
   flows,
-  templates = [],
+  locale,
   runtimeAvailability = null,
   onCreateFlow,
   isCreating = false,
@@ -29,11 +29,11 @@ export function FlowGallery({
   classNames
 }: FlowGalleryProps) {
   const cards = flows.map((flow) => ({
-    card: buildFlowGalleryCard(flow),
-    automation: buildFlowAutomationControl(flow, runtimeAvailability)
+    card: buildFlowGalleryCard(flow, locale),
+    automation: buildFlowAutomationControl(flow, runtimeAvailability, locale)
   }));
-  const templateCards = templates.map(buildFlowTemplateCard);
   const className = (name: keyof FlowGalleryClassNames) => classNames?.[name] ?? "";
+  const copy = galleryCopy[locale];
 
   return (
     <div className={className("gallery")}>
@@ -43,7 +43,7 @@ export function FlowGallery({
             <Icon iconName="flow" width={18} height={18} />
           </span>
           <h1 id="flows-title" className={className("title")}>
-            Воронки <span className={className("count")}>{flows.length}</span>
+            {copy.title} <span className={className("count")}>{flows.length}</span>
           </h1>
         </div>
         <button
@@ -51,30 +51,27 @@ export function FlowGallery({
           type="button"
           onClick={onCreateFlow}
           disabled={!onCreateFlow || isCreating}
-          title={onCreateFlow ? undefined : "Создание воронки будет доступно в конструкторе"}
         >
           <Icon iconName="plus" width={15} height={15} aria-hidden="true" />
-          Новая воронка
+          {copy.create}
         </button>
       </header>
 
-      <div className={className("galleryGrid")} aria-label="Воронки">
+      <div className={className("galleryGrid")} aria-label={copy.title}>
         {cards.map(({ card, automation }) => (
           <article key={card.id} className={className("flowCard")}>
             <button
               className={className("graphPreview")}
               type="button"
-              aria-label={`Открыть схему: ${card.title}`}
+              aria-label={`${copy.open}: ${card.title}`}
               onClick={() => onOpenFlow?.(card.id)}
               disabled={!onOpenFlow}
-              title={onOpenFlow ? undefined : "Конструктор воронки будет доступен в следующем шаге"}
             >
-              {card.pathPreview.map((nodeTitle, index) => (
-                <span key={nodeTitle} className={className("graphNode")} title={nodeTitle}>
-                  {index > 0 ? <span className={className("graphConnector")} aria-hidden="true" /> : null}
-                  <span>{nodeTitle}</span>
-                </span>
-              ))}
+              <span className={className("graphNode")}>{card.graphSchemaLabel}</span>
+              <span className={className("graphNode")}>{card.originLabel}</span>
+              {card.migrationRequired ? (
+                <span className={className("graphNode")}>{copy.migrationRequired}</span>
+              ) : null}
             </button>
             <div className={className("cardBody")}>
               <div className={className("cardHeading")}>
@@ -82,34 +79,36 @@ export function FlowGallery({
               </div>
               <div className={className("chipRow")}>
                 <span className={className("statusChip")}>
-                  {automation.statusLabel ?? card.statusLabel}
+                  {automation.statusLabel ?? card.runtimeStatusLabel}
                 </span>
                 <span className={className("approvalChip")}>{card.approvalModeLabel}</span>
               </div>
             </div>
             <footer className={className("cardFooter")}>
               <dl className={className("metrics")}>
-                <Metric classNames={classNames} label="В работе" value={card.metrics.activeRuns} />
-                <Metric classNames={classNames} label="Ожидают" value={card.metrics.waitingApprovals} />
-                <Metric classNames={classNames} label="Завершено" value={card.metrics.completedRuns} />
-                <Metric classNames={classNames} label="Конверсия" value={card.metrics.conversionRate} />
+                <Metric
+                  classNames={classNames}
+                  label={copy.definition}
+                  value={card.definitionStateLabel}
+                />
+                <Metric
+                  classNames={classNames}
+                  label={copy.runtime}
+                  value={automation.statusLabel ?? card.runtimeStatusLabel}
+                />
+                <Metric classNames={classNames} label={copy.revision} value={card.revisionLabel} />
+                <Metric
+                  classNames={classNames}
+                  label={copy.version}
+                  value={card.publishedVersionLabel}
+                />
               </dl>
-              <button
-                className={className("automationToggle")}
-                type="button"
-                role="switch"
-                aria-checked={automation.checked}
-                aria-label={automation.accessibleLabel}
+              <AutomationToggle
+                automation={automation}
                 disabled={!onAutomationToggle || !automation.canToggle || isTogglingAutomation}
-                title={automation.title}
-                onClick={() => {
-                  if (automation.canToggle) {
-                    onAutomationToggle?.(card.id, automation.nextActive);
-                  }
-                }}
-              >
-                <span aria-hidden="true" />
-              </button>
+                onToggle={() => onAutomationToggle?.(card.id, automation.nextActive)}
+                className={className("automationToggle")}
+              />
             </footer>
           </article>
         ))}
@@ -119,16 +118,43 @@ export function FlowGallery({
           type="button"
           onClick={onCreateFlow}
           disabled={!onCreateFlow || isCreating}
-          title={onCreateFlow ? undefined : "Создание воронки будет доступно в конструкторе"}
+          aria-label={copy.create}
         >
           <Icon iconName="plus" width={26} height={26} aria-hidden="true" />
-          <span>Новая воронка</span>
-          <small className={className("newFlowHint")}>
-            {templateCards.length > 0 ? "С нуля или из готового сценария" : "Создайте первый сценарий"}
-          </small>
+          <span>{copy.create}</span>
+          <small className={className("newFlowHint")}>{copy.createHint}</small>
         </button>
       </div>
     </div>
+  );
+}
+
+function AutomationToggle({
+  automation,
+  disabled,
+  onToggle,
+  className
+}: {
+  readonly automation: ReturnType<typeof buildFlowAutomationControl>;
+  readonly disabled: boolean;
+  readonly onToggle: () => void;
+  readonly className: string;
+}) {
+  return (
+    <button
+      className={className}
+      type="button"
+      role="switch"
+      aria-checked={automation.checked}
+      aria-label={automation.accessibleLabel}
+      disabled={disabled}
+      title={automation.title}
+      onClick={() => {
+        if (automation.canToggle) onToggle();
+      }}
+    >
+      <span aria-hidden="true" />
+    </button>
   );
 }
 
@@ -139,12 +165,37 @@ function Metric({
 }: {
   readonly classNames: FlowGalleryClassNames | undefined;
   readonly label: string;
-  readonly value: number | null;
+  readonly value: string;
 }) {
   return (
     <div className={classNames?.metric ?? ""}>
       <dt>{label}</dt>
-      <dd className={classNames?.metricValue ?? ""}>{value ?? "-"}</dd>
+      <dd className={classNames?.metricValue ?? ""}>{value}</dd>
     </div>
   );
 }
+
+const galleryCopy = {
+  ru: {
+    title: "Воронки",
+    create: "Новая воронка",
+    open: "Открыть схему",
+    createHint: "С нуля или из доступного сценария",
+    migrationRequired: "Требуется миграция",
+    definition: "Состояние",
+    runtime: "Исполнение",
+    revision: "Редакция",
+    version: "Версия"
+  },
+  en: {
+    title: "Flows",
+    create: "New flow",
+    open: "Open flow",
+    createHint: "Start blank or use an available template",
+    migrationRequired: "Migration required",
+    definition: "Definition",
+    runtime: "Runtime",
+    revision: "Revision",
+    version: "Version"
+  }
+} as const;

@@ -55,7 +55,7 @@ export function InboxPage() {
   const channelConnectionsQuery = useQuery(listMessagingChannelConnectionsQueryOptions());
   const threadsQuery = useQuery(listMessagingThreadsQueryOptions({ limit: 50, offset: 0 }));
   const threadQuery = useQuery(getMessagingThreadQueryOptions(selectedThreadId));
-  const flowsQuery = useFlowListQuery({ status: "all", limit: 50, offset: 0 });
+  const flowsQuery = useFlowListQuery({ state: "all", runtimeStatus: "all", limit: 50, offset: 0 });
   const liveFlowRuntimeAvailable = canProjectLiveFlowRuntime(flowsQuery.data?.runtime);
   const flowRunsQueries = useQueries({
     queries: (flowsQuery.data?.flows ?? []).map((flow) => ({
@@ -108,18 +108,17 @@ export function InboxPage() {
       runsByFlowId
     });
   }, [flowRunsQueries, flowsQuery.data?.flows, flowsQuery.data?.runtime, threads]);
-  const flowContextStatus =
-    flowsQuery.isError
-      ? "error"
-      : flowsQuery.isLoading
-        ? "loading"
-        : !liveFlowRuntimeAvailable
-          ? "unavailable"
-          : flowRunsQueries.some((query) => query.isError)
-            ? "error"
-            : flowRunsQueries.some((query) => query.isLoading || query.isFetching)
-              ? "loading"
-              : "ready";
+  const flowContextStatus = flowsQuery.isError
+    ? "error"
+    : flowsQuery.isLoading
+      ? "loading"
+      : !liveFlowRuntimeAvailable
+        ? "unavailable"
+        : flowRunsQueries.some((query) => query.isError)
+          ? "error"
+          : flowRunsQueries.some((query) => query.isLoading || query.isFetching)
+            ? "loading"
+            : "ready";
 
   useDocumentTitle("ElevenHouse | Сообщения");
 

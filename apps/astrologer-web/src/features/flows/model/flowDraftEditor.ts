@@ -1,233 +1,331 @@
-import type { FlowGraph, FlowNode, FlowNodePosition } from "@elevenhouse/contracts";
+import type {
+  FlowGraphV2,
+  FlowNodeKindV2,
+  FlowNodeV2,
+  FlowPresentationV1,
+  FlowSourceHandleV2
+} from "@elevenhouse/contracts";
 
-export type FlowPaletteNodeId =
-  | "request_birth_data"
-  | "send_message"
-  | "reply_draft"
-  | "data_available"
-  | "approval";
+export type FlowEditorLocale = "ru" | "en";
 
-type FlowPaletteNodeTemplate =
-  | Omit<Extract<FlowNode, { category: "action" }>, "id" | "position">
-  | Omit<Extract<FlowNode, { category: "ai" }>, "id" | "position">
-  | Omit<Extract<FlowNode, { category: "condition" }>, "id" | "position">
-  | Omit<Extract<FlowNode, { category: "handoff" }>, "id" | "position">;
+export type FlowPaletteNodeId = Exclude<FlowNodeKindV2, "booking_confirmed" | "manual_client">;
 
 export type FlowPaletteNodeDefinition = {
   readonly id: FlowPaletteNodeId;
-  readonly label: string;
-  readonly description: string;
-  readonly node: FlowPaletteNodeTemplate;
+  readonly label: Readonly<Record<FlowEditorLocale, string>>;
+  readonly description: Readonly<Record<FlowEditorLocale, string>>;
 };
 
 export const flowPaletteNodeGroups = [
   {
-    id: "actions",
-    label: "Действия",
+    id: "logic",
+    label: { ru: "Логика", en: "Logic" },
     nodes: [
       {
-        id: "request_birth_data",
-        label: "Запросить данные",
-        description: "Форма BirthData перед расчетом или консультацией",
-        node: {
-          category: "action",
-          kind: "request_birth_data",
-          approvalMode: "manual_approve",
-          title: "Запросить данные",
-          config: { form: "birth_data" }
+        id: "birth_data_available",
+        label: { ru: "Данные рождения заполнены?", en: "Birth data available?" },
+        description: {
+          ru: "Выбрать ветку по данным для подготовки услуги",
+          en: "Choose a branch using service preparation data"
+        }
+      }
+    ]
+  },
+  {
+    id: "human",
+    label: { ru: "Работа астролога", en: "Astrologer work" },
+    nodes: [
+      {
+        id: "astrologer_work_item",
+        label: { ru: "Задача астрологу", en: "Astrologer task" },
+        description: {
+          ru: "Остановить сценарий до выполнения внутренней задачи",
+          en: "Wait until an internal task is completed"
         }
       },
       {
-        id: "send_message",
-        label: "Отправить сообщение",
-        description: "Черновик сообщения в подключенный канал",
-        node: {
-          category: "action",
-          kind: "send_message",
-          approvalMode: "manual_approve",
-          title: "Отправить сообщение",
-          config: { channel: "preferred" }
+        id: "astrologer_approval",
+        label: { ru: "Решение астролога", en: "Astrologer approval" },
+        description: {
+          ru: "Продолжить по ветке подтверждения или отклонения",
+          en: "Continue through an approved or rejected branch"
         }
       }
     ]
   },
   {
-    id: "ai",
-    label: "AI-узлы",
+    id: "outcomes",
+    label: { ru: "Результаты", en: "Outcomes" },
     nodes: [
       {
-        id: "reply_draft",
-        label: "AI-черновик ответа",
-        description: "Готовит текст, который астролог подтверждает вручную",
-        node: {
-          category: "ai",
-          kind: "reply_draft",
-          approvalMode: "manual_approve",
-          title: "AI-черновик ответа",
-          config: { task: "reply_draft" }
+        id: "completed",
+        label: { ru: "Завершено", en: "Completed" },
+        description: {
+          ru: "Успешный измеримый итог сценария",
+          en: "A successful measurable flow outcome"
         }
-      }
-    ]
-  },
-  {
-    id: "logic",
-    label: "Логика",
-    nodes: [
+      },
       {
-        id: "data_available",
-        label: "Данные получены?",
-        description: "Ветвление по наличию данных клиента",
-        node: {
-          category: "condition",
-          kind: "data_available",
-          title: "Данные получены?",
-          config: { data: "birth_data" }
+        id: "suppressed",
+        label: { ru: "Подавлено", en: "Suppressed" },
+        description: {
+          ru: "Корректно остановить сценарий по бизнес-причине",
+          en: "Stop the flow for an explicit business reason"
         }
-      }
-    ]
-  },
-  {
-    id: "handoff",
-    label: "Человек",
-    nodes: [
+      },
       {
-        id: "approval",
-        label: "Подтверждение астролога",
-        description: "Остановить сценарий до ручного решения",
-        node: {
-          category: "handoff",
-          kind: "approval",
-          approvalMode: "manual_approve",
-          title: "Подтверждение астролога",
-          config: { queue: "default" }
+        id: "failed",
+        label: { ru: "Ошибка", en: "Failed" },
+        description: {
+          ru: "Завершить сценарий с типизированной ошибкой",
+          en: "Finish the flow with a typed error"
         }
       }
     ]
   }
 ] satisfies ReadonlyArray<{
   readonly id: string;
-  readonly label: string;
+  readonly label: Readonly<Record<FlowEditorLocale, string>>;
   readonly nodes: readonly FlowPaletteNodeDefinition[];
 }>;
 
-export function renameFlowNode(graph: FlowGraph, nodeId: string, title: string): FlowGraph {
-  return updateFlowNode(graph, nodeId, (node) => ({ ...node, title }));
+export function renameFlowNode(
+  graph: FlowGraphV2,
+  nodeId: string,
+  displayTitle: string
+): FlowGraphV2 {
+  return updateFlowNode(graph, nodeId, (node) => ({ ...node, displayTitle }));
 }
 
-export function updateFlowNodeConfig(
-  graph: FlowGraph,
-  nodeId: string,
-  config: Record<string, unknown>
-): FlowGraph {
-  return updateFlowNode(graph, nodeId, (node) => ({ ...node, config }));
+export function replaceFlowNode(graph: FlowGraphV2, replacement: FlowNodeV2): FlowGraphV2 {
+  return updateFlowNode(graph, replacement.id, () => replacement);
 }
 
-export function moveFlowNode(
-  graph: FlowGraph,
+type FlowNodeOfKind<TKind extends FlowNodeKindV2> = Extract<FlowNodeV2, { kind: TKind }>;
+
+export function updateFlowNodeConfig<TKind extends FlowNodeKindV2>(
+  graph: FlowGraphV2,
   nodeId: string,
-  position: FlowNodePosition
-): FlowGraph {
-  return updateFlowNode(graph, nodeId, (node) => ({ ...node, position }));
+  kind: TKind,
+  config: FlowNodeOfKind<TKind>["config"]
+): FlowGraphV2 {
+  return updateFlowNode(graph, nodeId, (node) => {
+    if (node.kind !== kind) throw new Error("FLOW_NODE_KIND_MISMATCH");
+
+    return { ...node, config } as FlowNodeV2;
+  });
+}
+
+export function moveFlowNodePresentation(
+  presentation: FlowPresentationV1,
+  nodeId: string,
+  position: { readonly x: number; readonly y: number }
+): FlowPresentationV1 {
+  let found = false;
+  const nodes = presentation.nodes.map((node) => {
+    if (node.nodeId !== nodeId) return node;
+    found = true;
+    return { ...node, position };
+  });
+
+  if (!found) throw new Error("FLOW_PRESENTATION_NODE_NOT_FOUND");
+  return { ...presentation, nodes };
+}
+
+export function getRequiredSourceHandles(node: FlowNodeV2): readonly FlowSourceHandleV2[] {
+  if (node.kind === "booking_confirmed" || node.kind === "manual_client") return ["next"];
+  if (node.kind === "birth_data_available") return ["true", "false"];
+  if (node.kind === "astrologer_work_item") return ["success"];
+  if (node.kind === "astrologer_approval") {
+    return node.config.expiresAfterMinutes
+      ? ["approved", "rejected", "timeout"]
+      : ["approved", "rejected"];
+  }
+  return [];
+}
+
+export function getAvailableSourceHandles(
+  graph: FlowGraphV2,
+  nodeId: string
+): readonly FlowSourceHandleV2[] {
+  const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+  if (!node) throw new Error("FLOW_NODE_NOT_FOUND");
+
+  const occupied = new Set(
+    graph.edges.filter((edge) => edge.sourceNodeId === nodeId).map((edge) => edge.sourceHandle)
+  );
+  return getRequiredSourceHandles(node).filter((handle) => !occupied.has(handle));
 }
 
 export function appendFlowNodeFromPalette(
-  graph: FlowGraph,
+  graph: FlowGraphV2,
+  presentation: FlowPresentationV1,
   input: {
-    readonly selectedNodeId: string | null;
+    readonly sourceNodeId: string;
+    readonly sourceHandle: FlowSourceHandleV2;
     readonly paletteNodeId: FlowPaletteNodeId;
+    readonly locale: FlowEditorLocale;
     readonly existingNodeIds?: ReadonlySet<string>;
   }
-): FlowGraph {
-  const definition = findPaletteNode(input.paletteNodeId);
-  const selectedIndex = input.selectedNodeId
-    ? graph.nodes.findIndex((node) => node.id === input.selectedNodeId)
-    : -1;
-  const insertAfterIndex = selectedIndex >= 0 ? selectedIndex : graph.nodes.length - 1;
-  const previousNode = graph.nodes[insertAfterIndex] ?? null;
-  const nextNode = graph.nodes[insertAfterIndex + 1] ?? null;
-  const existingIds = input.existingNodeIds ?? new Set(graph.nodes.map((node) => node.id));
-  const nodeId = uniqueNodeId(definition.id, existingIds);
+): {
+  readonly graph: FlowGraphV2;
+  readonly presentation: FlowPresentationV1;
+  readonly addedNodeId: string;
+} {
+  const sourceNode = graph.nodes.find((node) => node.id === input.sourceNodeId);
+  if (!sourceNode) throw new Error("FLOW_NODE_NOT_FOUND");
+  if (!getRequiredSourceHandles(sourceNode).includes(input.sourceHandle)) {
+    throw new Error("FLOW_SOURCE_HANDLE_INVALID");
+  }
+  if (
+    graph.edges.some(
+      (edge) => edge.sourceNodeId === input.sourceNodeId && edge.sourceHandle === input.sourceHandle
+    )
+  ) {
+    throw new Error("FLOW_SOURCE_HANDLE_OCCUPIED");
+  }
+
+  const existingNodeIds = input.existingNodeIds ?? new Set(graph.nodes.map((node) => node.id));
+  const nodeId = uniqueNodeId(nodeIdBase[input.paletteNodeId], existingNodeIds);
+  const node = createPaletteNode(input.paletteNodeId, nodeId, input.locale);
+  const sourcePosition =
+    presentation.nodes.find((item) => item.nodeId === input.sourceNodeId)?.position ??
+    fallbackPosition(graph.nodes.findIndex((candidate) => candidate.id === input.sourceNodeId));
   const position = {
-    x: (previousNode?.position?.x ?? 80) + 240,
-    y: previousNode?.position?.y ?? 120
+    x: sourcePosition.x + 320,
+    y: sourcePosition.y + branchOffset(input.sourceHandle)
   };
-  const node = {
-    ...definition.node,
-    id: nodeId,
-    position
-  } as FlowNode;
-  const nodes = [
-    ...graph.nodes.slice(0, insertAfterIndex + 1),
-    node,
-    ...shiftNodesRight(graph.nodes.slice(insertAfterIndex + 1))
-  ];
-  const edgesWithoutDirectNext =
-    previousNode && nextNode
-      ? graph.edges.filter(
-          (edge) => edge.fromNodeId !== previousNode.id || edge.toNodeId !== nextNode.id
-        )
-      : graph.edges;
-  const insertedEdges = previousNode
-    ? [
-        { id: `${previousNode.id}-to-${node.id}`, fromNodeId: previousNode.id, toNodeId: node.id },
-        ...(nextNode
-          ? [{ id: `${node.id}-to-${nextNode.id}`, fromNodeId: node.id, toNodeId: nextNode.id }]
-          : [])
-      ]
-    : [];
 
   return {
-    ...graph,
-    nodes,
-    edges: [...edgesWithoutDirectNext, ...insertedEdges]
+    graph: {
+      ...graph,
+      nodes: [...graph.nodes, node],
+      edges: [
+        ...graph.edges,
+        {
+          id: uniqueEdgeId(
+            `${input.sourceNodeId}-${input.sourceHandle}-to-${nodeId}`,
+            new Set(graph.edges.map((edge) => edge.id))
+          ),
+          sourceNodeId: input.sourceNodeId,
+          targetNodeId: nodeId,
+          sourceHandle: input.sourceHandle
+        }
+      ]
+    },
+    presentation: {
+      ...presentation,
+      nodes: [...presentation.nodes, { nodeId, position }]
+    },
+    addedNodeId: nodeId
   };
 }
 
 function updateFlowNode(
-  graph: FlowGraph,
+  graph: FlowGraphV2,
   nodeId: string,
-  update: (node: FlowGraph["nodes"][number]) => FlowGraph["nodes"][number]
-): FlowGraph {
+  update: (node: FlowNodeV2) => FlowNodeV2
+): FlowGraphV2 {
   let found = false;
   const nodes = graph.nodes.map((node) => {
-    if (node.id !== nodeId) {
-      return node;
-    }
-
+    if (node.id !== nodeId) return node;
     found = true;
     return update(node);
   });
 
-  if (!found) {
-    throw new Error("FLOW_NODE_NOT_FOUND");
-  }
-
+  if (!found) throw new Error("FLOW_NODE_NOT_FOUND");
   return { ...graph, nodes };
 }
 
-function findPaletteNode(id: FlowPaletteNodeId): FlowPaletteNodeDefinition {
-  for (const group of flowPaletteNodeGroups) {
-    const node = group.nodes.find((candidate) => candidate.id === id);
-    if (node) return node;
-  }
+function createPaletteNode(
+  kind: FlowPaletteNodeId,
+  id: string,
+  locale: FlowEditorLocale
+): FlowNodeV2 {
+  const title = paletteText[kind][locale];
+  const base = {
+    id,
+    displayTitle: title,
+    configSchemaVersion: 1 as const,
+    executorContractVersion: 1 as const
+  };
 
-  throw new Error("FLOW_PALETTE_NODE_NOT_FOUND");
+  if (kind === "birth_data_available") {
+    return { ...base, kind, config: { purpose: "service_preparation" } };
+  }
+  if (kind === "astrologer_work_item") {
+    return {
+      ...base,
+      kind,
+      config: {
+        taskKind: "consultation_preparation",
+        taskTitle: locale === "ru" ? "Подготовить консультацию" : "Prepare consultation",
+        priority: "normal"
+      }
+    };
+  }
+  if (kind === "astrologer_approval") {
+    return {
+      ...base,
+      kind,
+      config: {
+        approvalKind: "manual_task",
+        approvalTitle: locale === "ru" ? "Проверить результат" : "Review the result"
+      }
+    };
+  }
+  if (kind === "completed") {
+    return { ...base, kind, config: { goalKey: "flow_completed" } };
+  }
+  if (kind === "suppressed") {
+    return { ...base, kind, config: { reasonCode: "flow_suppressed" } };
+  }
+  return { ...base, kind: "failed", config: { errorCode: "flow_failed" } };
 }
+
+const paletteText = {
+  birth_data_available: { ru: "Данные рождения заполнены?", en: "Birth data available?" },
+  astrologer_work_item: { ru: "Задача астрологу", en: "Astrologer task" },
+  astrologer_approval: { ru: "Решение астролога", en: "Astrologer approval" },
+  completed: { ru: "Завершено", en: "Completed" },
+  suppressed: { ru: "Подавлено", en: "Suppressed" },
+  failed: { ru: "Ошибка", en: "Failed" }
+} satisfies Record<FlowPaletteNodeId, Record<FlowEditorLocale, string>>;
+
+const nodeIdBase = {
+  birth_data_available: "birth-data-available",
+  astrologer_work_item: "astrologer-work-item",
+  astrologer_approval: "astrologer-approval",
+  completed: "completed",
+  suppressed: "suppressed",
+  failed: "failed"
+} satisfies Record<FlowPaletteNodeId, string>;
 
 function uniqueNodeId(baseId: string, existingIds: ReadonlySet<string>): string {
   if (!existingIds.has(baseId)) return baseId;
-
   for (let suffix = 2; suffix < 10_000; suffix += 1) {
-    const candidate = `${baseId}_${suffix}`;
+    const candidate = `${baseId}-${suffix}`;
     if (!existingIds.has(candidate)) return candidate;
   }
-
   throw new Error("FLOW_NODE_ID_EXHAUSTED");
 }
 
-function shiftNodesRight(nodes: readonly FlowNode[]): readonly FlowNode[] {
-  return nodes.map((node) => ({
-    ...node,
-    position: node.position ? { x: node.position.x + 240, y: node.position.y } : undefined
-  }));
+function uniqueEdgeId(baseId: string, existingIds: ReadonlySet<string>): string {
+  if (!existingIds.has(baseId)) return baseId;
+  for (let suffix = 2; suffix < 10_000; suffix += 1) {
+    const candidate = `${baseId}-${suffix}`;
+    if (!existingIds.has(candidate)) return candidate;
+  }
+  throw new Error("FLOW_EDGE_ID_EXHAUSTED");
+}
+
+function branchOffset(handle: FlowSourceHandleV2): number {
+  if (handle === "false" || handle === "rejected") return 160;
+  if (handle === "timeout" || handle === "error") return 320;
+  return 0;
+}
+
+function fallbackPosition(index: number): { x: number; y: number } {
+  const normalizedIndex = Math.max(0, index);
+  return { x: 80 + normalizedIndex * 320, y: 120 };
 }

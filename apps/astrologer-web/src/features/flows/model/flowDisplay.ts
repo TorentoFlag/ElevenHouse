@@ -1,99 +1,144 @@
 import type {
-  CreateFlowRequest,
   FlowApprovalMode,
-  FlowGraph,
-  FlowNodeCategory,
-  FlowResponse,
+  FlowDefinitionState,
+  FlowDefinitionSummaryV2,
+  FlowNodeKindV2,
+  FlowSourceHandleV2,
   FlowStatus
 } from "@elevenhouse/contracts";
 
-export const flowStatusLabelRu = {
-  draft: "Черновик",
-  published: "Опубликована",
-  active: "Активна",
-  paused: "Пауза",
-  archived: "Архив"
-} satisfies Record<FlowStatus, string>;
+export type FlowDisplayLocale = "ru" | "en";
 
-export const flowApprovalModeLabelRu = {
-  draft_only: "Только черновики",
-  manual_approve: "С подтверждением",
-  auto_internal: "Авто внутри CRM",
-  auto_send: "Полный автомат"
-} satisfies Record<FlowApprovalMode, string>;
+export function flowDefinitionStateLabel(
+  state: FlowDefinitionState,
+  locale: FlowDisplayLocale
+): string {
+  return definitionStateLabels[locale][state];
+}
 
-export const flowCategoryLabelRu = {
-  trigger: "Триггер",
-  action: "Действие",
-  ai: "AI",
-  condition: "Условие",
-  delay: "Пауза",
-  handoff: "Хендофф",
-  terminal: "Финал"
-} satisfies Record<FlowNodeCategory, string>;
+export function flowRuntimeStatusLabel(status: FlowStatus, locale: FlowDisplayLocale): string {
+  return runtimeStatusLabels[locale][status];
+}
 
-export type FlowGraphSummary = {
-  readonly nodes: number;
-  readonly edges: number;
-  readonly aiNodes: number;
-  readonly actionNodes: number;
-  readonly triggerTitle: string | null;
-  readonly pathPreview: readonly string[];
+export function flowApprovalModeLabel(mode: FlowApprovalMode, locale: FlowDisplayLocale): string {
+  return approvalModeLabels[locale][mode];
+}
+
+export function flowNodeKindLabel(kind: FlowNodeKindV2, locale: FlowDisplayLocale): string {
+  return nodeKindLabels[locale][kind];
+}
+
+export function flowSourceHandleLabel(
+  handle: FlowSourceHandleV2,
+  locale: FlowDisplayLocale
+): string {
+  return sourceHandleLabels[locale][handle];
+}
+
+export type FlowDefinitionGallerySummary = {
+  readonly total: number;
+  readonly editableDrafts: number;
+  readonly versioned: number;
+  readonly archived: number;
+  readonly active: number;
+  readonly paused: number;
 };
 
-export type FlowGallerySummary = Record<FlowStatus | "total", number>;
+export function summarizeFlowDefinitions(
+  flows: readonly FlowDefinitionSummaryV2[]
+): FlowDefinitionGallerySummary {
+  return flows.reduce<FlowDefinitionGallerySummary>(
+    (summary, flow) => ({
+      total: summary.total + 1,
+      editableDrafts: summary.editableDrafts + (flow.state === "draft" ? 1 : 0),
+      versioned: summary.versioned + (flow.state === "versioned" ? 1 : 0),
+      archived: summary.archived + (flow.state === "archived" ? 1 : 0),
+      active: summary.active + (flow.runtimeStatus === "active" ? 1 : 0),
+      paused: summary.paused + (flow.runtimeStatus === "paused" ? 1 : 0)
+    }),
+    { total: 0, editableDrafts: 0, versioned: 0, archived: 0, active: 0, paused: 0 }
+  );
+}
 
-export function summarizeFlowGraph(graph: FlowGraph): FlowGraphSummary {
-  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
-  const trigger = graph.nodes.find((node) => node.category === "trigger") ?? graph.nodes[0] ?? null;
-  const pathPreview: string[] = [];
-  const seen = new Set<string>();
-  let cursor = trigger?.id ?? null;
+const definitionStateLabels = {
+  ru: { draft: "Черновик", versioned: "Опубликована", archived: "В архиве" },
+  en: { draft: "Draft", versioned: "Published", archived: "Archived" }
+} satisfies Record<FlowDisplayLocale, Record<FlowDefinitionState, string>>;
 
-  while (cursor && pathPreview.length < 5 && !seen.has(cursor)) {
-    seen.add(cursor);
-    const node = nodesById.get(cursor);
-    if (!node) break;
-
-    pathPreview.push(node.title);
-    cursor = graph.edges.find((edge) => edge.fromNodeId === node.id)?.toNodeId ?? null;
+const runtimeStatusLabels = {
+  ru: {
+    draft: "Не опубликована",
+    published: "Не запущена",
+    active: "Активна",
+    paused: "На паузе",
+    archived: "В архиве"
+  },
+  en: {
+    draft: "Not published",
+    published: "Not running",
+    active: "Active",
+    paused: "Paused",
+    archived: "Archived"
   }
+} satisfies Record<FlowDisplayLocale, Record<FlowStatus, string>>;
 
-  return {
-    nodes: graph.nodes.length,
-    edges: graph.edges.length,
-    aiNodes: graph.nodes.filter((node) => node.category === "ai").length,
-    actionNodes: graph.nodes.filter((node) => node.category === "action").length,
-    triggerTitle: trigger?.title ?? null,
-    pathPreview
-  };
-}
-
-export function summarizeFlows(flows: readonly FlowResponse[]): FlowGallerySummary {
-  const summary: FlowGallerySummary = {
-    total: flows.length,
-    draft: 0,
-    published: 0,
-    active: 0,
-    paused: 0,
-    archived: 0
-  };
-
-  for (const flow of flows) {
-    summary[flow.status] += 1;
+const approvalModeLabels = {
+  ru: {
+    draft_only: "Только черновик",
+    manual_approve: "С подтверждением",
+    auto_internal: "Автоматически внутри",
+    auto_send: "Автодоставка настроена"
+  },
+  en: {
+    draft_only: "Draft only",
+    manual_approve: "Approval required",
+    auto_internal: "Automatic internal actions",
+    auto_send: "Automatic delivery configured"
   }
+} satisfies Record<FlowDisplayLocale, Record<FlowApprovalMode, string>>;
 
-  return summary;
-}
+const nodeKindLabels = {
+  ru: {
+    booking_confirmed: "Запись подтверждена",
+    manual_client: "Ручной запуск",
+    birth_data_available: "Данные рождения",
+    astrologer_work_item: "Задача астрологу",
+    astrologer_approval: "Решение астролога",
+    completed: "Завершено",
+    suppressed: "Подавлено",
+    failed: "Ошибка"
+  },
+  en: {
+    booking_confirmed: "Booking confirmed",
+    manual_client: "Manual start",
+    birth_data_available: "Birth data",
+    astrologer_work_item: "Astrologer task",
+    astrologer_approval: "Astrologer approval",
+    completed: "Completed",
+    suppressed: "Suppressed",
+    failed: "Failed"
+  }
+} satisfies Record<FlowDisplayLocale, Record<FlowNodeKindV2, string>>;
 
-export function createFlowFromTemplateRequest(input: {
-  readonly name: string;
-  readonly approvalMode: FlowApprovalMode;
-  readonly graph: FlowGraph;
-}): CreateFlowRequest {
-  return {
-    name: input.name.trim(),
-    approvalMode: input.approvalMode,
-    graph: input.graph
-  };
-}
+const sourceHandleLabels = {
+  ru: {
+    next: "Далее",
+    true: "Да",
+    false: "Нет",
+    success: "Выполнено",
+    error: "Ошибка",
+    timeout: "Срок истёк",
+    approved: "Подтверждено",
+    rejected: "Отклонено"
+  },
+  en: {
+    next: "Next",
+    true: "Yes",
+    false: "No",
+    success: "Completed",
+    error: "Error",
+    timeout: "Timed out",
+    approved: "Approved",
+    rejected: "Rejected"
+  }
+} satisfies Record<FlowDisplayLocale, Record<FlowSourceHandleV2, string>>;

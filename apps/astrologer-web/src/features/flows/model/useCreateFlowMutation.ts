@@ -1,11 +1,12 @@
-import type { CreateFlowRequest, FlowResponse } from "@elevenhouse/contracts";
+import type { FlowDefinitionV2 } from "@elevenhouse/contracts";
 import { useMutation, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
+import type { CreateFlowInput } from "../api/createFlow";
 import { createFlowMutationOptions } from "./flowsQueryOptions";
 
 export function useCreateFlowMutation(): UseMutationResult<
-  FlowResponse,
+  FlowDefinitionV2,
   Error,
-  CreateFlowRequest
+  CreateFlowInput
 > {
   const queryClient = useQueryClient();
 

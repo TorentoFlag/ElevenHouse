@@ -738,13 +738,50 @@ CREATE TABLE "astro_calendar_events" (
 	CONSTRAINT "astro_calendar_events_range_check" CHECK ("astro_calendar_events"."ends_at" is null or "astro_calendar_events"."ends_at" >= "astro_calendar_events"."starts_at")
 );
 --> statement-breakpoint
+CREATE TABLE "flow_versions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"flow_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"version" integer NOT NULL,
+	"source_revision" integer,
+	"approval_mode" text NOT NULL,
+	"graph_schema_version" text,
+	"graph" jsonb NOT NULL,
+	"presentation" jsonb,
+	"capability_manifest" jsonb,
+	"published_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "flow_versions_id_owner_unique" UNIQUE("id","owner_user_id"),
+	CONSTRAINT "flow_versions_flow_id_id_owner_unique" UNIQUE("flow_id","id","owner_user_id"),
+	CONSTRAINT "flow_versions_flow_id_id_owner_published_unique" UNIQUE("flow_id","id","owner_user_id","published_at"),
+	CONSTRAINT "flow_versions_positive_version_check" CHECK ("flow_versions"."version" > 0),
+	CONSTRAINT "flow_versions_source_revision_check" CHECK ("flow_versions"."source_revision" is null or "flow_versions"."source_revision" > 0),
+	CONSTRAINT "flow_versions_approval_mode_check" CHECK ("flow_versions"."approval_mode" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
+	CONSTRAINT "flow_versions_graph_object_check" CHECK (jsonb_typeof("flow_versions"."graph") = 'object'),
+	CONSTRAINT "flow_versions_presentation_object_check" CHECK ("flow_versions"."presentation" is null or jsonb_typeof("flow_versions"."presentation") = 'object'),
+	CONSTRAINT "flow_versions_v2_metadata_check" CHECK ((
+        "flow_versions"."source_revision" is null
+        and "flow_versions"."graph_schema_version" is null
+        and "flow_versions"."capability_manifest" is null
+      ) or (
+        "flow_versions"."source_revision" > 0
+        and "flow_versions"."graph_schema_version" = 'flow-graph.v2'
+        and "flow_versions"."graph"->>'schemaVersion' = 'flow-graph.v2'
+        and jsonb_typeof("flow_versions"."capability_manifest") = 'object'
+      ))
+);
+--> statement-breakpoint
 CREATE TABLE "flows" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"owner_user_id" uuid NOT NULL,
 	"name" text NOT NULL,
+	"origin" jsonb,
 	"status" text DEFAULT 'draft' NOT NULL,
+	"definition_state" text DEFAULT 'draft' NOT NULL,
 	"approval_mode" text DEFAULT 'manual_approve' NOT NULL,
+	"revision" integer DEFAULT 1 NOT NULL,
+	"draft_base_version_id" uuid,
 	"draft_graph" jsonb NOT NULL,
+	"draft_presentation" jsonb,
 	"published_version_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -752,23 +789,130 @@ CREATE TABLE "flows" (
 	CONSTRAINT "flows_id_owner_unique" UNIQUE("id","owner_user_id"),
 	CONSTRAINT "flows_name_length_check" CHECK (length(trim("flows"."name")) between 1 and 180),
 	CONSTRAINT "flows_status_check" CHECK ("flows"."status" in ('draft', 'published', 'active', 'paused', 'archived')),
+	CONSTRAINT "flows_definition_state_check" CHECK ("flows"."definition_state" in ('draft', 'versioned', 'archived')),
+	CONSTRAINT "flows_revision_check" CHECK ("flows"."revision" > 0),
+	CONSTRAINT "flows_definition_lifecycle_check" CHECK ((
+          "flows"."definition_state" = 'draft'
+          and (
+            (
+              "flows"."published_version_id" is null
+              and "flows"."published_at" is null
+              and "flows"."draft_base_version_id" is null
+            ) or (
+              "flows"."published_version_id" is not null
+              and "flows"."published_at" is not null
+              and "flows"."draft_base_version_id" = "flows"."published_version_id"
+            )
+          )
+        ) or (
+          "flows"."definition_state" = 'versioned'
+          and "flows"."published_version_id" is not null
+          and "flows"."published_at" is not null
+          and "flows"."draft_base_version_id" is null
+        ) or (
+          "flows"."definition_state" = 'archived'
+          and (
+            (
+              "flows"."published_version_id" is null
+              and "flows"."published_at" is null
+              and "flows"."draft_base_version_id" is null
+            ) or (
+              "flows"."published_version_id" is not null
+              and "flows"."published_at" is not null
+              and (
+                "flows"."draft_base_version_id" is null
+                or "flows"."draft_base_version_id" = "flows"."published_version_id"
+              )
+            )
+          )
+        )),
 	CONSTRAINT "flows_approval_mode_check" CHECK ("flows"."approval_mode" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
-	CONSTRAINT "flows_draft_graph_object_check" CHECK (jsonb_typeof("flows"."draft_graph") = 'object')
+	CONSTRAINT "flows_draft_graph_object_check" CHECK (jsonb_typeof("flows"."draft_graph") = 'object'),
+	CONSTRAINT "flows_graph_origin_check" CHECK ((
+          "flows"."draft_graph"->>'schemaVersion' = 'flow-graph.v1'
+          and "flows"."origin" is null
+          and "flows"."draft_presentation" is null
+        ) or (
+          "flows"."draft_graph"->>'schemaVersion' = 'flow-graph.v2'
+          and jsonb_typeof("flows"."origin") = 'object'
+          and "flows"."origin"->>'schemaVersion' = 'flow-definition-origin.v1'
+          and "flows"."origin"->>'type' in ('blank', 'template', 'migration')
+        )),
+	CONSTRAINT "flows_draft_presentation_object_check" CHECK ("flows"."draft_presentation" is null or jsonb_typeof("flows"."draft_presentation") = 'object')
 );
 --> statement-breakpoint
-CREATE TABLE "flow_versions" (
+CREATE TABLE "flow_definition_command_outcomes" (
+	"command_id" uuid PRIMARY KEY NOT NULL,
+	"response_status" integer NOT NULL,
+	"response_body" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "flow_definition_command_outcomes_response_check" CHECK ((
+        "flow_definition_command_outcomes"."response_status" in (200, 201)
+        or "flow_definition_command_outcomes"."response_status" between 400 and 499
+      ) and jsonb_typeof("flow_definition_command_outcomes"."response_body") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "flow_definition_commands" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"api_surface" text NOT NULL,
+	"actor_user_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"route_template" text NOT NULL,
+	"resource_id" uuid NOT NULL,
+	"command_scope" text NOT NULL,
+	"idempotency_key" text NOT NULL,
+	"request_hash" text NOT NULL,
+	"state" text DEFAULT 'processing' NOT NULL,
+	"completed_at" timestamp with time zone,
+	"replay_until" timestamp with time zone NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "flow_definition_commands_id_resource_owner_unique" UNIQUE("id","resource_id","owner_user_id"),
+	CONSTRAINT "flow_definition_commands_scope_check" CHECK ("flow_definition_commands"."api_surface" = 'astrologer-api'
+        and "flow_definition_commands"."command_scope" in ('flows.definition.create.v2', 'flows.definition.update-draft.v2', 'flows.definition.publish.v2', 'flows.definition.create-next-draft.v2', 'flows.definition.migrate.v2')
+        and (
+          (
+            "flow_definition_commands"."route_template" = '/flows'
+            and "flow_definition_commands"."command_scope" = 'flows.definition.create.v2'
+            and "flow_definition_commands"."resource_id" = "flow_definition_commands"."owner_user_id"
+          )
+          or ("flow_definition_commands"."route_template" = '/flows/:flowId/draft' and "flow_definition_commands"."command_scope" = 'flows.definition.update-draft.v2')
+          or ("flow_definition_commands"."route_template" = '/flows/:flowId/publish' and "flow_definition_commands"."command_scope" = 'flows.definition.publish.v2')
+          or ("flow_definition_commands"."route_template" = '/flows/:flowId/next-draft' and "flow_definition_commands"."command_scope" = 'flows.definition.create-next-draft.v2')
+          or ("flow_definition_commands"."route_template" = '/flows/:flowId/migrations/v2' and "flow_definition_commands"."command_scope" = 'flows.definition.migrate.v2')
+        )),
+	CONSTRAINT "flow_definition_commands_key_check" CHECK (length("flow_definition_commands"."idempotency_key") between 8 and 128
+        and "flow_definition_commands"."idempotency_key" ~ '^[A-Za-z0-9._:-]+$'),
+	CONSTRAINT "flow_definition_commands_request_hash_check" CHECK ("flow_definition_commands"."request_hash" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "flow_definition_commands_state_check" CHECK ("flow_definition_commands"."state" in ('processing', 'succeeded', 'failed')),
+	CONSTRAINT "flow_definition_commands_terminal_state_check" CHECK ((
+        "flow_definition_commands"."state" = 'processing'
+        and "flow_definition_commands"."completed_at" is null
+      ) or (
+        "flow_definition_commands"."state" in ('succeeded', 'failed')
+        and "flow_definition_commands"."completed_at" is not null
+      )),
+	CONSTRAINT "flow_definition_commands_replay_window_check" CHECK ("flow_definition_commands"."replay_until" = "flow_definition_commands"."created_at" + interval '24 hours'),
+	CONSTRAINT "flow_definition_commands_completion_check" CHECK ("flow_definition_commands"."completed_at" is null or "flow_definition_commands"."completed_at" >= "flow_definition_commands"."created_at")
+);
+--> statement-breakpoint
+CREATE TABLE "flow_definition_migrations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"flow_id" uuid NOT NULL,
 	"owner_user_id" uuid NOT NULL,
-	"version" integer NOT NULL,
-	"approval_mode" text NOT NULL,
-	"graph" jsonb NOT NULL,
-	"published_at" timestamp with time zone NOT NULL,
-	CONSTRAINT "flow_versions_id_owner_unique" UNIQUE("id","owner_user_id"),
-	CONSTRAINT "flow_versions_flow_id_id_owner_unique" UNIQUE("flow_id","id","owner_user_id"),
-	CONSTRAINT "flow_versions_positive_version_check" CHECK ("flow_versions"."version" > 0),
-	CONSTRAINT "flow_versions_approval_mode_check" CHECK ("flow_versions"."approval_mode" in ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
-	CONSTRAINT "flow_versions_graph_object_check" CHECK (jsonb_typeof("flow_versions"."graph") = 'object')
+	"command_id" uuid NOT NULL,
+	"source_graph_schema_version" text NOT NULL,
+	"target_graph_schema_version" text NOT NULL,
+	"source_version_id" uuid,
+	"source_revision" integer NOT NULL,
+	"source_graph_hash" text NOT NULL,
+	"target_revision" integer NOT NULL,
+	"migrated_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "flow_definition_migrations_schema_versions_check" CHECK ("flow_definition_migrations"."source_graph_schema_version" = 'flow-graph.v1'
+        and "flow_definition_migrations"."target_graph_schema_version" = 'flow-graph.v2'),
+	CONSTRAINT "flow_definition_migrations_revision_check" CHECK ("flow_definition_migrations"."source_revision" > 0
+        and "flow_definition_migrations"."target_revision" = "flow_definition_migrations"."source_revision" + 1),
+	CONSTRAINT "flow_definition_migrations_graph_hash_check" CHECK ("flow_definition_migrations"."source_graph_hash" ~ '^sha256:[a-f0-9]{64}$')
 );
 --> statement-breakpoint
 CREATE TABLE "flow_approvals" (
@@ -1751,10 +1895,17 @@ ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_resu
 ALTER TABLE "astro_calendar_generations" ADD CONSTRAINT "astro_calendar_generations_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astro_calendar_events" ADD CONSTRAINT "astro_calendar_events_generation_id_astro_calendar_generations_id_fk" FOREIGN KEY ("generation_id") REFERENCES "public"."astro_calendar_generations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astro_calendar_events" ADD CONSTRAINT "astro_calendar_events_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "flows" ADD CONSTRAINT "flows_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "flows" ADD CONSTRAINT "flows_published_version_owner_fk" FOREIGN KEY ("id","published_version_id","owner_user_id") REFERENCES "public"."flow_versions"("flow_id","id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_versions" ADD CONSTRAINT "flow_versions_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_versions" ADD CONSTRAINT "flow_versions_flow_owner_fk" FOREIGN KEY ("flow_id","owner_user_id") REFERENCES "public"."flows"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flows" ADD CONSTRAINT "flows_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flows" ADD CONSTRAINT "flows_published_version_owner_fk" FOREIGN KEY ("id","published_version_id","owner_user_id","published_at") REFERENCES "public"."flow_versions"("flow_id","id","owner_user_id","published_at") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flows" ADD CONSTRAINT "flows_draft_base_version_owner_fk" FOREIGN KEY ("id","draft_base_version_id","owner_user_id") REFERENCES "public"."flow_versions"("flow_id","id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_definition_command_outcomes" ADD CONSTRAINT "flow_definition_command_outcomes_command_fk" FOREIGN KEY ("command_id") REFERENCES "public"."flow_definition_commands"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_definition_commands" ADD CONSTRAINT "flow_definition_commands_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_definition_commands" ADD CONSTRAINT "flow_definition_commands_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_definition_migrations" ADD CONSTRAINT "flow_definition_migrations_flow_owner_fk" FOREIGN KEY ("flow_id","owner_user_id") REFERENCES "public"."flows"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_definition_migrations" ADD CONSTRAINT "flow_definition_migrations_source_version_owner_fk" FOREIGN KEY ("flow_id","source_version_id","owner_user_id") REFERENCES "public"."flow_versions"("flow_id","id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_definition_migrations" ADD CONSTRAINT "flow_definition_migrations_command_resource_owner_fk" FOREIGN KEY ("command_id","flow_id","owner_user_id") REFERENCES "public"."flow_definition_commands"("id","resource_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_approvals" ADD CONSTRAINT "flow_approvals_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_approvals" ADD CONSTRAINT "flow_approvals_decided_by_user_id_users_id_fk" FOREIGN KEY ("decided_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_approvals" ADD CONSTRAINT "flow_approvals_run_owner_fk" FOREIGN KEY ("flow_run_id","owner_user_id") REFERENCES "public"."flow_runs"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1932,19 +2083,28 @@ CREATE UNIQUE INDEX "astro_calendar_generations_fingerprint_unique" ON "astro_ca
 CREATE INDEX "astro_calendar_events_owner_starts_idx" ON "astro_calendar_events" USING btree ("owner_user_id","starts_at","id");--> statement-breakpoint
 CREATE INDEX "astro_calendar_events_generation_starts_idx" ON "astro_calendar_events" USING btree ("generation_id","starts_at","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "astro_calendar_events_generation_event_unique" ON "astro_calendar_events" USING btree ("generation_id","event_id");--> statement-breakpoint
-CREATE INDEX "flows_owner_status_updated_idx" ON "flows" USING btree ("owner_user_id","status","updated_at");--> statement-breakpoint
-CREATE INDEX "flows_owner_name_idx" ON "flows" USING btree ("owner_user_id","name");--> statement-breakpoint
 CREATE INDEX "flow_versions_owner_published_idx" ON "flow_versions" USING btree ("owner_user_id","published_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "flow_versions_flow_version_unique" ON "flow_versions" USING btree ("flow_id","version");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_versions_flow_source_revision_unique" ON "flow_versions" USING btree ("flow_id","source_revision") WHERE "flow_versions"."source_revision" is not null;--> statement-breakpoint
+CREATE INDEX "flows_owner_status_updated_idx" ON "flows" USING btree ("owner_user_id","status","updated_at");--> statement-breakpoint
+CREATE INDEX "flows_owner_definition_state_updated_idx" ON "flows" USING btree ("owner_user_id","definition_state","updated_at","id");--> statement-breakpoint
+CREATE INDEX "flows_owner_name_idx" ON "flows" USING btree ("owner_user_id","name");--> statement-breakpoint
+CREATE INDEX "flow_definition_command_outcomes_created_idx" ON "flow_definition_command_outcomes" USING btree ("created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_definition_commands_scope_key_unique" ON "flow_definition_commands" USING btree ("api_surface","actor_user_id","owner_user_id","route_template","resource_id","idempotency_key");--> statement-breakpoint
+CREATE INDEX "flow_definition_commands_replay_until_idx" ON "flow_definition_commands" USING btree ("replay_until");--> statement-breakpoint
+CREATE INDEX "flow_definition_commands_owner_resource_created_idx" ON "flow_definition_commands" USING btree ("owner_user_id","resource_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_definition_migrations_command_unique" ON "flow_definition_migrations" USING btree ("command_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_definition_migrations_flow_target_revision_unique" ON "flow_definition_migrations" USING btree ("flow_id","target_revision");--> statement-breakpoint
+CREATE INDEX "flow_definition_migrations_owner_migrated_idx" ON "flow_definition_migrations" USING btree ("owner_user_id","migrated_at");--> statement-breakpoint
 CREATE INDEX "flow_approvals_owner_status_created_idx" ON "flow_approvals" USING btree ("owner_user_id","status","created_at");--> statement-breakpoint
 CREATE INDEX "flow_approvals_run_created_idx" ON "flow_approvals" USING btree ("flow_run_id","created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "flow_delivery_attempts_owner_idempotency_unique" ON "flow_delivery_attempts" USING btree ("owner_user_id","idempotency_key");--> statement-breakpoint
 CREATE UNIQUE INDEX "flow_delivery_attempts_step_attempt_unique" ON "flow_delivery_attempts" USING btree ("flow_step_run_id","attempt_number");--> statement-breakpoint
 CREATE INDEX "flow_delivery_attempts_owner_status_created_idx" ON "flow_delivery_attempts" USING btree ("owner_user_id","status","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_runs_owner_flow_event_unique" ON "flow_runs" USING btree ("owner_user_id","flow_id","runtime_event_id");--> statement-breakpoint
 CREATE INDEX "flow_runs_owner_status_updated_idx" ON "flow_runs" USING btree ("owner_user_id","status","updated_at");--> statement-breakpoint
 CREATE INDEX "flow_runs_flow_created_idx" ON "flow_runs" USING btree ("flow_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "flow_runs_runtime_event_idx" ON "flow_runs" USING btree ("runtime_event_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "flow_runs_owner_flow_event_unique" ON "flow_runs" USING btree ("owner_user_id","flow_id","runtime_event_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "flow_runtime_events_owner_dedupe_unique" ON "flow_runtime_events" USING btree ("owner_user_id","dedupe_key");--> statement-breakpoint
 CREATE INDEX "flow_runtime_events_owner_occurred_idx" ON "flow_runtime_events" USING btree ("owner_user_id","occurred_at","id");--> statement-breakpoint
 CREATE INDEX "flow_step_runs_owner_run_created_idx" ON "flow_step_runs" USING btree ("owner_user_id","flow_run_id","created_at");--> statement-breakpoint
@@ -2047,3 +2207,277 @@ ALTER TABLE "schedule_reservations"
     "owner_user_id" WITH =,
     tstzrange("occupied_start_at", "occupied_end_at", '[)') WITH &&
   ) WHERE ("lifecycle" = 'active');
+--> statement-breakpoint
+-- ElevenHouse Flows integrity objects: begin
+CREATE OR REPLACE FUNCTION elevenhouse_guard_flow_version_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_version_guard$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION 'flow_versions rows are immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_versions_immutable_update';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM flows WHERE id = OLD.flow_id)
+     AND EXISTS (SELECT 1 FROM users WHERE id = OLD.owner_user_id) THEN
+    RAISE EXCEPTION 'flow_versions rows can only be deleted with their aggregate'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_versions_delete_with_aggregate_only';
+  END IF;
+
+  RETURN OLD;
+END;
+$flow_version_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "flow_versions_immutable_update"
+BEFORE UPDATE ON flow_versions
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_flow_version_mutation();
+--> statement-breakpoint
+CREATE TRIGGER "flow_versions_delete_with_aggregate_only"
+BEFORE DELETE ON flow_versions
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_flow_version_mutation();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_assert_flow_publication_pointer()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_pointer_guard$
+DECLARE
+  checked_flow_id uuid;
+  aggregate_row flows%ROWTYPE;
+  latest_version_row flow_versions%ROWTYPE;
+BEGIN
+  IF TG_TABLE_NAME = 'flows' THEN
+    checked_flow_id := COALESCE(NEW.id, OLD.id);
+  ELSE
+    checked_flow_id := COALESCE(NEW.flow_id, OLD.flow_id);
+  END IF;
+
+  SELECT * INTO aggregate_row
+    FROM flows
+   WHERE id = checked_flow_id;
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT * INTO latest_version_row
+    FROM flow_versions
+   WHERE flow_id = checked_flow_id
+   ORDER BY version DESC
+   LIMIT 1;
+
+  IF NOT FOUND THEN
+    IF aggregate_row.published_version_id IS NOT NULL
+       OR aggregate_row.published_at IS NOT NULL THEN
+      RAISE EXCEPTION 'flow publication pointer exists without an immutable version'
+        USING ERRCODE = '23514', CONSTRAINT = 'flow_publication_pointer_consistency';
+    END IF;
+    RETURN NULL;
+  END IF;
+
+  IF aggregate_row.published_version_id IS DISTINCT FROM latest_version_row.id
+     OR aggregate_row.published_at IS DISTINCT FROM latest_version_row.published_at THEN
+    RAISE EXCEPTION 'flow publication pointer must identify the latest immutable version'
+      USING ERRCODE = '23514', CONSTRAINT = 'flow_publication_pointer_consistency';
+  END IF;
+
+  RETURN NULL;
+END;
+$flow_pointer_guard$;
+--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER "flow_publication_pointer_consistency"
+AFTER INSERT OR UPDATE ON flows
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_assert_flow_publication_pointer();
+--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER "flow_version_pointer_consistency"
+AFTER INSERT OR DELETE ON flow_versions
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_assert_flow_publication_pointer();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_guard_flow_definition_command_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_command_guard$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF EXISTS (SELECT 1 FROM users WHERE id = OLD.owner_user_id) THEN
+      RAISE EXCEPTION 'flow definition command tombstones are retained for the owner lifetime'
+        USING ERRCODE = '55000', CONSTRAINT = 'flow_definition_commands_immutable_identity';
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  IF ROW(
+      OLD.id,
+      OLD.api_surface,
+      OLD.actor_user_id,
+      OLD.owner_user_id,
+      OLD.route_template,
+      OLD.resource_id,
+      OLD.command_scope,
+      OLD.idempotency_key,
+      OLD.request_hash,
+      OLD.replay_until,
+      OLD.created_at
+    ) IS DISTINCT FROM ROW(
+      NEW.id,
+      NEW.api_surface,
+      NEW.actor_user_id,
+      NEW.owner_user_id,
+      NEW.route_template,
+      NEW.resource_id,
+      NEW.command_scope,
+      NEW.idempotency_key,
+      NEW.request_hash,
+      NEW.replay_until,
+      NEW.created_at
+    ) THEN
+    RAISE EXCEPTION 'flow definition command identity is immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_definition_commands_immutable_identity';
+  END IF;
+
+  IF OLD.state <> 'processing'
+     OR NEW.state NOT IN ('succeeded', 'failed')
+     OR OLD.completed_at IS NOT NULL
+     OR NEW.completed_at IS NULL
+     OR NEW.updated_at < OLD.updated_at THEN
+    RAISE EXCEPTION 'flow definition command permits one processing-to-terminal transition'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_definition_commands_immutable_identity';
+  END IF;
+
+  RETURN NEW;
+END;
+$flow_command_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "flow_definition_commands_immutable_identity"
+BEFORE UPDATE OR DELETE ON flow_definition_commands
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_flow_definition_command_mutation();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_guard_flow_definition_outcome_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_outcome_guard$
+DECLARE
+  command_replay_until timestamp with time zone;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION 'flow definition command outcomes are immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_definition_command_outcomes_retention';
+  END IF;
+
+  SELECT replay_until INTO command_replay_until
+    FROM flow_definition_commands
+   WHERE id = OLD.command_id;
+  IF FOUND AND transaction_timestamp() < command_replay_until THEN
+    RAISE EXCEPTION 'flow definition command outcome is retained through its replay window'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_definition_command_outcomes_retention';
+  END IF;
+
+  RETURN OLD;
+END;
+$flow_outcome_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "flow_definition_command_outcomes_retention"
+BEFORE UPDATE OR DELETE ON flow_definition_command_outcomes
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_flow_definition_outcome_mutation();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_assert_flow_definition_command_outcome()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_command_outcome_guard$
+DECLARE
+  checked_command_id uuid;
+  command_row flow_definition_commands%ROWTYPE;
+  outcome_row flow_definition_command_outcomes%ROWTYPE;
+  has_outcome boolean;
+BEGIN
+  IF TG_TABLE_NAME = 'flow_definition_commands' THEN
+    checked_command_id := COALESCE(NEW.id, OLD.id);
+  ELSE
+    checked_command_id := COALESCE(NEW.command_id, OLD.command_id);
+  END IF;
+
+  SELECT * INTO command_row
+    FROM flow_definition_commands
+   WHERE id = checked_command_id;
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT * INTO outcome_row
+    FROM flow_definition_command_outcomes
+   WHERE command_id = checked_command_id;
+  has_outcome := FOUND;
+
+  IF command_row.state = 'processing' THEN
+    IF has_outcome THEN
+      RAISE EXCEPTION 'processing flow definition command cannot have an outcome'
+        USING ERRCODE = '23514', CONSTRAINT = 'flow_definition_command_outcome_consistency';
+    END IF;
+    RETURN NULL;
+  END IF;
+
+  IF NOT has_outcome THEN
+    IF transaction_timestamp() < command_row.replay_until THEN
+      RAISE EXCEPTION 'terminal flow definition command requires a replay outcome'
+        USING ERRCODE = '23514', CONSTRAINT = 'flow_definition_command_outcome_consistency';
+    END IF;
+    RETURN NULL;
+  END IF;
+
+  IF outcome_row.created_at < command_row.created_at
+     OR outcome_row.created_at > command_row.replay_until
+     OR outcome_row.created_at IS DISTINCT FROM command_row.completed_at
+     OR (command_row.state = 'succeeded' AND outcome_row.response_status NOT IN (200, 201))
+     OR (command_row.state = 'failed' AND outcome_row.response_status NOT BETWEEN 400 AND 499) THEN
+    RAISE EXCEPTION 'flow definition command state and outcome do not agree'
+      USING ERRCODE = '23514', CONSTRAINT = 'flow_definition_command_outcome_consistency';
+  END IF;
+
+  RETURN NULL;
+END;
+$flow_command_outcome_guard$;
+--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER "flow_definition_command_outcome_consistency"
+AFTER INSERT OR UPDATE OR DELETE ON flow_definition_commands
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_assert_flow_definition_command_outcome();
+--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER "flow_definition_outcome_command_consistency"
+AFTER INSERT OR UPDATE OR DELETE ON flow_definition_command_outcomes
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_assert_flow_definition_command_outcome();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_guard_flow_definition_migration_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_migration_guard$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION 'flow definition migration evidence is immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_definition_migrations_immutable';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM flows WHERE id = OLD.flow_id)
+     AND EXISTS (SELECT 1 FROM users WHERE id = OLD.owner_user_id) THEN
+    RAISE EXCEPTION 'flow definition migration evidence can only be deleted with its aggregate'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_definition_migrations_immutable';
+  END IF;
+
+  RETURN OLD;
+END;
+$flow_migration_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "flow_definition_migrations_immutable"
+BEFORE UPDATE OR DELETE ON flow_definition_migrations
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_flow_definition_migration_mutation();
+-- ElevenHouse Flows integrity objects: end

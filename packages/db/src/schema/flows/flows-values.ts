@@ -1,5 +1,25 @@
 export const flowStatusValues = ["draft", "published", "active", "paused", "archived"] as const;
 
+export const flowDefinitionStateValues = ["draft", "versioned", "archived"] as const;
+
+export const flowDefinitionCommandStateValues = ["processing", "succeeded", "failed"] as const;
+
+export const flowDefinitionCommandScopeValues = [
+  "flows.definition.create.v2",
+  "flows.definition.update-draft.v2",
+  "flows.definition.publish.v2",
+  "flows.definition.create-next-draft.v2",
+  "flows.definition.migrate.v2"
+] as const;
+
+export const flowDefinitionRouteTemplateValues = [
+  "/flows",
+  "/flows/:flowId/draft",
+  "/flows/:flowId/publish",
+  "/flows/:flowId/next-draft",
+  "/flows/:flowId/migrations/v2"
+] as const;
+
 export const flowApprovalModeValues = [
   "draft_only",
   "manual_approve",

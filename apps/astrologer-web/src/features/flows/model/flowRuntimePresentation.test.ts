@@ -1,6 +1,10 @@
 import type { FlowRuntimeAvailability } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
-import { canProjectLiveFlowRuntime } from "./flowRuntimePresentation";
+import {
+  buildFlowAutomationControl,
+  buildFlowRuntimePresentation,
+  canProjectLiveFlowRuntime
+} from "./flowRuntimePresentation";
 
 const definitionOnlyRuntime = {
   mode: "definition_only",
@@ -31,5 +35,27 @@ describe("flow runtime presentation", () => {
         historySemantics: "mixed"
       })
     ).toBe(false);
+  });
+
+  it("localizes fail-closed runtime evidence and automation controls", () => {
+    expect(buildFlowRuntimePresentation(undefined, "en").unavailableReason).toBe(
+      "Execution availability has not been confirmed by the server."
+    );
+    expect(buildFlowRuntimePresentation(definitionOnlyRuntime, "en").unavailableReason).toBe(
+      "Flow execution is not available yet. You can edit and publish the definition."
+    );
+    expect(
+      buildFlowAutomationControl(
+        {
+          runtimeStatus: "published",
+          latestPublishedVersionId: "11111111-1111-4111-8111-111111111111"
+        },
+        definitionOnlyRuntime,
+        "en"
+      )
+    ).toMatchObject({
+      canToggle: false,
+      accessibleLabel: "Execution is unavailable for this flow version"
+    });
   });
 });

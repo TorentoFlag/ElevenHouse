@@ -1,36 +1,47 @@
 import type {
-  CreateFlowRequest,
   DecideFlowApprovalRequest,
+  FlowDefinitionV2,
   FlowResponse,
   ListFlowApprovalsQuery,
-  ListFlowsQuery,
+  ListFlowDefinitionsV2QueryInput,
   ListFlowRunsQuery,
   ManualFlowRunResponse,
-  PublishFlowResponse
+  PublishFlowDefinitionV2Response
 } from "@elevenhouse/contracts";
 import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import { activateFlow } from "../api/activateFlow";
-import { createFlow } from "../api/createFlow";
+import { createFlow, type CreateFlowInput } from "../api/createFlow";
+import { createNextFlowDraft, type CreateNextFlowDraftInput } from "../api/createNextFlowDraft";
 import { createManualFlowRun, type CreateManualFlowRunInput } from "../api/createManualFlowRun";
 import { decideFlowApproval, type DecideFlowApprovalInput } from "../api/decideFlowApproval";
+import { getFlowDefinition } from "../api/getFlowDefinition";
 import { listFlowApprovals } from "../api/listFlowApprovals";
 import { listFlowRuns } from "../api/listFlowRuns";
 import { listFlowTemplates } from "../api/listFlowTemplates";
 import { listFlows } from "../api/listFlows";
+import {
+  migrateFlowDefinition,
+  type MigrateFlowDefinitionInput
+} from "../api/migrateFlowDefinition";
 import { pauseFlow } from "../api/pauseFlow";
-import { publishFlow } from "../api/publishFlow";
+import { publishFlow, type PublishFlowInput } from "../api/publishFlow";
 import { simulateFlowRun, type SimulateFlowRunInput } from "../api/simulateFlowRun";
 import { updateFlowDraft, type UpdateFlowDraftInput } from "../api/updateFlowDraft";
+import {
+  validateFlowDefinition,
+  type ValidateFlowDefinitionInput
+} from "../api/validateFlowDefinition";
 
 export const flowsQueryKeys = {
   all: () => ["flows"] as const,
-  list: (query: ListFlowsQuery) => ["flows", "list", query] as const,
-  templates: () => ["flows", "templates"] as const,
+  list: (query: ListFlowDefinitionsV2QueryInput) => ["flows", "list", query] as const,
+  detail: (flowId: string | null) => ["flows", "detail", flowId] as const,
+  templates: (locale: "ru" | "en") => ["flows", "templates", locale] as const,
   runs: (flowId: string, query: ListFlowRunsQuery) => ["flows", "runs", flowId, query] as const,
   approvals: (query: ListFlowApprovalsQuery) => ["flows", "approvals", query] as const
 };
 
-export function flowListQueryOptions(query: ListFlowsQuery) {
+export function flowListQueryOptions(query: ListFlowDefinitionsV2QueryInput) {
   return {
     queryKey: flowsQueryKeys.list(query),
     queryFn: () => listFlows(query),
@@ -38,10 +49,21 @@ export function flowListQueryOptions(query: ListFlowsQuery) {
   };
 }
 
-export function flowTemplatesQueryOptions() {
+export function flowDefinitionQueryOptions(flowId: string | null) {
   return {
-    queryKey: flowsQueryKeys.templates(),
-    queryFn: () => listFlowTemplates()
+    queryKey: flowsQueryKeys.detail(flowId),
+    queryFn: () => {
+      if (!flowId) throw new Error("FLOW_DEFINITION_ID_REQUIRED");
+      return getFlowDefinition(flowId);
+    },
+    enabled: flowId !== null
+  };
+}
+
+export function flowTemplatesQueryOptions(locale: "ru" | "en") {
+  return {
+    queryKey: flowsQueryKeys.templates(locale),
+    queryFn: () => listFlowTemplates(locale)
   };
 }
 
@@ -62,7 +84,7 @@ export function flowApprovalsQueryOptions(query: ListFlowApprovalsQuery) {
 
 export function createFlowMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return {
-    mutationFn: (body: CreateFlowRequest) => createFlow(body),
+    mutationFn: (input: CreateFlowInput) => createFlow(input),
     onSuccess: () => invalidateFlows(queryClient)
   };
 }
@@ -78,7 +100,25 @@ export function updateFlowDraftMutationOptions(
 
 export function publishFlowMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return {
-    mutationFn: (flowId: string) => publishFlow(flowId),
+    mutationFn: (input: PublishFlowInput) => publishFlow(input),
+    onSuccess: () => invalidateFlows(queryClient)
+  };
+}
+
+export function createNextFlowDraftMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: CreateNextFlowDraftInput) => createNextFlowDraft(input),
+    onSuccess: () => invalidateFlows(queryClient)
+  };
+}
+
+export function migrateFlowDefinitionMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: MigrateFlowDefinitionInput) => migrateFlowDefinition(input),
     onSuccess: () => invalidateFlows(queryClient)
   };
 }
@@ -100,6 +140,12 @@ export function pauseFlowMutationOptions(queryClient: Pick<QueryClient, "invalid
 export function simulateFlowRunMutationOptions() {
   return {
     mutationFn: (input: SimulateFlowRunInput) => simulateFlowRun(input)
+  };
+}
+
+export function validateFlowDefinitionMutationOptions() {
+  return {
+    mutationFn: (input: ValidateFlowDefinitionInput) => validateFlowDefinition(input)
   };
 }
 
@@ -127,6 +173,7 @@ function invalidateFlows(queryClient: Pick<QueryClient, "invalidateQueries">) {
 
 export type FlowMutationResult =
   | FlowResponse
-  | PublishFlowResponse
+  | FlowDefinitionV2
+  | PublishFlowDefinitionV2Response
   | ManualFlowRunResponse
   | { readonly approval: { readonly status: DecideFlowApprovalRequest["decision"] } };

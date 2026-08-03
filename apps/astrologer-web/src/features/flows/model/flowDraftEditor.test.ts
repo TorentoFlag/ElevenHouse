@@ -1,118 +1,219 @@
-import type { FlowGraph } from "@elevenhouse/contracts";
+import type { FlowGraphV2, FlowPresentationV1 } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
 import {
   appendFlowNodeFromPalette,
-  moveFlowNode,
+  flowPaletteNodeGroups,
+  getAvailableSourceHandles,
+  moveFlowNodePresentation,
   renameFlowNode,
   updateFlowNodeConfig
 } from "./flowDraftEditor";
 
-const graph = {
-  schemaVersion: "flow-graph.v1",
+const graph: FlowGraphV2 = {
+  schemaVersion: "flow-graph.v2",
   nodes: [
     {
-      id: "lead_created",
-      category: "trigger",
-      kind: "lead_created",
-      title: "Новый лид",
-      config: {},
-      position: { x: 80, y: 120 }
+      id: "manual-client",
+      kind: "manual_client",
+      displayTitle: "Клиент выбран вручную",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {}
     },
     {
-      id: "ai_interpretation",
-      category: "ai",
-      kind: "reply_draft",
-      approvalMode: "manual_approve",
-      title: "AI-интерпретация",
-      config: { tone: "calm" },
-      position: { x: 360, y: 120 }
+      id: "preparation",
+      kind: "astrologer_work_item",
+      displayTitle: "Подготовить консультацию",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        taskKind: "consultation_preparation",
+        taskTitle: "Подготовить консультацию",
+        priority: "normal"
+      }
     }
   ],
   edges: [
     {
-      id: "lead-to-ai",
-      fromNodeId: "lead_created",
-      toNodeId: "ai_interpretation"
+      id: "manual-next-to-preparation",
+      sourceNodeId: "manual-client",
+      targetNodeId: "preparation",
+      sourceHandle: "next"
     }
   ]
-} satisfies FlowGraph;
+};
 
-describe("flowDraftEditor", () => {
-  it("renames the requested graph node", () => {
-    const renamed = renameFlowNode(graph, "ai_interpretation", "AI-черновик");
+const presentation: FlowPresentationV1 = {
+  schemaVersion: "flow-presentation.v1",
+  nodes: [
+    { nodeId: "manual-client", position: { x: 80, y: 120 } },
+    { nodeId: "preparation", position: { x: 400, y: 120 } }
+  ],
+  viewport: { x: 0, y: 0, zoom: 1 }
+};
 
-    expect(renamed.nodes.find((node) => node.id === "ai_interpretation")?.title).toBe("AI-черновик");
-    expect(graph.nodes.find((node) => node.id === "ai_interpretation")?.title).toBe("AI-интерпретация");
+describe("flowDraftEditor V2", () => {
+  it("renames only the requested node display title", () => {
+    const renamed = renameFlowNode(graph, "preparation", "Проверить данные");
+
+    expect(renamed.nodes.find((node) => node.id === "preparation")?.displayTitle).toBe(
+      "Проверить данные"
+    );
+    expect(graph.nodes.find((node) => node.id === "preparation")?.displayTitle).toBe(
+      "Подготовить консультацию"
+    );
   });
 
-  it("rejects edits to a missing graph node", () => {
-    expect(() => renameFlowNode(graph, "missing", "x")).toThrow("FLOW_NODE_NOT_FOUND");
-  });
-
-  it("replaces a node configuration without changing the source graph", () => {
-    const updated = updateFlowNodeConfig(graph, "ai_interpretation", { tone: "warm" });
-
-    expect(updated.nodes.find((node) => node.id === "ai_interpretation")?.config).toEqual({ tone: "warm" });
-    expect(graph.nodes.find((node) => node.id === "ai_interpretation")?.config).toEqual({ tone: "calm" });
-  });
-
-  it("moves a node using the FlowGraph position contract", () => {
-    const moved = moveFlowNode(graph, "ai_interpretation", { x: 480, y: 200 });
-
-    expect(moved.nodes.find((node) => node.id === "ai_interpretation")?.position).toEqual({ x: 480, y: 200 });
-  });
-
-  it("adds a palette node after the selected node and connects it to the current path", () => {
-    const updated = appendFlowNodeFromPalette(graph, {
-      selectedNodeId: "lead_created",
-      paletteNodeId: "request_birth_data",
-      existingNodeIds: new Set(["lead_created", "ai_interpretation"])
+  it("updates a strict config only when the discriminant matches", () => {
+    const updated = updateFlowNodeConfig(graph, "preparation", "astrologer_work_item", {
+      taskKind: "consultation_preparation",
+      taskTitle: "Собрать вопросы",
+      instructions: "Проверить время рождения",
+      priority: "high"
     });
 
-    expect(updated.nodes).toEqual([
-      graph.nodes[0],
-      expect.objectContaining({
-        id: "request_birth_data",
-        category: "action",
-        kind: "request_birth_data",
-        title: "Запросить данные",
-        approvalMode: "manual_approve",
-        position: { x: 320, y: 120 }
-      }),
-      { ...graph.nodes[1], position: { x: 600, y: 120 } }
-    ]);
-    expect(updated.edges).toEqual([
+    expect(updated.nodes.find((node) => node.id === "preparation")?.config).toEqual({
+      taskKind: "consultation_preparation",
+      taskTitle: "Собрать вопросы",
+      instructions: "Проверить время рождения",
+      priority: "high"
+    });
+    expect(() =>
+      updateFlowNodeConfig(graph, "preparation", "completed", { goalKey: "done" })
+    ).toThrow("FLOW_NODE_KIND_MISMATCH");
+  });
+
+  it("moves a node only in presentation state", () => {
+    const moved = moveFlowNodePresentation(presentation, "preparation", { x: 520, y: 240 });
+
+    expect(moved.nodes.find((node) => node.nodeId === "preparation")?.position).toEqual({
+      x: 520,
+      y: 240
+    });
+    expect(presentation.nodes.find((node) => node.nodeId === "preparation")?.position).toEqual({
+      x: 400,
+      y: 120
+    });
+  });
+
+  it("adds a supported node through an unoccupied semantic handle", () => {
+    const updated = appendFlowNodeFromPalette(
       {
-        id: "lead_created-to-request_birth_data",
-        fromNodeId: "lead_created",
-        toNodeId: "request_birth_data"
+        ...graph,
+        nodes: [graph.nodes[0]!],
+        edges: []
       },
       {
-        id: "request_birth_data-to-ai_interpretation",
-        fromNodeId: "request_birth_data",
-        toNodeId: "ai_interpretation"
+        ...presentation,
+        nodes: [presentation.nodes[0]!]
+      },
+      {
+        sourceNodeId: "manual-client",
+        sourceHandle: "next",
+        paletteNodeId: "astrologer_work_item",
+        locale: "ru"
+      }
+    );
+
+    expect(updated.addedNodeId).toBe("astrologer-work-item");
+    expect(updated.graph.nodes.at(-1)).toMatchObject({
+      id: "astrologer-work-item",
+      kind: "astrologer_work_item",
+      displayTitle: "Задача астрологу",
+      config: {
+        taskKind: "consultation_preparation",
+        taskTitle: "Подготовить консультацию",
+        priority: "normal"
+      }
+    });
+    expect(updated.graph.edges).toEqual([
+      {
+        id: "manual-client-next-to-astrologer-work-item",
+        sourceNodeId: "manual-client",
+        targetNodeId: "astrologer-work-item",
+        sourceHandle: "next"
       }
     ]);
+    expect(updated.presentation.nodes.at(-1)).toEqual({
+      nodeId: "astrologer-work-item",
+      position: { x: 400, y: 120 }
+    });
   });
 
-  it("uses a stable suffix when the palette node id already exists", () => {
-    const updated = appendFlowNodeFromPalette(graph, {
-      selectedNodeId: "ai_interpretation",
-      paletteNodeId: "reply_draft",
-      existingNodeIds: new Set(["lead_created", "ai_interpretation", "reply_draft"])
-    });
+  it("exposes missing branch handles and refuses an occupied handle", () => {
+    const conditionGraph: FlowGraphV2 = {
+      schemaVersion: "flow-graph.v2",
+      nodes: [
+        graph.nodes[0]!,
+        {
+          id: "birth-data",
+          kind: "birth_data_available",
+          displayTitle: "Данные рождения заполнены?",
+          configSchemaVersion: 1,
+          executorContractVersion: 1,
+          config: { purpose: "service_preparation" }
+        },
+        {
+          id: "done",
+          kind: "completed",
+          displayTitle: "Завершено",
+          configSchemaVersion: 1,
+          executorContractVersion: 1,
+          config: { goalKey: "completed" }
+        }
+      ],
+      edges: [
+        {
+          id: "manual-next-to-birth-data",
+          sourceNodeId: "manual-client",
+          targetNodeId: "birth-data",
+          sourceHandle: "next"
+        },
+        {
+          id: "birth-data-true-to-done",
+          sourceNodeId: "birth-data",
+          targetNodeId: "done",
+          sourceHandle: "true"
+        }
+      ]
+    };
 
-    expect(updated.nodes.at(-1)).toMatchObject({
-      id: "reply_draft_2",
-      category: "ai",
-      kind: "reply_draft",
-      approvalMode: "manual_approve",
-      position: { x: 600, y: 120 }
-    });
-    expect(updated.edges.at(-1)).toEqual({
-      id: "ai_interpretation-to-reply_draft_2",
-      fromNodeId: "ai_interpretation",
-      toNodeId: "reply_draft_2"
-    });
+    expect(getAvailableSourceHandles(conditionGraph, "birth-data")).toEqual(["false"]);
+    expect(() =>
+      appendFlowNodeFromPalette(conditionGraph, presentationFor(conditionGraph), {
+        sourceNodeId: "birth-data",
+        sourceHandle: "true",
+        paletteNodeId: "suppressed",
+        locale: "ru"
+      })
+    ).toThrow("FLOW_SOURCE_HANDLE_OCCUPIED");
+  });
+
+  it("keeps the palette limited to executable V2 kinds", () => {
+    const paletteKinds = flowPaletteNodeGroups.flatMap((group) =>
+      group.nodes.map((node) => node.id)
+    );
+
+    expect(paletteKinds).toEqual([
+      "birth_data_available",
+      "astrologer_work_item",
+      "astrologer_approval",
+      "completed",
+      "suppressed",
+      "failed"
+    ]);
+    expect(paletteKinds).not.toContain("send_message");
+    expect(paletteKinds).not.toContain("reply_draft");
   });
 });
+
+function presentationFor(graphValue: FlowGraphV2): FlowPresentationV1 {
+  return {
+    schemaVersion: "flow-presentation.v1",
+    nodes: graphValue.nodes.map((node, index) => ({
+      nodeId: node.id,
+      position: { x: 80 + index * 320, y: 120 }
+    })),
+    viewport: { x: 0, y: 0, zoom: 1 }
+  };
+}

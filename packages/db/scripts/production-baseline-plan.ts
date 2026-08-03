@@ -1,3 +1,5 @@
+import { flowsIntegritySql } from "./augment-flows-baseline";
+
 export type MigrationIdentity = {
   readonly hash: string;
   readonly createdAt: string;
@@ -10,16 +12,27 @@ export type MigrationLedgerRow = {
 
 export type BaselineHistoryKind =
   | "current"
+  | "previous_flow_definition_control"
   | "previous_current"
   | "legacy_calculations"
   | "unknown";
 
 export const currentBaseline = {
+  hash: "bf151129ed85e6bd009a7bc40087938906e6d1497413458b12f66d62e258dff7",
+  createdAt: "1785747356544"
+} as const satisfies MigrationIdentity;
+
+export const previousFlowDefinitionControlBaseline = {
+  hash: "357b63b1fc968f7d20a5dca13006535d80b73db8b6dadf1a426a97312c26fa94",
+  createdAt: "1785708843533"
+} as const satisfies MigrationIdentity;
+
+export const previousBaseline = {
   hash: "ed87993e6e473fbeee9cbeb7db2166df31161f401b9725e8bb2ad3240628bf39",
   createdAt: "1785010323027"
 } as const satisfies MigrationIdentity;
 
-export const previousBaseline = {
+const misrecordedFlowRuntimeBaseline = {
   hash: "8b8e765327792e8946a232199cd3627a68ed14b2419fb62581f8c66482a6a917",
   createdAt: "1785010323027"
 } as const satisfies MigrationIdentity;
@@ -67,18 +80,37 @@ export const approvedLegacyMigrations = [
   }
 ] as const satisfies readonly MigrationIdentity[];
 
-const approvedPreviousCurrentHistories = [
-  [previousBaseline],
-  [telegramMtprotoBaseline, previousBaseline],
+const approvedBeforeFlowDefinitionControlHistories = [
+  [misrecordedFlowRuntimeBaseline],
+  [telegramMtprotoBaseline, misrecordedFlowRuntimeBaseline],
   [preFlowRuntimeBaseline],
   [telegramMtprotoBaseline, preFlowRuntimeBaseline],
   [...approvedLegacyMigrations, natalChartEngineBaseline],
-  [...approvedLegacyMigrations, natalChartEngineBaseline, previousBaseline],
-  [...approvedLegacyMigrations, previousBaseline],
+  [...approvedLegacyMigrations, natalChartEngineBaseline, misrecordedFlowRuntimeBaseline],
+  [...approvedLegacyMigrations, misrecordedFlowRuntimeBaseline],
   [...approvedLegacyMigrations, preFlowRuntimeBaseline],
   [...approvedLegacyMigrations, telegramMtprotoBaseline, preFlowRuntimeBaseline],
   [...approvedLegacyMigrations, ...approvedPriorBaselines, preFlowRuntimeBaseline]
 ] as const satisfies readonly (readonly MigrationIdentity[])[];
+
+const approvedPreviousCurrentHistories: readonly (readonly MigrationIdentity[])[] = [
+  [previousBaseline],
+  [telegramMtprotoBaseline, previousBaseline],
+  [...approvedLegacyMigrations, previousBaseline],
+  ...approvedBeforeFlowDefinitionControlHistories,
+  ...approvedBeforeFlowDefinitionControlHistories.map((history) => [...history, previousBaseline])
+];
+
+const approvedPreviousFlowDefinitionControlHistories: readonly (
+  readonly MigrationIdentity[]
+)[] = [
+  [previousFlowDefinitionControlBaseline],
+  [...approvedLegacyMigrations, previousFlowDefinitionControlBaseline],
+  ...approvedPreviousCurrentHistories.map((history) => [
+    ...history,
+    previousFlowDefinitionControlBaseline
+  ])
+];
 
 export function classifyBaselineHistory(
   migrations: readonly MigrationLedgerRow[]
@@ -88,14 +120,22 @@ export function classifyBaselineHistory(
     matchesMigrationHistory(migrations, [...approvedLegacyMigrations, currentBaseline]) ||
     approvedPreviousCurrentHistories.some((history) =>
       matchesMigrationHistory(migrations, [...history, currentBaseline])
+    ) ||
+    approvedPreviousFlowDefinitionControlHistories.some((history) =>
+      matchesMigrationHistory(migrations, [...history, currentBaseline])
     )
   ) {
     return "current";
   }
   if (
-    approvedPreviousCurrentHistories.some((history) =>
+    approvedPreviousFlowDefinitionControlHistories.some((history) =>
       matchesMigrationHistory(migrations, history)
     )
+  ) {
+    return "previous_flow_definition_control";
+  }
+  if (
+    approvedPreviousCurrentHistories.some((history) => matchesMigrationHistory(migrations, history))
   ) {
     return "previous_current";
   }
@@ -359,4 +399,341 @@ export const schedulingBaselineDdl = `
   CREATE INDEX IF NOT EXISTS idempotency_commands_expiry_idx ON idempotency_commands (expires_at);
   CREATE INDEX IF NOT EXISTS idempotency_commands_actor_created_idx
     ON idempotency_commands (actor_user_id, created_at);
+`;
+
+export const flowDefinitionControlBaselineDdl = `
+  CREATE TABLE IF NOT EXISTS flows (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    owner_user_id uuid NOT NULL,
+    name text NOT NULL,
+    origin jsonb,
+    status text DEFAULT 'draft' NOT NULL,
+    definition_state text DEFAULT 'draft' NOT NULL,
+    approval_mode text DEFAULT 'manual_approve' NOT NULL,
+    revision integer DEFAULT 1 NOT NULL,
+    draft_base_version_id uuid,
+    draft_graph jsonb NOT NULL,
+    draft_presentation jsonb,
+    published_version_id uuid,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    updated_at timestamptz DEFAULT now() NOT NULL,
+    published_at timestamptz,
+    CONSTRAINT flows_id_owner_unique UNIQUE (id, owner_user_id),
+    CONSTRAINT flows_name_length_check CHECK (length(trim(name)) BETWEEN 1 AND 180),
+    CONSTRAINT flows_status_check CHECK (status IN ('draft', 'published', 'active', 'paused', 'archived')),
+    CONSTRAINT flows_approval_mode_check CHECK (approval_mode IN ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
+    CONSTRAINT flows_draft_graph_object_check CHECK (jsonb_typeof(draft_graph) = 'object'),
+    CONSTRAINT flows_owner_user_id_users_id_fk
+      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS flow_versions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    flow_id uuid NOT NULL,
+    owner_user_id uuid NOT NULL,
+    version integer NOT NULL,
+    source_revision integer,
+    approval_mode text NOT NULL,
+    graph_schema_version text,
+    graph jsonb NOT NULL,
+    presentation jsonb,
+    capability_manifest jsonb,
+    published_at timestamptz NOT NULL,
+    CONSTRAINT flow_versions_id_owner_unique UNIQUE (id, owner_user_id),
+    CONSTRAINT flow_versions_flow_id_id_owner_unique UNIQUE (flow_id, id, owner_user_id),
+    CONSTRAINT flow_versions_positive_version_check CHECK (version > 0),
+    CONSTRAINT flow_versions_approval_mode_check CHECK (approval_mode IN ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
+    CONSTRAINT flow_versions_graph_object_check CHECK (jsonb_typeof(graph) = 'object'),
+    CONSTRAINT flow_versions_owner_user_id_users_id_fk
+      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT flow_versions_flow_owner_fk
+      FOREIGN KEY (flow_id, owner_user_id) REFERENCES flows(id, owner_user_id) ON DELETE CASCADE
+  );
+
+  ALTER TABLE flows
+    ADD COLUMN IF NOT EXISTS origin jsonb,
+    ADD COLUMN IF NOT EXISTS definition_state text,
+    ADD COLUMN IF NOT EXISTS revision integer,
+    ADD COLUMN IF NOT EXISTS draft_base_version_id uuid,
+    ADD COLUMN IF NOT EXISTS draft_presentation jsonb;
+
+  ALTER TABLE flow_versions
+    ADD COLUMN IF NOT EXISTS source_revision integer,
+    ADD COLUMN IF NOT EXISTS graph_schema_version text,
+    ADD COLUMN IF NOT EXISTS presentation jsonb,
+    ADD COLUMN IF NOT EXISTS capability_manifest jsonb;
+
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM flows
+       WHERE draft_graph ? 'schemaVersion'
+         AND draft_graph->>'schemaVersion' <> 'flow-graph.v1'
+    ) OR EXISTS (
+      SELECT 1 FROM flow_versions
+       WHERE graph ? 'schemaVersion'
+         AND graph->>'schemaVersion' <> 'flow-graph.v1'
+    ) THEN
+      RAISE EXCEPTION 'Refusing to relabel a non-V1 Flows graph during baseline reconciliation';
+    END IF;
+  END
+  $$;
+
+  UPDATE flows
+     SET draft_graph = jsonb_set(draft_graph, '{schemaVersion}', '"flow-graph.v1"'::jsonb, true)
+   WHERE NOT (draft_graph ? 'schemaVersion');
+  UPDATE flow_versions
+     SET graph = jsonb_set(graph, '{schemaVersion}', '"flow-graph.v1"'::jsonb, true)
+   WHERE NOT (graph ? 'schemaVersion');
+
+  UPDATE flows
+     SET definition_state = CASE
+       WHEN status = 'archived' THEN 'archived'
+       WHEN published_version_id IS NULL THEN 'draft'
+       ELSE 'versioned'
+     END
+   WHERE definition_state IS NULL;
+  UPDATE flows SET revision = 1 WHERE revision IS NULL;
+
+  ALTER TABLE flows
+    ALTER COLUMN definition_state SET DEFAULT 'draft',
+    ALTER COLUMN definition_state SET NOT NULL,
+    ALTER COLUMN revision SET DEFAULT 1,
+    ALTER COLUMN revision SET NOT NULL;
+
+  ALTER TABLE flows
+    ADD CONSTRAINT flows_definition_state_check
+      CHECK (definition_state IN ('draft', 'versioned', 'archived')),
+    ADD CONSTRAINT flows_revision_check CHECK (revision > 0),
+    ADD CONSTRAINT flows_definition_lifecycle_check CHECK (
+      (
+        definition_state = 'draft'
+        AND (
+          (
+            published_version_id IS NULL
+            AND published_at IS NULL
+            AND draft_base_version_id IS NULL
+          )
+          OR (
+            published_version_id IS NOT NULL
+            AND published_at IS NOT NULL
+            AND draft_base_version_id = published_version_id
+          )
+        )
+      )
+      OR (
+        definition_state = 'versioned'
+        AND published_version_id IS NOT NULL
+        AND published_at IS NOT NULL
+        AND draft_base_version_id IS NULL
+      )
+      OR (
+        definition_state = 'archived'
+        AND (
+          (
+            published_version_id IS NULL
+            AND published_at IS NULL
+            AND draft_base_version_id IS NULL
+          )
+          OR (
+            published_version_id IS NOT NULL
+            AND published_at IS NOT NULL
+            AND (
+              draft_base_version_id IS NULL
+              OR draft_base_version_id = published_version_id
+            )
+          )
+        )
+      )
+    ),
+    ADD CONSTRAINT flows_graph_origin_check CHECK (
+      (
+        draft_graph->>'schemaVersion' = 'flow-graph.v1'
+        AND origin IS NULL
+        AND draft_presentation IS NULL
+      )
+      OR (
+        draft_graph->>'schemaVersion' = 'flow-graph.v2'
+        AND jsonb_typeof(origin) = 'object'
+        AND origin->>'schemaVersion' = 'flow-definition-origin.v1'
+        AND origin->>'type' IN ('blank', 'template', 'migration')
+      )
+    ),
+    ADD CONSTRAINT flows_draft_presentation_object_check
+      CHECK (draft_presentation IS NULL OR jsonb_typeof(draft_presentation) = 'object');
+
+  ALTER TABLE flow_versions
+    ADD CONSTRAINT flow_versions_flow_id_id_owner_published_unique
+      UNIQUE (flow_id, id, owner_user_id, published_at),
+    ADD CONSTRAINT flow_versions_source_revision_check
+      CHECK (source_revision IS NULL OR source_revision > 0),
+    ADD CONSTRAINT flow_versions_presentation_object_check
+      CHECK (presentation IS NULL OR jsonb_typeof(presentation) = 'object'),
+    ADD CONSTRAINT flow_versions_v2_metadata_check CHECK (
+      (
+        source_revision IS NULL
+        AND graph_schema_version IS NULL
+        AND capability_manifest IS NULL
+      )
+      OR (
+        source_revision > 0
+        AND graph_schema_version = 'flow-graph.v2'
+        AND graph->>'schemaVersion' = 'flow-graph.v2'
+        AND jsonb_typeof(capability_manifest) = 'object'
+      )
+    );
+
+  ALTER TABLE flows DROP CONSTRAINT IF EXISTS flows_published_version_owner_fk;
+  ALTER TABLE flows
+    ADD CONSTRAINT flows_published_version_owner_fk
+      FOREIGN KEY (id, published_version_id, owner_user_id, published_at)
+      REFERENCES flow_versions(flow_id, id, owner_user_id, published_at) ON DELETE RESTRICT,
+    ADD CONSTRAINT flows_draft_base_version_owner_fk
+      FOREIGN KEY (id, draft_base_version_id, owner_user_id)
+      REFERENCES flow_versions(flow_id, id, owner_user_id) ON DELETE RESTRICT;
+
+  CREATE INDEX IF NOT EXISTS flows_owner_status_updated_idx
+    ON flows (owner_user_id, status, updated_at);
+  CREATE INDEX IF NOT EXISTS flows_owner_definition_state_updated_idx
+    ON flows (owner_user_id, definition_state, updated_at, id);
+  CREATE INDEX IF NOT EXISTS flows_owner_name_idx ON flows (owner_user_id, name);
+  CREATE INDEX IF NOT EXISTS flow_versions_owner_published_idx
+    ON flow_versions (owner_user_id, published_at);
+  CREATE UNIQUE INDEX IF NOT EXISTS flow_versions_flow_version_unique
+    ON flow_versions (flow_id, version);
+  CREATE UNIQUE INDEX flow_versions_flow_source_revision_unique
+    ON flow_versions (flow_id, source_revision) WHERE source_revision IS NOT NULL;
+
+  CREATE TABLE flow_definition_commands (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    api_surface text NOT NULL,
+    actor_user_id uuid NOT NULL,
+    owner_user_id uuid NOT NULL,
+    route_template text NOT NULL,
+    resource_id uuid NOT NULL,
+    command_scope text NOT NULL,
+    idempotency_key text NOT NULL,
+    request_hash text NOT NULL,
+    state text DEFAULT 'processing' NOT NULL,
+    completed_at timestamptz,
+    replay_until timestamptz NOT NULL,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    updated_at timestamptz DEFAULT now() NOT NULL,
+    CONSTRAINT flow_definition_commands_id_resource_owner_unique
+      UNIQUE (id, resource_id, owner_user_id),
+    CONSTRAINT flow_definition_commands_scope_check CHECK (
+      api_surface = 'astrologer-api'
+      AND command_scope IN (
+        'flows.definition.create.v2',
+        'flows.definition.update-draft.v2',
+        'flows.definition.publish.v2',
+        'flows.definition.create-next-draft.v2',
+        'flows.definition.migrate.v2'
+      )
+      AND (
+        (
+          route_template = '/flows'
+          AND command_scope = 'flows.definition.create.v2'
+          AND resource_id = owner_user_id
+        )
+        OR (route_template = '/flows/:flowId/draft' AND command_scope = 'flows.definition.update-draft.v2')
+        OR (route_template = '/flows/:flowId/publish' AND command_scope = 'flows.definition.publish.v2')
+        OR (route_template = '/flows/:flowId/next-draft' AND command_scope = 'flows.definition.create-next-draft.v2')
+        OR (route_template = '/flows/:flowId/migrations/v2' AND command_scope = 'flows.definition.migrate.v2')
+      )
+    ),
+    CONSTRAINT flow_definition_commands_key_check CHECK (
+      length(idempotency_key) BETWEEN 8 AND 128
+      AND idempotency_key ~ '^[A-Za-z0-9._:-]+$'
+    ),
+    CONSTRAINT flow_definition_commands_request_hash_check
+      CHECK (request_hash ~ '^sha256:[a-f0-9]{64}$'),
+    CONSTRAINT flow_definition_commands_state_check
+      CHECK (state IN ('processing', 'succeeded', 'failed')),
+    CONSTRAINT flow_definition_commands_terminal_state_check CHECK (
+      (state = 'processing' AND completed_at IS NULL)
+      OR (state IN ('succeeded', 'failed') AND completed_at IS NOT NULL)
+    ),
+    CONSTRAINT flow_definition_commands_replay_window_check
+      CHECK (replay_until = created_at + interval '24 hours'),
+    CONSTRAINT flow_definition_commands_completion_check
+      CHECK (completed_at IS NULL OR completed_at >= created_at),
+    CONSTRAINT flow_definition_commands_actor_user_id_users_id_fk
+      FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT flow_definition_commands_owner_user_id_users_id_fk
+      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE flow_definition_command_outcomes (
+    command_id uuid PRIMARY KEY NOT NULL,
+    response_status integer NOT NULL,
+    response_body jsonb NOT NULL,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    CONSTRAINT flow_definition_command_outcomes_response_check CHECK (
+      (
+        response_status IN (200, 201)
+        OR response_status BETWEEN 400 AND 499
+      )
+      AND jsonb_typeof(response_body) = 'object'
+    ),
+    CONSTRAINT flow_definition_command_outcomes_command_fk
+      FOREIGN KEY (command_id) REFERENCES flow_definition_commands(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE flow_definition_migrations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    flow_id uuid NOT NULL,
+    owner_user_id uuid NOT NULL,
+    command_id uuid NOT NULL,
+    source_graph_schema_version text NOT NULL,
+    target_graph_schema_version text NOT NULL,
+    source_version_id uuid,
+    source_revision integer NOT NULL,
+    source_graph_hash text NOT NULL,
+    target_revision integer NOT NULL,
+    migrated_at timestamptz NOT NULL,
+    CONSTRAINT flow_definition_migrations_schema_versions_check CHECK (
+      source_graph_schema_version = 'flow-graph.v1'
+      AND target_graph_schema_version = 'flow-graph.v2'
+    ),
+    CONSTRAINT flow_definition_migrations_revision_check CHECK (
+      source_revision > 0
+      AND target_revision = source_revision + 1
+    ),
+    CONSTRAINT flow_definition_migrations_graph_hash_check
+      CHECK (source_graph_hash ~ '^sha256:[a-f0-9]{64}$'),
+    CONSTRAINT flow_definition_migrations_flow_owner_fk
+      FOREIGN KEY (flow_id, owner_user_id)
+      REFERENCES flows(id, owner_user_id) ON DELETE CASCADE,
+    CONSTRAINT flow_definition_migrations_source_version_owner_fk
+      FOREIGN KEY (flow_id, source_version_id, owner_user_id)
+      REFERENCES flow_versions(flow_id, id, owner_user_id) ON DELETE CASCADE,
+    CONSTRAINT flow_definition_migrations_command_resource_owner_fk
+      FOREIGN KEY (command_id, flow_id, owner_user_id)
+      REFERENCES flow_definition_commands(id, resource_id, owner_user_id) ON DELETE CASCADE
+  );
+
+  CREATE UNIQUE INDEX flow_definition_commands_scope_key_unique
+    ON flow_definition_commands (
+      api_surface,
+      actor_user_id,
+      owner_user_id,
+      route_template,
+      resource_id,
+      idempotency_key
+    );
+  CREATE INDEX flow_definition_commands_replay_until_idx
+    ON flow_definition_commands (replay_until);
+  CREATE INDEX flow_definition_commands_owner_resource_created_idx
+    ON flow_definition_commands (owner_user_id, resource_id, created_at);
+  CREATE INDEX flow_definition_command_outcomes_created_idx
+    ON flow_definition_command_outcomes (created_at);
+  CREATE UNIQUE INDEX flow_definition_migrations_command_unique
+    ON flow_definition_migrations (command_id);
+  CREATE UNIQUE INDEX flow_definition_migrations_flow_target_revision_unique
+    ON flow_definition_migrations (flow_id, target_revision);
+  CREATE INDEX flow_definition_migrations_owner_migrated_idx
+    ON flow_definition_migrations (owner_user_id, migrated_at);
+
+  ${flowsIntegritySql}
 `;

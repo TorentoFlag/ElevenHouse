@@ -1,16 +1,36 @@
-import { BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+  UnprocessableEntityException
+} from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
-import type { FlowRuntimeStore, FlowStore } from "@elevenhouse/domain";
+import {
+  compileFlowGraphV2,
+  type FlowDefinitionControlStore,
+  type FlowDefinitionQueryStore,
+  type FlowRuntimeStore,
+  type FlowStore
+} from "@elevenhouse/domain";
 import type {
   FlowApproval,
+  FlowDefinitionDetailV2,
+  FlowDefinitionSummaryV2,
+  FlowDefinitionV2,
   FlowGraph,
   FlowGraphV2,
+  FlowPresentationV1,
+  MigrateFlowDefinitionV2Response,
+  PublishFlowDefinitionV2Response,
   FlowRuntimeEvent,
   FlowRunResponse
 } from "@elevenhouse/contracts";
 import type { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
-import { csrfRequiredMetadataKey } from "../security/route-policy/route-security-metadata";
+import {
+  csrfRequiredMetadataKey,
+  idempotencyRequiredMetadataKey
+} from "../security/route-policy/route-security-metadata";
 import { FlowsController } from "./flows.controller";
 import { FlowApprovalsController } from "./flow-approvals.controller";
 import { FlowRunsController } from "./flow-runs.controller";
@@ -27,6 +47,14 @@ const runtimeAvailability = {
   reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
   historySemantics: "legacy_preview"
 } as const;
+type CurrentFlowDefinitionSummaryV2 = Extract<
+  FlowDefinitionSummaryV2,
+  { graphSchemaVersion: "flow-graph.v2" }
+>;
+type CurrentFlowDefinitionDetailV2 = Extract<
+  FlowDefinitionDetailV2,
+  { graphSchemaVersion: "flow-graph.v2" }
+>;
 
 const graph: FlowGraph = {
   schemaVersion: "flow-graph.v1",
@@ -80,82 +108,204 @@ const graphV2: FlowGraphV2 = {
   ]
 };
 
+const graphV2Compilation = compileFlowGraphV2(graphV2);
+if (!graphV2Compilation.normalizedGraph || !graphV2Compilation.capabilityManifest) {
+  throw new Error("Expected valid V2 graph fixture");
+}
+const normalizedGraphV2 = graphV2Compilation.normalizedGraph;
+const capabilityManifestV1 = graphV2Compilation.capabilityManifest;
+const presentationV1: FlowPresentationV1 = {
+  schemaVersion: "flow-presentation.v1",
+  nodes: [
+    { nodeId: "manual", position: { x: 80, y: 120 } },
+    { nodeId: "completed", position: { x: 400, y: 120 } }
+  ],
+  viewport: { x: 0, y: 0, zoom: 1 }
+};
+
 describe("FlowsService", () => {
   it("lists built-in templates through the API contract", async () => {
-    const response = await createService().listFlowTemplates();
+    const response = await createService().listFlowTemplates({ locale: "en" });
 
-    expect(response.templates.length).toBeGreaterThan(0);
-    expect(response.templates[0]).toMatchObject({
-      key: expect.any(String),
-      graph: expect.objectContaining({ schemaVersion: "flow-graph.v1" })
+    expect(response).toMatchObject({
+      schemaVersion: "flow-definition-template-catalog.v2",
+      catalogVersion: 1,
+      locale: "en"
     });
+    expect(response.templates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "manual-consultation-preparation",
+          availability: "available"
+        }),
+        expect.objectContaining({ key: "session-prep", availability: "legacy_read_only" })
+      ])
+    );
+    expect(response.templates.every((template) => !("graph" in template))).toBe(true);
   });
 
-  it("creates and lists owner-scoped flow drafts", async () => {
+  it("creates, lists and gets owner-scoped V2 definitions", async () => {
     const store = createFlowStore();
-    const service = createService({ store });
+    const definitionStore = createDefinitionControlStore();
+    const definitionQueryStore = createDefinitionQueryStore();
+    const service = createService({ store, definitionStore, definitionQueryStore });
 
-    const created = await service.createFlow({ name: "Welcome funnel", graph }, request());
-    const listed = await service.listFlows(
-      { status: "draft", limit: "10", offset: "0" },
+    const created = await service.createFlow(
+      {
+        schemaVersion: "flow-definition-create.v2",
+        name: "Welcome funnel",
+        locale: "ru",
+        source: { type: "blank" }
+      },
+      "flow-create-request-1",
       request()
     );
+    const listed = await service.listFlows(
+      { state: "draft", runtimeStatus: "all", limit: "10", offset: "0" },
+      request()
+    );
+    const detail = await service.getFlow(flowId, request());
 
     expect(created).toMatchObject({
+      schemaVersion: "flow-definition.v2",
       ownerUserId,
       name: "Welcome funnel",
-      status: "draft"
+      state: "draft",
+      origin: { type: "blank" }
     });
     expect(listed.total).toBe(1);
     expect(listed.runtime).toEqual(runtimeAvailability);
-    expect(store.createDraft).toHaveBeenCalledWith({
+    expect(detail).toMatchObject({ id: flowId, graphSchemaVersion: "flow-graph.v2" });
+    expect(definitionStore.executeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.objectContaining({
+          scope: "flows.definition.create.v2",
+          resourceId: ownerUserId,
+          idempotencyKey: "flow-create-request-1"
+        })
+      })
+    );
+    expect(definitionQueryStore.listByOwner).toHaveBeenCalledWith({
       ownerUserId,
-      name: "Welcome funnel",
-      approvalMode: "manual_approve",
-      graph,
-      now
+      query: { state: "draft", runtimeStatus: "all", limit: 10, offset: 0 }
     });
-    expect(store.listByOwner).toHaveBeenCalledWith({
-      ownerUserId,
-      status: "draft",
-      limit: 10,
-      offset: 0
-    });
+    expect(definitionQueryStore.getByOwner).toHaveBeenCalledWith({ ownerUserId, flowId });
+    expect(store.createDraft).not.toHaveBeenCalled();
+    expect(store.listByOwner).not.toHaveBeenCalled();
   });
 
-  it("updates drafts and publishes immutable versions", async () => {
+  it("routes V2 draft, publish and next-draft commands through the durable control store", async () => {
     const store = createFlowStore();
-    const service = createService({ store });
+    const definitionStore = createDefinitionControlStore();
+    const service = createService({ store, definitionStore });
 
-    const updated = await service.updateFlowDraft(flowId, { name: "After purchase" }, request());
-    const published = await service.publishFlow(flowId, request());
+    const updated = await service.updateFlowDraft(
+      flowId,
+      { expectedRevision: 1, name: "After purchase" },
+      "flow-update-request-1",
+      request()
+    );
+    const published = await service.publishFlow(
+      flowId,
+      { expectedRevision: 1 },
+      "flow-publish-request-1",
+      request()
+    );
+    const nextDraft = await service.createNextFlowDraft(
+      flowId,
+      { expectedRevision: 2, baseVersionId: versionId },
+      "flow-next-draft-request-1",
+      request()
+    );
 
     expect(updated.name).toBe("After purchase");
+    expect(updated).toMatchObject({ schemaVersion: "flow-definition.v2", revision: 2 });
     expect(published).toMatchObject({
       flow: {
         id: flowId,
-        status: "published",
-        publishedVersion: 1
+        state: "versioned",
+        revision: 2
       },
       version: {
         id: versionId,
-        status: "published",
-        version: 1
+        sourceRevision: 1,
+        version: 1,
+        graph: normalizedGraphV2
       }
     });
-    expect(store.updateDraft).toHaveBeenCalledWith({
-      ownerUserId,
-      flowId,
-      patch: { name: "After purchase" },
-      now
+    expect(nextDraft).toMatchObject({
+      state: "draft",
+      revision: 3,
+      draftBaseVersionId: versionId,
+      latestPublishedVersionId: versionId
     });
-    expect(store.publishDraft).toHaveBeenCalledWith({ ownerUserId, flowId, now });
+    expect(definitionStore.executeDraftUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.objectContaining({
+          scope: "flows.definition.update-draft.v2",
+          actorUserId: ownerUserId,
+          ownerUserId,
+          resourceId: flowId,
+          expectedRevision: 1,
+          idempotencyKey: "flow-update-request-1"
+        })
+      })
+    );
+    expect(definitionStore.executePublish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.objectContaining({
+          scope: "flows.definition.publish.v2",
+          idempotencyKey: "flow-publish-request-1"
+        })
+      })
+    );
+    expect(definitionStore.executeCreateNextDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.objectContaining({
+          scope: "flows.definition.create-next-draft.v2",
+          idempotencyKey: "flow-next-draft-request-1"
+        })
+      })
+    );
+    expect(store.updateDraft).not.toHaveBeenCalled();
+    expect(store.publishDraft).not.toHaveBeenCalled();
+  });
+
+  it("migrates one legacy definition through an explicit idempotent route command", async () => {
+    const definitionStore = createDefinitionControlStore();
+    const service = createService({ definitionStore });
+
+    const migrated = await service.migrateFlowDefinition(
+      flowId,
+      {
+        schemaVersion: "flow-definition-migrate.v2",
+        expectedRevision: 1,
+        targetGraphSchemaVersion: "flow-graph.v2"
+      },
+      "flow-migrate-request-1",
+      request()
+    );
+
+    expect(migrated).toMatchObject({
+      flow: { id: flowId, origin: { type: "migration" }, revision: 2 },
+      migration: { sourceRevision: 1, targetGraphSchemaVersion: "flow-graph.v2" }
+    });
+    expect(definitionStore.executeMigration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.objectContaining({
+          scope: "flows.definition.migrate.v2",
+          resourceId: flowId,
+          idempotencyKey: "flow-migrate-request-1"
+        })
+      })
+    );
   });
 
   it("validates an owner-scoped v2 definition without persistence writes", async () => {
     const store = createFlowStore();
+    const definitionQueryStore = createDefinitionQueryStore();
     const runtimeStore = createRuntimeStore();
-    const service = createService({ store, runtimeStore });
+    const service = createService({ store, definitionQueryStore, runtimeStore });
 
     await expect(
       service.validateFlowDefinition(flowId, { graph: graphV2 }, request())
@@ -171,7 +321,7 @@ describe("FlowsService", () => {
       })
     });
 
-    expect(store.findByOwnerAndId).toHaveBeenCalledWith({ ownerUserId, flowId });
+    expect(definitionQueryStore.getByOwner).toHaveBeenCalledWith({ ownerUserId, flowId });
     expect(store.createDraft).not.toHaveBeenCalled();
     expect(store.updateDraft).not.toHaveBeenCalled();
     expect(store.publishDraft).not.toHaveBeenCalled();
@@ -196,18 +346,16 @@ describe("FlowsService", () => {
       ])
     });
 
-    const missingStore = createFlowStore({
-      findByOwnerAndId: vi.fn(async () => null)
+    const missingQueryStore = createDefinitionQueryStore({
+      getByOwner: vi.fn(async () => null)
     });
     await expect(
-      createService({ store: missingStore }).validateFlowDefinition(
+      createService({ definitionQueryStore: missingQueryStore }).validateFlowDefinition(
         flowId,
         { graph: graphV2 },
         request()
       )
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(missingStore.updateDraft).not.toHaveBeenCalled();
-    expect(missingStore.publishDraft).not.toHaveBeenCalled();
   });
 
   it("maps unavailable activation to conflict and keeps pause available", async () => {
@@ -263,39 +411,58 @@ describe("FlowsService", () => {
     );
   });
 
-  it("maps missing flow and unsafe publish attempts to explicit HTTP errors", async () => {
-    const store = createFlowStore({
-      findByOwnerAndId: vi.fn(async () => null)
+  it("maps missing reads and persisted publish rejections to explicit HTTP errors", async () => {
+    const definitionQueryStore = createDefinitionQueryStore({
+      getByOwner: vi.fn(async () => null)
     });
-    const service = createService({ store });
+    const service = createService({ definitionQueryStore });
 
     await expect(service.getFlow(flowId, request())).rejects.toBeInstanceOf(NotFoundException);
 
-    const unsafeStore = createFlowStore({
-      findByOwnerAndId: vi.fn(async () =>
-        flow({
-          draftGraph: {
-            ...graph,
-            nodes: [
-              graph.nodes[0]!,
-              {
-                id: "auto-message",
-                category: "action",
-                kind: "send_message",
-                approvalMode: "auto_send",
-                title: "Автоотправка",
-                config: {}
-              }
-            ],
-            edges: [{ id: "edge-1", fromNodeId: "lead-created", toNodeId: "auto-message" }]
+    const unsafeStore = createFlowStore();
+    const definitionStore = createDefinitionControlStore({
+      executePublish: vi.fn(async () => ({
+        kind: "created" as const,
+        outcome: {
+          kind: "rejected" as const,
+          response: {
+            statusCode: 422 as const,
+            body: {
+              code: "FLOW_GRAPH_NOT_PUBLISHABLE" as const,
+              issues: [
+                {
+                  code: "unterminated_path" as const,
+                  severity: "error" as const,
+                  blocking: true as const,
+                  path: "nodes[manual]",
+                  message: "Every reachable path must terminate"
+                }
+              ]
+            }
           }
-        })
-      )
+        }
+      }))
     });
 
     await expect(
-      createService({ store: unsafeStore }).publishFlow(flowId, request())
-    ).rejects.toBeInstanceOf(BadRequestException);
+      createService({ store: unsafeStore, definitionStore }).publishFlow(
+        flowId,
+        { expectedRevision: 1 },
+        "flow-publish-invalid-1",
+        request()
+      )
+    ).rejects.toMatchObject({
+      status: 422,
+      response: expect.objectContaining({ code: "FLOW_GRAPH_NOT_PUBLISHABLE" })
+    });
+    await expect(
+      createService({ store: unsafeStore, definitionStore }).publishFlow(
+        flowId,
+        { expectedRevision: 1 },
+        "flow-publish-invalid-2",
+        request()
+      )
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
     expect(unsafeStore.publishDraft).not.toHaveBeenCalled();
   });
 
@@ -305,9 +472,18 @@ describe("FlowsService", () => {
     await expect(service.listFlows({}, {} as AstrologerSessionRequest)).rejects.toBeInstanceOf(
       UnauthorizedException
     );
-    await expect(service.createFlow({ name: "", graph }, request())).rejects.toBeInstanceOf(
-      BadRequestException
-    );
+    await expect(
+      service.createFlow(
+        {
+          schemaVersion: "flow-definition-create.v2",
+          name: "",
+          locale: "ru",
+          source: { type: "blank" }
+        },
+        "flow-create-invalid-1",
+        request()
+      )
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it("maps unavailable simulation to conflict without runtime persistence", async () => {
@@ -531,6 +707,33 @@ describe("FlowsController", () => {
       Reflect.getMetadata(csrfRequiredMetadataKey, FlowsController.prototype.publishFlow)
     ).toBe(true);
     expect(
+      Reflect.getMetadata(csrfRequiredMetadataKey, FlowsController.prototype.createNextFlowDraft)
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(csrfRequiredMetadataKey, FlowsController.prototype.migrateFlowDefinition)
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(idempotencyRequiredMetadataKey, FlowsController.prototype.createFlow)
+    ).toEqual({ scope: "flows.definition.create.v2" });
+    expect(
+      Reflect.getMetadata(idempotencyRequiredMetadataKey, FlowsController.prototype.updateFlowDraft)
+    ).toEqual({ scope: "flows.definition.update-draft.v2" });
+    expect(
+      Reflect.getMetadata(idempotencyRequiredMetadataKey, FlowsController.prototype.publishFlow)
+    ).toEqual({ scope: "flows.definition.publish.v2" });
+    expect(
+      Reflect.getMetadata(
+        idempotencyRequiredMetadataKey,
+        FlowsController.prototype.createNextFlowDraft
+      )
+    ).toEqual({ scope: "flows.definition.create-next-draft.v2" });
+    expect(
+      Reflect.getMetadata(
+        idempotencyRequiredMetadataKey,
+        FlowsController.prototype.migrateFlowDefinition
+      )
+    ).toEqual({ scope: "flows.definition.migrate.v2" });
+    expect(
       Reflect.getMetadata(csrfRequiredMetadataKey, FlowsController.prototype.simulateFlow)
     ).toBe(true);
     expect(
@@ -551,15 +754,192 @@ describe("FlowsController", () => {
 function createService(
   overrides: {
     readonly store?: FlowStore;
+    readonly definitionStore?: FlowDefinitionControlStore;
+    readonly definitionQueryStore?: FlowDefinitionQueryStore;
     readonly runtimeStore?: FlowRuntimeStore;
     readonly clock?: SystemClock;
   } = {}
 ) {
   return new FlowsService(
     overrides.store ?? createFlowStore(),
+    overrides.definitionStore ?? createDefinitionControlStore(),
+    overrides.definitionQueryStore ?? createDefinitionQueryStore(),
     overrides.runtimeStore ?? createRuntimeStore(),
     overrides.clock ?? ({ now: () => new Date(now) } as SystemClock)
   );
+}
+
+function createDefinitionControlStore(
+  overrides: Partial<FlowDefinitionControlStore> = {}
+): FlowDefinitionControlStore {
+  return {
+    executeCreate: vi.fn(async () => ({
+      kind: "created" as const,
+      outcome: {
+        kind: "succeeded" as const,
+        response: { statusCode: 201 as const, body: definitionV2() }
+      }
+    })),
+    executeDraftUpdate: vi.fn(async () => ({
+      kind: "created" as const,
+      outcome: {
+        kind: "succeeded" as const,
+        response: {
+          statusCode: 200 as const,
+          body: definitionV2({ name: "After purchase", revision: 2 })
+        }
+      }
+    })),
+    executePublish: vi.fn(async () => ({
+      kind: "created" as const,
+      outcome: {
+        kind: "succeeded" as const,
+        response: { statusCode: 200 as const, body: publishedDefinitionV2() }
+      }
+    })),
+    executeCreateNextDraft: vi.fn(async () => ({
+      kind: "created" as const,
+      outcome: {
+        kind: "succeeded" as const,
+        response: {
+          statusCode: 200 as const,
+          body: definitionV2({
+            state: "draft",
+            revision: 3,
+            draftBaseVersionId: versionId,
+            latestPublishedVersionId: versionId,
+            latestPublishedVersion: 1,
+            publishedAt: now
+          })
+        }
+      }
+    })),
+    executeMigration: vi.fn(async () => ({
+      kind: "created" as const,
+      outcome: {
+        kind: "succeeded" as const,
+        response: { statusCode: 200 as const, body: migratedDefinitionV2() }
+      }
+    })),
+    ...overrides
+  };
+}
+
+function definitionV2(overrides: Partial<FlowDefinitionV2> = {}): FlowDefinitionV2 {
+  return {
+    schemaVersion: "flow-definition.v2",
+    id: flowId,
+    ownerUserId,
+    name: "Welcome funnel",
+    origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
+    state: "draft",
+    approvalMode: "manual_approve",
+    revision: 1,
+    draftBaseVersionId: null,
+    draftGraph: normalizedGraphV2,
+    draftPresentation: presentationV1,
+    latestPublishedVersionId: null,
+    latestPublishedVersion: null,
+    createdAt: now,
+    updatedAt: now,
+    publishedAt: null,
+    ...overrides
+  };
+}
+
+function migratedDefinitionV2(): MigrateFlowDefinitionV2Response {
+  return {
+    flow: definitionV2({
+      origin: {
+        schemaVersion: "flow-definition-origin.v1",
+        type: "migration",
+        sourceGraphSchemaVersion: "flow-graph.v1",
+        sourceVersionId: null
+      },
+      revision: 2
+    }),
+    migration: {
+      schemaVersion: "flow-definition-migration.v1",
+      sourceGraphSchemaVersion: "flow-graph.v1",
+      targetGraphSchemaVersion: "flow-graph.v2",
+      sourceVersionId: null,
+      sourceRevision: 1,
+      sourceGraphHash: `sha256:${"0".repeat(64)}`,
+      migratedAt: now
+    }
+  };
+}
+
+function definitionSummaryV2(
+  overrides: Partial<CurrentFlowDefinitionSummaryV2> = {}
+): CurrentFlowDefinitionSummaryV2 {
+  return {
+    schemaVersion: "flow-definition-summary.v2",
+    id: flowId,
+    ownerUserId,
+    name: "Welcome funnel",
+    state: "draft",
+    runtimeStatus: "draft",
+    approvalMode: "manual_approve",
+    revision: 1,
+    draftBaseVersionId: null,
+    latestPublishedVersionId: null,
+    latestPublishedVersion: null,
+    createdAt: now,
+    updatedAt: now,
+    publishedAt: null,
+    graphSchemaVersion: "flow-graph.v2",
+    origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
+    migrationRequired: false,
+    ...overrides
+  };
+}
+
+function definitionDetailV2(
+  overrides: Partial<CurrentFlowDefinitionDetailV2> = {}
+): CurrentFlowDefinitionDetailV2 {
+  return {
+    ...definitionSummaryV2(),
+    schemaVersion: "flow-definition-detail.v2",
+    draftGraph: normalizedGraphV2,
+    draftPresentation: presentationV1,
+    ...overrides
+  };
+}
+
+function createDefinitionQueryStore(
+  overrides: Partial<FlowDefinitionQueryStore> = {}
+): FlowDefinitionQueryStore {
+  return {
+    listByOwner: vi.fn(async () => ({ flows: [definitionSummaryV2()], total: 1 })),
+    getByOwner: vi.fn(async () => definitionDetailV2()),
+    ...overrides
+  };
+}
+
+function publishedDefinitionV2(): PublishFlowDefinitionV2Response {
+  return {
+    flow: definitionV2({
+      state: "versioned",
+      revision: 2,
+      latestPublishedVersionId: versionId,
+      latestPublishedVersion: 1,
+      publishedAt: now
+    }),
+    version: {
+      schemaVersion: "flow-published-version.v2",
+      id: versionId,
+      flowId,
+      version: 1,
+      sourceRevision: 1,
+      status: "published",
+      approvalMode: "manual_approve",
+      graph: normalizedGraphV2,
+      presentation: presentationV1,
+      capabilityManifest: capabilityManifestV1,
+      publishedAt: now
+    }
+  };
 }
 
 function createFlowStore(overrides: Partial<FlowStore> = {}): FlowStore {

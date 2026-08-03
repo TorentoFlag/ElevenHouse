@@ -1,5 +1,5 @@
 import type {
-  FlowResponse,
+  FlowDefinitionSummaryV2,
   FlowRunResponse,
   FlowRuntimeAvailability,
   MessagingThread
@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { buildInboxFlowContexts } from "./inboxFlowContexts";
 
 describe("buildInboxFlowContexts", () => {
-  it("builds selected-thread flow context from real client-subject runs and flow data", () => {
+  it("builds durable context from a V2 summary and the persisted run status", () => {
     expect(
       buildInboxFlowContexts({
         threads: [thread],
@@ -33,7 +33,7 @@ describe("buildInboxFlowContexts", () => {
       {
         threadId: thread.id,
         flowName: flow.name,
-        currentStepTitle: "Черновик заботливого сообщения"
+        currentStepTitle: "Ожидает подтверждения"
       }
     ]);
   });
@@ -72,12 +72,16 @@ describe("buildInboxFlowContexts", () => {
     ).toEqual([]);
   });
 
-  it("does not project legacy preview runs as live inbox context", () => {
+  it.each([
+    ["runtime metadata is missing", undefined],
+    ["execution is unavailable", definitionOnlyRuntime],
+    ["history is not durable", mixedHistoryRuntime]
+  ])("fails closed when %s", (_case, runtimeAvailability) => {
     expect(
       buildInboxFlowContexts({
         threads: [thread],
         flows: [flow],
-        runtimeAvailability: definitionOnlyRuntime,
+        runtimeAvailability,
         runsByFlowId: {
           [flow.id]: [
             {
@@ -109,6 +113,13 @@ const durableRuntime = {
   historySemantics: "durable_execution"
 } satisfies FlowRuntimeAvailability;
 
+const mixedHistoryRuntime = {
+  mode: "canary",
+  executionAvailable: true,
+  reasonCode: null,
+  historySemantics: "mixed"
+} satisfies FlowRuntimeAvailability;
+
 const thread = {
   id: "11111111-1111-4111-8111-111111111111",
   clientUserId: "22222222-2222-4222-8222-222222222222",
@@ -122,38 +133,27 @@ const thread = {
 } satisfies MessagingThread;
 
 const flow = {
+  schemaVersion: "flow-definition-summary.v2",
   id: "33333333-3333-4333-8333-333333333333",
   ownerUserId: "44444444-4444-4444-8444-444444444444",
   name: "Реактивация спящих",
-  status: "active",
+  state: "versioned",
+  runtimeStatus: "active",
   approvalMode: "manual_approve",
-  draftGraph: {
-    schemaVersion: "flow-graph.v1",
-    nodes: [
-      {
-        id: "trigger-astro-event",
-        category: "trigger",
-        kind: "astro_event",
-        title: "Транзит у спящего клиента",
-        config: {}
-      },
-      {
-        id: "care-message",
-        category: "action",
-        kind: "send_message",
-        title: "Черновик заботливого сообщения",
-        approvalMode: "manual_approve",
-        config: {}
-      }
-    ],
-    edges: []
-  },
-  publishedVersionId: "66666666-6666-4666-8666-666666666666",
-  publishedVersion: 1,
+  revision: 2,
+  draftBaseVersionId: null,
+  latestPublishedVersionId: "66666666-6666-4666-8666-666666666666",
+  latestPublishedVersion: 1,
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
-  publishedAt: "2026-07-28T08:00:00.000Z"
-} satisfies FlowResponse;
+  publishedAt: "2026-07-28T08:00:00.000Z",
+  graphSchemaVersion: "flow-graph.v2",
+  origin: {
+    schemaVersion: "flow-definition-origin.v1",
+    type: "blank"
+  },
+  migrationRequired: false
+} satisfies FlowDefinitionSummaryV2;
 
 const run = {
   id: "77777777-7777-4777-8777-777777777777",

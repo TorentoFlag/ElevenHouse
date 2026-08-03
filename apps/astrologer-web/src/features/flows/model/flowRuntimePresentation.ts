@@ -1,4 +1,4 @@
-import type { FlowResponse, FlowRuntimeAvailability } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummaryV2, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 
 export const flowRuntimeExecutionUnavailableMessageRu =
   "Исполнение воронки пока недоступно. Сценарий можно редактировать и публиковать.";
@@ -8,6 +8,8 @@ export const flowApprovalDecisionUnavailableMessageRu =
 
 export const flowApprovalMixedHistoryMessageRu =
   "Подтверждения из переходной истории доступны только для просмотра.";
+
+export type FlowRuntimeLocale = "ru" | "en";
 
 export type FlowRuntimePresentation = {
   readonly executionAvailable: boolean;
@@ -26,14 +28,16 @@ export type FlowAutomationControlPresentation = {
 };
 
 export function buildFlowRuntimePresentation(
-  runtimeAvailability: FlowRuntimeAvailability | null | undefined
+  runtimeAvailability: FlowRuntimeAvailability | null | undefined,
+  locale: FlowRuntimeLocale = "ru"
 ): FlowRuntimePresentation {
+  const copy = runtimeCopy[locale];
   if (!runtimeAvailability) {
     return {
       executionAvailable: false,
       historyIsLegacyPreview: false,
       historySemantics: "unverified",
-      unavailableReason: "Доступность исполнения этой версии не подтверждена сервером."
+      unavailableReason: copy.unverified
     };
   }
 
@@ -43,7 +47,7 @@ export function buildFlowRuntimePresentation(
     executionAvailable,
     historyIsLegacyPreview: runtimeAvailability.historySemantics === "legacy_preview",
     historySemantics: runtimeAvailability.historySemantics,
-    unavailableReason: executionAvailable ? null : flowRuntimeExecutionUnavailableMessageRu
+    unavailableReason: executionAvailable ? null : copy.unavailable
   };
 }
 
@@ -57,21 +61,22 @@ export function canProjectLiveFlowRuntime(
 }
 
 export function buildFlowAutomationControl(
-  flow: FlowResponse,
-  runtimeAvailability: FlowRuntimeAvailability | null | undefined
+  flow: Pick<FlowDefinitionSummaryV2, "runtimeStatus" | "latestPublishedVersionId">,
+  runtimeAvailability: FlowRuntimeAvailability | null | undefined,
+  locale: FlowRuntimeLocale = "ru"
 ): FlowAutomationControlPresentation {
-  const runtime = buildFlowRuntimePresentation(runtimeAvailability);
-  const checked = flow.status === "active";
+  const copy = runtimeCopy[locale];
+  const runtime = buildFlowRuntimePresentation(runtimeAvailability, locale);
+  const checked = flow.runtimeStatus === "active";
 
   if (checked && !runtime.executionAvailable) {
     return {
       checked,
       canToggle: true,
       nextActive: false,
-      accessibleLabel:
-        "Исполнение отключено; сохраненную активацию можно поставить на паузу",
-      title: `${runtime.unavailableReason ?? "Исполнение воронки недоступно"} Поставить сохраненный статус на паузу.`,
-      statusLabel: "Исполнение отключено"
+      accessibleLabel: copy.persistedActiveLabel,
+      title: `${runtime.unavailableReason ?? copy.unavailableShort} ${copy.pausePersistedTitle}`,
+      statusLabel: copy.executionDisabled
     };
   }
 
@@ -80,22 +85,23 @@ export function buildFlowAutomationControl(
       checked,
       canToggle: true,
       nextActive: false,
-      accessibleLabel: "Автоматизация активна",
-      title: "Поставить автоматизацию на паузу",
+      accessibleLabel: copy.activeLabel,
+      title: copy.pauseTitle,
       statusLabel: null
     };
   }
 
   const canActivateFromStatus =
-    flow.publishedVersionId !== null && (flow.status === "published" || flow.status === "paused");
+    flow.latestPublishedVersionId !== null &&
+    (flow.runtimeStatus === "published" || flow.runtimeStatus === "paused");
 
   if (canActivateFromStatus && !runtime.executionAvailable) {
     return {
       checked,
       canToggle: false,
       nextActive: true,
-      accessibleLabel: "Исполнение этой версии воронки недоступно",
-      title: runtime.unavailableReason ?? "Исполнение воронки недоступно",
+      accessibleLabel: copy.versionUnavailableLabel,
+      title: runtime.unavailableReason ?? copy.unavailableShort,
       statusLabel: null
     };
   }
@@ -104,10 +110,41 @@ export function buildFlowAutomationControl(
     checked,
     canToggle: canActivateFromStatus && runtime.executionAvailable,
     nextActive: true,
-    accessibleLabel: canActivateFromStatus
-      ? "Включить автоматизацию"
-      : "Автоматизация не запущена",
-    title: canActivateFromStatus ? "Включить автоматизацию" : "Сначала опубликуйте воронку",
+    accessibleLabel: canActivateFromStatus ? copy.activateLabel : copy.notStartedLabel,
+    title: canActivateFromStatus ? copy.activateTitle : copy.publishFirstTitle,
     statusLabel: null
   };
 }
+
+const runtimeCopy = {
+  ru: {
+    unverified: "Доступность исполнения этой версии не подтверждена сервером.",
+    unavailable: flowRuntimeExecutionUnavailableMessageRu,
+    unavailableShort: "Исполнение воронки недоступно.",
+    persistedActiveLabel: "Исполнение отключено; сохраненную активацию можно поставить на паузу",
+    pausePersistedTitle: "Поставить сохраненный статус на паузу.",
+    executionDisabled: "Исполнение недоступно",
+    activeLabel: "Автоматизация активна",
+    pauseTitle: "Поставить автоматизацию на паузу",
+    versionUnavailableLabel: "Исполнение этой версии воронки недоступно",
+    activateLabel: "Включить автоматизацию",
+    notStartedLabel: "Автоматизация не запущена",
+    activateTitle: "Включить автоматизацию",
+    publishFirstTitle: "Сначала опубликуйте воронку"
+  },
+  en: {
+    unverified: "Execution availability has not been confirmed by the server.",
+    unavailable: "Flow execution is not available yet. You can edit and publish the definition.",
+    unavailableShort: "Flow execution is unavailable.",
+    persistedActiveLabel: "Execution is disabled; the persisted active state can be paused",
+    pausePersistedTitle: "Pause the persisted active state.",
+    executionDisabled: "Execution unavailable",
+    activeLabel: "Automation is active",
+    pauseTitle: "Pause automation",
+    versionUnavailableLabel: "Execution is unavailable for this flow version",
+    activateLabel: "Enable automation",
+    notStartedLabel: "Automation has not started",
+    activateTitle: "Enable automation",
+    publishFirstTitle: "Publish the flow first"
+  }
+} as const;

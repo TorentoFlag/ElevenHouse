@@ -1,261 +1,302 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type {
-  CreateFlowRequest,
-  FlowGraph,
-  FlowApprovalDecision,
-  FlowResponse,
-  FlowTemplate,
-  SimulateFlowRunRequest
+  FlowDefinitionTemplateDescriptorV2,
+  ValidateFlowDefinitionResponse
 } from "@elevenhouse/contracts";
+import { useI18n } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
+import {
+  buildCreateFlowDefinitionRequest,
+  createFlowCommandAttemptRegistry,
+  describeFlowDefinitionError,
+  getFlowDefinitionMigrationIssues,
+  getFlowDefinitionRevisionConflict,
+  getFlowDefinitionValidationIssues,
+  parseAstroCalendarFlowHandoff
+} from "../../features/flows/model/flowsPageModel";
+import { buildLegacyFlowDefinitionExport } from "../../features/flows/model/flowDefinitionExport";
 import { useActivateFlowMutation } from "../../features/flows/model/useActivateFlowMutation";
-import { useCreateManualFlowRunMutation } from "../../features/flows/model/useCreateManualFlowRunMutation";
-import { useFlowApprovalsQuery } from "../../features/flows/model/useFlowApprovalsQuery";
-import { useFlowListQuery } from "../../features/flows/model/useFlowListQuery";
-import { useFlowRunsQuery } from "../../features/flows/model/useFlowRunsQuery";
-import { useFlowTemplatesQuery } from "../../features/flows/model/useFlowTemplatesQuery";
-import { usePauseFlowMutation } from "../../features/flows/model/usePauseFlowMutation";
 import { useCreateFlowMutation } from "../../features/flows/model/useCreateFlowMutation";
-import { useDecideFlowApprovalMutation } from "../../features/flows/model/useDecideFlowApprovalMutation";
+import { useCreateNextFlowDraftMutation } from "../../features/flows/model/useCreateNextFlowDraftMutation";
+import { useFlowDefinitionQuery } from "../../features/flows/model/useFlowDefinitionQuery";
+import { useFlowListQuery } from "../../features/flows/model/useFlowListQuery";
+import { useFlowTemplatesQuery } from "../../features/flows/model/useFlowTemplatesQuery";
+import { useMigrateFlowDefinitionMutation } from "../../features/flows/model/useMigrateFlowDefinitionMutation";
+import { usePauseFlowMutation } from "../../features/flows/model/usePauseFlowMutation";
 import { usePublishFlowMutation } from "../../features/flows/model/usePublishFlowMutation";
-import { useSimulateFlowRunMutation } from "../../features/flows/model/useSimulateFlowRunMutation";
 import { useUpdateFlowDraftMutation } from "../../features/flows/model/useUpdateFlowDraftMutation";
+import { useValidateFlowDefinitionMutation } from "../../features/flows/model/useValidateFlowDefinitionMutation";
+import type {
+  FlowDraftCommandPayload,
+  FlowNextDraftCommandPayload,
+  FlowPublishCommandPayload
+} from "../../features/flows/ui/FlowBuilder";
 import { FlowsPageView } from "./FlowsPageView";
 
 export function FlowsPage() {
-  useDocumentTitle("Воронки");
-  const flowsQuery = useFlowListQuery({ status: "all", limit: 50, offset: 0 });
-  const templatesQuery = useFlowTemplatesQuery();
-  const createFlowMutation = useCreateFlowMutation();
-  const updateDraftMutation = useUpdateFlowDraftMutation();
-  const publishMutation = usePublishFlowMutation();
-  const activateFlowMutation = useActivateFlowMutation();
-  const pauseFlowMutation = usePauseFlowMutation();
-  const simulateMutation = useSimulateFlowRunMutation();
-  const manualRunMutation = useCreateManualFlowRunMutation();
-  const decideApprovalMutation = useDecideFlowApprovalMutation();
+  const i18n = useI18n();
+  const locale = i18n.locale === "en" ? "en" : "ru";
+  useDocumentTitle(locale === "ru" ? "Воронки" : "Flows");
+
+  const handoff = useMemo(() => parseAstroCalendarFlowHandoff(getCurrentLocationSearch()), []);
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
-  const [createdFlow, setCreatedFlow] = useState<FlowResponse | null>(null);
-  const selectedRuntimeFlowId = selectedFlowId ?? createdFlow?.id ?? null;
-  const runsQuery = useFlowRunsQuery(selectedRuntimeFlowId, { status: "all", limit: 20, offset: 0 });
-  const approvalsQuery = useFlowApprovalsQuery({ status: "pending", limit: 50, offset: 0 });
-  const simulation =
-    simulateMutation.data?.flowId === selectedRuntimeFlowId ? simulateMutation.data : null;
-  const astroCalendarHandoff = useMemo(
-    () => parseAstroCalendarFlowHandoff(getCurrentLocationSearch()),
-    []
+  const [createDialogOpen, setCreateDialogOpen] = useState(handoff !== null);
+  const [validationResult, setValidationResult] = useState<ValidateFlowDefinitionResponse | null>(
+    null
   );
+  const commandAttempts = useRef(createFlowCommandAttemptRegistry()).current;
 
-  const openFlow = (flowId: string) => {
-    simulateMutation.reset();
-    setCreatedFlow(null);
-    setSelectedFlowId(flowId);
-  };
+  const flowsQuery = useFlowListQuery({
+    state: "all",
+    runtimeStatus: "all",
+    limit: 50,
+    offset: 0
+  });
+  const templatesQuery = useFlowTemplatesQuery(locale);
+  const selectedFlowQuery = useFlowDefinitionQuery(selectedFlowId);
+  const createMutation = useCreateFlowMutation();
+  const updateMutation = useUpdateFlowDraftMutation();
+  const publishMutation = usePublishFlowMutation();
+  const nextDraftMutation = useCreateNextFlowDraftMutation();
+  const migrationMutation = useMigrateFlowDefinitionMutation();
+  const activateMutation = useActivateFlowMutation();
+  const pauseMutation = usePauseFlowMutation();
+  const validationMutation = useValidateFlowDefinitionMutation();
+  const saveConflict = getFlowDefinitionRevisionConflict(updateMutation.error);
+  const publishConflict = getFlowDefinitionRevisionConflict(publishMutation.error);
+  const revisionConflict = saveConflict
+    ? { ...saveConflict, operation: "save" as const }
+    : publishConflict
+      ? { ...publishConflict, operation: "publish" as const }
+      : null;
 
-  const createFlow = () => {
-    createFlowMutation.mutate(
-      createFlowRequest({
-        templates: templatesQuery.data?.templates ?? [],
-        astroCalendarHandoff
-      }),
+  const createDefinition = (template: FlowDefinitionTemplateDescriptorV2 | null) => {
+    const body = buildCreateFlowDefinitionRequest({ locale, template });
+    const idempotencyKey = commandAttempts.acquire("create", body);
+
+    createMutation.mutate(
+      { body, idempotencyKey },
       {
-        onSuccess: (flow) => {
-          simulateMutation.reset();
-          setCreatedFlow(flow);
-          setSelectedFlowId(flow.id);
+        onSuccess: (definition) => {
+          commandAttempts.acknowledge("create", idempotencyKey);
+          setCreateDialogOpen(false);
+          setSelectedFlowId(definition.id);
         }
       }
     );
   };
 
-  const simulateFlow = (flowId: string) => {
-    if (runsQuery.data?.runtime.executionAvailable !== true) return;
-    simulateMutation.mutate({ flowId, body: createManualRuntimeRequest(flowId) });
+  const saveDraft = (input: FlowDraftCommandPayload) => {
+    const body = {
+      expectedRevision: input.expectedRevision,
+      graph: input.graph,
+      presentation: input.presentation
+    };
+    const idempotencyKey = commandAttempts.acquire("update", {
+      flowId: input.flowId,
+      body
+    });
+    updateMutation.mutate(
+      {
+        flowId: input.flowId,
+        body,
+        idempotencyKey
+      },
+      { onSuccess: () => commandAttempts.acknowledge("update", idempotencyKey) }
+    );
   };
 
-  const createManualRun = (flowId: string) => {
-    if (runsQuery.data?.runtime.executionAvailable !== true) return;
-    manualRunMutation.mutate({ flowId, body: createManualRuntimeRequest(flowId) });
+  const executePublishDraft = (input: FlowPublishCommandPayload) => {
+    const publishRevision = (expectedRevision: number) => {
+      const body = { expectedRevision };
+      const idempotencyKey = commandAttempts.acquire("publish", {
+        flowId: input.flowId,
+        body
+      });
+      publishMutation.mutate(
+        {
+          flowId: input.flowId,
+          body,
+          idempotencyKey
+        },
+        { onSuccess: () => commandAttempts.acknowledge("publish", idempotencyKey) }
+      );
+    };
+
+    if (!input.saveBeforePublish) {
+      publishRevision(input.expectedRevision);
+      return;
+    }
+
+    const body = {
+      expectedRevision: input.expectedRevision,
+      graph: input.graph,
+      presentation: input.presentation
+    };
+    const idempotencyKey = commandAttempts.acquire("update", {
+      flowId: input.flowId,
+      body
+    });
+    updateMutation.mutate(
+      {
+        flowId: input.flowId,
+        body,
+        idempotencyKey
+      },
+      {
+        onSuccess: (saved) => {
+          commandAttempts.acknowledge("update", idempotencyKey);
+          publishRevision(saved.revision);
+        }
+      }
+    );
   };
 
-  const decideApproval = (approvalId: string, decision: FlowApprovalDecision) => {
-    if (approvalsQuery.data?.runtime.executionAvailable !== true) return;
-    decideApprovalMutation.mutate({ approvalId, body: { decision } });
+  const publishDraft = (input: FlowPublishCommandPayload) => {
+    setValidationResult(null);
+    validationMutation.mutate(
+      { flowId: input.flowId, graph: input.graph },
+      {
+        onSuccess: (result) => {
+          setValidationResult(result);
+          if (result.publishable) executePublishDraft(input);
+        }
+      }
+    );
+  };
+
+  const createNextDraft = (input: FlowNextDraftCommandPayload) => {
+    const body = {
+      expectedRevision: input.expectedRevision,
+      baseVersionId: input.baseVersionId
+    };
+    const idempotencyKey = commandAttempts.acquire("next-draft", {
+      flowId: input.flowId,
+      body
+    });
+    nextDraftMutation.mutate(
+      { flowId: input.flowId, body, idempotencyKey },
+      {
+        onSuccess: () => commandAttempts.acknowledge("next-draft", idempotencyKey)
+      }
+    );
+  };
+
+  const migrateDefinition = (flowId: string, expectedRevision: number) => {
+    const body = {
+      schemaVersion: "flow-definition-migrate.v2" as const,
+      expectedRevision,
+      targetGraphSchemaVersion: "flow-graph.v2" as const
+    };
+    const idempotencyKey = commandAttempts.acquire("migrate", { flowId, body });
+    migrationMutation.mutate(
+      { flowId, body, idempotencyKey },
+      {
+        onSuccess: () => commandAttempts.acknowledge("migrate", idempotencyKey)
+      }
+    );
   };
 
   const toggleAutomation = (flowId: string, activate: boolean) => {
-    simulateMutation.reset();
     if (activate) {
-      if (flowsQuery.data?.runtime.executionAvailable !== true) return;
-      activateFlowMutation.mutate(flowId);
-    } else {
-      pauseFlowMutation.mutate(flowId);
+      if (flowsQuery.data?.runtime.executionAvailable === true) activateMutation.mutate(flowId);
+      return;
     }
+    pauseMutation.mutate(flowId);
   };
 
   return (
     <FlowsPageView
+      locale={locale}
       flows={flowsQuery.data?.flows ?? []}
       templates={templatesQuery.data?.templates ?? []}
-      isLoading={flowsQuery.isLoading || templatesQuery.isLoading}
-      isError={flowsQuery.isError || templatesQuery.isError}
-      selectedFlow={createdFlow}
+      isLoading={flowsQuery.isLoading}
+      isError={flowsQuery.isError}
+      listError={asLocalizedError(flowsQuery.error, locale)}
+      templateError={asLocalizedError(templatesQuery.error, locale)}
+      templatesLoading={templatesQuery.isLoading}
+      onRetryList={() => void flowsQuery.refetch()}
+      onRetryTemplates={() => void templatesQuery.refetch()}
       selectedFlowId={selectedFlowId}
-      onCreateFlow={createFlow}
-      onOpenFlow={openFlow}
-      onAutomationToggle={toggleAutomation}
+      selectedFlow={selectedFlowQuery.data ?? null}
+      isLoadingSelectedFlow={selectedFlowQuery.isLoading}
+      selectedFlowError={asLocalizedError(selectedFlowQuery.error, locale)}
+      createDialogOpen={createDialogOpen}
+      requestedTemplateKey={handoff?.suggestedTemplateKey ?? null}
+      onRequestCreate={() => setCreateDialogOpen(true)}
+      onCloseCreate={() => setCreateDialogOpen(false)}
+      onCreateTemplate={(template) => createDefinition(template)}
+      onCreateBlank={() => createDefinition(null)}
+      onOpenFlow={(flowId) => {
+        validationMutation.reset();
+        setValidationResult(null);
+        setCreateDialogOpen(false);
+        setSelectedFlowId(flowId);
+      }}
       onCloseBuilder={() => {
-        simulateMutation.reset();
-        setCreatedFlow(null);
+        validationMutation.reset();
+        setValidationResult(null);
         setSelectedFlowId(null);
       }}
-      onUpdateDraft={(flowId, graph) => updateDraftMutation.mutate({ flowId, body: { graph } })}
-      onPublish={(flowId, graph) =>
-        updateDraftMutation.mutate(
-          { flowId, body: { graph } },
-          {
-            onSuccess: () =>
-              publishMutation.mutate(flowId, {
-                onSuccess: (result) => setCreatedFlow(result.flow)
-              })
-          }
-        )
-      }
-      runs={runsQuery.data?.runs ?? []}
-      approvals={approvalsQuery.data?.approvals ?? []}
-      simulation={simulation}
+      onReloadSelectedFlow={async () => {
+        const result = await selectedFlowQuery.refetch();
+        if (result.error) throw result.error;
+        updateMutation.reset();
+        publishMutation.reset();
+        return result.data?.graphSchemaVersion === "flow-graph.v2" ? result.data : null;
+      }}
+      onSaveDraft={saveDraft}
+      onPublish={publishDraft}
+      onCreateNextDraft={createNextDraft}
+      onMigrate={migrateDefinition}
+      onExportLegacyFlow={downloadLegacyFlowDefinition}
+      onAutomationToggle={toggleAutomation}
       runtimeAvailability={flowsQuery.data?.runtime ?? null}
-      runRuntimeAvailability={runsQuery.data?.runtime ?? null}
-      approvalRuntimeAvailability={approvalsQuery.data?.runtime ?? null}
-      onSimulate={simulateFlow}
-      onCreateManualRun={createManualRun}
-      onApprovalDecision={decideApproval}
-      isLoadingRuns={runsQuery.isLoading}
-      isLoadingApprovals={approvalsQuery.isLoading}
-      createError={createFlowMutation.error}
-      draftUpdateError={updateDraftMutation.error}
-      publishError={publishMutation.error}
-      runtimeError={simulateMutation.error ?? manualRunMutation.error ?? (runsQuery.error as Error | null)}
-      approvalsError={decideApprovalMutation.error ?? (approvalsQuery.error as Error | null)}
-      isCreating={createFlowMutation.isPending}
-      isUpdatingDraft={updateDraftMutation.isPending}
+      isCreating={createMutation.isPending}
+      isSaving={updateMutation.isPending}
       isPublishing={publishMutation.isPending}
-      isTogglingAutomation={activateFlowMutation.isPending || pauseFlowMutation.isPending}
-      isSimulating={simulateMutation.isPending}
-      isCreatingManualRun={manualRunMutation.isPending}
-      isDecidingApproval={decideApprovalMutation.isPending}
+      isValidating={validationMutation.isPending}
+      isCreatingNextDraft={nextDraftMutation.isPending}
+      isMigrating={migrationMutation.isPending}
+      isTogglingAutomation={activateMutation.isPending || pauseMutation.isPending}
+      createError={asLocalizedError(createMutation.error, locale)}
+      saveError={asLocalizedError(updateMutation.error, locale)}
+      publishError={asLocalizedError(publishMutation.error, locale)}
+      nextDraftError={asLocalizedError(nextDraftMutation.error, locale)}
+      migrationError={asLocalizedError(migrationMutation.error, locale)}
+      migrationIssues={getFlowDefinitionMigrationIssues(migrationMutation.error)}
+      revisionConflict={revisionConflict}
+      validationIssues={
+        getFlowDefinitionValidationIssues(publishMutation.error).length > 0
+          ? getFlowDefinitionValidationIssues(publishMutation.error)
+          : (validationResult?.issues ?? [])
+      }
+      validationError={asLocalizedError(validationMutation.error, locale)}
     />
   );
 }
 
-function createManualRuntimeRequest(flowId: string): SimulateFlowRunRequest {
-  return {
-    source: "manual",
-    subjectType: "manual",
-    subjectId: flowId,
-    occurredAt: new Date().toISOString(),
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-    payload: {}
-  };
-}
-
-const newFlowRequest = {
-  name: "Новая воронка",
-  approvalMode: "manual_approve",
-  graph: {
-    schemaVersion: "flow-graph.v1",
-    nodes: [
-      {
-        id: "manual_trigger",
-        category: "trigger",
-        kind: "manual",
-        title: "Ручной запуск",
-        config: {},
-        position: { x: 80, y: 120 }
-      }
-    ],
-    edges: []
-  }
-} satisfies CreateFlowRequest;
-
-type AstroCalendarFlowHandoff = {
-  readonly source: "astro_calendar";
-  readonly eventId: string;
-  readonly suggestedTemplateKey: string;
-  readonly clientId?: string;
-};
-
-function createFlowRequest(input: {
-  readonly templates: readonly FlowTemplate[];
-  readonly astroCalendarHandoff: AstroCalendarFlowHandoff | null;
-}): CreateFlowRequest {
-  if (!input.astroCalendarHandoff) {
-    return newFlowRequest;
-  }
-
-  const template = input.templates.find(
-    (candidate) => candidate.key === input.astroCalendarHandoff?.suggestedTemplateKey
-  );
-
-  if (!template) {
-    return newFlowRequest;
-  }
-
-  return {
-    name: `Астрокалендарь · ${template.name}`,
-    approvalMode: template.recommendedApprovalMode,
-    graph: applyAstroCalendarContext(template.graph, input.astroCalendarHandoff)
-  };
-}
-
-function applyAstroCalendarContext(
-  graph: FlowGraph,
-  handoff: AstroCalendarFlowHandoff
-): FlowGraph {
-  return {
-    ...graph,
-    nodes: graph.nodes.map((node) => {
-      if (node.category !== "trigger" || node.kind !== "astro_event") {
-        return node;
-      }
-
-      return {
-        ...node,
-        config: {
-          ...node.config,
-          source: handoff.source,
-          eventId: handoff.eventId,
-          ...(handoff.clientId ? { clientId: handoff.clientId } : {})
-        }
-      };
-    })
-  };
-}
-
-function parseAstroCalendarFlowHandoff(search: string): AstroCalendarFlowHandoff | null {
-  const searchParams = new URLSearchParams(search);
-
-  if (searchParams.get("source") !== "astro_calendar") {
-    return null;
-  }
-
-  const eventId = searchParams.get("eventId")?.trim();
-  const suggestedTemplateKey = searchParams.get("suggestedTemplateKey")?.trim();
-
-  if (!eventId || !suggestedTemplateKey) {
-    return null;
-  }
-
-  const clientId = searchParams.get("clientId")?.trim();
-
-  return {
-    source: "astro_calendar",
-    eventId,
-    suggestedTemplateKey,
-    ...(clientId ? { clientId } : {})
-  };
+function asLocalizedError(error: unknown, locale: "ru" | "en"): Error | null {
+  return error ? describeFlowDefinitionError(error, locale) : null;
 }
 
 function getCurrentLocationSearch(): string {
   return typeof globalThis.location?.search === "string" ? globalThis.location.search : "";
+}
+
+function downloadLegacyFlowDefinition(
+  flow: Parameters<typeof buildLegacyFlowDefinitionExport>[0]
+): void {
+  const artifact = buildLegacyFlowDefinitionExport(flow);
+  const objectUrl = URL.createObjectURL(new Blob([artifact.contents], { type: artifact.mimeType }));
+  try {
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = artifact.filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }

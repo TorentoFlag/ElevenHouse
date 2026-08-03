@@ -1,68 +1,61 @@
-import type { FlowGraph, FlowResponse, FlowTemplate } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummaryV2 } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
-import { buildFlowGalleryCard, buildFlowTemplateCard } from "./flowsVisualModel";
-
-const graph: FlowGraph = {
-  schemaVersion: "flow-graph.v1",
-  nodes: [
-    { id: "lead", category: "trigger", kind: "lead_created", title: "Новый лид", config: {} },
-    {
-      id: "reply",
-      category: "ai",
-      kind: "reply_draft",
-      approvalMode: "manual_approve",
-      title: "Черновик ответа",
-      config: {}
-    }
-  ],
-  edges: [{ id: "lead-reply", fromNodeId: "lead", toNodeId: "reply" }]
-};
+import { buildFlowGalleryCard } from "./flowsVisualModel";
 
 const flow = {
+  schemaVersion: "flow-definition-summary.v2",
   id: "11111111-1111-4111-8111-111111111111",
   ownerUserId: "22222222-2222-4222-8222-222222222222",
-  name: "Запись на консультацию",
-  status: "draft",
+  name: "Подготовка консультации",
+  state: "draft",
+  runtimeStatus: "draft",
   approvalMode: "manual_approve",
-  draftGraph: graph,
-  publishedVersionId: null,
-  publishedVersion: null,
+  revision: 3,
+  draftBaseVersionId: null,
+  latestPublishedVersionId: null,
+  latestPublishedVersion: null,
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
-  publishedAt: null
-} satisfies FlowResponse;
-
-const template = {
-  key: "consultation",
-  name: "Подготовка к консультации",
-  description: "Собирает данные до встречи.",
-  category: "service_delivery",
-  recommendedApprovalMode: "manual_approve",
-  requiredCapabilities: ["booking_confirmed"],
-  graph
-} satisfies FlowTemplate;
+  publishedAt: null,
+  graphSchemaVersion: "flow-graph.v2",
+  origin: {
+    schemaVersion: "flow-definition-origin.v1",
+    type: "template",
+    templateKey: "manual-consultation-preparation",
+    templateVersion: 1
+  },
+  migrationRequired: false
+} satisfies FlowDefinitionSummaryV2;
 
 describe("flows visual model", () => {
-  it("maps a flow without inventing runtime metrics", () => {
-    const card = buildFlowGalleryCard(flow);
-
-    expect(card.statusLabel).toBe("Черновик");
-    expect(card.metrics).toEqual({
-      activeRuns: null,
-      waitingApprovals: null,
-      completedRuns: null,
-      conversionRate: null
+  it("maps a lightweight V2 summary without inventing graph or runtime metrics", () => {
+    expect(buildFlowGalleryCard(flow, "ru")).toEqual({
+      id: flow.id,
+      title: flow.name,
+      definitionStateLabel: "Черновик",
+      runtimeStatusLabel: "Не опубликована",
+      approvalModeLabel: "С подтверждением",
+      graphSchemaLabel: "Схема V2",
+      originLabel: "Из шаблона",
+      revisionLabel: "Редакция 3",
+      publishedVersionLabel: "Не опубликована",
+      migrationRequired: false
     });
-    expect(card.pathPreview).toEqual(["Новый лид", "Черновик ответа"]);
   });
 
-  it("maps a template with its graph preview and approval mode", () => {
-    expect(buildFlowTemplateCard(template)).toMatchObject({
-      key: "consultation",
-      title: "Подготовка к консультации",
-      approvalModeLabel: "С подтверждением",
-      triggerTitle: "Новый лид",
-      pathPreview: ["Новый лид", "Черновик ответа"]
+  it("makes legacy migration a first-class visible state", () => {
+    const legacy = {
+      ...flow,
+      graphSchemaVersion: "flow-graph.v1",
+      origin: null,
+      migrationRequired: true
+    } satisfies FlowDefinitionSummaryV2;
+
+    expect(buildFlowGalleryCard(legacy, "en")).toMatchObject({
+      graphSchemaLabel: "Legacy V1",
+      originLabel: "Legacy definition",
+      revisionLabel: "Revision 3",
+      migrationRequired: true
     });
   });
 });

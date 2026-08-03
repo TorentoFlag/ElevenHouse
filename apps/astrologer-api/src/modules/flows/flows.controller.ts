@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -13,7 +14,7 @@ import {
 } from "@nestjs/common";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
-import { RequireCsrf } from "../security/route-policy/route-security-policy";
+import { RequireCsrf, RequireIdempotency } from "../security/route-policy/route-security-policy";
 import { FlowsService } from "./flows.service";
 
 @Controller("flow-templates")
@@ -22,8 +23,8 @@ export class FlowTemplatesController {
   constructor(private readonly service: FlowsService) {}
 
   @Get()
-  listFlowTemplates() {
-    return this.service.listFlowTemplates();
+  listFlowTemplates(@Query() query: unknown) {
+    return this.service.listFlowTemplates(query);
   }
 }
 
@@ -39,8 +40,13 @@ export class FlowsController {
 
   @Post()
   @RequireCsrf()
-  createFlow(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
-    return this.service.createFlow(body, request);
+  @RequireIdempotency({ scope: "flows.definition.create.v2" })
+  createFlow(
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.createFlow(body, idempotencyKey, request);
   }
 
   @Get(":flowId")
@@ -61,19 +67,53 @@ export class FlowsController {
 
   @Patch(":flowId/draft")
   @RequireCsrf()
+  @RequireIdempotency({ scope: "flows.definition.update-draft.v2" })
   updateFlowDraft(
     @Param("flowId") flowId: string,
     @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Req() request: AstrologerSessionRequest
   ) {
-    return this.service.updateFlowDraft(flowId, body, request);
+    return this.service.updateFlowDraft(flowId, body, idempotencyKey, request);
   }
 
   @Post(":flowId/publish")
   @HttpCode(HttpStatus.OK)
   @RequireCsrf()
-  publishFlow(@Param("flowId") flowId: string, @Req() request: AstrologerSessionRequest) {
-    return this.service.publishFlow(flowId, request);
+  @RequireIdempotency({ scope: "flows.definition.publish.v2" })
+  publishFlow(
+    @Param("flowId") flowId: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.publishFlow(flowId, body, idempotencyKey, request);
+  }
+
+  @Post(":flowId/next-draft")
+  @HttpCode(HttpStatus.OK)
+  @RequireCsrf()
+  @RequireIdempotency({ scope: "flows.definition.create-next-draft.v2" })
+  createNextFlowDraft(
+    @Param("flowId") flowId: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.createNextFlowDraft(flowId, body, idempotencyKey, request);
+  }
+
+  @Post(":flowId/migrations/v2")
+  @HttpCode(HttpStatus.OK)
+  @RequireCsrf()
+  @RequireIdempotency({ scope: "flows.definition.migrate.v2" })
+  migrateFlowDefinition(
+    @Param("flowId") flowId: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.migrateFlowDefinition(flowId, body, idempotencyKey, request);
   }
 
   @Post(":flowId/activate")

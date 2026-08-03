@@ -3,73 +3,112 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
-  UnauthorizedException
+  UnauthorizedException,
+  UnprocessableEntityException
 } from "@nestjs/common";
 import {
   cancelFlowRunResponseSchema,
-  createFlowRequestSchema,
+  createFlowDefinitionV2RequestSchema,
+  createNextFlowDraftV2RequestSchema,
   decideFlowApprovalRequestSchema,
   decideFlowApprovalResponseSchema,
+  flowDefinitionDetailV2Schema,
+  flowDefinitionV2Schema,
   flowResponseSchema,
   getFlowRunResponseSchema,
   listFlowApprovalsQuerySchema,
   listFlowApprovalsResponseSchema,
-  listFlowTemplatesResponseSchema,
-  listFlowsQuerySchema,
-  listFlowsResponseSchema,
+  listFlowDefinitionTemplatesV2QuerySchema,
+  listFlowDefinitionTemplatesV2ResponseSchema,
+  listFlowDefinitionsV2QuerySchema,
+  listFlowDefinitionsV2ResponseSchema,
   listFlowRunsQuerySchema,
   listFlowRunsResponseSchema,
   manualFlowRunResponseSchema,
-  publishFlowResponseSchema,
+  migrateFlowDefinitionV2RequestSchema,
+  migrateFlowDefinitionV2ResponseSchema,
+  publishFlowDefinitionV2RequestSchema,
+  publishFlowDefinitionV2ResponseSchema,
   simulateFlowRunRequestSchema,
   simulateFlowRunResponseSchema,
-  updateFlowDraftRequestSchema,
+  updateFlowDefinitionDraftV2RequestSchema,
   validateFlowDefinitionRequestSchema,
   validateFlowDefinitionResponseSchema,
   type CancelFlowRunResponse,
   type DecideFlowApprovalResponse,
+  type FlowDefinitionDetailV2,
+  type FlowDefinitionV2,
   type FlowResponse,
   type GetFlowRunResponse,
   type ListFlowApprovalsResponse,
-  type ListFlowTemplatesResponse,
-  type ListFlowsResponse,
+  type ListFlowDefinitionTemplatesV2Response,
+  type ListFlowDefinitionsV2Response,
   type ListFlowRunsResponse,
   type ManualFlowRunResponse,
-  type PublishFlowResponse,
+  type MigrateFlowDefinitionV2Response,
+  type PublishFlowDefinitionV2Response,
   type SimulateFlowRunResponse,
   type ValidateFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 import {
   activateFlow,
   cancelFlowRun as cancelFlowRunUseCase,
-  createFlowDraft,
+  createFlowDefinitionV2,
+  createNextFlowDraftV2,
   dispatchFlowRuntimeEvent,
   createManualFlowRun,
   decideFlowApproval as decideFlowApprovalUseCase,
   FLOW_RUNTIME_AVAILABILITY,
-  FlowGraphValidationError,
+  FlowDefinitionDraftMutationInvalidError,
+  FlowDefinitionGraphAlreadyV2Error,
+  FlowDefinitionIdempotencyConflictError,
+  FlowDefinitionIdempotencyExpiredError,
+  FlowDefinitionIdempotencyKeyInvalidError,
+  FlowDefinitionIntegrityError,
+  FlowDefinitionMigrationBlockedError,
+  FlowDefinitionMigrationNotAllowedError,
+  FlowDefinitionMigrationRequiredError,
+  FlowDefinitionNextDraftBaseConflictError,
+  FlowDefinitionNextDraftUnavailableError,
+  FlowDefinitionNotEditableError,
+  FlowDefinitionPublishValidationError,
+  FlowDefinitionRevisionConflictError,
+  FlowDefinitionTemplateNotAvailableError,
+  FlowDefinitionTemplateNotFoundError,
+  FlowDefinitionTemplateParametersInvalidError,
+  FlowDefinitionTemplateVersionConflictError,
   FlowRuntimeExecutionUnavailableError,
   FlowStatusTransitionError,
-  getBuiltInFlowTemplates,
+  getFlowDefinitionTemplateCatalogV2,
+  getFlowDefinitionV2 as getFlowDefinitionV2UseCase,
   getFlow,
   listFlowApprovals,
-  listFlows,
+  listFlowDefinitionsV2 as listFlowDefinitionsV2UseCase,
   listFlowRuns,
+  migrateFlowDefinitionV2,
   pauseFlow,
-  publishFlow,
+  publishFlowDefinitionV2,
   simulateFlowRun,
-  updateFlowDraft,
+  updateFlowDefinitionDraftV2,
   validateFlowDefinition as validateFlowDefinitionUseCase,
   type DispatchFlowRuntimeEventInput,
   type DispatchFlowRuntimeEventResult,
+  type FlowDefinitionControlStore,
+  type FlowDefinitionQueryStore,
   type FlowRuntimeStore,
   type FlowStore
 } from "@elevenhouse/domain";
 import { z, type ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
-import { FLOW_RUNTIME_STORE, FLOW_STORE } from "./flows.tokens";
+import {
+  FLOW_DEFINITION_CONTROL_STORE,
+  FLOW_DEFINITION_QUERY_STORE,
+  FLOW_RUNTIME_STORE,
+  FLOW_STORE
+} from "./flows.tokens";
 
 const flowIdParamSchema = z.string().uuid();
 type DispatchRuntimeEventServiceInput = Omit<
@@ -81,56 +120,79 @@ type DispatchRuntimeEventServiceInput = Omit<
 export class FlowsService {
   constructor(
     @Inject(FLOW_STORE) private readonly store: FlowStore,
+    @Inject(FLOW_DEFINITION_CONTROL_STORE)
+    private readonly definitionStore: FlowDefinitionControlStore,
+    @Inject(FLOW_DEFINITION_QUERY_STORE)
+    private readonly definitionQueryStore: FlowDefinitionQueryStore,
     @Inject(FLOW_RUNTIME_STORE) private readonly runtimeStore: FlowRuntimeStore,
     private readonly clock: SystemClock
   ) {}
 
-  async listFlowTemplates(): Promise<ListFlowTemplatesResponse> {
-    return listFlowTemplatesResponseSchema.parse({
-      templates: getBuiltInFlowTemplates()
-    });
+  async listFlowTemplates(query: unknown): Promise<ListFlowDefinitionTemplatesV2Response> {
+    const parsedQuery = parseContract(listFlowDefinitionTemplatesV2QuerySchema, query ?? {});
+    return listFlowDefinitionTemplatesV2ResponseSchema.parse(
+      getFlowDefinitionTemplateCatalogV2(parsedQuery.locale)
+    );
   }
 
-  async listFlows(query: unknown, request: AstrologerSessionRequest): Promise<ListFlowsResponse> {
+  async listFlows(
+    query: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<ListFlowDefinitionsV2Response> {
     const ownerUserId = requireOwnerUserId(request);
-    const parsedQuery = parseContract(listFlowsQuerySchema, query ?? {});
-    const result = await listFlows({
-      store: this.store,
-      ownerUserId,
-      query: parsedQuery
-    });
+    const parsedQuery = parseContract(listFlowDefinitionsV2QuerySchema, query ?? {});
+    return mapFlowDefinitionErrors(async () => {
+      const result = await listFlowDefinitionsV2UseCase({
+        store: this.definitionQueryStore,
+        ownerUserId,
+        query: parsedQuery
+      });
 
-    return listFlowsResponseSchema.parse({
-      flows: result.flows,
-      total: result.total,
-      runtime: FLOW_RUNTIME_AVAILABILITY
+      return listFlowDefinitionsV2ResponseSchema.parse({
+        schemaVersion: "flow-definition-list.v2",
+        flows: result.flows,
+        total: result.total,
+        runtime: FLOW_RUNTIME_AVAILABILITY
+      });
     });
   }
 
-  async createFlow(body: unknown, request: AstrologerSessionRequest): Promise<FlowResponse> {
+  async createFlow(
+    body: unknown,
+    idempotencyKey: string | undefined,
+    request: AstrologerSessionRequest
+  ): Promise<FlowDefinitionV2> {
     const ownerUserId = requireOwnerUserId(request);
-    const parsedBody = parseContract(createFlowRequestSchema, body);
-    const flow = await createFlowDraft({
-      store: this.store,
-      ownerUserId,
-      input: parsedBody,
-      now: this.clock.now().toISOString()
+    const parsedBody = parseContract(createFlowDefinitionV2RequestSchema, body);
+    return mapFlowDefinitionErrors(async () => {
+      const flow = await createFlowDefinitionV2({
+        store: this.definitionStore,
+        actorUserId: ownerUserId,
+        ownerUserId,
+        request: parsedBody,
+        idempotencyKey: idempotencyKey ?? "",
+        now: this.clock.now().toISOString()
+      });
+      return flowDefinitionV2Schema.parse(flow);
     });
-
-    return flowResponseSchema.parse(flow);
   }
 
-  async getFlow(flowId: string, request: AstrologerSessionRequest): Promise<FlowResponse> {
+  async getFlow(
+    flowId: string,
+    request: AstrologerSessionRequest
+  ): Promise<FlowDefinitionDetailV2> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
-    const flow = await getFlow({
-      store: this.store,
-      ownerUserId,
-      flowId: parsedFlowId
-    });
-    if (!flow) throw flowNotFound();
+    return mapFlowDefinitionErrors(async () => {
+      const flow = await getFlowDefinitionV2UseCase({
+        store: this.definitionQueryStore,
+        ownerUserId,
+        flowId: parsedFlowId
+      });
+      if (!flow) throw flowDefinitionNotFound();
 
-    return flowResponseSchema.parse(flow);
+      return flowDefinitionDetailV2Schema.parse(flow);
+    });
   }
 
   async validateFlowDefinition(
@@ -140,11 +202,13 @@ export class FlowsService {
   ): Promise<ValidateFlowDefinitionResponse> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
-    const flow = await getFlow({
-      store: this.store,
-      ownerUserId,
-      flowId: parsedFlowId
-    });
+    const flow = await mapFlowDefinitionErrors(() =>
+      getFlowDefinitionV2UseCase({
+        store: this.definitionQueryStore,
+        ownerUserId,
+        flowId: parsedFlowId
+      })
+    );
     if (!flow) throw flowNotFound();
 
     const parsedBody = parseContract(validateFlowDefinitionRequestSchema, body);
@@ -162,51 +226,97 @@ export class FlowsService {
   async updateFlowDraft(
     flowId: string,
     body: unknown,
+    idempotencyKey: string | undefined,
     request: AstrologerSessionRequest
-  ): Promise<FlowResponse> {
+  ): Promise<FlowDefinitionV2> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
-    const patch = parseContract(updateFlowDraftRequestSchema, body);
-    const flow = await updateFlowDraft({
-      store: this.store,
-      ownerUserId,
-      flowId: parsedFlowId,
-      patch,
-      now: this.clock.now().toISOString()
+    const command = parseContract(updateFlowDefinitionDraftV2RequestSchema, body);
+    return mapFlowDefinitionErrors(async () => {
+      const flow = await updateFlowDefinitionDraftV2({
+        store: this.definitionStore,
+        actorUserId: ownerUserId,
+        ownerUserId,
+        flowId: parsedFlowId,
+        request: command,
+        idempotencyKey: idempotencyKey ?? "",
+        now: this.clock.now().toISOString()
+      });
+      if (!flow) throw flowDefinitionNotFound();
+      return flowDefinitionV2Schema.parse(flow);
     });
-    if (!flow) throw flowNotFound();
-
-    return flowResponseSchema.parse(flow);
   }
 
   async publishFlow(
     flowId: string,
+    body: unknown,
+    idempotencyKey: string | undefined,
     request: AstrologerSessionRequest
-  ): Promise<PublishFlowResponse> {
+  ): Promise<PublishFlowDefinitionV2Response> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
-
-    try {
-      const result = await publishFlow({
-        store: this.store,
+    const command = parseContract(publishFlowDefinitionV2RequestSchema, body);
+    return mapFlowDefinitionErrors(async () => {
+      const result = await publishFlowDefinitionV2({
+        store: this.definitionStore,
+        actorUserId: ownerUserId,
         ownerUserId,
         flowId: parsedFlowId,
+        request: command,
+        idempotencyKey: idempotencyKey ?? "",
         now: this.clock.now().toISOString()
       });
-      if (!result) throw flowNotFound();
-      return publishFlowResponseSchema.parse(result);
-    } catch (error) {
-      if (error instanceof FlowGraphValidationError) {
-        throw new BadRequestException({
-          statusCode: 400,
-          error: "FLOW_GRAPH_NOT_PUBLISHABLE",
-          code: "FLOW_GRAPH_NOT_PUBLISHABLE",
-          message: "Flow graph is not publishable",
-          issues: error.issues
-        });
-      }
-      throw error;
-    }
+      if (!result) throw flowDefinitionNotFound();
+      return publishFlowDefinitionV2ResponseSchema.parse(result);
+    });
+  }
+
+  async createNextFlowDraft(
+    flowId: string,
+    body: unknown,
+    idempotencyKey: string | undefined,
+    request: AstrologerSessionRequest
+  ): Promise<FlowDefinitionV2> {
+    const ownerUserId = requireOwnerUserId(request);
+    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
+    const command = parseContract(createNextFlowDraftV2RequestSchema, body);
+    return mapFlowDefinitionErrors(async () => {
+      const flow = await createNextFlowDraftV2({
+        store: this.definitionStore,
+        actorUserId: ownerUserId,
+        ownerUserId,
+        flowId: parsedFlowId,
+        request: command,
+        idempotencyKey: idempotencyKey ?? "",
+        now: this.clock.now().toISOString()
+      });
+      if (!flow) throw flowDefinitionNotFound();
+      return flowDefinitionV2Schema.parse(flow);
+    });
+  }
+
+  async migrateFlowDefinition(
+    flowId: string,
+    body: unknown,
+    idempotencyKey: string | undefined,
+    request: AstrologerSessionRequest
+  ): Promise<MigrateFlowDefinitionV2Response> {
+    const ownerUserId = requireOwnerUserId(request);
+    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
+    const command = parseContract(migrateFlowDefinitionV2RequestSchema, body);
+    return mapFlowDefinitionErrors(async () => {
+      const result = await migrateFlowDefinitionV2({
+        store: this.definitionStore,
+        actorUserId: ownerUserId,
+        ownerUserId,
+        flowId: parsedFlowId,
+        request: command,
+        idempotencyKey: idempotencyKey ?? "",
+        now: this.clock.now().toISOString()
+      });
+      if (!result) throw flowDefinitionNotFound();
+      return migrateFlowDefinitionV2ResponseSchema.parse(result);
+    });
   }
 
   async activateFlow(flowId: string, request: AstrologerSessionRequest): Promise<FlowResponse> {
@@ -457,6 +567,87 @@ function flowNotFound(): NotFoundException {
     code: "FLOW_NOT_FOUND",
     message: "Flow was not found"
   });
+}
+
+function flowDefinitionNotFound(): NotFoundException {
+  return new NotFoundException({ code: "FLOW_DEFINITION_NOT_FOUND" });
+}
+
+async function mapFlowDefinitionErrors<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof FlowDefinitionIdempotencyKeyInvalidError) {
+      throw new BadRequestException({ code: error.code });
+    }
+    if (error instanceof FlowDefinitionTemplateNotFoundError) {
+      throw new NotFoundException({ code: error.code, templateKey: error.templateKey });
+    }
+    if (error instanceof FlowDefinitionRevisionConflictError) {
+      throw new ConflictException({
+        code: error.code,
+        expectedRevision: error.expectedRevision,
+        currentRevision: error.currentRevision
+      });
+    }
+    if (error instanceof FlowDefinitionNotEditableError) {
+      throw new ConflictException({ code: error.code, state: error.state });
+    }
+    if (error instanceof FlowDefinitionNextDraftUnavailableError) {
+      throw new ConflictException({ code: error.code, state: error.state });
+    }
+    if (error instanceof FlowDefinitionNextDraftBaseConflictError) {
+      throw new ConflictException({
+        code: error.code,
+        expectedBaseVersionId: error.expectedBaseVersionId,
+        currentBaseVersionId: error.currentBaseVersionId
+      });
+    }
+    if (
+      error instanceof FlowDefinitionIdempotencyConflictError ||
+      error instanceof FlowDefinitionIdempotencyExpiredError ||
+      error instanceof FlowDefinitionMigrationRequiredError ||
+      error instanceof FlowDefinitionDraftMutationInvalidError ||
+      error instanceof FlowDefinitionGraphAlreadyV2Error
+    ) {
+      throw new ConflictException({ code: error.code });
+    }
+    if (error instanceof FlowDefinitionMigrationNotAllowedError) {
+      throw new ConflictException({ code: error.code, state: error.state });
+    }
+    if (error instanceof FlowDefinitionTemplateVersionConflictError) {
+      throw new ConflictException({
+        code: error.code,
+        templateKey: error.templateKey,
+        requestedVersion: error.requestedVersion,
+        currentVersion: error.currentVersion
+      });
+    }
+    if (error instanceof FlowDefinitionTemplateNotAvailableError) {
+      throw new ConflictException({
+        code: error.code,
+        templateKey: error.templateKey,
+        reasonCode: error.reasonCode
+      });
+    }
+    if (error instanceof FlowDefinitionTemplateParametersInvalidError) {
+      throw new UnprocessableEntityException({
+        code: error.code,
+        templateKey: error.templateKey,
+        parameterPaths: error.parameterPaths
+      });
+    }
+    if (error instanceof FlowDefinitionMigrationBlockedError) {
+      throw new UnprocessableEntityException({ code: error.code, issues: error.issues });
+    }
+    if (error instanceof FlowDefinitionPublishValidationError) {
+      throw new UnprocessableEntityException({ code: error.code, issues: error.issues });
+    }
+    if (error instanceof FlowDefinitionIntegrityError) {
+      throw new InternalServerErrorException({ code: error.code });
+    }
+    throw error;
+  }
 }
 
 function flowRuntimeVersionRequired(): BadRequestException {

@@ -1,95 +1,94 @@
 // @vitest-environment jsdom
 
-import type { FlowGraph } from "@elevenhouse/contracts";
+import type { FlowGraphV2 } from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowBuilderInspector } from "./FlowBuilderInspector";
 
-const graph = {
-  schemaVersion: "flow-graph.v1",
+const graph: FlowGraphV2 = {
+  schemaVersion: "flow-graph.v2",
   nodes: [
     {
-      id: "lead_created",
-      category: "trigger",
-      kind: "lead_created",
-      title: "Новый лид",
+      id: "manual-client",
+      kind: "manual_client",
+      displayTitle: "Клиент выбран вручную",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
       config: {}
     },
     {
-      id: "ai_interpretation",
-      category: "ai",
-      kind: "reply_draft",
-      approvalMode: "manual_approve",
-      title: "AI-интерпретация",
-      config: { tone: "calm" }
-    },
-    {
-      id: "send_summary",
-      category: "action",
-      kind: "send_message",
-      approvalMode: "manual_approve",
-      title: "Отправить резюме",
-      config: {}
-    },
-    {
-      id: "approval",
-      category: "handoff",
-      kind: "approval",
-      approvalMode: "manual_approve",
-      title: "Проверка астролога",
-      config: {}
+      id: "preparation",
+      kind: "astrologer_work_item",
+      displayTitle: "Подготовить консультацию",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        taskKind: "consultation_preparation",
+        taskTitle: "Подготовить консультацию",
+        instructions: "Проверить данные",
+        priority: "normal"
+      }
     }
   ],
   edges: [
-    { id: "lead-to-ai", fromNodeId: "lead_created", toNodeId: "ai_interpretation" },
-    { id: "ai-to-summary", fromNodeId: "ai_interpretation", toNodeId: "send_summary" },
-    { id: "ai-to-approval", fromNodeId: "ai_interpretation", toNodeId: "approval" }
+    {
+      id: "manual-next-to-preparation",
+      sourceNodeId: "manual-client",
+      targetNodeId: "preparation",
+      sourceHandle: "next"
+    }
   ]
-} satisfies FlowGraph;
+};
 
 describe("FlowBuilderInspector", () => {
   afterEach(() => cleanup());
 
-  it("keeps node title typing local and commits it on blur", () => {
-    const onTitleChange = vi.fn();
-    const onCommitTitle = vi.fn();
+  it("edits a V2 display title and kind-specific work-item fields without raw JSON", () => {
+    const onChangeNode = vi.fn();
     render(
       <FlowBuilderInspector
         graph={graph}
         selectedNode={graph.nodes[1]!}
-        onTitleChange={onTitleChange}
-        onCommitTitle={onCommitTitle}
-        onUpdateConfig={vi.fn()}
+        locale="ru"
+        editable
+        onChangeNode={onChangeNode}
       />
     );
 
-    expect(screen.getByLabelText("Название узла").getAttribute("name")).toBe("flowNodeTitle");
-    expect(screen.getByLabelText("Конфигурация").getAttribute("name")).toBe("flowNodeConfig");
-    fireEvent.change(screen.getByLabelText("Название узла"), { target: { value: "AI-черновик" } });
+    expect(screen.queryByLabelText("Конфигурация")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Название узла"), {
+      target: { value: "Собрать материалы" }
+    });
+    expect(onChangeNode).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "preparation", displayTitle: "Собрать материалы" })
+    );
 
-    expect(onTitleChange).toHaveBeenCalledWith("ai_interpretation", "AI-черновик");
-    expect(onCommitTitle).not.toHaveBeenCalled();
-    fireEvent.blur(screen.getByLabelText("Название узла"));
-
-    expect(onCommitTitle).toHaveBeenCalledWith("ai_interpretation", "AI-черновик");
+    fireEvent.change(screen.getByLabelText("Приоритет"), { target: { value: "high" } });
+    expect(onChangeNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "astrologer_work_item",
+        config: expect.objectContaining({ priority: "high" })
+      })
+    );
   });
 
-  it("shows production graph facts for the selected node", () => {
+  it("shows immutable contract facts and disables fields for a published version", () => {
     render(
       <FlowBuilderInspector
         graph={graph}
         selectedNode={graph.nodes[1]!}
-        onTitleChange={vi.fn()}
-        onCommitTitle={vi.fn()}
-        onUpdateConfig={vi.fn()}
+        locale="en"
+        editable={false}
+        onChangeNode={vi.fn()}
       />
     );
 
-    expect(screen.getByText("AI-узел")).toBeTruthy();
-    expect(screen.getByText("reply_draft")).toBeTruthy();
-    expect(screen.getByText("Требует подтверждения")).toBeTruthy();
+    expect(screen.getByText("Astrologer task")).toBeTruthy();
+    expect(screen.getByText("astrologer_work_item")).toBeTruthy();
     expect(
-      screen.getByText((_, element) => element?.textContent === "1 вход · 2 выхода")
+      screen.getByText((_, element) => element?.textContent === "1 input · 0 output")
     ).toBeTruthy();
+    expect(screen.getByLabelText("Node title")).toHaveProperty("disabled", true);
+    expect(screen.getByLabelText("Priority")).toHaveProperty("disabled", true);
   });
 });
