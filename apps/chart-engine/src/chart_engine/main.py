@@ -1,7 +1,3 @@
-import math
-from datetime import date, datetime, time
-from typing import Any
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -66,7 +62,15 @@ async def request_validation_error(
     _request: Request,
     error: RequestValidationError,
 ) -> JSONResponse:
-    return JSONResponse(status_code=422, content={"detail": _json_safe(error.errors())})
+    detail = [
+        {
+            "type": str(issue.get("type", "value_error")),
+            "loc": [part for part in issue.get("loc", ()) if isinstance(part, (str, int))],
+            "msg": str(issue.get("msg", "Invalid request")),
+        }
+        for issue in error.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": detail})
 
 
 @app.get("/live", response_model=HealthResponse)
@@ -164,19 +168,3 @@ def positions(request: PlanetaryPositionsRequest) -> PlanetaryPositionsPayload:
     return provider_runtime.calculate(
         lambda: calculate_planetary_positions(request, provider_runtime.metadata())
     )
-
-
-def _json_safe(value: Any) -> Any:
-    if isinstance(value, BaseException):
-        return str(value)
-    if isinstance(value, float) and not math.isfinite(value):
-        if math.isnan(value):
-            return "NaN"
-        return "Infinity" if value > 0 else "-Infinity"
-    if isinstance(value, (date, datetime, time)):
-        return value.isoformat()
-    if isinstance(value, dict):
-        return {str(key): _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(item) for item in value]
-    return value

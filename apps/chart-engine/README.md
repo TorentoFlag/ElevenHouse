@@ -66,12 +66,11 @@ after benchmark evidence.
 
 ## Provider readiness and ephemeris data
 
-`/ready` runs a bounded canonical natal sentinel and returns the exact provider
-versions, actual backend detected from Swiss Ephemeris return flags, normalized
-flags, data revision and supported capabilities. A requested Swiss Ephemeris
-calculation can transparently fall back to Moshier when data files are absent;
-the runtime reports that actual fallback and fails readiness when it does not
-match the configured deployment profile.
+`/ready` runs a canonical natal sentinel in a cancellable child process under
+the provider lock. One deadline covers lock acquisition, calculation and child
+cleanup. It returns exact provider versions, backend and normalized flags from
+that sentinel execution. If Swiss Ephemeris falls back to Moshier, readiness
+reports the actual Moshier result and fails the configured Swiss profile.
 
 Production requires all three profile values and passes them consistently to
 `astrologer-api`, `chart-worker` and `chart-engine`:
@@ -79,6 +78,14 @@ Production requires all three profile values and passes them consistently to
 - `CHART_ENGINE_EXPECTED_EPHEMERIS`;
 - `CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS`;
 - `CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION` when packaged Swiss data is expected.
+
+For a licensed Swiss-data deployment, the runtime derives the revision from the
+installed Kerykeion `sweph` directory that Kerykeion 5.12.9 actually selects.
+It computes a SHA-256 manifest over sorted top-level `.se1` filenames and their
+content hashes, then compares it with the expected revision. Missing,
+unreadable or symlinked data fails closed. Moshier always reports a null data
+revision. The readiness deadline is configurable with
+`CHART_ENGINE_READINESS_TIMEOUT_SECONDS` and defaults to five seconds.
 
 The image does not download or package `.se1` files. Adding ephemeris data or
 making licensing claims requires separate authority and legal review.

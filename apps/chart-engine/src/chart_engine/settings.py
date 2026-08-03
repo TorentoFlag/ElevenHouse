@@ -34,6 +34,13 @@ def expected_ephemeris_data_revision() -> str | None:
     return value
 
 
+def provider_readiness_timeout_seconds() -> float:
+    value = float(getenv("CHART_ENGINE_READINESS_TIMEOUT_SECONDS", "5"))
+    if value <= 0 or value > 60:
+        raise ValueError("CHART_ENGINE_READINESS_TIMEOUT_SECONDS_INVALID")
+    return value
+
+
 def chart_engine_host() -> str:
     return getenv("CHART_ENGINE_HOST", "0.0.0.0")
 

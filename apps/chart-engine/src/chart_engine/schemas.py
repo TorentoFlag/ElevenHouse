@@ -180,10 +180,10 @@ class RelationshipSnapshot(BaseModel):
     @classmethod
     def validate_client_id(cls, value: str) -> str:
         try:
-            UUID(value)
+            canonical_id = UUID(value)
         except ValueError as error:
             raise ValueError("CHART_RELATIONSHIP_CLIENT_ID_INVALID") from error
-        return value
+        return str(canonical_id)
 
     @model_validator(mode="after")
     def validate_distinct_clients(self):
@@ -459,6 +459,8 @@ class ProviderMetadata(BaseModel):
     def validate_metadata(self):
         if len(set(self.ephemerisFlags)) != len(self.ephemerisFlags):
             raise ValueError("CHART_EPHEMERIS_FLAGS_DUPLICATE")
+        if self.ephemeris == "swiss-ephemeris" and not self.ephemerisDataRevision:
+            raise ValueError("CHART_EPHEMERIS_DATA_REVISION_REQUIRED")
         if self.ephemeris == "moshier" and self.ephemerisDataRevision is not None:
             raise ValueError("CHART_EPHEMERIS_DATA_REVISION_FORBIDDEN")
         return self

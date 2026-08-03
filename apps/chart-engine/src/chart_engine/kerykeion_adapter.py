@@ -769,21 +769,29 @@ def calculate_solar_return(
         active_aspects=active_aspects,
     )
     warnings = _map_warnings(request)
+    solar_return_snapshot = SolarReturnSnapshot(
+        year=request.solarReturnSnapshot.year,
+        returnType="solar",
+        location=request.solarReturnSnapshot.location,
+        resolvedAt=_utc_datetime_string(solar_return_subject.iso_formatted_utc_datetime),
+    )
 
     return _validated_payload(StoredChartSolarReturnCalculationPayload(
         schemaVersion="chart-result.v2",
         method="solar_return",
         methodVersion=request.methodVersion,
         provider=provider,
-        reproducibilityFingerprint=_result_fingerprint(request, provider),
+        reproducibilityFingerprint=_result_fingerprint(
+            request,
+            provider,
+            result_input_snapshot={
+                "inputSnapshot": request.inputSnapshot,
+                "solarReturnSnapshot": solar_return_snapshot,
+            },
+        ),
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
-        solarReturnSnapshot=SolarReturnSnapshot(
-            year=request.solarReturnSnapshot.year,
-            returnType="solar",
-            location=request.solarReturnSnapshot.location,
-            resolvedAt=_utc_datetime_string(solar_return_subject.iso_formatted_utc_datetime),
-        ),
+        solarReturnSnapshot=solar_return_snapshot,
         result=ChartSolarReturnRenderResult(
             natal=_map_render_result(
                 natal_subject,
@@ -2348,13 +2356,18 @@ def _result_fingerprint(
     provider: ProviderMetadata,
     *,
     calculation_basis: ChartProgressionCalculationBasis | None = None,
+    result_input_snapshot: Any | None = None,
 ) -> str:
     return build_reproducibility_fingerprint(
         method=request.method,
         method_version=request.methodVersion,
         provider=provider,
         settings=request.settings,
-        input_snapshot=fingerprint_input_for_request(request),
+        input_snapshot=(
+            result_input_snapshot
+            if result_input_snapshot is not None
+            else fingerprint_input_for_request(request)
+        ),
         calculation_basis=calculation_basis,
     )
 

@@ -26,6 +26,12 @@ REQUIRED_POINT_IDS = {
     "south_node",
 }
 
+DISTRIBUTION_KEYS = {
+    "elements": {"fire", "earth", "air", "water"},
+    "modalities": {"cardinal", "fixed", "mutable"},
+    "polarity": {"masculine", "feminine"},
+}
+
 
 def validate_chart_render_result(value: Any) -> None:
     result = _mapping(value)
@@ -41,26 +47,29 @@ def validate_chart_render_result(value: Any) -> None:
     if set(house_numbers) != set(range(1, 13)) or len(house_numbers) != 12:
         raise CanonicalValidationError("CHART_HOUSES_INVALID")
 
-    seen_aspects: set[tuple[str, str, str]] = set()
+    seen_aspects: set[tuple[str, str]] = set()
     for aspect_value in _sequence(result.get("aspects")):
         aspect = _mapping(aspect_value)
         point_a = str(aspect.get("pointA"))
         point_b = str(aspect.get("pointB"))
-        aspect_type = str(aspect.get("type"))
         if point_a not in point_ids or point_b not in point_ids:
             raise CanonicalValidationError("CHART_ASPECT_UNKNOWN_REFERENCE")
         if point_a == point_b:
             raise CanonicalValidationError("CHART_ASPECT_SELF_REFERENCE")
         pair = tuple(sorted((point_a, point_b)))
-        key = (pair[0], pair[1], aspect_type)
+        key = (pair[0], pair[1])
         if key in seen_aspects:
             raise CanonicalValidationError("CHART_ASPECT_DUPLICATE")
         seen_aspects.add(key)
 
     distributions = _mapping(result.get("distributions"))
-    for dimension in ("elements", "modalities", "polarity"):
+    for dimension, required_keys in DISTRIBUTION_KEYS.items():
         counts = _mapping(distributions.get(dimension))
-        if sum(int(count) for count in counts.values()) != 10:
+        if set(counts) != required_keys:
+            raise CanonicalValidationError("CHART_DISTRIBUTION_KEYS_INVALID")
+        if any(type(count) is not int or count < 0 for count in counts.values()):
+            raise CanonicalValidationError("CHART_DISTRIBUTION_COUNT_INVALID")
+        if sum(counts.values()) != 10:
             raise CanonicalValidationError("CHART_DISTRIBUTION_TOTAL_INVALID")
 
 
@@ -71,17 +80,120 @@ def validate_calculation_result(payload: Any) -> None:
     if method in {"natal", "composite", "horary"}:
         validate_chart_render_result(result)
     elif method == "transit":
-        validate_chart_render_result(result.get("natal"))
-        validate_chart_render_result(result.get("transit"))
+        natal = _mapping(result.get("natal"))
+        transit = _mapping(result.get("transit"))
+        validate_chart_render_result(natal)
+        validate_chart_render_result(transit)
+        _validate_cross_aspects(
+            result.get("aspectsToNatal"),
+            left_field="transitPoint",
+            right_field="natalPoint",
+            left_ids=_point_ids(transit),
+            right_ids=_point_ids(natal),
+        )
     elif method == "synastry":
-        validate_chart_render_result(result.get("primary"))
-        validate_chart_render_result(result.get("partner"))
+        primary = _mapping(result.get("primary"))
+        partner = _mapping(result.get("partner"))
+        validate_chart_render_result(primary)
+        validate_chart_render_result(partner)
+        _validate_cross_aspects(
+            result.get("aspectsBetween"),
+            left_field="primaryPoint",
+            right_field="partnerPoint",
+            left_ids=_point_ids(primary),
+            right_ids=_point_ids(partner),
+        )
+        _validate_house_overlays(
+            result.get("houseOverlays"),
+            primary_ids=_overlay_ids(primary),
+            partner_ids=_overlay_ids(partner),
+        )
     elif method == "solar_return":
-        validate_chart_render_result(result.get("natal"))
-        validate_chart_render_result(result.get("solarReturn"))
+        natal = _mapping(result.get("natal"))
+        solar_return = _mapping(result.get("solarReturn"))
+        validate_chart_render_result(natal)
+        validate_chart_render_result(solar_return)
+        _validate_cross_aspects(
+            result.get("aspectsToNatal"),
+            left_field="solarReturnPoint",
+            right_field="natalPoint",
+            left_ids=_point_ids(solar_return),
+            right_ids=_point_ids(natal),
+        )
     elif method == "progression":
-        validate_chart_render_result(result.get("natal"))
-        validate_chart_render_result(result.get("progressed"))
+        natal = _mapping(result.get("natal"))
+        progressed = _mapping(result.get("progressed"))
+        validate_chart_render_result(natal)
+        validate_chart_render_result(progressed)
+        _validate_cross_aspects(
+            result.get("aspectsToNatal"),
+            left_field="progressedPoint",
+            right_field="natalPoint",
+            left_ids=_point_ids(progressed),
+            right_ids=_point_ids(natal),
+        )
+
+
+def _point_ids(result: Mapping[str, Any]) -> set[str]:
+    return {
+        str(_mapping(point).get("id"))
+        for point in _sequence(result.get("points"))
+    }
+
+
+def _overlay_ids(result: Mapping[str, Any]) -> set[str]:
+    house_ids = {
+        f"house_{int(_mapping(house).get('number'))}"
+        for house in _sequence(result.get("houses"))
+    }
+    return _point_ids(result) | house_ids
+
+
+def _validate_cross_aspects(
+    value: Any,
+    *,
+    left_field: str,
+    right_field: str,
+    left_ids: set[str],
+    right_ids: set[str],
+) -> None:
+    seen: set[tuple[str, str]] = set()
+    for aspect_value in _sequence(value):
+        aspect = _mapping(aspect_value)
+        left_id = str(aspect.get(left_field))
+        right_id = str(aspect.get(right_field))
+        if left_id not in left_ids or right_id not in right_ids:
+            raise CanonicalValidationError("CHART_CROSS_ASPECT_UNKNOWN_REFERENCE")
+        key = (left_id, right_id)
+        if key in seen:
+            raise CanonicalValidationError("CHART_CROSS_ASPECT_DUPLICATE")
+        seen.add(key)
+
+
+def _validate_house_overlays(
+    value: Any,
+    *,
+    primary_ids: set[str],
+    partner_ids: set[str],
+) -> None:
+    ids_by_owner = {"primary": primary_ids, "partner": partner_ids}
+    seen: set[tuple[str, str, str, int]] = set()
+    for overlay_value in _sequence(value):
+        overlay = _mapping(overlay_value)
+        owner = str(overlay.get("owner"))
+        projected_owner = str(overlay.get("projectedHouseOwner"))
+        point = str(overlay.get("point"))
+        projected_house = int(overlay.get("projectedHouse"))
+        if owner not in ids_by_owner or projected_owner not in ids_by_owner:
+            raise CanonicalValidationError("CHART_HOUSE_OVERLAY_OWNER_INVALID")
+        if owner == projected_owner:
+            raise CanonicalValidationError("CHART_HOUSE_OVERLAY_SELF_REFERENCE")
+        if point not in ids_by_owner[owner] or projected_house not in range(1, 13):
+            raise CanonicalValidationError("CHART_HOUSE_OVERLAY_UNKNOWN_REFERENCE")
+        key = (owner, point, projected_owner, projected_house)
+        if key in seen:
+            raise CanonicalValidationError("CHART_HOUSE_OVERLAY_DUPLICATE")
+        seen.add(key)
 
 
 def build_reproducibility_fingerprint(

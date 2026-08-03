@@ -3,6 +3,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from chart_engine.canonical_validation import reproducibility_fingerprint_for_result
 from chart_engine.main import app
 
 
@@ -172,6 +173,38 @@ def test_rejects_identical_relationship_ids() -> None:
     assert_typed_422(client.post("/v1/synastry", json=payload))
 
 
+def test_rejects_equivalent_relationship_uuid_encodings() -> None:
+    client = TestClient(app)
+    payload = request_payload("synastry")
+    payload["relationshipSnapshot"] = {
+        "primaryClientId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "partnerClientId": "AAAAAAAAAAAA4AAA8AAAAAAAAAAAAAAA",
+    }
+
+    assert_typed_422(client.post("/v1/synastry", json=payload))
+
+
+def test_canonicalizes_relationship_ids_before_result_fingerprint() -> None:
+    client = TestClient(app)
+    payload = request_payload("synastry")
+    payload["relationshipSnapshot"] = {
+        "primaryClientId": "AAAAAAAAAAAA4AAA8AAAAAAAAAAAAAAA",
+        "partnerClientId": "BBBBBBBBBBBB4BBB8BBBBBBBBBBBBBBB",
+    }
+
+    response = client.post("/v1/synastry", json=payload)
+
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["relationshipSnapshot"] == {
+        "primaryClientId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "partnerClientId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    }
+    assert result["reproducibilityFingerprint"] == reproducibility_fingerprint_for_result(
+        result
+    )
+
+
 @pytest.mark.parametrize(
     ("method", "route", "mutate"),
     [
@@ -213,3 +246,20 @@ def test_accepts_exact_placidus_latitude_boundary(latitude: float) -> None:
     response = client.post("/v1/natal", json=payload)
 
     assert response.status_code == 200, response.text
+
+
+def test_model_level_validation_response_does_not_echo_sensitive_input_or_context() -> None:
+    client = TestClient(app)
+    sensitive_marker = "PRIVATE-QUESTION-DO-NOT-ECHO"
+    payload = request_payload("horary")
+    payload["questionSnapshot"]["question"] = sensitive_marker
+    payload["questionSnapshot"]["latitude"] = 70.0
+
+    response = client.post("/v1/horary", json=payload)
+
+    assert_typed_422(response)
+    assert sensitive_marker not in response.text
+    for issue in response.json()["detail"]:
+        assert set(issue) == {"type", "loc", "msg"}
+        assert "input" not in issue
+        assert "ctx" not in issue

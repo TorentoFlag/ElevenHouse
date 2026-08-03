@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
+from chart_engine.canonical_validation import reproducibility_fingerprint_for_result
 from chart_engine.main import app
+from chart_engine.schemas import StoredChartSolarReturnCalculationPayload
 from test_request_validation import execution_profile
 
 
@@ -73,3 +75,6 @@ def test_solar_return_returns_canonical_dual_wheel_shape():
             "message": "Chart calculated with approximate birth time.",
         }
     ]
+    parsed = StoredChartSolarReturnCalculationPayload.model_validate(data)
+    assert data["reproducibilityFingerprint"] == reproducibility_fingerprint_for_result(data)
+    assert data["reproducibilityFingerprint"] == reproducibility_fingerprint_for_result(parsed)

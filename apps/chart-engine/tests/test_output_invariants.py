@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from chart_engine.canonical_validation import (
     CanonicalValidationError,
     reproducibility_fingerprint_for_result,
+    validate_calculation_result,
     validate_chart_render_result,
 )
 from chart_engine.main import app
@@ -130,3 +131,164 @@ def test_canonical_validation_rejects_invalid_aspect_relations(mutation: str) ->
 
     with pytest.raises(CanonicalValidationError):
         validate_chart_render_result(result)
+
+
+def test_canonical_validation_rejects_same_point_pair_with_different_type() -> None:
+    result = canonical_render_result()
+    duplicate_pair = copy.deepcopy(result["aspects"][0])
+    duplicate_pair["type"] = "square"
+    result["aspects"].append(duplicate_pair)
+
+    with pytest.raises(CanonicalValidationError, match="DUPLICATE"):
+        validate_chart_render_result(result)
+
+
+@pytest.mark.parametrize(
+    ("dimension", "counts"),
+    [
+        ("elements", {"fire": 10}),
+        ("modalities", {"cardinal": 10, "fixed": 0, "mutable": 0, "extra": 0}),
+        ("polarity", {"masculine": 11, "feminine": -1}),
+        ("elements", {"fire": 2.1, "earth": 2.1, "air": 3.1, "water": 3.1}),
+        ("polarity", {"masculine": True, "feminine": 9}),
+    ],
+)
+def test_canonical_validation_requires_exact_non_negative_integer_distributions(
+    dimension: str,
+    counts: dict,
+) -> None:
+    result = canonical_render_result()
+    result["distributions"][dimension] = counts
+
+    with pytest.raises(CanonicalValidationError):
+        validate_chart_render_result(result)
+
+
+def _cross_wheel_payload(method: str) -> dict:
+    natal = canonical_render_result()
+    secondary = canonical_render_result()
+    if method == "transit":
+        return {
+            "method": method,
+            "result": {
+                "natal": natal,
+                "transit": secondary,
+                "aspectsToNatal": [
+                    {
+                        "transitPoint": "sun",
+                        "natalPoint": "moon",
+                        "type": "trine",
+                    }
+                ],
+            },
+        }
+    if method == "solar_return":
+        return {
+            "method": method,
+            "result": {
+                "natal": natal,
+                "solarReturn": secondary,
+                "aspectsToNatal": [
+                    {
+                        "solarReturnPoint": "sun",
+                        "natalPoint": "moon",
+                        "type": "trine",
+                    }
+                ],
+            },
+        }
+    if method == "progression":
+        return {
+            "method": method,
+            "result": {
+                "natal": natal,
+                "progressed": secondary,
+                "aspectsToNatal": [
+                    {
+                        "progressedPoint": "sun",
+                        "natalPoint": "moon",
+                        "type": "trine",
+                    }
+                ],
+            },
+        }
+    return {
+        "method": "synastry",
+        "result": {
+            "primary": natal,
+            "partner": secondary,
+            "aspectsBetween": [
+                {
+                    "primaryPoint": "sun",
+                    "partnerPoint": "moon",
+                    "type": "trine",
+                }
+            ],
+            "houseOverlays": [
+                {
+                    "owner": "primary",
+                    "point": "sun",
+                    "projectedHouseOwner": "partner",
+                    "projectedHouse": 3,
+                }
+            ],
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("method", "left_field"),
+    [
+        ("transit", "transitPoint"),
+        ("solar_return", "solarReturnPoint"),
+        ("progression", "progressedPoint"),
+        ("synastry", "primaryPoint"),
+    ],
+)
+def test_cross_wheel_validation_rejects_unknown_references(
+    method: str,
+    left_field: str,
+) -> None:
+    payload = _cross_wheel_payload(method)
+    aspect_field = "aspectsBetween" if method == "synastry" else "aspectsToNatal"
+    payload["result"][aspect_field][0][left_field] = "unknown"
+
+    with pytest.raises(CanonicalValidationError, match="UNKNOWN_REFERENCE"):
+        validate_calculation_result(payload)
+
+
+@pytest.mark.parametrize("method", ["transit", "solar_return", "progression", "synastry"])
+def test_cross_wheel_validation_rejects_duplicate_relations(method: str) -> None:
+    payload = _cross_wheel_payload(method)
+    aspect_field = "aspectsBetween" if method == "synastry" else "aspectsToNatal"
+    duplicate_pair = copy.deepcopy(payload["result"][aspect_field][0])
+    duplicate_pair["type"] = "opposition"
+    payload["result"][aspect_field].append(duplicate_pair)
+
+    with pytest.raises(CanonicalValidationError, match="DUPLICATE"):
+        validate_calculation_result(payload)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda overlay: overlay.update(projectedHouseOwner="primary"),
+        lambda overlay: overlay.update(point="unknown"),
+    ],
+)
+def test_synastry_overlay_rejects_same_owner_and_unknown_point(mutation) -> None:
+    payload = _cross_wheel_payload("synastry")
+    mutation(payload["result"]["houseOverlays"][0])
+
+    with pytest.raises(CanonicalValidationError):
+        validate_calculation_result(payload)
+
+
+def test_synastry_overlay_rejects_duplicate_projection() -> None:
+    payload = _cross_wheel_payload("synastry")
+    payload["result"]["houseOverlays"].append(
+        copy.deepcopy(payload["result"]["houseOverlays"][0])
+    )
+
+    with pytest.raises(CanonicalValidationError, match="DUPLICATE"):
+        validate_calculation_result(payload)
