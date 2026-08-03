@@ -292,3 +292,13 @@ def test_synastry_overlay_rejects_duplicate_projection() -> None:
 
     with pytest.raises(CanonicalValidationError, match="DUPLICATE"):
         validate_calculation_result(payload)
+
+
+def test_synastry_overlay_rejects_conflicting_projected_houses() -> None:
+    payload = _cross_wheel_payload("synastry")
+    conflicting_projection = copy.deepcopy(payload["result"]["houseOverlays"][0])
+    conflicting_projection["projectedHouse"] = 4
+    payload["result"]["houseOverlays"].append(conflicting_projection)
+
+    with pytest.raises(CanonicalValidationError, match="DUPLICATE"):
+        validate_calculation_result(payload)

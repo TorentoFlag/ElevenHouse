@@ -177,7 +177,7 @@ def _validate_house_overlays(
     partner_ids: set[str],
 ) -> None:
     ids_by_owner = {"primary": primary_ids, "partner": partner_ids}
-    seen: set[tuple[str, str, str, int]] = set()
+    seen: set[tuple[str, str, str]] = set()
     for overlay_value in _sequence(value):
         overlay = _mapping(overlay_value)
         owner = str(overlay.get("owner"))
@@ -190,7 +190,7 @@ def _validate_house_overlays(
             raise CanonicalValidationError("CHART_HOUSE_OVERLAY_SELF_REFERENCE")
         if point not in ids_by_owner[owner] or projected_house not in range(1, 13):
             raise CanonicalValidationError("CHART_HOUSE_OVERLAY_UNKNOWN_REFERENCE")
-        key = (owner, point, projected_owner, projected_house)
+        key = (owner, point, projected_owner)
         if key in seen:
             raise CanonicalValidationError("CHART_HOUSE_OVERLAY_DUPLICATE")
         seen.add(key)
