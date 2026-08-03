@@ -132,9 +132,15 @@ and separately reviewed deliverable.
       externally blocked only by the unowned Flow mock mismatch at
       `flow-definition-control-plane.test.ts:360` and is carried to the next
       shared/repository gate.
+- [x] 2026-08-03: Task 3 shipped in `a85d811`, `d6fd291` and `51f22f5` after
+      two review/fix rounds. Clean provider and Docker evidence proved actual
+      Moshier flags, strict v2 HTTP, bounded process-cancelled readiness, real
+      artifact-derived Swiss provenance, recomputable natal/solar fingerprints
+      and cleanup. Fresh verification passed 82/82 pytest, compileall, exact
+      dependency versions, diff check and no task container/listener residue.
 - [x] Task 1: synchronize shared main and capture executable baseline.
 - [x] Task 2: strict contracts, method versions and civil-time domain.
-- [ ] Task 3: strict Python ingress, DST, provider runtime and readiness.
+- [x] Task 3: strict Python ingress, DST, provider runtime and readiness.
 - [ ] Task 4: numerical method repair and golden fixtures.
 - [ ] Task 5: abortable chart-engine client and failure taxonomy.
 - [ ] Task 6: durable job schema, participants, retry authority and fencing.
@@ -161,6 +167,10 @@ acceptance and the exact commit range.
   behavior.
 - Current Kerykeion 5.12.9 ignores ElevenHouse `dstOccurrence` because the
   adapter omits `is_dst`; both sides of a fold and a spring gap reach HTTP 500.
+- A sync readiness endpoint is not bounded merely because an HTTP caller has a
+  timeout. Task 3 now holds the provider lock while a spawned sentinel process
+  runs under one total deadline and terminates/joins timed-out children before
+  returning a typed readiness failure.
 - Kerykeion silently clamps high latitude to `+/-66`; ElevenHouse currently
   returns the original coordinate and no warning.
 - Requests using `FLG_SWIEPH` can return `FLG_MOSEPH` when planetary data files
@@ -778,7 +788,7 @@ class ProviderRuntime:
     def calculate(self, operation: Callable[[], T]) -> T: ...
 ```
 
-- [ ] **Step 1: Run and record the clean provider spike**
+- [x] **Step 1: Run and record the clean provider spike**
 
 Run this as one foreground shell so creation, validation and cleanup share the
 same checked value:
@@ -809,14 +819,14 @@ and fixed Berlin-fold subjects built with `is_dst=True` and `is_dst=False`.
 Commit the spike as a deterministic provider audit test. Do not download or
 package `.se1` files without license authority.
 
-- [ ] **Step 2: Write RED request/civil-time tests**
+- [x] **Step 2: Write RED request/civil-time tests**
 
 Assert unknown top-level/nested fields, invalid dates/times/zones, NaN/infinite
 coordinates, identical pair IDs, pre-birth progression/solar requests and
 `abs(latitude) > 66` produce typed 422. Assert first/second Berlin fold requests
 return distinct valid results and spring gap returns 422 rather than 500.
 
-- [ ] **Step 3: Write RED runtime/readiness/output tests**
+- [x] **Step 3: Write RED runtime/readiness/output tests**
 
 Assert provider operations cannot overlap inside a process, readiness executes
 a sentinel, reports exact versions/backend/flags/capabilities, fails on expected
@@ -825,7 +835,7 @@ result is `chart-result.v2` with a verified actual-metadata reproducibility
 fingerprint, and canonical validation rejects duplicate/self/unknown-reference
 payloads before HTTP 200.
 
-- [ ] **Step 4: Run RED Python suite**
+- [x] **Step 4: Run RED Python suite**
 
 Run:
 
@@ -839,7 +849,7 @@ cd apps/chart-engine
 Expected: failures name current permissive schemas, ignored occurrence,
 unconditional readiness, hard-coded backend and missing serialization.
 
-- [ ] **Step 5: Implement strict models and provider runtime**
+- [x] **Step 5: Implement strict models and provider runtime**
 
 Use a shared Pydantic base with `ConfigDict(extra="forbid")`, real `date`/time
 parsing, `zoneinfo.ZoneInfo`, finite-number constraints and model validators.
@@ -860,7 +870,7 @@ revision is required when the expected backend uses packaged Swiss data. Pass
 the same required values to chart-engine, astrologer-api and chart-worker in
 production Compose so all three compare one deployment profile.
 
-- [ ] **Step 6: Run GREEN provider suite and image build**
+- [x] **Step 6: Run GREEN provider suite and image build**
 
 Run:
 
@@ -896,7 +906,7 @@ Parse the readiness response with the strict shared schema and require the exact
 pinned versions/backend/flags/capabilities. Stop only the inspected ID; if stop
 fails, do not retry with removal or a broader target.
 
-- [ ] **Step 7: Commit exact paths**
+- [x] **Step 7: Commit exact paths**
 
 Commit subject: `fix: harden chart provider runtime`.
 
