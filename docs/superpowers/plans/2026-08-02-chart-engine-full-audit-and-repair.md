@@ -254,7 +254,10 @@ work changes later tasks.
   inputs. Production generation additionally requires recorded processor/
   cross-border legal authority; absent authority keeps the feature disabled.
 - **2026-08-02, async:** PostgreSQL lease generation is the fencing token;
-  BullMQ is transport and uses DB-stored `maxAttempts`.
+  PostgreSQL `clock_timestamp()` is the lease clock, BullMQ is transport and
+  uses DB-stored `maxAttempts`. Retryable attempt failure requeues through a
+  fenced DB transition; permanent/exhausted failure is terminal, and a bounded
+  runtime sweep closes expired final-attempt crashes.
 - **2026-08-02, recalculation:** same-ID replacement uses expected checksum and
   invalidates AI, publication and PDF/artifacts atomically.
 - **2026-08-02, relationships:** synastry/composite persist ordered subject and
@@ -438,8 +441,11 @@ export type ChartJobForProcessing = {
 ```
 
 `ChartJobProcessingStore.claimForProcessing` accepts
-`{jobId, workerId, now, leaseMs}`. `extendLease`, `complete` and `fail` require
-`workerId + leaseGeneration`; terminal writes are compare-and-set.
+`{jobId, workerId, leaseMs}` and returns a discriminated claimed/exhausted/not-
+claimable outcome. `extendLease`, `complete` and `recordAttemptFailure` require
+`workerId + leaseGeneration`; PostgreSQL time controls expiry and terminal
+writes are compare-and-set. The store also exposes persisted queue dispatch and
+a bounded expired/exhausted sweep for Task 9 composition.
 
 Task 11 owns pure frontend models; Task 12 consumes them:
 
@@ -1169,16 +1175,24 @@ exact ESLint, contracts/domain/client typecheck and builds, and diff check.
 - Modify: `packages/domain/src/charts/chart-execution-profile.test.ts`
 - Modify: `packages/db/src/schema/calculations/chart-calculation-jobs.schema.ts`
 - Modify: `packages/db/src/schema/calculations/calculation-records.schema.ts`
+- Modify: `packages/db/src/schema/calculations/calculation-participants.schema.ts`
 - Modify: `packages/db/src/schema/calculations/calculation-values.ts`
 - Modify: `packages/db/src/schema/calculations/calculations.schema.test.ts`
 - Modify: `packages/db/src/adapters/charts/drizzle-chart-calculation-job-store.ts`
 - Modify: `packages/db/src/adapters/charts/drizzle-chart-calculation-job-store.integration.ts`
+- Modify: `packages/db/src/adapters/calculations/drizzle-calculation-store.ts`
+- Modify: `packages/db/src/adapters/calculations/drizzle-calculation-store.integration.ts`
 - Create: `packages/db/src/adapters/charts/chart-calculation-job-row.ts`
 - Create: `apps/astrologer-api/src/modules/charts/chart-execution-profile.provider.ts`
 - Create: `apps/astrologer-api/src/modules/charts/chart-execution-profile.provider.test.ts`
 - Modify: `apps/astrologer-api/src/modules/charts/charts.module.ts`
 - Modify: `apps/astrologer-api/src/modules/charts/charts.service.ts`
 - Modify: `apps/astrologer-api/src/modules/charts/charts.service.test.ts`
+- Modify if the compatible shared diff is preserved first:
+  `apps/astrologer-api/src/config/runtime-config.ts`
+- Modify if the compatible shared diff is preserved first:
+  `apps/astrologer-api/src/config/runtime-config.test.ts`
+- Modify if the compatible shared diff is preserved first: `.env.example`
 - Regenerate: `packages/db/drizzle/0000_sticky_rictor.sql`
 - Regenerate matching baseline metadata under `packages/db/drizzle/meta/`
 
@@ -1187,9 +1201,12 @@ exact ESLint, contracts/domain/client typecheck and builds, and diff check.
 - Produces: participant/lease/job interfaces defined above.
 - Adds columns: `participant_snapshot jsonb not null`,
   `target_calculation_id uuid null`, `expected_source_checksum text null`,
-  `method_version text not null`, `execution_profile jsonb not null`,
+  `method_version text null`, `execution_profile jsonb null`,
   `lease_generation integer not null default 0`,
   `result_reproducibility_fingerprint text null`.
+- v1 keeps unknown method/profile/reproducibility provenance null. Exact
+  method/profile are required for v2, and succeeded v2 requires its result
+  reproducibility fingerprint; no legacy authority is fabricated.
 - Changes `schema_version` default to `chart-result.v2` while allowing both
   `chart-result.v1` and `chart-result.v2`; v1 rows are never selected for
   succeeded-result reuse. Existing queued/processing v1 jobs are terminally
@@ -1206,17 +1223,24 @@ jobs carry `chart-result.v2`, legacy succeeded v1 jobs are readable but not
 reusable, and an active v1 job is not processed as v2. Assert API-created
 fingerprints change when the method version or expected backend/data revision
 changes, result completion rejects a missing/mismatched post-execution
-fingerprint, and production config rejects a missing expected ephemeris value.
+fingerprint and canonical result checksum, and production config rejects
+missing/mismatched expected ephemeris flags/revision.
 Also assert ordered participant identity is part of the job dedup fingerprint:
 two same-owner clients with identical birth data must never reuse one another's
 calculation, while reversing subject/partner changes a relationship fingerprint.
+The fingerprint also distinguishes initial from replacement work and binds the
+owner-scoped target ID plus expected source checksum.
 
 - [ ] **Step 2: Write RED real-PostgreSQL race tests**
 
-Add cases for one parallel claim, expired reclaim with higher generation, old
-generation completion rejection, late failure after success, separate
-started/finished times, DB maxAttempts, archived non-reuse and two ordered
-relationship participants with `mode="compatibility"`.
+Add cases for one parallel claim, live duplicate delivery without another
+attempt, expired reclaim with higher generation, old-generation completion
+rejection, late failure after success, separate DB-issued started/finished
+times, transient requeue before the old deadline, permanent/final failure,
+expired final-attempt redelivery plus bounded sweep, DB maxAttempts, archived
+non-reuse/fresh calculation ID and two ordered relationship participants with
+`mode="compatibility"`. Direct cross-owner creation, relationship revocation
+before completion and blank participant names must fail without persistence.
 
 - [ ] **Step 3: Run RED against verified local DB**
 
@@ -1230,24 +1254,32 @@ docker compose ps postgres
 test "$(docker compose port postgres 5432)" = "0.0.0.0:5432"
 INTEGRATION_DATABASE_URL="postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse" \
   pnpm test:integration \
-  packages/db/src/adapters/charts/drizzle-chart-calculation-job-store.integration.ts
+  packages/db/src/adapters/charts/drizzle-chart-calculation-job-store.integration.ts \
+  packages/db/src/adapters/calculations/drizzle-calculation-store.integration.ts
 ```
 
 Expected: the current status-only updates and one-participant completion fail.
 
 - [ ] **Step 4: Implement schema and atomic lease SQL**
 
-Claim only when:
+PostgreSQL `clock_timestamp()` is the single lease/timestamp authority; caller
+time never decides processing ownership. Claim only when:
 
 ```sql
 status = 'queued'
-OR (status = 'processing' AND locked_until < :now)
+OR (status = 'processing' AND locked_until <= :db_now)
 ```
 
 and `attempts < max_attempts`. Set `locked_by`, increment
 `lease_generation`, set `locked_until`, and set
-`started_at = coalesce(started_at, :now)`. Extend/complete/fail predicate on
-job, processing state, worker, generation and unexpired lease.
+`started_at = coalesce(started_at, :db_now)`. Extend/complete/attempt-failure
+predicate on job, processing state, worker, generation and
+`locked_until > :db_now`. A retryable failure with attempts remaining returns
+to queued and clears the lease; permanent/exhausted failure is terminal. An
+expired row already at max attempts is terminalized on redelivery, and a
+bounded store sweep handles the no-redelivery crash case. Enforce the full
+queued/processing/succeeded/failed column-state matrix and
+`attempts <= max_attempts` in DB.
 
 - [ ] **Step 5: Implement active-result reuse and participants**
 
@@ -1256,16 +1288,25 @@ individual results get one subject; synastry/composite get subject+partner and
 compatibility mode. Replacement jobs never reuse an old succeeded job.
 Make the calculation-record exact-request uniqueness constraint apply only to
 non-archived rows so a fresh job after archival cannot overwrite, relink or
-reactivate the archived record.
+reactivate the archived record. Remove the job-level succeeded-fingerprint
+unique index which cannot see archived calculation state. Update the generic
+calculation store's exact lookup/replacement collision behavior to exclude
+archived rows. Initial chart completion is insert-only; result replacement
+belongs to Task 7.
 Inject the chart execution profile into every API-created v2 snapshot before
 request fingerprinting and persist that exact method version/profile on the
 job; never reconstruct a queued job's authority from the later process
 environment. On completion, recompute the result reproducibility
 fingerprint from canonical actual metadata and compare it with the result field;
-persist it on the job and calculation payload in the same transaction. A
+recompute the canonical result checksum instead of trusting/normalizing a
+caller string, and persist it on the job and calculation payload in the same
+transaction. Recompute the immutable job fingerprint before completion. A
 succeeded result is reusable only when its request fingerprint, v2
 method/profile and post-execution fingerprint all validate; legacy v1 is
-read-only.
+read-only. Creation and completion revalidate every participant through an
+active owner-scoped relationship; completion requires exact order/roles and a
+nonblank profile display name, with no identifier-derived fallback. Replacement
+uses a composite `(target_calculation_id, owner_user_id)` foreign key.
 
 - [ ] **Step 6: Regenerate baseline and reset only verified local DB**
 
@@ -1289,20 +1330,21 @@ git diff --name-status -- \
 ```
 
 Compare that inventory with the task's exact owned chart paths. Every unowned
-schema/config/script/dependency change, including the currently observed Flows
-work, must already be preserved in accepted shared history before generation;
+schema/config/script/dependency change must already be preserved in accepted
+shared history before generation;
 clean output files alone are insufficient because Drizzle reads the entire
 schema graph. Run `pnpm db:generate`, then compare the complete before/after
 inventory and generated SQL/snapshot/journal against the owned schema delta.
 Abort if an output includes unaccounted foreign semantics or any unowned input
 remains dirty.
 
-Current intake evidence on 2026-08-03 shows this stop condition is active:
-uncommitted Flow schema/package/lockfile changes already feed substantial Flow
-semantics into the three baseline outputs. Task 6 source/tests may proceed, but
-generation, reset and generated-file staging remain blocked until those inputs
-are preserved in accepted shared history or their owner explicitly coordinates
-one combined baseline.
+Current intake evidence on 2026-08-03 shows this stop condition is active. Flow
+schema/baseline semantics are preserved in shared commit `2d48222`, but
+`packages/db/package.json` and `pnpm-lock.yaml` still contain unrelated
+dev-calendar/Husky work. Task 6 source/tests may proceed, but generation, reset
+and generated-file staging remain blocked until those inputs are preserved in
+accepted shared history or their owner explicitly coordinates one combined
+baseline.
 
 Only after that, rerun `docker compose ps postgres` and
 `docker compose port postgres 5432`; require healthy status and local port 5432,
@@ -1330,7 +1372,8 @@ docker compose ps postgres
 test "$(docker compose port postgres 5432)" = "0.0.0.0:5432"
 INTEGRATION_DATABASE_URL="postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse" \
   pnpm test:integration \
-  packages/db/src/adapters/charts/drizzle-chart-calculation-job-store.integration.ts
+  packages/db/src/adapters/charts/drizzle-chart-calculation-job-store.integration.ts \
+  packages/db/src/adapters/calculations/drizzle-calculation-store.integration.ts
 pnpm --filter @elevenhouse/domain typecheck
 pnpm --filter @elevenhouse/db typecheck
 pnpm --filter @elevenhouse/astrologer-api typecheck
@@ -1739,7 +1782,8 @@ Task 5 intentionally does not guess a universal timeout for the valid
 
 - [ ] **Step 2: Write RED queue/relay/readiness tests**
 
-Assert relay reads `{maxAttempts}` from PostgreSQL before `queue.add`, BullMQ
+Assert relay consumes Task 6 `getQueueDispatch` and reads `{maxAttempts}` from
+PostgreSQL before `queue.add`, BullMQ
 options use that exact value, runtime config no longer supplies a competing
 attempt count, and readiness rejects missing/mismatched provider metadata or a
 job execution profile that differs from the real engine readiness profile.
@@ -1767,12 +1811,13 @@ Generate a stable process worker ID plus per-claim lease generation. Start an
 shutdown or failed extension, and pass its signal to the client. Only the
 current fence may complete/fail. Export/compose dedicated unrefined
 job-snapshot schemas in contracts; never call `.pick()` on a refined public
-request schema.
+request schema. Run Task 6's bounded expired/exhausted sweep periodically so a
+final-attempt process crash cannot leave a permanent processing row.
 
 - [ ] **Step 5: Make DB attempts the only retry source**
 
-Add `getQueueDispatch(jobId)` to the store, remove `CHART_WORKER_ATTEMPTS`, and
-construct BullMQ job options from persisted maxAttempts plus existing backoff/
+Consume `getQueueDispatch(jobId)`, remove `CHART_WORKER_ATTEMPTS`, and construct
+BullMQ job options from persisted maxAttempts plus existing backoff/
 jitter. A permanent failure writes one terminal failure; a transient failure
 returns/throws only while another durable attempt remains.
 
