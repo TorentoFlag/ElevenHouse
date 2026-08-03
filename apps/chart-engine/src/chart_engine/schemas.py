@@ -290,6 +290,13 @@ class ChartProgressionCalculationBasis(BaseModel):
     yearLengthDays: Literal[365.24219]
     dayForYearRatio: Literal[1]
 
+    @model_validator(mode="after")
+    def validate_elapsed_years(self):
+        expected_elapsed_years = self.elapsedLifeDays / self.yearLengthDays
+        if abs(self.elapsedYears - expected_elapsed_years) > 0.000000000001:
+            raise ValueError("CHART_PROGRESSION_BASIS_INCONSISTENT")
+        return self
+
 
 class ProgressionSnapshot(ProgressionRequestSnapshot):
     calculationBasis: ProgressionCalculationBasis

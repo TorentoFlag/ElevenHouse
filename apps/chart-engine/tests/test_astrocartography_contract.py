@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from chart_engine.main import app
@@ -44,6 +45,22 @@ def test_astrocartography_returns_canonical_map_lines():
 
     lines = data["result"]["lines"]
     assert len(lines) == 40
+    assert {(line["point"], line["angle"]) for line in lines} == {
+        (point, angle)
+        for point in {
+            "sun",
+            "moon",
+            "mercury",
+            "venus",
+            "mars",
+            "jupiter",
+            "saturn",
+            "uranus",
+            "neptune",
+            "pluto",
+        }
+        for angle in {"mc", "ic", "asc", "dsc"}
+    }
     assert {line["id"] for line in lines} >= {"sun_mc", "sun_ic", "sun_asc", "sun_dsc"}
     assert {
         line["angle"] for line in lines if line["point"] == "sun"
@@ -58,6 +75,11 @@ def test_astrocartography_returns_canonical_map_lines():
 
     sun_mc = next(line for line in lines if line["id"] == "sun_mc")
     assert len({round(coordinate["longitude"], 6) for coordinate in sun_mc["path"]}) == 1
+    # Provenance: independent PySwissEph right ascension minus Greenwich
+    # sidereal time gives 53.974146362860 degrees; IC is its antipode.
+    assert sun_mc["path"][0]["longitude"] == pytest.approx(53.974146, abs=0.000001)
+    sun_ic = next(line for line in lines if line["id"] == "sun_ic")
+    assert sun_ic["path"][0]["longitude"] == pytest.approx(-126.025854, abs=0.000001)
 
 
 def test_astrocartography_warns_when_birth_time_is_approximate():

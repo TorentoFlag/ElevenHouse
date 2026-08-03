@@ -10,7 +10,6 @@ import swisseph as swe
 from kerykeion import AspectsFactory, AstrologicalSubjectFactory, CompositeSubjectFactory
 from kerykeion.chart_data_factory import ChartDataFactory
 from kerykeion.ephemeris_data_factory import EphemerisDataFactory
-from kerykeion.planetary_return_factory import PlanetaryReturnFactory
 from kerykeion.transits_time_range_factory import TransitsTimeRangeFactory
 
 from chart_engine.canonical_validation import (
@@ -275,6 +274,9 @@ ASTRO_CALENDAR_TRANSIT_POINTS = {
 }
 ASTRO_CALENDAR_TRANSIT_ORB_LIMIT = 1.0
 ASTRO_CALENDAR_MAX_TRANSIT_EVENTS_PER_CLIENT = 80
+PROGRESSION_YEAR_LENGTH_DAYS = 365.24219
+SOLAR_RETURN_ANGULAR_TOLERANCE_DEGREES = 0.0001
+SOLAR_RETURN_SOLVER_TOLERANCE_DEGREES = 0.000001
 
 ASTRO_CALENDAR_POINT_LABELS_RU = {
     "sun": "Солнце",
@@ -743,19 +745,25 @@ def calculate_solar_return(
         active_points=active_points,
         dst_occurrence=request.inputSnapshot.dstOccurrence,
     )
-    return_factory = PlanetaryReturnFactory(
-        natal_subject,
-        lng=request.solarReturnSnapshot.location.longitude,
-        lat=request.solarReturnSnapshot.location.latitude,
-        tz_str=request.solarReturnSnapshot.location.timezone,
-        online=False,
-    )
-    solar_return_subject = return_factory.next_return_from_date(
+    natal_sun_longitude = _planet_longitude(swe.SUN, float(natal_subject.julian_day))
+    return_julian_day = _solve_solar_return_julian_day(
         request.solarReturnSnapshot.year,
-        1,
-        1,
-        return_type="Solar",
+        natal_sun_longitude,
     )
+    solar_return_subject = _create_subject_from_utc_instant(
+        name="solar_return",
+        instant=_jd_to_utc_datetime_string(return_julian_day),
+        timezone=request.solarReturnSnapshot.location.timezone,
+        latitude=request.solarReturnSnapshot.location.latitude,
+        longitude=request.solarReturnSnapshot.location.longitude,
+        house_system=request.settings.houseSystem,
+        active_points=active_points,
+    )
+    solar_return_error = abs(
+        _angle_difference(float(solar_return_subject.sun.abs_pos), natal_sun_longitude)
+    )
+    if solar_return_error > SOLAR_RETURN_ANGULAR_TOLERANCE_DEGREES:
+        raise RuntimeError("CHART_SOLAR_RETURN_ANGULAR_TOLERANCE_EXCEEDED")
     allowed_aspects = (
         MAJOR_ASPECTS
         if request.settings.aspectPreset == "major"
@@ -835,22 +843,33 @@ def calculate_progression(
         active_points=active_points,
         dst_occurrence=request.inputSnapshot.dstOccurrence,
     )
-    calculation_basis = _progression_basis(
-        request.inputSnapshot.birthDate,
-        request.progressionSnapshot.targetDate,
-    )
-    progressed_subject = _create_subject(
+    born = date.fromisoformat(request.inputSnapshot.birthDate)
+    target = date.fromisoformat(request.progressionSnapshot.targetDate)
+    elapsed_life_days = (target - born).days
+    elapsed_years = elapsed_life_days / PROGRESSION_YEAR_LENGTH_DAYS
+    birth_instant = _parse_kerykeion_utc_datetime(natal_subject.iso_formatted_utc_datetime)
+    symbolic_instant = birth_instant + timedelta(days=elapsed_years)
+    progressed_subject = _create_subject_from_utc_instant(
         name="progressed",
-        date=calculation_basis.symbolicDate,
-        time=request.inputSnapshot.birthTime,
+        instant=symbolic_instant.isoformat(),
         timezone=request.inputSnapshot.timezone,
         latitude=request.inputSnapshot.latitude,
         longitude=request.inputSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
-        dst_occurrence=None,
     )
-    reproducibility_basis = _progression_reproducibility_basis(request, progressed_subject)
+    calculation_basis = ProgressionCalculationBasis(
+        symbolicDate=symbolic_instant.date().isoformat(),
+        ageDays=int(elapsed_years),
+        dayForYearRatio=1,
+    )
+    reproducibility_basis = ChartProgressionCalculationBasis(
+        symbolicInstant=_utc_datetime_string(progressed_subject.iso_formatted_utc_datetime),
+        elapsedLifeDays=float(elapsed_life_days),
+        elapsedYears=elapsed_years,
+        yearLengthDays=PROGRESSION_YEAR_LENGTH_DAYS,
+        dayForYearRatio=1,
+    )
     allowed_aspects = (
         MAJOR_ASPECTS
         if request.settings.aspectPreset == "major"
@@ -1558,6 +1577,58 @@ def _planet_longitude(planet: int, julian_day: float) -> float:
     return float(values[0]) % 360.0
 
 
+def _solve_solar_return_julian_day(year: int, natal_sun_longitude: float) -> float:
+    start_julian_day = _julian_day_for_date(date(year, 1, 1))
+    end_julian_day = _julian_day_for_date(date(year + 1, 1, 1))
+    left_julian_day = start_julian_day
+    left_difference = _angle_difference(
+        _planet_longitude(swe.SUN, left_julian_day),
+        natal_sun_longitude,
+    )
+    if abs(left_difference) <= SOLAR_RETURN_SOLVER_TOLERANCE_DEGREES:
+        return left_julian_day
+
+    while left_julian_day < end_julian_day:
+        right_julian_day = min(left_julian_day + 1.0, end_julian_day)
+        right_difference = _angle_difference(
+            _planet_longitude(swe.SUN, right_julian_day),
+            natal_sun_longitude,
+        )
+        # The Sun advances through the return from negative to positive. The
+        # signed-angle discontinuity at the opposite longitude moves in the
+        # reverse direction, so it cannot be mistaken for the return bracket.
+        if left_difference <= 0 <= right_difference:
+            return _bisect_solar_return_julian_day(
+                natal_sun_longitude,
+                left_julian_day,
+                right_julian_day,
+            )
+        left_julian_day = right_julian_day
+        left_difference = right_difference
+
+    raise RuntimeError("CHART_SOLAR_RETURN_BRACKET_NOT_FOUND")
+
+
+def _bisect_solar_return_julian_day(
+    natal_sun_longitude: float,
+    low_julian_day: float,
+    high_julian_day: float,
+) -> float:
+    for _ in range(60):
+        midpoint = (low_julian_day + high_julian_day) / 2.0
+        midpoint_difference = _angle_difference(
+            _planet_longitude(swe.SUN, midpoint),
+            natal_sun_longitude,
+        )
+        if abs(midpoint_difference) <= SOLAR_RETURN_SOLVER_TOLERANCE_DEGREES:
+            return midpoint
+        if midpoint_difference < 0:
+            low_julian_day = midpoint
+        else:
+            high_julian_day = midpoint
+    return (low_julian_day + high_julian_day) / 2.0
+
+
 def _planet_sign(planet: int, julian_day: float) -> str:
     return ASTRO_CALENDAR_SIGN_NAMES[int(_planet_longitude(planet, julian_day) // 30) % 12]
 
@@ -1884,6 +1955,30 @@ def _create_subject(
         houses_system_identifier=HOUSE_SYSTEMS[house_system],
         active_points=active_points,
         is_dst=_dst_occurrence_value(dst_occurrence),
+        suppress_geonames_warning=True,
+    )
+
+
+def _create_subject_from_utc_instant(
+    *,
+    name: str,
+    instant: str,
+    timezone: str,
+    latitude: float,
+    longitude: float,
+    house_system: str,
+    active_points: list[str],
+) -> Any:
+    return AstrologicalSubjectFactory.from_iso_utc_time(
+        name=name,
+        iso_utc_time=instant,
+        lng=longitude,
+        lat=latitude,
+        tz_str=timezone,
+        online=False,
+        zodiac_type="Tropical",
+        houses_system_identifier=HOUSE_SYSTEMS[house_system],
+        active_points=active_points,
         suppress_geonames_warning=True,
     )
 
@@ -2302,37 +2397,6 @@ def _utc_datetime_string(value: str) -> str:
     if value.endswith("+00:00"):
         return f"{value[:-6]}Z"
     return value
-
-
-def _progression_basis(birth_date: str, target_date: str) -> ProgressionCalculationBasis:
-    born = date.fromisoformat(birth_date)
-    target = date.fromisoformat(target_date)
-    years = target.year - born.year
-    if (target.month, target.day) < (born.month, born.day):
-        years -= 1
-    age_days = max(0, years)
-    symbolic_date = born + timedelta(days=age_days)
-    return ProgressionCalculationBasis(
-        symbolicDate=symbolic_date.isoformat(),
-        ageDays=age_days,
-        dayForYearRatio=1,
-    )
-
-
-def _progression_reproducibility_basis(
-    request: ProgressionRequest,
-    progressed_subject: Any,
-) -> ChartProgressionCalculationBasis:
-    born = date.fromisoformat(request.inputSnapshot.birthDate)
-    target = date.fromisoformat(request.progressionSnapshot.targetDate)
-    elapsed_life_days = float((target - born).days)
-    return ChartProgressionCalculationBasis(
-        symbolicInstant=_utc_datetime_string(progressed_subject.iso_formatted_utc_datetime),
-        elapsedLifeDays=elapsed_life_days,
-        elapsedYears=elapsed_life_days / 365.24219,
-        yearLengthDays=365.24219,
-        dayForYearRatio=1,
-    )
 
 
 def _dst_occurrence_value(value: str | None) -> bool | None:

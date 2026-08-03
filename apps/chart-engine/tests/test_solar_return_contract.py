@@ -1,6 +1,8 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from chart_engine.canonical_validation import reproducibility_fingerprint_for_result
+from chart_engine.kerykeion_adapter import _angle_difference
 from chart_engine.main import app
 from chart_engine.schemas import StoredChartSolarReturnCalculationPayload
 from test_request_validation import execution_profile
@@ -78,3 +80,66 @@ def test_solar_return_returns_canonical_dual_wheel_shape():
     parsed = StoredChartSolarReturnCalculationPayload.model_validate(data)
     assert data["reproducibilityFingerprint"] == reproducibility_fingerprint_for_result(data)
     assert data["reproducibilityFingerprint"] == reproducibility_fingerprint_for_result(parsed)
+    natal_sun = _point_longitude(data, "natal", "sun")
+    return_sun = _point_longitude(data, "solarReturn", "sun")
+    assert _angular_difference(return_sun, natal_sun) <= 0.0001
+
+
+def test_solar_return_supports_zero_coordinates_with_audited_sun_fixture():
+    client = TestClient(app, raise_server_exceptions=False)
+    payload = _solar_return_payload()
+    payload["solarReturnSnapshot"]["location"] = {
+        "timezone": "UTC",
+        "latitude": 0.0,
+        "longitude": 0.0,
+    }
+
+    response = client.post("/v1/solar-return", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["solarReturnSnapshot"]["location"] == payload["solarReturnSnapshot"]["location"]
+    assert data["solarReturnSnapshot"]["resolvedAt"] == "2026-07-15T01:20:01Z"
+    # Provenance: natal/return Sun literals were derived independently with
+    # PySwissEph 2.10.3.2 calc_ut and solcross_ut under returned Moshier flags.
+    assert _point_longitude(data, "natal", "sun") == pytest.approx(
+        112.607047591819,
+        abs=0.000001,
+    )
+    return_sun = _point_longitude(data, "solarReturn", "sun")
+    assert return_sun == pytest.approx(112.607040967718, abs=0.000001)
+    assert _angular_difference(return_sun, 112.607047591819) <= 0.0001
+
+
+def test_solar_return_rejects_year_before_birth():
+    client = TestClient(app)
+    payload = _solar_return_payload()
+    payload["solarReturnSnapshot"]["year"] = 1989
+
+    response = client.post("/v1/solar-return", json=payload)
+
+    assert response.status_code == 422
+    assert "CHART_SOLAR_RETURN_PRE_BIRTH" in response.text
+
+
+def test_signed_longitude_difference_normalizes_across_zero_degrees():
+    assert _angle_difference(359.99995, 0.00002) == pytest.approx(
+        -0.00007,
+        abs=0.000000001,
+    )
+    assert _angle_difference(0.00002, 359.99995) == pytest.approx(
+        0.00007,
+        abs=0.000000001,
+    )
+
+
+def _point_longitude(payload: dict, layer: str, point_id: str) -> float:
+    return next(
+        point["longitude"]
+        for point in payload["result"][layer]["points"]
+        if point["id"] == point_id
+    )
+
+
+def _angular_difference(value: float, target: float) -> float:
+    return abs(((value - target + 180.0) % 360.0) - 180.0)

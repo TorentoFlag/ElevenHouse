@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from chart_engine.main import app
@@ -55,6 +56,13 @@ def test_synastry_returns_canonical_dual_wheel_shape():
     assert data["inputSnapshot"] == payload["inputSnapshot"]
     assert data["partnerInputSnapshot"] == payload["partnerInputSnapshot"]
     assert data["relationshipSnapshot"] == payload["relationshipSnapshot"]
+    assert (
+        data["relationshipSnapshot"]["primaryClientId"],
+        data["relationshipSnapshot"]["partnerClientId"],
+    ) == (
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+    )
     primary_point_ids = {point["id"] for point in data["result"]["primary"]["points"]}
     partner_point_ids = {point["id"] for point in data["result"]["partner"]["points"]}
     assert {"sun", "moon", "ascendant", "midheaven", "north_node", "south_node"}.issubset(
@@ -82,3 +90,25 @@ def test_synastry_returns_canonical_dual_wheel_shape():
             "message": "Partner chart calculated with approximate birth time.",
         }
     ]
+    # Provenance: independent PySwissEph 2.10.3.2 calc_ut literals at each
+    # participant's separately resolved UTC birth instant.
+    assert _point_longitude(data, "primary", "sun") == pytest.approx(
+        112.607047591819,
+        abs=0.000001,
+    )
+    assert _point_longitude(data, "partner", "moon") == pytest.approx(
+        301.059749206717,
+        abs=0.000001,
+    )
+    assert all(
+        aspect["primaryPoint"] in primary_point_ids and aspect["partnerPoint"] in partner_point_ids
+        for aspect in data["result"]["aspectsBetween"]
+    )
+
+
+def _point_longitude(payload: dict, layer: str, point_id: str) -> float:
+    return next(
+        point["longitude"]
+        for point in payload["result"][layer]["points"]
+        if point["id"] == point_id
+    )

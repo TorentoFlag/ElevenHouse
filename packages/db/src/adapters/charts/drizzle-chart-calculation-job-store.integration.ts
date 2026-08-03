@@ -264,7 +264,7 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
     await expect(
       workerStore.complete({
         jobId: created.jobId,
-        result: progressionChartResult(),
+        result: progressionV2ChartResult(),
         resultChecksum: digest("e"),
         now: "2026-07-20T12:00:05.000Z"
       })
@@ -289,8 +289,11 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
         progressedPointCount: 14,
         progressionAspectCount: 0,
         targetDate: "2026-07-23",
-        symbolicDate: "1990-08-20",
-        ageDays: 36
+        symbolicInstant: "1990-08-20T09:02:38Z",
+        elapsedLifeDays: 13157,
+        elapsedYears: 36.02267306523378,
+        yearLengthDays: 365.24219,
+        dayForYearRatio: 1
       }
     });
   });
@@ -533,12 +536,29 @@ function compositeChartResult() {
   };
 }
 
-function progressionChartResult() {
+function progressionV2ChartResult() {
   const natal = chartResult();
+  const renderResult = {
+    ...natal.result,
+    distributions: {
+      elements: { fire: 3, earth: 3, air: 2, water: 2 },
+      modalities: { cardinal: 4, fixed: 3, mutable: 3 },
+      polarity: { masculine: 5, feminine: 5 }
+    }
+  };
   return {
-    schemaVersion: "chart-result.v1",
+    schemaVersion: "chart-result.v2",
     method: "progression",
-    provider: natal.provider,
+    methodVersion: "chart.progression.secondary-tropical-year.v2",
+    provider: {
+      name: "kerykeion",
+      version: "5.12.9",
+      ephemeris: "moshier",
+      pyswissephVersion: "2.10.3.2",
+      ephemerisFlags: ["moshier", "speed"],
+      ephemerisDataRevision: null
+    },
+    reproducibilityFingerprint: digest("f"),
     settings: natal.settings,
     inputSnapshot: natal.inputSnapshot,
     progressionSnapshot: {
@@ -550,9 +570,16 @@ function progressionChartResult() {
         dayForYearRatio: 1
       }
     },
+    calculationBasis: {
+      symbolicInstant: "1990-08-20T09:02:38Z",
+      elapsedLifeDays: 13157,
+      elapsedYears: 36.02267306523378,
+      yearLengthDays: 365.24219,
+      dayForYearRatio: 1
+    },
     result: {
-      natal: natal.result,
-      progressed: natal.result,
+      natal: renderResult,
+      progressed: renderResult,
       aspectsToNatal: [],
       warnings: []
     }

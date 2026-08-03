@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from chart_engine.main import app
@@ -70,3 +71,13 @@ def test_composite_returns_canonical_single_wheel_relationship_shape():
             "message": "Composite calculated with approximate partner birth time.",
         }
     ]
+    # Provenance: independent circular means of each participant's direct
+    # PySwissEph 2.10.3.2 natal longitude, not CompositeSubjectFactory output.
+    assert _point_longitude(data, "sun") == pytest.approx(125.956780305997, abs=0.000001)
+    assert _point_longitude(data, "moon") == pytest.approx(341.135964590878, abs=0.000001)
+
+
+def _point_longitude(payload: dict, point_id: str) -> float:
+    return next(
+        point["longitude"] for point in payload["result"]["points"] if point["id"] == point_id
+    )

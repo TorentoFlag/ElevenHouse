@@ -1,9 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import {
-  storedChartCalculationPayloadSchema,
-  type StoredChartCalculationPayload
-} from "@elevenhouse/contracts";
+import { chartResultSchema, type ChartResult } from "@elevenhouse/contracts";
 import {
   CHART_CALCULATION_REQUESTED_EVENT,
   type ChartCalculationCommandStore,
@@ -60,7 +57,7 @@ export function createDrizzleChartWorkerJobStore(
     complete: (input) =>
       completeChartJob(database, {
         ...input,
-        result: storedChartCalculationPayloadSchema.parse(input.result)
+        result: chartResultSchema.parse(input.result)
       }),
     fail: (input) => failChartJob(database, input)
   };
@@ -261,7 +258,7 @@ async function completeChartJob(
   database: ChartDrizzleDatabase,
   input: {
     readonly jobId: string;
-    readonly result: StoredChartCalculationPayload;
+    readonly result: ChartResult;
     readonly resultChecksum: string;
     readonly now: string;
   }
@@ -386,7 +383,7 @@ function buildChartCalculationParticipantDisplayName(
   return displayName && displayName.length > 0 ? displayName : `Client ${clientId.slice(0, 8)}`;
 }
 
-function buildChartResultSummary(result: StoredChartCalculationPayload) {
+function buildChartResultSummary(result: ChartResult) {
   if (result.method === "transit") {
     return {
       provider: result.provider.name,
@@ -415,6 +412,20 @@ function buildChartResultSummary(result: StoredChartCalculationPayload) {
     };
   }
   if (result.method === "progression") {
+    if (result.schemaVersion === "chart-result.v2") {
+      return {
+        provider: result.provider.name,
+        natalPointCount: result.result.natal.points.length,
+        progressedPointCount: result.result.progressed.points.length,
+        progressionAspectCount: result.result.aspectsToNatal.length,
+        targetDate: result.progressionSnapshot.targetDate,
+        symbolicInstant: result.calculationBasis.symbolicInstant,
+        elapsedLifeDays: result.calculationBasis.elapsedLifeDays,
+        elapsedYears: result.calculationBasis.elapsedYears,
+        yearLengthDays: result.calculationBasis.yearLengthDays,
+        dayForYearRatio: result.calculationBasis.dayForYearRatio
+      };
+    }
     return {
       provider: result.provider.name,
       natalPointCount: result.result.natal.points.length,

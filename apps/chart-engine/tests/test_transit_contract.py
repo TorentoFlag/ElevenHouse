@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from chart_engine.main import app
@@ -59,3 +60,25 @@ def test_transit_returns_canonical_dual_wheel_shape():
     assert len(data["result"]["transit"]["houses"]) == 12
     assert data["result"]["aspectsToNatal"]
     assert all("transitPoint" in aspect and "natalPoint" in aspect for aspect in data["result"]["aspectsToNatal"])
+    # Provenance: independent PySwissEph 2.10.3.2 calc_ut literals for the
+    # resolved birth and transit UTC instants under returned Moshier flags.
+    assert _point_longitude(data, "natal", "sun") == pytest.approx(
+        112.607047591819,
+        abs=0.000001,
+    )
+    assert _point_longitude(data, "transit", "jupiter") == pytest.approx(
+        124.863000238514,
+        abs=0.000001,
+    )
+    assert all(
+        aspect["transitPoint"] in transit_point_ids and aspect["natalPoint"] in natal_point_ids
+        for aspect in data["result"]["aspectsToNatal"]
+    )
+
+
+def _point_longitude(payload: dict, layer: str, point_id: str) -> float:
+    return next(
+        point["longitude"]
+        for point in payload["result"][layer]["points"]
+        if point["id"] == point_id
+    )
