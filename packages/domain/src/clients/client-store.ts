@@ -67,6 +67,10 @@ export type ClientJoinIntentClaimStore = {
   readonly findJoinIntentByTokenHash: (input: {
     readonly tokenHash: string;
   }) => Promise<ClientJoinIntent | null>;
+  /**
+   * Atomically marks an unexpired pending intent for this client, or returns the
+   * same client's existing claim. Returns null when another claimant won.
+   */
   readonly markJoinIntentClaimed: (input: {
     readonly intentId: string;
     readonly clientUserId: string;
@@ -83,7 +87,9 @@ export type ClientStore = ClientJoinIntentClaimStore & {
   readonly upsertClientBirthData: (
     input: ClientStoreUpsertBirthDataInput
   ) => Promise<ClientBirthData>;
-  readonly listClientBirthDataProfiles: (clientUserId: string) => Promise<readonly ClientBirthData[]>;
+  readonly listClientBirthDataProfiles: (
+    clientUserId: string
+  ) => Promise<readonly ClientBirthData[]>;
   readonly createClientBirthDataProfile: (
     input: ClientStoreCreateBirthDataProfileInput
   ) => Promise<ClientBirthData>;

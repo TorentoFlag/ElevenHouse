@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { CustomerPlatformRole } from "@elevenhouse/auth";
 import type {
   ClientJoinIntentClaimStore,
+  ClientStore,
   PasswordlessCustomerAccountRegistrationSessionStore,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
@@ -36,13 +37,15 @@ export type VerifyRegistrationWithSessionResult = {
   };
 };
 
+type RegistrationClientStore = PasswordlessCustomerAccountRegistrationSessionStore &
+  ClientJoinIntentClaimStore &
+  Pick<ClientStore, "upsertClientProfile">;
+
 @Injectable()
 export class DomainRegistrationHandler {
   constructor(
     @Inject(PASSWORDLESS_CUSTOMER_ACCOUNT_REGISTRATION_SESSION_UNIT_OF_WORK)
-    private readonly registration: PasswordlessCustomerAccountRegistrationSessionUnitOfWork<
-      PasswordlessCustomerAccountRegistrationSessionStore & ClientJoinIntentClaimStore
-    >,
+    private readonly registration: PasswordlessCustomerAccountRegistrationSessionUnitOfWork<RegistrationClientStore>,
     @Inject(PublicSessionTokenIssuer)
     private readonly sessionTokenIssuer: PublicSessionTokenIssuer,
     @Inject(SystemClock)
@@ -63,38 +66,44 @@ export class DomainRegistrationHandler {
     const now = this.clock.now();
     const expiresAt = new Date(now.getTime() + this.options.sessionTtlSeconds * 1000);
     const issuedToken: IssuedSessionToken = this.sessionTokenIssuer.issueSessionToken();
-    const result = await verifyPasswordlessCodeAndRegisterCustomerAccountWithSession<
-      PasswordlessCustomerAccountRegistrationSessionStore & ClientJoinIntentClaimStore
-    >({
-      registration: this.registration,
-      challengeId: input.challengeId,
-      code: input.code,
-      codeSecret: this.options.codeSecret,
-      now,
-      displayName: input.displayName,
-      roles: input.roles,
-      session: {
-        tokenHash: issuedToken.tokenHash,
-        expiresAt,
-        ...(input.ipAddress === undefined ? {} : { ipAddress: input.ipAddress }),
-        ...(input.userAgent === undefined ? {} : { userAgent: input.userAgent })
-      },
-      securityEventType: "registration_succeeded",
-      trustedStaticCode: this.options.trustedStaticCode ?? null,
-      ...(input.clientJoinIntentToken === undefined
-        ? {}
-        : {
-            afterRegistered: async ({ store, account }) => {
-              await claimClientJoinIntent({
-                store,
-                token: input.clientJoinIntentToken ?? "",
-                tokenHasher: hashClientJoinIntentToken,
-                clientUserId: account.user.id,
-                now
-              });
-            }
-          })
-    });
+    const result =
+      await verifyPasswordlessCodeAndRegisterCustomerAccountWithSession<RegistrationClientStore>({
+        registration: this.registration,
+        challengeId: input.challengeId,
+        code: input.code,
+        codeSecret: this.options.codeSecret,
+        now,
+        displayName: input.displayName,
+        roles: input.roles,
+        session: {
+          tokenHash: issuedToken.tokenHash,
+          expiresAt,
+          ...(input.ipAddress === undefined ? {} : { ipAddress: input.ipAddress }),
+          ...(input.userAgent === undefined ? {} : { userAgent: input.userAgent })
+        },
+        securityEventType: "registration_succeeded",
+        trustedStaticCode: this.options.trustedStaticCode ?? null,
+        afterRegistered: async ({ store, account }) => {
+          if (account.roleAssignments.some(({ role }) => role === "client")) {
+            await store.upsertClientProfile({
+              userId: account.user.id,
+              displayNameSnapshot: account.userProfile.displayName,
+              preferredLocale: null,
+              timezone: null,
+              now: now.toISOString()
+            });
+          }
+          if (input.clientJoinIntentToken !== undefined) {
+            await claimClientJoinIntent({
+              store,
+              token: input.clientJoinIntentToken,
+              tokenHasher: hashClientJoinIntentToken,
+              clientUserId: account.user.id,
+              now
+            });
+          }
+        }
+      });
 
     return {
       response: {

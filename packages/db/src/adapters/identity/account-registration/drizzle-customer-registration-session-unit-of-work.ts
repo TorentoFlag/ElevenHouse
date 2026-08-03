@@ -1,5 +1,7 @@
 import type {
-  CustomerAccountRegistrationSessionUnitOfWork,
+  ClientStore,
+  CustomerAccountRegistrationSessionStore,
+  PasswordlessCustomerAccountRegistrationSessionStore,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../../runtime";
@@ -17,10 +19,21 @@ import {
   type AccountRegistrationDrizzleExecutor
 } from "./drizzle-account-registration-unit-of-work";
 
-export type CustomerAccountRegistrationSessionDrizzleExecutor =
-  AccountRegistrationDrizzleExecutor & AuthSessionCreationDrizzleExecutor;
+export type CustomerAccountRegistrationSessionDrizzleExecutor = AccountRegistrationDrizzleExecutor &
+  AuthSessionCreationDrizzleExecutor;
 export type PasswordlessCustomerAccountRegistrationSessionDrizzleExecutor =
   CustomerAccountRegistrationSessionDrizzleExecutor & PasswordlessAuthDrizzleExecutor;
+
+export type CustomerAccountRegistrationSessionDrizzleStore =
+  CustomerAccountRegistrationSessionStore & ClientStore;
+export type PasswordlessCustomerAccountRegistrationSessionDrizzleStore =
+  PasswordlessCustomerAccountRegistrationSessionStore & ClientStore;
+
+export type CustomerAccountRegistrationSessionDrizzleUnitOfWork = {
+  readonly transact: <T>(
+    operation: (store: CustomerAccountRegistrationSessionDrizzleStore) => Promise<T>
+  ) => Promise<T>;
+};
 
 export type CustomerAccountRegistrationSessionDrizzleDatabase = Pick<
   ElevenHouseDatabase,
@@ -29,14 +42,14 @@ export type CustomerAccountRegistrationSessionDrizzleDatabase = Pick<
 
 export function createDrizzleCustomerAccountRegistrationSessionUnitOfWork(
   database: CustomerAccountRegistrationSessionDrizzleDatabase
-): CustomerAccountRegistrationSessionUnitOfWork {
+): CustomerAccountRegistrationSessionDrizzleUnitOfWork {
   return {
     transact: (operation) =>
       database.transaction((executor) =>
         operation({
           ...createAccountRegistrationStore(executor),
           ...createAuthSessionCreationStore(executor),
-          ...createDrizzleClientStore(executor as never)
+          ...createDrizzleClientStore(executor)
         })
       )
   };
@@ -44,7 +57,7 @@ export function createDrizzleCustomerAccountRegistrationSessionUnitOfWork(
 
 export function createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitOfWork(
   database: CustomerAccountRegistrationSessionDrizzleDatabase
-): PasswordlessCustomerAccountRegistrationSessionUnitOfWork {
+): PasswordlessCustomerAccountRegistrationSessionUnitOfWork<PasswordlessCustomerAccountRegistrationSessionDrizzleStore> {
   return {
     transact: (operation) =>
       database.transaction((executor) =>
@@ -52,7 +65,7 @@ export function createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitO
           ...createPasswordlessAuthStore(executor),
           ...createAccountRegistrationStore(executor),
           ...createAuthSessionCreationStore(executor),
-          ...createDrizzleClientStore(executor as never)
+          ...createDrizzleClientStore(executor)
         })
       )
   };

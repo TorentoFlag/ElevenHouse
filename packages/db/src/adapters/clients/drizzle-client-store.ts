@@ -1,6 +1,8 @@
-import { and, count, desc, eq, ilike, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, ilike, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import {
+  ClientAstrologerRelationshipBlockedError,
   ClientAstrologerRelationshipRoleError,
+  ClientProfileProjectionError,
   type AstrologerClientList,
   type AstrologerClientListItem,
   type ClientAstrologerRelationship,
@@ -20,6 +22,7 @@ import {
   clientBirthData,
   clientJoinIntents,
   clientProfiles,
+  userProfiles,
   userRoleAssignments
 } from "../../schema";
 import { insertReturningOne } from "../../shared";
@@ -44,15 +47,28 @@ export function createDrizzleClientStore(database: ClientDrizzleDatabase): Clien
       return row ? toClientJoinIntent(row) : null;
     },
     markJoinIntentClaimed: async ({ intentId, clientUserId, now }) => {
+      const claimedAt = new Date(now);
       const [row] = await database
         .update(clientJoinIntents)
         .set({
           status: "claimed",
           claimedByClientUserId: clientUserId,
-          claimedAt: new Date(now),
-          updatedAt: new Date(now)
+          claimedAt,
+          updatedAt: claimedAt
         })
-        .where(eq(clientJoinIntents.id, intentId))
+        .where(
+          and(
+            eq(clientJoinIntents.id, intentId),
+            gt(clientJoinIntents.expiresAt, claimedAt),
+            or(
+              eq(clientJoinIntents.status, "pending"),
+              and(
+                eq(clientJoinIntents.status, "claimed"),
+                eq(clientJoinIntents.claimedByClientUserId, clientUserId)
+              )
+            )
+          )
+        )
         .returning();
 
       return row ? toClientJoinIntent(row) : null;
@@ -160,7 +176,11 @@ async function listClientBirthDataProfiles(
     .select()
     .from(clientBirthData)
     .where(eq(clientBirthData.clientUserId, clientUserId))
-    .orderBy(desc(clientBirthData.isPrimary), desc(clientBirthData.createdAt), desc(clientBirthData.id));
+    .orderBy(
+      desc(clientBirthData.isPrimary),
+      desc(clientBirthData.createdAt),
+      desc(clientBirthData.id)
+    );
 
   return rows.map(toClientBirthData);
 }
@@ -217,7 +237,12 @@ async function updateClientBirthDataProfile(
         ...input.data,
         updatedAt: new Date(input.now)
       })
-      .where(and(eq(clientBirthData.clientUserId, input.clientUserId), eq(clientBirthData.id, input.birthDataId)))
+      .where(
+        and(
+          eq(clientBirthData.clientUserId, input.clientUserId),
+          eq(clientBirthData.id, input.birthDataId)
+        )
+      )
       .returning();
 
     return row ? toClientBirthData(row) : null;
@@ -250,50 +275,119 @@ async function ensureRelationship(
   database: ClientDrizzleDatabase,
   input: ClientStoreEnsureRelationshipInput
 ): Promise<ClientAstrologerRelationship> {
-  const [hasClientRole, hasAstrologerRole] = await Promise.all([
-    hasRole(database, input.clientUserId, "client"),
-    hasRole(database, input.astrologerUserId, "astrologer")
-  ]);
-  if (!hasClientRole) {
-    throw new ClientAstrologerRelationshipRoleError("Client account role is required");
-  }
-  if (!hasAstrologerRole) {
-    throw new ClientAstrologerRelationshipRoleError("Astrologer account role is required");
-  }
+  return withClientTransaction(database, async (transaction) => {
+    const [existingRelationship] = await transaction
+      .select({ status: clientAstrologerRelationships.status })
+      .from(clientAstrologerRelationships)
+      .where(
+        and(
+          eq(clientAstrologerRelationships.clientUserId, input.clientUserId),
+          eq(clientAstrologerRelationships.astrologerUserId, input.astrologerUserId)
+        )
+      )
+      .limit(1)
+      .for("update");
+    if (existingRelationship?.status === "blocked") {
+      throw new ClientAstrologerRelationshipBlockedError();
+    }
 
-  const row = await insertReturningOne(
-    () =>
-      database
-        .insert(clientAstrologerRelationships)
-        .values({
-          clientUserId: input.clientUserId,
-          astrologerUserId: input.astrologerUserId,
-          source: input.source,
+    await lockAndValidateRelationshipRoles(transaction, input);
+
+    const [canonicalProfile] = await transaction
+      .select({ displayName: userProfiles.displayName })
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, input.clientUserId))
+      .limit(1)
+      .for("share");
+    if (!canonicalProfile) {
+      throw new ClientProfileProjectionError();
+    }
+
+    const timestamp = new Date(input.now);
+    await transaction
+      .insert(clientProfiles)
+      .values({
+        userId: input.clientUserId,
+        displayNameSnapshot: canonicalProfile.displayName,
+        preferredLocale: null,
+        timezone: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      })
+      .onConflictDoUpdate({
+        target: clientProfiles.userId,
+        set: {
+          displayNameSnapshot: canonicalProfile.displayName,
+          updatedAt: timestamp
+        },
+        setWhere: isNull(clientProfiles.displayNameSnapshot)
+      });
+
+    const [row] = await transaction
+      .insert(clientAstrologerRelationships)
+      .values({
+        clientUserId: input.clientUserId,
+        astrologerUserId: input.astrologerUserId,
+        source: input.source,
+        status: "active",
+        firstLinkedAt: timestamp,
+        lastLinkedAt: timestamp,
+        archivedAt: null,
+        blockedAt: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      })
+      .onConflictDoUpdate({
+        target: [
+          clientAstrologerRelationships.clientUserId,
+          clientAstrologerRelationships.astrologerUserId
+        ],
+        set: {
           status: "active",
-          firstLinkedAt: new Date(input.now),
-          lastLinkedAt: new Date(input.now),
+          lastLinkedAt: timestamp,
           archivedAt: null,
           blockedAt: null,
-          createdAt: new Date(input.now),
-          updatedAt: new Date(input.now)
-        })
-        .onConflictDoUpdate({
-          target: [
-            clientAstrologerRelationships.clientUserId,
-            clientAstrologerRelationships.astrologerUserId
-          ],
-          set: {
-            status: "active",
-            lastLinkedAt: new Date(input.now),
-            archivedAt: null,
-            updatedAt: new Date(input.now)
-          }
-        })
-        .returning(),
-    "client_astrologer_relationships"
-  );
+          updatedAt: timestamp
+        },
+        setWhere: ne(clientAstrologerRelationships.status, "blocked")
+      })
+      .returning();
+    if (!row) {
+      throw new ClientAstrologerRelationshipBlockedError();
+    }
 
-  return toClientAstrologerRelationship(row);
+    return toClientAstrologerRelationship(row);
+  });
+}
+
+async function lockAndValidateRelationshipRoles(
+  database: ClientDrizzleDatabase,
+  input: Pick<ClientStoreEnsureRelationshipInput, "clientUserId" | "astrologerUserId">
+): Promise<void> {
+  const rows = await database
+    .select({ userId: userRoleAssignments.userId, role: userRoleAssignments.role })
+    .from(userRoleAssignments)
+    .where(
+      or(
+        and(
+          eq(userRoleAssignments.userId, input.clientUserId),
+          eq(userRoleAssignments.role, "client")
+        ),
+        and(
+          eq(userRoleAssignments.userId, input.astrologerUserId),
+          eq(userRoleAssignments.role, "astrologer")
+        )
+      )
+    )
+    .orderBy(asc(userRoleAssignments.userId), asc(userRoleAssignments.role))
+    .for("key share");
+  const lockedRoles = new Set(rows.map(({ userId, role }) => `${userId}:${role}`));
+  if (!lockedRoles.has(`${input.clientUserId}:client`)) {
+    throw new ClientAstrologerRelationshipRoleError("Client account role is required");
+  }
+  if (!lockedRoles.has(`${input.astrologerUserId}:astrologer`)) {
+    throw new ClientAstrologerRelationshipRoleError("Astrologer account role is required");
+  }
 }
 
 async function listAstrologerClients(
@@ -328,7 +422,10 @@ async function listAstrologerClients(
     .leftJoin(clientProfiles, eq(clientProfiles.userId, clientAstrologerRelationships.clientUserId))
     .leftJoin(
       clientBirthData,
-      eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId)
+      and(
+        eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId),
+        eq(clientBirthData.isPrimary, true)
+      )
     )
     .where(where)
     .orderBy(
@@ -363,7 +460,10 @@ async function getAstrologerClient(
     .leftJoin(clientProfiles, eq(clientProfiles.userId, clientAstrologerRelationships.clientUserId))
     .leftJoin(
       clientBirthData,
-      eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId)
+      and(
+        eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId),
+        eq(clientBirthData.isPrimary, true)
+      )
     )
     .where(
       and(
@@ -375,20 +475,6 @@ async function getAstrologerClient(
     .limit(1);
 
   return row ? toAstrologerClientListItem(row.relationship, row.profile, row.birthData) : null;
-}
-
-async function hasRole(
-  database: ClientDrizzleDatabase,
-  userId: string,
-  role: "client" | "astrologer"
-): Promise<boolean> {
-  const [row] = await database
-    .select({ id: userRoleAssignments.id })
-    .from(userRoleAssignments)
-    .where(and(eq(userRoleAssignments.userId, userId), eq(userRoleAssignments.role, role)))
-    .limit(1);
-
-  return Boolean(row);
 }
 
 function toAstrologerClientListItem(
@@ -419,8 +505,7 @@ function toClientBirthData(row: ClientBirthDataRow): ClientBirthData {
     birthCity: row.birthCity,
     birthRegion: row.birthRegion,
     birthTimezone: row.birthTimezone,
-    birthTimeDstOccurrence:
-      row.birthTimeDstOccurrence as ClientBirthData["birthTimeDstOccurrence"],
+    birthTimeDstOccurrence: row.birthTimeDstOccurrence as ClientBirthData["birthTimeDstOccurrence"],
     birthLatitude: row.birthLatitude === null ? null : Number(row.birthLatitude),
     birthLongitude: row.birthLongitude === null ? null : Number(row.birthLongitude),
     source: row.source as ClientBirthData["source"],

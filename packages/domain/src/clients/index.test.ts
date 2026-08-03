@@ -276,6 +276,38 @@ describe("clients domain", () => {
     ).rejects.toBeInstanceOf(ClientJoinIntentError);
   });
 
+  it("does not create a relationship when the atomic intent claim loses a race", async () => {
+    const store = createMemoryClientStore({
+      clientRoleUsers: [clientUserId],
+      astrologerRoleUsers: [astrologerUserId]
+    });
+    const intent = await createClientJoinIntent({
+      store,
+      tokenGenerator: () => "raced-token",
+      tokenHasher: (token) => `hash:${token}`,
+      idGenerator: () => "44444444-4444-4444-8444-444444444444",
+      astrologerUserId,
+      publicHandleSnapshot: "alisa-vega",
+      now: new Date(now),
+      expiresAt: new Date("2026-07-06T11:00:00.000Z")
+    });
+    const losingStore: ClientStore = {
+      ...store,
+      markJoinIntentClaimed: async () => null
+    };
+
+    await expect(
+      claimClientJoinIntent({
+        store: losingStore,
+        token: intent.token,
+        tokenHasher: (token) => `hash:${token}`,
+        clientUserId,
+        now: new Date("2026-07-06T10:05:00.000Z")
+      })
+    ).rejects.toBeInstanceOf(ClientJoinIntentError);
+    expect(store.relationships).toEqual([]);
+  });
+
   it("lists only clients related to the requested astrologer", async () => {
     const store = createMemoryClientStore({
       clientRoleUsers: [clientUserId],
@@ -422,6 +454,12 @@ function createMemoryClientStore(input: {
       }
       const intent = joinIntents[index];
       if (!intent) {
+        return null;
+      }
+      if (
+        new Date(intent.expiresAt).getTime() <= new Date(claimedAt).getTime() ||
+        (intent.status !== "pending" && intent.claimedByClientUserId !== clientUserId)
+      ) {
         return null;
       }
       joinIntents[index] = {

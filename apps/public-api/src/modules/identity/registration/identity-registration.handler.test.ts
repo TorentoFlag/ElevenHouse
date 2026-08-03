@@ -1,5 +1,6 @@
 import type {
   ClientJoinIntentClaimStore,
+  ClientStore,
   PasswordlessCustomerAccountRegistrationSessionStore,
   PasswordlessCustomerAccountRegistrationSessionUnitOfWork
 } from "@elevenhouse/domain";
@@ -12,6 +13,31 @@ const now = new Date("2026-06-16T10:00:00.000Z");
 const codeSecret = "test-secret";
 
 describe("DomainRegistrationHandler", () => {
+  it("seeds the client profile projection inside registration without a join token", async () => {
+    const store = createRegistrationStore();
+    const handler = new DomainRegistrationHandler(
+      createUnitOfWork(store),
+      createSessionTokenIssuer(),
+      { now: () => now },
+      { codeSecret, sessionTtlSeconds: 604800 }
+    );
+
+    await handler.verifyCodeAndRegister({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      code: "123456",
+      displayName: "Марина",
+      roles: ["client"]
+    });
+
+    expect(store.upsertClientProfile).toHaveBeenCalledWith({
+      userId: "11111111-1111-4111-8111-111111111111",
+      displayNameSnapshot: "Марина",
+      preferredLocale: null,
+      timezone: null,
+      now: "2026-06-16T10:00:00.000Z"
+    });
+  });
+
   it("claims a client join intent inside the registration transaction", async () => {
     const store = createRegistrationStore();
     const handler = new DomainRegistrationHandler(
@@ -32,6 +58,13 @@ describe("DomainRegistrationHandler", () => {
     expect(store.findJoinIntentByTokenHash).toHaveBeenCalledWith({
       tokenHash: "sha256:e33b027e982588fdc45c1182c93d740ab110e2bee6d20a71f6279b400ddd425d"
     });
+    expect(store.upsertClientProfile).toHaveBeenCalledWith({
+      userId: "11111111-1111-4111-8111-111111111111",
+      displayNameSnapshot: "Марина",
+      preferredLocale: null,
+      timezone: null,
+      now: "2026-06-16T10:00:00.000Z"
+    });
     expect(store.ensureRelationship).toHaveBeenCalledWith({
       clientUserId: "11111111-1111-4111-8111-111111111111",
       astrologerUserId: "22222222-2222-4222-8222-222222222222",
@@ -43,10 +76,9 @@ describe("DomainRegistrationHandler", () => {
 
 function createUnitOfWork(
   store: PasswordlessCustomerAccountRegistrationSessionStore &
-    ClientJoinIntentClaimStore
-): PasswordlessCustomerAccountRegistrationSessionUnitOfWork<
-  typeof store
-> {
+    ClientJoinIntentClaimStore &
+    Pick<ClientStore, "upsertClientProfile">
+): PasswordlessCustomerAccountRegistrationSessionUnitOfWork<typeof store> {
   return {
     transact: async (operation) => operation(store)
   };
@@ -124,6 +156,7 @@ function createRegistrationStore() {
       ...input,
       metadata: {}
     })),
+    upsertClientProfile: vi.fn(async () => undefined),
     findJoinIntentByTokenHash: vi.fn(async () => ({
       id: "44444444-4444-4444-8444-444444444444",
       astrologerUserId: "22222222-2222-4222-8222-222222222222",
@@ -162,5 +195,6 @@ function createRegistrationStore() {
       updatedAt: input.now
     }))
   } satisfies PasswordlessCustomerAccountRegistrationSessionStore &
-    ClientJoinIntentClaimStore;
+    ClientJoinIntentClaimStore &
+    Pick<ClientStore, "upsertClientProfile">;
 }

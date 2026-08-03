@@ -175,15 +175,23 @@ export async function claimClientJoinIntent(input: {
     throw new ClientJoinIntentError("Client join intent is expired");
   }
 
-  const relationship = await input.store.ensureRelationship({
+  const claimedIntent = await input.store.markJoinIntentClaimed({
+    intentId: intent.id,
     clientUserId,
-    astrologerUserId: intent.astrologerUserId,
-    source: "direct_link",
     now
   });
-  await input.store.markJoinIntentClaimed({
-    intentId: intent.id,
-    clientUserId: relationship.clientUserId,
+  if (
+    !claimedIntent ||
+    claimedIntent.status !== "claimed" ||
+    claimedIntent.claimedByClientUserId !== clientUserId
+  ) {
+    throw new ClientJoinIntentError("Client join intent is already claimed");
+  }
+
+  const relationship = await input.store.ensureRelationship({
+    clientUserId,
+    astrologerUserId: claimedIntent.astrologerUserId,
+    source: "direct_link",
     now
   });
 

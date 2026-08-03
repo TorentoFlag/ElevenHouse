@@ -8,6 +8,8 @@ import type {
   AuthSecurityEvent,
   AuthSession,
   AuthSessionAuthenticationStore,
+  ClientProfile,
+  ClientStore,
   CustomerAccountRegistrationSessionStore,
   PasswordlessAuthStore,
   UserAccount,
@@ -16,12 +18,16 @@ import type {
 } from "@elevenhouse/domain";
 
 export class InMemoryPasswordlessAuthStore
-  implements PasswordlessAuthStore, AuthSessionAuthenticationStore
+  implements
+    PasswordlessAuthStore,
+    AuthSessionAuthenticationStore,
+    Pick<ClientStore, "upsertClientProfile">
 {
   readonly authChallenges: AuthChallenge[] = [];
   readonly authChallengeDeliveries: AuthChallengeDelivery[] = [];
   readonly users: UserAccount[] = [];
   readonly userProfiles: UserProfile[] = [];
+  readonly clientProfiles: ClientProfile[] = [];
   readonly authIdentities: AuthIdentity[] = [];
   readonly roleAssignments: UserRoleAssignment[] = [];
   readonly userSessions: AuthSession[] = [];
@@ -92,7 +98,9 @@ export class InMemoryPasswordlessAuthStore
     );
   }
 
-  async findLatestDeliveryByChallengeId(challengeId: string): Promise<AuthChallengeDelivery | null> {
+  async findLatestDeliveryByChallengeId(
+    challengeId: string
+  ): Promise<AuthChallengeDelivery | null> {
     return (
       [...this.authChallengeDeliveries]
         .reverse()
@@ -162,7 +170,9 @@ export class InMemoryPasswordlessAuthStore
     };
   }
 
-  async createUser(input: { readonly status: "active" | "suspended" | "deleted" }): Promise<UserAccount> {
+  async createUser(input: {
+    readonly status: "active" | "suspended" | "deleted";
+  }): Promise<UserAccount> {
     const now = this.now.toISOString();
     const user: UserAccount = {
       id: randomUUID(),
@@ -187,6 +197,30 @@ export class InMemoryPasswordlessAuthStore
     };
     this.userProfiles.push(profile);
     return profile;
+  }
+
+  async upsertClientProfile(
+    input: Parameters<ClientStore["upsertClientProfile"]>[0]
+  ): Promise<void> {
+    const existing = this.clientProfiles.find((profile) => profile.userId === input.userId);
+    if (existing) {
+      Object.assign(existing, {
+        displayNameSnapshot: input.displayNameSnapshot,
+        preferredLocale: input.preferredLocale,
+        timezone: input.timezone,
+        updatedAt: input.now
+      });
+      return;
+    }
+
+    this.clientProfiles.push({
+      userId: input.userId,
+      displayNameSnapshot: input.displayNameSnapshot,
+      preferredLocale: input.preferredLocale,
+      timezone: input.timezone,
+      createdAt: input.now,
+      updatedAt: input.now
+    });
   }
 
   async createAuthIdentity(
@@ -231,9 +265,7 @@ export class InMemoryPasswordlessAuthStore
       id: randomUUID(),
       userId: input.userId,
       role: input.role,
-      ...(input.assignedByUserId === undefined
-        ? {}
-        : { assignedByUserId: input.assignedByUserId }),
+      ...(input.assignedByUserId === undefined ? {} : { assignedByUserId: input.assignedByUserId }),
       assignedAt: this.now.toISOString()
     };
     this.roleAssignments.push(assignment);

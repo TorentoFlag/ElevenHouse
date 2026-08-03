@@ -10,6 +10,7 @@ import type {
   AuthChallengeDeliveryStatus,
   AuthChallengeStatus,
   AuthIdentity,
+  ClientStore,
   ExistingPasswordlessIdentity,
   IdentityProvider,
   PasswordlessAuthChannel,
@@ -49,6 +50,7 @@ export type PasswordlessAuthDrizzleExecutor = Pick<
   "insert" | "query" | "select" | "update"
 >;
 export type PasswordlessAuthDrizzleDatabase = Pick<ElevenHouseDatabase, "transaction">;
+export type PasswordlessAuthDrizzleStore = PasswordlessAuthStore & ClientStore;
 
 const passwordlessAuthChannelSet = new Set<string>(["email", "phone"]);
 const authChallengeStatusSet = new Set<string>(authChallengeStatusValues);
@@ -59,13 +61,13 @@ const customerRoleSet = new Set<string>(["client", "astrologer"]);
 
 export function createDrizzlePasswordlessAuthUnitOfWork(
   database: PasswordlessAuthDrizzleDatabase
-): PasswordlessAuthUnitOfWork {
+): PasswordlessAuthUnitOfWork<PasswordlessAuthDrizzleStore> {
   return {
     transact: (operation) =>
       database.transaction((executor) =>
         operation({
           ...createPasswordlessAuthStore(executor),
-          ...createDrizzleClientStore(executor as never)
+          ...createDrizzleClientStore(executor)
         })
       )
   };

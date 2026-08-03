@@ -18,3 +18,17 @@ export class ClientJoinIntentError extends Error {
     this.name = "ClientJoinIntentError";
   }
 }
+
+export class ClientAstrologerRelationshipBlockedError extends ClientJoinIntentError {
+  constructor(message = "Client relationship is blocked") {
+    super(message);
+    this.name = "ClientAstrologerRelationshipBlockedError";
+  }
+}
+
+export class ClientProfileProjectionError extends Error {
+  constructor(message = "Canonical client user profile is required") {
+    super(message);
+    this.name = "ClientProfileProjectionError";
+  }
+}

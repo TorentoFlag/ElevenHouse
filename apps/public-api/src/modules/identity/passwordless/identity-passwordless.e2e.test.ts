@@ -256,15 +256,12 @@ describe("passwordless public auth HTTP flow", () => {
 
     expect(requestResponse.status).toBe(201);
 
-    const registrationResponse = await postJson(
-      "/identity/registration/passwordless/verify-code",
-      {
-        challengeId: requestResponse.body.challengeId,
-        code: "123456",
-        displayName: " Анна ",
-        roles: ["client"]
-      }
-    );
+    const registrationResponse = await postJson("/identity/registration/passwordless/verify-code", {
+      challengeId: requestResponse.body.challengeId,
+      code: "123456",
+      displayName: " Анна ",
+      roles: ["client"]
+    });
 
     expect(registrationResponse.status).toBe(201);
     expect(registrationResponse.body).toMatchObject({
@@ -280,6 +277,14 @@ describe("passwordless public auth HTTP flow", () => {
       expect.objectContaining({
         userId: registrationResponse.body.account.id,
         displayName: "Анна"
+      })
+    ]);
+    expect(store.clientProfiles).toEqual([
+      expect.objectContaining({
+        userId: registrationResponse.body.account.id,
+        displayNameSnapshot: "Анна",
+        preferredLocale: null,
+        timezone: null
       })
     ]);
     expect(store.authSecurityEvents.at(-1)).toMatchObject({
@@ -302,15 +307,12 @@ describe("passwordless public auth HTTP flow", () => {
       identifier: "astrologer@example.com",
       roles: ["astrologer"]
     });
-    const registrationResponse = await postJson(
-      "/identity/registration/passwordless/verify-code",
-      {
-        challengeId: requestResponse.body.challengeId,
-        code: "123456",
-        displayName: "Анна",
-        roles: ["astrologer"]
-      }
-    );
+    const registrationResponse = await postJson("/identity/registration/passwordless/verify-code", {
+      challengeId: requestResponse.body.challengeId,
+      code: "123456",
+      displayName: "Анна",
+      roles: ["astrologer"]
+    });
 
     expect(requestResponse.status).toBe(201);
     expect(registrationResponse.status).toBe(400);
@@ -330,15 +332,12 @@ describe("passwordless public auth HTTP flow", () => {
       identifier: "client@example.com",
       roles: ["client"]
     });
-    const registrationResponse = await postJson(
-      "/identity/registration/passwordless/verify-code",
-      {
-        challengeId: requestResponse.body.challengeId,
-        code: "123456",
-        displayName: "Анна",
-        roles: ["client"]
-      }
-    );
+    const registrationResponse = await postJson("/identity/registration/passwordless/verify-code", {
+      challengeId: requestResponse.body.challengeId,
+      code: "123456",
+      displayName: "Анна",
+      roles: ["client"]
+    });
 
     expect(registrationResponse.status).toBe(409);
     expect(registrationResponse.setCookie).toBeNull();
@@ -567,15 +566,11 @@ describe("passwordless public auth HTTP flow", () => {
       status: 200
     });
 
-    const logoutResponse = await postEmpty(
-      "/identity/logout",
-      authenticatedCookies,
-      {
-        "user-agent": "ElevenHouse-Test/1.0",
-        origin: "http://localhost:3000",
-        [csrfHeaderName]: csrfToken
-      }
-    );
+    const logoutResponse = await postEmpty("/identity/logout", authenticatedCookies, {
+      "user-agent": "ElevenHouse-Test/1.0",
+      origin: "http://localhost:3000",
+      [csrfHeaderName]: csrfToken
+    });
 
     expect(logoutResponse.status).toBe(204);
     expect(logoutResponse.setCookie).toContain(`${sessionCookieName}=`);
