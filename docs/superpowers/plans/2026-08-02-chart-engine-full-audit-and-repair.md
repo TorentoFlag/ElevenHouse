@@ -138,11 +138,20 @@ and separately reviewed deliverable.
       artifact-derived Swiss provenance, recomputable natal/solar fingerprints
       and cleanup. Fresh verification passed 82/82 pytest, compileall, exact
       dependency versions, diff check and no task container/listener residue.
+- [x] 2026-08-03: Task 4 shipped in `6148781`, `c41a7c2` and `8234ad0` after
+      numerical and snapshot-binding review rounds. Fresh verification passed
+      105 Python tests, 54 focused contract/domain tests and 14 real-PostgreSQL
+      integration tests.
+- [x] 2026-08-03: Task 5 shipped in `6a4b931` after independent review found
+      and closed a native-fetch over-read and a cross-language readiness-status
+      mismatch. Fresh verification passed 113 Python tests, 90 focused Vitest
+      tests, compileall, exact ESLint and sequential package typecheck/build;
+      final review found no Critical, Important or Minor issues.
 - [x] Task 1: synchronize shared main and capture executable baseline.
 - [x] Task 2: strict contracts, method versions and civil-time domain.
 - [x] Task 3: strict Python ingress, DST, provider runtime and readiness.
-- [ ] Task 4: numerical method repair and golden fixtures.
-- [ ] Task 5: abortable chart-engine client and failure taxonomy.
+- [x] Task 4: numerical method repair and golden fixtures.
+- [x] Task 5: abortable chart-engine client and failure taxonomy.
 - [ ] Task 6: durable job schema, participants, retry authority and fencing.
 - [ ] Task 7: target recalculation, archival and artifact lifecycle.
 - [ ] Task 8: client-granted chart-AI consent and durable usage evidence.
@@ -171,6 +180,9 @@ acceptance and the exact commit range.
   timeout. Task 3 now holds the provider lock while a spawned sentinel process
   runs under one total deadline and terminates/joins timed-out children before
   returning a typed readiness failure.
+- A default Web Streams reader may pull a provider chunk much larger than an
+  application counter's quota. Task 5 now uses a BYOB reader sized by the
+  remaining 2,048-byte diagnostic budget and tests the real native-fetch pulls.
 - Kerykeion silently clamps high latitude to `+/-66`; ElevenHouse currently
   returns the original coordinate and no warning.
 - Requests using `FLG_SWIEPH` can return `FLG_MOSEPH` when planetary data files
@@ -411,6 +423,8 @@ export type ChartJobForProcessing = {
   readonly ownerUserId: string;
   readonly clientId: string;
   readonly method: ChartCalculationMethod;
+  readonly methodVersion: ChartMethodVersion;
+  readonly executionProfile: ChartExecutionProfile;
   readonly status: "processing";
   readonly inputSnapshot: unknown;
   readonly settingsSnapshot: unknown;
@@ -889,7 +903,7 @@ docker run --detach --rm \
   --name elevenhouse-chart-engine-acceptance-20260803 \
   --publish 127.0.0.1:8012:8012 \
   --env CHART_ENGINE_EXPECTED_EPHEMERIS=moshier \
-  --env CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS=moshier,speed \
+  --env CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS=FLG_MOSEPH,FLG_SPEED \
   elevenhouse-chart-engine:test
 chart_engine_container_id="$(docker inspect --format '{{.Id}}' \
   elevenhouse-chart-engine-acceptance-20260803)"
@@ -1007,6 +1021,7 @@ integration tests, exact ESLint, compileall, domain build and DB typecheck.
 
 - Modify: `packages/contracts/src/charts.ts`
 - Modify: `packages/contracts/src/charts.test.ts`
+- Create: `packages/contracts/test-fixtures/chart-engine-readiness.v2.json`
 - Modify: `packages/domain/src/charts/chart-execution-profile.ts`
 - Modify: `packages/domain/src/charts/chart-execution-profile.test.ts`
 - Modify: `apps/chart-engine/src/chart_engine/schemas.py`
@@ -1029,21 +1044,32 @@ export type ChartEngineRequestOptions = {
   readonly timeoutMs?: number;
 };
 
-export class ChartEngineTransientError extends Error {}
-export class ChartEngineConfigurationError extends Error {}
-export class ChartEngineCancelledError extends Error {}
-export class ChartEnginePermanentError extends Error {}
+export type ChartEngineReadinessOptions = ChartEngineRequestOptions & {
+  readonly expectedProfile?: ChartExecutionProfile;
+};
+
+export abstract class ChartEngineError extends Error {
+  readonly code: string;
+  readonly status?: number;
+}
+
+export class ChartEngineTransientError extends ChartEngineError {}
+export class ChartEngineConfigurationError extends ChartEngineError {}
+export class ChartEngineCancelledError extends ChartEngineError {}
+export class ChartEnginePermanentError extends ChartEngineError {}
 ```
 
 Every calculation method, AstroCalendar, positions and `checkReady()` accept
-optional `ChartEngineRequestOptions`. `checkReady()` returns a shared strict
-`chartEngineReadinessResponseSchema` value rather than discarding the body.
+optional `ChartEngineRequestOptions`. `checkReady(options?)` returns a shared
+strict `chartEngineReadinessResponseSchema` value rather than discarding the
+body and, when given an expected execution profile, compares the exact provider
+versions/backend/normalized flags/revision.
 The only canonical provider-flag vocabulary is the actual Swiss API flag name
 set: Moshier is `FLG_MOSEPH + FLG_SPEED`; packaged Swiss data is
 `FLG_SWIEPH + FLG_SPEED`. The separate `ephemeris` field remains
 `moshier | swiss-ephemeris`, and Swiss artifact revisions are SHA-256 digests.
 
-- [ ] **Step 1: Write RED provider-vocabulary and readiness-contract tests**
+- [x] **Step 1: Write RED provider-vocabulary and readiness-contract tests**
 
 Add shared TypeScript and Python vectors for exact backend-appropriate flag
 sets, order-insensitive comparison/canonical hashing, unsupported/missing flag
@@ -1051,18 +1077,21 @@ rejection, SHA-256 Swiss revision validation and the complete unique capability
 set. Prove the current semantic Python flag tokens and incomplete TypeScript
 expected flags disagree.
 
-- [ ] **Step 2: Write RED real-HTTP client tests**
+- [x] **Step 2: Write RED real-HTTP client tests**
 
-Use a test-owned `node:http` listener on `127.0.0.1:0` and native `fetch`, not
+Use the one shared JSON readiness fixture from `packages/contracts/test-fixtures`
+in both pytest and Vitest. Use a test-owned `node:http` listener on
+`127.0.0.1:0` and native `fetch`, not
 an injected fetch mock. Test every endpoint's method/path/body and signal,
 caller abort, internal timeout, dropped connection, 4xx permanent input,
 invalid JSON/valid JSON with invalid schema as permanent contract, eligible
-5xx/network as transient, readiness mismatch as configuration and v2 response
-parsing for all eight chart methods. Read at most 2,048 response characters for
-diagnosis, but never expose or persist an arbitrary raw provider body; prove an
-echoed secret is absent from the thrown error.
+`500/502/503/504` and network as transient, readiness mismatch/redirect/other
+5xx as configuration and v2 response parsing for all eight chart methods. Read
+at most 2,048 UTF-8 response bytes through a bounded Web Streams reader, but
+never expose or persist an arbitrary raw provider body; prove an echoed secret
+is absent from the thrown error and a redirect target receives no request.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 Run:
 
@@ -1078,7 +1107,7 @@ pnpm test packages/contracts/src/charts.test.ts \
 Expected: failures show provider-vocabulary drift, no shared readiness parser,
 stale v1 client fixtures, no abort/timeout and generic errors.
 
-- [ ] **Step 4: Normalize the shared provider/readiness contract**
+- [x] **Step 4: Normalize the shared provider/readiness contract**
 
 Translate returned Swiss bit masks to canonical `FLG_*` names in Python,
 compare normalized sets, make both execution-profile schemas require the exact
@@ -1088,17 +1117,21 @@ same literal vectors in Python and TypeScript. A pre-existing result with a
 different v2 flag vocabulary is non-reproducible and must not have its digest
 rewritten in place.
 
-- [ ] **Step 5: Implement one shared request helper**
+- [x] **Step 5: Implement one shared request helper**
 
 Combine caller signal with an internal `AbortController`, clear its timer in
-`finally`, remove abort listeners, bound response reading, and classify before
-parsing the endpoint schema. Remove the unused public `fetchFn` mock seam. Wrap
+`finally`, remove abort listeners, retain the deadline through response reading,
+and use an explicit first-abort-wins sentinel. `timeoutMs` is enforced when
+supplied; do not impose an unproven fixed default on the accepted 500-client
+AstroCalendar range. Bound and cancel non-2xx stream reading, refuse redirects,
+and classify before parsing the endpoint schema. Remove the unused public
+`fetchFn` mock seam. Export safe fixed error code/status without raw causes. Wrap
 local request-schema failures as permanent; make successful malformed payloads
 permanent; make calculation 5xx/network failures transient; and make readiness
 HTTP/profile/schema mismatch configuration errors. Do not duplicate fetch/error
 logic per method and do not treat legacy v1 chart output as v2 success.
 
-- [ ] **Step 6: Run GREEN and package gates**
+- [x] **Step 6: Run GREEN and package gates**
 
 Run:
 
@@ -1115,9 +1148,15 @@ pnpm --filter @elevenhouse/chart-engine-client typecheck
 pnpm --filter @elevenhouse/chart-engine-client build
 ```
 
-- [ ] **Step 7: Commit exact paths**
+- [x] **Step 7: Commit exact paths**
 
 Commit subject: `fix: bound chart provider requests`.
+
+Completion evidence: commit `6a4b931`; independent review approved after the
+hard BYOB diagnostic quota, exact Python `ready` status, empty query/fragment
+base-URL rejection and genuinely optional error status fixes. Fresh final
+checks: 113 Python tests, 90 focused contract/domain/client tests, compileall,
+exact ESLint, contracts/domain/client typecheck and builds, and diff check.
 
 ### Task 6: Durable Job Schema, Participants, Retry Authority and Fencing
 
@@ -1126,7 +1165,10 @@ Commit subject: `fix: bound chart provider requests`.
 - Modify: `packages/domain/src/charts/chart-types.ts`
 - Modify: `packages/domain/src/charts/chart-use-cases.ts`
 - Modify: `packages/domain/src/charts/chart-use-cases.test.ts`
+- Modify: `packages/domain/src/charts/chart-execution-profile.ts`
+- Modify: `packages/domain/src/charts/chart-execution-profile.test.ts`
 - Modify: `packages/db/src/schema/calculations/chart-calculation-jobs.schema.ts`
+- Modify: `packages/db/src/schema/calculations/calculation-records.schema.ts`
 - Modify: `packages/db/src/schema/calculations/calculation-values.ts`
 - Modify: `packages/db/src/schema/calculations/calculations.schema.test.ts`
 - Modify: `packages/db/src/adapters/charts/drizzle-chart-calculation-job-store.ts`
@@ -1165,6 +1207,9 @@ reusable, and an active v1 job is not processed as v2. Assert API-created
 fingerprints change when the method version or expected backend/data revision
 changes, result completion rejects a missing/mismatched post-execution
 fingerprint, and production config rejects a missing expected ephemeris value.
+Also assert ordered participant identity is part of the job dedup fingerprint:
+two same-owner clients with identical birth data must never reuse one another's
+calculation, while reversing subject/partner changes a relationship fingerprint.
 
 - [ ] **Step 2: Write RED real-PostgreSQL race tests**
 
@@ -1209,6 +1254,9 @@ job, processing state, worker, generation and unexpired lease.
 Join succeeded jobs to `calculation_records.status <> 'archived'`. Initial
 individual results get one subject; synastry/composite get subject+partner and
 compatibility mode. Replacement jobs never reuse an old succeeded job.
+Make the calculation-record exact-request uniqueness constraint apply only to
+non-archived rows so a fresh job after archival cannot overwrite, relink or
+reactivate the archived record.
 Inject the chart execution profile into every API-created v2 snapshot before
 request fingerprinting and persist that exact method version/profile on the
 job; never reconstruct a queued job's authority from the later process
@@ -1249,6 +1297,13 @@ inventory and generated SQL/snapshot/journal against the owned schema delta.
 Abort if an output includes unaccounted foreign semantics or any unowned input
 remains dirty.
 
+Current intake evidence on 2026-08-03 shows this stop condition is active:
+uncommitted Flow schema/package/lockfile changes already feed substantial Flow
+semantics into the three baseline outputs. Task 6 source/tests may proceed, but
+generation, reset and generated-file staging remain blocked until those inputs
+are preserved in accepted shared history or their owner explicitly coordinates
+one combined baseline.
+
 Only after that, rerun `docker compose ps postgres` and
 `docker compose port postgres 5432`; require healthy status and local port 5432,
 then run the reset with no inherited URL ambiguity:
@@ -1280,6 +1335,11 @@ pnpm --filter @elevenhouse/domain typecheck
 pnpm --filter @elevenhouse/db typecheck
 pnpm --filter @elevenhouse/astrologer-api typecheck
 ```
+
+The Task 6 lease port intentionally has no unfenced compatibility overload.
+The chart-worker is already a declared staged boundary after Task 5; Task 9 must
+consume the persisted v2 profile/snapshots and pass worker ID, lease generation
+and deadlines before chart-worker typecheck/build can be claimed again.
 
 - [ ] **Step 8: Commit exact paths**
 
@@ -1672,6 +1732,10 @@ profile mismatch fails before the calculation HTTP request. Assert timeout is
 recorded once, permanent input/contract/config errors do not retry, transient
 failures stop at claim `maxAttempts`, heartbeat loss aborts the provider
 request, and old execution cannot complete/fail newer state.
+
+Define and pass an explicit durable calculation timeout/lease signal here;
+Task 5 intentionally does not guess a universal timeout for the valid
+500-client AstroCalendar range.
 
 - [ ] **Step 2: Write RED queue/relay/readiness tests**
 
