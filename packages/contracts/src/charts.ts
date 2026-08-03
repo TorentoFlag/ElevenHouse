@@ -5,6 +5,15 @@ const uuidSchema = z.string().uuid();
 
 const chartJsonRecordSchema = z.record(z.string(), z.unknown());
 
+const chartEphemerisDataRevisionSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/);
+
+const chartProviderFlagSchema = z.enum(["FLG_MOSEPH", "FLG_SWIEPH", "FLG_SPEED"]);
+
+const chartProviderFlagsByEphemeris = {
+  moshier: new Set(["FLG_MOSEPH", "FLG_SPEED"]),
+  "swiss-ephemeris": new Set(["FLG_SWIEPH", "FLG_SPEED"])
+} as const;
+
 export const chartMethodVersions = {
   natal: "chart.natal.kerykeion-5.12.v2",
   astrocartography: "chart.astrocartography.swisseph.v2",
@@ -51,16 +60,16 @@ export const chartExecutionProfileSchema = z
     kerykeionVersion: z.literal("5.12.9"),
     pyswissephVersion: z.literal("2.10.3.2"),
     expectedEphemeris: z.enum(["swiss-ephemeris", "moshier"]),
-    expectedEphemerisFlags: z.array(z.string().trim().min(1).max(100)).min(1),
-    expectedEphemerisDataRevision: z.string().trim().min(1).max(100).nullable()
+    expectedEphemerisFlags: z.array(chartProviderFlagSchema).min(1),
+    expectedEphemerisDataRevision: chartEphemerisDataRevisionSchema.nullable()
   })
   .strict()
   .superRefine((value, context) => {
-    if (new Set(value.expectedEphemerisFlags).size !== value.expectedEphemerisFlags.length) {
+    if (!hasExactProviderFlags(value.expectedEphemeris, value.expectedEphemerisFlags)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["expectedEphemerisFlags"],
-        message: "Expected ephemeris flags must be unique"
+        message: "Expected ephemeris flags must exactly match the selected backend"
       });
     }
     if (value.expectedEphemeris === "moshier" && value.expectedEphemerisDataRevision !== null) {
@@ -263,16 +272,16 @@ export const chartProviderMetadataV2Schema = z
     version: z.string().trim().min(1).max(100),
     ephemeris: z.enum(["swiss-ephemeris", "moshier"]),
     pyswissephVersion: z.string().trim().min(1).max(100),
-    ephemerisFlags: z.array(z.string().trim().min(1).max(100)),
-    ephemerisDataRevision: z.string().trim().min(1).max(100).nullable()
+    ephemerisFlags: z.array(chartProviderFlagSchema).min(1),
+    ephemerisDataRevision: chartEphemerisDataRevisionSchema.nullable()
   })
   .strict()
   .superRefine((value, context) => {
-    if (new Set(value.ephemerisFlags).size !== value.ephemerisFlags.length) {
+    if (!hasExactProviderFlags(value.ephemeris, value.ephemerisFlags)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["ephemerisFlags"],
-        message: "Ephemeris flags must be unique"
+        message: "Ephemeris flags must exactly match the selected backend"
       });
     }
     if (value.ephemeris === "moshier" && value.ephemerisDataRevision !== null) {
@@ -282,8 +291,67 @@ export const chartProviderMetadataV2Schema = z
         message: "Moshier results must not declare ephemeris data revision"
       });
     }
+    if (value.ephemeris === "swiss-ephemeris" && value.ephemerisDataRevision === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ephemerisDataRevision"],
+        message: "Swiss Ephemeris results require a data revision"
+      });
+    }
   });
 export type ChartProviderMetadata = z.infer<typeof chartProviderMetadataV2Schema>;
+
+export const chartEngineCapabilities = [
+  "natal",
+  "astrocartography",
+  "transit",
+  "synastry",
+  "composite",
+  "solar_return",
+  "progression",
+  "horary",
+  "planetary_positions",
+  "astro_calendar"
+] as const;
+
+const chartEngineCapabilitySchema = z.enum(chartEngineCapabilities);
+
+export const chartEngineReadinessResponseSchema = z
+  .object({
+    service: z.literal("chart-engine"),
+    status: z.literal("ready"),
+    provider: chartProviderMetadataV2Schema,
+    capabilities: z.array(chartEngineCapabilitySchema)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const capabilities = new Set(value.capabilities);
+    if (
+      value.capabilities.length !== chartEngineCapabilities.length ||
+      capabilities.size !== chartEngineCapabilities.length ||
+      chartEngineCapabilities.some((capability) => !capabilities.has(capability))
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["capabilities"],
+        message: "Chart engine readiness must declare the complete unique capability set"
+      });
+    }
+  });
+export type ChartEngineReadinessResponse = z.infer<typeof chartEngineReadinessResponseSchema>;
+
+function hasExactProviderFlags(
+  ephemeris: keyof typeof chartProviderFlagsByEphemeris,
+  flags: readonly string[]
+): boolean {
+  const expected = chartProviderFlagsByEphemeris[ephemeris];
+  const actual = new Set(flags);
+  return (
+    flags.length === expected.size &&
+    actual.size === expected.size &&
+    [...expected].every((flag) => actual.has(flag))
+  );
+}
 
 export const chartProgressionCalculationBasisSchema = z
   .object({

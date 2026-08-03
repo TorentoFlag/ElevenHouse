@@ -16,11 +16,15 @@ def expected_ephemeris() -> str:
 
 
 def expected_ephemeris_flags() -> tuple[str, ...]:
+    expected = {
+        "moshier": {"FLG_MOSEPH", "FLG_SPEED"},
+        "swiss-ephemeris": {"FLG_SWIEPH", "FLG_SPEED"},
+    }[expected_ephemeris()]
     value = getenv("CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS", "").strip()
     if not value:
-        return (expected_ephemeris(), "speed")
+        return tuple(sorted(expected))
     flags = tuple(part.strip() for part in value.split(",") if part.strip())
-    if len(set(flags)) != len(flags) or not flags:
+    if set(flags) != expected or len(flags) != len(expected):
         raise ValueError("CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS_INVALID")
     return flags
 

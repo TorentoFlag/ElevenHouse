@@ -25,7 +25,7 @@ def execution_profile() -> dict:
         "kerykeionVersion": "5.12.9",
         "pyswissephVersion": "2.10.3.2",
         "expectedEphemeris": "moshier",
-        "expectedEphemerisFlags": ["moshier", "speed"],
+        "expectedEphemerisFlags": ["FLG_MOSEPH", "FLG_SPEED"],
         "expectedEphemerisDataRevision": None,
     }
 

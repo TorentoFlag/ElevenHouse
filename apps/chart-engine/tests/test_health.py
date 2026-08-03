@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from chart_engine.main import app
@@ -19,27 +22,13 @@ def test_ready_returns_service_status():
     response = client.get("/ready")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "service": "chart-engine",
-        "status": "ready",
-        "provider": {
-            "name": "kerykeion",
-            "version": "5.12.9",
-            "ephemeris": "moshier",
-            "pyswissephVersion": "2.10.3.2",
-            "ephemerisFlags": ["moshier", "speed"],
-            "ephemerisDataRevision": None,
-        },
-        "capabilities": [
-            "natal",
-            "astrocartography",
-            "transit",
-            "synastry",
-            "composite",
-            "solar_return",
-            "progression",
-            "horary",
-            "planetary_positions",
-            "astro_calendar",
-        ],
-    }
+    repository_root = next(
+        parent for parent in Path(__file__).parents if (parent / "packages/contracts").is_dir()
+    )
+    expected = json.loads(
+        (
+            repository_root
+            / "packages/contracts/test-fixtures/chart-engine-readiness.v2.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert response.json() == expected

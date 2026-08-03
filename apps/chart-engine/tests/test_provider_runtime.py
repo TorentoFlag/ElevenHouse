@@ -1,6 +1,8 @@
+import json
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import active_children
 from os import getenv
+from pathlib import Path
 from threading import Barrier, Event, Lock
 from time import monotonic, sleep
 
@@ -9,7 +11,7 @@ import swisseph as swe
 from pydantic import ValidationError
 
 from chart_engine.provider_runtime import ProviderReadinessError, ProviderRuntime
-from chart_engine.schemas import ProviderMetadata
+from chart_engine.schemas import ChartExecutionProfile, ProviderMetadata, ProviderReadinessResponse
 
 
 MOSHIER_METADATA = {
@@ -17,7 +19,7 @@ MOSHIER_METADATA = {
     "version": "5.12.9",
     "ephemeris": "moshier",
     "pyswissephVersion": "2.10.3.2",
-    "ephemerisFlags": ["moshier", "speed"],
+    "ephemerisFlags": ["FLG_MOSEPH", "FLG_SPEED"],
     "ephemerisDataRevision": None,
 }
 
@@ -35,7 +37,7 @@ def environment_selected_probe() -> dict:
         return {
             **MOSHIER_METADATA,
             "ephemeris": "swiss-ephemeris",
-            "ephemerisFlags": ["swiss-ephemeris", "speed"],
+            "ephemerisFlags": ["FLG_SWIEPH", "FLG_SPEED"],
             "ephemerisDataRevision": "sha256:" + "a" * 64,
         }
     return successful_probe()
@@ -45,18 +47,82 @@ def swiss_revision_probe() -> dict:
     return {
         **MOSHIER_METADATA,
         "ephemeris": "swiss-ephemeris",
-        "ephemerisFlags": ["swiss-ephemeris", "speed"],
+        "ephemerisFlags": ["FLG_SWIEPH", "FLG_SPEED"],
         "ephemerisDataRevision": "sha256:" + "b" * 64,
     }
 
 
 def missing_speed_flag_probe() -> dict:
-    return {**MOSHIER_METADATA, "ephemerisFlags": ["moshier"]}
+    return {**MOSHIER_METADATA, "ephemerisFlags": ["FLG_MOSEPH"]}
+
+
+def reordered_flags_probe() -> dict:
+    return {**MOSHIER_METADATA, "ephemerisFlags": ["FLG_SPEED", "FLG_MOSEPH"]}
 
 
 def hanging_probe() -> dict:
     sleep(30)
     return successful_probe()
+
+
+def test_shared_readiness_fixture_parses_in_python() -> None:
+    repository_root = next(
+        parent for parent in Path(__file__).parents if (parent / "packages/contracts").is_dir()
+    )
+    fixture = json.loads(
+        (
+            repository_root
+            / "packages/contracts/test-fixtures/chart-engine-readiness.v2.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert ProviderReadinessResponse.model_validate(fixture).model_dump(mode="json") == fixture
+
+    with pytest.raises(ValidationError):
+        ProviderReadinessResponse.model_validate({**fixture, "status": "live"})
+
+    capabilities = fixture["capabilities"]
+    for invalid_capabilities in (
+        capabilities[:-1],
+        [*capabilities[:-1], capabilities[0]],
+        [*capabilities, "future_method"],
+    ):
+        with pytest.raises(ValidationError):
+            ProviderReadinessResponse.model_validate(
+                {**fixture, "capabilities": invalid_capabilities}
+            )
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        [],
+        ["FLG_MOSEPH"],
+        ["FLG_MOSEPH", "FLG_SPEED", "FLG_J2000"],
+        ["FLG_MOSEPH", "FLG_SPEED", "FLG_SPEED"],
+        ["moshier", "speed"],
+        ["FLG_SWIEPH", "FLG_SPEED"],
+    ],
+)
+def test_moshier_profile_rejects_non_canonical_flag_sets(flags: list[str]) -> None:
+    with pytest.raises(ValidationError):
+        ChartExecutionProfile.model_validate(
+            {
+                "provider": "kerykeion",
+                "kerykeionVersion": "5.12.9",
+                "pyswissephVersion": "2.10.3.2",
+                "expectedEphemeris": "moshier",
+                "expectedEphemerisFlags": flags,
+                "expectedEphemerisDataRevision": None,
+            }
+        )
+
+
+def test_readiness_compares_expected_flags_without_order_sensitivity(monkeypatch) -> None:
+    monkeypatch.setenv("CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS", "FLG_SPEED,FLG_MOSEPH")
+    runtime = ProviderRuntime(sentinel=reordered_flags_probe)
+
+    assert set(runtime.ready().ephemerisFlags) == {"FLG_MOSEPH", "FLG_SPEED"}
 
 
 def test_provider_operations_cannot_overlap_inside_a_process() -> None:
@@ -106,7 +172,7 @@ def test_readiness_fails_closed_on_provider_version_drift() -> None:
 def test_readiness_fails_closed_on_actual_flag_drift() -> None:
     runtime = ProviderRuntime(sentinel=missing_speed_flag_probe)
 
-    with pytest.raises(ProviderReadinessError, match="EPHEMERIS_FLAGS_MISMATCH"):
+    with pytest.raises(ProviderReadinessError, match="CHART_EPHEMERIS_FLAGS_INVALID"):
         runtime.ready()
 
 
@@ -114,7 +180,7 @@ def test_readiness_fails_closed_on_actual_data_revision_drift(monkeypatch) -> No
     monkeypatch.setenv("CHART_ENGINE_EXPECTED_EPHEMERIS", "swiss-ephemeris")
     monkeypatch.setenv(
         "CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS",
-        "swiss-ephemeris,speed",
+        "FLG_SWIEPH,FLG_SPEED",
     )
     monkeypatch.setenv("CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION", "sha256:" + "a" * 64)
     runtime = ProviderRuntime(sentinel=swiss_revision_probe)
@@ -175,7 +241,7 @@ def test_actual_swiss_backend_without_proven_data_artifacts_fails_closed(
     monkeypatch.setenv("CHART_ENGINE_EXPECTED_EPHEMERIS", "swiss-ephemeris")
     monkeypatch.setenv(
         "CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS",
-        "swiss-ephemeris,speed",
+        "FLG_SWIEPH,FLG_SPEED",
     )
     monkeypatch.setenv("CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION", "sha256:" + "a" * 64)
     missing_path = tmp_path / "missing-provider-data"
@@ -202,7 +268,7 @@ def test_actual_swiss_revision_is_derived_from_configured_artifact_bytes(
     monkeypatch.setenv("CHART_ENGINE_EXPECTED_EPHEMERIS", "swiss-ephemeris")
     monkeypatch.setenv(
         "CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS",
-        "swiss-ephemeris,speed",
+        "FLG_SWIEPH,FLG_SPEED",
     )
     monkeypatch.setenv(
         "CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION",
@@ -239,6 +305,6 @@ def test_swiss_metadata_without_actual_revision_is_rejected() -> None:
             {
                 **MOSHIER_METADATA,
                 "ephemeris": "swiss-ephemeris",
-                "ephemerisFlags": ["swiss-ephemeris", "speed"],
+                "ephemerisFlags": ["FLG_SWIEPH", "FLG_SPEED"],
             }
         )

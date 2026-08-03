@@ -71,6 +71,11 @@ the provider lock. One deadline covers lock acquisition, calculation and child
 cleanup. It returns exact provider versions, backend and normalized flags from
 that sentinel execution. If Swiss Ephemeris falls back to Moshier, readiness
 reports the actual Moshier result and fails the configured Swiss profile.
+Provider flags use Swiss API names only: Moshier reports exactly
+`FLG_MOSEPH,FLG_SPEED`, while licensed Swiss data reports exactly
+`FLG_SWIEPH,FLG_SPEED`. Flag order is not significant. Moshier reports a null
+data revision; Swiss data reports `sha256:` followed by 64 lowercase hex
+characters.
 
 Production requires all three profile values and passes them consistently to
 `astrologer-api`, `chart-worker` and `chart-engine`:

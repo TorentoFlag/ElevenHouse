@@ -18,18 +18,43 @@ class HealthResponse(BaseModel):
     status: Literal["live", "ready"]
 
 
+EPHEMERIS_FLAGS_BY_BACKEND = {
+    "moshier": {"FLG_MOSEPH", "FLG_SPEED"},
+    "swiss-ephemeris": {"FLG_SWIEPH", "FLG_SPEED"},
+}
+
+CHART_ENGINE_CAPABILITIES = {
+    "natal",
+    "astrocartography",
+    "transit",
+    "synastry",
+    "composite",
+    "solar_return",
+    "progression",
+    "horary",
+    "planetary_positions",
+    "astro_calendar",
+}
+
+
 class ChartExecutionProfile(BaseModel):
     provider: Literal["kerykeion"]
     kerykeionVersion: Literal["5.12.9"]
     pyswissephVersion: Literal["2.10.3.2"]
     expectedEphemeris: Literal["swiss-ephemeris", "moshier"]
-    expectedEphemerisFlags: list[str] = Field(min_length=1)
-    expectedEphemerisDataRevision: str | None
+    expectedEphemerisFlags: list[
+        Literal["FLG_MOSEPH", "FLG_SWIEPH", "FLG_SPEED"]
+    ] = Field(min_length=1)
+    expectedEphemerisDataRevision: str | None = Field(
+        pattern=r"^sha256:[0-9a-f]{64}$"
+    )
 
     @model_validator(mode="after")
     def validate_profile(self):
-        if len(set(self.expectedEphemerisFlags)) != len(self.expectedEphemerisFlags):
-            raise ValueError("CHART_EXPECTED_EPHEMERIS_FLAGS_DUPLICATE")
+        if set(self.expectedEphemerisFlags) != EPHEMERIS_FLAGS_BY_BACKEND[
+            self.expectedEphemeris
+        ] or len(self.expectedEphemerisFlags) != 2:
+            raise ValueError("CHART_EXPECTED_EPHEMERIS_FLAGS_INVALID")
         if self.expectedEphemeris == "swiss-ephemeris" and not self.expectedEphemerisDataRevision:
             raise ValueError("CHART_EXPECTED_EPHEMERIS_DATA_REVISION_REQUIRED")
         if self.expectedEphemeris == "moshier" and self.expectedEphemerisDataRevision is not None:
@@ -461,13 +486,15 @@ class ProviderMetadata(BaseModel):
     version: str
     ephemeris: Literal["swiss-ephemeris", "moshier"]
     pyswissephVersion: str
-    ephemerisFlags: list[str]
-    ephemerisDataRevision: str | None
+    ephemerisFlags: list[Literal["FLG_MOSEPH", "FLG_SWIEPH", "FLG_SPEED"]]
+    ephemerisDataRevision: str | None = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def validate_metadata(self):
-        if len(set(self.ephemerisFlags)) != len(self.ephemerisFlags):
-            raise ValueError("CHART_EPHEMERIS_FLAGS_DUPLICATE")
+        if set(self.ephemerisFlags) != EPHEMERIS_FLAGS_BY_BACKEND[
+            self.ephemeris
+        ] or len(self.ephemerisFlags) != 2:
+            raise ValueError("CHART_EPHEMERIS_FLAGS_INVALID")
         if self.ephemeris == "swiss-ephemeris" and not self.ephemerisDataRevision:
             raise ValueError("CHART_EPHEMERIS_DATA_REVISION_REQUIRED")
         if self.ephemeris == "moshier" and self.ephemerisDataRevision is not None:
@@ -476,6 +503,7 @@ class ProviderMetadata(BaseModel):
 
 
 class ProviderReadinessResponse(HealthResponse):
+    status: Literal["ready"]
     provider: ProviderMetadata
     capabilities: list[
         Literal[
@@ -491,6 +519,15 @@ class ProviderReadinessResponse(HealthResponse):
             "astro_calendar",
         ]
     ]
+
+    @model_validator(mode="after")
+    def validate_capabilities(self):
+        if (
+            set(self.capabilities) != CHART_ENGINE_CAPABILITIES
+            or len(self.capabilities) != len(CHART_ENGINE_CAPABILITIES)
+        ):
+            raise ValueError("CHART_ENGINE_CAPABILITIES_INVALID")
+        return self
 
 
 class ChartPoint(BaseModel):

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import readinessFixture from "../test-fixtures/chart-engine-readiness.v2.json";
 import {
   chartAstrocartographyJobCreateRequestSchema,
   chartCompositeJobCreateRequestSchema,
@@ -19,11 +20,87 @@ import {
   chartTransitJobCreateRequestSchema,
   chartResultSchema,
   chartMethodVersions,
+  chartEngineReadinessResponseSchema,
+  chartExecutionProfileSchema,
+  chartProviderMetadataV2Schema,
   isReproducibleChartResult,
   storedChartCalculationPayloadSchema
 } from "./charts";
 
 describe("chart contracts", () => {
+  it("parses the shared strict chart-engine readiness fixture", () => {
+    expect(chartEngineReadinessResponseSchema.parse(readinessFixture)).toEqual(readinessFixture);
+  });
+
+  it("requires the exact backend-specific provider flag set regardless of order", () => {
+    expect(
+      chartExecutionProfileSchema.parse({
+        ...localExecutionProfile(),
+        expectedEphemerisFlags: ["FLG_SPEED", "FLG_MOSEPH"]
+      }).expectedEphemerisFlags
+    ).toEqual(["FLG_SPEED", "FLG_MOSEPH"]);
+    expect(
+      chartProviderMetadataV2Schema.parse({
+        ...completeV2NatalPayload().provider,
+        ephemeris: "swiss-ephemeris",
+        ephemerisFlags: ["FLG_SPEED", "FLG_SWIEPH"],
+        ephemerisDataRevision: `sha256:${"b".repeat(64)}`
+      }).ephemerisFlags
+    ).toEqual(["FLG_SPEED", "FLG_SWIEPH"]);
+  });
+
+  it("rejects non-canonical Moshier flag sets", () => {
+    for (const expectedEphemerisFlags of [
+      [],
+      ["FLG_MOSEPH"],
+      ["FLG_MOSEPH", "FLG_SPEED", "FLG_J2000"],
+      ["FLG_MOSEPH", "FLG_SPEED", "FLG_SPEED"],
+      ["moshier", "speed"],
+      ["FLG_SWIEPH", "FLG_SPEED"]
+    ]) {
+      expect(() =>
+        chartExecutionProfileSchema.parse({
+          ...localExecutionProfile(),
+          expectedEphemerisFlags
+        })
+      ).toThrow();
+    }
+  });
+
+  it("requires an exact lowercase SHA-256 Swiss data revision", () => {
+    for (const ephemerisDataRevision of [
+      null,
+      "se2_2026.1",
+      `sha256:${"A".repeat(64)}`,
+      `sha256:${"a".repeat(63)}`
+    ]) {
+      expect(() =>
+        chartProviderMetadataV2Schema.parse({
+          ...completeV2NatalPayload().provider,
+          ephemeris: "swiss-ephemeris",
+          ephemerisFlags: ["FLG_SWIEPH", "FLG_SPEED"],
+          ephemerisDataRevision
+        })
+      ).toThrow();
+    }
+  });
+
+  it("rejects incomplete, duplicate and foreign readiness capabilities", () => {
+    const capabilities = [...readinessFixture.capabilities];
+    for (const invalidCapabilities of [
+      capabilities.slice(0, -1),
+      [...capabilities.slice(0, -1), capabilities[0]],
+      [...capabilities, "future_method"]
+    ]) {
+      expect(() =>
+        chartEngineReadinessResponseSchema.parse({
+          ...readinessFixture,
+          capabilities: invalidCapabilities
+        })
+      ).toThrow();
+    }
+  });
+
   it("keeps historical v1 astrocartography line relationships frozen", () => {
     const payload = completeV1AstrocartographyPayload();
     payload.result.lines[0] = { ...payload.result.lines[0]!, id: "legacy-sun-meridian" };
@@ -66,7 +143,9 @@ describe("chart contracts", () => {
     };
 
     expect(storedChartCalculationPayloadSchema.parse(historical)).toEqual(historical);
-    expect(() => chartResultSchema.parse({ ...completeV2NatalPayload(), result: historical.result })).toThrow();
+    expect(() =>
+      chartResultSchema.parse({ ...completeV2NatalPayload(), result: historical.result })
+    ).toThrow();
   });
 
   it("rejects Placidus v2 calculation requests outside the Kerykeion latitude range", () => {
@@ -248,9 +327,7 @@ describe("chart contracts", () => {
         ...completeV2NatalPayload(),
         result: {
           ...valid,
-          aspects: [
-            { pointA: "sun", pointB: "sun", type: "conjunction", angle: 0, orb: 0 }
-          ]
+          aspects: [{ pointA: "sun", pointB: "sun", type: "conjunction", angle: 0, orb: 0 }]
         }
       })
     ).toThrow();
@@ -271,9 +348,7 @@ describe("chart contracts", () => {
         ...completeV2NatalPayload(),
         result: {
           ...valid,
-          aspects: [
-            { pointA: "sun", pointB: "not-a-point", type: "square", angle: 90, orb: 1 }
-          ]
+          aspects: [{ pointA: "sun", pointB: "not-a-point", type: "square", angle: 90, orb: 1 }]
         }
       })
     ).toThrow();
@@ -1433,7 +1508,7 @@ function localExecutionProfile() {
     kerykeionVersion: "5.12.9" as const,
     pyswissephVersion: "2.10.3.2" as const,
     expectedEphemeris: "moshier" as const,
-    expectedEphemerisFlags: ["FLG_MOSEPH"],
+    expectedEphemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
     expectedEphemerisDataRevision: null
   };
 }
@@ -1459,7 +1534,7 @@ function completeV2NatalPayload() {
       version: "5.12.9",
       ephemeris: "moshier" as const,
       pyswissephVersion: "2.10.3.2",
-      ephemerisFlags: ["FLG_MOSEPH"],
+      ephemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
       ephemerisDataRevision: null
     },
     reproducibilityFingerprint: `sha256:${"a".repeat(64)}`,

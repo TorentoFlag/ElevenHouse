@@ -13,7 +13,7 @@ describe("chart execution profile", () => {
       kerykeionVersion: "5.12.9",
       pyswissephVersion: "2.10.3.2",
       expectedEphemeris: "moshier",
-      expectedEphemerisFlags: ["FLG_MOSEPH"],
+      expectedEphemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
       expectedEphemerisDataRevision: null
     });
   });
@@ -69,7 +69,7 @@ describe("chart execution profile", () => {
     });
 
     expect(request).toBe(reorderedRequest);
-    expect(request).toBe("sha256:1a69bdc6d52f127baa71c23ccd62baf714c274c8ff3a94b03312127a00f9faf3");
+    expect(request).toBe("sha256:58f4f2ec498030ab51828b5c73507376f5a779fc37886546434cc81d8d53d5de");
     expect(actual).toBe("sha256:517bcce0d8df713313d262aa6823bd1e34095cc139165e5311e3e479a4260f4c");
     expect(actual).not.toBe(request);
     expect(
@@ -81,8 +81,8 @@ describe("chart execution profile", () => {
           version: "5.12.9",
           ephemeris: "swiss-ephemeris",
           pyswissephVersion: "2.10.3.2",
-          ephemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
-          ephemerisDataRevision: "se2_2026.1"
+          ephemerisFlags: ["FLG_SWIEPH", "FLG_SPEED"],
+          ephemerisDataRevision: `sha256:${"b".repeat(64)}`
         },
         settings: { houseSystem: "placidus", nodeType: "true" },
         inputSnapshot: { longitude: 12.4964, latitude: 41.9028 }
@@ -100,7 +100,7 @@ describe("chart execution profile", () => {
         settings: {},
         inputSnapshot: { numbers: [-0, 1e-7, 1e-6, 1e21, 1e20] }
       })
-    ).toBe("sha256:9abc50e10859afdbbc124daadcaa2b291bf0cbb451d89f1cdabe01794033c076");
+    ).toBe("sha256:a274ff1d5f690022015e910f8c512b42512cb61b84d4b02134adf54c17bdff75");
     expect(
       buildChartReproducibilityFingerprint({
         method: "natal",
@@ -116,7 +116,7 @@ describe("chart execution profile", () => {
           birthTimePrecision: "exact"
         }
       })
-    ).toBe("sha256:633a49a4add9689ec0365a8bd6f4f5eb213bf2a126c7cdf088ad56f326af47ba");
+    ).toBe("sha256:44260d51d6bcb81e43ac75274bec27ca8244003252e1ee2065e1c728045db8c1");
   });
 
   it("extracts the exact method-specific Python fingerprint input from every v2 result", () => {
@@ -243,7 +243,7 @@ function localProvider() {
     version: "5.12.9",
     ephemeris: "moshier" as const,
     pyswissephVersion: "2.10.3.2",
-    ephemerisFlags: ["moshier", "speed"],
+    ephemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
     ephemerisDataRevision: null
   };
 }

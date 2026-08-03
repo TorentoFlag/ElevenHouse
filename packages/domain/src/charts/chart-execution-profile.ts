@@ -36,7 +36,10 @@ export function resolveChartExecutionProfile(
     kerykeionVersion: "5.12.9" as const,
     pyswissephVersion: "2.10.3.2" as const,
     expectedEphemeris,
-    expectedEphemerisFlags: expectedEphemeris === "swiss-ephemeris" ? ["FLG_SWIEPH"] : ["FLG_MOSEPH"],
+    expectedEphemerisFlags:
+      expectedEphemeris === "swiss-ephemeris"
+        ? ["FLG_SWIEPH", "FLG_SPEED"]
+        : ["FLG_MOSEPH", "FLG_SPEED"],
     expectedEphemerisDataRevision: expectedEphemeris === "swiss-ephemeris" ? dataRevision : null
   };
   const parsed = chartExecutionProfileSchema.safeParse(profile);

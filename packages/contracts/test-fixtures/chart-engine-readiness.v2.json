@@ -1,0 +1,24 @@
+{
+  "service": "chart-engine",
+  "status": "ready",
+  "provider": {
+    "name": "kerykeion",
+    "version": "5.12.9",
+    "ephemeris": "moshier",
+    "pyswissephVersion": "2.10.3.2",
+    "ephemerisFlags": ["FLG_MOSEPH", "FLG_SPEED"],
+    "ephemerisDataRevision": null
+  },
+  "capabilities": [
+    "natal",
+    "astrocartography",
+    "transit",
+    "synastry",
+    "composite",
+    "solar_return",
+    "progression",
+    "horary",
+    "planetary_positions",
+    "astro_calendar"
+  ]
+}

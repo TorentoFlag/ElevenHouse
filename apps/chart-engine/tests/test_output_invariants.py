@@ -53,7 +53,7 @@ def test_natal_result_is_v2_with_verified_actual_metadata_fingerprint() -> None:
         "version": "5.12.9",
         "ephemeris": "moshier",
         "pyswissephVersion": "2.10.3.2",
-        "ephemerisFlags": ["moshier", "speed"],
+        "ephemerisFlags": ["FLG_MOSEPH", "FLG_SPEED"],
         "ephemerisDataRevision": None,
     }
     assert payload["reproducibilityFingerprint"] == reproducibility_fingerprint_for_result(
@@ -74,12 +74,12 @@ def test_chart_fingerprint_uses_ecmascript_number_serialization_vector() -> None
             "version": "5.12.9",
             "ephemeris": "moshier",
             "pyswissephVersion": "2.10.3.2",
-            "ephemerisFlags": ["moshier", "speed"],
+            "ephemerisFlags": ["FLG_MOSEPH", "FLG_SPEED"],
             "ephemerisDataRevision": None,
         },
         settings={},
         input_snapshot={"numbers": [-0.0, 1e-7, 1e-6, 1e21, 1e20]},
-    ) == "sha256:9abc50e10859afdbbc124daadcaa2b291bf0cbb451d89f1cdabe01794033c076"
+    ) == "sha256:a274ff1d5f690022015e910f8c512b42512cb61b84d4b02134adf54c17bdff75"
 
 
 def test_small_coordinate_python_result_matches_typescript_fingerprint_vector() -> None:
@@ -91,7 +91,7 @@ def test_small_coordinate_python_result_matches_typescript_fingerprint_vector() 
 
     assert response.status_code == 200
     assert response.json()["reproducibilityFingerprint"] == (
-        "sha256:633a49a4add9689ec0365a8bd6f4f5eb213bf2a126c7cdf088ad56f326af47ba"
+        "sha256:44260d51d6bcb81e43ac75274bec27ca8244003252e1ee2065e1c728045db8c1"
     )
 
 

@@ -87,7 +87,7 @@ class ProviderRuntime:
             raise ProviderReadinessError("PYSWISSEPH_VERSION_MISMATCH")
         if metadata.ephemeris != self._expected_ephemeris:
             raise ProviderReadinessError("EPHEMERIS_BACKEND_MISMATCH")
-        if tuple(metadata.ephemerisFlags) != self._expected_flags:
+        if set(metadata.ephemerisFlags) != set(self._expected_flags):
             raise ProviderReadinessError("EPHEMERIS_FLAGS_MISMATCH")
         if metadata.ephemerisDataRevision != self._expected_data_revision:
             raise ProviderReadinessError("EPHEMERIS_DATA_REVISION_MISMATCH")
@@ -101,15 +101,19 @@ def detect_actual_provider_metadata() -> ProviderMetadata:
         swe.SUN,
         swe.FLG_SWIEPH | swe.FLG_SPEED,
     )
-    if returned_flags & swe.FLG_MOSEPH:
+    backend_flags = returned_flags & (swe.FLG_MOSEPH | swe.FLG_SWIEPH)
+    if backend_flags == swe.FLG_MOSEPH:
         backend = "moshier"
-    elif returned_flags & swe.FLG_SWIEPH:
+        backend_flag = "FLG_MOSEPH"
+    elif backend_flags == swe.FLG_SWIEPH:
         backend = "swiss-ephemeris"
+        backend_flag = "FLG_SWIEPH"
     else:
         raise ProviderReadinessError("EPHEMERIS_BACKEND_UNPROVEN")
-    flags = [backend]
-    if returned_flags & swe.FLG_SPEED:
-        flags.append("speed")
+    supported_flags = swe.FLG_MOSEPH | swe.FLG_SWIEPH | swe.FLG_SPEED
+    if returned_flags & ~supported_flags or not returned_flags & swe.FLG_SPEED:
+        raise ProviderReadinessError("EPHEMERIS_FLAGS_UNPROVEN")
+    flags = [backend_flag, "FLG_SPEED"]
     revision = None
     if backend == "swiss-ephemeris":
         revision = _ephemeris_artifact_revision(data_path)
